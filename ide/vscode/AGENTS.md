@@ -109,6 +109,23 @@ before attachments never looks at the header and goes on sending base64 under th
 carries a file is read with `bytesOf`, which takes both and never returns a Node `Buffer` (a `Buffer` posted
 to a webview is turned into an array of numbers by its `toJSON`).
 
+**A request whose answer will be dropped is cancelled, not left to run.** The daemon serves one request at a
+time, so a stale one -- a tab asked for the object the user has since moved off, a render the Inspector asked for
+before a newer click -- used to run to the end while everything behind it waited, and its answer was then thrown
+away. Now such a request carries a `vscode.CancellationToken` (passed in the command's argument as
+`cancellation`, which arrives intact because commands run in this process), and `send` hands it to
+`sendRequest`, which sends `$/cancelRequest` when it is cancelled; the daemon answers a queued request at once
+and stops a running one at its next safe point, with `-32800` either way (`src/common/cancellation.ts`, and
+"`$/cancelRequest` is honoured" in `src/partcad_service_json_rpc/AGENTS.md`). A staged request asks for no
+further sub-assembly once its token is cancelled. `PartcadViewer` keeps the panel's requests in an `InFlight`:
+every one is cancelled when another object is shown or the panel is cleared or closed -- the renderer forgets
+every request then -- and a tab's when that tab is asked again, since the renderer waits for the newest only;
+runs of an analysis or a simulation are never replaced by one another, each answering a question of its own.
+`PartcadInspector` cancels the render of the inspection a newer one supersedes, and counts it out of
+`_pendingShows` by its error, as it does any request that failed. A cancelled request is not an error to report:
+`isCancellation` is what tells the two apart. A daemon from before this ignores the notification, and the answer
+is dropped here as it always was.
+
 **A backend that never starts reports itself in the `PartCAD` terminal view**, not only in the output channel.
 Everything else in that view arrives over the backend's own `?/partcad/terminal` and `?/partcad/log`
 notifications, which is precisely what a missing backend cannot send, so `terminal.ts` carries a

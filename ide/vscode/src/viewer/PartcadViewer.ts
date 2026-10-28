@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { InFlight, isCancellation } from '../common/cancellation';
 import { bytesOf } from '../common/framing';
 import { readChoices, writeChoices } from '../common/garage';
 import { traceError, traceInfo, traceVerbose } from '../common/log/logging';
@@ -211,6 +212,18 @@ export class PartcadViewer implements vscode.Disposable {
      * while it is not full screen.
      */
     private videoFullscreenState: { maximized: boolean } | undefined;
+    /**
+     * The daemon requests made for the panel and not answered yet.
+     *
+     * Cancelled as soon as the panel will drop their answers, rather than left
+     * to run while every request behind them waits: all of them when another
+     * object is shown or the panel is cleared or closed (the renderer forgets
+     * every request it had in flight then), and one tab's when that tab is
+     * asked again (the renderer waits for the newest only). A run of an
+     * analysis or a simulation is never replaced by another: each is the
+     * answer to a question of its own (see 'runAnalysis' in the renderer).
+     */
+    private readonly inFlight = new InFlight();
 
     constructor(private readonly extensionUri: vscode.Uri) {
         this.disposables.push(
@@ -259,6 +272,7 @@ export class PartcadViewer implements vscode.Disposable {
     public handle(message: ViewerMessage): void {
         if (message.type === MSG_CLEAR) {
             this.lastShow = undefined;
+            this.inFlight.cancelAll();
             void this.panel?.webview.postMessage({ type: 'clear' });
             return;
         }
@@ -276,6 +290,8 @@ export class PartcadViewer implements vscode.Disposable {
         }
 
         this.lastShow = { ...message, object };
+        // Nothing asked for the previous object is going to be looked at.
+        this.inFlight.cancelAll();
         // A file rendered for the previous object is not this one's to save.
         this.forgetRendered();
 
@@ -399,6 +415,10 @@ export class PartcadViewer implements vscode.Disposable {
             return;
         }
 
+        // Replacing whatever this tab asked for last, unless this is a run: see
+        // 'inFlight'.
+        const run = analysis || command === SIMULATION_RUN;
+        const request = this.inFlight.begin(run ? undefined : tab);
         try {
             // The commands are registered by the backend, so an absent one means
             // no PartCAD is connected -- which is worth saying plainly rather
@@ -406,7 +426,11 @@ export class PartcadViewer implements vscode.Disposable {
             if (!(await vscode.commands.getCommands(true)).includes(command)) {
                 throw new Error('PartCAD is not connected. Use "Restart PartCAD" to reconnect.');
             }
-            const args: Record<string, unknown> = { pkg: target.package, name: target.name };
+            const args: Record<string, unknown> = {
+                pkg: target.package,
+                name: target.name,
+                cancellation: request.token,
+            };
             if (RENDER_TABS.has(tab)) {
                 args.kind = target.kind ?? 'part';
                 args.format = format;
@@ -520,8 +544,14 @@ export class PartcadViewer implements vscode.Disposable {
             }
             post({ data: await vscode.commands.executeCommand(command, args) });
         } catch (error: any) {
+            if (isCancellation(error)) {
+                // Cancelled because the renderer is no longer waiting for it.
+                return;
+            }
             traceError(`Digital Thread: failed to fetch the '${tab}' tab: ${error?.message ?? error}`);
             post({ error: `${error?.message ?? error}` });
+        } finally {
+            this.inFlight.end(request);
         }
     }
 
@@ -583,6 +613,9 @@ export class PartcadViewer implements vscode.Disposable {
     private async fetchDetails(token: number, objects: unknown, width?: number, height?: number): Promise<void> {
         const post = (payload: { items?: unknown; error?: string }) =>
             void this.panel?.webview.postMessage({ type: 'details', token, ...payload });
+        // The renderer asks for one batch at a time, so nothing replaces it but
+        // another object: see 'inFlight'.
+        const request = this.inFlight.begin();
         try {
             if (!(await vscode.commands.getCommands(true)).includes('partcad.manufacturingDetails')) {
                 throw new Error('PartCAD is not connected. Use "Restart PartCAD" to reconnect.');
@@ -591,13 +624,19 @@ export class PartcadViewer implements vscode.Disposable {
                 objects,
                 width,
                 height,
+                cancellation: request.token,
             })) as { items?: unknown } | undefined;
             // Each thumbnail as bytes, as 'fetchTab' posts every file.
             detailsBytes(answer?.items);
             post({ items: answer?.items ?? [] });
         } catch (error: any) {
+            if (isCancellation(error)) {
+                return;
+            }
             traceError(`Digital Thread: failed to fetch the Build vs Buy details: ${error?.message ?? error}`);
             post({ error: `${error?.message ?? error}` });
+        } finally {
+            this.inFlight.end(request);
         }
     }
 
@@ -812,6 +851,8 @@ export class PartcadViewer implements vscode.Disposable {
         panel.onDidDispose(() => {
             if (this.panel === panel) {
                 this.panel = undefined;
+                // Nobody is left to show the answers to.
+                this.inFlight.cancelAll();
                 this.updateSpaceMouse();
                 // A panel closed while its video was full screen leaves no
                 // window in Zen Mode behind it.
@@ -1122,6 +1163,7 @@ export class PartcadViewer implements vscode.Disposable {
     public dispose(): void {
         this.panel?.dispose();
         this.panel = undefined;
+        this.inFlight.cancelAll();
         this.forgetRendered();
         if (this.renderDirectory !== undefined) {
             removeQuietly(this.renderDirectory);

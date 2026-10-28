@@ -27,6 +27,7 @@ import * as vscode from 'vscode';
 import { Disposable } from 'vscode';
 import { createMessageConnection, MessageConnection } from 'vscode-jsonrpc/node';
 
+import { RequestCancelledError } from './cancellation';
 import { AttachmentMessageReader, AttachmentMessageWriter } from './framing';
 import { traceError, traceInfo } from './log/logging';
 import { identity, INSTANTIATE_METHOD, pendingSubassemblies, requestParams } from './staging';
@@ -309,8 +310,15 @@ class JsonRpcBackend implements PartcadBackend {
         }
     }
 
-    private send(method: string, params: any): Promise<any> {
-        return this.sendStaged(method, params, new Set<string>());
+    /**
+     * Make a request, and everything staging it takes.
+     *
+     * `token`, when given, is cancelled by whoever no longer wants the answer
+     * (see `cancellation.ts`): the request is then cancelled on the service, and
+     * no further step of staging it is asked for.
+     */
+    private send(method: string, params: any, token?: vscode.CancellationToken): Promise<any> {
+        return this.sendStaged(method, params, new Set<string>(), token);
     }
 
     /**
@@ -329,10 +337,25 @@ class JsonRpcBackend implements PartcadBackend {
      * looping: an entry named a second time, having already been built, is
      * reported rather than asked for again.
      */
-    private async sendStaged(method: string, params: any, staged: Set<string>): Promise<any> {
+    private async sendStaged(
+        method: string,
+        params: any,
+        staged: Set<string>,
+        token?: vscode.CancellationToken,
+    ): Promise<any> {
         for (;;) {
+            if (token?.isCancellationRequested) {
+                // Between two steps of staging: the one that was running has
+                // been answered, and nothing more is asked for.
+                throw new RequestCancelledError();
+            }
             try {
-                return await this.connection.sendRequest(method, params);
+                // Only with a token when there is one: `sendRequest` takes a
+                // trailing token if it is one, and anything else -- `undefined`
+                // included -- as one more parameter.
+                return await (token === undefined
+                    ? this.connection.sendRequest(method, params)
+                    : this.connection.sendRequest(method, params, token));
             } catch (e: any) {
                 const askedFor = pendingSubassemblies(e?.code, e?.data);
                 if (askedFor.length === 0) {
@@ -353,7 +376,7 @@ class JsonRpcBackend implements PartcadBackend {
                 for (const item of pending) {
                     staged.add(identity(item));
                     traceInfo(`PartCAD: building ${identity(item)} before ${method}`);
-                    await this.sendStaged(INSTANTIATE_METHOD, requestParams(item, params?.context), staged);
+                    await this.sendStaged(INSTANTIATE_METHOD, requestParams(item, params?.context), staged, token);
                 }
             }
         }
@@ -493,67 +516,88 @@ class JsonRpcBackend implements PartcadBackend {
             this.commandDisposables.push(vscode.commands.registerCommand(name, fn));
         };
 
-        reg('partcad.showPart', (a) => this.send('inspect.part', { package: a.pkg, name: a.name, params: a.params }));
+        // `a.cancellation`, here and below, is the token a caller that may
+        // supersede the request passes along with it: the Inspector when a newer
+        // selection replaces the one being rendered, the Digital Thread when the
+        // object or the tab moves on (see `cancellation.ts`). Commands are run
+        // in this process, so it arrives as the object it is.
+        reg('partcad.showPart', (a) =>
+            this.send('inspect.part', { package: a.pkg, name: a.name, params: a.params }, a.cancellation),
+        );
         reg('partcad.showSketch', (a) =>
-            this.send('inspect.sketch', { package: a.pkg, name: a.name, params: a.params }),
+            this.send('inspect.sketch', { package: a.pkg, name: a.name, params: a.params }, a.cancellation),
         );
         reg('partcad.showInterface', (a) =>
-            this.send('inspect.interface', { package: a.pkg, name: a.name, params: a.params }),
+            this.send('inspect.interface', { package: a.pkg, name: a.name, params: a.params }, a.cancellation),
         );
         reg('partcad.showAssembly', (a) =>
-            this.send('inspect.assembly', { package: a.pkg, name: a.name, params: a.params }),
+            this.send('inspect.assembly', { package: a.pkg, name: a.name, params: a.params }, a.cancellation),
         );
-        reg('partcad.showScene', (a) => this.send('inspect.scene', { package: a.pkg, name: a.name, params: a.params }));
+        reg('partcad.showScene', (a) =>
+            this.send('inspect.scene', { package: a.pkg, name: a.name, params: a.params }, a.cancellation),
+        );
         // The Digital Thread's section sliders, on the 3D tab: the object on
         // screen shown again, cut by a box ('inspect.object' with 'section'),
         // which the daemon sends over the viewer protocol like any show. The
         // name is the one it was shown under, parameter values and all, and the
         // kind is said rather than looked up, as the panel knows it.
         reg('partcad.showSection', (a) =>
-            this.send('inspect.object', {
-                package: a.pkg,
-                object: a.name,
-                ...(a.kind && a.kind !== 'part' ? { [a.kind]: true } : {}),
-                section: a.section ?? null,
-            }),
+            this.send(
+                'inspect.object',
+                {
+                    package: a.pkg,
+                    object: a.name,
+                    ...(a.kind && a.kind !== 'part' ? { [a.kind]: true } : {}),
+                    section: a.section ?? null,
+                },
+                a.cancellation,
+            ),
         );
         // What the Digital Thread's tabs beside the 3D one are filled from. Each
         // is the CLI's own operation -- 'pc bom', the assembly instruction book
         // 'pc render -t html' writes, 'pc supply quote' -- asked for as data
         // rather than as a file, because the panel has to draw it.
         reg('partcad.bom', (a) =>
-            this.send('bom', {
-                package: a.pkg,
-                object: a.name,
-                params: a.params,
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                stop_at_purchasable: a.stopAtPurchasable,
-            }),
+            this.send(
+                'bom',
+                {
+                    package: a.pkg,
+                    object: a.name,
+                    params: a.params,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    stop_at_purchasable: a.stopAtPurchasable,
+                },
+                a.cancellation,
+            ),
         );
         reg('partcad.assemblyGuide', (a) =>
-            this.send('assembly.guide', {
-                package: a.pkg,
-                object: a.name,
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                ignore_manufacturability: a.ignoreManufacturability,
-                // 'pc instructions -r' and '-b', and what the user chose to build
-                // and to buy - which the daemon is told rather than reads, since
-                // it is kept on this machine (see 'garage.ts').
-                // Not 'recursive': on a request naming an object, that is a walk
-                // over the packages below it, and the daemon refuses it.
-                subassemblies: a.recursive,
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                build_parts: a.buildParts,
-                choices: a.choices,
-                // When given, the document comes back written in it as well, for
-                // Save: the daemon may be on another machine.
-                format: a.format,
-                // Each picture as its bytes, not as a data URI: the panel makes a
-                // Blob URL of them. A daemon from before this sends data URIs,
-                // which the panel shows as it always did.
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                image_bytes: true,
-            }),
+            this.send(
+                'assembly.guide',
+                {
+                    package: a.pkg,
+                    object: a.name,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    ignore_manufacturability: a.ignoreManufacturability,
+                    // 'pc instructions -r' and '-b', and what the user chose to build
+                    // and to buy - which the daemon is told rather than reads, since
+                    // it is kept on this machine (see 'garage.ts').
+                    // Not 'recursive': on a request naming an object, that is a walk
+                    // over the packages below it, and the daemon refuses it.
+                    subassemblies: a.recursive,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    build_parts: a.buildParts,
+                    choices: a.choices,
+                    // When given, the document comes back written in it as well, for
+                    // Save: the daemon may be on another machine.
+                    format: a.format,
+                    // Each picture as its bytes, not as a data URI: the panel makes a
+                    // Blob URL of them. A daemon from before this sends data URIs,
+                    // which the panel shows as it always did.
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    image_bytes: true,
+                },
+                a.cancellation,
+            ),
         );
         // The Manufacturing tabs. The tree is what an object is made of and what
         // each part of it declares about being built and bought - no geometry,
@@ -562,61 +606,85 @@ class JsonRpcBackend implements PartcadBackend {
         // the order it is built in, and with 'document' the pages of the
         // instruction book it points into.
         reg('partcad.manufacturingTree', (a) =>
-            this.send('manufacturing.tree', { package: a.pkg, object: a.name, kind: a.kind }),
+            this.send('manufacturing.tree', { package: a.pkg, object: a.name, kind: a.kind }, a.cancellation),
         );
         reg('partcad.manufacturingDetails', (a) =>
-            this.send('manufacturing.details', { objects: a.objects, width: a.width, height: a.height }),
+            this.send(
+                'manufacturing.details',
+                { objects: a.objects, width: a.width, height: a.height },
+                a.cancellation,
+            ),
         );
         reg('partcad.manufacturingPlan', (a) =>
-            this.send('manufacturing.plan', {
-                package: a.pkg,
-                object: a.name,
-                kind: a.kind,
-                choices: a.choices,
-                subassemblies: a.recursive,
-                document: a.document,
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                ignore_manufacturability: a.ignoreManufacturability,
-                // As for 'assembly.guide' above.
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                image_bytes: true,
-            }),
+            this.send(
+                'manufacturing.plan',
+                {
+                    package: a.pkg,
+                    object: a.name,
+                    kind: a.kind,
+                    choices: a.choices,
+                    subassemblies: a.recursive,
+                    document: a.document,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    ignore_manufacturability: a.ignoreManufacturability,
+                    // As for 'assembly.guide' above.
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    image_bytes: true,
+                },
+                a.cancellation,
+            ),
         );
         // The Requirements tab: what the object is required to be, and with
         // 'verify' whether the model is it ('pc test -f requirements').
         reg('partcad.requirements', (a) =>
-            this.send('requirements.check', { package: a.pkg, object: a.name, kind: a.kind, verify: a.verify }),
+            this.send(
+                'requirements.check',
+                { package: a.pkg, object: a.name, kind: a.kind, verify: a.verify },
+                a.cancellation,
+            ),
         );
         // The Test tab: every check 'pc test' runs on one object, and with
         // 'verify' how each came out.
         reg('partcad.testReport', (a) =>
-            this.send('test.report', { package: a.pkg, object: a.name, kind: a.kind, verify: a.verify }),
+            this.send(
+                'test.report',
+                { package: a.pkg, object: a.name, kind: a.kind, verify: a.verify },
+                a.cancellation,
+            ),
         );
         reg('partcad.supplyQuote', (a) =>
-            this.send('supply.quote', { package: a.pkg, object: a.name, qos: a.qos, recursive: a.recursive }),
+            this.send(
+                'supply.quote',
+                { package: a.pkg, object: a.name, qos: a.qos, recursive: a.recursive },
+                a.cancellation,
+            ),
         );
         // The Analysis tabs - FEA, Dynamic FEA, Heat Transfer and CFD. What a
         // part declares for each of them is configuration, read on every show
         // to decide which apply: the scenarios of every analysis, one request.
-        reg('partcad.caeList', (a) => this.send('cae.list', { package: a.pkg, object: a.name }));
+        reg('partcad.caeList', (a) => this.send('cae.list', { package: a.pkg, object: a.name }, a.cancellation));
         // Running one is one command for all of them, as one operation backs
         // every 'pc cae <analysis>' (fea, dynamic, thermal, cfd): which one is
         // asked for is an argument, not a method, and so is the scenario of it
         // ('pc cae <analysis> -f <name>'; left out, every scenario is run).
         reg('partcad.cae', (a) =>
-            this.send('cae.analyze', {
-                package: a.pkg,
-                object: a.name,
-                analysis: a.analysis,
-                scenario: a.scenario,
-                implementation: a.implementation,
-                // The panel has no file system in reach, so the model comes back
-                // as bytes rather than as a path on the daemon's machine.
-                inline: a.inline === true,
-                // The findings are drawn by the panel, so the daemon need not
-                // also print the table it prints for the CLI.
-                json: true,
-            }),
+            this.send(
+                'cae.analyze',
+                {
+                    package: a.pkg,
+                    object: a.name,
+                    analysis: a.analysis,
+                    scenario: a.scenario,
+                    implementation: a.implementation,
+                    // The panel has no file system in reach, so the model comes back
+                    // as bytes rather than as a path on the daemon's machine.
+                    inline: a.inline === true,
+                    // The findings are drawn by the panel, so the daemon need not
+                    // also print the table it prints for the CLI.
+                    json: true,
+                },
+                a.cancellation,
+            ),
         );
         reg('partcad.caeDefaults', () => this.send('cae.defaults', {}));
         // The Validation group's Simulation tab. What an object declares under
@@ -624,62 +692,70 @@ class JsonRpcBackend implements PartcadBackend {
         // group applies; running one is 'pc sim -f <name>', with the pictures
         // the plugin took of the scene sent back as bytes rather than as paths.
         reg('partcad.simulateList', (a) =>
-            this.send('simulate.list', { package: a.pkg, object: a.name, kind: a.kind }),
+            this.send('simulate.list', { package: a.pkg, object: a.name, kind: a.kind }, a.cancellation),
         );
         reg('partcad.simulateRun', (a) =>
-            this.send('simulate.run', {
-                package: a.pkg,
-                object: a.name,
-                assembly: a.kind === 'assembly',
-                // A stack of blocks is a scene, and declares 'simulate:' too.
-                scene: a.kind === 'scene',
-                filter: a.scenario,
-                // Another simulation plugin than the one it names, when the
-                // panel's "Simulated by" says so.
-                plugin: a.plugin,
-                // Where the pictures are taken from, when the view panel says.
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                viewport_origin: a.viewportOrigin,
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                viewport_up: a.viewportUp,
-                inline: true,
-            }),
+            this.send(
+                'simulate.run',
+                {
+                    package: a.pkg,
+                    object: a.name,
+                    assembly: a.kind === 'assembly',
+                    // A stack of blocks is a scene, and declares 'simulate:' too.
+                    scene: a.kind === 'scene',
+                    filter: a.scenario,
+                    // Another simulation plugin than the one it names, when the
+                    // panel's "Simulated by" says so.
+                    plugin: a.plugin,
+                    // Where the pictures are taken from, when the view panel says.
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    viewport_origin: a.viewportOrigin,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    viewport_up: a.viewportUp,
+                    inline: true,
+                },
+                a.cancellation,
+            ),
         );
         // The Design tab's 2D and Draft tabs: one object rendered to one file,
         // which comes back as bytes, since the daemon may be on another machine.
         // 'plugin' is the package that implements the file type, as 'pc render
         // -e' names one; left out, PartCAD's own renderers draw it.
         reg('partcad.renderInline', (a) =>
-            this.send('render.inline', {
-                package: a.pkg,
-                object: a.name,
-                kind: a.kind,
-                format: a.format,
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                options_package: a.plugin,
-                // The panel beside the drawing: which links of the object to
-                // keep, and whether its ports and interfaces are drawn on top of
-                // the projection. The same two things 'pc render --filter' and
-                // '--with-ports'/'--with-interfaces'/'--with-internals' ask for,
-                // under the names that operation reads.
-                filter: a.filter,
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                with_ports: a.withPorts,
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                with_interfaces: a.withInterfaces,
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                with_internals: a.withInternals,
-                // Which ports, where the panel narrowed it to some of them.
-                ports: a.ports,
-                // The view panel beside it: where the picture is looked at from
-                // ('pc render --viewport-origin/--viewport-up'), and what the
-                // object is cut to before it is drawn.
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                viewport_origin: a.viewportOrigin,
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                viewport_up: a.viewportUp,
-                section: a.section,
-            }),
+            this.send(
+                'render.inline',
+                {
+                    package: a.pkg,
+                    object: a.name,
+                    kind: a.kind,
+                    format: a.format,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    options_package: a.plugin,
+                    // The panel beside the drawing: which links of the object to
+                    // keep, and whether its ports and interfaces are drawn on top of
+                    // the projection. The same two things 'pc render --filter' and
+                    // '--with-ports'/'--with-interfaces'/'--with-internals' ask for,
+                    // under the names that operation reads.
+                    filter: a.filter,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    with_ports: a.withPorts,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    with_interfaces: a.withInterfaces,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    with_internals: a.withInternals,
+                    // Which ports, where the panel narrowed it to some of them.
+                    ports: a.ports,
+                    // The view panel beside it: where the picture is looked at from
+                    // ('pc render --viewport-origin/--viewport-up'), and what the
+                    // object is cut to before it is drawn.
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    viewport_origin: a.viewportOrigin,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    viewport_up: a.viewportUp,
+                    section: a.section,
+                },
+                a.cancellation,
+            ),
         );
         reg('partcad.renderFormats', (a) => this.send('render.formats', { package: a.package }));
         reg('partcad.exportPart', (type, path, pkg, name, params) =>
