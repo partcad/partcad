@@ -153,3 +153,24 @@ def test_another_form_is_left_to_build123d():
         _old_relocate(BRepPrimAPI_MakeBox(1, 1, 1).Shape(), offset)
     )
     assert wrapper_transform._packed_transformation([[1, 2, 3], [0, 0, 1], True]) is None
+
+
+def test_a_scale_that_is_not_a_number_is_left_to_build123d():
+    """Three factors, one per axis: build123d's to make sense of, as it always was."""
+    pytest.importorskip("build123d")
+    factors = (1.0, 2.0, 3.0)
+    new = wrapper_transform.scale(BRepPrimAPI_MakeBox(1, 1, 1).Shape(), factors)
+    assert _brep(new) == _brep(_old_scale(BRepPrimAPI_MakeBox(1, 1, 1).Shape(), factors))
+    assert [round(value, 6) for value in _box(new)] == [0.0, 0.0, 0.0, 1.0, 2.0, 3.0]
+
+
+@pytest.mark.parametrize(
+    "offset",
+    [
+        [[1, 2], [0, 0, 1], 5],
+        [[1, 2, 3], [0, 0, "z"], 5],
+        "[[1, 2, 3], [0, 0, 1], 5]",
+    ],
+)
+def test_what_is_not_the_packed_form_is_not_built_here(offset):
+    assert wrapper_transform._packed_transformation(offset) is None

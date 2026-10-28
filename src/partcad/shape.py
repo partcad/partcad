@@ -1062,9 +1062,16 @@ class Shape(ShapeConfiguration):
             finished = self._finished_by_wrapper(claim)
             # Every part, by the one validation every part goes through,
             # before anything is recorded or cached: see '_validated_part'.
+            # Already taken by the wrapper that built it, where it could, on
+            # the live shape and with the same two functions: then the part is
+            # converted already, and all that is left is to say what is wrong
+            # with it, in the same words.
             verdict = finished.get(shape_envelope.FINISHED_VALIDATED)
-            if self.kind == "part" and shape_envelope.is_shape_object(shape) and (ctx is not None or verdict):
-                shape = await self._validated_part(ctx, shape, verdict)
+            if self.kind == "part" and shape_envelope.is_shape_object(shape):
+                if verdict is not None:
+                    self._not_a_solid(verdict.get("problems") or [])
+                elif ctx is not None:
+                    shape = await self._validated_part(ctx, shape)
             if self.components:
                 self.components = [self._component_to_envelope(c) for c in self.components]
 
@@ -3749,7 +3756,7 @@ class Shape(ShapeConfiguration):
         if problems:
             pc_logging.warning("%s:%s is not a solid: %s" % (self.project_name, self.name, "; ".join(problems)))
 
-    async def _validated_part(self, ctx, envelope, verdict=None):
+    async def _validated_part(self, ctx, envelope):
         """A part's envelope as every part leaves its factory: solidified, and judged.
 
         The one validation every part goes through, whatever made it - a
@@ -3776,15 +3783,11 @@ class Shape(ShapeConfiguration):
         Asked in that sandbox only of a part nothing has validated yet. The
         wrapper that built the part does it itself wherever it can, on the live
         shape and with the same two functions, and hands back the part already
-        converted ('wrapper_common.finished'): its 'verdict' - which conversion
-        it was asked for, and the problems it found - is all that is left to
-        report here, in the same words. What still comes here is what no such
+        converted ('wrapper_common.finished'), which leaves 'get_wrapped' only
+        the problems it found to report. What still comes here is what no such
         wrapper built: a JavaScript part, a part an in-process factory made, a
         reference to another part, and a wrapper that could not finish it.
         """
-        if verdict is not None:
-            self._not_a_solid(verdict.get("problems") or [])
-            return envelope
         # Except a part read from a STEP or BREP file: see '_solidifies'.
         solidify = self._solidifies()
         try:

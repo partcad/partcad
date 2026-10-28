@@ -99,6 +99,21 @@ def test_the_two_ends_spell_the_protocol_alike():
     assert ocp_serialize.FINISHED_DECLINED == shape_envelope.FINISHED_DECLINED
 
 
+def test_the_claim_is_taken_off_and_nothing_else_is():
+    claim = {"validated": {"solidify": True, "problems": []}}
+    sections = {"header": "kept"}
+    with_more = {"brep": b"x", "metadata": {"finished": claim, "sections": sections}}
+    assert shape_envelope.take_finished(with_more) == ({"brep": b"x", "metadata": {"sections": sections}}, claim)
+    assert with_more["metadata"]["finished"] == claim, "the envelope it was taken from is left as it was"
+    # A claim that was all the metadata held takes the metadata with it.
+    assert shape_envelope.take_finished({"brep": b"x", "metadata": {"finished": claim}}) == ({"brep": b"x"}, claim)
+    # Nothing to take, and something that is not a claim.
+    plain = {"brep": b"x", "metadata": {"sections": sections}}
+    assert shape_envelope.take_finished(plain) == (plain, {})
+    assert shape_envelope.take_finished(None) == (None, {})
+    assert shape_envelope.take_finished({"brep": b"x", "metadata": {"finished": "yes"}}) == ({"brep": b"x"}, {})
+
+
 def test_the_request_is_taken_off_before_the_wrapper_sees_it(monkeypatch):
     """A partType wrapper hands its request on to the package's script, which has no business with it."""
     for name in ("_request_finish", "_request_name", "_request_label"):
@@ -111,6 +126,9 @@ def test_the_request_is_taken_off_before_the_wrapper_sees_it(monkeypatch):
 
     wrapper_common.remember_request({"name": "other", ocp_serialize.KEY_FINISH: "not a request"})
     assert wrapper_common._request_finish is None
+    # Not a request a part is built from at all: nothing is remembered of it.
+    wrapper_common.remember_request(["not", "a", "dict"])
+    assert wrapper_common._request_name == "other"
 
 
 def test_a_request_that_asks_nothing_gets_its_shape_back_as_it_was(asked):
@@ -181,6 +199,13 @@ def test_it_is_moved_and_scaled_after_it_is_validated_and_says_so(asked):
     assert finished[ocp_serialize.KEY_METADATA]["measurements"]["bbox"] == pytest.approx(_bbox(shape))
 
 
+def test_a_request_to_move_it_alone_moves_it_alone(asked):
+    asked({"offset": OFFSET})
+    finished = wrapper_common.finished(_box())
+    assert finished[ocp_serialize.KEY_METADATA][ocp_serialize.METADATA_FINISHED] == {"offset": OFFSET}
+    assert _bbox(_decoded(finished)) == [10.0, 0.0, 0.0, 20.0, 20.0, 30.0]
+
+
 def test_a_step_that_fails_is_left_to_the_core_with_everything_after_it(asked, monkeypatch, capfd):
     def refuse(shape, factor):
         raise ValueError("no such factor")
@@ -218,10 +243,15 @@ def test_a_validation_that_fails_claims_nothing_and_moves_nothing(asked, monkeyp
 
 def test_several_shapes_leave_as_one_part(asked):
     """What 'transform.compound' did in a sandbox of its own, done before the part is finished."""
+    from OCP.TopLoc import TopLoc_Location
+    from OCP.TopoDS import TopoDS_Shape
+
     first = _box()
     second = BRepPrimAPI_MakeBox(5.0, 5.0, 5.0).Shape()
     asked({"validate": {"solidify": True}, "scale": 2})
-    answer = wrapper_common.finished_shapes([first, None, second])
+    # Nothing, a null shape and a location a script showed are skipped, as the
+    # sandbox that used to compound them skipped them.
+    answer = wrapper_common.finished_shapes([first, None, TopoDS_Shape(), TopLoc_Location(), second])
 
     assert len(answer) == 1
     claim = answer[0][ocp_serialize.KEY_METADATA][ocp_serialize.METADATA_FINISHED]
@@ -385,6 +415,14 @@ def test_what_the_wrapper_could_not_do_is_done_here(sandboxes, caplog):
 def test_a_claim_nobody_can_account_for_is_refused(sandboxes, config, claim):
     with pytest.raises(Exception, match="was not asked to"):
         asyncio.run(_Uncached(config=config, claim=claim).get_wrapped(object()))
+
+
+def test_only_a_part_is_finished_by_its_wrapper(sandboxes):
+    """A sketch asks for nothing, so a claim on one is a claim nobody asked for."""
+    sketch = _Uncached(config={"offset": OFFSET}, claim={"offset": OFFSET})
+    sketch.kind = "sketch"
+    with pytest.raises(Exception, match="was not asked to"):
+        asyncio.run(sketch.get_wrapped(object()))
 
 
 #
