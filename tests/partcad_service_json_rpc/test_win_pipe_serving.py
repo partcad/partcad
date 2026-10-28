@@ -292,6 +292,20 @@ def test_a_queued_request_that_is_cancelled_is_answered_at_once_and_never_runs()
     assert ran == []
 
 
+def test_a_cancellation_sent_as_a_request_is_answered_as_well():
+    """The editor sends '$/cancelRequest' as a notification; a client that sends it with an id waits for an answer."""
+
+    async def run():
+        async with _served({}) as (reader, writer):
+            rendezvous.write_frame(
+                writer, {"jsonrpc": "2.0", "id": 7, "method": "$/cancelRequest", "params": {"id": 99}}
+            )
+            await writer.drain()
+            return await asyncio.wait_for(rendezvous.read_frame(reader), TIMEOUT)
+
+    assert asyncio.run(run()) == {"jsonrpc": "2.0", "id": 7, "result": None}
+
+
 async def _writer_pair():
     """A 'PipeWriter' writing to a socket whose other end nobody reads, and that end."""
     loop = asyncio.get_running_loop()

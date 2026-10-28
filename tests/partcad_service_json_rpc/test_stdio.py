@@ -146,6 +146,21 @@ def test_a_queued_request_that_is_cancelled_is_answered_and_never_runs():
     assert ran == []
 
 
+def test_a_cancellation_sent_as_a_request_is_answered_as_well():
+    """The editor sends '$/cancelRequest' as a notification; a client that sends it with an id waits for an answer."""
+    stdin = io.BytesIO(
+        _requests(
+            {"jsonrpc": "2.0", "id": 7, "method": "$/cancelRequest", "params": {"id": 99}},
+            {"jsonrpc": "2.0", "id": 1, "method": "n", "params": {"n": 1}},
+        )
+    )
+    stdout = io.BytesIO()
+    stdio.serve(stdin, stdout, Session(), {"n": lambda s, p: p["n"]})
+    answers = _drain(stdout)
+    assert {"jsonrpc": "2.0", "id": 7, "result": None} in answers
+    assert {"jsonrpc": "2.0", "id": 1, "result": 1} in answers
+
+
 def test_everything_asked_is_answered_in_order_before_serving_ends():
     # The end of stdin is the client done sending: what it sent is still owed.
     stdin = io.BytesIO(_requests(*({"jsonrpc": "2.0", "id": n, "method": "n", "params": {"n": n}} for n in range(20))))

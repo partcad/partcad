@@ -334,8 +334,11 @@ def _connection_handler(
                     continue
 
                 if isinstance(request, dict) and request.get("method") == CANCEL_METHOD:
-                    # Answered by the request it names (see 'core.cancellation').
+                    # Answered by the request it names (see 'core.cancellation'),
+                    # and with nothing itself if it was sent as a request.
                     requests.cancel(request.get("params"))
+                    if "id" in request:
+                        out.put(encoded({"jsonrpc": "2.0", "id": request["id"], "result": None}))
                     continue
 
                 job = Job(request, notify, respond, finish)

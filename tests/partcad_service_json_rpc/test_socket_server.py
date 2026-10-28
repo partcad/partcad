@@ -443,6 +443,20 @@ def test_a_running_request_that_is_cancelled_stops_at_its_next_safe_point(socket
         server.stop()
 
 
+def test_a_cancellation_sent_as_a_request_is_answered_as_well(socket_dir):
+    # The editor sends '$/cancelRequest' as a notification; a client that sends
+    # it with an id is waiting for an answer, which nothing else would give.
+    server, path, _ = _serve(socket_dir, {})
+    try:
+        f, c = _connect(path)
+        c.settimeout(TIMEOUT)
+        write_message(f, {"jsonrpc": "2.0", "id": 7, "method": "$/cancelRequest", "params": {"id": 99}})
+        assert read_message(f) == {"jsonrpc": "2.0", "id": 7, "result": None}
+        _close(f, c)
+    finally:
+        server.stop()
+
+
 def test_a_client_that_goes_away_has_its_request_cancelled(socket_dir):
     # 'pc render -r' interrupted with Ctrl-C: nobody can read what it goes on
     # producing, and the next command would wait for all of it.

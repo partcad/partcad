@@ -126,7 +126,12 @@ def serve(read_stream: BinaryIO, write_stream: BinaryIO, session, registry: Mapp
                 continue
 
             if isinstance(request, dict) and request.get("method") == CANCEL_METHOD:
+                # Answered by the request it names, and with nothing itself if
+                # it was sent as a request (see 'socket_server').
                 requests.cancel(request.get("params"))
+                if "id" in request:
+                    with lock:
+                        write_message(write_stream, {"jsonrpc": "2.0", "id": request["id"], "result": None})
                 continue
 
             job = Job(request, None, respond, requests.untrack)

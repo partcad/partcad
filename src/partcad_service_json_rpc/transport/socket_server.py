@@ -308,8 +308,13 @@ class SocketServer:
                 if isinstance(request, dict) and request.get("method") == CANCEL_METHOD:
                     # A notification, answered by the request it names: at once
                     # if that one is still queued, by its handler if it is
-                    # running (see 'core.cancellation').
+                    # running (see 'core.cancellation'). Sent as a request it is
+                    # answered as well, with nothing: JSON-RPC answers every
+                    # message that has an id, and its sender is waiting.
                     requests.cancel(request.get("params"))
+                    if "id" in request:
+                        with write_lock:
+                            write({"jsonrpc": "2.0", "id": request["id"], "result": None})
                     continue
 
                 self._submit(request, requests, sink, write, write_lock, token)
