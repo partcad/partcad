@@ -1658,9 +1658,18 @@ jobs:
           git add -A -- examples "${UNSTABLE[@]}"
 
           if ! git diff --cached --quiet -- examples "${UNSTABLE[@]}"; then
-            echo "::error::'pc render -r' changed the checked-in examples. Re-render locally ('cd examples && pc render -r') and commit the result, or fix the regression."
+            echo "::error::'pc render -r' changed the checked-in examples. Re-render locally ('cd examples && pc render -r') and commit the result, or fix the regression. This cell's files are in the test results artifact, under 'rendered/'."
             git diff --cached --name-status -- examples "${UNSTABLE[@]}"
             git --no-pager diff --cached -- examples "${UNSTABLE[@]}"
+            # What this cell rendered, uploaded with the test results below: a
+            # drawing in LFS shows above as nothing but a new pointer, and one
+            # that comes out differently on another machine cannot be re-rendered
+            # there into the file this check holds the tree to.
+            git diff --cached --name-only --diff-filter=AM -z -- examples "${UNSTABLE[@]}" |
+              while IFS= read -r -d '' changed; do
+                mkdir -p "examples-partcad-test-results/rendered/$(dirname "$changed")"
+                cp "$changed" "examples-partcad-test-results/rendered/$changed"
+              done
             exit 1
           fi
 
