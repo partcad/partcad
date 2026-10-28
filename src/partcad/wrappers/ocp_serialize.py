@@ -565,7 +565,7 @@ def make_metadata(measurements=None, annotations=None, sections=None):
     return metadata
 
 
-def encode_shape(shape, name=None, label=None, metadata=None) -> dict:
+def encode_shape(shape, name=None, label=None, metadata=None, measurer=None) -> dict:
     """Represent a single shape as {"name", "label", "brep", "metadata"}, ready for JSON.
 
     The shape is measured on the way through, and the numbers go into the
@@ -584,10 +584,14 @@ def encode_shape(shape, name=None, label=None, metadata=None) -> dict:
     rather than over them, because it comes from a wrapper that read a file
     while the measurements come from the geometry in hand, and on the one key
     they could share the geometry is the more recent truth.
+
+    'measurer' is the 'shape_measure.Measurer' of the document this shape is
+    part of, so that a solid it shares with another shape there is measured
+    once; without one, the shape is measured on its own.
     """
     import shape_measure
 
-    measured = shape_measure.measurements_or_none(shape)
+    measured = (measurer or shape_measure.Measurer()).measurements_or_none(shape)
     combined = dict(metadata or {})
     if measured:
         combined[METADATA_MEASUREMENTS] = measured
@@ -738,7 +742,7 @@ def _decode_tree(obj, shared):
     raise ValueError("Not a shape or assembly object: %r" % (list(obj) if isinstance(obj, dict) else type(obj)))
 
 
-def encode(obj, name=None, label=None):
+def encode(obj, name=None, label=None, measurer=None):
     """Convert 'obj' into a structure made only of JSON-native values.
 
     A TopoDS_Shape becomes a shape object. 'name'/'label', when given, are
@@ -760,9 +764,19 @@ def encode(obj, name=None, label=None):
     load the kernel to find out it was not. A value only reaches _ensure_ocp()
     here when it is neither a scalar nor a container, which is the only way it
     could be OCCT.
+
+    Every shape in 'obj' is measured with one 'shape_measure.Measurer' -
+    'measurer', when the caller has one - so that a solid two of them share, a
+    part shown twice or placed twice, is measured once.
     """
     if obj is None or isinstance(obj, (bool, int, float, str)):
         return obj
+
+    if measurer is None:
+        # Not the kernel: 'shape_measure' imports OCP only once it measures.
+        import shape_measure
+
+        measurer = shape_measure.Measurer()
 
     if isinstance(obj, dict):
         # An already-built shape/assembly object keeps its own metadata verbatim.
@@ -773,16 +787,16 @@ def encode(obj, name=None, label=None):
                     # Raw bytes reach here only in-process; on the pipe it is base64 already.
                     encoded[key] = value if isinstance(value, str) else base64.b64encode(value).decode("ascii")
                 elif key == KEY_ASSEMBLY:
-                    encoded[key] = [encode(child, name, label) for child in value]
+                    encoded[key] = [encode(child, name, label, measurer) for child in value]
                 elif key in (KEY_LOCATION, "name", "label"):
                     encoded[key] = value
                 else:
-                    encoded[key] = encode(value, name, label)
+                    encoded[key] = encode(value, name, label, measurer)
             return encoded
-        return {key: encode(value, name, label) for key, value in obj.items()}
+        return {key: encode(value, name, label, measurer) for key, value in obj.items()}
 
     if isinstance(obj, (list, tuple, set, frozenset)):
-        return [encode(item, name, label) for item in obj]
+        return [encode(item, name, label, measurer) for item in obj]
 
     if isinstance(obj, (bytes, bytearray)):
         return {KEY_BYTES: base64.b64encode(bytes(obj)).decode("ascii")}
@@ -793,7 +807,7 @@ def encode(obj, name=None, label=None):
     # Nothing JSON-native is left, so this is where the kernel is needed.
     _ensure_ocp()
     if isinstance(obj, OCP.TopoDS.TopoDS_Shape):
-        return encode_shape(obj, name=name, label=label)
+        return encode_shape(obj, name=name, label=label, measurer=measurer)
 
     if type(obj).__module__.split(".")[0] == "OCP":
         _warn("dropping non-shape OCCT object of type %s" % type(obj))

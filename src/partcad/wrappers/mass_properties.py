@@ -17,9 +17,10 @@ disagree about where it balances.
 Deliberately free of every dependency but 'urdf_common', which is free of every
 dependency: no OCP, so the core can import it without loading a CAD kernel,
 and the exporters can do this without one too. The geometry's share of a mass
-is measured once, by OCCT, as the shape is built (see
+is measured once per solid, by OCCT, as the shape is built (see
 'shape_measure.distribution()'), and everything after that is a handful of
-3x3 matrices.
+3x3 matrices - adding a compound's solids up included, which 'shape_measure'
+does with 'added_up()' below rather than with a copy of its own.
 
 The currency is a PartCAD ``physics`` dict - the names and the units a part
 states its own under, so that what a part states and what is worked out for it
@@ -210,32 +211,53 @@ def combined(parts):
     weighed = [part for part in parts if weighs(part)]
     if not weighed:
         return None
-    total = sum(float(part["mass"]) for part in weighed)
-    centres = [[float(v) for v in (part.get("centerOfMass") or (0.0, 0.0, 0.0))] for part in weighed]
-    centre = [sum(float(part["mass"]) * c[axis] for part, c in zip(weighed, centres)) / total for axis in range(3)]
+    tensors = [tensor_of(part) for part in weighed]
+    total, centre, tensor = added_up(
+        (
+            float(part["mass"]),
+            [float(v) for v in (part.get("centerOfMass") or (0.0, 0.0, 0.0))],
+            _ZERO if own is None else own,
+        )
+        for part, own in zip(weighed, tensors)
+    )
 
-    any_inertia = False
+    result = {"mass": total, "centerOfMass": centre}
+    # Point masses all of them, and only one: a single point has no inertia to
+    # speak of, and a zero tensor written out would claim one.
+    if any(own is not None for own in tensors) or len(weighed) > 1:
+        result["inertia"] = inertia_of(tensor)
+    return result
+
+
+def added_up(items, length_unit=MM_PER_M):
+    """'(mass, centre, tensor)' for several '(mass, centre, tensor)' held rigidly together.
+
+    The arithmetic of 'combined()', on bare numbers rather than physics dicts:
+    every item is stated in one frame, with its tensor about its own centre. The
+    masses add, the centre is their weighted mean, and each tensor is moved to
+    that common centre by the parallel-axis theorem before the tensors are
+    added. Every mass must be positive - nothing here asks.
+
+    'length_unit' is how many of the centres' unit make one of the tensor's
+    length unit: a physics dict states its centre in millimetres and its inertia
+    in kg*m^2, so a thousand, while what 'shape_measure' adds up - the volumes
+    of solids, and their inertia at unit density in mm^5 - is in millimetres
+    throughout, so one. It is here, rather than written out again there, so
+    that a compound's inertia and a body's are worked out by one rule.
+    """
+    items = list(items)
+    total = sum(mass for mass, _centre, _tensor in items)
+    centre = [sum(mass * own_centre[axis] for mass, own_centre, _tensor in items) / total for axis in range(3)]
+
     tensor = [[0.0] * 3 for _ in range(3)]
-    for part, own_centre in zip(weighed, centres):
-        mass = float(part["mass"])
-        own = tensor_of(part)
-        if own is None:
-            own = _ZERO
-        else:
-            any_inertia = True
-        offset = [(own_centre[axis] - centre[axis]) / MM_PER_M for axis in range(3)]
+    for mass, own_centre, own in items:
+        offset = [(own_centre[axis] - centre[axis]) / length_unit for axis in range(3)]
         square = sum(v * v for v in offset)
         for row in range(3):
             for col in range(3):
                 shift = mass * ((square if row == col else 0.0) - offset[row] * offset[col])
                 tensor[row][col] += own[row][col] + shift
-
-    result = {"mass": total, "centerOfMass": centre}
-    # Point masses all of them, and only one: a single point has no inertia to
-    # speak of, and a zero tensor written out would claim one.
-    if any_inertia or len(weighed) > 1:
-        result["inertia"] = inertia_of(tensor)
-    return result
+    return total, centre, tensor
 
 
 def of_body(parts, own=None):
@@ -351,10 +373,20 @@ def weighs(physics):
     return math.isfinite(mass) and mass > 0.0
 
 
+def turned(tensor, matrix):
+    """R T R^T: 'tensor' as seen from a frame turned by the 3x3 rotation 'matrix'.
+
+    The one way a tensor is turned, whoever holds the rotation: 'placed()' as a
+    quaternion, by way of '_rotated()', and 'shape_measure' as the matrix of an
+    OCCT location.
+    """
+    left = [[sum(matrix[row][k] * tensor[k][col] for k in range(3)) for col in range(3)] for row in range(3)]
+    return [[sum(left[row][k] * matrix[col][k] for k in range(3)) for col in range(3)] for row in range(3)]
+
+
 def _rotated(tensor, rotation):
     """R T R^T, for the rotation quaternion 'rotation'."""
     # The columns of R are the images of the basis vectors.
     columns = [urdf_common.rotate_vec(rotation, axis) for axis in ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))]
     matrix = [[columns[col][row] for col in range(3)] for row in range(3)]
-    left = [[sum(matrix[row][k] * tensor[k][col] for k in range(3)) for col in range(3)] for row in range(3)]
-    return [[sum(left[row][k] * matrix[col][k] for k in range(3)) for col in range(3)] for row in range(3)]
+    return turned(tensor, matrix)

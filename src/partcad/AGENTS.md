@@ -839,6 +839,15 @@ at all).
   deserialized, to compute what was free at build time. `shape_measure.bbox` drops the gap OCCT pads a box by,
   so a 120 mm block measures 120.
 
+  **A solid is integrated once per encoded document, however often it is met** (`shape_measure.Measurer`, one
+  per `ocp_serialize.encode()`): `VolumeProperties` is the expensive part of encoding, often dearer than writing
+  the BREP. A shape met again (same `TShape`, location and orientation) is the numbers it had; a solid met again
+  somewhere else is moved there (`mass_properties.turned`) rather than integrated; and a compound is worked out
+  from its children - their solids, added up by `mass_properties.added_up` (the parallel-axis rule every body
+  an exporter writes is added up with), and the union of their boxes, which is exactly the box OCCT draws round
+  the compound. The numbers agree with integrating the compound whole to float rounding, which
+  `tests/partcad/unit/test_shape_measure.py` holds them to.
+
   `Shape.get_bounding_box_async` reads that recorded box too; it does not measure a shape that carries one.
   `wrapper_measure` still exists for what was not measured at build time: `measure.bbox(frame=...)`, which
   re-measures a shape in a **port's** frame rather than its own, and the bounding box of a shape that recorded
