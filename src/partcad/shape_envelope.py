@@ -41,14 +41,21 @@ on the layer, and that is the whole reason this module exists:
   * In memory, in the file cache and in every remote cache it is 'bytes' - the
     compressed frame itself. Nothing there needs it to be text, and base64
     would cost a third more space and a copy in each direction.
-  * On the wrapper pipe it is a base64 'str', because that hop is JSON and JSON
-    has no byte type. 'encode()' puts it into that form and 'decode()' takes it
-    straight back out, so the boundary is these two functions and nowhere else.
+  * On the pipe to PartCAD's own Python wrappers it is 'bytes' too: a request
+    and an answer there are a frame ('serialize()'), JSON naming each payload
+    as an attachment that follows it raw.
+  * In JSON it is a base64 'str', because JSON has no byte type: what a
+    container or a JavaScript runtime is sent ('dumps()'), which parse their
+    requests themselves. 'encode()' puts it into that form and 'decode()' takes
+    it straight back out, so the boundary is these two functions and nowhere
+    else.
 """
 
 import base64
 import hashlib
 import json
+
+from partcad_utils import framing
 
 try:
     # Python 3.14 and newer carry zstd in the standard library; below that the
@@ -125,6 +132,12 @@ KEY_GLTF_REF = "gltfRef"
 # 'wrappers/ocp_serialize.py'), so nothing that walks a tree ever sees it. It is
 # written only when it makes the document smaller ('table_saves_space'), so a
 # document with nothing repeated is exactly the document it always was.
+#
+# It is the JSON form's ('dumps()'), and the shape cache's (see
+# 'cache_shape._TREE_MAGIC'). A frame ('serialize()') has no use for it: it
+# attaches each distinct payload once and names it from every node, which is
+# the same sharing with no digests to compute. Both readers still take a table
+# wherever one is, a frame included.
 KEY_BREPS = "__breps__"
 KEY_BREP_REF = "brepRef"
 
@@ -499,6 +512,43 @@ class Payloads:
         )
 
 
+class Distinct:
+    """One bytes object per distinct payload of a frame, which then carries each once.
+
+    A frame writes an object once however many times the document names it
+    (see 'partcad_utils.framing'), and every leaf of a tree built in this
+    process shares the bytes object of the part it holds, so most repeats are
+    one object already and cost nothing to find. What is left is two objects
+    with the same bytes - a sub-assembly read back from the cache next to one
+    just built - and those are found by comparing payloads of the same length
+    only, which is cheaper than the digest of every payload a table is keyed by
+    (see 'Payloads'), and needs no table: the frame's reader hands every node
+    naming one attachment the one bytes object.
+
+    The same arrangement as 'ocp_serialize.Distinct', on the far side of the
+    pipe.
+    """
+
+    def __init__(self):
+        self._by_id = {}
+        self._by_length = {}
+        # Held, so that an identity cannot be reused while the document is encoded.
+        self._held = []
+
+    def __call__(self, value) -> bytes:
+        found = self._by_id.get(id(value))
+        if found is None:
+            data = brep_bytes(value)
+            same = self._by_length.setdefault(len(data), [])
+            found = next((other for other in same if other == data), None)
+            if found is None:
+                same.append(data)
+                found = data
+            self._by_id[id(value)] = found
+            self._held.append(value)
+        return found
+
+
 def make_shape(brep, name=None, label=None) -> dict:
     """A shape envelope around a zstd-compressed BREP payload."""
     return {"name": name, "label": label, KEY_BREP: brep_bytes(brep)}
@@ -745,7 +795,7 @@ def _described_data(obj):
     return obj
 
 
-def encode(obj, name=None, label=None, payloads=None):
+def encode(obj, name=None, label=None, payloads=None, attach=None):
     """Convert 'obj' into a structure made only of JSON-native values.
 
     Shape and assembly envelopes keep their metadata; their "brep" payload is
@@ -759,6 +809,10 @@ def encode(obj, name=None, label=None, payloads=None):
     Given 'payloads' (a 'Payloads'), a node names its payload by KEY_BREP_REF
     instead, and the payload is kept there, unencoded, for whoever writes the
     table: 'dumps()' as base64 JSON, the shape cache as raw bytes.
+
+    Given 'attach' (a 'Distinct'), nothing is base64: every payload stays the
+    bytes it is, one object per distinct payload, and so does every other bytes
+    value, for a frame to carry as attachments ('serialize()').
     """
     if obj is None or isinstance(obj, (bool, int, float, str)):
         return obj
@@ -769,23 +823,27 @@ def encode(obj, name=None, label=None, payloads=None):
             encoded = {}
             for key, value in obj.items():
                 if key == KEY_BREP:
-                    if payloads is None:
-                        encoded[key] = brep_base64(value)
-                    else:
+                    if payloads is not None:
                         encoded[KEY_BREP_REF] = payloads.ref(value)
+                    elif attach is not None:
+                        encoded[key] = attach(value)
+                    else:
+                        encoded[key] = brep_base64(value)
                 elif key == KEY_ASSEMBLY:
-                    encoded[key] = [encode(child, name, label, payloads) for child in value]
+                    encoded[key] = [encode(child, name, label, payloads, attach) for child in value]
                 elif key in (KEY_LOCATION, "name", "label"):
                     encoded[key] = value
                 else:
-                    encoded[key] = encode(value, name, label, payloads)
+                    encoded[key] = encode(value, name, label, payloads, attach)
             return encoded
-        return {key: encode(value, name, label, payloads) for key, value in obj.items()}
+        return {key: encode(value, name, label, payloads, attach) for key, value in obj.items()}
 
     if isinstance(obj, (list, tuple, set, frozenset)):
-        return [encode(item, name, label, payloads) for item in obj]
+        return [encode(item, name, label, payloads, attach) for item in obj]
 
     if isinstance(obj, (bytes, bytearray)):
+        if attach is not None:
+            return obj
         return {KEY_BYTES: base64.b64encode(bytes(obj)).decode("ascii")}
 
     if isinstance(obj, BaseException):
@@ -875,26 +933,67 @@ def dumps(obj, name=None, label=None, share=False) -> str:
 
 
 def loads(text) -> object:
-    """Deserialize a JSON string produced by 'dumps()', with or without its table."""
+    """Deserialize a JSON string produced by 'dumps()', with or without its table, or a frame from 'serialize()'."""
     if isinstance(text, (bytes, bytearray)):
+        if text.startswith(_FRAME_BYTES):
+            document, _end = framing.message_at(text, 0)
+            return decode(document, table_of(document))
         text = text.decode("utf-8")
     document = json.loads(text)
     return decode(document, table_of(document))
 
 
-def serialize(obj, name=None, label=None, share=False) -> str:
-    """Serialize 'obj' into the single-line form that travels over the pipe. See 'dumps()'."""
-    return dumps(obj, name=name, label=label, share=share)
+def serialize(obj, name=None, label=None, share=False) -> bytes:
+    """Serialize 'obj' into what PartCAD's own Python wrappers are sent and answer with: a frame.
+
+    The frame the daemon and its clients exchange ('partcad_utils.framing'):
+    the document as a JSON body, then every payload in it - and every other
+    bytes value - raw, as an attachment the body names where it belongs. A
+    distinct payload is attached once however many nodes name it ('Distinct'),
+    so the table 'share' asks the JSON form for ('dumps()') has nothing to add
+    here, and none is written.
+
+    Nothing is base64 and nothing is copied into text: the payloads are the
+    bytes the core already holds, and joining them behind the body is the one
+    copy made, because a runtime hands its process one 'bytes' on standard
+    input (see 'runtime.stdin_bytes'). At 50 MB of BREP that took the core's
+    encoding from 0.7 s to a few tens of milliseconds, while holding the GIL
+    every other request of a daemon waits on.
+
+    The reader is 'ocp_serialize', in a Python sandbox, and it answers in the
+    form it was asked in ('wrapper_common.handle_output'). A container and a
+    JavaScript runtime parse their requests themselves, and are sent 'dumps()'
+    as they always were.
+    """
+    encoded = encode(obj, name=name, label=label, attach=Distinct())
+    return b"".join(framing.encode_message(encoded, attachments=True))
 
 
 def deserialize(data) -> dict:
-    """Deserialize the form produced by 'serialize()'.
+    """Deserialize what a wrapper answered: a frame ('serialize()'), or a line of JSON ('dumps()').
 
-    The response is taken as the last non-empty line of 'data', so any leading
-    progress a wrapper wrote to stdout is ignored.
+    A frame is found wherever it starts in 'data' ('framing.find_message'),
+    and a line of JSON is the last non-empty line, so either way whatever a
+    wrapper wrote to stdout before it - progress, or what printed before the
+    wrapper took its channel away - is ignored. Of several frames the last is
+    the answer, as the last line is. A wrapper answers a frame with a frame and
+    JSON with JSON, which is what a wrapper in a container is sent.
+
+    Every payload of a frame comes back as a bytes object of its own, and every
+    node naming one gets the same object, so 'data' need not be held once this
+    returns.
     """
     if isinstance(data, (bytes, bytearray)):
-        data = data.decode("utf-8")
+        start = framing.find_message(data)
+        if start is not None:
+            while start is not None:
+                document, end = framing.message_at(data, start)
+                start = framing.find_message(data, end)
+            return decode(document, table_of(document))
+        # Leniently: what is not a whole frame is either JSON, which is UTF-8,
+        # or what is left of a frame, which is said below rather than as a
+        # complaint about one of its bytes.
+        data = data.decode("utf-8", errors="replace")
     line = data.strip()
     if "\n" in line:
         for candidate in reversed(line.splitlines()):
@@ -907,4 +1006,19 @@ def deserialize(data) -> dict:
         # which slips past the exit-code and stderr checks in the callers. Say so
         # here rather than letting loads() raise a bare, contextless JSONDecodeError.
         raise ValueError("the wrapper produced no output to deserialize (empty response)")
-    return loads(line)
+    try:
+        return loads(line)
+    except ValueError:
+        if data.startswith(_FRAME_TEXT) or "\n" + _FRAME_TEXT in data:
+            # Not JSON because it was never meant to be: a frame that ended
+            # before its header said it would, or one decoded as text.
+            raise ValueError(
+                "the wrapper's answer is a frame that did not arrive whole (%d bytes of it did)" % len(data)
+            )
+        raise
+
+
+# How a frame begins: what tells one from JSON, and, as text, what says an
+# answer that is not JSON was one.
+_FRAME_TEXT = "Content-Length: "
+_FRAME_BYTES = _FRAME_TEXT.encode("ascii")

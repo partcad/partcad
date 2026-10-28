@@ -26,6 +26,7 @@ import types
 import pytest
 
 import partcad as pc
+from partcad import process_output
 from partcad import runtime as pc_runtime
 from partcad import shape as pc_shape
 from partcad import simulation
@@ -119,8 +120,9 @@ class HostRuntime:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        out, err = await process.communicate(stdin.encode("utf-8"))
-        return process.returncode, out.decode("utf-8"), err.decode("utf-8")
+        out, err = await process.communicate(pc_runtime.stdin_bytes(stdin))
+        # Read the way every runtime reads them: a wrapper's answer is a frame of bytes.
+        return process.returncode, process_output.answer(out), process_output.decode(err)
 
 
 def _cache(tmp_path, name):

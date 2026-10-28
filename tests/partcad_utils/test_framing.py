@@ -9,7 +9,18 @@ import io
 import os
 import threading
 
-from partcad_utils.framing import Peer, as_bytes, encode_message, read_message, to_json, write_message
+import pytest
+
+from partcad_utils.framing import (
+    Peer,
+    as_bytes,
+    encode_message,
+    find_message,
+    message_at,
+    read_message,
+    to_json,
+    write_message,
+)
 
 
 def test_write_message_emits_content_length_header_and_blank_line():
@@ -184,3 +195,51 @@ def test_a_pipe_frame_cut_off_is_the_end_of_the_stream():
     assert asyncio.run(read(b"")) is None
     assert asyncio.run(read(b"Content-Length: 10\r\n")) is None
     assert asyncio.run(read(b"Content-Length: 10\r\n\r\n{}")) is None
+
+
+# --- In a buffer -------------------------------------------------------------
+#
+# A wrapper's answer is read out of everything its process wrote, which can have
+# something in front of it (see 'partcad_utils.framing').
+
+
+def test_a_message_is_found_past_whatever_is_in_front_of_it():
+    frame = _frame({"id": 1, "result": b"\x00\xff"}, attachments=True)
+
+    assert find_message(frame) == 0
+    assert find_message(b"progress\n" + frame) == len(b"progress\n")
+    # What a progress meter leaves: no newline before the message.
+    assert find_message(b"writing... " + frame) == len(b"writing... ")
+    assert find_message(b"no message here") is None
+
+
+def test_a_header_that_is_not_whole_is_not_a_message():
+    frame = _frame({"id": 1, "result": b"\x00\xff"}, attachments=True)
+
+    # Mentioned in passing, cut off, or saying nothing of its length.
+    assert find_message(b"Content-Length: 99\r\n\r\n{}") is None
+    assert find_message(frame[:-1]) is None
+    assert find_message(b"Content-Length: soon\r\n\r\n") is None
+    # ... while the whole one after them is.
+    assert find_message(b"Content-Length: soon\r\n\r\n" + frame) == len(b"Content-Length: soon\r\n\r\n")
+
+
+def test_a_message_read_from_a_buffer_ends_where_it_says_and_owns_its_bytes():
+    picture = b"\x89PNG" * 1000
+    message = {"id": 1, "result": {"a": picture, "b": picture, "c": b""}}
+    data = bytearray(b"noise\n" + _frame(message, attachments=True) + b"after")
+
+    read, end = message_at(data, find_message(data))
+
+    assert read == message
+    assert read["result"]["a"] is read["result"]["b"]
+    assert type(read["result"]["a"]) is bytes
+    assert data[end:] == b"after"
+    # Nothing read refers into the buffer it was read from.
+    data[:] = b""
+    assert read["result"]["a"] == picture
+
+
+def test_there_is_no_message_where_none_is_whole():
+    with pytest.raises(ValueError, match="no whole message"):
+        message_at(b"Content-Length: 10\r\n\r\n{}")
