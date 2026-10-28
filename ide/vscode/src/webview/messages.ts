@@ -713,6 +713,18 @@ export interface FetchFormatsMessage {
 }
 
 /**
+ * Renderer to host: the Simulation tab's video went full screen, or came back.
+ *
+ * Only where the webview cannot go full screen itself -- Visual Studio Code
+ * allows its webviews no Fullscreen API -- so the player fills the panel, and
+ * the host makes the panel fill the screen (see 'PartcadViewer.videoFullscreen').
+ */
+export interface VideoFullscreenMessage {
+    type: 'videoFullscreen';
+    on: boolean;
+}
+
+/**
  * Renderer to host: save what a render tab is showing.
  *
  * Only the tab is named, never a file: the host keeps the file it rendered, and
@@ -1153,7 +1165,7 @@ export interface SimulationListData {
     simulations: SimulationScenario[];
 }
 
-/** One picture of a run, as the bytes of the file the plugin wrote. */
+/** One picture of a run, or its video, as the bytes of the file the plugin wrote. */
 export interface SimulationImage {
     filename: string;
     extension: string;
@@ -1167,7 +1179,9 @@ export interface SimulationImage {
  * none, or when the run never got far enough to have one -- which 'error' then
  * says. 'images' are the two pictures the plugin took of the scene, before
  * anything moved and when the run was over, from the scene's own viewpoint; a
- * plugin that takes none leaves them out, which is not a failure.
+ * plugin that takes none leaves them out, which is not a failure. 'recording'
+ * is the video of the whole run it recorded from the same viewpoint (WebM),
+ * and 'video' where the daemon keeps it; likewise left out when there is none.
  */
 export interface SimulationRun {
     object: string;
@@ -1181,6 +1195,8 @@ export interface SimulationRun {
     images?: { before?: SimulationImage; after?: SimulationImage };
     /** Where the pictures were taken from; what the view panel shows beside them. */
     viewport?: ViewportData | null;
+    video?: string | null;
+    recording?: SimulationImage;
 }
 
 /** The answer to a run: what 'pc sim -f <name>' prints with '--json'. */

@@ -4686,6 +4686,47 @@ def test_the_snapshots_of_a_run_come_back_as_bytes_when_asked(tmp_path):
     assert images["before"]["content"] == b"\x89PNG before"
 
 
+def test_the_video_of_a_run_comes_back_as_bytes_when_asked_and_its_path_is_said(tmp_path, monkeypatch):
+    """What the IDE's Simulation tab plays, and 'pc sim --video' saves: the daemon may be on another machine."""
+    (tmp_path / "video.webm").write_bytes(b"\x1a\x45\xdf\xa3 webm")
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"] = FakeObject("//")
+
+    class Run:
+        object_name = "//:stack"
+        name = "falls"
+        error = None
+        passed = True
+        failed = False
+        snapshots = {}
+        video = str(tmp_path / "video.webm")
+
+        def to_dict(self):
+            return {"object": self.object_name, "simulation": self.name, "snapshots": {}, "video": self.video}
+
+    async def simulate(*_args, **_kwargs):
+        return [Run()]
+
+    monkeypatch.setattr(operations, "_simulate_async", simulate)
+
+    plain = operations.simulate_run(session, {"package": "//", "object": "stack"})
+    inline = operations.simulate_run(session, {"package": "//", "object": "stack", "inline": True})
+
+    assert plain["simulations"][0]["video"] == str(tmp_path / "video.webm")
+    assert "recording" not in plain["simulations"][0]
+    recording = inline["simulations"][0]["recording"]
+    assert (recording["filename"], recording["extension"]) == ("video.webm", "webm")
+    assert recording["content"] == b"\x1a\x45\xdf\xa3 webm"
+    assert any("video: %s" % (tmp_path / "video.webm") in m for m in session.partcad.logging.messages("info"))
+
+
+def test_a_video_that_cannot_be_read_back_is_left_out_rather_than_failing_the_run(tmp_path):
+    session, _ = make_session()
+
+    assert operations._inline_file(session.partcad, str(tmp_path / "gone.webm"), "video") is None
+    assert any("Failed to read the video back" in m for m in session.partcad.logging.messages("warning"))
+
+
 # ---- what an object is, looked up from its name ----------------------------
 #
 # A name is one object of its package whatever its kind, so a request that does

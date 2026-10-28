@@ -33,6 +33,7 @@ import {
     ShowSectionMessage,
     StateReplyMessage,
     TabId,
+    VideoFullscreenMessage,
 } from './messages';
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
@@ -82,6 +83,12 @@ export function showSection(message: ShowSectionMessage): void {
 /** Ask the host to save what a render tab is showing, wherever the user says. */
 export function saveRendered(tab: TabId): void {
     vscode.postMessage({ type: 'save', tab });
+}
+
+/** Ask the host to take the panel full screen, or back, for the Simulation tab's video. */
+export function videoFullscreen(on: boolean): void {
+    const message: VideoFullscreenMessage = { type: 'videoFullscreen', on };
+    vscode.postMessage(message);
 }
 
 /** Say that something failed, over the 3D view and into the extension's log. */

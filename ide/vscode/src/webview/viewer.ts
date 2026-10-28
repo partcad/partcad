@@ -94,6 +94,7 @@ import {
     sendState,
     showObject,
     showSection,
+    videoFullscreen,
 } from './host';
 import {
     ANALYSIS_TABS,
@@ -134,6 +135,7 @@ import { RequirementsView } from './requirements';
 import { Bounds, Section, boundsOf, describeSection, sameSection, sectionFrom, sectionRequest } from './section';
 import { onToggle } from './sidePanel';
 import { SimulationView } from './simulation';
+import { createVideoPlayer } from './videoPlayer';
 import { spaceMouse } from './spacemouse';
 import { controlValues, snapshot } from './state';
 import { SupplyView } from './supply';
@@ -215,6 +217,9 @@ const simulationView = new SimulationView(panes.simulation, {
                 ? 'From where the scene is rendered from: said once the simulation has run'
                 : undefined,
         ),
+    // The video of a run, in Video.js; full screen, where the webview cannot go
+    // full screen itself, is the host's to do.
+    player: (recording, still) => createVideoPlayer(recording, still, { onFullscreen: (on) => videoFullscreen(on) }),
 });
 const tabs = new Tabs(byId('tabs'), onTabSelected);
 const designTabs = new Tabs(byId('design-tabs'), (tab) => onInnerSelected('design', tab));

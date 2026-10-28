@@ -629,7 +629,7 @@ def simulated(tmp_path, monkeypatch):
             f.write("scene")
         return path
 
-    async def run(_ctx, _impl, directory, _scene_file, _declaration, _subject, _kind, snapshot=None):
+    async def run(_ctx, _impl, directory, _scene_file, _declaration, _subject, _kind, snapshot=None, video=None):
         runs.append(directory)
         trajectory = os.path.join(directory, "trajectory.csv")
         with open(trajectory, "w") as f:
@@ -641,6 +641,11 @@ def simulated(tmp_path, monkeypatch):
             with open(os.path.join(directory, name), "w") as f:
                 f.write("picture of run %d" % len(runs))
             result["snapshots"] = {"after": name}
+        if video:
+            # And films: the video of the run, as asked.
+            with open(os.path.join(directory, video["file"]), "w") as f:
+                f.write("video of run %d at %dx%d" % (len(runs), video["width"], video["height"]))
+            result["video"] = video["file"]
         return result
 
     monkeypatch.setattr(simulation, "_export_scene_async", export)
@@ -689,6 +694,51 @@ def test_the_pictures_come_back_with_a_cached_run(simulated):
     assert len(runs) == 1
     with open(second.snapshots["after"]) as f:
         assert f.read() == "picture of run 1"
+
+
+def test_the_video_comes_back_with_a_cached_run(simulated):
+    """A file in the run directory, like the pictures."""
+    ctx, part, runs = simulated
+    (entry,) = simulation.of_shape(part)
+
+    _run(simulation.run_async(ctx, part, "part", entry))
+    second = _run(simulation.run_async(ctx, part, "part", entry))
+
+    assert len(runs) == 1
+    with open(second.video) as f:
+        assert f.read() == "video of run 1 at 1280x720"
+
+
+def test_a_video_wanted_at_another_size_is_another_run(simulated, monkeypatch):
+    """The video is part of the answer, so its size is part of the question."""
+    ctx, part, runs = simulated
+    (entry,) = simulation.of_shape(part)
+    monkeypatch.setattr(ctx.user_config, "simulation_video_resolution", "hd")
+    _run(simulation.run_async(ctx, part, "part", entry))
+
+    monkeypatch.setattr(ctx.user_config, "simulation_video_resolution", "1080p")
+    bigger = _run(simulation.run_async(ctx, part, "part", entry))
+    assert len(runs) == 2
+    with open(bigger.video) as f:
+        assert f.read() == "video of run 2 at 1920x1080"
+
+    monkeypatch.setattr(ctx.user_config, "simulation_video_resolution", "none")
+    none = _run(simulation.run_async(ctx, part, "part", entry))
+    assert len(runs) == 3
+    assert none.video is None
+    # And the key a run with no video is asked under is the one it had before
+    # videos: nothing about a video is in it.
+    _run(simulation.run_async(ctx, part, "part", entry))
+    assert len(runs) == 3
+
+
+def test_the_key_of_a_run_is_the_one_its_verdict_is_kept_under_whatever_the_video(simulated, monkeypatch):
+    ctx, part, runs = simulated
+    (entry,) = simulation.of_shape(part)
+    for resolution in ("hd", "1080p", "none"):
+        monkeypatch.setattr(ctx.user_config, "simulation_video_resolution", resolution)
+        result = _run(simulation.run_async(ctx, part, "part", entry))
+        assert result.artifact_key == _run(simulation.question_key_async(ctx, part, "part", entry))
 
 
 def test_a_scene_looked_at_from_elsewhere_is_another_run(simulated, monkeypatch):

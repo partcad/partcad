@@ -14,6 +14,7 @@ and what PartCAD makes of the two objects the plugin hands back.
 """
 
 import asyncio
+import logging
 import os
 
 import pytest
@@ -381,7 +382,7 @@ def stub_run(monkeypatch, result):
     async def export(_ctx, _scene, _impl, directory):
         return os.path.join(directory, "scene.xml")
 
-    async def run(_ctx, _impl, _directory, _scene_file, _declaration, _subject, _kind, snapshot=None):
+    async def run(_ctx, _impl, _directory, _scene_file, _declaration, _subject, _kind, snapshot=None, video=None):
         return result
 
     monkeypatch.setattr(simulation, "_export_scene_async", export)
@@ -575,7 +576,7 @@ def test_a_run_asks_for_pictures_and_reports_the_ones_it_got(package, monkeypatc
     async def export(_ctx, _scene, _impl, directory):
         return os.path.join(directory, "scene.xml")
 
-    async def run(_ctx, _impl, directory, _scene_file, _declaration, _subject, _kind, snapshot=None):
+    async def run(_ctx, _impl, directory, _scene_file, _declaration, _subject, _kind, snapshot=None, video=None):
         asked["snapshot"] = snapshot
         name = snapshot["files"]["after"]
         with open(os.path.join(directory, name), "wb") as f:
@@ -607,3 +608,156 @@ def test_the_scene_is_found_where_it_was_sent(tmp_path):
     # And a path that is there is left alone.
     here = {"scene_file": str(tmp_path / "scene.xml")}
     assert wrapper_simulate.anchor("/nowhere", here)["scene_file"] == str(tmp_path / "scene.xml")
+
+
+#
+# The video of a run
+#
+
+
+@pytest.mark.parametrize(
+    "configured,expected",
+    [
+        (None, (1280, 720)),
+        ("", (1280, 720)),
+        ("hd", (1280, 720)),
+        ("720p", (1280, 720)),
+        ("FHD", (1920, 1080)),
+        ("1080p", (1920, 1080)),
+        ("4k", (3840, 2160)),
+        ("1600x900", (1600, 900)),
+        ("1600 \u00d7 900", (1600, 900)),
+        # A height alone is sixteen by nine, and every side is made even.
+        (1000, (1778, 1000)),
+        ("601x401", (600, 400)),
+        ("none", None),
+        ("off", None),
+        # What YAML makes of a bare 'off', 'no' or 'false'.
+        (False, None),
+        (0, None),
+    ],
+)
+def test_the_machine_says_how_big_a_video_is(configured, expected):
+    assert simulation.video_resolution(configured) == expected
+
+
+@pytest.mark.parametrize("configured", ["bogus", "10x10", "99999x1000", ["hd"], "x720"])
+def test_a_size_that_is_not_one_is_refused_saying_why(configured):
+    with pytest.raises(ValueError):
+        simulation.video_resolution(configured)
+
+
+def test_a_video_is_asked_for_from_where_the_pictures_are_taken_in_hd_unless_the_machine_says_otherwise(
+    ctx, monkeypatch
+):
+    scene = ctx.get_scene("%s:subject" % output.BUILTIN_SCENE_PACKAGE)
+    snapshot = dict(simulation.snapshot_request(ctx, scene), viewport_origin=[0.0, -100.0, 0.0])
+    monkeypatch.setattr(ctx.user_config, "simulation_video_resolution", None)
+
+    video = simulation.video_request(ctx, snapshot)
+
+    assert video == {
+        "format": "webm",
+        "file": "video.webm",
+        "fps": 25,
+        "width": 1280,
+        "height": 720,
+        "viewport_origin": [0.0, -100.0, 0.0],
+        "viewport_up": [0.0, 0.0, 1.0],
+    }
+    monkeypatch.setattr(ctx.user_config, "simulation_video_resolution", "1080p")
+    assert (simulation.video_request(ctx, snapshot)["width"], simulation.video_request(ctx, snapshot)["height"]) == (
+        1920,
+        1080,
+    )
+    monkeypatch.setattr(ctx.user_config, "simulation_video_resolution", "none")
+    assert simulation.video_request(ctx, snapshot) is None
+
+
+def test_a_size_that_makes_no_sense_is_said_once_and_the_video_recorded_in_hd(ctx, monkeypatch, caplog):
+    snapshot = simulation.snapshot_request(ctx, ctx.get_scene("%s:subject" % output.BUILTIN_SCENE_PACKAGE))
+    monkeypatch.setattr(ctx.user_config, "simulation_video_resolution", "huge-and-wide")
+    monkeypatch.setattr(simulation, "_REPORTED_RESOLUTIONS", set())
+
+    with caplog.at_level(logging.WARNING):
+        videos = [simulation.video_request(ctx, snapshot) for _ in range(3)]
+
+    assert all((video["width"], video["height"]) == (1280, 720) for video in videos)
+    said = [record for record in caplog.records if "videoResolution" in record.getMessage()]
+    assert len(said) == 1
+    assert "huge-and-wide" in said[0].getMessage()
+
+
+def test_only_a_video_the_plugin_wrote_inside_its_directory_is_kept(tmp_path):
+    directory = tmp_path / "run"
+    directory.mkdir()
+    (directory / "video.webm").write_bytes(b"webm")
+    (tmp_path / "elsewhere.webm").write_bytes(b"webm")
+
+    assert simulation.collect_video(str(directory), {"video": "video.webm"}, "//p:b", "s") == str(
+        directory / "video.webm"
+    )
+    assert simulation.collect_video(str(directory), {"video": "../elsewhere.webm"}, "//p:b", "s") is None
+    assert simulation.collect_video(str(directory), {"video": "gone.webm"}, "//p:b", "s") is None
+    # A plugin that records none has not failed.
+    assert simulation.collect_video(str(directory), {"before": {}, "after": {}}, "//p:b", "s") is None
+    assert simulation.collect_video(str(directory), {"video": ["video.webm"]}, "//p:b", "s") is None
+
+
+def test_a_run_asks_for_a_video_and_reports_the_one_it_got(package, monkeypatch):
+    context, part = package
+    monkeypatch.setattr(context.user_config, "simulation_video_resolution", "480p")
+    asked = {}
+
+    async def export(_ctx, _scene, _impl, directory):
+        return os.path.join(directory, "scene.xml")
+
+    async def run(_ctx, _impl, directory, _scene_file, _declaration, _subject, _kind, snapshot=None, video=None):
+        asked["video"] = video
+        with open(os.path.join(directory, video["file"]), "wb") as f:
+            f.write(b"webm")
+        return dict(result_with(10.0, 9.9), video=video["file"])
+
+    monkeypatch.setattr(simulation, "_export_scene_async", export)
+    monkeypatch.setattr(simulation, "_run_plugin_async", run)
+    (entry,) = simulation.of_shape(part)
+
+    result = asyncio.run(simulation.run_async(context, part, "part", entry))
+
+    assert result.passed is True
+    assert (asked["video"]["width"], asked["video"]["height"], asked["video"]["fps"]) == (854, 480, 25)
+    assert asked["video"]["viewport_origin"] == [100.0, -100.0, 100.0]
+    assert os.path.isfile(result.video)
+    assert result.to_dict()["video"] == result.video
+
+
+def test_a_machine_that_wants_no_video_asks_for_none(package, monkeypatch):
+    context, part = package
+    monkeypatch.setattr(context.user_config, "simulation_video_resolution", "none")
+    asked = {}
+
+    async def export(_ctx, _scene, _impl, directory):
+        return os.path.join(directory, "scene.xml")
+
+    async def run(_ctx, _impl, _directory, _scene_file, _declaration, _subject, _kind, snapshot=None, video=None):
+        asked["video"] = video
+        return result_with(10.0, 9.9)
+
+    monkeypatch.setattr(simulation, "_export_scene_async", export)
+    monkeypatch.setattr(simulation, "_run_plugin_async", run)
+    (entry,) = simulation.of_shape(part)
+
+    result = asyncio.run(simulation.run_async(context, part, "part", entry))
+
+    assert asked["video"] is None
+    assert result.video is None
+    assert result.to_dict()["video"] is None
+
+
+def test_the_size_of_a_video_is_read_from_the_environment(monkeypatch):
+    from partcad_utils.user_config import UserConfig
+
+    monkeypatch.setenv("PC_SIMULATION_VIDEO_RESOLUTION", "1080p")
+
+    assert UserConfig().simulation_video_resolution == "1080p"
+    assert UserConfig().to_dict()["simulation.videoResolution"] == "1080p"

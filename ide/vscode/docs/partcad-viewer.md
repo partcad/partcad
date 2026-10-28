@@ -342,8 +342,9 @@ the protocol has no authentication.
 | `src/webview/packagePicker.ts` | The package field "Drawn by", "Simulated by" and "Analysed by" are: an editable combo box, and the quick choices it offers |
 | `src/webview/cae.ts` | What an Analysis tab draws of the selected scenario: the result model, and the findings |
 | `src/webview/scenarioList.ts` | The list of declared entries the Simulation and Analysis tabs share: rows, verdict marks, the keyboard |
-| `src/webview/simulation.ts` | The Simulation tab: the simulations declared, and the scene before and after one ran |
-| `src/partcad/simulation.py` | What `simulate:` declares, how a run goes, and the pictures a plugin is asked to take |
+| `src/webview/simulation.ts` | The Simulation tab: the simulations declared, and the video of each run with the scene before and after it as its still |
+| `src/webview/videoPlayer.ts` | The player the Simulation tab plays a run's video in: Video.js, MSE, the still, and full screen |
+| `src/partcad/simulation.py` | What `simulate:` declares, how a run goes, and the pictures and the video a plugin is asked for |
 | `src/partcad/cae.py` | What a part declares about an analysis -- its named scenarios -- and in what units |
 | `src/partcad/assembly_guide.py` | The instruction book, built once for every format |
 | `src/partcad/document.py` | The renderer-independent document model |
@@ -674,8 +675,9 @@ its own (`sim-mujoco:mujoco`), and offered as itself, first, when it is neither.
 is overridden; another, chosen or typed, runs the simulation with it (`pc sim --plugin`),
 the way choosing a drawing package draws again, and **Simulate** runs it afresh. Answers are kept per
 simulation *and* per plugin, so switching back to one already run shows it. Under the toolbar is what the
-simulation is about, then two pictures of the scene: before anything moved on the left, after the run on the
-right, an arrow between them.
+simulation is about, then the video of the run, in a player (`videoPlayer.ts`) whose still -- until it is
+played -- is two pictures of the scene: before anything moved on the left, after the run on the right, an arrow
+between them. A run with no video shows the two pictures as they are, side by side with the arrow.
 
 Under the pictures is what the verdict is made of, folded away behind a strip of three titles: **Criteria** (the
 `validation:` expression), **Before** and **After** (the two objects the plugin reported, which are what that
@@ -692,3 +694,24 @@ the scene's own over its package's, and the corner a part is drawn from when nei
 draws the scene as its simulator had it at the first instant and the last, both framed alike so that what moved
 is seen to have moved. They come back as bytes rather than paths for the reason a render does. A plugin that
 takes none -- one older than the request -- leaves the verdict standing and the tab says there are no pictures.
+
+The video is the plugin's too, asked for beside the pictures from the same viewpoint, 25 frames a second of
+simulated time, at the size `simulation.videoResolution` says (HD by default), and comes back the same way
+(`recording`). The player is Video.js 10 (`@videojs/html`), composed from its parts rather than a packaged
+skin, and only `videoPlayer.ts` imports it: Video.js is ES modules alone, and the panes' tests run under
+CommonJS with no DOM, so `viewer.ts` hands the player to the Simulation pane (`SimulationCallbacks.player`).
+Three things about it are not what a page in a browser would do:
+
+* **The video is fed through Media Source Extensions.** A VS Code webview plays no `blob:` URL of a file --
+  "FFmpegDemuxer: open context failed", for a WebM any browser plays -- while a `MediaSource` it is handed the
+  bytes through plays, seeks and times like any other. A plain `blob:` URL is the fallback where there is no
+  MSE. The CSP gains `media-src blob:` and nothing else.
+* **Full screen is ours.** VS Code gives its webview iframes no `allow="fullscreen"`, so the Fullscreen API is
+  not there, and a skin's full-screen button hides itself. The player's own button uses the API where it
+  exists, and otherwise fills the panel and asks the host (`videoFullscreen`) to make the panel fill the
+  screen: Zen Mode, the panel's editor group maximized first when it shares the editor area, and Zen Mode's
+  centred layout turned off. What the host did is kept and exactly that is undone on the way back -- by the
+  button, Escape, or the panel closing -- since none of those commands can be asked what state they are in.
+* **The icons are Video.js's SVG strings, not its `<media-icon>` element,** which loads its icon sets with a
+  dynamic import: a chunk the panel's CSP would never let load. The viewer bundle is held to one chunk for the
+  same reason (`LimitChunkCountPlugin` in `webpack.config.js`).

@@ -568,9 +568,11 @@ at all).
   and its links, plus the plugin, the declaration's `params`, how the scene is exported for it, and the
   scene's world as the facts it *resolved* to (a `medium:` is a reference into another package, whose
   density can change without the scene's key moving), and the pictures the run is asked for
-  (`simulation.snapshot_request`: the scene's `render: png:` viewpoint and size), which are files in the run
-  directory and so come back with a hit -- a scene looked at from somewhere else is another question, not
-  last viewpoint's pictures. The
+  (`simulation.snapshot_request`: the scene's `render: png:` viewpoint and size) and the video
+  (`simulation.video_request`: that viewpoint, 25 fps, and `simulation.videoResolution` -- `none` leaves it out
+  of the request *and* of the key, so a machine recording no video asks what every run asked before videos),
+  which are files in the run directory and so come back with a hit -- a scene looked at from somewhere else is
+  another question, not last viewpoint's pictures. The
   `validation:` is deliberately not in it: it is re-evaluated on a hit, so editing it re-judges the run. A
   subject with no key (`cache: false`) is never cached, and only successes are stored, for the reason the
   verdict cache does not store an unrunnable analysis. The key is worked out without building the subject, so

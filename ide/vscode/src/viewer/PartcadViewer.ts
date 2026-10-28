@@ -205,6 +205,12 @@ export class PartcadViewer implements vscode.Disposable {
      */
     private readonly latestRender = new Map<string, number>();
     private renderDirectory: string | undefined;
+    /**
+     * The Simulation tab's video, full screen: what this did to the window for
+     * it, to be undone -- and nothing more -- when it comes back. Undefined
+     * while it is not full screen.
+     */
+    private videoFullscreenState: { maximized: boolean } | undefined;
 
     constructor(private readonly extensionUri: vscode.Uri) {
         this.disposables.push(
@@ -807,6 +813,9 @@ export class PartcadViewer implements vscode.Disposable {
             if (this.panel === panel) {
                 this.panel = undefined;
                 this.updateSpaceMouse();
+                // A panel closed while its video was full screen leaves no
+                // window in Zen Mode behind it.
+                void this.videoFullscreen(false);
             }
         });
         panel.onDidChangeViewState(() => this.postSpaceMouseState());
@@ -824,6 +833,7 @@ export class PartcadViewer implements vscode.Disposable {
                     width?: number;
                     height?: number;
                     digests?: string[];
+                    on?: boolean;
                 } & Partial<ViewerStateReply>,
             ) => {
                 if (message.type === 'state') {
@@ -874,6 +884,8 @@ export class PartcadViewer implements vscode.Disposable {
                     void this.showObject(message.package, message.name, message.kind);
                 } else if (message.type === 'showSection') {
                     void this.showSection(message.token ?? 0, message.section);
+                } else if (message.type === 'videoFullscreen') {
+                    void this.videoFullscreen(message.on === true);
                 } else {
                     traceVerbose(`Digital Thread: ${message.type}`);
                 }
@@ -881,6 +893,53 @@ export class PartcadViewer implements vscode.Disposable {
         );
         this.panel = panel;
         this.updateSpaceMouse();
+    }
+
+    /**
+     * Take the panel full screen for the Simulation tab's video, or bring it back.
+     *
+     * A webview cannot go full screen itself: Visual Studio Code gives its
+     * iframes no `allow="fullscreen"`, so the Fullscreen API is not there for
+     * the player. What it does instead is fill the panel, and this makes the
+     * panel fill the screen: Zen Mode, which takes the window full screen and
+     * hides everything around the editors -- and, where the panel shares the
+     * editor area with others, the panel's group maximized first, the group the
+     * click on the player has just made the active one.
+     *
+     * Both are toggles that nothing can ask the state of, so what this did is
+     * kept, and leaving undoes exactly that: Zen Mode is left with the command
+     * that only ever leaves it, and the group is put back only if this
+     * maximized it. A window already in Zen Mode when the video went full
+     * screen is a case this cannot see, and leaves it; so is an editor the user
+     * had centred themselves, which comes back uncentred.
+     */
+    private async videoFullscreen(on: boolean): Promise<void> {
+        try {
+            if (on && this.videoFullscreenState === undefined) {
+                const maximized = vscode.window.tabGroups.all.length > 1;
+                this.videoFullscreenState = { maximized };
+                if (maximized) {
+                    await vscode.commands.executeCommand('workbench.action.toggleMaximizeEditorGroup');
+                }
+                await vscode.commands.executeCommand('workbench.action.toggleZenMode');
+                if (vscode.workspace.getConfiguration('zenMode').get<boolean>('centerLayout', true)) {
+                    // Zen Mode centres the editor in a column of its own, which
+                    // a full-screen video should not be. Leaving Zen Mode only
+                    // takes back a centring it made itself, so this needs no
+                    // undoing.
+                    await vscode.commands.executeCommand('workbench.action.toggleCenteredLayout');
+                }
+            } else if (!on && this.videoFullscreenState !== undefined) {
+                const { maximized } = this.videoFullscreenState;
+                this.videoFullscreenState = undefined;
+                await vscode.commands.executeCommand('workbench.action.exitZenMode');
+                if (maximized) {
+                    await vscode.commands.executeCommand('workbench.action.toggleMaximizeEditorGroup');
+                }
+            }
+        } catch (error) {
+            traceError(`Digital Thread: the video could not go full screen: ${error}`);
+        }
     }
 
     /**
@@ -990,12 +1049,14 @@ export class PartcadViewer implements vscode.Disposable {
 
         // No 'connect-src': the geometry arrives over postMessage and is parsed
         // from memory, so the viewer never issues a network request. Nothing
-        // here may be relaxed to load an asset from a CDN.
+        // here may be relaxed to load an asset from a CDN. 'media-src blob:' is
+        // the video of a simulation run, which arrives the same way and is
+        // played from memory too.
         return `<!DOCTYPE html>
 			<html lang="en">
 			<head>
 				<meta charset="UTF-8">
-				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data: blob:; script-src 'nonce-${nonce}';">
+				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data: blob:; media-src blob:; script-src 'nonce-${nonce}';">
 				<meta name="viewport" content="width=device-width, initial-scale=1.0">
 				<link href="${styleUri}" rel="stylesheet">
 				<title>${PartcadViewer.title}</title>

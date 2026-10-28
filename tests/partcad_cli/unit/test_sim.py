@@ -3,15 +3,16 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Tests for `pc sim`'s own options: `--plugin`, and `--before`/`--after`.
+"""Tests for `pc sim`'s own options: `--plugin`, `--before`/`--after` and `--video`.
 
 What is pinned is the wrapping rather than the simulation: what reaches the
 daemon, and the files this process writes from what comes back. Nothing here
-starts a simulator -- the daemon call is replaced. `--before` and `--after` are
-written here and not by the daemon, because the daemon may be on another machine
-and the path the user gave names a file on this one.
+starts a simulator -- the daemon call is replaced. `--before`, `--after` and
+`--video` are written here and not by the daemon, because the daemon may be on
+another machine and the path the user gave names a file on this one.
 """
 
+import base64
 import json
 
 import pytest
@@ -141,3 +142,85 @@ def test_a_simulation_that_did_not_run_has_no_state_to_save(simulated, tmp_path)
 
     assert result.exit_code == 1
     assert "No Gazebo found" in result.stderr
+
+
+WEBM = b"\x1a\x45\xdf\xa3 a video"
+
+
+def _filmed(**overrides):
+    simulation = _simulation()
+    simulation["video"] = "/daemon/state/simulate/abc/video.webm"
+    simulation["images"] = {"before": {"filename": "snapshot-before.png", "extension": "png", "content": "AAAA"}}
+    simulation["recording"] = {"filename": "video.webm", "extension": "webm", "content": WEBM}
+    simulation.update(overrides)
+    return simulation
+
+
+def test_the_video_is_asked_for_as_bytes_and_written_here(simulated, tmp_path):
+    simulated.result = {"simulations": [_filmed()], "total": 1, "failed": 0, "ok": True}
+    path = tmp_path / "out" / "falls.webm"
+
+    result = _invoke("-a", "stack", "--video", str(path))
+
+    assert result.exit_code == 0, result.output
+    assert simulated.calls[0]["params"]["inline"] is True
+    assert path.read_bytes() == WEBM
+    assert str(path) in result.stderr
+
+
+def test_a_video_a_daemon_sent_as_base64_is_written_as_its_bytes(simulated, tmp_path):
+    # A daemon from before attachments, which sends every file that way.
+    recording = {"filename": "video.webm", "extension": "webm", "content": base64.b64encode(WEBM).decode("ascii")}
+    simulated.result = {"simulations": [_filmed(recording=recording)], "total": 1, "failed": 0, "ok": True}
+    path = tmp_path / "falls.webm"
+
+    assert _invoke("-a", "stack", "--video", str(path)).exit_code == 0
+    assert path.read_bytes() == WEBM
+
+
+def test_without_it_no_bytes_are_asked_for(simulated):
+    assert _invoke("-a", "stack").exit_code == 0
+    assert simulated.calls[0]["params"]["inline"] is False
+
+
+def test_the_bytes_asked_for_to_save_a_video_are_not_printed(simulated, tmp_path):
+    simulated.result = {"simulations": [_filmed()], "total": 1, "failed": 0, "ok": True}
+
+    result = _invoke("-a", "stack", "--json", "--video", str(tmp_path / "falls.webm"))
+
+    assert result.exit_code == 0, result.output
+    (printed,) = json.loads(result.stdout)["simulations"]
+    assert "recording" not in printed and "images" not in printed
+    # The path on the daemon's side is still said, as it always is.
+    assert printed["video"] == "/daemon/state/simulate/abc/video.webm"
+
+
+def test_a_simulation_whose_plugin_recorded_no_video_has_none_to_save(simulated, tmp_path):
+    simulated.result = {
+        "simulations": [_filmed(video=None, recording=None)],
+        "total": 1,
+        "failed": 0,
+        "ok": True,
+    }
+
+    result = _invoke("-a", "stack", "--video", str(tmp_path / "falls.webm"))
+
+    assert result.exit_code == 1
+    assert "has no video to save" in result.stderr
+    assert "videoResolution" in result.stderr
+    assert not (tmp_path / "falls.webm").exists()
+
+
+def test_one_video_at_a_time(simulated, tmp_path):
+    simulated.result = {
+        "simulations": [_filmed(simulation="falls"), _filmed(simulation="stands")],
+        "total": 2,
+        "failed": 0,
+        "ok": True,
+    }
+
+    result = _invoke("-a", "stack", "--video", str(tmp_path / "falls.webm"))
+
+    assert result.exit_code == 1
+    assert "-f" in result.stderr
+    assert not (tmp_path / "falls.webm").exists()

@@ -33,7 +33,9 @@ they write the state a simulation started from and ended in to files the user
 named, and the daemon may be on another machine, where a path would name a file
 nobody here could open. The daemon sends the two objects back with the result,
 and this process writes them -- YAML, which reads, unless `--json` was asked
-for or the path ends in `.json`.
+for or the path ends in `.json`. `--video` is the same for the video of the run
+the plugin recorded: asked for, the daemon sends its bytes back with the result
+(as it does for the IDE), and they are written here.
 """
 
 import json
@@ -41,6 +43,8 @@ import os
 import sys
 
 import rich_click as click
+
+from partcad_utils import framing
 
 from .. import fast_only, object_kind
 from ..exclude import exclude_option, exclude_params
@@ -129,6 +133,16 @@ from ..service import run
     default=None,
     help="Save the state the simulation ended in to this file (YAML, or JSON for a '.json' path)",
 )
+@click.option(
+    "--video",
+    "video_path",
+    type=click.Path(dir_okay=False, writable=True),
+    default=None,
+    help=(
+        "Save the video of the run the simulation plugin recorded to this file (WebM). Its size is "
+        "'simulation.videoResolution' in the configuration (PC_SIMULATION_VIDEO_RESOLUTION), HD by default"
+    ),
+)
 @exclude_option
 @param_option
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to simulate"
@@ -145,6 +159,7 @@ def cli(
     plugin,
     before_path,
     after_path,
+    video_path,
     exclude,
     params,
     object,
@@ -163,6 +178,9 @@ def cli(
             "filter": filter_name,
             "object": object,
             "plugin": plugin,
+            # The video's bytes back with the result, to be written here: the
+            # daemon may be on another machine (see the docstring above).
+            "inline": bool(video_path),
             **param_params(params),
             **exclude_params(exclude),
         },
@@ -172,6 +190,13 @@ def cli(
     if result is None:
         # The package did not load; the daemon has already said so.
         raise click.ClickException("Nothing was simulated")
+
+    # The bytes asked for to save the video, taken out of the result before
+    # anything prints it: they were asked for to be written, not read.
+    recordings = [entry.pop("recording", None) for entry in result.get("simulations") or []]
+    if video_path:
+        for entry in result.get("simulations") or []:
+            entry.pop("images", None)
 
     if as_json:
         # To stdout, so it can be piped into `jq` no matter where the logs go.
@@ -185,11 +210,50 @@ def cli(
     for moment, path in (("before", before_path), ("after", after_path)):
         if path:
             save_state(result, moment, path, as_json)
+    if video_path:
+        save_video(result, recordings, video_path)
 
     if not result.get("ok", True):
         raise click.ClickException(
             "%d of %d simulation(s) did not pass" % (result.get("failed", 0), result.get("total", 0))
         )
+
+
+def save_video(result: dict, recordings: list, path: str) -> None:
+    """Write the video one simulation's plugin recorded to 'path', or say why not.
+
+    One simulation's, for the reason 'save_state' saves one state.
+    """
+    simulations = result.get("simulations") or []
+    if len(simulations) != 1:
+        raise click.ClickException(
+            "--video saves the video of one simulation, and %d ran: name the object, and the simulation with -f"
+            % len(simulations)
+        )
+    (simulation,) = simulations
+    (recording,) = recordings
+    if not recording or not recording.get("content"):
+        if simulation.get("error"):
+            why = simulation["error"]
+        elif simulation.get("video"):
+            why = "it could not be read back"
+        else:
+            why = (
+                "its plugin recorded none -- one that predates videos, or one that could not record it on this "
+                "machine says why among its warnings -- or 'simulation.videoResolution' is 'none'"
+            )
+        raise click.ClickException(
+            "%s: the simulation '%s' has no video to save: %s"
+            % (simulation.get("object"), simulation.get("simulation"), why)
+        )
+
+    directory = os.path.dirname(os.path.abspath(path))
+    os.makedirs(directory, exist_ok=True)
+    with open(path, "wb") as f:
+        # Its bytes, or base64 from a daemon that sends no attachments.
+        f.write(framing.as_bytes(recording["content"]))
+    # To stderr: with '--json', stdout is the result and nothing else.
+    click.echo("Saved the video of the simulation '%s' to %s" % (simulation.get("simulation"), path), err=True)
 
 
 def save_state(result: dict, moment: str, path: str, as_json: bool) -> None:

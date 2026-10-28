@@ -4,7 +4,8 @@
 // Licensed under Apache License, Version 2.0.
 //
 // The Validation group's Simulation tab: which simulation is on screen, when one
-// is run, and which side of the arrow each picture is on.
+// is run, which side of the arrow each picture is on, and that a run with a
+// video is played -- the pictures its still -- by the player the panel hands in.
 //
 // The pane runs in the webview and this suite in the extension host, which has
 // no DOM, so it is given the handful of things 'dom.ts' and the pane ask of an
@@ -17,8 +18,8 @@
 import * as assert from 'assert';
 import { resolveObjectURL } from 'buffer';
 
-import { SimulationListData, SimulationRunData, groupOf } from '../../webview/messages';
-import { SimulationView, pluginChoices, prettyJson } from '../../webview/simulation';
+import { SimulationImage, SimulationListData, SimulationRunData, groupOf } from '../../webview/messages';
+import { SimulationPlayer, SimulationStill, SimulationView, pluginChoices, prettyJson } from '../../webview/simulation';
 
 class FakeElement {
     public readonly children: FakeElement[] = [];
@@ -118,6 +119,15 @@ async function blobAt(url: string): Promise<{ type: string; text: string }> {
     return { type: blob.type, text: await blob.text() };
 }
 
+const RECORDING: SimulationImage = { filename: 'video.webm', extension: 'webm', content: bytes('WEBM') };
+
+function filmed(name: string, passed: boolean | null): SimulationRunData {
+    const data = ran(name, passed);
+    data.simulations[0].video = '/daemon/state/simulate/abc/video.webm';
+    data.simulations[0].recording = RECORDING;
+    return data;
+}
+
 function ran(name: string, passed: boolean | null, images = true, error?: string): SimulationRunData {
     return {
         total: 1,
@@ -141,17 +151,46 @@ function ran(name: string, passed: boolean | null, images = true, error?: string
     };
 }
 
-function pane(): { root: FakeElement; view: SimulationView; runs: string[]; plugins: (string | undefined)[] } {
+/** A player the way the panel hands one in, which says what it was asked to play and whether it was stopped. */
+interface FakePlayer {
+    recording: SimulationImage;
+    still: SimulationStill;
+    element: FakeElement;
+    disposed: boolean;
+}
+
+function pane(withPlayer = false): {
+    root: FakeElement;
+    view: SimulationView;
+    runs: string[];
+    plugins: (string | undefined)[];
+    players: FakePlayer[];
+} {
     const root = new FakeElement('div');
     const runs: string[] = [];
     const plugins: (string | undefined)[] = [];
+    const players: FakePlayer[] = [];
     const view = new SimulationView(root as unknown as HTMLElement, {
         onRun: (scenario, plugin) => {
             runs.push(scenario);
             plugins.push(plugin);
         },
+        player: withPlayer
+            ? (recording, still): SimulationPlayer => {
+                  const element = new FakeElement('div');
+                  element.className = 'fake-player';
+                  const player: FakePlayer = { recording, still, element, disposed: false };
+                  players.push(player);
+                  return {
+                      element: element as unknown as HTMLElement,
+                      dispose: () => {
+                          player.disposed = true;
+                      },
+                  };
+              }
+            : undefined,
     });
-    return { root, view, runs, plugins };
+    return { root, view, runs, plugins, players };
 }
 
 const MUJOCO = '//pub/feature/simulate/mujoco:mujoco';
@@ -293,6 +332,65 @@ suite('Digital Thread Simulation tab', () => {
         assert.strictEqual(mark(rows(root)[0]).textContent, '✓');
         assert.ok(mark(rows(root)[0]).className.includes('simulation-passed'));
         assert.strictEqual(mark(rows(root)[0]).title, 'Passed');
+    });
+
+    test('a run with a video is played, its pictures the still, instead of being shown side by side', () => {
+        const { root, view, players } = pane(true);
+        view.setScenarios(LIST);
+        view.start();
+
+        view.showRun('falls', filmed('falls', true));
+
+        assert.strictEqual(players.length, 1);
+        const [player] = players;
+        assert.deepStrictEqual(player.recording, RECORDING);
+        assert.deepStrictEqual(player.still.before?.content, bytes('BEFORE'));
+        assert.deepStrictEqual(player.still.after?.content, bytes('AFTER'));
+        assert.strictEqual(root.find('fake-player').length, 1);
+        assert.strictEqual(root.find('simulation-pictures').length, 0);
+        // The verdict is still the list's to say.
+        assert.strictEqual(mark(rows(root)[0]).textContent, '✓');
+        // Opening a folded view does not start the video again.
+        detailTitle(root, 'after').fire('click');
+        assert.strictEqual(players.length, 1);
+        assert.strictEqual(player.disposed, false);
+    });
+
+    test('a player is stopped when the page it is on is drawn again, or put away', () => {
+        const { root, view, players } = pane(true);
+        view.setScenarios(LIST);
+        view.start();
+        view.showRun('falls', filmed('falls', true));
+
+        // Another simulation selected: the first one's video stops.
+        rows(root)[1].fire('click');
+        assert.strictEqual(players[0].disposed, true);
+        view.showRun('falls_in_gazebo', filmed('falls_in_gazebo', null));
+        assert.strictEqual(players.length, 2);
+
+        // Run afresh: the old answer's player goes with it.
+        root.find('simulation-run')[0].fire('click');
+        assert.strictEqual(players[1].disposed, true);
+
+        // And a new object puts every player away.
+        view.showRun('falls_in_gazebo', filmed('falls_in_gazebo', null));
+        view.setBusy('Loading…');
+        assert.strictEqual(players[2].disposed, true);
+    });
+
+    test('a run with no video, or a panel with no player, shows the pictures side by side', () => {
+        const withPlayer = pane(true);
+        withPlayer.view.setScenarios(LIST);
+        withPlayer.view.start();
+        withPlayer.view.showRun('falls', ran('falls', true));
+        assert.strictEqual(withPlayer.players.length, 0);
+        assert.strictEqual(withPlayer.root.find('simulation-pictures').length, 1);
+
+        const withoutPlayer = pane();
+        withoutPlayer.view.setScenarios(LIST);
+        withoutPlayer.view.start();
+        withoutPlayer.view.showRun('falls', filmed('falls', true));
+        assert.strictEqual(withoutPlayer.root.find('simulation-pictures').length, 1);
     });
 
     test('the page repeats neither the name nor the verdict, which the list says', () => {

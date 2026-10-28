@@ -75,6 +75,31 @@ They are optional. A plugin that cannot draw on this machine, or does not try,
 reports none and the run is exactly as good: the verdict never depends on a
 picture. They are what the IDE's Simulation tab shows, side by side.
 
+**Video.** The request carries ``video`` too, unless this machine's
+configuration asks for none: a video of the whole run, from the same viewpoint
+as the pictures, a frame every 1/fps seconds of *simulated* time from the start
+of the run to its end -- so that it plays the run in real time::
+
+    request["video"] = {
+        "format": "webm",                      # WebM, with VP9 in it
+        "file": "video.webm",
+        "fps": 25,
+        "width": 1280, "height": 720,          # 'simulation.videoResolution'
+        "viewport_origin": [100, -100, 100],   # the snapshots' own
+        "viewport_up": [0, 0, 1],
+    }
+
+The file is named relative to ``path``, as the pictures are, and a plugin that
+recorded it says so in its result::
+
+    output = {..., "video": "video.webm"}
+
+It is as optional as the pictures, and for the same reason. The IDE's
+Simulation tab plays it, with the two pictures as the still it shows until it
+is played. A plugin draws it inside the run's budget, below, and one that would
+not finish it in time is better off giving it up, with a warning, than losing
+the run's answer to the watchdog.
+
 Both '__file__' and the run name '__partcad_simulate__' are set on the script,
 so it can gate any top-level work ("if __name__ == '__partcad_simulate__':")
 and remain importable by its siblings.

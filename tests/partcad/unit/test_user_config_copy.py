@@ -38,6 +38,7 @@ cacheFiles: false
 logLevel: error
 simulation:
   timeout: 900
+  videoResolution: 1080p
 git:
   clone:
     timeout: 42
@@ -70,6 +71,7 @@ cacheFiles: true
 logLevel: debug
 simulation:
   timeout: 60
+  videoResolution: 480p
 git:
   clone:
     retry:
@@ -202,6 +204,8 @@ def test_an_unset_option_is_left_out_rather_than_sent_as_null(tmp_path, monkeypa
         # How long a simulation may run is the caller's machine's to say, not
         # the daemon's.
         ("simulation_timeout", 900.0),
+        # And how big a video of it is: it is watched on the caller's screen.
+        ("simulation_video_resolution", "1080p"),
     ],
 )
 def test_the_caller_s_options_win_over_the_rebuilding_process_own(homes, attribute, expected):

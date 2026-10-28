@@ -1599,6 +1599,226 @@ input.switch:focus-visible {
     line-height: 1;
 }
 
+/*
+ * The video of a run ('videoPlayer.ts'): Video.js's parts, styled here as the
+ * usual player -- the picture, and over its foot a bar that fades out while it
+ * plays and nobody moves the pointer: the position along the top of the bar,
+ * and under it play, a step back and forward, from the start, the time, the
+ * speed and full screen. The picture keeps the video's proportions and takes
+ * the room the page leaves it, as the pictures it stands in for do.
+ */
+.simulation-video {
+    --simulation-video-aspect: 1.7778;
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    container-type: size;
+}
+
+.simulation-video video-player {
+    display: contents;
+}
+
+/* As large as the room allows, in the video's proportions: the controls lie
+   over the picture, not over bars beside it. */
+.simulation-video-surface {
+    position: relative;
+    display: block;
+    box-sizing: border-box;
+    width: min(100cqw, 100cqh * var(--simulation-video-aspect));
+    height: min(100cqh, 100cqw / var(--simulation-video-aspect));
+    overflow: hidden;
+    background: #000;
+    border: 1px solid var(--vscode-panel-border, transparent);
+    outline: none;
+}
+
+.simulation-video-surface:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.simulation-video-media,
+.simulation-video-poster,
+.simulation-video-poster img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.simulation-video-poster {
+    pointer-events: none;
+    transition: opacity 0.2s;
+}
+
+.simulation-video-poster:not([data-visible]),
+.simulation-video-poster img:not([src]) {
+    opacity: 0;
+}
+
+/* Full screen without the Fullscreen API, which is a webview's lot: the whole
+   panel, with the host taking the panel to the whole screen. */
+.simulation-video-filling {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: #000;
+}
+
+.simulation-video-filling .simulation-video-surface {
+    border: 0;
+}
+
+.simulation-video-controls {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 1.5rem 0.6rem 0.4rem;
+    color: #fff;
+    background: linear-gradient(to top, rgb(0 0 0 / 70%), rgb(0 0 0 / 0%));
+    transition: opacity 0.25s;
+}
+
+.simulation-video-controls:not([data-visible]) {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.simulation-video-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.simulation-video-spacer {
+    flex: 1 1 auto;
+}
+
+.simulation-video-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    height: 2rem;
+    padding: 0 0.3rem;
+    color: inherit;
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.simulation-video-button:hover {
+    background: rgb(255 255 255 / 15%);
+}
+
+.simulation-video-button:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+}
+
+.simulation-video-icon {
+    display: inline-flex;
+}
+
+.simulation-video-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* A step back is a step forward the other way round. */
+.simulation-video-back .simulation-video-icon {
+    transform: scaleX(-1);
+}
+
+/* Play, pause or replay, whichever the button would do. */
+.simulation-video-play .simulation-video-icon {
+    display: none;
+}
+
+.simulation-video-play[data-paused]:not([data-ended]) .show-paused,
+.simulation-video-play:not([data-paused]):not([data-ended]) .show-playing,
+.simulation-video-play[data-ended] .show-ended {
+    display: inline-flex;
+}
+
+/* At the end the play button is a replay button, and from-the-start would say
+   it a second time. */
+.simulation-video-row:has(.simulation-video-play[data-ended]) .simulation-video-replay {
+    display: none;
+}
+
+.simulation-video-rate::after {
+    content: attr(data-rate) "\00D7";
+}
+
+.simulation-video-fullscreen .show-fullscreen,
+.simulation-video[data-fullscreen] .simulation-video-fullscreen .show-windowed {
+    display: none;
+}
+
+.simulation-video[data-fullscreen] .simulation-video-fullscreen .show-fullscreen {
+    display: inline-flex;
+}
+
+.simulation-video-time {
+    padding: 0 0.4rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.simulation-video-time media-time-separator {
+    padding: 0 0.25rem;
+}
+
+.simulation-video-timeline {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 14px;
+    margin: 0 0.3rem;
+    cursor: pointer;
+    touch-action: none;
+}
+
+.simulation-video-timeline media-slider-track {
+    position: relative;
+    width: 100%;
+    height: 4px;
+    overflow: hidden;
+    background: rgb(255 255 255 / 30%);
+    border-radius: 2px;
+}
+
+.simulation-video-timeline media-slider-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--media-slider-fill, 0%);
+    background: var(--vscode-progressBar-background, var(--vscode-focusBorder, #0e70c0));
+}
+
+.simulation-video-timeline media-slider-thumb {
+    position: absolute;
+    left: var(--media-slider-fill, 0%);
+    width: 12px;
+    height: 12px;
+    margin-left: -6px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 2px rgb(0 0 0 / 60%);
+}
+
 /* The folded views: their titles along the bottom, the strip the tab strips
    above are made of, and the one that is open under them. */
 .simulation-details {
