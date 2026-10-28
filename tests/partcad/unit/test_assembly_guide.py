@@ -962,10 +962,13 @@ def test_the_pdf_request_carries_whether_it_has_to_be_reproducible():
     seen = []
 
     class FakeRuntime:
+        def get_session(self, _name):
+            return None
+
         async def ensure_async(self, *args, **kwargs):
             return None
 
-        async def run_async(self, command, request_serialized):
+        async def run_async(self, command, request_serialized, session=None):
             seen.append(shape_envelope.deserialize(request_serialized.strip().splitlines()[-1]))
             return 0, shape_envelope.serialize({"success": True}), ""
 

@@ -93,10 +93,11 @@ class PartFactoryBuild123d(PartFactoryPython):
                 sandbox_versions.BUILD123D,
                 session=self.session,
             )
-            # Last: re-asserts the VTK-enabled OCP that build123d's
-            # 'cadquery-ocp-novtk' dependency has just replaced.
+            # The OCP build build123d depends on, which is the one the
+            # sandbox's own environment holds: a build123d part asks for
+            # nothing it lacks, and runs in it.
             await self.runtime.ensure_async(
-                sandbox_versions.CADQUERY_OCP,
+                sandbox_versions.OCP,
                 session=self.session,
             )
             cwd = self.project.config_dir

@@ -106,7 +106,7 @@ class PartFactorySweep(PartFactory):
                 # envelopes and the path is plain data, so the core never touches
                 # a live OCP object.
                 runtime = self.ctx.get_python_runtime(version=self.PYTHON_SANDBOX_VERSION)
-                await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+                await runtime.ensure_async(sandbox_versions.OCP)
 
                 wrapper_path = wrapper.get("sweep.py")
                 request = {

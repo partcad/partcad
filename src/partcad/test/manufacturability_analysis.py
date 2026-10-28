@@ -29,7 +29,7 @@ async def _analyze(ctx, envelope, op: str, **extra) -> dict:
     the sandbox is the expensive part, not the arithmetic inside it.
     """
     runtime = ctx.get_python_runtime(version=sandbox_versions.DEFAULT_PYTHON_VERSION)
-    await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+    await runtime.ensure_async(sandbox_versions.OCP)
 
     wrapper_path = wrapper.get("manufacturability.py")
     request = {"shape": envelope, "op": op}

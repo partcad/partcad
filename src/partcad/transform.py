@@ -20,12 +20,11 @@ from .process_crash import describe_exit_code
 
 # 'offset'/'scale' mirror the build123d relocate()/scale() the core used to run
 # in-process, so their runtime needs build123d; 'compound' only needs OCP to
-# combine shapes. cadquery-ocp comes last because build123d pulls the VTK-less
-# 'cadquery-ocp-novtk' build over it (see sandbox_versions).
+# combine shapes.
 _DEPENDENCIES = {
-    "offset": (sandbox_versions.BUILD123D, sandbox_versions.CADQUERY_OCP),
-    "scale": (sandbox_versions.BUILD123D, sandbox_versions.CADQUERY_OCP),
-    "compound": (sandbox_versions.CADQUERY_OCP,),
+    "offset": (sandbox_versions.BUILD123D, sandbox_versions.OCP),
+    "scale": (sandbox_versions.BUILD123D, sandbox_versions.OCP),
+    "compound": (sandbox_versions.OCP,),
 }
 
 

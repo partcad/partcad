@@ -1312,6 +1312,9 @@ class _Sandbox:
         self.answer = answer
         self.runs = []
 
+    def get_session(self, _name):
+        return None
+
     async def ensure_async(self, *_args, **_kwargs):
         return None
 

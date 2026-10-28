@@ -24,7 +24,7 @@ from .geom import Location
 from .process_crash import describe_exit_code
 
 # The bounding box only needs OCCT itself, no CAD kernel on top of it.
-_DEPENDENCIES = (sandbox_versions.CADQUERY_OCP,)
+_DEPENDENCIES = (sandbox_versions.OCP,)
 
 
 async def _run(ctx, request, cacheable: bool = True):

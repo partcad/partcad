@@ -41,8 +41,11 @@ export:
   stl:
     # An implementation of this package's own, replacing the built-in one.
     path: export_stl_commented.py
+    # OCP alone, so the build build123d depends on: every sandbox has it
+    # already. 'cadquery-ocp' is CadQuery's, and a script that does not import
+    # CadQuery would be given a whole environment of its own to carry it.
     pythonRequirements:
-      - cadquery-ocp==7.9.3.1.1
+      - cadquery-ocp-novtk==7.9.3.1.1
     # Parameters, handed to the script above rather than to the built-in one.
     tolerance: 0.1
     angularTolerance: 0.1

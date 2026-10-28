@@ -1970,6 +1970,7 @@ class Shape(ShapeConfiguration):
         script_path = wrapper.get("export.py")
         config_dir = os.path.abspath(impl.project.config_dir)
         input_dirs = []
+        session = None
 
         if container:
             # Raises SandboxUnavailable when there is no container runtime.
@@ -1983,12 +1984,15 @@ class Shape(ShapeConfiguration):
             input_dirs = [os.path.dirname(script_path), config_dir]
         else:
             runtime = ctx.get_python_runtime(version=impl.python_version(), image=impl.docker_image)
-            await runtime.prepare_for_package(impl.project)
-            # Installed one at a time, not with asyncio.gather(): the order
-            # matters, since build123d overwrites the OCP native module that
-            # cadquery-ocp installs (see sandbox_versions.GUARD_INVALIDATED_BY).
+            # What the implementation needs beyond the sandbox's own environment
+            # goes into a layer over it, never into that environment: wrappers
+            # are reading it (see 'runtime_python.base_requirements').
+            session = runtime.get_session("%s:%s" % (impl.section, impl.format_name))
+            await runtime.prepare_for_package(impl.project, session=session)
+            # Installed one at a time, not with asyncio.gather(): the order a
+            # package declares its requirements in is part of what it declared.
             for dep in impl.python_requirements:
-                await runtime.ensure_async(dep)
+                await runtime.ensure_async(dep, session=session)
 
         with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
             # The meta-wrapper, what to write, where to run, and what to run.
@@ -2021,9 +2025,9 @@ class Shape(ShapeConfiguration):
             if container:
                 extra = {"input_dirs": input_dirs, "output_files": [final_filepath]}
             elif getattr(runtime, "EXCHANGES_FILES", False):
-                extra = {"output_files": [final_filepath]}
+                extra = {"output_files": [final_filepath], "session": session}
             else:
-                extra = {}
+                extra = {"session": session}
             exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized, **extra)
             if exitcode != 0 and len(errors) == 0:
                 errors = command_failure(command, exitcode)
@@ -3542,7 +3546,7 @@ class Shape(ShapeConfiguration):
             request_serialized = shape_envelope.serialize(request)
 
             runtime = ctx.get_python_runtime(version="3.11")
-            await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+            await runtime.ensure_async(sandbox_versions.OCP)
 
             with tempfile.TemporaryDirectory(prefix="partcad-solidity-") as unused_dir:
                 command = [wrapper.get("solidity.py"), os.path.join(unused_dir, "unused.txt")]

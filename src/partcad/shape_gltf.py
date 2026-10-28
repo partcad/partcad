@@ -88,9 +88,9 @@ NOMINAL_SIZE = 100.0
 # object is shown.
 DEFAULT_ANGULAR_TOLERANCE = 0.4
 
-# export_gltf is build123d's; cadquery-ocp comes last because build123d pulls
-# the VTK-less 'cadquery-ocp-novtk' build over it (see sandbox_versions).
-_DEPENDENCIES = (sandbox_versions.BUILD123D, sandbox_versions.CADQUERY_OCP)
+# export_gltf is build123d's, and both are what every sandbox's own environment
+# holds (see 'runtime_python.base_requirements').
+_DEPENDENCIES = (sandbox_versions.BUILD123D, sandbox_versions.OCP)
 
 
 def size_of(tree):
@@ -237,8 +237,6 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None, cache
     cached = response_serialized is not None
     if not cached:
         runtime = ctx.get_python_runtime(version=sandbox_versions.DEFAULT_PYTHON_VERSION)
-        # Installed one at a time, not concurrently: the order matters because
-        # build123d overwrites the OCP native module cadquery-ocp installs.
         for dep in _DEPENDENCIES:
             await runtime.ensure_async(dep)
 

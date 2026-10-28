@@ -251,9 +251,11 @@ class PartFactoryWrapper(PartFactory):
             await self.runtime.ensure_async(sandbox_versions.TYPING_EXTENSIONS, session=self.session)
             await self.runtime.ensure_async(sandbox_versions.OCPSVG, session=self.session)
             await self.runtime.ensure_async(sandbox_versions.BUILD123D, session=self.session)
-            # Last: re-asserts the VTK-enabled OCP that build123d's
-            # 'cadquery-ocp-novtk' dependency has just replaced.
-            await self.runtime.ensure_async(sandbox_versions.CADQUERY_OCP, session=self.session)
+            # The OCP build build123d depends on, which is the one the
+            # sandbox's own environment holds. A partType that imports CadQuery
+            # says so in its 'pythonRequirements', and runs in a layer that
+            # carries CadQuery's own build.
+            await self.runtime.ensure_async(sandbox_versions.OCP, session=self.session)
 
             # The request handed to the wrapper script.
             request = {

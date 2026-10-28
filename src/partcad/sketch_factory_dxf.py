@@ -172,8 +172,10 @@ class SketchFactoryDxf(SketchFactoryPython):
                 request["label"] = sketch.name
                 request_serialized = shape_envelope.serialize(request)
 
-                await self.runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
-                await self.runtime.ensure_async(sandbox_versions.CADQUERY)
+                # CadQuery reads the drawing, so this runs in the layer CadQuery
+                # parts run in, by way of the session (see 'runtime_python').
+                await self.runtime.ensure_async(sandbox_versions.CADQUERY_OCP, session=self.session)
+                await self.runtime.ensure_async(sandbox_versions.CADQUERY, session=self.session)
                 command = [
                     wrapper_path,
                     os.path.abspath(self.path),
@@ -182,6 +184,7 @@ class SketchFactoryDxf(SketchFactoryPython):
                 exitcode, response_serialized, errors = await self.runtime.run_async(
                     command,
                     request_serialized,
+                    session=self.session,
                 )
                 if exitcode != 0 and len(errors) == 0:
                     errors = command_failure(command, exitcode)

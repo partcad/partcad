@@ -35,12 +35,11 @@ desc: |
   that file type in its own `cam:` section.
 
 # What the implementation below imports. build123d does the sectioning and the
-# 2D offsetting; OCP is asserted after it for the reason `//builtin/render`
-# gives -- build123d pulls `cadquery-ocp-novtk`, which overwrites the very same
-# OCP native module.
+# 2D offsetting, on the OCP build it depends on -- the one `//builtin/render`
+# names, for the reason it gives.
 pythonRequirements:
   - build123d==0.11.1
-  - cadquery-ocp==7.9.3.1.1
+  - cadquery-ocp-novtk==7.9.3.1.1
 
 cam:
   gcode:

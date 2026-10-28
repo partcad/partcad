@@ -481,19 +481,22 @@ def test_the_base_stack_is_asked_for_before_anything_else(tmp_path):
     assert made.requirements[-len(base) :] == base
 
 
-def test_the_vtk_ocp_is_reasserted_after_build123d():
+def test_the_base_ends_with_the_ocp_build_build123d_depends_on():
+    """The one environment here gets the VTK build only when a CadQuery run asks for it, after this."""
     from partcad import runtime_python, sandbox_versions
 
     order = runtime_python.base_requirements("3.11")
-    assert order.index(sandbox_versions.CADQUERY_OCP) > order.index(sandbox_versions.BUILD123D)
-    assert order[-1] == sandbox_versions.CADQUERY_OCP
+    assert order.index(sandbox_versions.OCP) > order.index(sandbox_versions.BUILD123D)
+    assert order[-1] == sandbox_versions.OCP
+    assert sandbox_versions.CADQUERY_OCP not in order
 
 
-def test_python_3_10_gets_no_cadquery():
+def test_no_python_gets_cadquery_in_the_base():
+    """It comes with the runs that import it, on every version that has a release of it."""
     from partcad import runtime_python, sandbox_versions
 
     assert sandbox_versions.CADQUERY not in runtime_python.base_requirements("3.10")
-    assert sandbox_versions.CADQUERY in runtime_python.base_requirements("3.11")
+    assert sandbox_versions.CADQUERY not in runtime_python.base_requirements("3.11")
 
 
 def test_a_command_brings_the_base_stack_with_it_even_without_once(tmp_path, monkeypatch):

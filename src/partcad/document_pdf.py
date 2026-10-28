@@ -123,12 +123,15 @@ async def render_pdf_async(
     request_serialized = shape_envelope.serialize(request)
 
     runtime = ctx.get_python_runtime(version=_PYTHON_VERSION)
+    # Neither is in the sandbox's own environment, so the PDF is composed in a
+    # layer over it (see 'runtime_python.base_requirements').
+    session = runtime.get_session("pdf")
     for dependency in _DEPENDENCIES:
-        await runtime.ensure_async(dependency)
+        await runtime.ensure_async(dependency, session=session)
 
     before = _identity(path)
     command = [wrapper.get("render_pdf.py"), path]
-    exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
+    exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized, session=session)
     if exitcode != 0 and len(errors) == 0:
         errors = command_failure(command, exitcode)
     if errors:

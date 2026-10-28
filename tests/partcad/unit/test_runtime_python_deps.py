@@ -11,20 +11,35 @@ import os
 import pathlib
 import re
 import signal
+import subprocess
+import sys
 
+import pytest
 from packaging.requirements import Requirement
 
 import partcad as pc
 from partcad import sandbox_versions
 from partcad.runtime_python import (
+    BASE_SITE_DIRS_COMMAND,
+    LAYER_GUARD,
+    LAYER_PTH,
+    LINK_LAYER_COMMAND,
     PIP_CONSTRAINTS,
+    VENV_PREFIX,
     PythonRuntime,
+    base_requirements,
     clear_reassert,
     describe_exit_code,
     get_guard_path,
     invalidate_dependent_guards,
+    layer_created,
+    layer_linked,
     needs_reassert,
+    read_site_dirs,
 )
+
+# PartCAD's own sources, which a few tests below read.
+_SRC = pathlib.Path(__file__).resolve().parents[3] / "src" / "partcad"
 
 
 def _bare_runtime(path):
@@ -139,22 +154,34 @@ def test_unrelated_install_invalidates_nothing(tmp_path):
     assert not needs_reassert(str(tmp_path), sandbox_versions.CADQUERY_OCP)
 
 
-def test_cadquery_ocp_is_installed_after_build123d_everywhere():
-    """Order matters: the re-assert has to happen in the same sequence.
+def test_only_what_imports_cadquery_asks_for_its_ocp():
+    """CadQuery's OCP build is what puts a run in CadQuery's layer.
 
-    Any install list that has both must end with cadquery-ocp, otherwise the
-    sandbox is left holding the VTK-less OCP build until something else
-    happens to install it again.
+    Everything else asks for 'OCP', the build the sandbox's own environment
+    holds. Asking for CadQuery's to get OCP alone provisions a layer carrying
+    VTK for nothing -- and in the 'remote' sandbox, which has one environment,
+    writes the VTK build over the base's.
     """
-    src = pathlib.Path(__file__).parent.parent.parent / "src" / "partcad"
+    assert _SRC.is_dir(), _SRC
     offenders = []
-    for path in sorted(src.rglob("*.py")):
-        text = path.read_text()
-        ocp = [m.start() for m in re.finditer(r"sandbox_versions\.CADQUERY_OCP", text)]
-        b3d = [m.start() for m in re.finditer(r"sandbox_versions\.BUILD123D", text)]
-        if ocp and b3d and max(ocp) < max(b3d):
+    for path in sorted(_SRC.rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        asks_for_its_ocp = re.search(r"sandbox_versions\.CADQUERY_OCP\b", text)
+        asks_for_cadquery = re.search(r"sandbox_versions\.CADQUERY\b(?!_)", text)
+        if asks_for_its_ocp and not asks_for_cadquery:
             offenders.append(path.name)
     assert offenders == [], offenders
+
+
+def test_the_base_holds_one_ocp_build_and_no_cadquery():
+    """The two OCP builds write one native module, so one environment holds one of them."""
+    for version in ("3.10", "3.11", "3.14"):
+        base = base_requirements(version)
+        assert sandbox_versions.OCP in base
+        assert sandbox_versions.BUILD123D in base
+        assert sandbox_versions.CADQUERY_OCP not in base
+        assert sandbox_versions.CADQUERY not in base
+    assert sandbox_versions.OCP == sandbox_versions.CADQUERY_OCP_NOVTK
 
 
 def test_get_constraints_flags_writes_the_file(tmp_path):
@@ -233,28 +260,159 @@ def test_report_dependency_conflicts_silent_when_consistent(tmp_path, monkeypatc
     assert recorded == []
 
 
-def test_session_deps_start_with_zstd(tmp_path):
-    """A v-env has to install zstd itself.
-
-    "python -m venv" without --system-site-packages leaves the v-env blind to
-    what the sandbox around it has installed, so a wrapper running there could
-    not read the compressed BREP the host sends it.
-    """
+def _provisioned_runtime(tmp_path):
+    """A bare runtime whose own environment holds what 'once()' gives it."""
     runtime = _bare_runtime(tmp_path / "sandbox")
     runtime.version = "3.11"
+    os.makedirs(runtime.path, exist_ok=True)
+    for requirement in base_requirements(runtime.version) + [sandbox_versions.ZSTD]:
+        pathlib.Path(get_guard_path(runtime.path, requirement)).touch()
+    return runtime
 
-    session = PythonRuntime.get_session(runtime, "//some:package")
 
-    assert session["deps"] == [sandbox_versions.ZSTD]
-    # Seeding the list must not by itself demand that a v-env be created.
+def _ask(runtime, session, *requirements):
+    for requirement in requirements:
+        PythonRuntime.ensure_onced(runtime, requirement, session=session)
+
+
+def test_a_session_asking_only_for_the_base_has_no_layer(tmp_path):
+    """Which is every build123d part, and every projection to SVG."""
+    runtime = _provisioned_runtime(tmp_path)
+    session = PythonRuntime.get_session(runtime, "//some:part")
+
+    _ask(runtime, session, sandbox_versions.OCP_TESSELLATE, sandbox_versions.BUILD123D, sandbox_versions.OCP)
+
     assert session["dirty"] is False
+    assert session["missing"] == []
+    assert session["path"] is None
+    assert PythonRuntime.environment_path(runtime, session) == runtime.path
 
 
-def test_session_deps_skip_zstd_where_the_stdlib_has_it(tmp_path):
-    runtime = _bare_runtime(tmp_path / "sandbox")
-    runtime.version = "3.14"
+def test_what_the_base_lacks_names_the_layer(tmp_path):
+    runtime = _provisioned_runtime(tmp_path)
+    session = PythonRuntime.get_session(runtime, "//some:part")
 
-    assert PythonRuntime.get_session(runtime, "//some:package")["deps"] == []
+    _ask(runtime, session, sandbox_versions.NLOPT, sandbox_versions.CADQUERY, sandbox_versions.CADQUERY_OCP)
+
+    assert session["dirty"] is True
+    assert session["missing"] == [sandbox_versions.CADQUERY, sandbox_versions.CADQUERY_OCP]
+    assert os.path.dirname(session["path"]) == runtime.path
+    assert os.path.basename(session["path"]) == VENV_PREFIX + session["hash"]
+    assert PythonRuntime.environment_path(runtime, session) == session["path"]
+
+
+def test_runs_adding_the_same_packages_share_a_layer(tmp_path):
+    """Every CadQuery part, whatever its package, and the 3MF export: one layer, provisioned once."""
+    runtime = _provisioned_runtime(tmp_path)
+    part = PythonRuntime.get_session(runtime, "//one:part")
+    export = PythonRuntime.get_session(runtime, "export:3mf")
+    other = PythonRuntime.get_session(runtime, "//other:part")
+
+    _ask(runtime, part, sandbox_versions.CADQUERY, sandbox_versions.CADQUERY_OCP)
+    _ask(runtime, export, sandbox_versions.CADQUERY_OCP, sandbox_versions.CADQUERY)
+    _ask(runtime, other, sandbox_versions.CADQUERY, sandbox_versions.CADQUERY_OCP, "requests")
+
+    assert part["path"] == export["path"]
+    assert other["path"] != part["path"]
+
+
+def test_a_session_never_installs_into_the_base(tmp_path, monkeypatch):
+    """What it lacks is noted, and installed into its layer when it runs."""
+    runtime = _provisioned_runtime(tmp_path)
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("a session's requirement was installed into the sandbox's own environment")
+
+    monkeypatch.setattr(type(runtime), "install_onced_locked", refuse, raising=False)
+    session = PythonRuntime.get_session(runtime, "//some:part")
+
+    _ask(runtime, session, sandbox_versions.CADQUERY)
+    asyncio.run(PythonRuntime.ensure_async_onced(runtime, sandbox_versions.SVGLIB, session=session))
+
+    assert session["missing"] == [sandbox_versions.CADQUERY, sandbox_versions.SVGLIB]
+
+
+def test_an_install_into_the_base_after_provisioning_is_a_warning(tmp_path, monkeypatch):
+    """The canary for a caller that should have used a session."""
+    runtime = _locking_runtime(tmp_path)
+    os.makedirs(runtime.path, exist_ok=True)
+    warned = []
+    monkeypatch.setattr(
+        pc.logging, "warning", lambda message, *args: warned.append(message % args if args else message)
+    )
+    monkeypatch.setattr(type(runtime), "install_onced_locked", lambda *a, **k: None, raising=False)
+
+    PythonRuntime.ensure_onced(runtime, sandbox_versions.SVGLIB)
+    PythonRuntime.ensure_onced(runtime, sandbox_versions.SVGLIB, path=os.path.join(runtime.path, VENV_PREFIX + "x"))
+
+    assert len(warned) == 1
+    assert sandbox_versions.SVGLIB in warned[0]
+
+
+def test_read_site_dirs_keeps_each_directory_once():
+    """purelib and platlib are one directory nearly everywhere."""
+    assert read_site_dirs(0, "/base/site\n/base/site\n", "") == ["/base/site"]
+    assert read_site_dirs(0, "/base/lib\r\n/base/lib64\r\n", "") == ["/base/lib", "/base/lib64"]
+
+
+def test_read_site_dirs_refuses_no_answer():
+    with pytest.raises(Exception, match="no such interpreter"):
+        read_site_dirs(1, "", "no such interpreter")
+    with pytest.raises(Exception, match="exit code 0"):
+        read_site_dirs(0, "", "")
+
+
+def test_a_layer_that_could_not_be_made_says_why(tmp_path):
+    with pytest.raises(Exception, match="disk full"):
+        layer_created(str(tmp_path), 1, "disk full")
+    with pytest.raises(Exception, match="exit code 2"):
+        layer_linked(str(tmp_path), 2, "")
+    assert not os.path.exists(get_guard_path(str(tmp_path), LAYER_GUARD))
+
+    layer_linked(str(tmp_path), 0, "")
+    assert os.path.exists(get_guard_path(str(tmp_path), LAYER_GUARD))
+
+
+def _venv_python(venv):
+    if os.name == "nt":
+        return os.path.join(venv, "Scripts", "python.exe")
+    return os.path.join(venv, "bin", "python")
+
+
+def test_a_layer_sees_the_base_after_its_own_packages(tmp_path):
+    """The mechanism itself, with a real interpreter: what makes a layer a layer.
+
+    A module only the base has is found through the .pth file, and one both
+    have is the layer's -- which is how CadQuery's OCP build in its layer wins
+    over the build the base holds.
+    """
+    base = tmp_path / "base"
+    base.mkdir()
+    (base / "only_in_base.py").write_text("WHERE = 'base'\n")
+    (base / "in_both.py").write_text("WHERE = 'base'\n")
+    layer = tmp_path / (VENV_PREFIX + "layer")
+    subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(layer)], check=True)
+    python = _venv_python(str(layer))
+
+    linked = subprocess.run([python, *LINK_LAYER_COMMAND, str(base)], capture_output=True, text=True)
+    assert linked.returncode == 0, linked.stderr
+    purelib = subprocess.run(
+        [python, "-c", "import sysconfig; print(sysconfig.get_path('purelib'))"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert (pathlib.Path(purelib) / LAYER_PTH).read_text().splitlines() == [str(base)]
+    (pathlib.Path(purelib) / "in_both.py").write_text("WHERE = 'layer'\n")
+
+    found = subprocess.run(
+        [python, "-c", "import only_in_base, in_both; print(only_in_base.WHERE, in_both.WHERE)"],
+        capture_output=True,
+        text=True,
+        cwd=str(tmp_path),
+    )
+    assert found.returncode == 0, found.stderr
+    assert found.stdout.split() == ["base", "layer"]
 
 
 def _record_ensures(runtime, monkeypatch):
@@ -380,9 +538,9 @@ def test_no_factory_pins_its_own_version_of_the_shared_cad_stack():
     for the other parts. Everything must go through sandbox_versions.
     """
     pinned_names = {sandbox_versions.distribution_name(req) for req in sandbox_versions.PINNED_REQUIREMENTS}
-    src = pathlib.Path(__file__).parent.parent.parent / "src" / "partcad"
+    assert _SRC.is_dir(), _SRC
     offenders = []
-    for path in sorted(src.rglob("*.py")):
+    for path in sorted(_SRC.rglob("*.py")):
         if path.name == "sandbox_versions.py":
             continue
         for literal in re.findall(r"""["']([A-Za-z0-9_.\-\[\]]+==[^"']+)["']""", path.read_text()):
@@ -405,6 +563,7 @@ def _locking_runtime(tmp_path):
     """A bare runtime with the little more that the environment lock reads."""
     runtime = _bare_runtime(tmp_path / "sandbox")
     runtime.version = "3.11"
+    runtime.sandbox = "conda"
     runtime.sandbox_dir = "pc-py-conda-3.11"
     runtime.ctx = _StubContext(tmp_path)
     runtime.superseded_requirements = set()
@@ -432,36 +591,127 @@ def test_the_environment_locked_is_the_one_run_in(tmp_path):
     )
 
 
-def test_a_session_with_a_venv_locks_the_venv(tmp_path):
+def test_a_session_with_a_layer_locks_the_layer(tmp_path):
     runtime = _locking_runtime(tmp_path)
     session = PythonRuntime.get_session(runtime, "//some:package")
-    session["dirty"] = True
+    _ask(runtime, session, sandbox_versions.CADQUERY)
 
     assert PythonRuntime.environment_path(runtime, session) == session["path"]
-    # The name the per-session lock used, so a PartCAD of either vintage
-    # running beside this one contends over the same file.
     assert PythonRuntime.environment_lock(runtime, session).lock_path.endswith(
         ".pc-py-conda-3.11.%s.lock" % session["hash"]
     )
     assert PythonRuntime.environment_lock(runtime, session) is not PythonRuntime.environment_lock(runtime, None)
 
 
-def test_a_session_needs_the_environment_for_writing_only_until_it_is_provisioned(tmp_path):
-    """Which is what lets a package's parts render together rather than in turn."""
+def test_a_session_needs_its_layer_for_writing_only_until_it_is_provisioned(tmp_path):
+    """Which is what lets the parts sharing a layer render together rather than in turn.
+
+    Read from the layer's guards, which every session asking for the layer
+    sees, rather than from what one session has seen installed: a part's
+    first run must not take the layer for writing because some other part
+    provisioned it.
+    """
     runtime = _locking_runtime(tmp_path)
     session = PythonRuntime.get_session(runtime, "//some:package")
 
     assert not PythonRuntime.session_needs_install(runtime, None)
     assert not PythonRuntime.session_needs_install(runtime, session)
 
-    session["dirty"] = True
+    _ask(runtime, session, sandbox_versions.CADQUERY)
     assert PythonRuntime.session_needs_install(runtime, session)
 
-    session["installed"].update(session["deps"])
+    os.makedirs(session["path"])
+    pathlib.Path(get_guard_path(session["path"], sandbox_versions.CADQUERY)).touch()
+    assert PythonRuntime.session_needs_install(runtime, session), "a layer not linked to its base yet"
+    pathlib.Path(get_guard_path(session["path"], LAYER_GUARD)).touch()
     assert not PythonRuntime.session_needs_install(runtime, session)
 
-    session["deps"].append("something-else==1.0")
+    another = PythonRuntime.get_session(runtime, "//another:package")
+    _ask(runtime, another, sandbox_versions.CADQUERY)
+    assert not PythonRuntime.session_needs_install(runtime, another)
+
+    _ask(runtime, session, "something-else==1.0")
     assert PythonRuntime.session_needs_install(runtime, session)
+
+
+def _record_provisioning(runtime, monkeypatch):
+    """What provisioning a layer runs and installs, without running or installing it."""
+    done = []
+
+    def run(self, cmd, stdin="", cwd=None, session=None, path=None):
+        done.append(("run", list(cmd), path))
+        if list(cmd)[: len(LINK_LAYER_COMMAND)] == list(LINK_LAYER_COMMAND):
+            return 0, "", ""
+        if list(cmd)[:2] == ["-m", "venv"]:
+            os.makedirs(cmd[-1])
+            return 0, "", ""
+        return 0, "/base/site-packages\n", ""
+
+    async def run_async(self, cmd, stdin="", cwd=None, session=None, path=None):
+        return run(self, cmd, stdin, cwd, session, path)
+
+    def ensure(self, package, session=None, path=None, force=False):
+        done.append(("install", package, path))
+        pathlib.Path(get_guard_path(path, package)).touch()
+
+    async def ensure_async(self, package, session=None, path=None, force=False):
+        ensure(self, package, session, path, force)
+
+    def check(self, path=None):
+        done.append(("check", path))
+
+    async def check_async(self, path=None):
+        check(self, path)
+
+    monkeypatch.setattr(type(runtime), "run_onced_locked", run, raising=False)
+    monkeypatch.setattr(type(runtime), "run_async_onced_locked", run_async, raising=False)
+    monkeypatch.setattr(type(runtime), "ensure_onced_locked", ensure, raising=False)
+    monkeypatch.setattr(type(runtime), "ensure_async_onced_locked", ensure_async, raising=False)
+    monkeypatch.setattr(type(runtime), "check_deps_onced_locked", check, raising=False)
+    monkeypatch.setattr(type(runtime), "check_deps_async_onced_locked", check_async, raising=False)
+    return done
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_a_layer_is_made_linked_and_given_what_it_adds(tmp_path, monkeypatch, asynchronous):
+    runtime = _locking_runtime(tmp_path)
+    runtime.base_site_dirs = None
+    done = _record_provisioning(runtime, monkeypatch)
+    session = PythonRuntime.get_session(runtime, "//some:package")
+    _ask(runtime, session, sandbox_versions.CADQUERY, sandbox_versions.CADQUERY_OCP)
+
+    def provision(session):
+        if asynchronous:
+            asyncio.run(PythonRuntime.provision_layer_async_onced_locked(runtime, session))
+        else:
+            PythonRuntime.provision_layer_onced_locked(runtime, session)
+
+    provision(session)
+
+    layer = session["path"]
+    assert done == [
+        ("run", ["-m", "venv", "--upgrade-deps", layer], None),
+        ("run", list(BASE_SITE_DIRS_COMMAND), None),
+        ("run", [*LINK_LAYER_COMMAND, "/base/site-packages"], layer),
+        ("install", sandbox_versions.CADQUERY, layer),
+        ("install", sandbox_versions.CADQUERY_OCP, layer),
+        ("check", layer),
+    ]
+    assert not PythonRuntime.session_needs_install(runtime, session)
+
+    # A layer whose directory is there already -- its creation was interrupted
+    # before it was linked -- is linked and given what it adds, and the base
+    # is not asked where its packages are a second time.
+    del done[:]
+    other = PythonRuntime.get_session(runtime, "//other:package")
+    _ask(runtime, other, sandbox_versions.CADQUERY, "something-else==1.0")
+    os.makedirs(other["path"])
+    provision(other)
+    assert done == [
+        ("run", [*LINK_LAYER_COMMAND, "/base/site-packages"], other["path"]),
+        ("install", sandbox_versions.CADQUERY, other["path"]),
+        ("install", "something-else==1.0", other["path"]),
+    ]
 
 
 def _forbid_locking(runtime, monkeypatch):

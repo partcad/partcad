@@ -332,7 +332,7 @@ directory come back only under the same name.
     stl:
       path: my_stl_exporter.py
       pythonRequirements:
-        - cadquery-ocp==7.9.3.1.1
+        - cadquery-ocp-novtk==7.9.3.1.1
       comment: Produced by ACME Corp.
 
 ``path`` is resolved relative to the package that declared it. A file type that
@@ -402,6 +402,16 @@ Both fields still parse anywhere -- every field of a file type layers the same
 way -- so setting them on a file type whose implementation lives elsewhere is
 not an error. It simply describes nothing: the environment being described
 belongs to the package that wrote the script.
+
+Every sandbox already holds build123d and the OCP build it depends on,
+``cadquery-ocp-novtk``, which is the one to name for a script that imports
+``OCP`` and not CadQuery. Whatever an implementation asks for beyond that is
+installed into a layer over the sandbox -- an environment of its own that sees
+everything the sandbox holds -- shared by every implementation and every part
+asking for the same packages. ``cadquery-ocp``, the OCP build CadQuery needs, is
+one of those: the two builds write the same native module, so they cannot share
+an environment, and naming CadQuery's without importing CadQuery gets a script a
+layer carrying VTK that it never uses.
 
 Bringing dependencies pip cannot install
 ----------------------------------------

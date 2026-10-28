@@ -195,13 +195,16 @@ def test_the_reader_runs_in_its_own_package_s_image_and_cache(tmp_path):
     asked, seen = {}, {}
 
     class Runtime:
-        async def ensure_async(self, _requirement):
+        def get_session(self, _name):
             return None
 
-        async def prepare_for_package(self, _project):
+        async def ensure_async(self, _requirement, session=None):
             return None
 
-        async def run_async(self, command, request):
+        async def prepare_for_package(self, _project, session=None):
+            return None
+
+        async def run_async(self, command, request, session=None):
             seen.update(pc.shape_envelope.deserialize(request))
             return 0, pc.shape_envelope.serialize({"success": True, "root": {"links": [], "parts": []}}), ""
 
@@ -228,16 +231,19 @@ def test_the_reader_is_told_where_the_file_was_declared(package):
         return 0, pc.shape_envelope.serialize({"success": True, "root": {"links": [], "parts": []}}), ""
 
     class Runtime:
-        async def ensure_async(self, _requirement):
+        def get_session(self, _name):
             return None
 
-        async def prepare_for_package(self, _project):
+        async def ensure_async(self, _requirement, session=None):
+            return None
+
+        async def prepare_for_package(self, _project, session=None):
             # The generic reader path installs the implementing package's own
             # requirements before its file-type ones, the way the export path
             # does.
             return None
 
-        async def run_async(self, command, request):
+        async def run_async(self, command, request, session=None):
             return await capture(command, request)
 
     factory.ctx.get_python_runtime = lambda *args, **kwargs: Runtime()

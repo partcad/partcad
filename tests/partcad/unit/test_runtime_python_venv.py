@@ -95,8 +95,9 @@ def test_the_venv_sandbox_is_selectable(ctx):
     assert isinstance(runtime, VenvPythonRuntime)
     assert runtime.sandbox == "venv"
     # Named after the sandbox and the version, like every other one, so two
-    # versions are two environments.
-    assert runtime.path.endswith("pc-py-venv-" + VERSION)
+    # versions are two environments -- and after the layout, so a sandbox an
+    # older PartCAD built is never written to by this one.
+    assert runtime.path.endswith("pc-py-venv-" + VERSION + "-layered")
 
 
 def test_the_factory_knows_the_name():

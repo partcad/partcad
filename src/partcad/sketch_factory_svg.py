@@ -75,9 +75,7 @@ class SketchFactorySvg(SketchFactoryPython):
                 await self.runtime.ensure_async(sandbox_versions.OCPSVG)
                 await self.runtime.ensure_async(sandbox_versions.TYPING_EXTENSIONS)
                 await self.runtime.ensure_async(sandbox_versions.BUILD123D)
-                # Last: re-asserts the VTK-enabled OCP that build123d's
-                # 'cadquery-ocp-novtk' dependency has just replaced.
-                await self.runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+                await self.runtime.ensure_async(sandbox_versions.OCP)
                 command = [
                     wrapper_path,
                     os.path.abspath(self.path),

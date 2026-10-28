@@ -1143,12 +1143,15 @@ async def _run_plugin_async(
     # - Gazebo - can only arrive in a sandbox built from an image that carries
     # it.
     runtime = ctx.get_python_runtime(version=impl.python_version(), image=impl.docker_image)
-    await runtime.prepare_for_package(impl.project)
+    # In a layer over the sandbox's own environment, as an output
+    # implementation's are (see 'Shape._run_implementation_locked').
+    session = runtime.get_session("%s:%s" % (impl.section, impl.format_name))
+    await runtime.prepare_for_package(impl.project, session=session)
     # One at a time rather than with asyncio.gather(), for the reason
-    # 'Shape._render_one_async' installs them that way: the order a package
-    # declares its requirements in is part of what it declared.
+    # 'Shape._run_implementation_locked' installs them that way: the order a
+    # package declares its requirements in is part of what it declared.
     for dep in impl.python_requirements:
-        await runtime.ensure_async(dep)
+        await runtime.ensure_async(dep, session=session)
 
     command = [
         wrapper.get("simulate.py"),
@@ -1171,6 +1174,7 @@ async def _run_plugin_async(
         exitcode, response_serialized, errors = await runtime.run_async(
             command,
             shape_envelope.serialize(request),
+            session=session,
             # Longer than the budget: the wrapper stops the run when the budget
             # is spent and says so, which is the better report, and this is for
             # the run it could not stop. 'communicate' kills the process tree.

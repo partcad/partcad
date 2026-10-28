@@ -100,9 +100,7 @@ class PartFactoryGltf(PartFactoryHomogen, PartFactoryFile):
             await self.runtime.ensure_async(sandbox_versions.TYPING_EXTENSIONS)
             await self.runtime.ensure_async(sandbox_versions.OCPSVG)
             await self.runtime.ensure_async(sandbox_versions.BUILD123D)
-            # Last: re-asserts the VTK-enabled OCP that build123d's
-            # 'cadquery-ocp-novtk' dependency has just replaced.
-            await self.runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+            await self.runtime.ensure_async(sandbox_versions.OCP)
 
             command = [wrapper.get("import_gltf.py"), os.path.abspath(self.path)]
             with telemetry.start_as_current_span("*PartFactoryGltf.instantiate.{runtime.run_async}"):

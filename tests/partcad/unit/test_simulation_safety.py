@@ -140,6 +140,11 @@ parts:
 class HostRuntime:
     """A sandbox that is this interpreter, spawned and bounded the way every sandbox is."""
 
+    def get_session(self, name):
+        # What a caller asks for beyond the base goes into a layer; nothing
+        # is installed here, so there is no layer to name.
+        return None
+
     async def prepare_for_package(self, project, session=None):
         return None
 
