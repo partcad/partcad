@@ -31,7 +31,8 @@ import pytest
 
 from partcad import runtime as pc_runtime
 from partcad import wrapper as pc_wrapper
-from partcad_utils import container_service, containers
+from partcad_utils import container_files, container_service, containers
+from partcad_utils.json_rpc_client import RuntimeJsonRpcClient
 
 # Where the wrappers are, asked the way the core asks: 'partcad.wrappers' is a
 # namespace package and has no '__file__', and in a frozen bundle the directory
@@ -78,6 +79,9 @@ def server(monkeypatch, tmp_path):
     # the way `partcad-service-remote-docker` tells it, and read at start-up for
     # the same reason the allowlist is.
     monkeypatch.setenv("PC_CONTAINER_SANDBOX_ROOT", str(tmp_path / "pc-sandbox"))
+    # And where it keeps what it is sent by content: this test's, not the
+    # machine's, which every other test process would be writing too.
+    monkeypatch.setenv("PC_CONTAINER_STORE", str(tmp_path / "pc-store"))
 
     spec = importlib.util.spec_from_file_location("pc_container_json_rpc", SERVER)
     module = importlib.util.module_from_spec(spec)
@@ -212,23 +216,30 @@ def test_a_command_outside_the_allowlist_is_refused(server, package, tmp_path):
 # --------------------------------------------------------------------------- #
 
 
-class _Wire:
+class _Wire(RuntimeJsonRpcClient):
     """The RPC client, with the socket taken out.
 
-    Everything the client encodes and everything the server decodes stays in;
-    what is skipped is the HTTP request and the container it would reach. The
-    parameters are round-tripped through JSON first, because that is what they
-    do in the real thing and it is where a value that is not JSON survives here
-    and does not there.
+    Everything the client encodes and everything the server decodes stays in
+    -- the frame each way, the negotiation over what the store lacks, the
+    store itself -- and what is skipped is the HTTP request and the container
+    it would reach. The body is joined into bytes and parsed again on the far
+    side, because that is what happens to it in the real thing.
     """
 
     def __init__(self, server):
+        super().__init__("127.0.0.1", 0, token="wire-%d" % id(self))
         self.server = server
         self.sent = None
+        self.methods = []
 
-    async def execute_async(self, command, params=None, timeout=None):
-        self.sent = json.loads(json.dumps({"command": list(command), **(params or {})}))
-        return {"result": self.server.handle_execute_command(**self.sent)}
+    def _post_frame(self, parts, timeout):
+        body = b"".join(bytes(memoryview(part)) for part in parts)
+        payload = self.server.decode_frame(body)
+        self.methods.append(payload["method"])
+        if payload["method"] == "execute":
+            self.sent = payload["params"]
+        answer = self.server.encode_frame(self.server.dispatch(payload, frames=True))
+        return 200, self.server.FRAME_TYPE, b"".join(bytes(memoryview(part)) for part in answer)
 
 
 class _WiredEndpoint(containers.Endpoint):
@@ -307,8 +318,44 @@ def test_the_command_went_through_the_container_and_carried_its_files(runtime, p
     )
     sent = runtime.endpoint.wire.sent
     assert sent is not None
-    assert set(sent["input_dirs"]) == {WRAPPERS, str(package)}
+    assert set(sent["input_trees"]) == {WRAPPERS, str(package)}
     assert sent["output_files"] == [output]
+
+
+def test_a_directory_the_container_has_is_not_sent_again(runtime, package, tmp_path, monkeypatch):
+    """The wrappers every sandbox command imports, once per container rather than once per command."""
+    monkeypatch.setattr(container_files, "_KNOWN", container_files.collections.OrderedDict())
+    wire = runtime.endpoint.wire
+    output = str(tmp_path / "result.glb")
+    command = ["python", os.path.join(WRAPPERS, "wrapper_export.py"), output, str(package), str(package / "solve.py")]
+
+    def render(question):
+        exitcode, stdout, errors = asyncio.run(
+            runtime.run_async(
+                command, _serialize({"question": question}), output_files=[output], input_dirs=[WRAPPERS, str(package)]
+            )
+        )
+        assert exitcode == 0, errors
+        return _deserialize(stdout)["findings"]
+
+    assert render("first") == ["first"]
+    first = dict(wire.sent.get("blobs") or {})
+    assert wire.methods == ["missing", "execute"]
+    assert {digest for tree in wire.sent["input_trees"].values() for _n, digest, _m in tree["files"]} <= set(first)
+
+    wire.methods.clear()
+    assert render("second") == ["second"]
+    # Neither asked about nor sent: this process knows the container has it.
+    assert wire.methods == ["execute"]
+    assert not wire.sent.get("blobs")
+
+    # A package changed between the two is sent as what changed and no more.
+    (package / "helper.py").write_text(HELPER.replace("as bytes would be", "as bytes would be, again"))
+    wire.methods.clear()
+    assert render("third") == ["third"]
+    assert wire.methods == ["missing", "execute"]
+    assert len(wire.sent["blobs"]) == 1
+    assert open(output).read() == "a model, as bytes would be, again"
 
 
 def test_what_the_implementation_printed_is_a_warning_and_not_a_failure(runtime, package, tmp_path):
@@ -478,3 +525,27 @@ def test_a_path_that_is_not_there_is_refused_rather_than_run(server):
     """The shape is not the permission: it has to be an environment that exists."""
     with pytest.raises(Exception, match="not allowed"):
         server.handle_execute_command([os.path.join(server.SANDBOX_ROOT, "v-env-3.11", "bin", "python"), "-c", "pass"])
+
+
+@pytest.mark.skipif(os.name == "nt", reason="an execute bit")
+@pytest.mark.parametrize("before, sent, after", [(0o755, 0o644, False), (0o644, 0o755, True), (0o750, 0o755, True)])
+def test_a_file_written_back_runs_or_not_as_it_does_over_there(tmp_path, before, sent, after):
+    """Written over, a file keeps the mode it had here: whether it runs is set from what came back, both ways."""
+    target = tmp_path / "out"
+    target.mkdir()
+    (target / "tool.sh").write_text("old")
+    (target / "tool.sh").chmod(before)
+    back = {"files": [["tool.sh", sent, container_service.pack_blob(b"new")]], "dirs": []}
+    container_files.write_back({"output_dirs": {str(target): back}}, output_dirs=[str(target)])
+    assert (target / "tool.sh").read_bytes() == b"new"
+    assert bool(os.stat(target / "tool.sh").st_mode & 0o111) is after
+    # What does not decide whether it runs is left as it was here.
+    assert os.stat(target / "tool.sh").st_mode & 0o666 == before & 0o666
+
+
+@pytest.mark.parametrize("body", [b"[1]", b'"answer"', b"3", b"null"])
+def test_an_answer_that_is_not_an_object_is_no_answer(monkeypatch, body):
+    monkeypatch.setattr(
+        RuntimeJsonRpcClient, "_post_frame", lambda self, parts, timeout: (200, "application/json", body)
+    )
+    assert RuntimeJsonRpcClient("127.0.0.1", 1).call("execute", {"command": ["x"]}) is None

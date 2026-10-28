@@ -47,18 +47,23 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from partcad import remote_docker, remote_sandbox
 from partcad.remote_sandbox import execute
 from partcad.remote_sandbox import forward as _forward
+from partcad_utils import container_service
 from partcad_utils import logging as pc_logging
 
 # The stdlib rather than a web framework, like the service inside every
 # container (`partcad_utils.container_service`): this one ships in the wheel,
 # and a wheel dependency is also a thing the frozen bundles have to carry and
 # PyInstaller has to be told about (see `dev-tools/pyinstaller/README.md`).
-# What is needed here is one JSON-RPC method over HTTP POST, which is smaller
+# What is needed here is two JSON-RPC methods over HTTP POST, which is smaller
 # than the paperwork of adding a framework to a CAD tool.
+#
+# They come in either of the container service's dialects, and are forwarded
+# in the one they came in: frames from a client of this release, JSON from one
+# of an older release, which never asks `GET /` and never sends anything else.
 
 
 class Handler(BaseHTTPRequestHandler):
-    """One JSON-RPC method, over POST, at any path.
+    """`execute` and `missing`, over POST, at any path; what it speaks on `GET /`.
 
     ``pool`` and ``environments`` are set on the server rather than reached
     through module globals, so that the handler is testable against a pool that
@@ -93,9 +98,20 @@ class Handler(BaseHTTPRequestHandler):
         # not a 401 -- it is the connection closing with nothing said.
         return hmac.compare_digest(value.strip().encode("utf-8", "replace"), token.encode("utf-8"))
 
+    def do_GET(self):  # noqa: N802 - the name BaseHTTPRequestHandler dispatches to
+        """What this service speaks, unauthenticated and running nothing -- as a container's service answers.
+
+        A client asks before its first request, because this service is
+        installed on its own machine and need not be the client's release: one
+        that says 5 or more takes frames, and one that predates the question
+        answers 501, which is an answer too (see `RuntimeJsonRpcClient.protocol`).
+        """
+        self._reply({"ok": True, "protocol": container_service.PROTOCOL})
+
     def do_POST(self):  # noqa: N802 - the name BaseHTTPRequestHandler dispatches to
         length = int(self.headers.get("Content-Length") or 0)
         request_id = None
+        frames = container_service.is_frame(self.headers.get("Content-Type"))
         if not self._authenticated():
             # Read and discard the body first: this connection is keep-alive
             # (HTTP/1.1), so a body left unread is the next request as far as
@@ -112,26 +128,51 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         try:
-            request = json.loads(self.rfile.read(length) or b"{}")
+            body = self.rfile.read(length)
+            # In frames the payloads are views of this body, and stay that all
+            # the way to the container and back: this reads the header, not
+            # what the header points at.
+            request = container_service.decode_frame(body) if frames else json.loads(body or b"{}")
             request_id = request.get("id")
-            if request.get("method") != "execute":
-                raise ValueError("Unknown method: %r. This service serves 'execute'." % request.get("method"))
-            result = execute(self.server.pool, self.server.environments, request.get("params") or {})
-            self._reply({"jsonrpc": "2.0", "id": request_id, "result": result})
+            params = request.get("params") or {}
+            if request.get("method") == "execute":
+                result = execute(self.server.pool, self.server.environments, params, frames=frames)
+            elif request.get("method") == "missing":
+                if not params.get("image"):
+                    raise ValueError("'image' is required: it is what decides which container is asked")
+                result = {"missing": remote_sandbox.missing(self.server.pool, params["image"], params.get("digests"))}
+            else:
+                raise ValueError(
+                    "Unknown method: %r. This service serves 'execute' and 'missing'." % request.get("method")
+                )
+            self._reply({"jsonrpc": "2.0", "id": request_id, "result": result}, frames=frames)
+        except remote_sandbox.ContainerError as e:
+            # Its code is the container's, and the client acts on some of them
+            # -- `MISSING` is "send this and ask again", not a failure.
+            pc_logging.warning("Request failed: %s" % e)
+            self._reply({"jsonrpc": "2.0", "id": request_id, "error": e.error()}, status=500, frames=frames)
         except Exception as e:
             pc_logging.warning("Request failed: %s" % e)
             self._reply(
                 {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32603, "message": str(e)}},
                 status=500,
+                frames=frames,
             )
 
-    def _reply(self, payload: dict, status: int = 200) -> None:
-        body = json.dumps(payload).encode()
+    def _reply(self, payload: dict, status: int = 200, frames: bool = False) -> None:
+        """``payload``, in the dialect the request came in."""
+        if frames:
+            parts = container_service.encode_frame(payload)
+            content_type, length = container_service.FRAME_TYPE, container_service.frame_length(parts)
+        else:
+            parts = [json.dumps(payload).encode()]
+            content_type, length = "application/json", len(parts[0])
         self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(length))
         self.end_headers()
-        self.wfile.write(body)
+        for part in parts:
+            self.wfile.write(part)
 
     def log_message(self, fmt, *args):
         """Through PartCAD's logging rather than onto stderr directly."""

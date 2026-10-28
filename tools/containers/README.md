@@ -43,9 +43,18 @@ Files reach it one of two ways, chosen by the `useDockerRemote` option (`PC_USE_
 * **`mount`** (the default) -- the directories under *Mounts* below are bind-mounted at the paths they have
   here, and commands name files by those paths.
 * **`upload`** -- nothing from this machine is mounted. The files a command reads travel with the request
-  (`input_files`, `input_dirs`) and what it writes comes back with the answer (`output_files`,
+  (`input_files`, `input_trees`) and what it writes comes back with the answer (`output_files`,
   `output_dirs`). A sandbox's environment lives in a named volume on the daemon's side. This is what a
   daemon that cannot see this machine's files needs.
+
+  PartCAD speaks the service's *frame* dialect: a JSON header and raw, length-prefixed blobs, so standard input,
+  files and what a command printed travel as the bytes they are rather than as base64. A directory travels as
+  a tree -- each file's name, mode and SHA-256 -- and the service keeps what it is sent in a store of its own
+  (`/tmp/pc-store` in the container, bounded by `PC_CONTAINER_STORE_LIMIT`, 256 MiB by default, and gone with
+  the container), so a directory it already has costs its manifest: the wrappers are sent once per container,
+  a package once and then only what changed in it. The JSON dialect, base64 and gzipped tars, is still served,
+  for an older client of `partcad-service-remote-docker` and for anybody with `curl`; the service's docstring
+  is the protocol.
 
 ## Base image contract
 

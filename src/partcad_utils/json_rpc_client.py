@@ -9,34 +9,100 @@ Here rather than in `partcad` because both a client and a daemon speak it: the
 daemon runs sandboxes, KiCad imports and plugin containers through it, and `pc
 open` runs an application through it, from a process that has to stay cheap to
 import. It needs `requests` and nothing else.
+
+Two dialects, as the service has (see its docstring): `call` and `run` speak
+frames, which is what PartCAD uses with every container it starts and with a
+`partcad-service-remote-docker` that says it can (`protocol`); `execute` speaks
+the JSON one, for a service of an older release.
+
+**Connections are kept.** A render sends a container a command per part, and a
+connection per command was a TCP handshake and a server thread per command. A
+`requests.Session` keeps them open; it is one per thread rather than one shared,
+because a session's connection pool is safe to share and the rest of it --
+cookies, adapters being mounted -- is not documented to be, and commands are
+sent from every thread of the executor at once.
 """
 
 import asyncio
 import json
+import os
 import threading
 from typing import Any, Dict, Optional, Union
 
 import requests
+import urllib3
 
+from . import container_files, container_service
 from . import logging as pc_logging
+
+_SESSIONS = threading.local()
+
+
+def _session() -> requests.Session:
+    """This thread's session -- and a new one in a process forked from the one that made it.
+
+    A forked child inherits its parent's sockets, and two processes writing
+    requests into one connection is two garbled conversations.
+    """
+    held = getattr(_SESSIONS, "held", None)
+    if held is None or held[0] != os.getpid():
+        held = (os.getpid(), requests.Session())
+        _SESSIONS.held = held
+    return held[1]
+
+
+# The protocol each service answered with, by URL: asked once per process.
+_PROTOCOLS: Dict[str, int] = {}
+_PROTOCOLS_GUARD = threading.Lock()
 
 
 def _summary(command, params) -> str:
     """What a request is, for a log line: the command, and how much rides with it.
 
-    Not the request itself. A request in upload mode carries whole directories as
-    base64, and logging that at debug level wrote megabytes per command.
+    Not the request itself. A request in upload mode carries whole files, and
+    logging that at debug level wrote megabytes per command.
     """
     params = params or {}
+
+    def size(value) -> int:
+        if isinstance(value, dict) and "zlib" in value:
+            value = value["zlib"]
+        if isinstance(value, (bytes, bytearray, memoryview)):
+            return memoryview(value).nbytes
+        return len(value or "")
+
     sizes = []
-    for key in ("input_files", "input_dirs"):
+    for key in ("input_files", "input_dirs", "blobs"):
         payload = params.get(key) or {}
         if payload:
-            sizes.append("%s: %d (%d bytes)" % (key, len(payload), sum(len(v or "") for v in payload.values())))
+            sizes.append("%s: %d (%d bytes)" % (key, len(payload), sum(size(v) for v in payload.values())))
+    trees = params.get("input_trees") or {}
+    if trees:
+        files = sum(len(tree.get("files") or ()) for tree in trees.values())
+        sizes.append("input_trees: %d (%d files)" % (len(trees), files))
     for key in ("output_files", "output_dirs"):
         if params.get(key):
             sizes.append("%s: %d" % (key, len(params[key])))
     return "%s%s" % (command, (" [" + ", ".join(sizes) + "]") if sizes else "")
+
+
+class _Body:
+    """A frame's buffers as one request body, sent buffer by buffer.
+
+    Iterable and sized, which is what makes `requests` send it with a
+    Content-Length and without joining it -- the service reads a body by its
+    length and does not speak chunked encoding.
+    """
+
+    def __init__(self, parts):
+        self.parts = parts
+        self.length = container_service.frame_length(parts)
+
+    def __len__(self):
+        return self.length
+
+    def __iter__(self):
+        return iter(self.parts)
 
 
 class RuntimeJsonRpcClient:
@@ -90,8 +156,98 @@ class RuntimeJsonRpcClient:
         except (requests.exceptions.RequestException, ValueError, AttributeError):
             return None
 
+    def protocol(self, timeout: float = 10.0) -> Optional[int]:
+        """The protocol the server speaks, asked once per process; None while nothing answers.
+
+        For `partcad-service-remote-docker`, which is installed on its own
+        machine and may be any release. One that predates the question has no
+        `GET /` at all and answers 501 -- which is an answer, and is 1; no
+        answer is not remembered, so a service that was down is asked again.
+        """
+        with _PROTOCOLS_GUARD:
+            if self.url in _PROTOCOLS:
+                return _PROTOCOLS[self.url]
+        try:
+            response = _session().get(self.url + "/", timeout=timeout)
+        except requests.exceptions.RequestException:
+            return None
+        found = 1
+        if response.status_code == 200:
+            try:
+                found = int(json.loads(response.content).get("protocol") or 1)
+            except (ValueError, AttributeError, TypeError):
+                found = 1
+        elif response.status_code >= 500 and response.status_code != 501:
+            # The service, or a proxy in front of it, failing: not an answer.
+            return None
+        with _PROTOCOLS_GUARD:
+            _PROTOCOLS[self.url] = found
+        return found
+
+    # ---------------------------------------------------------------- frames --
+
+    def _post_frame(self, parts, timeout):
+        """POST a frame; ``(status, content type, body)``. The one place a frame meets the network."""
+        headers = dict(self._headers())
+        headers["Content-Type"] = container_service.FRAME_TYPE
+        response = _session().post(
+            self.url + "/jsonrpc", data=_Body(parts), headers=headers, timeout=timeout, stream=True
+        )
+        # In one read rather than through `response.content`, which reads in
+        # ten-kilobyte pieces: half the time for an answer of fifty megabytes.
+        # Read to its end, the connection goes back to the pool by itself.
+        try:
+            body = response.raw.read(decode_content=True)
+        except urllib3.exceptions.HTTPError as e:
+            # What `response.content` would have raised: `requests` wraps
+            # urllib3's errors only on its own way of reading. Unwrapped, an
+            # answer cut off by a container dying mid-reply escaped `call` as
+            # urllib3's, past every caller that asks whether the container
+            # stopped when no answer came.
+            response.close()
+            raise requests.exceptions.ConnectionError(e, response=response)
+        return response.status_code, response.headers.get("Content-Type", ""), body
+
+    def call(self, method: str, params: Dict[str, Any], timeout: float = None) -> Optional[Dict]:
+        """One JSON-RPC call in the frame dialect: the response object, or None if none arrived.
+
+        Every bytes value of ``params`` travels as it is, and every bytes value
+        of the answer comes back as a `memoryview` of what was read.
+        """
+        request = {"jsonrpc": "2.0", "method": method, "params": params, "id": self.get_request_id()}
+        pc_logging.debug("JSON-RPC %s %s: %s" % (self.url, method, _summary(params.get("command"), params)))
+        try:
+            status, content_type, body = self._post_frame(container_service.encode_frame(request), timeout)
+            if status == 401:
+                return {"error": {"code": -32001, "message": "The container refused this client's token"}}
+            if container_service.is_frame(content_type):
+                answer = container_service.decode_frame(body)
+            else:
+                # What answers without speaking frames -- a proxy in front of
+                # the service, or the service refusing before it read the body --
+                # may still have said something worth reading.
+                answer = json.loads(body)
+            # A response is an object; anything else is no response at all.
+            return answer if isinstance(answer, dict) else None
+        except (requests.exceptions.RequestException, ValueError) as e:
+            pc_logging.error("Error during RPC call to %s: %s" % (self.url, e))
+            return None
+
+    def run(
+        self,
+        command: list,
+        request: "container_files.Request",
+        timeout: float = None,
+        route: Optional[dict] = None,
+    ) -> Optional[Dict]:
+        """`execute` ``command`` in the frame dialect, sending only what the server lacks (see `container_files`)."""
+        key = (self.url, self.token, tuple(sorted((route or {}).items())))
+        return container_files.execute(self.call, key, command, request, timeout=timeout, route=route)
+
+    # ------------------------------------------------------------------ JSON --
+
     def execute(self, command: list, params: Dict[str, Any] = None, timeout: float = None) -> Union[Dict, None]:
-        """Run `command` on the server.
+        """Run `command` on the server, in the JSON dialect.
 
         Returns the JSON-RPC response object -- `result` or `error` -- or None if
         no response arrived at all. `timeout` is seconds to wait, None for no
@@ -106,7 +262,7 @@ class RuntimeJsonRpcClient:
         }
         pc_logging.debug("JSON-RPC %s: %s" % (self.url, _summary(command, params)))
         try:
-            response = requests.post(self.url + "/jsonrpc", json=request, headers=self._headers(), timeout=timeout)
+            response = _session().post(self.url + "/jsonrpc", json=request, headers=self._headers(), timeout=timeout)
             if response.status_code == 401:
                 return {"error": {"code": -32001, "message": "The container refused this client's token"}}
             return json.loads(response.content)
@@ -118,7 +274,7 @@ class RuntimeJsonRpcClient:
         """Where each of ``names`` resolves in the container, or None for each that does not."""
         request = {"jsonrpc": "2.0", "method": "which", "params": {"names": list(names)}, "id": self.get_request_id()}
         try:
-            response = requests.post(self.url + "/jsonrpc", json=request, headers=self._headers(), timeout=timeout)
+            response = _session().post(self.url + "/jsonrpc", json=request, headers=self._headers(), timeout=timeout)
             answer = json.loads(response.content)
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
             pc_logging.error("Error during RPC call to %s: %s" % (self.url, e))

@@ -14,7 +14,6 @@ does, `NotFound` and 409 included. `test_containers_live.py` does the same
 things against a real daemon.
 """
 
-import base64
 import io
 import json
 import os
@@ -558,11 +557,14 @@ def _endpoint(mode):
 def test_mount_mode_sends_names_and_nothing_else(tmp_path):
     source = tmp_path / "in.txt"
     source.write_text("x")
-    params = _endpoint(MOUNT).params(
+    request = _endpoint(MOUNT).request(
         stdin="request", cwd=str(tmp_path), input_files=[str(source)], output_files=["/o"], input_dirs=[str(tmp_path)]
     )
-    assert set(params) == {"stdin", "cwd"}
-    assert base64.b64decode(params["stdin"]) == b"request"
+    assert set(request.params) == {"stdin", "cwd"}
+    # As it is: the frame dialect carries bytes, and base64 around them was a
+    # third more to send and an encode and a decode on every hop.
+    assert request.params["stdin"] == b"request"
+    assert request.digests() == []
 
 
 def test_upload_mode_sends_every_file_and_names_every_output(tmp_path):
@@ -571,24 +573,30 @@ def test_upload_mode_sends_every_file_and_names_every_output(tmp_path):
     package = tmp_path / "pkg"
     package.mkdir()
     (package / "a.py").write_text("A")
-    params = _endpoint(UPLOAD).params(
+    request = _endpoint(UPLOAD).request(
         input_files=[str(source)], output_files=["/o.stl"], input_dirs=[str(package)], output_dirs=["/d"]
     )
-    assert base64.b64decode(params["input_files"][str(source)]) == b"payload"
-    assert params["input_dirs"][str(package)] == container_service.pack_directory(str(package))
-    assert params["output_files"] == ["/o.stl"]
-    assert params["output_dirs"] == ["/d"]
+    assert request.params["input_files"][str(source)] == b"payload"
+    # A directory by content: names, modes and digests, and where to read each
+    # digest from should the container lack it.
+    tree = request.params["input_trees"][str(package)]
+    assert [(name, digest) for name, digest, _mode in tree["files"]] == [
+        ("a.py", container_service.content_digest(b"A"))
+    ]
+    assert request.content(container_service.content_digest(b"A")) == b"A"
+    assert request.params["output_files"] == ["/o.stl"]
+    assert request.params["output_dirs"] == ["/d"]
 
 
 def _answer(**result):
-    base = {"exit_code": 0, "stdout": "", "stderr": "", "output_files": {}, "output_dirs": {}}
+    base = {"exit_code": 0, "stdout": b"", "stderr": b"", "output_files": {}, "output_dirs": {}}
     base.update(result)
     return {"jsonrpc": "2.0", "id": 1, "result": base}
 
 
 def test_an_output_file_comes_back_to_where_it_was_asked_for(tmp_path):
     target = tmp_path / "out.stl"
-    answer = _answer(output_files={str(target): base64.b64encode(b"mesh").decode()})
+    answer = _answer(output_files={str(target): b"mesh"})
     code, _, _ = _endpoint(UPLOAD).result(answer, output_files=[str(target)])
     assert code == 0
     assert target.read_bytes() == b"mesh"
@@ -596,7 +604,7 @@ def test_an_output_file_comes_back_to_where_it_was_asked_for(tmp_path):
 
 def test_a_file_nobody_asked_for_is_not_written(tmp_path):
     stray = tmp_path / "stray"
-    answer = _answer(output_files={str(stray): base64.b64encode(b"x").decode()})
+    answer = _answer(output_files={str(stray): b"x"})
     _endpoint(UPLOAD).result(answer, output_files=[])
     assert not stray.exists()
 
@@ -609,7 +617,7 @@ def test_a_directory_comes_back_over_the_one_here_without_deleting_anything(tmp_
     edited = tmp_path / "edited"
     edited.mkdir()
     (edited / "board.kicad_pcb").write_text("v2")
-    answer = _answer(output_dirs={str(project): container_service.pack_directory(str(edited))})
+    answer = _answer(output_dirs={str(project): container_service.tree_back(str(edited))})
     _endpoint(UPLOAD).result(answer, output_dirs=[str(project)])
     assert (project / "board.kicad_pcb").read_text() == "v2"
     assert (project / "keep.txt").read_text() == "mine"
@@ -617,7 +625,7 @@ def test_a_directory_comes_back_over_the_one_here_without_deleting_anything(tmp_
 
 def test_mount_mode_writes_nothing_back_because_nothing_was_away(tmp_path):
     target = tmp_path / "out.stl"
-    answer = _answer(output_files={str(target): base64.b64encode(b"mesh").decode()})
+    answer = _answer(output_files={str(target): b"mesh"})
     _endpoint(MOUNT).result(answer, output_files=[str(target)])
     assert not target.exists()
 
@@ -636,11 +644,7 @@ def test_no_answer_at_all_is_a_failure_that_says_so():
 
 
 def test_output_is_decoded_and_the_exit_code_kept():
-    answer = _answer(
-        exit_code=3,
-        stdout=base64.b64encode(b"out").decode(),
-        stderr=base64.b64encode(b"err").decode(),
-    )
+    answer = _answer(exit_code=3, stdout=b"out", stderr=b"err")
     assert _endpoint(MOUNT).result(answer) == (3, "out", "err")
 
 
@@ -688,8 +692,8 @@ def test_a_daemon_elsewhere_is_warned_about_once(monkeypatch):
 
 def test_env_is_sent_in_either_mode(tmp_path):
     for mode in (MOUNT, UPLOAD):
-        assert _endpoint(mode).params(env={"DISPLAY": ":1"})["env"] == {"DISPLAY": ":1"}
-    assert "env" not in _endpoint(MOUNT).params()
+        assert _endpoint(mode).request(env={"DISPLAY": ":1"}).params["env"] == {"DISPLAY": ":1"}
+    assert "env" not in _endpoint(MOUNT).request().params
 
 
 def test_display_plumbing_is_bound_on_a_local_daemon_in_either_mode(daemon):

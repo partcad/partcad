@@ -691,6 +691,9 @@ class _Silent:
     def execute(self, command, params=None, timeout=None):
         return None
 
+    def call(self, method, params=None, timeout=None):
+        return None
+
 
 def test_a_remote_container_that_stopped_is_let_go_and_the_next_request_starts_another(monkeypatch):
     from partcad import remote_sandbox
@@ -724,6 +727,105 @@ def test_a_remote_container_that_merely_did_not_answer_is_kept(monkeypatch):
 
     assert code == 1 and "returned no response" in stderr
     assert pool.acquire(image) is lease
+
+
+# --------------------------------------------------------------------------- #
+# A container that dies halfway through its answer                             #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def cut_off():
+    """A port whose service reads a request whole, promises a frame, sends six bytes of it and hangs up.
+
+    Which is what a container's service killed while it was writing its answer
+    looks like from here: the request got there, and the answer did not.
+    """
+    import socket
+
+    from partcad_utils import container_service as service
+
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(8)
+
+    def answer_badly(connection):
+        with connection:
+            received = b""
+            while b"\r\n\r\n" not in received:
+                received += connection.recv(65536)
+            head, _, body = received.partition(b"\r\n\r\n")
+            length = next(
+                int(line.split(b":", 1)[1])
+                for line in head.split(b"\r\n")
+                if line.lower().startswith(b"content-length:")
+            )
+            while len(body) < length:
+                body += connection.recv(65536)
+            connection.sendall(
+                b"HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: 1000\r\n\r\nPCF1\x00\x00"
+                % service.FRAME_TYPE.encode()
+            )
+
+    def serve():
+        while True:
+            try:
+                connection, _ = listener.accept()
+            except OSError:
+                return
+            threading.Thread(target=answer_badly, args=(connection,), daemon=True).start()
+
+    threading.Thread(target=serve, daemon=True).start()
+    yield listener.getsockname()[1]
+    listener.close()
+
+
+def test_an_answer_cut_off_halfway_is_no_answer_rather_than_an_exception(cut_off):
+    """`requests` wraps urllib3's errors only on its own way of reading a body, and this reads it another way."""
+    from partcad_utils.json_rpc_client import RuntimeJsonRpcClient
+
+    assert RuntimeJsonRpcClient("127.0.0.1", cut_off).call("execute", {"command": ["x"]}, timeout=30) is None
+
+
+def test_a_remote_container_that_died_halfway_through_its_answer_is_let_go(cut_off):
+    from partcad import remote_docker, remote_sandbox
+
+    pool, environments = (
+        remote_docker.ContainerPool(
+            lambda image: remote_docker.Lease(image, _Container(status="exited", oom=True), "127.0.0.1:%d" % cut_off)
+        ),
+        _Environments(),
+    )
+    image = "ghcr.io/x/solver:abc"
+
+    code, _, stderr = remote_sandbox.forward(pool, image, ["python", "-c", "pass"])
+    assert code == 1 and "stopped by the out-of-memory killer" in stderr
+    assert pool.leases() == []
+
+    with pytest.raises(RuntimeError, match="stopped by the out-of-memory killer"):
+        remote_sandbox.execute(
+            pool, environments, {"image": image, "command": ["x.py"], "python_version": "3.11"}, frames=True
+        )
+    assert environments.forgotten == [image]
+
+
+def test_a_container_runtime_whose_container_died_halfway_through_its_answer_says_so(tmp_path, cut_off):
+    from partcad_utils import containers
+
+    endpoint = containers.Endpoint(
+        name="partcad-kicad-x",
+        spec=containers.ContainerSpec(role="kicad", image="kicad:1"),
+        container=_Container(status="exited", oom=True),
+        host="127.0.0.1",
+        port=cut_off,
+        token=None,
+    )
+    made = pc_runtime.Runtime(_ctx(tmp_path), "kicad")
+    made.use_container(endpoint)
+
+    exitcode, _, stderr = made.run(["kicad-cli"], "")
+    assert exitcode == 1
+    assert "stopped by the out-of-memory killer" in stderr
 
 
 # --------------------------------------------------------------------------- #

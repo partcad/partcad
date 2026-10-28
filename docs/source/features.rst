@@ -733,7 +733,10 @@ in a Docker volume on the daemon's side, built once and reused. It applies to
 every container PartCAD starts -- the ``docker`` sandbox, KiCad imports, a
 plugin's ``container:`` and an application ``pc ide open`` runs in a container
 alike -- and off by default, because sending a package
-with every command costs time that a shared filesystem does not. It needs no
+costs time that a shared filesystem does not. What is sent is sent once: each
+container keeps the files it has been given, by their content, so a command
+sends only what it does not have yet -- PartCAD's own wrappers once per
+container, a package once and then whatever changed in it. It needs no
 service in between: that is the difference from the ``remote`` sandbox below,
 which reaches containers through ``partcad-service-remote-docker`` and never
 talks to Docker itself.
@@ -832,9 +835,11 @@ The ``remote`` sandbox
 ----------------------
 
 ``remote`` makes no assumption that the container can see your disk. The
-directories a command needs are packed up and sent to it, and the files it wrote
-are sent back. That costs a copy per run, and it buys a sandbox that can be
-anywhere -- another machine, another architecture, a build farm.
+directories a command needs are sent to it, and the files it wrote are sent
+back. That costs a copy -- of each file once per container, since the container
+keeps what it has been sent and is asked for nothing it already has -- and it
+buys a sandbox that can be anywhere: another machine, another architecture, a
+build farm.
 
 It is served by ``partcad-service-remote-docker``, which accepts those requests,
 starts and reuses a container per image, multiplexes callers onto it and retires
@@ -880,9 +885,12 @@ tunnel -- SSH, WireGuard, whatever the network already has -- and point
 container PartCAD starts on this machine is loopback too, and a certificate
 between a process and its own container would secure nothing.
 
-Today the transfer is a whole directory at a time; the intent is to replace that
-with a filesystem the container mounts and pulls files through one at a time, at
-which point ``remote`` becomes as cheap as ``docker`` and stops being a trade.
+A client and a service need not be the same release: the client asks the
+service what it speaks before its first request, and talks to one from before
+that question the way it always did -- with every file sent on every command.
+The intent beyond that is a filesystem the container mounts and pulls files
+through one at a time, at which point ``remote`` becomes as cheap as ``docker``
+and stops being a trade.
 
 Containers PartCAD manages
 --------------------------

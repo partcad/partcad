@@ -539,7 +539,12 @@ Files reach a container two ways, and **both have to work for every caller**: `m
 directories at the paths they have here; `upload` (`useDockerRemote: true`, `PC_USE_DOCKER_REMOTE=true`)
 mounts nothing and sends what a command reads with the request and what it writes back with the answer. A
 sandbox in `upload` mode is the `remote` sandbox talking to its container itself -- the same
-`remote_sandbox.execute`, so one implementation of provisioning and forwarding, not two. You can exercise
+`remote_sandbox.execute`, so one implementation of provisioning and forwarding, not two. What travels is
+`partcad_utils.container_files`'s to decide, for every caller: bytes as bytes (the service's frame dialect, not
+base64 in JSON), and a directory by content -- the container keeps what it has been sent in a bounded store
+and is asked which digests it lacks, so the wrappers go once per container rather than once per command. The
+JSON dialect stays in the service for one reader: a `partcad-service-remote-docker` is installed on its own
+machine, so a client asks its `GET /` which it speaks, and an older client's JSON is forwarded as JSON. You can exercise
 `upload` mode on an ordinary machine with a local daemon by setting the variable; the live suites in
 `tests/partcad_utils/test_containers_live.py` run both modes against a real daemon, and
 `PC_USE_DOCKER_REMOTE=true poetry run pytest tests/partcad/unit/test_part.py::test_part_example_kicad` is the

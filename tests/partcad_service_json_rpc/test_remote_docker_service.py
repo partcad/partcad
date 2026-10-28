@@ -109,6 +109,82 @@ def test_the_request_reaches_the_container_unchanged(pool, environments, upstrea
     assert "image" not in upstream["params"]
 
 
+def test_a_request_in_frames_reaches_the_container_without_its_payloads_being_touched(pool, environments, monkeypatch):
+    """The views of the body the service read go on to the container as they are: not decoded, copied or encoded."""
+    from partcad_utils import container_service
+
+    seen = {}
+
+    class _Client:
+        def __init__(self, host, port, token=None):
+            pass
+
+        def call(self, method, params, timeout=None):
+            seen["method"] = method
+            seen["params"] = params
+            return {"jsonrpc": "2.0", "id": 1, "result": {"stdout": memoryview(b"ok"), "exit_code": 0}}
+
+        def execute(self, command, params, timeout=None):
+            raise AssertionError("a request in frames was forwarded as JSON")
+
+    monkeypatch.setattr(remote_sandbox, "RuntimeJsonRpcClient", _Client)
+    body = b"".join(
+        bytes(part)
+        for part in container_service.encode_frame(
+            {
+                "params": {
+                    "stdin": b"request",
+                    "blobs": {"d" * 64: b"content"},
+                    "input_trees": {"/work": {"files": [["a.py", "d" * 64, 420]], "dirs": []}},
+                }
+            }
+        )
+    )
+    params = container_service.decode_frame(body)["params"]
+    params.update({"image": "ghcr.io/x/solver:abc", "python_version": "3.11", "command": ["x.py"]})
+
+    result = service.execute(pool, environments, params, frames=True)
+
+    assert bytes(result["stdout"]) == b"ok"
+    assert seen["method"] == "execute"
+    assert seen["params"]["command"] == [remote_sandbox.interpreter_path("3.11"), "x.py"]
+    assert seen["params"]["stdin"] is params["stdin"]
+    assert seen["params"]["blobs"]["d" * 64] is params["blobs"]["d" * 64]
+    assert seen["params"]["input_trees"] == params["input_trees"]
+    assert seen["params"]["lock"] == remote_sandbox.lock_for("3.11", exclusive=False)
+    assert "image" not in seen["params"]
+
+
+def test_content_the_container_lacks_is_relayed_with_its_code(pool, environments, monkeypatch):
+    """`MISSING` is "send this and ask again", which the client can do only if it is still `MISSING`."""
+    from partcad_utils import container_service
+
+    _answers(
+        monkeypatch,
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "error": {"code": container_service.MISSING, "message": "lacking", "data": {"missing": ["e" * 64]}},
+        },
+    )
+    with pytest.raises(remote_sandbox.ContainerError) as refused:
+        service.execute(
+            pool, environments, {"image": "ghcr.io/x/a:1", "python_version": "3.11", "command": ["x"]}, frames=True
+        )
+    assert refused.value.error() == {
+        "code": container_service.MISSING,
+        "message": "ghcr.io/x/a:1: lacking",
+        "data": {"missing": ["e" * 64]},
+    }
+
+
+def test_what_the_container_lacks_is_asked_of_the_container_for_the_image(pool, monkeypatch):
+    _answers(monkeypatch, {"jsonrpc": "2.0", "id": 1, "result": {"missing": ["f" * 64]}})
+    assert remote_sandbox.missing(pool, "ghcr.io/x/a:1", ["f" * 64, "0" * 64]) == ["f" * 64]
+    assert pool.started == ["ghcr.io/x/a:1"]
+    assert [lease.in_flight for lease in pool.leases()] == [0]
+
+
 def test_the_image_decides_which_container(pool, environments, upstream):
     service.execute(pool, environments, {"image": "ghcr.io/x/a:1", "python_version": "3.11", "command": ["python"]})
     service.execute(pool, environments, {"image": "ghcr.io/x/b:1", "python_version": "3.11", "command": ["python"]})
@@ -149,7 +225,7 @@ def test_the_container_is_released_even_when_the_request_fails(pool, environment
 
 
 def _answers(monkeypatch, payload):
-    """A container that replies with exactly ``payload``."""
+    """A container that replies with exactly ``payload``, in either dialect."""
 
     class _Client:
         def __init__(self, host, port, token=None):
@@ -158,29 +234,26 @@ def _answers(monkeypatch, payload):
         def execute(self, command, params, timeout=None):
             return payload
 
+        def call(self, method, params, timeout=None):
+            return payload
+
     monkeypatch.setattr(remote_sandbox, "RuntimeJsonRpcClient", _Client)
 
 
 def test_what_a_command_wrote_is_decoded(pool, monkeypatch):
-    """The container sends base64 inside a JSON-RPC envelope.
+    """The container sends what it printed inside a JSON-RPC envelope.
 
     Read off the envelope instead of out of it, 'exit_code' was never there --
     so every command, a pip install included, was reported as having succeeded
     with nothing to say, and 'Environments' recorded packages it had not
     installed.
     """
-    import base64
-
     _answers(
         monkeypatch,
         {
             "jsonrpc": "2.0",
             "id": 1,
-            "result": {
-                "exit_code": 2,
-                "stdout": base64.b64encode(b"what it printed").decode(),
-                "stderr": base64.b64encode(b"what went wrong").decode(),
-            },
+            "result": {"exit_code": 2, "stdout": memoryview(b"what it printed"), "stderr": b"what went wrong"},
         },
     )
 

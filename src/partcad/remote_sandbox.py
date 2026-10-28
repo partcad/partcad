@@ -26,12 +26,11 @@ command over there, which is what makes the sequence testable: what is worth
 pinning is *which* commands are run, in what order, and how often.
 """
 
-import base64
 import json
 import threading
 from typing import Callable, Optional
 
-from partcad_utils import containers
+from partcad_utils import container_files, containers
 from partcad_utils.json_rpc_client import RuntimeJsonRpcClient
 
 from . import sandbox_versions
@@ -322,9 +321,26 @@ class Environments:
             self._pythons.pop(image, None)
 
 
-def _decoded(value) -> str:
-    """What a command wrote, which the container sends base64-encoded."""
-    return base64.b64decode(value).decode("utf-8", errors="replace") if value else ""
+class ContainerError(RuntimeError):
+    """What a container refused a request with, with its JSON-RPC code and data kept.
+
+    A `RuntimeError` like every other failure here, so that whoever reads only
+    the sentence reads it as before; the code is for whoever acts on it -- the
+    service relaying `container_service.MISSING` to a client, which then sends
+    what was missing, rather than flattening it into a failure.
+    """
+
+    def __init__(self, message: str, code: Optional[int] = None, data=None):
+        RuntimeError.__init__(self, message)
+        self.code = code
+        self.data = data
+
+    def error(self) -> dict:
+        """As the JSON-RPC error object it came as."""
+        error = {"code": self.code if self.code is not None else -32603, "message": str(self)}
+        if self.data is not None:
+            error["data"] = self.data
+        return error
 
 
 def _message(error) -> str:
@@ -365,6 +381,11 @@ def _lost(pool, lease, environments=None):
     return "The container serving '%s' %s; it is started again for the next command." % (lease.image, why)
 
 
+def _client(lease) -> RuntimeJsonRpcClient:
+    host, port = lease.endpoint.rsplit(":", 1)
+    return RuntimeJsonRpcClient(host, int(port), token=lease.token)
+
+
 def forward(pool, image: str, command: list, params: dict = None) -> tuple:
     """Run one command in the container for ``image``, as (exit code, out, err).
 
@@ -373,19 +394,22 @@ def forward(pool, image: str, command: list, params: dict = None) -> tuple:
     """
     lease = pool.acquire(image)
     try:
-        host, port = lease.endpoint.rsplit(":", 1)
-        answer = RuntimeJsonRpcClient(host, int(port), token=lease.token).execute(command, params or {})
+        answer = _client(lease).call("execute", dict(params or {}, command=list(command)))
         if not answer:
             return 1, "", _lost(pool, lease) or "The container serving '%s' returned no response" % image
         # The envelope, not the payload: the client returns what the container
-        # replied with, and what is in it is base64. Reading 'exit_code' off the
-        # envelope found nothing, so every command -- a provisioning command
-        # included -- was reported as having succeeded silently, and a container
-        # that refused one was recorded as having run it.
+        # replied with. Reading 'exit_code' off the envelope found nothing, so
+        # every command -- a provisioning command included -- was reported as
+        # having succeeded silently, and a container that refused one was
+        # recorded as having run it.
         if answer.get("error"):
             return 1, "", _message(answer["error"])
         result = answer.get("result") or {}
-        return int(result.get("exit_code") or 0), _decoded(result.get("stdout")), _decoded(result.get("stderr"))
+        return (
+            int(result.get("exit_code") or 0),
+            container_files.text(result.get("stdout")),
+            container_files.text(result.get("stderr")),
+        )
     finally:
         pool.release(lease)
 
@@ -398,13 +422,36 @@ def which(pool, image: str, names: list) -> Optional[dict]:
     """
     lease = pool.acquire(image)
     try:
-        host, port = lease.endpoint.rsplit(":", 1)
-        return RuntimeJsonRpcClient(host, int(port), token=lease.token).which(list(names))
+        return _client(lease).which(list(names))
     finally:
         pool.release(lease)
 
 
-def execute(pool, environments, params: dict, timeout: Optional[float] = None) -> dict:
+def missing(pool, image: str, digests: list, timeout: Optional[float] = None) -> list:
+    """Which of ``digests`` the container for ``image`` does not have in its store.
+
+    What a client asks before sending a directory by content, through the same
+    pool and so of the same container its command will run in.
+    """
+    lease = pool.acquire(image)
+    try:
+        answer = _client(lease).call("missing", {"digests": list(digests)}, timeout=timeout)
+        if not answer:
+            raise RuntimeError(_lost(pool, lease) or "The container serving '%s' returned no response" % image)
+        if answer.get("error"):
+            error = answer["error"]
+            raise ContainerError("%s: %s" % (image, _message(error)), error.get("code"), error.get("data"))
+        return list((answer.get("result") or {}).get("missing") or [])
+    finally:
+        pool.release(lease)
+
+
+# What a request in frames may carry to the container: everything about its
+# files, passed through untouched.
+_FRAME_FORWARDED = ("stdin", "cwd", "input_files", "output_files", "input_trees", "blobs", "output_dirs")
+
+
+def execute(pool, environments, params: dict, timeout: Optional[float] = None, frames: bool = False) -> dict:
     """Run one command in the environment this service keeps for ``image``.
 
     The caller sends what it wants run and never learns where the environment
@@ -413,10 +460,14 @@ def execute(pool, environments, params: dict, timeout: Optional[float] = None) -
     sandbox, where the client owns the environment because it can see the disk
     it is on.
 
-    Everything about files is passed through untouched. The service inside the
-    container already unpacks directories, rewrites the command's paths and
-    packs the outputs back -- it does that for every container PartCAD runs --
-    and a second implementation here would be a second place for it to be wrong.
+    Everything about files is passed through untouched, in the dialect it came
+    in (``frames``: see `partcad_utils.container_service`). The service inside
+    the container already builds directories, rewrites the command's paths and
+    sends the outputs back -- it does that for every container PartCAD runs --
+    and a second implementation here would be a second place for it to be
+    wrong. In frames that is literal: the blobs a request carries are the views
+    of its body the service read, and go on to the container as they are,
+    without being decoded, copied or encoded on the way.
     """
     image = params.get("image")
     if not image:
@@ -433,23 +484,25 @@ def execute(pool, environments, params: dict, timeout: Optional[float] = None) -
 
     lease = pool.acquire(image)
     try:
-        host, port = lease.endpoint.rsplit(":", 1)
-        rpc = RuntimeJsonRpcClient(host, int(port), token=lease.token)
-        answer = rpc.execute(
-            [interpreter] + list(command),
-            {
+        rpc = _client(lease)
+        if frames:
+            forwarded = dict((key, params[key]) for key in _FRAME_FORWARDED if key in params)
+        else:
+            forwarded = {
                 "stdin": params.get("stdin"),
                 "cwd": params.get("cwd"),
                 "input_files": params.get("input_files") or {},
                 "output_files": params.get("output_files") or [],
                 "input_dirs": params.get("input_dirs") or {},
                 "output_dirs": params.get("output_dirs") or [],
-                # Shared: any number of commands may run out of the environment
-                # at once, and none while something installs into it.
-                "lock": lock_for(version, exclusive=False),
-            },
-            timeout=timeout,
-        )
+            }
+        # Shared: any number of commands may run out of the environment at
+        # once, and none while something installs into it.
+        forwarded["lock"] = lock_for(version, exclusive=False)
+        if frames:
+            answer = rpc.call("execute", dict(forwarded, command=[interpreter] + list(command)), timeout=timeout)
+        else:
+            answer = rpc.execute([interpreter] + list(command), forwarded, timeout=timeout)
         if not answer:
             raise RuntimeError(
                 _lost(pool, lease, environments) or "The container serving '%s' returned no response" % image
@@ -458,7 +511,10 @@ def execute(pool, environments, params: dict, timeout: Optional[float] = None) -
             # Returned as this call's *result*, an error left the client
             # unwrapping a payload with no 'stdout' in it, so a command the
             # container refused arrived as a malformed answer.
-            raise RuntimeError("%s: %s" % (image, _message(answer["error"])))
+            error = answer["error"]
+            code = error.get("code") if isinstance(error, dict) else None
+            data = error.get("data") if isinstance(error, dict) else None
+            raise ContainerError("%s: %s" % (image, _message(error)), code, data)
         # The container's payload, not its envelope. Two JSON-RPC layers are
         # already one more than the caller asked for; nesting a second envelope
         # inside the first would make the client unwrap twice to reach a field

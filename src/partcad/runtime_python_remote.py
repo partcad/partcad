@@ -294,16 +294,34 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
         output_files, output_dirs = outputs_for(output_files, output_dirs, input_dirs)
         return input_dirs, output_files, output_dirs or None
 
+    def _what_is_wanted(self) -> dict:
+        """What the service needs to know besides the command: which container, which environment, holding what."""
+        return {"image": self.image, "python_version": self.version, "requirements": list(self.requirements)}
+
+    @staticmethod
+    def _speaks_frames(client) -> bool:
+        """Whether ``client``'s service takes frames (see `partcad_utils.container_service`).
+
+        Asked, because `partcad-service-remote-docker` runs on another machine
+        and is installed there on its own: it may be a release from before
+        frames, which answers this question with a 501 and is spoken to in
+        JSON, as it always was.
+        """
+        from partcad_utils import container_service
+
+        protocol = getattr(client, "protocol", None)
+        found = protocol() if callable(protocol) else None
+        return bool(found) and found >= container_service.FRAME_PROTOCOL
+
     def _params(self, cmd, stdin, cwd, input_files, output_files, input_dirs, output_dirs=None) -> dict:
+        """The request in the JSON dialect, for a service that does not take frames."""
         if input_dirs is None:
             input_dirs = input_dirs_for(cmd, cwd)
         params = self._rpc_params(stdin, cwd, input_files or [], output_files or [], input_dirs, output_dirs)
-        params["image"] = self.image
-        params["python_version"] = self.version
-        params["requirements"] = list(self.requirements)
+        params.update(self._what_is_wanted())
         return params
 
-    def _answer(self, cmd, response, output_files, output_dirs=None):
+    def _answer(self, cmd, response, output_files, output_dirs=None, frames=False):
         if not response:
             return self._no_response(self.name)
         if response.get("error"):
@@ -312,10 +330,53 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
             # Neither an answer nor an error is still a failure, and saying so
             # is better than the KeyError that reading it blind produced.
             return 1, "", "The remote sandbox service answered without a result: %s" % response
+        if frames:
+            from partcad_utils import container_files
+
+            from .process_output import decode as decode_output
+
+            result = response["result"]
+            container_files.write_back(result, output_files, output_dirs, who="The remote sandbox")
+            # Empty as a string, as a process run here reports it (see
+            # '_rpc_result'), and decoded the way a process run here is.
+            stdout = decode_output(bytes(result.get("stdout") or b""))
+            stderr = decode_output(bytes(result.get("stderr") or b""))
+            returncode = result.get("exit_code")
+            returncode = int(bool(stderr)) if returncode is None else returncode
+            return self._finished(cmd, stdout, stderr, returncode)
         # The service answers with the container's payload rather than its
         # envelope, and '_rpc_result' reads an envelope -- so it is given one.
         stdout, stderr, returncode = self._rpc_result({"result": response["result"]}, output_files or [], output_dirs)
         return self._finished(cmd, stdout, stderr, returncode)
+
+    def _send(self, cmd, stdin, cwd, timeout, input_files, output_files, input_dirs, output_dirs):
+        """One command, from what it reads to what it wrote: blocking, and the whole of it.
+
+        Blocking on purpose: everything here is I/O -- walking and hashing the
+        directories sent, the request, writing back what came -- and
+        `run_async` runs all of it on an executor thread. It used to pack the
+        directories on the event loop and hand only the request to a thread,
+        which held every other coroutine for as long as a package took to tar.
+        """
+        input_dirs, output_files, output_dirs = self._exchanged(cmd, cwd, input_dirs, output_files, output_dirs)
+        client = self._client()
+        if not self._speaks_frames(client):
+            params = self._params(cmd, stdin, cwd, input_files, output_files, input_dirs, output_dirs)
+            return self._answer(cmd, client.execute(list(cmd), params, timeout=timeout), output_files, output_dirs)
+
+        from partcad_utils import container_files
+
+        request = container_files.Request(
+            stdin=runtime.stdin_bytes(stdin) or None,
+            cwd=cwd,
+            input_files=input_files or (),
+            output_files=output_files or (),
+            input_dirs=input_dirs or (),
+            output_dirs=output_dirs or (),
+        )
+        request.params.update(self._what_is_wanted())
+        answer = client.run(list(cmd), request, timeout=timeout, route={"image": self.image})
+        return self._answer(cmd, answer, output_files, output_dirs, frames=True)
 
     def run(
         self,
@@ -332,9 +393,7 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
         # skipped it, so the base stack was never asked for and every wrapper
         # died on its first import.
         self.once()
-        input_dirs, output_files, output_dirs = self._exchanged(cmd, cwd, input_dirs, output_files, output_dirs)
-        params = self._params(cmd, stdin, cwd, input_files, output_files, input_dirs, output_dirs)
-        return self._answer(cmd, self._client().execute(list(cmd), params), output_files, output_dirs)
+        return self._send(cmd, stdin, cwd, None, input_files, output_files, input_dirs, output_dirs)
 
     async def run_async(
         self,
@@ -348,10 +407,17 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
         input_dirs=None,
         output_dirs=None,
     ):
+        import asyncio
+        import functools
+
         await self.once_async()
-        input_dirs, output_files, output_dirs = self._exchanged(cmd, cwd, input_dirs, output_files, output_dirs)
-        params = self._params(cmd, stdin, cwd, input_files, output_files, input_dirs, output_dirs)
+        # Resolved here, on the loop, as every other launch point resolves it:
+        # a request may be the callable that writes it (see 'stdin_bytes'),
+        # and what it serializes is not this thread's to hand to another.
+        data = runtime.stdin_bytes(stdin)
         # The bound the caller was given, honoured. Dropped, it meant an
         # unresponsive service held the render open with nothing to wait for.
-        answer = await self._client().execute_async(list(cmd), params, timeout=timeout)
-        return self._answer(cmd, answer, output_files, output_dirs)
+        return await asyncio.get_running_loop().run_in_executor(
+            None,
+            functools.partial(self._send, cmd, data, cwd, timeout, input_files, output_files, input_dirs, output_dirs),
+        )
