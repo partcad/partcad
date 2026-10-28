@@ -136,6 +136,8 @@ class FakeResult implements CaeResultView {
 
 const BRACKET = '//examples/feature_cae:bracket';
 const CALCULIX = '//pub/feature/cae/calculix:fea';
+/** A model's bytes, as the host posts them: what the daemon sent, or its base64 decoded. */
+const PNG = new TextEncoder().encode('PNG');
 const ELMER = '//pub/feature/cae/elmer:fea';
 
 /** What 'cae.list' answers for a part with two FEA scenarios and a heat transfer one, plus the host's defaults. */
@@ -167,7 +169,7 @@ function ran(scenario: string, findings = 0, error: string | null = null, implem
         implementation,
         filepath: error ? null : `/tmp/bracket.fea.${scenario}.png`,
         extension: error ? null : 'png',
-        content: error ? null : 'UE5H',
+        content: error ? null : PNG,
         findings: Array.from({ length: findings }, (_, i) => ({ message: `finding ${i}`, severity: 'warning' })),
         error,
     };
@@ -622,7 +624,7 @@ suite('Digital Thread Analysis tabs', () => {
             implementation: CALCULIX,
             filepath: '/tmp/bracket.fea.png',
             extension: 'png',
-            content: 'UE5H',
+            content: PNG,
             findings: [],
         };
         view.showRun('loaded', legacy);

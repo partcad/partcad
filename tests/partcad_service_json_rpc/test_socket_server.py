@@ -18,7 +18,7 @@ import pytest
 from partcad_service_json_rpc.core import events
 from partcad_service_json_rpc.core.session import Session
 from partcad_service_json_rpc.transport.socket_server import SocketServer
-from partcad_utils.framing import read_message, write_message
+from partcad_utils.framing import as_bytes, read_message, write_message
 
 if not hasattr(socket, "AF_UNIX"):
     pytest.skip("AF_UNIX not available on this platform", allow_module_level=True)
@@ -220,4 +220,42 @@ def test_a_busy_daemon_still_answers_whether_it_is_alive_and_can_be_stopped(sock
         c.close()
     finally:
         release.set()
+        server.stop()
+
+
+def test_each_connection_is_sent_files_the_way_its_client_reads_them(socket_dir):
+    # One daemon, two clients of different versions: the one that said it reads
+    # attachments gets the bytes, the one that did not gets the base64 it always
+    # got -- per connection, because a setting on the shared session would be one
+    # client deciding for the other.
+    server, path, _ = _serve(socket_dir, {"render": lambda s, p: {"content": b"\x89PNG" * 1000}})
+    try:
+        new, new_socket = _connect(path)
+        old, old_socket = _connect(path)
+        write_message(new, {"jsonrpc": "2.0", "id": 1, "method": "render"}, accept_attachments=True)
+        write_message(old, {"jsonrpc": "2.0", "id": 1, "method": "render"})
+        attached = read_message(new)["result"]["content"]
+        encoded = read_message(old)["result"]["content"]
+        assert attached == b"\x89PNG" * 1000
+        assert isinstance(encoded, str)
+        assert as_bytes(encoded) == attached
+        # And it stays so for the rest of the connection.
+        write_message(new, {"jsonrpc": "2.0", "id": 2, "method": "render"})
+        assert isinstance(read_message(new)["result"]["content"], bytes)
+        new_socket.close()
+        old_socket.close()
+    finally:
+        server.stop()
+
+
+def test_the_daemon_client_says_it_reads_attachments(socket_dir):
+    from partcad_client.client import DaemonClient
+
+    server, path, _ = _serve(socket_dir, {"render": lambda s, p: {"content": b"\x00\x01"}})
+    try:
+        stream, sock = _connect(path)
+        client = DaemonClient(stream, stream, closer=sock.close)
+        assert client.call("render") == {"content": b"\x00\x01"}
+        client.close()
+    finally:
         server.stop()

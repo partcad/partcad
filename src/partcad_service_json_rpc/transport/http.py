@@ -10,12 +10,17 @@ notification stream is delivered over Server-Sent Events at ``GET /events``.
 There is no authentication yet (by design, for now). Requests are dispatched in
 a worker thread so a long CAD operation does not block the event loop, and
 events are marshalled back onto the loop thread-safely.
+
+There are no attachments here (see ``partcad_utils.framing``): a file in an
+answer is base64 text, as it always was over HTTP, which is what any HTTP client
+of this already reads. ``framing.to_json`` is what writes it so.
 """
 
 import asyncio
-import json
 
 from aiohttp import web
+
+from partcad_utils.framing import to_json
 
 from ..rpc.dispatcher import PARSE_ERROR, Dispatcher
 
@@ -52,7 +57,7 @@ def build_app(session, registry) -> web.Application:
                 {"jsonrpc": "2.0", "id": None, "error": {"code": PARSE_ERROR, "message": "Parse error"}}
             )
         response = await loop.run_in_executor(None, dispatcher.dispatch, body, session)
-        return web.json_response(response if response is not None else {})
+        return web.json_response(response if response is not None else {}, dumps=to_json)
 
     async def handle_events(request: web.Request) -> web.StreamResponse:
         state["loop"] = asyncio.get_running_loop()
@@ -70,7 +75,7 @@ def build_app(session, registry) -> web.Application:
         try:
             while True:
                 message = await q.get()
-                await resp.write(("data: %s\n\n" % json.dumps(message)).encode("utf-8"))
+                await resp.write(("data: %s\n\n" % to_json(message)).encode("utf-8"))
         except (asyncio.CancelledError, ConnectionResetError):
             pass
         finally:

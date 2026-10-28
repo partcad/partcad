@@ -90,8 +90,9 @@ processes, already follows every request.
   `operations.py` (the operation functions).
 - `rpc/` — `dispatcher.py` (JSON-RPC 2.0 parse/dispatch/error mapping) and `methods.py` (the CLI-shaped method
   registry; `rpc.discover` returns the catalog).
-- `transport/` — `framing.py` (Content-Length codec), `stdio.py`, `socket_server.py` (threaded AF_UNIX server,
-  the daemon's transport), `http.py` (optional HTTP+SSE).
+- `transport/` — `stdio.py`, `socket_server.py` (threaded AF_UNIX server, the daemon's transport), `http.py`
+  (optional HTTP+SSE). The `Content-Length` codec they frame with is `partcad_utils.framing`, which the clients
+  read too; see "Files cross as attachments" below.
 
   Requests are dispatched one at a time, under one lock, by the socket server and the pipe server alike. A few
   are answered at the transport level instead, beside whatever is being served: `daemon.stop`,
@@ -230,6 +231,10 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
   on a request that names an object already means a walk over packages, and is refused), `build_parts`,
   `choices` (or `bvb`, every object's, for a client that cannot resolve the name -- `pc instructions`) and,
   with `format`, the document written down as PDF or HTML, as bytes for the client to save on its side.
+  `document: false` leaves the model out, for `pc instructions`, which keeps only the file and was sent every
+  illustration a second time beside the copy inside it; `image_bytes` carries each picture of the model as its
+  bytes and media type rather than as a data URI, which is how the IDE asks (and `manufacturing.plan` takes it
+  too). An older daemon ignores both and sends what it always sent, which both clients still read.
 * `requirements.check`, behind the Digital Thread's Requirements tab: an object's `requirements:` as data -- the features,
   each with the `simulate:` entries that name it (`feature:`), and a line per required port, interface and
   physical property. Without `verify` nothing is built and every verdict is `null`, which is what lets the
@@ -278,6 +283,33 @@ no `object` it routes every sketch and part that declares a `cam:` section and p
 enumeration is here rather than in a client -- and it reports every failure instead of stopping at the first,
 because a route is a file and one object's broken section must not cost the other nineteen theirs. It has no
 `inline` twin: a route is text a machine reads, not something a webview draws.
+
+### Files cross as attachments
+
+A method that hands a file back -- `render.inline`, `cae.analyze` with `inline`, `simulate.run` with `inline`,
+the thumbnails of `manufacturing.details`, the `file` of `assembly.guide`, and the model's pictures with
+`image_bytes` -- returns its **bytes**, and the transport decides how they cross (`partcad_utils.framing`). To a
+client that said it reads them, they are raw segments after the message, named in the JSON as
+`{"$attachment": <index>}` and announced in an `Attachment-Lengths` header beside `Content-Length`; to any
+other they are base64 text under the same key, which is exactly what that field held before attachments
+existed. A client says so with `Accept-Attachments: 1` in the header of a message, and the transport keeps
+that per connection (a `framing.Peer`), beside the ANSI renderer `log.mode` asks for and for the same reason:
+the session is every client's at once. `DaemonClient` says it on every request, and so does the editor
+extension (`ide/vscode/src/common/framing.ts`); the FreeCAD addon does not, and is handed no file anyway.
+`--http` has no attachments: its answers are base64, as they were (`framing.to_json`).
+
+Two things follow, and both matter. **A reader of such a field takes both forms** -- `framing.as_bytes` on
+the Python side, `bytesOf` in the extension -- because a daemon older than this, or one reached over HTTP, still
+sends base64. And **base64 happens at an edge or not at all**: the MCP server encodes a picture because MCP's
+image content is base64, and nothing else here does. At forty megabytes this is the difference between 1.3 s
+end to end with the daemon's GIL held for half a second, and 30 ms with it held for a few. One object named
+twice in a message is one segment, which is why the cae model of the only scenario and the illustration on
+several pages of a book cross once.
+
+There is deliberately no second way for a file to reach a client -- a path on a local daemon's disk, say: two
+ways of delivering one file are two ways to get it wrong, and attachments serve a remote daemon as well as a
+local one. No request carries a file yet; the daemon's readers take attachments all the same, but a client
+would have to learn whether its daemon does before sending one.
 
 ### An assembly is built in two phases
 

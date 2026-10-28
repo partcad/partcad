@@ -17,6 +17,7 @@
 // instruction book is a step and a reader follows them one at a time.
 //
 
+import { ObjectUrls } from './blobs';
 import { el, empty, link } from './dom';
 import { DocumentBlock, DocumentData, DocumentImage, DocumentPage } from './messages';
 
@@ -44,6 +45,8 @@ export class DocumentView {
     private readonly counter = el('div', 'counter');
     /** The scrolling half; the arrows below it stay put. */
     private readonly body = el('div', 'document-pages');
+    /** The pictures of its pages; see 'dispose()'. */
+    private readonly urls = new ObjectUrls();
     private current = 0;
 
     constructor(root: HTMLElement, data: DocumentData, options: DocumentOptions = {}) {
@@ -51,7 +54,7 @@ export class DocumentView {
 
         const body = this.body;
         for (const page of data.pages) {
-            const rendered = renderPage(page, data.footer, options);
+            const rendered = renderPage(page, data.footer, this.urls, options);
             this.pages.push(rendered);
             this.titles.push(page.title ?? '');
             body.appendChild(rendered);
@@ -89,6 +92,11 @@ export class DocumentView {
         this.body.scrollTop = 0;
     }
 
+    /** Let go of the pictures: this document is no longer on screen. */
+    public dispose(): void {
+        this.urls.revoke();
+    }
+
     /** Whether an arrow key was one this document could use. */
     public handleKey(key: string): boolean {
         switch (key) {
@@ -117,11 +125,13 @@ export class DocumentView {
  *
  * What the Build tab shows for the step selected in its list: a page of the
  * very book the Assembly tab pages through, so that a step reads the same in
- * both.
+ * both. 'urls' is where the pictures it shows are named (see 'blobs.ts'), and
+ * whoever passes it lets go of them when the document goes.
  */
 export function renderPage(
     page: DocumentPage,
     footer: string | null | undefined,
+    urls: ObjectUrls,
     options: DocumentOptions = {},
 ): HTMLElement {
     const section = el('section', 'page');
@@ -129,7 +139,7 @@ export function renderPage(
     const blocks =
         options.headless && first?.type === 'heading' && (first.level ?? 1) === 1 ? page.blocks.slice(1) : page.blocks;
     for (const block of blocks) {
-        const node = renderBlock(block);
+        const node = renderBlock(block, urls);
         if (node !== undefined) {
             section.appendChild(node);
         }
@@ -142,7 +152,7 @@ export function renderPage(
     return section;
 }
 
-function renderBlock(block: DocumentBlock): HTMLElement | undefined {
+function renderBlock(block: DocumentBlock, urls: ObjectUrls): HTMLElement | undefined {
     switch (block.type) {
         case 'heading':
             return renderHeading(block);
@@ -151,7 +161,7 @@ function renderBlock(block: DocumentBlock): HTMLElement | undefined {
         case 'properties':
             return renderProperties(block.items ?? []);
         case 'images':
-            return renderImages(block.images ?? [], block.height);
+            return renderImages(block.images ?? [], block.height, urls);
         case 'table':
             return renderTable(block);
         case 'links':
@@ -186,21 +196,24 @@ function renderProperties(items: [string, string][]): HTMLElement {
     return list;
 }
 
-function renderImages(images: DocumentImage[], height: number | undefined): HTMLElement {
+function renderImages(images: DocumentImage[], height: number | undefined, urls: ObjectUrls): HTMLElement {
     const row = el('div', 'images');
     // The same share of the page the paginated formats give the row, so a step's
     // exploded view is as prominent here as it is on paper.
     row.style.flexBasis = `${Math.round((height ?? 0.4) * 100)}%`;
     for (const image of images) {
-        if (!image.src) {
+        // The picture itself, embedded by the daemon: the illustrations of an
+        // instruction book live in a temporary directory that is gone before
+        // this runs, and the panel's CSP forbids fetching anything anyway. Its
+        // bytes, which the extension asks for, or a data URI from a daemon that
+        // predates sending them.
+        const source = image.content ? urls.of(image.content, image.type || 'image/svg+xml') : image.src;
+        if (!source) {
             continue;
         }
         const figure = el('figure');
         const picture = el('img');
-        // A data URI, embedded by the daemon: the illustrations of an instruction
-        // book live in a temporary directory that is gone before this runs, and
-        // the panel's CSP forbids fetching anything anyway.
-        picture.src = image.src;
+        picture.src = source;
         picture.alt = image.alt ?? '';
         figure.appendChild(picture);
         if (image.caption) {

@@ -175,7 +175,7 @@ export class RenderView {
         const type = IMAGE_TYPES[data.extension];
         if (type !== undefined) {
             this.image = new ImageView(this.body);
-            this.image.show(`data:${type};base64,${data.content}`, `${data.object} as ${data.format}`);
+            this.image.show(data.content, type, `${data.object} as ${data.format}`);
             return;
         }
         this.body.appendChild(

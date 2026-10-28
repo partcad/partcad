@@ -22,6 +22,7 @@ answer.
 """
 
 import asyncio
+import base64
 import socket
 import sys
 import threading
@@ -34,6 +35,7 @@ import pytest
 from partcad_service_json_rpc import config_restart
 from partcad_service_json_rpc import win_pipe as service_win_pipe
 from partcad_service_json_rpc.core import events
+from partcad_utils import framing
 from partcad_utils import win_pipe as rendezvous
 
 # Enough that the worker is still writing while the loop finishes each write
@@ -143,3 +145,47 @@ def test_a_request_s_events_arrive_in_order_before_its_answer_and_the_connection
     for lines, answer in rounds:
         assert lines == ["event %d" % i for i in range(EVENTS)]
         assert answer["result"] == {"done": True}
+
+
+def test_the_pipe_carries_attachments_to_a_client_that_reads_them():
+    # The editor on Windows reaches this daemon over a pipe, and says it reads
+    # attachments as it does on a socket. Pinned over a socket for the same
+    # reason as the test above: the framing is not Windows-specific.
+    picture = bytes(range(256)) * 2048  # several reads' worth
+
+    async def run():
+        loop = asyncio.get_running_loop()
+        peers = []
+
+        async def handler(reader, writer):
+            peer = framing.Peer()
+            peers.append(peer)
+            while True:
+                request = await rendezvous.read_frame(reader, peer)
+                if request is None:
+                    break
+                answer = {"jsonrpc": "2.0", "id": request["id"], "result": {"content": picture}}
+                rendezvous.write_frame(writer, answer, peer.attachments)
+                await writer.drain()
+
+        ours, theirs = socket.socketpair()
+        await loop.connect_accepted_socket(lambda: service_win_pipe._connection_protocol(handler), ours)
+        reader, writer = await asyncio.open_connection(sock=theirs)
+        try:
+            # A client from before attachments first, then one that reads them.
+            writer.write(b"".join(framing.encode_message({"jsonrpc": "2.0", "id": 1, "method": "x"})))
+            await writer.drain()
+            older = await asyncio.wait_for(rendezvous.read_frame(reader), TIMEOUT)
+            assert older["result"]["content"] == base64.b64encode(picture).decode("ascii")
+
+            writer.write(
+                b"".join(framing.encode_message({"jsonrpc": "2.0", "id": 2, "method": "x"}, accept_attachments=True))
+            )
+            await writer.drain()
+            newer = await asyncio.wait_for(rendezvous.read_frame(reader), TIMEOUT)
+            assert newer["result"]["content"] == picture
+            assert peers[0].attachments is True
+        finally:
+            writer.close()
+
+    asyncio.run(run())

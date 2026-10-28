@@ -17,7 +17,7 @@ import sys
 import threading
 from typing import BinaryIO, Mapping
 
-from partcad_utils.framing import read_message, write_message
+from partcad_utils.framing import Peer, read_message, write_message
 from partcad_utils.logging_ansi_render import AnsiEventRenderer
 
 from ..rpc.dispatcher import INVALID_PARAMS, Dispatcher, Handler
@@ -33,11 +33,18 @@ def serve(read_stream: BinaryIO, write_stream: BinaryIO, session, registry: Mapp
     """Serve JSON-RPC over the given binary streams until end of input."""
     lock = threading.Lock()
     renderer = [None]
+    # Whether the client reads attachments, as the socket server keeps it: the
+    # editor runs this channel too (`partcad.serviceChannel: stdio`).
+    peer = Peer()
 
     def send(event, payload):
         try:
             with lock:
-                write_message(write_stream, {"jsonrpc": "2.0", "method": event, "params": payload})
+                write_message(
+                    write_stream,
+                    {"jsonrpc": "2.0", "method": event, "params": payload},
+                    attachments=peer.attachments,
+                )
         except (OSError, ValueError):
             # The renderer's ticking thread can outlive the stream by a tick.
             pass
@@ -53,7 +60,7 @@ def serve(read_stream: BinaryIO, write_stream: BinaryIO, session, registry: Mapp
 
     try:
         while True:
-            request = read_message(read_stream)
+            request = read_message(read_stream, peer)
             if request is None:
                 break
 
@@ -93,7 +100,7 @@ def serve(read_stream: BinaryIO, write_stream: BinaryIO, session, registry: Mapp
             response = dispatcher.dispatch(request, session)
             if response is not None:
                 with lock:
-                    write_message(write_stream, response)
+                    write_message(write_stream, response, attachments=peer.attachments)
     finally:
         if renderer[0] is not None:
             renderer[0].close()

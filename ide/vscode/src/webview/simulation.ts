@@ -48,6 +48,7 @@
 // asked for as data.
 //
 
+import { ObjectUrls } from './blobs';
 import { el, empty, placeholder } from './dom';
 import {
     SIMULATION_PLUGINS,
@@ -133,6 +134,8 @@ export class SimulationView {
     private requested: string | undefined;
     /** What is known of each run, by simulation and plugin (see 'key'). */
     private readonly runs = new Map<string, RunState>();
+    /** The pictures of those runs, which go with them. */
+    private readonly urls = new ObjectUrls();
     /** The plugin each simulation is to be run with, by name, as chosen or typed; absent, the one it names. */
     private readonly plugins = new Map<string, string>();
     /** The folded view that is open, if any; kept across simulations and objects. */
@@ -267,6 +270,7 @@ export class SimulationView {
         this.scenarios = [];
         this.selected = undefined;
         this.runs.clear();
+        this.urls.revoke();
         this.plugins.clear();
         this.list.draw([], undefined);
         this.list.element.hidden = true;
@@ -288,6 +292,7 @@ export class SimulationView {
     public setScenarios(data: SimulationListData): void {
         this.scenarios = data.simulations ?? [];
         this.runs.clear();
+        this.urls.revoke();
         this.plugins.clear();
         this.selected = firstSelected(
             this.scenarios.map((scenario) => scenario.name),
@@ -390,7 +395,7 @@ export class SimulationView {
             if (state.run.error) {
                 body.appendChild(el('p', 'error', state.run.error));
             }
-            body.appendChild(pictures(state.run));
+            body.appendChild(pictures(state.run, this.urls));
         }
         page.appendChild(body);
 
@@ -493,7 +498,7 @@ export class SimulationView {
  * between them. A picture the plugin did not take is said to be missing in its
  * place, so the two never swap sides.
  */
-function pictures(run: SimulationRun): HTMLElement {
+function pictures(run: SimulationRun, urls: ObjectUrls): HTMLElement {
     const row = el('div', 'simulation-pictures');
     const before = run.images?.before;
     const after = run.images?.after;
@@ -507,11 +512,11 @@ function pictures(run: SimulationRun): HTMLElement {
         );
         return row;
     }
-    row.appendChild(figure(before, 'Before'));
+    row.appendChild(figure(before, 'Before', urls));
     const arrow = el('div', 'simulation-arrow', '→');
     arrow.setAttribute('aria-hidden', 'true');
     row.appendChild(arrow);
-    row.appendChild(figure(after, 'After'));
+    row.appendChild(figure(after, 'After', urls));
     return row;
 }
 
@@ -535,13 +540,13 @@ export function prettyJson(value: unknown): string {
     });
 }
 
-function figure(image: SimulationImage | undefined, caption: string): HTMLElement {
+function figure(image: SimulationImage | undefined, caption: string, urls: ObjectUrls): HTMLElement {
     const figure = el('figure', 'simulation-figure');
     if (image === undefined) {
         figure.appendChild(placeholder('No picture.'));
     } else {
         const picture = el('img', 'simulation-image');
-        picture.src = `data:${mimeType(image.extension)};base64,${image.content}`;
+        picture.src = urls.of(image.content, mimeType(image.extension));
         picture.alt = `The scene ${caption.toLowerCase()} the simulation`;
         figure.appendChild(picture);
     }

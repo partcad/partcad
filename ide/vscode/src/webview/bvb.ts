@@ -36,6 +36,7 @@
 // the bottom draws them.
 //
 
+import { ObjectUrls } from './blobs';
 import { el, empty, placeholder } from './dom';
 import { BvbData, Choices, ItemDetails, TreeNode } from './messages';
 
@@ -321,6 +322,8 @@ export class BvbView {
     private result: BvbResult | undefined;
     /** What the daemon said about each line, for the object on screen. */
     private readonly details = new Map<string, ItemDetails>();
+    /** Their thumbnails, which go with them. */
+    private readonly urls = new ObjectUrls();
     private readonly asked = new Set<string>();
 
     constructor(
@@ -338,6 +341,7 @@ export class BvbView {
         this.data = undefined;
         this.result = undefined;
         this.details.clear();
+        this.urls.revoke();
         this.asked.clear();
         this.reset().appendChild(placeholder(text));
     }
@@ -446,7 +450,7 @@ export class BvbView {
             const image = el('img');
             // Through an <img>, never inlined: an SVG in the DOM could carry
             // script or links the panel's CSP would not stop.
-            image.src = `data:image/svg+xml;base64,${details.thumbnail}`;
+            image.src = this.urls.of(details.thumbnail, 'image/svg+xml');
             image.alt = row.name;
             image.width = THUMBNAIL_SIZE;
             image.height = THUMBNAIL_SIZE;

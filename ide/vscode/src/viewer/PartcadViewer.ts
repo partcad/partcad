@@ -8,10 +8,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { bytesOf } from '../common/framing';
 import { readChoices, writeChoices } from '../common/garage';
 import { traceError, traceInfo, traceVerbose } from '../common/log/logging';
 import { getViewerPerformanceDebugFromSetting } from '../common/settings';
 import * as utils from '../utils';
+import { detailsBytes, filesAsBytes } from './payloads';
 import { MSG_CLEAR, MSG_SHOW, ViewerMessage, ViewerNode, decodeGltf } from './protocol';
 import { SpacenavClient } from './spacenav';
 
@@ -310,8 +312,12 @@ export class PartcadViewer implements vscode.Disposable {
             this.latestRender.set(tab, Math.max(token, this.latestRender.get(tab) ?? 0));
         }
         const analysis = ANALYSIS_TABS.has(tab);
-        const post = (payload: { data?: unknown; error?: string }) =>
+        // Every file in the answer as bytes, which the panel makes a Blob URL
+        // of, whether the daemon sent it so or as base64 (see 'payloads.ts').
+        const post = (payload: { data?: unknown; error?: string }) => {
+            filesAsBytes(tab, payload.data);
             void this.panel?.webview.postMessage({ type: 'tabData', tab, token, ...payload });
+        };
 
         const command = tab === 'simulation' && message.scenario ? SIMULATION_RUN : TAB_COMMANDS[tab];
         if (command === undefined) {
@@ -345,7 +351,8 @@ export class PartcadViewer implements vscode.Disposable {
                 args.withInterfaces = render?.withInterfaces;
                 args.withInternals = render?.withInternals;
                 args.ports = render?.ports;
-                const data = (await vscode.commands.executeCommand(command, args)) as RenderedData | undefined;
+                const data = filesAsBytes(tab, await vscode.commands.executeCommand(command, args)) as
+                    RenderedData | undefined;
                 if (data?.content && this.lastShow === target && this.latestRender.get(tab) === token) {
                     this.keepRendered(tab, data);
                 }
@@ -405,10 +412,11 @@ export class PartcadViewer implements vscode.Disposable {
                 // steps (the daemon answers 'manufacturable' either way).
                 args.ignoreManufacturability = true;
                 const data = (await vscode.commands.executeCommand(command, args)) as
-                    { file?: { filename: string; extension: string; content: string } } | undefined;
+                    { file?: { filename: string; extension: string; content: unknown } } | undefined;
                 const file = data?.file;
-                if (file?.content && this.lastShow === target && this.latestRender.get(tab) === token) {
-                    this.keepRendered(tab, file);
+                const content = bytesOf(file?.content);
+                if (file && content && this.lastShow === target && this.latestRender.get(tab) === token) {
+                    this.keepRendered(tab, { filename: file.filename, extension: file.extension, content });
                 }
                 // The file stays here, which is where Save copies it from; the
                 // renderer only needs to know there is one.
@@ -473,6 +481,8 @@ export class PartcadViewer implements vscode.Disposable {
                 width,
                 height,
             })) as { items?: unknown } | undefined;
+            // Each thumbnail as bytes, as 'fetchTab' posts every file.
+            detailsBytes(answer?.items);
             post({ items: answer?.items ?? [] });
         } catch (error: any) {
             traceError(`Digital Thread: failed to fetch the Build vs Buy details: ${error?.message ?? error}`);
@@ -555,7 +565,7 @@ export class PartcadViewer implements vscode.Disposable {
             // and the two tabs cannot write over each other.
             const directory = fs.mkdtempSync(path.join(this.renderDirectory, `${tab}-`));
             const file = path.join(directory, path.basename(data.filename));
-            fs.writeFileSync(file, Buffer.from(data.content, 'base64'));
+            fs.writeFileSync(file, data.content);
             this.rendered.set(tab, { file, filename: path.basename(data.filename), extension: data.extension });
         } catch (error: any) {
             // Shown all the same: the picture is in the message. Only Save needs
@@ -976,7 +986,8 @@ interface RenderedData {
     format: string;
     filename: string;
     extension: string;
-    content: string;
+    /** The file, as 'filesAsBytes' leaves it: its bytes. */
+    content: Uint8Array;
 }
 
 /** The 'partcad.spaceMouse.*' settings, in the shape the renderer takes them. */

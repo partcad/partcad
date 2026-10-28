@@ -169,6 +169,44 @@ def test_document_to_data_embeds_images_on_request():
     assert "path" not in image
 
 
+def test_document_to_data_carries_each_picture_as_its_bytes_and_once():
+    """A reader at the end of a connection that carries bytes is handed them
+
+    Rather than a data URI, which is the picture as base64 -- a third bigger,
+    and decoded again by the webview that shows it (see 'partcad_utils.framing').
+    The same file on several pages is read once, and is one object, which such a
+    connection sends once.
+    """
+    with tempfile.TemporaryDirectory() as directory:
+        path = os.path.join(directory, "widget.svg")
+        with open(path, "w") as f:
+            f.write('<svg xmlns="http://www.w3.org/2000/svg"/>')
+
+        def page():
+            return pc_document.Page(blocks=[pc_document.ImageRow([pc_document.Image(file=path, alt="widget")])])
+
+        missing = pc_document.Image(file=os.path.join(directory, "gone.svg"), src="widget.svg")
+        document = pc_document.Document(
+            pages=[page(), page(), pc_document.Page(blocks=[pc_document.ImageRow([missing])])]
+        )
+        data = pc_document.to_data(document, embed_images=True, image_bytes=True)
+        uris = pc_document.to_data(document, embed_images=True)
+
+    first, second, fallback = [page["blocks"][0]["images"][0] for page in data["pages"]]
+    assert first == {
+        "content": b'<svg xmlns="http://www.w3.org/2000/svg"/>',
+        "type": "image/svg+xml",
+        "caption": None,
+        "alt": "widget",
+    }
+    assert second["content"] is first["content"]
+    # A picture with no file to read keeps the address it has, as in the HTML.
+    assert fallback == {"src": "widget.svg", "caption": None, "alt": ""}
+    # Asked for as data URIs, which is what a client that does not ask gets.
+    assert uris["pages"][0]["blocks"][0]["images"][0]["src"].startswith("data:image/svg+xml;base64,")
+    assert "content" not in uris["pages"][0]["blocks"][0]["images"][0]
+
+
 def _wrapper_layout(monkeypatch):
     """'wrapper_layout', the arithmetic of the wrapper that draws the PDF.
 

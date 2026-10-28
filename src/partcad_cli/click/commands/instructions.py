@@ -4,12 +4,11 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import base64
 import os
 
 import rich_click as click
 
-from partcad_utils import garage
+from partcad_utils import framing, garage
 
 from ..parameters import param_option, param_params
 from ..service import run
@@ -92,6 +91,9 @@ def cli(cli_ctx, fmt, recursive, build_parts, output_dir, package, ignore_manufa
             # fully qualified name only the daemon resolves 'object' to - so
             # all of them go, and the daemon picks.
             "bvb": garage.load_all_bvb(),
+            # Only the file is kept here, and the model would be every
+            # illustration sent a second time beside the copy inside it.
+            "document": False,
         },
         needs_context=True,
     )
@@ -105,5 +107,6 @@ def cli(cli_ctx, fmt, recursive, build_parts, output_dir, package, ignore_manufa
     os.makedirs(directory, exist_ok=True)
     path = os.path.join(directory, os.path.basename(file["filename"]))
     with open(path, "wb") as f:
-        f.write(base64.b64decode(file["content"]))
+        # Its bytes, or base64 from a daemon that sends no attachments.
+        f.write(framing.as_bytes(file["content"]))
     click.echo(path)

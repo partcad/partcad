@@ -8,6 +8,7 @@
 // an object rendered to a file (the 2D and Draft tabs).
 //
 
+import { ObjectUrls } from './blobs';
 import { el } from './dom';
 
 /** The still-image formats a browser shows by itself, by file extension. */
@@ -26,15 +27,6 @@ export const IMAGE_TYPES: Record<string, string> = {
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 20;
 
-export function decodeBase64(content: string): Uint8Array {
-    const binary = atob(content);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes;
-}
-
 /**
  * A still image that pans and zooms.
  *
@@ -46,6 +38,8 @@ export function decodeBase64(content: string): Uint8Array {
  */
 export class ImageView {
     private readonly image = el('img', 'image-view');
+    /** The picture on screen, which goes when it is replaced or this view is. */
+    private readonly urls = new ObjectUrls();
     private readonly listeners = new AbortController();
     private scale = 1;
     private x = 0;
@@ -112,16 +106,19 @@ export class ImageView {
         host.addEventListener('dblclick', () => this.reset(), on);
     }
 
-    public show(source: string, alt: string): void {
-        this.image.src = source;
+    /** Show a file's bytes as the picture they are; 'type' is its media type. */
+    public show(bytes: Uint8Array, type: string, alt: string): void {
+        this.urls.revoke();
+        this.image.src = this.urls.of(bytes, type);
         this.image.alt = alt;
         this.reset();
     }
 
-    /** Let go of the host: the listeners, the classes, and the <img> itself. */
+    /** Let go of the host: the listeners, the classes, the <img> itself and its picture. */
     public dispose(): void {
         this.listeners.abort();
         this.image.remove();
+        this.urls.revoke();
         this.host.classList.remove('image-host');
     }
 

@@ -300,7 +300,10 @@ class DaemonClient:
             watchdog.start()
         try:
             try:
-                write_message(self._write, request)
+                # Saying it reads attachments: a file in the answer then comes
+                # as its bytes rather than as base64 (see 'partcad_utils.framing'),
+                # and every caller reads such a field with 'framing.as_bytes'.
+                write_message(self._write, request, accept_attachments=True)
             except TimeoutError as e:
                 # The service is not reading. Rare -- a request is small enough
                 # to fit in the socket buffer whatever the service is doing --

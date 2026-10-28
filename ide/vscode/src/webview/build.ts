@@ -27,6 +27,7 @@
 // drawn, and arrive afterwards.
 //
 
+import { ObjectUrls } from './blobs';
 import { renderPage } from './document';
 import { el, empty, placeholder } from './dom';
 import { PlanData, PlanItem } from './messages';
@@ -45,6 +46,8 @@ export class BuildView {
     private data: PlanData | undefined;
     private selected: string | undefined;
     private documentError: string | undefined;
+    /** The pictures of the pages, one page shown at a time; they go with the document. */
+    private readonly urls = new ObjectUrls();
 
     constructor(
         private readonly root: HTMLElement,
@@ -68,6 +71,7 @@ export class BuildView {
 
     public setBusy(text: string): void {
         this.data = undefined;
+        this.urls.revoke();
         this.documentError = undefined;
         empty(this.tree);
         this.recursiveControl.hidden = true;
@@ -76,6 +80,7 @@ export class BuildView {
 
     public showError(message: string): void {
         this.data = undefined;
+        this.urls.revoke();
         empty(this.tree);
         this.recursiveControl.hidden = true;
         this.showMain(el('p', 'error', message));
@@ -84,6 +89,7 @@ export class BuildView {
     /** The plan has arrived: list it, and select where to start. */
     public showPlan(data: PlanData): void {
         this.data = data;
+        this.urls.revoke();
         this.documentError = undefined;
         // Only an assembly has sub-assemblies to recurse into.
         this.recursiveControl.hidden = data.plan.type !== 'assembly';
@@ -110,6 +116,8 @@ export class BuildView {
         if (this.data === undefined) {
             return;
         }
+        // The page on screen is drawn again from the new document right away.
+        this.urls.revoke();
         this.data = { ...this.data, document: data.document, pages: data.pages };
         this.showSelected();
     }
@@ -206,7 +214,7 @@ export class BuildView {
         }
         const pages = el('div', 'document-pages');
         // Without the page's own heading: the item selected on the left is it.
-        const rendered = renderPage(page, data.document.footer, { headless: true });
+        const rendered = renderPage(page, data.document.footer, this.urls, { headless: true });
         rendered.classList.add('current');
         pages.appendChild(rendered);
         const wrapper = el('div', 'document');

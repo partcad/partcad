@@ -40,6 +40,10 @@ a CAD addon, or documentation.
   owns it: a copy on each side is a copy that can disagree, and a disagreement is a client silently starting a
   second daemon.
 
+  `framing` is also how a file crosses: as raw bytes after the message (an *attachment*) to a client that says it
+  reads them, and as base64 to any other, under the same key -- so a reader takes both (`framing.as_bytes`). The
+  editor extension's copy is `ide/vscode/src/common/framing.ts`.
+
   `config_report` is here for the same reason one level down: it is how a configuration and a `PC_*`
   environment are *read back* — by `pc config`, by `pc system status config|env`, and by the daemon answering
   `pc daemon status config|env` for its own side. What it really holds is the redaction, and a redaction rule
