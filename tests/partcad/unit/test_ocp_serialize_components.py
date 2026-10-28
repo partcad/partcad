@@ -194,6 +194,27 @@ def test_a_child_the_payload_does_not_have_is_an_error():
             ocp_serialize.decode_shape(dict(shape, **{ocp_serialize.KEY_CHILD: child}))
 
 
+def test_a_decoding_shared_across_documents_holds_shapes_and_nothing_else():
+    """A batch of outputs decodes every request of one call into one set of shapes, and looks over them all.
+
+    'wrapper_export.carries_mesh' asks each of them whether it arrived with a
+    mesh on it; anything in there that is not a shape fails that, and with it
+    every file the batch was writing together.
+    """
+    from OCP.TopoDS import TopoDS_Shape
+
+    shape, components = _encoded(_solids())
+    shared = {}
+
+    first = ocp_serialize.decode({"components": components}, shared)["components"]
+    second = ocp_serialize.decode({"shape": shape, "components": components[1:]}, shared)
+
+    assert shared and all(isinstance(value, TopoDS_Shape) for value in shared.values())
+    # The payload read once for both documents, and its children taken out of it once.
+    assert len([key for key in shared if isinstance(key, (str, bytes))]) == 1
+    assert [component.IsEqual(other) for component, other in zip(first[1:], second["components"])] == [True, True]
+
+
 def test_what_is_encoded_travels_as_json():
     shape, components = _encoded(_solids())
 

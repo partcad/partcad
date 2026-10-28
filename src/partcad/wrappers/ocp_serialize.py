@@ -749,24 +749,33 @@ def _shared_shape(payload, shared, child=None):
     'child' is a node's KEY_CHILD: the shape handed back is then that child of
     the payload's shape, placed and oriented as the shape holds it. The
     payload is still read once, however many of its children are asked for.
+
+    Every value 'shared' holds is a shape, a child as much as a payload's
+    shape: a caller sharing one decoding across several documents looks over
+    them all (see 'wrapper_export.carries_mesh').
     """
     key = payload if isinstance(payload, (str, bytes)) else bytes(payload)
     shape = shared.get(key)
     if shape is None:
         shape = shared[key] = _shape_from_b64(payload)
     if child is not None:
-        # Keyed apart from every payload: a tuple is never a str or bytes.
-        children = shared.get((key, KEY_CHILD))
-        if children is None:
-            children = []
+        if not isinstance(child, int) or isinstance(child, bool) or child < 0:
+            raise ValueError("A node names child %r of a shape" % (child,))
+        # Each child under a key of its own, apart from every payload's: a
+        # tuple is never a str or bytes. All of them on the first one asked for,
+        # so that the children are iterated once however many are asked for.
+        found = shared.get((key, KEY_CHILD, child))
+        if found is None and (key, KEY_CHILD, 0) not in shared:
             iterator = OCP.TopoDS.TopoDS_Iterator(shape)
+            index = 0
             while iterator.More():
-                children.append(iterator.Value())
+                shared[(key, KEY_CHILD, index)] = iterator.Value()
+                index += 1
                 iterator.Next()
-            shared[(key, KEY_CHILD)] = children
-        if not isinstance(child, int) or isinstance(child, bool) or not 0 <= child < len(children):
-            raise ValueError("A node names child %r of a shape that has %d" % (child, len(children)))
-        shape = children[child]
+            found = shared.get((key, KEY_CHILD, child))
+        if found is None:
+            raise ValueError("A node names child %d of a shape that has %d" % (child, shape.NbChildren()))
+        shape = found
     return downcast(shape.Located(shape.Location()))
 
 
