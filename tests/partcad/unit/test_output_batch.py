@@ -82,25 +82,43 @@ def _cache(tmp_path) -> Cache:
 
 
 class _Sandbox:
-    """A Python runtime that runs what it is asked with this interpreter, and keeps count."""
+    """A Python runtime that runs what it is asked with this interpreter, and keeps count.
+
+    Its own environment holds everything but what is named 'layer-...': a file
+    type asking for one of those runs in the layer named after them, as
+    'PythonRuntime.get_session' has it.
+    """
 
     EXCHANGES_FILES = False
 
     def __init__(self):
         self.calls = []
-        self.prepared = []
-        self.ensured = []
+        self.sessions = []
+
+    def get_session(self, name):
+        return {"name": name, "path": None, "dirty": False, "deps": [], "missing": []}
+
+    def _ask(self, session, python_package):
+        if session is None:
+            return
+        session["deps"].append(python_package)
+        if python_package.startswith("layer-") and python_package not in session["missing"]:
+            session["missing"].append(python_package)
+            session["dirty"] = True
+            session["path"] = "layer:" + ",".join(sorted(session["missing"]))
 
     async def prepare_for_package(self, project, session=None):
-        self.prepared.append(project.name)
+        for python_package in project.config_obj.get("pythonRequirements") or []:
+            self._ask(session, python_package)
 
     async def ensure_async(self, python_package, session=None, path=None, force=False):
-        self.ensured.append(python_package)
+        self._ask(session, python_package)
 
-    async def run_async(self, cmd, stdin="", **_kwargs):
+    async def run_async(self, cmd, stdin="", session=None, **_kwargs):
         data = stdin() if callable(stdin) else stdin
         cmd = [part for part in cmd if part != "python"]
         self.calls.append(cmd)
+        self.sessions.append(session)
         finished = await asyncio.to_thread(
             subprocess.run, [sys.executable, *cmd], input=data, capture_output=True, text=True
         )
@@ -287,8 +305,12 @@ def test_file_types_of_another_environment_are_written_by_a_call_of_their_own(ba
         assert _read(out, "bracket." + name).startswith(name)
 
 
-def test_the_requirements_of_several_file_types_are_installed_in_an_order_that_keeps_them(batch):
-    """glTF's list after STEP's, each package once where it first appears, would end in build123d."""
+def test_the_requirements_of_several_file_types_are_asked_for_in_an_order_that_keeps_them(batch):
+    """glTF's list after STEP's, each package once where it first appears, would end in build123d.
+
+    Which a sandbox keeping one environment, installing in the order asked,
+    would leave with OCP's build without VTK.
+    """
     make, sandbox, out = batch
     ctx = make("""
     alpha: {path: write.py, extension: alpha, say: alpha, pythonRequirements: ["%s"]}
@@ -297,7 +319,31 @@ def test_the_requirements_of_several_file_types_are_installed_in_an_order_that_k
 
     _render(ctx, out)
     assert sandbox.files_per_call() == [2]
-    assert sandbox.ensured == [sandbox_versions.BUILD123D, sandbox_versions.CADQUERY_OCP]
+    assert sandbox.sessions[0]["deps"] == [sandbox_versions.BUILD123D, sandbox_versions.CADQUERY_OCP]
+
+
+def test_file_types_are_written_together_with_those_of_their_own_layer(batch):
+    """Each runs where it would have run alone: the base, or the layer its requirements make."""
+    make, sandbox, out = batch
+    ctx = make("""
+    alpha: {path: write.py, extension: alpha, say: alpha}
+    beta: {path: write.py, extension: beta, say: beta, pythonRequirements: [layer-raster]}
+    gamma: {path: write.py, extension: gamma, say: gamma}
+    delta: {path: write.py, extension: delta, say: delta, pythonRequirements: [layer-raster]}
+    epsilon: {path: write.py, extension: epsilon, say: epsilon, pythonRequirements: [layer-cad]}
+    """)
+
+    _render(ctx, out)
+
+    written = {}
+    for call, session in zip(sandbox.calls, sandbox.sessions):
+        layer = session["path"] if session["dirty"] else "base"
+        written[layer] = sorted(os.path.basename(call[index]) for index in range(1, len(call), 3))
+    assert written == {
+        "base": ["bracket.alpha", "bracket.gamma"],
+        "layer:layer-raster": ["bracket.beta", "bracket.delta"],
+        "layer:layer-cad": ["bracket.epsilon"],
+    }
 
 
 def test_every_file_type_is_still_an_action_of_its_own(batch, caplog):
@@ -524,9 +570,12 @@ def _contents(path):
 def test_built_in_files_written_together_are_the_files_written_alone(tmp_path, monkeypatch):
     """Byte for byte, the file types that share a decoding and a mesh included.
 
-    The projections share one ('render_svg.TESSELLATION'), STL and 3MF another,
-    OBJ and three.js a third: a file written after its group's first one finds
-    that one's mesh on the shape, and has to come out as though it had made it.
+    The SVG, the STL, the OBJ and the three.js file run in the sandbox's own
+    environment and are written by one call, the PNG and the JPEG in the layer
+    that rasterizes and by another, and the 3MF in CadQuery's, alone. PNG and
+    JPEG share a decoding and a mesh ('render_svg.TESSELLATION'), and so do OBJ
+    and three.js: a file written after its group's first one finds that one's
+    mesh on the shape, and has to come out as though it had made it.
     """
     from partcad import runtime_python
 
@@ -542,6 +591,7 @@ def test_built_in_files_written_together_are_the_files_written_alone(tmp_path, m
         render:
           svg:
           png:
+          jpeg:
         export:
           stl:
           3mf:
@@ -555,22 +605,23 @@ def test_built_in_files_written_together_are_the_files_written_alone(tmp_path, m
 
     async def counted(self, cmd, *args, **kwargs):
         if os.path.basename(str(cmd[0])) == "wrapper_export.py":
-            calls.append(len(cmd))
+            calls.append((len(cmd) - 1) // 3)
         return await original(self, cmd, *args, **kwargs)
 
     monkeypatch.setattr(runtime_python.PythonRuntime, "run_async_onced", counted)
 
+    formats = ("svg", "png", "jpeg", "stl", "3mf", "obj", "threejs")
     ctx = pc.Context(str(root))
     ctx.cache_artifacts = None
     together, alone = tmp_path / "together", tmp_path / "alone"
     asyncio.run(ctx.get_project("//").render_async(output_dir=str(together)))
-    assert calls == [1 + 6 * 3]
+    assert sorted(calls) == [1, 2, 4]
 
     part = ctx.get_part("//:screw")
-    for format_name in ("svg", "png", "stl", "3mf", "obj", "threejs"):
+    for format_name in formats:
         asyncio.run(part.render_async(ctx, format_name, output_dir=str(alone)))
 
     names = sorted(os.listdir(alone))
-    assert names == sorted(os.listdir(together)) and len(names) == 6
+    assert names == sorted(os.listdir(together)) and len(names) == len(formats)
     for name in names:
         assert _contents(str(together / name)) == _contents(str(alone / name)), name
