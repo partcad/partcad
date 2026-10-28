@@ -17,9 +17,18 @@ class Cache:
     """A hierarchy of storage tiers, addressed as one key-value store.
 
     Entries are flat names ('<hash>.<key>') holding bytes. A read walks the
-    tiers nearest-first and stops at the first one that has the entry; a write
-    offers the entry to every tier whose size window accepts it. Which tiers
-    exist is the user's configuration - see cache_backend.build().
+    tiers nearest-first and stops at the first one that has the entry, and
+    copies what it found into the nearer tiers that missed it (see
+    '_promote_async'); a write offers the entry to every tier whose size window
+    accepts it. Which tiers exist is the user's configuration - see
+    cache_backend.build().
+
+    The files tier is written before a write returns. The remote tiers are
+    written behind it, from a bounded queue on the cache's I/O thread, and what
+    is queued is visible to every read in this process until it lands (see
+    cache_io.py): the files tier is what every process on this machine reads
+    first, so it is the one that has to be there when the caller goes on, and
+    the remote ones are where a write costs a network round trip.
 
     Nothing here inspects, converts or copies a payload: what a caller hands in
     is what every tier stores, and a shape payload is the zstd-compressed BREP
@@ -59,17 +68,9 @@ class Cache:
         # tiers that want it get it (see CacheBackend.stores_names).
         names = {self._name(hash_str, "name"): hash.name.encode()}
 
-        async def task_backend(backend):
-            accepted = {
-                self._name(hash_str, key): value for key, value in items.items() if backend.accepts(key, len(value))
-            }
-            if not accepted:
-                return {}
-            if backend.stores_names:
-                accepted.update(names)
-            return await backend.write_async(accepted)
-
-        results = await asyncio.gather(*[asyncio.create_task(task_backend(b)) for b in self.backends])
+        results = await asyncio.gather(
+            *[asyncio.create_task(self._write_backend_async(b, hash_str, items, names)) for b in self.backends]
+        )
 
         saved = {}
         for stored in results:
@@ -77,6 +78,17 @@ class Cache:
                 if stored.get(self._name(hash_str, key), False):
                     saved[key] = True
         return saved
+
+    async def _write_backend_async(self, backend, hash_str: str, items: dict[str, bytes], names: dict) -> dict:
+        """Offer 'items' to one tier: those its size window accepts, and the name sidecar if it keeps one."""
+        accepted = {
+            self._name(hash_str, key): value for key, value in items.items() if backend.accepts(key, len(value))
+        }
+        if not accepted:
+            return {}
+        if backend.stores_names:
+            accepted.update(names)
+        return await backend.write_async(accepted)
 
     async def read_data_async(self, hash: CacheHash, keys: list[str]) -> dict[str, bytes]:
         """Read 'keys' under 'hash' from the nearest tier that holds each of them."""
@@ -91,23 +103,56 @@ class Cache:
 
         found = {}
         pending = list(keys)
-        for backend in self.backends:
+        for index, backend in enumerate(self.backends):
             if not pending:
                 break
             stored = await backend.read_async([self._name(hash_str, key) for key in pending])
             still_pending = []
+            hits = {}
             for key in pending:
                 data = stored.get(self._name(hash_str, key))
                 if data is None:
                     still_pending.append(key)
                 else:
                     found[key] = data
+                    hits[key] = data
+            if hits and index > 0:
+                await self._promote_async(hash, hash_str, hits, self.backends[:index])
             pending = still_pending
 
         # A key nobody had is reported as a miss, the way a missing file was.
         for key in pending:
             found[key] = None
         return found
+
+    async def _promote_async(self, hash: CacheHash, hash_str: str, hits: dict[str, bytes], nearer: list) -> None:
+        """Copy what a farther tier had into the nearer ones, every one of which missed it.
+
+        Every one: a key is asked of a tier only while no nearer tier has
+        answered it. Without this, an entry that only S3 holds is downloaded
+        again by every process that wants it, and by this one again as soon as
+        the memory tier lets go of it - the local file it would take to stop
+        that is never written, because nothing on this machine built the entry.
+        So a hit is written down as a write of it would have been: to the tiers
+        whose size window accepts it, the files tier before this returns and
+        the remote ones behind it (an S3 hit lands in memcached for the team
+        too). An entry with no bytes in it is a miss to every reader, and is
+        not worth copying.
+        """
+        hits = {key: value for key, value in hits.items() if value}
+        if not hits:
+            return
+        names = {self._name(hash_str, "name"): hash.name.encode()}
+        await asyncio.gather(
+            *[asyncio.create_task(self._write_backend_async(b, hash_str, hits, names)) for b in nearer]
+        )
+
+    async def flush_async(self) -> None:
+        """Wait until what this cache wrote so far has reached every tier it was meant for."""
+        for backend in self.backends:
+            flush = getattr(backend, "flush_async", None)
+            if flush is not None:
+                await flush()
 
     async def contains_data_async(self, hash: CacheHash, keys: list[str]) -> dict[str, bool]:
         """Which of 'keys' some tier holds under 'hash', without reading them.

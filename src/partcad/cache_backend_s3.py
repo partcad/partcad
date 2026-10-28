@@ -26,16 +26,20 @@ import asyncio
 
 from . import logging as pc_logging
 from . import telemetry
-from .cache_backend import PooledCacheBackend, missing_dependency
+from .cache_backend import RemoteCacheBackend, missing_dependency
 
 # The errors S3 answers a missing object with. Both are ordinary cache misses,
 # not failures: a HEAD-less GET says NoSuchKey, and a bucket the caller may not
 # list says 404.
 _MISS_CODES = ("NoSuchKey", "404", "NoSuchBucket")
 
+# What a lookup answered "no such object" with, before the answer is put
+# together: absent from it, as a miss is everywhere else.
+_ABSENT = object()
+
 
 @telemetry.instrument()
-class S3CacheBackend(PooledCacheBackend):
+class S3CacheBackend(RemoteCacheBackend):
     """Cache entries as S3 objects under a configured bucket and prefix."""
 
     name = "s3"
@@ -64,12 +68,25 @@ class S3CacheBackend(PooledCacheBackend):
         # model, so keeping it is what makes opening a client cheap.
         self._session = aioboto3.Session()
 
+    @property
+    def client_key(self) -> tuple:
+        # The bucket is a parameter of each request, not of the client, so
+        # every bucket and every data type at one endpoint shares one client:
+        # one connection pool, and one TLS handshake per connection in it for
+        # the life of the process.
+        return ("s3",) + tuple(sorted(self._client_kwargs.items()))
+
+    @property
+    def location(self) -> tuple:
+        return self.client_key + (self.bucket, self._prefix)
+
     def _key(self, name: str) -> str:
         return self._prefix + name
 
     async def _open(self):
         # An aioboto3 client is an async context manager over an HTTP session,
-        # entered here and exited in '_close()'.
+        # entered here and exited in '_close()' - both on the I/O loop, which
+        # is the one loop the session's connections ever belong to.
         context = self._session.client("s3", **self._client_kwargs)
         return context, await context.__aenter__()
 
@@ -84,14 +101,18 @@ class S3CacheBackend(PooledCacheBackend):
                 try:
                     response = await client.get_object(Bucket=self.bucket, Key=self._key(name))
                 except Exception as e:
-                    if not _is_miss(e):
-                        pc_logging.debug("cache: %s: failed to read '%s': %s" % (self.name, name, e))
+                    if _is_miss(e):
+                        return name, _ABSENT
+                    pc_logging.debug("cache: %s: failed to read '%s': %s" % (self.name, name, e))
+                    # Not a miss: nothing is known about the entry, and saying
+                    # None (see 'CacheBackend._read_async') keeps it from being
+                    # remembered as one.
                     return name, None
                 async with response["Body"] as body:
                     return name, await body.read()
 
             results = await asyncio.gather(*[asyncio.create_task(task_item(name)) for name in names])
-        return {name: data for name, data in results if data is not None}
+        return {name: data for name, data in results if data is not _ABSENT}
 
     async def _contains_async(self, names: list[str]) -> dict[str, bool]:
         # HEAD, not GET: this tier is the furthest away and the one a shape is
@@ -103,9 +124,11 @@ class S3CacheBackend(PooledCacheBackend):
                 try:
                     response = await client.head_object(Bucket=self.bucket, Key=self._key(name))
                 except Exception as e:
-                    if not _is_miss(e):
-                        pc_logging.debug("cache: %s: failed to check '%s': %s" % (self.name, name, e))
-                    return name, False
+                    if _is_miss(e):
+                        return name, False
+                    pc_logging.debug("cache: %s: failed to check '%s': %s" % (self.name, name, e))
+                    # As for a read: not known, rather than not there.
+                    return name, None
                 return name, int(response.get("ContentLength", 0)) > 0
 
             results = await asyncio.gather(*[asyncio.create_task(task_item(name)) for name in names])

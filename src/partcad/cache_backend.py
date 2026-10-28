@@ -25,11 +25,17 @@ The tiers, fastest first:
 
 Each tier has its own size window, because what is worth a local file is not
 necessarily worth a network round trip.
+
+The two remote tiers do their I/O on a thread of their own (see cache_io.py):
+one client per server for the life of the process, writes sent behind the
+caller's back from a bounded queue, and the misses they answered remembered for
+a while. The files tier does none of that, and is read and written in the
+caller's own loop, as it always was.
 """
 
-import asyncio
 import contextlib
 
+from . import cache_io
 from . import logging as pc_logging
 
 # The cache keys that hold geometry, and so are the ones a size window applies
@@ -105,11 +111,8 @@ class CacheBackend:
 
     async def read_async(self, names: list[str]) -> dict[str, bytes]:
         """The entries of 'names' this tier holds, missing ones simply absent."""
-        try:
-            return await self._read_async(names)
-        except Exception as e:
-            pc_logging.debug("cache: %s: read failed: %s" % (self.name, e))
-            return {}
+        stored = await self._read_guarded(names)
+        return {name: data for name, data in stored.items() if data is not None}
 
     async def contains_async(self, names: list[str]) -> dict[str, bool]:
         """Which of 'names' this tier holds, without handing the payloads over.
@@ -120,16 +123,36 @@ class CacheBackend:
         """
         if not names:
             return {}
-        try:
-            return await self._contains_async(names)
-        except Exception as e:
-            pc_logging.debug("cache: %s: existence check failed: %s" % (self.name, e))
-            return {}
+        held = await self._contains_guarded(names)
+        return {name: bool(value) for name, value in held.items()}
 
     async def write_async(self, items: dict[str, bytes]) -> dict[str, bool]:
         """Store 'items', reporting which of them this tier took."""
         if not items:
             return {}
+        return await self._write_guarded(items)
+
+    # The three operations with every failure contained, which is what makes a
+    # tier that cannot be reached a miss and a warning rather than a failed
+    # build. A read or an existence check that fails says None for the names it
+    # was asked about: "could not find out", which a caller that remembers
+    # misses (cache_io._KnownMisses) must tell apart from "not here".
+
+    async def _read_guarded(self, names: list[str]) -> dict[str, bytes]:
+        try:
+            return await self._read_async(names)
+        except Exception as e:
+            pc_logging.debug("cache: %s: read failed: %s" % (self.name, e))
+            return {name: None for name in names}
+
+    async def _contains_guarded(self, names: list[str]) -> dict[str, bool]:
+        try:
+            return await self._contains_async(names)
+        except Exception as e:
+            pc_logging.debug("cache: %s: existence check failed: %s" % (self.name, e))
+            return {name: None for name in names}
+
+    async def _write_guarded(self, items: dict[str, bytes]) -> dict[str, bool]:
         try:
             return await self._write_async(items)
         except Exception as e:
@@ -137,6 +160,12 @@ class CacheBackend:
             return {}
 
     async def _read_async(self, names: list[str]) -> dict[str, bytes]:
+        """The entries this tier holds, by name.
+
+        A name it does not hold is left out. One it could not find out about -
+        its own request failed while the others' did not - may be given as None
+        instead, so that the answer is not taken for a miss and remembered.
+        """
         raise NotImplementedError
 
     async def _write_async(self, items: dict[str, bytes]) -> dict[str, bool]:
@@ -155,79 +184,93 @@ class CacheBackend:
         enough that fetching it only to drop it is the expensive half.
         """
         stored = await self._read_async(names)
-        return {name: bool(stored.get(name)) for name in names}
+        return {name: (None if name in stored and stored[name] is None else bool(stored.get(name))) for name in names}
 
 
-class PooledCacheBackend(CacheBackend):
-    """A tier reached through a client that must not outlive its event loop.
+class RemoteCacheBackend(CacheBackend):
+    """A tier on another machine, reached through the cache's I/O thread.
 
     PartCAD drives its async work through many separate 'asyncio.run()' calls -
-    every synchronous accessor is one - and a connection pool belongs to the
-    loop that opened it. Kept past that loop it is unusable, and unclosable too,
-    which is how leaked sockets and "unclosed session" warnings happen; opened
-    afresh for every request it would cost a handshake per cache lookup.
+    every pool task and every synchronous accessor is one - and a connection
+    pool belongs to the loop that opened it. This used to be answered by
+    opening a client for each loop that used the tier and closing it after
+    that loop's last request, which kept nothing past its loop but cost a
+    connection (and against S3 a TLS handshake) for every pool task that read
+    or wrote a shape. Now the client belongs to the one loop that outlives them
+    all (see cache_io.py): opened on first use, shared by every tier reaching
+    the same server ('client_key'), closed once when the process exits.
 
-    So the client lives exactly as long as there is a request using it: opened
-    for the first, closed after the last. One traversal that builds a hundred
-    shapes concurrently shares one client; between commands nothing is held at
-    all. Subclasses supply '_open()' and '_close()' and reach the client through
-    'connected()'.
+    Reads and existence checks are handed to that loop and awaited; writes are
+    queued there and the caller goes on (write-behind), and a read in this
+    process sees what is queued. Subclasses supply '_open()', '_close()', the
+    two keys below, and the '_read_async'/'_write_async' that run on the I/O
+    loop and reach the client through 'connected()'.
     """
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        # Keyed by the event loop, because more than one can be live at a time:
-        # PartCAD builds on a thread of its own with 'asyncio.run()' while the
-        # caller's loop is still going. Sharing one client between them would let
-        # the loop that finished first close the other one's socket. An entry
-        # lives only while a request is using it (see 'connected()').
-        self._per_loop = {}
+    @property
+    def client_key(self) -> tuple:
+        """Which server this tier talks to: tiers with the same key share one client."""
+        raise NotImplementedError
+
+    @property
+    def location(self) -> tuple:
+        """Which entries this tier holds: the server and the namespace on it.
+
+        What a queued write and a remembered miss are filed under, so that the
+        caches of every context in this process - each with tiers of its own -
+        see each other's writes and share what they learnt.
+        """
+        raise NotImplementedError
 
     async def _open(self):
-        """Build the client. Called with the tier's lock held."""
+        """Build the client. Called on the I/O loop, once per 'client_key'."""
         raise NotImplementedError
 
     async def _close(self, client) -> None:
         """Release a client built by '_open()'."""
 
-    def _guard(self):
-        """The (loop, state) pair for the loop running now, creating it if new.
-
-        Deliberately not a coroutine: it has to notice the loop and install the
-        lock without an await in between, or two requests could each decide they
-        are the first and open a client apiece.
-        """
-        loop = asyncio.get_running_loop()
-        state = self._per_loop.get(loop)
-        if state is None:
-            state = self._per_loop[loop] = {"lock": asyncio.Lock(), "client": None, "users": 0}
-        return loop, state
-
     @contextlib.asynccontextmanager
     async def connected(self):
-        """The shared client, for the duration of one request."""
-        loop, state = self._guard()
-        lock = state["lock"]
-        async with lock:
-            if state["client"] is None:
-                state["client"] = await self._open()
-            state["users"] += 1
+        """The shared client, for one request. On the I/O loop only."""
+        yield await cache_io.client(self)
+
+    async def read_async(self, names: list[str]) -> dict[str, bytes]:
+        if not names:
+            return {}
         try:
-            yield state["client"]
-        finally:
-            async with lock:
-                state["users"] -= 1
-                client = state["client"] if state["users"] == 0 else None
-                if client is not None:
-                    state["client"] = None
-                    # The last user of this loop's client: the loop keeps
-                    # nothing between requests, and its entry goes with it.
-                    self._per_loop.pop(loop, None)
-            if client is not None:
-                try:
-                    await self._close(client)
-                except Exception as e:
-                    pc_logging.debug("cache: %s: failed to close: %s" % (self.name, e))
+            return await cache_io.read(self, names)
+        except cache_io.Unavailable as e:
+            pc_logging.debug("cache: %s: not read: %s" % (self.name, e))
+            return {}
+
+    async def contains_async(self, names: list[str]) -> dict[str, bool]:
+        if not names:
+            return {}
+        try:
+            return await cache_io.contains(self, names)
+        except cache_io.Unavailable as e:
+            pc_logging.debug("cache: %s: not asked: %s" % (self.name, e))
+            return {}
+
+    async def write_async(self, items: dict[str, bytes]) -> dict[str, bool]:
+        """Queue 'items' to be written, and report them taken.
+
+        Taken, because from here on they are visible to every lookup in this
+        process and will be sent. A send that then fails is logged as an
+        awaited one always was, and the entry is not there next time - as if the
+        tier had evicted it, which a shared cache may do anyway.
+        """
+        if not items:
+            return {}
+        try:
+            return await cache_io.write(self, items)
+        except cache_io.Unavailable as e:
+            pc_logging.debug("cache: %s: not written: %s" % (self.name, e))
+            return {}
+
+    async def flush_async(self) -> None:
+        """Wait until what this process has written to this tier so far has landed."""
+        await cache_io.flush_async(self.location)
 
 
 class CacheDependencyError(ImportError):

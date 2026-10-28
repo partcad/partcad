@@ -12,7 +12,7 @@ import threading
 
 import ruamel.yaml as ruamel
 
-from . import consts, dependency_pin, factory
+from . import cache_io, consts, dependency_pin, factory
 from . import logging as pc_logging
 from . import project_factory_git as rfg
 from .assembly import Assembly
@@ -153,6 +153,12 @@ def fini():
     with _partcad_context_lock:
         _partcad_context = None
         _partcad_context_path = None
+
+    # What the remote cache tiers have queued is sent, and their clients closed,
+    # before whoever de-initialises PartCAD goes on: the daemon does this before
+    # it drops every 'partcad' module and imports them again, which would leave
+    # the thread holding them running for a module nobody can reach.
+    cache_io.shutdown()
 
 
 def get_assembly(assembly_name, params=None) -> Assembly:
