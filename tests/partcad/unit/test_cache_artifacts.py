@@ -298,6 +298,8 @@ def test_the_members_of_an_entry_are_put_back_without_being_held_in_memory_toget
     if not tracing:
         tracemalloc.start()
     tracemalloc.reset_peak()
+    # What is traced already (the entry itself, and all the input when tracing was on before) is not `_unpack`'s.
+    baseline, _peak = tracemalloc.get_traced_memory()
     try:
         restored = cache_artifacts._unpack(data, {}, str(run))
         _current, peak = tracemalloc.get_traced_memory()
@@ -307,7 +309,7 @@ def test_the_members_of_an_entry_are_put_back_without_being_held_in_memory_toget
 
     assert restored == {"frames": 6}
     # Less than one member at the peak, where holding them all is six.
-    assert peak < member, "peaked at %d bytes" % peak
+    assert peak - baseline < member, "peaked %d bytes above where it started" % (peak - baseline)
     assert sorted(os.listdir(run)) == ["frame%d.bin" % i for i in range(6)]
     for i in range(6):
         assert (run / ("frame%d.bin" % i)).read_bytes() == stored["directory/frame%d.bin" % i]
