@@ -251,7 +251,7 @@ begin
 end;
 
 { Stops what runs out of the PartCAD command line tools this application
-  carries, before the uninstaller removes them.
+  carries, before the uninstaller removes them or an upgrade replaces them.
 
   The PartCAD daemon (partcad-json-rpc) serves one workspace each and outlives
   whatever started it: the extension starts one for every folder it opens, and
@@ -263,7 +263,7 @@ end;
   each to exit, which is what `pc upgrade` does before it replaces an
   installation. Whatever is still running out of this directory after that is
   ended -- and only that: a PartCAD that some other installation is running is
-  not this uninstaller's to stop. A daemon's state is under %USERPROFILE%\.partcad,
+  not this installation's to stop. A daemon's state is under %USERPROFILE%\.partcad,
   outside this directory, so ending one loses nothing the next one needs.
 
   Ended until nothing is left, rather than once. A daemon is started by a
@@ -295,6 +295,20 @@ begin
         'else { $quiet++ }; ' +
         'Start-Sleep -Milliseconds 500 }"',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+{ Before an upgrade copies anything, for the same reason as before an
+  uninstall: a daemon running out of the installation being replaced holds its
+  files. Setup's own Restart Manager pass cannot close one -- a console process
+  with no window has nothing to ask -- and a silent upgrade that finds one is
+  aborted and rolled back. Any `pc` run from here leaves one, since `pc` on
+  Windows reaches its workspace's daemon over a named pipe and the daemon stays
+  up for the next command. Called before Setup looks for files in use; with
+  nothing installed yet there is nothing to stop. }
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  StopPartcad;
+  Result := '';
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
