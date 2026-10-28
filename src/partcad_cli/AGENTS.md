@@ -245,11 +245,20 @@ business holding never reaches the wire.
 The daemon's `config` answer is deliberately *not* the configuration your command ran under — that one travels
 with every `context.create`, as this section says above. It is the daemon's own, resolved from its own
 environment whenever something first started it, which is what a client sending no configuration gets. The
-`env` answer is the one thing the client cannot reconstruct at all — on POSIX. On Windows `connect()` serves
-the request from a one-shot stdio child of the client rather than from the named-pipe daemon, so both answers
-describe a process that inherited the caller's environment; the command still reports whatever process did the
-work, which is what it promises. `tests/partcad_cli/unit/test_status.py` asserts each half on its own platform,
-having first asserted the POSIX half on both and failed on Windows for exactly that reason.
+`env` answer is the one thing the client cannot reconstruct at all, on every platform now: `connect()` reaches
+the socket daemon on POSIX and the named-pipe daemon on Windows. Windows used to be served by a one-shot stdio
+child of the client instead, which inherited the caller's environment, and `tests/partcad_cli/unit/test_status.py`
+asserted each half on its own platform for as long as that lasted. That child is still the fallback where no
+daemon can be had, and the command then reports *its* environment -- whatever process did the work, which is
+what it promises.
+
+How `connect()` reaches the daemon is worth knowing because it is most of what a command costs. It works out the
+endpoint itself, from the rendezvous in `partcad_utils.workspace` (`partcad_client.client.workspace_endpoint`),
+and connects; the `partcad-json-rpc --socket` launcher runs only when nothing answers there. Asking the launcher
+every time was a process start -- a third of a second -- per command, to learn a path that a hash already says.
+What the launcher decides beyond "is something listening" (the lock, the stale socket, `--replace-different`,
+the settings a new daemon is started with) it still decides, because a command without `--replace-different`
+takes whichever daemon is listening anyway.
 
 PartCAD **never prompts** for anything mid-operation. Credentials for private Git dependencies are configured
 upfront under `git.auth` in the user configuration, and `GitCallbacks` fails with a message naming that setting

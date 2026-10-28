@@ -18,7 +18,6 @@ each of which exists in both places.
 """
 
 import logging
-import os
 import re
 from collections.abc import Iterator
 
@@ -123,31 +122,25 @@ def test_system_status_env_reports_the_partcad_environment(
 def test_daemon_status_env_reports_the_environment_of_whatever_answered(
     click_runner: Iterator[CliRunner],
 ) -> None:
-    """The environment of the process that served the request, whichever that is.
+    """The environment of the daemon that served the request, not this one.
 
-    What the command promises is not "an environment that differs from mine" --
-    it is "the environment of the process doing the work". Which process that is
-    depends on the platform, and so does the right assertion:
+    The request goes to the shared per-workspace daemon -- a socket on POSIX, a
+    named pipe on Windows -- a detached process holding whatever environment
+    started it. A variable set only here never reaches it, and that difference
+    is the whole reason `pc daemon status env` exists.
 
-    * On POSIX the request goes to the shared per-workspace socket daemon, a
-      detached process holding whatever environment started it. A variable set
-      only here never reaches it, and that difference is the whole reason
-      `pc daemon status env` exists.
-    * On Windows `partcad_client.client.connect()` does not use the named-pipe
-      daemon; it spawns a one-shot stdio service as a *child of this process*,
-      which inherits this environment. The variable is then genuinely in the
-      environment of the process that answered, so reporting it is correct
-      rather than a leak.
+    This asserted each half on its own platform for as long as Windows served
+    every command from a one-shot stdio child of the client instead, which
+    inherited this environment and reported the variable. That child is still
+    the fallback where no daemon can be had, so this failing on one platform
+    only is that platform's `pc` no longer reaching its daemon.
 
-    Asserting the POSIX half everywhere is what this test did first, and it
-    failed on `Pytest (windows-2022, 3.14)` for exactly the second reason.
-
-    "Whatever environment started it" is the catch on POSIX: a daemon this
-    very call had to start would be started from this environment, variable
-    and all, and report it. So one is made to answer first, without the
-    variable. That used to be left to the tests above it in this file, which is
-    an order a serial run happens to keep and pytest-xdist does not -- under it
-    this test could be the first thing in the run to ask for the daemon.
+    "Whatever environment started it" is the catch: a daemon this very call had
+    to start would be started from this environment, variable and all, and
+    report it. So one is made to answer first, without the variable. That used
+    to be left to the tests above it in this file, which is an order a serial
+    run happens to keep and pytest-xdist does not -- under it this test could be
+    the first thing in the run to ask for the daemon.
     """
     warm = click_runner.invoke(cli, ["--no-ansi", "daemon", "status"])
     assert warm.exit_code == 0, warm.output
@@ -160,7 +153,4 @@ def test_daemon_status_env_reports_the_environment_of_whatever_answered(
     logging.debug("result.output: %s", result.output)
 
     assert result.exit_code == 0
-    if os.name == "nt":
-        assert "PC_STATUS_TEST_CLIENT_ONLY=client" in result.output
-    else:
-        assert "PC_STATUS_TEST_CLIENT_ONLY" not in result.output
+    assert "PC_STATUS_TEST_CLIENT_ONLY" not in result.output

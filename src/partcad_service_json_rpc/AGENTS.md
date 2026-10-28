@@ -129,6 +129,10 @@ processes, already follows every request.
     into the workspace's `daemon.log` — the same file the POSIX daemon redirects itself to, which it can
     because it is a fork and gets to run code first. Without it, a daemon that died before serving accounted
     for itself nowhere.
+  - **Somewhere to run.** The root of the launcher's drive (`_daemon_cwd`), as the POSIX daemon runs in "/": not
+    the client's directory, which Windows would then refuse to delete for as long as the daemon serves, and
+    not another drive either. A path with a root and no drive (`\tmp\home`) is on the *current* drive, and a
+    daemon run from its state directory on C: built every such sandbox there for clients on D:.
 
   And `ensure_daemon` **waits for the pipe to answer** before printing it: the POSIX branch binds and listens
   in this very process, so the socket exists the moment it is named, while a pipe does not exist until the new
@@ -147,7 +151,12 @@ processes, already follows every request.
   not mtime; `PC_DAEMON_RESTART_ON_CONFIG=0` turns it off. After a restart the socket path and the pid file
   belong to the successor, which is why `SocketServer` forgets its path once unlinked and `_cleanup` removes
   only a pid file holding its own pid.
-- `client.py` — `DaemonClient` and `start_daemon`, used by the CLI (and any Python caller) to reach the daemon.
+- The client side is not here: `partcad_client.client` holds `DaemonClient`, `start_daemon` (which runs this
+  package's launcher) and `connect()`. `connect()` works out the endpoint from `partcad_utils.workspace` and
+  connects to it directly, running the launcher only when nothing answers -- so the launcher's fast path ("a
+  daemon is listening: print it") is now taken by `pc daemon start` and the editor extension, and every decision
+  past that one (the lock, replacing a stale or differently started daemon, the settings it is started with) is
+  still the launcher's alone.
 - `__main__.py` — the `partcad-json-rpc` entry point: channel selection (`--socket` default, `--stdio`,
   `--http`) and CLI-style flags mirroring `pc` globals.
 

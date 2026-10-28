@@ -160,3 +160,27 @@ def test_an_unbuffered_pipe_is_read_whole():
 def test_blank_lines_before_a_header_are_not_a_message():
     buf = io.BytesIO(b"\r\n" + _frame({"id": 1}))
     assert read_message(buf) == {"id": 1}
+
+
+def test_a_pipe_frame_cut_off_is_the_end_of_the_stream():
+    """The asyncio reader the named pipe is read with says so at a disconnect, not by raising.
+
+    `read_frame` catches `asyncio.IncompleteReadError` by that name, so the
+    module has to have `asyncio` imported where the except clause is evaluated
+    -- which is only ever when a client goes away. Moved into the functions that
+    open pipes, it was a NameError on every disconnect, and no test that only
+    exchanges whole messages notices.
+    """
+    import asyncio
+
+    from partcad_utils import win_pipe
+
+    async def read(data: bytes):
+        reader = asyncio.StreamReader()
+        reader.feed_data(data)
+        reader.feed_eof()
+        return await win_pipe.read_frame(reader)
+
+    assert asyncio.run(read(b"")) is None
+    assert asyncio.run(read(b"Content-Length: 10\r\n")) is None
+    assert asyncio.run(read(b"Content-Length: 10\r\n\r\n{}")) is None

@@ -262,10 +262,9 @@ def test_turning_the_bound_off_leaves_the_socket_blocking(socket_dir, monkeypatc
 
     server, path = _serve(socket_dir, {"ping": slow_ping})
     try:
-        # The real '_connect_socket', with only the launcher stubbed out: the
-        # socket it builds is what this is about, and starting a daemon is not.
-        monkeypatch.setattr(client_module, "start_daemon", lambda cwd, extra_args: path)
-        client = client_module._connect_socket(None, ())
+        # The real connector, given the endpoint: the socket it builds is what
+        # this is about, and finding or starting a daemon is not.
+        client = client_module._open_endpoint(path)
 
         answer = []
 

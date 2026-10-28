@@ -14,6 +14,7 @@ Mirrors ``partcad_client.client`` (a thin client that does not import
   calls from a worker thread while the Qt main thread stays responsive.
 """
 
+import io
 import os
 import socket
 import subprocess
@@ -96,8 +97,14 @@ def start_daemon(executable: str, cwd: Optional[str] = None, extra_args=()) -> s
 
 def _connect_socket(executable: str, cwd: Optional[str], extra_args) -> JsonRpcClient:
     path = start_daemon(executable, cwd, extra_args)
-    if path.startswith("\\\\.\\pipe\\"):  # Windows named pipe
-        stream = open(path, "r+b", buffering=0)  # pragma: no cover - Windows only
+    if path.startswith("\\\\.\\pipe\\"):  # Windows named pipe  # pragma: no cover - Windows only
+        # Unreachable today -- 'connect' takes the stdio service on Windows --
+        # and buffered for the day it is not: a read from a pipe returns what
+        # has arrived so far, and 'read_message' takes a body shorter than its
+        # length for the end of the stream. A buffered reader reads on until it
+        # has the whole length.
+        raw = open(path, "r+b", buffering=0)
+        stream = io.BufferedRWPair(raw, raw)
         return JsonRpcClient(stream, stream, closer=stream.close)
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     # Bound the connect: the daemon is local and answers immediately or not at

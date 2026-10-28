@@ -41,6 +41,20 @@ def _network_available(host: str = "github.com", port: int = 443, timeout: float
 def before_scenario(context: Context, scenario) -> None:
     if NETWORK_TAG in scenario.effective_tags and not _network_available():
         scenario.skip("network not available: skipping @%s scenario" % NETWORK_TAG)
+    # First, so that it runs last: after the cleanups the steps register. See
+    # 'features/daemons.py'.
+    from features.daemons import watch_scenario_directories
+
+    watch_scenario_directories(context)
+
+
+def after_scenario(context: Context, scenario) -> None:
+    # Before the scenario's cleanups, which is when behave runs this: they
+    # remove the workspace and the $HOME the daemon is serving from, and on
+    # Windows cannot while it runs. See 'features/daemons.py'.
+    from features.daemons import stop_scenario_daemon
+
+    stop_scenario_daemon(context)
 
 
 # def before_all(context: Context) -> None:

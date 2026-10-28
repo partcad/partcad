@@ -56,7 +56,7 @@ def _launcher_argv() -> list:
     return [sys.executable, "-m", "partcad_service_json_rpc"]
 
 
-def spawn_pipe_daemon(root_path: str, extra_args=()) -> None:
+def spawn_pipe_daemon(root_path: str, extra_args=()) -> "subprocess.Popen":
     """Start a detached server process serving the workspace's named pipe.
 
     ``extra_args`` are the launcher's own settings flags (`--python-sandbox`,
@@ -66,19 +66,47 @@ def spawn_pipe_daemon(root_path: str, extra_args=()) -> None:
     without this the Windows one served every workspace with the defaults --
     `pc --python-sandbox conda daemon start` printed a pipe, and the daemon
     behind it had no idea conda had been asked for.
+
+    Returns the process, so that the launcher waiting for it to serve can tell
+    one that is starting from one that has already died.
     """
     creationflags = 0
     creationflags |= getattr(subprocess, "DETACHED_PROCESS", 0)
     creationflags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     with _daemon_log(root_path) as log:
-        subprocess.Popen(
+        return subprocess.Popen(
             _launcher_argv() + ["--serve-pipe", pipe_name(root_path), *extra_args],
             close_fds=True,
             creationflags=creationflags,
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=log,
+            cwd=_daemon_cwd(),
         )
+
+
+def _daemon_cwd() -> str:
+    r"""Where the daemon runs: the root of the drive its launcher runs on.
+
+    Not the launcher's own directory: Windows will not delete or rename a
+    directory some process is running in, and the launcher's is wherever its
+    client was -- the package a `pc` command ran in, a test's temporary
+    directory -- which this process would hold for as long as it serves. The
+    POSIX daemon leaves its own for "/" (`daemon._serve_detached`), and this is
+    the same move on Windows.
+
+    The same *drive*, though, and that is not a detail. A path with a root and
+    no drive -- ``\tmp\home``, which is what a `HOME` written POSIX-style is
+    on Windows -- names a directory on the current drive, so a daemon running on
+    another one resolves every such path somewhere its client never looks. Run in
+    its workspace's state directory under the user's profile, on C:, it built
+    the sandbox of every behave scenario on a Windows runner -- whose temporary
+    `HOME` is ``/tmp/sandbox/home\...``, on D: for the harness that makes and
+    removes it -- in C:\tmp\sandbox\home\...: gigabytes each, which nothing
+    removed, until C: was full.
+    """
+    drive = os.path.splitdrive(os.getcwd())[0]
+    return drive + os.sep if drive else os.sep
 
 
 @contextlib.contextmanager

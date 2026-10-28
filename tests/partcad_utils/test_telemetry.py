@@ -12,6 +12,11 @@
 the one function that now decides.
 """
 
+import os
+import subprocess
+import sys
+import types
+
 from partcad_utils import telemetry
 
 
@@ -76,3 +81,80 @@ def test_an_instrumented_function_is_called_either_way(monkeypatch):
         assert subject(1) == 2
     telemetry.forget_settings()
     assert calls == [1, 1]
+
+
+# Loading the Sentry SDK was half of what importing the CLI cost (~150 ms of
+# ~300 ms) on every command, collecting or not. It is loaded now when telemetry
+# is first collected, and everything that hands Sentry something asks first
+# whether this process has it.
+
+
+def _modules_after(statement: str) -> set:
+    """The modules a fresh interpreter has loaded after ``statement``."""
+    script = "import sys\n%s\nprint('\\n'.join(sys.modules))" % statement
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join(sys.path))
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=True, env=env)
+    return set(result.stdout.split())
+
+
+def test_importing_the_cli_does_not_load_sentry():
+    loaded = _modules_after("import partcad_cli.click.command")
+    assert "sentry_sdk" not in loaded
+    assert "partcad_utils.telemetry_sentry" not in loaded
+    # The OpenTelemetry SDK came in with it; only the API is needed to start.
+    assert "opentelemetry.sdk.trace" not in loaded
+
+
+def test_reporting_an_error_does_not_load_sentry():
+    # The logging functions are what every error passes through, on both ends.
+    loaded = _modules_after("from partcad_utils import logging\nlogging.error('x')\nlogging.exception(ValueError('y'))")
+    assert "sentry_sdk" not in loaded
+
+
+def _recording_sentry():
+    calls = []
+    sentry = types.SimpleNamespace(
+        capture_message=lambda message, level: calls.append(("message", message, level)),
+        capture_exception=lambda error: calls.append(("exception", error)),
+        flush=lambda timeout: calls.append(("flush", timeout)),
+    )
+    return sentry, calls
+
+
+def test_a_process_with_sentry_hands_it_everything(monkeypatch):
+    sentry, calls = _recording_sentry()
+    monkeypatch.setitem(sys.modules, "sentry_sdk", sentry)
+    error = ValueError("boom")
+
+    telemetry.capture_message("said", level="error")
+    telemetry.capture_exception(error)
+    telemetry.flush(timeout=1.5)
+
+    assert calls == [("message", "said", "error"), ("exception", error), ("flush", 1.5)]
+
+
+def test_a_process_without_sentry_hands_it_nothing(monkeypatch):
+    # Not loaded means not initialized, and an SDK that was never initialized
+    # drops what it is given: skipping the call is what it would have done.
+    monkeypatch.delitem(sys.modules, "sentry_sdk", raising=False)
+
+    telemetry.capture_message("said", level="error")
+    telemetry.capture_exception(ValueError("boom"))
+    telemetry.flush(timeout=1.5)
+
+    assert "sentry_sdk" not in sys.modules
+
+
+def test_the_logging_functions_hand_sentry_what_they_always_did(monkeypatch):
+    """Through 'telemetry' now, with the same arguments as when they imported the SDK."""
+    from partcad_utils import logging as pc_logging
+
+    sentry, calls = _recording_sentry()
+    monkeypatch.setitem(sys.modules, "sentry_sdk", sentry)
+    monkeypatch.setattr(pc_logging, "had_errors", pc_logging.had_errors)
+    monkeypatch.setattr(pc_logging, "first_error", pc_logging.first_error)
+
+    pc_logging.error("broken")
+    pc_logging.critical("process_start: x")
+
+    assert calls == [("message", "('broken',){}", "error"), ("message", "('process_start: x',){}", "debug")]

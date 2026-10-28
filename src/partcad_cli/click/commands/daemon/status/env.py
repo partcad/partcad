@@ -14,17 +14,18 @@ from ....service import run
 def cli(cli_ctx) -> None:
     """The `PC_*` variables the daemon process is running with.
 
-    The daemon-side counterpart of `pc system status env`. On POSIX it is the
-    one report that cannot be reconstructed from this side at all: the shared
-    socket daemon inherited the environment of whatever started it, which may
-    have been another shell, another window, or a previous day.
+    The daemon-side counterpart of `pc system status env`, and the one report
+    that cannot be reconstructed from this side at all: the shared daemon -- a
+    socket on POSIX, a named pipe on Windows -- inherited the environment of
+    whatever started it, which may have been another shell, another window, or
+    a previous day.
 
-    On Windows it answers the same question and usually gets the same answer as
-    `pc system status env`, because `partcad_client.client.connect()` does not
-    use the named-pipe daemon -- it spawns a one-shot stdio service as a child
-    of this process, which inherits this environment. That is the environment of
-    the process doing the work, which is what this command reports; it is simply
-    not a *different* one there.
+    Where no daemon can be had, `partcad_client.client.connect()` falls back to
+    a one-shot stdio service spawned as a child of this process, and the answer
+    is then this environment. That is still the environment of the process
+    doing the work, which is what this command reports; it is simply not a
+    *different* one. (Windows used to get that answer every time, before `pc`
+    there used the daemon.)
 
     Variables whose names say they authenticate are scrubbed on the far side,
     before the log line is written, so the value never reaches the wire.

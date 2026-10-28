@@ -9,8 +9,9 @@
 server lives as long as the agent's session, so this one keeps its connection
 and reconnects when it has gone away -- which it does on purpose: the daemon
 restarts itself when `~/.partcad/config.yaml` changes and cuts idle connections
-off, and on Windows `partcad_client.client.connect` starts a one-shot stdio
-service that this server would otherwise be paying to start on every call.
+off, and where no daemon can be had `partcad_client.client.connect` starts a
+one-shot stdio service that this server would otherwise be paying to start on
+every call.
 
 What it does not do is resend a request that may have run. A connection that
 dies while the daemon is working on a request leaves no way to know whether the

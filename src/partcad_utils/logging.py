@@ -20,7 +20,6 @@ from logging import (  # noqa: F401  # re-exported so callers use pc_logging.DEB
     WARNING,
 )
 
-import sentry_sdk
 from opentelemetry import trace
 
 from . import telemetry
@@ -170,7 +169,7 @@ def _track_error(args):
 def error(*args, **kwargs):
     _track_error(args)
     logging.getLogger("partcad").error(*args, **kwargs)
-    sentry_sdk.capture_message(str(args) + str(kwargs), level="error")
+    telemetry.capture_message(str(args) + str(kwargs), level="error")
     current_span = trace.get_current_span()
     if current_span:
         current_span.set_status(trace.Status(trace.StatusCode.ERROR, str(args)))
@@ -178,7 +177,7 @@ def error(*args, **kwargs):
 
 def critical(*args, **kwargs):
     logging.getLogger("partcad").critical(*args, **kwargs)
-    sentry_sdk.capture_message(str(args) + str(kwargs), level="debug")
+    telemetry.capture_message(str(args) + str(kwargs), level="debug")
 
 
 # Some pytest versions/configurations/plugins mess with the exception method
@@ -194,9 +193,9 @@ def exception(
     # to report", which would turn the error being logged into a crash of the
     # logging call itself. Route non-exceptions to capture_message instead.
     if args and isinstance(args[0], BaseException):
-        sentry_sdk.capture_exception(args[0])
+        telemetry.capture_exception(args[0])
     elif args:
-        sentry_sdk.capture_message(str(args[0]), level="error")
+        telemetry.capture_message(str(args[0]), level="error")
 
 
 # Create 'ops' that are used for dependency injection of the logic to control

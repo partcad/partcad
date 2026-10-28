@@ -307,11 +307,11 @@ Host commands
     possibly days ago, possibly from a VS Code window. It is not what your command ran under (that travels
     with the command, as explained above); it is what the daemon falls back on for a client that sends none.
   - ``pc daemon status env`` — Dump the ``PC_*`` environment variables the daemon process is running with.
-    On POSIX this is the one report that cannot be worked out from this side at all, because the shared
-    socket daemon inherited the environment of whatever started it. On Windows the client connects to a
-    one-shot stdio service spawned as its own child rather than to the named-pipe daemon, so the answer is
-    usually the same as ``pc system status env`` — still the environment of the process doing the work, just
-    not a different one. Credentials are scrubbed on the far side, so the value never reaches the wire.
+    This is the one report that cannot be worked out from this side at all, because the shared daemon
+    inherited the environment of whatever started it. Where no daemon can be started, ``pc`` falls back to a
+    one-shot service spawned as its own child, and the answer is then the same as ``pc system status env`` —
+    still the environment of the process doing the work, just not a different one. Credentials are scrubbed
+    on the far side, so the value never reaches the wire.
   - ``pc daemon reset`` — Drop that state. ``--repo-only``, ``--sandbox-only`` and ``--cache-only`` narrow it
     to the cached dependencies, the sandboxed runtime environments, or the filesystem cache respectively;
     without them all of it goes.
@@ -329,8 +329,8 @@ Host commands
 
     On Windows the daemon serves a named pipe rather than a Unix socket, and it is started as a detached
     process rather than by forking; ``pc daemon start``/``stop`` work the same way and print the same kind of
-    answer. ``pc`` itself does not use it yet — each command there still runs a service of its own — so what a
-    daemon buys on Windows today is the editor extension's warm context.
+    answer, and every other command uses that daemon as it does elsewhere — the same warm context the editor
+    extension is served from.
 
 ****************
 Package commands
