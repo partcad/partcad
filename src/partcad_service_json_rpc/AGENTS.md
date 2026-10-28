@@ -129,6 +129,10 @@ processes, already follows every request.
     into the workspace's `daemon.log` — the same file the POSIX daemon redirects itself to, which it can
     because it is a fork and gets to run code first. Without it, a daemon that died before serving accounted
     for itself nowhere.
+  - **Somewhere to run.** The root of the launcher's drive (`_daemon_cwd`), as the POSIX daemon runs in "/": not
+    the client's directory, which Windows would then refuse to delete for as long as the daemon serves, and
+    not another drive either. A path with a root and no drive (`\tmp\home`) is on the *current* drive, and a
+    daemon run from its state directory on C: built every such sandbox there for clients on D:.
 
   And `ensure_daemon` **waits for the pipe to answer** before printing it: the POSIX branch binds and listens
   in this very process, so the socket exists the moment it is named, while a pipe does not exist until the new

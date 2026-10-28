@@ -73,7 +73,6 @@ def spawn_pipe_daemon(root_path: str, extra_args=()) -> "subprocess.Popen":
     creationflags = 0
     creationflags |= getattr(subprocess, "DETACHED_PROCESS", 0)
     creationflags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-    wdir = workspace_dir(root_path)
     with _daemon_log(root_path) as log:
         return subprocess.Popen(
             _launcher_argv() + ["--serve-pipe", pipe_name(root_path), *extra_args],
@@ -82,15 +81,32 @@ def spawn_pipe_daemon(root_path: str, extra_args=()) -> "subprocess.Popen":
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=log,
-            # Not the launcher's own: Windows will not delete or rename a
-            # directory some process is running in, and the launcher's is
-            # wherever its client was -- the package a `pc` command ran in, a
-            # test's temporary directory -- which this process would then hold
-            # for as long as it serves. The POSIX daemon leaves its own for "/"
-            # (`daemon._serve_detached`); this one is put in the workspace's
-            # state directory, which already holds its log.
-            cwd=wdir if os.path.isdir(wdir) else None,
+            cwd=_daemon_cwd(),
         )
+
+
+def _daemon_cwd() -> str:
+    r"""Where the daemon runs: the root of the drive its launcher runs on.
+
+    Not the launcher's own directory: Windows will not delete or rename a
+    directory some process is running in, and the launcher's is wherever its
+    client was -- the package a `pc` command ran in, a test's temporary
+    directory -- which this process would hold for as long as it serves. The
+    POSIX daemon leaves its own for "/" (`daemon._serve_detached`), and this is
+    the same move on Windows.
+
+    The same *drive*, though, and that is not a detail. A path with a root and
+    no drive -- ``\tmp\home``, which is what a `HOME` written POSIX-style is
+    on Windows -- names a directory on the current drive, so a daemon running on
+    another one resolves every such path somewhere its client never looks. Run in
+    its workspace's state directory under the user's profile, on C:, it built
+    the sandbox of every behave scenario on a Windows runner -- whose temporary
+    `HOME` is ``/tmp/sandbox/home\...``, on D: for the harness that makes and
+    removes it -- in C:\tmp\sandbox\home\...: gigabytes each, which nothing
+    removed, until C: was full.
+    """
+    drive = os.path.splitdrive(os.getcwd())[0]
+    return drive + os.sep if drive else os.sep
 
 
 @contextlib.contextmanager

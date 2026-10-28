@@ -23,6 +23,7 @@ about it that is not: the argv, and the redirection that gives a daemon dying
 before it serves somewhere to say so.
 """
 
+import os
 import subprocess
 import sys
 
@@ -117,20 +118,34 @@ def test_a_daemon_is_started_even_with_nowhere_to_log(spawns, monkeypatch):
     assert kwargs["stdout"] is None and kwargs["stderr"] is None
 
 
-def test_the_daemon_does_not_hold_the_directory_it_was_started_from(spawns, tmp_path):
+def test_the_daemon_does_not_hold_the_directory_it_was_started_from(spawns, tmp_path, monkeypatch):
     # A Windows process's working directory cannot be deleted or renamed while
     # it runs, and the launcher's is wherever its client ran -- a package, a
-    # test's temporary directory. The daemon is put in its own state directory.
-    spawn_pipe_daemon(WORKSPACE)
-
-    [(_, kwargs)] = spawns
-    assert kwargs["cwd"] == str(tmp_path / ".partcad" / "workspaces" / workspace_hash(WORKSPACE))
-
-
-def test_a_daemon_with_no_state_directory_keeps_the_launchers(spawns, monkeypatch):
-    monkeypatch.setattr(win_pipe.os, "makedirs", _raise(OSError("read-only")))
+    # test's temporary directory. The daemon runs at the root instead.
+    workspace = tmp_path / "package"
+    workspace.mkdir()
+    monkeypatch.chdir(workspace)
 
     spawn_pipe_daemon(WORKSPACE)
 
     [(_, kwargs)] = spawns
-    assert kwargs["cwd"] is None
+    assert kwargs["cwd"] == os.path.splitdrive(str(workspace))[0] + os.sep
+
+
+def test_the_daemon_runs_on_the_drive_its_launcher_runs_on(spawns, monkeypatch):
+    """A path with a root and no drive has to mean the same thing to both.
+
+    `/tmp/sandbox/home\\...` -- a temporary `HOME` the way the behave harness
+    writes one on Windows -- is a directory on the *current* drive. The daemon
+    once ran in its state directory under the user's profile, on C:, while its
+    clients ran on D:, so every sandbox it built for such a `HOME` went to C:,
+    where nothing that removed the `HOME` ever looked, until the disk was full.
+    """
+    monkeypatch.setattr(win_pipe.os, "getcwd", lambda: "D:\\a\\partcad\\partcad")
+    monkeypatch.setattr(win_pipe.os.path, "splitdrive", lambda path: ("D:", path[2:]))
+    monkeypatch.setattr(win_pipe.os, "sep", "\\")
+
+    spawn_pipe_daemon(WORKSPACE)
+
+    [(_, kwargs)] = spawns
+    assert kwargs["cwd"] == "D:\\"
