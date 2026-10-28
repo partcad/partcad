@@ -92,6 +92,7 @@ import {
     saveRendered,
     sendState,
     showObject,
+    showSection,
 } from './host';
 import {
     ANALYSIS_TABS,
@@ -101,6 +102,7 @@ import {
     CaeListData,
     CaeRunData,
     Choices,
+    DESIGN_TABS,
     DRAFT_PLUGINS,
     DetailsMessage,
     FetchTabMessage,
@@ -112,6 +114,7 @@ import {
     RenderData,
     RenderFormat,
     RequirementsData,
+    SectionShownMessage,
     ShowMessage,
     SimulationListData,
     SimulationRunData,
@@ -120,12 +123,15 @@ import {
     TabId,
     TestArtifact,
     TestData,
+    ViewportData,
     groupOf,
     isAnalysisTab,
     isRenderTab,
 } from './messages';
 import { Choice, RenderView } from './render';
 import { RequirementsView } from './requirements';
+import { Bounds, Section, boundsOf, describeSection, sameSection, sectionFrom, sectionRequest } from './section';
+import { onToggle } from './sidePanel';
 import { SimulationView } from './simulation';
 import { spaceMouse } from './spacemouse';
 import { controlValues, snapshot } from './state';
@@ -133,6 +139,8 @@ import { SupplyView } from './supply';
 import { TabSpec, Tabs } from './tabs';
 import { TestView } from './test';
 import { LinkFilter, OverlayRequest, Selection, Tree, filterIsEmpty } from './tree';
+import { Capability, ViewCapabilities, ViewPanel } from './viewPanel';
+import { Viewpoint } from './viewpoint';
 
 const panes: Record<TabId, HTMLElement> = {
     requirements: byId('pane-requirements'),
@@ -178,6 +186,8 @@ const assemblyView = new AssemblyView(panes.assembly, {
 // what they typed into it. Like the simulation pane, each keeps what every run
 // of every scenario answered for as long as the object is on screen.
 const caeViews: Partial<Record<TabId, AnalysisView>> = {};
+/** What each analysis tab draws its scenario's result with: what its view panel turns. */
+const caeResults: Partial<Record<AnalysisTabId, CaeResult>> = {};
 for (const tab of ANALYSIS_TABS) {
     caeViews[tab] = new AnalysisView(
         panes[tab],
@@ -186,7 +196,7 @@ for (const tab of ANALYSIS_TABS) {
             onRun: (scenario, implementation) => runAnalysis(tab, scenario, implementation),
             onFailure: (message) => reportError(message),
         },
-        (host) => new CaeResult(host, tab),
+        (host) => (caeResults[tab] = new CaeResult(host, tab)),
     );
 }
 const requirementsView = new RequirementsView(panes.requirements);
@@ -195,7 +205,15 @@ const testView = new TestView(panes.test, { onRun: () => runTests(), onShow: (ar
 // on screen: a run is a simulator started in a sandbox, and switching back to a
 // simulation already run must not start it again.
 const simulationView = new SimulationView(panes.simulation, {
-    onRun: (scenario, plugin) => runSimulation(scenario, plugin),
+    onRun: (scenario, plugin, viewpoint) => runSimulation(scenario, plugin, viewpoint),
+    // Where the pictures on screen were taken from, for the view panel beside them.
+    onShown: (viewpoint) =>
+        viewPanels.simulation?.setViewpoint(
+            viewpoint,
+            viewpoint === undefined
+                ? 'From where the scene is rendered from: said once the simulation has run'
+                : undefined,
+        ),
 });
 const tabs = new Tabs(byId('tabs'), onTabSelected);
 const designTabs = new Tabs(byId('design-tabs'), (tab) => onInnerSelected('design', tab));
@@ -228,12 +246,16 @@ const sceneLoaded: Promise<Scene | undefined> = import(/* webpackMode: "eager" *
     (module) => {
         scene = module;
         scene.setShowMetadata(metadataCheckbox?.checked ?? true);
-        if (module.software && animateCheckbox) {
+        if (module.software) {
             // Drawn without a GPU, the model does not turn on its own: a frame
             // every 16 ms is what the software renderer cannot afford. The box
             // says so, and ticking it turns it on regardless.
-            animateCheckbox.checked = false;
+            view3d.setAnimate(false);
         }
+        // Where the camera is, said in the view panel as it moves - however it
+        // was moved: a drag, the damping after it, Animate, a SpaceMouse.
+        module.onViewChange(follow3dCamera);
+        updateViewPanels();
         return module;
     },
     (error: unknown) => {
@@ -242,9 +264,14 @@ const sceneLoaded: Promise<Scene | undefined> = import(/* webpackMode: "eager" *
         if (controls !== null) {
             controls.hidden = true;
         }
+        sceneFailed = true;
+        updateViewPanels();
         return undefined;
     },
 );
+
+/** Whether the 3D view failed to start, which its view panel then says. */
+let sceneFailed = false;
 
 /**
  * What is ticked, for the whole Design group.
@@ -350,6 +377,14 @@ function onBoxChanged(): void {
     if (open === undefined || !isRenderTab(open)) {
         return;
     }
+    settleRender(open);
+}
+
+/**
+ * Render a render tab again once what it is asked with has stopped changing:
+ * a box ticked, a section slider let go, an axis chosen in its view panel.
+ */
+function settleRender(open: TabId): void {
     const pending = settling[open];
     if (pending !== undefined) {
         clearTimeout(pending);
@@ -400,24 +435,365 @@ if (metadataCheckbox) {
     });
 }
 
-// Initialize animation checkbox
-const animateCheckbox = document.getElementById('animate-checkbox') as HTMLInputElement;
-if (animateCheckbox) {
-    animateCheckbox.addEventListener('change', (event) => {
-        scene?.setAutoRotate((event.target as HTMLInputElement).checked);
-    });
+/*
+ * The view panel down the right of every tab that shows the object: how it is
+ * looked at - the gizmo, the axis buttons, the viewpoint - what it is cut to,
+ * and, on the 3D tab, Animate and Opacity (see 'viewPanel.ts').
+ *
+ * One per tab, because each tab looks at the object its own way: the 3D view
+ * turns a camera, the 2D tab asks PartCAD for a picture from where the panel
+ * says, an analysis turns the solver's mesh, Simulation has its pictures taken
+ * from there. What a panel's parts do on its tab is decided here, in
+ * 'capabilitiesOf', and what cannot work there says why.
+ *
+ * The section is the exception, and is one answer for the whole Design group,
+ * for the reason the ticked boxes are ('selection'): what part of the object
+ * somebody wants to see is a property of the object, not of the tab. So it is
+ * held here ('designSection') and every Design panel shows it.
+ */
+const viewPanels: Partial<Record<TabId, ViewPanel>> = {};
+
+/** The 3D tab's: it moves the camera, as dragging the model does. */
+const view3d = new ViewPanel(
+    {
+        onViewpoint: (viewpoint) => {
+            holdStill();
+            scene?.setViewpoint(viewpoint);
+        },
+        onResetView: () => scene?.fitView(),
+        onSection: (section) => onSectionChanged(section),
+        onAnimate: (animate) => scene?.setAutoRotate(animate),
+        onOpacity: (opacity) => scene?.setOpacity(opacity),
+    },
+    // The ids the screenshot script drives these two by.
+    {
+        target: true,
+        animate: true,
+        ids: { animate: 'animate-checkbox', opacity: 'opacity-slider', opacityValue: 'opacity-value' },
+    },
+);
+viewPanels['3d'] = view3d;
+
+/**
+ * Where the 2D tab's picture is to be looked at from, as its view panel set it;
+ * undefined is from where the package's configuration says. Forgotten with the
+ * object.
+ */
+let viewpoint2d: Viewpoint | undefined;
+
+viewPanels['2d'] = new ViewPanel(
+    {
+        // Rendered once the view is settled - the gizmo let go, a button, a
+        // field - and not while it is being dragged: a picture is a round trip.
+        onViewpoint: (viewpoint, final) => {
+            if (final) {
+                viewpoint2d = viewpoint;
+                rerender('2d');
+            }
+        },
+        onResetView: () => {
+            viewpoint2d = undefined;
+            rerender('2d');
+        },
+        onSection: (section) => onSectionChanged(section),
+    },
+    { target: false },
+);
+viewPanels.draft = new ViewPanel(
+    { onViewpoint: () => {}, onResetView: () => {}, onSection: onSectionChanged },
+    { target: false },
+);
+
+for (const tab of ANALYSIS_TABS) {
+    const result = caeResults[tab];
+    viewPanels[tab] = new ViewPanel(
+        {
+            onViewpoint: (viewpoint) => result?.setViewpoint(viewpoint),
+            onResetView: () => result?.fit(),
+            onSection: () => {},
+        },
+        { target: true },
+    );
+    if (result !== undefined) {
+        result.onViewChange = throttled(() => updateAnalysisPanel(tab));
+    }
 }
 
-// Initialize opacity slider
-const opacitySlider = document.getElementById('opacity-slider') as HTMLInputElement;
-const opacityValue = document.getElementById('opacity-value') as HTMLSpanElement;
-if (opacitySlider && opacityValue) {
-    opacitySlider.addEventListener('input', (event) => {
-        const value = parseInt((event.target as HTMLInputElement).value, 10);
-        const opacity = value / 100;
-        scene?.setOpacity(opacity);
-        opacityValue.textContent = `${value}%`;
-    });
+viewPanels.simulation = new ViewPanel(
+    {
+        // Run again with the pictures taken from there, once it is settled: the
+        // pictures are taken by the run, as choosing a plugin runs it again.
+        onViewpoint: (viewpoint, final) => {
+            if (final) {
+                simulationView.setViewpoint(viewpoint);
+            }
+        },
+        onResetView: () => simulationView.setViewpoint(undefined),
+        onSection: () => {},
+    },
+    { target: false },
+);
+
+for (const [tab, panel] of Object.entries(viewPanels) as [TabId, ViewPanel][]) {
+    panes[tab].appendChild(panel.element);
+}
+
+// Brought out, a panel says where its view is looking from now: while it was
+// folded away nothing told it (see 'follow3dCamera').
+onToggle((side, expanded) => {
+    if (side === 'right' && expanded) {
+        view3d.setViewpoint(scene?.viewpoint());
+        ANALYSIS_TABS.forEach((tab) => updateAnalysisPanel(tab));
+    }
+});
+
+/**
+ * What the object is cut to, for the whole Design group, as the view panels say;
+ * null for the whole of it. Forgotten with the object, kept across a show of the
+ * same one, for the reason the selection is.
+ */
+let designSection: Section | null = null;
+
+/** What the geometry in the 3D view is cut to, as the show that brought it said. */
+let shownSection: Section | null = null;
+
+/** Whether the PartCAD that sent the object can cut it at all: a show from one that cannot says nothing about a section. */
+let sectionSupported = false;
+
+/** The cut the 3D view asked the daemon for and has not heard back about, by its token. */
+let askedSection: { token: number; section: Section | null } | undefined;
+
+/** How big the object is, which is what the section sliders span; undefined when nothing says. */
+let designBounds: Bounds | undefined;
+
+/** A function that runs at most every tenth of a second, however often it is called, and once more after the last call. */
+function throttled(run: () => void): () => void {
+    let waiting: ReturnType<typeof setTimeout> | undefined;
+    let again = false;
+    return () => {
+        if (waiting !== undefined) {
+            again = true;
+            return;
+        }
+        run();
+        waiting = setTimeout(function settle() {
+            if (again) {
+                again = false;
+                run();
+                waiting = setTimeout(settle, 100);
+                return;
+            }
+            waiting = undefined;
+        }, 100);
+    };
+}
+
+/** The 3D view's camera moved: say where it is, in its view panel. */
+const follow3dCamera = throttled(() => {
+    if (view3d.side.expanded) {
+        view3d.setViewpoint(scene?.viewpoint());
+    }
+});
+
+/**
+ * A viewpoint chosen in the 3D view's panel holds still: Animate would turn the
+ * model away from it at once. The box is cleared, so that what it says is what
+ * the model does.
+ */
+function holdStill(): void {
+    if (view3d.animating) {
+        view3d.setAnimate(false);
+        scene?.setAutoRotate(false);
+    }
+}
+
+/** An analysis's result changed, or its camera moved: what its view panel can do, and where it is looking from. */
+function updateAnalysisPanel(tab: AnalysisTabId): void {
+    const panel = viewPanels[tab];
+    const result = caeResults[tab];
+    if (panel === undefined || result === undefined) {
+        return;
+    }
+    panel.setCapabilities(capabilitiesOf(tab));
+    if (result.drawing === 'mesh') {
+        const pole = result.pole;
+        if (pole !== undefined) {
+            panel.setPole(pole);
+        }
+        panel.setViewpoint(result.viewpoint());
+    } else {
+        panel.setViewpoint(undefined);
+    }
+}
+
+/** Why a picture PartCAD renders cannot be animated, or made see-through. */
+const STILL_PICTURE = 'A picture PartCAD renders holds still, and is drawn as it is';
+
+/** What each part of a tab's view panel can do there; what cannot says why. */
+function capabilitiesOf(tab: TabId): ViewCapabilities {
+    const nothing = 'Nothing is shown';
+    const known = Boolean(shown?.package);
+    const kind = shown?.kind ?? '';
+    let section: Capability = true;
+    if (shown === undefined) {
+        section = nothing;
+    } else if (!known) {
+        section = 'PartCAD did not say which package this belongs to, so it cannot be asked to cut it';
+    } else if (kind === 'interface') {
+        section = 'An interface is ports: there is no solid to cut';
+    } else if (!sectionSupported) {
+        section = 'This PartCAD cannot cut a section: update PartCAD to cut one';
+    }
+
+    if (tab === '3d') {
+        const failed = sceneFailed ? 'The 3D view could not start' : undefined;
+        const viewing: Capability =
+            failed ?? (scene === undefined ? 'The 3D view is starting' : shown ? true : nothing);
+        return { viewpoint: viewing, section, animate: failed ?? true, opacity: failed ?? true };
+    }
+    if (tab === '2d') {
+        return {
+            viewpoint:
+                shown === undefined ? nothing : known ? true : 'PartCAD did not say which package this belongs to',
+            section,
+            animate: STILL_PICTURE,
+            opacity: STILL_PICTURE,
+        };
+    }
+    if (tab === 'draft') {
+        return {
+            viewpoint: 'A drawing lays its views out itself: the drawing package decides where each is looked at from',
+            section,
+            animate: STILL_PICTURE,
+            opacity: STILL_PICTURE,
+        };
+    }
+    if (isAnalysisTab(tab)) {
+        const drawing = caeResults[tab]?.drawing ?? 'nothing';
+        return {
+            viewpoint:
+                drawing === 'mesh'
+                    ? true
+                    : drawing === 'picture'
+                      ? 'This result is a picture the solver drew, looked at from where it chose'
+                      : 'Nothing has been drawn yet: a scenario is drawn once it has run',
+            section: "An analysis's result is the solver's mesh, which PartCAD does not cut",
+            animate: 'An analysis result holds still: its colours are the answer, to be read',
+            opacity: 'An analysis result is drawn in the colours the solver gave it, which are the answer',
+        };
+    }
+    // Simulation.
+    const pictures = "The pictures are the simulation plugin's, of the whole scene";
+    return {
+        viewpoint: simulated(shown) ? true : 'This declares no simulations',
+        section: pictures,
+        animate: pictures,
+        opacity: pictures,
+    };
+}
+
+/** Every view panel, told what it can do now: the object, or what is known about it, changed. */
+function updateViewPanels(): void {
+    for (const [tab, panel] of Object.entries(viewPanels) as [TabId, ViewPanel][]) {
+        if (isAnalysisTab(tab)) {
+            updateAnalysisPanel(tab);
+        } else {
+            panel.setCapabilities(capabilitiesOf(tab));
+        }
+    }
+}
+
+/** The Design group's panels, which share one section. */
+function designPanels(): ViewPanel[] {
+    return (['3d', '2d', 'draft'] as TabId[]).map((tab) => viewPanels[tab]).filter((panel) => panel !== undefined);
+}
+
+/**
+ * A section was chosen on one of the Design tabs: it is the section of all three.
+ *
+ * The 3D view is shown again, cut, when it is the tab on screen; the two render
+ * tabs forget their pictures, which are no longer of what the panel says, and
+ * the one on screen is rendered again - the rule a ticked box keeps.
+ */
+function onSectionChanged(section: Section | null): void {
+    designSection = section;
+    for (const panel of designPanels()) {
+        panel.setSection(section);
+    }
+    const open = tabs.current === 'design' ? designTabs.current : undefined;
+    for (const tab of RENDER_TABS) {
+        if (tab !== open) {
+            requested.delete(tab);
+            awaiting.delete(tab);
+        }
+    }
+    if (open === '3d') {
+        cut3d();
+    } else if (open !== undefined && isRenderTab(open)) {
+        rerender(open);
+    }
+}
+
+/**
+ * Ask for the 3D view to be shown cut as the panel says, unless it already is.
+ *
+ * Through the daemon - a cut is a CAD operation - which shows the object again,
+ * with the section on the show; the camera stays, since it is the same object.
+ * A request superseded by a newer one is simply not waited for.
+ */
+function cut3d(): void {
+    if (shown === undefined || !shown.package || !sectionSupported || shown.kind === 'interface') {
+        return;
+    }
+    if (askedSection === undefined && sameSection(shownSection, designSection)) {
+        return;
+    }
+    if (askedSection !== undefined && sameSection(askedSection.section, designSection)) {
+        return;
+    }
+    lastToken += 1;
+    askedSection = { token: lastToken, section: designSection };
+    view3d.setSectionNote(
+        designSection
+            ? `Cutting (${describeSection(designSection)})… PartCAD cuts the object and draws it again.`
+            : 'Drawing the whole object again…',
+    );
+    showSection({ type: 'showSection', token: lastToken, section: sectionRequest(designSection) });
+}
+
+/** The daemon has answered a cut: it is on screen by now, or it could not be made. */
+function onSectionShown(message: SectionShownMessage): void {
+    if (askedSection?.token !== message.token) {
+        return;
+    }
+    askedSection = undefined;
+    if (message.error !== undefined) {
+        view3d.setSectionNote(`PartCAD could not cut this: ${message.error}`, true);
+        return;
+    }
+    view3d.setSectionNote(undefined);
+    if (tabs.current === 'design' && designTabs.current === '3d') {
+        // The panel was moved again while that one was being cut.
+        cut3d();
+    }
+}
+
+/** A render tab's picture is no longer what its panel says: drawn again once it settles, if it is on screen. */
+function rerender(tab: TabId): void {
+    requested.delete(tab);
+    awaiting.delete(tab);
+    const open = tabs.current === 'design' ? designTabs.current : undefined;
+    if (open === tab) {
+        settleRender(tab);
+    }
+}
+
+/** A viewpoint as a 'render:' section says it, as the panel holds one. */
+function viewpointOf(viewport: ViewportData | null | undefined): Viewpoint | undefined {
+    if (!viewport?.viewport_origin || !viewport.viewport_up) {
+        return undefined;
+    }
+    return { origin: [...viewport.viewport_origin], up: [...viewport.viewport_up], target: [0, 0, 0] };
 }
 
 /** Offer the Metadata box when, and only when, the object on screen has callouts. */
@@ -477,8 +853,11 @@ let manufacturing: { data: BvbData; result: BvbResult } | 'failed' | undefined;
  */
 let simulations: SimulationListData | 'failed' | undefined;
 
-/** The simulation each run in flight is of, and the plugin it was asked for with, by its token. */
-const simulationRuns = new Map<number, { scenario: string; plugin: string | undefined }>();
+/** The simulation each run in flight is of, and the plugin and the viewpoint it was asked for with, by its token. */
+const simulationRuns = new Map<
+    number,
+    { scenario: string; plugin: string | undefined; viewpoint: Viewpoint | undefined }
+>();
 
 /**
  * What the part on screen declares for each analysis, once the daemon has said
@@ -814,6 +1193,7 @@ async function show(message: ShowMessage): Promise<void> {
     resetRenderTabs('Select this tab to render it.');
     resetManufacturing('Asking PartCAD what this is made of…');
     resetValidation('Asking PartCAD what this declares under simulate:…');
+    showView(message);
     // Which scenario a tab asked for with the show is to select ('pc ide view
     // --analysis-fea --scenario loaded'), said to the panes before their lists
     // are asked for: an answer can arrive while the geometry is still loading,
@@ -906,10 +1286,20 @@ async function show(message: ShowMessage): Promise<void> {
         if (generation !== mine) {
             return;
         }
-        // Apply current opacity slider value to newly loaded geometry
-        if (opacitySlider) {
-            const opacity = parseInt(opacitySlider.value, 10) / 100;
-            view.setOpacity(opacity);
+        // What the Opacity slider says, for the geometry that just arrived.
+        view.setOpacity(view3d.opacityFraction);
+        if (designBounds === undefined) {
+            // A tree that records no size: the sliders span what is drawn.
+            designBounds = view.modelBounds();
+            for (const panel of designPanels()) {
+                panel.setBounds(designBounds);
+            }
+        }
+        view3d.setViewpoint(view.viewpoint());
+        // The same object again, cut otherwise than the panel says - an edit
+        // saved shows it whole - and the 3D view on screen: cut it again.
+        if (tabs.current === 'design' && designTabs.current === '3d') {
+            cut3d();
         }
     }
     // A tab asked for with the show ('pc ide view --analysis-fea'): the group's
@@ -948,9 +1338,48 @@ function requestTab(tab: TabId | null | undefined): void {
     tabs.request(group);
 }
 
+/**
+ * What the view panels hold for a show: forgotten with the object, kept for a
+ * show of the same one - what it is cut to, where the 2D tab looks from - for
+ * the reason the camera is kept.
+ */
+function showView(message: ShowMessage): void {
+    sectionSupported = message.section !== undefined;
+    shownSection = sectionFrom(message.section ?? null);
+    if (!message.keepCamera) {
+        designSection = null;
+        askedSection = undefined;
+        viewpoint2d = undefined;
+        simulationView.setViewpoint(undefined);
+        view3d.setSectionNote(undefined);
+    }
+    // The object's size, as its tree records it. A cut records the object's own
+    // size too, so this is the same box whether or not it is cut; only a tree
+    // that records none leaves the box of the last show standing for a cut of it.
+    const bounds = boundsOf(message.object);
+    if (bounds !== undefined || !message.keepCamera || shownSection === null) {
+        designBounds = bounds;
+    }
+    for (const panel of designPanels()) {
+        panel.setBounds(designBounds);
+        panel.setSection(designSection);
+    }
+    viewPanels['2d']?.setViewpoint(
+        viewpoint2d,
+        viewpoint2d === undefined ? 'Said once the picture is drawn' : undefined,
+    );
+    updateViewPanels();
+}
+
 function clear(): void {
     generation += 1;
     shown = undefined;
+    sectionSupported = false;
+    shownSection = null;
+    designSection = null;
+    askedSection = undefined;
+    designBounds = undefined;
+    viewpoint2d = undefined;
     awaiting.clear();
     requested.clear();
     scene?.clearGeometry();
@@ -971,6 +1400,14 @@ function clear(): void {
     requirements = undefined;
     requirementsView.setBusy('Nothing to show.');
     resetValidation('Nothing to simulate.');
+    simulationView.setViewpoint(undefined);
+    for (const panel of designPanels()) {
+        panel.setBounds(undefined);
+        panel.setSection(null);
+        panel.setSectionNote(undefined);
+        panel.setViewpoint(undefined);
+    }
+    updateViewPanels();
     setAllTabs(undefined);
 }
 
@@ -1045,15 +1482,24 @@ function resetValidation(text: string): void {
  * next has asked for both, and each answer belongs to the simulation it is of.
  * The daemon runs them one after another either way.
  */
-function runSimulation(scenario: string, plugin: string | undefined): void {
+function runSimulation(scenario: string, plugin: string | undefined, viewpoint: Viewpoint | undefined): void {
     if (shown === undefined) {
         return;
     }
     lastToken += 1;
-    simulationRuns.set(lastToken, { scenario, plugin });
+    simulationRuns.set(lastToken, { scenario, plugin, viewpoint });
     // 'plugin' is the field the Draft tab names its drawing package in, and
-    // means the same here: who does the work instead of the default.
-    fetchTab({ type: 'fetchTab', tab: 'simulation', token: lastToken, scenario, plugin });
+    // means the same here: who does the work instead of the default. The
+    // viewpoint is the view panel's, when it has been moved.
+    fetchTab({
+        type: 'fetchTab',
+        tab: 'simulation',
+        token: lastToken,
+        scenario,
+        plugin,
+        viewportOrigin: viewpoint?.origin,
+        viewportUp: viewpoint?.up,
+    });
 }
 
 /** What the object declares under 'simulate:' has arrived: list it, and rebuild the strips it decides. */
@@ -1219,9 +1665,16 @@ function renderTab(tab: TabId): void {
             ? 'Drawing… The first drawing can take a few minutes, while PartCAD installs what makes it.'
             : 'Rendering…',
     );
+    // What the view panel beside it says: where to look from - the 2D tab only,
+    // and only once it has been moved, so that a package's own viewpoint is
+    // what a picture starts out with - and what to cut the object to first.
+    const viewpoint = tab === '2d' ? viewpoint2d : undefined;
     request(tab, {
         format,
         plugin: tab === 'draft' ? view.plugin : undefined,
+        viewportOrigin: viewpoint?.origin,
+        viewportUp: viewpoint?.up,
+        section: sectionRequest(designSection) ?? undefined,
         filter,
         withPorts: overlay?.ports,
         withInterfaces: overlay?.interfaces,
@@ -1321,6 +1774,8 @@ function onLeafSelected(tab: TabId): void {
         // The canvas had no size at all while the tab was hidden, and a WebGL
         // renderer does not find out on its own that it has one again.
         scene?.resizeCanvas();
+        // A section chosen on the 2D or Draft tab is this tab's too.
+        cut3d();
         return;
     }
     if (isAnalysisTab(tab)) {
@@ -1387,9 +1842,14 @@ function onTabData(tab: TabId, token: number, data: unknown, error: string | und
         // A run, which is answered under a token of its own: see 'runSimulation'.
         simulationRuns.delete(token);
         if (error !== undefined) {
-            simulationView.showRunError(asked.scenario, error, asked.plugin);
+            simulationView.showRunError(asked.scenario, error, asked.plugin, asked.viewpoint);
         } else {
-            simulationView.showRun(asked.scenario, data as SimulationRunData | undefined, asked.plugin);
+            simulationView.showRun(
+                asked.scenario,
+                data as SimulationRunData | undefined,
+                asked.plugin,
+                asked.viewpoint,
+            );
         }
         return;
     }
@@ -1426,6 +1886,15 @@ function onTabData(tab: TabId, token: number, data: unknown, error: string | und
             } catch (e: unknown) {
                 view?.showError(`Failed to display this: ${e}`);
                 reportError(`failed to render the '${tab}' tab: ${e}`);
+            }
+            if (tab === '2d') {
+                // Where the picture was looked at from, as the renderer said -
+                // the panel's own until it has been moved, then what it asked.
+                const drawnFrom = viewpoint2d ?? viewpointOf((data as RenderData).viewport);
+                viewPanels['2d']?.setViewpoint(
+                    drawnFrom,
+                    drawnFrom === undefined ? 'The renderer did not say where it looked from' : undefined,
+                );
             }
         }
         return;
@@ -1715,6 +2184,16 @@ function collectState(): Record<string, unknown> {
             if (id === '2d') {
                 selections.overlays = renderTrees['2d']!.overlay();
             }
+            const panel = viewPanels[id];
+            if (panel !== undefined) {
+                // The view panel's: where the view is looked at from and, on
+                // the Design tabs, what the object is cut to.
+                selections.view = {
+                    expanded: panel.side.expanded,
+                    viewpoint: panel.current ?? null,
+                    section: DESIGN_TABS.includes(id) ? designSection : null,
+                };
+            }
             if (id === 'simulation') {
                 // Which simulation is on screen and how each run went, which
                 // no control in the pane holds: the list is rows, not a select.
@@ -1775,6 +2254,8 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
     const message = event.data;
     if (message.type === 'state') {
         void answerState(message.token);
+    } else if (message.type === 'sectionShown') {
+        onSectionShown(message);
     } else if (message.type === 'clear') {
         clear();
     } else if (message.type === 'show') {

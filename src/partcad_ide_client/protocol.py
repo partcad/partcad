@@ -216,6 +216,16 @@ KEY_TAB = "tab"
 # loaded'). Absent selects the first, as opening the tab by hand does. One the
 # object does not declare selects nothing new, and the tab stays on its first.
 KEY_SCENARIO = "scenario"
+# On a show message: the cross-section the object was cut to before it was
+# tessellated, as PartCAD normalized it -- '{"x": [lo, hi], "z": [lo, hi]}', in
+# millimetres in the frame of the object's root, naming only the axes that cut
+# (see 'partcad.shape_section') -- or None for the whole object. Always present on
+# a show from a PartCAD that can cut, None included, so that the viewer can tell
+# "the whole object" from "a PartCAD too old to be asked for a cut" and offer its
+# section sliders only to the first. The viewer asks for a cut by asking the
+# daemon to show the object again with one ('inspect.object' with 'section'),
+# and this is how it learns what the geometry on screen was cut to.
+KEY_SECTION = "section"
 
 # The tabs whose pane is a list of what the object declares, one of which is
 # selected and run: its simulations, and its scenarios of each analysis.

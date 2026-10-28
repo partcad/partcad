@@ -200,6 +200,7 @@ def show(
     reply_timeout: float = REPLY_TIMEOUT,
     tab=None,
     scenario=None,
+    section=None,
 ) -> dict:
     """Display one already-tessellated object in the IDE's Digital Thread.
 
@@ -228,6 +229,9 @@ def show(
     to leave the viewer on the one it is on. 'scenario' is which of that tab's
     simulations or analysis scenarios to select (see 'protocol.KEY_SCENARIO'),
     and needs a tab that lists them.
+
+    'section' is the cross-section 'obj' was cut to (see 'protocol.KEY_SECTION'),
+    or None for the whole object. Sent either way.
     """
     if tab is not None and tab not in protocol.viewer_tab_ids():
         raise ValueError("not a Digital Thread tab: %r (one of %s)" % (tab, ", ".join(protocol.viewer_tab_ids())))
@@ -249,6 +253,7 @@ def show(
         "kind": kind,
         "package": package,
         "keepCamera": bool(keep_camera),
+        protocol.KEY_SECTION: section or None,
         protocol.KEY_OBJECT: obj,
     }
     if tab is not None:

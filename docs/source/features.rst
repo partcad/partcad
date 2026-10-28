@@ -134,7 +134,32 @@ note in the corner of the view says so, and hovering over it says how to have th
 
 Down the left of the 3D view is a list of **what is on screen**, with a checkbox on every line: unticking one
 hides that line and everything under it, and ticking it again brings back exactly what was showing before.
-**Animate** and **Opacity** are at the bottom of the same pane.
+
+Down the right of every tab that shows the object -- 3D, 2D and Draft, each analysis, and Simulation -- is the
+**view panel**, folded away until the button at the top of that edge (the editor's own "side bar" icon) brings it
+out; it stays out, or folded, on every tab at once. From the top:
+
+- an **orientation gizmo**, the object's X, Y and Z as they lie from where it is looked at. Drag it to turn the
+  view, or click an axis to look along it; with the gizmo focused, the arrow keys turn the view a step at a time;
+- a button per axis, **X**, **-X**, **Y**, **-Y**, **Z** and **-Z**, each looking along that axis from that end.
+  They are the views ``pc render --view`` names -- X is ``right``, -Y is ``front``, Z is ``top`` with +Y up -- so
+  the 2D tab's picture after one of them is the picture that command draws;
+- a **section** slider per axis, each with two ends, which start at the two faces of the object's bounding box:
+  moving an end inwards cuts that much off from that side, and the three together keep a box. The cut is made by
+  PartCAD, on the exact geometry, before it is drawn -- the 3D view is shown again cut, and the 2D and Draft tabs
+  draw the cut object -- so it is a section of the solid and not a clipping of the picture. It is one section for
+  the 3D, 2D and Draft tabs, kept for as long as the object is on screen;
+- the **viewpoint**: where the view is looked at from (**Origin**), which way is up (**Up**) and, in a 3D view,
+  the point it looks at (**Target**), in millimetres in the object's frame. They are the ``viewport_origin`` and
+  ``viewport_up`` a ``render:`` section takes, so they can be copied out into one, or onto
+  ``pc render --viewport-origin``, and typed or pasted in -- ``1, 2, 3``, ``[1, 2, 3]`` and ``1 2 3`` all read.
+  **Reset** goes back to the view the tab starts out with;
+- **Animate** and **Opacity**, which turn the 3D view's model on its own and make it see-through.
+
+What does not apply on a tab is disabled, and says why: a drawing package lays its views out itself, an
+analysis's result is the solver's mesh rather than geometry PartCAD cuts, and a picture does not animate. On the
+Simulation tab the viewpoint is where the plugin takes its pictures from, so choosing one runs the simulation
+again with its pictures taken from there.
 
 The list is the object itself. Every object PartCAD can show is a tree, and the pane is that tree:
 

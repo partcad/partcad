@@ -464,6 +464,15 @@ def process(request):
     angular_tolerance = float(request.get("angularTolerance", 0.4))
 
     errors = []
+    # A cross-section, cut here rather than in a sandbox of its own: starting
+    # one is most of what a cut costs, and the viewer asks for a new one every
+    # time a slider is let go. A node cut away entirely is left with no geometry
+    # at all, which is a node this walk already copes with (see 'wrapper_section').
+    section = request.get("section")
+    if section:
+        import wrapper_section
+
+        tree = wrapper_section.section_tree(tree, section, errors, keep_empty=False)
     # One decoded shape per distinct geometry, shared by every node naming it.
     shapes = {}
     geometry = {}
@@ -479,6 +488,7 @@ def process(request):
         # nothing was exported and so nothing was found out.
         "tolerance": tolerance,
         "angularTolerance": angular_tolerance,
+        "section": section or None,
         "mergedFaces": None if _create_xde is False else (_create_xde is not None),
     }
 

@@ -313,8 +313,8 @@ body {
  *
  * The tree takes whatever is left after the controls at the bottom, which is
  * most of it - an assembly is a hierarchy and a part has a row per port, so the
- * list is the tall thing here and Metadata, Animate and Opacity are up to three
- * lines under it (Metadata only for a model that has any).
+ * list is the tall thing here and Metadata is the one line under it, for a model
+ * that has any. Animate and Opacity are in the view panel on the right.
  * It shrinks on a narrow panel rather than pushing the canvas out of one.
  *
  * Shared with the 2D and Draft panes, which have the same pane down their left
@@ -1220,8 +1220,8 @@ a {
     font-family: var(--vscode-editor-font-family, monospace);
 }
 
-/* How the model is drawn, under the tree of what is drawn: the bottom of the
-   control pane, and the only part of it that is there before anything is shown. */
+/* What is pinned to the model, under the tree of what is drawn: the bottom of the
+   control pane, there only while the model has callouts to pin. */
 .viewer-controls {
     flex: 0 0 auto;
     display: flex;
@@ -1715,4 +1715,339 @@ input.switch:focus-visible {
     order: -1;
     border-top: none;
     border-bottom: 1px solid var(--vscode-panel-border, transparent);
+}
+
+/*
+ * A panel along one side of a pane ('sidePanel.ts'): the button that folds it
+ * away and brings it back, down its edge, and what it folds. Folded, it is the
+ * strip the button is in, so the button stays where the panel comes out of and
+ * nothing is laid over the pane beside it.
+ */
+.side-panel {
+    display: flex;
+    flex: 0 0 auto;
+    min-height: 0;
+    overflow: hidden;
+    border-left: 1px solid var(--vscode-panel-border, transparent);
+    background: var(--vscode-sideBar-background, transparent);
+}
+
+.side-panel-left {
+    flex-direction: row-reverse;
+    border-left: none;
+    border-right: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.side-panel-toggle {
+    flex: 0 0 auto;
+    align-self: flex-start;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin: 0.3rem 0.15rem;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--vscode-icon-foreground, var(--vscode-foreground));
+    cursor: pointer;
+}
+
+.side-panel-toggle:hover {
+    background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+}
+
+.side-panel-toggle:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.side-panel-icon-frame {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1;
+}
+
+/* The strip of the window the icon is: filled while the panel is out, as the
+   editor's own side bar buttons are. */
+.side-panel-icon-fill {
+    display: none;
+    fill: currentColor;
+    opacity: 0.6;
+}
+
+.side-panel.expanded .side-panel-icon-fill {
+    display: inline;
+}
+
+.side-panel-body {
+    flex: 0 0 17rem;
+    width: 17rem;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/*
+ * The view panel ('viewPanel.ts'): the gizmo at the top in the middle, the axis
+ * buttons under it, then the section sliders, the viewpoint and how the model
+ * is drawn, each a group under a heading in the editor's own side bar style.
+ */
+.view-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem 0.6rem 0.8rem 0.2rem;
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-foreground);
+}
+
+.view-gizmo-row {
+    display: flex;
+    justify-content: center;
+}
+
+.view-gizmo {
+    display: block;
+    color: var(--vscode-foreground);
+    border-radius: 50%;
+    cursor: grab;
+    touch-action: none;
+}
+
+.view-gizmo:active {
+    cursor: grabbing;
+}
+
+.view-gizmo:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+}
+
+.view-gizmo.disabled,
+.view-gizmo.unknown {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.view-axes {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.2rem;
+}
+
+.view-axis,
+.view-reset {
+    padding: 0.15em 0;
+    border: 1px solid var(--vscode-button-border, transparent);
+    border-radius: 2px;
+    background: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+    color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+    font-family: inherit;
+    font-size: 0.9em;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.view-reset {
+    padding: 0.05em 0.6em;
+    font-weight: normal;
+}
+
+.view-axis:hover:enabled,
+.view-reset:hover:enabled {
+    background: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
+}
+
+.view-axis:disabled,
+.view-reset:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.view-axis:focus-visible,
+.view-reset:focus-visible,
+.view-vector:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+/* The axis letters in the colours the gizmo draws them in, so that the button
+   and the ball it stands for read as one. */
+.view-axis-x,
+.view-axis-minus-x {
+    color: #e5484d;
+}
+
+.view-axis-y,
+.view-axis-minus-y {
+    color: #30a46c;
+}
+
+.view-axis-z,
+.view-axis-minus-z {
+    color: #3e7bfa;
+}
+
+.view-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding-top: 0.45rem;
+    border-top: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
+}
+
+.view-group.disabled .view-slider,
+.view-group.disabled .view-field,
+.control-label.disabled {
+    opacity: 0.5;
+}
+
+.control-label.disabled {
+    cursor: default;
+}
+
+.view-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.view-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--vscode-sideBarSectionHeader-foreground, var(--vscode-foreground));
+}
+
+.view-note {
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.9em;
+    line-height: 1.35;
+}
+
+.view-note.error {
+    color: var(--vscode-errorForeground);
+}
+
+/* One axis of the section: its letter, the two-ended slider, and what it keeps. */
+.view-slider {
+    display: grid;
+    grid-template-columns: 1rem 1fr auto;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.view-slider-label,
+.view-field-label {
+    font-weight: 600;
+    color: var(--vscode-descriptionForeground);
+}
+
+.view-slider-value {
+    min-width: 5.5rem;
+    color: var(--vscode-descriptionForeground);
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.85em;
+    text-align: right;
+    white-space: nowrap;
+}
+
+/*
+ * Two range inputs over one track, which is how a slider gets two ends without
+ * a widget of its own. The inputs take no pointer themselves - only their
+ * thumbs do - so that either end can be grabbed wherever it is, and the track
+ * between the ends is drawn filled: what is kept.
+ */
+.range-pair {
+    --low: 0%;
+    --high: 100%;
+    position: relative;
+    height: 1.2rem;
+}
+
+.range-pair::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 4px;
+    transform: translateY(-50%);
+    border-radius: 2px;
+    background: linear-gradient(
+        to right,
+        var(--vscode-scrollbarSlider-background, rgba(128, 128, 128, 0.3)) var(--low),
+        var(--vscode-button-background, #0e639c) var(--low),
+        var(--vscode-button-background, #0e639c) var(--high),
+        var(--vscode-scrollbarSlider-background, rgba(128, 128, 128, 0.3)) var(--high)
+    );
+}
+
+.range-pair input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    margin: 0;
+    background: transparent;
+    pointer-events: none;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.range-pair input::-webkit-slider-runnable-track {
+    height: 4px;
+    background: transparent;
+}
+
+.range-pair input::-webkit-slider-thumb {
+    width: 12px;
+    height: 12px;
+    margin-top: -4px;
+    border: 1px solid var(--vscode-editor-background, #fff);
+    border-radius: 50%;
+    background: var(--vscode-button-background, #0e639c);
+    pointer-events: auto;
+    cursor: ew-resize;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.range-pair input:focus-visible::-webkit-slider-thumb {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+}
+
+.range-pair input:disabled::-webkit-slider-thumb {
+    cursor: default;
+}
+
+/* One vector of the viewpoint: what it is called and the field it is in. */
+.view-field {
+    display: grid;
+    grid-template-columns: 2.9rem 1fr;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.view-vector {
+    min-width: 0;
+    padding: 0.2em 0.35em;
+    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, transparent));
+    border-radius: 2px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.9em;
+}
+
+.view-vector.invalid {
+    border-color: var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
+}
+
+.view-display {
+    gap: 0.4rem;
 }

@@ -83,6 +83,9 @@ const TAB_COMMANDS: Record<string, string> = {
 /** What the Simulation tab asks when it names a simulation: run it, 'pc sim -f <name>'. */
 const SIMULATION_RUN = 'partcad.simulateRun';
 
+/** What the view panel's section sliders ask, on the 3D tab: show the object again, cut. */
+const SHOW_SECTION = 'partcad.showSection';
+
 /** The tabs that render the object to a file, which is then kept and can be saved. */
 const RENDER_TABS = new Set(['2d', 'draft']);
 
@@ -119,6 +122,11 @@ interface FetchTabRequest extends RenderRequest {
      * ('pc cae <analysis> -f'); absent, every scenario is run.
      */
     scenario?: string;
+    /** On the 2D and Simulation tabs: where the picture is looked at from, as the view panel says. */
+    viewportOrigin?: number[];
+    viewportUp?: number[];
+    /** On the 2D and Draft tabs: what to cut the object to, as the view panel's sliders say. */
+    section?: Record<string, [number, number]>;
 }
 
 /** A file a render tab is showing, kept until the next one replaces it. */
@@ -277,6 +285,10 @@ export class PartcadViewer implements vscode.Disposable {
             // came, for the same reason: what the object declares is the
             // renderer's to know.
             scenario: typeof message.scenario === 'string' ? message.scenario : null,
+            // What the object was cut to, and null for the whole of it -- passed
+            // as it came, absent included: a PartCAD that does not send it
+            // cannot cut, and the view panel offers it no section sliders.
+            section: message.section === undefined ? undefined : (message.section ?? null),
             // The object as it arrived, geometry aside: the hierarchy, the
             // placements, the ports and the interfaces are PartCAD's account of
             // what is on screen, and this side knows nothing about assemblies,
@@ -351,6 +363,11 @@ export class PartcadViewer implements vscode.Disposable {
                 args.withInterfaces = render?.withInterfaces;
                 args.withInternals = render?.withInternals;
                 args.ports = render?.ports;
+                // What the view panel beside it says: where the picture is looked
+                // at from, and what the object is cut to first.
+                args.viewportOrigin = message.viewportOrigin;
+                args.viewportUp = message.viewportUp;
+                args.section = message.section;
                 const data = filesAsBytes(tab, await vscode.commands.executeCommand(command, args)) as
                     RenderedData | undefined;
                 if (data?.content && this.lastShow === target && this.latestRender.get(tab) === token) {
@@ -391,6 +408,9 @@ export class PartcadViewer implements vscode.Disposable {
                 args.scenario = message.scenario;
                 // Another plugin than the simulation names: 'pc sim --plugin'.
                 args.plugin = message.plugin;
+                // And where its pictures are taken from, when the view panel says.
+                args.viewportOrigin = message.viewportOrigin;
+                args.viewportUp = message.viewportUp;
                 post({ data: await vscode.commands.executeCommand(command, args) });
                 return;
             }
@@ -445,6 +465,40 @@ export class PartcadViewer implements vscode.Disposable {
         } catch (error: any) {
             traceError(`Digital Thread: failed to fetch the '${tab}' tab: ${error?.message ?? error}`);
             post({ error: `${error?.message ?? error}` });
+        }
+    }
+
+    /**
+     * Show the object on screen again, cut to 'section' or whole (null): the 3D
+     * tab's section sliders.
+     *
+     * Through the daemon, which cuts the object and shows it the way it shows
+     * anything - over the viewer protocol, into 'handle' - with the section it
+     * was cut to on the show. What is answered here is only whether the daemon
+     * could, so that the panel stops saying it is cutting.
+     */
+    private async showSection(token: number, section: unknown): Promise<void> {
+        const post = (error?: string) =>
+            void this.panel?.webview.postMessage({ type: 'sectionShown', token, ...(error ? { error } : {}) });
+        const target = this.lastShow;
+        if (!target?.package || !target.name) {
+            post('PartCAD did not say which package this object belongs to.');
+            return;
+        }
+        try {
+            if (!(await vscode.commands.getCommands(true)).includes(SHOW_SECTION)) {
+                throw new Error('PartCAD is not connected. Use "Restart PartCAD" to reconnect.');
+            }
+            await vscode.commands.executeCommand(SHOW_SECTION, {
+                pkg: target.package,
+                name: target.name,
+                kind: target.kind ?? undefined,
+                section: section ?? null,
+            });
+            post();
+        } catch (error: any) {
+            traceError(`Digital Thread: failed to cut the object: ${error?.message ?? error}`);
+            post(`${error?.message ?? error}`);
         }
     }
 
@@ -748,6 +802,8 @@ export class PartcadViewer implements vscode.Disposable {
                     void this.saveRendered(message.tab ?? '');
                 } else if (message.type === 'showObject') {
                     void this.showObject(message.package, message.name, message.kind);
+                } else if (message.type === 'showSection') {
+                    void this.showSection(message.token ?? 0, message.section);
                 } else {
                     traceVerbose(`Digital Thread: ${message.type}`);
                 }
@@ -885,10 +941,8 @@ export class PartcadViewer implements vscode.Disposable {
 						<div id="pane-3d" class="pane pane-3d">
 							<div class="controls" hidden>
 								<div id="tree" class="tree" role="tree"></div>
-								<div class="viewer-controls">
-									<label class="control-label" id="metadata-control" hidden><input type="checkbox" id="metadata-checkbox" checked> Metadata</label>
-									<label class="control-label"><input type="checkbox" id="animate-checkbox" checked> Animate</label>
-									<label class="control-label">Opacity <input type="range" id="opacity-slider" min="0" max="100" value="100" class="opacity-slider"><span id="opacity-value" class="control-value">100%</span></label>
+								<div class="viewer-controls" id="metadata-control" hidden>
+									<label class="control-label"><input type="checkbox" id="metadata-checkbox" checked> Metadata</label>
 								</div>
 							</div>
 							<div id="viewer" class="viewer">

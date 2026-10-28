@@ -13,6 +13,8 @@ beside it. Both halves are checked here without a sandbox.
 """
 
 import asyncio
+import os
+import re
 
 import pytest
 
@@ -219,3 +221,27 @@ def test_a_package_render_without_overrides_passes_none_of_them(monkeypatch):
     for call in calls:
         assert "viewport_origin" not in call
         assert "viewport_up" not in call
+
+
+def test_the_view_panel_names_the_same_axis_views():
+    """The Digital Thread's axis buttons are these views, each from the same side and the same way up.
+
+    A webview cannot import Python, so 'ide/vscode/src/webview/viewpoint.ts' keeps
+    a copy of the six ('AXIS_DIRECTIONS'): the X button is 'right', -Y is 'front',
+    Z is 'top', and the 2D tab's picture after one of them is the picture
+    'pc render --view' draws. This is what keeps the copy honest.
+    """
+    repository = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    path = os.path.join(repository, "ide", "vscode", "src", "webview", "viewpoint.ts")
+    with open(path, encoding="utf-8") as f:
+        source = f.read()
+    declared = re.findall(
+        r"^\s*'?(-?[xyz])'?: \{ origin: \[([^\]]+)\], up: \[([^\]]+)\], view: '(\w+)' \},$",
+        source,
+        re.MULTILINE,
+    )
+    assert len(declared) == 6
+    for axis, origin, up, view in declared:
+        numbers = [tuple(float(value) for value in vector.split(",")) for vector in (origin, up)]
+        assert tuple(numbers) == (tuple(map(float, VIEWS[view][0])), tuple(map(float, VIEWS[view][1]))), axis
+    assert {view for _, _, _, view in declared} == set(VIEW_NAMES) - {"iso"}

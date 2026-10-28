@@ -1687,6 +1687,64 @@ def test_the_scenario_asked_for_goes_with_the_tab():
     assert (part.shown_on, part.shown_scenario) == ("fea", "loaded")
 
 
+class FakeSectionable(FakeShape):
+    """A shape whose show takes a section, as 'Shape.show()' does."""
+
+    def show(self, ctx=None, tab=None, scenario=None, section=None):
+        super().show(ctx, tab=tab, scenario=scenario)
+        self.shown_section = section
+
+
+def test_a_section_goes_with_the_show():
+    """The 3D tab's section sliders: the object shown again, cut, and told so with the show."""
+    session, _ = make_session()
+    part = FakeSectionable(name="widget")
+    session.partcad_ctx.shapes[("part", "//:widget")] = part
+
+    operations.inspect_object(session, {"package": "//", "object": "widget", "section": {"z": [0, 2.5], "x": None}})
+
+    assert part.shown is True
+    assert part.shown_section == {"z": [0.0, 2.5]}
+
+
+def test_a_show_with_no_section_is_the_call_it_always_was():
+    """A shape with an older 'show()' - no 'section' - is shown as it always was."""
+    session, _ = make_session()
+    part = FakeShape(name="widget")
+    session.partcad_ctx.shapes[("part", "//:widget")] = part
+
+    operations.inspect_object(session, {"package": "//", "object": "widget", "section": {"x": None}})
+
+    assert part.shown is True
+
+
+def test_a_section_that_is_not_one_is_refused_before_anything_is_built():
+    session, _ = make_session()
+    part = FakeSectionable(name="widget")
+    session.partcad_ctx.shapes[("part", "//:widget")] = part
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.inspect_object(session, {"package": "//", "object": "widget", "section": {"x": [3, 3]}})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert part.shown is False
+
+
+def test_a_section_of_an_interface_is_refused():
+    session, _ = make_session()
+    port = FakeSectionable(name="mount", kind="interface")
+    session.partcad_ctx.shapes[("interface", "//:mount")] = port
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.inspect_object(
+            session, {"package": "//", "object": "mount", "interface": True, "section": {"x": [0, 1]}}
+        )
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "interface" in caught.value.message
+    assert port.shown is False
+
+
 @pytest.mark.parametrize("tab", [None, "3d", "bom"])
 def test_a_scenario_on_a_tab_that_lists_none_is_refused(tab):
     session, _ = make_session()
@@ -3882,14 +3940,20 @@ def test_supply_totals_price_a_set_by_one_supplier():
 class FakeRenderable(FakeShape):
     """A shape whose render writes a file, as 'Shape.render_async()' does."""
 
-    def __init__(self, name, project_name="//", kind="part", filename=None, content=b"picture", uncached=()):
+    def __init__(
+        self, name, project_name="//", kind="part", filename=None, content=b"picture", uncached=(), answer=None
+    ):
         super().__init__(name=name, project_name=project_name, uncached=uncached, kind=kind)
         self.filename = filename
         self.content = content
         self.render_calls = []
+        self.render_kwargs = []
+        # What the implementation answered, as 'Shape.render_async()' returns it.
+        self.answer = answer
 
     async def render_async(self, ctx, format_name, output_dir=None, options_package=None, **kwargs):
         self.render_calls.append((format_name, options_package))
+        self.render_kwargs.append(kwargs)
         if self.filename is not None:
             # Into a directory of its own when the name says so, as a name with a
             # '/' in it does ('output.name_to_path').
@@ -3897,6 +3961,7 @@ class FakeRenderable(FakeShape):
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "wb") as f:
                 f.write(self.content)
+        return {format_name: self.answer} if self.answer is not None else {}
 
 
 def _inline_session(builtin=("png", "svg"), projects=None):
@@ -3921,12 +3986,67 @@ def test_render_inline_returns_the_file_it_rendered():
         "filename": "cube.png",
         "extension": "png",
         "content": b"\x89PNG",
+        "viewport": None,
+        "section": None,
     }
     assert part.render_calls == [("png", None)]
     # On the wire: the bytes after the message for a client that reads them, and
     # for any other the base64 this always sent.
     assert framing.encode_message(result, attachments=True)[2:] == [b"\x89PNG"]
     assert json.loads(framing.encode_message(result)[1])["content"] == "iVBORw=="
+    # Nothing aimed, nothing cut: the configuration's picture of the whole object.
+    assert part.render_kwargs[0]["section"] is None
+    assert "viewport_origin" not in part.render_kwargs[0]
+
+
+def test_render_inline_aims_and_cuts_the_picture_it_is_asked_for():
+    """The 2D tab's view panel: the viewpoint its gizmo says, and the box its section sliders say."""
+    session = _inline_session()
+    drawn_from = {"viewport_origin": [0.0, 0.0, 100.0], "viewport_up": [0.0, 1.0, 0.0]}
+    part = FakeRenderable("cube", filename="cube.png", answer={"success": True, "viewport": drawn_from})
+    session.partcad_ctx.shapes[("part", "//:cube")] = part
+
+    result = operations.render_inline(
+        session,
+        {
+            "package": "//",
+            "object": "cube",
+            "format": "png",
+            "viewport_origin": [0, 0, 100],
+            "viewport_up": [0, 1, 0],
+            "section": {"x": [0, 5], "y": None},
+        },
+    )
+
+    kwargs = part.render_kwargs[0]
+    assert kwargs["viewport_origin"] == [0.0, 0.0, 100.0]
+    assert kwargs["viewport_up"] == [0.0, 1.0, 0.0]
+    assert kwargs["section"] == {"x": [0.0, 5.0]}
+    # What it was drawn from is what the implementation said, and the section is
+    # the one it was cut to, as PartCAD reads it.
+    assert result["viewport"] == drawn_from
+    assert result["section"] == {"x": [0.0, 5.0]}
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"section": {"x": [5, 1]}},
+        {"section": {"w": [0, 1]}},
+        {"viewport_origin": [0, 0, 0]},
+        {"viewport_origin": [0, 0, 1], "viewport_up": [0, 0, 2]},
+    ],
+)
+def test_render_inline_refuses_a_section_or_a_viewpoint_that_is_not_one(extra):
+    session = _inline_session()
+    part = FakeRenderable("cube", filename="cube.png")
+    session.partcad_ctx.shapes[("part", "//:cube")] = part
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_inline(session, {"package": "//", "object": "cube", "format": "png", **extra})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert part.render_calls == []
 
 
 def test_render_inline_names_the_extension_the_implementation_wrote():

@@ -909,6 +909,17 @@ def test_an_export_implementation_never_reports_findings(wrapper_export, tmp_pat
     assert set(result) == {"success", "exception"}
 
 
+def test_the_wrapper_carries_back_where_a_projection_was_looked_at_from(wrapper_export, tmp_path):
+    """A render implementation's viewpoint is what the IDE's 2D tab shows beside its picture."""
+    script = _script(
+        tmp_path,
+        "def process(path, request):\n"
+        "    return {'success': True, 'viewport': {'viewport_origin': [0, 0, 100], 'viewport_up': [0, 1, 0]}}\n",
+    )
+    result = wrapper_export.process(script, str(tmp_path / "out.svg"), {})
+    assert result["viewport"] == {"viewport_origin": [0, 0, 100], "viewport_up": [0, 1, 0]}
+
+
 # --------------------------------------------------------------------------- #
 # What a failure says, and who says it                                        #
 # --------------------------------------------------------------------------- #

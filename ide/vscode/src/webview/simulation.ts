@@ -60,14 +60,22 @@ import {
 } from './messages';
 import { PackageChoice, PackagePicker, quickChoices, unaskedChoice } from './packagePicker';
 import { ScenarioList, Verdict, firstSelected } from './scenarioList';
+import { Viewpoint, formatVector } from './viewpoint';
 
 export interface SimulationCallbacks {
     /**
      * Run this simulation, with this plugin or -- undefined -- the one it names
-     * itself; the answer comes back through 'showRun' or 'showRunError', quoting
-     * both back.
+     * itself, and taking its pictures from this viewpoint or -- undefined --
+     * from where its scene is rendered from; the answer comes back through
+     * 'showRun' or 'showRunError', quoting all three back.
      */
-    onRun: (scenario: string, plugin: string | undefined) => void;
+    onRun: (scenario: string, plugin: string | undefined, viewpoint: Viewpoint | undefined) => void;
+    /**
+     * The simulation on screen changed, or its run did: where its pictures were
+     * taken from, as the run said, or undefined when there is no run to say.
+     * What the view panel shows.
+     */
+    onShown?: (viewpoint: Viewpoint | undefined) => void;
 }
 
 /**
@@ -140,6 +148,12 @@ export class SimulationView {
     private readonly plugins = new Map<string, string>();
     /** The folded view that is open, if any; kept across simulations and objects. */
     private detail: SimulationDetail | undefined;
+    /**
+     * Where the pictures are taken from, as the view panel set it, for every
+     * simulation of the object; undefined is from where the scene is rendered
+     * from. Part of what a run is (see 'key'), as the plugin is.
+     */
+    private viewpoint: Viewpoint | undefined;
     /** Where the folded views are drawn on the page on screen, to redraw them alone. */
     private details: HTMLElement | undefined;
 
@@ -199,7 +213,23 @@ export class SimulationView {
 
     /** Whether this simulation has been asked for with the plugin it is set to, and its answer is kept or awaited. */
     public has(scenario: string): boolean {
-        return this.runs.has(this.key(scenario, this.override(scenario)));
+        return this.runs.has(this.key(scenario, this.override(scenario), this.viewpoint));
+    }
+
+    /**
+     * Take the pictures from 'viewpoint' - undefined: from where the scene is
+     * rendered from - and run the simulation on screen so, unless it has been.
+     * Choosing where to look from runs it, the way choosing a plugin does: the
+     * pictures are taken by the run.
+     */
+    public setViewpoint(viewpoint: Viewpoint | undefined): void {
+        this.viewpoint = viewpoint;
+        if (this.selected === undefined) {
+            return;
+        }
+        this.drawList();
+        this.showSelected();
+        this.start();
     }
 
     /** The quick choices of a simulation's "Simulated by". */
@@ -242,13 +272,14 @@ export class SimulationView {
         this.run(this.selected);
     }
 
-    private key(scenario: string, plugin: string | undefined): string {
-        return `${scenario}\u0000${plugin ?? ''}`;
+    private key(scenario: string, plugin: string | undefined, viewpoint: Viewpoint | undefined): string {
+        const from = viewpoint === undefined ? '' : `${formatVector(viewpoint.origin)}/${formatVector(viewpoint.up)}`;
+        return `${scenario}\u0000${plugin ?? ''}\u0000${from}`;
     }
 
-    /** What is known of the run a simulation is set to, with the plugin it is set to. */
+    /** What is known of the run a simulation is set to, with the plugin and the viewpoint it is set to. */
     private runState(scenario: string): RunState | undefined {
-        return this.runs.get(this.key(scenario, this.override(scenario)));
+        return this.runs.get(this.key(scenario, this.override(scenario), this.viewpoint));
     }
 
     /**
@@ -319,19 +350,33 @@ export class SimulationView {
         }
     }
 
-    /** A run's answer: 'pc sim --json' for one simulation, run with 'plugin' (undefined: its own). */
-    public showRun(scenario: string, data: SimulationRunData | undefined, plugin?: string): void {
+    /**
+     * A run's answer: 'pc sim --json' for one simulation, run with 'plugin'
+     * (undefined: its own) and its pictures taken from 'viewpoint' (undefined:
+     * the scene's).
+     */
+    public showRun(
+        scenario: string,
+        data: SimulationRunData | undefined,
+        plugin?: string,
+        viewpoint?: Viewpoint,
+    ): void {
         const run = data?.simulations?.find((entry) => entry.simulation === scenario) ?? data?.simulations?.[0];
-        this.answered(scenario, plugin, { state: 'done', run });
+        this.answered(scenario, plugin, viewpoint, { state: 'done', run });
     }
 
     /** A run that PartCAD could not even start: the request failed rather than the simulation. */
-    public showRunError(scenario: string, error: string, plugin?: string): void {
-        this.answered(scenario, plugin, { state: 'failed', error });
+    public showRunError(scenario: string, error: string, plugin?: string, viewpoint?: Viewpoint): void {
+        this.answered(scenario, plugin, viewpoint, { state: 'failed', error });
     }
 
-    private answered(scenario: string, plugin: string | undefined, state: RunState): void {
-        this.runs.set(this.key(scenario, plugin), state);
+    private answered(
+        scenario: string,
+        plugin: string | undefined,
+        viewpoint: Viewpoint | undefined,
+        state: RunState,
+    ): void {
+        this.runs.set(this.key(scenario, plugin, viewpoint), state);
         this.drawList();
         if (scenario === this.selected) {
             this.showSelected();
@@ -340,12 +385,12 @@ export class SimulationView {
 
     private run(scenario: string): void {
         const plugin = this.override(scenario);
-        this.runs.set(this.key(scenario, plugin), { state: 'running' });
+        this.runs.set(this.key(scenario, plugin, this.viewpoint), { state: 'running' });
         this.drawList();
         if (scenario === this.selected) {
             this.showSelected();
         }
-        this.callbacks.onRun(scenario, plugin);
+        this.callbacks.onRun(scenario, plugin, this.viewpoint);
     }
 
     private select(scenario: string): void {
@@ -381,6 +426,14 @@ export class SimulationView {
             body.appendChild(el('p', 'simulation-desc', scenario.desc.trim()));
         }
         const state = this.runState(scenario.name);
+        // Where the pictures were taken from, for the view panel: what the run
+        // said, or - before it has said - what it was asked for.
+        const viewport = state?.state === 'done' ? state.run?.viewport : undefined;
+        this.callbacks.onShown?.(
+            viewport
+                ? { origin: [...viewport.viewport_origin], up: [...viewport.viewport_up], target: [0, 0, 0] }
+                : this.viewpoint,
+        );
         if (state === undefined || state.state === 'running') {
             body.appendChild(
                 placeholder(

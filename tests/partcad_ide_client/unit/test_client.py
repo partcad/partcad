@@ -167,6 +167,22 @@ def test_show_carries_the_tab_asked_for(ide):
     assert message[protocol.KEY_TAB] == "fea"
 
 
+def test_show_carries_the_section_it_was_cut_to(ide):
+    client.show(protocol.make_node(b"glTF"), name="//pkg:beam", section={"z": [0.0, 2.5]})
+
+    (message,) = ide.received
+    assert message[protocol.KEY_SECTION] == {"z": [0.0, 2.5]}
+
+
+def test_show_of_the_whole_object_says_so(ide):
+    """None and not absent: absent is a PartCAD that cannot cut, and the viewer offers it no sliders."""
+    client.show(protocol.make_node(b"glTF"), name="//pkg:beam")
+
+    (message,) = ide.received
+    assert protocol.KEY_SECTION in message
+    assert message[protocol.KEY_SECTION] is None
+
+
 def test_show_without_a_tab_sends_no_tab_key(ide):
     """An IDE from before the key, and every show that names no tab, leave the viewer where it is."""
     client.show(protocol.make_node(b"glTF"), name="//pkg:beam")

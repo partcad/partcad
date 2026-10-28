@@ -31,7 +31,7 @@ from . import output
 from . import physics as pc_physics
 from . import render_overlay
 from . import runtime as pc_runtime
-from . import sandbox_versions, scene_world, shape_ports, source_key, sync_threads, wrapper
+from . import sandbox_versions, scene_world, shape_ports, shape_section, source_key, sync_threads, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
 from .shape_config import ShapeConfiguration
@@ -639,7 +639,7 @@ class Shape(ShapeConfiguration):
 
         return self.components
 
-    async def get_representation(self, ctx, form=shape_envelope.FORM_BREP):
+    async def get_representation(self, ctx, form=shape_envelope.FORM_BREP, section=None):
         """This shape as a tree of nodes, with the geometry at each in 'form'.
 
         The one way to ask a shape for itself as a whole. Every shape is such a
@@ -662,11 +662,17 @@ class Shape(ShapeConfiguration):
         shape cache holds, because what a node records about a port is the
         reference and not the geometry - which is why the tessellation is keyed
         on the tree it is handed rather than on this shape's key.
+
+        'section' is a cross-section to cut the geometry to first, as a box in
+        the frame of the tree's root ('shape_section.normalize'), or None for the
+        whole shape. Only the nodes are cut: the port sketches are annotations of
+        the object, and a port is where it is whether or not the solid around it
+        is drawn.
         """
         from . import port_sketches, shape_gltf
 
         tree = await port_sketches.attach_async(ctx, await self.get_wrapped(ctx))
-        return await shape_gltf.in_form_async(ctx, tree, form, cacheable=self.artifacts_cacheable())
+        return await shape_gltf.in_form_async(ctx, tree, form, cacheable=self.artifacts_cacheable(), section=section)
 
     def prepare(self):
         return asyncio.run(self.prepare_async())
@@ -1505,9 +1511,17 @@ class Shape(ShapeConfiguration):
         )
         return await self.convert("build123d", ctx)
 
-    async def show_async(self, ctx=None, tab=None, scenario=None):
-        """Show this shape in the Digital Thread, on its tab 'tab' if one is named, and that tab's 'scenario'."""
+    async def show_async(self, ctx=None, tab=None, scenario=None, section=None):
+        """Show this shape in the Digital Thread, on its tab 'tab' if one is named, and that tab's 'scenario'.
+
+        'section' cuts it by a box first ('shape_section'): what the viewer's
+        section sliders ask for, by asking for the object to be shown again.
+        """
         from . import viewer
+
+        # Refused before anything is built: a section that is not one costs a
+        # message, not a tessellation.
+        section = shape_section.normalize(section)
 
         # A caller that cannot pass one gets the process-wide context; one that
         # passes None where there is no global is told so rather than left to
@@ -1527,17 +1541,24 @@ class Shape(ShapeConfiguration):
             # TODO(clairbee): consider removing this exception handler permanently
             # Comment out the below exception handler for easier troubleshooting in CLI
             try:
-                tree = await self.get_representation(ctx, shape_envelope.FORM_GLTF)
+                tree = await self.get_representation(ctx, shape_envelope.FORM_GLTF, section=section)
             except Exception as e:
                 pc_logging.exception(e)
 
             if tree is not None:
                 await viewer.show(
-                    ctx, tree, name=self.name, kind=self.kind, package=self.project_name, tab=tab, scenario=scenario
+                    ctx,
+                    tree,
+                    name=self.name,
+                    kind=self.kind,
+                    package=self.project_name,
+                    tab=tab,
+                    scenario=scenario,
+                    section=section,
                 )
 
-    def show(self, ctx=None, tab=None, scenario=None):
-        asyncio.run(self.show_async(ctx, tab=tab, scenario=scenario))
+    def show(self, ctx=None, tab=None, scenario=None, section=None):
+        asyncio.run(self.show_async(ctx, tab=tab, scenario=scenario, section=section))
 
     def shape_info(self, ctx):
         """What 'pc info' reports of any shape, whatever kind or type it is.
@@ -2047,7 +2068,7 @@ class Shape(ShapeConfiguration):
             self.error("Failed to deserialize response: %s" % e)
             return None
 
-    async def _output_run_async(self, ctx, impl, script, request, final_filepath, view=None):
+    async def _output_run_async(self, ctx, impl, script, request, final_filepath, view=None, section=None):
         """'_run_implementation_async' for an export or a render file, asked of the cache first.
 
         The same file asked for again is a read, exactly as an analysis and a
@@ -2064,7 +2085,10 @@ class Shape(ShapeConfiguration):
         when the next path leaves nothing to name them by. A filtered view (see
         'partcad.assembly_filter') adds its filter: a view has no key of its
         own, so it is keyed as the assembly it is a view of and the links it
-        keeps - which is everything it is.
+        keeps - which is everything it is. A cross-section (see
+        'partcad.shape_section') adds its box the same way, and for the same
+        reason: the request's geometry is left out of the key, and the cut is the
+        one thing about that geometry the shape's own key does not say.
 
         And the tree the file is made of adds what it says about its shapes
         ('shape_envelope.description()'): the geometry is the shape's key, but
@@ -2085,6 +2109,8 @@ class Shape(ShapeConfiguration):
         extra = {"tree": shape_envelope.description(request.get("wrapped"))}
         if view is not None:
             extra["view"] = view.key()
+        if section is not None:
+            extra["section"] = section
         artifact = await self._artifact_hash(
             impl.section,
             impl.format_name,
@@ -2187,8 +2213,14 @@ class Shape(ShapeConfiguration):
         link_filter=None,
         views=None,
         defaults_only=False,
+        section=None,
     ):
-        """Produce one output file, whatever its type."""
+        """Produce one output file, whatever its type.
+
+        Returns what the implementation answered - its result, with whatever it
+        reports about the file beside 'success' - or None when there is none to
+        return: a filter that could not be read, an answer that could not be.
+        """
         impl, final_filepath = self.output_getopts(
             ctx, format_name, project, filepath, options_project, output_dir, defaults_only=defaults_only
         )
@@ -2214,10 +2246,16 @@ class Shape(ShapeConfiguration):
             mask = link_filter if link_filter is not None else impl.link_filter
         except ValueError as e:
             self.error("%s: %s" % (format_name, e))
-            return
+            return None
         subject, obj, subject_ports = await self._output_subject_async(
             ctx, obj, mask, views if views is not None else {}
         )
+        # Cut after the filter: a section is a box through what is kept, and the
+        # links a filter drops have nothing left to cut. The ports drawn on top
+        # are found on the subject itself, uncut - a port is where it is whether
+        # or not the solid around it is drawn.
+        if section is not None:
+            obj = await shape_section.section_async(ctx, obj, section, cacheable=self.artifacts_cacheable())
 
         effective_overlay = render_overlay.effective(overlay, impl)
         ports = None
@@ -2241,10 +2279,16 @@ class Shape(ShapeConfiguration):
             self.error("%s: %s" % (format_name, e))
             raise
         result = await self._output_run_async(
-            ctx, impl, script, request, final_filepath, view=mask if subject is not self else None
+            ctx,
+            impl,
+            script,
+            request,
+            final_filepath,
+            view=mask if subject is not self else None,
+            section=section,
         )
         if result is None:
-            return
+            return None
 
         if not result.get("success", False):
             self.error(
@@ -2275,6 +2319,7 @@ class Shape(ShapeConfiguration):
                 "%s:%s: %s cannot state these properties, so they are not in the exported file: %s"
                 % (self.project_name, self.name, format_name.upper(), ", ".join(unsupported))
             )
+        return result
 
     async def render_async(
         self,
@@ -2288,8 +2333,9 @@ class Shape(ShapeConfiguration):
         overlay=None,
         link_filter=None,
         defaults_only: bool = False,
+        section=None,
         **kwargs,
-    ) -> None:
+    ) -> dict:
         """Write this shape out as one output file type, or as all of them.
 
         Args:
@@ -2316,7 +2362,18 @@ class Shape(ShapeConfiguration):
                 --with-ports"/"--with-interfaces"), or None. A file type that
                 declares 'with_ports:'/'with_interfaces:' of its own draws them
                 either way - see 'render_overlay.effective'.
+            section: A cross-section to cut the shape to before it is written,
+                as a box in the frame of its root ('shape_section.normalize'),
+                or None for the whole shape. What the IDE's 2D and Draft tabs
+                send when their section sliders are moved.
             kwargs: Export parameters, overriding what the configuration says.
+
+        Returns:
+            What each file type's implementation answered, by the name the type
+            was asked for under: the result it reported - 'success', the
+            warnings, and whatever else it says about the file, such as the
+            viewpoint a projection was drawn from - or None where there is none.
+            Empty when there was nothing to write.
         """
         # A caller that names no package still gets the shape's own. Its
         # 'export:'/'render:' sections are where a package declares its file
@@ -2335,11 +2392,14 @@ class Shape(ShapeConfiguration):
         # The bare file type in the action name: a package path in it would make
         # one operation look like several, one per package that asked.
         action = f"Render{output.split_format(self.project_name, format_name)[0].upper()}" if format_name else "Render"
+        # Refused before anything is built, as a bad filter is.
+        section = shape_section.normalize(section)
+        results = {}
         with pc_logging.Action(action, self.project_name, self.name):
             obj = await self.get_wrapped(ctx)
             if obj is None:
                 pc_logging.error(f"Cannot render '{self.name}': shape is empty")
-                return
+                return results
 
             # Shared by every file type this call writes, so that an object
             # whose ports are asked for in three formats is walked once - and,
@@ -2349,7 +2409,7 @@ class Shape(ShapeConfiguration):
             views = {}
 
             for fmt in [format_name] if format_name else output.all_formats(ctx):
-                await self._render_one_async(
+                results[fmt] = await self._render_one_async(
                     ctx,
                     obj,
                     fmt,
@@ -2363,7 +2423,9 @@ class Shape(ShapeConfiguration):
                     link_filter=link_filter,
                     views=views,
                     defaults_only=defaults_only,
+                    section=section,
                 )
+        return results
 
     def render(
         self,

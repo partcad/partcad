@@ -34,10 +34,11 @@ cannot drift apart.
 
 ## The 3D view
 
-The pane is a control pane on the left and the canvas beside it. The control pane is a **tree of what is on
-screen**, with a checkbox on every item, and the Metadata and Animate boxes and the Opacity slider at the
-bottom of it — all of them say what is drawn, so all of them are one pane. There is no name in the corner of the canvas: the first item
-of the tree is the object, and it says the same thing where it can also be switched off.
+The pane is a control pane on the left, the canvas beside it and the view panel on the right (below). The control
+pane is a **tree of what is on screen**, with a checkbox on every item, and the Metadata box at the bottom of it —
+both say what is drawn, so both are one pane. How the model is looked at and drawn — the camera, a section, Animate
+and Opacity — is the view panel's. There is no name in the corner of the canvas: the first item of the tree is the
+object, and it says the same thing where it can also be switched off.
 
 **The tree is the object.** What arrives over the protocol is one node tree and nothing else, whatever is being
 shown, and the pane is that tree read out as rows:
@@ -187,6 +188,61 @@ predates the renumbering, so HID order is right for it too (`spacenavFit`).
 The orbit controls keep the camera's up direction, so the navigation is a turntable: a roll about the line of
 sight (`rz`) is dropped, and a tilt stops at the poles.
 
+## The view panel
+
+Down the right of every tab that shows the object — 3D, 2D and Draft, each analysis, and Simulation — is one
+widget, `viewPanel.ts`: the orientation gizmo (`gizmo.ts`), a button per axis view, a two-ended section slider per
+axis, the viewpoint as three editable vectors, and Animate and Opacity. It is a `SidePanel` (`sidePanel.ts`):
+folded into a strip with the editor's side bar button at the top of it, and brought out by that button. Out or
+folded is one answer per side for the whole panel, not per tab, and the right side starts folded.
+
+**A viewpoint is three vectors in PartCAD's frame** — millimetres, Z up, the frame of the object's root
+(`viewpoint.ts`): `origin`, where the camera is as seen from what it looks at, which is `viewport_origin`;
+`up`, which is `viewport_up`; and `target`, the point looked at, which only a 3D view has to move (a rendered
+picture looks at the origin and is scaled to fit — see `LOOK_AT` in `render_svg.py`). So the fields can be copied
+into a `render:` section or onto `pc render --viewport-origin`, and mean the same picture there. The six axis views
+are `render.VIEWS` — X is `right`, -Y `front`, Z `top` with +Y up — and `test_render_views.py` reads
+`AXIS_DIRECTIONS` to hold the two together.
+
+**Turning is a turntable**, about Z, by an azimuth and a polar angle — the two the orbit controls keep, so that a
+view the panel produces is one the 3D view can hold. At the poles the line of sight says nothing about which way
+round the camera is, and the up vector says it instead; the camera is put a hair's breadth off the pole on that
+side, and read back as on it (`cameraView.ts`, the only code that crosses between PartCAD's frame and a stage's).
+The analysis view's stage is a glTF's frame for a glTF result and the file's own coordinates for an STL, which then
+turns about its Y.
+
+**A section is cut by PartCAD, before anything is drawn** — three ranges, one per axis, in the frame of the
+object's root, naming only the axes that cut (`section.ts`); `partcad/shape_section.py` is the other end. The 3D
+view asks for one by asking the daemon to show the object again (`showSection` → `partcad.showSection` →
+`inspect.object` with `section`), and the show that comes back over the viewer protocol carries the section it was
+cut to (`KEY_SECTION`); the glTF wrapper cuts and tessellates in one sandbox. The 2D and Draft tabs send it with
+`render.inline`, which cuts the tree before the implementation is handed it. Four details are load-bearing:
+
+* **One section for the Design group** (`designSection`), for the reason the ticked boxes are one selection:
+  what part of the object somebody wants to see is a property of the object. Forgotten with the object, kept
+  across a show of the same one; a show of the same object that arrives whole — an edit saved — is cut again.
+* **The sliders span the object, not the last cut.** Their bounds are the nodes' measured boxes placed down the
+  tree (`boundsOf`, the arithmetic of `shape_gltf.size_of`), and PartCAD leaves what a cut node says about its
+  size alone, so a cut tree reports the whole object's box. A tree that records none falls back to the box of the
+  geometry drawn, measured only on a show of the whole object.
+* **A cut is not re-centred.** A show that cuts, or takes a cut away, keeps the model where the last show put it
+  (`frame()`'s `centred`): centred on what is left, the object would jump on the stage with every slider let go.
+* **A PartCAD that cannot cut is told apart from an uncut object** by the key being absent rather than null, and
+  is offered no sliders: re-asking a daemon that ignores `section` would be a loop.
+
+**What a tab cannot do is disabled and says why** (`capabilitiesOf` in `viewer.ts`) rather than taken away, so the
+panel keeps its shape from tab to tab: a drawing package lays its views out itself (Draft: no viewpoint), an
+analysis's result is the solver's mesh (no section) and holds still because its colours are the answer (no Animate
+or Opacity), a rendered picture neither turns nor fades. On the 2D tab the viewpoint is sent only once the panel
+has moved it, so a package's own `render:` viewpoint is what a picture starts out with, and the panel shows the
+one the renderer reports it drew from (`viewport` in its result). On Simulation it is where the plugin takes its
+pictures (`snapshot_request`'s override), part of what a run is keyed by, so choosing one runs the simulation
+again as choosing a plugin does.
+
+The panel reports what was asked once it is settled — a slider let go, a field Entered or left, the gizmo
+released — because on most tabs a change is a round trip to the daemon; the gizmo also reports as it is dragged,
+so that a camera follows it. A field being typed into is not overwritten by the view moving under it.
+
 ## How a shape gets onto the screen
 
 ```text
@@ -251,6 +307,14 @@ the protocol has no authentication.
 | `src/webview/nodes.ts` | The vocabulary the renderer and the pane share about the tree |
 | `src/webview/frames.ts` | PartCAD's frame against glTF's, and the one conversion between them |
 | `src/webview/tree.ts` | The 3D view's control pane: the rows, the boxes, and what is to be drawn |
+| `src/webview/viewPanel.ts` | The view panel down the right of every tab that shows the object |
+| `src/webview/sidePanel.ts` | A panel along one side of a pane, and the button that folds it away |
+| `src/webview/gizmo.ts` | The view panel's orientation gizmo |
+| `src/webview/viewpoint.ts` | Where a view is looked at from, in PartCAD's terms: the axis views and the turntable |
+| `src/webview/cameraView.ts` | A viewpoint read off an orbit camera, and put back onto one |
+| `src/webview/section.ts` | A cross-section as the panel holds it, and the object's bounds it spans |
+| `src/partcad/shape_section.py` | A cross-section: what a request may ask for, and the cut of a BREP tree in a sandbox |
+| `src/partcad/wrappers/wrapper_section.py` | Sandbox: a tree's geometry cut by a box, node by node |
 | `src/webview/spacemouse.ts` | A SpaceMouse: which gamepad is one, what its axes mean, and how it moves the camera of the view on screen |
 | `src/viewer/spacenav.ts` | spacenavd's socket, read in the extension host for Linux |
 | `src/webview/render.ts` | The 2D and Draft tabs: the control pane, the file, and Save |
@@ -346,8 +410,8 @@ so a name typed and not entered runs once, with that name.
 
 ## The 2D and Draft views
 
-Each is the same pane: the control pane on the left, what to render to along the top, the file under it, and a
-Save button. Both are `pc render` of one object to one file type, and what differs is who implements the type —
+Each is the same pane: the control pane on the left, what to render to along the top, the file under it, a
+Save button, and the view panel on the right (see "The view panel"). Both are `pc render` of one object to one file type, and what differs is who implements the type —
 the 2D tab asks PartCAD's own renderers for a picture (PNG, JPEG, SVG), the Draft tab names a package that
 draws, in **Drawn by** (the package field, above; `//pub/feature/render/draftwright` unless another is chosen or
 typed), and offers whatever that package's `render:` section declares (`pc render -e`, and

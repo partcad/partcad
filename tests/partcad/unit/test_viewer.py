@@ -147,6 +147,49 @@ def test_a_shape_shows_itself_in_the_drawable_form(monkeypatch):
     assert shown["package"] == "//pkg"
 
 
+def test_a_shape_shown_cut_is_tessellated_cut_and_says_so(monkeypatch):
+    """The 3D tab's section sliders: the cut goes to the tessellation, and with the show."""
+    from partcad import shape_gltf
+
+    converted = {}
+
+    async def fake_convert(ctx, subject, **kwargs):
+        converted.update(kwargs)
+        return TESSELLATED
+
+    monkeypatch.setattr(shape_gltf, "convert_async", fake_convert)
+    shown = _capture_show(monkeypatch)
+
+    shape = fake_part("bracket")
+    asyncio.run(shape.show_async(object(), section={"x": [0, 5], "y": None}))
+
+    assert converted["section"] == {"x": [0.0, 5.0]}
+    assert shown["section"] == {"x": [0.0, 5.0]}
+
+
+def test_a_shape_shown_whole_says_so_too(monkeypatch):
+    _tessellates(monkeypatch)
+    shown = _capture_show(monkeypatch)
+
+    asyncio.run(fake_part("bracket").show_async(object()))
+
+    assert shown["section"] is None
+
+
+def test_a_section_that_is_not_one_is_refused_before_anything_is_built(monkeypatch):
+    shown = _capture_show(monkeypatch)
+    shape = fake_part("bracket")
+
+    async def never(ctx):
+        raise AssertionError("built for a section that is not one")
+
+    shape.get_wrapped = never
+
+    with pytest.raises(ValueError):
+        asyncio.run(shape.show_async(object(), section={"x": [5, 1]}))
+    assert shown == {}
+
+
 def test_a_shape_that_will_not_build_warns_rather_than_raises(monkeypatch):
     """A show is a side effect of browsing a package, not the command itself."""
     shown = _capture_show(monkeypatch)

@@ -167,7 +167,7 @@ def tolerance_for(tree):
     return min(max(size / SCREEN_DIVISOR, MIN_TOLERANCE), MAX_TOLERANCE)
 
 
-async def in_form_async(ctx, tree, form, cacheable: bool = True):
+async def in_form_async(ctx, tree, form, cacheable: bool = True, section=None):
     """'tree' with its geometry in 'form', whatever form it arrived in.
 
     The one place that decides what a form means, so that every kind of subject -
@@ -176,16 +176,25 @@ async def in_form_async(ctx, tree, form, cacheable: bool = True):
 
     'cacheable' is False for a subject that says `cache: false`, whose
     tessellation is then never remembered (see 'convert_async').
+
+    'section' cuts the geometry by a box first (see 'shape_section'): in the
+    BREP form by a sandbox of its own, and in the glTF form in the sandbox that
+    tessellates it, which is one sandbox where it would otherwise be two.
     """
+    from . import shape_section
+
+    section = shape_section.normalize(section)
     if form == shape_envelope.FORM_BREP:
-        return tree
+        if section is None:
+            return tree
+        return await shape_section.section_async(ctx, tree, section, cacheable=cacheable)
     shape_envelope.geometry_key(form)
     if tree is None:
         return None
-    return await convert_async(ctx, tree, cacheable=cacheable)
+    return await convert_async(ctx, tree, cacheable=cacheable, section=section)
 
 
-async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None, cacheable: bool = True):
+async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None, cacheable: bool = True, section=None):
     """'tree' with its geometry tessellated into glTF, one copy per distinct shape.
 
     'tolerance' is the linear deflection in mm. Left at None - which is how the
@@ -210,6 +219,13 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None, cache
     own cache key, because the port sketches are attached after the shape cache
     has answered and no key of the subject covers them. 'cacheable' False - a
     subject with `cache: false` - is tessellated every time.
+
+    'section', a box from 'shape_section.normalize', cuts the geometry before it
+    is tessellated, in the same sandbox (see 'wrappers/wrapper_section.py'). It
+    is sent with the tree, so it is part of the question the answer is cached
+    under. The tolerance is still the whole tree's: what the nodes record about
+    their size is the object's and not the cut's, so a cut is drawn as finely as
+    the object it was cut from.
     """
     if ctx is None:
         raise ValueError("A context is required to tessellate a shape tree")
@@ -225,6 +241,10 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None, cache
         "tolerance": tolerance_for(tree) if tolerance is None else float(tolerance),
         "angularTolerance": DEFAULT_ANGULAR_TOLERANCE if angular_tolerance is None else angular_tolerance,
     }
+    if section:
+        # Only when there is one, so that every uncut tree is asked - and cached -
+        # exactly as it was before sections existed.
+        request["section"] = section
 
     cache = getattr(ctx, "cache_artifacts", None)
     artifact = cache_artifacts.wrapper_hash(

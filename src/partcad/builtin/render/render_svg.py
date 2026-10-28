@@ -134,6 +134,9 @@ def viewport_origin(request):
 # and now nothing does - nor does any drawing pay for working it out.
 LOOK_AT = (0.0, 0.0, 0.0)
 
+# The key of a result that says where the projection was looked at from.
+VIEWPORT_KEY = "viewport"
+
 
 def viewport_up(request):
     """Which way is up in the projection, when the request does not say."""
@@ -984,6 +987,15 @@ def process(path, request):
         # tell anybody why the red part came out goldenrod.
         if warnings:
             result["warnings"] = warnings
+        # Where the picture was looked at from, whoever chose it - the request,
+        # the package's configuration, or the default for the kind of shape -
+        # under the names that configuration uses. What the IDE's 2D tab shows
+        # beside the picture, so that what it says is the picture's viewpoint
+        # rather than a guess at it.
+        result[VIEWPORT_KEY] = {
+            "viewport_origin": [float(component) for component in origin],
+            "viewport_up": [float(component) for component in up],
+        }
         return result
     except Exception as e:
         wrapper_common.handle_exception(e)

@@ -43,6 +43,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { CaeResultView } from './analysis';
 import { DEFAULT_COLOR } from './appearance';
+import { SceneFrame, placeCamera, poleOf, readViewpoint } from './cameraView';
 import { el, empty, placeholder } from './dom';
 import { IMAGE_TYPES, ImageView } from './image';
 import { ANALYSIS_LABELS, AnalysisTabId, CaeData, CaeFinding } from './messages';
@@ -56,6 +57,7 @@ import {
     softwareNotice,
     trianglesOf,
 } from './surface';
+import { Pole, Viewpoint } from './viewpoint';
 
 /** How much of the pane the findings take when there are any. */
 const FINDINGS_SHARE = '20%';
@@ -109,6 +111,15 @@ class MeshView {
         this.dirty = true;
     };
     private disposed = false;
+    /**
+     * How the stage relates to PartCAD's frame, which is the file's to say: a
+     * glTF is metres and Y up by its specification, so it is PartCAD's frame
+     * converted as the 3D view's is; an STL states no frame at all, and is taken
+     * as the coordinates it holds - Y up on the stage, as three draws it.
+     */
+    private frameOf: SceneFrame = { size: 0.001, yUp: true, offset: [0, 0, 0] };
+    /** Told whenever the camera moves: the view panel. */
+    public onViewChange: (() => void) | undefined;
 
     constructor(private readonly host: HTMLElement) {
         host.classList.add('cae-canvas');
@@ -137,6 +148,7 @@ class MeshView {
         controls.enableDamping = true;
         controls.addEventListener('change', () => {
             this.dirty = true;
+            this.onViewChange?.();
         });
         this.controls = controls;
         // A context given back is an empty canvas, and a page shown again may
@@ -187,6 +199,10 @@ class MeshView {
     }
 
     public async show(bytes: Uint8Array, extension: string): Promise<void> {
+        this.frameOf =
+            extension === 'stl'
+                ? { size: 1, yUp: false, offset: [0, 0, 0] }
+                : { size: 0.001, yUp: true, offset: [0, 0, 0] };
         const object = extension === 'stl' ? loadStl(bytes) : await loadGltf(bytes, extension);
         await this.ready;
         if (this.disposed || this.surface === undefined) {
@@ -211,6 +227,36 @@ class MeshView {
         this.start();
     }
 
+    /** Where the camera is looking from, in PartCAD's frame; undefined before a model is shown. */
+    public viewpoint(): Viewpoint | undefined {
+        if (this.model === undefined || this.controls === undefined) {
+            return undefined;
+        }
+        return readViewpoint(this.camera, this.controls.target, this.frameOf);
+    }
+
+    /** What the camera turns about, in PartCAD's terms (see 'frameOf'). */
+    public get pole(): Pole {
+        return poleOf(this.frameOf);
+    }
+
+    /** Look from where the view panel says. */
+    public setViewpoint(viewpoint: Viewpoint): void {
+        if (this.model === undefined || this.controls === undefined) {
+            return;
+        }
+        placeCamera(this.camera, this.controls.target, viewpoint, this.frameOf);
+        this.controls.update();
+        this.dirty = true;
+    }
+
+    /** The view the model was first shown in: the view panel's "Reset". */
+    public fit(): void {
+        if (this.model !== undefined) {
+            this.frame(this.model);
+        }
+    }
+
     /** Put the whole model in view, whatever units and origin it came in. */
     private frame(object: THREE.Object3D): void {
         const box = new THREE.Box3().setFromObject(object);
@@ -229,6 +275,7 @@ class MeshView {
         this.controls.target.copy(center);
         this.controls.update();
         this.dirty = true;
+        this.onViewChange?.();
     }
 
     private start(): void {
@@ -470,6 +517,11 @@ export class CaeResult implements CaeResultView {
      * is still the one on screen.
      */
     private shown = 0;
+    /**
+     * Told whenever what the model band holds changes - a mesh, a picture,
+     * nothing - and whenever the mesh's camera moves: the view panel beside it.
+     */
+    public onViewChange: (() => void) | undefined;
 
     constructor(host: HTMLElement, analysis: AnalysisTabId) {
         this.label = ANALYSIS_LABELS[analysis];
@@ -518,6 +570,7 @@ export class CaeResult implements CaeResultView {
 
         if (MESH_TYPES.has(extension)) {
             const view = new MeshView(this.model);
+            view.onViewChange = () => this.onViewChange?.();
             this.meshView = view;
             void view.show(data.content, extension).catch((error: unknown) => {
                 if (shown !== this.shown) {
@@ -547,6 +600,30 @@ export class CaeResult implements CaeResultView {
         this.meshView?.resize();
     }
 
+    /** What the model band is: a mesh that can be looked at from anywhere, a picture, or nothing yet. */
+    public get drawing(): 'mesh' | 'picture' | 'nothing' {
+        return this.meshView !== undefined ? 'mesh' : this.imageView !== undefined ? 'picture' : 'nothing';
+    }
+
+    /** Where the mesh is looked at from, once there is one. */
+    public viewpoint(): Viewpoint | undefined {
+        return this.meshView?.viewpoint();
+    }
+
+    /** What the mesh's camera turns about. */
+    public get pole(): Pole | undefined {
+        return this.meshView?.pole;
+    }
+
+    public setViewpoint(viewpoint: Viewpoint): void {
+        this.meshView?.setViewpoint(viewpoint);
+    }
+
+    /** Back to the view the mesh was first shown in. */
+    public fit(): void {
+        this.meshView?.fit();
+    }
+
     /**
      * Empty the model band, ending whatever was drawing into it.
      *
@@ -563,6 +640,9 @@ export class CaeResult implements CaeResultView {
         this.meshView = undefined;
         empty(this.model);
         this.shown += 1;
+        // After the band is emptied and before whatever replaces it is drawn,
+        // which says so again.
+        queueMicrotask(() => this.onViewChange?.());
         return this.shown;
     }
 
