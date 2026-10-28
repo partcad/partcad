@@ -216,11 +216,14 @@ export class PartcadViewer implements vscode.Disposable {
      * The daemon requests made for the panel and not answered yet.
      *
      * Cancelled as soon as the panel will drop their answers, rather than left
-     * to run while every request behind them waits: all of them when another
-     * object is shown or the panel is cleared or closed (the renderer forgets
-     * every request it had in flight then), and one tab's when that tab is
-     * asked again (the renderer waits for the newest only). A run of an
-     * analysis or a simulation is never replaced by another: each is the
+     * to run while every request behind them waits: all of them whenever a show
+     * is posted to the webview or the panel is cleared or closed (the renderer
+     * forgets every request it had in flight then), and one tab's when that tab
+     * is asked again (the renderer waits for the newest only). A show is posted
+     * for another object, and also again for the same one - to a webview that
+     * reloaded and said 'ready', to one that said 'geometryMissing', to a panel
+     * opened afresh - and the renderer starts over each time: see 'post'. A run
+     * of an analysis or a simulation is never replaced by another: each is the
      * answer to a question of its own (see 'runAnalysis' in the renderer).
      */
     private readonly inFlight = new InFlight();
@@ -290,8 +293,6 @@ export class PartcadViewer implements vscode.Disposable {
         }
 
         this.lastShow = { ...message, object };
-        // Nothing asked for the previous object is going to be looked at.
-        this.inFlight.cancelAll();
         // A file rendered for the previous object is not this one's to save.
         this.forgetRendered();
 
@@ -308,6 +309,11 @@ export class PartcadViewer implements vscode.Disposable {
      * hold and the word to let go of what it no longer needs.
      */
     private post(message: ViewerMessage): void {
+        // Nothing asked for before this is going to be looked at: the renderer
+        // forgets every request it has in flight when it is shown something,
+        // the same object posted again included ('show' in 'webview/viewer.ts'),
+        // and asks again for what it still wants.
+        this.inFlight.cancelAll();
         const panel = this.panel;
         if (panel === undefined) {
             return;

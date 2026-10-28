@@ -16,8 +16,9 @@
 // And when a show arrives: the tab it asks for, and the scenario on that tab,
 // reach the renderer as they came.
 //
-// And when the panel moves on: what it asked for and will now drop is
-// cancelled, not left running on the daemon.
+// And when the panel moves on - or the renderer starts over on the same
+// object - what it asked for and will now drop is cancelled, not left running
+// on the daemon.
 //
 
 import * as assert from 'assert';
@@ -429,6 +430,53 @@ suite('The Digital Thread host, moving on', () => {
         );
         asked.forEach((call) => call.answer());
         await Promise.all(pending);
+        viewer.dispose();
+    });
+
+    test('the same object posted again cancels everything asked for before it', async () => {
+        // A webview that reloaded says 'ready', and one that lacked geometry it
+        // was thought to hold says 'geometryMissing': either way it is posted
+        // the show again, and starts over - asking again for what it wants.
+        asked.length = 0;
+        const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
+        let receive: ((message: Record<string, unknown>) => void) | undefined;
+        const nothing = { dispose: () => undefined };
+        const panel = {
+            active: false,
+            visible: false,
+            webview: {
+                options: {},
+                html: '',
+                cspSource: '',
+                asWebviewUri: (uri: vscode.Uri) => uri,
+                postMessage: () => Promise.resolve(true),
+                onDidReceiveMessage: (listener: (message: Record<string, unknown>) => void) => {
+                    receive = listener;
+                    return nothing;
+                },
+            },
+            onDidDispose: () => nothing,
+            onDidChangeViewState: () => nothing,
+            dispose: () => undefined,
+        };
+        viewer.restore(panel as unknown as vscode.WebviewPanel);
+        viewer.handle({ type: 'show', name: 'bracket', kind: 'part', package: '//pkg', object: null });
+        assert.ok(receive);
+
+        for (const type of ['ready', 'geometryMissing']) {
+            const before = asked.length;
+            receive({ type: 'fetchTab', tab: 'bom', token: before + 1 });
+            receive({ type: 'fetchTab', tab: 'supply', token: before + 2 });
+            await until(() => asked.length === before + 2);
+            receive({ type, digests: [] });
+
+            assert.deepStrictEqual(
+                asked.slice(before).map((call) => call.token.isCancellationRequested),
+                [true, true],
+                type,
+            );
+        }
+        asked.forEach((call) => call.answer());
         viewer.dispose();
     });
 
