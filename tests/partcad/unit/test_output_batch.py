@@ -212,6 +212,48 @@ def test_a_file_type_the_cache_holds_is_not_drawn_again(batch):
     assert _read(out, "bracket.gamma").startswith("gamma in package")
 
 
+def test_several_file_types_say_what_each_answered_in_the_order_asked(batch):
+    """'render_async' answers for every file type it was asked for, written together or not."""
+    make, sandbox, out = batch
+    ctx = make(THREE)
+    part = ctx.get_part("//:bracket")
+
+    results = asyncio.run(part.render_async(ctx, ["gamma", "alpha", "beta"], output_dir=str(out)))
+
+    assert sandbox.files_per_call() == [3]
+    assert list(results) == ["gamma", "alpha", "beta"]
+    assert all(result["success"] for result in results.values())
+    # And one asked for alone, under the name it was asked for by.
+    assert list(asyncio.run(part.render_async(ctx, "alpha", output_dir=str(out)))) == ["alpha"]
+
+
+def test_a_section_cuts_every_file_type_of_a_batch_and_is_part_of_each_key(batch, monkeypatch):
+    """Each file type is cut as it is when asked for alone, and a cut is never answered for the whole."""
+    make, sandbox, out = batch
+    ctx = make(THREE)
+    part = ctx.get_part("//:bracket")
+    cuts = []
+
+    async def section_async(_ctx, tree, section, cacheable=True):
+        cuts.append(section)
+        return dict(tree, cut=section)
+
+    monkeypatch.setattr(pc_shape.shape_section, "section_async", section_async)
+    formats = ["alpha", "beta", "gamma"]
+
+    asyncio.run(part.render_async(ctx, formats, output_dir=str(out), section={"z": [0, 5], "x": None}))
+    assert cuts == [{"z": [0.0, 5.0]}] * 3
+    assert sandbox.files_per_call() == [3]
+
+    # The whole shape is another question, and so is another cut ...
+    asyncio.run(part.render_async(ctx, formats, output_dir=str(out)))
+    asyncio.run(part.render_async(ctx, formats, output_dir=str(out), section={"z": [1, 5]}))
+    assert sandbox.files_per_call() == [3, 3, 3]
+    # ... and the same one again is the cache's.
+    asyncio.run(part.render_async(ctx, formats, output_dir=str(out), section={"z": [0, 5]}))
+    assert sandbox.files_per_call() == [3, 3, 3]
+
+
 def test_what_one_sandbox_path_leaves_behind_is_not_seen_by_the_next(batch):
     make, sandbox, out = batch
     ctx = make("""
