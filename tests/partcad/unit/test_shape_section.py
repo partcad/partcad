@@ -234,7 +234,7 @@ class InProcessSandbox:
 
     async def run_async(self, argv, stdin):
         name = os.path.basename(argv[0])
-        request = ocp_serialize.deserialize_raw(runtime.stdin_bytes(stdin).decode("utf-8"))
+        request = ocp_serialize.deserialize_raw(runtime.stdin_bytes(stdin))
         self.requests.append((name, request))
         if self.answer is not None:
             return self.answer
