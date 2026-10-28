@@ -827,18 +827,28 @@ async def process_async(environment, argv, script, cwd=None, env=None, new_sessi
     return process
 
 
+def _within(path, environment) -> bool:
+    return path == environment or path.startswith(environment.rstrip(os.sep) + os.sep)
+
+
 def retire(environment) -> None:
     """Retire every zygote of ``environment``: something has just been installed into it.
+
+    And every zygote of a layer inside it (`runtime_python.VENV_PREFIX`): a
+    layer sees the sandbox's own packages after its own, so what was installed
+    there is what its zygote imported too. Its 'Zygote.stale' would say so on
+    the next call, as it does for an install by another process; this says it
+    at once.
 
     And forget that it could not have one, since what was installed may be what
     it lacked.
     """
     environment = os.path.normpath(environment)
     with _registry_lock:
-        retiring = [z for z in _zygotes.values() if z.environment == environment]
+        retiring = [z for z in _zygotes.values() if _within(z.environment, environment)]
         for zygote in retiring:
             del _zygotes[zygote.key]
-        for key in [key for key in _unusable if key[0] == environment]:
+        for key in [key for key in _unusable if _within(key[0], environment)]:
             del _unusable[key]
     for zygote in retiring:
         zygote.retire()

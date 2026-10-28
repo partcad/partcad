@@ -233,7 +233,8 @@ at all).
     Anything else that starts one makes the zygote refuse, and the environment runs fresh interpreters.
   * **It is retired whenever what it imported may have changed**, because a zygote holding an OCP module since
     overwritten on disk is the failure the install guards exist to prevent: `record_install` calls
-    `sandbox_zygote.retire(path)` after every install, and every call stats what the zygote imported from
+    `sandbox_zygote.retire(path)` after every install -- which retires the zygotes of the layers inside `path` as
+    well, since a layer sees the base's packages after its own -- and every call stats what the zygote imported from
     (`Zygote.stale`: the interpreter, each `sys.path` directory, the `wrappers/` modules it loaded) -- which is how
     an install by *another* process, an edited `ocp_serialize.py` or a deleted sandbox retires it too. A zygote
     whose directories moved *while* it imported is discarded at once.
@@ -258,7 +259,11 @@ at all).
     (`PR_SET_PDEATHSIG`) and is then reported killed, with a note (`zygote_lost`).
   * **One per environment, interpreter, flags and environment variables**, process-wide, at most `MAX_ZYGOTES`
     (2); one used within `EVICT_AFTER` does not give way to another environment's, so two do not take turns
-    replacing each other. Each holds some 400 MB of its own (USS; 700 MB RSS, the rest shared with its children),
+    replacing each other. A layer is an environment of its own: its zygote is started with the layer's
+    interpreter, so it imports from the layer's `sys.path` -- the layer's packages, then the base's through
+    `LAYER_PTH` -- exactly as a fresh interpreter there would, and a run that asked for another layer, or for none,
+    is never forked from it. CadQuery's layer has one with CadQuery and its VTK build of OCP preloaded; the base's
+    has build123d, and finds no CadQuery to preload. Each holds some 400 MB of its own (USS; 700 MB RSS, the rest shared with its children),
     and goes after `IDLE` (10 minutes) unused, or with the process that started it. Its children are this
     process's grandchildren, so `psutil`'s recursive children -- and memory admission
     (`docs/design/memory-and-scheduling.md`, section 9) -- count them, and the zygote beside them; by PSS, which

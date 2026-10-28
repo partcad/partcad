@@ -458,6 +458,37 @@ def test_an_install_retires_the_zygote(tmp_path):
     assert _dead(first)
 
 
+def test_an_install_into_the_sandbox_retires_the_zygotes_of_its_layers(tmp_path):
+    """A layer sees the sandbox's own packages after its own, so its zygote imported what was just replaced."""
+    script = _script(tmp_path, ECHO)
+    sandbox = tmp_path / "sandbox"
+    layer = sandbox / (runtime_python.VENV_PREFIX + "0123456789abcdef")
+    elsewhere = tmp_path / "sandbox-other"
+
+    async def forked_from(environment):
+        argv = _argv(script)
+        deadline = time.monotonic() + 120
+        while True:
+            p = await sandbox_zygote.process_async(str(environment), argv, 2, cwd=str(tmp_path))
+            if p is not None:
+                await runtime.communicate(p, b"")
+                return p.parent_pid
+            assert time.monotonic() < deadline
+            await asyncio.sleep(0.05)
+
+    async def calls():
+        before = {name: await forked_from(path) for name, path in (("layer", layer), ("elsewhere", elsewhere))}
+        sandbox_zygote.retire(str(sandbox))
+        after = {name: await forked_from(path) for name, path in (("layer", layer), ("elsewhere", elsewhere))}
+        return before, after
+
+    before, after = asyncio.run(calls())
+
+    assert before["layer"] != after["layer"]
+    # A sibling whose name merely starts the same way is another environment.
+    assert before["elsewhere"] == after["elsewhere"]
+
+
 def test_a_change_to_what_it_imported_from_retires_it(tmp_path):
     """An install by another process: nothing here hears of it, and the directory it wrote to says so."""
     script = _script(tmp_path, ECHO)
