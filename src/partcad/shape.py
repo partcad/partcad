@@ -1252,9 +1252,11 @@ class Shape(ShapeConfiguration):
                         cache_hash, [self.kind, "cmps"], self.get_cache_metadata()
                     )
                     # Whatever was recorded about the geometry came back inside
-                    # the same entry as the geometry (see cache_shape.py), so a
-                    # hit is a hit: there is no sibling entry that might be
-                    # missing, and nothing to check for completeness.
+                    # the same entry as the geometry (see cache_shape.py). The
+                    # components are an entry of their own; one that names the
+                    # geometry beside it is admitted to a tier exactly where
+                    # that geometry is (see 'ShapeCache.write_async'), so a tier's
+                    # size window cannot keep the one and drop the other.
                     #
                     # Set only on a hit, and to '{}' rather than None when the
                     # entry recorded nothing: None on this attribute means "not

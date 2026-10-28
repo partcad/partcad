@@ -48,13 +48,20 @@ class Cache:
     def _name(self, hash_str: str, key: str) -> str:
         return "%s.%s" % (hash_str, key)
 
-    async def write_data_async(self, hash: CacheHash, items: dict[str, bytes]) -> dict[str, bool]:
+    async def write_data_async(
+        self, hash: CacheHash, items: dict[str, bytes], sizes: dict[str, int] = None
+    ) -> dict[str, bool]:
         """Store 'items' under 'hash', reporting which of them landed somewhere.
 
         A key that no tier accepted - too big for one, too small for another,
         every tier disabled - comes back absent rather than False, which is what
         the callers have always keyed their in-memory decisions off.
+
+        'sizes' is the size a tier judges a key by where that is not the length
+        of its bytes: an entry that only names another one's geometry is worth
+        keeping exactly where that geometry is kept (see 'ShapeCache.write_async').
         """
+        sizes = sizes or {}
         if not self.backends:
             # Caching is disabled
             return {}
@@ -69,7 +76,7 @@ class Cache:
         names = {self._name(hash_str, "name"): hash.name.encode()}
 
         results = await asyncio.gather(
-            *[asyncio.create_task(self._write_backend_async(b, hash_str, items, names)) for b in self.backends]
+            *[asyncio.create_task(self._write_backend_async(b, hash_str, items, names, sizes)) for b in self.backends]
         )
 
         saved = {}
@@ -79,10 +86,19 @@ class Cache:
                     saved[key] = True
         return saved
 
-    async def _write_backend_async(self, backend, hash_str: str, items: dict[str, bytes], names: dict) -> dict:
-        """Offer 'items' to one tier: those its size window accepts, and the name sidecar if it keeps one."""
+    async def _write_backend_async(
+        self, backend, hash_str: str, items: dict[str, bytes], names: dict, sizes: dict[str, int] = None
+    ) -> dict:
+        """Offer 'items' to one tier: those its size window accepts, and the name sidecar if it keeps one.
+
+        'sizes' is what the window judges a key by where that is not the length
+        of its bytes (see 'write_data_async').
+        """
+        sizes = sizes or {}
         accepted = {
-            self._name(hash_str, key): value for key, value in items.items() if backend.accepts(key, len(value))
+            self._name(hash_str, key): value
+            for key, value in items.items()
+            if backend.accepts(key, sizes.get(key, len(value)))
         }
         if not accepted:
             return {}

@@ -378,6 +378,34 @@ def test_pieces_of_other_geometry_than_the_entry_beside_them_are_a_miss(tmp_path
     assert read["cmps"] is None
 
 
+def test_a_tier_keeps_pieces_wherever_it_keeps_the_geometry_they_name(tmp_path):
+    """A size window must not keep the geometry and drop its components: that hit comes back without them.
+
+    The pieces' entry is a few hundred bytes whatever the compound weighs, so a
+    tier that refuses entries that small - every persistent tier does, at 100
+    bytes by default - would take the compound and refuse its components.
+    """
+    cache = ShapeCache(user_config=CacheUserConfig(tmp_path, cache_min_entry_size=len(COMPOUND)))
+    cache_hash = _hash()
+    components = [_piece(0), _piece(1)]
+    assert len(cache_shape._serialize(components, {"part": COMPOUND})) < len(COMPOUND)
+
+    asyncio.run(cache.write_async(cache_hash, {"part": {"brep": COMPOUND}, "cmps": components}))
+
+    read, _ = asyncio.run(cache.read_async(cache_hash, ["part", "cmps"], {"name": "pkg:first", "label": "first"}))
+    assert read["part"]["brep"] == COMPOUND
+    assert read["cmps"] == components
+
+
+def test_a_tier_that_refuses_the_geometry_refuses_the_pieces_that_name_it(tmp_path):
+    cache = ShapeCache(user_config=CacheUserConfig(tmp_path, cache_max_entry_size=len(COMPOUND) - 1))
+    cache_hash = _hash()
+
+    asyncio.run(cache.write_async(cache_hash, {"part": {"brep": COMPOUND}, "cmps": [_piece(0)]}))
+
+    assert not (tmp_path / "cache" / "shapes" / ("%s.cmps" % cache_hash.get())).exists()
+
+
 def test_pieces_of_geometry_not_beside_them_carry_it_once(tmp_path):
     """A part moved by its 'offset' keeps the components of what it moved, as it always did."""
     cache = _cache(tmp_path)

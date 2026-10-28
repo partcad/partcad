@@ -197,6 +197,18 @@ def _holds_pieces(value) -> bool:
     return isinstance(value, dict) and shape_envelope.KEY_CHILD in value
 
 
+def _named_beside(value, beside) -> set:
+    """The keys of the entries in 'beside' whose geometry the pieces in 'value' name."""
+    if not beside:
+        return set()
+    if isinstance(value, list):
+        return set().union(*(_named_beside(item, beside) for item in value)) if value else set()
+    if isinstance(value, dict) and shape_envelope.KEY_CHILD in value:
+        key = _beside_key(value[shape_envelope.KEY_BREP], beside)
+        return {key} if key is not None else set()
+    return set()
+
+
 def _serialize_tree(payload, beside=None) -> bytes:
     """A tree as a _TREE_MAGIC frame: its structure, then each distinct payload once.
 
@@ -372,7 +384,19 @@ class ShapeCache(Cache):
                 for key, value in items.items()
                 if shape_envelope.is_shape_object(value) and shape_envelope.KEY_CHILD not in value
             }
-            stored = await self.write_data_async(hash, {key: _serialize(value, beside) for key, value in items.items()})
+            serialized = {key: _serialize(value, beside) for key, value in items.items()}
+            # Components that name the geometry beside them are a few hundred
+            # bytes whatever that geometry weighs, and a tier with a minimum
+            # entry size would keep the geometry and refuse them - a hit that
+            # comes back without its components. So each tier is asked about
+            # them at the size of the geometry they name: it keeps both or
+            # neither.
+            sizes = {}
+            for key, value in items.items():
+                named = [serialized[other] for other in _named_beside(value, beside) if other in serialized]
+                if named:
+                    sizes[key] = max(len(data) for data in named)
+            stored = await self.write_data_async(hash, serialized, sizes)
 
         results = {}
         for key, value in items.items():
