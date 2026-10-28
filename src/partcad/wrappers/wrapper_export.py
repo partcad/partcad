@@ -654,12 +654,12 @@ def run_together(outputs, document):
     a large assembly at the memory one of them takes.
     """
     entries = document.get(OUTPUTS_KEY) if isinstance(document, dict) else None
-    subjects = document.get(SUBJECTS_KEY) or []
     if not isinstance(entries, list) or len(entries) != len(outputs):
         raise ValueError(
             "Asked to write %d files and handed %s"
             % (len(outputs), "%d requests" % len(entries) if isinstance(entries, list) else "none")
         )
+    subjects = document.get(SUBJECTS_KEY) or []
     keys = [sharing_key(script, entry) for (_path, _directory, script), entry in zip(outputs, entries)]
     # Whether each object arrived with a mesh on it, once its first decoding says.
     meshed = {}

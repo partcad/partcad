@@ -448,8 +448,13 @@ class _OutputBatch:
             await self._run()
 
     async def _run(self):
-        """Write what was handed in, and answer every member that handed something in."""
-        waiting, self.waiting = self.waiting, []
+        """Write what was handed in, and answer every member that handed something in.
+
+        Only what a member is still waiting for: one that stopped - its render
+        was cancelled while the last of the batch was being worked out - has
+        nobody to write its file for, and the cancellation is not to wait for it.
+        """
+        waiting, self.waiting = [entry for entry in self.waiting if not entry[1].done()], []
         if not waiting:
             return
         try:
@@ -475,12 +480,22 @@ def _in_order(results: dict, formats) -> dict:
 
 
 async def _together(batch, each, formats) -> None:
-    """'each(format)' for every file type of one render call: all at once for a batch, else one after another."""
+    """'each(format)' for every file type of one render call: all at once for a batch, else one after another.
+
+    A batch's file types are written by whichever of them is handed in last, so
+    none of them is left running when this returns: a failure is raised once
+    every one has finished - the first in the order asked for - and not as it
+    happens, which left the rest writing files, or not, for a caller that had
+    already been told the render failed.
+    """
     if batch is None:
         for format_name in formats:
             await each(format_name)
         return
-    await asyncio.gather(*(each(format_name) for format_name in formats))
+    outcomes = await asyncio.gather(*(each(format_name) for format_name in formats), return_exceptions=True)
+    for outcome in outcomes:
+        if isinstance(outcome, BaseException):
+            raise outcome
 
 
 # The part types whose geometry is the file they are read from, and is handed

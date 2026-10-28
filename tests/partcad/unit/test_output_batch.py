@@ -15,8 +15,9 @@ fails costs the others nothing.
 The wrapper is the real one, run as a subprocess by this interpreter; only the
 runtime around it is a stand-in, which counts the calls. The implementations are
 scripts of the test's own and the shape carries no geometry, so none of it needs
-a CAD sandbox - except the one test that is about sharing geometry, which needs
-OCP in this interpreter and skips without it.
+a CAD sandbox. What the wrapper does with the files of one call - which of them
+share a decoding of the object, and in what order they are written - is
+`test_output_batch_wrapper.py`'s, which runs it in this process.
 """
 
 import asyncio
@@ -33,11 +34,7 @@ import pytest
 import partcad as pc
 from partcad import output, sandbox_versions
 from partcad import shape as pc_shape
-from partcad import wrapper as pc_wrapper
 from partcad.cache import Cache
-
-WRAPPERS = os.path.dirname(pc_wrapper.get("export.py"))
-WRAPPER = os.path.join(WRAPPERS, "wrapper_export.py")
 
 # Says which file type it is, where it ran, and with what in 'sys.path' and
 # 'sys.argv' -- which is what it would have found running on its own. 'crash'
@@ -99,6 +96,8 @@ class _Sandbox:
         return {"name": name, "path": None, "dirty": False, "deps": [], "missing": []}
 
     def _ask(self, session, python_package):
+        if python_package.startswith("unavailable-"):
+            raise RuntimeError("No matching distribution found for %s" % python_package)
         if session is None:
             return
         session["deps"].append(python_package)
@@ -171,6 +170,7 @@ THREE = """
     beta: {path: write.py, extension: beta, say: beta}
     gamma: {path: write.py, extension: gamma, say: gamma}
     """
+THREE_NAMES = ("alpha", "beta", "gamma")
 
 
 def _render(ctx, out):
@@ -412,6 +412,341 @@ def test_a_caller_holding_the_shape_writes_each_file_type_on_its_own(batch):
     assert sandbox.files_per_call() == [1, 1]
 
 
+def test_asked_for_no_file_type_in_particular_every_one_is_written_by_one_call(batch, monkeypatch):
+    """'render_async' with no file type writes every one there is, and writes them together as well.
+
+    Every one there is means every built-in one, which would need a CAD sandbox
+    here; the package's own three stand in for them.
+    """
+    make, sandbox, out = batch
+    ctx = make(THREE)
+    monkeypatch.setattr(output, "all_formats", lambda _ctx: ["gamma", "alpha", "beta"])
+
+    results = asyncio.run(ctx.get_part("//:bracket").render_async(ctx, None, output_dir=str(out)))
+
+    assert sandbox.files_per_call() == [3]
+    assert list(results) == ["gamma", "alpha", "beta"]
+    assert all(result["success"] for result in results.values())
+
+
+def test_an_empty_shape_writes_none_of_the_file_types_asked_for(batch, monkeypatch, caplog):
+    """Each file type says so under its own action, and the batch they were in starts no sandbox."""
+    make, sandbox, out = batch
+    ctx = make(THREE)
+
+    async def get_wrapped(self, _ctx):
+        return None
+
+    monkeypatch.setattr(pc.shape.Shape, "get_wrapped", get_wrapped)
+
+    results = asyncio.run(ctx.get_part("//:bracket").render_async(ctx, ["alpha", "beta"], output_dir=str(out)))
+
+    assert results == {}
+    assert sandbox.calls == []
+    assert caplog.text.count("Cannot render 'bracket': shape is empty") == 2
+
+
+def test_a_sandbox_that_sends_files_back_is_told_every_file_a_call_writes(batch, monkeypatch):
+    """What a command writes is not in its request, so a sandbox exchanging files has to be told all of them."""
+    make, _sandbox, out = batch
+    ctx = make(THREE)
+
+    class Exchanging(_Sandbox):
+        EXCHANGES_FILES = True
+
+        def __init__(self):
+            super().__init__()
+            self.sent_back = []
+
+        async def run_async(self, cmd, stdin="", session=None, output_files=None, **kwargs):
+            self.sent_back.append(output_files)
+            return await super().run_async(cmd, stdin, session=session, **kwargs)
+
+    exchanging = Exchanging()
+    monkeypatch.setattr(ctx, "get_python_runtime", lambda version=None, image=None: exchanging)
+
+    _render(ctx, out)
+
+    assert exchanging.files_per_call() == [3]
+    (sent_back,) = exchanging.sent_back
+    assert sorted(sent_back) == [os.path.join(os.path.abspath(str(out)), "bracket." + name) for name in THREE_NAMES]
+
+
+@pytest.mark.parametrize(
+    "said, reported",
+    [
+        ("", "Empty response from the 'alpha' implementation"),
+        ("not an answer", "Failed to deserialize response"),
+    ],
+)
+def test_a_file_type_whose_call_says_nothing_readable_is_reported_and_answered_with_none(
+    batch, monkeypatch, caplog, said, reported
+):
+    """Asked for alone, as a file type always was: the call that writes it is the one there always was."""
+    make, _sandbox, out = batch
+    ctx = make(THREE)
+
+    class Mute(_Sandbox):
+        async def run_async(self, cmd, stdin="", session=None, **_kwargs):
+            self.calls.append(cmd)
+            return 0, said, ""
+
+    mute = Mute()
+    monkeypatch.setattr(ctx, "get_python_runtime", lambda version=None, image=None: mute)
+
+    results = asyncio.run(ctx.get_part("//:bracket").render_async(ctx, "alpha", output_dir=str(out)))
+
+    assert results == {"alpha": None}
+    assert mute.files_per_call() == [1]
+    assert reported in caplog.text
+
+
+def test_a_file_type_asked_for_alone_that_cannot_be_written_raises_as_it_always_did(batch):
+    make, sandbox, out = batch
+    ctx = make("""
+    beta: {path: write.py, extension: beta, say: beta, always_crash: true}
+    """)
+
+    with pytest.raises(Exception, match="Failed to execute command"):
+        asyncio.run(ctx.get_part("//:bracket").render_async(ctx, "beta", output_dir=str(out)))
+    assert sandbox.files_per_call() == [1]
+
+
+def test_a_file_type_whose_requirements_cannot_be_installed_fails_on_its_own(batch):
+    """Which environment it would run in cannot be told, so it is written alone - and fails there, and only there."""
+    make, sandbox, out = batch
+    ctx = make("""
+    alpha: {path: write.py, extension: alpha, say: alpha}
+    beta: {path: write.py, extension: beta, say: beta, pythonRequirements: [unavailable-raster]}
+    gamma: {path: write.py, extension: gamma, say: gamma}
+    """)
+
+    with pytest.raises(RuntimeError, match="No matching distribution found for unavailable-raster"):
+        _render(ctx, out)
+
+    # Never started: the install it needed is what failed.
+    assert sandbox.files_per_call() == [2]
+    assert _read(out, "bracket.alpha").startswith("alpha") and _read(out, "bracket.gamma").startswith("gamma")
+    assert not os.path.exists(os.path.join(str(out), "bracket.beta"))
+
+
+def test_a_file_type_whose_container_is_declared_wrongly_fails_on_its_own(batch):
+    """A 'container:' that names no image is the declaration's mistake, said for that file type alone."""
+    make, sandbox, out = batch
+    ctx = make("""
+    alpha: {path: write.py, extension: alpha, say: alpha}
+    beta: {path: write.py, extension: beta, say: beta, container: {port: 5000}}
+    gamma: {path: write.py, extension: gamma, say: gamma}
+    """)
+
+    with pytest.raises(ValueError, match="names no 'image:'"):
+        _render(ctx, out)
+
+    assert sandbox.files_per_call() == [2]
+    assert _read(out, "bracket.alpha").startswith("alpha") and _read(out, "bracket.gamma").startswith("gamma")
+
+
+def test_a_sandbox_that_cannot_start_fails_every_file_of_the_call_and_is_not_asked_again(batch, monkeypatch):
+    """Nothing ran, so the reason is the same for every file of it: none is written again on its own."""
+    make, _sandbox, out = batch
+    ctx = make(THREE)
+
+    class Absent(_Sandbox):
+        async def run_async(self, cmd, stdin="", session=None, **_kwargs):
+            self.calls.append(cmd)
+            raise RuntimeError("the sandbox is not there")
+
+    absent = Absent()
+    monkeypatch.setattr(ctx, "get_python_runtime", lambda version=None, image=None: absent)
+
+    with pytest.raises(RuntimeError, match="the sandbox is not there"):
+        asyncio.run(ctx.get_part("//:bracket").render_async(ctx, ["alpha", "beta", "gamma"], output_dir=str(out)))
+    assert absent.files_per_call() == [3]
+
+
+def test_a_file_the_call_says_nothing_of_is_written_again_though_the_call_ended_well(batch, monkeypatch, caplog):
+    """The wrapper leaves a file unanswered when it fails before reaching its implementation, and exits 0.
+
+    The stand-in here loses that file's answer instead. Either way the call
+    said nothing of it, which is all the core goes by: it writes it again on
+    its own, and says so only to whoever is debugging, since nothing failed.
+    """
+    make, _sandbox, out = batch
+    ctx = make(THREE)
+
+    class Forgetful(_Sandbox):
+        async def run_async(self, cmd, stdin="", session=None, **kwargs):
+            code, said, errors = await super().run_async(cmd, stdin, session=session, **kwargs)
+            if len(cmd) > 4:
+                said = "\n".join(line for line in said.splitlines() if json.loads(line)["output"] != 1)
+            return code, said, errors
+
+    forgetful = Forgetful()
+    monkeypatch.setattr(ctx, "get_python_runtime", lambda version=None, image=None: forgetful)
+
+    with caplog.at_level(logging.DEBUG):
+        _render(ctx, out)
+
+    assert forgetful.files_per_call() == [3, 1]
+    for name in THREE_NAMES:
+        assert _read(out, "bracket." + name).startswith(name)
+    assert "not answered by the call writing 3 files at once, written again on its own: beta" in caplog.text
+    assert "stopped before it wrote" not in caplog.text
+
+
+def _left_running():
+    """The tasks of this loop other than the one asking: what a render left behind when it returned."""
+    return [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]
+
+
+def test_a_file_type_that_does_not_resolve_fails_once_the_others_are_written(batch):
+    """It fails before it is handed in, and the batch is still the others' to finish before the render says so.
+
+    Raised as it happened, the failure reached the caller while the other file
+    types were still being worked out, and they went on doing it in tasks
+    nobody waited for: written after the render had failed, or - when the loop
+    ended first - not at all.
+    """
+    make, sandbox, out = batch
+    ctx = make(THREE)
+    part = ctx.get_part("//:bracket")
+
+    async def scenario():
+        with pytest.raises(Exception, match="No implementation of 'nope' is declared"):
+            await part.render_async(ctx, ["alpha", "nope", "gamma"], output_dir=str(out))
+        return _left_running()
+
+    assert asyncio.run(scenario()) == []
+    assert sandbox.files_per_call() == [2]
+    assert _read(out, "bracket.alpha").startswith("alpha") and _read(out, "bracket.gamma").startswith("gamma")
+
+
+def test_a_render_cancelled_before_every_file_type_is_handed_in_starts_no_sandbox(batch, monkeypatch):
+    """Nobody is waiting for the files handed in by then, so nothing writes them, and the cancellation is not held up.
+
+    The second file type is still being worked out - cut, here - when the
+    render is cancelled. Giving up on it is what completes the batch, and the
+    first one's file is no longer anybody's to wait for: the batch used to
+    start a sandbox call for it all the same, in a task the cancelled render
+    had already stopped waiting for.
+    """
+    make, sandbox, out = batch
+    ctx = make(THREE)
+    part = ctx.get_part("//:bracket")
+    cuts = []
+
+    async def scenario():
+        cutting = asyncio.Event()
+
+        async def section_async(_ctx, tree, section, cacheable=True):
+            cuts.append(section)
+            if len(cuts) > 1:
+                cutting.set()
+                await asyncio.Event().wait()
+            return tree
+
+        monkeypatch.setattr(pc_shape.shape_section, "section_async", section_async)
+        task = asyncio.ensure_future(
+            part.render_async(ctx, ["alpha", "beta"], output_dir=str(out), section={"z": [0, 5]})
+        )
+        await asyncio.wait_for(cutting.wait(), 60)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, 60)
+        return _left_running()
+
+    assert asyncio.run(scenario()) == []
+    assert len(cuts) == 2
+    assert sandbox.calls == []
+
+
+def test_a_render_cancelled_while_its_files_are_written_leaves_nothing_running(batch, monkeypatch):
+    make, _sandbox, out = batch
+    ctx = make(THREE)
+    part = ctx.get_part("//:bracket")
+
+    async def scenario():
+        started = asyncio.Event()
+
+        class Slow(_Sandbox):
+            async def run_async(self, cmd, stdin="", session=None, **_kwargs):
+                self.calls.append(cmd)
+                started.set()
+                await asyncio.Event().wait()
+
+        slow = Slow()
+        monkeypatch.setattr(ctx, "get_python_runtime", lambda version=None, image=None: slow)
+        task = asyncio.ensure_future(part.render_async(ctx, ["alpha", "beta"], output_dir=str(out)))
+        await asyncio.wait_for(started.wait(), 60)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, 60)
+        return slow, _left_running()
+
+    slow, left = asyncio.run(scenario())
+    assert slow.files_per_call() == [2]
+    assert left == []
+
+
+def test_a_batch_answers_whoever_still_waits_and_its_failure_is_every_members():
+    """A member that gave up waiting while the call ran is not answered, and the others are answered all the same."""
+    calls = []
+
+    async def scenario():
+        running = asyncio.Event()
+        finish = asyncio.Event()
+
+        async def outputs_run_async(_ctx, outputs, _cache):
+            calls.append(list(outputs))
+            running.set()
+            await finish.wait()
+            if outputs[0] == "fails":
+                raise RuntimeError("the cache could not be read")
+            return ["first", "second"]
+
+        async def member(batch, output_):
+            async with batch.member():
+                return await batch.submit(None, output_)
+
+        # One member stops waiting while the call runs.
+        batch = pc_shape._OutputBatch(types.SimpleNamespace(_outputs_run_async=outputs_run_async), None, 2)
+        first = asyncio.ensure_future(member(batch, "a"))
+        second = asyncio.ensure_future(member(batch, "b"))
+        await asyncio.wait_for(running.wait(), 60)
+        first.cancel()
+        finish.set()
+        assert await asyncio.wait_for(second, 60) == "second"
+        assert first.cancelled()
+
+        # And what the call raises, every member raises.
+        running.clear()
+        batch = pc_shape._OutputBatch(types.SimpleNamespace(_outputs_run_async=outputs_run_async), None, 2)
+        members = [asyncio.ensure_future(member(batch, name)) for name in ("fails", "too")]
+        results = await asyncio.wait_for(asyncio.gather(*members, return_exceptions=True), 60)
+        assert [str(result) for result in results] == ["the cache could not be read"] * 2
+
+    asyncio.run(scenario())
+    assert calls == [["a", "b"], ["fails", "too"]]
+
+
+def test_only_the_lines_that_answer_for_a_file_of_the_call_are_answers():
+    """Whatever else reaches the call's output - a library's chatter, an answer for no file of it - is passed over."""
+    said = "\n".join(
+        [
+            "",
+            "Warning: something a library printed",
+            json.dumps([0, {"success": True}]),
+            json.dumps({"output": 0, "result": {"success": True}}),
+            json.dumps({"output": 3, "result": {"success": True}}),
+            json.dumps({"output": True, "result": {"success": True}}),
+            json.dumps({"output": 1, "result": "written"}),
+            "   ",
+            json.dumps({"output": 2, "result": {"success": False}}),
+        ]
+    )
+    assert pc_shape._together_answers(said, 3) == {0: {"success": True}, 2: {"success": False}}
+
+
 # --------------------------------------------------------------------------- #
 # Which sandbox a file type runs in                                           #
 # --------------------------------------------------------------------------- #
@@ -459,126 +794,6 @@ def test_the_object_travels_once_however_many_files_are_of_it():
     assert all("wrapped" not in entry[output.BATCH_REQUEST_KEY] for entry in entries)
     # The requests themselves are left as they were.
     assert outputs[0].request["wrapped"] is tree
-
-
-# --------------------------------------------------------------------------- #
-# The wrapper                                                                 #
-# --------------------------------------------------------------------------- #
-
-
-def _wrapper_call(outputs, document):
-    command = [sys.executable, WRAPPER]
-    for path, directory, script in outputs:
-        command += [path, directory, script]
-    finished = subprocess.run(command, input=json.dumps(document), capture_output=True, text=True)
-    answers = {}
-    for line in finished.stdout.splitlines():
-        if line.strip():
-            answer = json.loads(line)
-            answers[answer["output"]] = answer["result"]
-    return finished, answers
-
-
-def _script(directory, name, text):
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / name
-    path.write_text(text)
-    return str(path)
-
-
-def test_the_wrapper_answers_each_file_and_leaves_unanswered_what_it_could_not_start(tmp_path):
-    script = _script(tmp_path / "package", "write.py", WRITE)
-    outputs = [
-        (str(tmp_path / "a.txt"), str(tmp_path / "package"), script),
-        (str(tmp_path / "b.txt"), str(tmp_path / "gone"), script),
-        (str(tmp_path / "c.txt"), str(tmp_path / "package"), script),
-    ]
-    document = {
-        "outputs": [{"request": {"say": name}} for name in ("a", "b", "c")],
-        "subjects": [],
-    }
-
-    finished, answers = _wrapper_call(outputs, document)
-
-    assert finished.returncode == 0, finished.stderr
-    assert sorted(answers) == [0, 2]
-    assert answers[0]["success"] is True and answers[0]["files"] == []
-    assert (tmp_path / "c.txt").read_text().startswith("c in package")
-
-
-@pytest.fixture
-def box():
-    """A shape envelope holding a box, and the same box carrying a mesh."""
-    pytest.importorskip("OCP")
-    sys.path.insert(0, WRAPPERS)
-    try:
-        import ocp_serialize
-    finally:
-        sys.path.remove(WRAPPERS)
-    from OCP.BRepMesh import BRepMesh_IncrementalMesh
-    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
-
-    plain = BRepPrimAPI_MakeBox(10.0, 20.0, 30.0).Shape()
-    meshed = BRepPrimAPI_MakeBox(10.0, 20.0, 30.0).Shape()
-    BRepMesh_IncrementalMesh(meshed, 0.5)
-    encode = ocp_serialize._brep_b64
-    return {"name": "box", "label": None, "brep": encode(plain)}, {"name": "box", "label": None, "brep": encode(meshed)}
-
-
-# Remembers the shape it was handed, in the process, and says whether the one
-# it is handed now shares its geometry with the last one.
-PROBE = textwrap.dedent("""
-    import builtins
-
-    {declaration}
-
-
-    def process(path, request):
-        shape = request["wrapped"]
-        last = getattr(builtins, "_probe_last", None)
-        builtins._probe_last = shape
-        with open(path, "w") as f:
-            f.write("shared" if last is not None and last.IsPartner(shape) else "own")
-        return {{"success": True, "files": []}}
-    """)
-
-
-def test_files_that_mesh_alike_share_one_decoding_of_the_object(tmp_path, box):
-    plain, _meshed = box
-    declared = _script(tmp_path / "pkg", "declared.py", PROBE.format(declaration='TESSELLATION = ("m", "tolerance")'))
-    silent = _script(tmp_path / "pkg", "silent.py", PROBE.format(declaration=""))
-    directory = str(tmp_path / "pkg")
-    names = ["first", "second", "coarser", "silent", "third"]
-    scripts = [declared, declared, declared, silent, declared]
-    tolerances = [0.1, 0.1, 0.5, 0.1, 0.1]
-    outputs = [(str(tmp_path / name), directory, script) for name, script in zip(names, scripts)]
-    document = {
-        "outputs": [{"request": {"tolerance": tolerance}, "subject": 0} for tolerance in tolerances],
-        "subjects": [plain],
-    }
-
-    finished, answers = _wrapper_call(outputs, document)
-
-    assert finished.returncode == 0, finished.stderr
-    assert len(answers) == 5
-    written = {name: (tmp_path / name).read_text() for name in names}
-    # The three alike are written one after another from one decoding; the one
-    # meshed coarser, and the one that says nothing, each from one of its own.
-    assert written == {"first": "own", "second": "shared", "third": "shared", "coarser": "own", "silent": "own"}
-
-
-def test_an_object_that_arrived_with_a_mesh_on_it_is_decoded_for_each_file(tmp_path, box):
-    _plain, meshed = box
-    declared = _script(tmp_path / "pkg", "declared.py", PROBE.format(declaration='TESSELLATION = ("m", "tolerance")'))
-    names = ["first", "second"]
-    outputs = [(str(tmp_path / name), str(tmp_path / "pkg"), declared) for name in names]
-    document = {"outputs": [{"request": {"tolerance": 0.1}, "subject": 0}] * 2, "subjects": [meshed]}
-
-    finished, answers = _wrapper_call(outputs, document)
-
-    assert finished.returncode == 0, finished.stderr
-    assert len(answers) == 2
-    assert [(tmp_path / name).read_text() for name in names] == ["own", "own"]
 
 
 # --------------------------------------------------------------------------- #

@@ -162,8 +162,11 @@ at all).
   would have found them. Nothing is lost in parallelism: a shape's files never ran at once (`Shape.locked()`), and a
   call is one process slot and one task however many files it writes. Each file is answered on a line of its own as
   soon as it is written, and one left unanswered -- the process died, or the wrapper failed before reaching it --
-  is written again by a call of its own, so it fails exactly as it does alone and takes nothing else with it. Two
-  rules are load-bearing. The requirements of several file types are asked for in `sandbox_versions.install_order`,
+  is written again by a call of its own, so it fails exactly as it does alone and takes nothing else with it. Nor
+  does one that fails before it is handed in (a file type that does not resolve): the render raises once every
+  other one has finished (`_together`), since whichever is handed in last writes them all, and raising first left
+  them running for a caller that had gone; a cancelled render writes nothing nobody waits for (`_OutputBatch._run`).
+  Two rules are load-bearing. The requirements of several file types are asked for in `sandbox_versions.install_order`,
   which re-imposes "what build123d overwrites goes after it" on their union rather than inheriting an order that
   no single list has (the `remote` sandbox installs into one environment in the order asked); never
   `asyncio.gather` them. And two file types that write one path (glTF and three.js are
