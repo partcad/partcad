@@ -17,7 +17,7 @@ import shutil
 import pytest
 
 import partcad as pc
-from partcad import factory, sandbox_versions
+from partcad import brep_inspect, factory, sandbox_versions
 from partcad.part_factory_chili3d import PartFactoryChili3d, resolve_chili3d
 from partcad.shape import PART_EXTENSION_MAPPING, UNEXPORTABLE_PART_TYPES
 from partcad.user_config import UserConfig
@@ -176,3 +176,7 @@ def test_the_example_renders_to_a_brep_envelope(javascript_config):
     assert shape["label"] == "cube"
     # The script shows exactly one shape, so it is the only component.
     assert len(part.components) == 1
+    # Chili3D's kernel writes ASCII BREP and its encoder records no free-shell
+    # count, so this is the payload the core still scans for one: a cube is a
+    # body, and the scan read it to say so.
+    assert brep_inspect.envelope_free_shells(shape) == (0, 0)

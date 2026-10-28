@@ -865,14 +865,19 @@ at all).
   returns a part and does not go through `finished()` costs every such part two to four interpreters.
 
   Which leaves the core to notice the ones that were not converted, and it does that **without a CAD kernel
-  and without a sandbox**: `brep_inspect.py` reads the `TShapes` section of the BREP payload the core already
-  holds — one record per shape, each opening with a two-letter type code — and counts the shells no solid
-  references. Every solid is bounded by a shell, so "the payload contains a shell" is true of a box and says
-  nothing; what is asked is whether a shell bounds anything. It counts the references rather than resolving
-  them, so it never has to know which end of the record list the indices count from. `test/shell.py` is the
-  check that reports the result, and it is the cheapest one `pc test` runs. Do not answer this question in a
-  sandbox, and do not turn the scanner into a BREP reader: everything between a record's type code and the line
-  its sub-shape list ends on is geometry, and is skipped unread.
+  and without a sandbox**. The count is taken where the shape is live, as it is encoded: `shape_measure.free_shells`
+  puts it in the measurements every wrapper's `encode_shape` records (`freeShells`, beside `solids`), and
+  `brep_inspect.payload_free_shells` reads it back. Every solid is bounded by a shell, so "the payload contains a
+  shell" is true of a box and says nothing; what is asked is whether a shell bounds anything -- every distinct
+  shell, less the ones a solid is made of. An envelope that recorded no count -- Chili3D's, whose encoder measures
+  nothing, or one an earlier release wrote -- has an ASCII payload, and for that `brep_inspect.py` reads the
+  `TShapes` section — one record per shape, each opening with a two-letter type code — and counts the shells no
+  solid references, by the same rule. It counts the references rather than resolving them, so it never has to know
+  which end of the record list the indices count from. `test/shell.py` is the check that reports the result, and
+  it is the cheapest one `pc test` runs. Do not answer this question in a sandbox, and do not turn the scanner into
+  a BREP reader: everything between a record's type code and the line its sub-shape list ends on is geometry, and
+  is skipped unread. A binary payload (below) has no such line, which is why its count is recorded rather than
+  read.
 
   **No object can exclude itself from this check, nor from `degenerate` or `solidity`, and none of the three
   may be given a setting that lets it.** All three report a fact about the geometry — a surface where a body
@@ -1325,6 +1330,22 @@ at all).
   that too. One entry per sketch however many ports point at it — a bolt pattern is four ports and one circle —
   and it is attached *after* `get_wrapped()` rather than recorded in a node, because what a node records about a
   port is the reference: reading a declaration is a lookup and building a sketch is not.
+
+  **A BREP payload is OCCT's binary format, without its mesh** (`ocp_serialize.shape_to_brep`, `shape_from_brep`).
+  Binary because every shape that crosses the wrapper pipe or lands in the cache is written and read at least once,
+  and on the parts under `examples/` a `BinTools` payload is written and compressed four to eight times faster than a
+  `BRepTools` one, read one and a half to five times faster, and is 5-28% smaller after zstd -- and is exact, where
+  ASCII rounds every coordinate to fifteen digits on each hop. Exact is visible: the exact hidden-line projection is
+  sensitive to the last digits along a tangent silhouette, so drawings of curved parts moved by a segment here and
+  there when the payloads stopped being rounded. The format version is pinned (`BINARY_FORMAT_VERSION`, 4, which OCCT
+  7.6 and later read) rather than left at OCCT's `CURRENT`, because a payload the core encodes in process, with
+  whatever OCP its user installed, is read by the sandbox's, and one a plugin's container writes is read by PartCAD's
+  own. Readers tell the formats apart by the header and read both: Chili3D's kernel has an ASCII writer only, a
+  package's `.brep` file is ASCII, and an earlier release wrote ASCII (the shape cache's `VERSION` keeps the releases'
+  entries apart). Without its mesh because a triangulation is not geometry, only what somebody meshed the faces to:
+  everything that needs one -- a projection, an STL, a glTF, a CAE mesh -- meshes for itself at its own tolerance.
+  Except a face with no surface, which *is* its triangles (an SDF part, an STL read as a mesh, an imported glTF): OCCT
+  keeps those, and a shape holding one is written with all of its mesh so the edges bounding such a face keep theirs.
 
   **BREP payloads travel and are cached one copy per distinct payload** (`shape_envelope.KEY_BREPS`,
   `KEY_BREP_REF`, `Payloads`; the same two keys in `ocp_serialize`). Unlike `KEY_GEOMETRY` this is a property of the

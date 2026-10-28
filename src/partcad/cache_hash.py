@@ -117,7 +117,15 @@ from . import logging as pc_logging
 #      {motion: fixed}') is welded where its 'toParams' start it. An entry
 #      written under 13 would go on being served with the value dropped and
 #      the part at nought.
-VERSION = 14
+#  15: a BREP payload is OCCT's binary format and carries no triangulation but
+#      that of a face with no surface (see 'ocp_serialize.shape_to_brep'), and
+#      a shape's measurements say how many of its shells no solid bounds
+#      ('shape_envelope.METADATA_FREE_SHELLS'). This release could read an
+#      entry written under 14, because it tells the formats apart by their
+#      headers; an earlier release handed an entry written now could not, and
+#      its sandbox would fail the shape. A tier shared across releases is
+#      where the two meet, so they are kept apart.
+VERSION = 15
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.

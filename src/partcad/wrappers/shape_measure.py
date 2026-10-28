@@ -77,6 +77,54 @@ def volumes(shape):
     return sorted((props.Mass() for props in _solid_properties(shape)), reverse=True)
 
 
+def free_shells(shape):
+    """How many shells in 'shape' no solid bounds itself with.
+
+    A shell no solid owns is a skin rather than a body - the shape itself, or a
+    piece of the compound it is - and it is what the 'shell' check fails a part
+    for. That check runs in the core, which has no kernel, and used to read the
+    answer off the ASCII payload (see 'partcad.brep_inspect'); a payload is
+    binary now, so the answer is counted here, as the shape is encoded, and
+    travels in the measurements.
+
+    By the rule the payload scan applies, so the two agree: every distinct
+    shell, less the ones a solid is made of. Distinct by what the shell *is*
+    and not by where it is placed, since a payload records each sub-shape once
+    however often it is placed. Only containers are walked - compounds,
+    compsolids, solids - so this costs a step per solid and shell rather than
+    one per face.
+    """
+    from OCP.TopAbs import TopAbs_COMPOUND, TopAbs_COMPSOLID, TopAbs_SHELL, TopAbs_SOLID
+    from OCP.TopLoc import TopLoc_Location
+    from OCP.TopoDS import TopoDS_Iterator
+    from OCP.TopTools import TopTools_MapOfShape
+
+    if shape is None or shape.IsNull():
+        return 0
+    containers = (TopAbs_COMPOUND, TopAbs_COMPSOLID, TopAbs_SOLID)
+    unplaced = TopLoc_Location()
+    shells = []
+    seen = TopTools_MapOfShape()
+    bounding = TopTools_MapOfShape()
+    pending = [shape]
+    while pending:
+        current = pending.pop()
+        kind = current.ShapeType()
+        if kind == TopAbs_SHELL:
+            shell = current.Located(unplaced)
+            if seen.Add(shell):
+                shells.append(shell)
+        elif kind in containers:
+            children = TopoDS_Iterator(current)
+            while children.More():
+                child = children.Value()
+                if kind == TopAbs_SOLID and child.ShapeType() == TopAbs_SHELL:
+                    bounding.Add(child.Located(unplaced))
+                pending.append(child)
+                children.Next()
+    return sum(1 for shell in shells if not bounding.Contains(shell))
+
+
 def distribution(solids):
     """Where the solids' volume is and how it is spread: (centroid, unit inertia).
 
@@ -118,7 +166,8 @@ def measurements(shape):
     """Everything generic that is worth knowing about a shape's size.
 
     ``{"bbox": [...] | None, "volume": float | None, "solids": int,
-    "centroid": [x, y, z] | None, "unitInertia": [[...], [...], [...]] | None}``.
+    "freeShells": int, "centroid": [x, y, z] | None,
+    "unitInertia": [[...], [...], [...]] | None}``.
 
     'volume' is None - rather than 0.0 - for a shape holding no solid at all: a
     sketch, a shell, a wire. A shape that encloses nothing and a shape that is
@@ -131,6 +180,9 @@ def measurements(shape):
     'centroid' and 'unitInertia' are what a mass is worked out from - see
     'distribution()'. They are taken in the same pass over the solids as the
     volume, so a shape that is measured at all is measured for its mass too.
+
+    'freeShells' is how many shells no solid bounds itself with - see
+    'free_shells()', and the 'shell' check it is recorded for.
     """
     solids = _solid_properties(shape)
     found = sorted((props.Mass() for props in solids), reverse=True)
@@ -139,6 +191,7 @@ def measurements(shape):
         "bbox": bbox(shape),
         "volume": sum(found) if found else None,
         "solids": len(found),
+        "freeShells": free_shells(shape),
     }
     if centroid is not None:
         measured["centroid"] = centroid

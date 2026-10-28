@@ -65,9 +65,9 @@ def tests(concurrency_cap: int) -> list[Test]:
                 # weighs where a physical property is required.
                 RequirementsTest(),
                 DegenerateTest(),
-                # Costs no sandbox at all: the verdict is read off the BREP
-                # bytes the core already holds (see partcad.brep_inspect), so it
-                # goes with the nearly-free checks rather than the measured ones.
+                # Costs no sandbox at all: the verdict is read off the envelope
+                # the core already holds (see partcad.brep_inspect), so it goes
+                # with the nearly-free checks rather than the measured ones.
                 # Before solidity, which has nothing to say about a shape with no
                 # solid in it - this is what says why there is none.
                 ShellTest(),

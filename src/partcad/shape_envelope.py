@@ -263,6 +263,12 @@ FINISHED_DECLINED = "declined"
 METADATA_BBOX = "bbox"
 METADATA_VOLUME = "volume"
 METADATA_SOLIDS = "solids"
+# How many shells in the shape no solid bounds itself with: a skin rather than
+# a body, which the 'shell' check fails a part for (see 'partcad.brep_inspect').
+# Recorded because a binary payload cannot be read for it without a kernel, and
+# counted where the shape is live ('shape_measure.free_shells') by the rule
+# 'brep_inspect' applies to an ASCII one, so the two cannot answer differently.
+METADATA_FREE_SHELLS = "freeShells"
 # Where that volume is and how it is spread: the centroid in millimetres, and
 # the 3x3 inertia tensor about it at a density of one, in mm^5. The geometry's
 # half of a mass, a centre of mass and an inertia - the other half is a density,
@@ -279,8 +285,9 @@ ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
 # How far a BREP payload may expand before 'brep_plain()' refuses to finish
 # decompressing it, as a multiple of the compressed size and never less than the
 # floor. Both come from measurement rather than from taste: across the shapes
-# the example packages build, BREP compresses by a median of 4.3x and at worst
-# by 17.4x, while a zstd frame of 6 KB expands to 200 MB - a ratio of 32,000 -
+# the example packages build, ASCII BREP compresses by a median of 4.3x and at
+# worst by 17.4x - the binary BREP payloads are now written in compresses less,
+# by 1.8x to 7.5x on the example STEP parts - while a zstd frame of 6 KB expands to 200 MB - a ratio of 32,000 -
 # and costs nothing to write. The gap between the two is wide enough that a
 # limit set in the middle of it cannot be reached by geometry.
 #
@@ -403,10 +410,14 @@ def brep_plain(value) -> bytes:
     """The BREP bytes themselves: the payload, decompressed.
 
     'brep_bytes()' hands back the payload as it is carried, which is a zstd
-    frame; this unwraps it into the ASCII BREP that OCCT wrote. Everything the
-    core does with a shape moves the frame around unopened, so this is for the
-    one thing that reads it: 'brep_inspect', which answers a question about the
-    shape's topology off the bytes rather than by starting a sandbox.
+    frame; this unwraps it into the BREP that OCCT wrote - binary, from every
+    Python wrapper, and ASCII from Chili3D or an earlier release (see
+    'ocp_serialize.shape_from_brep'). Everything the core does with a shape
+    moves the frame around unopened, so this is for the two things that open
+    it: 'brep_inspect', which answers a question about an ASCII payload's
+    topology off the bytes rather than by starting a sandbox, and the
+    interference check, which writes what two parts share out as '.brep' files
+    for a 'brep' part to read back.
 
     A payload that is not a zstd frame is returned as it is. That is how a peer
     without zstd writes one (see 'ocp_serialize._compress'), and telling the two
@@ -415,9 +426,10 @@ def brep_plain(value) -> bytes:
 
     Bounded (see MAX_BREP_EXPANSION): a frame that keeps producing past the
     limit raises rather than being decompressed to the end. Raising is the right
-    answer for the only caller there is - 'brep_inspect.topology()' reads a
-    refusal as "this payload could not be read", which is a verdict it already
-    has to have, and which reports nothing about the shape.
+    answer for both callers - 'brep_inspect.topology()' reads a refusal as "this
+    payload could not be read", which is a verdict it already has to have and
+    reports nothing about the shape, and the interference check keeps nothing
+    to look at rather than failing its verdict.
     """
     data = brep_bytes(value)
     if not data.startswith(ZSTD_MAGIC):

@@ -14,13 +14,17 @@ builds a face.
 """
 
 import asyncio
-import io
 import math
+import os
+import sys
 
 import pytest
 
 import partcad as pc
 from partcad import shape_envelope
+
+sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
+import ocp_serialize  # noqa: E402
 
 PACKAGE = "tests/partcad/unit/data/sketch_slot/partcad.yaml"
 
@@ -37,21 +41,14 @@ def _measured(project, name):
     touches a live OCCT object - so the payload is read back into one here.
     """
     from OCP.Bnd import Bnd_Box
-    from OCP.BRep import BRep_Builder
     from OCP.BRepBndLib import BRepBndLib
     from OCP.BRepGProp import BRepGProp
-    from OCP.BRepTools import BRepTools
     from OCP.GProp import GProp_GProps
-    from OCP.TopoDS import TopoDS_Shape
 
     ctx = project.ctx
     envelope = asyncio.run(project.get_sketch(name).get_wrapped(ctx))
-    shape = TopoDS_Shape()
-    BRepTools.Read_s(
-        shape,
-        io.BytesIO(shape_envelope.brep_plain(envelope[shape_envelope.KEY_BREP])),
-        BRep_Builder(),
-    )
+    # Binary, as every Python wrapper writes a payload; 'shape_from_brep' reads either format.
+    shape = ocp_serialize.shape_from_brep(shape_envelope.brep_plain(envelope[shape_envelope.KEY_BREP]))
 
     properties = GProp_GProps()
     BRepGProp.SurfaceProperties_s(shape, properties)

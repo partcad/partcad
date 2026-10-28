@@ -60,7 +60,9 @@ license:
 # format implemented at the bottom of this module:
 #
 # * A single shape is an object {"name", "label", "brep"} where "brep" is the
-#   base64 of the zstd-compressed bytes 'BRepTools.Write_s' produces.
+#   base64 of the zstd-compressed bytes 'BinTools.Write_s' produces - OCCT's
+#   binary BREP, see 'shape_to_brep()'. The ASCII BREP 'BRepTools.Write_s'
+#   produces is still read wherever a payload is: see 'shape_from_brep()'.
 # * An assembly is {"name", "label", "assembly": [...]} whose array holds child
 #   shape- or sub-assembly-objects; it decodes to a TopoDS_Compound.
 # * The request and response envelopes are ordinary JSON objects that carry such
@@ -91,6 +93,9 @@ import pyexpat  # noqa: F401
 # triggers _ensure_ocp() first.
 OCP = None
 downcast_LUT = None
+# The 'BinTools_FormatVersion' payloads are written in, or None where this OCP
+# has no binary writer to ask for one (see 'shape_to_brep()'). Set with OCP.
+_binary_version = None
 
 try:
     # Python 3.14 and newer carry zstd in the standard library. One statement,
@@ -109,7 +114,7 @@ except ImportError:
 
 def _ensure_ocp():
     """Import OCP and build the downcast table on first use."""
-    global OCP, downcast_LUT
+    global OCP, downcast_LUT, _binary_version
     if OCP is not None:
         return
 
@@ -120,10 +125,18 @@ def _ensure_ocp():
     # 'OCP.TopoDS.TopoDS.Vertex_s' through the package alone raises AttributeError.
     # Importing each submodule materializes it; the dotted references below then
     # resolve as they always did.
+    import OCP.BinTools  # noqa: F401
     import OCP.BRep  # noqa: F401
     import OCP.BRepTools  # noqa: F401
     import OCP.TopAbs  # noqa: F401
+    import OCP.TopExp  # noqa: F401
     import OCP.TopoDS  # noqa: F401
+
+    # Named, never 'BinTools_FormatVersion_CURRENT': see BINARY_FORMAT_VERSION.
+    # Absent from an OCCT older than 7.6, which has no versioned binary writer;
+    # such a peer writes ASCII, which every reader here still reads.
+    versions = getattr(_OCP.BinTools, "BinTools_FormatVersion", None)
+    _binary_version = getattr(versions, "BinTools_FormatVersion_VERSION_%d" % BINARY_FORMAT_VERSION, None)
 
     # Build the table into a local first, then publish 'downcast_LUT' before
     # 'OCP'. The guard above returns as soon as 'OCP is not None', so a second
@@ -232,10 +245,48 @@ METADATA_FINISHED = "finished"
 FINISHED_VALIDATED = "validated"
 FINISHED_DECLINED = "declined"
 
-# What 'BRepTools.Write_s' produces is verbose ASCII, and it is by far the
-# largest thing that either travels the wrapper pipe or lands in the shape
-# cache. Compressing it before the base64 (which inflates whatever it is given
-# by another third) is what keeps both affordable.
+# A payload is OCCT's *binary* BREP ('BinTools'), not the ASCII one
+# ('BRepTools') it used to be. Every shape that crosses the wrapper pipe or lands
+# in the shape cache is written and read once at least, and on the parts under
+# examples/ (STEP parts, an SDF one) writing and compressing a binary payload is
+# four to eight times faster than an ASCII one, reading it one and a half to
+# five times faster, and it is 40-55% smaller before zstd and 5-28% smaller
+# after it. It is also exact: ASCII prints a double to fifteen significant
+# digits, so every hop through it moved a vertex - by up to 5e-11 on a large
+# part - and a part that went through three wrappers had been rounded three
+# times.
+#
+# The version is named rather than left at 'BinTools_FormatVersion_CURRENT',
+# because the writer and the reader are not always the same OCCT: a payload
+# the core encodes in process, with whatever OCP its user installed, is read in
+# a sandbox, and one written in a plugin's container is read in PartCAD's own.
+# A writer that moved to a newer CURRENT would write what an older reader
+# refuses. 4 is what OCCT 7.6 and later write by default and read, which is
+# every OCP PartCAD provisions (sandbox_versions.OCP and CADQUERY_OCP, both
+# 7.9.3), and it is the first version that keeps the normals of a face that is
+# nothing but triangles - an imported glTF's - which the ASCII payloads kept
+# too.
+BINARY_FORMAT_VERSION = 4
+
+# What a binary payload starts with: 'BinTools' writes a newline and then
+# "Open CASCADE Topology V4, (c) Open Cascade". The ASCII one starts with
+# "CASCADE Topology" after its newline, or with "DBRep_DrawableShape" when it
+# was saved from Draw - which is why this is matched at the start, past the
+# whitespace, and never as a substring: the ASCII marker is inside this one.
+BINARY_MAGIC = b"Open CASCADE Topology"
+# How much of a payload the sniff looks at.
+_SNIFF_WINDOW = 64
+
+# The header of the section of a binary payload that holds triangulations, and
+# its count. A payload written without triangles holds only those of faces that
+# have no surface, so a count other than 0 is how 'shape_to_brep()' learns that
+# a shape is a mesh without walking its faces.
+_TRIANGULATIONS = b"Triangulations "
+
+# The payload, zstd-compressed, is by far the largest thing that either travels
+# the wrapper pipe or lands in the shape cache. Compressing it before the base64
+# (which inflates whatever it is given by another third) is what keeps both
+# affordable.
 #
 # Level 3 is zstd's own default: on this data the levels above it cost several
 # times the CPU for a few percent of size, and the payload is on its way to a
@@ -244,8 +295,8 @@ ZSTD_LEVEL = 3
 
 # The zstd frame header, used to tell a compressed payload from a plain one.
 # Sniffing it rather than declaring the encoding in the JSON keeps the format
-# unchanged, and it cannot collide with a raw payload: BREP always begins with
-# its own ASCII header ("DBRep_DrawableShape" or "CASCADE Topology").
+# unchanged, and it cannot collide with a raw payload: BREP, binary or ASCII,
+# always begins with its own text header (see BINARY_MAGIC).
 ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
 
 # Whether the "no zstd here" warning has already been issued. It applies to
@@ -313,22 +364,120 @@ def encode_gltf(glb: bytes) -> bytes:
     return bytes(glb)
 
 
-def shape_to_brep(shape) -> bytes:
-    """Serialize a TopoDS_Shape into the flat BREP byte array."""
-    _ensure_ocp()
+def _write_binary(shape, with_triangles: bool) -> bytes:
     with BytesIO() as bio:
-        OCP.BRepTools.BRepTools.Write_s(shape, bio)
+        # Normals never: a surface gives them back exactly, and a face with no
+        # surface keeps its own whatever this says (see BINARY_FORMAT_VERSION).
+        OCP.BinTools.BinTools.Write_s(shape, bio, with_triangles, False, _binary_version)
         return bio.getvalue()
 
 
+def _holds_mesh(payload: bytes) -> bool:
+    """Whether a payload written without triangles still holds some: a face that is only a mesh.
+
+    Read off the count in the header of the triangulation section, which is
+    text in a binary payload. Looked for from the end: the section comes after
+    "PolygonOnTriangulations", whose name ends in the same word, and before
+    only the shapes themselves. A count that cannot be read answers yes, which
+    costs a payload with its triangles in it and nothing else.
+    """
+    at = payload.rfind(_TRIANGULATIONS)
+    if at < 0 or payload[max(at - 2, 0) : at] == b"On":
+        return True
+    start = at + len(_TRIANGULATIONS)
+    end = payload.find(b"\n", start, start + 24)
+    if end < 0:
+        return True
+    try:
+        return int(payload[start:end]) != 0
+    except ValueError:
+        return True
+
+
+def shape_to_brep(shape) -> bytes:
+    """Serialize a TopoDS_Shape into the flat BREP byte array: binary, and without its mesh.
+
+    Without its mesh because a triangulation is not geometry: it is what
+    somebody meshed the faces to, at the tolerance they wanted, and every
+    reader of a payload that needs one meshes for itself - a projection, an
+    STL, a glTF and a CAE model each at their own tolerance (see
+    'utils_ocp.tessellate', 'wrapper_gltf._mesh', 'render_svg'). Carried, it
+    was most of the payload of anything that had been meshed: forty placements
+    of the example motor, meshed, are 44 MB with it and 10 MB without (4.0 and
+    1.2 MB compressed), written in 504 ms rather than 205.
+
+    Except where it *is* the geometry: a face with no surface under it is its
+    triangles - an SDF part, an STL read as a mesh, an imported glTF - and
+    OCCT keeps those whatever it is told. What it does not keep, told to drop
+    triangles, is the polygons on the edges bounding such a face, which are
+    those edges' only geometry. So a shape found to hold a mesh is written
+    again with everything, unless it has no edges for that to matter to (an
+    SDF part is one face and no edge).
+
+    Not covered: an edge whose only geometry is a 3D polygon, standing on its
+    own. Nothing PartCAD reads or builds makes one, and telling would cost a
+    walk over every edge of every shape - as long as writing it.
+
+    ASCII where this OCP has no binary writer (an OCCT older than 7.6), which
+    every reader still reads (see 'shape_from_brep()').
+    """
+    _ensure_ocp()
+    if _binary_version is None:
+        with BytesIO() as bio:
+            OCP.BRepTools.BRepTools.Write_s(shape, bio)
+            return bio.getvalue()
+
+    payload = _write_binary(shape, False)
+    if _holds_mesh(payload) and OCP.TopExp.TopExp_Explorer(shape, OCP.TopAbs.TopAbs_EDGE).More():
+        payload = _write_binary(shape, True)
+    return payload
+
+
+def is_binary_brep(data) -> bool:
+    """Whether a BREP payload (uncompressed) is OCCT's binary format rather than its ASCII one."""
+    return bytes(data[:_SNIFF_WINDOW]).lstrip().startswith(BINARY_MAGIC)
+
+
 def shape_from_brep(data: bytes):
-    """Deserialize a flat BREP byte array into a downcast TopoDS_Shape."""
+    """Deserialize a flat BREP byte array into a downcast TopoDS_Shape.
+
+    Either format, told apart by its header rather than by anything the
+    envelope says: a payload written by an earlier release (in a shared cache
+    tier, on the pipe from a peer), by Chili3D, whose kernel has an ASCII
+    writer and no binary one, or read from a '.brep' file is ASCII, and every
+    payload this module writes is binary.
+    """
     _ensure_ocp()
     with BytesIO(data) as bio:
         shape = OCP.TopoDS.TopoDS_Shape()
-        builder = OCP.BRep.BRep_Builder()
-        OCP.BRepTools.BRepTools.Read_s(shape, bio, builder)
+        if is_binary_brep(data):
+            OCP.BinTools.BinTools.Read_s(shape, bio)
+        else:
+            OCP.BRepTools.BRepTools.Read_s(shape, bio, OCP.BRep.BRep_Builder())
         return downcast(shape)
+
+
+def shape_from_brep_file(path: str):
+    """Read a '.brep' file in either format, as 'shape_from_brep()' reads a payload.
+
+    A package's '.brep' is ASCII - that is what every tool writes by default -
+    but one PartCAD wrote itself need not be: the volumes an interference check
+    leaves behind are the payloads it answered with, decompressed into files
+    (see 'partcad.test.interference_artifact'). The file is read by OCCT from
+    its path rather than into memory first, and only its first bytes are read
+    here.
+    """
+    _ensure_ocp()
+    with open(path, "rb") as stream:
+        head = stream.read(_SNIFF_WINDOW)
+    shape = OCP.TopoDS.TopoDS_Shape()
+    if is_binary_brep(head):
+        read = OCP.BinTools.BinTools.Read_s(shape, path)
+    else:
+        read = OCP.BRepTools.BRepTools.Read_s(shape, path, OCP.BRep.BRep_Builder())
+    if not read or shape.IsNull():
+        raise ValueError("Failed to load BREP file: %s" % path)
+    return shape
 
 
 def compressed_brep(shape) -> bytes:

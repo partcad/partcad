@@ -118,6 +118,59 @@ def test_a_payload_that_cannot_be_read_is_not_an_answer():
     assert brep_inspect.topology(truncated[: truncated.index(b"TShapes") + 40]) is None
 
 
+# The head of what 'BinTools' writes, which is the format every Python wrapper
+# writes a payload in. Real enough for the sniff, and the rest is beside the
+# point: the scan must not try to read it.
+BINARY = b"\nOpen CASCADE Topology V4, (c) Open Cascade\nLocations 0\nCurve2ds 1\n\x01\x00\x00TShapes 1\n\x07\x00*\n"
+
+
+def test_a_binary_payload_is_not_scanned():
+    """The ASCII marker is inside the binary one, so the binary one has to be told apart first."""
+    assert brep_inspect.is_binary_brep(BINARY)
+    assert not brep_inspect.looks_like_brep(BINARY)
+    assert brep_inspect.topology(BINARY) is None
+    assert brep_inspect.topology(zstd_compress(BINARY, 3)) is None
+    assert not brep_inspect.is_binary_brep(payload("solid.brep"))
+
+
+def measured(free_shells, brep=BINARY):
+    return {
+        "name": "pkg:thing",
+        "label": "thing",
+        "brep": zstd_compress(brep, 3),
+        "metadata": {"measurements": {"solids": 1, shape_envelope.METADATA_FREE_SHELLS: free_shells}},
+    }
+
+
+def test_the_count_an_envelope_recorded_is_the_answer():
+    """Taken where the shape was live; the core reads it, and reads no payload to do it."""
+    assert brep_inspect.envelope_free_shells(measured(0)) == (0, 0)
+    assert brep_inspect.envelope_free_shells(measured(2)) == (2, 0)
+    assert brep_inspect.envelope_free_shells({"assembly": [measured(0), measured(1)]}) == (1, 0)
+    # A binary payload that recorded nothing is a payload nothing read.
+    bare = measured(0)
+    del bare["metadata"]
+    assert brep_inspect.envelope_free_shells(bare) == (0, 1)
+
+
+def test_the_recorded_count_comes_before_the_scan():
+    """It is the same count, from the shape the payload was written from, and it costs nothing to read."""
+    # An ASCII payload of a solid beside a record that says otherwise: the record is what is believed.
+    assert brep_inspect.envelope_free_shells(measured(1, brep=payload("solid.brep"))) == (1, 0)
+
+
+@pytest.mark.parametrize("count", [None, -1, True, 1.5, "1"])
+def test_a_count_nobody_wrote_is_not_one(count):
+    """Only a whole, non-negative number is a count; anything else falls back to the payload."""
+    assert brep_inspect.recorded_free_shells(measured(count)) is None
+    assert brep_inspect.envelope_free_shells(measured(count, brep=payload("shell_open.brep"))) == (1, 0)
+
+
+def test_the_check_reads_the_recorded_count():
+    assert verdict(_Shape(measured(0))) == ShellTest.TEST_PASSED
+    assert verdict(_Shape(measured(1))) == ShellTest.TEST_FAILED
+
+
 def test_a_record_that_is_not_a_shape_type_stops_the_scan():
     """A format this no longer understands reads as unread, not as "no shell"."""
     broken = payload("shell_closed.brep").replace(b"\nSh\n", b"\nXx\n", 1)

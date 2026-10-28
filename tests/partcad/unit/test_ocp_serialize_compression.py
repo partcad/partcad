@@ -54,8 +54,8 @@ def test_brep_payload_is_a_compressed_frame():
     payload = base64.b64decode(ocp_serialize.encode_shape(box)["brep"])
 
     assert payload.startswith(ocp_serialize.ZSTD_MAGIC)
-    # The whole point: BREP is verbose ASCII, so this is a large margin, not a
-    # marginal one.
+    # The whole point: even binary BREP repeats itself - a header per section,
+    # zeros in every small integer - so this is a margin, not a coin toss.
     assert len(payload) < len(ocp_serialize.shape_to_brep(box))
 
 
@@ -114,7 +114,7 @@ def test_encoding_falls_back_when_zstd_is_missing(monkeypatch, capsys):
     payload = base64.b64decode(encoded["brep"])
 
     assert not payload.startswith(ocp_serialize.ZSTD_MAGIC)
-    # Still the BREP an older PartCAD would have written, and still decodable.
+    # The plain BREP itself, which every reader tells from a frame, and still decodable.
     assert abs(_volume(ocp_serialize.decode_shape(encoded)) - _volume(box)) < 1e-6
     assert "zstd is not available" in capsys.readouterr().err
 

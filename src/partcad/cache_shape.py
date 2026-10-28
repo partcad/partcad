@@ -69,9 +69,16 @@ from .utils import total_size
 #
 # They are told apart on read by the leading bytes: each frame by its magic, JSON
 # by its first character, and a BREP payload is either a zstd frame or, where the
-# peer had no zstd, the ASCII BREP header - the same distinction
-# 'wrappers/ocp_serialize.py' already relies on.
-_BREP_PREFIXES = (b"\x28\xb5\x2f\xfd", b"CASCADE Topology", b"DBRep_DrawableShape")
+# peer had no zstd, the BREP header - binary or ASCII, each of which OCCT writes
+# after a newline - the same distinction 'wrappers/ocp_serialize.py' already
+# relies on.
+_BREP_PREFIXES = (
+    b"\x28\xb5\x2f\xfd",
+    b"\nOpen CASCADE Topology",
+    b"\nCASCADE Topology",
+    b"CASCADE Topology",
+    b"DBRep_DrawableShape",
+)
 
 # A BREP payload with metadata in front of it:
 #

@@ -38,10 +38,12 @@ class ShellTest(Test):
     or a BREP file, where a surface model is what the file says the part is, and
     saying so is this check's job rather than quietly changing it.
 
-    Read off the BREP bytes rather than measured in a sandbox: the payload the
-    core already holds says which shapes it is made of in plain text, and
-    'partcad.brep_inspect' reads that without a CAD kernel. So this check costs
-    no sandbox and no interpreter, which is why it can be asked of every part.
+    Read off the envelope rather than measured in a sandbox: the wrapper that
+    encoded the shape counted its free shells while the shape was live and
+    recorded the count in its measurements, and an ASCII payload that carries
+    no count says which shapes it is made of in plain text. 'partcad.brep_inspect'
+    reads either without a CAD kernel. So this check costs no sandbox and no
+    interpreter, which is why it can be asked of every part.
 
     A shell a solid bounds is not reported - a box has one, and it is that box's
     boundary. What is reported is a shell no solid owns: the shape itself, or one
