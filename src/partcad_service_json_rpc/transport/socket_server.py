@@ -7,10 +7,17 @@
 
 This is what the per-workspace daemon serves. Every connection is a bidirectional
 JSON-RPC endpoint using the same ``Content-Length`` framing as the stdio channel.
-A single shared warm :class:`Session` backs all connections; a lock serializes
-dispatch, and while a request is handled the session emitter is bound to the
-calling connection's writer, so events (logs, items, stats, prompts) are routed
-back to that client only.
+A single shared warm :class:`Session` backs all connections, and requests are
+served one at a time by one thread (``dispatch.Dispatch``); while a request is
+handled the session emitter is bound to the calling connection's writer, so
+events (logs, items, stats, prompts) are routed back to that client only.
+
+Each connection has a thread that reads it and a thread that writes it
+(``writer.SocketWriter``), and neither waits for a request to be served: the
+reader goes on reading, which is how a ``$/cancelRequest`` reaches a request
+that is queued or running (``core.cancellation``), and the writer sends what is
+queued for its client at whatever pace that client reads -- so a client that
+stops reading delays nobody else, and is dropped if it does not start again.
 
 The server can also be asked to :meth:`~SocketServer.restart`: it stops
 listening, lets every connection finish what it is doing, tells each one to
@@ -27,6 +34,7 @@ kind of thing, and is kept beside them (a ``framing.Peer`` per connection).
 
 import os
 import socket
+import sys
 import threading
 from typing import Callable, Mapping, Optional
 
@@ -35,8 +43,15 @@ from partcad_utils.logging_ansi_render import AnsiEventRenderer
 from partcad_utils.workspace import LIVENESS_METHOD
 
 from ..config_restart import GRACE_SECONDS, SETTINGS_METHOD, Connections, settings_differ
+from ..core.cancellation import CANCEL_METHOD
 from ..core.events import TERMINAL, TERMINAL_TEXT, log_mode_result, terminal_params
 from ..rpc.dispatcher import INVALID_PARAMS, Dispatcher, Handler
+from .dispatch import Dispatch, Job, Requests
+from .writer import MAX_BACKLOG, WRITE_TIMEOUT, SocketWriter
+
+# How long a closing connection waits for what it still has to send, and how
+# long `daemon.stop` waits for its answer to leave before the daemon does.
+_FLUSH_SECONDS = 5.0
 
 STOP_METHOD = "daemon.stop"
 
@@ -55,7 +70,7 @@ LOG_MODE_METHOD = "log.mode"
 
 
 class SocketServer:
-    """Serves the shared session over a stream socket, one thread per connection."""
+    """Serves the shared session over a stream socket: a reader and a writer per connection, one dispatcher."""
 
     def __init__(
         self,
@@ -64,11 +79,15 @@ class SocketServer:
         on_shutdown: Optional[Callable] = None,
         restart_grace: float = GRACE_SECONDS,
         launch_settings=(),
+        write_timeout: float = WRITE_TIMEOUT,
+        max_backlog: int = MAX_BACKLOG,
     ):
         self._session = session
         self._dispatcher = Dispatcher(registry)
         self._on_shutdown = on_shutdown
-        self._dispatch_lock = threading.Lock()
+        # One request at a time, whichever connection it came from: the session
+        # is not safe to use from two threads (see 'dispatch').
+        self._dispatch = Dispatch(self._dispatcher, session)
         self._server_sock: Optional[socket.socket] = None
         self._path: Optional[str] = None
         self._listener_lock = threading.Lock()
@@ -79,6 +98,9 @@ class SocketServer:
         # `daemon.settings` (see `config_restart.SETTINGS_METHOD`).
         self._launch_settings = list(launch_settings)
         self._connections = Connections()
+        # When a client that stops reading is dropped (see 'writer').
+        self._write_timeout = write_timeout
+        self._max_backlog = max_backlog
 
     def serve_unix(self, path: str) -> None:
         """Bind an AF_UNIX socket at ``path`` and serve until stopped."""
@@ -141,7 +163,18 @@ class SocketServer:
 
     def _handle_connection(self, conn: socket.socket, token: Optional[int] = None) -> None:
         rfile = conn.makefile("rb")
-        wfile = conn.makefile("wb")
+        # What this client asked for and has not been answered yet: what a
+        # `$/cancelRequest` is looked up in, and cancelled wholesale if the
+        # client stops being reachable.
+        requests = Requests()
+
+        def dropped(why):
+            print("PartCAD daemon: dropped a connection: %s" % why, file=sys.stderr, flush=True)
+            requests.cancel_all()
+
+        # Every frame for this client is queued here and sent by a thread of its
+        # own; nothing serving a request ever waits on the client to read.
+        wfile = SocketWriter(conn, on_drop=dropped, timeout=self._write_timeout, max_backlog=self._max_backlog)
         write_lock = threading.Lock()
         # What this client has said it reads: whether its files may go as raw
         # attachments rather than as base64 (see 'partcad_utils.framing').
@@ -169,11 +202,14 @@ class SocketServer:
                 pass
 
         def sink(event, payload):
-            if renderer[0] is not None and event == "log":
+            # Read once: `log.mode` is answered by the reader, which may swap
+            # the renderer while a request of this connection is emitting.
+            rendering = renderer[0]
+            if rendering is not None and event == "log":
                 # Rendered instead of forwarded. The renderer writes through
-                # `send` itself -- from this thread and from its own ticking
-                # thread -- so nothing is emitted here.
-                renderer[0].handle(payload)
+                # `send` itself -- from the dispatch thread and from its own
+                # ticking thread -- so nothing is emitted here.
+                rendering.handle(payload)
                 return
             send(event, payload)
 
@@ -193,6 +229,9 @@ class SocketServer:
                     if "id" in request:
                         with write_lock:
                             write({"jsonrpc": "2.0", "id": request["id"], "result": {"stopped": True}})
+                        # Sent before the daemon goes, not merely queued: the
+                        # process may be gone before the writer gets to it.
+                        wfile.wait_sent(_FLUSH_SECONDS)
                     self.stop()
                     break
 
@@ -255,45 +294,63 @@ class SocketServer:
                     continue
 
                 if isinstance(request, dict) and request.get("method") == LIVENESS_METHOD:
-                    # Answered now, outside the dispatch lock: it reads the
-                    # registry and nothing else, and a liveness probe queued
-                    # behind the request being served timed out and took this
-                    # daemon for gone -- which is what made `pc daemon stop`
-                    # say there was nothing to stop while one was busy or stuck.
+                    # Answered now, not queued: it reads the registry and
+                    # nothing else, and a liveness probe queued behind the
+                    # request being served timed out and took this daemon for
+                    # gone -- which is what made `pc daemon stop` say there was
+                    # nothing to stop while one was busy or stuck.
                     response = self._dispatcher.dispatch(request, self._session)
                     if response is not None:
                         with write_lock:
                             write(response)
                     continue
 
-                # Busy from here until the answer is written: a restart waits
-                # for it, and tells this connection to reconnect only after.
-                self._connections.begin(token)
-                try:
-                    with self._dispatch_lock:
-                        self._session.emitter.set_sink(sink)
-                        try:
-                            response = self._dispatcher.dispatch(request, self._session)
-                        finally:
-                            self._session.emitter.set_sink(None)
-                    if response is not None:
-                        with write_lock:
-                            write(response)
-                finally:
-                    self._connections.end(token)
+                if isinstance(request, dict) and request.get("method") == CANCEL_METHOD:
+                    # A notification, answered by the request it names: at once
+                    # if that one is still queued, by its handler if it is
+                    # running (see 'core.cancellation').
+                    requests.cancel(request.get("params"))
+                    continue
+
+                self._submit(request, requests, sink, write, write_lock, token)
         except OSError:
             pass
         finally:
+            # What this client asked for is still answered after it stops
+            # sending: a client may close its half of the connection and go on
+            # reading. One that has gone altogether is found out by the writer,
+            # whose next send fails, and its requests are cancelled then.
+            requests.wait_idle()
+            wfile.close(_FLUSH_SECONDS)
             self._connections.remove(token)
             if renderer[0] is not None:
                 # A client that disconnects mid-operation leaves a thread
                 # redrawing a footer into a closed socket.
                 renderer[0].close()
                 renderer[0] = None
-            try:
-                conn.close()
-            except OSError:
-                pass
+            for closing in (rfile, conn):
+                try:
+                    closing.close()
+                except OSError:
+                    pass
+
+    def _submit(self, request, requests: Requests, sink, write, write_lock, token) -> None:
+        """Queue a request for dispatch, as this connection's next."""
+
+        def respond(response):
+            with write_lock:
+                write(response)
+
+        def finish(job):
+            requests.untrack(job)
+            self._connections.end(token)
+
+        job = Job(request, sink, respond, finish)
+        requests.track(job)
+        # Busy from here until the answer is written: a restart waits for it,
+        # and tells this connection to reconnect only after.
+        self._connections.begin(token)
+        self._dispatch.submit(job, requests)
 
     def restart(self) -> None:
         """Stop listening now, and stop serving once the connections are done.
@@ -344,5 +401,6 @@ class SocketServer:
             return
         self._stop.set()
         self._close_listener()
+        self._dispatch.stop()
         if self._on_shutdown is not None:
             self._on_shutdown()

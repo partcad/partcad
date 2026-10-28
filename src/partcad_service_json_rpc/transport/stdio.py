@@ -10,6 +10,13 @@ This is the default transport. The extension talks to it with
 Protocol uses. Server-to-client notifications (the event stream) share the
 output stream with responses, guarded by a lock so the log-streaming thread and
 the dispatch loop never interleave a frame.
+
+Requests are read on the calling thread and served on another, one at a time
+and in order (``dispatch.Dispatch``), as the socket daemon serves them: the
+reader goes on reading while a request runs, which is how a ``$/cancelRequest``
+reaches it (see ``core.cancellation``). Writing stays on whichever thread has
+something to write: this channel has one client, and a client that does not
+read its own answers delays nobody else.
 """
 
 import sys
@@ -19,8 +26,10 @@ from typing import BinaryIO, Mapping
 from partcad_utils.framing import Peer, read_message, write_message
 from partcad_utils.logging_ansi_render import AnsiEventRenderer
 
+from ..core.cancellation import CANCEL_METHOD
 from ..core.events import TERMINAL, TERMINAL_TEXT, log_mode_result, terminal_params
 from ..rpc.dispatcher import INVALID_PARAMS, Dispatcher, Handler
+from .dispatch import Dispatch, Job, Requests
 
 # The same opt-in the socket daemon answers; see the note on `LOG_MODE_METHOD`
 # in `socket_server.py`. Kept working here so that `partcad.serviceChannel:
@@ -52,13 +61,26 @@ def serve(read_stream: BinaryIO, write_stream: BinaryIO, session, registry: Mapp
             pass
 
     def sink(event, payload):
-        if renderer[0] is not None and event == "log":
-            renderer[0].handle(payload)
+        # Read once: the reader may swap it while a request is emitting.
+        rendering = renderer[0]
+        if rendering is not None and event == "log":
+            rendering.handle(payload)
             return
         send(event, payload)
 
+    def respond(response):
+        try:
+            with lock:
+                write_message(write_stream, response, attachments=peer.attachments)
+        except (OSError, ValueError):
+            # The client has closed its end: nobody is left to answer.
+            pass
+
     session.emitter.set_sink(sink)
     dispatcher = Dispatcher(registry)
+    # No sink of its own for each request: the one bound above stays bound.
+    dispatch = Dispatch(dispatcher, session)
+    requests = Requests()
 
     try:
         while True:
@@ -102,11 +124,19 @@ def serve(read_stream: BinaryIO, write_stream: BinaryIO, session, registry: Mapp
                         )
                 continue
 
-            response = dispatcher.dispatch(request, session)
-            if response is not None:
-                with lock:
-                    write_message(write_stream, response, attachments=peer.attachments)
+            if isinstance(request, dict) and request.get("method") == CANCEL_METHOD:
+                requests.cancel(request.get("params"))
+                continue
+
+            job = Job(request, None, respond, requests.untrack)
+            requests.track(job)
+            dispatch.submit(job, requests)
     finally:
+        # Everything that was asked is answered before this returns, as it was
+        # when each request was answered before the next was read: the end of
+        # the input is the client done *sending*, and it may still be reading.
+        requests.wait_idle()
+        dispatch.stop()
         if renderer[0] is not None:
             renderer[0].close()
             renderer[0] = None

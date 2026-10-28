@@ -15,6 +15,8 @@ import logging
 import traceback
 from typing import Any, Callable, Mapping, Optional
 
+from ..core import cancellation
+
 _logger = logging.getLogger(__name__)
 
 # Standard JSON-RPC 2.0 error codes.
@@ -23,6 +25,9 @@ INVALID_REQUEST = -32600
 METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602
 INTERNAL_ERROR = -32603
+# What a cancelled request is answered with (LSP's RequestCancelled; see
+# 'core.cancellation').
+REQUEST_CANCELLED = cancellation.REQUEST_CANCELLED
 
 Handler = Callable[[Any, Any], Any]
 
@@ -56,11 +61,15 @@ class Dispatcher:
         # server-side either way, so nothing is lost.
         self._include_traceback = include_traceback
 
-    def dispatch(self, request: Any, session: Any) -> Optional[dict]:
+    def dispatch(self, request: Any, session: Any, cancel: Optional[cancellation.CancelToken] = None) -> Optional[dict]:
         """Process one parsed request; return a response dict or None.
 
         Notifications (requests without an ``id``) never produce a response,
         even on error, per the JSON-RPC 2.0 specification.
+
+        ``cancel`` is what a ``$/cancelRequest`` for this request sets: while
+        the handler runs it is the request :func:`cancellation.check` looks at,
+        and a handler that stops at one is answered ``REQUEST_CANCELLED``.
         """
         is_notification = not isinstance(request, dict) or "id" not in request
         request_id = request.get("id") if isinstance(request, dict) else None
@@ -84,7 +93,12 @@ class Dispatcher:
                 raise JsonRpcError(METHOD_NOT_FOUND, f"Method not found: {method}")
 
             params = request.get("params", {})
-            result = handler(session, params)
+            with cancellation.serving(cancel):
+                result = handler(session, params)
+        except cancellation.RequestCancelled:
+            if is_notification:
+                return None
+            return cancellation.cancelled_response(request_id)
         except JsonRpcError as e:
             if is_notification:
                 return None

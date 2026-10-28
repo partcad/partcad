@@ -6,6 +6,8 @@
 """Tests for the optional HTTP + SSE transport."""
 
 import asyncio
+import base64
+import threading
 
 from aiohttp.test_utils import TestClient, TestServer
 
@@ -74,3 +76,76 @@ def test_events_stream_delivers_emitted_notifications():
     line = _run(run())
     assert "items" in line
     assert "//" in line
+
+
+def test_nothing_is_encoded_on_the_event_loop(monkeypatch):
+    # The loop is every client's: an answer with a big file in it used to be
+    # base64-encoded and dumped there while every other request waited.
+    encoded_on = []
+    real = http_transport.to_json
+
+    def recording(message):
+        encoded_on.append(threading.current_thread())
+        return real(message)
+
+    monkeypatch.setattr(http_transport, "to_json", recording)
+
+    def go(session, params):
+        session.emitter.emit(events.ITEMS, {"name": "//"})
+        return {"content": b"\x89PNG" * 1000}
+
+    app = http_transport.build_app(Session(), {"go": go})
+
+    async def run():
+        async with TestClient(TestServer(app)) as client:
+            events_stream = await client.get("/events")
+            resp = await client.post("/rpc", json={"jsonrpc": "2.0", "id": 1, "method": "go"})
+            body = await resp.json()
+            await asyncio.wait_for(events_stream.content.readuntil(b"\n\n"), timeout=5)
+            return threading.current_thread(), body, resp.headers["Content-Type"]
+
+    loop_thread, body, content_type = _run(run())
+    assert body["result"]["content"] == base64.b64encode(b"\x89PNG" * 1000).decode("ascii")
+    assert content_type == "application/json; charset=utf-8"
+    assert len(encoded_on) == 2
+    assert loop_thread not in encoded_on
+
+
+def test_an_event_is_encoded_once_however_many_streams_it_goes_to(monkeypatch):
+    calls = []
+    real = http_transport.to_json
+    monkeypatch.setattr(http_transport, "to_json", lambda message: calls.append(message) or real(message))
+
+    def go(session, params):
+        session.emitter.emit(events.ITEMS, {"name": "//"})
+        return "ok"
+
+    app = http_transport.build_app(Session(), {"go": go})
+
+    async def run():
+        async with TestClient(TestServer(app)) as client:
+            streams = [await client.get("/events") for _ in range(3)]
+            await client.post("/rpc", json={"jsonrpc": "2.0", "id": 1, "method": "go"})
+            return [await asyncio.wait_for(s.content.readuntil(b"\n\n"), timeout=5) for s in streams]
+
+    lines = _run(run())
+    assert len(set(lines)) == 1 and b"items" in lines[0]
+    # One for the event, one for the answer.
+    assert len(calls) == 2
+
+
+def test_an_event_stream_that_lets_too_much_pile_up_is_dropped():
+    async def run():
+        subscriber = http_transport._Subscriber(max_backlog=10)
+        subscriber.put(b"x" * 8)
+        first = subscriber.dropped
+        # Never too big on its own: only what waits behind another.
+        lone = http_transport._Subscriber(max_backlog=10)
+        lone.put(b"y" * 100)
+        subscriber.put(b"z" * 8)
+        return first, lone.dropped, subscriber.dropped, list(subscriber.events)
+
+    first, lone, dropped, left = _run(run())
+    assert first is None and lone is None
+    assert dropped is not None and "stopped reading" in dropped
+    assert left == []
