@@ -410,19 +410,26 @@ def _destination(directory: Optional[str], path: str) -> str:
 
     Anywhere else it is the caller's own output path, put back where the
     implementation would have written it: through a link, if one is there.
+
+    Either way a directory where the file goes is refused here, while the entry
+    is still being staged: found only once files are being put in place, it
+    would leave the ones placed before it.
     """
     if not directory:
-        return os.path.realpath(path)
-    # Resolved before anything is created: 'realpath' follows the links in the
-    # part of the path that exists, and creating the rest first would create it
-    # wherever such a link points.
-    root = os.path.realpath(directory)
-    resolved = os.path.realpath(os.path.dirname(path))
-    if os.path.commonpath([root, resolved]) != root:
-        raise ValueError("%s leads outside %s" % (path, directory))
-    destination = os.path.join(resolved, os.path.basename(path))
-    if os.path.islink(destination):
-        raise ValueError("%s is a link" % path)
+        destination = os.path.realpath(path)
+    else:
+        # Resolved before anything is created: 'realpath' follows the links in
+        # the part of the path that exists, and creating the rest first would
+        # create it wherever such a link points.
+        root = os.path.realpath(directory)
+        resolved = os.path.realpath(os.path.dirname(path))
+        if os.path.commonpath([root, resolved]) != root:
+            raise ValueError("%s leads outside %s" % (path, directory))
+        destination = os.path.join(resolved, os.path.basename(path))
+        if os.path.islink(destination):
+            raise ValueError("%s is a link" % path)
+    if os.path.isdir(destination):
+        raise ValueError("%s is a directory" % path)
     return destination
 
 

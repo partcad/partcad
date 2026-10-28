@@ -359,6 +359,23 @@ def test_a_miss_removes_the_directories_it_made_for_a_file_and_no_others(tmp_pat
     assert _staged_files(tmp_path) == []
 
 
+def test_a_directory_where_a_file_goes_is_a_miss_that_puts_nothing_in_place(tmp_path):
+    """Found while staging, not while placing: the file placed first would be left behind."""
+    cache = _cache(tmp_path)
+    data = _entry({"result.json": b"{}", "files/model": b"new model", "directory/frame.bin": b"frame"})
+    assert _run(cache.write_data_async(_hash(), {ARTIFACT_KEY: data}))[ARTIFACT_KEY]
+    run = tmp_path / "run"
+    (run / "frame.bin").mkdir(parents=True)
+    model = run / "m.vtu"
+    model.write_bytes(b"old model")
+
+    restored = _run(cache_artifacts.restore_async(cache, _hash(), files={"model": str(model)}, directory=str(run)))
+
+    assert restored is None
+    assert model.read_bytes() == b"old model"
+    assert _staged_files(tmp_path) == []
+
+
 def test_an_entry_that_does_not_start_with_its_result_is_a_miss(tmp_path):
     """Every release writes the result first: it says where the rest goes."""
     cache = _cache(tmp_path)
@@ -600,6 +617,10 @@ def simulated(tmp_path, monkeypatch):
     )
     ctx = pc.Context(str(root))
     ctx.cache_artifacts = _cache(tmp_path)
+    # A run's directory is named after what it simulates, which is the same in
+    # every test here: under the real state directory, a test on another
+    # worker would be rerunning into the directory this one reads back.
+    monkeypatch.setattr(ctx.user_config, "internal_state_dir", str(tmp_path / "state"))
     runs = []
 
     async def export(_ctx, _scene, _impl, directory):
