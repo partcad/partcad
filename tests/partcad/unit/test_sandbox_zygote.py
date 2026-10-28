@@ -1812,15 +1812,20 @@ def _is_readable(fd):
 
 
 @pytest.mark.parametrize("pidfd", [True, False], ids=["pidfd", "no-pidfd"])
-def test_a_child_whose_zygote_answers_nonsense_is_reported_killed(zygote, pidfd):
+def test_a_child_whose_zygote_answers_nonsense_is_reported_killed(zygote, pidfd, monkeypatch):
     """A reply that cannot be read is no reply: the zygote is lost to the child, which went with it.
 
     With a pidfd the child is killed through it, and is over when the pidfd
     says so. A pipe stands in for one -- both read as ready once what they are
     of is over -- because pidfds are not to be had everywhere (a container's
-    seccomp profile can refuse them), and this is about what is done with one.
-    Without one, nothing can reach the child safely, and it is over at once.
+    seccomp profile can refuse them), and this is about what is done with one;
+    so does a stand-in for sending a signal through it, which not every
+    interpreter has. Without one, nothing can reach the child safely, and it is
+    over at once.
     """
+    sent = []
+    if pidfd:
+        monkeypatch.setattr(signal, "pidfd_send_signal", lambda fd, sig: sent.append((fd, sig)), raising=False)
 
     async def main():
         stand_in_r, stand_in_w = os.pipe() if pidfd else (None, None)
@@ -1832,6 +1837,7 @@ def test_a_child_whose_zygote_answers_nonsense_is_reported_killed(zygote, pidfd)
             await _until(lambda: child.process.zygote_lost)
             if pidfd:
                 assert child.process.returncode is None
+                assert sent == [(stand_in_r, signal.SIGTERM), (stand_in_r, signal.SIGKILL)]
                 # The child is gone.
                 os.close(stand_in_w)
                 stand_in_w = None
@@ -1839,6 +1845,32 @@ def test_a_child_whose_zygote_answers_nonsense_is_reported_killed(zygote, pidfd)
         finally:
             if stand_in_w is not None:
                 os.close(stand_in_w)
+            child.close()
+
+    asyncio.run(main())
+
+
+def test_a_pidfd_this_interpreter_cannot_signal_through_is_let_go(monkeypatch):
+    """The zygote's interpreter can open a pidfd that this one, built against older headers, cannot use.
+
+    Such a child is handled as one that came with no pidfd: the descriptor is
+    closed rather than kept, and a lost zygote ends the child at once instead
+    of waiting for a pidfd nothing could have signalled through.
+    """
+    monkeypatch.delattr(signal, "pidfd_send_signal", raising=False)
+
+    async def main():
+        stand_in_r, stand_in_w = os.pipe()
+        child = _Child(pidfd=stand_in_r)
+        try:
+            # Its only reading end is gone: closed, not kept.
+            with pytest.raises(BrokenPipeError):
+                os.write(stand_in_w, b"x")
+            child.zygote_end.send(b"not a message")
+            assert await asyncio.wait_for(child.process.wait(), 30) == -signal.SIGKILL
+            assert child.process.zygote_lost
+        finally:
+            os.close(stand_in_w)
             child.close()
 
     asyncio.run(main())

@@ -515,6 +515,13 @@ class ZygoteProcess:
         self.returncode = None
         self.zygote_lost = False
         self._loop = loop
+        # A pidfd is of use only to an interpreter that can signal through one.
+        # The zygote's opens it ('os.pidfd_open'), and this one can be built
+        # against older kernel headers and have no 'signal.pidfd_send_signal':
+        # such a child is then handled as one that came with no pidfd at all.
+        if pidfd is not None and not hasattr(signal, "pidfd_send_signal"):
+            _close(pidfd)
+            pidfd = None
         self._pidfd = pidfd
         self._reply = reply
         self._stdin = stdin
