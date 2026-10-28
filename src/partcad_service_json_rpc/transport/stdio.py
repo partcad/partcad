@@ -24,7 +24,7 @@ import sys
 import threading
 from typing import BinaryIO, Mapping
 
-from partcad_utils.framing import Peer, read_message, write_message
+from partcad_utils.framing import Peer, encode_message, read_message, write_message
 from partcad_utils.logging_ansi_render import AnsiEventRenderer
 
 from ..core.cancellation import CANCEL_METHOD
@@ -70,9 +70,16 @@ def serve(read_stream: BinaryIO, write_stream: BinaryIO, session, registry: Mapp
         send(event, payload)
 
     def respond(response):
+        # Encoded outside the guard below: an answer JSON cannot carry raises,
+        # and 'Dispatch._answer' answers the request with that instead. Only a
+        # write to a client that has gone is nobody's to hear about - and a
+        # ValueError is both a closed stream and a circular answer.
+        chunks = encode_message(response, peer.attachments)
         try:
             with lock:
-                write_message(write_stream, response, attachments=peer.attachments)
+                for chunk in chunks:
+                    write_stream.write(chunk)
+                write_stream.flush()
         except (OSError, ValueError):
             # The client has closed its end: nobody is left to answer.
             pass

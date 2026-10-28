@@ -161,6 +161,21 @@ def test_a_cancellation_sent_as_a_request_is_answered_as_well():
     assert {"jsonrpc": "2.0", "id": 1, "result": 1} in answers
 
 
+def test_an_answer_that_cannot_be_encoded_is_answered_with_an_error():
+    """A closed stream and an answer JSON cannot carry both raise ValueError: only the first may go unanswered."""
+
+    def circular(session, params):
+        answer = {}
+        answer["itself"] = answer
+        return answer
+
+    stdin = io.BytesIO(_requests({"jsonrpc": "2.0", "id": 1, "method": "circular"}))
+    stdout = io.BytesIO()
+    stdio.serve(stdin, stdout, Session(), {"circular": circular})
+    (answer,) = _drain(stdout)
+    assert answer["id"] == 1 and answer["error"]["code"] == -32603
+
+
 def test_everything_asked_is_answered_in_order_before_serving_ends():
     # The end of stdin is the client done sending: what it sent is still owed.
     stdin = io.BytesIO(_requests(*({"jsonrpc": "2.0", "id": n, "method": "n", "params": {"n": n}} for n in range(20))))
