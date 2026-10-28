@@ -371,7 +371,13 @@ def process(script, path, request):
     # interpreted here, because what is worth counting differs between a router
     # and a wire EDM, and a fixed set of keys in this line would be PartCAD
     # deciding that on their behalf.
-    for key in ("warnings", "unsupported", "findings", "stats"):
+    #
+    # 'viewport' is a 'render:' implementation's: where a projection was looked
+    # at from, whoever chose it - the request, the package, or the default for the
+    # kind of shape (see 'render_svg.VIEWPORT_KEY'). What the IDE's 2D tab shows
+    # beside the picture, so that its viewpoint is the picture's rather than a
+    # guess at it.
+    for key in ("warnings", "unsupported", "findings", "stats", "viewport"):
         if output.get(key):
             result[key] = output[key]
     # Passed on when it is a list at all, empty included: see FILES_KEY. A value

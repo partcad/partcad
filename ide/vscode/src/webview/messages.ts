@@ -368,6 +368,15 @@ export interface ShowMessage {
      * does not declare. See 'SCENARIO_TABS'.
      */
     scenario?: string | null;
+    /**
+     * What the object was cut to before it was drawn - a box in millimetres in
+     * the frame of its root, naming only the axes that cut ('section.ts') - or
+     * null for the whole object. Absent from a 'partcad' that cannot cut, which
+     * is how the view panel knows not to offer its section sliders. A cut is
+     * asked for by asking the daemon to show the object again with one
+     * ('ShowSectionMessage'), and this is how the panel learns what is on screen.
+     */
+    section?: ViewSection | null;
     /** The object itself, as the root node of its tree, or null when it is empty. */
     object: ShowNode | null;
     /** Configuration for the viewer, sent from the extension. */
@@ -475,8 +484,20 @@ export interface StateReplyMessage {
     screenshotError?: string;
 }
 
+/**
+ * Host to renderer: the show asked for with 'ShowSectionMessage' has been asked
+ * of the daemon and answered - the cut object is already on its way over the
+ * viewer protocol by then - or could not be, and 'error' is why.
+ */
+export interface SectionShownMessage {
+    type: 'sectionShown';
+    token: number;
+    error?: string;
+}
+
 export type HostMessage =
     | StateRequestMessage
+    | SectionShownMessage
     | ShowMessage
     | ClearMessage
     | TabDataMessage
@@ -577,6 +598,49 @@ export interface FetchTabMessage {
      * ('analysis'), so an analysis tab always names one.
      */
     scenario?: string;
+    /**
+     * On the 2D tab and the Simulation tab: where the picture is to be looked
+     * at from, as the view panel says it -- 'viewport_origin' and
+     * 'viewport_up', 'pc render --viewport-origin/--viewport-up'. Left out, it
+     * is looked at from where the package's configuration says, or from the
+     * default for the kind of object.
+     */
+    viewportOrigin?: [number, number, number];
+    viewportUp?: [number, number, number];
+    /**
+     * On the 2D and Draft tabs: what to cut the object to before it is drawn,
+     * as the view panel's section sliders say ('section.ts'). Left out for the
+     * whole object.
+     */
+    section?: ViewSection;
+}
+
+/**
+ * A cross-section as it travels: the axes that cut, each with the slab it keeps,
+ * '[from, to]' in millimetres in the frame of the object's root. The same form
+ * 'partcad/shape_section.py' normalizes to; 'Section' in 'section.ts' is this.
+ */
+export type ViewSection = Partial<Record<'x' | 'y' | 'z', [number, number]>>;
+
+/** Where a picture was looked at from, under the names a 'render:' section uses. */
+export interface ViewportData {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    viewport_origin: [number, number, number];
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    viewport_up: [number, number, number];
+}
+
+/**
+ * Renderer to host: show the object on screen again, cut to 'section' - or
+ * whole, for null - which is how the 3D view's section sliders reach PartCAD.
+ * The show comes back over the viewer protocol like any other, carrying the
+ * section it was cut to; the host answers 'sectionShown' quoting 'token' once
+ * the daemon has.
+ */
+export interface ShowSectionMessage {
+    type: 'showSection';
+    token: number;
+    section: ViewSection | null;
 }
 
 /**
@@ -883,6 +947,10 @@ export interface RenderData {
     filename: string;
     extension: string;
     content: Uint8Array;
+    /** Where the picture was looked at from, when the implementation says; what the view panel shows. */
+    viewport?: ViewportData | null;
+    /** What it was cut to, as PartCAD read the section asked for, or null for the whole object. */
+    section?: ViewSection | null;
 }
 
 /** What the user chose for each line that can be both built and bought, by its full name. */
@@ -1086,6 +1154,8 @@ export interface SimulationRun {
     error?: string | null;
     result?: Record<string, unknown>;
     images?: { before?: SimulationImage; after?: SimulationImage };
+    /** Where the pictures were taken from; what the view panel shows beside them. */
+    viewport?: ViewportData | null;
 }
 
 /** The answer to a run: what 'pc sim -f <name>' prints with '--json'. */

@@ -29,6 +29,7 @@ import {
     FetchTabMessage,
     SaveChoicesMessage,
     ShowObjectMessage,
+    ShowSectionMessage,
     StateReplyMessage,
     TabId,
 } from './messages';
@@ -69,6 +70,11 @@ export function openSource(path: string): void {
 
 /** Ask the host to show another object in the panel: an artifact a check left behind. */
 export function showObject(message: ShowObjectMessage): void {
+    vscode.postMessage(message);
+}
+
+/** Ask the host to show the object on screen again, cut; it answers with 'sectionShown'. */
+export function showSection(message: ShowSectionMessage): void {
     vscode.postMessage(message);
 }
 

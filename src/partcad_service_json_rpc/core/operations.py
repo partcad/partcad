@@ -1710,7 +1710,9 @@ def lint_run(session, params):
     return None
 
 
-async def _simulate_async(ctx, pc, packages, object_name, kind, filter_name, fast_only=False, plugin=None):
+async def _simulate_async(
+    ctx, pc, packages, object_name, kind, filter_name, fast_only=False, plugin=None, viewport=None
+):
     """Run every declared simulation of what was selected, one after another.
 
     Sequentially, and deliberately: a simulation plugin is a whole simulator
@@ -1725,6 +1727,9 @@ async def _simulate_async(ctx, pc, packages, object_name, kind, filter_name, fas
     name is (see ``_kind_of``). Walking a package takes all three: a stack of
     blocks is an arrangement, so it is a scene, and it claims to stand like
     anything else.
+
+    ``viewport`` is where every run's pictures are taken from instead of where
+    its scene says (see 'partcad.simulation.snapshot_request').
     """
     from partcad import simulation as pc_simulation
 
@@ -1777,7 +1782,12 @@ async def _simulate_async(ctx, pc, packages, object_name, kind, filter_name, fas
         for declaration in pc_simulation.of_shape(shape):
             if filter_name and declaration.name != filter_name:
                 continue
-            results.append(await pc_simulation.run_async(ctx, shape, kind, declaration, plugin=plugin))
+            if viewport:
+                results.append(
+                    await pc_simulation.run_async(ctx, shape, kind, declaration, plugin=plugin, viewport=viewport)
+                )
+            else:
+                results.append(await pc_simulation.run_async(ctx, shape, kind, declaration, plugin=plugin))
     return results
 
 
@@ -1786,7 +1796,13 @@ _SIMULATED = ("part", "assembly", "scene")
 
 
 def simulate_run(session, params):
-    """Run the simulations a part, an assembly or a scene declares, and validate them."""
+    """Run the simulations a part, an assembly or a scene declares, and validate them.
+
+    ``view``, ``viewport_origin`` and ``viewport_up`` take the pictures of every
+    run from there rather than from where its scene is rendered from: what the
+    IDE's Simulation tab sends when its viewpoint is moved. With ``inline``, each
+    run says where its pictures were taken from (``viewport``).
+    """
     import asyncio
 
     ctx = _ctx(session, params)
@@ -1794,6 +1810,7 @@ def simulate_run(session, params):
         return None
     pc = session.partcad
     selected, object_name, recursive = _request(params)
+    viewport = _viewport(params)
     package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
     if not package_obj:
@@ -1835,6 +1852,7 @@ def simulate_run(session, params):
                 # Another simulation plugin than the declarations name, for
                 # every simulation this runs ('pc sim --plugin').
                 params.get("plugin") or None,
+                viewport or None,
             )
         )
 
@@ -1876,8 +1894,15 @@ def simulate_run(session, params):
         # The pictures as bytes as well as paths, which is what the IDE's
         # Simulation tab needs: a webview has no file system in reach, and the
         # daemon that wrote them may not be on the machine showing them.
-        for entry in simulations:
+        for entry, result in zip(simulations, results):
             entry["images"] = _inline_snapshots(pc, entry.get("snapshots") or {})
+            # And where they were taken from, for the viewpoint beside them.
+            snapshot = getattr(result, "snapshot", None) or {}
+            entry["viewport"] = (
+                {"viewport_origin": snapshot["viewport_origin"], "viewport_up": snapshot["viewport_up"]}
+                if snapshot.get("viewport_origin") and snapshot.get("viewport_up")
+                else None
+            )
 
     return {
         "simulations": simulations,
@@ -2147,7 +2172,14 @@ def daemon_set_telemetry(session, params):
 
 
 def inspect_object(session, params):
-    """Inspect an object: show it in the CAD viewer, or return a verbal summary."""
+    """Inspect an object: show it in the CAD viewer, or return a verbal summary.
+
+    ``section`` shows it cut by a box (see `partcad.shape_section`): what the
+    Digital Thread's section sliders ask for, by asking for the object on screen
+    to be shown again. The viewer is told what it was cut to with the show
+    itself ('partcad_ide_client.protocol.KEY_SECTION'). An interface is ports and
+    has no geometry to cut, so a section of one is refused.
+    """
     ctx = _ctx(session, params)
     if ctx is None:
         return None
@@ -2158,6 +2190,7 @@ def inspect_object(session, params):
     # tessellation.
     tab = _viewer_tab(params)
     scenario = _viewer_scenario(params, tab)
+    section = _section(params)
     package = ctx.resolve_package_path(params.get("package"))
     package_obj = ctx.get_project(package)
     if not package_obj:
@@ -2192,6 +2225,8 @@ def inspect_object(session, params):
         if obj is None:
             pc.logging.error("Object %s is not found" % path)
             return None
+        if section is not None and kind == "interface":
+            raise JsonRpcError(USAGE_ERROR, "%s is an interface: it is ports, and there is nothing to cut" % path)
         if params.get("verbal"):
             # The object's own package. 'obj' having been found means it is
             # loaded, so this never comes back None.
@@ -2205,8 +2240,13 @@ def inspect_object(session, params):
             _stage_subassemblies(session, ctx, obj)
         # Which tab of the viewer to open on ('pc ide view --design-2d'), and
         # which of its scenarios to select ('--scenario'). Both ride on the show
-        # itself -- see 'partcad_ide_client.protocol.KEY_TAB'.
-        obj.show(ctx, tab=tab, scenario=scenario)
+        # itself -- see 'partcad_ide_client.protocol.KEY_TAB'. So does the
+        # section, which is passed only when there is one: a show of the whole
+        # object is the call it always was.
+        if section is not None:
+            obj.show(ctx, tab=tab, scenario=scenario, section=section)
+        else:
+            obj.show(ctx, tab=tab, scenario=scenario)
     return None
 
 
@@ -4458,13 +4498,23 @@ def render_inline(session, params):
     on top of the projection. They are what the ticked boxes of that panel
     resolve to, so the tab and the command line produce the same picture.
 
+    ``view``, ``viewport_origin`` and ``viewport_up`` aim the projection for this
+    one picture, exactly as they do for ``render.objects``: what the panel's
+    viewpoint fields and its orientation gizmo say. ``section`` cuts the object
+    by a box first -- ``{"x": [lo, hi], ...}`` in millimetres in the frame of the
+    object's root, an axis left out not cut (see `partcad.shape_section`) --
+    which is what the panel's section sliders ask for.
+
     The file is written into a temporary directory on the daemon's machine, read
     back, and the directory removed. A path would not do: the daemon may be on
     another machine, and the client decides where the file is kept -- the IDE
     holds it in a temporary file of its own until the user saves it somewhere.
     What comes back is the bytes, the file name PartCAD chose, and its
-    extension, which is what says how to show it. The bytes go as an attachment
-    to a client that reads them, and as base64 to any other (see
+    extension, which is what says how to show it -- and, where the
+    implementation says, the viewpoint the picture was drawn from
+    (``viewport``: ``viewport_origin`` and ``viewport_up``, whoever chose them),
+    and the section it was cut to, normalized, or None. The bytes go as an
+    attachment to a client that reads them, and as base64 to any other (see
     ``partcad_utils.framing``).
 
     An implementation that writes nothing has said why in the log, which the
@@ -4509,6 +4559,8 @@ def render_inline(session, params):
             USAGE_ERROR,
             "Only an assembly or a scene has links to filter; '%s' has none" % kind,
         )
+    section = _section(params)
+    render_opts = _viewport(params)
 
     if kind in ("assembly", "scene"):
         # Phase one of an assembly build, as for every other request that ends
@@ -4523,7 +4575,7 @@ def render_inline(session, params):
     directory = tempfile.mkdtemp(prefix="partcad-render-")
     try:
         with pc.logging.Process("Render", package, name):
-            asyncio.run(
+            results = asyncio.run(
                 shape.render_async(
                     ctx,
                     fmt,
@@ -4531,6 +4583,8 @@ def render_inline(session, params):
                     options_package=options_package,
                     overlay=overlay,
                     link_filter=link_filter,
+                    section=section,
+                    **render_opts,
                 )
             )
         # Found rather than predicted: which extension a file type writes, and
@@ -4547,13 +4601,45 @@ def render_inline(session, params):
         shutil.rmtree(directory, ignore_errors=True)
 
     filename = os.path.basename(filepath)
+    # One file type was asked for, so there is one answer, under whatever name
+    # it was asked for by.
+    answered = next((result for result in (results or {}).values() if isinstance(result, dict)), None) or {}
+    viewport = answered.get("viewport")
     return {
         "object": path,
         "format": fmt,
         "filename": filename,
         "extension": os.path.splitext(filename)[1].lstrip(".").lower(),
         "content": content,
+        "viewport": viewport if isinstance(viewport, dict) else None,
+        "section": section,
     }
+
+
+def _section(params):
+    """The cross-section a request asks for, normalized, or None; refused when it is not one."""
+    from partcad import shape_section
+
+    try:
+        return shape_section.normalize(params.get("section"))
+    except ValueError as e:
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
+
+
+def _viewport(params):
+    """The viewport overrides a request asks for ('view', 'viewport_origin', 'viewport_up'), as export parameters."""
+    from partcad.render import resolve_viewport
+
+    try:
+        return resolve_viewport(
+            params.get("view"),
+            params.get("viewport_origin"),
+            params.get("viewport_up"),
+        )
+    except ValueError as e:
+        # A view nobody offers, or a vector that is not one: nothing is drawn
+        # rather than something aimed somewhere else.
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
 
 
 def _render_objects(

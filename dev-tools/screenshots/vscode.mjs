@@ -370,12 +370,20 @@ export async function viewer(page) {
     return await webviewFrame(page, '#viewer');
 }
 
-/** Stop the 3D view turning on its own, so that every show is framed the same way. */
+/**
+ * Stop the 3D view turning on its own, so that every show is framed the same way.
+ *
+ * Set rather than clicked: the box is in the view panel, which starts folded
+ * away - as a reader first sees it, and as the pictures show it - and a box
+ * that is not on screen is not one Playwright will click.
+ */
 export async function stopTurning(page) {
-    const box = (await viewer(page)).locator('#animate-checkbox');
-    if (await box.isChecked()) {
-        await box.click();
-    }
+    await (await viewer(page)).locator('#animate-checkbox').evaluate((box) => {
+        if (box.checked) {
+            box.checked = false;
+            box.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    });
 }
 
 /**

@@ -472,12 +472,30 @@ def test_a_scene_looked_at_from_elsewhere_is_another_run(simulated, monkeypatch)
 
     asked = simulation.snapshot_request
 
-    def from_the_front(ctx, scene):
-        return dict(asked(ctx, scene), viewport_origin=[0.0, -100.0, 0.0])
+    def from_the_front(ctx, scene, viewport=None):
+        return dict(asked(ctx, scene, viewport), viewport_origin=[0.0, -100.0, 0.0])
 
     monkeypatch.setattr(simulation, "snapshot_request", from_the_front)
     _run(simulation.run_async(ctx, part, "part", entry))
     assert len(runs) == 2
+
+
+def test_a_run_asked_from_another_viewpoint_is_another_run_and_says_where_from(simulated):
+    """The IDE's Simulation tab, its viewpoint moved: a new question, and the answer says what it was."""
+    ctx, part, runs = simulated
+    (entry,) = simulation.of_shape(part)
+    first = _run(simulation.run_async(ctx, part, "part", entry))
+    top = {"viewport_origin": [0.0, 0.0, 100.0], "viewport_up": [0.0, 1.0, 0.0]}
+    second = _run(simulation.run_async(ctx, part, "part", entry, viewport=top))
+    again = _run(simulation.run_async(ctx, part, "part", entry, viewport=top))
+
+    assert len(runs) == 2
+    assert first.snapshot["viewport_origin"] != top["viewport_origin"]
+    assert (second.snapshot["viewport_origin"], second.snapshot["viewport_up"]) == (
+        top["viewport_origin"],
+        top["viewport_up"],
+    )
+    assert again.snapshot == second.snapshot
 
 
 def test_another_simulation_question_is_another_run(simulated):

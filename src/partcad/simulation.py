@@ -330,6 +330,10 @@ class SimulationResult:
         # something derived from the run -- 'pc test''s verdict -- may only do
         # so when there was one (see 'question_key_async').
         self.artifact_key: typing.Optional[str] = None
+        # The pictures the run was asked for, and from where ('snapshot_request'),
+        # or None when it never got that far. What the IDE's Simulation tab shows
+        # as the viewpoint the pictures beside it were taken from.
+        self.snapshot: typing.Optional[dict] = None
 
     @property
     def name(self) -> str:
@@ -554,7 +558,7 @@ def run_directory(ctx, object_name: str, simulation_name: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def snapshot_request(ctx, scene) -> dict:
+def snapshot_request(ctx, scene, viewport: typing.Optional[dict] = None) -> dict:
     """What the plugin is asked to draw of the scene, and from where.
 
     The camera is the one the scene is *rendered* from: ``viewport_origin`` and
@@ -573,6 +577,12 @@ def snapshot_request(ctx, scene) -> dict:
     ``files`` says where each picture goes, relative to the run directory the
     plugin is handed as ``path``; see 'collect_snapshots' for what is done with
     what the plugin reports.
+
+    'viewport' overrides where they are taken from for one run, as
+    'render.resolve_viewport' answers - ``viewport_origin`` and ``viewport_up``,
+    either or both - on top of whatever the scene says: what the IDE's
+    Simulation tab sends when its viewpoint is moved. It is part of the question
+    a run is cached under, as everything here is.
     """
     options = {}
     try:
@@ -587,6 +597,9 @@ def snapshot_request(ctx, scene) -> dict:
             "The scene %s:%s says nothing usable about how it is rendered: %s" % (scene.project_name, scene.name, e)
         )
 
+    if viewport:
+        options = dict(options)
+        options.update({key: value for key, value in viewport.items() if value is not None})
     default_origin, default_up = VIEWS[SNAPSHOT_DEFAULT_VIEW]
     try:
         viewport = resolve_viewport(
@@ -695,6 +708,7 @@ async def run_async(
     declaration: SimulationDeclaration,
     report: bool = True,
     plugin: typing.Optional[str] = None,
+    viewport: typing.Optional[dict] = None,
 ) -> SimulationResult:
     """Run one declared simulation of one object and validate what came back.
 
@@ -715,6 +729,9 @@ async def run_async(
     declaration says -- the scene, the offset, the parameters, the validation
     -- is asked of that plugin instead. It is a different question, so it is
     cached as one.
+
+    ``viewport`` takes the pictures from somewhere else than the scene says
+    (see 'snapshot_request'), and is a different question too.
     """
     if plugin:
         declaration = copy.copy(declaration)
@@ -750,7 +767,8 @@ async def run_async(
             # The pictures to ask for. Part of the question, so that a scene
             # looked at from somewhere else is not answered with the pictures
             # taken from where it used to be looked at.
-            snapshot = snapshot_request(ctx, scene)
+            snapshot = snapshot_request(ctx, scene, viewport)
+            result.snapshot = snapshot
 
             # The same question asked again is a read: the directory is put
             # back as the run that answered it left it, scene and all, and the

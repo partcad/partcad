@@ -84,10 +84,11 @@ The point is that a retake differs from the last take only in what changed in Pa
   1064 window at twice the pixels (the size of the screenshots these replaced, which came from a Retina display),
   and a terminal running `bash` with a prompt of only the directory name - not the prompt of whoever took the
   picture, with their branch and their git status in it.
-* **A still 3D view.** The Digital Thread turns the model on its own until its "Animate" box is cleared, and that
-  box is not there until something has been shown. So each object is shown, the box cleared, another object shown,
-  and the object shown again: a show of a new object puts the camera back where every show starts it, which makes
-  the framing the same on every run.
+* **A still 3D view.** The Digital Thread turns the model on its own until its "Animate" box is cleared. So each
+  object is shown, the box cleared, another object shown, and the object shown again: a show of a new object puts
+  the camera back where every show starts it, which makes the framing the same on every run. The box is in the view
+  panel, which starts folded away and stays so in every picture, so the script sets it (`stopTurning`) rather than
+  clicking it: Playwright clicks nothing that is not on screen.
 * **Waiting for the right thing.** A show is finished when the Digital Thread's tree names the object and the
   loading overlay is gone; the terminal is finished when behave's summary line is in it.
 * **Tidy before the shutter**: notifications cleared, the pointer moved where it hovers nothing.

@@ -186,6 +186,11 @@ def test_every_projection_looks_along_the_direction_asked_for(render_svg, monkey
         "success": True,
         "exception": None,
         "files": [],
+        # Where it was looked at from, said back: what the IDE's 2D tab shows.
+        render_svg.VIEWPORT_KEY: {
+            "viewport_origin": [float(component) for component in VIEWS[view][0]],
+            "viewport_up": [float(component) for component in VIEWS[view][1]],
+        },
     }
 
     # The shape, then the annotations drawn over it - from the one camera, or
@@ -321,7 +326,14 @@ def _process(real_svg, shapes, tmp_path, name, reproducible, view):
     request = {"wrapped": shapes[name], "shape_kind": "part", "reproducible": reproducible}
     request.update(resolve_viewport(view))
 
-    assert real_svg.process(path, request) == {"success": True, "exception": None, "files": []}
+    result = real_svg.process(path, request)
+    # And it says where it looked from, which is what it was asked to.
+    viewport = result.pop(real_svg.VIEWPORT_KEY)
+    assert result == {"success": True, "exception": None, "files": []}
+    assert viewport == {
+        "viewport_origin": list(real_svg.viewport_origin(request)),
+        "viewport_up": list(real_svg.viewport_up(request)),
+    }
 
     with open(path, encoding="utf-8") as f:
         return _segments(f.read())

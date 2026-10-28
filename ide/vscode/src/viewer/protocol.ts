@@ -188,6 +188,13 @@ export interface ViewerMessage {
      * it under, or absent for the first. See KEY_SCENARIO in the Python module.
      */
     scenario?: string | null;
+    /**
+     * On a show: the cross-section the object was cut to, as PartCAD normalized
+     * it - '{"x": [lo, hi], ...}', the axes that cut - or null for the whole
+     * object. Absent from a PartCAD that cannot cut. See KEY_SECTION in the
+     * Python module.
+     */
+    section?: Record<string, [number, number]> | null;
     /** The object itself, as the root node of its tree. */
     object?: ViewerNode | null;
 }

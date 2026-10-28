@@ -474,6 +474,19 @@ class JsonRpcBackend implements PartcadBackend {
             this.send('inspect.assembly', { package: a.pkg, name: a.name, params: a.params }),
         );
         reg('partcad.showScene', (a) => this.send('inspect.scene', { package: a.pkg, name: a.name, params: a.params }));
+        // The Digital Thread's section sliders, on the 3D tab: the object on
+        // screen shown again, cut by a box ('inspect.object' with 'section'),
+        // which the daemon sends over the viewer protocol like any show. The
+        // name is the one it was shown under, parameter values and all, and the
+        // kind is said rather than looked up, as the panel knows it.
+        reg('partcad.showSection', (a) =>
+            this.send('inspect.object', {
+                package: a.pkg,
+                object: a.name,
+                ...(a.kind && a.kind !== 'part' ? { [a.kind]: true } : {}),
+                section: a.section ?? null,
+            }),
+        );
         // What the Digital Thread's tabs beside the 3D one are filled from. Each
         // is the CLI's own operation -- 'pc bom', the assembly instruction book
         // 'pc render -t html' writes, 'pc supply quote' -- asked for as data
@@ -594,6 +607,11 @@ class JsonRpcBackend implements PartcadBackend {
                 // Another simulation plugin than the one it names, when the
                 // panel's "Simulated by" says so.
                 plugin: a.plugin,
+                // Where the pictures are taken from, when the view panel says.
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                viewport_origin: a.viewportOrigin,
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                viewport_up: a.viewportUp,
                 inline: true,
             }),
         );
@@ -623,6 +641,14 @@ class JsonRpcBackend implements PartcadBackend {
                 with_internals: a.withInternals,
                 // Which ports, where the panel narrowed it to some of them.
                 ports: a.ports,
+                // The view panel beside it: where the picture is looked at from
+                // ('pc render --viewport-origin/--viewport-up'), and what the
+                // object is cut to before it is drawn.
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                viewport_origin: a.viewportOrigin,
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                viewport_up: a.viewportUp,
+                section: a.section,
             }),
         );
         reg('partcad.renderFormats', (a) => this.send('render.formats', { package: a.package }));

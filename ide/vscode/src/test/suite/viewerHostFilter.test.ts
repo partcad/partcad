@@ -228,3 +228,115 @@ suite('The Digital Thread host, shown something', () => {
         viewer.dispose();
     });
 });
+
+suite('The Digital Thread host, and the view panel', () => {
+    /** A host showing the bracket, and everything it posts to its webview. */
+    function bracket(): {
+        viewer: PartcadViewer;
+        host: {
+            fetchTab(message: Record<string, unknown>): Promise<void>;
+            showSection(token: number, section: unknown): Promise<void>;
+        };
+        posted: Record<string, unknown>[];
+    } {
+        const posted: Record<string, unknown>[] = [];
+        const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
+        const host = viewer as unknown as {
+            lastShow: unknown;
+            panel: unknown;
+            fetchTab(message: Record<string, unknown>): Promise<void>;
+            showSection(token: number, section: unknown): Promise<void>;
+        };
+        host.lastShow = { type: 'show', name: 'bracket;length=10', kind: 'assembly', package: '//pkg' };
+        host.panel = {
+            webview: {
+                postMessage: (message: Record<string, unknown>) => {
+                    posted.push(message);
+                    return Promise.resolve(true);
+                },
+            },
+            dispose: () => undefined,
+        };
+        return { viewer, host, posted };
+    }
+
+    test('a render carries where it is looked at from and what it is cut to', async () => {
+        const sent: Record<string, unknown>[] = [];
+        const registration = vscode.commands.registerCommand(
+            'partcad.renderInline',
+            (args: Record<string, unknown>) => {
+                sent.push(args);
+                return { object: '//pkg:bracket', format: 'png', filename: 'b.png', extension: 'png', content: '' };
+            },
+        );
+        try {
+            const { viewer, host } = bracket();
+            await host.fetchTab({
+                tab: '2d',
+                token: 1,
+                format: 'png',
+                viewportOrigin: [0, 0, 100],
+                viewportUp: [0, 1, 0],
+                section: { z: [0, 5] },
+            });
+            assert.deepStrictEqual(sent[0].viewportOrigin, [0, 0, 100]);
+            assert.deepStrictEqual(sent[0].viewportUp, [0, 1, 0]);
+            assert.deepStrictEqual(sent[0].section, { z: [0, 5] });
+            viewer.dispose();
+        } finally {
+            registration.dispose();
+        }
+    });
+
+    test('a section of the 3D view is the object on screen shown again, cut, and answered once shown', async () => {
+        const asked: Record<string, unknown>[] = [];
+        let fail = false;
+        const registration = vscode.commands.registerCommand('partcad.showSection', (args: Record<string, unknown>) => {
+            asked.push(args);
+            if (fail) {
+                throw new Error('the boolean did not complete');
+            }
+            return null;
+        });
+        try {
+            const { viewer, host, posted } = bracket();
+            await host.showSection(7, { x: [0, 5] });
+            // The name it was shown under, parameter values and all, and its kind.
+            assert.deepStrictEqual(asked[0], {
+                pkg: '//pkg',
+                name: 'bracket;length=10',
+                kind: 'assembly',
+                section: { x: [0, 5] },
+            });
+            assert.deepStrictEqual(posted[posted.length - 1], { type: 'sectionShown', token: 7 });
+
+            fail = true;
+            await host.showSection(8, null);
+            assert.deepStrictEqual(asked[1].section, null);
+            assert.strictEqual(posted[posted.length - 1].token, 8);
+            assert.ok(String(posted[posted.length - 1].error).includes('the boolean did not complete'));
+            viewer.dispose();
+        } finally {
+            registration.dispose();
+        }
+    });
+
+    test('a show says what it was cut to - absent from a PartCAD that cannot cut - as it came', () => {
+        const { viewer, posted } = bracket();
+        viewer.handle({ type: 'show', name: 'bracket', kind: 'part', package: '//pkg', object: null, section: null });
+        viewer.handle({
+            type: 'show',
+            name: 'bracket',
+            kind: 'part',
+            package: '//pkg',
+            object: null,
+            section: { y: [0, 15] },
+        });
+        viewer.handle({ type: 'show', name: 'bracket', kind: 'part', package: '//pkg', object: null });
+        assert.deepStrictEqual(
+            posted.map((message) => message.section),
+            [null, { y: [0, 15] }, undefined],
+        );
+        viewer.dispose();
+    });
+});

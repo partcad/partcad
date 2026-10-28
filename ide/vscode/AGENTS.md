@@ -238,6 +238,17 @@ loading readout is a fraction of the *table* (`totalSize`), because counting a s
 report a download that never happened; and nothing may dispose a parsed group that has been handed out, since
 its geometry is the geometry of every clone of it.
 
+**Every tab that shows the object has the view panel down its right** (`viewPanel.ts`; "The view panel" in
+[docs/partcad-viewer.md](./docs/partcad-viewer.md)): the orientation gizmo, the axis views, a section slider per
+axis, the viewpoint as `viewport_origin`/`viewport_up`/target, and Animate and Opacity, which used to be at the
+bottom of the 3D view's tree. One widget for every tab; what a tab cannot do with it is disabled and says why
+(`capabilitiesOf`), and only `cameraView.ts` crosses between PartCAD's frame and a stage's. A section is never a
+clipping plane here: PartCAD cuts the exact geometry (`partcad/shape_section.py`), the 3D view by asking the daemon
+to show the object again (`partcad.showSection` -> `inspect.object` with `section`) and the render tabs by sending
+it with `render.inline`, and the show says what it was cut to (`KEY_SECTION`, absent from a PartCAD that cannot
+cut). The panel starts folded, and the screenshot script drives Animate and Opacity by the ids the 3D tab's panel
+keeps (`animate-checkbox`, `opacity-slider`) without unfolding it - which is why it sets them rather than clicking.
+
 None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote`, `cae.analyze` and
 `simulate.run` (with `cae.list` and `simulate.list`, which read what they would run) are the CLI's own operations (`pc bom`, the book `pc render -t html` writes, the cart
 `pc supply quote` fills, the analysis `pc cae <analysis>` runs, the simulation `pc sim` runs), asked for

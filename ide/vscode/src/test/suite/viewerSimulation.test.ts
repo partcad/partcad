@@ -218,6 +218,43 @@ suite('Digital Thread Simulation tab', () => {
         assert.ok(listed.every((row) => row.className.split(' ').includes('build-item')));
     });
 
+    test('a viewpoint chosen in the view panel runs it again, its pictures taken from there', () => {
+        const root = new FakeElement('div');
+        const asked: { scenario: string; viewpoint: unknown }[] = [];
+        const shownFrom: unknown[] = [];
+        const view = new SimulationView(root as unknown as HTMLElement, {
+            onRun: (scenario, _plugin, viewpoint) => asked.push({ scenario, viewpoint }),
+            onShown: (viewpoint) => shownFrom.push(viewpoint),
+        });
+        view.setScenarios(LIST);
+        view.start();
+        // Where the scene says it is looked at from, which the run says.
+        const answer = ran('falls', true);
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        answer.simulations[0].viewport = { viewport_origin: [100, -100, 100], viewport_up: [0, 0, 1] };
+        view.showRun('falls', answer);
+        assert.deepStrictEqual(shownFrom[shownFrom.length - 1], {
+            origin: [100, -100, 100],
+            up: [0, 0, 1],
+            target: [0, 0, 0],
+        });
+
+        const top = { origin: [0, 0, 100] as [number, number, number], up: [0, 1, 0] as [number, number, number] };
+        view.setViewpoint({ ...top, target: [0, 0, 0] });
+        assert.deepStrictEqual(
+            asked.map((run) => run.scenario),
+            ['falls', 'falls'],
+        );
+        assert.deepStrictEqual(asked[1].viewpoint, { ...top, target: [0, 0, 0] });
+        // Running: nothing is known of where this one's pictures were taken but what was asked.
+        assert.deepStrictEqual(shownFrom[shownFrom.length - 1], { ...top, target: [0, 0, 0] });
+        // And going back to where the scene says shows the run already answered,
+        // without running it again.
+        view.setViewpoint(undefined);
+        assert.strictEqual(asked.length, 2);
+        assert.strictEqual(root.find('simulation-pictures').length, 1);
+    });
+
     test('runs the selected simulation when the tab is opened, and once for the object', () => {
         const { root, view, runs } = pane();
         view.setScenarios(LIST);

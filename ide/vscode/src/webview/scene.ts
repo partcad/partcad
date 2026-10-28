@@ -62,11 +62,13 @@ import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRe
 
 import { Appearance, DEFAULT_APPEARANCE, appearanceKey, appearanceOf, edgeColor } from './appearance';
 import { calloutsOf } from './callouts';
+import { SceneFrame, fromStage, placeCamera as aimCamera, readViewpoint } from './cameraView';
 import { el } from './dom';
 import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
 import { reportError } from './host';
 import { ShowMessage, ShowNode } from './messages';
 import { ItemId, PORT_COLOR, PORT_OPACITY, flickerOn, nodeId, portId, totalSize } from './nodes';
+import { Bounds } from './section';
 import { Navigable, onScreen, spaceMouse } from './spacemouse';
 import {
     SOFTWARE_TRIANGLE_BUDGET,
@@ -77,6 +79,7 @@ import {
     softwareNotice,
     trianglesOf,
 } from './surface';
+import { Viewpoint } from './viewpoint';
 
 // Part.js: <Stage intensity={0.5}> and MeshPhongMaterial with no arguments.
 const STAGE_INTENSITY = 0.5;
@@ -172,6 +175,14 @@ const labelRenderer = new CSS2DRenderer();
 labelRenderer.domElement.className = 'callouts';
 container.appendChild(labelRenderer.domElement);
 
+/** Who is told when the camera moves: the view panel, which says where it is looking from. */
+const viewListeners = new Set<() => void>();
+
+/** Be told whenever the camera moves, however it was moved. */
+export function onViewChange(listener: () => void): void {
+    viewListeners.add(listener);
+}
+
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 10000);
 camera.position.set(0, 0, 5);
@@ -183,8 +194,9 @@ controls.enableDamping = true;
 controls.autoRotate = !software;
 controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
 // Any movement of the camera - a drag, the damping after it, a turn of the
-// model on its own - is a new picture.
+// model on its own - is a new picture, and a new viewpoint for the view panel.
 controls.addEventListener('change', invalidate);
+controls.addEventListener('change', () => viewListeners.forEach((listener) => listener()));
 
 // The light of a room stands in for drei's <Environment preset="...">: light
 // from every direction, brighter from above, is what makes a machined surface
@@ -263,6 +275,9 @@ export function setShowMetadata(enabled: boolean): void {
 
 /** Everything the current show put on the stage; replaced wholesale by the next. */
 let content: THREE.Group | undefined;
+
+/** Whether what is on the stage is a cross-section of the object rather than the whole of it. */
+let shownCut = false;
 
 /** What 'content' was built from, whose materials go when it does (see 'Geometry.disposeMaterials'). */
 let shownGeometry: Geometry | undefined;
@@ -471,6 +486,7 @@ export function clearGeometry(): void {
     }
     shownGeometry?.disposeMaterials();
     shownGeometry = undefined;
+    shownCut = false;
     drawnBy.clear();
     visibleItems = undefined;
     flickering = undefined;
@@ -483,8 +499,13 @@ export function clearGeometry(): void {
 /**
  * Center 'box' at the origin, moving the model with it, and frame the camera on
  * it, as <Stage adjustCamera> does, and scale the light rig to it.
+ *
+ * 'centred' is where the last show put the model instead, for a show that cuts
+ * it or takes a cut away: the cut is a part of the same object, and centred on
+ * itself it would jump on the stage every time a slider is let go, with the
+ * camera kept where it was. So the object stays where it was put.
  */
-function frame(group: THREE.Group, box: THREE.Box3, keepCamera: boolean): void {
+function frame(group: THREE.Group, box: THREE.Box3, keepCamera: boolean, centred?: THREE.Vector3): void {
     if (box.isEmpty()) {
         return;
     }
@@ -496,7 +517,11 @@ function frame(group: THREE.Group, box: THREE.Box3, keepCamera: boolean): void {
 
     // Stage centers the model rather than moving the camera to it, so that
     // orbiting turns the model about itself.
-    group.position.sub(center);
+    if (centred !== undefined) {
+        group.position.copy(centred);
+    } else {
+        group.position.sub(center);
+    }
 
     spotLight.position.set(radius * 2, radius * 4, radius * 2);
     stagePointLight.position.set(-radius * 2, radius, -radius * 2);
@@ -539,11 +564,11 @@ function fitDistance(radius: number): number {
 /**
  * Put the camera back where a show puts it, on the model as it is already placed.
  *
- * What a SpaceMouse's "Fit" button does. Not 'frame()': that centres the model as
- * well, which a show does once and which a second time would do nothing but
- * accumulate rounding.
+ * What a SpaceMouse's "Fit" button does, and the view panel's "Reset". Not
+ * 'frame()': that centres the model as well, which a show does once and which a
+ * second time would do nothing but accumulate rounding.
  */
-function fitView(): void {
+export function fitView(): void {
     if (content === undefined) {
         return;
     }
@@ -1130,6 +1155,11 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
         return;
     }
 
+    // A cut of the object on screen, or the whole of it after a cut: kept where
+    // the object was, rather than centred on what is left of it (see 'frame()').
+    const cut = Boolean(message.section);
+    const centred =
+        message.keepCamera && (cut || shownCut) && content !== undefined ? content.position.clone() : undefined;
     if (content !== undefined) {
         scene.remove(content);
         disposeTree(content);
@@ -1137,6 +1167,7 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     shownGeometry?.disposeMaterials();
     shownGeometry = geometry;
     content = group;
+    shownCut = cut;
     scene.add(group);
     // Framed on every shape the show carries, whether or not it is switched on:
     // the camera has to stay where it is when an item is unchecked, and a model
@@ -1148,7 +1179,13 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // and the ports of everything inside an assembly start out unticked, which
     // is a model centred on something nobody can see. An interface has no shape
     // but its ports, and is framed on those.
-    frame(group, geometryBox.isEmpty() ? new THREE.Box3().setFromObject(group) : geometryBox, message.keepCamera);
+    frame(
+        group,
+        geometryBox.isEmpty() ? new THREE.Box3().setFromObject(group) : geometryBox,
+        message.keepCamera,
+        centred,
+    );
+    viewListeners.forEach((listener) => listener());
     buildProxies(group);
     invalidate();
 
@@ -1330,6 +1367,57 @@ export function resizeCanvas(): void {
         camera.position.sub(controls.target).setLength(length).add(controls.target);
     }
     invalidate();
+}
+
+/** How the stage relates to PartCAD's frame: glTF's, with the model moved to the middle. */
+function stageFrame(): SceneFrame {
+    const offset = content?.position ?? new THREE.Vector3();
+    return { size: MM_TO_M, yUp: true, offset: [offset.x, offset.y, offset.z] };
+}
+
+/** Where the camera is looking from, in PartCAD's frame; undefined with nothing on the stage. */
+export function viewpoint(): Viewpoint | undefined {
+    if (content === undefined) {
+        return undefined;
+    }
+    return readViewpoint(camera, controls.target, stageFrame());
+}
+
+/** Look from where 'viewpoint' says, at what it says, as the view panel asks. */
+export function setViewpoint(viewpoint: Viewpoint): void {
+    if (content === undefined) {
+        return;
+    }
+    aimCamera(camera, controls.target, viewpoint, stageFrame());
+    // Put there on purpose, like a drag: a resize leaves it where it is rather
+    // than fitting it again (see 'fittedTo').
+    fittedTo = undefined;
+    // The orbit controls take it from here; their 'change' tells the panel.
+    controls.update();
+    invalidate();
+}
+
+/**
+ * What the model on the stage occupies, in PartCAD's frame, or undefined.
+ *
+ * For an object whose tree says nothing about its size: the view panel's
+ * section sliders span this instead. Measured on what is drawn, so it is asked
+ * only of a show of the whole object.
+ */
+export function modelBounds(): Bounds | undefined {
+    if (content === undefined || shownCut) {
+        return undefined;
+    }
+    const box = new THREE.Box3().setFromObject(content);
+    if (box.isEmpty()) {
+        return undefined;
+    }
+    const frame = stageFrame();
+    const corners = [box.min, box.max].map((corner) => fromStage([corner.x, corner.y, corner.z], frame));
+    return {
+        min: [0, 1, 2].map((axis) => Math.min(corners[0][axis], corners[1][axis])) as Bounds['min'],
+        max: [0, 1, 2].map((axis) => Math.max(corners[0][axis], corners[1][axis])) as Bounds['max'],
+    };
 }
 
 /** What the Animate box says; a SpaceMouse being moved pauses it without unticking it. */
@@ -1514,9 +1602,12 @@ if (software) {
 
 // The canvas, and not the window: the canvas changes size without the window
 // doing so - the control pane appears with the first show, a strip of tabs over
-// it appears or goes - and a renderer that is not told draws the old size
-// stretched over the new one.
-new ResizeObserver(() => resizeCanvas()).observe(container);
+// it appears or goes, the view panel comes out or folds away - and a renderer
+// that is not told draws the old size stretched over the new one.
+// On the next frame rather than in the observer: resizing the canvas from inside
+// it is a size change the observer is then told about in the same frame, which
+// the browser reports as an error - and 'host.ts' as the panel failing to start.
+new ResizeObserver(() => requestAnimationFrame(resizeCanvas)).observe(container);
 resizeCanvas();
 if (surface.setAnimationLoop !== undefined) {
     surface.setAnimationLoop(animate);

@@ -150,6 +150,10 @@ def process(path, request, fmt, config_pil=None):
         # drawn from it.
         if svg_response.get("warnings"):
             result["warnings"] = svg_response["warnings"]
+        # And where it was looked at from, for the same reason ('viewport' is
+        # 'render_svg.VIEWPORT_KEY').
+        if svg_response.get("viewport"):
+            result["viewport"] = svg_response["viewport"]
         return result
     except Exception as e:
         wrapper_common.handle_exception(e)

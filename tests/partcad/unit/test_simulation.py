@@ -517,6 +517,23 @@ def test_a_package_says_how_every_scene_in_it_is_looked_at(tmp_path):
     assert from_scene["viewport_up"] == [0.0, 0.0, 1.0]
 
 
+def test_a_viewpoint_asked_for_wins_over_the_one_the_scene_says(tmp_path):
+    """The IDE's Simulation tab, its viewpoint moved: the pictures of this run are taken from there."""
+    context = scene_package(
+        tmp_path,
+        scene_render="    render:\n      png:\n        viewport_origin: [100, 0, 0]\n        width: 300\n",
+    )
+
+    snapshot = simulation.snapshot_request(
+        context, context.get_scene("//:table"), {"viewport_origin": [0, 0, 100], "viewport_up": [0, 1, 0]}
+    )
+
+    assert snapshot["viewport_origin"] == [0.0, 0.0, 100.0]
+    assert snapshot["viewport_up"] == [0.0, 1.0, 0.0]
+    # What was not asked for is still the scene's.
+    assert snapshot["width"] == 300
+
+
 def test_a_viewpoint_that_names_no_orientation_falls_back_rather_than_failing_the_run(tmp_path):
     """Up along the line of sight says nothing about which way is up."""
     context = scene_package(
