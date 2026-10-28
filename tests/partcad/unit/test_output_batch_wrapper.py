@@ -354,14 +354,34 @@ def _envelope(wrapper_export, shape, name):
 
 @pytest.fixture
 def box(wrapper_export):
-    """A shape envelope holding a box, and the same box carrying a mesh."""
+    """A shape envelope holding a box, and one holding a mesh of that box.
+
+    The mesh as a mesh import or an SDF part arrives: faces that are nothing but
+    their triangles. A box meshed in place would not do - a payload carries no
+    triangulation of a face that has a surface under it ('ocp_serialize'), so
+    it would arrive as the plain box.
+    """
     pytest.importorskip("OCP")
+    from OCP.BRep import BRep_Builder, BRep_Tool
     from OCP.BRepMesh import BRepMesh_IncrementalMesh
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+    from OCP.TopAbs import TopAbs_ShapeEnum
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopLoc import TopLoc_Location
+    from OCP.TopoDS import TopoDS, TopoDS_Compound, TopoDS_Face
 
     plain = BRepPrimAPI_MakeBox(10.0, 20.0, 30.0).Shape()
-    meshed = BRepPrimAPI_MakeBox(10.0, 20.0, 30.0).Shape()
-    BRepMesh_IncrementalMesh(meshed, 0.5)
+    source = BRepPrimAPI_MakeBox(10.0, 20.0, 30.0).Shape()
+    BRepMesh_IncrementalMesh(source, 0.5)
+    builder = BRep_Builder()
+    meshed = TopoDS_Compound()
+    builder.MakeCompound(meshed)
+    explorer = TopExp_Explorer(source, TopAbs_ShapeEnum.TopAbs_FACE)
+    while explorer.More():
+        face = TopoDS_Face()
+        builder.MakeFace(face, BRep_Tool.Triangulation_s(TopoDS.Face_s(explorer.Current()), TopLoc_Location()))
+        builder.Add(meshed, face)
+        explorer.Next()
     return _envelope(wrapper_export, plain, "box"), _envelope(wrapper_export, meshed, "box")
 
 
