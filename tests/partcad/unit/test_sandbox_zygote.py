@@ -21,8 +21,12 @@ runs next (see "pytest runs in parallel" in the root `AGENTS.md`).
 """
 
 import asyncio
+import errno
+import io
+import json
 import os
 import signal
+import socket
 import sys
 import textwrap
 import time
@@ -32,6 +36,7 @@ import psutil
 import pytest
 
 from partcad import runtime, runtime_python, sandbox_lock, sandbox_zygote
+from partcad_utils import container_service
 
 pytestmark = pytest.mark.skipif(not sandbox_zygote.supported(), reason="zygotes are Linux only")
 
@@ -312,6 +317,54 @@ def test_a_crash_leaves_the_zygote_serving(tmp_path):
     assert first.parent_pid == second.parent_pid
 
 
+def test_a_bounded_call_leads_a_session_of_its_own(tmp_path):
+    """What 'start_new_session' makes of a fresh interpreter, so that the bound can stop all of it at once."""
+    script = _script(tmp_path, "import os\nprint(os.getsid(0) == os.getpid(), os.getpgid(0) == os.getpid())\n")
+
+    p, stdout, _ = asyncio.run(_call(tmp_path, script, timeout=60))
+
+    assert p.returncode == 0
+    assert stdout.split() == [b"True", b"True"]
+
+
+def test_children_draw_random_numbers_of_their_own(tmp_path, monkeypatch):
+    """numpy's global generator was seeded once, in the zygote, and every child would draw the same numbers from it."""
+    pytest.importorskip("numpy")
+    monkeypatch.setattr(sandbox_zygote, "PRELOAD", ("numpy.random",))
+    script = _script(tmp_path, "import random, numpy.random\nprint(numpy.random.random(), random.random())\n")
+
+    async def calls():
+        return [(await _call(tmp_path, script))[1].split() for _ in range(2)]
+
+    first, second = asyncio.run(calls())
+
+    assert first[0] != second[0]
+    assert first[1] != second[1]
+
+
+@pytest.mark.parametrize(
+    "body,expected",
+    [
+        ("import sys, time\ntime.sleep(0.5)\nsys.stdout.write(str(len(sys.stdin.buffer.read())))\n", b"1048576"),
+        ("import sys\nsys.stdout.write('not listening')\n", b"not listening"),
+    ],
+    ids=["read-late", "never-read"],
+)
+def test_a_request_is_written_as_the_child_reads_it(tmp_path, body, expected):
+    """More than a pipe holds: the rest waits for room, and stops when the child has stopped reading.
+
+    As asyncio's own 'communicate' does, which is what a fresh interpreter's
+    request is written with.
+    """
+    script = _script(tmp_path, body)
+    request = b"x" * (1 << 20)
+
+    p, stdout, _ = asyncio.run(_call(tmp_path, script, stdin=request))
+
+    assert (p.returncode, stdout) == (0, expected)
+    assert _fresh(script, stdin=request)[:2] == (0, expected)
+
+
 # --------------------------------------------------------------------------- #
 # Stopping a child                                                             #
 # --------------------------------------------------------------------------- #
@@ -386,6 +439,39 @@ def test_what_a_child_started_and_left_holding_its_output_is_stopped(tmp_path):
     assert _dead(int(stdout.split()[-1]))
 
 
+def test_output_held_by_what_could_not_be_stopped_is_cut_off_from_this_end(tmp_path, monkeypatch):
+    """The last resort of `runtime.communicate`, through the zygote's pipes: what was read by then is the answer.
+
+    `stop_holders` finds nothing here, as it finds nothing where no tool can
+    say which process holds a pipe, or the one that does will not die.
+    """
+    monkeypatch.setattr(container_service, "EXIT_GRACE", 0.5)
+    monkeypatch.setattr(container_service, "stop_holders", lambda files: [])
+    held = tmp_path / "held"
+    script = _script(
+        tmp_path,
+        """
+        import subprocess, sys
+        held = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+        open(sys.argv[1], "w").write(str(held.pid))
+        print("answered")
+        """,
+    )
+
+    try:
+        p, stdout, _ = asyncio.run(_call(tmp_path, script, str(held)))
+        assert not _dead(int(held.read_text()), within=0.5)
+    finally:
+        if held.exists():
+            try:
+                os.kill(int(held.read_text()), signal.SIGKILL)
+            except OSError:
+                pass
+
+    assert p.returncode == 0
+    assert stdout == b"answered\n"
+
+
 def test_a_child_whose_zygote_dies_is_reported_killed(tmp_path):
     script = _script(tmp_path, SLEEPER)
 
@@ -427,8 +513,51 @@ def test_the_owner_of_a_forked_child_is_found_under_its_zygote(tmp_path):
 
 
 def _zygote_pid(tmp_path):
+    return _starting(tmp_path).pid
+
+
+def _starting(tmp_path):
+    """The one zygote this test's environment has, ready or not."""
     (zygote,) = [z for z in sandbox_zygote.zygotes() if z.environment == os.path.normpath(_environment(tmp_path))]
-    return zygote.pid
+    return zygote
+
+
+def _refused(tmp_path, within=120):
+    """Why this test's environment could not have a zygote, once that has been found out.
+
+    Asked for rather than read at once: it is written after the zygote says it
+    is over, by the thread that started it.
+    """
+    deadline = time.monotonic() + within
+    environment = os.path.normpath(_environment(tmp_path))
+    while time.monotonic() < deadline:
+        with sandbox_zygote._registry_lock:
+            found = [entry for key, entry in sandbox_zygote._unusable.items() if key[0] == environment]
+        if found:
+            return found[0]
+        time.sleep(0.05)
+    raise AssertionError("nothing says why %s has no zygote" % environment)
+
+
+def _held_against(tmp_path):
+    with sandbox_zygote._registry_lock:
+        return [key for key in sandbox_zygote._unusable if key[0] == os.path.normpath(_environment(tmp_path))]
+
+
+def _asked(tmp_path, argv, env=None, lock=None):
+    """One call's question to its environment's zygote, for a test in which no process is to be forked."""
+    return asyncio.run(
+        sandbox_zygote.process_async(_environment(tmp_path), argv, 2, cwd=str(tmp_path), env=env, lock=lock)
+    )
+
+
+def _start_held(tmp_path, monkeypatch, argv, env=None):
+    """Have a zygote started, and hand it over before it starts: it waits for a process slot until this returns."""
+    slots = sandbox_lock.ProcessSlots(1)
+    monkeypatch.setattr(sandbox_lock, "process_slots", slots)
+    with slots.slot():
+        assert _asked(tmp_path, argv, env=env) is None
+        return _starting(tmp_path)
 
 
 def test_one_zygote_serves_every_call_of_an_environment(tmp_path):
@@ -522,9 +651,7 @@ def test_a_zygote_that_cannot_be_started_is_not_asked_again(tmp_path, monkeypatc
         return await sandbox_zygote.process_async(_environment(tmp_path), argv, 2, cwd=str(tmp_path), env=env)
 
     assert asyncio.run(call()) is None
-    _settled(tmp_path)
-    (refused,) = [entry for key, entry in sandbox_zygote._unusable.items() if key[0] == _environment(tmp_path)]
-    assert "not today" in refused[3]
+    assert "not today" in _refused(tmp_path)[3]
     assert asyncio.run(call()) is None
     # The second call found the refusal remembered, and started nothing.
     assert [z for z in sandbox_zygote.zygotes() if z.environment == os.path.normpath(_environment(tmp_path))] == []
@@ -544,9 +671,7 @@ def test_a_zygote_that_starts_a_thread_is_not_used(tmp_path, monkeypatch):
         return await sandbox_zygote.process_async(_environment(tmp_path), argv, 2, cwd=str(tmp_path), env=env)
 
     assert asyncio.run(call()) is None
-    _settled(tmp_path)
-    (refused,) = [entry for key, entry in sandbox_zygote._unusable.items() if key[0] == _environment(tmp_path)]
-    assert "threads" in refused[3]
+    assert "threads" in _refused(tmp_path)[3]
     assert asyncio.run(call()) is None
 
 
@@ -659,6 +784,260 @@ def test_a_zygote_in_use_does_not_give_way_to_another(tmp_path, monkeypatch):
     assert [z.environment for z in sandbox_zygote.zygotes()] == [os.path.normpath(str(other / "environment"))]
 
 
+@pytest.mark.parametrize("why", ["no interpreter", "no room for its log"])
+def test_a_zygote_that_cannot_be_started_says_why(tmp_path, monkeypatch, why):
+    """Whatever stops it, the calls go on in fresh interpreters, and what stopped it is what is remembered."""
+    argv = _argv(_script(tmp_path, ECHO))
+    if why == "no interpreter":
+        argv[0] = str(tmp_path / "no-such-python")
+        expected = "no-such-python"
+    else:
+        full = _raises(OSError(errno.ENOSPC, "No space left on device"))
+        monkeypatch.setattr(sandbox_zygote, "tempfile", types.SimpleNamespace(TemporaryFile=full))
+        expected = "No space left on device"
+
+    assert _asked(tmp_path, argv) is None
+
+    refused = _refused(tmp_path)[3]
+    assert "could not start it" in refused and expected in refused
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "raise RuntimeError('too late')\n",
+        "import threading\nthreading.Thread(target=time.sleep, args=(120,), daemon=True).start()\n",
+    ],
+    ids=["fails", "starts-a-thread"],
+)
+def test_a_zygote_the_runtime_stopped_waiting_for_exits_by_itself(tmp_path, monkeypatch, body):
+    """It goes to say why it cannot serve, finds nobody to say it to, and goes -- rather than wait to be killed."""
+    site = _site(tmp_path)
+    (site / "slow_to_answer.py").write_text("import time\ntime.sleep(1.5)\n" + body)
+    monkeypatch.setattr(sandbox_zygote, "PRELOAD", ("slow_to_answer",))
+    monkeypatch.setattr(sandbox_zygote, "START_TIMEOUT", 0.3)
+    # Long enough that only a zygote that did not go by itself is killed.
+    monkeypatch.setattr(sandbox_zygote, "_REFUSED_EXIT", 60.0)
+    env = dict(os.environ, PYTHONPATH=str(site))
+
+    starting = _start_held(tmp_path, monkeypatch, _argv(_script(tmp_path, ECHO)), env=env)
+
+    assert starting.ready.wait(120)
+    assert not starting.usable and "did not answer" in starting.reason
+    assert starting.popen.wait(60) == 0
+
+
+def test_a_zygote_stuck_in_its_imports_is_killed(tmp_path, monkeypatch):
+    site = _site(tmp_path)
+    (site / "stuck_on_import.py").write_text("import time\ntime.sleep(120)\n")
+    monkeypatch.setattr(sandbox_zygote, "PRELOAD", ("stuck_on_import",))
+    monkeypatch.setattr(sandbox_zygote, "START_TIMEOUT", 0.3)
+    monkeypatch.setattr(sandbox_zygote, "_REFUSED_EXIT", 0.5)
+    env = dict(os.environ, PYTHONPATH=str(site))
+
+    stuck = _start_held(tmp_path, monkeypatch, _argv(_script(tmp_path, ECHO)), env=env)
+
+    assert stuck.ready.wait(120)
+    assert stuck.popen.wait(60) == -signal.SIGKILL
+    assert "did not answer" in _refused(tmp_path)[3]
+
+
+def test_a_zygote_of_another_release_is_not_used(tmp_path, monkeypatch):
+    """A checkout whose files moved under a daemon still running the old code: the two ends would not agree."""
+    monkeypatch.setattr(sandbox_zygote, "PROTOCOL", sandbox_zygote.PROTOCOL + 1)
+    monkeypatch.setattr(sandbox_zygote, "_REFUSED_EXIT", 60.0)
+
+    other = _start_held(tmp_path, monkeypatch, _argv(_script(tmp_path, ECHO)))
+
+    assert "protocol" in _refused(tmp_path)[3]
+    # Told nothing, it takes the closed control socket for its retirement.
+    assert other.popen.wait(60) == 0
+
+
+def test_a_zygote_whose_files_changed_while_it_imported_is_not_used_and_the_next_call_starts_another(
+    tmp_path, monkeypatch
+):
+    """An install by another process, half done as it imported: some of each, which no fresh interpreter would be."""
+    site = _site(tmp_path)
+    (site / "installs_as_imported.py").write_text(
+        "import os\nopen(os.path.join(os.path.dirname(__file__), 'installed.py'), 'a').close()\n"
+    )
+    monkeypatch.setattr(sandbox_zygote, "PRELOAD", ("installs_as_imported",))
+    env = dict(os.environ, PYTHONPATH=str(site))
+    script = _script(tmp_path, ECHO)
+
+    first = _start_held(tmp_path, monkeypatch, _argv(script), env=env)
+
+    assert first.ready.wait(120)
+    assert not first.usable and "changed while it imported" in first.reason
+    # Not held against the environment: the install is over by the next call.
+    p, stdout, _ = asyncio.run(_call(tmp_path, script, env=env))
+    assert p.returncode == 0 and b"main=__main__" in stdout
+    assert p.parent_pid != first.pid
+
+
+def test_an_environment_that_could_not_have_a_zygote_asks_again_once_what_it_imports_from_changes(
+    tmp_path, monkeypatch
+):
+    """An install by another process, which nothing here hears of: the directory it installed into says so."""
+    site = _site(tmp_path)
+    (site / "needs_a_dependency.py").write_text("import partcad_zygote_dependency\n")
+    monkeypatch.setattr(sandbox_zygote, "PRELOAD", ("needs_a_dependency",))
+    env = dict(os.environ, PYTHONPATH=str(site))
+    script = _script(tmp_path, ECHO)
+
+    assert _asked(tmp_path, _argv(script), env=env) is None
+    assert "partcad_zygote_dependency" in _refused(tmp_path)[3]
+    assert _asked(tmp_path, _argv(script), env=env) is None
+    # Past the granularity of a directory's timestamp, generously.
+    time.sleep(0.1)
+    (site / "partcad_zygote_dependency.py").write_text("")
+
+    p, stdout, _ = asyncio.run(_call(tmp_path, script, env=env))
+
+    assert p.returncode == 0 and b"main=__main__" in stdout
+
+
+def test_an_install_forgets_that_an_environment_could_not_have_a_zygote(tmp_path, monkeypatch):
+    """What was installed may be what it lacked."""
+    broken = _site(tmp_path)
+    (broken / "broken_on_import.py").write_text("raise RuntimeError('not today')\n")
+    monkeypatch.setattr(sandbox_zygote, "PRELOAD", ("broken_on_import",))
+    env = dict(os.environ, PYTHONPATH=str(broken))
+    os.makedirs(_environment(tmp_path))
+    assert _asked(tmp_path, _argv(_script(tmp_path, ECHO)), env=env) is None
+    _refused(tmp_path)
+
+    runtime_python.PythonRuntime(_ctx(tmp_path), "test", "3.11").record_install("anything", _environment(tmp_path))
+
+    assert _held_against(tmp_path) == []
+
+
+def test_a_zygote_retired_before_its_turn_never_starts(tmp_path, monkeypatch):
+    """Retired while it waited for a slot -- by an install, which is what it waited behind: what it would import changed."""
+    script = _script(tmp_path, ECHO)
+    slots = sandbox_lock.ProcessSlots(1)
+    monkeypatch.setattr(sandbox_lock, "process_slots", slots)
+
+    with slots.slot():
+        assert _asked(tmp_path, _argv(script)) is None
+        waiting = _starting(tmp_path)
+        sandbox_zygote.retire(_environment(tmp_path))
+        # Twice is once.
+        waiting.retire()
+
+    assert waiting.ready.wait(120)
+    assert (waiting.popen, waiting.usable, waiting.reason) == (None, False, "retired before it started")
+    # Nor is it held against the environment: the next call has one of its own.
+    p, _, _ = asyncio.run(_call(tmp_path, script))
+    assert p.returncode == 0
+
+
+def test_a_zygote_retired_while_it_imports_is_stopped(tmp_path, monkeypatch):
+    """What it is importing nothing will use, and it has no child yet: there is nothing to wait for."""
+    site = _site(tmp_path)
+    (site / "slow_to_import.py").write_text("import time\ntime.sleep(120)\n")
+    monkeypatch.setattr(sandbox_zygote, "PRELOAD", ("slow_to_import",))
+    env = dict(os.environ, PYTHONPATH=str(site))
+
+    importing = _start_held(tmp_path, monkeypatch, _argv(_script(tmp_path, ECHO)), env=env)
+    deadline = time.monotonic() + 120
+    while importing.popen is None:
+        assert time.monotonic() < deadline, "the zygote was never started"
+        time.sleep(0.05)
+    sandbox_zygote.retire(_environment(tmp_path))
+
+    assert importing.ready.wait(120)
+    assert not importing.usable
+    assert importing.popen.wait(60) == -signal.SIGKILL
+
+
+def test_a_zygote_retired_as_it_becomes_ready_is_let_go_of(tmp_path, monkeypatch):
+    """Ready, and retired before 'start' has said so: nothing will ever use it, so nothing may keep it."""
+    original = sandbox_zygote.Zygote._start
+    held = {}
+
+    def _start(self):
+        original(self)
+        held["control"] = self.control
+        # What an install does at this instant.
+        sandbox_zygote.retire(self.environment)
+
+    monkeypatch.setattr(sandbox_zygote.Zygote, "_start", _start)
+
+    became = _start_held(tmp_path, monkeypatch, _argv(_script(tmp_path, ECHO)))
+
+    assert became.ready.wait(120)
+    # Let go of by 'start' once it is over: its control socket closed, and the process reaped.
+    deadline = time.monotonic() + 60
+    while held["control"].fileno() != -1 or became.popen.returncode is None:
+        assert time.monotonic() < deadline, "the zygote was kept"
+        time.sleep(0.05)
+    assert not became.usable and became.reason is None
+
+
+def test_a_zygote_whose_environment_cannot_be_locked_is_not_started(tmp_path):
+    """The lock it imports under, which 'start' never reaches: a reason like any other."""
+
+    class Unlockable:
+        def acquire(self, write=False):
+            raise RuntimeError("the lock is gone")
+
+    assert _asked(tmp_path, _argv(_script(tmp_path, ECHO)), lock=Unlockable()) is None
+
+    assert "the lock is gone" in _refused(tmp_path)[3]
+
+
+def test_a_zygote_that_stops_answering_is_retired_and_the_call_started_the_ordinary_way(tmp_path, monkeypatch):
+    """Stopped -- here by SIGSTOP; a zygote swapped out would do -- it is of no use to this call or the next."""
+    monkeypatch.setattr(sandbox_zygote, "SPAWN_TIMEOUT", 1.0)
+    script = _script(tmp_path, ECHO)
+
+    async def calls():
+        first, _, _ = await _call(tmp_path, script)
+        stopped = _starting(tmp_path)
+        os.kill(stopped.pid, signal.SIGSTOP)
+        try:
+            return stopped, await sandbox_zygote.process_async(
+                _environment(tmp_path), _argv(script), 2, cwd=str(tmp_path)
+            )
+        finally:
+            os.kill(stopped.pid, signal.SIGCONT)
+
+    stopped, p = asyncio.run(calls())
+
+    assert p is None
+    assert stopped.retired and "did not answer a request" in stopped.reason
+    assert stopped not in sandbox_zygote.zygotes()
+    # Woken, it finds the request's caller gone, forks nothing, and goes.
+    assert stopped.popen.wait(60) == 0
+
+
+def test_a_call_with_no_directory_is_run_in_this_processs_own(tmp_path, monkeypatch):
+    """As a fresh interpreter started without one would be -- and in none, when this process's own is gone."""
+    work = tmp_path / "work"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    argv = _argv(_script(tmp_path, ECHO))
+
+    async def calls():
+        deadline = time.monotonic() + 120
+        while True:
+            p = await sandbox_zygote.process_async(_environment(tmp_path), argv, 2)
+            if p is not None:
+                break
+            assert time.monotonic() < deadline, "no zygote to fork from"
+            await asyncio.sleep(0.05)
+        stdout, _ = await runtime.communicate(p, b"")
+        work.rmdir()
+        return stdout, await sandbox_zygote.process_async(_environment(tmp_path), argv, 2)
+
+    stdout, gone = asyncio.run(calls())
+
+    assert ("cwd=%s" % os.path.realpath(work)).encode() in stdout
+    assert gone is None
+
+
 def test_only_a_script_is_forked():
     assert sandbox_zygote.script_index(["python", "-sOOu", "/w/wrapper.py", "a"], FLAGS) == 2
     assert sandbox_zygote.script_index(["python", "-sOOu", "-m", "pip"], FLAGS) is None
@@ -743,6 +1122,22 @@ def test_the_python_runtime_describes_a_forked_crash_as_it_describes_any(tmp_pat
 
     assert exitcode == -signal.SIGSEGV
     assert "killed by signal %d (SIGSEGV)" % signal.SIGSEGV in stderr
+
+
+def test_the_python_runtime_says_why_a_wrapper_went_with_its_zygote(tmp_path, one_slot):
+    """Reported killed, which it was -- by its zygote going, which is the part worth saying."""
+    made = _python_runtime(tmp_path)
+    asyncio.run(made.run_async_onced([_script(tmp_path, PARENT, name="warm.py")], stdin="request"))
+    _runtime_zygote(made)
+    script = _script(
+        tmp_path,
+        "import os, signal, sys, time\nsys.stdin.read()\nos.kill(os.getppid(), signal.SIGKILL)\ntime.sleep(60)\n",
+    )
+
+    exitcode, _, stderr = asyncio.run(made.run_async_onced([script], stdin="request"))
+
+    assert exitcode == -signal.SIGKILL
+    assert "stopped while it ran, and took it along" in stderr
 
 
 def test_a_sandbox_whose_interpreter_is_elsewhere_is_never_forked(tmp_path, one_slot, monkeypatch):
@@ -905,3 +1300,539 @@ def test_how_a_script_ended_is_read_as_the_interpreter_reads_it(zygote, tmp_path
     stderr = capsys.readouterr().err
     if expected == 1:
         assert "said" in stderr or "RuntimeError: raised" in stderr
+
+
+def test_a_libc_that_cannot_be_loaded_is_no_prctl(zygote, monkeypatch):
+    """A child is then not tied to its zygote's life, and is still reported as its socket says."""
+    import ctypes
+
+    with monkeypatch.context() as m:
+        m.setattr(ctypes, "CDLL", _raises(OSError("no libc here")))
+        prctl = zygote._libc_prctl()
+
+    assert prctl is None
+
+
+def test_without_proc_the_threads_are_the_interpreters_count(zygote, monkeypatch):
+    """Native threads included where the kernel says; Python's own, where it cannot be asked."""
+    import threading
+
+    monkeypatch.setattr(zygote, "os", _System(listdir=_raises(FileNotFoundError("/proc/self/task"))))
+    with monkeypatch.context() as m:
+        m.setattr(threading, "active_count", lambda: 5)
+        threads = zygote._threads()
+
+    assert threads == 5
+
+
+def test_settling_forks_once_and_waits_for_what_it_forked(zygote, monkeypatch):
+    """In this process, with stand-ins for the fork: a pytest that forked would go on running the test twice."""
+    exited = []
+
+    def exit_(status):
+        exited.append(status)
+        raise SystemExit(status)
+
+    monkeypatch.setattr(zygote, "_threads", lambda: 2)
+    # A fork that fails leaves the threads where they were, and says so by counting them.
+    monkeypatch.setattr(zygote, "os", _System(fork=_raises(OSError(errno.EAGAIN, "no fork"))))
+    zygote._settle()
+    # Its child goes at once, and does nothing else.
+    monkeypatch.setattr(zygote, "os", _System(fork=lambda: 0, _exit=exit_))
+    with pytest.raises(SystemExit):
+        zygote._settle()
+    assert exited == [0]
+    # Its parent waits for it, and does not mind finding it reaped already.
+    monkeypatch.setattr(zygote, "os", _System(fork=lambda: NO_SUCH_PID, waitpid=_raises(ChildProcessError())))
+    zygote._settle()
+
+
+def test_a_preload_that_takes_the_wrappers_off_the_path_itself_is_let_be(zygote, tmp_path, monkeypatch):
+    """The wrappers' directory is on the path only while preloading, and what it imports may have moved it already."""
+    import importlib
+
+    (tmp_path / "partcad_zygote_path_taker.py").write_text("import sys\nsys.path.remove(%r)\n" % zygote.WRAPPERS)
+    monkeypatch.setattr(sys, "path", [str(tmp_path)] + [entry for entry in sys.path if entry != zygote.WRAPPERS])
+    importlib.invalidate_caches()
+
+    try:
+        assert zygote._preload(["partcad_zygote_path_taker"]) == (["partcad_zygote_path_taker"], [])
+    finally:
+        sys.modules.pop("partcad_zygote_path_taker", None)
+    assert zygote.WRAPPERS not in sys.path
+
+
+def test_the_two_ends_read_each_others_messages(zygote):
+    """The runtime's half and the zygote's frame a message the same way, and pass a descriptor with one alike."""
+    runtime_end, zygote_end = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+    r, w = os.pipe()
+    try:
+        sandbox_zygote._send(runtime_end, {"asked": 1})
+        assert zygote._receive(zygote_end) == ({"asked": 1}, [])
+
+        zygote._send(zygote_end, {"pid": 7}, [w])
+        message, fds = sandbox_zygote._receive(runtime_end)
+        assert message == {"pid": 7} and len(fds) == 1
+        # The same pipe, under another number.
+        os.write(fds[0], b"through")
+        os.close(fds[0])
+        assert os.read(r, 7) == b"through"
+    finally:
+        os.close(r)
+        os.close(w)
+        runtime_end.close()
+        zygote_end.close()
+
+
+def test_an_empty_message_is_the_end_and_what_came_with_it_is_closed(zygote):
+    """Nothing to read is the end of the stream, at either end; a descriptor sent with nothing is not kept."""
+    for receive in (zygote._receive, sandbox_zygote._receive):
+        mine, theirs = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        r, w = os.pipe()
+        try:
+            socket.send_fds(mine, [b""], [w])
+            os.close(w)
+
+            assert receive(theirs) == (None, [])
+            # Every writing end of the pipe is closed, so its reader is at the end.
+            os.set_blocking(r, False)
+            assert os.read(r, 1) == b""
+        finally:
+            os.close(r)
+            mine.close()
+            theirs.close()
+
+
+def test_closing_what_is_not_open_is_not_an_error(zygote):
+    import resource
+
+    soft, _ = resource.getrlimit(resource.RLIMIT_NOFILE)
+    # No descriptor can be numbered past the limit.
+    beyond = soft if 0 < soft < (1 << 30) else (1 << 30)
+
+    zygote._close(beyond)
+    sandbox_zygote._close(beyond)
+    sandbox_zygote._close(None)
+
+
+def test_a_stamp_is_the_same_at_both_ends(zygote, tmp_path):
+    """The zygote stamps what it imports from before it starts, and the runtime compares that with what is there."""
+    there, missing = tmp_path / "there", tmp_path / "missing"
+    there.write_text("x")
+
+    # As it travels: JSON, which has no tuples.
+    sent = json.loads(json.dumps(zygote._stamps([str(there), str(missing)])))
+
+    assert sent[1] == [str(missing), None]
+    assert tuple(sandbox_zygote._as_stamp(stamp) for _, stamp in sent) == sandbox_zygote._stamp(
+        [str(there), str(missing)]
+    )
+
+
+def test_what_cannot_be_said_does_not_change_how_a_script_ended(zygote, tmp_path, monkeypatch):
+    """A message with nowhere to go, an excepthook that fails: the status is the interpreter's all the same."""
+    closed = io.StringIO()
+    closed.close()
+    monkeypatch.setattr(sys, "stderr", closed)
+    monkeypatch.setattr(sys, "excepthook", _raises(RuntimeError("no hook")))
+
+    assert zygote._run(types.ModuleType("__main__"), _script(tmp_path, "import sys\nsys.exit('unsaid')\n", "a.py")) == 1
+    assert zygote._run(types.ModuleType("__main__"), _script(tmp_path, "raise ValueError('unshown')\n", "b.py")) == 1
+
+
+def test_a_traceback_is_handed_on_starting_in_the_script(zygote, tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setattr(sys, "excepthook", zygote._without_this_frame(lambda kind, value, tb: seen.append((value, tb))))
+    script = _script(tmp_path, "raise ValueError('here')\n")
+
+    assert zygote._run(types.ModuleType("__main__"), script) == 1
+
+    ((value, tb),) = seen
+    assert tb.tb_frame.f_code.co_filename == script and value.__traceback__ is tb
+    # Whatever it is handed: one that cannot take a traceback goes on as it is.
+    seen.clear()
+    sys.excepthook(ValueError, None, None)
+    assert seen == [(None, None)]
+
+
+@pytest.mark.parametrize("status,fails", [(3, False), (-signal.SIGINT, True)], ids=["exit", "interrupt"])
+def test_a_child_ends_in_shutdowns_order_whatever_fails_on_the_way(zygote, monkeypatch, status, fails):
+    """In this process, with stand-ins for whatever would end it or reach the interpreter's own state."""
+    done = []
+
+    def step(name, failing=False):
+        def run(*args):
+            done.append(name)
+            if failing:
+                raise RuntimeError(name)
+
+        return run
+
+    with monkeypatch.context() as m:
+        m.setattr(
+            zygote,
+            "sys",
+            types.SimpleNamespace(
+                modules={"threading": types.SimpleNamespace(_shutdown=step("threads", fails))},
+                stdout=types.SimpleNamespace(flush=step("stdout", fails)),
+                stderr=types.SimpleNamespace(flush=step("stderr", fails)),
+            ),
+        )
+        m.setitem(sys.modules, "atexit", types.SimpleNamespace(_run_exitfuncs=step("atexit", fails)))
+        m.setattr(zygote, "_flush_writers", step("flush"))
+        m.setattr(zygote, "_release", step("release", fails))
+        m.setattr(
+            zygote,
+            "signal",
+            types.SimpleNamespace(
+                SIGINT=signal.SIGINT,
+                SIG_DFL=signal.SIG_DFL,
+                signal=lambda signum, handler: done.append(("handler", signum, handler)),
+            ),
+        )
+        m.setattr(
+            zygote,
+            "os",
+            _System(kill=lambda pid, signum: done.append(("kill", pid, signum)), _exit=lambda code: done.append(code)),
+        )
+        zygote._finish(status, {"inherited"})
+
+    ended = ["threads", "atexit", "flush", "release", "stdout", "stderr"]
+    if status == -signal.SIGINT:
+        # By the signal itself, as an interpreter ends on an interrupt nothing caught.
+        ended += [("handler", signal.SIGINT, signal.SIG_DFL), ("kill", os.getpid(), signal.SIGINT)]
+    assert done == ended + [status & 0xFF]
+
+
+def test_a_file_that_cannot_be_written_out_does_not_keep_the_others_from_it(zygote, tmp_path):
+    class Unwritable(io.BufferedWriter):
+        failing = True
+
+        def flush(self):
+            if self.failing:
+                raise OSError(errno.ENOSPC, "No space left on device")
+            super().flush()
+
+    stuck = Unwritable(io.BytesIO())
+    stuck.write(b"stuck")
+    left_open = open(tmp_path / "left-open.txt", "w")
+    left_open.write("buffered")
+    try:
+        zygote._flush_writers()
+
+        assert (tmp_path / "left-open.txt").read_text() == "buffered"
+    finally:
+        stuck.failing = False
+        stuck.close()
+        left_open.close()
+
+
+def test_a_module_blocked_or_gone_already_is_passed_over_on_release(zygote, monkeypatch):
+    """'sys.modules' may hold None -- an import blocked on purpose -- and a module only it held is gone once dropped."""
+    modules = {"inherited": types.ModuleType("inherited"), "blocked": None, "gone": types.ModuleType("gone")}
+    monkeypatch.setattr(zygote, "sys", types.SimpleNamespace(modules=modules))
+
+    zygote._release({"inherited"})
+
+    assert list(modules) == ["inherited"]
+
+
+# --------------------------------------------------------------------------- #
+# The zygote's half of a request, in this process                             #
+# --------------------------------------------------------------------------- #
+
+# Past any 'pid_max': kill() and getpgid() of it fail, as they do for a child that is gone.
+NO_SUCH_PID = 1 << 30
+
+
+def _raises(error):
+    def raising(*args, **kwargs):
+        raise error
+
+    return raising
+
+
+class _System:
+    """'os' as `wrappers/zygote.py` sees it, with whatever may not be done in this process for real done instead."""
+
+    def __init__(self, **instead):
+        self.__dict__.update(instead)
+
+    def __getattr__(self, name):
+        return getattr(os, name)
+
+
+class _Parent:
+    """A `_Zygote` in this process, and the runtime's end of its control socket.
+
+    Nothing here may fork -- a fork of pytest would go on running the test --
+    so its 'fork' fails unless a test says what it does instead.
+    """
+
+    def __init__(self, zygote, monkeypatch):
+        self.system = _System(fork=_raises(AssertionError("forked in a test")))
+        monkeypatch.setattr(zygote, "os", self.system)
+        monkeypatch.setattr(zygote, "_threads", lambda: 1)
+        self.control, theirs = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        self.zygote = zygote._Zygote(theirs, 0)
+        # The runtime's ends of every request's standard streams: input, output, error.
+        self.streams = []
+
+    def ask(self, request, reply=None):
+        """Send ``request`` as the runtime does, and have it answered; the runtime's end of its socket, if it has one."""
+        mine, theirs = (None, reply) if reply is not None else socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        (stdin_r, stdin_w), (stdout_r, stdout_w), (stderr_r, stderr_w) = os.pipe(), os.pipe(), os.pipe()
+        sandbox_zygote._send(self.control, request, [stdin_r, stdout_w, stderr_w, theirs.fileno()])
+        for fd in (stdin_r, stdout_w, stderr_w):
+            os.close(fd)
+        theirs.close()
+        self.streams = [stdin_w, stdout_r, stderr_r]
+        assert self.zygote._request() is None
+        return mine
+
+    def output_closed(self):
+        """Whether the zygote let go of the child's end of its standard output."""
+        os.set_blocking(self.streams[1], False)
+        try:
+            return os.read(self.streams[1], 1) == b""
+        except BlockingIOError:
+            return False
+
+    def close(self):
+        self.zygote.selector.close()
+        for sock in [self.zygote.control, self.control, *self.zygote.children.values()]:
+            sock.close()
+        for fd in [self.zygote.wake_r, self.zygote.wake_w, *self.streams]:
+            os.close(fd)
+
+
+@pytest.fixture
+def parent(zygote, monkeypatch):
+    made = _Parent(zygote, monkeypatch)
+    yield made
+    made.close()
+
+
+def _request(tmp_path):
+    script = _script(tmp_path, ECHO)
+    return {"argv": [sys.executable, *FLAGS, script], "script": 1 + len(FLAGS), "cwd": str(tmp_path), "session": False}
+
+
+def test_the_zygote_answers_with_the_childs_pid_and_pidfd_and_then_how_it_ended(parent, tmp_path):
+    """Its half of the protocol, read by the runtime's half: what a `ZygoteProcess` is made from."""
+    stand_in_r, stand_in_w = os.pipe()
+    parent.system.fork = lambda: NO_SUCH_PID
+    parent.system.pidfd_open = lambda pid: os.dup(stand_in_r)
+    # A child it did not fork for a request comes first, and is not reported to anybody.
+    reaped = iter([(NO_SUCH_PID + 1, 0), (NO_SUCH_PID, 3 << 8)])
+    parent.system.waitpid = lambda pid, options: next(reaped)
+    reply = None
+    try:
+        reply = parent.ask(_request(tmp_path))
+
+        message, fds = sandbox_zygote._receive(reply)
+        assert message == {"pid": NO_SUCH_PID} and len(fds) == 1
+        os.write(stand_in_w, b"pidfd")
+        assert os.read(fds[0], 5) == b"pidfd"
+        os.close(fds[0])
+        # The child's ends of its streams are the child's alone.
+        assert parent.output_closed()
+
+        parent.zygote._reap()
+
+        assert sandbox_zygote._receive(reply) == ({"exit": 3}, [])
+        assert sandbox_zygote._receive(reply) == (None, [])
+        assert parent.zygote.children == {}
+    finally:
+        os.close(stand_in_r)
+        os.close(stand_in_w)
+        if reply is not None:
+            reply.close()
+
+
+def test_a_caller_that_gives_up_as_its_child_is_forked_has_the_child_killed(parent, tmp_path):
+    """Gone before the pid could be sent to it: nobody is left to read what the child says, so it does not run on."""
+    mine, theirs = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+    killed = []
+
+    def fork():
+        mine.close()
+        return NO_SUCH_PID
+
+    def kill(pid, signum):
+        killed.append((pid, signum))
+        # No such process, as for a child that has died meanwhile.
+        os.kill(pid, signum)
+
+    parent.system.fork = fork
+    parent.system.kill = kill
+    parent.ask(_request(tmp_path), reply=theirs)
+    assert NO_SUCH_PID in parent.zygote.children
+
+    # What the loop does when that socket reads as closed.
+    parent.zygote._caller_gone(NO_SUCH_PID)
+    # Heard of again, as nothing makes it, or of a child it does not have: nothing changes.
+    parent.zygote._caller_gone(NO_SUCH_PID)
+    parent.zygote._caller_gone(NO_SUCH_PID + 1)
+
+    assert killed == [(NO_SUCH_PID, signal.SIGKILL)] * 2
+    # Reaped by the time it is waited for, as nothing makes it either: it waits for the next.
+    parent.system.waitpid = _raises(ChildProcessError())
+    parent.zygote._reap()
+    assert NO_SUCH_PID in parent.zygote.children
+
+
+@pytest.mark.parametrize("case", ["threads", "not-a-request", "no-fork", "caller-gone", "caller-unconnected"])
+def test_a_request_that_cannot_be_forked_is_refused_saying_why(parent, zygote, tmp_path, monkeypatch, case):
+    """Refused, the call is started the ordinary way; nothing of the request is kept, and the reason goes back."""
+    request, reply, expected = _request(tmp_path), None, None
+    if case == "threads":
+        monkeypatch.setattr(zygote, "_threads", lambda: 2)
+        expected = "this process has 2 threads"
+    elif case == "not-a-request":
+        request = {"argv": []}
+        expected = "not a request"
+    elif case == "no-fork":
+        parent.system.fork = _raises(OSError(errno.EAGAIN, "Resource temporarily unavailable"))
+        expected = "fork failed"
+    elif case == "caller-gone":
+        mine, reply = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        mine.close()
+    else:
+        # Not even connected: it cannot be asked whether it is still there.
+        reply = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+
+    mine = parent.ask(request, reply=reply)
+
+    if mine is not None:
+        try:
+            message, _ = sandbox_zygote._receive(mine)
+            assert expected in message["error"]
+        finally:
+            mine.close()
+    assert parent.zygote.children == {}
+    assert parent.output_closed()
+    # A process with a thread in it forks nothing more, ever.
+    assert parent.zygote.accepting == (case != "threads")
+
+
+def test_what_is_not_a_request_on_the_control_socket_is_passed_over(parent, zygote):
+    """Too many descriptors, or not the four a request comes with: dropped, closed, and the zygote serves on."""
+    r, w = os.pipe()
+    try:
+        socket.send_fds(parent.control, [b"{}"], [w] * (zygote.MAX_FDS + 1))
+        assert parent.zygote._request() is None
+        socket.send_fds(parent.control, [b"{}"], [w])
+        assert parent.zygote._request() is None
+        os.close(w)
+        w = None
+
+        # Every copy it was sent is closed.
+        os.set_blocking(r, False)
+        assert os.read(r, 1) == b""
+        assert parent.zygote.accepting
+    finally:
+        os.close(r)
+        if w is not None:
+            os.close(w)
+
+
+# --------------------------------------------------------------------------- #
+# The runtime's half of a child, in this process                               #
+# --------------------------------------------------------------------------- #
+
+
+class _Child:
+    """A `ZygoteProcess` for no process at all: the zygote's end of its socket, and the far ends of its pipes."""
+
+    def __init__(self, pidfd=None):
+        loop = asyncio.get_running_loop()
+        mine, self.zygote_end = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        mine.setblocking(False)
+        (stdin_r, stdin_w), (stdout_r, stdout_w), (stderr_r, stderr_w) = os.pipe(), os.pipe(), os.pipe()
+        self.far = [stdin_r, stdout_w, stderr_w]
+        self.process = sandbox_zygote.ZygoteProcess(
+            loop, NO_SUCH_PID, os.getpid(), pidfd, mine, stdin=stdin_w, stdout=stdout_r, stderr=stderr_r
+        )
+
+    def close(self):
+        self.process.close_output()
+        self.process._reply.close()
+        self.zygote_end.close()
+        for fd in self.far:
+            os.close(fd)
+
+
+async def _until(condition, within=30):
+    deadline = time.monotonic() + within
+    while not condition():
+        assert time.monotonic() < deadline
+        await asyncio.sleep(0.01)
+
+
+def test_what_the_zygote_says_besides_how_the_child_ended_is_passed_over(zygote):
+    """Read as it comes, and nothing but an exit status ends the child; a descriptor that came with it is not kept."""
+
+    async def main():
+        child = _Child()
+        r, w = os.pipe()
+        try:
+            # Woken with nothing to read.
+            child.process._on_reply()
+            zygote._send(child.zygote_end, {"said": "something else"}, [w])
+            os.close(w)
+            # Nothing is ever written into the pipe: it reads once its last writer is closed.
+            await _until(lambda: _is_readable(r))
+            assert os.read(r, 1) == b""
+            assert child.process.returncode is None
+
+            zygote._send(child.zygote_end, {"exit": 3})
+            assert await asyncio.wait_for(child.process.wait(), 30) == 3
+            # Ended once: whatever says so after that changes nothing.
+            child.process._end(0)
+            child.process.send_signal(signal.SIGKILL)
+            assert child.process.returncode == 3
+        finally:
+            os.close(r)
+            child.close()
+
+    asyncio.run(main())
+
+
+def _is_readable(fd):
+    import select
+
+    return bool(select.select([fd], [], [], 0)[0])
+
+
+@pytest.mark.parametrize("pidfd", [True, False], ids=["pidfd", "no-pidfd"])
+def test_a_child_whose_zygote_answers_nonsense_is_reported_killed(zygote, pidfd):
+    """A reply that cannot be read is no reply: the zygote is lost to the child, which went with it.
+
+    With a pidfd the child is killed through it, and is over when the pidfd
+    says so. A pipe stands in for one -- both read as ready once what they are
+    of is over -- because pidfds are not to be had everywhere (a container's
+    seccomp profile can refuse them), and this is about what is done with one.
+    Without one, nothing can reach the child safely, and it is over at once.
+    """
+
+    async def main():
+        stand_in_r, stand_in_w = os.pipe() if pidfd else (None, None)
+        child = _Child(pidfd=stand_in_r)
+        try:
+            child.process.terminate()
+            assert child.process.returncode is None
+            child.zygote_end.send(b"not a message")
+            await _until(lambda: child.process.zygote_lost)
+            if pidfd:
+                assert child.process.returncode is None
+                # The child is gone.
+                os.close(stand_in_w)
+                stand_in_w = None
+            assert await asyncio.wait_for(child.process.wait(), 30) == -signal.SIGKILL
+        finally:
+            if stand_in_w is not None:
+                os.close(stand_in_w)
+            child.close()
+
+    asyncio.run(main())

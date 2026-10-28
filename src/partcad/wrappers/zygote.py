@@ -57,7 +57,8 @@ thing this process inherits -- with descriptors passed as ``SCM_RIGHTS``:
 * ``{"ready": true, ...}`` is the first message this sends, once it has
   imported what it could: what it preloaded, what was not installed, and the
   files whose change means it is out of date (`_watch_list`). Or ``{"ready":
-  false, "reason": ...}``, and it exits.
+  false, "reason": ..., "watch": [...]}``, and it exits: the same files are
+  then the ones whose change is worth another try.
 * A request is ``{"argv": [...], "script": <index>, "cwd": ..., "session":
   bool}`` with four descriptors: the child's standard input, output and error,
   and a socket of the request's own that every answer about it goes to.
@@ -584,7 +585,14 @@ def main(argv):
         loaded, absent = _preload(preload)
     except BaseException as e:  # whatever it was, the answer is "not ready"
         try:
-            _send(control, {"ready": False, "reason": "preloading failed: %s: %s" % (type(e).__name__, e)})
+            _send(
+                control,
+                {
+                    "ready": False,
+                    "reason": "preloading failed: %s: %s" % (type(e).__name__, e),
+                    "watch": _watch_list(),
+                },
+            )
         except OSError:
             pass
         return None
@@ -602,7 +610,11 @@ def main(argv):
         try:
             _send(
                 control,
-                {"ready": False, "reason": "%d threads after preloading %s" % (threads, ", ".join(loaded))},
+                {
+                    "ready": False,
+                    "reason": "%d threads after preloading %s" % (threads, ", ".join(loaded)),
+                    "watch": _watch_list(),
+                },
             )
         except OSError:
             pass

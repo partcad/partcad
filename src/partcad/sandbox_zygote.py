@@ -227,10 +227,7 @@ async def _readable(loop, fd, timeout=None):
 
     loop.add_reader(fd, wake)
     try:
-        if timeout is None:
-            await ready
-        else:
-            await asyncio.wait_for(ready, timeout)
+        await asyncio.wait_for(ready, timeout)
     finally:
         loop.remove_reader(fd)
 
@@ -378,10 +375,13 @@ class Zygote:
                 return
             self.retired = True
             starting = not self.ready.is_set()
-            control, self.control = self.control, None
+            control = None
+            if not starting:
+                control, self.control = self.control, None
         if starting:
             # What it is importing nothing will use, and it has no child yet.
-            # 'start' lets the process go once it is over.
+            # 'start' lets the process go once it is over -- and closes its
+            # control socket, which is why that is left where 'start' looks.
             with contextlib.suppress(Exception):
                 if self.popen is not None:
                     self.popen.kill()
@@ -850,16 +850,6 @@ def retire(environment) -> None:
             del _zygotes[zygote.key]
         for key in [key for key in _unusable if _within(key[0], environment)]:
             del _unusable[key]
-    for zygote in retiring:
-        zygote.retire()
-
-
-def retire_all() -> None:
-    """Retire every zygote of this process, and forget every refusal."""
-    with _registry_lock:
-        retiring = list(_zygotes.values())
-        _zygotes.clear()
-        _unusable.clear()
     for zygote in retiring:
         zygote.retire()
 
