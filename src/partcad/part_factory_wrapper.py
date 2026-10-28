@@ -261,6 +261,8 @@ class PartFactoryWrapper(PartFactory):
             request = {
                 "name": "%s:%s" % (part.project_name, part.name),
                 "label": part.name,
+                # Validated and moved by the wrapper, while the shape is live (see 'Shape.finish_request').
+                shape_envelope.KEY_FINISH: part.finish_request(),
                 "orig_name": self.orig_name,
                 "config": self.config,
                 "parameters": {},
@@ -306,12 +308,18 @@ class PartFactoryWrapper(PartFactory):
                 part.error("The partType wrapper produced no shape")
                 return None
             self.ctx.stats_parts_instantiated += 1
+            # One shape, which is what the wrapper hands back for a part however
+            # many the script made: it compounds them itself, while they are
+            # live (see 'wrapper_common.finished_shapes').
             if len(shapes) == 1:
                 return shapes[0]
 
-            # Compounding runs in the sandbox (transform.compound), so the core
-            # never touches OCP. Keep the contract: report via part.error() and
-            # return None instead of raising.
+            # Several only from a wrapper that could not compound them - an
+            # answer holding something no shape is made of, which it leaves
+            # for the codec to refuse. Compounding runs in a sandbox
+            # (transform.compound), so the core never touches OCP. Keep the
+            # contract: report via part.error() and return None instead of
+            # raising.
             try:
                 return await transform.compound(self.ctx, shapes)
             except Exception as e:

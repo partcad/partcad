@@ -40,8 +40,10 @@ if __name__ == "__main__":
     _, request = wrapper_common.handle_input()
     try:
         shape = process(request)
-        model = {"success": True, "exception": None, "shape": shape}
     except Exception as e:
         wrapper_common.handle_exception(e)
         model = {"success": False, "exception": str(e), "shape": None}
+    else:
+        # Validated and moved here, while it is live (see wrapper_common.finished).
+        model = {"success": True, "exception": None, "shape": wrapper_common.finished(shape)}
     wrapper_common.handle_output(model)

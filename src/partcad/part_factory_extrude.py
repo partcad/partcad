@@ -110,6 +110,8 @@ class PartFactoryExtrude(PartFactoryHomogen):
                     "depth": self.depth,
                     "name": "%s:%s" % (part.project_name, part.name),
                     "label": part.name,
+                    # Validated and moved by the wrapper, while the shape is live (see 'Shape.finish_request').
+                    shape_envelope.KEY_FINISH: part.finish_request(),
                 }
                 request_serialized = shape_envelope.serialize(request)
                 exitcode, response_serialized, errors = await runtime.run_async(

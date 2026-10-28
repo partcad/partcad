@@ -158,4 +158,8 @@ def process(path, request):
 if __name__ == "__main__":
     path, request = wrapper_common.handle_input()
     result = process(path, request)
+    if result.get("success") and "shapes" in result:
+        # The shapes a script makes are one part, compounded, validated and
+        # moved here while they are live (see wrapper_common.finished_shapes).
+        result["shapes"] = wrapper_common.finished_shapes(result["shapes"])
     wrapper_common.handle_output(result)

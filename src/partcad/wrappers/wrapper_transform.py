@@ -9,6 +9,14 @@
 # core process never has to touch a live OCP object to perform them. The operand
 # shape(s) arrive in the request as BREP (see ocp_serialize) and the result goes
 # back the same way.
+#
+# That makes this the fallback, for a shape that is already a BREP when it is
+# moved: a reference to another part, or a part whose wrapper could not do it.
+# A part's own 'offset' and 'scale' are applied by the wrapper that builds it,
+# while the shape is still live ('wrapper_common.finished'), with the very same
+# 'relocate()' and 'scale()' below - one definition of what moving a part
+# means, and one CACHE_VERSION that says when it changed, whichever process
+# runs it.
 
 import os
 import sys
@@ -30,7 +38,7 @@ import wrapper_common
 CACHE_VERSION = 1
 
 
-def _relocate(shape, offset):
+def relocate(shape, offset):
     """Move 'shape' by the packed [translation, axis, angle] offset.
 
     The transform is applied to the geometry, so what comes back sits at the
@@ -52,23 +60,81 @@ def _relocate(shape, offset):
 
     Baking it into the geometry is what stops any of that being possible: an
     envelope is BREP bytes, and nothing downstream has to remember a frame.
+
+    What the offset means is build123d's 'Location(*offset)'. The packed form,
+    which is the one PartCAD documents, is built here the way that constructor
+    builds it, call for call, so that it does not cost importing build123d -
+    seconds of IPython and friends, in a wrapper that reads a STEP file and
+    would otherwise never load it; any other form is handed to build123d
+    itself. 'test_part_finish' holds the two to the same bytes.
     """
-    import build123d as b3d
     from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
 
-    location = b3d.Location(*offset)
-    transform = BRepBuilderAPI_Transform(shape, location.wrapped.Transformation(), True)
+    transformation = _packed_transformation(offset)
+    if transformation is None:
+        import build123d as b3d
+
+        transformation = b3d.Location(*offset).wrapped.Transformation()
+    transform = BRepBuilderAPI_Transform(shape, transformation, True)
     return transform.Shape()
 
 
-def _scale(shape, factor):
-    """Scale 'shape' by 'factor', mirroring the build123d scale() the core used."""
+def scale(shape, factor):
+    """Scale 'shape' by 'factor' about its own position, as build123d's 'Shape.scale()' does.
+
+    A plain number is scaled here, by the very transformation that method
+    builds for one - about the translation of the shape's own location - and
+    without importing build123d for it (see 'relocate'); anything else goes to
+    build123d, which knows what else it accepts.
+    """
+    if _is_number(factor):
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.gp import gp_Pnt, gp_Trsf
+
+        transformation = gp_Trsf()
+        transformation.SetScale(gp_Pnt(shape.Location().Transformation().TranslationPart()), float(factor))
+        return ocp_serialize.downcast(BRepBuilderAPI_Transform(shape, transformation, True).Shape())
+
     import build123d as b3d
 
     solid = b3d.Solid.make_box(1, 1, 1)
     solid.wrapped = shape
     solid = solid.scale(factor)
     return solid.wrapped
+
+
+def _is_number(value):
+    # 'bool' is an 'int'; build123d takes one as a number too, and is left to.
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _packed_transformation(offset):
+    """What build123d's 'Location(*offset)' makes of '[[x, y, z], [ax, ay, az], angle]', or None for any other form.
+
+    That constructor, given a position, a direction and an angle in degrees,
+    rotates about the direction through the origin and then sets the
+    translation: the same three OCCT calls, with the same doubles, here.
+    """
+    if not isinstance(offset, (list, tuple)) or len(offset) != 3:
+        return None
+    translation, axis, angle = offset
+    for vector in (translation, axis):
+        if not isinstance(vector, (list, tuple)) or len(vector) != 3 or not all(map(_is_number, vector)):
+            return None
+    if not _is_number(angle):
+        return None
+
+    import math
+
+    from OCP.gp import gp_Ax1, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    from OCP.TopLoc import TopLoc_Location
+
+    transformation = gp_Trsf()
+    transformation.SetRotation(
+        gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(gp_Vec(*[float(value) for value in axis]).XYZ())), math.radians(angle)
+    )
+    transformation.SetTranslationPart(gp_Vec(*[float(value) for value in translation]))
+    return TopLoc_Location(transformation).Transformation()
 
 
 def _compound(shapes):
@@ -87,9 +153,9 @@ def _compound(shapes):
 def process(request):
     operation = request.get("operation")
     if operation == "offset":
-        return _relocate(request["shape"], request["offset"])
+        return relocate(request["shape"], request["offset"])
     if operation == "scale":
-        return _scale(request["shape"], request["scale"])
+        return scale(request["shape"], request["scale"])
     if operation == "compound":
         return _compound(request.get("shapes", []))
     raise ValueError("Unknown transform operation: %r" % (operation,))

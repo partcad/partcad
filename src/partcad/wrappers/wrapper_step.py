@@ -84,10 +84,12 @@ def process(path, request):
         print("Failed to read what '%s' states: %s" % (path, e), file=sys.stderr)
         sections = None
 
-    shape = ocp_serialize.encode_shape(
+    # Validated and moved, as the request asks, while the shape is still live
+    # here (see wrapper_common.finished): judged and not converted for a STEP
+    # part, whose file is the authority on it, and converted too for a KiCad
+    # board, which is read through here.
+    shape = wrapper_common.finished(
         compound,
-        name=request.get("name"),
-        label=request.get("label"),
         metadata={ocp_serialize.METADATA_SECTIONS: sections} if sections else None,
     )
 

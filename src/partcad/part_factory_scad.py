@@ -298,6 +298,8 @@ class PartFactoryScad(PartFactoryHomogen, PartFactoryFile):
                 request = {"fallback_import_stl": True}
                 request["name"] = "%s:%s" % (part.project_name, part.name)
                 request["label"] = part.name
+                # Validated and moved by the wrapper, while the shape is live (see 'Shape.finish_request').
+                request[shape_envelope.KEY_FINISH] = part.finish_request()
                 request_serialized = shape_envelope.serialize(request)
 
                 await self.runtime.ensure_async(sandbox_versions.OCP_TESSELLATE)

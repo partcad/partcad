@@ -41,12 +41,6 @@ def process(path, request):
             # First, make sure it's not the known problem in Mesher
             shape = b3d.import_stl(path).wrapped
 
-        return {
-            "success": True,
-            "exception": None,
-            "shape": shape,
-        }
-
     except Exception as e:
         wrapper_common.handle_exception(e)
         return {
@@ -54,6 +48,13 @@ def process(path, request):
             "exception": str(e),
             "shape": None,
         }
+
+    return {
+        "success": True,
+        "exception": None,
+        # Validated and moved here, while it is live (see wrapper_common.finished).
+        "shape": wrapper_common.finished(shape),
+    }
 
 
 path, request = wrapper_common.handle_input()

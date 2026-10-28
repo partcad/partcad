@@ -85,7 +85,9 @@ def process(path, request):
         wrapper_common.handle_exception(e)
         return {"success": False, "exception": str(e), "shape": None}
 
-    return {"success": True, "exception": None, "shape": shape}
+    # Validated and moved here, while it is live (see wrapper_common.finished) -
+    # and so is a glTF part, which 'wrapper_import_gltf' reads through this.
+    return {"success": True, "exception": None, "shape": wrapper_common.finished(shape)}
 
 
 if __name__ == "__main__":

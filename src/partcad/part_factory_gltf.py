@@ -94,6 +94,8 @@ class PartFactoryGltf(PartFactoryHomogen, PartFactoryFile):
                 self.runtime = self.ctx.get_python_runtime(self.PYTHON_SANDBOX_VERSION)
 
             request = {"name": "%s:%s" % (part.project_name, part.name), "label": part.name}
+            # Validated and moved by the wrapper, while the shape is live (see 'Shape.finish_request').
+            request[shape_envelope.KEY_FINISH] = part.finish_request()
             request_serialized = shape_envelope.serialize(request)
 
             await self.runtime.ensure_async(sandbox_versions.OCP_TESSELLATE)
