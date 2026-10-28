@@ -215,3 +215,52 @@ def test_the_default_python_is_one_the_pins_cover():
     assert sandbox_versions.is_at_least(
         sandbox_versions.MAX_PYTHON_VERSION_CAD, sandbox_versions.DEFAULT_PYTHON_VERSION
     )
+
+
+# --------------------------------------------------------------------------- #
+# The order several file types' requirements are installed in                 #
+# --------------------------------------------------------------------------- #
+
+OCP = sandbox_versions.CADQUERY_OCP
+B3D = sandbox_versions.BUILD123D
+
+
+def test_a_union_installs_what_build123d_overwrites_after_it():
+    """STEP's list and then glTF's, each requirement once where it first appears, would end in build123d.
+
+    Which leaves the sandbox's OCP without VTK: the very thing every single
+    list is written to avoid, undone by putting two of them together.
+    """
+    order = sandbox_versions.install_order([OCP, B3D, OCP])
+    assert order == [B3D, OCP]
+
+
+def test_a_union_already_in_order_is_left_alone():
+    """The render package's own list and the PNG file type's, as every render installs them."""
+    requirements = ["ocpsvg==0.6.0", B3D, OCP, "svglib==1.5.1", "reportlab==4.4.3"]
+    assert sandbox_versions.install_order(requirements) == requirements
+
+
+def test_a_requirement_is_installed_once_however_it_is_spelled():
+    """Compared as it would be installed: an unpinned name is the pin PartCAD installs for it."""
+    order = sandbox_versions.install_order(["cadquery-ocp", "ezdxf==1.4.4", OCP])
+    assert order == ["cadquery-ocp", "ezdxf==1.4.4"]
+
+
+def test_nothing_else_moves(monkeypatch):
+    """Only what something after it overwrites is moved, and the rest keep their places."""
+    monkeypatch.setitem(sandbox_versions.GUARD_INVALIDATED_BY, "b==1", ("a==1",))
+    assert sandbox_versions.install_order(["x==1", "a==1", "y==1", "b==1", "z==1"]) == [
+        "x==1",
+        "y==1",
+        "b==1",
+        "a==1",
+        "z==1",
+    ]
+
+
+def test_two_that_overwrite_each_other_are_left_as_they_came(monkeypatch):
+    """There is no order that leaves both installed, and inventing one would hide that."""
+    monkeypatch.setitem(sandbox_versions.GUARD_INVALIDATED_BY, "b==1", ("a==1",))
+    monkeypatch.setitem(sandbox_versions.GUARD_INVALIDATED_BY, "a==1", ("b==1",))
+    assert sandbox_versions.install_order(["a==1", "b==1", "c==1"]) == ["c==1", "a==1", "b==1"]

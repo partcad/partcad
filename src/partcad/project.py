@@ -3083,35 +3083,43 @@ class Project(project_config.Configuration):
                 if named_elsewhere:
                     formats = [format]
 
-                for format_name in formats:
-                    if named_elsewhere or self._should_render_format(format_name, shape_cfg, format, shape.kind):
-                        if not hasattr(shape, "finalized") or shape.finalized:
-                            tasks.append(
-                                shape.render_async(
-                                    ctx=self.ctx,
-                                    format_name=format_name,
-                                    project=self,
-                                    output_dir=output_dir,
-                                    options_package=options_package,
-                                    overlay=overlay,
-                                    # One run's '--filter', if there was one.
-                                    # Left to each file type's own 'filter:'
-                                    # otherwise, which is why this goes down to
-                                    # the file rather than being applied to the
-                                    # shape here: one object may be rendered to
-                                    # a filtered PNG and a whole STEP.
-                                    link_filter=link_filter,
-                                    # One run's worth of export parameters (the
-                                    # viewport of 'pc render --view'), on top of
-                                    # everything the configuration resolved to.
-                                    # Handed to every file type: whether one
-                                    # means anything to a projection of a shape
-                                    # is the implementation's to decide, and a
-                                    # package may well implement one of its own
-                                    # that reads it.
-                                    **(render_opts or {}),
-                                )
-                            )
+                # Every file type of one shape in one call, which writes them
+                # together: the shape is decoded, and the CAD stack imported, once
+                # for all of them rather than once per file (see
+                # 'Shape.render_async'). Each is still logged, cached and reported
+                # as a file of its own.
+                selected = [
+                    format_name
+                    for format_name in formats
+                    if named_elsewhere or self._should_render_format(format_name, shape_cfg, format, shape.kind)
+                ]
+                if selected and (not hasattr(shape, "finalized") or shape.finalized):
+                    tasks.append(
+                        shape.render_async(
+                            ctx=self.ctx,
+                            format_name=selected,
+                            project=self,
+                            output_dir=output_dir,
+                            options_package=options_package,
+                            overlay=overlay,
+                            # One run's '--filter', if there was one.
+                            # Left to each file type's own 'filter:'
+                            # otherwise, which is why this goes down to
+                            # the file rather than being applied to the
+                            # shape here: one object may be rendered to
+                            # a filtered PNG and a whole STEP.
+                            link_filter=link_filter,
+                            # One run's worth of export parameters (the
+                            # viewport of 'pc render --view'), on top of
+                            # everything the configuration resolved to.
+                            # Handed to every file type: whether one
+                            # means anything to a projection of a shape
+                            # is the implementation's to decide, and a
+                            # package may well implement one of its own
+                            # that reads it.
+                            **(render_opts or {}),
+                        )
+                    )
 
             await asyncio.gather(*tasks)
 

@@ -21,6 +21,10 @@ import render_raster
 # before is produced again.
 CACHE_VERSION = 2
 
+# This projection's, for the reason 'render_svg.TESSELLATION' gives: it is drawn
+# by 'render_svg.process()'. A literal, because it is read without running this.
+TESSELLATION = ("projection", "reproducible", "normalize_mesh", "with_ports", "with_interfaces", "ports", "annotations")
+
 # The request fields that are the JPEG encoder's own options. renderPM forwards
 # 'configPIL' to 'PIL.Image.save()', so these reach Pillow verbatim.
 ENCODER_OPTIONS = ("quality", "progressive", "optimize", "subsampling")

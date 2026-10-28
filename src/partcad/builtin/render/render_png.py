@@ -21,6 +21,10 @@ import render_raster
 # before is produced again.
 CACHE_VERSION = 2
 
+# This projection's, for the reason 'render_svg.TESSELLATION' gives: it is drawn
+# by 'render_svg.process()'. A literal, because it is read without running this.
+TESSELLATION = ("projection", "reproducible", "normalize_mesh", "with_ports", "with_interfaces", "ports", "annotations")
+
 
 def process(path, request):
     return render_raster.process(path, request, "PNG", config_pil={"transparent": True})

@@ -1193,6 +1193,7 @@ def test_the_flag_reaches_the_request_of_every_implementation():
         project_name = "//pkg"
 
         _run_implementation_locked = pc.shape.Shape._run_implementation_locked
+        _run_together_locked = pc.shape.Shape._run_together_locked
 
         def error(self, message):  # pragma: no cover - not reached here
             raise AssertionError(message)

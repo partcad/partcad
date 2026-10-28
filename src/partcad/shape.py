@@ -269,6 +269,236 @@ def _file_identity(path: str):
     return (stat.st_ino, stat.st_size, stat.st_mtime_ns)
 
 
+def _render_action(project_name: str, format_name) -> str:
+    """The name of the action that writes one file type, or every one of them.
+
+    The bare file type: a package path in it would make one operation look like
+    several, one per package that asked.
+    """
+    return f"Render{output.split_format(project_name, format_name)[0].upper()}" if format_name else "Render"
+
+
+class _Output:
+    """One file an implementation is to write: who writes it, from what, where, and what is known of it on the way.
+
+    'artifact' is its cache key ('Shape._artifact_hash'), and 'before' which file
+    was at 'path' before it was written ('_file_identity').
+    """
+
+    __slots__ = ("impl", "script", "request", "path", "artifact", "before")
+
+    def __init__(self, impl, script, request, path, artifact=None):
+        self.impl = impl
+        self.script = script
+        self.request = request
+        self.path = path
+        self.artifact = artifact
+        self.before = None
+
+
+def _sandbox_of(impl):
+    """Which sandbox interpreter an implementation runs in, as far as running several in one goes; or None.
+
+    The interpreter and the image it is built from - what 'ctx.get_python_runtime'
+    is asked for - and whose implementation it is. PartCAD's own built-in
+    implementations are written to run one after another in one process, each
+    setting what it reads of OCCT's process-wide parameters and naming no helper
+    module another one names; two packages' implementations are not known to be,
+    so each package's run with its own and nobody else's. A container is a
+    process of the implementation's own, and so is one whose environment cannot
+    be told: None, which runs alone.
+    """
+    try:
+        if impl.container:
+            return None
+        name = getattr(impl.project, "name", None) or ""
+        builtin = name == output.BUILTIN_ROOT_PACKAGE or name.startswith(output.BUILTIN_ROOT_PACKAGE + "/")
+        return (impl.python_version(), impl.docker_image, output.BUILTIN_ROOT_PACKAGE if builtin else name)
+    except Exception:  # pylint: disable=broad-except
+        return None
+
+
+def _rounds(outputs) -> list:
+    """The indices of 'outputs', in rounds none of which writes one path twice.
+
+    Each in the first round after the last one that writes its path, so files
+    asked for at one path are written in the order asked for and the last of
+    them is the one left there, as when each was written on its own.
+    """
+    rounds = []
+    last = {}
+    for index, output_ in enumerate(outputs):
+        path = os.path.normcase(os.path.abspath(output_.path))
+        position = last.get(path, -1) + 1
+        if position == len(rounds):
+            rounds.append([])
+        rounds[position].append(index)
+        last[path] = position
+    return rounds
+
+
+def _together_request(outputs) -> dict:
+    """What 'wrapper_export.py' is handed to write several files: every request, and each object once.
+
+    The object a request is of is taken out of it and put in a list of its own,
+    once however many requests are of it, and the request names it by its place
+    there (see 'output.BATCH_OUTPUTS_KEY'). What makes two requests of one object
+    is that they hold the one tree: every file type of a shape is handed the tree
+    'get_wrapped' answered, and a filtered view the tree of the view.
+    """
+    subjects = []
+    named = {}
+    entries = []
+    for output_ in outputs:
+        request = dict(output_.request)
+        entry = {output.BATCH_REQUEST_KEY: request}
+        # The key '_output_request' puts the object under, and the wrapper reads
+        # it from ('wrapper_export.WRAPPED_KEY').
+        wrapped = request.pop("wrapped", None)
+        if wrapped is not None:
+            subject = named.get(id(wrapped))
+            if subject is None:
+                subject = named[id(wrapped)] = len(subjects)
+                subjects.append(wrapped)
+            entry[output.BATCH_SUBJECT_KEY] = subject
+        entries.append(entry)
+    return {output.BATCH_OUTPUTS_KEY: entries, output.BATCH_SUBJECTS_KEY: subjects}
+
+
+def _together_answers(stdout, count: int) -> dict:
+    """What a call writing 'count' files said of each of them, by its place in the call.
+
+    One line per file it finished (see 'output.BATCH_OUTPUT_KEY'). A line that
+    is not one of those is not an answer; a file with none was not answered.
+    """
+    answers = {}
+    for line in (stdout or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            answer = shape_envelope.loads(line)
+        except Exception:  # pylint: disable=broad-except
+            pc_logging.debug("Not an answer from the export wrapper: %s" % line[:200])
+            continue
+        if not isinstance(answer, dict):
+            continue
+        index = answer.get(output.BATCH_OUTPUT_KEY)
+        result = answer.get(output.BATCH_RESULT_KEY)
+        if isinstance(index, int) and not isinstance(index, bool) and 0 <= index < count and isinstance(result, dict):
+            answers[index] = result
+    return answers
+
+
+class _OutputBatch:
+    """The file types of one shape that 'Shape.render_async' was asked for together, written together.
+
+    Each is worked out in a task of its own, exactly as when it is asked for on
+    its own - which implementation, which script, which path, what it is handed
+    and its cache key - and is then handed in here ('submit') instead of being
+    run. Once every one of them has been handed in, or has given up on the way
+    (an empty shape, a filter that is not one), the cache is asked for each and
+    what it does not hold is written in as few sandbox calls as their
+    environments allow ('Shape._outputs_run_async'). Each task then reports its
+    own file from its own answer, the way it always has.
+
+    The tasks are worked out one at a time, in the order they get here
+    ('member'): they share what one render call works out once and fills in as
+    it is asked - where the ports are, the filtered views - and two at once
+    would each work it out.
+
+    Never made by a task that holds the shape's lock already: the tasks of the
+    batch are other tasks, and would wait for that lock for good.
+    """
+
+    def __init__(self, shape, ctx, size):
+        self.shape = shape
+        self.ctx = ctx
+        self.undecided = size
+        self.cache = None
+        self.turn = asyncio.Lock()
+        self.current = None
+        self.waiting = []
+
+    @contextlib.asynccontextmanager
+    async def member(self):
+        """One file type's part in the batch, from working it out to handing it in or giving up."""
+        await self.turn.acquire()
+        mine = {"decided": False}
+        self.current = mine
+        try:
+            yield
+        finally:
+            if not mine["decided"]:
+                await self._decide(mine)
+
+    async def submit(self, cache, output_):
+        """Hand in the file the member working now is to write, and wait for what writing it said."""
+        self.cache = cache
+        future = asyncio.get_running_loop().create_future()
+        self.waiting.append((output_, future))
+        await self._decide(self.current)
+        return await future
+
+    async def _decide(self, mine):
+        mine["decided"] = True
+        self.current = None
+        self.turn.release()
+        self.undecided -= 1
+        if self.undecided == 0:
+            await self._run()
+
+    async def _run(self):
+        """Write what was handed in, and answer every member that handed something in.
+
+        Only what a member is still waiting for: one that stopped - its render
+        was cancelled while the last of the batch was being worked out - has
+        nobody to write its file for, and the cancellation is not to wait for it.
+        """
+        waiting, self.waiting = [entry for entry in self.waiting if not entry[1].done()], []
+        if not waiting:
+            return
+        try:
+            outcomes = await self.shape._outputs_run_async(self.ctx, [output_ for output_, _ in waiting], self.cache)
+        except asyncio.CancelledError:
+            for _, future in waiting:
+                future.cancel()
+            raise
+        except Exception as e:  # pylint: disable=broad-except
+            outcomes = [e] * len(waiting)
+        for (_, future), outcome in zip(waiting, outcomes):
+            if future.done():
+                continue
+            if isinstance(outcome, BaseException):
+                future.set_exception(outcome)
+            else:
+                future.set_result(outcome)
+
+
+def _in_order(results: dict, formats) -> dict:
+    """'results' in the order 'formats' asked for them: file types written together finish in any order."""
+    return {format_name: results[format_name] for format_name in formats if format_name in results}
+
+
+async def _together(batch, each, formats) -> None:
+    """'each(format)' for every file type of one render call: all at once for a batch, else one after another.
+
+    A batch's file types are written by whichever of them is handed in last, so
+    none of them is left running when this returns: a failure is raised once
+    every one has finished - the first in the order asked for - and not as it
+    happens, which left the rest writing files, or not, for a caller that had
+    already been told the render failed.
+    """
+    if batch is None:
+        for format_name in formats:
+            await each(format_name)
+        return
+    outcomes = await asyncio.gather(*(each(format_name) for format_name in formats), return_exceptions=True)
+    for outcome in outcomes:
+        if isinstance(outcome, BaseException):
+            raise outcome
+
+
 # The part types whose geometry is the file they are read from, and is handed
 # over as the file holds it: a closed shell in one is reported, not converted.
 FILE_AUTHORITY_TYPES = frozenset({"step", "brep"})
@@ -1967,37 +2197,66 @@ class Shape(ShapeConfiguration):
 
     async def _run_implementation_locked(self, ctx, impl, script, request, final_filepath):
         """The body of '_run_implementation_async', with the shape held still."""
-        # Whether the file has to come out the same every time it is produced.
-        # Set here rather than left to whatever the configuration happened to
-        # carry, so that it is in *every* request and an implementation - one
-        # PartCAD ships, or one a package published on its own - can read it
-        # without first asking whether the key exists. That is the whole of what
-        # makes 'reproducible' mean one thing across every implementation there
-        # is; see 'output.REPRODUCIBLE_KEY'.
-        #
-        # What is already in the request wins, because by the time it gets here
-        # it is the layered answer: the file type's declaration merged through
-        # 'impl.parameters', with an explicit argument from the caller on top of
-        # it. 'impl.reproducible' is the fallback for a caller that built its
-        # request some other way, and the coercion is the point of reading both
-        # through the same function - "false" is a string on the way in from
-        # JSON-RPC and would otherwise be true.
-        request[output.REPRODUCIBLE_KEY] = (
-            output.as_flag(request[output.REPRODUCIBLE_KEY])
-            if output.REPRODUCIBLE_KEY in request
-            else impl.reproducible
-        )
-        # Where the implementing package keeps what it fetches for itself (see
-        # 'output.package_cache_dir'). Added here, after anything has been keyed
-        # on the request, because it is a path on this machine and says nothing
-        # about what the file will contain.
-        if getattr(impl, "project", None) is not None:
-            request.setdefault("cache_dir", output.package_cache_dir(ctx, impl.project))
+        return (await self._run_together_locked(ctx, [_Output(impl, script, request, final_filepath)]))[0]
+
+    async def _run_together_locked(self, ctx, outputs):
+        """Run the implementations of 'outputs' in one sandbox call, and read back what each said.
+
+        One is the call there has always been, and its answer and its failure
+        are what '_run_implementation_async' returns and raises. Several are the
+        files of this shape that one sandbox environment writes, as
+        '_run_implementations_async' groups them: one interpreter, which imports
+        the CAD stack once and decodes the shape once for every file that may
+        share it, and runs each implementation as it would have been run alone
+        (see 'wrapper_export.py'). Each is answered as soon as it is written, so
+        a call that dies has still said what it finished; every file it did not
+        answer is written again in a call of its own, which fails, if it fails,
+        exactly as it does on its own - so one file's crash costs no other file
+        anything but the time.
+
+        Returns one entry per output, in order: its result dict, or None when it
+        said nothing that could be read (which has been reported by then); and,
+        for several, the exception a file's own call raised where it raised one.
+        """
+        for output_ in outputs:
+            request = output_.request
+            impl = output_.impl
+            # Whether the file has to come out the same every time it is produced.
+            # Set here rather than left to whatever the configuration happened to
+            # carry, so that it is in *every* request and an implementation - one
+            # PartCAD ships, or one a package published on its own - can read it
+            # without first asking whether the key exists. That is the whole of what
+            # makes 'reproducible' mean one thing across every implementation there
+            # is; see 'output.REPRODUCIBLE_KEY'.
+            #
+            # What is already in the request wins, because by the time it gets here
+            # it is the layered answer: the file type's declaration merged through
+            # 'impl.parameters', with an explicit argument from the caller on top of
+            # it. 'impl.reproducible' is the fallback for a caller that built its
+            # request some other way, and the coercion is the point of reading both
+            # through the same function - "false" is a string on the way in from
+            # JSON-RPC and would otherwise be true.
+            request[output.REPRODUCIBLE_KEY] = (
+                output.as_flag(request[output.REPRODUCIBLE_KEY])
+                if output.REPRODUCIBLE_KEY in request
+                else impl.reproducible
+            )
+            # Where the implementing package keeps what it fetches for itself (see
+            # 'output.package_cache_dir'). Added here, after anything has been keyed
+            # on the request, because it is a path on this machine and says nothing
+            # about what the file will contain.
+            if getattr(impl, "project", None) is not None:
+                request.setdefault("cache_dir", output.package_cache_dir(ctx, impl.project))
+
+        together = len(outputs) > 1
+        impl = outputs[0].impl
+        script = outputs[0].script
 
         # Where this implementation runs. A container when it declared one --
         # the only sandbox that can carry what pip cannot install -- and the
         # Python sandbox otherwise, which is every implementation that ships
-        # with PartCAD and most of those that do not.
+        # with PartCAD and most of those that do not. Several are never a
+        # container's (see '_sandbox_of').
         container = impl.container
 
         # Serialized by the runtime when the process starts, not here: until a
@@ -2006,12 +2265,15 @@ class Shape(ShapeConfiguration):
         # sandbox the reader is 'wrapper_export.py', which takes the payloads of
         # a tree written once each (see 'shape_envelope.KEY_BREPS'); a container
         # runs a program of the implementation's own, handed the request as it
-        # has always been written.
+        # has always been written. Several files are one document holding every
+        # request and the shape once (see '_together_request').
         def request_serialized():
-            return shape_envelope.serialize(request, share=not container)
+            if together:
+                return shape_envelope.serialize(_together_request(outputs), share=True)
+            return shape_envelope.serialize(outputs[0].request, share=not container)
 
         script_path = wrapper.get("export.py")
-        config_dir = os.path.abspath(impl.project.config_dir)
+        config_dirs = [os.path.abspath(output_.impl.project.config_dir) for output_ in outputs]
         input_dirs = []
         session = None
 
@@ -2024,31 +2286,25 @@ class Shape(ShapeConfiguration):
             # only the files the command names would leave both unable to start:
             # the wrapper imports its siblings, and so does the implementation
             # script (see runtime.pack_directory).
-            input_dirs = [os.path.dirname(script_path), config_dir]
+            input_dirs = [os.path.dirname(script_path), config_dirs[0]]
         else:
             runtime = ctx.get_python_runtime(version=impl.python_version(), image=impl.docker_image)
-            # What the implementation needs beyond the sandbox's own environment
+            # What the implementations need beyond the sandbox's own environment
             # goes into a layer over it, never into that environment: wrappers
             # are reading it (see 'runtime_python.base_requirements').
-            session = runtime.get_session("%s:%s" % (impl.section, impl.format_name))
-            await runtime.prepare_for_package(impl.project, session=session)
-            # Installed one at a time, not with asyncio.gather(): the order a
-            # package declares its requirements in is part of what it declared.
-            for dep in impl.python_requirements:
-                await runtime.ensure_async(dep, session=session)
+            session = await self._output_session_async(runtime, outputs)
 
         with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
-            # The meta-wrapper, what to write, where to run, and what to run.
-            # The implementation script is an argument and not part of the
-            # request because a container rewrites arguments naming a directory
-            # it was sent and cannot rewrite the request, which reaches it as
-            # one opaque string on standard input -- see wrapper_export.py.
-            command = [
-                script_path,
-                final_filepath,
-                config_dir,
-                os.path.abspath(script),
-            ]
+            # The meta-wrapper, and for each file what to write, where to run,
+            # and what to run. The implementation script is an argument and not
+            # part of the request because a container rewrites arguments naming a
+            # directory it was sent and cannot rewrite the request, which reaches
+            # it as one opaque string on standard input -- see wrapper_export.py.
+            # The 'remote' sandbox works out which directories to send from the
+            # same arguments, so every file's are there.
+            command = [script_path]
+            for output_, config_dir in zip(outputs, config_dirs):
+                command += [output_.path, config_dir, os.path.abspath(output_.script)]
             if container:
                 # The interpreter is named rather than pathed: the container's
                 # allowlist maps the name to the executable, which is what keeps
@@ -2065,32 +2321,187 @@ class Shape(ShapeConfiguration):
             # container path knows its input directories too; the 'remote'
             # sandbox works those out from the command itself, and only the
             # output is beyond inference.
+            written = [output_.path for output_ in outputs]
             if container:
-                extra = {"input_dirs": input_dirs, "output_files": [final_filepath]}
+                extra = {"input_dirs": input_dirs, "output_files": written}
             elif getattr(runtime, "EXCHANGES_FILES", False):
-                extra = {"output_files": [final_filepath], "session": session}
+                extra = {"output_files": written, "session": session}
             else:
                 extra = {"session": session}
             exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized, **extra)
             if exitcode != 0 and len(errors) == 0:
                 errors = command_failure(command, exitcode)
-            if errors:
+            if errors and not together:
                 errors = errors.rstrip() + sandbox_note(ctx, impl)
                 pc_logging.error(errors)
                 raise Exception(errors)
 
+        if together:
+            return await self._together_outcomes_async(ctx, outputs, response_serialized, errors)
+
         response_lines = response_serialized.strip().splitlines()
         if not response_lines:
             self.error("Empty response from the '%s' implementation: %s" % (impl.format_name, script))
-            return None
+            return [None]
 
         try:
-            return shape_envelope.deserialize(response_lines[-1].strip())
+            return [shape_envelope.deserialize(response_lines[-1].strip())]
         except Exception as e:
             self.error("Failed to deserialize response: %s" % e)
-            return None
+            return [None]
 
-    async def _output_run_async(self, ctx, impl, script, request, final_filepath, view=None, section=None):
+    async def _together_outcomes_async(self, ctx, outputs, response_serialized, errors):
+        """What each of several files written in one call came to: its answer, or a call of its own.
+
+        A file the call did not answer is written again on its own - the call
+        died before it got there, or something failed before its implementation
+        was reached - and what that call answers or raises is its outcome, the
+        message included, as though it had never been one of several.
+        """
+        answers = _together_answers(response_serialized, len(outputs))
+        unanswered = [output_ for index, output_ in enumerate(outputs) if index not in answers]
+        if unanswered:
+            names = ", ".join(output_.impl.format_name for output_ in unanswered)
+            if errors:
+                pc_logging.warning(
+                    "%s:%s: the sandbox writing %d files at once stopped before it wrote %s (%s); "
+                    "writing %s again, each on its own"
+                    % (
+                        self.project_name,
+                        self.name,
+                        len(outputs),
+                        names,
+                        errors.strip().splitlines()[-1] if errors.strip() else "no reason given",
+                        "it" if len(unanswered) == 1 else "them",
+                    )
+                )
+            else:
+                pc_logging.debug(
+                    "%s:%s: not answered by the call writing %d files at once, written again on its own: %s"
+                    % (self.project_name, self.name, len(outputs), names)
+                )
+        outcomes = []
+        for index, output_ in enumerate(outputs):
+            if index in answers:
+                outcomes.append(answers[index])
+                continue
+            try:
+                outcomes.append(
+                    await self._run_implementation_async(
+                        ctx, output_.impl, output_.script, output_.request, output_.path
+                    )
+                )
+            except Exception as e:  # pylint: disable=broad-except
+                outcomes.append(e)
+        return outcomes
+
+    async def _output_session_async(self, runtime, outputs):
+        """The session the implementations of 'outputs' run with: what they need beyond the sandbox's own environment.
+
+        A session names the layer a run happens in (see
+        'runtime_python.PythonRuntime.get_session'), and the layer is what the
+        requirements the base does not hold make it - so the files a call writes
+        together are files whose sessions name one layer, and the session the
+        call runs with asks for all of their requirements.
+
+        One implementation's requirements are asked for in the order its package
+        declared them, which is part of what it declared. Several are asked for
+        in the order 'sandbox_versions.install_order' works out for all of them,
+        the packages' own included: their lists are each in an order that keeps
+        every one of them installed and their union is not, which matters where
+        a sandbox keeps one environment and installs what it is asked, in the
+        order asked (the 'remote' one).
+        """
+        names = ", ".join("%s:%s" % (output_.impl.section, output_.impl.format_name) for output_ in outputs)
+        session = runtime.get_session(names)
+        projects = []
+        for output_ in outputs:
+            if all(output_.impl.project is not project for project in projects):
+                projects.append(output_.impl.project)
+        for project in projects:
+            await runtime.prepare_for_package(project, session=session)
+        if len(outputs) == 1:
+            requirements = outputs[0].impl.python_requirements
+        else:
+            from .runtime_python import package_requirements
+
+            requirements = sandbox_versions.install_order(
+                [dep for project in projects for dep in package_requirements(project)]
+                + [dep for output_ in outputs for dep in output_.impl.python_requirements]
+            )
+        # Asked one at a time, not with asyncio.gather(): the order is part of
+        # the answer.
+        for dep in requirements:
+            await runtime.ensure_async(dep, session=session)
+        return session
+
+    async def _layer_of_async(self, ctx, output_):
+        """Which environment an implementation runs in once its requirements are counted: a layer, or the base.
+
+        '_sandbox_of' tells sandboxes apart by what is declared of them; within
+        one, what a file type requires beyond the sandbox's own environment
+        puts it in a layer of its own (the 3MF exporter, which imports
+        CadQuery, in the one CadQuery parts run in; the raster projections in
+        one carrying what rasterizes an SVG). Files are written together only
+        with the files of their own layer, so each runs where it would have run
+        alone.
+        """
+        impl = output_.impl
+        runtime = ctx.get_python_runtime(version=impl.python_version(), image=impl.docker_image)
+        session = await self._output_session_async(runtime, [output_])
+        return session.get("path") if session and session.get("dirty") else None
+
+    async def _run_implementations_async(self, ctx, outputs):
+        """'_run_implementation_async' for several files of this shape, in as few sandbox calls as can be.
+
+        The ones that run in one environment - one sandbox ('_sandbox_of'), and
+        one layer of it ('_layer_of_async') - run in one call
+        ('_run_together_locked'), and one with an environment of its own - a
+        container's, say - runs alone, through '_run_implementation_async'
+        exactly as a file asked for by itself does. One after another, under
+        the shape's lock: the files of one shape never ran at once, and a call
+        is one process slot whatever it writes.
+
+        Returns, for each output, its result, None, or the exception its run
+        raised: one file failing stops no other.
+        """
+        outcomes = [None] * len(outputs)
+        sandboxes = {}
+        for index, output_ in enumerate(outputs):
+            sandboxes.setdefault(_sandbox_of(output_.impl) or ("alone", index), []).append(index)
+        environments = {}
+        for key, indices in sandboxes.items():
+            for index in indices:
+                layer = None
+                if len(indices) > 1:
+                    try:
+                        layer = await self._layer_of_async(ctx, outputs[index])
+                    except Exception:  # pylint: disable=broad-except
+                        # Whatever stopped it is said by its own run, alone.
+                        layer = ("alone", index)
+                environments.setdefault((key, layer), []).append(index)
+        async with self.locked():
+            for indices in environments.values():
+                if len(indices) > 1:
+                    try:
+                        answers = await self._run_together_locked(ctx, [outputs[index] for index in indices])
+                    except Exception as e:  # pylint: disable=broad-except
+                        # Before anything ran - an install, a sandbox that is
+                        # not there - and so the same for every one of them.
+                        answers = [e] * len(indices)
+                    for index, answer in zip(indices, answers):
+                        outcomes[index] = answer
+                    continue
+                output_ = outputs[indices[0]]
+                try:
+                    outcomes[indices[0]] = await self._run_implementation_async(
+                        ctx, output_.impl, output_.script, output_.request, output_.path
+                    )
+                except Exception as e:  # pylint: disable=broad-except
+                    outcomes[indices[0]] = e
+        return outcomes
+
+    async def _output_run_async(self, ctx, impl, script, request, final_filepath, view=None, section=None, batch=None):
         """'_run_implementation_async' for an export or a render file, asked of the cache first.
 
         The same file asked for again is a read, exactly as an analysis and a
@@ -2126,6 +2537,10 @@ class Shape(ShapeConfiguration):
         render leaves the last good picture where it was, as it always has -
         so what is there afterwards proves nothing until it is compared with
         what was there before.
+
+        'batch' is the '_OutputBatch' this file is written with, when it was
+        asked for together with other file types of this shape: it is then
+        handed in, written with them, and answered from there.
         """
         cache = getattr(ctx, "cache_artifacts", None)
         extra = {"tree": shape_envelope.description(request.get("wrapped"))}
@@ -2143,24 +2558,62 @@ class Shape(ShapeConfiguration):
             extra,
         )
 
+        output_ = _Output(impl, script, request, final_filepath, artifact)
+        if batch is not None:
+            return await batch.submit(cache, output_)
+        (outcome,) = await self._outputs_run_async(ctx, [output_], cache)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return outcome
+
+    async def _outputs_run_async(self, ctx, outputs, cache):
+        """'_output_run_async' for several files of this shape at once: what each came to.
+
+        Each is still a question of its own: asked of the cache under its own
+        key, and its answer stored under it. Only the ones the cache does not
+        hold are written, and those together ('_run_implementations_async'),
+        so a file type cached already is put back and not drawn again, and the
+        call that draws the rest pays for its interpreter, the CAD stack and
+        decoding the shape once.
+
+        Two that write one path are not written in one call. Nothing clears a
+        path, so the file left there is whichever was written last, and the
+        first one's run, compared with what was there before it, would look as
+        though it had written the second one's file - and be remembered so. So
+        they go in rounds ('_rounds'), each written and stored before the next.
+
+        Returns, for each output, its result, None, or the exception its run
+        raised.
+        """
+        outcomes = [None] * len(outputs)
         # Held across the read, the run and the write, for the reason
         # 'analyze_async' holds it: the path is derived from the shape, so two
         # renders of one shape name one file. Re-entrant, so the lock
         # '_run_implementation_async' takes inside is passed straight through.
         async with self.locked():
-            result = await cache_artifacts.restore_files_async(cache, artifact, final_filepath)
-            if result is not None:
-                return result
-
-            before = _file_identity(final_filepath)
-            result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
-            if artifact is None or result is None or not result.get("success", False):
-                # Only an answer is remembered (see 'partcad.cache_artifacts').
-                return result
-            written = self._written_besides(impl, result, final_filepath, before)
-            if written is not None:
-                await cache_artifacts.store_files_async(cache, artifact, result, final_filepath, written)
-        return result
+            for indices in _rounds(outputs):
+                missing = []
+                for index in indices:
+                    output_ = outputs[index]
+                    result = await cache_artifacts.restore_files_async(cache, output_.artifact, output_.path)
+                    if result is not None:
+                        outcomes[index] = result
+                        continue
+                    output_.before = _file_identity(output_.path)
+                    missing.append(index)
+                if not missing:
+                    continue
+                answers = await self._run_implementations_async(ctx, [outputs[index] for index in missing])
+                for index, result in zip(missing, answers):
+                    outcomes[index] = result
+                    output_ = outputs[index]
+                    if output_.artifact is None or not isinstance(result, dict) or not result.get("success", False):
+                        # Only an answer is remembered (see 'partcad.cache_artifacts').
+                        continue
+                    written = self._written_besides(output_.impl, result, output_.path, output_.before)
+                    if written is not None:
+                        await cache_artifacts.store_files_async(cache, output_.artifact, result, output_.path, written)
+        return outcomes
 
     def _written_besides(self, impl, result, final_filepath, before) -> Optional[list]:
         """What else one run wrote, as the implementation named it, or None if it cannot be said.
@@ -2236,12 +2689,16 @@ class Shape(ShapeConfiguration):
         views=None,
         defaults_only=False,
         section=None,
+        batch=None,
     ):
         """Produce one output file, whatever its type.
 
         Returns what the implementation answered - its result, with whatever it
         reports about the file beside 'success' - or None when there is none to
         return: a filter that could not be read, an answer that could not be.
+
+        'batch' is the '_OutputBatch' it is written with, if it is one of
+        several file types of this shape asked for together.
         """
         impl, final_filepath = self.output_getopts(
             ctx, format_name, project, filepath, options_project, output_dir, defaults_only=defaults_only
@@ -2308,6 +2765,7 @@ class Shape(ShapeConfiguration):
             final_filepath,
             view=mask if subject is not self else None,
             section=section,
+            batch=batch,
         )
         if result is None:
             return None
@@ -2358,12 +2816,13 @@ class Shape(ShapeConfiguration):
         section=None,
         **kwargs,
     ) -> dict:
-        """Write this shape out as one output file type, or as all of them.
+        """Write this shape out as one output file type, several, or all of them.
 
         Args:
             ctx: Execution context.
-            format_name: The file type (e.g. "step", "svg", "png"). None
-                produces every type that has a built-in implementation.
+            format_name: The file type (e.g. "step", "svg", "png"), or a list of
+                them. None produces every type that has a built-in
+                implementation.
             project: The package the shape belongs to, whose 'export:' and
                 'render:' sections configure the output.
             filepath: The file to write. None resolves it from the
@@ -2390,12 +2849,20 @@ class Shape(ShapeConfiguration):
                 send when their section sliders are moved.
             kwargs: Export parameters, overriding what the configuration says.
 
+        Several file types - a list, or None - are written together: each is
+        worked out, logged and reported as it is when asked for alone, a list
+        each under an action of its own, and what the cache does not hold is
+        written by one sandbox call per environment rather than one per file
+        (see '_OutputBatch'). That is 'Project.render_async()', which asks for
+        every file type of a shape at once.
+
         Returns:
             What each file type's implementation answered, by the name the type
             was asked for under: the result it reported - 'success', the
             warnings, and whatever else it says about the file, such as the
             viewpoint a projection was drawn from - or None where there is none.
-            Empty when there was nothing to write.
+            In the order they were asked for, however they were written. Empty
+            when there was nothing to write.
         """
         # A caller that names no package still gets the shape's own. Its
         # 'export:'/'render:' sections are where a package declares its file
@@ -2411,43 +2878,93 @@ class Shape(ShapeConfiguration):
                 pc_logging.error("The options package is not found: %s" % options_package)
                 return
 
-        # The bare file type in the action name: a package path in it would make
-        # one operation look like several, one per package that asked.
-        action = f"Render{output.split_format(self.project_name, format_name)[0].upper()}" if format_name else "Render"
         # Refused before anything is built, as a bad filter is.
         section = shape_section.normalize(section)
         results = {}
-        with pc_logging.Action(action, self.project_name, self.name):
+
+        # Shared by every file type this call writes, so that an object
+        # whose ports are asked for in three formats is walked once - and,
+        # where a 'filter:' applies, so that two file types asking for the
+        # same subset of it build that subset once.
+        ports_cache = {}
+        views = {}
+
+        def render_one(obj, fmt, batch=None):
+            return self._render_one_async(
+                ctx,
+                obj,
+                fmt,
+                project,
+                filepath,
+                options_project,
+                output_dir,
+                kwargs,
+                overlay=overlay,
+                ports_cache=ports_cache,
+                link_filter=link_filter,
+                views=views,
+                defaults_only=defaults_only,
+                section=section,
+                batch=batch,
+            )
+
+        if isinstance(format_name, (list, tuple)):
+            # Each under the action it has when it is asked for alone, the first
+            # building - or finding built - the shape it is of, and every one
+            # handed that same tree: a batch sends a subject once only where its
+            # requests hold the same object ('_together_request'), and a shape
+            # the memory tier does not keep answers 'get_wrapped' with a new tree
+            # each time - N copies in one request, and no decoding shared. The
+            # members are worked out one at a time ('_OutputBatch.member').
+            formats = list(format_name)
+            batch = self._output_batch(ctx, len(formats))
+            fetched = []
+
+            async def each(fmt):
+                with pc_logging.Action(_render_action(self.project_name, fmt), self.project_name, self.name):
+                    async with batch.member() if batch is not None else contextlib.nullcontext():
+                        if not fetched:
+                            fetched.append(await self.get_wrapped(ctx))
+                        obj = fetched[0]
+                        if obj is None:
+                            pc_logging.error(f"Cannot render '{self.name}': shape is empty")
+                            return
+                        results[fmt] = await render_one(obj, fmt, batch)
+
+            await _together(batch, each, formats)
+            return _in_order(results, formats)
+
+        with pc_logging.Action(_render_action(self.project_name, format_name), self.project_name, self.name):
             obj = await self.get_wrapped(ctx)
             if obj is None:
                 pc_logging.error(f"Cannot render '{self.name}': shape is empty")
                 return results
 
-            # Shared by every file type this call writes, so that an object
-            # whose ports are asked for in three formats is walked once - and,
-            # where a 'filter:' applies, so that two file types asking for the
-            # same subset of it build that subset once.
-            ports_cache = {}
-            views = {}
+            if format_name:
+                results[format_name] = await render_one(obj, format_name)
+                return results
 
-            for fmt in [format_name] if format_name else output.all_formats(ctx):
-                results[fmt] = await self._render_one_async(
-                    ctx,
-                    obj,
-                    fmt,
-                    project,
-                    filepath,
-                    options_project,
-                    output_dir,
-                    kwargs,
-                    overlay=overlay,
-                    ports_cache=ports_cache,
-                    link_filter=link_filter,
-                    views=views,
-                    defaults_only=defaults_only,
-                    section=section,
-                )
-        return results
+            formats = output.all_formats(ctx)
+            batch = self._output_batch(ctx, len(formats))
+
+            async def each(fmt):
+                async with batch.member() if batch is not None else contextlib.nullcontext():
+                    results[fmt] = await render_one(obj, fmt, batch)
+
+            await _together(batch, each, formats)
+        return _in_order(results, formats)
+
+    def _output_batch(self, ctx, size):
+        """The '_OutputBatch' to write 'size' file types of this shape with, or None to write each on its own.
+
+        None for fewer than two, and for a caller that holds this shape's lock
+        already: the file types of a batch are worked out in tasks of their own,
+        and a task would wait for that lock for as long as its holder waited for
+        the task.
+        """
+        if size < 2 or _held_by_current_task(self):
+            return None
+        return _OutputBatch(self, ctx, size)
 
     def render(
         self,

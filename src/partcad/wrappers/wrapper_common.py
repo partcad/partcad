@@ -128,18 +128,21 @@ def remember_request(request):
         _request_finish = finish if isinstance(finish, dict) else None
 
 
-def handle_output(model):
+def handle_output(model, end=""):
     """Answer PartCAD, on the descriptor `protect_response_channel()` kept.
 
     Written with 'os.write' rather than through a file object, because the
     descriptor is deliberately not 'sys.stdout' any more -- that one is standard
     error now, and is where everything else in this process prints.
+
+    'end' follows the answer: a wrapper that answers more than once, a line at a
+    time as each answer is ready, passes a newline (see 'wrapper_export').
     """
     # Serialize the output, echoing the request's name/label onto the shape. A
     # payload the answer carries more than once - the parts of an assembly read
     # from a STEP file - is written once (see 'ocp_serialize.KEY_BREPS'): the
     # core reads that form of every answer.
-    serialized = ocp_serialize.serialize(model, name=_request_name, label=_request_label, share=True)
+    serialized = ocp_serialize.serialize(model, name=_request_name, label=_request_label, share=True) + end
     if _response_fd is None:
         sys.stdout.write(serialized)
         sys.stdout.flush()

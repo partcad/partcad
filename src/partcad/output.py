@@ -488,6 +488,20 @@ REPRODUCIBLE_KEY = "reproducible"
 # runs in a sandbox and cannot import this.
 FILES_KEY = "files"
 
+# What 'wrapper_export.py' is handed when one call writes several files of one
+# object, and what it answers each of them with (see 'Shape._run_together_locked'
+# and the wrapper's docstring): the requests under BATCH_OUTPUTS_KEY, each under
+# BATCH_REQUEST_KEY with its object taken out and named by its place in
+# BATCH_SUBJECTS_KEY (BATCH_SUBJECT_KEY), and one line per file written, saying
+# which (BATCH_OUTPUT_KEY) and how it went (BATCH_RESULT_KEY). The twins are the
+# keys of the same names, less the prefix, in 'wrapper_export'.
+BATCH_OUTPUTS_KEY = "outputs"
+BATCH_SUBJECTS_KEY = "subjects"
+BATCH_SUBJECT_KEY = "subject"
+BATCH_REQUEST_KEY = "request"
+BATCH_OUTPUT_KEY = "output"
+BATCH_RESULT_KEY = "result"
+
 
 def as_flag(value, name: str = REPRODUCIBLE_KEY) -> bool:
     """One of the protocol's boolean fields, however it was written.

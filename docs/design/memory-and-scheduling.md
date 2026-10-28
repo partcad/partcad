@@ -394,6 +394,14 @@ The design that carries it out, **decided** with the points above and built in t
   the views of one model -- `f1` and its three views -- are produced from the one tree in memory while any of them
   runs. An object over 1 MB that the file tier holds is kept while anything uses it (point 8), and dropped when nothing
   does, rather than read again by each of its outputs.
+- **And they are one task.** The files of one object the cache does not hold are written by one wrapper call per
+  sandbox environment (`Shape._run_together_locked`, `wrapper_export.run_together`), so under point 7 they are one
+  task, admitted once and holding one process slot. The object crosses the pipe once for all of them
+  (`output.BATCH_SUBJECTS_KEY`), and is decoded once for the files that may share a decoding (an implementation's
+  `TESSELLATION`) and otherwise once per file, the last decoding let go before the next is made -- so the sandbox
+  too holds one copy at a time, which is point 8 on that side of the pipe. Nothing is given up for it: one object's
+  files never ran at once (`Shape.locked()`), and the CAD stack each of them imported for itself was most of what a
+  small part's file cost.
 - **The two idle lists live in the memory tier** (`cache_shape.ShapeCache`), over what `Shape._wrapped` holds. An
   object is in use while anything other than the memory tier holds its tree, which needs no bookkeeping from the
   callers of `get_wrapped`; an idle one is on its list, most recently used last. An entry's recorded size is only a
