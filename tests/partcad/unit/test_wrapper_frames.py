@@ -21,6 +21,9 @@ the bytes as bytes.
 
 import asyncio
 import base64
+import io
+import json
+import locale
 import os
 import pathlib
 import sys
@@ -278,6 +281,36 @@ def test_no_answer_at_all_says_so():
         shape_envelope.deserialize(b"")
 
 
+def test_loads_reads_a_frame_as_well_as_json():
+    """'ocp_serialize.loads()' takes what either side of the pipe wrote, in either form."""
+    answer = {"success": True, "blob": b"\x00\xff", "nested": [{"more": b""}], "name": "//pkg:x", "label": "x"}
+
+    for data in (
+        ocp_serialize.serialize(answer),
+        ocp_serialize.dumps(answer),
+        shape_envelope.serialize(answer),
+        shape_envelope.dumps(answer),
+    ):
+        assert ocp_serialize.loads(data) == answer
+
+
+def test_a_plugin_answer_that_is_not_one_is_quoted_as_text_in_either_form():
+    """A simulation plugin's answer that is not an object says what came back -- as text, not as a bytes literal.
+
+    A frame is bytes when it comes off a process ('process_output.answer'), and
+    the sentence a user reads is about what the plugin wrote, so it begins with
+    the header and the body, not with "b'" and escapes.
+    """
+    from partcad import simulation
+
+    with pytest.raises(ValueError, match=r"a list rather than an object, beginning 'Content-Length: 6\\r\\n"):
+        simulation.read_answer(ocp_serialize.serialize([1, 2]))
+    with pytest.raises(ValueError, match="beginning 'Segmentation fault"):
+        simulation.read_answer(b"Segmentation fault\n\xff\xfe")
+    assert simulation.read_answer(b"") is None
+    assert simulation.read_answer(ocp_serialize.serialize({"success": True})) == {"success": True}
+
+
 # --------------------------------------------------------------------------- #
 # What carries it                                                             #
 # --------------------------------------------------------------------------- #
@@ -393,6 +426,19 @@ def test_a_framed_answer_is_remembered_as_the_line_it_says(monkeypatch):
     assert shape_envelope.deserialize(line) == shape_envelope.deserialize(frame)
 
 
+def test_a_framed_answer_that_is_not_one_is_not_remembered(monkeypatch):
+    """What does not read back as an answer is not stored as one, so the next run asks the wrapper again."""
+
+    async def store_async(*_args, **_kwargs):
+        raise AssertionError("an answer that does not read back was stored")
+
+    monkeypatch.setattr(cache_artifacts, "store_async", store_async)
+    frame = ocp_serialize.serialize({"success": True, "tree": _leaf(BRICK, "brick")})
+
+    for data in (frame[:-100], b"\xff\xfe what a crash leaves"):
+        assert asyncio.run(cache_artifacts.store_response_async(None, None, data)) is False
+
+
 def test_a_framed_answer_written_a_little_at_a_time_arrives_whole(monkeypatch):
     """'os.write' may take less than it is handed: each piece of the frame is written on from a view of itself."""
     import wrapper_common
@@ -416,3 +462,84 @@ def test_a_framed_answer_written_a_little_at_a_time_arrives_whole(monkeypatch):
     assert len(received) > 250
     assert set(handed) == {memoryview}
     assert shape_envelope.deserialize(b"".join(received)) == answer
+
+
+@pytest.fixture
+def wrapper_common(monkeypatch, tmp_path):
+    """'wrapper_common' run in this process, with what it would change about the process left alone.
+
+    'handle_input()' takes descriptor 1 away and sets the locale, and both
+    belong to the test worker: here the channel is not moved -- it is the
+    standard output each test hands the module -- the locale is not set, and
+    what the module notes about a request is put back afterwards.
+    """
+    import wrapper_common as module
+
+    for name, value in (
+        ("_request_name", None),
+        ("_request_label", None),
+        ("_answer_framed", False),
+        ("_response_fd", None),
+    ):
+        monkeypatch.setattr(module, name, value)
+    monkeypatch.setattr(module, "protect_response_channel", lambda: None)
+    monkeypatch.setattr(
+        module, "locale", types.SimpleNamespace(setlocale=lambda *_: None, LC_ALL=locale.LC_ALL, Error=locale.Error)
+    )
+    # The output path alone: a working directory after it is a 'chdir' of the worker.
+    monkeypatch.setattr(sys, "argv", ["wrapper.py", str(tmp_path / "out")])
+    return module
+
+
+@pytest.mark.parametrize("form", ["frame", "json"])
+def test_a_wrapper_answers_on_its_standard_output_in_the_form_it_was_asked_in(
+    wrapper_common, monkeypatch, tmp_path, form
+):
+    """Standard input is read as bytes, and the answer written as bytes, behind whatever printed first.
+
+    Where the channel was not taken away (see 'protect_response_channel'), the
+    answer shares standard output with everything that prints, and what a script
+    printed before it is still in the text layer's buffer: it has to reach the
+    bytes underneath before the answer does, or it lands in the middle of a frame.
+    """
+    request = {"name": "//pkg:brick", "label": "brick", "blob": b"\x00\xff\n", "width": 512}
+    data = shape_envelope.serialize(request) if form == "frame" else shape_envelope.dumps(request).encode("utf-8")
+    channel = io.BytesIO()
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(data)))
+    # No newline translation, so that what printed reads the same on Windows.
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(channel, newline="\n"))
+
+    path, read = wrapper_common.handle_input()
+    print("progress, which is not the answer")
+    wrapper_common.handle_output({"success": True, "echo": read})
+
+    assert path == os.path.normpath(str(tmp_path / "out"))
+    assert read == request
+    printed, answer = channel.getvalue().split(b"\n", 1)
+    assert printed == b"progress, which is not the answer"
+    assert ocp_serialize.is_frame(answer) is (form == "frame")
+    assert shape_envelope.deserialize(answer) == {"success": True, "echo": request}
+
+
+@pytest.mark.parametrize("framed", [False, True], ids=["json", "frame"])
+def test_a_standard_output_of_text_alone_is_answered_in_json(wrapper_common, monkeypatch, framed):
+    """Something replaced standard output with text, which has no bytes to write a frame to: JSON is text.
+
+    Whatever the request came as -- including JSON on a standard input that is
+    text as well, which has no bytes to offer and is read as what it holds.
+    """
+    request = {"blob": b"\x00\xff\n", "width": 512}
+    if framed:
+        stdin = io.TextIOWrapper(io.BytesIO(shape_envelope.serialize(request)))
+    else:
+        stdin = io.StringIO(shape_envelope.dumps(request))
+    stdout = io.StringIO()
+    monkeypatch.setattr(sys, "stdin", stdin)
+    monkeypatch.setattr(sys, "stdout", stdout)
+
+    _path, read = wrapper_common.handle_input()
+    wrapper_common.handle_output({"success": True, "echo": read})
+
+    assert read == request
+    assert json.loads(stdout.getvalue())["success"] is True
+    assert shape_envelope.deserialize(stdout.getvalue()) == {"success": True, "echo": request}
