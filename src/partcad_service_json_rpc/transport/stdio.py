@@ -19,6 +19,7 @@ something to write: this channel has one client, and a client that does not
 read its own answers delays nobody else.
 """
 
+import os
 import sys
 import threading
 from typing import BinaryIO, Mapping
@@ -144,4 +145,23 @@ def serve(read_stream: BinaryIO, write_stream: BinaryIO, session, registry: Mapp
 
 def serve_stdio(session, registry: Mapping[str, Handler]) -> None:
     """Serve over the process's real stdin/stdout (binary buffers)."""
-    serve(sys.stdin.buffer, sys.stdout.buffer, session, registry)
+    serve(_private_input(), sys.stdout.buffer, session, registry)
+
+
+def _private_input() -> BinaryIO:
+    """The requests' stream: standard input, moved off fd 0, which becomes the null device.
+
+    The reader waits on it while a request runs, and the request starts
+    processes -- git, a sandbox's wrappers -- that inherit standard input
+    unless told otherwise. On Windows that is the same pipe, and a synchronous
+    read pending on a pipe holds up whatever else touches it: the child sat
+    waiting on its own standard input for as long as this one waited for the
+    client's next request, which was forever (every `pc test` over this
+    channel). Anywhere, a child reading it would take the client's requests.
+    Moved to a descriptor no child inherits, it is this reader's alone, as the
+    detached daemon's is (`daemon._serve_detached`).
+    """
+    fd = os.dup(sys.stdin.fileno())
+    with open(os.devnull, "rb") as devnull:
+        os.dup2(devnull.fileno(), sys.stdin.fileno())
+    return open(fd, "rb")

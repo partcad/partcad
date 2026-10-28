@@ -551,6 +551,10 @@ def test_a_client_that_takes_nothing_for_the_timeout_is_dropped():
         writer.put([b"x" * (32 * 1024 * 1024)])
         assert writer.wait_sent(TIMEOUT)
         assert writer.dropped is not None and "accepted nothing" in writer.dropped
+        # Told on the writer's thread just after the waiters are woken.
+        deadline = time.monotonic() + TIMEOUT
+        while not told and time.monotonic() < deadline:
+            time.sleep(0.01)
         assert told == [writer.dropped]
         # Dropped is shut down: what the client reads ends.
         theirs.settimeout(TIMEOUT)
