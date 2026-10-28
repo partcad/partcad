@@ -242,7 +242,9 @@ circle upload one geometry"), applied to the model. The loading readout is a fra
 glTF itself, never zlib or base64 on this path: PartCAD sends it as the blobs of a binary frame, `FrameReader`
 copies each into an `ArrayBuffer` of its own, and `PartcadViewer` posts those to the webview, which parses them
 as they are (`decodeGltf` still reads the base64-of-zlib an older PartCAD sends in a JSON frame). Before a show
-PartCAD offers its digests and is told which this window lacks (`GeometryExchange`/`GeometryStore` in
+PartCAD offers its digests - of the glTF buffers, which `partcad_ide_client` renames the table to, since the
+shape-keyed names PartCAD tessellates under name one part at several tolerances - and is told which this
+window lacks (`GeometryExchange`/`GeometryStore` in
 `src/viewer/geometryStore.ts`), and the host posts the webview only the buffers it does not hold parsed
 (`WebviewLedger`), telling it with each show what to let go of; `src/webview/geometryCache.ts` keeps the parsed
 shapes by digest, as templates that are never on the stage and only cloned. Three rules keep that honest: **the

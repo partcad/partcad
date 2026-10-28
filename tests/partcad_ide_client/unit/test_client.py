@@ -404,6 +404,11 @@ def assembly(**geometry):
     }
 
 
+def named(**geometry):
+    """The table an IDE is sent for 'geometry': each buffer under the name of its own bytes."""
+    return {protocol.geometry_name(payload): payload for payload in geometry.values()}
+
+
 NEW_IDE = (protocol.CAP_BINARY, protocol.CAP_OFFER)
 
 
@@ -420,10 +425,9 @@ def test_an_ide_from_before_capabilities_is_asked_once_and_sent_json(ide_with):
     assert old.connections == 1
     # In the spelling such an IDE inflates.
     table = old.received[-1][protocol.KEY_OBJECT][protocol.KEY_GEOMETRY]
-    assert {digest: zlib.decompress(base64.b64decode(payload)) for digest, payload in table.items()} == {
-        "bolt": BOLT,
-        "nut": NUT,
-    }
+    assert {digest: zlib.decompress(base64.b64decode(payload)) for digest, payload in table.items()} == named(
+        bolt=BOLT, nut=NUT
+    )
 
 
 def test_an_ide_that_accepts_offers_is_sent_only_what_it_lacks(ide_with):
@@ -431,18 +435,18 @@ def test_an_ide_that_accepts_offers_is_sent_only_what_it_lacks(ide_with):
 
     client.show(assembly(bolt=BOLT, nut=NUT))
     assert new.types() == [protocol.MSG_OFFER, protocol.MSG_GEOMETRY, protocol.MSG_SHOW]
-    assert new.received[1][protocol.KEY_GEOMETRY] == {"bolt": BOLT, "nut": NUT}
+    assert new.received[1][protocol.KEY_GEOMETRY] == named(bolt=BOLT, nut=NUT)
     # The show itself names everything and carries nothing.
-    assert new.received[2][protocol.KEY_OBJECT][protocol.KEY_GEOMETRY] == {"bolt": None, "nut": None}
+    assert new.received[2][protocol.KEY_OBJECT][protocol.KEY_GEOMETRY] == dict.fromkeys(named(bolt=BOLT, nut=NUT))
     assert new.kinds[1:] == [protocol.KIND_BINARY, protocol.KIND_BINARY]
-    assert new.shown() == {"bolt": BOLT, "nut": NUT}
+    assert new.shown() == named(bolt=BOLT, nut=NUT)
 
     # An edit: the nut changed, the bolt did not, a washer is new.
     del new.received[:]
     client.show(assembly(bolt=BOLT, washer=WASHER))
     assert new.types() == [protocol.MSG_OFFER, protocol.MSG_GEOMETRY, protocol.MSG_SHOW]
-    assert new.received[1][protocol.KEY_GEOMETRY] == {"washer": WASHER}
-    assert new.shown() == {"bolt": BOLT, "washer": WASHER}
+    assert new.received[1][protocol.KEY_GEOMETRY] == named(washer=WASHER)
+    assert new.shown() == named(bolt=BOLT, washer=WASHER)
 
     # The same again: nothing to send but the tree.
     del new.received[:]
@@ -458,6 +462,55 @@ def test_the_tree_shown_is_left_as_it_was(ide_with):
     client.show(tree)
 
     assert tree[protocol.KEY_GEOMETRY] == {"bolt": BOLT}
+    assert tree["assembly"][0]["gltfRef"] == "bolt"
+
+
+def test_one_shape_meshed_at_another_tolerance_is_another_buffer_and_is_sent(ide_with):
+    """PartCAD names an entry by the shape it was tessellated from, and the mesh is the whole tree's.
+
+    The same part shown inside a large assembly and then alone is one name and two
+    buffers. A window keeps what it was sent by name, so under PartCAD's name the
+    part alone was drawn with the assembly's coarser mesh.
+    """
+    new = ide_with(capabilities=NEW_IDE)
+    coarse, fine = b"glTF-bolt-coarse", b"glTF-bolt-fine" + bytes(64)
+
+    client.show(assembly(bolt=coarse))
+    del new.received[:]
+    client.show(assembly(bolt=fine))
+
+    assert new.types() == [protocol.MSG_OFFER, protocol.MSG_GEOMETRY, protocol.MSG_SHOW]
+    assert new.received[1][protocol.KEY_GEOMETRY] == named(bolt=fine)
+    assert new.shown() == named(bolt=fine)
+
+
+def test_one_buffer_is_sent_once_whatever_shape_it_is_named_after(ide_with):
+    """The same bytes again - the same part at the same tolerance - are not sent again, under any name."""
+    new = ide_with(capabilities=NEW_IDE)
+
+    client.show(assembly(bolt=BOLT))
+    del new.received[:]
+    client.show(assembly(screw=BOLT))
+
+    assert new.types() == [protocol.MSG_OFFER, protocol.MSG_SHOW]
+    assert new.shown() == named(bolt=BOLT)
+
+
+def test_every_reference_names_the_entry_it_was_sent_under(ide_with):
+    """Nodes, the nodes inside them and the sketches the ports are drawn with: wherever one is."""
+    new = ide_with(capabilities=NEW_IDE)
+    tree = assembly(bolt=BOLT, nut=NUT)
+    tree["assembly"][0]["assembly"] = [{"name": "//pkg:inner", "gltfRef": "nut"}]
+    tree[protocol.KEY_SKETCHES] = {"hole": {"name": "hole", "gltfRef": "bolt"}}
+
+    client.show(tree)
+
+    shown = new.received[-1][protocol.KEY_OBJECT]
+    bolt, nut = protocol.geometry_name(BOLT), protocol.geometry_name(NUT)
+    assert [node["gltfRef"] for node in shown["assembly"]] == [bolt, nut]
+    assert shown["assembly"][0]["assembly"][0]["gltfRef"] == nut
+    assert shown[protocol.KEY_SKETCHES]["hole"]["gltfRef"] == bolt
+    assert set(shown[protocol.KEY_GEOMETRY]) == {bolt, nut}
 
 
 def test_an_ide_that_let_go_between_the_offer_and_the_show_is_sent_it_again(ide_with):
@@ -476,8 +529,8 @@ def test_an_ide_that_let_go_between_the_offer_and_the_show_is_sent_it_again(ide_
         protocol.MSG_GEOMETRY,
         protocol.MSG_SHOW,
     ]
-    assert new.received[3][protocol.KEY_GEOMETRY] == {"bolt": BOLT, "nut": NUT}
-    assert new.shown() == {"bolt": BOLT, "nut": NUT}
+    assert new.received[3][protocol.KEY_GEOMETRY] == named(bolt=BOLT, nut=NUT)
+    assert new.shown() == named(bolt=BOLT, nut=NUT)
 
 
 def test_an_ide_that_keeps_letting_go_is_sent_the_show_whole(ide_with):
@@ -487,7 +540,7 @@ def test_an_ide_that_keeps_letting_go_is_sent_the_show_whole(ide_with):
 
     assert reply["ok"] is True
     assert new.types()[-1] == protocol.MSG_SHOW
-    assert new.received[-1][protocol.KEY_OBJECT][protocol.KEY_GEOMETRY] == {"bolt": BOLT}
+    assert new.received[-1][protocol.KEY_OBJECT][protocol.KEY_GEOMETRY] == named(bolt=BOLT)
     assert new.kinds[-1] == protocol.KIND_BINARY
 
 
@@ -499,7 +552,7 @@ def test_an_ide_that_reads_binary_frames_and_takes_no_offers_is_sent_the_show_wh
 
     assert binary.types() == [protocol.MSG_OFFER, protocol.MSG_SHOW, protocol.MSG_SHOW]
     assert binary.kinds[1:] == [protocol.KIND_BINARY, protocol.KIND_BINARY]
-    assert binary.received[-1][protocol.KEY_OBJECT][protocol.KEY_GEOMETRY] == {"bolt": BOLT}
+    assert binary.received[-1][protocol.KEY_OBJECT][protocol.KEY_GEOMETRY] == named(bolt=BOLT)
 
 
 def test_what_an_ide_accepts_is_forgotten_with_its_connection(ide_with):
@@ -534,7 +587,7 @@ def test_geometry_larger_than_a_frame_follows_in_several(ide_with, monkeypatch):
     client.show(assembly(bolt=BOLT, nut=NUT, washer=WASHER))
 
     assert new.types() == [protocol.MSG_OFFER, protocol.MSG_GEOMETRY, protocol.MSG_GEOMETRY, protocol.MSG_SHOW]
-    assert new.shown() == {"bolt": BOLT, "nut": NUT, "washer": WASHER}
+    assert new.shown() == named(bolt=BOLT, nut=NUT, washer=WASHER)
 
 
 def test_a_shape_too_large_for_a_binary_frame_goes_compressed(ide_with, monkeypatch):
@@ -549,7 +602,7 @@ def test_a_shape_too_large_for_a_binary_frame_goes_compressed(ide_with, monkeypa
     assert reply["ok"] is True
     assert new.types()[-1] == protocol.MSG_SHOW
     assert new.kinds[-1] == protocol.KIND_JSON
-    assert new.shown() == {"bolt": base64.b64encode(zlib.compress(huge, 6)).decode("ascii")}
+    assert new.shown() == {protocol.geometry_name(huge): base64.b64encode(zlib.compress(huge, 6)).decode("ascii")}
 
 
 def test_a_show_offered_over_a_connection_found_gone_is_offered_again_over_a_new_one(ide_with):
@@ -562,7 +615,7 @@ def test_a_show_offered_over_a_connection_found_gone_is_offered_again_over_a_new
 
     assert reply["ok"] is True
     assert new.types() == [protocol.MSG_OFFER, protocol.MSG_GEOMETRY, protocol.MSG_SHOW]
-    assert new.shown() == {"bolt": BOLT, "nut": NUT}
+    assert new.shown() == named(bolt=BOLT, nut=NUT)
 
 
 class FakeSocket:

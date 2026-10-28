@@ -342,6 +342,7 @@ def show(
             "not a shape tree (no %r, %r or %r key): %r"
             % (protocol.KEY_GLTF, protocol.KEY_GLTF_REF, protocol.KEY_ASSEMBLY, obj)
         )
+    obj = _named_by_content(obj)
 
     message = {
         "type": protocol.MSG_SHOW,
@@ -358,6 +359,59 @@ def show(
     if scenario is not None:
         message[protocol.KEY_SCENARIO] = scenario
     return _exchange(lambda connection: _show(connection, message, reply_timeout))
+
+
+def _named_by_content(obj: dict) -> dict:
+    """'obj' with its geometry table keyed by the buffers it holds, and every reference renamed to match.
+
+    The table PartCAD sends is keyed by the shape each entry was tessellated from,
+    and that is not enough for a window that keeps what it was sent across shows:
+    see 'protocol.geometry_name'. Renamed here, before anything is offered or sent,
+    so that every way a show goes - offered, sent whole, or as JSON to an IDE that
+    keeps nothing - names one buffer one way. Copies what it renames and shares the
+    rest: the tree passed in is the one PartCAD keeps.
+
+    The table on the root only, which is the one PartCAD writes; a reference is
+    renamed wherever it is, because the tessellation leaves one wherever it found
+    geometry.
+    """
+    table = obj.get(protocol.KEY_GEOMETRY)
+    if not isinstance(table, dict):
+        return obj
+    names = {}
+    renamed_table = {}
+    for digest, payload in table.items():
+        if protocol.is_payload(payload):
+            names[digest] = protocol.geometry_name(payload)
+            renamed_table[names[digest]] = payload
+        else:
+            renamed_table[digest] = payload
+    renamed = dict(_with_references_renamed(obj, names))
+    renamed[protocol.KEY_GEOMETRY] = renamed_table
+    return renamed
+
+
+def _with_references_renamed(value, names: dict):
+    """'value' with every KEY_GLTF_REF in it that 'names' renames renamed; the same object where none is."""
+    if isinstance(value, list):
+        items = [_with_references_renamed(item, names) for item in value]
+        return items if any(new is not old for new, old in zip(items, value)) else value
+    if not isinstance(value, dict):
+        return value
+    renamed = None
+    for key, item in value.items():
+        if key == protocol.KEY_GEOMETRY:
+            # The buffers themselves: nothing in them is a reference.
+            continue
+        if key == protocol.KEY_GLTF_REF and isinstance(item, str):
+            new = names.get(item, item)
+        else:
+            new = _with_references_renamed(item, names)
+        if new is not item:
+            if renamed is None:
+                renamed = dict(value)
+            renamed[key] = new
+    return value if renamed is None else renamed
 
 
 # How much geometry one MSG_GEOMETRY frame is given, short of the frame limit by

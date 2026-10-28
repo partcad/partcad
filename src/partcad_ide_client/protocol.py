@@ -136,6 +136,7 @@ be worth it.
 """
 
 import base64
+import hashlib
 import json
 import struct
 import zlib
@@ -279,7 +280,8 @@ KEY_INTERFACES = "interfaces"
 KEY_SKETCHES = "sketches"
 # On the root node: every distinct piece of geometry in the tree, keyed by a digest
 # of the exact shape it was tessellated from, with each node - and each sketch above
-# - naming its entry in 'gltfRef' instead of carrying a copy of it. One entry
+# - naming its entry in 'gltfRef' instead of carrying a copy of it. As the client
+# sends it, the digest is of the glTF itself instead (see 'geometry_name'). One entry
 # however many nodes are made of it: an assembly that places one bolt a hundred
 # times sends that bolt once and names it a hundred times, which is possible
 # because a node's placement was never part of its geometry. What draws the tree
@@ -382,6 +384,28 @@ def decode_gltf(payload) -> bytes:
     if is_zlib(data):
         return zlib.decompress(data)
     return data
+
+
+def geometry_name(payload) -> str:
+    """What a geometry table names 'payload' by as it goes to the IDE: a digest of the GLB it is.
+
+    Not the digest PartCAD names it by, which is of the shape it was tessellated
+    from: one shape is meshed at the tolerance of the whole tree it is shown in, so
+    a part shown inside a large assembly is a coarser buffer than the same part shown
+    alone, under the same name. A window keeps what it was sent by name, across shows
+    (see 'MSG_OFFER'), and would draw the part alone with the assembly's mesh. Named
+    by its own bytes, one name is always one buffer. Of the buffer rather than its
+    spelling, so that a raw GLB and the same GLB as an older PartCAD spelled it are
+    one entry; BLAKE2b, at about twice the speed of SHA-256 here, because every show
+    hashes all of its geometry.
+    """
+    if isinstance(payload, (bytes, bytearray)) and payload[:4] == b"glTF":
+        data = payload
+    elif isinstance(payload, memoryview) and bytes(payload[:4]) == b"glTF":
+        data = payload
+    else:
+        data = decode_gltf(payload)
+    return hashlib.blake2b(data, digest_size=20).hexdigest()
 
 
 def is_zlib(data) -> bool:

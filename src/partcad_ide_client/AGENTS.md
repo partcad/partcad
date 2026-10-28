@@ -60,6 +60,9 @@ nothing. A connection nothing is known about yet is asked with the offer itself.
 conversation again over a new connection when one is found gone part way, which is safe because the show is
 always the last message of it. A new capability is a new name in `KEY_CAPABILITIES`, and an old IDE is never
 sent anything it did not say it reads; `tests/partcad_ide_client/unit/test_client.py` holds both directions.
+Before any of it, `show()` renames the geometry table to digests of the glTF buffers (`geometry_name`): a
+window keeps what it was sent by name, and the names PartCAD writes are of the shape tessellated, which one
+part shown alone and inside an assembly shares at two tolerances.
 
 ## Setup
 

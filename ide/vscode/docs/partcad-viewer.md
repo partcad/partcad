@@ -385,7 +385,10 @@ because a PartCAD from before this, or a tessellation it cached, wrote it.
 
 **A show is offered before it is sent.** Most of a show is what the window was shown a moment ago: an edit
 re-renders one part of an assembly, a cross-section leaves the parts it misses as they were, a reader goes back
-to the object before. So `partcad_ide_client` sends the digests of the show's geometry table first (`offer`),
+to the object before. So `partcad_ide_client` sends the digests of the show's geometry table first (`offer`) -
+digests of the glTF buffers themselves, which it renames the table to before offering (`geometry_name`): PartCAD
+keys an entry by the shape it was tessellated from, and one shape is meshed at the tolerance of the whole tree
+it is shown in, so the same part alone and inside an assembly is two buffers under one such name -
 the extension host answers which it lacks (`GeometryStore`, shared by every connection of the window, keeping
 the show on screen and up to 256 MB beyond it), those follow (`geometry`, held for that connection until its
 show), and the show names every entry as `null`. Showing the same assembly again sends the tree and nothing

@@ -374,3 +374,13 @@ def test_the_extension_reads_the_kinds_and_says_the_capabilities_this_side_sends
     # into frames by this side's limit, and that side refuses one over its own.
     factors = [int(factor) for factor in _ts_constant(source, "MAX_FRAME_LENGTH").split("*")]
     assert math.prod(factors) == protocol.MAX_FRAME_LENGTH
+
+
+def test_a_geometry_name_is_of_the_buffer_whatever_its_spelling():
+    glb = b"glTF" + bytes(range(256)) * 4
+    spelled = base64.b64encode(zlib.compress(glb, 6)).decode("ascii")
+
+    assert protocol.geometry_name(glb) == protocol.geometry_name(spelled)
+    assert protocol.geometry_name(glb) == protocol.geometry_name(memoryview(glb))
+    assert protocol.geometry_name(glb) == protocol.geometry_name(bytearray(glb))
+    assert protocol.geometry_name(glb) != protocol.geometry_name(glb + b"\x00")
