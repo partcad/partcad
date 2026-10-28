@@ -571,7 +571,7 @@ def make_metadata(measurements=None, annotations=None, sections=None):
 
 
 def encode_shape(shape, name=None, label=None, metadata=None) -> dict:
-    """Represent a single shape as {"name", "label", "brep", "metadata"}, ready for 'encode()'.
+    """Represent a single shape as {"name", "label", "brep", "metadata"}, ready for JSON.
 
     The shape is measured on the way through, and the numbers go into the
     'measurements' section of the envelope's metadata. This is the whole of how
@@ -743,7 +743,7 @@ def _decode_tree(obj, shared):
     raise ValueError("Not a shape or assembly object: %r" % (list(obj) if isinstance(obj, dict) else type(obj)))
 
 
-def encode(obj, name=None, label=None, attach=None):
+def encode(obj, name=None, label=None):
     """Convert 'obj' into a structure made only of JSON-native values.
 
     A TopoDS_Shape becomes a shape object. 'name'/'label', when given, are
@@ -755,9 +755,10 @@ def encode(obj, name=None, label=None, attach=None):
     null - every consumer already discards it - and any other unknown type
     raises, to catch real bugs.
 
-    Given 'attach' (a 'Distinct'), nothing is base64: every payload stays the
-    bytes it is, one object per distinct payload, and so does every other bytes
-    value, for a frame to carry as attachments ('serialize()').
+    Bytes are left as they are - a node's payload under "brep", and any other
+    bytes value in a '__bytes__' object - for whoever writes the document to
+    decide how they cross: raw behind a frame ('frame()'), or as base64 text in
+    JSON ('dumps()'), the way 'partcad_framing' writes a message either way.
 
     Every JSON-native kind is settled before OCP is reached for, and that
     ordering is the point rather than tidiness. Importing OCP is the better part
@@ -779,23 +780,22 @@ def encode(obj, name=None, label=None, attach=None):
             encoded = {}
             for key, value in obj.items():
                 if key == KEY_BREP:
-                    encoded[key] = _payload(value, attach)
+                    # Bytes: base64 only in a request that came as JSON.
+                    encoded[key] = _brep_payload(value)
                 elif key == KEY_ASSEMBLY:
-                    encoded[key] = [encode(child, name, label, attach) for child in value]
+                    encoded[key] = [encode(child, name, label) for child in value]
                 elif key in (KEY_LOCATION, "name", "label"):
                     encoded[key] = value
                 else:
-                    encoded[key] = encode(value, name, label, attach)
+                    encoded[key] = encode(value, name, label)
             return encoded
-        return {key: encode(value, name, label, attach) for key, value in obj.items()}
+        return {key: encode(value, name, label) for key, value in obj.items()}
 
     if isinstance(obj, (list, tuple, set, frozenset)):
-        return [encode(item, name, label, attach) for item in obj]
+        return [encode(item, name, label) for item in obj]
 
     if isinstance(obj, (bytes, bytearray)):
-        if attach is not None:
-            return obj
-        return {KEY_BYTES: base64.b64encode(bytes(obj)).decode("ascii")}
+        return {KEY_BYTES: obj}
 
     if isinstance(obj, BaseException):
         return str(obj)
@@ -803,27 +803,13 @@ def encode(obj, name=None, label=None, attach=None):
     # Nothing JSON-native is left, so this is where the kernel is needed.
     _ensure_ocp()
     if isinstance(obj, OCP.TopoDS.TopoDS_Shape):
-        encoded = encode_shape(obj, name=name, label=label)
-        encoded[KEY_BREP] = _payload(encoded[KEY_BREP], attach)
-        return encoded
+        return encode_shape(obj, name=name, label=label)
 
     if type(obj).__module__.split(".")[0] == "OCP":
         _warn("dropping non-shape OCCT object of type %s" % type(obj))
         return None
 
     raise TypeError("Cannot encode %s for the wrapper protocol" % type(obj))
-
-
-def _payload(value, attach):
-    """A "brep" payload in the form 'encode()' is writing: bytes for a frame, base64 for JSON.
-
-    Bytes are what a payload is everywhere in a wrapper - 'encode_shape()'
-    writes them, and a frame's reader hands them over - and base64 only what
-    JSON needs; text arrives only in a request that came as JSON.
-    """
-    if attach is not None:
-        return attach(value)
-    return value if isinstance(value, str) else base64.b64encode(value).decode("ascii")
 
 
 class Distinct:
@@ -837,6 +823,28 @@ class Distinct:
     than a digest of each that a table is keyed by (see '_shared_payloads').
     The core's twin, for the requests it writes, is 'shape_envelope.Distinct'.
     """
+
+    @classmethod
+    def applied(cls, encoded):
+        """'encoded', what 'encode()' made, with every node's payload the one object holding its bytes.
+
+        In place: every dict and list in it is one 'encode()' made, and nothing
+        else holds them yet.
+        """
+        same = cls()
+
+        def walk(obj):
+            if isinstance(obj, dict):
+                if isinstance(obj.get(KEY_BREP), bytes):
+                    obj[KEY_BREP] = same(obj[KEY_BREP])
+                for value in obj.values():
+                    walk(value)
+            elif isinstance(obj, list):
+                for item in obj:
+                    walk(item)
+
+        walk(encoded)
+        return encoded
 
     def __init__(self):
         self._by_id = {}
@@ -874,7 +882,8 @@ def _decode(obj, shared):
             _ensure_ocp()
             return _decode_shape(obj, shared)
         if KEY_BYTES in obj and len(obj) == 1:
-            return base64.b64decode(obj[KEY_BYTES])
+            # Base64 in JSON, the bytes themselves in a frame.
+            return partcad_framing.as_bytes(obj[KEY_BYTES])
         return {key: _decode(value, shared) for key, value in obj.items()}
 
     if isinstance(obj, list):
@@ -903,7 +912,7 @@ def _shared_payloads(encoded):
     def count(obj):
         if isinstance(obj, dict):
             payload = obj.get(KEY_BREP)
-            if isinstance(payload, str):
+            if isinstance(payload, (str, bytes)):
                 counts[payload] = counts.get(payload, 0) + 1
             for value in obj.values():
                 count(value)
@@ -912,15 +921,19 @@ def _shared_payloads(encoded):
                 count(item)
 
     count(encoded)
-    carried = sum(len(payload) * uses for payload, uses in counts.items())
-    tabled = sum(len(payload) + _REFERENCE_COST + uses * _REFERENCE_COST for payload, uses in counts.items())
+    # As long as it is in the JSON the table is for: base64, for a payload that is bytes.
+    lengths = {
+        payload: len(payload) if isinstance(payload, str) else 4 * ((len(payload) + 2) // 3) for payload in counts
+    }
+    carried = sum(lengths[payload] * uses for payload, uses in counts.items())
+    tabled = sum(lengths[payload] + _REFERENCE_COST + uses * _REFERENCE_COST for payload, uses in counts.items())
     if tabled >= carried:
         return encoded
     digests = {payload: payload_digest(payload) for payload in counts}
 
     def refer(obj):
         if isinstance(obj, dict):
-            if isinstance(obj.get(KEY_BREP), str):
+            if isinstance(obj.get(KEY_BREP), (str, bytes)):
                 node = {key: refer(value) for key, value in obj.items() if key != KEY_BREP}
                 node[KEY_BREP_REF] = digests[obj[KEY_BREP]]
                 return node
@@ -971,7 +984,8 @@ def dumps(obj, name=None, label=None, share=False) -> str:
     core is, for every answer: 'shape_envelope.loads()' reads both forms.
     """
     encoded = encode(obj, name=name, label=label)
-    return json.dumps(_shared_payloads(encoded) if share else encoded)
+    # Every bytes value as base64 text, which is what JSON has room for.
+    return partcad_framing.to_json(_shared_payloads(encoded) if share else encoded)
 
 
 def loads(text) -> object:
@@ -995,7 +1009,7 @@ def frame(obj, name=None, label=None) -> list:
     one 'bytes', so that a wrapper writes forty megabytes of payload as it is
     rather than copying it in behind the header first ('wrapper_common').
     """
-    encoded = encode(obj, name=name, label=label, attach=Distinct())
+    encoded = Distinct.applied(encode(obj, name=name, label=label))
     return partcad_framing.encode_message(encoded, attachments=True)
 
 
@@ -1029,29 +1043,27 @@ def _document(data):
         start = partcad_framing.find_message(data)
         if start is not None:
             document, _end = partcad_framing.message_at(data, start)
-            return document
+            return _bytes_in_place(document)
     return json.loads(_payload_line(data))
 
 
-def read(stream):
-    """The document on 'stream', undecoded, and whether it came as a frame: '(document, framed)'.
+def _bytes_in_place(obj):
+    """'obj' with every '__bytes__' object a frame carried replaced by the bytes it holds.
 
-    A frame is read off the stream as it arrives, each attachment into a bytes
-    object of its own, so that a wrapper holds its request once rather than
-    once as it came and once again as what it came to. JSON - which a wrapper
-    in a container is sent - is read to the end, as it always was. Told apart
-    by the first byte: a frame starts with its header, and JSON with anything
-    but that.
+    So that a wrapper reading a request raw holds bytes as bytes, and hands them
+    back as bytes - encoding '{"__bytes__": b"..."}' again would wrap it twice.
+    In JSON such an object holds base64 text, which is already what it is
+    written back as, and is left as it always was.
     """
-    peek = getattr(stream, "peek", None)
-    if peek is not None and peek(1)[:1] == _FRAME_START[:1]:
-        document = partcad_framing.read_message(stream)
-        if document is None:
-            raise ValueError("the request ended before its frame said it would")
-        return _inflate(document), True
-    data = stream.read()
-    framed = is_frame(data)
-    return _inflate(_document(data)), framed
+    if isinstance(obj, dict):
+        if len(obj) == 1 and isinstance(obj.get(KEY_BYTES), bytes):
+            return obj[KEY_BYTES]
+        for key, value in obj.items():
+            obj[key] = _bytes_in_place(value)
+    elif isinstance(obj, list):
+        for index, item in enumerate(obj):
+            obj[index] = _bytes_in_place(item)
+    return obj
 
 
 def _payload_line(data) -> str:

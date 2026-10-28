@@ -21,7 +21,6 @@ the bytes as bytes.
 
 import asyncio
 import base64
-import io
 import os
 import pathlib
 import sys
@@ -99,9 +98,7 @@ def test_a_wrapper_reads_the_request_the_core_writes():
 
     for read in (
         ocp_serialize.deserialize_raw(shape_envelope.serialize(request)),
-        ocp_serialize.read(io.BufferedReader(io.BytesIO(shape_envelope.serialize(request))))[0],
-        # A stream that cannot be peeked into is read whole, and read the same.
-        ocp_serialize.read(io.BytesIO(shape_envelope.serialize(request)))[0],
+        ocp_serialize.deserialize_raw(b"what printed first\n" + shape_envelope.serialize(request)),
     ):
         assert read["width"] == 512
         assert read["blob"] == b"\x00\xff\n"
@@ -115,12 +112,23 @@ def test_a_wrapper_reads_the_request_the_core_writes():
         )
 
 
-def test_a_frame_is_read_as_a_frame_and_json_as_json():
+def test_a_frame_is_told_from_json():
+    """Which is what decides the form a wrapper answers in."""
     request = {"wrapped": _leaf(BRICK, "brick")}
 
-    assert ocp_serialize.read(io.BufferedReader(io.BytesIO(shape_envelope.serialize(request))))[1] is True
-    assert ocp_serialize.read(io.BufferedReader(io.BytesIO(shape_envelope.dumps(request).encode())))[1] is False
-    assert ocp_serialize.read(io.BytesIO(shape_envelope.dumps(request).encode()))[1] is False
+    assert ocp_serialize.is_frame(shape_envelope.serialize(request)) is True
+    assert ocp_serialize.is_frame(shape_envelope.dumps(request).encode()) is False
+    assert ocp_serialize.is_frame(shape_envelope.dumps(request)) is False
+    assert ocp_serialize.is_frame(shape_envelope.serialize(request)[:-1]) is False
+
+
+def test_bytes_read_raw_go_back_as_they_came():
+    """A wrapper reading its request raw hands back what it holds of it, and the bytes in it stay bytes."""
+    raw = ocp_serialize.deserialize_raw(shape_envelope.serialize({"blob": b"\x00", "nested": [{"more": b"\xff"}]}))
+
+    assert raw == {"blob": b"\x00", "nested": [{"more": b"\xff"}]}
+    for form in (ocp_serialize.serialize(raw), ocp_serialize.dumps(raw)):
+        assert shape_envelope.deserialize(form) == raw
 
 
 def test_each_distinct_payload_is_attached_once_and_held_once():
@@ -202,7 +210,11 @@ def test_the_parts_of_an_answer_encoded_one_by_one_are_one_attachment():
 
 
 def test_a_tessellation_table_travels_as_attachments():
-    """The glTF of a tree, keyed by geometry: bytes like any other, so raw like any other."""
+    """The glTF of a tree, keyed by geometry: bytes like any other, so raw like any other.
+
+    Read back by the core through 'decode()' of the table on the tree's root,
+    which turns its '__bytes__' objects into bytes, base64 or attached.
+    """
     glb = b"glTF" + os.urandom(64)
     answer = {
         "success": True,
@@ -212,7 +224,9 @@ def test_a_tessellation_table_travels_as_attachments():
     frame = ocp_serialize.serialize(answer)
 
     assert len(glb) in _attachments(frame)
-    assert shape_envelope.deserialize(frame)["tree"][shape_envelope.KEY_GEOMETRY] == {"d1": glb}
+    assert base64.b64encode(glb) not in frame
+    table = shape_envelope.loads(frame)["tree"][shape_envelope.KEY_GEOMETRY]
+    assert shape_envelope.decode(table) == {"d1": glb}
 
 
 def test_an_answer_is_found_past_what_was_printed_in_front_of_it():
@@ -377,3 +391,28 @@ def test_a_framed_answer_is_remembered_as_the_line_it_says(monkeypatch):
     line = stored["response"]
     assert isinstance(line, str) and "\n" not in line
     assert shape_envelope.deserialize(line) == shape_envelope.deserialize(frame)
+
+
+def test_a_framed_answer_written_a_little_at_a_time_arrives_whole(monkeypatch):
+    """'os.write' may take less than it is handed: each piece of the frame is written on from a view of itself."""
+    import wrapper_common
+
+    received = []
+    handed = []
+
+    def write(fd, data):
+        handed.append(type(data))
+        taken = bytes(data[:4096])
+        received.append(taken)
+        return len(taken)
+
+    monkeypatch.setattr(wrapper_common, "_response_fd", 99)
+    monkeypatch.setattr(wrapper_common, "_answer_framed", True)
+    monkeypatch.setattr(wrapper_common, "os", types.SimpleNamespace(write=write))
+    answer = {"success": True, "shape": _leaf(os.urandom(1 << 20), "big"), "blob": b"\x00" * 5000}
+
+    wrapper_common.handle_output(answer)
+
+    assert len(received) > 250
+    assert set(handed) == {memoryview}
+    assert shape_envelope.deserialize(b"".join(received)) == answer

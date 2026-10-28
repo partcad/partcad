@@ -109,7 +109,8 @@ def test_a_frame_is_answered_with_a_frame_and_nothing_else(tmp_path):
     assert framing.find_message(finished.stdout) == 0
     message, end = framing.message_at(finished.stdout, 0)
     assert end == len(finished.stdout)
-    assert message["blob"] == b"\x00\xff\n"
+    # Attached, raw: what JSON would have carried as base64.
+    assert message["blob"] == {ocp_serialize.KEY_BYTES: b"\x00\xff\n"}
 
 
 def test_json_is_answered_with_json(tmp_path):

@@ -108,10 +108,10 @@ def handle_input(decode=True):
     # #   - Make stdin blocking so that we can read until EOF
     # flag = fcntl.fcntl(sys.stdin, fcntl.F_GETFL)
     # fcntl.fcntl(sys.stdin, fcntl.F_SETFL, flag & ~os.O_NONBLOCK)
-    #   - Read until EOF: a frame as it arrives, JSON to the end
-    document = _read_request()
+    #   - Read until EOF, as bytes: see '_read_request()'
+    input_str = _read_request()
     #   - Unpack the content received via stdin
-    request = ocp_serialize.decode(document) if decode else document
+    request = ocp_serialize.deserialize(input_str) if decode else ocp_serialize.deserialize_raw(input_str)
     remember_request(request)
     return path, request
 
@@ -134,19 +134,20 @@ def remember_request(request):
 
 
 def _read_request():
-    """The request on standard input, undecoded, noting whether it came as a frame.
+    """Everything on standard input, noting whether it is a frame, which the answer then is too.
 
     As bytes: a frame's attachments are raw (see 'ocp_serialize.serialize'),
     and text is only what a JSON request - a container's - decodes to. A
     standard input that something replaced with text has no bytes to offer,
-    and is read as JSON, which is all text can be.
+    and is read as the JSON it can only be.
     """
     global _answer_framed
     stream = getattr(sys.stdin, "buffer", None)
     if stream is None:
-        return ocp_serialize.deserialize_raw(sys.stdin.read())
-    document, _answer_framed = ocp_serialize.read(stream)
-    return document
+        return sys.stdin.read()
+    data = stream.read()
+    _answer_framed = ocp_serialize.is_frame(data)
+    return data
 
 
 def handle_output(model, end=""):

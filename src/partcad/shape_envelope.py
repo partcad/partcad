@@ -812,7 +812,9 @@ def encode(obj, name=None, label=None, payloads=None, attach=None):
 
     Given 'attach' (a 'Distinct'), nothing is base64: every payload stays the
     bytes it is, one object per distinct payload, and so does every other bytes
-    value, for a frame to carry as attachments ('serialize()').
+    value inside its '__bytes__' object, for a frame to carry as attachments
+    ('serialize()'). The document is the same either way, but for how a bytes
+    value is written in it, which is the rule 'partcad_utils.framing' has.
     """
     if obj is None or isinstance(obj, (bool, int, float, str)):
         return obj
@@ -843,7 +845,7 @@ def encode(obj, name=None, label=None, payloads=None, attach=None):
 
     if isinstance(obj, (bytes, bytearray)):
         if attach is not None:
-            return obj
+            return {KEY_BYTES: obj}
         return {KEY_BYTES: base64.b64encode(bytes(obj)).decode("ascii")}
 
     if isinstance(obj, BaseException):
@@ -887,7 +889,8 @@ def decode(obj, table=None):
                 decoded[KEY_GEOMETRY] = decode(decoded[KEY_GEOMETRY], table)
             return decoded
         if KEY_BYTES in obj and len(obj) == 1:
-            return base64.b64decode(obj[KEY_BYTES])
+            # Base64 in JSON, the bytes themselves in a frame.
+            return framing.as_bytes(obj[KEY_BYTES])
         return {key: decode(value, table) for key, value in obj.items()}
 
     if isinstance(obj, list):
