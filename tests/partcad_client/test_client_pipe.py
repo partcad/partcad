@@ -7,12 +7,14 @@
 
 `pc` on Windows used to start a one-shot stdio service for every command, and
 the pipe client in `partcad_client.client` was reached by nothing -- which is
-how it kept a bug: it read the pipe through the raw, unbuffered file it is
-opened as, where a read returns what has arrived so far, and `read_message`
-takes a body shorter than its length for the end of the stream. Now that every
-Windows command connects through it, these pin what it does with a stand-in for
-the pipe, so that they run on every leg of the matrix: a module of its own, with
-no AF_UNIX guard (see `test_daemon_windows.py` for why that matters).
+how it kept a bug for as long as it did: it read the pipe through the raw,
+unbuffered file it is opened as, where a read returns what has arrived so far,
+and `read_message` took a body shorter than its length for the end of the
+stream (`framing._read_exactly` reads on now). Now that every Windows command
+connects through it, these pin what it does with a stand-in for the pipe that
+hands answers over a few bytes at a time, so that they run on every leg of the
+matrix: a module of its own, with no AF_UNIX guard (see
+`test_daemon_windows.py` for why that matters).
 
 What is not exercised here is the operating system's half: opening a real pipe,
 and `CancelIoEx` ending a read blocked in it.
@@ -94,11 +96,6 @@ def _pretending_to_be_windows():
 
 # Big enough that no pipe hands it over in one read.
 LARGE = {"jsonrpc": "2.0", "id": 1, "result": {"data": "x" * 200_000}}
-
-
-def test_a_raw_pipe_read_is_short(monkeypatch):
-    """The bug, on its own: the unbuffered file reads a large body short, as the end of the stream."""
-    assert read_message(FakePipe(_framed(LARGE))) is None
 
 
 def test_a_large_answer_arrives_whole_over_the_pipe(monkeypatch):

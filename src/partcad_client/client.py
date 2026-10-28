@@ -590,13 +590,13 @@ def _open_socket(path: str) -> DaemonClient:
 def _open_pipe(name: str) -> DaemonClient:
     """A client on the Windows named-pipe daemon ``name``.
 
-    Buffered, rather than the raw file the pipe is opened as. A read from a pipe
-    returns whatever has arrived so far -- for a long message, less than was
-    asked for -- and ``read_message`` reads a body with one ``read(length)`` and
-    takes a short one for the end of the stream: a large answer would have
-    ended the connection half-way through. A buffered reader goes on reading
-    until it has the whole length, which is also what the socket's
-    ``makefile()`` hands the socket client.
+    Buffered, rather than the raw file the pipe is opened as, which is what the
+    socket's ``makefile()`` hands the socket client too. A read from a pipe
+    returns whatever has arrived so far, and ``read_message`` reads its headers
+    a line at a time: unbuffered, that is a call into the operating system per
+    byte. (A short read of a body is no longer mistaken for the end of the
+    stream -- ``framing._read_exactly`` reads on -- but it was, on this path,
+    until #862.)
 
     A pipe opened as a file takes no timeout, so a stall is ended the way the
     stdio channel's is: by a watchdog, which here cancels the blocked read
