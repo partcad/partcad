@@ -1665,7 +1665,7 @@ jobs:
             # drawing in LFS shows above as nothing but a new pointer, and one
             # that comes out differently on another machine cannot be re-rendered
             # there into the file this check holds the tree to.
-            git diff --cached --name-only --diff-filter=AM -z -- examples "${UNSTABLE[@]}" |
+            git diff --cached --name-only --no-renames --diff-filter=AM -z -- examples "${UNSTABLE[@]}" |
               while IFS= read -r -d '' changed; do
                 mkdir -p "examples-partcad-test-results/rendered/$(dirname "$changed")"
                 cp "$changed" "examples-partcad-test-results/rendered/$changed"
