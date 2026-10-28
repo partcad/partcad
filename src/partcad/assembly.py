@@ -689,29 +689,38 @@ class Assembly(Shape):
             return None
 
         with pc_logging.Action("Interference", self.project_name, self.name):
-            # The tree travels as a JSON string rather than as itself. Anything
-            # recognisable as a shape or an assembly is turned into OCCT
-            # geometry on arrival (see ocp_serialize.decode), and a compound is
-            # exactly what this must not be given: the names go with it, and a
-            # report that two parts overlap has to be able to say which two.
-            # A string is left alone, so the wrapper decodes the tree itself,
-            # leaf by leaf, keeping each name attached to its solid.
-            request_serialized = shape_envelope.serialize(
-                {
-                    # shape_envelope.dumps, not json.dumps: the envelope carries
-                    # its BREP payloads as bytes, which stock JSON cannot encode
-                    # at all. Getting this wrong raised a TypeError that the
-                    # test caught and reported as a pass, so the check answered
-                    # "no interference" for every assembly without ever looking
-                    # at one.
-                    "assembly_json": shape_envelope.dumps(obj),
-                    "min_volume": min_volume,
-                    "min_fraction": min_fraction,
-                    "expected": [list(pair) for pair in expected],
-                    "opaque": list(opaque),
-                    "keep_common": bool(keep_common),
-                }
-            )
+            # The tree travels as itself, and the wrapper reads its request
+            # undecoded. A wrapper that decodes it turns anything recognisable
+            # as a shape or an assembly into OCCT geometry on arrival (see
+            # ocp_serialize.decode), and a compound is exactly what this must
+            # not be given: the names go with it, and a report that two parts
+            # overlap has to be able to say which two. So the wrapper decodes
+            # the tree itself, leaf by leaf, keeping each name attached to its
+            # solid.
+            #
+            # It used to travel as a JSON string inside the request, for that
+            # same reason, which wrote every payload once per node that carries
+            # it and then escaped all of it again: a thousand instances of
+            # twenty parts were 123 MB of request and a second of the daemon's
+            # time to write it. As itself, each payload the tree repeats is
+            # written once ('share', see 'shape_envelope.KEY_BREPS') - 3 MB.
+            # Serialized when the process starts, for the reason
+            # 'runtime.stdin_bytes' gives. Not under "assembly": that is the
+            # key that makes a dict an assembly envelope, request and all.
+            #
+            # shape_envelope, never json.dumps: the envelope carries its BREP
+            # payloads as bytes, which stock JSON cannot encode at all. Getting
+            # this wrong once raised a TypeError that the test caught and
+            # reported as a pass, so the check answered "no interference" for
+            # every assembly without ever looking at one.
+            request = {
+                "tree": obj,
+                "min_volume": min_volume,
+                "min_fraction": min_fraction,
+                "expected": [list(pair) for pair in expected],
+                "opaque": list(opaque),
+                "keep_common": bool(keep_common),
+            }
 
             runtime = ctx.get_python_runtime(version="3.11")
             await runtime.ensure_async(sandbox_versions.OCP)
@@ -720,7 +729,9 @@ class Assembly(Shape):
             # output path; give it one inside a directory of our own.
             with tempfile.TemporaryDirectory(prefix="partcad-interference-") as unused_dir:
                 command = [wrapper.get("interference.py"), os.path.join(unused_dir, "unused.txt")]
-                exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
+                exitcode, response_serialized, errors = await runtime.run_async(
+                    command, lambda: shape_envelope.serialize(request, share=True)
+                )
             if exitcode != 0 and len(errors) == 0:
                 errors = command_failure(command, exitcode)
             if errors:

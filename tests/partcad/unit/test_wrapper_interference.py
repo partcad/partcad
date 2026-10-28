@@ -17,6 +17,7 @@ from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
 from OCP.gp import gp_Pnt
 
 import partcad as pc
+from partcad import shape_envelope
 from partcad.test import interference as core_rule
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
@@ -26,6 +27,11 @@ import wrapper_interference  # noqa: E402
 
 def _box(x):
     return BRepPrimAPI_MakeBox(gp_Pnt(x, 0.0, 0.0), 10.0, 10.0, 10.0).Shape()
+
+
+def _wire(request):
+    """'request' as the wrapper reads it: written by the core, and read back undecoded."""
+    return ocp_serialize.deserialize_raw(shape_envelope.serialize(request, share=True))
 
 
 def _request(expected=()):
@@ -39,7 +45,7 @@ def _request(expected=()):
         ],
         name="asm",
     )
-    return {"assembly_json": ocp_serialize.dumps(tree), "expected": [list(pair) for pair in expected]}
+    return _wire({"tree": tree, "expected": [list(pair) for pair in expected]})
 
 
 def _counting_common(monkeypatch):
@@ -115,8 +121,8 @@ def _part(label, x):
 
 
 def _check(tree, **request):
-    request["assembly_json"] = ocp_serialize.dumps(ocp_serialize.encode_assembly(tree, name="asm"))
-    return wrapper_interference.process(None, request)
+    request["tree"] = ocp_serialize.encode_assembly(tree, name="asm")
+    return wrapper_interference.process(None, _wire(request))
 
 
 def test_a_pair_of_subtrees_the_joints_account_for_is_skipped_whole(monkeypatch):
@@ -180,7 +186,7 @@ def test_a_part_that_is_not_a_solid_is_not_checked_rather_than_checked_wrongly(m
         ],
         name="asm",
     )
-    result = wrapper_interference.process(None, {"assembly_json": ocp_serialize.dumps(tree)})
+    result = wrapper_interference.process(None, _wire({"tree": tree}))
 
     assert result["success"]
     assert result["unchecked"] == ["shell"]

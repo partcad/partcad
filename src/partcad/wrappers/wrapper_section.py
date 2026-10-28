@@ -246,7 +246,7 @@ def process(request):
     if not isinstance(tree, dict):
         raise Exception("No shape tree to cut")
     errors = []
-    cut = section_tree(tree, request.get("section"), errors, keep_empty=True)
+    cut = section_tree(tree, request.get("section"), errors, keep_empty=request.get("keepEmpty", True) is not False)
     return {"success": True, "exception": None, "tree": cut, "errors": errors}
 
 

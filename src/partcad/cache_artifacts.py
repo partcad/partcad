@@ -46,6 +46,17 @@ bytes are the question, exactly. So the subject is their digest
 code of every wrapper there is. `cache: false` still means what it says: the
 caller passes whether the object it is asking about may be cached.
 
+**A wrapper handed many subjects at once can store an answer per subject**
+('wrapper_entries_hash', 'store_entries_async'). The IDE's tessellation is
+handed the distinct shapes of a tree and answers with the glTF of each, and the
+tree is mostly the same shapes the last time it was shown: one part edited is one
+part to tessellate again, not the whole tree. So the run is keyed as above minus
+the subject, and each answer is stored under that key with its subject's name -
+a digest of exactly the bytes it is about - in its own entry, read back many to a
+call. An entry holds the caller's bytes as they are, neither packed nor
+compressed here: what they are is the caller's to say, and the one caller's are
+compressed already.
+
 **What is stored is the result and the files it wrote, as one entry.** One,
 because a hit has to be a hit: a result whose model went missing is worse than
 running again. The files go in by *role* rather than by path, since a path is
@@ -308,6 +319,73 @@ async def store_response_async(cache, hash: Optional[CacheHash], response: str) 
     if not lines:
         return False
     return await store_async(cache, hash, {_RESPONSE: lines[-1].strip()})
+
+
+# What one answer of many is stored under, beside the key of the run it came
+# from (see 'store_entries_async'). Named after ARTIFACT_KEY so that every tier
+# holds it to the same size window, from above only: each one is a piece of a
+# run whose cost is starting a sandbox, however few bytes the piece is.
+_ENTRY_KEY = ARTIFACT_KEY + "-%s"
+
+
+def wrapper_entries_hash(
+    name: str,
+    wrapper_name: str,
+    requirements: Iterable[str] = (),
+    python_version: str = sandbox_versions.DEFAULT_PYTHON_VERSION,
+    question: Optional[dict] = None,
+) -> CacheHash:
+    """The key of a run of 'wrapper_name' whose answers are stored one per subject.
+
+    Everything 'wrapper_hash' keys on but the subject, which is in the name of
+    each entry instead ('store_entries_async'): the wrapper and every other
+    wrapper's code, the version it reports, the environment, and 'question' -
+    whatever else every answer of the run depends on, which for a tessellation is
+    the deflection. Worked out once for any number of subjects, and not
+    conditional: a caller that must not cache simply does not ask for one.
+    """
+    return wrapper_hash(name, wrapper_name, "entries", requirements, python_version, question)
+
+
+async def restore_entries_async(cache, hash: Optional[CacheHash], names) -> dict:
+    """The entries stored under 'hash' for 'names', as the bytes they were stored as.
+
+    A name nothing was stored for - or no tier could be read for - is absent:
+    every entry is its own hit or miss. One read for all of them, which a tier
+    that can answer many in one round trip (memcached) does.
+    """
+    if cache is None or hash is None or not cache.enabled or not names:
+        return {}
+    try:
+        found = await cache.read_data_async(hash, [_ENTRY_KEY % name for name in names])
+    except Exception as e:
+        pc_logging.debug("Ignoring the cached results of %s: %s" % (hash.name, e))
+        return {}
+    entries = {}
+    for name in names:
+        data = found.get(_ENTRY_KEY % name)
+        if data:
+            entries[name] = bytes(data)
+    if entries:
+        pc_logging.debug("Using %d cached result(s) of %s" % (len(entries), hash.name))
+    return entries
+
+
+async def store_entries_async(cache, hash: Optional[CacheHash], entries: dict) -> int:
+    """Store each of 'entries' (bytes by subject name) under 'hash'; how many some tier took.
+
+    Never raises, for the reason 'store_async' gives. An entry no tier takes -
+    one too big for every tier - is simply not there next time, and the others
+    are.
+    """
+    if cache is None or hash is None or not cache.enabled or not entries:
+        return 0
+    try:
+        saved = await cache.write_data_async(hash, {_ENTRY_KEY % name: data for name, data in entries.items()})
+    except Exception as e:
+        pc_logging.debug("Failed to store the results of %s: %s" % (hash.name, e))
+        return 0
+    return sum(1 for stored in saved.values() if stored)
 
 
 def _relocate(value, old: str, new: str):

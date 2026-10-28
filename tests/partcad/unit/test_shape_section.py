@@ -203,22 +203,13 @@ class TestSectionTree:
 
 
 class TestGltf:
-    def test_the_gltf_wrapper_cuts_before_it_tessellates(self):
+    def test_a_cut_for_drawing_leaves_a_node_the_box_misses_with_no_geometry(self):
         far = Location([[500, 0, 0], [0, 0, 1], 0])
         tree = node(None, children=[node(box(), label="near"), node(box(), location=far, label="far")])
-        whole = wrapper_gltf.process({"tree": tree, "tolerance": 0.1})
-        assert len(whole["tree"][ocp_serialize.KEY_GEOMETRY]) == 1
-        assert all(ocp_serialize.KEY_GLTF_REF in child for child in whole["tree"][ocp_serialize.KEY_ASSEMBLY])
-
-        cut_tree = wrapper_gltf.process({"tree": tree, "tolerance": 0.1, "section": {"x": [0.0, 5.0]}})
-        assert cut_tree["section"] == {"x": [0.0, 5.0]}
-        assert cut_tree["errors"] == []
-        near, gone = cut_tree["tree"][ocp_serialize.KEY_ASSEMBLY]
-        # Half the near cube is a different shape from the whole one, and the
-        # far one has nothing left to draw - and is not reported as a failure.
-        assert ocp_serialize.KEY_GLTF_REF in near
-        assert ocp_serialize.KEY_GLTF_REF not in gone
-        assert near[ocp_serialize.KEY_GLTF_REF] not in whole["tree"][ocp_serialize.KEY_GEOMETRY]
+        answer = wrapper_section.process({"tree": tree, "section": {"x": [0.0, 5.0]}, "keepEmpty": False})
+        near, gone = answer["tree"][ocp_serialize.KEY_ASSEMBLY]
+        assert volume(near) == pytest.approx(500.0)
+        assert ocp_serialize.KEY_BREP not in gone and gone["label"] == "far"
 
 
 class InProcessSandbox:
@@ -319,7 +310,28 @@ class TestSectionAsync:
         assert asyncio.run(shape_gltf.in_form_async(context, tree, shape_envelope.FORM_BREP)) is tree
 
         gltf = asyncio.run(shape_gltf.in_form_async(context, tree, shape_envelope.FORM_GLTF, section={"z": [0, 5]}))
-        # One sandbox cuts and tessellates: the section goes with the tree.
-        assert [name for name, _ in sandbox.requests] == ["wrapper_section.py", "wrapper_gltf.py"]
-        assert sandbox.requests[-1][1]["section"] == {"z": [0.0, 5.0]}
-        assert ocp_serialize.KEY_GLTF_REF in gltf
+        # Cut first, and then the cut tree's shapes tessellated as any tree's are:
+        # what reaches the tessellation is the half cube, and no section.
+        names = [name for name, _ in sandbox.requests]
+        assert names == ["wrapper_section.py", "wrapper_section.py", "wrapper_gltf.py"]
+        assert sandbox.requests[1][1]["keepEmpty"] is False
+        [shape] = sandbox.requests[-1][1]["shapes"]
+        assert "section" not in sandbox.requests[-1][1]
+        assert shape["digest"] == gltf[ocp_serialize.KEY_GLTF_REF]
+        assert shape["digest"] in gltf[ocp_serialize.KEY_GEOMETRY]
+
+    def test_what_the_box_misses_is_drawn_from_the_geometry_it_already_had(self, monkeypatch):
+        warnings = []
+        monkeypatch.setattr(shape_gltf.pc_logging, "warning", warnings.append)
+        sandbox = InProcessSandbox()
+        context = SandboxContext(sandbox)
+        far = Location([[500, 0, 0], [0, 0, 1], 0])
+        tree = node(None, children=[node(box(), label="near"), node(box(), location=far, label="far")])
+        whole = asyncio.run(shape_gltf.in_form_async(context, tree, shape_envelope.FORM_GLTF))
+        cut = asyncio.run(shape_gltf.in_form_async(context, tree, shape_envelope.FORM_GLTF, section={"x": [0, 5]}))
+        near, gone = cut[ocp_serialize.KEY_ASSEMBLY]
+        # Half the near cube is a shape of its own; the far one has nothing left
+        # to draw, and is not reported as a shape that would not tessellate.
+        assert near[ocp_serialize.KEY_GLTF_REF] not in whole[ocp_serialize.KEY_GEOMETRY]
+        assert ocp_serialize.KEY_GLTF_REF not in gone
+        assert warnings == []

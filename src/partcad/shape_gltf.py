@@ -15,10 +15,12 @@ the names, the placements or the ports changes, only what sits at each node that
 has geometry.
 
 It runs in a sandbox, like every other operation on geometry: the core has no CAD
-library and never holds a live OCP object. One sandbox for the whole tree rather
-than one per node, because starting an interpreter and importing OCP is seconds
-and tessellating a part is not - an assembly of five hundred parts converted one
-node at a time would cost longer than building it.
+library and never holds a live OCP object. One sandbox for all of a tree's shapes
+rather than one per node, because starting an interpreter and importing OCP is
+seconds and tessellating a part is not - an assembly of five hundred parts
+converted one node at a time would cost longer than building it. And only for the
+shapes it has not tessellated before: each shape's glTF is cached on its own, and
+the tree is put back together here, around them (see 'convert_async').
 
 Nothing here is specific to the IDE viewer. The viewer is the one caller today
 (see 'viewer.py'), and it is the reason the form exists, but a caller that wants
@@ -61,6 +63,22 @@ SCREEN_DIVISOR = SCREEN_PIXELS / PIXEL_BUDGET
 MIN_TOLERANCE = 0.001
 MAX_TOLERANCE = 10.0
 
+# The values the linear deflection is rounded down onto: the R10 series of
+# preferred numbers (ISO 3), ten to a decade, each about a fifth smaller than the
+# one above it - 0.1, 0.125, 0.16, 0.2, 0.25, 0.315, 0.4, 0.5, 0.63, 0.8, 1 mm.
+#
+# Rounded at all because a tessellation is cached per shape, keyed on the
+# deflection it was made at (see 'convert_async'), and the deflection is a
+# fraction of the size of the whole tree: without the rounding, moving one part of an assembly a millimetre,
+# or adding a washer at its edge, would change the diagonal by a hair, the
+# deflection with it, and so the key of every shape in the tree - and the whole
+# assembly would be tessellated again for a difference nobody could see. Rounded,
+# a tree keeps its deflection until its size moves by a step, and every cached
+# shape in it stays a hit. Rounding down by less than a step is a preview at most
+# a fifth finer than the budget asks for, never coarser: within what the budget
+# is a guess at anyway.
+TOLERANCE_SERIES = (1.0, 1.25, 1.6, 2.0, 2.5, 3.15, 4.0, 5.0, 6.3, 8.0)
+
 # What to assume when a tree records no size at all. Every shape a wrapper returned
 # carries the box it was measured in as it was built, so this is for the tree that
 # carries none: one whose metadata was stripped, or one with no geometry in it,
@@ -91,6 +109,25 @@ DEFAULT_ANGULAR_TOLERANCE = 0.4
 # export_gltf is build123d's, and both are what every sandbox's own environment
 # holds (see 'runtime_python.base_requirements').
 _DEPENDENCIES = (sandbox_versions.BUILD123D, sandbox_versions.OCP)
+
+# What a stored tessellation is: one entry per shape, keyed by its geometry,
+# rather than one per tree. Part of the question an entry answers, so that a
+# change to what an entry holds is a change of key, and never two layouts read
+# under one.
+GEOMETRY_ENTRIES = "glTF per geometry, v1"
+
+# What the rest of an entry is, as its first byte: the glTF payload as the text
+# it travelled as, the same payload as bytes, or the finding that the shape has
+# nothing to draw, followed by the reason. The payload is stored exactly as it
+# came back from the sandbox and handed back exactly so. What it is - how the
+# glTF is compressed, how it is written down - is the wrapper's business (see
+# 'ocp_serialize.encode_gltf'), and the wrapper's code is in the key, so two
+# encodings are never read back under one. It is deflated already, which is why
+# nothing compresses it again here: that would cost every hit a decompression
+# for next to nothing.
+_ENTRY_TEXT = b"t"
+_ENTRY_BYTES = b"b"
+_ENTRY_NOTHING = b"n"
 
 
 def size_of(tree):
@@ -159,12 +196,38 @@ def tolerance_for(tree):
 
     The one place that turns "half a pixel of a thousand" into millimetres, so that
     the viewer, a test and anything else asking the same question get the same
-    number.
+    number. Rounded down onto 'TOLERANCE_SERIES' (see 'bucketed').
     """
     size = size_of(tree)
     if not size:
         size = NOMINAL_SIZE
-    return min(max(size / SCREEN_DIVISOR, MIN_TOLERANCE), MAX_TOLERANCE)
+    return bucketed(min(max(size / SCREEN_DIVISOR, MIN_TOLERANCE), MAX_TOLERANCE))
+
+
+def bucketed(tolerance: float) -> float:
+    """'tolerance' rounded down to the nearest value of 'TOLERANCE_SERIES', in mm.
+
+    Down, never up: the deflection used is at most one step finer than the budget
+    asked for and never coarser, so a preview is never less smooth than the budget
+    says. The value is written out from its decimal digits rather than computed,
+    so that it is the same float on every machine - it is part of a cache key, and
+    a key that differed in its last bit between two machines would split a shared
+    tier in two.
+    """
+    # A hair of slack throughout, so that a tolerance a rounding error short of a
+    # value of the series - 0.1 worked out as 0.0999... - is that value rather
+    # than the one below it.
+    slack = 1 + 1e-9
+    exponent = math.floor(math.log10(tolerance))
+    mantissa = tolerance / 10.0**exponent
+    if mantissa * slack >= 10.0:
+        exponent += 1
+        mantissa /= 10.0
+    step = TOLERANCE_SERIES[0]
+    for value in TOLERANCE_SERIES:
+        if value <= mantissa * slack:
+            step = value
+    return float("%re%d" % (step, exponent))
 
 
 async def in_form_async(ctx, tree, form, cacheable: bool = True, section=None):
@@ -177,9 +240,9 @@ async def in_form_async(ctx, tree, form, cacheable: bool = True, section=None):
     'cacheable' is False for a subject that says `cache: false`, whose
     tessellation is then never remembered (see 'convert_async').
 
-    'section' cuts the geometry by a box first (see 'shape_section'): in the
-    BREP form by a sandbox of its own, and in the glTF form in the sandbox that
-    tessellates it, which is one sandbox where it would otherwise be two.
+    'section' cuts the geometry by a box first (see 'shape_section'), in a
+    sandbox of its own and cached as its own answer, and the glTF form is then
+    the cut tree tessellated a shape at a time (see 'convert_async').
     """
     from . import shape_section
 
@@ -212,20 +275,30 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None, cache
     worth looking at. A sketch made of edges alone is not such a node: its edges
     are drawn as line segments (see 'wrapper_gltf._to_glb').
 
-    **The answer is cached** (see 'partcad.cache_artifacts'), keyed on exactly
-    what the sandbox is handed - the tree, every BREP in it, the sketches of its
-    ports, the tolerances - so that showing an object again, in this process or
-    the next, starts no sandbox. Keyed on the bytes rather than on the subject's
-    own cache key, because the port sketches are attached after the shape cache
-    has answered and no key of the subject covers them. 'cacheable' False - a
-    subject with `cache: false` - is tessellated every time.
+    **Each shape's tessellation is cached on its own** (see 'GEOMETRY_ENTRIES'),
+    keyed on the digest of its exact geometry and the tolerances, so that showing
+    an object again, in this process or the next, starts no sandbox - and showing
+    it after one of its parts was edited tessellates that part and nothing else.
+    The tree is not in the key, and is never serialized to find one: the digests
+    are worked out from the payloads the tree already holds, every distinct one
+    is looked up, and only what is missing goes to a sandbox - only the payloads,
+    one each. The answer is then put together here, out of the tree as it came
+    and the glTF of each of its shapes, wherever that came from. Keyed on the
+    bytes rather than on the subject's own cache key, because the port sketches
+    are attached after the shape cache has answered and no key of the subject
+    covers them. 'cacheable' False - a subject with `cache: false` - is
+    tessellated every time.
 
-    'section', a box from 'shape_section.normalize', cuts the geometry before it
-    is tessellated, in the same sandbox (see 'wrappers/wrapper_section.py'). It
-    is sent with the tree, so it is part of the question the answer is cached
-    under. The tolerance is still the whole tree's: what the nodes record about
-    their size is the object's and not the cut's, so a cut is drawn as finely as
-    the object it was cut from.
+    'section', a box from 'shape_section.normalize', cuts the tree first, by
+    'shape_section.section_async' - which caches the cut as it caches any - and
+    what is tessellated is the cut tree's shapes, by the same rule: a cut cannot
+    be made a shape at a time, since a box in the root's frame cuts each
+    placement of a shape differently, but what it leaves are shapes like any
+    other, and a part the box misses keeps its geometry, its digest and so its
+    entry. A node the box takes all of is left with no geometry at all. The
+    tolerance is still the whole tree's: what the nodes record about their size
+    is the object's and not the cut's, so a cut is drawn as finely as the object
+    it was cut from.
     """
     if ctx is None:
         raise ValueError("A context is required to tessellate a shape tree")
@@ -236,51 +309,198 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None, cache
     # than a policy because the size it would be worked out from is already known
     # here: asking the geometry again, in the one process that has a kernel, would
     # be a second answer to "how big is it" (see 'size_of').
-    request = {
-        "tree": tree,
-        "tolerance": tolerance_for(tree) if tolerance is None else float(tolerance),
-        "angularTolerance": DEFAULT_ANGULAR_TOLERANCE if angular_tolerance is None else angular_tolerance,
-    }
+    tolerance = tolerance_for(tree) if tolerance is None else float(tolerance)
+    angular_tolerance = DEFAULT_ANGULAR_TOLERANCE if angular_tolerance is None else float(angular_tolerance)
+
     if section:
-        # Only when there is one, so that every uncut tree is asked - and cached -
-        # exactly as it was before sections existed.
-        request["section"] = section
+        from . import shape_section
+
+        tree = await shape_section.section_async(ctx, tree, section, cacheable=cacheable, keep_empty=False)
+
+    shapes = _Shapes()
+    converted = shapes.convert(tree)
+    payloads = shapes.payloads.by_digest
 
     cache = getattr(ctx, "cache_artifacts", None)
-    artifact = cache_artifacts.wrapper_hash(
-        "%s#gltf" % (tree.get("name") or "tree"),
-        "gltf.py",
-        cache_artifacts.request_key(request) if cacheable else None,
-        _DEPENDENCIES,
-    )
-    response_serialized = await cache_artifacts.restore_response_async(cache, artifact)
-    cached = response_serialized is not None
-    if not cached:
-        runtime = ctx.get_python_runtime(version=sandbox_versions.DEFAULT_PYTHON_VERSION)
-        for dep in _DEPENDENCIES:
-            await runtime.ensure_async(dep)
-
-        # argv[1] is mandatory for every wrapper (wrapper_common.handle_input reads
-        # it as the output path). This one writes no file - the glTF comes back over
-        # the pipe - so it carries the operation name, which is what shows up in
-        # process listings and logs.
-        # A tree is mostly repeats, and 'wrapper_gltf.py' reads its payloads written
-        # once each (see 'shape_envelope.KEY_BREPS') - serialized when the process
-        # starts, for the reason 'runtime.stdin_bytes' gives.
-        exitcode, response_serialized, errors = await runtime.run_async(
-            [wrapper.get("gltf.py"), "gltf"],
-            lambda: shape_envelope.serialize(request, share=True),
+    artifact = None
+    if cacheable and payloads:
+        artifact = cache_artifacts.wrapper_entries_hash(
+            "%s#gltf" % (tree.get("name") or "tree"),
+            "gltf.py",
+            _DEPENDENCIES,
+            question={"entries": GEOMETRY_ENTRIES, "tolerance": tolerance, "angularTolerance": angular_tolerance},
         )
-        if exitcode != 0 and not errors:
-            errors = "Failed to tessellate the shape tree (%s)" % describe_exit_code(exitcode)
-        if errors:
-            raise Exception(errors)
+    geometry, nothing = _restored(await cache_artifacts.restore_entries_async(cache, artifact, list(payloads)))
+    from_cache = len(geometry) + len(nothing)
+
+    missing = {
+        digest: payload for digest, payload in payloads.items() if digest not in geometry and digest not in nothing
+    }
+    if missing:
+        tessellated, empty, failed = await _tessellate_async(ctx, tree, missing, tolerance, angular_tolerance)
+        # Only an answer is remembered: a shape that has glTF, or one that has
+        # nothing to draw, which is the same answer for the same geometry on any
+        # machine. A shape that would not tessellate is tried again next time,
+        # alone, because why it failed may be this sandbox's doing rather than
+        # the geometry's - and everything else in the tree is a hit regardless.
+        entries = {digest: _entry(payload) for digest, payload in tessellated.items()}
+        entries.update({digest: _nothing_entry(reason) for digest, reason in empty.items()})
+        await cache_artifacts.store_entries_async(cache, artifact, entries)
+        geometry.update(tessellated)
+        nothing.update(empty)
+        nothing.update(failed)
+
+    # Once per distinct shape rather than once per node naming it: a hundred
+    # instances of one part that will not tessellate are one thing wrong.
+    for digest in payloads:
+        if digest not in geometry:
+            pc_logging.warning("Nothing to draw for %s: %s" % (shapes.labels[digest], nothing.get(digest)))
+    for node, digest in shapes.nodes:
+        if digest in geometry:
+            node[shape_envelope.KEY_GLTF_REF] = digest
+    converted[shape_envelope.KEY_GEOMETRY] = {digest: geometry[digest] for digest in payloads if digest in geometry}
+    if not shape_envelope.is_node(converted):
+        # A lone shape with nothing to draw: there is no tree left to show, and
+        # why was reported just above.
+        raise Exception("The tessellation of %s produced no shape tree" % (tree.get("name") or "a shape"))
+
+    if from_cache:
+        pc_logging.debug(
+            "Tessellated %s: %d of %d shape(s) from the cache"
+            % (tree.get("name") or "a shape tree", from_cache, len(payloads))
+        )
+    return converted
+
+
+def _entry(payload) -> bytes:
+    if isinstance(payload, str):
+        return _ENTRY_TEXT + payload.encode("utf-8")
+    return _ENTRY_BYTES + bytes(payload)
+
+
+def _nothing_entry(reason) -> bytes:
+    return _ENTRY_NOTHING + str(reason or "").encode("utf-8")
+
+
+def _restored(entries):
+    """The glTF and the 'nothing to draw' findings in what the cache had, by digest.
+
+    An entry that is not one of the three is passed over, which makes it a miss:
+    it is read from tiers other machines write to, and tessellating again is
+    always a valid answer.
+    """
+    geometry, nothing = {}, {}
+    for digest, data in entries.items():
+        kind, rest = data[:1], data[1:]
+        if kind == _ENTRY_TEXT and rest:
+            try:
+                geometry[digest] = rest.decode("utf-8")
+            except UnicodeDecodeError:
+                continue
+        elif kind == _ENTRY_BYTES and rest:
+            geometry[digest] = rest
+        elif kind == _ENTRY_NOTHING:
+            nothing[digest] = rest.decode("utf-8", errors="replace") or "there is nothing to draw"
+    return geometry, nothing
+
+
+class _Shapes:
+    """The distinct shapes of one tree, as the tree is converted around them.
+
+    'convert()' makes the glTF form of the tree with the geometry left out: the
+    same nodes, names, placements, ports and everything else, copied rather than
+    shared so that nothing done to the answer reaches the tree it was made from
+    (which is the BREP tree a shape keeps). Every node that had a payload is kept
+    in 'nodes' with the digest of that payload, to be given the reference to its
+    glTF once it is known.
+
+    The digests come from 'shape_envelope.Payloads', which computes one per
+    payload *object*: every node of a tree built in this process holds the bytes
+    object of the part it is made of, so an assembly of a thousand instances of
+    twenty parts costs twenty digests.
+    """
+
+    def __init__(self):
+        self.payloads = shape_envelope.Payloads()
+        self.labels = {}
+        self.nodes = []
+
+    def convert(self, value):
+        """'value' with every piece of BREP in it taken out and its node recorded.
+
+        A walk of the whole structure rather than of the places a node's
+        geometry is known to sit. Geometry turns up in more than one of them - a
+        node's own, the nodes inside it, the sketches the ports of an object are
+        drawn with - and a walk that knew the list would quietly hand the browser
+        BREP the day the core added another. Anything that is not geometry is
+        copied through untouched, as JSON would have it: a tuple as a list.
+        """
+        if isinstance(value, dict):
+            converted = {key: self.convert(item) for key, item in value.items() if key != shape_envelope.KEY_BREP}
+            brep = value.get(shape_envelope.KEY_BREP)
+            if brep:
+                digest = self.payloads.ref(brep)
+                if digest not in self.labels:
+                    self.labels[digest] = value.get("label") or value.get("name") or "a shape"
+                self.nodes.append((converted, digest))
+            return converted
+        if isinstance(value, (list, tuple)):
+            return [self.convert(item) for item in value]
+        return value
+
+
+async def _tessellate_async(ctx, tree, payloads, tolerance, angular_tolerance):
+    """Tessellate 'payloads' (by digest) in one sandbox: '(glTF, empty, failed)', each by digest.
+
+    Raises if the sandbox could not be run or answered a failure. One shape that
+    would not tessellate is not that: it is in 'failed' with the reason.
+    """
+    runtime = ctx.get_python_runtime(version=sandbox_versions.DEFAULT_PYTHON_VERSION)
+    for dep in _DEPENDENCIES:
+        await runtime.ensure_async(dep)
+
+    # Each payload once, under the digest it is named by here, and nothing of
+    # the tree: the tree is put back together in the core (see 'convert_async').
+    # Serialized when the process starts, for the reason 'runtime.stdin_bytes'
+    # gives.
+    request = {
+        "shapes": [{"digest": digest, shape_envelope.KEY_BREP: payload} for digest, payload in payloads.items()],
+        "tolerance": tolerance,
+        "angularTolerance": angular_tolerance,
+    }
+    # argv[1] is mandatory for every wrapper (wrapper_common.handle_input reads
+    # it as the output path). This one writes no file - the glTF comes back over
+    # the pipe - so it carries the operation name, which is what shows up in
+    # process listings and logs.
+    exitcode, response_serialized, errors = await runtime.run_async(
+        [wrapper.get("gltf.py"), "gltf"],
+        lambda: shape_envelope.serialize(request),
+    )
+    if exitcode != 0 and not errors:
+        errors = "Failed to tessellate the shape tree (%s)" % describe_exit_code(exitcode)
+    if errors:
+        raise Exception(errors)
 
     result = shape_envelope.deserialize(response_serialized)
     if not result.get("success", False):
         raise Exception(result.get("exception") or "Failed to tessellate the shape tree")
-    for reason in result.get("errors") or []:
-        pc_logging.warning("Nothing to draw for %s" % reason)
+
+    def table(key):
+        value = result.get(key)
+        return value if isinstance(value, dict) else {}
+
+    geometry, empty, failed = {}, {}, {}
+    answered, found_empty, found_failed = table("geometry"), table("empty"), table("failed")
+    for digest in payloads:
+        payload = answered.get(digest)
+        if isinstance(payload, (str, bytes)) and payload:
+            geometry[digest] = payload
+        elif digest in found_empty:
+            empty[digest] = found_empty[digest]
+        else:
+            # Said to have failed, or not mentioned at all: either way nothing
+            # to draw this time, and nothing to remember.
+            failed[digest] = found_failed.get(digest) or "the tessellation did not answer for it"
 
     # A preview whose faces were not merged is one with a draw call per face rather
     # than per shape, which is the difference between an assembly that can be
@@ -291,21 +511,14 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None, cache
             "Tessellated without merging faces, so this preview has one draw call per face: %s"
             % (result.get("mergeFacesReason") or "the exporter did not support it")
         )
-    converted = result.get("tree")
-    if not shape_envelope.is_node(converted):
-        raise Exception("The tessellation produced no shape tree")
-    if not cached:
-        # Only an answer is remembered: everything that failed has raised by
-        # now. A tree with a node that would not tessellate is an answer - the
-        # same tree gives the same nodes nothing to draw next time too.
-        await cache_artifacts.store_response_async(cache, artifact, response_serialized)
 
     # Worth one line in the log: it is the number that decides both how long this
     # took and how big what it produced is, and it is not in the configuration
     # anywhere to be read off.
     pc_logging.debug(
-        "Tessellated %s: %s"
+        "Tessellated %d shape(s) of %s: %s"
         % (
+            len(payloads),
             tree.get("name") or "a shape tree",
             ", ".join(
                 "%s=%s" % (key, result[key])
@@ -314,4 +527,4 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None, cache
             ),
         )
     )
-    return converted
+    return geometry, empty, failed

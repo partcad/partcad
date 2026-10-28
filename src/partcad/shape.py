@@ -653,7 +653,7 @@ class Shape(ShapeConfiguration):
         this is in the ordinary case and it costs a cache lookup. glTF is that
         same tree tessellated, in one sandbox, for a caller that has to draw it
         rather than compute with it - a browser has no CAD kernel. That is
-        cached too, as what the tessellation answered (see 'shape_gltf'): it is
+        cached too, a shape at a time (see 'shape_gltf.convert_async'): it is
         what the IDE asks for every time an object is shown, and starting a
         sandbox to answer it is most of the wait.
 
@@ -661,7 +661,7 @@ class Shape(ShapeConfiguration):
         node, in the same form (see 'port_sketches'). They are not in what the
         shape cache holds, because what a node records about a port is the
         reference and not the geometry - which is why the tessellation is keyed
-        on the tree it is handed rather than on this shape's key.
+        on the geometry it is handed rather than on this shape's key.
 
         'section' is a cross-section to cut the geometry to first, as a box in
         the frame of the tree's root ('shape_section.normalize'), or None for the
