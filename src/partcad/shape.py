@@ -2887,15 +2887,23 @@ class Shape(ShapeConfiguration):
             )
 
         if isinstance(format_name, (list, tuple)):
-            # Each under the action it has when it is asked for alone, and each
-            # building - or finding built - the shape it is of.
+            # Each under the action it has when it is asked for alone, the first
+            # building - or finding built - the shape it is of, and every one
+            # handed that same tree: a batch sends a subject once only where its
+            # requests hold the same object ('_together_request'), and a shape
+            # the memory tier does not keep answers 'get_wrapped' with a new tree
+            # each time - N copies in one request, and no decoding shared. The
+            # members are worked out one at a time ('_OutputBatch.member').
             formats = list(format_name)
             batch = self._output_batch(ctx, len(formats))
+            fetched = []
 
             async def each(fmt):
                 with pc_logging.Action(_render_action(self.project_name, fmt), self.project_name, self.name):
                     async with batch.member() if batch is not None else contextlib.nullcontext():
-                        obj = await self.get_wrapped(ctx)
+                        if not fetched:
+                            fetched.append(await self.get_wrapped(ctx))
+                        obj = fetched[0]
                         if obj is None:
                             pc_logging.error(f"Cannot render '{self.name}': shape is empty")
                             return

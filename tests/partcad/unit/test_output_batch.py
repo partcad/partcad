@@ -446,6 +446,39 @@ def test_an_empty_shape_writes_none_of_the_file_types_asked_for(batch, monkeypat
     assert caplog.text.count("Cannot render 'bracket': shape is empty") == 2
 
 
+def test_the_file_types_of_one_render_are_handed_one_tree(batch, monkeypatch):
+    """A shape the memory tier does not keep answers each 'get_wrapped' with a tree of its own.
+
+    Asked for once per file type, a batch would carry one copy per file - the
+    subjects are told apart by identity - and no two files could share a
+    decoding: exactly the large objects batching is for.
+    """
+    make, sandbox, out = batch
+    ctx = make(THREE)
+    fetched = []
+
+    async def get_wrapped(self, _ctx):
+        fetched.append(self.name)
+        return {"name": self.name, "label": None}
+
+    documents = []
+    together_request = pc_shape._together_request
+
+    def spy(outputs):
+        documents.append(together_request(outputs))
+        return documents[-1]
+
+    monkeypatch.setattr(pc.shape.Shape, "get_wrapped", get_wrapped)
+    monkeypatch.setattr(pc_shape, "_together_request", spy)
+
+    results = asyncio.run(ctx.get_part("//:bracket").render_async(ctx, list(THREE_NAMES), output_dir=str(out)))
+
+    assert all(result["success"] for result in results.values())
+    assert fetched == ["bracket"]
+    assert sandbox.files_per_call() == [3]
+    assert [len(document[output.BATCH_SUBJECTS_KEY]) for document in documents] == [1]
+
+
 def test_a_sandbox_that_sends_files_back_is_told_every_file_a_call_writes(batch, monkeypatch):
     """What a command writes is not in its request, so a sandbox exchanging files has to be told all of them."""
     make, _sandbox, out = batch
