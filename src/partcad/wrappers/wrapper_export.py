@@ -133,11 +133,14 @@ document: under OUTPUTS_KEY the request each would have been handed on its own,
 less the object, which is under SUBJECTS_KEY once and named by every request
 that is of it (SUBJECT_KEY). Each file is written exactly as it would have been
 on its own - in its own working directory, with 'sys.argv' and 'sys.path' as it
-would have found them - and answered the moment it is done, on a line of its
-own that says which file the answer is for (OUTPUT_KEY, RESULT_KEY). A file
-left unanswered, because the process died or because something failed before
-its implementation was reached, the core writes again in a call of its own, so
-that it fails the way it always did and takes nothing else with it.
+would have found them - and answered the moment it is done, with an answer of
+its own that says which file it is for (OUTPUT_KEY, RESULT_KEY): a frame, as
+the core asks, or a line of JSON for a call asked in JSON (see
+'wrapper_common.handle_output'). A file left unanswered, because the process
+died or because something failed before its implementation was reached, the
+core writes again in a call of its own, so that it fails the way it always did
+and takes nothing else with it - and so is one whose answer was cut off part
+way, which is no answer at all.
 
 What it saves is what is not done again. The interpreter starts once and
 imports the CAD stack once, which for anything short of a large assembly is
@@ -247,16 +250,17 @@ WORLD_KEY = "world"
 # 'partcad.output.FILES_KEY'.
 FILES_KEY = "files"
 
-# The document a call writing several files is handed, and the lines it answers
-# with (see the module's docstring). The twins of these are the 'BATCH_*' keys of
+# The document a call writing several files is handed, and the answers it gives
+# (see the module's docstring). The twins of these are the 'BATCH_*' keys of
 # 'partcad.output', spelled out separately for the reason JOINT_KEY is.
 #
 # OUTPUTS_KEY: one entry per file, in the order of the arguments, each holding
 # the request under REQUEST_KEY and, when the request is of the object, which
 # of SUBJECTS_KEY that is under SUBJECT_KEY. The object is there once rather
 # than once per file because it is the one big thing in the document: every
-# payload in it is written once already (see 'ocp_serialize.KEY_BREPS'), and
-# the tree around them - names, placements, properties - is the rest.
+# payload in it is attached to the frame once already (see
+# 'shape_envelope.serialize'), and the tree around them - names, placements,
+# properties - is the rest.
 OUTPUTS_KEY = "outputs"
 SUBJECTS_KEY = "subjects"
 SUBJECT_KEY = "subject"

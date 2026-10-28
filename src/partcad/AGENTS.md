@@ -160,9 +160,10 @@ at all).
   rasterizes, the rest in the base), which imports the CAD stack once and runs each
   implementation as it would have run alone, in its own working directory and with `sys.argv`/`sys.path` as it
   would have found them. Nothing is lost in parallelism: a shape's files never ran at once (`Shape.locked()`), and a
-  call is one process slot and one task however many files it writes. Each file is answered on a line of its own as
-  soon as it is written, and one left unanswered -- the process died, or the wrapper failed before reaching it --
-  is written again by a call of its own, so it fails exactly as it does alone and takes nothing else with it. Nor
+  call is one process slot and one task however many files it writes. Each file is answered as soon as it is
+  written, by a frame of its own (a line of JSON in a call asked in JSON; `shape_envelope.deserialize_all` reads
+  either), and one left unanswered -- the process died, the wrapper failed before reaching it, or its frame was cut
+  off -- is written again by a call of its own, so it fails exactly as it does alone and takes nothing else with it. Nor
   does one that fails before it is handed in (a file type that does not resolve): the render raises once every
   other one has finished (`_together`), since whichever is handed in last writes them all, and raising first left
   them running for a caller that had gone; a cancelled render writes nothing nobody waits for (`_OutputBatch._run`).
@@ -1415,13 +1416,14 @@ at all).
   Three rules keep every path working. **A wrapper answers in the form it was asked in** (`wrapper_common`): a
   container and a JavaScript runtime are sent JSON (`shape_envelope.dumps`), exactly as before, and a wrapper that
   container runs answers in JSON. **Standard output stays bytes when it holds a whole frame**
-  (`process_output.answer`, at every launch point and in the container service's JSON dialect, `Runtime._rpc_result`)
-  and is text otherwise, so a command that only prints is read as it always was; a new launch point has to read its
-  output through it, and a new reader of an answer has to hand the whole of it to `shape_envelope.deserialize`
-  rather than splitting it into lines. **An answer is found, not assumed**: `framing.find_message` skips whatever a
-  wrapper wrote before it took its channel away, and a frame that did not arrive whole says so. A wrapper answer
-  kept in the artifact cache is kept as the line of JSON that says the same (`cache_artifacts.store_response_async`),
-  since an entry's result is JSON.
+  (`process_output.answer`, at every launch point and in both of the container service's dialects -- the JSON one,
+  `Runtime._rpc_result`, and frames, `RemotePythonRuntime._answer`, which the `remote` sandbox and the `docker` one in
+  `upload` mode both answer through; in `mount` mode it is a launch point like any other) and is text otherwise, so a
+  command that only prints is read as it always was; a new launch point has to read its output through it, and a new
+  reader of an answer has to hand the whole of it to `shape_envelope.deserialize` rather than splitting it into lines.
+  **An answer is found, not assumed**: `framing.find_message` skips whatever a wrapper wrote before it took its
+  channel away, and a frame that did not arrive whole says so. A wrapper answer kept in the artifact cache is kept as
+  the line of JSON that says the same (`cache_artifacts.store_response_async`), since an entry's result is JSON.
 
   **The connection layer is re-stamped rather than stored.** It rides in `get_cache_metadata()`, the layer
   `apply_metadata()` puts back around every payload as it is materialized, for the reason `properties:` does: a

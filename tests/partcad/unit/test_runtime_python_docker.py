@@ -993,6 +993,66 @@ def test_an_upload_command_runs_through_the_same_execute_as_the_remote_service(t
     assert seen["output_files"] == [str(tmp_path / "out.stl")]
 
 
+# What a Python wrapper is asked and answers with: a frame, its payload raw and
+# not UTF-8 (see 'shape_envelope.serialize').
+_FRAMED = {"success": True, "shape": {"name": "p", "label": "p", "brep": b"\x28\xb5\x2f\xfd\xff\x00"}}
+
+
+@pytest.mark.parametrize("asynchronous", [False, True], ids=["run", "run_async"])
+def test_a_wrappers_frame_crosses_a_mounted_sandbox_as_the_bytes_it_is(tmp_path, monkeypatch, asynchronous):
+    """Through 'docker exec', whose output is read back from files (see 'runtime.output_capture').
+
+    Kept as the bytes it is rather than decoded as text, which is what a
+    command that prints is (see 'process_output.answer').
+    """
+    import asyncio
+    import sys
+
+    from partcad import shape_envelope
+
+    made = _runtime(tmp_path)
+    made.provisioned = True
+    made.exec_path = sys.executable
+    # A wrapper that answers with what it was asked, behind a line of progress.
+    echo = "import sys\ndata = sys.stdin.buffer.read()\nsys.stdout.buffer.write(b'progress\\n' + data)\n"
+    monkeypatch.setattr(made, "_spawn", lambda cmd, cwd=None, env=None: ([sys.executable, "-c", echo], None, None))
+
+    if asynchronous:
+        exitcode, stdout, stderr = asyncio.run(
+            made.run_async(["-c", "pass"], lambda: shape_envelope.serialize(_FRAMED), session=None)
+        )
+    else:
+        exitcode, stdout, stderr = made.run(["-c", "pass"], shape_envelope.serialize(_FRAMED), session=None)
+
+    assert exitcode == 0, stderr
+    assert isinstance(stdout, bytes)
+    assert shape_envelope.deserialize(stdout) == _FRAMED
+
+
+def test_a_wrappers_frame_crosses_an_upload_sandbox_as_the_bytes_it_is(tmp_path, monkeypatch):
+    """Through the service's frame dialect, both ways: the request raw, and the answer handed back raw."""
+    from partcad import remote_sandbox, shape_envelope
+
+    sent = []
+
+    def execute(pool, environments, params, timeout=None, frames=False):
+        sent.append(bytes(params["stdin"]))
+        return {"exit_code": 0, "stdout": b"progress\n" + sent[-1], "stderr": b"", "output_files": {}}
+
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    monkeypatch.setattr(remote_sandbox, "execute", execute)
+    monkeypatch.setattr(remote_sandbox, "missing", lambda pool, image, digests, timeout=None: list(digests))
+    made = runtime_python_docker.DockerUploadPythonRuntime(_upload_ctx(tmp_path), "3.11", image="ghcr.io/x/solver:abc")
+    frame = shape_envelope.serialize(_FRAMED)
+
+    exitcode, stdout, stderr = made.run(["-c", "pass"], frame)
+
+    assert sent == [frame]
+    assert (exitcode, stderr) == (0, "")
+    assert isinstance(stdout, bytes)
+    assert shape_envelope.deserialize(stdout) == _FRAMED
+
+
 def test_upload_mode_holds_its_containers_in_a_pool_of_sandbox_role(monkeypatch):
     from partcad import remote_docker
 

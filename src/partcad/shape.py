@@ -368,19 +368,19 @@ def _together_request(outputs) -> dict:
 def _together_answers(stdout, count: int) -> dict:
     """What a call writing 'count' files said of each of them, by its place in the call.
 
-    One line per file it finished (see 'output.BATCH_OUTPUT_KEY'). A line that
-    is not one of those is not an answer; a file with none was not answered.
+    One answer per file it finished (see 'output.BATCH_OUTPUT_KEY'): a frame
+    each, as the Python sandbox is answered - 'stdout' is then the bytes they
+    are ('process_output.answer') - or a line of JSON each, for a call asked in
+    JSON (see 'shape_envelope.deserialize_all'). What is not one of those is not
+    an answer, and neither is a frame cut off part way; a file with none was not
+    answered.
     """
     answers = {}
-    for line in (stdout or "").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            answer = shape_envelope.loads(line)
-        except Exception:  # pylint: disable=broad-except
-            pc_logging.debug("Not an answer from the export wrapper: %s" % line[:200])
-            continue
+
+    def skipped(text):
+        pc_logging.debug("Not an answer from the export wrapper: %s" % text[:200])
+
+    for answer in shape_envelope.deserialize_all(stdout, skipped):
         if not isinstance(answer, dict):
             continue
         index = answer.get(output.BATCH_OUTPUT_KEY)

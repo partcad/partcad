@@ -333,13 +333,18 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
         if frames:
             from partcad_utils import container_files
 
+            from .process_output import answer as stdout_of
             from .process_output import decode as decode_output
 
             result = response["result"]
             container_files.write_back(result, output_files, output_dirs, who="The remote sandbox")
             # Empty as a string, as a process run here reports it (see
-            # '_rpc_result'), and decoded the way a process run here is.
-            stdout = decode_output(bytes(result.get("stdout") or b""))
+            # '_rpc_result'), and read the way a process run here is read: a
+            # Python wrapper's answer is a frame of raw bytes, which stays the
+            # bytes it is for 'shape_envelope.deserialize', and anything else is
+            # text (see 'process_output.answer'). Decoded as text, a frame lost
+            # every byte of its payloads that was not UTF-8.
+            stdout = stdout_of(bytes(result.get("stdout") or b""))
             stderr = decode_output(bytes(result.get("stderr") or b""))
             returncode = result.get("exit_code")
             returncode = int(bool(stderr)) if returncode is None else returncode

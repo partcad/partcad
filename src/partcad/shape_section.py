@@ -146,11 +146,12 @@ async def section_async(ctx, tree, section, cacheable: bool = True, keep_empty: 
             await runtime.ensure_async(dep)
         # argv[1] is required of every wrapper and unused by this one, which
         # answers over the pipe: it carries the operation name. The tree's
-        # repeated payloads travel once each, serialized when the process starts
-        # (see 'shape_gltf.convert_async').
+        # repeated payloads travel once each, attached to the frame raw (see
+        # 'shape_envelope.serialize'), serialized when the process starts (see
+        # 'shape_gltf.convert_async').
         exitcode, response_serialized, errors = await runtime.run_async(
             [wrapper.get("section.py"), "section"],
-            lambda: shape_envelope.serialize(request, share=True),
+            lambda: shape_envelope.serialize(request),
         )
         if exitcode != 0 and not errors:
             errors = "Failed to cut the shape tree (%s)" % describe_exit_code(exitcode)

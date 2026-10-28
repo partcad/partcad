@@ -702,8 +702,8 @@ class Assembly(Shape):
             # same reason, which wrote every payload once per node that carries
             # it and then escaped all of it again: a thousand instances of
             # twenty parts were 123 MB of request and a second of the daemon's
-            # time to write it. As itself, each payload the tree repeats is
-            # written once ('share', see 'shape_envelope.KEY_BREPS') - 3 MB.
+            # time to write it. As itself, in a frame, each payload the tree
+            # repeats is attached once, raw (see 'shape_envelope.serialize').
             # Serialized when the process starts, for the reason
             # 'runtime.stdin_bytes' gives. Not under "assembly": that is the
             # key that makes a dict an assembly envelope, request and all.
@@ -730,7 +730,7 @@ class Assembly(Shape):
             with tempfile.TemporaryDirectory(prefix="partcad-interference-") as unused_dir:
                 command = [wrapper.get("interference.py"), os.path.join(unused_dir, "unused.txt")]
                 exitcode, response_serialized, errors = await runtime.run_async(
-                    command, lambda: shape_envelope.serialize(request, share=True)
+                    command, lambda: shape_envelope.serialize(request)
                 )
             if exitcode != 0 and len(errors) == 0:
                 errors = command_failure(command, exitcode)

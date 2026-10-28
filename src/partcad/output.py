@@ -492,9 +492,10 @@ FILES_KEY = "files"
 # object, and what it answers each of them with (see 'Shape._run_together_locked'
 # and the wrapper's docstring): the requests under BATCH_OUTPUTS_KEY, each under
 # BATCH_REQUEST_KEY with its object taken out and named by its place in
-# BATCH_SUBJECTS_KEY (BATCH_SUBJECT_KEY), and one line per file written, saying
-# which (BATCH_OUTPUT_KEY) and how it went (BATCH_RESULT_KEY). The twins are the
-# keys of the same names, less the prefix, in 'wrapper_export'.
+# BATCH_SUBJECTS_KEY (BATCH_SUBJECT_KEY), and one answer per file written - a
+# frame, or a line of JSON when the call was asked in JSON - saying which
+# (BATCH_OUTPUT_KEY) and how it went (BATCH_RESULT_KEY). The twins are the keys
+# of the same names, less the prefix, in 'wrapper_export'.
 BATCH_OUTPUTS_KEY = "outputs"
 BATCH_SUBJECTS_KEY = "subjects"
 BATCH_SUBJECT_KEY = "subject"

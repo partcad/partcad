@@ -32,8 +32,9 @@ import types
 import pytest
 
 import partcad as pc
-from partcad import output, sandbox_versions
+from partcad import output, process_output, runtime, sandbox_versions
 from partcad import shape as pc_shape
+from partcad import shape_envelope
 from partcad.cache import Cache
 
 # Says which file type it is, where it ran, and with what in 'sys.path' and
@@ -114,16 +115,17 @@ class _Sandbox:
         self._ask(session, python_package)
 
     async def run_async(self, cmd, stdin="", session=None, **_kwargs):
-        data = stdin() if callable(stdin) else stdin
+        # Bytes, as a request to the Python sandbox is: a frame.
+        data = runtime.stdin_bytes(stdin)
         cmd = [part for part in cmd if part != "python"]
         self.calls.append(cmd)
         self.sessions.append(session)
-        finished = await asyncio.to_thread(
-            subprocess.run, [sys.executable, *cmd], input=data, capture_output=True, text=True
-        )
-        # What 'PythonRuntime' does with what a run printed: a warning when it
-        # succeeded, the error when it did not.
-        return finished.returncode, finished.stdout, finished.stderr if finished.returncode else ""
+        finished = await asyncio.to_thread(subprocess.run, [sys.executable, *cmd], input=data, capture_output=True)
+        # What 'PythonRuntime' does with what a run printed: its answers kept as
+        # the bytes of their frames (see 'process_output.answer'), and standard
+        # error a warning when it succeeded, the error when it did not.
+        stderr = process_output.decode(finished.stderr)
+        return finished.returncode, process_output.answer(finished.stdout), stderr if finished.returncode else ""
 
     def files_per_call(self):
         return [(len(call) - 1) // 3 for call in self.calls]
@@ -611,7 +613,10 @@ def test_a_file_the_call_says_nothing_of_is_written_again_though_the_call_ended_
         async def run_async(self, cmd, stdin="", session=None, **kwargs):
             code, said, errors = await super().run_async(cmd, stdin, session=session, **kwargs)
             if len(cmd) > 4:
-                said = "\n".join(line for line in said.splitlines() if json.loads(line)["output"] != 1)
+                # A frame each (see 'shape_envelope.serialize'): all of them
+                # written again, but the one for the second file.
+                answers = shape_envelope.deserialize_all(said)
+                said = b"".join(shape_envelope.serialize(answer) for answer in answers if answer["output"] != 1)
             return code, said, errors
 
     forgetful = Forgetful()
@@ -778,6 +783,41 @@ def test_only_the_lines_that_answer_for_a_file_of_the_call_are_answers():
         ]
     )
     assert pc_shape._together_answers(said, 3) == {0: {"success": True}, 2: {"success": False}}
+
+
+def _frames(*answers):
+    """Answers as the Python sandbox writes them: a frame each (see 'shape_envelope.serialize')."""
+    return b"".join(shape_envelope.serialize(answer) for answer in answers)
+
+
+def test_only_the_frames_that_answer_for_a_file_of_the_call_are_answers():
+    """As the lines are, in the form a call asked in a frame answers in - with its payloads the bytes they are."""
+    said = b"".join(
+        [
+            b"Warning: something a library printed\n",
+            _frames([0, {"success": True}], {"output": 0, "result": {"success": True, "blob": b"\x00\xff"}}),
+            b"\n",
+            _frames(
+                {"output": 3, "result": {"success": True}},
+                {"output": True, "result": {"success": True}},
+                {"output": 1, "result": "written"},
+                {"output": 2, "result": {"success": False}},
+            ),
+        ]
+    )
+    assert pc_shape._together_answers(process_output.answer(said), 3) == {
+        0: {"success": True, "blob": b"\x00\xff"},
+        2: {"success": False},
+    }
+
+
+def test_a_frame_cut_off_is_no_answer_for_its_file():
+    """The process died while writing it: the file is written again on its own, and those before it are answered."""
+    whole = _frames({"output": 0, "result": {"success": True}})
+    cut = _frames({"output": 1, "result": {"success": True, "blob": b"\x00" * 1000}})[:-10]
+    assert pc_shape._together_answers(process_output.answer(whole + cut), 2) == {0: {"success": True}}
+    # And a first frame cut off leaves no frame at all, which is text, and no answer.
+    assert pc_shape._together_answers(process_output.answer(cut), 2) == {}
 
 
 # --------------------------------------------------------------------------- #

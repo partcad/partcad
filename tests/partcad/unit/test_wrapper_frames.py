@@ -478,6 +478,7 @@ def wrapper_common(monkeypatch, tmp_path):
     for name, value in (
         ("_request_name", None),
         ("_request_label", None),
+        ("_request_finish", None),
         ("_answer_framed", False),
         ("_response_fd", None),
     ):

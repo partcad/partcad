@@ -37,7 +37,6 @@
 # caller to report: a section that misses a part is worth less than one that
 # draws it uncut, and the log says which one it is.
 
-import base64
 import os
 import sys
 
@@ -182,9 +181,15 @@ def _cut(shape, placement, slabs):
     return result
 
 
-def _payload(shape) -> str:
-    """'shape' as a node's "brep" travels over the pipe: compressed, then base64."""
-    return base64.b64encode(ocp_serialize.compressed_brep(shape)).decode("ascii")
+def _payload(shape) -> bytes:
+    """'shape' as a node's "brep" is carried: the compressed payload, as bytes.
+
+    Whoever writes the answer decides how they cross (see
+    'ocp_serialize.encode'): raw behind a frame, which is what the core asks
+    in, and base64 only in JSON. Base64 here was base64 inside the frame - a
+    third more of every node that was cut, and a decode at the far end.
+    """
+    return ocp_serialize.compressed_brep(shape)
 
 
 def section_tree(tree, section, errors, keep_empty=True):

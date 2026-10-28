@@ -65,6 +65,8 @@ def wrapper_export(tmp_path, monkeypatch):
     monkeypatch.setattr(common, "_response_fd", None)
     monkeypatch.setattr(common, "_request_name", None)
     monkeypatch.setattr(common, "_request_label", None)
+    monkeypatch.setattr(common, "_request_finish", None)
+    monkeypatch.setattr(common, "_answer_framed", False)
     monkeypatch.setattr(common, "protect_response_channel", lambda: None)
     module.frozen = frozen
     try:
@@ -78,29 +80,31 @@ def wrapper_export(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def wrapper_call(wrapper_export, monkeypatch, capsys):
+def wrapper_call(wrapper_export, monkeypatch, capsysbinary):
     """Run the wrapper's '__main__' for these files and this document, and read back what it answered.
 
-    Several files are answered a line each, by place ('wrapper_export.OUTPUT_KEY');
-    one is answered as one always was, with its result alone.
+    Handed the document as the core hands it, a frame ('shape_envelope.serialize'),
+    and read back as the core reads it: several files are answered a frame each,
+    by place ('wrapper_export.OUTPUT_KEY', 'Shape._together_answers'); one is
+    answered as one always was, with its result alone.
     """
+    from partcad import process_output
+    from partcad import shape as pc_shape
+    from partcad import shape_envelope
 
     def call(outputs, document):
         argv = [WRAPPER]
         for path, directory, script in outputs:
             argv += [path, directory, script]
         monkeypatch.setattr(sys, "argv", argv)
-        monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(document)))
-        capsys.readouterr()
+        monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(shape_envelope.serialize(document))))
+        capsysbinary.readouterr()
         runpy.run_path(WRAPPER, run_name="__main__")
-        said = capsys.readouterr().out
+        said = process_output.answer(capsysbinary.readouterr().out)
+        assert isinstance(said, bytes), "answered in the frame it was asked in: %r" % said[:200]
         if len(outputs) == 1:
-            return json.loads(said)
-        answers = {}
-        for line in said.splitlines():
-            answer = json.loads(line)
-            answers[answer[wrapper_export.OUTPUT_KEY]] = answer[wrapper_export.RESULT_KEY]
-        return answers
+            return shape_envelope.deserialize(said)
+        return pc_shape._together_answers(said, len(outputs))
 
     return call
 
@@ -181,6 +185,29 @@ def test_a_failed_file_is_answered_and_the_others_are_still_written(wrapper_call
         1: {"success": True, "exception": None, "files": []},
     }
     assert (tmp_path / "b.txt").read_text() == "b of None in package, leaked False"
+
+
+def test_a_call_asked_in_json_answers_a_line_per_file(wrapper_export, monkeypatch, capsysbinary, tmp_path):
+    """In the form it was asked in (see 'wrapper_common.handle_output'): JSON, a line each, which the core reads too."""
+    from partcad import process_output
+    from partcad import shape as pc_shape
+
+    script = _script(tmp_path / "package", "write.py", WRITE)
+    outputs = [(str(tmp_path / name), str(tmp_path / "package"), script) for name in ("a.txt", "b.txt")]
+    document = {"outputs": [{"request": {"say": "a"}}, {"request": {"say": "b"}}], "subjects": []}
+    monkeypatch.setattr(sys, "argv", [WRAPPER] + [part for output_ in outputs for part in output_])
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(json.dumps(document).encode("utf-8"))))
+    capsysbinary.readouterr()
+
+    runpy.run_path(WRAPPER, run_name="__main__")
+
+    said = process_output.answer(capsysbinary.readouterr().out)
+    assert isinstance(said, str)
+    assert [json.loads(line)[wrapper_export.OUTPUT_KEY] for line in said.splitlines()] == [0, 1]
+    assert pc_shape._together_answers(said, 2) == {
+        0: {"success": True, "exception": None, "files": []},
+        1: {"success": True, "exception": None, "files": []},
+    }
 
 
 def test_the_collector_is_frozen_once_however_many_decodings_are_let_go(wrapper_export, wrapper_call, tmp_path):
@@ -322,7 +349,7 @@ def test_each_request_is_handed_the_object_it_names_and_only_that(wrapper_export
 
 
 def _envelope(wrapper_export, shape, name):
-    return {"name": name, "label": None, "brep": wrapper_export.ocp_serialize._brep_b64(shape)}
+    return {"name": name, "label": None, "brep": wrapper_export.ocp_serialize.compressed_brep(shape)}
 
 
 @pytest.fixture

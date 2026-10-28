@@ -1021,6 +1021,44 @@ def deserialize(data) -> dict:
         raise
 
 
+def deserialize_all(data, skipped=None) -> list:
+    """Every answer a wrapper that answers more than once wrote, in order (see 'wrapper_export.run_together').
+
+    It answers in the form it was asked in ('wrapper_common.handle_output'):
+    a frame each, found wherever it starts, or a line of JSON each. Whatever
+    else is in 'data' is passed over - what printed in between, a line that is
+    not an answer, and a frame that did not arrive whole, which is no answer
+    at all - and each line of text that is not blank and not an answer is
+    handed to 'skipped', when given, for whoever is debugging. 'data' is as
+    'process_output.answer' hands it over: the bytes of the frames, or text.
+    """
+    answers = []
+    if isinstance(data, (bytes, bytearray)):
+        start = framing.find_message(data)
+        if start is not None:
+            while start is not None:
+                end = start + 1
+                try:
+                    document, end = framing.message_at(data, start)
+                    answers.append(decode(document, table_of(document)))
+                except Exception:  # pylint: disable=broad-except
+                    if skipped is not None:
+                        skipped("a frame at byte %d that is not an answer" % start)
+                start = framing.find_message(data, end)
+            return answers
+        data = data.decode("utf-8", errors="replace")
+    for line in (data or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            answers.append(loads(line))
+        except Exception:  # pylint: disable=broad-except
+            if skipped is not None:
+                skipped(line)
+    return answers
+
+
 # How a frame begins: what tells one from JSON, and, as text, what says an
 # answer that is not JSON was one.
 _FRAME_TEXT = "Content-Length: "
