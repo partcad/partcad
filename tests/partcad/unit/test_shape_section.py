@@ -14,6 +14,7 @@ about its size - and that skips the boolean wherever the box does not cross a
 node at all.
 """
 
+import asyncio
 import os
 import sys
 
@@ -23,7 +24,7 @@ from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
 from OCP.GProp import GProp_GProps
 
 import partcad as pc
-from partcad import shape_envelope, shape_section
+from partcad import runtime, shape_envelope, shape_gltf, shape_section
 from partcad.geom import Location
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
@@ -184,6 +185,22 @@ class TestSectionTree:
         assert result[ocp_serialize.KEY_BREP] == "not a payload"
         assert len(errors) == 1 and errors[0].startswith("broken: ")
 
+    def test_a_node_with_nothing_in_it_is_left_as_it_is(self):
+        empty = node(ocp_serialize.compound_of([]), label="empty")
+        result = cut(node(None, children=[empty]), {"x": [0.0, 5.0]})
+        assert result[ocp_serialize.KEY_ASSEMBLY][0][ocp_serialize.KEY_BREP] == empty[ocp_serialize.KEY_BREP]
+
+    def test_what_is_not_a_node_among_the_children_is_passed_through(self):
+        result = cut(node(None, children=[node(box()), "not a node"]), {"x": [0.0, 5.0]})
+        assert result[ocp_serialize.KEY_ASSEMBLY][1] == "not a node"
+
+    def test_the_wrapper_answers_with_the_cut_tree_and_what_would_not_cut(self):
+        answer = wrapper_section.process({"tree": node(box()), "section": {"x": [0.0, 5.0]}})
+        assert answer["success"] is True and answer["errors"] == []
+        assert volume(answer["tree"]) == pytest.approx(500.0)
+        with pytest.raises(Exception, match="No shape tree to cut"):
+            wrapper_section.process({"section": {"x": [0.0, 5.0]}})
+
 
 class TestGltf:
     def test_the_gltf_wrapper_cuts_before_it_tessellates(self):
@@ -202,3 +219,107 @@ class TestGltf:
         assert ocp_serialize.KEY_GLTF_REF in near
         assert ocp_serialize.KEY_GLTF_REF not in gone
         assert near[ocp_serialize.KEY_GLTF_REF] not in whole["tree"][ocp_serialize.KEY_GEOMETRY]
+
+
+class InProcessSandbox:
+    """A Python runtime that runs the wrapper it is asked for here, in this process.
+
+    On the request as it would travel - serialized, payload table and all, and
+    read back as the wrapper reads it - and answering as the wrapper answers, so
+    what is under test is everything on the core's side of the pipe.
+    'answer', when given, is what the sandbox says instead: an exit code, what
+    it wrote and what it complained of.
+    """
+
+    WRAPPERS = {"wrapper_section.py": wrapper_section, "wrapper_gltf.py": wrapper_gltf}
+
+    def __init__(self, answer=None):
+        self.answer = answer
+        self.ensured = []
+        self.requests = []
+
+    async def ensure_async(self, requirement):
+        self.ensured.append(requirement)
+
+    async def run_async(self, argv, stdin):
+        name = os.path.basename(argv[0])
+        request = ocp_serialize.deserialize_raw(runtime.stdin_bytes(stdin).decode("utf-8"))
+        self.requests.append((name, request))
+        if self.answer is not None:
+            return self.answer
+        return 0, ocp_serialize.serialize(self.WRAPPERS[name].process(request), share=True), ""
+
+
+class SandboxContext:
+    """The little of a context the core asks for to cut a tree: a runtime, and no cache."""
+
+    cache_artifacts = None
+
+    def __init__(self, sandbox):
+        self.sandbox = sandbox
+
+    def get_python_runtime(self, version=None):
+        return self.sandbox
+
+
+class TestSectionAsync:
+    def test_the_tree_is_cut_in_the_sandbox_and_handed_back_in_the_cores_form(self):
+        sandbox = InProcessSandbox()
+        tree = node(None, children=[node(box(), label="cube")], name="pkg:assy")
+        result = asyncio.run(shape_section.section_async(SandboxContext(sandbox), tree, {"x": [0, 5]}))
+        assert sandbox.ensured == list(shape_section._DEPENDENCIES)
+        [(wrapper_name, request)] = sandbox.requests
+        assert wrapper_name == "wrapper_section.py"
+        assert request["section"] == {"x": [0.0, 5.0]}
+        assert result["name"] == "pkg:assy"
+        assert volume(result[ocp_serialize.KEY_ASSEMBLY][0]) == pytest.approx(500.0)
+
+    def test_nothing_to_cut_starts_no_sandbox(self):
+        sandbox = InProcessSandbox()
+        tree = node(box())
+        assert asyncio.run(shape_section.section_async(SandboxContext(sandbox), tree, None)) is tree
+        assert asyncio.run(shape_section.section_async(SandboxContext(sandbox), None, {"x": [0, 5]})) is None
+        assert sandbox.requests == []
+
+    def test_a_context_and_a_tree_are_required(self):
+        with pytest.raises(ValueError, match="context is required"):
+            asyncio.run(shape_section.section_async(None, node(box()), {"x": [0, 5]}))
+        with pytest.raises(ValueError, match="Not a shape tree"):
+            asyncio.run(shape_section.section_async(SandboxContext(InProcessSandbox()), {"a": 1}, {"x": [0, 5]}))
+
+    @pytest.mark.parametrize(
+        "answer, message",
+        [
+            ((1, "", ""), "Failed to cut the shape tree"),
+            ((0, "", "Traceback: it broke"), "it broke"),
+            ((0, ocp_serialize.serialize({"success": False, "exception": "no kernel"}), ""), "no kernel"),
+            ((0, ocp_serialize.serialize({"success": True, "tree": None}), ""), "produced no shape tree"),
+        ],
+    )
+    def test_a_sandbox_that_did_not_cut_is_a_failure(self, answer, message):
+        with pytest.raises(Exception, match=message):
+            asyncio.run(
+                shape_section.section_async(SandboxContext(InProcessSandbox(answer)), node(box()), {"x": [0, 5]})
+            )
+
+    def test_a_node_that_would_not_cut_is_warned_about_and_shown_whole(self, monkeypatch):
+        warnings = []
+        monkeypatch.setattr(shape_section.pc_logging, "warning", warnings.append)
+        tree = node(None, children=[{"label": "broken", ocp_serialize.KEY_BREP: b"not a payload"}])
+        result = asyncio.run(shape_section.section_async(SandboxContext(InProcessSandbox()), tree, {"x": [0, 5]}))
+        assert result[ocp_serialize.KEY_ASSEMBLY][0]["label"] == "broken"
+        assert len(warnings) == 1 and "x 0..5" in warnings[0] and "broken: " in warnings[0]
+
+    def test_a_tree_asked_for_in_either_form_is_cut_first(self):
+        sandbox = InProcessSandbox()
+        context = SandboxContext(sandbox)
+        tree = node(box(), label="cube")
+        brep = asyncio.run(shape_gltf.in_form_async(context, tree, shape_envelope.FORM_BREP, section={"z": [0, 5]}))
+        assert volume(brep) == pytest.approx(500.0)
+        assert asyncio.run(shape_gltf.in_form_async(context, tree, shape_envelope.FORM_BREP)) is tree
+
+        gltf = asyncio.run(shape_gltf.in_form_async(context, tree, shape_envelope.FORM_GLTF, section={"z": [0, 5]}))
+        # One sandbox cuts and tessellates: the section goes with the tree.
+        assert [name for name, _ in sandbox.requests] == ["wrapper_section.py", "wrapper_gltf.py"]
+        assert sandbox.requests[-1][1]["section"] == {"z": [0.0, 5.0]}
+        assert ocp_serialize.KEY_GLTF_REF in gltf
