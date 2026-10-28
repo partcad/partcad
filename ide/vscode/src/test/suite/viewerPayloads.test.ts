@@ -43,11 +43,19 @@ suite('The files a tab is filled with', () => {
         assert.ok(!('content' in data.analyses[2]));
     });
 
-    test("a run's pictures are bytes", () => {
+    test("a run's pictures and its video are bytes", () => {
         const data = filesAsBytes('simulation', {
-            simulations: [{ images: { before: { extension: 'png', content: PNG_BASE64 } } }, { images: undefined }],
-        }) as { simulations: { images: Record<string, { content: unknown }> }[] };
+            simulations: [
+                {
+                    images: { before: { extension: 'png', content: PNG_BASE64 } },
+                    recording: { extension: 'webm', content: PNG_BASE64 },
+                },
+                { images: undefined },
+            ],
+        }) as { simulations: { images: Record<string, { content: unknown }>; recording?: { content: unknown } }[] };
         assert.ok(isBytes(data.simulations[0].images.before.content, PNG));
+        assert.ok(isBytes(data.simulations[0].recording?.content, PNG));
+        assert.ok(!('recording' in data.simulations[1]));
     });
 
     test("a document's pictures are bytes where they came as bytes, and data URIs are left alone", () => {

@@ -255,15 +255,17 @@ def test_the_search_index_is_built_once_and_not_before_it_is_asked_for():
     # a package that nobody has searched yet looks like.
     project.interface_indexes.clear()
 
-    # What 'pc list parts' reads, and all it reads.
-    assert [part.name for part in project.parts.values()] == [
-        "plate",
-        "screw",
-        "named-plate",
-        "raised-plate",
-        "scaled-plate",
-        "relabelled-plate",
+    # What 'pc list parts' reads, and all it reads. Sorted: the dictionary is in
+    # the order the parts were created, and a test before this one in the same
+    # process may have looked one of them up by name -- which creates it first.
+    assert sorted(part.name for part in project.parts.values()) == [
         "broken-plate",
+        "named-plate",
+        "plate",
+        "raised-plate",
+        "relabelled-plate",
+        "scaled-plate",
+        "screw",
     ]
     assert project.interface_indexes == {}
 

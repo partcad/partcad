@@ -1887,15 +1887,22 @@ def simulate_run(session, params):
                     ", ".join("%s %s" % (moment, path) for moment, path in result.snapshots.items()),
                 )
             )
+        if result.video:
+            pc.logging.info("%s: %s: video: %s" % (result.object_name, result.name, result.video))
     failed = [result for result in results if result.failed]
 
     simulations = [result.to_dict() for result in results]
     if params.get("inline"):
-        # The pictures as bytes as well as paths, which is what the IDE's
-        # Simulation tab needs: a webview has no file system in reach, and the
-        # daemon that wrote them may not be on the machine showing them.
+        # The pictures and the video as bytes as well as paths, which is what
+        # the IDE's Simulation tab needs -- a webview has no file system in
+        # reach, and the daemon that wrote them may not be on the machine
+        # showing them -- and what 'pc sim --video' saves.
         for entry, result in zip(simulations, results):
             entry["images"] = _inline_snapshots(pc, entry.get("snapshots") or {})
+            if entry.get("video"):
+                recording = _inline_file(pc, entry["video"], "video")
+                if recording is not None:
+                    entry["recording"] = recording
             # And where they were taken from, for the viewpoint beside them.
             snapshot = getattr(result, "snapshot", None) or {}
             entry["viewport"] = (
@@ -1915,26 +1922,33 @@ def simulate_run(session, params):
 
 
 def _inline_snapshots(pc, snapshots: dict) -> dict:
-    """Each snapshot of a run, as the file's name, extension and bytes.
+    """Each snapshot of a run, as the file's name, extension and bytes (see '_inline_file')."""
+    images = {}
+    for moment, path in snapshots.items():
+        image = _inline_file(pc, path, "'%s' snapshot" % moment)
+        if image is not None:
+            images[moment] = image
+    return images
+
+
+def _inline_file(pc, path: str, what: str):
+    """A file a run wrote, as its name, extension and bytes; None, and a warning, if it cannot be read.
 
     The bytes go as an attachment to a client that reads them, and as base64 to
     any other (see 'partcad_utils.framing'), which is what this always sent.
     """
-    images = {}
-    for moment, path in snapshots.items():
-        try:
-            with open(path, "rb") as f:
-                content = f.read()
-        except OSError as e:
-            # The verdict stands without it; only the picture is missing.
-            pc.logging.warning("Failed to read the '%s' snapshot back: %s" % (moment, e))
-            continue
-        images[moment] = {
-            "filename": os.path.basename(path),
-            "extension": os.path.splitext(path)[1].lstrip(".").lower(),
-            "content": content,
-        }
-    return images
+    try:
+        with open(path, "rb") as f:
+            content = f.read()
+    except OSError as e:
+        # The verdict stands without it; only the file is missing.
+        pc.logging.warning("Failed to read the %s back: %s" % (what, e))
+        return None
+    return {
+        "filename": os.path.basename(path),
+        "extension": os.path.splitext(path)[1].lstrip(".").lower(),
+        "content": content,
+    }
 
 
 def simulate_list(session, params):

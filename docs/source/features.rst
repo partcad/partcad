@@ -102,10 +102,13 @@ is always the first (see :doc:`digital_thread/index` for what each group is for)
     to no package has nothing to ask PartCAD about, and the tab says so.
   - **Simulation** — for a part, an assembly or a scene that declares a ``simulate:`` section (see :doc:`simulation`):
     the simulations it declares, listed on the left with the first one selected. Selecting one runs it, as
-    ``pc sim -f <name>`` does, and shows whether its ``validation:`` held, and two pictures of the scene the
-    simulation plugin took -- before anything moved on the left, and when the run was over on the right --
-    from where the scene is looked at when it is rendered. A plugin that takes no pictures has not failed:
-    a line says so where they would be.
+    ``pc sim -f <name>`` does, and shows whether its ``validation:`` held, and plays the video of the run the
+    simulation plugin recorded (see :ref:`sim-video`), in a player with the usual controls -- play and pause,
+    replay, a step back and forward, a position to drag, the speed, and full screen. Until it is played, the
+    player shows two pictures of the scene the plugin took -- before anything moved on the left, and when the
+    run was over on the right, an arrow between them -- and a run with no video shows those two side by side.
+    All of it is from where the scene is looked at when it is rendered. A plugin that takes no pictures has
+    not failed: a line says so where they would be.
 
     Whether each run held is a green or red mark before its name in the list. Above the pictures, as on the
     Draft tab, **Simulated by** names the plugin that runs it -- filled in with the one it names, offering the

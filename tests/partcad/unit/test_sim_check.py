@@ -751,7 +751,7 @@ def test_pc_sim_still_reports_for_itself(package, monkeypatch, caplog):
     assert _errors(caplog)
     # And nothing of the check's in what '--json' prints: the exception, the
     # resolved plugin, the problem and the artifact key stay off it. The
-    # pictures are on it, because they are what the run produced.
+    # pictures and the video are on it, because they are what the run produced.
     assert set(result.to_dict()) == {
         "object",
         "simulation",
@@ -762,6 +762,7 @@ def test_pc_sim_still_reports_for_itself(package, monkeypatch, caplog):
         "error",
         "result",
         "snapshots",
+        "video",
     }
 
 

@@ -586,7 +586,7 @@ simulation and emptied by the next run, holding the scene file the engine was
 handed, its meshes, whatever the plugin wrote and the pictures it took (see
 :ref:`sim-snapshots`). See ``pc sim`` in :doc:`cli` for every option.
 
-Two of those options are about what is asked and what is kept:
+Three of those options are about what is asked and what is kept:
 
 .. code-block:: shell
 
@@ -594,14 +594,18 @@ Two of those options are about what is asked and what is kept:
   pc sim stable --plugin //pub/feature/simulate/gazebo:gazebo
   # The state the run started from and ended in, as files
   pc sim -f sinks block --before before.yaml --after after.json
+  # And the video of the run
+  pc sim -f sinks block --video sinks.webm
 
 ``--plugin`` runs a simulation with another plugin than the one it names;
 everything else the declaration says -- the scene, the offset, the parameters,
 the validation -- is asked of that plugin instead, and the answer is cached as
 the different question it is. ``--before`` and ``--after`` write the two states
 a validation is evaluated over, as YAML, or as JSON with ``--json`` or a path
-ending in ``.json``. They write one simulation's, so name the object and, when
-it declares several, the simulation with ``-f``.
+ending in ``.json``. ``--video`` writes the video the plugin recorded of the run
+(see :ref:`sim-video`). They write one simulation's, so name the object and,
+when it declares several, the simulation with ``-f``, and they write it on the
+machine the command runs on, whichever machine ran the simulation.
 
 .. _sim-test:
 
@@ -747,10 +751,11 @@ Pictures of a run
 
 Every run is also asked for two pictures of the scene: one before anything
 moved and one when the run is over. They are what the IDE's **Validation →
-Simulation** tab shows side by side, and the one thing a reader can check a
-verdict against without reading numbers -- a validation that passed for the
-wrong reason, a block that fell *through* another rather than off it, is plain
-to see in them.
+Simulation** tab shows, with an arrow between them -- as the still of the video
+of the run (see :ref:`sim-video`), or side by side where there is none -- and
+the one thing a reader can check a verdict against without reading numbers -- a
+validation that passed for the wrong reason, a block that fell *through* another
+rather than off it, is plain to see in them.
 
 They are taken from where the scene is looked at when it is rendered: the
 ``viewport_origin`` and ``viewport_up`` of its ``render: png:`` configuration,
@@ -793,6 +798,54 @@ depends on a picture. ``pc sim`` says where the pictures of each run were
 written, and ``--json`` lists them under ``snapshots``. Both plugins draw them
 from their engine's own geometry at the engine's own poses, on the CPU, so a
 picture needs no GPU in the sandbox.
+
+.. _sim-video:
+
+A video of a run
+================
+
+Every run is asked for a video of the whole of it as well: from the same
+viewpoint as the pictures, 25 frames for every second of *simulated* time, from
+the start of the run to its end -- so that it plays the run in real time, 251
+frames for ten seconds. It is what the IDE's **Validation → Simulation** tab
+plays, in a player with the usual controls -- play and pause, replay, a
+position to drag, the speed, full screen -- with the before and after pictures,
+and an arrow between them, as the still it shows until it is played. A run
+whose plugin recorded none is shown as two pictures side by side.
+
+Its size is this machine's to say rather than the package's, since it is about
+the screen it is watched on and the time a run may spend drawing it:
+``simulation.videoResolution`` in ``~/.partcad/config.yaml``, or
+``PC_SIMULATION_VIDEO_RESOLUTION``. HD -- 1280 by 720 -- unless it says
+otherwise:
+
+.. code-block:: yaml
+
+   simulation:
+     videoResolution: 1080p   # or hd, 720p, 480p, fhd, qhd, 1440p, 4k, uhd, 2160p;
+                              # a height alone, sixteen by nine; 1600x900; or none
+
+``none`` records no video at all, which is the setting for a machine that only
+runs ``pc test`` and has no use for one: drawing the frames is most of what a
+short run of a small scene costs.
+
+The plugin is handed this in the request as ``video`` -- the format (WebM, with
+VP9 in it: the one pairing every browser plays, including the webview the IDE
+draws in, which plays no H.264), the name of the file, the frame rate, the size
+and the viewpoint -- and says whether it recorded it in its result:
+
+.. code-block:: python
+
+   output = {..., "video": "video.webm"}
+
+Like the pictures it is optional, and part of the question the run is cached
+under: a video wanted at another size is another run. ``pc sim`` says where it
+was written, ``--json`` names it under ``video``, and ``--video <path>`` saves a
+copy where you say. Both plugins draw its frames the way they draw the
+pictures, from the poses their engine reported at each frame's instant, and
+encode them with the FFmpeg the ``imageio-ffmpeg`` wheel carries. They draw it
+last, inside what is left of the run's budget, and give it up with a warning
+rather than let it cost the run its answer.
 
 .. _sim-caching:
 
@@ -1039,7 +1092,8 @@ A simulation plugin is declared the way an export implementation is -- a script,
 the sandbox it needs, and its parameters -- and the contract is narrow: a scene
 with the object in it goes in, as a file in the format the plugin names, and
 JSON carrying ``before`` and ``after`` comes out -- and, if it can draw them,
-the two pictures of :ref:`sim-snapshots`. See :ref:`simulate`.
+the two pictures of :ref:`sim-snapshots` and the video of :ref:`sim-video`. See
+:ref:`simulate`.
 
 The exporter that writes that file is handed the scene's tree (``decode:
 false``), and whatever it writes, which nodes are one body and how the joints

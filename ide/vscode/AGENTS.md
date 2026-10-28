@@ -336,11 +336,14 @@ between them. Three things about Simulation are load-bearing:
   by", `pc sim --plugin`), because answers are kept by the pane per simulation *and* plugin for as long as the
   object is on screen, so going back to one does not start a simulator again; **Simulate** is how one is
   asked for afresh.
-- **The pictures are the plugin's, not this extension's.** PartCAD asks every run for a picture of the scene
-  before and after, from the scene's own `render: png:` viewpoint, and the plugin draws them; `simulate.run`
-  sends them back as bytes (`inline`), because the daemon may be on another machine. Before is always on the
-  left and after on the right, and a picture the plugin did not take is said to be missing in its place, so
-  the two never swap sides. See "The pictures of a run" in `src/partcad/simulation.py`.
+- **The pictures and the video are the plugin's, not this extension's.** PartCAD asks every run for a picture
+  of the scene before and after, from the scene's own `render: png:` viewpoint, and for a video of the whole run
+  from there; the plugin draws them; `simulate.run` sends them back as bytes (`inline`: `images`, `recording`),
+  because the daemon may be on another machine. Before is always on the left and after on the right, and a
+  picture the plugin did not take is said to be missing in its place, so the two never swap sides. A run with
+  a video is played in `videoPlayer.ts` (Video.js 10, fed through Media Source Extensions, full screen through
+  Zen Mode), with the two pictures and the arrow as its still; see "Simulation" in `docs/partcad-viewer.md`
+  for why it is built the way it is. See "The pictures of a run" in `src/partcad/simulation.py`.
 
 Four things about it are load-bearing:
 
@@ -358,15 +361,18 @@ Four things about it are load-bearing:
   back to the `EADDRINUSE` branch, which is what it always did.
 - **The panel's CSP forbids network access.** Geometry arrives over `postMessage` and is parsed from memory;
   three.js is bundled rather than loaded from a CDN. Do not add an asset that is fetched at runtime — that is
-  what rules out drei's `environment` presets, and why the renderer uses `RoomEnvironment`.
+  what rules out drei's `environment` presets, and why the renderer uses `RoomEnvironment`. It also admits
+  only the one script its nonce names, so the viewer bundle is held to a single chunk
+  (`LimitChunkCountPlugin`): a dependency's dynamic import split off into a file of its own would never load.
 - **A file a tab shows is posted as a `Uint8Array` and shown through a Blob URL.** `src/viewer/payloads.ts`
-  makes every file in a tab's answer bytes before it is posted -- a render, a model, a run's pictures, the Build
-  vs Buy thumbnails, a document's pictures (asked for with `image_bytes`) -- whether the daemon sent them as
-  attachments or as base64, so the panel has one way to show each and no `atob` loop. `postMessage` hands a
-  typed array over as it is. The CSP allows `blob:` for images, and a Blob URL holds its bytes until it is
-  revoked, in a panel kept alive while hidden: so `src/webview/blobs.ts`'s `ObjectUrls` is owned by the view
+  makes every file in a tab's answer bytes before it is posted -- a render, a model, a run's pictures and its
+  video, the Build vs Buy thumbnails, a document's pictures (asked for with `image_bytes`) -- whether the daemon
+  sent them as attachments or as base64, so the panel has one way to show each and no `atob` loop. `postMessage`
+  hands a typed array over as it is. The CSP allows `blob:` for images, and a Blob URL holds its bytes until it
+  is revoked, in a panel kept alive while hidden: so `src/webview/blobs.ts`'s `ObjectUrls` is owned by the view
   that shows the pictures and revoked when what it showed goes. A document from a daemon too old to send bytes
-  still carries data URIs in `src`, which are shown as they were.
+  still carries data URIs in `src`, which are shown as they were. The video is the exception to the Blob URL: a
+  webview will not play one, so `videoPlayer.ts` feeds it to a `MediaSource` instead.
 - **The wire format is shared with Python.** `src/viewer/protocol.ts` mirrors
   `src/partcad_ide_client/protocol.py`, which is the normative description. Changing one
   means changing both. `src/test/suite/viewerProtocol.test.ts` covers this side, and a Python test reads

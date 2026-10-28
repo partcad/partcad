@@ -1,6 +1,7 @@
 //@ts-check
 
 const path = require('path');
+const webpack = require('webpack');
 
 //@ts-check
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
@@ -98,6 +99,12 @@ const viewerConfig = {
       },
     ],
   },
+  plugins: [
+    // One file, whatever a dependency imports lazily: the panel's CSP admits
+    // only the one script it names (by its nonce), so a chunk webpack split
+    // off to fetch later would never load. Video.js has such imports.
+    new webpack.optimize.LimitChunkCountPlugin({ maxChunks: 1 }),
+  ],
   devtool: 'source-map',
   infrastructureLogging: {
     level: 'log',

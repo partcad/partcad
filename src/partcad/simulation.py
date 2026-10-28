@@ -57,9 +57,13 @@ the order is that, then the scene, then the engine's own default.
 
 Every run also asks the plugin for two pictures of the scene, one before
 anything moved and one when the run is over, taken from where the scene is
-looked at when it is rendered -- see 'snapshot_request'. They are what the IDE's
-Simulation tab shows side by side, and they are the one thing a reader can check
-a verdict against without reading numbers.
+looked at when it is rendered -- see 'snapshot_request'. They are the one thing
+a reader can check a verdict against without reading numbers. And it asks for a
+video of the whole run from the same viewpoint, 25 frames a second of simulated
+time, at the size this machine's ``simulation.videoResolution`` says -- see
+'video_request'. The IDE's Simulation tab plays the video, with the two pictures
+as the still it shows until it is played, and shows the pictures side by side
+where a plugin recorded no video.
 
 Every run has a wall-clock **budget** (see 'run_budget'), and a run that does
 not finish within it is stopped -- with everything it started -- and fails as
@@ -80,6 +84,7 @@ import asyncio
 import copy
 import hashlib
 import os
+import re
 import shutil
 import typing
 
@@ -138,6 +143,43 @@ SNAPSHOT_DEFAULT_VIEW = "iso"
 # The size of a snapshot when the scene's rendering configuration does not say,
 # which is what '//builtin/render' gives a PNG.
 SNAPSHOT_DEFAULT_SIZE = 512
+
+# The video of the whole run a plugin is asked to record beside the pictures,
+# and the file it goes to inside the run directory: WebM, with VP9 in it -- the
+# one pairing every browser plays, including the webview of Visual Studio Code,
+# where the IDE plays it, which plays no H.264.
+VIDEO_FORMAT = "webm"
+VIDEO_FILE = "video." + VIDEO_FORMAT
+
+# Frames a second of simulated time, which is what makes the video play the run
+# in real time.
+VIDEO_FPS = 25
+
+# The sizes 'simulation.videoResolution' may name, and the one it is when it
+# names none: HD.
+VIDEO_RESOLUTIONS = {
+    "480p": (854, 480),
+    "hd": (1280, 720),
+    "720p": (1280, 720),
+    "fhd": (1920, 1080),
+    "1080p": (1920, 1080),
+    "qhd": (2560, 1440),
+    "1440p": (2560, 1440),
+    "4k": (3840, 2160),
+    "uhd": (3840, 2160),
+    "2160p": (3840, 2160),
+}
+VIDEO_DEFAULT_RESOLUTION = "hd"
+
+# What 'simulation.videoResolution' says to record no video with. YAML reads a
+# bare 'off', 'no' and 'false' as false before PartCAD sees them, which says the
+# same.
+VIDEO_OFF = ("none", "off", "no", "false", "0")
+
+# The smallest and the largest side a video may have, in pixels: one smaller is
+# not a picture of anything, and one larger is no screen's.
+VIDEO_MIN_SIDE = 16
+VIDEO_MAX_SIDE = 7680
 
 # The identity, as the string a scene parameter carries it in. A location
 # reaches an ASSY template as text that is substituted into the YAML, so it is
@@ -309,6 +351,9 @@ class SimulationResult:
         # each is of ('before', 'after'). Empty when it took none -- a plugin
         # that predates them, or one that could not draw on this machine.
         self.snapshots: typing.Dict[str, str] = {}
+        # The video of the run the plugin recorded, as an absolute path; None
+        # when it recorded none, for the same reasons, or none was asked for.
+        self.video: typing.Optional[str] = None
 
         # The four below are for a caller that has to say *why*, and are kept
         # out of 'to_dict()' -- which is what 'pc sim --json' prints, and which
@@ -367,6 +412,7 @@ class SimulationResult:
             "error": self.error,
             "result": self.result,
             "snapshots": dict(self.snapshots),
+            "video": self.video,
         }
 
 
@@ -652,26 +698,147 @@ def collect_snapshots(directory: str, result: dict, object_name: str, simulation
         )
         return {}
 
-    root = os.path.abspath(directory)
     found = {}
     for moment, name in reported.items():
-        if not isinstance(name, str) or not name:
-            continue
-        path = os.path.abspath(os.path.join(root, name))
-        if not path.startswith(root + os.sep):
-            pc_logging.warning(
-                "%s: the simulation '%s' reported a '%s' snapshot outside its run directory: %s"
-                % (object_name, simulation_name, moment, name)
-            )
-            continue
-        if not os.path.isfile(path):
-            pc_logging.warning(
-                "%s: the simulation '%s' reported a '%s' snapshot it did not write: %s"
-                % (object_name, simulation_name, moment, name)
-            )
-            continue
-        found[str(moment)] = path
+        path = _reported_file(directory, name, "a '%s' snapshot" % moment, object_name, simulation_name)
+        if path is not None:
+            found[str(moment)] = path
     return found
+
+
+def collect_video(directory: str, result: dict, object_name: str, simulation_name: str) -> typing.Optional[str]:
+    """The video the plugin says it recorded, as an absolute path, or None.
+
+    Reported under ``video`` as the name of a file in the run directory, and
+    kept on the terms 'collect_snapshots' keeps a picture on. None is not a
+    failure either: a plugin that predates videos, or could not make one on
+    this machine, has run the simulation all the same.
+    """
+    reported = result.get("video") if isinstance(result, dict) else None
+    if not reported:
+        return None
+    return _reported_file(directory, reported, "a video", object_name, simulation_name)
+
+
+def _reported_file(directory: str, name, what: str, object_name: str, simulation_name: str) -> typing.Optional[str]:
+    """The file a plugin reported writing into its run directory, as an absolute path -- if it did.
+
+    One that names a file outside the directory, or one that is not there, is
+    reported and answered with None.
+    """
+    if not isinstance(name, str) or not name:
+        return None
+    root = os.path.abspath(directory)
+    path = os.path.abspath(os.path.join(root, name))
+    if not path.startswith(root + os.sep):
+        pc_logging.warning(
+            "%s: the simulation '%s' reported %s outside its run directory: %s"
+            % (object_name, simulation_name, what, name)
+        )
+        return None
+    if not os.path.isfile(path):
+        pc_logging.warning(
+            "%s: the simulation '%s' reported %s it did not write: %s" % (object_name, simulation_name, what, name)
+        )
+        return None
+    return path
+
+
+# ---------------------------------------------------------------------------
+# The video of a run
+# ---------------------------------------------------------------------------
+
+
+def video_resolution(value) -> typing.Optional[typing.Tuple[int, int]]:
+    """'simulation.videoResolution' as (width, height) in pixels, or None for no video.
+
+    Unset is HD. A name of 'VIDEO_RESOLUTIONS'; a height alone ('1080', or
+    '1080p' when it is not one of the names), sixteen by nine; a width and a
+    height ('1600x900'); or one of 'VIDEO_OFF', or false, for none. Each side is
+    made even, which is what a video's colour is halved by, and has to be
+    between 'VIDEO_MIN_SIDE' and 'VIDEO_MAX_SIDE'. Anything else raises
+    ValueError, saying what is wrong with it.
+    """
+    if value is None or value is True or (isinstance(value, str) and not value.strip()):
+        return VIDEO_RESOLUTIONS[VIDEO_DEFAULT_RESOLUTION]
+    if value is False:
+        return None
+    if isinstance(value, (int, float)):
+        text = "%g" % value
+    elif isinstance(value, str):
+        text = value.strip().lower()
+    else:
+        raise ValueError("is not a size")
+    if text in VIDEO_OFF:
+        return None
+    if text in VIDEO_RESOLUTIONS:
+        return VIDEO_RESOLUTIONS[text]
+    match = re.fullmatch(r"(\d+)\s*[x\u00d7*]\s*(\d+)", text)
+    if match:
+        width, height = int(match.group(1)), int(match.group(2))
+    else:
+        match = re.fullmatch(r"(\d+)p?", text)
+        if not match:
+            raise ValueError(
+                "is not a size: name one of %s, a height, '<width>x<height>', or 'none'"
+                % ", ".join(sorted(VIDEO_RESOLUTIONS))
+            )
+        height = int(match.group(1))
+        width = int(round(height * 16 / 9.0))
+    width -= width % 2
+    height -= height % 2
+    for side in (width, height):
+        if not VIDEO_MIN_SIDE <= side <= VIDEO_MAX_SIDE:
+            raise ValueError("has a side of %d pixels, and a side is %d to %d" % (side, VIDEO_MIN_SIDE, VIDEO_MAX_SIDE))
+    return width, height
+
+
+# The values of 'simulation.videoResolution' already said to make no sense, so
+# that a run of every simulation in a tree says so once rather than once a run.
+_REPORTED_RESOLUTIONS: typing.Set[str] = set()
+
+
+def video_request(ctx, snapshot: dict) -> typing.Optional[dict]:
+    """What the plugin is asked to record of the whole run, or None for nothing.
+
+    A video at the size this machine's ``simulation.videoResolution``
+    (``PC_SIMULATION_VIDEO_RESOLUTION``) says -- HD unless it says otherwise,
+    and nothing at all when it says 'none' -- at 'VIDEO_FPS' frames a second of
+    simulated time, which plays the run in real time. It is taken from where
+    the pictures are taken from, ``snapshot``'s viewpoint, so that it starts
+    and ends on what they show; see 'snapshot_request'.
+
+    The size is the machine's to say rather than the package's: it is about the
+    screen the video is watched on and the time a run may spend drawing it, not
+    about the simulation. A setting that cannot be read is reported, once, and
+    the video recorded in HD.
+
+    ``file`` says where it goes, relative to the run directory, as for the
+    pictures; see 'collect_video' for what is done with what the plugin reports.
+    """
+    configured = getattr(getattr(ctx, "user_config", None), "simulation_video_resolution", None)
+    try:
+        size = video_resolution(configured)
+    except ValueError as e:
+        if str(configured) not in _REPORTED_RESOLUTIONS:
+            _REPORTED_RESOLUTIONS.add(str(configured))
+            pc_logging.warning(
+                "'simulation.videoResolution' (PC_SIMULATION_VIDEO_RESOLUTION) is %r, which %s; the videos of "
+                "simulations are recorded in %s" % (configured, e, VIDEO_DEFAULT_RESOLUTION.upper())
+            )
+        size = VIDEO_RESOLUTIONS[VIDEO_DEFAULT_RESOLUTION]
+    if size is None:
+        return None
+    width, height = size
+    return {
+        "format": VIDEO_FORMAT,
+        "file": VIDEO_FILE,
+        "fps": VIDEO_FPS,
+        "width": width,
+        "height": height,
+        "viewport_origin": list(snapshot["viewport_origin"]),
+        "viewport_up": list(snapshot["viewport_up"]),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -764,11 +931,13 @@ async def run_async(
             # this run's when the plugin draws none.
             _empty(directory)
 
-            # The pictures to ask for. Part of the question, so that a scene
-            # looked at from somewhere else is not answered with the pictures
-            # taken from where it used to be looked at.
+            # The pictures to ask for, and the video. Part of the question, so
+            # that a scene looked at from somewhere else -- or a video wanted
+            # at another size -- is not answered with what was made for the
+            # old one.
             snapshot = snapshot_request(ctx, scene, viewport)
             result.snapshot = snapshot
+            video = video_request(ctx, snapshot)
 
             # The same question asked again is a read: the directory is put
             # back as the run that answered it left it, scene and all, and the
@@ -776,7 +945,7 @@ async def run_async(
             # and is evaluated below either way, so editing it re-judges the
             # run rather than repeating it.
             cache = getattr(ctx, "cache_artifacts", None)
-            artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind, world, snapshot)
+            artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind, world, snapshot, video)
             result.artifact_key = artifact.get() if artifact is not None else None
             result.result = await cache_artifacts.restore_async(cache, artifact, directory=directory)
             if result.result is None:
@@ -784,12 +953,14 @@ async def run_async(
                 _empty(directory)
                 scene_file = await _export_scene_async(ctx, scene, impl, directory)
                 result.result = await _run_plugin_async(
-                    ctx, impl, directory, scene_file, declaration, object_name, kind, snapshot=snapshot
+                    ctx, impl, directory, scene_file, declaration, object_name, kind, snapshot=snapshot, video=video
                 )
                 # Only an answer is remembered: a run that failed raised above.
                 await cache_artifacts.store_async(cache, artifact, result.result, directory=directory)
-            # Restored or run, the pictures are files in the directory now.
+            # Restored or run, the pictures and the video are files in the
+            # directory now.
             result.snapshots = collect_snapshots(directory, result.result, object_name, declaration.name)
+            result.video = collect_video(directory, result.result, object_name, declaration.name)
         except Exception as e:  # pylint: disable=broad-except
             result.error = str(e)
             result.exception = e
@@ -841,13 +1012,14 @@ async def question_key_async(ctx, shape, kind: str, declaration: SimulationDecla
     without building or running anything: the scene's key (which covers the
     subject), the plugin and its resolved options, its environment, the
     declaration's 'params', how the scene is exported for it, the pictures it
-    is asked to take, and the content of both scripts and of the wrappers. So it
-    is the whole of what a run's 'before' and 'after' depend on -- and
-    deliberately not the 'validation:', which is judged over them afterwards.
-    The pictures are not something a verdict depends on, but they are part of
-    what the run is asked, and this key is that question's (a test holds the
-    two to be equal): a scene looked at from somewhere else is judged again
-    rather than vouched for by a run that drew it from where it used to be.
+    is asked to take and the video it is asked to record, and the content of
+    both scripts and of the wrappers. So it is the whole of what a run's
+    'before' and 'after' depend on -- and deliberately not the 'validation:',
+    which is judged over them afterwards. The pictures and the video are not
+    something a verdict depends on, but they are part of what the run is asked,
+    and this key is that question's (a test holds the two to be equal): a scene
+    looked at from somewhere else is judged again rather than vouched for by a
+    run that drew it from where it used to be.
 
     For a caller that remembers something *derived* from a run, and has to be
     told when the run it was derived from would be a different one: 'pc test'
@@ -866,10 +1038,11 @@ async def question_key_async(ctx, shape, kind: str, declaration: SimulationDecla
         await scene.prepare_async()
         world = scene.world_facts(ctx)
         snapshot = snapshot_request(ctx, scene)
+        video = video_request(ctx, snapshot)
     except Exception as e:  # pylint: disable=broad-except
         pc_logging.debug("%s: the simulation '%s' has no key: %s" % (object_name, declaration.name, e))
         return None
-    artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind, world, snapshot)
+    artifact = await _artifact_hash(ctx, scene, impl, declaration, object_name, kind, world, snapshot, video)
     return artifact.get() if artifact is not None else None
 
 
@@ -901,7 +1074,7 @@ def _scene_export(ctx, scene, impl, directory: str):
     return format_name, export_impl, scene_project
 
 
-async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str, world=None, snapshot=None):
+async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str, world=None, snapshot=None, video=None):
     """The cache key of one simulation's answer, or None when it has none.
 
     The scene's own key - which covers the subject, since the subject is a
@@ -962,6 +1135,10 @@ async def _artifact_hash(ctx, scene, impl, declaration, subject: str, kind: str,
             # Only when there is one, so that a scene that states neither keeps
             # the key - and the cached answer - it had before scenes could.
             question["world"] = world
+        if video:
+            # The video asked for, likewise only when there is one: a machine
+            # that records none asks what every run asked before videos.
+            question["video"] = video
         return cache_artifacts.question_hash("%s#%s" % (subject, declaration.name), subject_key, question, files)
     except Exception as e:  # pylint: disable=broad-except
         pc_logging.debug("%s: the simulation '%s' will not be cached: %s" % (subject, declaration.name, e))
@@ -1124,7 +1301,7 @@ def read_answer(response_serialized: str):
 
 
 async def _run_plugin_async(
-    ctx, impl, directory: str, scene_file: str, declaration, subject: str, kind: str, snapshot=None
+    ctx, impl, directory: str, scene_file: str, declaration, subject: str, kind: str, snapshot=None, video=None
 ) -> dict:
     """Start the plugin in its sandbox and return the JSON it produced.
 
@@ -1155,6 +1332,9 @@ async def _run_plugin_async(
     if snapshot:
         # The pictures to take, and from where; see 'snapshot_request'.
         request["snapshot"] = snapshot
+    if video:
+        # The video to record of the whole run; see 'video_request'.
+        request["video"] = video
 
     # The image the plugin names, as for an export or a render implementation
     # (see 'Shape._run_implementation_locked'): a simulator that is not a wheel
@@ -1184,8 +1364,8 @@ async def _run_plugin_async(
         os.path.abspath(script),
     ]
     # A sandbox that sends files rather than sharing a directory has to be told
-    # what comes back: the pictures are written into the run directory, so the
-    # run directory does. The scene goes the other way without being named,
+    # what comes back: the pictures and the video are written into the run
+    # directory, so the run directory does. The scene goes the other way without being named,
     # because the directory is an argument (see 'input_dirs_for').
     extra = {"output_dirs": [os.path.abspath(directory)]} if getattr(runtime, "EXCHANGES_FILES", False) else {}
     try:

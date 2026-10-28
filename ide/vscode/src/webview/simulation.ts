@@ -16,11 +16,17 @@
 //   * the verdict of its 'validation:' expression, as a symbol before its name
 //     in the list, in green or red -- the one place it is said, so the list
 //     reads as a summary of every run and the page as the detail of one;
-//   * the two pictures the simulation plugin took of the scene, the one before
+//   * the video of the run the simulation plugin recorded, in a player with the
+//     usual controls -- play, pause and replay, a step back and forward, a
+//     position to drag, the speed, full screen -- whose still, until it is
+//     played, is the two pictures the plugin took of the scene: the one before
 //     anything moved on the left and the one when the run was over on the
-//     right, with an arrow between them. They are taken from where the scene is
-//     looked at when it is rendered (its 'render: png:' viewpoint), and both
-//     are framed alike, so what moved is seen to have moved;
+//     right, with an arrow between them. The player is 'videoPlayer.ts', handed
+//     in as 'SimulationCallbacks.player'. A run with no video -- a plugin that
+//     predates them, a machine set to record none -- shows the two pictures as
+//     they are, side by side with the arrow between. All of it is taken from
+//     where the scene is looked at when it is rendered (its 'render: png:'
+//     viewpoint), and framed alike, so what moved is seen to have moved;
 //   * and, folded away under them, what the verdict is made of: the criteria
 //     (the 'validation:' expression), and the 'before' and 'after' objects the
 //     plugin reported, which are what that expression is evaluated over.
@@ -76,6 +82,24 @@ export interface SimulationCallbacks {
      * What the view panel shows.
      */
     onShown?: (viewpoint: Viewpoint | undefined) => void;
+    /**
+     * A player for the video of a run, with the run's pictures as its still
+     * ('videoPlayer.ts'). Absent, a run is shown as its two pictures, which is
+     * what a run with no video is shown as anyway.
+     */
+    player?: (recording: SimulationImage, still: SimulationStill) => SimulationPlayer;
+}
+
+/** The pictures a run's player shows as its still: before and after, either of which the plugin may not have taken. */
+export interface SimulationStill {
+    before?: SimulationImage;
+    after?: SimulationImage;
+}
+
+/** A player on the page: what it is drawn as, and how to stop it when the page is drawn again. */
+export interface SimulationPlayer {
+    readonly element: HTMLElement;
+    dispose(): void;
 }
 
 /**
@@ -156,6 +180,8 @@ export class SimulationView {
     private viewpoint: Viewpoint | undefined;
     /** Where the folded views are drawn on the page on screen, to redraw them alone. */
     private details: HTMLElement | undefined;
+    /** The player on the page on screen, if it plays a video; stopped when the page is drawn again. */
+    private player: SimulationPlayer | undefined;
 
     constructor(
         private readonly root: HTMLElement,
@@ -422,6 +448,7 @@ export class SimulationView {
         // What the run shows, between the toolbar and the folded views: it is
         // what gives up room when one of them is opened.
         const body = el('div', 'simulation-body');
+        let player: SimulationPlayer | undefined;
         if (scenario.desc?.trim()) {
             body.appendChild(el('p', 'simulation-desc', scenario.desc.trim()));
         }
@@ -448,7 +475,13 @@ export class SimulationView {
             if (state.run.error) {
                 body.appendChild(el('p', 'error', state.run.error));
             }
-            body.appendChild(pictures(state.run, this.urls));
+            const recording = state.run.recording;
+            if (recording?.content && this.callbacks.player !== undefined) {
+                player = this.callbacks.player(recording, state.run.images ?? {});
+                body.appendChild(player.element);
+            } else {
+                body.appendChild(pictures(state.run, this.urls));
+            }
         }
         page.appendChild(body);
 
@@ -456,6 +489,7 @@ export class SimulationView {
         this.drawDetails(scenario);
         page.appendChild(this.details);
         this.showMain(page);
+        this.player = player;
     }
 
     /**
@@ -540,9 +574,17 @@ export class SimulationView {
         this.picker.disabled = false;
     }
 
+    /** Put this on the page in place of whatever was there, a player included. */
     private showMain(content: HTMLElement): void {
+        this.stopPlayer();
         empty(this.content);
         this.content.appendChild(content);
+    }
+
+    /** Stop the player on screen, if there is one: its video, its file, and its full screen. */
+    private stopPlayer(): void {
+        this.player?.dispose();
+        this.player = undefined;
     }
 }
 

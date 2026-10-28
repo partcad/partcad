@@ -62,10 +62,10 @@ export function detailsBytes(items: unknown): void {
  *
  * The render tabs carry the file, an analysis carries the model of each
  * scenario (and of the only one, where a client from before scenarios reads
- * it), a run of a simulation its pictures, and the Assembly and Build tabs the
- * pictures of their pages. The Assembly tab's file is not here: it stays in the
- * extension host, where Save copies it from, and is written down with
- * `bytesOf` there.
+ * it), a run of a simulation its pictures and its video, and the Assembly and
+ * Build tabs the pictures of their pages. The Assembly tab's file is not here:
+ * it stays in the extension host, where Save copies it from, and is written
+ * down with `bytesOf` there.
  */
 export function filesAsBytes(tab: string, data: unknown): unknown {
     if (!isRecord(data)) {
@@ -91,6 +91,9 @@ export function filesAsBytes(tab: string, data: unknown): unknown {
                     if (isRecord(image)) {
                         inBytes(image, 'content');
                     }
+                }
+                if (isRecord(run.recording)) {
+                    inBytes(run.recording, 'content');
                 }
             }
             break;

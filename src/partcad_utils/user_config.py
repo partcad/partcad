@@ -360,6 +360,7 @@ OPTION_KEYS = (
     "git.clone.retry.patience",
     "plugin.query.timeout",
     "simulation.timeout",
+    "simulation.videoResolution",
     "useDocker",
     "useDockerPython",
     "useDockerKicad",
@@ -1227,6 +1228,22 @@ class UserConfig(vyper.Vyper):
         # default: unset
         self.bind_env("simulation.timeout", "PC_SIMULATION_TIMEOUT")
         self.simulation_timeout = _positive_seconds(self.get("simulation.timeout"))
+
+        # option: simulation.videoResolution
+        # description: the size of the video every simulation run is asked to
+        #              record, beside its before and after pictures: a name --
+        #              'hd' or '720p' (1280x720), 'fhd' or '1080p' (1920x1080),
+        #              '480p', 'qhd' or '1440p', '4k', 'uhd' or '2160p' -- a
+        #              height alone ('1080', sixteen by nine), '<width>x<height>',
+        #              or 'none' for no video at all. It is read, and anything
+        #              it cannot make sense of reported, by
+        #              'partcad.simulation.video_request'. The frame rate is 25
+        #              and the viewpoint the scene's own 'render: png:' one,
+        #              as for the pictures.
+        # values: <string>
+        # default: hd
+        self.bind_env("simulation.videoResolution", "PC_SIMULATION_VIDEO_RESOLUTION")
+        self.simulation_video_resolution = self.get("simulation.videoResolution")
 
         # option: telemetry
         # description: Telemetry configuration
