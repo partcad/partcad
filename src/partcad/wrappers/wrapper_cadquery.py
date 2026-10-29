@@ -22,7 +22,13 @@ import py_stubs.ocp_vscode  # Make 'sys.modules["py_stub.ocp_vscode"]' available
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
-CACHE_VERSION = 1
+#
+# 2: the components are references into the compound (ocp_serialize.KEY_CHILD),
+#    and so is the 'cmps' cache entry they are written to. Raised so that no
+#    earlier release, whose key says 1, ever reads either entry: it would take
+#    the part from the one and find components it cannot read in the other -
+#    a part handed back without its components, which is worse than a miss.
+CACHE_VERSION = 2
 
 
 def process(path, request):
@@ -84,13 +90,17 @@ def process(path, request):
         shapes.append(shape)
 
     # Compound and filter here (see wrapper_common.combine) rather than in the
-    # core process, so the factory just forwards the resulting envelope.
+    # core process, so the factory just forwards the resulting envelope. The
+    # components are sent as references into the compound, which holds them
+    # (see wrapper_common.encode_combined).
     compound, components = wrapper_common.combine(shapes, request.get("kind", "part"))
     # A part is validated and moved here, while it is live (see
-    # wrapper_common.finished); a sketch asks for none of it. Not one the core
-    # is about to drop: a failed build, or one that showed nothing.
-    if build_result.success and components:
-        compound = wrapper_common.finished(compound)
+    # wrapper_common.finished), and its components refer into what that made of
+    # it; a sketch asks for none of it. Not one the core is about to drop: a
+    # failed build, or one that showed nothing.
+    compound, components = wrapper_common.encode_combined(
+        compound, components, finish=bool(build_result.success and components)
+    )
     return {
         "success": build_result.success,
         "exception": wrapper_common.exception_to_str(build_result.exception),

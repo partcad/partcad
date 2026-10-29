@@ -12,7 +12,7 @@ import json
 
 from cache_config import CacheUserConfig
 
-from partcad import cache_shape, shape_envelope
+from partcad import cache_backend, cache_shape, shape_envelope
 from partcad.assembly import Assembly
 from partcad.cache_hash import CacheHash
 from partcad.cache_shape import ShapeCache
@@ -317,6 +317,217 @@ def test_what_is_not_an_assembly_stays_plain_json(tmp_path):
     assert not stored.startswith(cache_shape._TREE_MAGIC)
     assert json.loads(stored)
     assert [item["brep"] for item in cache_shape._deserialize(stored)] == [BREP, BREP]
+
+
+# A compound's payload, with something in it to find - and to find missing.
+COMPOUND = BREP + b"Compound of three solids\n" * 64
+
+
+def _piece(child, name="pkg:first", label="first", payload=COMPOUND):
+    """A component that is a piece of the compound beside it (shape_envelope.KEY_CHILD)."""
+    piece = {"name": name, "label": label, "brep": payload, shape_envelope.KEY_CHILD: child}
+    piece[shape_envelope.KEY_METADATA] = {"measurements": {"solids": 1, "volume": 10.0 + child}}
+    return piece
+
+
+def test_components_that_are_pieces_of_the_geometry_beside_them_do_not_repeat_it(tmp_path):
+    """The compound is cached once: its components' entry says which pieces of it they are."""
+    cache = _cache(tmp_path)
+    cache_hash = _hash()
+    shape = {"name": "pkg:first", "label": "first", "brep": COMPOUND}
+    components = [_piece(0), [_piece(1), _piece(2)]]
+
+    asyncio.run(cache.write_async(cache_hash, {"part": shape, "cmps": components}))
+
+    stored = _entry(tmp_path, cache_hash, "cmps")
+    assert COMPOUND not in stored
+    assert len(stored) < len(COMPOUND)
+
+    metadata = {"name": "pkg:second", "label": "second"}
+    read, _ = asyncio.run(cache.read_async(cache_hash, ["part", "cmps"], metadata))
+
+    assert read["cmps"] == [
+        _piece(0, "pkg:second", "second"),
+        [_piece(1, "pkg:second", "second"), _piece(2, "pkg:second", "second")],
+    ]
+    # And held once in memory, too: every piece is the geometry's own bytes.
+    assert all(piece["brep"] is read["part"]["brep"] for piece in [read["cmps"][0]] + read["cmps"][1])
+
+
+def test_pieces_read_without_the_geometry_beside_them_are_a_miss(tmp_path):
+    cache = _cache(tmp_path)
+    cache_hash = _hash()
+    asyncio.run(cache.write_async(cache_hash, {"part": {"brep": COMPOUND}, "cmps": [_piece(0)]}))
+
+    read, in_memory = asyncio.run(cache.read_async(cache_hash, ["cmps"], {"name": "pkg:a", "label": "a"}))
+
+    assert read == {"cmps": None}
+    assert in_memory == {"cmps": False}
+
+
+def test_pieces_of_other_geometry_than_the_entry_beside_them_are_a_miss(tmp_path):
+    """Written beside one build's compound, read beside another's: not its pieces."""
+    cache = _cache(tmp_path)
+    cache_hash = _hash()
+    asyncio.run(cache.write_async(cache_hash, {"part": {"brep": COMPOUND}, "cmps": [_piece(0)]}))
+    asyncio.run(cache.write_async(cache_hash, {"part": {"brep": COMPOUND + b"rebuilt\n"}}))
+
+    read, _ = asyncio.run(cache.read_async(cache_hash, ["part", "cmps"], {"name": "pkg:a", "label": "a"}))
+
+    assert read["part"]["brep"] == COMPOUND + b"rebuilt\n"
+    assert read["cmps"] is None
+
+
+def test_a_tier_keeps_pieces_wherever_it_keeps_the_geometry_they_name(tmp_path):
+    """A size window must not keep the geometry and drop its components: that hit comes back without them.
+
+    The pieces' entry is a few hundred bytes whatever the compound weighs, so a
+    tier that refuses entries that small - every persistent tier does, at 100
+    bytes by default - would take the compound and refuse its components.
+    """
+    cache = ShapeCache(user_config=CacheUserConfig(tmp_path, cache_min_entry_size=len(COMPOUND)))
+    cache_hash = _hash()
+    components = [_piece(0), _piece(1)]
+    assert len(cache_shape._serialize(components, {"part": COMPOUND})) < len(COMPOUND)
+
+    asyncio.run(cache.write_async(cache_hash, {"part": {"brep": COMPOUND}, "cmps": components}))
+
+    read, _ = asyncio.run(cache.read_async(cache_hash, ["part", "cmps"], {"name": "pkg:first", "label": "first"}))
+    assert read["part"]["brep"] == COMPOUND
+    assert read["cmps"] == components
+
+
+def test_a_tier_that_refuses_the_geometry_refuses_the_pieces_that_name_it(tmp_path):
+    cache = ShapeCache(user_config=CacheUserConfig(tmp_path, cache_max_entry_size=len(COMPOUND) - 1))
+    cache_hash = _hash()
+
+    asyncio.run(cache.write_async(cache_hash, {"part": {"brep": COMPOUND}, "cmps": [_piece(0)]}))
+
+    assert not (tmp_path / "cache" / "shapes" / ("%s.cmps" % cache_hash.get())).exists()
+
+
+class _FarTier(cache_backend.CacheBackend):
+    """A tier behind the files one: a dictionary, and what it was asked for."""
+
+    name = "far"
+
+    def __init__(self) -> None:
+        super().__init__(None, "shapes")
+        self.storage = {}
+        self.reads = []
+
+    async def _read_async(self, names):
+        self.reads.append(list(names))
+        return {name: self.storage[name] for name in names if name in self.storage}
+
+    async def _write_async(self, items):
+        self.storage.update(items)
+        return {name: True for name in items}
+
+
+def _tiers(tmp_path, *far, **config):
+    """A shape cache of the files tier, at the default minimum entry size unless told, with 'far' behind it."""
+    cache = ShapeCache(user_config=CacheUserConfig(tmp_path, **config))
+    cache.backends = cache.backends + list(far)
+    return cache
+
+
+def _held_by_files(tmp_path, cache_hash, key):
+    return (tmp_path / "cache" / "shapes" / ("%s.%s" % (cache_hash.get(), key))).exists()
+
+
+def test_a_hit_copied_nearer_brings_the_pieces_of_its_geometry_with_it(tmp_path):
+    """The size window of a promotion is the size window of a write, so the files tier holds both or neither.
+
+    Judged by its own length, the pieces' entry is refused by a tier that took
+    the compound copied with it, and that tier then answers the part without
+    its components the day the farther tier lets go of them.
+    """
+    far = _FarTier()
+    cache_hash = _hash()
+    components = [_piece(0), _piece(1)]
+    asyncio.run(
+        _tiers(tmp_path / "writer", far).write_async(cache_hash, {"part": {"brep": COMPOUND}, "cmps": components})
+    )
+    cache = _tiers(tmp_path, far, cache_min_entry_size=len(COMPOUND))
+
+    read, _ = asyncio.run(cache.read_async(cache_hash, ["part", "cmps"], {"name": "pkg:first", "label": "first"}))
+
+    assert read["cmps"] == components
+    assert _held_by_files(tmp_path, cache_hash, "part") and _held_by_files(tmp_path, cache_hash, "cmps")
+    # And the next read is answered here, components and all.
+    far.reads.clear()
+    read, _ = asyncio.run(cache.read_async(cache_hash, ["part", "cmps"], {"name": "pkg:first", "label": "first"}))
+    assert read["cmps"] == components
+    assert far.reads == []
+
+
+def test_pieces_found_farther_than_their_geometry_are_copied_in_beside_it(tmp_path):
+    """The geometry was a hit in a nearer tier, or in a farther one: either way they are judged by its size."""
+    middle, far = _FarTier(), _FarTier()
+    cache_hash = _hash()
+    components = [_piece(0)]
+    asyncio.run(
+        _tiers(tmp_path / "writer", middle).write_async(cache_hash, {"part": {"brep": COMPOUND}, "cmps": components})
+    )
+    # The pieces in the middle tier, the geometry only in the far one.
+    far.storage = {name: value for name, value in middle.storage.items() if name.endswith(".part")}
+    middle.storage = {name: value for name, value in middle.storage.items() if name.endswith(".cmps")}
+    cache = _tiers(tmp_path, middle, far, cache_min_entry_size=len(COMPOUND))
+
+    read, _ = asyncio.run(cache.read_async(cache_hash, ["part", "cmps"], {"name": "pkg:first", "label": "first"}))
+
+    assert read["cmps"] == components
+    assert _held_by_files(tmp_path, cache_hash, "part") and _held_by_files(tmp_path, cache_hash, "cmps")
+
+
+def test_pieces_found_without_their_geometry_are_copied_nowhere(tmp_path):
+    """Read back without the compound they name they are a miss, so a tier holding them would hold nothing."""
+    far = _FarTier()
+    cache_hash = _hash()
+    asyncio.run(
+        _tiers(tmp_path / "writer", far).write_async(cache_hash, {"part": {"brep": COMPOUND}, "cmps": [_piece(0)]})
+    )
+    far.storage = {name: value for name, value in far.storage.items() if not name.endswith(".part")}
+    cache = _tiers(tmp_path, far)
+
+    read, _ = asyncio.run(cache.read_async(cache_hash, ["part", "cmps"], {"name": "pkg:first", "label": "first"}))
+
+    assert read == {"part": None, "cmps": None}
+    assert not _held_by_files(tmp_path, cache_hash, "cmps")
+
+
+def test_pieces_of_geometry_not_beside_them_carry_it_once(tmp_path):
+    """A part moved by its 'offset' keeps the components of what it moved, as it always did."""
+    cache = _cache(tmp_path)
+    cache_hash = _hash()
+    moved = {"brep": BREP + b"moved\n"}
+    components = [_piece(0), _piece(1), _piece(2)]
+
+    asyncio.run(cache.write_async(cache_hash, {"part": moved, "cmps": components}))
+
+    stored = _entry(tmp_path, cache_hash, "cmps")
+    assert stored.count(COMPOUND) == 1
+    read, _ = asyncio.run(cache.read_async(cache_hash, ["cmps"], {"name": "pkg:first", "label": "first"}))
+    assert read["cmps"] == components
+
+
+def test_components_that_are_pieces_are_written_where_no_earlier_release_reads(tmp_path):
+    """The one framed component entry, and why that is safe: its key is one no earlier release computes.
+
+    'test_what_is_not_an_assembly_stays_plain_json' is the rule; this is its
+    exception. The wrappers that make pieces raised their CACHE_VERSION when
+    they started to, and a shape's key carries the versions of the wrappers
+    that build it - which is what keeps an earlier release from ever being the
+    one to read this frame and miss it while hitting the part beside it.
+    """
+    from partcad import code_version, wrapper
+
+    stored = cache_shape._serialize([_piece(0)], {"part": COMPOUND})
+
+    assert stored.startswith(cache_shape._TREE_MAGIC)
+    for name in ("build123d.py", "cadquery.py"):
+        assert code_version.declared(wrapper.get(name)) >= 2
 
 
 def test_the_file_tier_takes_a_tree_of_fifty_megabytes_by_default(monkeypatch, tmp_path):

@@ -22,7 +22,19 @@ Nothing here imports OCP at module scope: the core process imports
 'ocp_serialize' to encode the shapes its in-process factories still build, and
 it pulls the kernel in lazily so that a workflow using only delegating
 factories never loads it at all.
+
+**A shape is measured once, however often it is met** (see 'Measurer'). What
+costs is integrating a solid's volume - OCCT's 'VolumeProperties', which on
+curved geometry takes longer than writing the BREP does - and the same solid
+used to be integrated again and again: once inside the compound a script
+returned, once more as the component it also returned, and once per placement
+when one solid is placed many times. Now a solid is integrated once per
+'TShape', its numbers are moved to wherever else it is placed, and a
+compound's numbers are worked out from its children's rather than by
+integrating them all over again.
 """
+
+import mass_properties
 
 
 def bbox(shape):
@@ -49,21 +61,186 @@ def bbox(shape):
     return [xmin, ymin, zmin, xmax, ymax, zmax]
 
 
-def _solid_properties(shape):
-    """The volume properties of each solid in 'shape', as OCCT integrates them."""
+def _united(box, other):
+    """The smallest box holding two boxes, either of which may be None (holding nothing)."""
+    if box is None:
+        return other
+    if other is None:
+        return box
+    return [min(box[axis], other[axis]) for axis in range(3)] + [max(box[axis], other[axis]) for axis in range(3, 6)]
+
+
+def _hash(shape):
+    """A hash of 'shape' for finding it again in a 'Measurer', or None where the OCP build has none.
+
+    OCP hashes a shape by its 'TShape' and its location, and compares two with
+    'IsEqual()', which adds the orientation. Without a hash nothing is found
+    again, and everything is measured as it is met - slower, and the same
+    numbers.
+    """
+    try:
+        return hash(shape)
+    except TypeError:
+        return None
+
+
+def _integrated(solid):
+    """'(volume, centroid, unit inertia)' of one solid, as OCCT integrates it where it stands.
+
+    OCCT's MatrixOfInertia() is already the tensor about the centre of mass, and
+    with its products of inertia already negated - the tensor itself rather
+    than the integrals - which is the form URDF, SDFormat and MJCF all state.
+    """
     from OCP.BRepGProp import BRepGProp
     from OCP.GProp import GProp_GProps
-    from OCP.TopAbs import TopAbs_SOLID
-    from OCP.TopExp import TopExp_Explorer
 
-    found = []
-    explorer = TopExp_Explorer(shape, TopAbs_SOLID)
-    while explorer.More():
-        props = GProp_GProps()
-        BRepGProp.VolumeProperties_s(explorer.Current(), props)
-        found.append(props)
-        explorer.Next()
-    return found
+    props = GProp_GProps()
+    BRepGProp.VolumeProperties_s(solid, props)
+    centre = props.CentreOfMass()
+    matrix = props.MatrixOfInertia()
+    # Row/column indices in OCCT's gp_Mat are 1-based.
+    tensor = [[matrix.Value(row, col) for col in (1, 2, 3)] for row in (1, 2, 3)]
+    return props.Mass(), [centre.X(), centre.Y(), centre.Z()], tensor
+
+
+def _moved(measured, transformation):
+    """'measured' for the same solid moved by 'transformation' (a gp_Trsf), or None.
+
+    A rigid motion moves the centroid and turns the tensor about it (R I R^T,
+    'mass_properties.turned()'), and leaves the volume as it was - which is what
+    lets a solid placed a hundred times be integrated once. Anything else - a
+    scale, a mirror - changes what there is to integrate, so None, and the
+    caller integrates it where it stands.
+    """
+    from OCP.gp import gp_Pnt
+
+    if abs(transformation.ScaleFactor() - 1.0) > 1e-12 or transformation.IsNegative():
+        return None
+    volume, centre, tensor = measured
+    point = gp_Pnt(*centre).Transformed(transformation)
+    rotation = [[transformation.Value(row, col) for col in (1, 2, 3)] for row in (1, 2, 3)]
+    return volume, [point.X(), point.Y(), point.Z()], mass_properties.turned(tensor, rotation)
+
+
+class Measurer:
+    """Measures shapes, taking each solid and each shape it is handed once.
+
+    One per document being encoded ('ocp_serialize.encode()' makes one for
+    everything it encodes), and never kept beyond it: it holds on to every
+    shape it has measured, which is what lets it recognise one again, and a
+    process encoding shapes for as long as it runs would hold all of them.
+
+    Two things are remembered, and neither changes a number:
+
+      * A shape - a compound, a solid, a face - by its 'TShape', its location
+        and its orientation. Met again, it is the same geometry in the same
+        place, so its measurements are what they were. That is what a
+        script's components are: the very shapes the compound beside them
+        holds, encoded again on their own.
+      * A solid by its 'TShape' and orientation alone. Met again somewhere
+        else, its volume is the same, and its centroid and its inertia are
+        moved there rather than integrated again ('_moved()').
+
+    A compound is measured as its children are: its solids are theirs, in the
+    order OCCT's explorer would visit them, and its box is the union of theirs -
+    which is exactly the box OCCT draws round the compound, because that box is
+    the union of the boxes of the faces, edges and vertices in it, child by
+    child. So measuring a compound and then each of its children costs no more
+    than measuring the compound.
+    """
+
+    def __init__(self):
+        self._shapes = {}
+        self._solids = {}
+
+    def measurements(self, shape):
+        """'measurements(shape)', taking what this measurer has already measured as known."""
+        solids, box = self._measured(shape)
+        found = sorted((volume for volume, _centre, _tensor in solids), reverse=True)
+        centroid, unit_inertia = distribution(solids)
+        measured = {
+            "bbox": None if box is None else list(box),
+            "volume": sum(found) if found else None,
+            "solids": len(found),
+            # Counted afresh for every shape rather than from its children's:
+            # a walk of its containers alone, a step per solid and shell, and a
+            # shell two children share is one shell (see 'free_shells()').
+            "freeShells": free_shells(shape),
+        }
+        if centroid is not None:
+            measured["centroid"] = centroid
+            measured["unitInertia"] = unit_inertia
+        return measured
+
+    def measurements_or_none(self, shape):
+        """'measurements_or_none(shape)', taking what this measurer has already measured as known."""
+        try:
+            return self.measurements(shape)
+        except Exception:  # pylint: disable=broad-except
+            return None
+
+    def _measured(self, shape):
+        """'(solids, box)' of 'shape': each solid's '(volume, centroid, unit inertia)', and its box."""
+        from OCP.TopAbs import TopAbs_COMPOUND, TopAbs_SOLID
+        from OCP.TopExp import TopExp_Explorer
+        from OCP.TopoDS import TopoDS_Iterator
+
+        if shape.IsNull():
+            # Asked of a null shape, OCCT's ShapeType() does not raise: it
+            # crashes the process. A null shape holds nothing, and that is the
+            # answer measuring it whole always gave.
+            return [], None
+        key = _hash(shape)
+        if key is not None:
+            for known, measured in self._shapes.get(key, ()):
+                if known.IsEqual(shape):
+                    return measured
+
+        if shape.ShapeType() == TopAbs_COMPOUND:
+            solids = []
+            box = None
+            # Cumulative, as TopExp_Explorer is: each child comes out placed
+            # and oriented the way the compound holds it.
+            children = TopoDS_Iterator(shape)
+            while children.More():
+                child_solids, child_box = self._measured(children.Value())
+                solids.extend(child_solids)
+                box = _united(box, child_box)
+                children.Next()
+        else:
+            solids = []
+            explorer = TopExp_Explorer(shape, TopAbs_SOLID)
+            while explorer.More():
+                solids.append(self._solid(explorer.Current()))
+                explorer.Next()
+            box = bbox(shape)
+
+        measured = (solids, box)
+        if key is not None:
+            self._shapes.setdefault(key, []).append((shape, measured))
+        return measured
+
+    def _solid(self, solid):
+        """'(volume, centroid, unit inertia)' of one solid, integrated once per 'TShape'."""
+        from OCP.TopLoc import TopLoc_Location
+
+        location = solid.Location()
+        local = solid.Located(TopLoc_Location())
+        key = _hash(local)
+        known = self._solids.get(key, ()) if key is not None else ()
+        for other, where, measured in known:
+            if other.IsEqual(local):
+                if where.IsEqual(location):
+                    return measured
+                moved = _moved(measured, location.Transformation().Multiplied(where.Transformation().Inverted()))
+                if moved is not None:
+                    return moved
+                break
+
+        measured = _integrated(solid)
+        if key is not None:
+            self._solids.setdefault(key, []).append((local, location, measured))
+        return measured
 
 
 def volumes(shape):
@@ -74,7 +251,8 @@ def volumes(shape):
     positive number, and the inversion disappears into the total. The caller
     adds them up knowing how many there were.
     """
-    return sorted((props.Mass() for props in _solid_properties(shape)), reverse=True)
+    solids, _box = Measurer()._measured(shape)
+    return sorted((volume for volume, _centre, _tensor in solids), reverse=True)
 
 
 def free_shells(shape):
@@ -128,6 +306,9 @@ def free_shells(shape):
 def distribution(solids):
     """Where the solids' volume is and how it is spread: (centroid, unit inertia).
 
+    'solids' is each solid's '(volume, centroid, unit inertia)' as OCCT
+    integrated it ('_integrated()'), in one frame.
+
     The centroid in millimetres, and the inertia tensor about it as a 3x3 list,
     taken at a density of one in the shape's own units - mm^5. It is the half of
     a mass, a centre of mass and an inertia that the geometry decides; the other
@@ -137,29 +318,23 @@ def distribution(solids):
     cached with the geometry it describes, while a material's density can be
     edited without rebuilding anything.
 
-    OCCT's MatrixOfInertia() is already the tensor about the centre of mass, and
-    with its products of inertia already negated - the tensor itself rather
-    than the integrals - which is the form URDF, SDFormat and MJCF all state.
-    Adding the solids up with GProp_GProps.Add() moves each one's tensor to the
-    common centroid, so a compound of several is one distribution.
+    Several solids are added up into one distribution by the parallel-axis
+    theorem, with 'mass_properties.added_up()' - the arithmetic every body an
+    exporter writes is added up with - so a compound of several is one
+    distribution. One solid is its own.
 
     (None, None) unless every solid encloses a positive volume. A solid with its
     faces turned inward integrates to a negative mass, and a centre of mass
     worked out with one in the sum is a number with no meaning - the volume is
     reported as it stands, and that is where the defect shows.
     """
-    from OCP.GProp import GProp_GProps
-
-    if not solids or any(props.Mass() <= 0.0 for props in solids):
+    if not solids or any(volume <= 0.0 for volume, _centre, _tensor in solids):
         return None, None
-    total = GProp_GProps()
-    for props in solids:
-        total.Add(props)
-    centre = total.CentreOfMass()
-    matrix = total.MatrixOfInertia()
-    # Row/column indices in OCCT's gp_Mat are 1-based.
-    tensor = [[matrix.Value(row, col) for col in (1, 2, 3)] for row in (1, 2, 3)]
-    return [centre.X(), centre.Y(), centre.Z()], tensor
+    if len(solids) == 1:
+        _volume, centre, tensor = solids[0]
+        return list(centre), [list(row) for row in tensor]
+    _total, centre, tensor = mass_properties.added_up(solids, length_unit=1.0)
+    return centre, tensor
 
 
 def measurements(shape):
@@ -183,20 +358,11 @@ def measurements(shape):
 
     'freeShells' is how many shells no solid bounds itself with - see
     'free_shells()', and the 'shell' check it is recorded for.
+
+    A shape measured on its own; to measure several that share solids, measure
+    them with one 'Measurer'.
     """
-    solids = _solid_properties(shape)
-    found = sorted((props.Mass() for props in solids), reverse=True)
-    centroid, unit_inertia = distribution(solids)
-    measured = {
-        "bbox": bbox(shape),
-        "volume": sum(found) if found else None,
-        "solids": len(found),
-        "freeShells": free_shells(shape),
-    }
-    if centroid is not None:
-        measured["centroid"] = centroid
-        measured["unitInertia"] = unit_inertia
-    return measured
+    return Measurer().measurements(shape)
 
 
 def measurements_or_none(shape):
@@ -208,7 +374,4 @@ def measurements_or_none(shape):
     BREP worth returning, and returning it is what was asked; the size is the
     extra. So a failure here costs the measurement and nothing else.
     """
-    try:
-        return measurements(shape)
-    except Exception:  # pylint: disable=broad-except
-        return None
+    return Measurer().measurements_or_none(shape)

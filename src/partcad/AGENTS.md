@@ -235,7 +235,7 @@ at all).
   "not here" is remembered for `KNOWN_MISS_TTL` (60 s) and cleared by this process's own write of it; a lookup that
   failed says nothing and is not remembered (`CacheBackend._read_guarded` answers None for "could not find out").
   A hit in a farther tier is copied into the nearer ones that missed it, within each one's size window
-  (`Cache._promote_async`). So a test asserting on what a server holds flushes first (`cache_io.flush()`,
+  (`Cache._promote_async`), which judges it exactly as a write would (`Cache._admission_sizes`). So a test asserting on what a server holds flushes first (`cache_io.flush()`,
   `Cache.flush_async()`), and `tests/partcad/conftest.py` stops the thread after every test.
 - **A file is keyed on all of its content** (`cache_hash.file_digest`): the SHA-256 of it, never its path or its
   timestamps, so a shared tier is shared. The digest is remembered by the file's identity (`cache_hash.FileMemo`:
@@ -841,6 +841,33 @@ at all).
   deserialized, to compute what was free at build time. `shape_measure.bbox` drops the gap OCCT pads a box by,
   so a 120 mm block measures 120.
 
+  **A solid is integrated once per encoded document, however often it is met** (`shape_measure.Measurer`, one
+  per `ocp_serialize.encode()`): `VolumeProperties` is the expensive part of encoding, often dearer than writing
+  the BREP. A shape met again (same `TShape`, location and orientation) is the numbers it had; a solid met again
+  somewhere else is moved there (`mass_properties.turned`) rather than integrated; and a compound is worked out
+  from its children - their solids, added up by `mass_properties.added_up` (the parallel-axis rule every body
+  an exporter writes is added up with), and the union of their boxes, which is exactly the box OCCT draws round
+  the compound. The numbers agree with integrating the compound whole to float rounding, which
+  `tests/partcad/unit/test_shape_measure.py` holds them to.
+
+  **A script's components are references into its compound** (`ocp_serialize.encode_combined`,
+  `KEY_CHILD`). `wrapper_common.combine()` returns a compound and the shapes it was made of, which the compound
+  holds; the build123d and cadquery wrappers used to encode both, so the geometry was written, measured, sent
+  and cached twice. Now a component the compound holds is a node carrying the compound's own payload and
+  `child: <index>` - which of the compound's children it is, in `TopoDS_Iterator` order - so the payload table
+  sends it once, and in the core every component holds the compound's one bytes object. `decode_shape`,
+  `decode_tree` and `decode` hand back the child; `strip_metadata`/`apply_metadata` keep `child` with the
+  payload, because without it the payload is a different shape. A component the compound does not hold (a face
+  a part's script returned beside its solids) is still a shape of its own. A reader that opens a payload
+  itself rather than through those decoders (`shape_from_payload`, a mesh keyed by `payload_digest`) would have
+  to honour `child` too; nothing that does is handed components. The compound they refer into is the *finished*
+  one, the part the core is handed: `wrapper_common.encode_combined` validates, moves and scales the live
+  compound as `finished()` would (below) before it encodes it and refers the components into it, so the
+  compound is measured once, as it leaves. Validating what `combine()` made changes nothing in it, so its
+  components are still its children; a part moved or scaled is a copy holding none of them, and its
+  components are then shapes of their own, where the script left them - the core has never moved a part's
+  components with it.
+
   `Shape.get_bounding_box_async` reads that recorded box too; it does not measure a shape that carries one.
   `wrapper_measure` still exists for what was not measured at build time: `measure.bbox(frame=...)`, which
   re-measures a shape in a **port's** frame rather than its own, and the bounding box of a shape that recorded
@@ -1393,7 +1420,18 @@ at all).
   JSON is still read; an earlier release reading a frame counts it a miss and writes its own form. **Nothing but an
   assembly's tree is framed**, and that is about the earlier release rather than about sharing: a part's components
   (`cmps`) are an entry beside its geometry, and framed they would be that release's miss while the geometry beside
-  them was its hit -- a part handed back with no components, which is worse than a miss of both.
+  them was its hit -- a part handed back with no components, which is worse than a miss of both. The one exception
+  is components that are references into their compound (`KEY_CHILD`, above): their entry is a tree frame whose
+  header says the payload is the one in the geometry entry written beside it (`"beside"`), so the cache holds the
+  geometry once; read back, it needs that entry read with it and holding the payload it names, by digest, or it is
+  a miss. Being a few hundred bytes whatever the geometry weighs, such an entry is offered to each tier at the size
+  of the geometry it names (`ShapeCache._admission_sizes`), on a write and on a promotion alike, so a tier with a
+  minimum entry size holds both or neither; copied from a farther tier without that geometry, it is copied nowhere.
+  No earlier release can be the one reading it, and that is why the frame is allowed there: the build123d and
+  cadquery wrappers raised their `CACHE_VERSION` when they started producing such components, a shape's key carries
+  the versions of the wrappers that build it (`ShapeFactory.code_versions`), so an earlier release computes another
+  key and misses the geometry and its components alike. A new kind of component entry gets the same treatment, or
+  stays JSON.
 
   **A request is serialized when its process starts** (`runtime.stdin_bytes`): a runtime's `stdin` may be a
   callable, called at the spawn, inside the process slot. The render path passes one, so a drawing waiting for a slot

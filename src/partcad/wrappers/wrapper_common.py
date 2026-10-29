@@ -380,13 +380,23 @@ def finished(shape, metadata=None):
 
     if not isinstance(shape, OCP.TopoDS.TopoDS_Shape):
         return shape
+    shape, combined = _finished_live(shape, metadata)
+    return ocp_serialize.encode_shape(shape, name=_request_name, label=_request_label, metadata=combined)
+
+
+def _finished_live(shape, metadata=None):
+    """'(shape, metadata)': 'shape' finished as the request asks, and what to encode it with (or None).
+
+    'finished()' without the encoding, for a caller that encodes the shape
+    with others ('encode_combined()').
+    """
     done = {}
     if _request_finish:
         shape, done = _finish(shape, _request_finish)
     combined = dict(metadata or {})
     if done:
         combined[ocp_serialize.METADATA_FINISHED] = done
-    return ocp_serialize.encode_shape(shape, name=_request_name, label=_request_label, metadata=combined or None)
+    return shape, combined or None
 
 
 def finished_shapes(shapes):
@@ -524,6 +534,36 @@ def combine(shapes, kind):
 
     walk(shapes, components)
     return compound, components
+
+
+def encode_combined(compound, components, finish=False):
+    """'combine()'s compound and components, encoded as the answer carries them.
+
+    The compound holds the very shapes its components are, so each component it
+    holds is sent as a reference to the compound's geometry rather than as a
+    second copy of it - see 'ocp_serialize.encode_combined()', which also
+    measures each of them once. Echoes the request's name and label onto all of
+    them, as 'handle_output()' does onto a shape it encodes itself.
+
+    'finish' is whether the compound is the part, to be finished on its way out
+    as 'finished()' finishes one - validated, moved by its 'offset', scaled by
+    its 'scale', and said to be. That is done to the live compound first, so
+    that what the components refer into, and what is measured once, is the
+    part the core is handed: the finished compound. Validating a compound
+    'combine()' made changes nothing in it (every shell it could close is a
+    solid already), so its components are still its children and still refer
+    into it. A part that is moved or scaled is a copy, which holds none of
+    them: its components are then shapes of their own, as they were before it
+    was moved - the core has never moved a part's components with it.
+
+    Returns (shape object, components).
+    """
+    metadata = None
+    if finish and _request_finish:
+        compound, metadata = _finished_live(compound)
+    return ocp_serialize.encode_combined(
+        compound, components, name=_request_name, label=_request_label, metadata=metadata
+    )
 
 
 def exception_to_str(exc):

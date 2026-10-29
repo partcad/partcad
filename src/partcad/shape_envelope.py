@@ -22,8 +22,8 @@ point of the split:
 A single shape is '{"name", "label", "brep"}'; an assembly is
 '{"name", "label", "assembly": [...]}'. Either may also carry an optional
 "location", an optional "properties", an optional "joint", an optional
-"attached", an optional "kind", an optional "fixed" and an optional "metadata"
-(see the keys below).
+"attached", an optional "kind", an optional "fixed" and an optional "metadata",
+and a single shape an optional "child" (see the keys below).
 
 The two names answer different questions and a reader needs both. "name" is the
 *object*: '<package>:<object>', what the node holds, shared by every node that
@@ -155,6 +155,20 @@ def base64_length(size: int) -> int:
 # Optional placement on a shape/assembly object, carried opaquely by the core
 # and turned into a real location by the geometry-side codec (ocp_serialize).
 KEY_LOCATION = "location"
+# Optional on a shape object: which child of the shape its KEY_BREP payload holds
+# this node is, as an index in the order OCCT iterates the children. A script's
+# components are made this way ('ocp_serialize.encode_combined()'): each one
+# carries the payload of the compound it is part of - in memory the very bytes
+# object the compound holds, on the pipe and in the cache that payload once - and
+# says which piece of it it is. The geometry-side twin, and what decodes it, is
+# 'ocp_serialize.KEY_CHILD'.
+#
+# Part of the geometry, not of the outer layer: the payload without it is a
+# different shape. So 'strip_metadata()' and 'apply_metadata()' keep it with the
+# payload, and the shape cache writes a list of such components without the
+# payload when the geometry entry beside it already holds that payload (see
+# 'cache_shape').
+KEY_CHILD = "child"
 # Optional properties on a shape/assembly object: what the shape reports about
 # itself ("material", "color", "physics"), as opposed to the parameters it was
 # built from. One key rather than three, so that the envelope's key space stays
@@ -665,6 +679,8 @@ def strip_metadata(obj):
     if key is None:
         return obj
     stripped = {key: obj[key]}
+    if KEY_CHILD in obj:
+        stripped[KEY_CHILD] = obj[KEY_CHILD]
     metadata = metadata_of(obj)
     if metadata:
         stripped[KEY_METADATA] = metadata
@@ -686,6 +702,8 @@ def apply_metadata(obj, metadata):
         return obj
     wrapped = dict(metadata or {})
     wrapped[key] = obj[key]
+    if KEY_CHILD in obj:
+        wrapped[KEY_CHILD] = obj[KEY_CHILD]
     own = metadata_of(obj)
     if own:
         wrapped[KEY_METADATA] = own
@@ -693,7 +711,7 @@ def apply_metadata(obj, metadata):
 
 
 # What a node holds of its geometry, or learnt from it, rather than says about it.
-_GEOMETRY_KEYS = frozenset((KEY_BREP, KEY_GLTF, KEY_GEOMETRY, KEY_METADATA))
+_GEOMETRY_KEYS = frozenset((KEY_BREP, KEY_CHILD, KEY_GLTF, KEY_GEOMETRY, KEY_METADATA))
 
 
 def description(obj):
