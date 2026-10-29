@@ -35,12 +35,12 @@ from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
 from OCP.BRepTools import BRepTools
 from OCP.gp import gp_Pnt, gp_Trsf, gp_Vec
 from OCP.GProp import GProp_GProps
-from OCP.Poly import Poly_Array1OfTriangle, Poly_Triangle, Poly_Triangulation
+from OCP.Poly import Poly_Array1OfTriangle, Poly_Polygon3D, Poly_Triangle, Poly_Triangulation
 from OCP.TColgp import TColgp_Array1OfPnt
-from OCP.TopAbs import TopAbs_FACE, TopAbs_SHELL, TopAbs_VERTEX
+from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_SHELL, TopAbs_VERTEX
 from OCP.TopExp import TopExp, TopExp_Explorer
 from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import TopoDS, TopoDS_Compound, TopoDS_Face, TopoDS_Shape
+from OCP.TopoDS import TopoDS, TopoDS_Compound, TopoDS_Edge, TopoDS_Face, TopoDS_Shape
 from OCP.TopTools import TopTools_IndexedMapOfShape
 
 from partcad import brep_inspect, cache_shape, shape_envelope
@@ -209,6 +209,47 @@ def test_a_shape_holding_a_mesh_is_written_with_all_of_it():
     decoded = ocp_serialize.shape_from_brep(ocp_serialize.shape_to_brep(both))
 
     assert _triangles(decoded) == _triangles(both)
+
+
+def _polyline(points):
+    """An edge that is nothing but a 3D polygon: no curve under it, and in no face."""
+    nodes = TColgp_Array1OfPnt(1, len(points))
+    for index, point in enumerate(points):
+        nodes.SetValue(index + 1, gp_Pnt(*point))
+    edge = TopoDS_Edge()
+    BRep_Builder().MakeEdge(edge, Poly_Polygon3D(nodes))
+    return edge
+
+
+def _lone_polygons(shape):
+    """The points of every 3D polygon on an edge of 'shape' that is in no face."""
+    found = []
+    explorer = TopExp_Explorer(shape, TopAbs_EDGE, TopAbs_FACE)
+    while explorer.More():
+        polygon = BRep_Tool.Polygon3D_s(TopoDS.Edge_s(explorer.Current()), TopLoc_Location())
+        if polygon is not None:
+            nodes = [polygon.Nodes().Value(index) for index in range(1, polygon.NbNodes() + 1)]
+            found.append([(node.X(), node.Y(), node.Z()) for node in nodes])
+        explorer.Next()
+    return found
+
+
+def test_an_edge_that_is_only_a_polygon_keeps_it():
+    """Written without it, the edge would come back as nothing at all: the polygon is all it is."""
+    points = [(0.0, 0.0, 0.0), (1.0 / 3.0, 0.0, 0.0), (1.0 / 3.0, 2.0 / 7.0, 0.0)]
+    both = _compound(_meshed(_box()), _polyline(points))
+
+    decoded = ocp_serialize.shape_from_brep(ocp_serialize.shape_to_brep(both))
+
+    assert _lone_polygons(decoded) == [points]
+
+
+def test_edges_bounding_faces_are_not_taken_for_lone_polygons():
+    """A meshed solid's edges carry polygons too, on its triangles: its payload still leaves the mesh out."""
+    box = _meshed(_box())
+
+    assert not ocp_serialize._holds_lone_polygon(box)
+    assert _triangles(ocp_serialize.shape_from_brep(ocp_serialize.shape_to_brep(box))) == 0
 
 
 @pytest.mark.parametrize(
