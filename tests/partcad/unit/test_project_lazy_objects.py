@@ -184,3 +184,88 @@ def test_a_part_lookup_survives_a_short_form_assembly(tmp_path):
     assert project.get_part("robot/link", quiet=True) is None
     # ...and the package still answers for what it does declare.
     assert project.get_part("cube", quiet=True) is not None
+
+
+def _state(obj) -> dict:
+    """What a factory finishes setting up on its object after making it."""
+    return {
+        "path": getattr(obj, "path", None),
+        "cache_dependencies": list(getattr(obj, "cache_dependencies", [])),
+        "cache_dependencies_broken": getattr(obj, "cache_dependencies_broken", None),
+        "get_final_config": getattr(obj, "get_final_config", None) is not None,
+    }
+
+
+def test_an_object_is_registered_only_once_it_is_whole(monkeypatch):
+    """What a package hands out is what its factory finished building.
+
+    'get_object' returns whatever is registered without taking the object's
+    lock, so an object registered from inside '_create()' could be handed out
+    before 'post_create()' gave it a path, or before its factory's constructor
+    added to its cache dependencies or attached an alias's accessors.
+    """
+    registered = {}
+    register = pc.project.Project.register_object
+
+    def recording(self, kind, name, obj):
+        registered[(kind, name)] = (obj, _state(obj))
+        return register(self, kind, name, obj)
+
+    monkeypatch.setattr(pc.project.Project, "register_object", recording)
+    ctx = pc.Context("examples")
+
+    ctx.get_project(PARTS).get_part("cube")  # a CadQuery file, and its 'box' alias
+    ctx.get_project("//produce_part_extrude").get_part("cylinder")
+    ctx.get_project(ASSEMBLIES).get_assembly("primitive")
+
+    assert {name for _, name in registered} >= {"cube", "box", "cylinder", "primitive"}
+    for (kind, name), (obj, at_registration) in registered.items():
+        assert at_registration == _state(obj), "%s '%s' was registered before it was whole" % (kind, name)
+    assert registered[("part", "cube")][1]["path"] is not None
+
+
+def test_a_part_being_made_is_not_handed_out_half_made(monkeypatch):
+    """The second caller for a part waits for the first to finish making it.
+
+    It used to be handed the part the moment '_create()' registered it, before
+    'post_create()' set its 'path': the instance a concurrent 'pc test -r' then
+    instantiated was 'os.path.exists(None)'.
+    """
+    import threading
+
+    from partcad.part_factory_file import PartFactoryFile
+
+    entered, release = threading.Event(), threading.Event()
+    post_create = PartFactoryFile.post_create
+
+    def paused(self):
+        entered.set()
+        release.wait(timeout=60)
+        return post_create(self)
+
+    monkeypatch.setattr(PartFactoryFile, "post_create", paused)
+    project = pc.Context("examples").get_project(PARTS)
+
+    got = {}
+
+    def ask(who):
+        part = project.get_part("cube")
+        # As it was when it was handed over: the maker goes on to finish the
+        # very same object, so looking at it afterwards would see it whole.
+        got[who] = (part, part.path)
+
+    making = threading.Thread(target=ask, args=("maker",))
+    making.start()
+    assert entered.wait(timeout=60)
+    asking = threading.Thread(target=ask, args=("asker",))
+    asking.start()
+    # Long enough for the asker to have been handed a registered part, had
+    # there been one; it must instead be waiting for the maker to finish.
+    asking.join(timeout=2)
+    release.set()
+    making.join(timeout=60)
+    asking.join(timeout=60)
+
+    assert not making.is_alive() and not asking.is_alive()
+    assert got["asker"][0] is got["maker"][0]
+    assert got["asker"][1] is not None

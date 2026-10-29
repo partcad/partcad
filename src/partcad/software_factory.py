@@ -45,7 +45,8 @@ class SoftwareFactory(factory.Factory):
 
     def _create(self, config) -> None:
         self.software = self._create_software(config)
-        self.target_project.register_object("software", self.name, self.software)
+        # Registered once the factory is built, not here (see 'factory._RegisteredOnceBuilt').
+        self.register_when_built("software", self.software)
         self.post_create()
 
     def post_create(self) -> None:
