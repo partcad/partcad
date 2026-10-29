@@ -84,7 +84,8 @@ class AssemblyFactory(ShapeFactory):
         self.assembly._subassemblies = lambda assembly_self: self.subassemblies_async(assembly_self)
         self.assembly.info = lambda: self.info(self.assembly)
         self.assembly.with_ports = self.with_ports
-        self.target_project.register_object(self.OBJECT_KIND, self.name, self.assembly)
+        # Registered once the factory is built, not here (see 'factory._RegisteredOnceBuilt').
+        self.register_when_built(self.OBJECT_KIND, self.assembly)
 
         self.apply_environment_cache_key(self.assembly)
         self.post_create()

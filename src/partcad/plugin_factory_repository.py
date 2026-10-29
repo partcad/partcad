@@ -42,6 +42,7 @@ class PluginFactoryRepository(PluginFactoryPython):
         if hasattr(self, "path"):
             self.plugin.path = self.path
 
-        self.target_project.register_object("repository", self.name, self.plugin)
+        # Registered once the factory is built, not here (see 'factory._RegisteredOnceBuilt').
+        self.register_when_built("repository", self.plugin)
         self.ctx.stats_plugins += 1
         self.ctx.stats_repositories += 1

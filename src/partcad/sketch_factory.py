@@ -95,7 +95,8 @@ class SketchFactory(ShapeFactory):
 
     def _create(self, config: object) -> None:
         self.sketch = self._create_sketch(config)
-        self.target_project.register_object("sketch", self.name, self.sketch)
+        # Registered once the factory is built, not here (see 'factory._RegisteredOnceBuilt').
+        self.register_when_built("sketch", self.sketch)
 
         self.apply_environment_cache_key(self.sketch)
         self.post_create()

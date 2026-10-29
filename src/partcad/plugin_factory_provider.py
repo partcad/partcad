@@ -43,6 +43,7 @@ class PluginFactoryProvider(PluginFactoryPython):
         if hasattr(self, "path"):
             self.plugin.path = self.path
 
-        self.target_project.register_object("provider", self.name, self.plugin)
+        # Registered once the factory is built, not here (see 'factory._RegisteredOnceBuilt').
+        self.register_when_built("provider", self.plugin)
         self.ctx.stats_plugins += 1
         self.ctx.stats_providers += 1
