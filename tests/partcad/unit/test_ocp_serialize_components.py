@@ -16,6 +16,7 @@ its place in the nesting - and what it is for: the answer carries the geometry
 once.
 """
 
+import base64
 import json
 import os
 import sys
@@ -133,7 +134,9 @@ def test_the_answer_carries_the_geometry_once():
     compound, raw = wrapper_common.combine(solids, "part")
     twice = ocp_serialize.dumps({"shape": compound, "components": raw}, share=True)
 
-    payload = len(shape[ocp_serialize.KEY_BREP])
+    # As long as the document writes it: the shape holds its payload raw, and
+    # JSON carries it as base64 (see 'ocp_serialize.dumps').
+    payload = len(base64.b64encode(shape[ocp_serialize.KEY_BREP]))
     assert _payloads(once) == payload
     # Each component a payload of its own, beside the compound holding them all.
     assert _payloads(twice) > 1.8 * payload
@@ -218,7 +221,9 @@ def test_a_decoding_shared_across_documents_holds_shapes_and_nothing_else():
 def test_what_is_encoded_travels_as_json():
     shape, components = _encoded(_solids())
 
-    assert json.loads(json.dumps(components))[0][ocp_serialize.KEY_CHILD] == 0
+    # The JSON a container is answered in, which writes the raw payloads the
+    # components hold as base64 (see 'ocp_serialize.dumps').
+    assert json.loads(ocp_serialize.dumps(components))[0][ocp_serialize.KEY_CHILD] == 0
     assert list(_leaves(components))
 
 

@@ -496,9 +496,11 @@ def test_a_client_that_takes_nothing_for_too_long_is_dropped_and_its_request_can
         c.settimeout(TIMEOUT)
         write_message(f, {"jsonrpc": "2.0", "id": 1, "method": "flood", "params": {"n": 100000}})
         # Not reading, for longer than the bound: the connection is shut down,
-        # and what the client finds when it does read is what had already
-        # reached its buffer, then the end -- no answer, since the request was
-        # cancelled rather than run to the end for nobody.
+        # and what the client finds when it does read is the end -- after what
+        # had already reached its buffer, where the platform keeps that past
+        # the shutdown: Linux does, and on macOS the client has found none.
+        # No answer either way, since the request was cancelled rather than
+        # run to the end for nobody.
         time.sleep(2)
         messages = []
         while True:
@@ -506,7 +508,7 @@ def test_a_client_that_takes_nothing_for_too_long_is_dropped_and_its_request_can
             if message is None:
                 break
             messages.append(message)
-        assert messages and all(m.get("method") == events.INFO for m in messages)
+        assert all(m.get("method") == events.INFO for m in messages)
         assert len(messages) < 100000
         _close(f, c)
     finally:
