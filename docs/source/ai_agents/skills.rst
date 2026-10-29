@@ -33,78 +33,168 @@ authorship.
 ``pc healthcheck`` reports installed skills that came from an older PartCAD than the one now installed:
 ``pc upgrade`` replaces PartCAD and leaves the skills where they are, so something has to notice.
 
-==============
-What there is
-==============
 
-**Setting up**
+========================
+The skills PartCAD ships
+========================
+
+Fourteen of them. The name in each heading is what you type in Claude Code; under
+Cursor the same skill is ``pc-<name>``, and an agent that chooses skills by their
+description will reach for the right one without being told.
+
+
+Setting up
+==========
 
 ``/pc:setup``
-  Puts ``pc`` on this machine -- the standalone build, or the wheel into the active Python environment -- and,
-  when the agent runs inside Visual Studio Code or VSCodium, the PartCAD extension into that editor.
+  Puts ``pc`` on this machine so the other skills have something to run, and
+  does nothing if a working one is already there -- the first thing it does is
+  check, because the common case is that PartCAD is installed and the agent
+  should get on with the job.
+
+  It installs one of two ways and asks which if it matters: the **standalone
+  build** from the GitHub releases, which carries its own Python and needs none
+  on the machine, or the **wheel** into the Python environment that is currently
+  active, which is the one to pick if anything is going to ``import partcad``.
+  When the agent is running inside Visual Studio Code or VSCodium it also
+  installs the PartCAD extension into that editor -- and works out which editor
+  it is in rather than guessing, stopping early when there is nothing to do.
 
 ``/pc:init``
-  Creates a package in the current directory, by running ``pc init``.
+  Creates a package in the current directory by running ``pc init``, which writes
+  a ``partcad.yaml`` and installs the skills into the repository. It locates the
+  command first and falls back to ``/pc:setup`` when there is nothing installed.
 
-**Generating geometry**
+
+Generating geometry
+===================
 
 ``/pc:gen``
-  Decides whether the request is a part, an assembly or a 2D sketch, and follows the matching skill below.
+  The one to use when it does not matter which kind of object the request is.
+  It decides whether what was asked for is a single part, a multi-part assembly
+  or a 2D sketch, and then follows the matching skill below. "Model me a shelf
+  bracket" is a part; "model me a gearbox" is an assembly; "draw me the profile"
+  is a sketch.
 
 ``/pc:gen-part``
-  Writes down what the part is required to be, authors the CAD script, and validates it by rendering several
-  views and checking each against the description. A single projection hides whatever is behind it, which is
-  why it is several.
+  Models one part from a description, and the order it works in is the point:
+
+  1. It reads the request, and chooses a representation -- build123d, CadQuery,
+     OpenSCAD, or a primitive -- rather than defaulting to one.
+  2. **It writes down what the part is required to be before it writes any
+     geometry**, as the ``requirements:`` section, in the terms of the request
+     ("four M3 holes on a 40 mm square") rather than in terms of the model it is
+     about to build. Requirements written afterwards describe the design, and
+     then everything meets them.
+  3. It authors and registers the script, then validates it with ``pc test``.
+  4. It renders the part **from several angles and compares each view against
+     the description**, because a single projection hides whatever is behind it
+     -- then iterates on what the comparison found.
 
 ``/pc:gen-assembly``
-  Reuses or generates the component parts, authors the ``.assy`` -- explicit placement, or interface mates --
-  and validates the result the same way.
+  Models an assembly, and is the longest of the skills because putting things
+  together is where the hard-won rules live. It decomposes the request, takes an
+  inventory of parts that already exist and generates only what is missing,
+  authors the ``.assy``, and groups whatever repeats into sub-assemblies.
+
+  Its last step is the valuable one: it **replaces the coordinates it started
+  with by connections**, so the assembly ends up saying what holds each item
+  rather than where each item happens to sit. That is what makes the assembly
+  survive a change to one of its parts. The rules it follows there are the ones
+  that are easy to get wrong -- find the pairs by where the ports actually are;
+  grow the order outwards from what is already placed rather than following the
+  order the thing is built in; the first item needs no location at all; a turn is
+  a *difference* between two ports, not an orientation; let sub-assemblies join
+  each other; and, above all, **do not predict a mate -- try it**, and look at
+  the result.
 
 ``/pc:gen-sketch``
-  Authors a 2D sketch (build123d, CadQuery, DXF, SVG or basic) and validates it by rendering to SVG.
+  Authors a 2D sketch -- build123d, CadQuery, DXF, SVG or a basic outline -- and
+  validates it by rendering it to SVG and comparing that against the
+  description. Sketches are what parts are extruded and swept from, and what a
+  port's boundary is drawn with.
 
 ``/pc:add-interfaces``
-  Adds ``interfaces``, ports and ``implements:`` to an existing part, so PartCAD can mate it by connection
-  rather than by hand-written coordinates. It works the port positions out of the geometry and proves them
-  twice: by drawing them on the part, and by mating two instances in a throwaway assembly.
+  Adds ``interfaces``, ports and ``implements:`` to a part that has none, so that
+  PartCAD can mate it by connection instead of by hand-written coordinates.
 
-**Looking at what is there**
+  It works the port positions out of the geometry -- by rendering the part and
+  by reading its source -- and then **proves them twice**: by drawing the ports
+  on the part and looking at them, and by mating two instances of the part in a
+  throwaway assembly and looking at that. A port that is in the wrong place or
+  facing the wrong way is invisible in the declaration and obvious in either
+  picture.
+
+
+Finding and describing
+======================
 
 ``/pc:search``
-  Finds parts and assemblies in the catalog whose name, description or source matches a query.
+  Finds parts and assemblies in the catalog whose name, description or source
+  matches a natural-language query, by running ``pc search``; then presents the
+  matches and, if you pick one, inspects or renders it. The reason to reach for
+  it first is that the public repository already has the fastener, the bearing
+  or the motor, and a part that is reused is a part nobody has to validate.
 
 ``/pc:describe``
-  Writes a narratable description of an existing object from its measured bounding box and its renders, and
-  stores it in the object's ``summary:``.
+  Writes a narratable, accessibility-oriented description of an existing object
+  and stores it in the object's ``summary:``, where ``pc ide view`` and the
+  Explorer show it. It does not guess from the name: it measures the bounding
+  box and the volume, renders three views, renders a dimensioned drawing where
+  one is available, and writes the description from those.
 
-**Producing files**
+
+Producing files
+===============
 
 ``/pc:render``
-  Writes a 2D projection -- PNG, JPEG, SVG or DXF -- from one or many viewing angles, optionally with the
-  connection ports and interfaces drawn on top.
+  Draws an object as a PNG, JPEG, SVG or DXF. It handles both cases -- ``pc
+  render`` for an object a package declares, ``pc adhoc render`` for a file that
+  belongs to no package -- and that distinction is the first thing it works out.
+
+  What it adds over the bare command is the judgement: which angle answers the
+  question (front, top, iso, or an arbitrary direction), rendering several
+  angles at once when one will not do, drawing the ports and interfaces on top
+  when the question is about how something connects, and rendering part of an
+  assembly when the whole of it would be unreadable.
 
 ``/pc:export``
-  Writes a CAD file out of an object the package declares, changing nothing in ``partcad.yaml``.
+  Writes a CAD file out of an object a package declares -- STEP, BREP, STL, 3MF,
+  OBJ, IGES, glTF, three.js, URDF, or a file type the package implements itself
+  -- and **changes nothing in** ``partcad.yaml``. It can export part of an
+  assembly rather than all of it. Use it to hand something to somebody else.
 
 ``/pc:convert``
-  Changes what something *is*: for an object in a package it rewrites the declaration to point at the new
-  file; for a bare file it converts the file and touches no package.
+  Changes what something *is*, which is the difference from exporting. For an
+  object in a package it rewrites the declaration to point at the new file, so
+  the package now says the object is a STEP where it used to say it was a
+  script. For a bare file it converts the file and touches no package.
 
-**Checking and analysing**
+
+Checking and analysing
+======================
 
 ``/pc:validate``
-  Checks an object against the requirements its ``requirements:`` section declares, by running ``pc test``,
-  and reports what each requirement found.
+  The skill for the :doc:`Validation phase </digital_thread/lifecycle/validation>`,
+  and the only one that judges a requirement no program can measure.
+
+  It reads what the object's ``requirements:`` section asks for, runs ``pc test``
+  for the ports, interfaces and physical properties PartCAD measures, runs every
+  simulation and every engineering analysis scenario, renders the object from
+  every angle that matters with its ports and interfaces drawn, and -- for an
+  assembly -- reads the bill of materials and the assembly instructions. Then it
+  gives every requirement a verdict: **met, not met, or "cannot tell"**, with
+  the evidence named for each. The third verdict is what keeps it honest; a
+  feature it has no evidence for is reported as unjudged rather than passed.
 
 ``/pc:sim-assembly-fea``
-  Turns what a simulation of an assembly measured into a stress analysis of one part in it: runs the
-  assembly's ``simulate:`` entry, reads the forces off the result, and drives ``pc cae fea`` with them.
+  Turns what a simulation measured into a stress analysis of one part, which is
+  a thing neither tool does on its own.
 
-==================
-Writing your own
-==================
-
-The library lives in ``ai-agents/common/skills`` in the PartCAD repository, one directory per skill. A skill
-is a ``SKILL.md`` with a name, a one-line description that decides when an agent reaches for it, and the
-procedure. :doc:`/contributing` covers getting one into PartCAD; nothing stops you keeping one in your own
-package's repository instead.
+  It runs the assembly's ``simulate:`` entry, reads the forces and moments acting
+  at the end of the run on the body the part is welded into, works out which of
+  them actually load that part and where they land, and writes a new named
+  scenario into the part's ``fea:`` section beside any already there. Then it
+  runs ``pc cae fea`` on it and shows the result where there is somewhere to
+  show it. The step that matters is the third: a force on a welded body is not a
+  force on the part until somebody decides which of it the part carries.

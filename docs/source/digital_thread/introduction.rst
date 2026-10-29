@@ -1,3 +1,5 @@
+.. _digital-thread:
+
 ############
 Introduction
 ############
@@ -10,8 +12,9 @@ record kept true to one physical thing for as long as the thing lasts. The
 thread is what the twin is made of.
 
 PartCAD is designed to be that record for manufacturable physical products, from
-the first sentence about an idea to the order for the parts. This chapter explains how; :doc:`/digital_thread/lifecycle` takes the phases one at a time, and
-:doc:`/digital_thread/workflows/index` the work that runs through them.
+the first sentence about an idea to the order for the parts. This chapter explains
+how; :doc:`/digital_thread/lifecycle/index` takes the phases one at a time, and
+:doc:`/digital_thread/workflows` the work that runs through them.
 
 
 Everything is a declaration in a package
@@ -29,27 +32,27 @@ declaration of the same object:
    * - Phase
      - What the object declares
      - What answers questions about it
-     - In the Digital Thread
-   * - :doc:`Requirements </digital_thread/workflows/requirements>`
+     - In the UI
+   * - :doc:`Requirements </digital_thread/lifecycle/requirements>`
      - ``requirements:`` -- features, ports, interfaces, physical properties
      - ``pc test``, ``/pc:validate``
      - **Requirements**
-   * - :doc:`Design </digital_thread/workflows/design>`
+   * - :doc:`Design </digital_thread/lifecycle/design>`
      - the part's script or file, its parameters, ports and interfaces; an
        assembly's links and connections; sketches, scenes
      - ``pc info``, ``pc render``, ``pc export``
      - **Design**
-   * - :doc:`Analysis </digital_thread/workflows/analysis>`
+   * - :doc:`Analysis </digital_thread/lifecycle/analysis>`
      - ``physics:``, materials, ``fea:``, ``dynamic:``, ``thermal:``, ``cfd:``,
        ``simulate:``
      - ``pc info``, ``pc cae``, ``pc sim``
      - **Analysis**
-   * - :doc:`Manufacturing </digital_thread/workflows/manufacturing>`
+   * - :doc:`Manufacturing </digital_thread/lifecycle/manufacturing>`
      - ``manufacturing:``, ``vendor:`` and ``sku:``, materials, tolerances,
        software, an assembly's instructions
      - ``pc bom``, ``pc supply``, ``pc instructions``, ``pc cam``
      - **Manufacturing**
-   * - :doc:`Validation </digital_thread/workflows/validation>`
+   * - :doc:`Validation </digital_thread/lifecycle/validation>`
      - the claims all of the above make, checked
      - ``pc test``, ``pc sim``, ``/pc:validate``
      - **Validation**
@@ -86,7 +89,7 @@ A declaration states claims: this part is made by laser cutting, this assembly's
 parts do not overlap, this mass is under 50 grams, this robot does not tip over.
 ``pc test`` checks every claim that can be measured, ``pc sim`` every claim about
 behaviour that a simulation can show, and the ``/pc:validate`` agent skill
-judges the rest from evidence it gathers and names. See :doc:`/digital_thread/workflows/validation`.
+judges the rest from evidence it gathers and names. See :doc:`/digital_thread/lifecycle/validation`.
 
 Packages build on packages
 ==========================

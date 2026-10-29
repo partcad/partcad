@@ -919,7 +919,7 @@
       ]
     },
     "motion-type": {
-      "description": "A kind of joint, which implies its degrees of freedom: 'fixed' none; 'revolute' one turn about 'axis', bounded by 'limits' on either side or on neither; 'prismatic' one move along 'axis', likewise; 'cylindrical' a turn and a move about and along 'axis'; 'screw' the same two, the move following the turn by the 'threadStep'; 'universal' two turns, about 'axis' and about the port's X axis (its Y, when 'axis' is X); 'ball' three turns about the port's origin, bounded by one angle ('limits: {upper: <degrees>}'); 'planar' two moves across the plane normal to 'axis' and one turn about it; 'floating' all six: a body of its own. 'continuous' is deprecated: a 'revolute' with both bounds open. See docs/source/config_geometry.rst.",
+      "description": "A kind of joint, which implies its degrees of freedom: 'fixed' none; 'revolute' one turn about 'axis', bounded by 'limits' on either side or on neither; 'prismatic' one move along 'axis', likewise; 'cylindrical' a turn and a move about and along 'axis'; 'screw' the same two, the move following the turn by the 'threadStep'; 'universal' two turns, about 'axis' and about the port's X axis (its Y, when 'axis' is X); 'ball' three turns about the port's origin, bounded by one angle ('limits: {upper: <degrees>}'); 'planar' two moves across the plane normal to 'axis' and one turn about it; 'floating' all six: a body of its own. 'continuous' is deprecated: a 'revolute' with both bounds open. See docs/source/config_interfaces.rst.",
       "type": "string",
       "anyOf": [
         { "enum": ["fixed", "revolute", "prismatic", "cylindrical", "screw", "universal", "ball", "planar", "floating"] },

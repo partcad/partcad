@@ -25,6 +25,7 @@ import {
     canvas,
     command,
     expand,
+    filled,
     installExtension,
     launch,
     layout,
@@ -35,14 +36,17 @@ import {
     rowAction,
     select,
     shot,
+    shown,
     showStill,
     sleep,
     slide,
+    tab,
     terminal,
     terminalShows,
     tidy,
     trimmed,
     viewer,
+    viewPanel,
     zoom,
 } from './vscode.mjs';
 
@@ -95,6 +99,12 @@ const SETTINGS = {
     'workbench.tips.enabled': false,
     'workbench.enableExperiments': false,
     'workbench.secondarySideBar.defaultVisibility': 'hidden',
+    // A tree keeps the row being expanded under a sticky header of its parents,
+    // and a header over a twistie is a header that takes the click meant for it
+    // ("intercepts pointer events"). Off, so that 'expand()' walks a path -- and
+    // so that a picture of the Explorer is the tree rather than the tree with
+    // part of itself repeated at the top.
+    'workbench.tree.enableStickyScroll': false,
     'security.workspace.trust.enabled': false,
     'update.mode': 'none',
     'extensions.autoUpdate': false,
@@ -145,6 +155,21 @@ async function inVSCode(folder, steps) {
 
 const out = (name) => path.join(OUT, `${name}.png`);
 
+/**
+ * The Digital Thread panel alone, as a rectangle to cut a screenshot to.
+ *
+ * The tab strips are above the 3D view and outside '#viewer', so this is the
+ * webview's own frame element rather than the canvas: a picture of a tab has to
+ * have the tab in it.
+ */
+async function panel(page) {
+    const box = await page.locator('iframe.webview, .webview').last().boundingBox();
+    if (!box) {
+        throw new Error('the Digital Thread panel is not on screen');
+    }
+    return box;
+}
+
 /** Open the Digital Thread beside the editor. */
 async function openViewer(page) {
     await command(page, 'Open Digital Thread');
@@ -185,13 +210,14 @@ const SHOTS = {
             await layout(page, { sidebar: 330, editor: 520, panel: 250 });
             await paneHeight(page, 'Inspector', 260);
             await showStill(page, 'connect-mates', 2, 'connect-ports');
+            await zoom(page, 1.5);
             await tidy(page);
             await shot(page, out('vscode2'));
         });
     },
 
     // A port, and the sketch that is its boundary, as the Digital Thread draws
-    // them: docs/source/config_geometry.rst, "Port boundary".
+    // them: docs/source/config_interfaces.rst, "Port boundary".
     async 'interface-m3'() {
         await inVSCode(EXAMPLES, async (page) => {
             await partcadView(page, ['Explorer']);
@@ -265,6 +291,390 @@ const SHOTS = {
                 width: Math.min(editor.width, 620),
                 height: 19 * 7 + 8,
             });
+        });
+    },
+
+    // --- The Digital Thread, one picture per tab ----------------------------
+    //
+    // docs/source/digital_thread/lifecycle/*.rst, each in its "In the UI"
+    // section: one picture per phase ('dt-<phase>') and one per sub-tab of it
+    // ('dt-<phase>-<tab>'). All of them are the panel alone rather than the
+    // whole window: what is being shown is the tab, and the editor beside it
+    // would be the same picture twenty times over.
+    //
+    // The first sub-tab of a group has no picture of its own, because the
+    // group's own picture is taken on it: 'dt-analysis' *is* the FEA tab,
+    // 'dt-manufacturing' is Build vs Buy, 'dt-validation' is Test. Those pages
+    // use that file, and nothing here takes the same picture twice.
+    //
+    // The view panel stays folded in every picture but 'dt-design-3d', whose
+    // page is about it.
+
+    // Design: the object itself, and the tree of what it is made of.
+    async 'dt-design'() {
+        await inVSCode(EXAMPLES, async (page) => {
+            await partcadView(page, ['Explorer']);
+            await expand(page, FEATURE_INTERFACE);
+            await openViewer(page);
+            await layout(page, { sidebar: 300, editor: 820 });
+            await showStill(page, 'connect-mates', 2, 'connect-ports');
+            await zoom(page, 1.5);
+            await tidy(page);
+            await shot(page, out('dt-design'), await panel(page));
+        });
+    },
+
+    // The 3D tab with the view panel out: the gizmo, the axis views, the
+    // section sliders and the viewpoint, which is what that page is about.
+    async 'dt-design-3d'() {
+        await inVSCode(EXAMPLES, async (page) => {
+            await partcadView(page, ['Explorer']);
+            await expand(page, FEATURE_INTERFACE);
+            await openViewer(page);
+            await layout(page, { sidebar: 300, editor: 700 });
+            await showStill(page, 'connect-mates', 2, 'connect-ports');
+            await viewPanel(page, true);
+            await tidy(page);
+            await shot(page, out('dt-design-3d'), await panel(page));
+        });
+    },
+
+    // The 2D tab: the object rendered to a picture, as 'pc render' renders it.
+    async 'dt-design-2d'() {
+        await inVSCode(EXAMPLES, async (page) => {
+            await partcadView(page, ['Explorer']);
+            await expand(page, FEATURE_INTERFACE);
+            await openViewer(page);
+            await layout(page, { sidebar: 300, editor: 820 });
+            await showStill(page, 'connect-mates', 2, 'connect-ports');
+            await tab(page, 'design', '2d');
+            await filled(page, '.render-body img, .render-body canvas, .image-view');
+            await tidy(page);
+            await shot(page, out('dt-design-2d'), await panel(page));
+        });
+    },
+
+    // The Draft tab: a dimensioned drawing. The first one is slow - PartCAD
+    // installs the drawing package into a sandbox before it can draw anything -
+    // so this waits as long as 'filled' allows.
+    async 'dt-design-draft'() {
+        await inVSCode(EXAMPLES, async (page) => {
+            await partcadView(page, ['Explorer']);
+            await expand(page, FEATURE_INTERFACE);
+            await openViewer(page);
+            await layout(page, { sidebar: 300, editor: 820 });
+            await showStill(page, 'example-bracket', 2, 'example-motor');
+            await tab(page, 'design', 'draft');
+            await filled(page, '.render-body img, .render-body canvas, .image-view');
+            await tidy(page);
+            await shot(page, out('dt-design-draft'), await panel(page));
+        });
+    },
+
+    // Analysis: the FEA tab of a part that declares scenarios of it, which is
+    // the scenario list and what was found, not a run started by the shutter.
+    async 'dt-analysis'() {
+        await inVSCode(EXAMPLES, async (page) => {
+            await partcadView(page, ['Explorer']);
+            await expand(page, ['feature_cae']);
+            await openViewer(page);
+            await layout(page, { sidebar: 300, editor: 820 });
+            await showStill(page, 'cantilever', 2, 'pipe');
+            await tab(page, 'analysis', 'fea');
+            await tidy(page);
+            await shot(page, out('dt-analysis'), await panel(page));
+        });
+    },
+
+    // The other three analyses of the same part, each its own question. One
+    // function, three names: what differs is the tab and the output file.
+    ...Object.fromEntries(
+        [
+            ['dt-analysis-dynamic', 'dynamic', 'cantilever'],
+            ['dt-analysis-thermal', 'thermal', 'cantilever'],
+            ['dt-analysis-cfd', 'cfd', 'pipe'],
+        ].map(([name, id, object]) => [
+            name,
+            async () => {
+                await inVSCode(EXAMPLES, async (page) => {
+                    await partcadView(page, ['Explorer']);
+                    await expand(page, ['feature_cae']);
+                    await openViewer(page);
+                    await layout(page, { sidebar: 300, editor: 820 });
+                    await showStill(page, object, 2, object === 'pipe' ? 'cantilever' : 'pipe');
+                    await tab(page, 'analysis', id);
+                    await filled(page, '.cae-model canvas, .cae-model img, .cae-findings-heading');
+                    await tidy(page);
+                    await shot(page, out(name), await panel(page));
+                });
+            },
+        ]),
+    ),
+
+    // Manufacturing: Build vs Buy, the choice that decides the other four tabs.
+    async 'dt-manufacturing'() {
+        await inVSCode(EXAMPLES, async (page) => {
+            await partcadView(page, ['Explorer']);
+            await expand(page, ['provider_manufacturer']);
+            await openViewer(page);
+            await layout(page, { sidebar: 300, editor: 820 });
+            await showStill(page, 'assembly', 2, 'cylinder');
+            await tab(page, 'manufacturing', 'bvb');
+            await filled(page, '.bvb .thumbnail');
+            await tidy(page);
+            await shot(page, out('dt-manufacturing'), await panel(page));
+        });
+    },
+
+    // Validation: every check 'pc test' runs, with its verdict. The checks are
+    // run by opening the tab, so this one waits for a verdict to appear.
+    async 'dt-validation'() {
+        await inVSCode(EXAMPLES, async (page) => {
+            await partcadView(page, ['Explorer']);
+            await expand(page, FEATURE_INTERFACE);
+            await openViewer(page);
+            await layout(page, { sidebar: 300, editor: 820 });
+            await showStill(page, 'example-bracket', 2, 'example-motor');
+            await tab(page, 'validation', 'test', 8000);
+            await filled(page, '.test-verdict');
+            await tidy(page);
+            await shot(page, out('dt-validation'), await panel(page));
+        });
+    },
+
+    // Build: the order to make something in. Nothing here clicks a switch in
+    // Build vs Buy first, so the object has to be one whose lines can only be
+    // built - and a part made *from stock* is not one: its stock is bought, so
+    // its Build tab is disabled until somebody chooses to build it.
+    // 'provider_manufacturer' is made by its provider, so both of its lines say
+    // Build already, which is what 'dt-manufacturing' shows.
+    async 'dt-manufacturing-build'() {
+        await inVSCode(EXAMPLES, async (page) => {
+            await partcadView(page, ['Explorer']);
+            await expand(page, ['provider_manufacturer']);
+            await openViewer(page);
+            await layout(page, { sidebar: 300, editor: 820 });
+            await showStill(page, 'assembly', 2, 'cylinder');
+            await tab(page, 'manufacturing', 'build');
+            await filled(page, '.build-tree .build-node');
+            await tidy(page);
+            await shot(page, out('dt-manufacturing-build'), await panel(page));
+        });
+    },
+
+    // Buy: what is bought, from whom, and for how much. It has to be an object
+    // that is *bought*: 'provider_manufacturer's parts are made by their
+    // provider, so both of its lines are built and its Buy tab is disabled.
+    // 'provider_store:nut' is a gobilda part with a vendor and an SKU, in a
+    // package that lists a supplier carrying it, so there is a quote to show.
+    async 'dt-manufacturing-buy'() {
+        await inVSCode(EXAMPLES, async (page) => {
+            await partcadView(page, ['Explorer']);
+            await expand(page, ['provider_store']);
+            // Loading what the alias points at goes on for a moment after the
+            // row is there, and a request that arrives while it does can fail.
+            await sleep(10000);
+            await openViewer(page);
+            await layout(page, { sidebar: 330, editor: 820 });
+            await showStill(page, 'nut', 2, 'bracket');
+            await tab(page, 'manufacturing', 'supply');
+            await filled(page, 'table.grid, .option, .placeholder');
+            await tidy(page);
+            await shot(page, out('dt-manufacturing-buy'), await panel(page));
+        });
+    },
+
+    // Bill of Materials: what has to be procured to have the assembly. An
+    // assembly of several *different* things, so that the list is a list:
+    // 'connect-mates' is a bracket, a motor and six screws of two sizes.
+    async 'dt-manufacturing-bom'() {
+        await inVSCode(EXAMPLES, async (page) => {
+            await partcadView(page, ['Explorer']);
+            await expand(page, FEATURE_INTERFACE);
+            await openViewer(page);
+            await layout(page, { sidebar: 300, editor: 820 });
+            await showStill(page, 'connect-mates', 2, 'connect-ports');
+            await tab(page, 'manufacturing', 'bom');
+            await filled(page, 'table.grid');
+            await tidy(page);
+            await shot(page, out('dt-manufacturing-bom'), await panel(page));
+        });
+    },
+
+    // Assembly: the instruction book. 'connect-mates' is put together by
+    // connections rather than by coordinates, so it has steps to write.
+    async 'dt-manufacturing-assembly'() {
+        await inVSCode(EXAMPLES, async (page) => {
+            await partcadView(page, ['Explorer']);
+            await expand(page, FEATURE_INTERFACE);
+            await openViewer(page);
+            await layout(page, { sidebar: 300, editor: 820 });
+            await showStill(page, 'connect-mates', 2, 'connect-ports');
+            await tab(page, 'manufacturing', 'assembly');
+            await filled(page, '.document-pages canvas, .document-pages img');
+            await tidy(page);
+            await shot(page, out('dt-manufacturing-assembly'), await panel(page));
+        });
+    },
+
+    // Validation -> Simulation: a run, played back. Opening the tab runs the
+    // first simulation the scene declares, which for 'stable' is a stack that
+    // stands - the clearest before-and-after there is.
+    async 'dt-validation-simulation'() {
+        await inVSCode(EXAMPLES, async (page) => {
+            await partcadView(page, ['Explorer']);
+            await expand(page, ['feature_simulate']);
+            await openViewer(page);
+            await layout(page, { sidebar: 300, editor: 820 });
+            await showStill(page, 'stable', 2, 'unstable');
+            await tab(page, 'validation', 'simulation', 8000);
+            await filled(page, '.simulation-figure, .simulation-video-media, .simulation-pictures');
+            await tidy(page);
+            await shot(page, out('dt-validation-simulation'), await panel(page));
+        });
+    },
+
+    // The Requirements tab, which is only there for an object that declares
+    // 'requirements:'. Nothing under examples/ does - the tree is what PartCAD
+    // renders and tests, and a requirement on an example would be one more
+    // thing for its checks to be about - so this one writes a package of its
+    // own, outside the repository, and opens VS Code on that.
+    async 'dt-requirements'() {
+        const folder = path.join(WORK, 'requirements');
+        fs.mkdirSync(folder, { recursive: true });
+        fs.writeFileSync(
+            path.join(folder, 'partcad.yaml'),
+            [
+                'desc: A shelf bracket, with the requirements it was asked to meet',
+                '',
+                'interfaces:',
+                '  mount:',
+                '    desc: Where the bracket bolts to the wall',
+                '    ports:',
+                '      hole: [[0, 0, 2.5], [0, 0, 1], 0]',
+                '',
+                'parts:',
+                '  bracket:',
+                '    type: build123d',
+                '    path: bracket.py',
+                '    desc: An L bracket that carries a shelf',
+                '    implements:',
+                '      mount: [[-20, 0, 0], [0, 0, 1], 0]',
+                '    requirements:',
+                '      features:',
+                '        mounting: Bolts to the wall through the holes of a 40 mm square, from the front',
+                '        shelf-load: Holds a 2 kg shelf at its free end without visible bending',
+                '      interfaces:',
+                '        mount: null',
+                '      physics:',
+                '        mass: "<0.05"',
+                '',
+            ].join('\n'),
+        );
+        fs.writeFileSync(
+            path.join(folder, 'bracket.py'),
+            [
+                'from build123d import *',
+                '',
+                'with BuildPart() as bracket:',
+                '    Box(50, 40, 5)',
+                '    with Locations(Plane.XY.offset(0)):',
+                '        with GridLocations(40, 30, 2, 2):',
+                '            Hole(1.6)',
+                '',
+                'show_object(bracket.part)',
+                '',
+            ].join('\n'),
+        );
+        await inVSCode(folder, async (page) => {
+            await partcadView(page, ['Explorer']);
+            await openViewer(page);
+            await layout(page, { sidebar: 300, editor: 820 });
+            await select(page, 'bracket');
+            await shown(page, 'bracket');
+            // Selecting a scripted part opens its script, and with no editor
+            // open yet that lands on top of the Digital Thread - whose tabs are
+            // then not on screen, and not clickable. Ask for it again.
+            await openViewer(page);
+            await tab(page, 'requirements', 8000);
+            await filled(page, 'table.grid.requirement-features');
+            await tidy(page);
+            await shot(page, out('dt-requirements'), await panel(page));
+        });
+    },
+
+    // --- The simulation examples --------------------------------------------
+    //
+    // docs/source/digital_thread/lifecycle/simulation.rst, "Examples". The
+    // first of the three is 'dt-validation-simulation' above, which is that
+    // package's 'stable'.
+
+    // A mechanism: the pendulum, held to its closed form.
+    async 'sim-example-pendulum'() {
+        await inVSCode(EXAMPLES, async (page) => {
+            await partcadView(page, ['Explorer']);
+            await expand(page, ['feature_simulate_joints']);
+            await openViewer(page);
+            await layout(page, { sidebar: 300, editor: 820 });
+            await showStill(page, 'pendulum', 2, 'nudged');
+            await tab(page, 'validation', 'simulation', 8000);
+            await filled(page, '.simulation-figure, .simulation-video-media, .simulation-pictures');
+            await tidy(page);
+            await shot(page, out('sim-example-pendulum'), await panel(page));
+        });
+    },
+
+    // The arm whose simulation an FEA scenario is then written from.
+    async 'sim-example-arm'() {
+        await inVSCode(EXAMPLES, async (page) => {
+            await partcadView(page, ['Explorer']);
+            await expand(page, ['feature_simulate_fea']);
+            await openViewer(page);
+            await layout(page, { sidebar: 300, editor: 820 });
+            await showStill(page, 'arm', 2, 'knee-gear');
+            await tab(page, 'validation', 'simulation', 8000);
+            await filled(page, '.simulation-figure, .simulation-video-media, .simulation-pictures');
+            await tidy(page);
+            await shot(page, out('sim-example-arm'), await panel(page));
+        });
+    },
+
+    // --- A result per plugin kind -------------------------------------------
+
+    // A part built by a package-defined partType: docs/source/plugins/part_types.rst.
+    async 'plugin-part-type'() {
+        await inVSCode(EXAMPLES, async (page) => {
+            await partcadView(page, ['Explorer']);
+            // Two packages, because 'produce_part_wrapper' holds one object and
+            // framing a show the same way every time needs a second one to show
+            // in between. 'produce_part_sweep' is that second one because it is
+            // the package immediately above this one: 'row()' finds a row by
+            // scrolling to it, so two packages far apart in the tree is two
+            // searches of a long tree and one of them runs out of time.
+            await expand(page, ['produce_part_sweep']);
+            await expand(page, ['produce_part_wrapper']);
+            await openViewer(page);
+            await layout(page, { sidebar: 300, editor: 820 });
+            // No zoom: a show already frames this one, and a box fills the frame.
+            await showStill(page, 'demo', 2, 'pipe');
+            await tidy(page);
+            await shot(page, out('plugin-part-type'), await panel(page));
+        });
+    },
+
+    // A part served by a repository plugin rather than by a file:
+    // docs/source/plugins/repositories.rst. 'example' is a package with no
+    // source tree at all - the CSV plugin beside it answers for it.
+    async 'plugin-repository'() {
+        await inVSCode(EXAMPLES, async (page) => {
+            await partcadView(page, ['Explorer']);
+            await expand(page, ['plugin_repository_basic', 'example']);
+            await openViewer(page);
+            await layout(page, { sidebar: 330, editor: 820 });
+            await showStill(page, 'bolt', 3, 'cube');
+            await zoom(page, 1.5);
+            await tidy(page);
+            await shot(page, out('plugin-repository'), await panel(page));
         });
     },
 

@@ -285,7 +285,7 @@ Quick Start
 
 .. note::
 
-  Following tutorial assumes that you have previous experience with both `VS Code`_ and `Docker`_ or have read
+  Following tutorial assumes that you have previous experience with both `Visual Studio Code`_ and `Docker`_ or have read
   `Environment`_ first.
 
 Overall process starting from setting up environment till merging changes in default branch is the following:
@@ -1451,8 +1451,6 @@ Parallelism
 .. _Open an existing folder in a container: https://code.visualstudio.com/docs/devcontainers/containers#_quick-start-open-an-existing-folder-in-a-container
 .. _named volume: https://docs.docker.com/engine/storage/volumes/
 .. _bind: https://docs.docker.com/engine/storage/bind-mounts/
-.. _VS Code: environment.md#visual-studio-code
-.. _Docker: environment.md#docker
 .. _Poetry: https://python-poetry.org/docs/
 .. _activated virtual environment: #activate-environment
 .. _pytest: https://docs.pytest.org/en/stable/

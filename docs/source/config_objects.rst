@@ -28,6 +28,26 @@ PartCAD :ref:`packages` may contain the following objects:
 
 - :ref:`providers` are implementations of a way to get parts and assemblies (to purchase them or to manufacture them).
 
+.. _one-name-one-object:
+
+====================
+One name, one object
+====================
+
+Within a package a name means **one** object, whatever kind it is. A package may not declare a part and an
+assembly both called ``bracket``, and it may not give one object an ``aliases:`` entry that takes another
+object's name. PartCAD keeps the name for one of them and refuses the other as the package loads, naming
+both; ``pc lint`` and the editor report it where the second one is written.
+
+The kinds that share this namespace are the ones a command can name: parts, interfaces, assemblies, sketches,
+scenes and software. :ref:`Materials <materials>`, :ref:`providers <providers>`,
+:ref:`repositories <repositories>` and :ref:`part types <part-types>` have namespaces of their own, because
+nothing names one of them without also saying what it is -- a part's ``material:``, ``pc supply --provider``,
+a part's ``type:``.
+
+What that buys on the command line -- naming an object without saying its kind -- is in
+:ref:`object-names`.
+
 ===============
 Common Metadata
 ===============
@@ -175,7 +195,7 @@ manufacturing, say -- but those are not part of this section.
   What the object has to have or do: a name for each, and a sentence saying
   what. Most of what anybody asks of a product is said this way, and PartCAD
   does not judge it. A ``simulate:`` entry may name the feature it demonstrates
-  (``feature:``, see :doc:`/digital_thread/workflows/simulation`); every feature, demonstrated or not, is
+  (``feature:``, see :doc:`/digital_thread/lifecycle/simulation`); every feature, demonstrated or not, is
   for whoever reads the evidence to judge -- the renders, the simulations, the
   bill of materials and the assembly instructions. That is what the
   ``/pc:validate`` agent skill does.
@@ -194,7 +214,7 @@ manufacturing, say -- but those are not part of this section.
 
 ``physics``
   The physical properties the object has to have: any field of a ``physics``
-  section a shape may state (see :doc:`/digital_thread/workflows/simulation`) -- ``mass``,
+  section a shape may state (see :doc:`/digital_thread/lifecycle/simulation`) -- ``mass``,
   ``centerOfMass``, ``inertia``, ``density``, ``friction`` and the rest. The
   value checked is the one ``pc info`` reports: what the object states in
   ``properties: physics:``; failing that, what its material lends (its

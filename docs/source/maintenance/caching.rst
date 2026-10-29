@@ -76,17 +76,25 @@ S3-compatible store that is not AWS.
 naming the package to install and leaves the remaining tiers working. See
 :doc:`/installation` for both.
 
+A hit in a farther tier is copied into the nearer tiers that missed it, so an
+entry another machine put in S3 is downloaded once and is a local file from
+then on. Writes to the two shared tiers are sent in the background: a build
+does not wait for memcached or S3, what is still waiting to be sent is visible
+to the process that wrote it, and it is sent before PartCAD exits. What a
+shared tier answered it does not hold is believed for a minute, so the many
+lookups of entries that are usually absent -- a part's components, its
+properties -- cost a round trip a minute rather than one each.
+
 Cache keys
 ==========
 
 An object is cached under a hash of what produces it: its configuration (less
 the keys that only describe it, such as ``desc``), the environment it is built
-in, and the files it is built from. A file contributes its size and its content
--- all of it up to 1 MB, and the first and last 0.5 MB of a larger one -- but
-never its modification time, so a fresh clone on another machine produces the
-same keys and a shared tier is shared. An edit confined to the middle of a file
-over 1 MB that leaves its size unchanged is therefore not seen; run that command
-with ``--cache-bypass``.
+in, and the files it is built from. A file contributes a digest of all of its
+content, but never its path or its modification time, so a fresh clone on
+another machine produces the same keys and a shared tier is shared. The digest
+is worked out again only when the file changes, and a file of 1 MB or more is
+not read again by the next process either.
 
 An object made out of others is keyed on theirs as well: an ``extrude`` or
 ``sweep`` on its sketch, a ``compound`` part on its assembly, an ``assy``
@@ -94,17 +102,47 @@ assembly on everything it links to. Editing a part rebuilds every assembly that
 uses it, and an object with ``cache: false`` makes everything built out of it
 uncached too.
 
-Analyses, routes and simulations
-================================
+Exports, renders, analyses, routes and simulations
+==================================================
 
-What ``pc cae``, ``pc cam`` and ``pc sim`` produce is
-cached in the same tiers: the result (the findings, what the route
-implementation counted, or what the simulator reported) together with the files
-the run wrote -- the analysis model, the route program, or the whole run
-directory of a simulation, with the scene, its meshes and whatever the plugin
-left there. Asking the same question again puts the files back where that run
-asks for them and runs nothing. The analysis, ``cam`` and ``sim`` checks of
-``pc test``, and the IDE's analysis tabs, go through the same cache.
+What ``pc export``, ``pc render``, ``pc cae``, ``pc cam`` and ``pc sim``
+produce is cached in the same tiers: the result (the warnings, the findings,
+what the route implementation counted, or what the simulator reported) together
+with the files the run wrote -- the exported file or the picture, the analysis
+model, the route program, or the whole run directory of a simulation, with the
+scene, its meshes and whatever the plugin left there. Asking the same question
+again puts the files back where that run asks for them and runs nothing. The
+analysis, ``cam`` and ``sim`` checks of ``pc test``, the IDE's analysis tabs,
+and ``pc convert`` go through the same cache.
+
+An exported or rendered file is cached together with anything its
+implementation wrote beside it -- the meshes a URDF file names, the ``.bin``
+next to a ``.gltf`` -- and that is only possible because the implementation
+says what it wrote: an implementation returns ``files``, a list of paths
+relative to the directory of the file it was asked for, and an empty list when
+it wrote nothing else. Every implementation PartCAD ships says so. One that does
+not -- written before this existed -- still works, and runs every time.
+
+The file's name is not part of the question. The files an implementation writes
+are named after the one it was asked for -- ``logo.urdf`` and
+``logo_meshes/bolt.stl`` -- so what is kept is the part each adds to the name
+they share, and asking for ``robot.urdf`` puts back ``robot.urdf`` and
+``robot_meshes/bolt.stl``. A name ending differently -- ``xyz.JPEG`` for a
+picture kept as ``abc.jpg`` with ``abc.colors.txt`` beside it -- leaves nothing
+to name the other files by (a difference of case does not count), and neither
+does a new name for files that name each other inside them, as a URDF file names
+its meshes: either is produced again. A filtered view (``--filter``) is keyed as
+the object it is a view of plus the links it keeps, and the pictures of an
+assembly instruction book as the assembly and the step.
+
+PartCAD's own sandboxed steps are cached the same way: the tessellation the IDE
+draws an object with, the PDF of an assembly instruction book, and the length a
+connection is pushed through. Those are keyed on exactly what the sandbox is
+handed -- the text and the pictures of the book, the geometry of each shape --
+so showing an object again, or printing the same book again, starts no sandbox.
+The tessellation is kept a shape at a time, keyed on that shape's exact geometry
+and on how finely it is drawn, so an assembly shown after one of its parts was
+edited sends that part, and nothing else, to be tessellated again.
 
 The question is the object's own cache key plus everything the run adds to it:
 the boundary conditions and where they landed, a route's job and the machine it
@@ -121,8 +159,9 @@ of the question: it is evaluated again on every run, so editing it re-judges the
 cached run rather than repeating it. What a simulation's question is made of,
 and how ``pc test``'s verdict on one is kept, are in :ref:`sim-caching`.
 
-Only answers are cached: an analysis, a route or a simulation that failed is run again
-next time, since installing a missing solver changes no key. The tiers' maximum
+Only answers are cached: an export, an analysis, a route or a simulation that failed is run again
+next time, since installing a missing solver changes no key. An object with
+``cache: false`` has nothing derived from it cached either. The tiers' maximum
 entry sizes apply as usual -- a model larger than ``cacheFilesMaxEntrySize`` is
 not kept in ``cacheFiles`` -- but their minimum sizes do not, because no
 solver's answer is too small to be worth keeping.

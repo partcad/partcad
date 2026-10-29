@@ -3,6 +3,16 @@
 Analysis
 ########
 
+.. toctree::
+   :maxdepth: 2
+   :hidden:
+
+   analysis_fea.rst
+   analysis_dynamic.rst
+   analysis_thermal.rst
+   analysis_cfd.rst
+
+
 Analysis is what engineering says about a design before anything is made: what
 it weighs and where its centre of mass is, how it carries a load, how a fluid
 flows around it, how it behaves once gravity and contact are switched on. Each
@@ -20,7 +30,7 @@ a ``physics:`` section, lent by its :ref:`material <materials>` (a density, a
 friction coefficient), or worked out from the solid -- and, for an assembly,
 combined from its parts. ``pc info`` reports each value with where it came from,
 and a requirement on one is checked against the same value (see
-:doc:`/digital_thread/workflows/requirements`).
+:doc:`/digital_thread/lifecycle/requirements`).
 
 Engineering analyses
 --------------------
@@ -48,7 +58,7 @@ it, and a ``validation:`` condition over what happened that holds when it went a
 it should -- "after ten seconds on a 10° slope it is still upright". ``pc sim``
 runs them. A simulation may name the feature of the requirements it demonstrates
 (``feature:``), which makes it evidence for that feature. See
-:doc:`/digital_thread/workflows/simulation` and :ref:`simulate`.
+:doc:`/digital_thread/lifecycle/simulation` and :ref:`simulate`.
 
 Analysis and validation
 =======================
@@ -58,18 +68,63 @@ that was needed. The same runs serve both: ``pc test`` runs every scenario of
 every ``fea:``, ``dynamic:``, ``thermal:`` and ``cfd:``, and every ``simulate:``
 entry, declared as its checks of the same names (``sim`` for a simulation), and
 fails an object any of whose scenarios finds a problem or whose simulation does
-not behave as it says (see :doc:`/digital_thread/workflows/validation`).
+not behave as it says (see :doc:`/digital_thread/lifecycle/validation`).
 
-In the Digital Thread
-=====================
+In the UI
+=========
 
-**Analysis** holds a tab per analysis -- **FEA**, **Dynamic FEA**, **Heat
-Transfer** and **CFD** -- for a part that declares scenarios of it. Each lists
-the scenarios, runs the one selected with the solver chosen over it,
-and shows the model it was run on and what it found. The simulations are run
-from **Validation → Simulation**, since what a simulation answers is whether the
-object does what it says it does.
+**Analysis** holds a tab per analysis, each enabled for a part that declares
+scenarios of it and disabled -- with the reason on hover -- for everything
+else. Each lists the scenarios down the left, runs the one selected with the
+solver chosen over it, and shows the model it produced and what it found. Each
+has a chapter of its own:
 
+:doc:`FEA </digital_thread/lifecycle/analysis_fea>`
+  Does the part hold up under what it carries: the stress in it, and how far it
+  moves. Read from ``fea:``.
+
+:doc:`Dynamic FEA </digital_thread/lifecycle/analysis_dynamic>`
+  At which frequencies does it ring, held as it is held, and in what shape.
+  Read from ``dynamic:``.
+
+:doc:`Heat Transfer </digital_thread/lifecycle/analysis_thermal>`
+  How hot does it get, heated and cooled as it is. Read from ``thermal:``.
+
+:doc:`CFD </digital_thread/lifecycle/analysis_cfd>`
+  How does a fluid flow through it -- where the part *is* the fluid volume.
+  Read from ``cfd:``.
+
+.. image:: /images/dt-analysis.png
+  :width: 100%
+  :align: center
+  :alt: The Analysis group: its four tabs, the scenario list, and the result of the one selected
+
+These tabs are the exception to "every tab is a question": looking at one
+**runs** the analysis. That is why each is a chapter rather than a line -- what
+it costs, what it needs installed and what its failure means are particular to
+the analysis.
+
+The simulations are not here. They are run from
+:ref:`Validation → Simulation <sim-in-the-ui>`, because what a simulation
+answers is whether the object does what it says it does, which is a question of
+validation rather than of analysis.
+
+
+On the command line
+===================
+
+.. code-block:: shell
+
+  pc info :bracket                     # the physical properties, and where each came from
+  pc cae fea :bracket                  # every scenario of one analysis
+  pc cae fea -f loaded :bracket        # one of them, by name
+  pc cae thermal :heatsink             # another analysis
+  pc sim -a gearbox                    # the simulations, which are the other half of this phase
+  pc test -f fea :bracket              # an analysis as the check pc test makes of it
+
+Each analysis has a chapter of its own above, with the keys its section takes
+and the packages that implement it. What follows here is what they have in
+common.
 
 Running an analysis
 ===================
@@ -262,7 +317,7 @@ The same policy, from the same code, decides ``pc test``'s ``sim`` check, which
 holds a part, an assembly or a scene to the ``simulate:`` claims it makes: a simulator
 that resolved and did not run is a failure, but for the one excuse, and a
 simulation plugin that cannot be found is never excused. See "Running a
-simulation" in :doc:`/digital_thread/workflows/simulation`.
+simulation" in :doc:`/digital_thread/lifecycle/simulation`.
 
 ``examples/feature_cae`` is the set of cases to check an implementation against
 -- a cantilever analysed for stress, for its natural frequencies and for heat,
@@ -273,3 +328,24 @@ driving it is the inlet's force over exactly the bore's area. That example's
 ``README.md`` has what each implementation measured.
 
 See :ref:`pc cae <cae>` for the command and the units it accepts.
+
+Agent skills
+============
+
+``/pc:sim-assembly-fea``
+  Turns what a simulation measured into a stress analysis of one part. It runs
+  the assembly's ``simulate:`` entry, reads the forces and moments acting on the
+  body the part is welded into at the end of the run, works out which of them
+  load that part and where, and writes a new named scenario into the part's
+  ``fea:`` section beside any already there. It is the bridge between the two
+  halves of this phase: a simulation says what the world does to an assembly,
+  and this turns that into the load case one part has to survive.
+
+``/pc:validate``
+  Runs every analysis scenario as part of giving each requirement a verdict, and
+  reports a scenario that names a ``feature:`` as evidence for that feature.
+
+There is no skill that writes an ``fea:`` section from a description. The
+conditions are an engineering judgement about how the part is really held and
+loaded, and a plausible-looking guess at them produces a plausible-looking
+number that is wrong.

@@ -49,112 +49,6 @@ The plugin is versioned with everything else in the release that publishes it, s
   It also ships inside the ``partcad`` wheel, and ``pc init`` installs it into the repository it
   creates a package in -- so there is nothing to install here if you have PartCAD already.
 
-.. _python-module:
-
-=============
-Python module
-=============
-
-PartCAD command line tools are implemented in Python and, in theory,
-available on all platforms where Python is available. However, it is only
-getting tested on Linux, macOS and Windows.
-
-.. code-block:: shell
-
-  $ python -m pip install -U partcad
-
-.. note::
-
-  One package is everything: the ``pc`` command line tool, the Python module, and
-  the ``partcad-json-rpc`` service the editor extensions talk to. ``partcad-cli``
-  used to be a separate package and is now a thin one that just pulls ``partcad``
-  in, so ``pip install partcad-cli`` still works if you have it written down
-  somewhere.
-
-.. note::
-
-  No Python on the machine, or no interest in maintaining a Python environment?
-  Install the :ref:`standalone command line tools <standalone-cli>` instead. They are
-  the same tools, shipped with their own interpreter. There is also a
-  :ref:`snap package <snap-package>` for Linux, not published yet.
-
-.. note::
-
-  PartCAD works best when `conda <https://docs.conda.io/>`_ is installed.
-  If that doesn't help (e.g. macOS+arm64) then try ``mamba``.
-  On Windows, PartCAD must be used inside a ``conda`` environment.
-
-  This applies to the wheels. The :ref:`standalone command line tools <standalone-cli>`, the
-  :ref:`snap <snap-package>` and the :ref:`PartCAD IDE <partcad-ide>` carry a conda of their own and need
-  none installed.
-
-.. note::
-
-  On **Windows**, install `Miniforge3 <https://github.com/conda-forge/miniforge>`_ with
-  ``Register Miniforge3 as my default Python X.XX`` and use that Python environment for PartCAD. Also set
-  ``LongPathsEnabled`` to ``1`` at ``HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem``
-  using the Registry Editor.
-
-  On **Ubuntu**, try ``apt install libcairo2-dev python3-dev`` if ``pip install`` fails to install ``cairo``.
-
-  On **macOS**, make sure Xcode and its command line tools are installed.
-
-.. note::
-
-  Git does not need to be installed. PartCAD talks to git servers itself, through the
-  ``libgit2`` library that comes with its dependencies, so packages imported from git
-  repositories are cloned and updated without the ``git`` command line tool. Where git is
-  installed, PartCAD still reads its configuration: see :ref:`git-configuration`.
-
-
-PartCAD provides Python modules that can be used in CAD as code scripts
-(such as ``CadQuery``, ``build123d`` and ``sdf``). They come with the same package
-as the command line tools, so there is nothing extra to install.
-
-.. code-block:: shell
-
-    $ python -m pip install -U partcad
-    $ python
-    ...
-    >>> import partcad as pc
-    >>> ctx = pc.init()
-
-
-Linting
-=======
-
-The linter used by ``pc lint`` to check Python files is optional. Install the
-``lint`` extra to enable it:
-
-.. code-block:: shell
-
-    $ python -m pip install -U 'partcad[lint]'
-
-Without the extra, linting Python files reports an error naming the package to
-install. Everything else in PartCAD, including linting of YAML files, works
-without it.
-
-Shared caching tiers
-====================
-
-Beyond memory and the local filesystem, PartCAD can keep its cache of built
-geometry on a memcached server shared by a team or a CI fleet
-(``cacheRemote``), and in an S3 bucket that outlives both (``cacheS3``). Both
-clients are imported only when their tier is switched on.
-
-``cacheRemote`` needs nothing installed: its client (``aiomcache``) is an
-ordinary dependency, so switching the tier on is all there is to it.
-
-``cacheS3`` is an extra, because its client pulls in ``botocore``, which is
-larger than the rest of PartCAD put together:
-
-.. code-block:: shell
-
-    $ python -m pip install -U 'partcad[aws]'        # cacheS3
-
-Enabling ``cacheS3`` without it reports an error naming the package to install
-and leaves the remaining tiers working.
-
 .. _partcad-ide:
 
 ===================
@@ -377,6 +271,88 @@ requirement to run Ubuntu: any distribution can run these bundles, and what diff
 minimum glibc. A machine the installer cannot identify as Ubuntu is offered the 22.04 build, which has the
 lower floor. Pass ``--platform`` to install a specific one.
 
+.. _snap-package:
+
+Linux (snap)
+============
+
+On Linux, the standalone tools are also packaged as a `snap <https://snapcraft.io/docs>`_, for x86_64 and
+arm64. It is the same bundle as the ``ubuntu-24.04`` archives above, so everything said about those applies
+here too -- what it carries, what it still expects from the machine, the bundled OpenSCAD. What the snap adds
+is the packaging: snapd installs it, keeps it up to date, and removes it cleanly.
+
+.. note::
+
+  **The snap is not published yet.** It is built by CI, but it is not on the Snap Store and it is not attached
+  to GitHub releases, so ``snap install partcad`` does not work today. Publishing needs Snap Store credentials
+  and, because the snap is classic, a manual store review; both are still to come.
+
+  To try it now, download the ``partcad-snap-amd64`` (or ``partcad-snap-arm64``) artifact from a run of the
+  ``Standalone`` workflow on GitHub, unzip it, and install the ``.snap`` inside as below.
+
+.. code-block:: shell
+
+  $ sudo snap install --dangerous --classic partcad_<version>_amd64.snap
+  $ sudo snap alias partcad.pc pc
+  $ pc version
+
+Two flags need explaining:
+
+* ``--classic`` is the confinement. PartCAD works on your own files -- it reads and writes CAD projects
+  anywhere on disk, clones git repositories, builds sandboxes and runs CAD scripts in them, and serves
+  a daemon over a socket that the Visual Studio Code extension connects to. A strictly confined snap could do
+  none of that.
+* ``--dangerous`` says the package is not signed by the Snap Store, which a downloaded file is not. It stops
+  being necessary once the snap is published.
+
+``snap alias`` is there because a snap only gives the bare command name to the app named after the snap
+itself. Without it, the commands are ``partcad``, ``partcad.pc`` and ``partcad.json-rpc``.
+
+Where it keeps its state
+------------------------
+
+Everywhere else, PartCAD keeps its cache, its sandboxes and its git clones in ``~/.partcad``. The snap
+does not write them there. It sets ``PC_INTERNAL_STATE_DIR`` to the per-user directory snapd gives it, so all
+of that lives in ``~/snap/partcad/common`` instead, and ``sudo snap remove --purge partcad`` takes it away
+with the snap.
+
+Your configuration file is the exception, on purpose: ``~/.partcad/config.yaml`` is read from the home
+directory as usual, so one configuration keeps applying whether you installed PartCAD from the snap, the
+standalone bundle, or a wheel.
+
+The telemetry id is kept next to it, for the same reason in reverse: it identifies you, and an id that moved
+with the state directory would count one machine as several.
+
+conda and git
+-------------
+
+A snap does not carry your shell environment, so a conda installed under your home directory -- the usual
+place -- is not visible to it, and neither is a git outside the standard system prefixes.
+
+conda no longer matters, and that is the one thing to know here that changed. The snap wraps the standalone
+bundle, the bundle carries its own conda, and a payload inside the snap is visible to it whatever your shell
+says -- so the snap gets the ``conda`` sandbox (see :ref:`python-sandbox`) rather than falling back to a
+virtual environment. What it will not pick up is *your* conda, and with it your package cache: the snap
+builds its sandbox from scratch the first time.
+
+git is still expected and accepted rather than worked around. Packages imported from git repositories are
+still cloned, through ``libgit2`` as everywhere else; what the snap cannot see is your git *configuration*
+(see :ref:`git-configuration`).
+
+.. code-block:: shell
+
+  $ pc healthcheck
+
+If you need your own git configuration, or want the snap to share the conda package cache you already have,
+use the :ref:`standalone bundle <standalone-cli>` or the wheels, which run with your own environment.
+
+To remove the snap, including its data:
+
+.. code-block:: shell
+
+  $ sudo snap remove --purge partcad
+
+
 macOS
 =====
 
@@ -595,88 +571,111 @@ The bundle provides the command line tools only. The ``partcad`` Python module f
 a wheel: ``python -m pip install -U partcad``.
 
 
-.. _snap-package:
+.. _python-module:
 
-============
-Snap (Linux)
-============
+=============
+Python Module
+=============
 
-On Linux, the standalone tools are also packaged as a `snap <https://snapcraft.io/docs>`_, for x86_64 and
-arm64. It is the same bundle as the ``ubuntu-24.04`` archives above, so everything said about those applies
-here too -- what it carries, what it still expects from the machine, the bundled OpenSCAD. What the snap adds
-is the packaging: snapd installs it, keeps it up to date, and removes it cleanly.
+PartCAD command line tools are implemented in Python and, in theory,
+available on all platforms where Python is available. However, it is only
+getting tested on Linux, macOS and Windows.
+
+.. code-block:: shell
+
+  $ python -m pip install -U partcad
 
 .. note::
 
-  **The snap is not published yet.** It is built by CI, but it is not on the Snap Store and it is not attached
-  to GitHub releases, so ``snap install partcad`` does not work today. Publishing needs Snap Store credentials
-  and, because the snap is classic, a manual store review; both are still to come.
+  One package is everything: the ``pc`` command line tool, the Python module, and
+  the ``partcad-json-rpc`` service the editor extensions talk to. ``partcad-cli``
+  used to be a separate package and is now a thin one that just pulls ``partcad``
+  in, so ``pip install partcad-cli`` still works if you have it written down
+  somewhere.
 
-  To try it now, download the ``partcad-snap-amd64`` (or ``partcad-snap-arm64``) artifact from a run of the
-  ``Standalone`` workflow on GitHub, unzip it, and install the ``.snap`` inside as below.
+.. note::
 
-.. code-block:: shell
+  No Python on the machine, or no interest in maintaining a Python environment?
+  Install the :ref:`standalone command line tools <standalone-cli>` instead. They are
+  the same tools, shipped with their own interpreter. There is also a
+  :ref:`snap package <snap-package>` for Linux, not published yet.
 
-  $ sudo snap install --dangerous --classic partcad_<version>_amd64.snap
-  $ sudo snap alias partcad.pc pc
-  $ pc version
+.. note::
 
-Two flags need explaining:
+  PartCAD works best when `conda <https://docs.conda.io/>`_ is installed.
+  If that doesn't help (e.g. macOS+arm64) then try ``mamba``.
+  On Windows, PartCAD must be used inside a ``conda`` environment.
 
-* ``--classic`` is the confinement. PartCAD works on your own files -- it reads and writes CAD projects
-  anywhere on disk, clones git repositories, builds sandboxes and runs CAD scripts in them, and serves
-  a daemon over a socket that the Visual Studio Code extension connects to. A strictly confined snap could do
-  none of that.
-* ``--dangerous`` says the package is not signed by the Snap Store, which a downloaded file is not. It stops
-  being necessary once the snap is published.
+  This applies to the wheels. The :ref:`standalone command line tools <standalone-cli>`, the
+  :ref:`snap <snap-package>` and the :ref:`PartCAD IDE <partcad-ide>` carry a conda of their own and need
+  none installed.
 
-``snap alias`` is there because a snap only gives the bare command name to the app named after the snap
-itself. Without it, the commands are ``partcad``, ``partcad.pc`` and ``partcad.json-rpc``.
+.. note::
 
-Where it keeps its state
-========================
+  On **Windows**, install `Miniforge3 <https://github.com/conda-forge/miniforge>`_ with
+  ``Register Miniforge3 as my default Python X.XX`` and use that Python environment for PartCAD. Also set
+  ``LongPathsEnabled`` to ``1`` at ``HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem``
+  using the Registry Editor.
 
-Everywhere else, PartCAD keeps its cache, its sandboxes and its git clones in ``~/.partcad``. The snap
-does not write them there. It sets ``PC_INTERNAL_STATE_DIR`` to the per-user directory snapd gives it, so all
-of that lives in ``~/snap/partcad/common`` instead, and ``sudo snap remove --purge partcad`` takes it away
-with the snap.
+  On **Ubuntu**, try ``apt install libcairo2-dev python3-dev`` if ``pip install`` fails to install ``cairo``.
 
-Your configuration file is the exception, on purpose: ``~/.partcad/config.yaml`` is read from the home
-directory as usual, so one configuration keeps applying whether you installed PartCAD from the snap, the
-standalone bundle, or a wheel.
+  On **macOS**, make sure Xcode and its command line tools are installed.
 
-The telemetry id is kept next to it, for the same reason in reverse: it identifies you, and an id that moved
-with the state directory would count one machine as several.
+.. note::
 
-conda and git
-=============
+  Git does not need to be installed. PartCAD talks to git servers itself, through the
+  ``libgit2`` library that comes with its dependencies, so packages imported from git
+  repositories are cloned and updated without the ``git`` command line tool. Where git is
+  installed, PartCAD still reads its configuration: see :ref:`git-configuration`.
 
-A snap does not carry your shell environment, so a conda installed under your home directory -- the usual
-place -- is not visible to it, and neither is a git outside the standard system prefixes.
 
-conda no longer matters, and that is the one thing to know here that changed. The snap wraps the standalone
-bundle, the bundle carries its own conda, and a payload inside the snap is visible to it whatever your shell
-says -- so the snap gets the ``conda`` sandbox (see :ref:`python-sandbox`) rather than falling back to a
-virtual environment. What it will not pick up is *your* conda, and with it your package cache: the snap
-builds its sandbox from scratch the first time.
-
-git is still expected and accepted rather than worked around. Packages imported from git repositories are
-still cloned, through ``libgit2`` as everywhere else; what the snap cannot see is your git *configuration*
-(see :ref:`git-configuration`).
+PartCAD provides Python modules that can be used in CAD as code scripts
+(such as ``CadQuery``, ``build123d`` and ``sdf``). They come with the same package
+as the command line tools, so there is nothing extra to install.
 
 .. code-block:: shell
 
-  $ pc healthcheck
+    $ python -m pip install -U partcad
+    $ python
+    ...
+    >>> import partcad as pc
+    >>> ctx = pc.init()
 
-If you need your own git configuration, or want the snap to share the conda package cache you already have,
-use the :ref:`standalone bundle <standalone-cli>` or the wheels, which run with your own environment.
 
-To remove the snap, including its data:
+Linting
+=======
+
+The linter used by ``pc lint`` to check Python files is optional. Install the
+``lint`` extra to enable it:
 
 .. code-block:: shell
 
-  $ sudo snap remove --purge partcad
+    $ python -m pip install -U 'partcad[lint]'
 
+Without the extra, linting Python files reports an error naming the package to
+install. Everything else in PartCAD, including linting of YAML files, works
+without it.
+
+Shared caching tiers
+====================
+
+Beyond memory and the local filesystem, PartCAD can keep its cache of built
+geometry on a memcached server shared by a team or a CI fleet
+(``cacheRemote``), and in an S3 bucket that outlives both (``cacheS3``). Both
+clients are imported only when their tier is switched on.
+
+``cacheRemote`` needs nothing installed: its client (``aiomcache``) is an
+ordinary dependency, so switching the tier on is all there is to it.
+
+``cacheS3`` is an extra, because its client pulls in ``botocore``, which is
+larger than the rest of PartCAD put together:
+
+.. code-block:: shell
+
+    $ python -m pip install -U 'partcad[aws]'        # cacheS3
+
+Enabling ``cacheS3`` without it reports an error naming the package to install
+and leaves the remaining tiers working.
 
 .. _vscode-extension:
 
@@ -718,11 +717,24 @@ Python and nothing compiled in it.
   run ``codium --install-extension PartCAD.partcad-official``; the ``.vsix`` above works there too. The
   :ref:`PartCAD IDE <partcad-ide>` needs neither gallery -- it ships the extension inside the application.
 
+.. _cad-addons:
+
+============
+CAD add-ons
+============
+
+PartCAD can also live *inside* a CAD application, as an add-on to it. Like the
+:ref:`Desktop Application <partcad-ide>` and the
+:ref:`Visual Studio Code extension <vscode-extension>`, an add-on carries no
+PartCAD of its own: it is a client of the ``partcad-json-rpc`` service, so it
+sees the same packages and the same cache as ``pc`` does on the same machine.
+
+There is one today.
+
 .. _freecad-addon:
 
-==============
-FreeCAD add-on
-==============
+FreeCAD
+=======
 
 The ``PartCAD`` workbench browses packages, parts and assemblies inside FreeCAD and imports them into the
 open document. It lives in the ``cad/freecad`` directory of the repository; copy or link that

@@ -4,13 +4,42 @@
 Simulations
 ###########
 
+A **simulation plugin** teaches PartCAD to run a physics simulator. It is the
+third kind of implementation declared in the same form as
+:doc:`an output type </plugins/output>` -- a ``path`` to a script, the sandbox
+that script needs, and the parameters it is handed -- and it is what turns an
+object's claim about its *behaviour* into something that can be checked.
 
-A part says what it *is*. ``simulate:`` is an optional section of a part, an
-assembly or a scene where it says what it is supposed to **do** once it is placed in a
-world and the world is switched on -- or, more often, what it is supposed not to
-do: not fall over, not slide off, not come apart. ``pc sim`` runs them, and
-``pc test`` holds the object to them every time it runs, as its ``sim`` check
-(see "Running a simulation" in :doc:`/digital_thread/workflows/simulation`).
+A part says what it **is**. ``simulate:`` is where a part, an assembly or a
+scene says what it is supposed to **do** once it is placed in a world and the
+world is switched on -- or, more often, what it is supposed *not* to do: not
+fall over, not slide off, not come apart. ``pc sim`` runs those, and ``pc test``
+holds the object to them every time it runs, as its ``sim`` check.
+
+**PartCAD ships no simulator.** It ships the concept -- this section, the
+sandbox a plugin runs in, and the export a scene reaches the simulator through
+-- and a package supplies the physics.
+
+What a simulation plugin is for
+===============================
+
+- **Proving a behavioural requirement.** A ``simulate:`` entry that names a
+  ``feature:`` of the object's ``requirements:`` becomes the evidence for that
+  feature, which is otherwise a sentence no program can measure.
+- **Catching what geometry cannot show.** A stack that stands, a gripper that
+  holds, a robot that does not tip on a slope: nothing about the shapes says any
+  of it.
+- **Regression-testing motion.** The simulations run in ``pc test``, through the
+  cache, so a change that makes a mechanism bind is a failed check rather than a
+  discovery.
+- **Wrapping one engine once.** A plugin brings the engine, the scene format it
+  reads and the vocabulary it reports in, so every package using it writes the
+  same kind of ``validation:``.
+
+Using one
+=========
+
+Declare the simulation on the object, naming the plugin by full path:
 
 .. code-block:: yaml
 
@@ -32,10 +61,23 @@ evaluated over in :ref:`sim-validation`.
 Every run is also asked for a picture of the scene before and after, taken from
 where the scene is rendered from: the ``viewport_origin`` and ``viewport_up`` of
 its ``render: png:``, or of its package's when the scene states none; see
-:doc:`/digital_thread/workflows/simulation`.
+:doc:`/digital_thread/lifecycle/simulation`.
 
-Simulation plugins
-==================
+Then:
+
+.. code-block:: shell
+
+  pc sim :bracket                # every simulation the object declares
+  pc sim -f holds-the-shelf :bracket   # one of them
+  pc sim --json :bracket         # everything the simulator reported, not just the verdict
+  pc test -f sim :bracket        # the same runs, as a check
+
+Every run is also asked for a picture of the scene before and after, taken from
+where the scene is rendered from: the ``viewport_origin`` and ``viewport_up`` of
+its ``render: png:``, or of its package's when the scene states none.
+
+Writing one
+===========
 
 A simulation plugin is the third kind of implementation a package can declare,
 beside the export and render ones of :ref:`output-files`, and it is declared in
@@ -90,9 +132,49 @@ two plugins PartCAD maintains share one vocabulary, described in
 :ref:`sim-validation`, and a plugin that reports the same is one whose
 validations read the same.
 
+An example
+==========
+
 **PartCAD ships none of these.** A simulator is somebody's program with a
 release cycle of its own, so PartCAD ships the concept -- this section, the
 sandbox a plugin runs in, and the export a scene reaches it through -- and a
 package supplies the physics. :ref:`sim-engines` lists the two there are.
 
-See :doc:`/digital_thread/workflows/simulation` and ``examples/feature_simulate``.
+Each of the two is one package carrying everything its format needs -- the
+:doc:`importer </plugins/importers>` that reads it, the
+:doc:`export type </plugins/output>` that writes it, the
+:doc:`application entry </plugins/applications>` that opens it, and the
+simulation plugin that runs it:
+
+.. list-table::
+   :header-rows: 1
+
+   * - package
+     - engine
+     - the type to name
+   * - `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_
+     - `MuJoCo <https://mujoco.org/>`_
+     - ``sim-mujoco:mujoco``
+   * - `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_
+     - `Gazebo <https://gazebosim.org/>`_
+     - ``sim-gazebo:gazebo``
+
+``examples/feature_simulate`` is the worked example. Its scenes are arrangements
+of blocks that each declare a ``simulate:`` entry with a ``validation:`` over how
+far anything moved: ``stable`` is supposed to stand, ``unstable``, ``slippery``
+and ``tilted`` are supposed not to, and ``tank`` is filled with water so that
+buoyancy and drag are exercised too.
+
+.. code-block:: shell
+
+  cd examples/feature_simulate
+  pc sim :stable                 # the stack that stands
+  pc sim --json :stable          # the body positions before and after
+  pc test -f sim                 # all of them, as checks
+
+:ref:`sim-engines` says what each engine models and what it does not, and
+:ref:`sim-validation` the vocabulary the two PartCAD maintains report in -- a
+plugin that reports the same is one whose validations read the same.
+
+See :doc:`/digital_thread/lifecycle/simulation` for the whole chapter on
+simulating, and :ref:`sim-declaring` for every key of the declaration.

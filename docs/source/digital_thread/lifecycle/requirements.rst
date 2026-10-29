@@ -63,18 +63,32 @@ order holds.
 Keep to what was asked for. A requirement the design imposes on itself -- a
 stock size, a tool -- belongs to manufacturing, not here.
 
-In the Digital Thread
-=====================
+In the UI
+=========
 
 An object that declares requirements gets a **Requirements** tab in front of all
-the others. It lists every port, interface and physical property required, each
-with a green or a red mark from the same check ``pc test`` runs, and then a
-table of the features: each with its description, a banner for every simulation
-that names it, and an **LLM** banner -- "Validate using /pc-validate" -- since a
-feature is for an agent or a person to judge.
+the others. It is the one tab with no strip of its own -- there is nothing to
+divide it into, because a requirement is one thing either met or not.
 
-How requirements are checked
-============================
+It lists every port, interface and physical property required, each with a green
+or a red mark from the same check ``pc test`` runs, and then a table of the
+features. Each feature carries its description and a banner per thing that
+validates it: one for every simulation that names it with ``feature:``, one for
+every analysis scenario that does (**FEA: loaded**), and an **LLM** banner --
+"Validate using /pc-validate" -- since a sentence is for an agent or a person to
+judge and for no program to measure.
+
+.. image:: /images/dt-requirements.png
+  :width: 100%
+  :align: center
+  :alt: The Requirements tab: the measured requirements with their marks, and the features with what validates each
+
+``pc ide view`` has a flag per tab of the five groups and none for this one:
+the tab is there for an object that declares ``requirements:`` and absent for
+every other object, so there is nothing to ask for.
+
+On the command line
+===================
 
 - ``pc test`` runs the ``requirements`` check (see :ref:`test-requirements`):
   every measured requirement, with what was found instead of each one not met. A
@@ -83,4 +97,23 @@ How requirements are checked
 - ``pc sim`` runs every simulation, including those that name a feature.
 - ``/pc:validate`` gathers the rest of the evidence -- renders from every angle
   that matters, the bill of materials and the assembly instructions -- and gives
-  each requirement a verdict. See :doc:`/digital_thread/workflows/validation`.
+  each requirement a verdict. See :doc:`/digital_thread/lifecycle/validation`.
+
+``pc info`` prints the section as it is read, which is how to see what a template
+or an :ref:`enrich <part-types>` left behind. ``pc lint`` reports a ``requirements:``
+that is malformed before anything is built.
+
+Agent skills
+============
+
+``/pc:gen-part`` and ``/pc:gen-assembly``
+  Write the ``requirements:`` down first, from the description and in its own
+  terms, and only then model anything. This is the order that makes requirements
+  worth having, and it is the reason to generate from a description rather than
+  to describe what was generated.
+
+``/pc:validate``
+  Gives every requirement a verdict -- met, not met, or "cannot tell" -- and
+  names the evidence for each. It is the only one of the skills that judges the
+  ``features:`` half, because a sentence is what an agent or a person can read
+  and a program cannot measure.

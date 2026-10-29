@@ -460,7 +460,7 @@ Object commands
   whether the object has the ports, interfaces and physical properties its ``requirements:`` say it has to
   (``requirements``; see :ref:`requirements`). Those last seven apply only to an object that declares the
   matching section, so a package that declares none pays nothing for them. Every check is listed, with when it
-  applies and what to do when it fails, in :doc:`/digital_thread/workflows/testing`. ``requirements`` fails a
+  applies and what to do when it fails, in :doc:`/digital_thread/lifecycle/testing`. ``requirements`` fails a
   requirement on something it cannot find out -- a mass with no material to work it out from -- rather than
   passing it, and says, for each requirement not met, what it found instead. The features a section lists are
   prose, and are for the ``/pc:validate`` agent skill to judge.
@@ -531,14 +531,14 @@ Object commands
   cannot be found is never excused. A declaration with no ``validation:`` is not run by ``pc test``: it is
   skipped when a package is tested and fails when the object is tested by name. This command is for asking on
   purpose: one simulation by name, and everything the plugin reported, which is why it does run such a
-  declaration and says it ran. See "Running a simulation" in :doc:`/digital_thread/workflows/simulation`.
+  declaration and says it ran. See "Running a simulation" in :doc:`/digital_thread/lifecycle/simulation`.
 
   PartCAD implements no simulator: a package imports one and names it in ``simulation:``
   (`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ is the MuJoCo one and
   `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ the Gazebo one; each also declares
   the reader, the writer and the ``pc ide open`` entry for that engine's own scene format). The *scene* does
   have a built-in default -- an empty world holding the object -- so a simulation of a part standing on its
-  own is a few lines. See :doc:`/digital_thread/workflows/simulation` and ``examples/feature_simulate``.
+  own is a few lines. See :doc:`/digital_thread/lifecycle/simulation` and ``examples/feature_simulate``.
 
 ``pc info``
   Show detailed information about a part, assembly, scene, or software, including its parameters. Name the

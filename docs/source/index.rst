@@ -42,7 +42,8 @@ product development process.**
 
    config_package.rst
    config_objects.rst
-   config_geometry.rst
+   config_sketches.rst
+   config_interfaces.rst
    config_parts.rst
    config_assemblies.rst
    config_scenes.rst
@@ -55,7 +56,11 @@ product development process.**
    :maxdepth: 2
    :caption: Digital Thread
 
-   digital_thread/index.rst
+   digital_thread/introduction.rst
+   digital_thread/lifecycle/index.rst
+   digital_thread/workflows.rst
+   digital_thread/use_cases.rst
+   digital_thread/change_management.rst
 
 .. toctree::
    :maxdepth: 2

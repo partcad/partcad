@@ -1,13 +1,43 @@
-Testing
-#######
+Test
+####
 
 ``pc test`` holds an object to every claim its declaration makes that can be
 measured. It is a list of checks, each asking one question of one object;
 this page is that list, and it is the same text the Digital Thread shows beside
 each check on the **Validation → Test** tab.
 
-Running the checks
-==================
+In the UI
+=========
+
+**Validation → Test** is the first tab of the Validation group and the one tab
+that is always enabled, since every object of a package has checks.
+
+- Down the left, every check ``pc test`` runs, in the order it runs them, each
+  with its verdict: passed, failed, warned, skipped, or not applicable -- the
+  last saying *why*, so a check that did not apply is never mistaken for one
+  that passed.
+- In the middle, the check selected: what it found this time, and under that
+  what the check asks, when it does not apply, what each failure means and what
+  to do about it -- the text of this page, which is where it comes from.
+- For a failure that left something behind to look at, a button that opens it.
+  An interference leaves an assembly of the two parts that overlap, placed where
+  the assembly places them, and a sub-assembly named ``interference`` holding
+  what they share: switch the two parts off in the 3D tab and what is left is
+  the overlap.
+
+.. image:: /images/dt-validation.png
+  :width: 100%
+  :align: center
+  :alt: The Validation group's Test tab: every check with its verdict, and the selected check explained
+
+The checks **run** when the tab is first opened, as ``pc test <object>`` runs
+them and through the same cache, so the panel and the command line give the same
+answer; **Run again** asks afresh. An object that belongs to no package -- a
+shape shown from a script -- has nothing to ask PartCAD about, and the tab says
+so. ``pc ide view --validation-test`` opens it from a terminal.
+
+On the command line
+===================
 
 .. code-block:: sh
 
@@ -605,3 +635,22 @@ Settings
 ``simulate: <name>:`` - ``simulation:`` (the plugin), ``scene:``, ``validation:``, and ``feature:``, the feature of the requirements it demonstrates.
 
 .. END GENERATED FROM partcad.test.catalog
+
+Agent skills
+============
+
+``/pc:validate``
+  Runs ``pc test`` as the first thing it does, and then goes beyond it: it runs
+  every simulation and every analysis scenario, renders the object from every
+  angle that matters with its ports and interfaces drawn, reads the bill of
+  materials and the assembly instructions of an assembly, and gives every
+  requirement a verdict -- met, not met, or "cannot tell" -- with the evidence
+  named. The ``features:`` half of a requirement is prose, which no check here
+  can measure, and it is judged there and nowhere else.
+
+``/pc:sim-assembly-fea``
+  Produces the ``fea:`` scenario that the ``fea`` check below then holds the
+  part to, out of what a simulation of its assembly measured.
+
+Every skill runs these same commands, through the same cache, so a verdict an
+agent reports is a verdict you can reproduce by hand.

@@ -382,7 +382,7 @@ From a STEP file it extracts the individual parts and creates an assembly YAML
 file that records each part along with its placement. From a URDF it creates an
 ``stl`` part per link carrying the physical properties the URDF stated, a pair
 of interfaces per joint, and an assembly that connects the parts through them
-rather than placing them by coordinates - see :doc:`/config_geometry`.
+rather than placing them by coordinates - see :doc:`/config_interfaces`.
 
 An import leaves the package holding PartCAD's own objects - parts it can render
 on their own and an assembly that places them - rather than a declaration that

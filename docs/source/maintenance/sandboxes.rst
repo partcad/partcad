@@ -74,6 +74,25 @@ That is what lets one package render against build123d 0.11 while another wants
 The equivalents everywhere else are ``PC_PYTHON_SANDBOX`` in the environment and
 ``--python-sandbox`` on the command line, in the usual order of precedence.
 
+**A script is forked rather than started**, on Linux, in the sandboxes whose
+interpreter runs on this machine (``venv``, ``conda`` and ``none``). Starting an
+interpreter and importing the CAD stack into it takes seconds -- build123d alone
+is five or more -- and running a small part takes a few hundredths of one, so
+PartCAD keeps one interpreter per sandbox environment that has done those
+imports, and each script runs in a copy of it, made with ``fork``. A copy is
+made from an interpreter that has run nothing, so no script can see what
+another one did, and one that crashes takes only itself with it. The
+interpreter is started once an environment has had a second script to run --
+the scripts before it is ready start as they always did -- and is replaced
+whenever anything is installed into the environment, by this PartCAD or by any
+other. It holds a few hundred megabytes while it waits, and goes after ten
+minutes without a script. It is not used on macOS or Windows, nor in the
+``docker``, ``remote`` and ``pypy`` sandboxes, and ``pythonSandboxZygote:
+false`` (``PC_PYTHON_SANDBOX_ZYGOTE=false``) turns it off on Linux too. It is
+only ever a shortcut: a script it cannot take, or an environment whose
+interpreter refused to be one (something it imported left a thread running,
+say), is started the ordinary way.
+
 Which one is chosen for you, when you have said nothing, is the first of
 ``docker``, ``conda`` and ``venv`` that this machine can actually provide. A
 continuous integration runner with no container runtime therefore keeps
@@ -128,7 +147,10 @@ in a Docker volume on the daemon's side, built once and reused. It applies to
 every container PartCAD starts -- the ``docker`` sandbox, KiCad imports, a
 plugin's ``container:`` and an application ``pc ide open`` runs in a container
 alike -- and off by default, because sending a package
-with every command costs time that a shared filesystem does not. It needs no
+costs time that a shared filesystem does not. What is sent is sent once: each
+container keeps the files it has been given, by their content, so a command
+sends only what it does not have yet -- PartCAD's own wrappers once per
+container, a package once and then whatever changed in it. It needs no
 service in between: that is the difference from the ``remote`` sandbox below,
 which reaches containers through ``partcad-service-remote-docker`` and never
 talks to Docker itself.
@@ -227,9 +249,11 @@ The ``remote`` sandbox
 ======================
 
 ``remote`` makes no assumption that the container can see your disk. The
-directories a command needs are packed up and sent to it, and the files it wrote
-are sent back. That costs a copy per run, and it buys a sandbox that can be
-anywhere -- another machine, another architecture, a build farm.
+directories a command needs are sent to it, and the files it wrote are sent
+back. That costs a copy -- of each file once per container, since the container
+keeps what it has been sent and is asked for nothing it already has -- and it
+buys a sandbox that can be anywhere: another machine, another architecture, a
+build farm.
 
 It is served by ``partcad-service-remote-docker``, which accepts those requests,
 starts and reuses a container per image, multiplexes callers onto it and retires
@@ -275,22 +299,14 @@ tunnel -- SSH, WireGuard, whatever the network already has -- and point
 container PartCAD starts on this machine is loopback too, and a certificate
 between a process and its own container would secure nothing.
 
-Today the transfer is a whole directory at a time; the intent is to replace that
-with a filesystem the container mounts and pulls files through one at a time, at
-which point ``remote`` becomes as cheap as ``docker`` and stops being a trade.
+A client and a service need not be the same release: the client asks the
+service what it speaks before its first request, and talks to one from before
+that question the way it always did -- with every file sent on every command.
+The intent beyond that is a filesystem the container mounts and pulls files
+through one at a time, at which point ``remote`` becomes as cheap as ``docker``
+and stops being a trade.
 
-Containers PartCAD manages
-==========================
 
-Every image PartCAD builds is labelled as its own, and ``pc system prune``
-removes the images and containers carrying those labels -- never anything else
-on the machine. ``pc system prune --stale`` removes only what is out of date:
-images from PartCAD releases other than this one, and containers nothing is
-using.
-
-Third-party images are asked, by convention, to carry the same labels. An image
-that does not is still usable; it simply cannot be told apart from the rest of
-what you have installed, so ``pc system prune`` leaves it alone.
 
 
 .. _javascript-sandbox:
@@ -331,3 +347,18 @@ in the environment (see :doc:`/maintenance/automation`):
 .. code-block:: yaml
 
   javascriptSandbox: conda
+
+
+
+Containers PartCAD manages
+==========================
+
+Every image PartCAD builds is labelled as its own, and ``pc system prune``
+removes the images and containers carrying those labels -- never anything else
+on the machine. ``pc system prune --stale`` removes only what is out of date:
+images from PartCAD releases other than this one, and containers nothing is
+using.
+
+Third-party images are asked, by convention, to carry the same labels. An image
+that does not is still usable; it simply cannot be told apart from the rest of
+what you have installed, so ``pc system prune`` leaves it alone.

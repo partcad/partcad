@@ -131,6 +131,80 @@ move on their joints -- a pendulum, and one of every other kind of joint -- each
 held to its closed form, in MuJoCo and, for every kind Gazebo builds, in Gazebo.
 See :ref:`sim-mechanisms`.
 
+.. _sim-in-the-ui:
+
+=========
+In the UI
+=========
+
+**Validation → Simulation** is this page as a tab, for a part, an assembly or a
+scene that declares ``simulate:``.
+
+The simulations are listed down the left in the order they are declared, with
+the first selected and a mark before each name saying how its last run went: a
+green tick passed, a red cross failed, a red exclamation could not run, and a
+dot ran with nothing to check. Selecting one **runs** it, exactly as
+``pc sim -f <name>`` runs it and through the same cache, so the tab and the
+command line give the same verdict.
+
+What is shown is the run. The video the plugin recorded plays in a player with
+the usual controls -- play and pause, replay, a step back and forward, a
+position to drag, the speed, and full screen, which takes the editor into Zen
+Mode while it lasts. Until it is played, the player's still is the two pictures
+the plugin took: before anything moved on the left, when the run was over on the
+right, with an arrow between them. A run whose plugin recorded no video shows
+those two side by side instead, and a plugin that takes no pictures at all has
+not failed -- a line says so where they would be. All of it is drawn from the
+viewpoint the scene is rendered from (see :ref:`sim-snapshots` and
+:ref:`sim-video`).
+
+Over the player, as on the Draft tab, **Simulated by** names the plugin --
+filled in with the one the simulation names, offering the ones PartCAD knows of,
+and taking any other name typed into it, which runs it with that one the way
+``pc sim --plugin`` does -- and **Simulate** runs it afresh. Under the player,
+**Criteria**, **Before** and **After** open on a click: the ``validation:``
+expression, and the ``before`` and ``after`` the plugin reported, which are
+exactly what that expression is evaluated over. A validation that passed for the
+wrong reason is found here.
+
+.. image:: /images/dt-validation-simulation.png
+  :width: 100%
+  :align: center
+  :alt: The Validation group's Simulation tab: the simulation that was run, the scene before and after it, and the criteria
+
+The video's size is this machine's to say rather than the package's --
+``simulation.videoResolution``, HD unless it says otherwise -- and the
+:ref:`view panel's <dt-design-3d>` viewpoint applies here too: choosing one runs
+the simulation again with its pictures taken from there, because the viewpoint
+is part of the question a run is cached under.
+
+The tab is disabled for anything that declares no simulation; Validation itself
+never is, for its :doc:`Test tab </digital_thread/lifecycle/testing>`.
+``pc ide view --validation-simulation`` opens it from a terminal, and
+``--scenario <name>`` selects one simulation by name.
+
+.. _sim-commands:
+
+===================
+On the command line
+===================
+
+.. code-block:: shell
+
+  pc sim :bracket                      # every simulation the object declares
+  pc sim -f holds-the-shelf :bracket   # one of them, by name
+  pc sim -S stable                     # a scene rather than a part
+  pc sim --json -a arm                 # everything the plugin reported, not only the verdict
+  pc sim --plugin //pub/feature/simulate/gazebo:gazebo :bracket   # with another engine
+  pc test -f sim :bracket              # the same runs, as the check pc test makes of them
+  pc ide view --validation-simulation :bracket                    # shown in the panel instead
+
+``pc sim`` is this page in one command, and ``pc test``'s ``sim`` check is the
+same runs with a pass or a fail on the end. `Running a simulation`_ below is the
+full account -- every option, what a run costs, what is cached, and what happens
+when one hangs or crashes -- and ``pc sim`` in :doc:`/cli` is the command
+reference.
+
 .. _sim-declaring:
 
 ======================
@@ -1764,6 +1838,124 @@ out first, and open what was written:
 An ASSY scene is refused too, for a reason of its own: it is nothing but
 references to the parts of a package, and a file opened on its own has no
 package to resolve them against. See ``pc ide open`` in :doc:`/cli`.
+
+.. _sim-examples:
+
+========
+Examples
+========
+
+Three packages under
+`examples/ <https://github.com/partcad/partcad/tree/main/examples>`_ are the
+worked cases, in the order they are worth reading. Each is a package you can
+clone and run, and each is held to its answer by PartCAD's own CI.
+
+`feature_simulate <https://github.com/partcad/partcad/tree/main/examples/feature_simulate>`_
+=============================================================================================
+
+The smallest claims that can be checked: two blocks, stacked. ``stable`` has
+the upper one squarely on the lower; ``unstable`` has it pushed 18 mm out of 20
+off the edge, so its centre of mass is past the corner it rests on. Nothing
+static tells them apart -- both render, export and list the same way -- and
+what separates them is what happens when the world is switched on.
+
+``slippery`` is ``stable`` with one word changed: PTFE instead of aluminium.
+Same geometry, same locations, same scene, same simulation, and the top block
+ends up on the floor -- in ``tilted``, a world whose gravity leans 15 degrees,
+because on a level floor nothing pulls a block sideways and friction is never
+asked anything. ``sink``, ``float`` and ``buoy`` are the same cube in water.
+
+.. code-block:: shell
+
+  cd examples/feature_simulate
+  pc sim -S stable        # nothing moves
+  pc sim -S unstable      # the top block falls off, and that validation passes too
+  pc sim -S slippery      # the material is what decides it
+  pc test -f sim          # all of them, as the check pc test runs
+
+.. image:: /images/dt-validation-simulation.png
+  :width: 100%
+  :align: center
+  :alt: feature_simulate's "stable" run on the Simulation tab: the stack before and after
+
+`feature_simulate_joints <https://github.com/partcad/partcad/tree/main/examples/feature_simulate_joints>`_
+===========================================================================================================
+
+A **mechanism** -- an assembly whose parts move against each other on their
+joints -- and one of every kind of joint PartCAD has, each held to what can be
+worked out on paper. ``pendulum`` is a 300 × 20 × 10 mm bar hung by one end
+from a frame, released level; its speed through the bottom, when it gets there
+and its small-angle period are all closed forms, and the validations write the
+formulas out. Then ``wound``, ``door``, ``incline``, ``collar``, ``nut``,
+``hooke``, ``spherical``, ``cone``, ``wall``, ``stage``, ``loose`` and
+``locked`` -- revolute bounded and unbounded, prismatic, cylindrical, screw,
+universal, ball, planar, composite, floating and fixed.
+
+Every run is held to its formula in MuJoCo, and in Gazebo for every kind Gazebo
+builds; the four it refuses rather than invent a link nobody measured are named
+in the package's ``README.md``. Nothing here depends on the material: the mass
+cancels out of every answer.
+
+.. code-block:: shell
+
+  cd examples/feature_simulate_joints
+  pc sim -a pendulum        # released level, it passes the bottom at the speed its fall gives it
+  pc sim -a nut             # a nut runs down its screw as slowly as its turn says, 36 degrees a millimetre
+  pc sim --json -a nudged   # what each engine reported: joints.swing, in degrees and deg/s
+  pc test -f sim            # every one of them
+
+.. image:: /images/sim-example-pendulum.png
+  :width: 100%
+  :align: center
+  :alt: feature_simulate_joints' pendulum on the Simulation tab: released level on the left, and where it got to on the right
+
+`feature_simulate_fea <https://github.com/partcad/partcad/tree/main/examples/feature_simulate_fea>`_
+=====================================================================================================
+
+The whole way from a simulation to a stress analysis, on a real mechanism: one
+arm of `OpenVMP <https://github.com/openvmp/openvmp-models>`_'s Don1 robot, and
+the worm gear in its knee. The simulation says what acts on every body at the
+end of the run; the ``/pc:sim-assembly-fea`` skill (see
+:doc:`/digital_thread/lifecycle/analysis_fea`) works out which of those loads
+reach one part and where, and writes the part an ``fea:`` scenario that applies
+them.
+
+A worm drive does not run backwards, so the knee stays where the motor left it
+and the gear's teeth are what hold it there. The assembly keeps that as the
+knee joint's spring; the scene bolts the lower arm to the world upside down with
+the upper arm level, and letting go drops the upper arm onto the worm's give.
+
+.. code-block:: shell
+
+  cd examples/feature_simulate_fea
+  pc sim -a arm --json              # the run, and what acts on every body at its end
+  pc cae fea -f dropped :knee-gear  # the gear under what the worm holds it with
+  pc test                           # both, as checks
+
+.. image:: /images/sim-example-arm.png
+  :width: 100%
+  :align: center
+  :alt: feature_simulate_fea's arm on the Simulation tab: let go level on the left, at rest where the worm holds it on the right
+
+============
+Agent skills
+============
+
+``/pc:sim-assembly-fea``
+  Runs an assembly's simulation, reads what acts on the body a part is welded
+  into at the end of it, and writes that part an ``fea:`` scenario applying
+  those loads in its own frame. It is the bridge from "what the world does to
+  this mechanism" to "what this one part has to survive".
+
+``/pc:validate``
+  Runs every simulation as part of giving each requirement a verdict, and
+  reports one that names a ``feature:`` as evidence for that feature. A
+  simulation is the only kind of evidence that can settle a claim about
+  behaviour.
+
+No skill writes a ``simulate:`` section from a description. What a thing is
+supposed to do, and the condition that decides whether it did, are claims
+somebody has to mean.
 
 .. _sim-limitations:
 

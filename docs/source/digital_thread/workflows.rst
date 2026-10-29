@@ -2,8 +2,11 @@
 Workflows
 #########
 
-A workflow is a path through the phases of :doc:`/digital_thread/lifecycle`, and the chapters under this one take those
-phases one at a time. These are the shapes the path takes in practice.
+A workflow is a path through the phases of
+:doc:`/digital_thread/lifecycle/index`, which that chapter takes one at a time.
+These are the shapes the path takes in practice -- each one crossing several
+phases, in the order somebody actually works in rather than the order the phases
+are listed in.
 
 
 From an idea to a part
@@ -48,14 +51,3 @@ Reviewing somebody else's product
 it. In the Digital Thread, each object shows its requirements, its design, its
 analyses, how it is made, and its checks with what each one found -- the whole
 thread of one object on one screen.
-
-
-.. toctree::
-   :maxdepth: 2
-
-   requirements.rst
-   design.rst
-   analysis.rst
-   manufacturing.rst
-   simulation.rst
-   validation.rst

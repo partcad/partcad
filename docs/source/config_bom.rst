@@ -8,7 +8,7 @@ same assembly can be quoted from two different suppliers, or built from what is 
 assembly changing.
 
 This is the object-oriented part of PartCAD, and it is built out of three things that are documented
-elsewhere in this section: :doc:`interfaces </config_geometry>`, which say how a part connects;
+elsewhere in this section: :doc:`interfaces </config_interfaces>`, which say how a part connects;
 ``alias``, which gives an existing part another name; and ``enrich``, which makes an opinionated version of
 an existing part by fixing some of its parameters. Put together, they let a part be refined by steps, from
 "something that bolts on here" to "this exact item from this exact vendor".

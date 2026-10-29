@@ -2,6 +2,13 @@
 Assemblies
 ##########
 
+.. toctree::
+   :maxdepth: 2
+   :hidden:
+
+   assy.rst
+
+
 .. _assemblies:
 
 What an assembly is
@@ -641,9 +648,3 @@ An assembly embedded in the parent's own source file (the nested ``links:`` of
 an Assembly YAML file) is not an object of any package, so there is no name to
 order it by. Such an assembly is always procured as its contents, and declaring
 a vendor for it has no effect.
-
-
-.. toctree::
-   :maxdepth: 2
-
-   assy.rst

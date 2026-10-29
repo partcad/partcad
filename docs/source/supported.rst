@@ -121,7 +121,7 @@ Placed arrangements of objects: a workcell, a table, a simulation world.
 Simulation
 ==========
 
-What an object is supposed to do once the world is switched on. See :doc:`/digital_thread/workflows/simulation`.
+What an object is supposed to do once the world is switched on. See :doc:`/digital_thread/lifecycle/simulation`.
 
 - ``simulate:`` on a part, an assembly or a scene: a scene, where in it the object goes, and the condition
   that says whether it went as it should
