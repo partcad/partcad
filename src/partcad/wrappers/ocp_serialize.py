@@ -139,6 +139,7 @@ def _ensure_ocp():
     import OCP.BRepTools  # noqa: F401
     import OCP.TopAbs  # noqa: F401
     import OCP.TopExp  # noqa: F401
+    import OCP.TopLoc  # noqa: F401
     import OCP.TopoDS  # noqa: F401
 
     # Named, never 'BinTools_FormatVersion_CURRENT': see BINARY_FORMAT_VERSION.
@@ -419,6 +420,27 @@ def _holds_mesh(payload: bytes) -> bool:
         return True
 
 
+def _holds_lone_polygon(shape) -> bool:
+    """Whether 'shape' has an edge in no face whose only geometry is a 3D polygon.
+
+    Written without triangles, OCCT drops that polygon, and the edge is read
+    back as nothing at all. The payload's header cannot say so - its polygon
+    count is nought, the polygon being what was dropped - so the shape is
+    asked. Only for edges outside every face: one that bounds a face has its
+    curve on that face's surface, or is a mesh face's, which '_holds_mesh'
+    sees. So the explorer never goes inside a face, and a solid costs a step
+    per face rather than a look at every edge.
+    """
+    explorer = OCP.TopExp.TopExp_Explorer(shape, OCP.TopAbs.TopAbs_EDGE, OCP.TopAbs.TopAbs_FACE)
+    location = OCP.TopLoc.TopLoc_Location()
+    while explorer.More():
+        edge = OCP.TopoDS.TopoDS.Edge_s(explorer.Current())
+        if not OCP.BRep.BRep_Tool.IsGeometric_s(edge) and OCP.BRep.BRep_Tool.Polygon3D_s(edge, location) is not None:
+            return True
+        explorer.Next()
+    return False
+
+
 def shape_to_brep(shape) -> bytes:
     """Serialize a TopoDS_Shape into the flat BREP byte array: binary, and without its mesh.
 
@@ -439,9 +461,10 @@ def shape_to_brep(shape) -> bytes:
     again with everything, unless it has no edges for that to matter to (an
     SDF part is one face and no edge).
 
-    Not covered: an edge whose only geometry is a 3D polygon, standing on its
-    own. Nothing PartCAD reads or builds makes one, and telling would cost a
-    walk over every edge of every shape - as long as writing it.
+    And so is a shape with an edge in no face whose only geometry is a 3D
+    polygon, which would otherwise come back as an edge of nothing. Nothing
+    PartCAD builds makes one, but a script or a plugin can hand one back, and
+    asking costs a step per face (see '_holds_lone_polygon').
 
     ASCII where this OCP has no binary writer (an OCCT older than 7.6), which
     every reader still reads (see 'shape_from_brep()').
@@ -453,7 +476,10 @@ def shape_to_brep(shape) -> bytes:
             return bio.getvalue()
 
     payload = _write_binary(shape, False)
-    if _holds_mesh(payload) and OCP.TopExp.TopExp_Explorer(shape, OCP.TopAbs.TopAbs_EDGE).More():
+    if _holds_mesh(payload):
+        if OCP.TopExp.TopExp_Explorer(shape, OCP.TopAbs.TopAbs_EDGE).More():
+            payload = _write_binary(shape, True)
+    elif _holds_lone_polygon(shape):
         payload = _write_binary(shape, True)
     return payload
 
