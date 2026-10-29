@@ -246,6 +246,7 @@ def test_an_edge_that_is_only_a_polygon_keeps_it():
 
 def test_edges_bounding_faces_are_not_taken_for_lone_polygons():
     """A meshed solid's edges carry polygons too, on its triangles: its payload still leaves the mesh out."""
+    ocp_serialize._ensure_ocp()
     box = _meshed(_box())
 
     assert not ocp_serialize._holds_lone_polygon(box)

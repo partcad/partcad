@@ -125,7 +125,11 @@ from . import logging as pc_logging
 #      headers; an earlier release handed an entry written now could not, and
 #      its sandbox would fail the shape. A tier shared across releases is
 #      where the two meet, so they are kept apart.
-VERSION = 15
+#  16: an edge in no face whose only geometry is a 3D polygon keeps it in a
+#      BREP payload ('ocp_serialize._holds_lone_polygon'). Under 15 it was
+#      written without one, and an entry written then would go on being
+#      served with an edge of nothing at all.
+VERSION = 16
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.
