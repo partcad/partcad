@@ -197,7 +197,7 @@ at all).
   and `subprocess`'s alike -- returns when stdout and stderr reach their end, and whatever a sandbox interpreter
   starts inherits both. So an interpreter the out-of-memory killer took while a child of it lived on was
   waited for as long as the child lived, holding its process slot, the environment's lock, the shape's lock
-  and the daemon's dispatch lock: every later command, `pc daemon status` included, stalled behind it. The
+  and the daemon's one request at a time: every later command, `pc daemon status` included, stalled behind it. The
   process is watched as well now: once it has exited, its output drains for `EXIT_GRACE` seconds, whatever
   can still write into its pipes is found by the pipe (`pipe_holders`: through `/proc` on Linux, and on macOS
   through `lsof`, which names the kernel handle each end of a pipe is joined to) and killed,

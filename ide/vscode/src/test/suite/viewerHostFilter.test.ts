@@ -16,6 +16,10 @@
 // And when a show arrives: the tab it asks for, and the scenario on that tab,
 // reach the renderer as they came.
 //
+// And when the panel moves on - or the renderer starts over on the same
+// object - what it asked for and will now drop is cancelled, not left running
+// on the daemon.
+//
 
 import * as assert from 'assert';
 import * as vscode from 'vscode';
@@ -179,7 +183,12 @@ suite('The Digital Thread host, asked to analyse', () => {
 
         await host.fetchTab({ tab: 'analysis', token: 7 });
 
-        assert.deepStrictEqual(listed, [{ pkg: '//pkg', name: 'bracket' }]);
+        // With the token that cancels it if the panel moves on (see 'inFlight').
+        assert.deepStrictEqual(
+            listed.map(({ pkg, name }) => ({ pkg, name })),
+            [{ pkg: '//pkg', name: 'bracket' }],
+        );
+        assert.ok(listed[0].cancellation);
         assert.strictEqual(posted.length, 1);
         assert.strictEqual(posted[0].tab, 'analysis');
         const data = posted[0].data as { analyses: Record<string, unknown[]>; defaults: Record<string, string> };
@@ -337,6 +346,155 @@ suite('The Digital Thread host, and the view panel', () => {
             posted.map((message) => message.section),
             [null, { y: [0, 15] }, undefined],
         );
+        viewer.dispose();
+    });
+});
+
+suite('The Digital Thread host, moving on', () => {
+    /** The tokens each command was asked with, and a way to answer each call. */
+    const asked: { command: string; token: vscode.CancellationToken; answer: () => void }[] = [];
+    const registrations: vscode.Disposable[] = [];
+
+    suiteSetup(() => {
+        for (const command of ['partcad.bom', 'partcad.cae', 'partcad.supplyQuote']) {
+            registrations.push(
+                vscode.commands.registerCommand(
+                    command,
+                    (args: Record<string, unknown>) =>
+                        new Promise((resolve) =>
+                            asked.push({
+                                command,
+                                token: args.cancellation as vscode.CancellationToken,
+                                answer: () => resolve({}),
+                            }),
+                        ),
+                ),
+            );
+        }
+        registrations.push(vscode.commands.registerCommand('partcad.caeDefaults', () => ({})));
+    });
+
+    suiteTeardown(() => registrations.forEach((registration) => registration.dispose()));
+
+    function shown(): {
+        viewer: PartcadViewer;
+        host: { fetchTab(message: Record<string, unknown>): Promise<void> };
+    } {
+        asked.length = 0;
+        const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
+        const host = viewer as unknown as {
+            lastShow: unknown;
+            panel: unknown;
+            fetchTab(message: Record<string, unknown>): Promise<void>;
+        };
+        host.lastShow = { type: 'show', name: 'bracket', kind: 'part', package: '//pkg' };
+        host.panel = { webview: { postMessage: () => Promise.resolve(true) }, dispose: () => undefined };
+        return { viewer, host };
+    }
+
+    async function until(condition: () => boolean): Promise<void> {
+        for (let i = 0; i < 500 && !condition(); i++) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        assert.ok(condition());
+    }
+
+    test('a tab asked again cancels what it asked before, and nothing else', async () => {
+        const { viewer, host } = shown();
+        const first = host.fetchTab({ tab: 'bom', token: 1 });
+        const other = host.fetchTab({ tab: 'supply', token: 2 });
+        await until(() => asked.length === 2);
+        const second = host.fetchTab({ tab: 'bom', token: 3 });
+        await until(() => asked.length === 3);
+
+        assert.strictEqual(asked[0].token.isCancellationRequested, true);
+        assert.strictEqual(asked[1].token.isCancellationRequested, false);
+        assert.strictEqual(asked[2].token.isCancellationRequested, false);
+        asked.forEach((call) => call.answer());
+        await Promise.all([first, other, second]);
+        viewer.dispose();
+    });
+
+    test('another object cancels everything asked for the last one', async () => {
+        const { viewer, host } = shown();
+        const pending = [
+            host.fetchTab({ tab: 'bom', token: 1 }),
+            host.fetchTab({ tab: 'fea', token: 2, scenario: 'a' }),
+        ];
+        await until(() => asked.length === 2);
+        viewer.handle({ type: 'show', name: 'nut', kind: 'part', package: '//pkg', object: null });
+
+        assert.deepStrictEqual(
+            asked.map((call) => call.token.isCancellationRequested),
+            [true, true],
+        );
+        asked.forEach((call) => call.answer());
+        await Promise.all(pending);
+        viewer.dispose();
+    });
+
+    test('the same object posted again cancels everything asked for before it', async () => {
+        // A webview that reloaded says 'ready', and one that lacked geometry it
+        // was thought to hold says 'geometryMissing': either way it is posted
+        // the show again, and starts over - asking again for what it wants.
+        asked.length = 0;
+        const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
+        let receive: ((message: Record<string, unknown>) => void) | undefined;
+        const nothing = { dispose: () => undefined };
+        const panel = {
+            active: false,
+            visible: false,
+            webview: {
+                options: {},
+                html: '',
+                cspSource: '',
+                asWebviewUri: (uri: vscode.Uri) => uri,
+                postMessage: () => Promise.resolve(true),
+                onDidReceiveMessage: (listener: (message: Record<string, unknown>) => void) => {
+                    receive = listener;
+                    return nothing;
+                },
+            },
+            onDidDispose: () => nothing,
+            onDidChangeViewState: () => nothing,
+            dispose: () => undefined,
+        };
+        viewer.restore(panel as unknown as vscode.WebviewPanel);
+        viewer.handle({ type: 'show', name: 'bracket', kind: 'part', package: '//pkg', object: null });
+        assert.ok(receive);
+
+        for (const type of ['ready', 'geometryMissing']) {
+            const before = asked.length;
+            receive({ type: 'fetchTab', tab: 'bom', token: before + 1 });
+            receive({ type: 'fetchTab', tab: 'supply', token: before + 2 });
+            await until(() => asked.length === before + 2);
+            receive({ type, digests: [] });
+
+            assert.deepStrictEqual(
+                asked.slice(before).map((call) => call.token.isCancellationRequested),
+                [true, true],
+                type,
+            );
+        }
+        asked.forEach((call) => call.answer());
+        viewer.dispose();
+    });
+
+    test('runs of an analysis do not replace one another', async () => {
+        // A user who retypes the implementation and runs again has asked twice.
+        const { viewer, host } = shown();
+        const pending = [
+            host.fetchTab({ tab: 'fea', token: 1, scenario: 'loaded' }),
+            host.fetchTab({ tab: 'fea', token: 2, scenario: 'loaded', implementation: '//mine:fea' }),
+        ];
+        await until(() => asked.length === 2);
+
+        assert.deepStrictEqual(
+            asked.map((call) => call.token.isCancellationRequested),
+            [false, false],
+        );
+        asked.forEach((call) => call.answer());
+        await Promise.all(pending);
         viewer.dispose();
     });
 });

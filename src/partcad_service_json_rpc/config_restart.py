@@ -157,9 +157,10 @@ class Connections:
     """The live connections of a daemon, as much as a restart needs to know.
 
     Every transport registers each connection with a way to send it a
-    notification, and brackets each request with :meth:`begin` and :meth:`end`.
-    Thread-safe: the socket server runs a thread per connection, the pipe
-    server a thread per request.
+    notification, and brackets each request with :meth:`begin` and :meth:`end`
+    -- from when it is queued until it is answered. Thread-safe: each
+    connection is read on a thread (or the pipe server's loop) of its own, and
+    answered from the one dispatch thread.
     """
 
     class _Entry:

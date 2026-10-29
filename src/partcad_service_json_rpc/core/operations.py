@@ -35,7 +35,7 @@ from partcad_utils.utils import (
 )
 
 from ..rpc.dispatcher import JsonRpcError
-from . import events
+from . import cancellation, events
 
 # PartCAD-specific JSON-RPC error code: a partcad.yaml could not be parsed. The
 # CLI turns this into its "Invalid configuration file" message + exit code.
@@ -100,6 +100,9 @@ def _ctx(session, params):
             # Reported as 'context.create' reports it. The context is kept, and
             # loads the root again on the next request (see the reload).
             raise JsonRpcError(INVALID_CONFIG, "Invalid configuration file", data={"detail": str(e)}) from e
+        # A safe point (see 'cancellation'): a reload can take a while, and
+        # what the request does next is the work it was asked for.
+        cancellation.check()
     return ctx
 
 
@@ -521,6 +524,10 @@ def _stage_subassemblies(session, ctx, assembly) -> None:
         return
     pending = [sub for sub in asyncio.run(assembly.get_uncached_subassemblies_async(ctx)) if sub not in session.staged]
     if not pending:
+        # A safe point (see 'cancellation'): the last moment before the
+        # assembly is built, which is the long part. A client stages one
+        # sub-assembly per request, so between two of them is here too.
+        cancellation.check()
         return
 
     items = [{"package": sub.project_name, "name": sub.name, staging.KIND: sub.kind} for sub in pending]
@@ -1545,6 +1552,9 @@ async def _test_async(ctx, pc, packages, filter_prefix, said, object_name, fast_
 
     scheduled = set()
     for package in packages:
+        # A safe point (see 'cancellation'): what is gathered below starts only
+        # once every package has been looked at, which can take a while.
+        cancellation.check()
         obj = object_name
         target = package
         if obj:
@@ -1782,6 +1792,8 @@ async def _simulate_async(
         for declaration in pc_simulation.of_shape(shape):
             if filter_name and declaration.name != filter_name:
                 continue
+            # A safe point (see 'cancellation'): between one simulation and the next.
+            cancellation.check()
             if viewport:
                 results.append(
                     await pc_simulation.run_async(ctx, shape, kind, declaration, plugin=plugin, viewport=viewport)
@@ -3315,6 +3327,10 @@ def manufacturing_details(session, params):
             return item
         try:
             async with budget:
+                # A safe point (see 'cancellation'): this row's turn has come.
+                # Not caught below -- it is not an Exception -- so a cancelled
+                # table stops rather than reporting every row left as failed.
+                cancellation.check()
                 picture = await thumbnail.svg_thumbnail_async(ctx, obj, width, height)
             if picture is not None:
                 item["thumbnail"] = picture
@@ -3599,6 +3615,8 @@ def cae_analyze(session, params):
     entries = []
     with pc.logging.Process(analysis.upper(), package, object_name):
         for scenario in scenarios:
+            # A safe point (see 'cancellation'): between one solver run and the next.
+            cancellation.check()
             entries.append(asyncio.run(_cae_scenario_async(ctx, pc, shape, path, analysis, scenario, params)))
 
     for entry in entries:
@@ -3951,6 +3969,8 @@ async def _route_packages_async(
 
     async def route(shape):
         async with at_once:
+            # A safe point (see 'cancellation'): this object's turn has come.
+            cancellation.check()
             return await shape.route_async(ctx, implementation=implementation, output_dir=output_dir, machine=machine)
 
     produced = await asyncio.gather(*[route(shape) for shape in shapes], return_exceptions=True)
@@ -4774,6 +4794,9 @@ async def _render_packages_async(
             package, object_in_package = pc.utils.resolve_resource_path(package, object_in_package)
 
         async with at_once:
+            # A safe point (see 'cancellation'): this package's turn has come,
+            # and nothing of it has been rendered yet.
+            cancellation.check()
             if object_in_package is None:
                 await ctx.render_async(
                     project_path=package,

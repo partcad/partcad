@@ -15,9 +15,11 @@ import time
 
 import pytest
 
-from partcad_service_json_rpc.core import events
+from partcad_service_json_rpc.core import cancellation, events
 from partcad_service_json_rpc.core.session import Session
+from partcad_service_json_rpc.rpc.dispatcher import REQUEST_CANCELLED
 from partcad_service_json_rpc.transport.socket_server import SocketServer
+from partcad_service_json_rpc.transport.writer import SocketWriter
 from partcad_utils.framing import as_bytes, read_message, write_message
 
 if not hasattr(socket, "AF_UNIX"):
@@ -309,5 +311,362 @@ def test_the_daemon_client_says_it_reads_attachments(socket_dir):
         client = DaemonClient(stream, stream, closer=sock.close)
         assert client.call("render") == {"content": b"\x00\x01"}
         client.close()
+    finally:
+        server.stop()
+
+
+# ---- reading apart from serving, writing apart from both ---------------------
+#
+# Each connection is read by a thread of its own and written by another, and
+# requests are served one at a time by a third (see 'transport.dispatch'): a
+# client that stops reading delays nobody else, and a '$/cancelRequest' reaches
+# the request it is about while that request is queued or running.
+
+# Generous: every wait below ends as soon as what it waits for happens, and a
+# worker of a parallel run shares the machine with the others.
+TIMEOUT = 30
+
+
+def _flood(session, params):
+    payload = "x" * params.get("size", 10000)
+    for _ in range(params["n"]):
+        session.emitter.emit(events.INFO, payload)
+        cancellation.check()
+    return "flooded"
+
+
+def _until_answer(f, request_id):
+    """Every notification before the answer to ``request_id``, and the answer."""
+    seen = []
+    while True:
+        message = read_message(f)
+        assert message is not None, "the connection closed after %d notifications" % len(seen)
+        if message.get("id") == request_id and "method" not in message:
+            return seen, message
+        seen.append(message)
+
+
+def _new_threads(before):
+    return [t for t in threading.enumerate() if t not in before]
+
+
+def _close(stream, sock):
+    # Both: a socket with a file still made of it is not closed until the file
+    # is, and the daemon would go on seeing a client that is still there.
+    stream.close()
+    sock.close()
+
+
+def test_a_client_that_stops_reading_delays_nobody_else(socket_dir):
+    # Twenty megabytes of events for a client that reads none of them: far more
+    # than a socket buffers. They used to be written by the thread serving the
+    # request, which blocked on the full socket holding the dispatch lock, and
+    # the second client's 'ping' waited for the first client to read.
+    server, path, _ = _serve(socket_dir, {"flood": _flood, "ping": lambda s, p: "pong"})
+    try:
+        stuck, stuck_socket = _connect(path)
+        write_message(stuck, {"jsonrpc": "2.0", "id": 1, "method": "flood", "params": {"n": 2000}})
+
+        other, other_socket = _connect(path)
+        other_socket.settimeout(TIMEOUT)
+        write_message(other, {"jsonrpc": "2.0", "id": 1, "method": "ping"})
+        assert read_message(other) == {"jsonrpc": "2.0", "id": 1, "result": "pong"}
+
+        # And the client that was not reading is owed everything, in order,
+        # the moment it starts: its events, then its answer.
+        stuck_socket.settimeout(TIMEOUT)
+        seen, answer = _until_answer(stuck, 1)
+        assert len(seen) == 2000 and all(m["method"] == events.INFO for m in seen)
+        assert answer["result"] == "flooded"
+        _close(stuck, stuck_socket)
+        _close(other, other_socket)
+    finally:
+        server.stop()
+
+
+def test_a_queued_request_that_is_cancelled_is_answered_at_once_and_never_runs(socket_dir):
+    entered, release = threading.Event(), threading.Event()
+    ran = []
+
+    def busy(session, params):
+        entered.set()
+        assert release.wait(TIMEOUT)
+        return "done"
+
+    server, path, _ = _serve(socket_dir, {"busy": busy, "quick": lambda s, p: ran.append(p) or "ran"})
+    try:
+        f, c = _connect(path)
+        c.settimeout(TIMEOUT)
+        write_message(f, {"jsonrpc": "2.0", "id": 1, "method": "busy"})
+        assert entered.wait(TIMEOUT)
+        write_message(f, {"jsonrpc": "2.0", "id": 2, "method": "quick"})
+        write_message(f, {"jsonrpc": "2.0", "method": "$/cancelRequest", "params": {"id": 2}})
+
+        # While the request ahead of it is still running.
+        assert read_message(f) == {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "error": {"code": REQUEST_CANCELLED, "message": "Request cancelled"},
+        }
+        release.set()
+        assert read_message(f)["result"] == "done"
+        assert ran == []
+        _close(f, c)
+    finally:
+        release.set()
+        server.stop()
+
+
+def test_a_running_request_that_is_cancelled_stops_at_its_next_safe_point(socket_dir):
+    started = threading.Event()
+    steps = []
+
+    def long(session, params):
+        started.set()
+        for step in range(3000):
+            steps.append(step)
+            cancellation.check()
+            time.sleep(0.01)
+        return "all of it"
+
+    server, path, _ = _serve(socket_dir, {"long": long})
+    try:
+        f, c = _connect(path)
+        c.settimeout(TIMEOUT)
+        write_message(f, {"jsonrpc": "2.0", "id": 5, "method": "long"})
+        assert started.wait(TIMEOUT)
+        write_message(f, {"jsonrpc": "2.0", "method": "$/cancelRequest", "params": {"id": 5}})
+        assert read_message(f)["error"]["code"] == REQUEST_CANCELLED
+        assert len(steps) < 3000
+        _close(f, c)
+    finally:
+        server.stop()
+
+
+def test_a_cancellation_sent_as_a_request_is_answered_as_well(socket_dir):
+    # The editor sends '$/cancelRequest' as a notification; a client that sends
+    # it with an id is waiting for an answer, which nothing else would give.
+    server, path, _ = _serve(socket_dir, {})
+    try:
+        f, c = _connect(path)
+        c.settimeout(TIMEOUT)
+        write_message(f, {"jsonrpc": "2.0", "id": 7, "method": "$/cancelRequest", "params": {"id": 99}})
+        assert read_message(f) == {"jsonrpc": "2.0", "id": 7, "result": None}
+        _close(f, c)
+    finally:
+        server.stop()
+
+
+def test_a_client_that_goes_away_has_its_request_cancelled(socket_dir):
+    # 'pc render -r' interrupted with Ctrl-C: nobody can read what it goes on
+    # producing, and the next command would wait for all of it.
+    stopped = threading.Event()
+
+    def chatty(session, params):
+        try:
+            for _ in range(100000):
+                session.emitter.info("working")
+                cancellation.check()
+                time.sleep(0.005)
+        except cancellation.RequestCancelled:
+            stopped.set()
+            raise
+        return "finished"
+
+    server, path, _ = _serve(socket_dir, {"chatty": chatty})
+    try:
+        f, c = _connect(path)
+        c.settimeout(TIMEOUT)
+        write_message(f, {"jsonrpc": "2.0", "id": 1, "method": "chatty"})
+        assert read_message(f)["method"] == events.INFO
+        _close(f, c)
+        assert stopped.wait(TIMEOUT)
+    finally:
+        server.stop()
+
+
+def test_a_client_that_takes_nothing_for_too_long_is_dropped_and_its_request_cancelled(socket_dir):
+    path = str(socket_dir / "socket")
+    server = SocketServer(Session(), {"flood": _flood}, write_timeout=0.5)
+    thread = threading.Thread(target=server.serve_unix, args=(path,), daemon=True)
+    thread.start()
+    _wait_until_listening(path)
+    try:
+        f, c = _connect(path)
+        c.settimeout(TIMEOUT)
+        write_message(f, {"jsonrpc": "2.0", "id": 1, "method": "flood", "params": {"n": 100000}})
+        # Not reading, for longer than the bound: the connection is shut down,
+        # and what the client finds when it does read is what had already
+        # reached its buffer, then the end -- no answer, since the request was
+        # cancelled rather than run to the end for nobody.
+        time.sleep(2)
+        messages = []
+        while True:
+            message = read_message(f)
+            if message is None:
+                break
+            messages.append(message)
+        assert messages and all(m.get("method") == events.INFO for m in messages)
+        assert len(messages) < 100000
+        _close(f, c)
+    finally:
+        server.stop()
+
+
+def test_the_threads_of_a_connection_end_with_it(socket_dir):
+    before = set(threading.enumerate())
+    server, path, thread = _serve(socket_dir, {"ping": lambda s, p: "pong"})
+    f, c = _connect(path)
+    c.settimeout(TIMEOUT)
+    write_message(f, {"jsonrpc": "2.0", "id": 1, "method": "ping"})
+    assert read_message(f)["result"] == "pong"
+    assert _new_threads(before)
+    _close(f, c)
+    server.stop()
+    thread.join(TIMEOUT)
+    deadline = time.monotonic() + TIMEOUT
+    while _new_threads(before) and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert _new_threads(before) == []
+
+
+# ---- the writer on its own -------------------------------------------------------
+
+
+def _pair():
+    ours, theirs = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+    return ours, theirs
+
+
+def test_frames_are_sent_whole_and_in_order():
+    ours, theirs = _pair()
+    writer = SocketWriter(ours)
+    try:
+        for n in range(500):
+            write_message(writer, {"jsonrpc": "2.0", "method": "n", "params": n})
+        write_message(writer, {"jsonrpc": "2.0", "id": 1, "result": b"\x00" * 300000}, attachments=True)
+        f = theirs.makefile("rb")
+        theirs.settimeout(TIMEOUT)
+        assert [read_message(f)["params"] for _ in range(500)] == list(range(500))
+        assert read_message(f)["result"] == b"\x00" * 300000
+        assert writer.wait_sent(TIMEOUT)
+        assert writer.dropped is None
+    finally:
+        writer.close(TIMEOUT)
+        ours.close()
+        theirs.close()
+
+
+def test_a_client_that_takes_nothing_for_the_timeout_is_dropped():
+    ours, theirs = _pair()
+    told = []
+    writer = SocketWriter(ours, on_drop=told.append, timeout=0.3)
+    try:
+        writer.put([b"x" * (32 * 1024 * 1024)])
+        assert writer.wait_sent(TIMEOUT)
+        assert writer.dropped is not None and "accepted nothing" in writer.dropped
+        # Told on the writer's thread just after the waiters are woken.
+        deadline = time.monotonic() + TIMEOUT
+        while not told and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert told == [writer.dropped]
+        # Dropped is shut down: what the client reads ends.
+        theirs.settimeout(TIMEOUT)
+        while theirs.recv(1 << 20):
+            pass
+        # And nothing more is queued for it, without an error to whoever writes.
+        writer.put([b"more"])
+    finally:
+        writer.close(TIMEOUT)
+        ours.close()
+        theirs.close()
+
+
+def test_a_client_that_lets_too_much_pile_up_is_dropped():
+    ours, theirs = _pair()
+    writer = SocketWriter(ours, timeout=TIMEOUT, max_backlog=1024 * 1024)
+    try:
+        # One frame bigger than the bound is fine on its own: it is the answer
+        # the client asked for. What piles up behind it is what is bounded.
+        writer.put([b"x" * (16 * 1024 * 1024)])
+        writer.put([b"y" * (200 * 1024)])
+        assert writer.dropped is None
+        for _ in range(8):
+            writer.put([b"y" * (200 * 1024)])
+        assert writer.wait_sent(TIMEOUT)
+        assert writer.dropped is not None and "stopped reading" in writer.dropped
+    finally:
+        writer.close(TIMEOUT)
+        ours.close()
+        theirs.close()
+
+
+def test_a_client_that_reads_slowly_is_not_dropped():
+    ours, theirs = _pair()
+    writer = SocketWriter(ours, timeout=1.0, max_backlog=1024 * 1024)
+    try:
+        # More than the bound, behind a frame being written, but read the whole
+        # time -- slowly, a piece every few hundredths of a second.
+        writer.put([b"x" * (4 * 1024 * 1024)])
+        writer.put([b"y" * (512 * 1024)])
+        received = 0
+        theirs.settimeout(TIMEOUT)
+        while received < 4 * 1024 * 1024 + 512 * 1024:
+            chunk = theirs.recv(256 * 1024)
+            assert chunk
+            received += len(chunk)
+            time.sleep(0.02)
+        assert writer.wait_sent(TIMEOUT)
+        assert writer.dropped is None
+    finally:
+        writer.close(TIMEOUT)
+        ours.close()
+        theirs.close()
+
+
+def test_frames_written_from_several_threads_at_once_never_interleave():
+    # The dispatch thread answers with a file while the renderer's ticking
+    # thread and the reader write frames of their own: each frame -- header,
+    # body, attachments -- is queued whole, whoever else is writing.
+    ours, theirs = _pair()
+    writer = SocketWriter(ours)
+    per_thread = 200
+
+    def write_many(n):
+        for i in range(per_thread):
+            content = bytes([n]) * (1000 + 37 * i)
+            write_message(writer, {"jsonrpc": "2.0", "method": "f", "params": {"n": n, "content": content}}, True)
+
+    threads = [threading.Thread(target=write_many, args=(n,)) for n in range(4)]
+    try:
+        for thread in threads:
+            thread.start()
+        f = theirs.makefile("rb")
+        theirs.settimeout(TIMEOUT)
+        seen = {n: 0 for n in range(4)}
+        for _ in range(4 * per_thread):
+            message = read_message(f)
+            n = message["params"]["n"]
+            assert message["params"]["content"] == bytes([n]) * (1000 + 37 * seen[n])
+            seen[n] += 1
+        assert seen == {n: per_thread for n in range(4)}
+    finally:
+        for thread in threads:
+            thread.join(TIMEOUT)
+        writer.close(TIMEOUT)
+        ours.close()
+        theirs.close()
+
+
+def test_an_answer_that_cannot_be_sent_is_said_so_and_the_connection_goes_on(socket_dir):
+    server, path, _ = _serve(socket_dir, {"odd": lambda s, p: object(), "ping": lambda s, p: "pong"})
+    try:
+        f, c = _connect(path)
+        c.settimeout(TIMEOUT)
+        write_message(f, {"jsonrpc": "2.0", "id": 1, "method": "odd"})
+        assert read_message(f)["error"]["code"] == -32603
+        write_message(f, {"jsonrpc": "2.0", "id": 2, "method": "ping"})
+        assert read_message(f) == {"jsonrpc": "2.0", "id": 2, "result": "pong"}
+        _close(f, c)
     finally:
         server.stop()

@@ -91,17 +91,50 @@ processes, already follows every request.
 - `rpc/` — `dispatcher.py` (JSON-RPC 2.0 parse/dispatch/error mapping) and `methods.py` (the CLI-shaped method
   registry; `rpc.discover` returns the catalog).
 - `transport/` — `stdio.py`, `socket_server.py` (threaded AF_UNIX server, the daemon's transport), `http.py`
-  (optional HTTP+SSE). The `Content-Length` codec they frame with is `partcad_utils.framing`, which the clients
+  (optional HTTP+SSE), and what the first two and the pipe server share: `dispatch.py` (the one dispatch thread,
+  and each connection's requests) and `writer.py` (each connection's writer, and when it gives up on a client). The `Content-Length` codec they frame with is `partcad_utils.framing`, which the clients
   read too; see "Files cross as attachments" below.
 
-  Requests are dispatched one at a time, under one lock, by the socket server and the pipe server alike. A few
-  are answered at the transport level instead, beside whatever is being served: `daemon.stop`,
-  `daemon.settings`, `log.mode`, and the liveness probe `rpc.discover` (`partcad_utils.workspace.LIVENESS_METHOD`).
-  The probe has to be: queued behind a long request -- or behind one that never ended, which is what a sandbox
-  process that died used to leave (see "A sandbox process is waited for until it is dead" in
-  `src/partcad/AGENTS.md`) -- it timed out, and `pc daemon stop`, which asks it first, reported that no daemon
-  was running to the user the stalled client had just told to run it. Whatever is answered there must touch no
-  session state: the emitter's sink belongs to the request holding the lock.
+  Requests are served one at a time, by one thread (`transport/dispatch.py`), by the socket server, the pipe
+  server and `--stdio` alike: the session is every client's and is not safe to use from two threads (one emitter
+  sink, contexts reloaded in place, `activate` reloading `partcad`). Connections take **turns** -- the next
+  request served is the oldest of the next connection in line, not the oldest of all -- so a `pc` command typed
+  while the editor has five tabs' requests queued waits for one of them, not five, and a connection's own
+  requests are served in the order it sent them.
+
+  **Reading, serving and writing are apart.** Each connection has a reader that only reads, so a request is
+  queued rather than read only once the last one is done, and a writer of its own (`transport/writer.py`; the
+  pipe's `PipeWriter`) that every response and notification is queued to -- so serving a request never waits
+  on its client, and a client that stops reading (an extension host stopped in a debugger, a terminal paused
+  with Ctrl-S) delays nobody else. That used to be the opposite: events were written by the thread serving the
+  request, holding the dispatch lock, and one full socket stalled the daemon for everyone. **A client that stops
+  reading is dropped, not waited for and not buffered for without limit**: after `WRITE_TIMEOUT` (60 s) in which
+  it took nothing it was sent, or once more than `MAX_BACKLOG` (256 MB) is queued behind the frame being written.
+  It sees its connection close -- the editor reconnects, `pc` says the service went away -- and its requests are
+  cancelled. The writer docstring says why each bound is what it is. A request's events are queued before its
+  answer, so they still arrive first; `--http` encodes answers and events on worker threads rather than on its
+  event loop, and drops an event stream by the same policy.
+
+  **`$/cancelRequest` is honoured** (`core/cancellation.py`), which is what `vscode-jsonrpc` sends when the token a
+  request was made with is cancelled. A queued request is answered at once with LSP's RequestCancelled
+  (`-32800`) and never runs. A running one is only flagged, and stops with `-32800` at its next **safe point**
+  (`cancellation.check()`): the end of `_ctx`, the moment before an assembly is built (`_stage_subassemblies`
+  found nothing left to stage), and the turn of each item of a recursive render, a CAM route, a Build vs Buy
+  table, a recursive test, each CAE scenario and each simulation. Safe points are between units of work, never
+  inside one, and `RequestCancelled` is a `BaseException` so that an operation reporting one object's failure and
+  carrying on cannot swallow it. One that reaches no safe point is answered as usual. A client that can no longer
+  be reached -- a write to it failed, as for `pc` interrupted with Ctrl-C -- has its requests cancelled the same
+  way; one that only closed its sending half (stdin of `--stdio` at the end of a pipe) is still answered.
+
+  A few requests are answered by the reader instead, beside whatever is being served: `daemon.stop`,
+  `daemon.settings`, `log.mode`, `$/cancelRequest`, and the liveness probe `rpc.discover`
+  (`partcad_utils.workspace.LIVENESS_METHOD`). The probe has to be: queued behind a long request -- or behind one
+  that never ended, which is what a sandbox process that died used to leave (see "A sandbox process is waited for
+  until it is dead" in `src/partcad/AGENTS.md`) -- it timed out, and `pc daemon stop`, which asks it first,
+  reported that no daemon was running to the user the stalled client had just told to run it. Whatever is
+  answered there must touch no session state: the emitter's sink belongs to the request being served. `log.mode`
+  takes effect at once, even for a request of the same connection that is already running; the editor sends it
+  before anything else.
 - `daemon.py` — workspace root discovery, hashing, socket path, liveness (`rpc.discover` probe), stale recovery,
   double-fork/detach, `daemon.stop`. `win_pipe.py` — the Windows named-pipe counterpart.
 

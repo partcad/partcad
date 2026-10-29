@@ -8,6 +8,7 @@
 //
 
 import * as vscode from 'vscode';
+import { isCancellation } from './common/cancellation';
 import * as utils from './utils';
 
 type ItemData = {
@@ -56,6 +57,15 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
      * click resolves the newer inspection instead of its own.
      */
     private _pendingShows: number = 0;
+
+    /**
+     * The render the current inspection asked for, while it is being made.
+     *
+     * Cancelled when a newer inspection supersedes it (see `cancellation.ts`):
+     * the newer one is what the progress waits for and what the viewer will
+     * show, and the daemon builds one thing at a time.
+     */
+    private _rendering?: vscode.CancellationTokenSource;
 
     private shownPackage: string = '';
     private shownItem: string = '';
@@ -180,15 +190,32 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                 });
 
                 progress.report({ message: progressMessage, increment: 20 });
+                this._rendering?.cancel();
+                const rendering = (this._rendering = new vscode.CancellationTokenSource());
                 const rendered = (async () => {
                     try {
-                        await vscode.commands.executeCommand(command, { pkg: packageName, name: itemName, params });
+                        await vscode.commands.executeCommand(command, {
+                            pkg: packageName,
+                            name: itemName,
+                            params,
+                            cancellation: rendering.token,
+                        });
                     } catch (error) {
                         // A render that never started will never be reported
                         // done; drop its share of the count so it cannot leave
                         // a later inspection waiting forever.
                         this.showDone();
+                        if (isCancellation(error)) {
+                            // Superseded by a newer inspection, which resolved
+                            // this one's wait when it began: nothing failed.
+                            return;
+                        }
                         throw error;
+                    } finally {
+                        if (this._rendering === rendering) {
+                            this._rendering = undefined;
+                        }
+                        rendering.dispose();
                     }
                     // Wait for an outside call of this._showResolve()
                     await done;

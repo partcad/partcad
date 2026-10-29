@@ -12,6 +12,7 @@ context is replaced by a faithful fake so the operation glue (param extraction,
 event emission, formatting) is exercised without a real CAD environment.
 """
 
+import asyncio
 import base64
 import contextlib
 import copy
@@ -23,7 +24,7 @@ import types
 import pytest
 
 import partcad.utils as pc_utils
-from partcad_service_json_rpc.core import events, operations
+from partcad_service_json_rpc.core import cancellation, events, operations
 from partcad_service_json_rpc.core.events import EventEmitter
 from partcad_service_json_rpc.core.session import Session
 from partcad_service_json_rpc.rpc.dispatcher import JsonRpcError
@@ -4881,3 +4882,112 @@ def test_render_inline_refuses_an_interface_it_looked_up():
     assert caught.value.message == (
         "Only parts, assemblies, scenes and sketches can be rendered to a file; 'interface' is none of them"
     )
+
+
+# ---- safe points ------------------------------------------------------------
+#
+# A request whose client has cancelled it stops at the next of these, never
+# inside a unit of work (see 'core.cancellation'). Outside a request they do
+# nothing, which is why every test above runs without one.
+
+
+def _serving_cancelled():
+    token = cancellation.CancelToken()
+    token.start()
+    token.cancel()
+    return cancellation.serving(token)
+
+
+def test_a_cancelled_request_stops_before_it_builds_the_object_it_names():
+    session, seen = make_session()
+    assembly = FakeShape()
+    session.partcad_ctx.shapes[("assembly", "//:top")] = assembly
+
+    with _serving_cancelled(), pytest.raises(cancellation.RequestCancelled):
+        operations.inspect_assembly(session, {"package": "//", "name": "top"})
+
+    assert assembly.shown is False
+    # Not reported as shown: the Inspector counts this request out by its error.
+    assert (events.SHOW_PART_DONE, None) not in seen
+
+
+def test_a_request_cancelled_while_its_subassemblies_are_looked_at_stops_before_the_build():
+    session, _ = make_session()
+    token = cancellation.CancelToken()
+    token.start()
+
+    class CancelledWhileLooking(FakeShape):
+        async def get_uncached_subassemblies_async(self, ctx):
+            token.cancel()
+            return []
+
+    assembly = CancelledWhileLooking()
+    session.partcad_ctx.shapes[("assembly", "//:top")] = assembly
+
+    with cancellation.serving(token), pytest.raises(cancellation.RequestCancelled):
+        operations.instantiate_assembly(session, {"package": "//", "name": "top"})
+
+    assert assembly.instantiated is False
+    assert assembly not in session.staged
+
+
+def test_a_cancelled_table_stops_at_the_next_row_rather_than_failing_every_row(monkeypatch):
+    token = cancellation.CancelToken()
+    token.start()
+    drawn = []
+
+    class Measured:
+        async def get_measurements_async(self, ctx):
+            return {}
+
+    async def svg_thumbnail_async(ctx, obj, width, height):
+        drawn.append(obj)
+        # The client moves on while the first row is being drawn.
+        token.cancel()
+        return b"<svg/>"
+
+    async def part_mass_async(ctx, obj):
+        return None
+
+    install_fake_partcad_modules(
+        monkeypatch,
+        {
+            "partcad.thumbnail": {"svg_thumbnail_async": svg_thumbnail_async},
+            "partcad.physics": {"part_mass_async": part_mass_async},
+            # One row at a time, so the others are still waiting for their turn.
+            "partcad.sandbox_lock": {"process_slots": types.SimpleNamespace(count=1)},
+        },
+    )
+    session, _ = make_session()
+    rows = []
+    for n in range(5):
+        session.partcad_ctx.shapes[("part", "//:p%d" % n)] = Measured()
+        rows.append({"name": "//:p%d" % n, "kind": "part"})
+
+    with cancellation.serving(token), pytest.raises(cancellation.RequestCancelled):
+        operations.manufacturing_details(session, {"objects": rows})
+
+    assert len(drawn) == 1
+
+
+def test_a_cancelled_recursive_render_starts_no_package_it_has_not_started(monkeypatch):
+    session, rendered = _render_session(monkeypatch)
+    for name in ("//a", "//b", "//c"):
+        session.partcad_ctx.projects[name] = FakeProject(name=name)
+
+    with _serving_cancelled(), pytest.raises(cancellation.RequestCancelled):
+        asyncio.run(
+            operations._render_packages_async(
+                session.partcad,
+                session.partcad_ctx,
+                {},
+                ["//a", "//b", "//c"],
+                "step",
+                None,
+                None,
+                None,
+                False,
+            )
+        )
+
+    assert rendered == []
