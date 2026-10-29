@@ -12,8 +12,9 @@ and easy to lose in an edit. So each one is run here the way a sandbox runs it:
 the script itself, as '__main__', reading its request from standard input and
 writing its answer to standard output through 'wrapper_common', only in this
 process rather than a fresh interpreter, so that what it does is measured. The
-answer is read back with the core's own codec, and has to carry the claim and
-the geometry the claim describes.
+request is the frame the core sends a Python wrapper ('shape_envelope.serialize'),
+and so is the answer, which is read back with the core's own codec and has to
+carry the claim and the geometry the claim describes.
 
 The script wrappers (build123d, cadquery) and the SDF one need packages this
 environment does not install; they are run in a sandbox by
@@ -37,6 +38,7 @@ from OCP.StlAPI import StlAPI_Writer
 
 import partcad as pc
 from partcad import shape_envelope
+from partcad_utils import framing
 
 WRAPPERS = os.path.join(os.path.dirname(pc.__file__), "wrappers")
 sys.path.append(WRAPPERS)
@@ -51,8 +53,14 @@ def _finish(solidify=True):
 
 
 @pytest.fixture
-def run(monkeypatch, capsys):
+def run(monkeypatch, capsysbinary):
     """Run 'wrapper_<name>.py' on 'argument' with 'request' on its stdin; its answer, as the core reads it.
+
+    Asked as the core asks a Python wrapper, in a frame, unless 'form' is
+    "json", which is how a wrapper a container runs is asked; either way the
+    answer has to come back in the form it was asked in ('wrapper_common
+    .handle_output'). Standard input and output are bytes, as a pipe is: a
+    frame's payloads are raw.
 
     Everything a wrapper changes about the process it runs in is put back: the
     module state 'wrapper_common' keeps for the response, the search path each
@@ -62,18 +70,25 @@ def run(monkeypatch, capsys):
     """
     for name in ("_request_finish", "_request_name", "_request_label"):
         monkeypatch.setattr(wrapper_common, name, None)
+    monkeypatch.setattr(wrapper_common, "_answer_framed", False)
     monkeypatch.setattr(wrapper_common, "_response_fd", None)
     monkeypatch.setattr(wrapper_common, "protect_response_channel", lambda: None)
     monkeypatch.setattr(sys, "path", list(sys.path))
     saved_locale = locale.setlocale(locale.LC_ALL)
 
-    def answer(name, argument, request):
+    def answer(name, argument, request, form="frame"):
         script = os.path.join(WRAPPERS, "wrapper_%s.py" % name)
         monkeypatch.setattr(sys, "argv", [script, str(argument)])
-        monkeypatch.setattr(sys, "stdin", io.StringIO(ocp_serialize.serialize(request)))
-        capsys.readouterr()
+        if form == "frame":
+            data = ocp_serialize.serialize(request)
+        else:
+            data = ocp_serialize.dumps(request).encode("utf-8")
+        monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(data)))
+        capsysbinary.readouterr()
         runpy.run_path(script, run_name="__main__")
-        return shape_envelope.deserialize(capsys.readouterr().out)
+        out = capsysbinary.readouterr().out
+        assert (framing.find_message(out) is not None) is (form == "frame"), out[:200]
+        return shape_envelope.deserialize(out)
 
     yield answer
     locale.setlocale(locale.LC_ALL, saved_locale)
@@ -133,10 +148,12 @@ def test_a_step_part_is_judged_not_converted_and_moved(run, step):
     assert measured["bbox"] == pytest.approx(MOVED_BOX, abs=1e-6)
 
 
-def test_a_brep_part_is_finished(run, tmp_path):
+@pytest.mark.parametrize("form", ["frame", "json"])
+def test_a_brep_part_is_finished(run, tmp_path, form):
+    """Asked in JSON too, as a wrapper a container runs is, and answered with the same claim in JSON."""
     path = tmp_path / "box.brep"
     BRepTools.Write_s(_box(), str(path))
-    claim, measured = _finished(run("brep", path, _request(_finish(solidify=False))))
+    claim, measured = _finished(run("brep", path, _request(_finish(solidify=False)), form=form))
     assert list(claim) == ["validated", "offset", "scale"]
     assert measured["volume"] == pytest.approx(6000.0 * 8)
 

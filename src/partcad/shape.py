@@ -368,19 +368,19 @@ def _together_request(outputs) -> dict:
 def _together_answers(stdout, count: int) -> dict:
     """What a call writing 'count' files said of each of them, by its place in the call.
 
-    One line per file it finished (see 'output.BATCH_OUTPUT_KEY'). A line that
-    is not one of those is not an answer; a file with none was not answered.
+    One answer per file it finished (see 'output.BATCH_OUTPUT_KEY'): a frame
+    each, as the Python sandbox is answered - 'stdout' is then the bytes they
+    are ('process_output.answer') - or a line of JSON each, for a call asked in
+    JSON (see 'shape_envelope.deserialize_all'). What is not one of those is not
+    an answer, and neither is a frame cut off part way; a file with none was not
+    answered.
     """
     answers = {}
-    for line in (stdout or "").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            answer = shape_envelope.loads(line)
-        except Exception:  # pylint: disable=broad-except
-            pc_logging.debug("Not an answer from the export wrapper: %s" % line[:200])
-            continue
+
+    def skipped(text):
+        pc_logging.debug("Not an answer from the export wrapper: %s" % text[:200])
+
+    for answer in shape_envelope.deserialize_all(stdout, skipped):
         if not isinstance(answer, dict):
             continue
         index = answer.get(output.BATCH_OUTPUT_KEY)
@@ -2265,15 +2265,18 @@ class Shape(ShapeConfiguration):
         # Serialized by the runtime when the process starts, not here: until a
         # process slot is free this is a request waiting its turn, and the tree
         # it carries is held anyway (see 'runtime.stdin_bytes'). In the Python
-        # sandbox the reader is 'wrapper_export.py', which takes the payloads of
-        # a tree written once each (see 'shape_envelope.KEY_BREPS'); a container
-        # runs a program of the implementation's own, handed the request as it
-        # has always been written. Several files are one document holding every
-        # request and the shape once (see '_together_request').
+        # sandbox the reader is 'wrapper_export.py', which is sent a frame with
+        # each distinct payload attached once (see 'shape_envelope.serialize');
+        # a container runs a program of the implementation's own, handed the
+        # request as it has always been written, as JSON. Several files are one
+        # document holding every request and the shape once (see
+        # '_together_request'), and are never a container's.
         def request_serialized():
             if together:
-                return shape_envelope.serialize(_together_request(outputs), share=True)
-            return shape_envelope.serialize(outputs[0].request, share=not container)
+                return shape_envelope.serialize(_together_request(outputs))
+            if container:
+                return shape_envelope.dumps(outputs[0].request)
+            return shape_envelope.serialize(outputs[0].request)
 
         script_path = wrapper.get("export.py")
         config_dirs = [os.path.abspath(output_.impl.project.config_dir) for output_ in outputs]
@@ -2342,13 +2345,14 @@ class Shape(ShapeConfiguration):
         if together:
             return await self._together_outcomes_async(ctx, outputs, response_serialized, errors)
 
-        response_lines = response_serialized.strip().splitlines()
-        if not response_lines:
+        # Text or the bytes of a frame (see 'process_output.answer'); either way
+        # what is in front of the answer is 'deserialize()''s to skip.
+        if not response_serialized or not response_serialized.strip():
             self.error("Empty response from the '%s' implementation: %s" % (impl.format_name, script))
             return [None]
 
         try:
-            return [shape_envelope.deserialize(response_lines[-1].strip())]
+            return [shape_envelope.deserialize(response_serialized)]
         except Exception as e:
             self.error("Failed to deserialize response: %s" % e)
             return [None]
@@ -4161,11 +4165,10 @@ class Shape(ShapeConfiguration):
                 pc_logging.error(errors)
                 raise Exception(errors)
 
-            response_lines = response_serialized.strip().splitlines()
-            if not response_lines:
+            if not response_serialized or not response_serialized.strip():
                 pc_logging.error("Empty response from wrapper: %s" % command[0])
                 return None
-            result = shape_envelope.deserialize(response_lines[-1].strip())
+            result = shape_envelope.deserialize(response_serialized)
 
             if not result.get("success", False):
                 pc_logging.error(

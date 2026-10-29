@@ -19,7 +19,9 @@ import sys
 from . import logging as pc_logging
 from . import runtime, sandbox_lock, sandbox_versions, sandbox_zygote, telemetry
 from .process_crash import describe_exit_code, describe_termination, killed_by_signal  # noqa: F401  (re-exported)
+from .process_output import answer as stdout_of
 from .process_output import decode as decode_output
+from .process_output import loggable
 
 # A sandbox is layered. Its own environment -- the conda prefix, the venv, the
 # image's interpreter -- holds what nearly every wrapper imports (see
@@ -739,12 +741,13 @@ class PythonRuntime(runtime.Runtime):
                     # holding its output lets go (see 'runtime.communicate').
                     stdout, stderr = capture.collect(*runtime.communicate_sync(p, data))
 
-            stdout = decode_output(stdout)
+            # A wrapper's answer stays the frame of bytes it is; see 'process_output.answer'.
+            stdout = stdout_of(stdout)
             stderr = decode_output(stderr)
             returncode, stderr = self._ended(p.returncode, stderr)
 
             if stdout:
-                pc_logging.debug("Output of %s: %s", cmd, stdout)
+                pc_logging.debug("Output of %s: %s", cmd, loggable(stdout))
             if stderr:
                 if returncode == 0:
                     pc_logging.warning("%s produced stderr: %s" % (cmd, stderr))
@@ -860,7 +863,8 @@ class PythonRuntime(runtime.Runtime):
                             )
                         stdout, stderr = capture.collect(*await runtime.communicate(p, data, timeout))
 
-            stdout = decode_output(stdout)
+            # A wrapper's answer stays the frame of bytes it is; see 'process_output.answer'.
+            stdout = stdout_of(stdout)
             stderr = decode_output(stderr)
             returncode, stderr = await self._ended_async(p.returncode, stderr)
             if getattr(p, "zygote_lost", False):
@@ -873,7 +877,7 @@ class PythonRuntime(runtime.Runtime):
                 stderr = note if not stderr else stderr.rstrip() + "\n" + note
 
             if stdout:
-                pc_logging.debug("Output of %s: %s", cmd, stdout)
+                pc_logging.debug("Output of %s: %s", cmd, loggable(stdout))
             if stderr:
                 if returncode == 0:
                     pc_logging.warning("%s produced stderr: %s" % (cmd, stderr))

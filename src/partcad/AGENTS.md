@@ -160,9 +160,10 @@ at all).
   rasterizes, the rest in the base), which imports the CAD stack once and runs each
   implementation as it would have run alone, in its own working directory and with `sys.argv`/`sys.path` as it
   would have found them. Nothing is lost in parallelism: a shape's files never ran at once (`Shape.locked()`), and a
-  call is one process slot and one task however many files it writes. Each file is answered on a line of its own as
-  soon as it is written, and one left unanswered -- the process died, or the wrapper failed before reaching it --
-  is written again by a call of its own, so it fails exactly as it does alone and takes nothing else with it. Nor
+  call is one process slot and one task however many files it writes. Each file is answered as soon as it is
+  written, by a frame of its own (a line of JSON in a call asked in JSON; `shape_envelope.deserialize_all` reads
+  either), and one left unanswered -- the process died, the wrapper failed before reaching it, or its frame was cut
+  off -- is written again by a call of its own, so it fails exactly as it does alone and takes nothing else with it. Nor
   does one that fails before it is handed in (a file type that does not resolve): the render raises once every
   other one has finished (`_together`), since whichever is handed in last writes them all, and raising first left
   them running for a caller that had gone; a cancelled render writes nothing nobody waits for (`_OutputBatch._run`).
@@ -1469,11 +1470,12 @@ at all).
   *serialized* document and of nothing in memory: in memory every node keeps its own `brep`, and the nodes that came
   out of one table entry hold the one bytes (or str) object. `dumps(share=True)` writes the table on the top level of
   the document, only when that makes it smaller; both ends' `loads()` and `ocp_serialize.deserialize_raw()` take it
-  back out before anything walks the tree, so no reader of a tree meets either key. It is written only where the reader
-  is known to understand it -- requests to PartCAD's own Python wrappers (`Shape._run_implementation_locked` outside a
-  container, `shape_gltf`) and every Python wrapper's answer (`wrapper_common.handle_output`), since the core reads both
-  forms of every answer -- and never to a container or a JavaScript runtime, which parse their requests themselves.
-  The LEGO castle's render request went from 33 MB to 8.7 MB with it. In the shape cache an assembly's tree is a frame
+  back out before anything walks the tree, so no reader of a tree meets either key. The table is the JSON form's, and
+  is written only where the reader is known to understand it -- the answer of a Python wrapper that was asked in JSON
+  (a container's), since the core reads both forms of every answer -- and never to a container or a JavaScript
+  runtime, which parse their requests themselves. The LEGO castle's render request went from 33 MB to 8.7 MB with it.
+  A frame (below) shares the same way without a table: a tree like the castle's, 731 placements of 9 parts and
+  4.6 MB of distinct geometry, is a frame of 4.9 MB. In the shape cache an assembly's tree is a frame
   of its own (`cache_shape._TREE_MAGIC`): the tree as compressed JSON naming its payloads, then each distinct payload
   once as raw bytes, so the castle's tree, 33 MB of JSON before, fits the file tier. A tree an earlier release wrote as
   JSON is still read; an earlier release reading a frame counts it a miss and writes its own form. **Nothing but an
@@ -1497,6 +1499,30 @@ at all).
   holds its request as the tree it holds anyway rather than as a text of it as well -- four views of the LEGO car
   waiting their turn were 66 MB of text and 66 MB of bytes each. Every launch point resolves `stdin` through that one
   function; a new one has to as well.
+
+  **The wrapper pipe is a frame, and a payload is never base64 on it** (`shape_envelope.serialize`,
+  `ocp_serialize.frame`). A request to one of PartCAD's Python wrappers, and its answer, are the frame the daemon and
+  its clients exchange (`partcad_utils.framing`): the document as a JSON body, then every BREP payload -- and every
+  other bytes value, a glTF included -- raw behind it as an attachment the body names where it belongs, once per
+  distinct payload (`Distinct`, on both sides; equal bytes in two objects are found by comparing payloads of one
+  length, not by digesting all of them). It replaced one line of JSON with base64 payloads, which cost five copies
+  of every payload in each direction: at 50 MB of BREP the core took 0.7 s to write a request and 0.6 s to read an
+  answer, holding the GIL every other request of the daemon waits on, against 50 to 60 ms now, nearly all of it
+  allocating the one copy that is left; a 5 MB part went from 64 and 50 ms to under 2. A sandbox cannot import
+  `partcad_utils`, so `wrappers/partcad_framing.py` is a byte-for-byte copy of `framing.py`, which
+  `tests/partcad/unit/test_wrapper_frames.py` holds to it: edit the one in `partcad_utils` and copy it over.
+
+  Three rules keep every path working. **A wrapper answers in the form it was asked in** (`wrapper_common`): a
+  container and a JavaScript runtime are sent JSON (`shape_envelope.dumps`), exactly as before, and a wrapper that
+  container runs answers in JSON. **Standard output stays bytes when it holds a whole frame**
+  (`process_output.answer`, at every launch point and in both of the container service's dialects -- the JSON one,
+  `Runtime._rpc_result`, and frames, `RemotePythonRuntime._answer`, which the `remote` sandbox and the `docker` one in
+  `upload` mode both answer through; in `mount` mode it is a launch point like any other) and is text otherwise, so a
+  command that only prints is read as it always was; a new launch point has to read its output through it, and a new
+  reader of an answer has to hand the whole of it to `shape_envelope.deserialize` rather than splitting it into lines.
+  **An answer is found, not assumed**: `framing.find_message` skips whatever a wrapper wrote before it took its
+  channel away, and a frame that did not arrive whole says so. A wrapper answer kept in the artifact cache is kept as
+  the line of JSON that says the same (`cache_artifacts.store_response_async`), since an entry's result is JSON.
 
   **The connection layer is re-stamped rather than stored.** It rides in `get_cache_metadata()`, the layer
   `apply_metadata()` puts back around every payload as it is materialized, for the reason `properties:` does: a

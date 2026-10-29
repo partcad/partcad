@@ -138,10 +138,9 @@ async def render_pdf_async(
         pc_logging.error(errors)
         raise Exception(errors)
 
-    response_lines = response_serialized.strip().splitlines()
-    if not response_lines:
+    if not response_serialized or not response_serialized.strip():
         raise Exception("Empty response from wrapper: %s" % command[0])
-    result = shape_envelope.deserialize(response_lines[-1].strip())
+    result = shape_envelope.deserialize(response_serialized)
 
     if not result.get("success", False):
         raise Exception("Failed to generate the PDF document: %s" % result.get("exception", "Unknown error"))

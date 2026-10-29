@@ -22,7 +22,6 @@ The last section runs the real thing, and counts the interpreters.
 """
 
 import asyncio
-import json
 import logging
 import os
 import sys
@@ -66,8 +65,14 @@ def _bbox(shape):
 
 
 def _decoded(envelope):
-    """What a wrapper's answer decodes to on the far side of the pipe."""
-    return ocp_serialize.decode(json.loads(json.dumps(envelope)))
+    """What a wrapper's answer decodes to on the far side of the pipe: through the frame it crosses it in.
+
+    A frame rather than a line of JSON, because that is what a Python wrapper
+    answers PartCAD's own requests with, and because the envelope holds its
+    payload as the bytes 'encode_shape' wrote, which stock JSON has no room for
+    (see 'ocp_serialize.serialize').
+    """
+    return ocp_serialize.deserialize(ocp_serialize.serialize(envelope))
 
 
 def _plain(envelope):

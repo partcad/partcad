@@ -100,12 +100,13 @@ def package(tmp_path):
 
 
 def _serialize(request):
+    """The request as a container is sent it: JSON (see 'Shape._run_implementation_locked')."""
     sys.path.insert(0, WRAPPERS)
     try:
         import ocp_serialize
     finally:
         sys.path.remove(WRAPPERS)
-    return ocp_serialize.serialize(request)
+    return ocp_serialize.dumps(request)
 
 
 def _deserialize(data):

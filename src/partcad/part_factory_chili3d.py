@@ -121,7 +121,9 @@ class PartFactoryChili3d(PartFactoryJavaScript):
                 request["name"] = "%s:%s" % (part.project_name, part.name)
                 request["label"] = part.name
                 request["kind"] = "part"
-                request_serialized = shape_envelope.serialize(request)
+                # JSON, which is what 'chili3d_common.mjs' parses: the frame
+                # 'serialize()' writes is for PartCAD's Python wrappers.
+                request_serialized = shape_envelope.dumps(request)
 
             cwd = self.project.config_dir
             if self.cwd is not None:

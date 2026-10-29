@@ -22,7 +22,9 @@ from partcad_utils import container_service, containers
 from . import logging as pc_logging
 from . import sandbox_lock
 from .process_crash import describe_exit_code, describe_termination
+from .process_output import answer as stdout_of
 from .process_output import decode as decode_output
+from .process_output import loggable
 
 # How long after its bound a run is killed from a thread of its own, in seconds,
 # when the event loop has not done it by then (see `communicate`).
@@ -729,7 +731,10 @@ class Runtime:
         # failed on "object of type 'NoneType' has no len()" -- in upload mode
         # only, and only once nothing else had made it print.
         stdout = result["stdout"]
-        stdout = base64.b64decode(stdout).decode("utf-8") if stdout else ""
+        # As a process run here is read (see 'process_output.answer'): a Python
+        # wrapper's answer is a frame of raw bytes, and a strict decoding of it
+        # as text raised on the first byte that was not UTF-8.
+        stdout = stdout_of(base64.b64decode(stdout)) if stdout else ""
         stderr = result["stderr"]
         stderr = base64.b64decode(stderr).decode("utf-8") if stderr else ""
         for file_name, file_contents in (result.get("output_files") or {}).items():
@@ -765,7 +770,7 @@ class Runtime:
         (see process_crash).
         """
         if stdout:
-            pc_logging.debug("Output of %s: %s", cmd, stdout)
+            pc_logging.debug("Output of %s: %s", cmd, loggable(stdout))
         if stderr:
             # TODO(azhar): remove this when the issue is fixed
             keywords = [
@@ -914,7 +919,7 @@ class Runtime:
                     env=spawn_env,
                 )
                 stdout, stderr = communicate_sync(p, data)
-            stdout = decode_output(stdout)
+            stdout = stdout_of(stdout)
             stderr = decode_output(stderr)
             returncode, stderr = self._ended(p.returncode, stderr)
             return self._finished(cmd, stdout, stderr, returncode)
@@ -977,7 +982,7 @@ class Runtime:
                     )
                     stdout, stderr = capture.collect(*await communicate(p, data, timeout))
 
-            stdout = decode_output(stdout)
+            stdout = stdout_of(stdout)
             stderr = decode_output(stderr)
             returncode, stderr = await self._ended_async(p.returncode, stderr)
             return self._finished(cmd, stdout, stderr, returncode)

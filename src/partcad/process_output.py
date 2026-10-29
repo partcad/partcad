@@ -31,9 +31,34 @@ ordinary case of UTF-8 with one bad byte in it. Marking the bytes we could not
 read is worth more in a diagnostic than inventing characters for them.
 """
 
+from partcad_utils import framing
+
 
 def decode(data: bytes) -> str:
     """Decode subprocess output as UTF-8, marking anything that is not."""
     if data is None:
         return data
     return data.decode("utf-8", errors="replace")
+
+
+def answer(data: bytes):
+    """What a process wrote on standard output, as whoever ran it reads it.
+
+    Text, decoded as `decode` decodes it -- with one exception, which is the
+    answer of one of PartCAD's own Python wrappers: a frame of raw bytes (see
+    `shape_envelope.serialize`), which a text decoding would ruin and which is
+    handed back as the bytes it is, for `shape_envelope.deserialize`. Told by
+    the frame itself being there, whole (`framing.find_message`), so a process
+    that only prints is read as it always was, and a wrapper asked in JSON
+    answers in JSON and is read as text.
+    """
+    if data and framing.find_message(data) is not None:
+        return bytes(data)
+    return decode(data)
+
+
+def loggable(output) -> str:
+    """``output`` as it goes into the log: text as it is, and a frame by its size."""
+    if isinstance(output, (bytes, bytearray)):
+        return "a framed answer of %d bytes" % len(output)
+    return output

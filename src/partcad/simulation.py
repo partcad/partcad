@@ -1281,23 +1281,32 @@ def crash_report(plugin: str, what: str, errors) -> str:
     return "%s %s. The end of what it wrote to standard error:\n%s" % (plugin, what, tail)
 
 
-def read_answer(response_serialized: str):
+def read_answer(response_serialized):
     """What a plugin answered, as a dict; None for no answer at all.
 
-    Raises ValueError, with the beginning of what came back, for an answer that
-    is not one -- text that is not JSON, or JSON that is not an object.
+    'response_serialized' is what the wrapper wrote: the bytes of a frame, or
+    text (see 'process_output.answer'). Raises ValueError, with the beginning of
+    what came back, for an answer that is not one -- output that is neither a
+    frame nor JSON, or an answer that is not an object.
     """
     if not (response_serialized or "").strip():
         return None
     try:
         answer = shape_envelope.deserialize(response_serialized)
     except Exception as e:  # pylint: disable=broad-except
-        raise ValueError("%s, beginning %r" % (e, response_serialized.strip()[:200]))
+        raise ValueError("%s, beginning %r" % (e, _beginning(response_serialized)))
     if not isinstance(answer, dict):
         raise ValueError(
-            "a %s rather than an object, beginning %r" % (type(answer).__name__, response_serialized.strip()[:200])
+            "a %s rather than an object, beginning %r" % (type(answer).__name__, _beginning(response_serialized))
         )
     return answer
+
+
+def _beginning(response) -> str:
+    """The first 200 characters of what came back, as text, for a sentence about it."""
+    if isinstance(response, (bytes, bytearray)):
+        response = bytes(response[:800]).decode("utf-8", errors="replace")
+    return response.strip()[:200]
 
 
 async def _run_plugin_async(

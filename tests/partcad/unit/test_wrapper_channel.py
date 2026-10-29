@@ -17,11 +17,14 @@ So `wrapper_common` takes the descriptor away and keeps the real one for
 only way to have something write to descriptor 1 the way a shared library does.
 """
 
+import json
 import os
 import subprocess
 import sys
 import textwrap
 import types
+
+import pytest
 
 from partcad import wrapper as pc_wrapper
 
@@ -34,6 +37,7 @@ WRAPPERS = os.path.dirname(pc_wrapper.get("export.py"))
 # wrappers are, since it is not being run out of a sandbox.
 SCRIPT = textwrap.dedent("""
     import os
+    import subprocess
     import sys
 
     sys.path.insert(0, sys.argv[3])
@@ -50,55 +54,90 @@ SCRIPT = textwrap.dedent("""
     # channel being moved, that fragment and the response become one line.
     os.write(1, b"OCCT: Transferring Shape, ShapeType = 2\\n")
     os.write(1, b"OCCT: writing... ")
+    # ...and a process it starts, which inherits descriptor 1 and nothing else.
+    subprocess.run([sys.executable, "-c", "print('a child talking')"], check=True)
 
-    wrapper_common.handle_output({"success": True, "echo": request.get("echo")})
+    wrapper_common.handle_output({"success": True, "echo": request.get("echo"), "blob": b"\\x00\\xff\\n"})
     """)
 
 
-def _run(tmp_path):
-    """Run the script above as a wrapper would be run, and return what it said."""
+def _ocp_serialize():
     sys.path.insert(0, WRAPPERS)
     try:
         import ocp_serialize
     finally:
         sys.path.remove(WRAPPERS)
+    return ocp_serialize
 
+
+def _run(tmp_path, framed=True):
+    """Run the script above as a wrapper would be run, asked in a frame or in JSON, and return what it said."""
+    ocp_serialize = _ocp_serialize()
     script = tmp_path / "wrapper.py"
     script.write_text(SCRIPT)
+    request = {"echo": "hello"}
     finished = subprocess.run(
         [sys.executable, str(script), str(tmp_path / "out.bin"), str(tmp_path), WRAPPERS],
-        input=ocp_serialize.serialize({"echo": "hello"}),
+        input=ocp_serialize.serialize(request) if framed else ocp_serialize.dumps(request).encode("utf-8"),
         capture_output=True,
-        text=True,
     )
     assert finished.returncode == 0, finished.stderr
     return ocp_serialize, finished
 
 
-def test_the_response_survives_everything_else_that_prints(tmp_path):
+@pytest.mark.parametrize("framed", [True, False], ids=["frame", "json"])
+def test_the_response_survives_everything_else_that_prints(tmp_path, framed):
     """The answer parses, and says what the wrapper meant it to say."""
-    ocp_serialize, finished = _run(tmp_path)
+    ocp_serialize, finished = _run(tmp_path, framed)
 
     response = ocp_serialize.deserialize(finished.stdout)
     assert response["success"] is True
     assert response["echo"] == "hello"
+    assert response["blob"] == b"\x00\xff\n"
 
 
-def test_what_printed_is_not_lost_but_moved(tmp_path):
+def test_a_frame_is_answered_with_a_frame_and_nothing_else(tmp_path):
+    """The whole of standard output is the one frame: nothing is in front of it or after it.
+
+    Which is what lets the core read it without looking for it, and what keeps
+    its bytes raw: there is no text on the channel to be decoded as text.
+    """
+    ocp_serialize, finished = _run(tmp_path, framed=True)
+
+    from partcad_utils import framing
+
+    assert framing.find_message(finished.stdout) == 0
+    message, end = framing.message_at(finished.stdout, 0)
+    assert end == len(finished.stdout)
+    # Attached, raw: what JSON would have carried as base64.
+    assert message["blob"] == {ocp_serialize.KEY_BYTES: b"\x00\xff\n"}
+
+
+def test_json_is_answered_with_json(tmp_path):
+    """What a wrapper in a container is sent, and what its caller reads back as text."""
+    _ocp_serialize_module, finished = _run(tmp_path, framed=False)
+
+    assert finished.stdout.startswith(b"{")
+    assert json.loads(finished.stdout)["echo"] == "hello"
+
+
+@pytest.mark.parametrize("framed", [True, False], ids=["frame", "json"])
+def test_what_printed_is_not_lost_but_moved(tmp_path, framed):
     """Both kinds of noise still reach the log, which is where they are useful.
 
     Silencing them would be the other way to protect the channel and is the
     wrong one: "the mesher said nothing" is how a diagnosable failure becomes an
     undiagnosable one.
     """
-    _ocp_serialize, finished = _run(tmp_path)
+    _ocp_serialize_module, finished = _run(tmp_path, framed)
 
-    assert "a script talking to itself" in finished.stderr
-    assert "OCCT: Transferring Shape" in finished.stderr
-    assert "OCCT: writing... " in finished.stderr
+    assert b"a script talking to itself" in finished.stderr
+    assert b"OCCT: Transferring Shape" in finished.stderr
+    assert b"OCCT: writing... " in finished.stderr
+    assert b"a child talking" in finished.stderr
     # And none of it is on the channel.
-    assert "talking to itself" not in finished.stdout
-    assert "OCCT" not in finished.stdout
+    assert b"talking" not in finished.stdout
+    assert b"OCCT" not in finished.stdout
 
 
 def test_an_answer_written_a_little_at_a_time_arrives_whole(monkeypatch):

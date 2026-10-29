@@ -12,6 +12,10 @@ True)' writes each payload once ('KEY_BREPS') and has every node name its entry
 ('KEY_BREP_REF'); 'loads()' puts the payloads back. These hold that the table is
 invisible to everything that reads a tree, that it is written only when it saves
 something, and that each side of the pipe reads what the other writes.
+
+The table is the JSON form's: what a container is sent, and what a wrapper asked
+in JSON answers. A frame ('serialize()') attaches each distinct payload once
+instead, which 'test_wrapper_frames.py' holds.
 """
 
 import json
@@ -53,28 +57,28 @@ def _leaves(tree):
 
 
 def test_a_repeated_payload_is_written_once():
-    text = shape_envelope.serialize({"wrapped": _castle()}, share=True)
+    text = shape_envelope.dumps({"wrapped": _castle()}, share=True)
     document = json.loads(text)
 
     assert sorted(document[shape_envelope.KEY_BREPS]) == sorted(
         shape_envelope.payload_digest(payload) for payload in (BRICK, CONE)
     )
     assert '"%s":' % shape_envelope.KEY_BREP not in text
-    assert len(text) < len(shape_envelope.serialize({"wrapped": _castle()}))
+    assert len(text) < len(shape_envelope.dumps({"wrapped": _castle()}))
 
 
 def test_the_table_is_taken_back_out_and_every_node_has_its_payload():
     request = {"wrapped": _castle(), "width": 512}
 
-    read = shape_envelope.loads(shape_envelope.serialize(request, share=True))
+    read = shape_envelope.loads(shape_envelope.dumps(request, share=True))
 
     assert shape_envelope.KEY_BREPS not in read
-    assert read == shape_envelope.loads(shape_envelope.serialize(request))
+    assert read == shape_envelope.loads(shape_envelope.dumps(request))
 
 
 def test_nodes_naming_one_entry_hold_one_bytes_object():
     """So a tree read back holds each payload once, which is what 'total_size' then counts."""
-    read = shape_envelope.loads(shape_envelope.serialize({"wrapped": _castle()}, share=True))
+    read = shape_envelope.loads(shape_envelope.dumps({"wrapped": _castle()}, share=True))
 
     bricks = [
         leaf[shape_envelope.KEY_BREP] for leaf in _leaves(read["wrapped"]) if leaf[shape_envelope.KEY_BREP] == BRICK
@@ -86,7 +90,7 @@ def test_nodes_naming_one_entry_hold_one_bytes_object():
 def test_nothing_repeated_is_the_document_it_always_was():
     request = {"wrapped": _leaf(BRICK, "brick"), "width": 512}
 
-    assert shape_envelope.serialize(request, share=True) == shape_envelope.serialize(request)
+    assert shape_envelope.dumps(request, share=True) == shape_envelope.dumps(request)
 
 
 def test_a_table_larger_than_what_it_replaces_is_not_written():
@@ -94,12 +98,12 @@ def test_a_table_larger_than_what_it_replaces_is_not_written():
     tiny = b"\x28\xb5\x2f\xfd tiny"
     tree = {"name": "x", shape_envelope.KEY_ASSEMBLY: [_leaf(tiny, "a"), _leaf(tiny, "b")]}
 
-    assert shape_envelope.serialize({"wrapped": tree}, share=True) == shape_envelope.serialize({"wrapped": tree})
+    assert shape_envelope.dumps({"wrapped": tree}, share=True) == shape_envelope.dumps({"wrapped": tree})
 
 
 def test_without_share_nothing_changes():
-    """Every caller but the two that hand a tree to PartCAD's own wrappers, which read the table."""
-    text = shape_envelope.serialize({"wrapped": _castle()})
+    """Every JSON document nobody asked to share, as it always was."""
+    text = shape_envelope.dumps({"wrapped": _castle()})
 
     assert shape_envelope.KEY_BREPS not in text
     assert shape_envelope.KEY_BREP_REF not in text
@@ -110,7 +114,7 @@ def test_equal_payloads_in_different_objects_are_still_one_entry():
     tree = _castle(4)
     tree[shape_envelope.KEY_ASSEMBLY].append(_leaf(bytes(bytearray(BRICK)), "copy"))
 
-    document = json.loads(shape_envelope.serialize({"wrapped": tree}, share=True))
+    document = json.loads(shape_envelope.dumps({"wrapped": tree}, share=True))
 
     assert len(document[shape_envelope.KEY_BREPS]) == 2
 
@@ -131,14 +135,14 @@ def test_the_sandbox_reads_the_table_the_core_writes():
     """'deserialize_raw' - what wrapper_gltf and every tree-walking wrapper reads - sees no table."""
     request = {"wrapped": _castle(), "width": 512}
 
-    shared = ocp_serialize.deserialize_raw(shape_envelope.serialize(request, share=True))
-    plain = ocp_serialize.deserialize_raw(shape_envelope.serialize(request))
+    shared = ocp_serialize.deserialize_raw(shape_envelope.dumps(request, share=True))
+    plain = ocp_serialize.deserialize_raw(shape_envelope.dumps(request))
 
     assert shared == plain
 
 
 def test_the_sandbox_holds_each_payload_it_was_sent_once():
-    shared = ocp_serialize.deserialize_raw(shape_envelope.serialize({"wrapped": _castle()}, share=True))
+    shared = ocp_serialize.deserialize_raw(shape_envelope.dumps({"wrapped": _castle()}, share=True))
 
     payloads = [leaf[ocp_serialize.KEY_BREP] for leaf in _leaves(shared["wrapped"])]
     distinct = {id(payload) for payload in payloads}
@@ -147,18 +151,18 @@ def test_the_sandbox_holds_each_payload_it_was_sent_once():
 
 def test_the_core_reads_the_table_the_sandbox_writes():
     """A wrapper's answer: the same tree, encoded leaf by leaf, then shared on the way out."""
-    encoded = json.loads(shape_envelope.serialize({"shape": _castle()}))
+    encoded = json.loads(shape_envelope.dumps({"shape": _castle()}))
 
-    text = ocp_serialize.serialize(encoded, share=True)
+    text = ocp_serialize.dumps(encoded, share=True)
 
     assert ocp_serialize.KEY_BREPS in json.loads(text)
     assert shape_envelope.deserialize(text) == shape_envelope.loads(json.dumps(encoded))
 
 
 def test_a_sandbox_answer_with_nothing_repeated_is_unchanged():
-    encoded = json.loads(shape_envelope.serialize({"shape": _leaf(BRICK, "brick")}))
+    encoded = json.loads(shape_envelope.dumps({"shape": _leaf(BRICK, "brick")}))
 
-    assert ocp_serialize.serialize(encoded, share=True) == ocp_serialize.serialize(encoded)
+    assert ocp_serialize.dumps(encoded, share=True) == ocp_serialize.dumps(encoded)
 
 
 def test_both_ends_name_a_payload_the_same_way():

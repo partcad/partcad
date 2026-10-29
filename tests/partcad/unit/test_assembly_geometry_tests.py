@@ -20,6 +20,7 @@ import asyncio
 
 import pytest
 
+from partcad import shape_envelope
 from partcad.test.degenerate import DegenerateTest
 from partcad.test.interference import InterferenceTest, _is_expected, _within
 
@@ -263,13 +264,12 @@ def test_the_assembly_is_sent_as_the_tree_it_is():
     its request would not turn it into one compound - which wrote every payload
     once per node carrying it, and escaped all of it again.
     """
-    import json as _json
-
-    from partcad import runtime, shape_envelope
+    from partcad import runtime
     from partcad.assembly import Assembly
+    from partcad_utils import framing
 
-    # Large enough that writing it once in a table is worth it (see
-    # 'shape_envelope.table_saves_space'), as any real part is.
+    # As large as a real part is, which a table in the JSON form would be worth
+    # writing for (see 'shape_envelope.table_saves_space').
     payload = b"\x00\x01 one part" * 100
     envelope = {
         "name": "asm",
@@ -300,12 +300,15 @@ def test_the_assembly_is_sent_as_the_tree_it_is():
     assembly.get_wrapped = _wrapped
     asyncio.run(assembly.get_interference_async(_Ctx()))
 
-    sent = _json.loads(captured["request"])
-    assert "wrapped" not in sent, "the geometry key is decoded on arrival; do not use it here"
-    # The one part the three nodes are made of is written once, in the table.
-    assert len(sent[shape_envelope.KEY_BREPS]) == 1
+    request = captured["request"]
+    # A frame (see 'shape_envelope.serialize'), and the one part the three
+    # nodes are made of is attached to it once, raw.
+    assert framing.find_message(request) == 0
+    headers = framing.parse_headers(request.split(b"\r\n\r\n", 1)[0])
+    assert framing.attachment_lengths(headers) == [len(payload)]
+    read = shape_envelope.loads(request)
+    assert "wrapped" not in read, "the geometry key is decoded on arrival; do not use it here"
     # And what is read back is the tree that was sent, each node with its name.
-    read = shape_envelope.loads(captured["request"])
     assert [child["label"] for child in read["tree"]["assembly"]] == ["a0", "a1", "a2"]
     assert all(child["brep"] == payload for child in read["tree"]["assembly"])
 
@@ -321,7 +324,7 @@ def test_an_envelope_carrying_bytes_can_still_be_sent():
 
     The envelope above is all strings, which is exactly why it proved nothing.
     """
-    from partcad import runtime, shape_envelope
+    from partcad import runtime
     from partcad.assembly import Assembly
 
     envelope = {
@@ -660,8 +663,6 @@ def test_the_pairs_the_joints_account_for_are_handed_to_the_check(monkeypatch):
 
 
 def test_the_expected_pairs_are_sent_to_the_wrapper():
-    import json as _json
-
     from partcad import runtime
     from partcad.assembly import Assembly
 
@@ -688,7 +689,7 @@ def test_the_expected_pairs_are_sent_to_the_wrapper():
 
     assembly.get_wrapped = _wrapped
     asyncio.run(assembly.get_interference_async(_Ctx(), expected=[("beam", "pin")]))
-    assert _json.loads(captured["request"])["expected"] == [["beam", "pin"]]
+    assert shape_envelope.loads(captured["request"])["expected"] == [["beam", "pin"]]
 
 
 def test_the_expected_pairs_are_read_from_an_assembly_that_is_not_instantiated_yet():

@@ -174,7 +174,8 @@ _STAGING_SUFFIX = ".partcad-staging"
 # What a wrapper answered, as the one line it wrote: the result of a run keyed
 # by 'wrapper_hash'. Kept as the line rather than as what it decodes to, because
 # what it decodes to carries bytes - a tessellation is glTF - and a result is
-# stored as JSON.
+# stored as JSON. An answer that came as a frame is kept as the line of JSON
+# saying the same (see 'store_response_async').
 _RESPONSE = "response"
 
 
@@ -309,12 +310,21 @@ async def restore_response_async(cache, hash: Optional[CacheHash]) -> Optional[s
     return response if isinstance(response, str) and response else None
 
 
-async def store_response_async(cache, hash: Optional[CacheHash], response: str) -> bool:
+async def store_response_async(cache, hash: Optional[CacheHash], response) -> bool:
     """Remember what a wrapper answered to 'hash', as the line it wrote.
 
     The last non-empty line, because that is the answer: whatever a wrapper
-    wrote before it is progress (see 'shape_envelope.deserialize').
+    wrote before it is progress (see 'shape_envelope.deserialize'). An answer
+    in a frame - the bytes a Python wrapper answers PartCAD's own requests with
+    (see 'process_output.answer') - is stored as the line of JSON that says the
+    same thing, which is what an entry holds and what 'deserialize' reads back.
     """
+    if isinstance(response, (bytes, bytearray)):
+        try:
+            line = shape_envelope.dumps(shape_envelope.deserialize(response))
+        except ValueError:
+            return False
+        return await store_async(cache, hash, {_RESPONSE: line})
     lines = [line for line in (response or "").strip().splitlines() if line.strip()]
     if not lines:
         return False

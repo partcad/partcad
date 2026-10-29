@@ -29,6 +29,11 @@ _request_finish = None
 # 'protect_response_channel()'.
 _response_fd = None
 
+# Whether the request came as a frame, which is what the answer then is too
+# (see 'handle_output()'). Nothing read yet answers in JSON, which every reader
+# of an answer reads.
+_answer_framed = False
+
 
 def protect_response_channel():
     """Give the response a file descriptor nothing else can write to.
@@ -103,8 +108,8 @@ def handle_input(decode=True):
     # #   - Make stdin blocking so that we can read until EOF
     # flag = fcntl.fcntl(sys.stdin, fcntl.F_GETFL)
     # fcntl.fcntl(sys.stdin, fcntl.F_SETFL, flag & ~os.O_NONBLOCK)
-    #   - Read until EOF
-    input_str = sys.stdin.read()
+    #   - Read until EOF, as bytes: see '_read_request()'
+    input_str = _read_request()
     #   - Unpack the content received via stdin
     request = ocp_serialize.deserialize(input_str) if decode else ocp_serialize.deserialize_raw(input_str)
     remember_request(request)
@@ -128,6 +133,23 @@ def remember_request(request):
         _request_finish = finish if isinstance(finish, dict) else None
 
 
+def _read_request():
+    """Everything on standard input, noting whether it is a frame, which the answer then is too.
+
+    As bytes: a frame's attachments are raw (see 'ocp_serialize.serialize'),
+    and text is only what a JSON request - a container's - decodes to. A
+    standard input that something replaced with text has no bytes to offer,
+    and is read as the JSON it can only be.
+    """
+    global _answer_framed
+    stream = getattr(sys.stdin, "buffer", None)
+    if stream is None:
+        return sys.stdin.read()
+    data = stream.read()
+    _answer_framed = ocp_serialize.is_frame(data)
+    return data
+
+
 def handle_output(model, end=""):
     """Answer PartCAD, on the descriptor `protect_response_channel()` kept.
 
@@ -135,24 +157,44 @@ def handle_output(model, end=""):
     descriptor is deliberately not 'sys.stdout' any more -- that one is standard
     error now, and is where everything else in this process prints.
 
-    'end' follows the answer: a wrapper that answers more than once, a line at a
-    time as each answer is ready, passes a newline (see 'wrapper_export').
+    In the form the request came in. A request of PartCAD's own is a frame, and
+    so is its answer: the document, then each distinct payload behind it as the
+    bytes 'encode_shape()' wrote ('ocp_serialize.frame'). A request that came as
+    JSON - a wrapper run in a container is sent that - is answered in JSON, with
+    a payload the answer carries more than once written once all the same (see
+    'ocp_serialize.KEY_BREPS'). The core reads both forms of every answer.
+
+    'end' follows an answer in JSON: a wrapper that answers more than once, a
+    line at a time as each answer is ready, passes a newline (see
+    'wrapper_export'). A frame says itself where it ends, and is followed by
+    nothing.
     """
-    # Serialize the output, echoing the request's name/label onto the shape. A
-    # payload the answer carries more than once - the parts of an assembly read
-    # from a STEP file - is written once (see 'ocp_serialize.KEY_BREPS'): the
-    # core reads that form of every answer.
-    serialized = ocp_serialize.serialize(model, name=_request_name, label=_request_label, share=True) + end
+    # Echoing the request's name/label onto the shape.
+    out = None if _response_fd is not None else getattr(sys.stdout, "buffer", None)
+    if _answer_framed and (_response_fd is not None or out is not None):
+        pieces = ocp_serialize.frame(model, name=_request_name, label=_request_label)
+    else:
+        serialized = ocp_serialize.dumps(model, name=_request_name, label=_request_label, share=True) + end
+        pieces = [serialized.encode("utf-8")]
     if _response_fd is None:
-        sys.stdout.write(serialized)
+        # The channel is shared with everything that prints, so what printed
+        # first goes out first: past the text layer's buffer, not around it.
         sys.stdout.flush()
+        if out is None:
+            sys.stdout.write(pieces[0].decode("utf-8"))
+            sys.stdout.flush()
+            return
+        for piece in pieces:
+            out.write(piece)
+        out.flush()
         return
-    # Through a view: 'os.write' may take less than it is given (a pipe, a
-    # signal), and slicing the bytes themselves would copy what is left of a
-    # multi-megabyte answer after every write that fell short.
-    payload = memoryview(serialized.encode("utf-8"))
-    while payload:
-        payload = payload[os.write(_response_fd, payload) :]
+    for piece in pieces:
+        # Through a view: 'os.write' may take less than it is given (a pipe, a
+        # signal), and slicing the bytes themselves would copy what is left of a
+        # multi-megabyte payload after every write that fell short.
+        view = memoryview(piece).cast("B")
+        while view:
+            view = view[os.write(_response_fd, view) :]
 
 
 def solidify(shape):

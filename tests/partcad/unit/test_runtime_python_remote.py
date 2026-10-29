@@ -194,7 +194,7 @@ def test_requirements_accumulate_and_travel_with_every_request(tmp_path, monkeyp
 
 
 def test_stdin_travels_as_the_bytes_it_is(tmp_path, monkeypatch):
-    """Not base64 again: a wrapper's request is base64 inside, and a third more of it was a third more to send."""
+    """Not base64: a wrapper's request is a frame of raw payloads, and base64 was a third more of it to send."""
     service = _Service()
     monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
 
@@ -257,6 +257,39 @@ def test_an_older_services_answer_is_read_as_it_was(tmp_path, monkeypatch):
     assert _runtime(tmp_path).run(["-c", "pass"], output_files=[wanted]) == (0, "said", "")
     with open(wanted, "rb") as f:
         assert f.read() == b"glTF"
+
+
+@pytest.mark.parametrize("older", [False, True], ids=["frames", "json"])
+def test_a_wrappers_frame_crosses_as_the_bytes_it_is_both_ways(tmp_path, monkeypatch, older):
+    """A Python wrapper is asked in a frame and answers in one, its payloads raw (see 'shape_envelope.serialize').
+
+    So its standard output comes back as the bytes it is, in either dialect of
+    the service (see 'process_output.answer'): decoded as text, as what a
+    command prints is, every byte of a payload that was not UTF-8 was lost, and
+    the answer with it. The same '_answer' reads what the 'docker' sandbox in
+    'upload' mode is answered.
+    """
+    from partcad import shape_envelope
+
+    request = shape_envelope.serialize({"name": "//pkg:p", "blob": b"\x00\xff"})
+    answer = {
+        "success": True,
+        "shape": {"name": "p", "label": "p", shape_envelope.KEY_BREP: b"\x28\xb5\x2f\xfd\xff\x00"},
+    }
+    printed = b"progress, which is not the answer\n" + shape_envelope.serialize(answer)
+    if older:
+        service = _OldService(result={"stdout": base64.b64encode(printed).decode(), "stderr": None, "exit_code": 0})
+    else:
+        service = _Service(result={"stdout": printed, "stderr": b"", "exit_code": 0, "output_files": {}})
+    monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
+
+    exitcode, stdout, stderr = _runtime(tmp_path).run(["-c", "pass"], stdin=request)
+
+    sent = base64.b64decode(service.params["stdin"]) if older else bytes(service.params["stdin"])
+    assert sent == request
+    assert (exitcode, stderr) == (0, "")
+    assert stdout == printed
+    assert shape_envelope.deserialize(stdout) == answer
 
 
 # --------------------------------------------------------------------------- #

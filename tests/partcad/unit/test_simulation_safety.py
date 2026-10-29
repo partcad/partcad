@@ -36,6 +36,7 @@ import psutil
 import pytest
 
 import partcad as pc
+from partcad import process_output
 from partcad import runtime as pc_runtime
 from partcad import simulation
 from partcad.cache import Cache
@@ -160,8 +161,9 @@ class HostRuntime:
             stderr=subprocess.PIPE,
             **pc_runtime.bounded_spawn_options(timeout),
         )
-        out, err = await pc_runtime.communicate(process, stdin.encode("utf-8"), timeout)
-        return process.returncode, out.decode("utf-8", "replace"), err.decode("utf-8", "replace")
+        out, err = await pc_runtime.communicate(process, pc_runtime.stdin_bytes(stdin), timeout)
+        # Read the way every runtime reads them: a wrapper's answer is a frame of bytes.
+        return process.returncode, process_output.answer(out), process_output.decode(err)
 
 
 def _cache(tmp_path, name):
@@ -338,7 +340,7 @@ def test_the_plugin_is_handed_the_budget_it_is_held_to(package, monkeypatch):
     monkeypatch.setattr(HostRuntime, "run_async", staticmethod(run_async))
     _run(package, "answer", timeout=4)
 
-    assert '"timeout": 4' in seen["request"]
+    assert b'"timeout": 4' in seen["request"]
     # PartCAD's own bound is the budget and the grace beside it: the wrapper is
     # the one that stops the run on time.
     assert seen["timeout"] == 4 + simulation.TIMEOUT_GRACE

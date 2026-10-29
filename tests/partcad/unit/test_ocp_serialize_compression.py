@@ -4,7 +4,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-"""BREP payloads are zstd-compressed inside the base64 the wire and the cache carry."""
+"""BREP payloads are zstd-compressed, as the wire, its JSON form and the cache carry them."""
 
 import base64
 import json
@@ -51,7 +51,7 @@ def test_zstd_is_available():
 
 def test_brep_payload_is_a_compressed_frame():
     box = _box()
-    payload = base64.b64decode(ocp_serialize.encode_shape(box)["brep"])
+    payload = ocp_serialize.encode_shape(box)["brep"]
 
     assert payload.startswith(ocp_serialize.ZSTD_MAGIC)
     # The whole point: even binary BREP repeats itself - a header per section,
@@ -63,10 +63,12 @@ def test_shape_round_trips_through_the_compression():
     box = _box()
     encoded = ocp_serialize.encode_shape(box, name="box", label="Box")
 
-    # Through the JSON that the pipe and the cache actually carry.
-    decoded = ocp_serialize.decode_shape(json.loads(json.dumps(encoded)))
-
-    assert abs(_volume(decoded) - _volume(box)) < 1e-6
+    # Through the frame the pipe carries, and through the JSON a container is sent.
+    for decoded in (
+        ocp_serialize.deserialize(ocp_serialize.serialize(encoded)),
+        ocp_serialize.decode_shape(json.loads(ocp_serialize.dumps(encoded))),
+    ):
+        assert abs(_volume(decoded) - _volume(box)) < 1e-6
 
 
 def test_assembly_round_trips_through_the_compression():
@@ -76,9 +78,11 @@ def test_assembly_round_trips_through_the_compression():
         name="asm",
     )
 
-    decoded = ocp_serialize.decode_shape(json.loads(json.dumps(tree)))
-
-    assert abs(_volume(decoded) - _volume(box)) < 1e-6
+    for decoded in (
+        ocp_serialize.deserialize(ocp_serialize.serialize(tree)),
+        ocp_serialize.decode_shape(json.loads(ocp_serialize.dumps(tree))),
+    ):
+        assert abs(_volume(decoded) - _volume(box)) < 1e-6
 
 
 def test_uncompressed_payload_is_still_accepted():
@@ -111,7 +115,7 @@ def test_encoding_falls_back_when_zstd_is_missing(monkeypatch, capsys):
     box = _box()
 
     encoded = ocp_serialize.encode_shape(box)
-    payload = base64.b64decode(encoded["brep"])
+    payload = encoded["brep"]
 
     assert not payload.startswith(ocp_serialize.ZSTD_MAGIC)
     # The plain BREP itself, which every reader tells from a frame, and still decodable.

@@ -43,6 +43,16 @@ instruction book shows the same illustration on several pages.
 There is no other way for a file to reach a client -- a path on a local
 daemon's disk, say -- on purpose: two ways of delivering one file are two ways
 of getting it wrong, and this one serves a remote daemon as well as a local one.
+
+**The wrapper pipe.** The same frame is what PartCAD and its Python wrappers
+exchange over a wrapper's standard input and output, with every BREP payload an
+attachment (see 'partcad.shape_envelope.serialize'). A sandbox cannot import
+this package, so 'partcad/wrappers/partcad_framing.py' is a copy of this file,
+byte for byte, which a test holds to it: edit this one and copy it over. A
+wrapper's answer is read out of everything its process wrote there, which can
+have something in front of it (see 'wrapper_common.protect_response_channel'),
+so a message is also found and read in a buffer, not only off a stream:
+:func:`find_message` and :func:`message_at`.
 """
 
 import base64
@@ -56,6 +66,10 @@ ATTACHMENT_LENGTHS = "Attachment-Lengths"
 ACCEPT_ATTACHMENTS = "Accept-Attachments"
 # How a body names a segment.
 ATTACHMENT_KEY = "$attachment"
+# What every frame begins with, which is the first header 'encode_message'
+# writes, and what ends its headers. Looked for by 'find_message'.
+_FIRST_HEADER = b"Content-Length: "
+_END_OF_HEADERS = b"\r\n\r\n"
 
 _BINARY = (bytes, bytearray, memoryview)
 
@@ -238,6 +252,68 @@ def _read_exactly(stream: BinaryIO, length: int) -> Optional[bytes]:
         parts.append(chunk)
         received += len(chunk)
     return b"".join(parts)
+
+
+def find_message(data, start: int = 0) -> Optional[int]:
+    """Where the first whole message in ``data`` at or after ``start`` begins, or None.
+
+    For a buffer in which something else may have been written ahead of the
+    message -- a line, or the half of one a progress meter leaves. A message
+    begins with the header :func:`encode_message` writes first, and is taken
+    for one only where that header is whole, says how long the message is, and
+    is followed by at least that many bytes: so text that happens to mention the
+    header is not a message, and neither is one that was cut off.
+    """
+    at = start
+    while True:
+        at = data.find(_FIRST_HEADER, at)
+        if at < 0:
+            return None
+        if _extent(data, at) is not None:
+            return at
+        at += 1
+
+
+def message_at(data, at: int = 0) -> tuple:
+    """The message framed at ``at`` in ``data``, and the offset just past it: ``(message, end)``.
+
+    Every attachment is a ``bytes`` of its own, so that nothing holds on to
+    ``data`` once it has been read. Raises ``ValueError`` where there is no
+    whole message.
+    """
+    extent = _extent(data, at)
+    if extent is None:
+        raise ValueError("there is no whole message at offset %d of these %d bytes" % (at, len(data)))
+    headers, body_start, _end = extent
+    view = memoryview(data)
+    offset = body_start + int(headers.get("content-length", 0))
+    body = bytes(view[body_start:offset])
+    segments = []
+    for size in attachment_lengths(headers):
+        segments.append(bytes(view[offset : offset + size]))
+        offset += size
+    return decode_body(body, segments), offset
+
+
+def _extent(data, at: int):
+    """``(headers, where the body starts, where the message ends)`` for a whole message at ``at``; else None."""
+    head_end = data.find(_END_OF_HEADERS, at)
+    if head_end < 0:
+        return None
+    try:
+        headers = parse_headers(bytes(data[at:head_end]))
+        length = int(headers["content-length"])
+        lengths = attachment_lengths(headers)
+    except (KeyError, ValueError):
+        # Not ASCII, not numbers, or no length at all: not a header this wrote.
+        return None
+    if length < 0 or any(size < 0 for size in lengths):
+        return None
+    body_start = head_end + len(_END_OF_HEADERS)
+    end = body_start + length + sum(lengths)
+    if end > len(data):
+        return None
+    return headers, body_start, end
 
 
 def read_message(stream: BinaryIO, peer: Optional[Peer] = None) -> Optional[Any]:
