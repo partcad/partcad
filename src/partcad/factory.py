@@ -125,9 +125,42 @@ class ObjectTypeParameterException(Exception):
         )
 
 
-class Factory:
+class _RegisteredOnceBuilt(type):
+    """Hands a factory's object to its package once the factory is built, and not before.
+
+    A factory makes its object in '_create()' and goes on setting it up after
+    that: 'post_create()' gives it its 'path' and cache dependencies, and many a
+    constructor adds to its hash, its cache dependencies or its accessors once
+    '_create()' has returned. 'Project.get_object()' hands out whatever the
+    package holds without taking the object's lock, so an object registered from
+    inside '_create()' was one a concurrent caller could be given half made: a
+    part with no 'path' yet, instantiated as 'os.path.exists(None)', or one
+    whose hash moved after it had been read ("Hash update after being used").
+    Registering when the outermost '__init__' has returned - whichever
+    subclass's that is - closes the window for every factory at once.
+    """
+
+    def __call__(cls, *args, **kwargs):
+        made = super().__call__(*args, **kwargs)
+        made.register_built()
+        return made
+
+
+class Factory(metaclass=_RegisteredOnceBuilt):
     def __init__(self) -> None:
         pass
+
+    def register_when_built(self, kind: str, obj) -> None:
+        """Register 'obj' in the target package once this factory is built (see '_RegisteredOnceBuilt')."""
+        self._unregistered = (kind, obj)
+
+    def register_built(self) -> None:
+        unregistered = getattr(self, "_unregistered", None)
+        if unregistered is None:
+            return
+        self._unregistered = None
+        kind, obj = unregistered
+        self.target_project.register_object(kind, self.name, obj)
 
 
 all = {

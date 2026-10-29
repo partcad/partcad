@@ -317,7 +317,8 @@ class PartFactory(ShapeFactory):
 
     def _create(self, config: object) -> None:
         self.part = self._create_part(config)
-        self.target_project.register_object("part", self.name, self.part)
+        # Registered once the factory is built, not here (see 'factory._RegisteredOnceBuilt').
+        self.register_when_built("part", self.part)
 
         self.apply_environment_cache_key(self.part)
         self.post_create()
