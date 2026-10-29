@@ -318,6 +318,10 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
     # not read by then is cut off. See 'runtime.output_capture'.
     OUTPUT_TO_FILES = True
 
+    # The interpreter is in the container, so there is nothing here to fork a
+    # wrapper from (see 'sandbox_zygote').
+    FORK_WRAPPERS = False
+
     def __init__(self, ctx, version=None, image=None):
         own_image = image is None
         if own_image:

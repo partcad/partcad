@@ -347,6 +347,7 @@ OPTION_KEYS = (
     "cacheDependenciesIgnore",
     "cacheBypass",
     "pythonSandbox",
+    "pythonSandboxZygote",
     "remoteSandbox",
     "remoteSandboxToken",
     "ignoreBundledOpenscad",
@@ -1101,6 +1102,22 @@ class UserConfig(vyper.Vyper):
         #          actually needed, and only when nothing was declared.
         self.bind_env("pythonSandbox", "PC_PYTHON_SANDBOX")
         self._python_sandbox = self.get_string("pythonSandbox")
+
+        # option: pythonSandboxZygote
+        # description: start each Python wrapper by forking an interpreter that
+        #              has already imported the CAD stack -- one per sandbox
+        #              environment, started on first use and retired whenever
+        #              anything is installed into it -- instead of starting and
+        #              importing a fresh one per call (partcad.sandbox_zygote).
+        #              Only the sandboxes whose interpreter runs on this machine
+        #              (venv, conda, none), and only on Linux: macOS and Windows
+        #              always start a fresh interpreter. Turn it off to have
+        #              Linux do the same.
+        # values: [True | False]
+        # default: True
+        self.set_default("pythonSandboxZygote", True)
+        self.bind_env("pythonSandboxZygote", "PC_PYTHON_SANDBOX_ZYGOTE")
+        self.python_sandbox_zygote = self.get_bool("pythonSandboxZygote")
 
         # option: remoteSandbox
         # description: where 'partcad-service-remote-docker' is listening, as

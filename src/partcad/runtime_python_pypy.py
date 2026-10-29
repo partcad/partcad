@@ -14,6 +14,10 @@ from . import runtime_python_conda, telemetry
 
 @telemetry.instrument()
 class PyPyPythonRuntime(runtime_python_conda.CondaPythonRuntime):
+    # Not forked from a zygote (see 'sandbox_zygote'): what PyPy makes of a
+    # preloaded CAD stack and a fork without an exec has never been tried.
+    FORK_WRAPPERS = False
+
     def __init__(self, ctx, version=None):
         super().__init__(ctx, version, variant="pypy")
 

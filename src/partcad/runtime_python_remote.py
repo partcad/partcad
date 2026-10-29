@@ -163,6 +163,9 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
     # the same sandbox reached another way says so here.
     SANDBOX_PREFIX = "remote-"
 
+    # The interpreter is on the other side of the service (see 'sandbox_zygote').
+    FORK_WRAPPERS = False
+
     def __init__(self, ctx, version=None, image=None, endpoint=None):
         if image is None:
             from . import runtime_python_docker

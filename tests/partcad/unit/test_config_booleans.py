@@ -53,6 +53,7 @@ BOOLEAN_OPTIONS = [
     ("useDockerPython", "PC_USE_DOCKER_PYTHON", "use_docker_python_declared"),
     ("useDockerKicad", "PC_USE_DOCKER_KICAD", "use_docker_kicad_declared"),
     ("useDockerRemote", "PC_USE_DOCKER_REMOTE", "use_docker_remote"),
+    ("pythonSandboxZygote", "PC_PYTHON_SANDBOX_ZYGOTE", "python_sandbox_zygote"),
 ]
 
 # The booleans TelemetryConfig reads, which go through the same get_bool.
@@ -178,6 +179,7 @@ def test_config_file_values_read_the_same_way(config_home, monkeypatch, key, att
         ("cache_dependencies_ignore", False),
         ("cache_bypass", False),
         ("ignore_bundled_openscad", False),
+        ("python_sandbox_zygote", True),
     ],
 )
 def test_an_option_nobody_set_keeps_its_default(config_home, monkeypatch, attribute, expected):

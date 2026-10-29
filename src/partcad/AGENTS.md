@@ -214,6 +214,64 @@ at all).
   a command that failed asks `containers.stopped` whether the *container* stopped, and if it did, says how
   and lets go of it, so the next command starts it again (`DockerPythonRuntime._ended`, `Runtime._ended` /
   `_endpoint_ended` for KiCad's and a plugin's container, `ContainerPool.discard` for the remote pool).
+- **A wrapper is forked from a zygote, not started afresh** (`sandbox_zygote.py`, `wrappers/zygote.py`,
+  `pythonSandboxZygote` / `PC_PYTHON_SANDBOX_ZYGOTE`): a fresh interpreter is most of what a small call costs --
+  28 ms bare, 1.45 s with OCP, 5 s and more with build123d, against 13 ms for the request and the answer of a
+  2.3 MB part -- so a `venv`, `conda` or `none` sandbox on Linux keeps one interpreter per environment that has
+  imported the CAD stack (`wrappers/zygote.py`'s `PRELOAD`, `pyexpat` first for the expat/VTK reason in
+  `ocp_serialize`), and `PythonRuntime.run_async_onced` has it fork each wrapper (`_forked`). The child gets the
+  request's argv, its directory and its standard streams -- pipes the runtime made and reads exactly as it reads a
+  process it started, so the wrapper protocol is untouched -- and runs the script as `__main__`. A part's two calls
+  (build, then the solidity check) went from seconds each to well under a tenth of a second. Forking per request
+  is what answers crash isolation and state bleed by construction: every child is a copy of a parent that has run
+  no request, and a child that segfaults takes only itself. Seven things about it are load-bearing:
+
+  * **It must not fork with a thread in it** (a fork copies only the caller, and any lock another thread held is
+    held for good). OCCT's and TBB's pools start on first use, which only a child reaches; OpenBLAS (numpy's, and
+    scipy's own copy, both of which build123d imports) starts one as it loads and stops it at a fork, so the zygote
+    forks once to nothing (`_settle`) and checks the kernel's thread count before every fork (`_threads`).
+    Anything else that starts one makes the zygote refuse, and the environment runs fresh interpreters.
+  * **It is retired whenever what it imported may have changed**, because a zygote holding an OCP module since
+    overwritten on disk is the failure the install guards exist to prevent: `record_install` calls
+    `sandbox_zygote.retire(path)` after every install -- which retires the zygotes of the layers inside `path` as
+    well, since a layer sees the base's packages after its own -- and every call stats what the zygote imported from
+    (`Zygote.stale`: the interpreter, each `sys.path` directory, the `wrappers/` modules it loaded) -- which is how
+    an install by *another* process, an edited `ocp_serialize.py` or a deleted sandbox retires it too. A zygote
+    whose directories moved *while* it imported is discarded at once.
+  * **No call waits for one.** It is started in the background on an environment's `WARM_AFTER`-th call, under
+    the environment's read lock and in a process slot of its own (`_start`), and calls run fresh until it is
+    ready: a one-call command never pays for its larger import, and a burst at the start of a run is no slower
+    than before. Any failure -- no zygote, a dead one, a refusal, a message that never comes -- is a fresh
+    interpreter for that call; the zygote's `pid` message is the line, so nothing runs twice.
+  * **Ending a child is not ending a fresh interpreter.** Full shutdown frees every inherited object, and so copies
+    every page the child shares with the zygote (0.4 s of a 0.04 s call), so `_finish` does what shutdown does that
+    anyone could see -- threads joined, `atexit` run, the child's own modules released the way the interpreter
+    releases them, every file it left open flushed (`_flush_writers`: a cycle is finalized in no particular
+    order), Python's and C's streams flushed -- and then `os._exit`. Exit status, `sys.exit` messages, tracebacks
+    (which start in the script, not in the zygote) and an interrupt's SIGINT are a fresh interpreter's;
+    `tests/partcad/unit/test_sandbox_zygote.py` compares them byte for byte.
+  * **The zygote is the child's parent, so it is what says how the child ended** (`ZygoteProcess`): the exit
+    status, signals included, which `process_crash` describes as before. `runtime.process_owner` checks a pid
+    against `parent_pid`; a pidfd keeps `kill()` off a pid that was reused; a bounded run still leads a session
+    (`setsid`), so `kill_process_tree` takes all of it; `runtime._output_pipes` / `_close_output` are how `_watch`
+    finds and lets go of what holds a dead child's output. Closing a request's socket kills its child, which is
+    how a cancelled call, and a runtime that is itself gone, reach it; a child dies with its zygote
+    (`PR_SET_PDEATHSIG`) and is then reported killed, with a note (`zygote_lost`).
+  * **One per environment, interpreter, flags and environment variables**, process-wide, at most `MAX_ZYGOTES`
+    (2); one used within `EVICT_AFTER` does not give way to another environment's, so two do not take turns
+    replacing each other. A layer is an environment of its own: its zygote is started with the layer's
+    interpreter, so it imports from the layer's `sys.path` -- the layer's packages, then the base's through
+    `LAYER_PTH` -- exactly as a fresh interpreter there would, and a run that asked for another layer, or for none,
+    is never forked from it. CadQuery's layer has one with CadQuery and its VTK build of OCP preloaded; the base's
+    has build123d, and finds no CadQuery to preload. Each holds some 400 MB of its own (USS; 700 MB RSS, the rest shared with its children),
+    and goes after `IDLE` (10 minutes) unused, or with the process that started it. Its children are this
+    process's grandchildren, so `psutil`'s recursive children -- and memory admission
+    (`docs/design/memory-and-scheduling.md`, section 9) -- count them, and the zygote beside them; by PSS, which
+    charges what a child shares with the zygote once rather than per child.
+  * **Linux only.** Frameworks the CAD stack loads on macOS do not survive a fork without an exec, and Windows has
+    no fork; both start a fresh interpreter per call. So do the container sandboxes (`FORK_WRAPPERS = False`):
+    `docker` runs a `docker exec` per call, `remote` and upload mode a `container_service` execute, and a zygote
+    inside the container -- which would remove the `docker exec` as well -- is a change of its own. So does `pypy`.
 - **A key is read once its shape is prepared** (`Shape.prepare_async(wait=True)`): a preparation hashes in what
   a shape is made of -- the file a `fileFrom` or a plugin fetches, the keys of what an assembly links to -- and a
   hash adds its files when it is first read, so a key read while one is under way is kept, half of it missing, for
@@ -1302,10 +1360,11 @@ at all).
   it is exact; `FORM_GLTF` is that same tree tessellated, for a caller that has to draw it rather than compute
   with it — a browser has no CAD kernel. One sandbox converts every shape of the tree that is not cached yet
   (`shape_gltf.convert_async` → `wrappers/wrapper_gltf.py`), not one per node: starting an interpreter and
-  importing OCP is seconds, so an assembly of five hundred parts converted a node at a time would cost longer
-  than building it. The sandbox is handed the distinct BREP payloads and nothing of the tree, and answers with
-  the glTF of each by its digest; the core keeps the tree and swaps each node's `brep` for a `gltfRef` itself,
-  which is what lets each shape's glTF be cached on its own (see the artifact cache above). Placements are
+  importing OCP is seconds, and even a call forked from a zygote is tens of milliseconds, so an assembly of five
+  hundred parts converted a node at a time would cost longer than building it. The sandbox is handed the distinct
+  BREP payloads and nothing of the tree, and answers with the glTF of each by its digest; the core keeps the tree
+  and swaps each node's `brep` for a `gltfRef` itself, which is what lets each shape's glTF be cached on its own
+  (see the artifact cache above). Placements are
   never baked into the geometry in either form — a node's `location` places its geometry, its children *and*
   its ports, and whoever realizes or draws the tree composes them down it (`shape_envelope.placed()` is the one
   composition, shared by an assembly placing a child and an interface placing a sketch on a port).

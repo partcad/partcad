@@ -18,7 +18,7 @@ import sys
 from partcad_utils import conda as pc_conda
 
 from . import logging as pc_logging
-from . import runtime, runtime_python, sandbox_lock, sandbox_versions, telemetry
+from . import runtime, runtime_python, sandbox_lock, sandbox_versions, sandbox_zygote, telemetry
 
 # Conda/mamba failures that are the machine, not the request, and that a retry
 # has been observed to clear. Matched against the stderr of "conda create".
@@ -183,6 +183,8 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
         file" on every install into it -- and would never be given the CAD stack,
         because once() skips that whole block when 'initialized' is set.
         """
+        # Whatever was forked from what is about to be deleted.
+        sandbox_zygote.retire(self.path)
         shutil.rmtree(self.path, ignore_errors=True)
         self.initialized = False
         self.conda_initialized = False

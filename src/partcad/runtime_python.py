@@ -17,7 +17,7 @@ import subprocess
 import sys
 
 from . import logging as pc_logging
-from . import runtime, sandbox_lock, sandbox_versions, telemetry
+from . import runtime, sandbox_lock, sandbox_versions, sandbox_zygote, telemetry
 from .process_crash import describe_exit_code, describe_termination, killed_by_signal  # noqa: F401  (re-exported)
 from .process_output import decode as decode_output
 
@@ -339,6 +339,13 @@ def base_requirements(version: str) -> list:
 
 
 class PythonRuntime(runtime.Runtime):
+    # Whether a wrapper this sandbox runs may be forked from a zygote of its
+    # environment instead of starting an interpreter of its own (see
+    # 'sandbox_zygote'). True for the sandboxes whose interpreter is on this
+    # machine and is the one a wrapper's command names; a sandbox that runs it
+    # somewhere else, or runs another interpreter, says False.
+    FORK_WRAPPERS = True
+
     def __init__(self, ctx, sandbox, version=None):
         if version is None:
             version = "%d.%d" % (sys.version_info.major, sys.version_info.minor)
@@ -832,24 +839,38 @@ class PythonRuntime(runtime.Runtime):
                     # See the notes beside the same lines in 'run_onced'.
                     data = runtime.stdin_bytes(stdin)
                     with runtime.output_capture(self.OUTPUT_TO_FILES) as capture:
-                        p = await asyncio.create_subprocess_exec(
-                            *argv,
-                            stdin=subprocess.PIPE,
-                            stdout=capture.stdout,
-                            stderr=capture.stderr,
-                            shell=False,
-                            env=spawn_env,
-                            # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                            cwd=spawn_cwd,
-                            # A bounded run is a process group of its own, so that
-                            # the bound stops all of it; see 'bounded_spawn_options'.
-                            **runtime.bounded_spawn_options(timeout),
-                        )
+                        # Forked from the environment's zygote where there is
+                        # one, and started afresh where there is not: the two
+                        # are read, bounded and killed the same way.
+                        p = await self._forked(argv, spawn_cwd, spawn_env, timeout, session, path)
+                        span.set_attribute("zygote", p is not None)
+                        if p is None:
+                            p = await asyncio.create_subprocess_exec(
+                                *argv,
+                                stdin=subprocess.PIPE,
+                                stdout=capture.stdout,
+                                stderr=capture.stderr,
+                                shell=False,
+                                env=spawn_env,
+                                # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
+                                cwd=spawn_cwd,
+                                # A bounded run is a process group of its own, so that
+                                # the bound stops all of it; see 'bounded_spawn_options'.
+                                **runtime.bounded_spawn_options(timeout),
+                            )
                         stdout, stderr = capture.collect(*await runtime.communicate(p, data, timeout))
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
             returncode, stderr = await self._ended_async(p.returncode, stderr)
+            if getattr(p, "zygote_lost", False):
+                # Reported as killed, which it was -- by its zygote going, which
+                # it had asked the kernel for, and which is the part worth saying.
+                note = (
+                    "The sandbox interpreter it was forked from (the zygote of %s) stopped while it ran, "
+                    "and took it along." % (path if path else self.environment_path(session))
+                )
+                stderr = note if not stderr else stderr.rstrip() + "\n" + note
 
             if stdout:
                 pc_logging.debug("Output of %s: %s", cmd, stdout)
@@ -894,6 +915,33 @@ class PythonRuntime(runtime.Runtime):
                     stderr = crash if not stderr else stderr.rstrip() + "\n" + crash
 
             return exitcode, stdout, stderr
+
+    async def _forked(self, argv, cwd, env, timeout, session=None, path=None):
+        """``argv`` forked from its environment's zygote, or None: then it is started the ordinary way.
+
+        Only a wrapper -- this sandbox's interpreter, its flags, a script --
+        run by a sandbox whose interpreter that is (`FORK_WRAPPERS`), on a
+        machine that can fork one (`sandbox_zygote.supported`), when the
+        configuration has not said otherwise ('pythonSandboxZygote'). A
+        configuration that does not know the option -- a test's stand-in --
+        asks for none.
+        """
+        if not self.FORK_WRAPPERS or self.OUTPUT_TO_FILES or self.endpoint is not None:
+            return None
+        if not sandbox_zygote.supported() or not getattr(self.ctx.user_config, "python_sandbox_zygote", False):
+            return None
+        script = sandbox_zygote.script_index(argv, self.python_flags)
+        if script is None:
+            return None
+        return await sandbox_zygote.process_async(
+            self.environment_path(session, path),
+            argv,
+            script,
+            cwd=cwd,
+            env=env,
+            new_session=timeout is not None,
+            lock=self.environment_lock(session, path),
+        )
 
     async def run_async_onced_locked(self, cmd, stdin="", cwd=None, session=None, path=None):
         if self.session_needs_install(session):
@@ -991,6 +1039,10 @@ class PythonRuntime(runtime.Runtime):
         pathlib.Path(get_guard_path(path, python_package)).touch()
         clear_reassert(path, python_package)
         invalidate_dependent_guards(path, python_package)
+        # A zygote of this environment imported what was there before, and the
+        # files it imported may be the ones just overwritten -- what the guards
+        # above are about, one level up. The next wrapper starts a new one.
+        sandbox_zygote.retire(path)
 
     def install_onced_locked(self, python_package, path, force=False):
         """Install one package. The environment's write lock is already held."""

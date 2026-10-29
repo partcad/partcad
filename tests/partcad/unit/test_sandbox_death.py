@@ -251,6 +251,40 @@ def test_a_sandbox_that_dies_alone_is_reported_at_once(tmp_path, monkeypatch):
     assert took < 10.0
 
 
+@posix
+def test_output_held_by_what_could_not_be_stopped_is_cut_off_from_this_end(pids, monkeypatch):
+    """The last resort: what holds the pipes was not found, or would not die, so they are closed from here.
+
+    What it said before it died is still what comes back. `stop_holders` finds
+    nothing here, as it finds nothing where no tool can say which process holds
+    a pipe.
+    """
+    monkeypatch.setattr(container_service, "EXIT_GRACE", 0.5)
+    monkeypatch.setattr(container_service, "stop_holders", lambda files: [])
+
+    async def main():
+        p = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-c",
+            _dies(pids),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        try:
+            out, _ = await asyncio.wait_for(pc_runtime.communicate(p, b"a request"), WITHIN)
+        except asyncio.TimeoutError:
+            pytest.fail("still waiting for a sandbox %gs after it died" % WITHIN)
+        return p.returncode, out
+
+    returncode, out = asyncio.run(main())
+
+    assert returncode == -signal.SIGKILL
+    assert out == b"half an answer"
+    # Nothing stopped what it left behind; the fixture does, now that the run is over.
+    assert not _gone(_left(pids), within=0.5)
+
+
 # --------------------------------------------------------------------------- #
 # The run that depended on it                                                  #
 # --------------------------------------------------------------------------- #
