@@ -47,6 +47,10 @@
 #   PC_CACHE_FROM       optional. A registry ref to take layers from. Left
 #                       empty by a caller that has nothing to point at -- the
 #                       first build of a tag, most of all.
+#   PC_TARGET           optional. A stage of the Dockerfile to build rather than
+#                       the image itself: 'gstreamer', for the flavour the video
+#                       file types of '//builtin/render' run in. The caller tags
+#                       it '<tag>-py<version>-gstreamer'.
 #
 set -eu
 
@@ -56,6 +60,7 @@ set -eu
 PC_PLATFORM="${PC_PLATFORM:-}"
 PC_PUSH="${PC_PUSH:-false}"
 PC_CACHE_FROM="${PC_CACHE_FROM:-}"
+PC_TARGET="${PC_TARGET:-}"
 
 # Resolved against this file rather than the working directory, so that a
 # caller's 'cd' cannot change which Dockerfile gets built.
@@ -86,6 +91,9 @@ fi
 if [ -n "${PC_CACHE_FROM}" ]; then
   set -- "$@" --cache-from "type=registry,ref=${PC_CACHE_FROM}"
 fi
+if [ -n "${PC_TARGET}" ]; then
+  set -- "$@" --target "${PC_TARGET}"
+fi
 
 if [ "${PC_PUSH}" = "true" ]; then
   # Inline cache so that the layers this publishes are what the next build
@@ -99,5 +107,5 @@ else
   set -- "$@" --output type=docker
 fi
 
-echo "building ${PC_IMAGE_REF} (python ${PC_PYTHON_VERSION}, PartCAD ${PC_PARTCAD_VERSION}${PC_PLATFORM:+, ${PC_PLATFORM}}, push=${PC_PUSH})"
+echo "building ${PC_IMAGE_REF} (python ${PC_PYTHON_VERSION}, PartCAD ${PC_PARTCAD_VERSION}${PC_PLATFORM:+, ${PC_PLATFORM}}${PC_TARGET:+, target ${PC_TARGET}}, push=${PC_PUSH})"
 exec docker buildx build "$@" "${context}"

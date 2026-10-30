@@ -60,6 +60,26 @@ and keep declaring `pythonRequirements` beside it. The image says where your pac
 already has the native pieces installed runs the same package in a conda or venv sandbox, and only a package
 that declares both works in either.
 
+## The GStreamer flavour
+
+```text
+ghcr.io/partcad/partcad-container-python:<release>-py<version>-gstreamer-<arch>
+```
+
+The `gstreamer` target of the same Dockerfile: this image, plus GStreamer with the plugins the video file types
+of `//builtin/render` encode with, and a font for the text they put over the picture. Built for the one Python
+version `//builtin/render` runs in (`sandbox_versions.DEFAULT_PYTHON_VERSION`). Nothing but those file types
+pulls it, and only on a machine rendering in the `docker` sandbox; anywhere else they use the machine's own
+GStreamer.
+
+```shell
+docker build --target gstreamer \
+  --build-arg PYTHON_VERSION=3.11 \
+  --build-arg PARTCAD_VERSION=0.8.58 \
+  -t partcad-container-python:3.11-gstreamer \
+  -f tools/containers/python/Dockerfile tools/containers
+```
+
 ## Building one here
 
 ```shell

@@ -4387,6 +4387,11 @@ def render_objects(session, params):
     configures, so the override lands on top of the configuration rather than
     beside it, and a file type that does not project never reads them.
 
+    ``size``, ``fps``, ``duration``, ``speed``, ``append``, ``preset`` and
+    ``quality`` do the same for a video (`VIDEO_OPTIONS`): they are fields of
+    the video file types of ``//builtin/render``, and a file type that is not a
+    video never reads them.
+
     ``filter`` keeps only some of the links of one assembly or scene, so that
     what is written is a view of it (see `partcad.assembly_filter`). It writes
     nothing into the package -- ``pc filter`` is what declares such a view as an
@@ -4431,6 +4436,7 @@ def render_objects(session, params):
         # be made sense of, so nothing is rendered rather than something aimed
         # somewhere else.
         raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    render_opts.update(_video(params))
 
     from partcad.exception import AssemblyDocumentError
 
@@ -4534,7 +4540,8 @@ def render_inline(session, params):
 
     ``view``, ``viewport_origin`` and ``viewport_up`` aim the projection for this
     one picture, exactly as they do for ``render.objects``: what the panel's
-    viewpoint fields and its orientation gizmo say. ``section`` cuts the object
+    viewpoint fields and its orientation gizmo say. The video options of
+    ``render.objects`` (`VIDEO_OPTIONS`) are taken too, for a video. ``section`` cuts the object
     by a box first -- ``{"x": [lo, hi], ...}`` in millimetres in the frame of the
     object's root, an axis left out not cut (see `partcad.shape_section`) --
     which is what the panel's section sliders ask for.
@@ -4594,7 +4601,7 @@ def render_inline(session, params):
             "Only an assembly or a scene has links to filter; '%s' has none" % kind,
         )
     section = _section(params)
-    render_opts = _viewport(params)
+    render_opts = {**_viewport(params), **_video(params)}
 
     if kind in ("assembly", "scene"):
         # Phase one of an assembly build, as for every other request that ends
@@ -4658,6 +4665,25 @@ def _section(params):
         return shape_section.normalize(params.get("section"))
     except ValueError as e:
         raise JsonRpcError(USAGE_ERROR, str(e)) from e
+
+
+# What a request may say about a video, for this one run: the fields of the
+# video file types of '//builtin/render' that 'pc render' offers as options
+# (see 'partcad_cli.click.video'). Handed on as export parameters, like the
+# viewport, so that each overrides what the file type's configuration says and
+# a file type that is not a video never reads them.
+VIDEO_OPTIONS = ("size", "fps", "duration", "speed", "append", "preset", "quality")
+
+
+def _video(params):
+    """The video overrides a request asks for, as export parameters: only the ones it gives."""
+    options = {}
+    for key in VIDEO_OPTIONS:
+        value = params.get(key)
+        if value is None or (key == "append" and value is False):
+            continue
+        options[key] = value
+    return options
 
 
 def _viewport(params):

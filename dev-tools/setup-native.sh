@@ -157,7 +157,7 @@ poetry run python dev-tools/check_installed_files.py --fix
 
 echo "==> what else this machine has"
 
-# Reported, never installed. Unlike OpenSCAD, neither of these is part of the
+# Reported, never installed. Unlike OpenSCAD, none of these is part of the
 # toolchain: without them some tests decline to run, and none of them fail.
 report() {
   # $1: the thing, $2: how to see whether it is here, $3: what its absence costs
@@ -172,6 +172,8 @@ report "a Docker daemon" "docker info" \
   "the KiCad example is skipped without one, and the 'docker' Python sandbox falls back"
 report "conda" "command -v conda || command -v mamba" \
   "the Python sandbox falls back to 'venv', which cannot provision an interpreter version but is otherwise fine"
+report "GStreamer" "command -v gst-launch-1.0 && command -v gst-discoverer-1.0" \
+  "the video file types of 'pc render' (mp4, webm, ...) cannot encode outside Docker, and their tests skip"
 
 echo "    ---"
 echo "    Python sandbox in use: $(poetry run python -c 'from partcad_utils.user_config import UserConfig; print(UserConfig().python_sandbox)')"

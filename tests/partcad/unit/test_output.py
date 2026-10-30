@@ -185,7 +185,23 @@ def test_builtin_formats_cover_what_the_exporters_supported(ctx):
         "threejs",
         "urdf",
     }
-    assert set(output.builtin_formats(ctx, output.RENDER)) == {"svg", "png", "jpeg", "dxf"}
+    assert set(output.builtin_formats(ctx, output.RENDER)) == {
+        "svg",
+        "png",
+        "jpeg",
+        "dxf",
+        # The videos (see 'builtin/render/render_video.py').
+        "mp4",
+        "m4v",
+        "mov",
+        "qt",
+        "mkv",
+        "webm",
+        "avi",
+        "wmv",
+        "asf",
+        "ogv",
+    }
 
 
 def test_every_built_in_package_validates_against_partcads_own_schema():

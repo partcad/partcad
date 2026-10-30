@@ -8,7 +8,8 @@ Output files
 Output files
 ============
 
-``pc export`` writes 3D and CAD files; ``pc render`` writes 2D projections. Both
+``pc export`` writes 3D and CAD files; ``pc render`` writes 2D projections, and
+videos of an object turning (see `Videos`_). Both
 are configured by a section of ``partcad.yaml`` named after the command --
 ``export:`` and ``render:`` -- with one subsection per output file type:
 
@@ -565,6 +566,19 @@ yours still conforms. Carry the ``partcad.*`` labels it documents: they are what
 ``pc system prune`` recognises, and an image without them is one PartCAD will
 leave behind when it cleans up after itself.
 
+A declaration naming one of PartCAD's own images can leave the release and the
+interpreter for PartCAD to fill in: ``{version}`` is the release running it and
+``{python}`` the interpreter its sandbox runs, so
+
+.. code-block:: yaml
+
+  dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
+
+is the image of whichever PartCAD is rendering -- which is how the video file
+types of ``//builtin/render`` name the one they encode in (see `Videos`_). It is
+read in a file type's ``dockerImage``, and what is cached keys on the declaration
+as written, so a release does not move the key of anything rendered in it.
+
 An image that is not built on one of those -- a simulator's, a distribution's --
 needs a ``python3`` on its ``PATH``, which is all that Debian and Ubuntu install:
 it is what runs the service PartCAD starts in every container. Say which version
@@ -599,9 +613,10 @@ one that ships nothing, because PartCAD implements no solver.
 
 ``//builtin/export`` implements ``step``, ``brep``, ``stl``, ``3mf``, ``obj``,
 ``gltf``, ``iges``, ``threejs`` and ``urdf``. ``//builtin/render`` implements
-``svg``, ``png``, ``jpeg`` and ``dxf``. Reading their ``partcad.yaml`` is the most direct
-way to see what parameters each file type takes and what a package's own
-implementation should look like.
+``svg``, ``png``, ``jpeg`` and ``dxf``, and the videos ``mp4``, ``m4v``, ``mov``,
+``qt``, ``mkv``, ``webm``, ``avi``, ``wmv``, ``asf`` and ``ogv`` (see `Videos`_).
+Reading their ``partcad.yaml`` is the most direct way to see what parameters each
+file type takes and what a package's own implementation should look like.
 
 It carries neither ``world`` nor ``mjcf``: an engine's own scene format belongs
 to that engine's plugin package, beside the reader and the simulator that share
@@ -950,3 +965,158 @@ for an ``export:`` type, which is a file of geometry rather than a picture.
 two of the assembly it belongs to, each naming ``render_svg.py`` in
 ``//builtin/render`` as its implementation, in the manner of `Using another
 package's implementation`_.
+
+.. _videos:
+
+Videos
+------
+
+``//builtin/render`` writes a video of an object turning, drawn the way the
+Digital Thread's 3D view draws it with *Animate* ticked: the same camera, the
+same light, the same material, each part in the colour it states and goldenrod
+where it states none, over the editor's background. It turns about its middle,
+at thirty degrees a second about the vertical unless told otherwise -- one turn
+every twelve seconds, which is how long a video is by default -- and is encoded
+by `GStreamer <https://gstreamer.freedesktop.org/>`_ into whichever container
+the file type names:
+
+========  ======================================  ==========================
+Type      What it is                              Container
+========  ======================================  ==========================
+``mp4``   H.264 (or H.265), AAC sound             MP4 -- what every social
+                                                  network takes
+``m4v``   The same, under Apple's extension       MP4
+``mov``   H.264 (or H.265, Motion JPEG), AAC      QuickTime
+``qt``    The same, under QuickTime's old one     QuickTime
+``mkv``   H.264, H.265, VP9, VP8 or Theora        Matroska
+``webm``  VP9 (or VP8), Opus or Vorbis sound      WebM -- what a web page plays
+``avi``   H.264, Motion JPEG or MPEG-4, MP3       AVI
+``wmv``   Windows Media Video, no sound           ASF
+``asf``   The same, under ASF's own extension     ASF
+``ogv``   Theora, Vorbis or Opus sound            Ogg
+========  ======================================  ==========================
+
+None of them is written by a bare ``pc render``, which writes what a package
+declares; a package declares one, or a command names it:
+
+.. code-block:: shell
+
+  pc render -t mp4 bracket                        # a Reel of the bracket turning
+  pc render -t webm --size landscape bracket      # 1920x1080, for a web page
+  pc render -t mp4 --speed 10,0,45 --duration 8 bracket
+  pc render -t mp4 --append --speed 90 bracket      # carry on the turn, faster
+
+Every option is a field of the file type, so a package says it once:
+
+.. code-block:: yaml
+
+  render:
+    mp4:
+      size: reels                 # 1080x1920, the default
+      fps: 30
+      speed: [0, 0, 30]           # degrees a second about X, Y and Z
+      duration: 12                # seconds; one turn of the fastest axis by default
+      preset: medium              # ultrafast ... veryslow: encoding time against size
+      quality: 65                 # 0-100; CRF 18 for H.264
+      background: "#1F1F1F"
+      fade_in: 0.5
+      fade_out: 0.5
+      text:
+        - text: Bracket, rev C
+          position: top
+        - text: Machined from 6061
+          start: 2
+          end: 6
+      logo: { path: images/logo.png, position: top-right, width: 0.2 }
+      audio: { path: media/theme.mp3, start: 30, fade_out: 1 }
+      title: Bracket, rev C
+
+``pc render`` sets ``size``, ``fps``, ``duration``, ``speed``, ``append``,
+``preset`` and ``quality`` for one run (``--size``, ``--fps``, ...), on top of
+the package's and the object's, as ``--view`` does for the viewpoint -- which a
+video takes too, as the direction it is looked at from. The full list of fields,
+with what each defaults to, is the comment above the video file types in
+``//builtin/render``'s ``partcad.yaml``.
+
+``size``
+  Where the video is going. ``reels`` -- 1080 by 1920, 9:16, full screen on a
+  phone: Instagram Reels and Stories, YouTube Shorts, TikTok -- is the default,
+  and ``shorts``, ``tiktok``, ``story`` and ``vertical`` are other names for it.
+  ``portrait`` is the 4:5 a photo feed shows in line (1080 by 1350), ``square``
+  1080 by 1080, ``pinterest`` 2:3, ``landscape`` or ``youtube`` 1920 by 1080; the
+  broadcast names ``720p``, ``1080p``, ``1440p`` and ``4k``, and ``4:3``,
+  ``21:9``, ``vertical-720p`` and ``vertical-4k``, are there too, and so is any
+  ``<width>x<height>``.
+
+``speed`` and ``start_angle``
+  How fast the object turns about each of X, Y and Z, in degrees a second, and
+  where it starts. Each axis turns at its own speed, so ``[0, 0, 30]`` is a
+  turntable and ``[20, 0, 45]`` tumbles.
+
+``preset`` and ``quality``
+  The trade between how long encoding takes and how small the file comes out,
+  in x264's names, which every encoder is told the nearest equivalent of; and
+  how much of the picture survives the encoder. For H.264 and H.265 the quality
+  is a CRF of 51 × (100 − quality) / 100, so the default 65 is CRF 18 -- visually
+  lossless, which is what a video uploaded somewhere that encodes it again
+  should be. ``bitrate``, in kbit/s, asks for a bitrate instead.
+
+``append``
+  Adds to the video already at the output path instead of writing it again.
+  A video keeps where its turn stopped in one of its container's tags, and the
+  part appended to it starts from there, so an object rendered in several runs --
+  after each change to it, or at another speed, with other text -- plays as one
+  turn. The text, the logo, the fades and the sound of the run are on its own
+  part alone. A video that says
+  nothing about its turn (an ``ogv``, since Ogg keeps no tags, or one PartCAD did
+  not write) is appended to from ``start_angle``, and a video of another size is
+  fitted into the new one's frame, with bars.
+
+``text``, ``logo``, ``audio`` and ``filters``
+  What makes a recording a post. ``text`` is one or several texts over the
+  picture, each shown throughout or between ``start`` and ``end``, at a
+  ``position``, ``size``, ``font`` and ``color`` of its own, outlined and
+  optionally shadowed or boxed. ``logo`` is an image in a corner. ``audio`` is an
+  extract of a soundtrack -- anything GStreamer can play, from ``start`` seconds
+  in, cut to the length of the video, faded and set to a ``volume``, and
+  ``loop``-ed to fill a video longer than what is left of it. ``filters`` are
+  GStreamer video filters the frames go through (``videobalance
+  saturation=1.3``). A relative path is read from the package of the object.
+
+Where GStreamer comes from
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+GStreamer is not something pip can install, so each video file type names
+PartCAD's GStreamer image as its ``dockerImage`` (see `Bringing dependencies pip
+cannot install`_): ``partcad-container-python`` with GStreamer in it, published
+beside the plain one for the interpreter ``//builtin/render`` runs in. A machine
+rendering in the ``docker`` sandbox -- the default wherever Docker runs --
+renders its videos there and needs nothing else. Anywhere else it is the
+machine's own ``gst-launch-1.0``: on the ``PATH``, where GStreamer's installers
+put it on macOS and Windows, or wherever ``PC_GSTREAMER`` says, with the
+``good``, ``bad``, ``ugly`` and ``libav`` plugins and the Pango text overlay. On
+Debian and Ubuntu that is::
+
+    apt install gstreamer1.0-tools gstreamer1.0-plugins-base-apps \
+      gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+      gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-x
+
+A machine with neither is told so before anything is drawn, and ``pc
+healthcheck`` says the same ahead of time (``GStreamer``).
+
+What it costs
+^^^^^^^^^^^^^
+
+Every frame is drawn on the CPU, in the sandbox: a part takes a fraction of a
+second a frame at the default size, so a twelve-second Reel is a minute or two
+on four cores. ``antialias: 1`` -- which draws each frame once rather than at
+twice its size each way -- is about four times faster and has harder edges;
+``threads`` is how many frames are drawn at once, one per core up to four. The
+encoder's ``preset`` trades the other half.
+
+A video is cached like any other file, keyed on the object and every field --
+except one that reads a file: a soundtrack, a logo, or the video it is appended
+to. What those hold is not in the question the cache keys on, so such a video is
+made afresh every time. ``reproducible`` decides nothing for a video: a
+container is stamped with the time it is written.
+

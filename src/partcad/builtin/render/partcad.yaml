@@ -1,5 +1,6 @@
 # The render implementations PartCAD ships with: the 2D projections that
-# `pc render` writes.
+# `pc render` writes, and the videos of an object turning (see the video file
+# types at the end).
 #
 # The structure is identical to `//builtin/export` -- see that package for what
 # each field means. The only difference is which section a package declares
@@ -21,8 +22,9 @@
 name: //builtin/render
 desc: |
   The render implementations PartCAD ships with: the 2D projections that
-  `pc render` writes. A package replaces any of them, or adds one of its own, by
-  declaring that file type in its own `render:` section.
+  `pc render` writes, and videos of an object turning as it turns in the
+  Digital Thread's 3D view. A package replaces any of them, or adds one of its
+  own, by declaring that file type in its own `render:` section.
 
 # What every script in this package imports. Declared for the package rather
 # than repeated on each of the file types below, because it is the same
@@ -155,4 +157,233 @@ render:
     # second answer to the question this field asks. A package that wants the
     # old behaviour says so - 'examples/feature_render' does, and so does every
     # example that keeps its drawing in the repository.
+    reproducible: false
+
+  # ---------------------------------------------------------------------------
+  # Videos
+  # ---------------------------------------------------------------------------
+  #
+  # A video of the object turning, drawn the way the Digital Thread's 3D view
+  # draws it with Animate ticked - the same camera, light, material and colours
+  # - by 'render_video.py', and encoded by GStreamer into the container each file
+  # type names as its 'container_format' (not 'container', which is the
+  # protocol's: an implementation declaring one is run in that image). None of
+  # them is written by a bare 'pc render': a package asks for one by declaring
+  # it, or a command by naming it ('pc render -t mp4').
+  #
+  # GStreamer is not something pip can install, so each of these names the
+  # image PartCAD publishes with it in ('dockerImage'), and a machine rendering
+  # in the 'docker' sandbox renders them there. Elsewhere it is the machine's own
+  # 'gst-launch-1.0' (or wherever 'PC_GSTREAMER' says), and a machine with
+  # neither is told so before anything is drawn. '{version}' and '{python}' are
+  # filled in with this release and the sandbox's interpreter.
+  #
+  # The fields every video file type takes. The ones declared below are the
+  # ones a package most often changes; every other one has the default
+  # 'render_video.py' gives it, which is what it says here.
+  #
+  #   size          where the video is going: 'reels' (1080x1920, the default:
+  #                 also 'shorts', 'tiktok', 'story', 'vertical', '9:16'),
+  #                 'portrait' (1080x1350, '4:5'), 'square' (1080x1080, '1:1'),
+  #                 'pinterest' (1000x1500, '2:3'), 'landscape' (1920x1080,
+  #                 'youtube', '16:9', '1080p', 'fhd'), '720p', '480p', '1440p',
+  #                 '4k', '4:3', '21:9', 'vertical-720p', 'vertical-4k' - or
+  #                 '<width>x<height>'. 'width' and 'height' override it.
+  #   fps           frames a second.
+  #   duration      seconds. Unset is one turn of the fastest-turning axis -
+  #                 twelve seconds at the default speed - or five seconds if
+  #                 nothing turns.
+  #   speed         how fast the object turns about X, Y and Z, in degrees a
+  #                 second, each axis at its own: [x, y, z], or one number for Z.
+  #                 The default is Animate's thirty about the vertical.
+  #   start_angle   the angles about X, Y and Z the first frame is drawn at.
+  #   append        add to the video already at the output path rather than
+  #                 writing it again. The video keeps where its turn stopped in
+  #                 one of its container's tags, and the new part starts there;
+  #                 a video that says nothing (an Ogg file, which keeps no tags,
+  #                 or one PartCAD did not write) is appended to from
+  #                 'start_angle'. A video that is a different size is fitted
+  #                 into the new one's frame, with bars.
+  #   preset        the trade between how long encoding takes and how small the
+  #                 file is: ultrafast, superfast, veryfast, faster, fast,
+  #                 medium, slow, slower, veryslow - x264's names, which every
+  #                 encoder is told the nearest equivalent of.
+  #   quality       0 to 100: how much of the picture survives the encoder - for
+  #                 H.264 and H.265 a CRF of 51 * (100 - quality) / 100, so the
+  #                 default 65 is CRF 18. 'bitrate' (kbit/s) asks for a bitrate
+  #                 instead.
+  #   codec         the video codec, where the container carries more than one:
+  #                 h264 (the default), h265, vp9, vp8, theora, mjpeg, mpeg4,
+  #                 wmv2 - whichever of them the container takes.
+  #   audio_codec, audio_bitrate   likewise for the soundtrack: aac, mp3, opus,
+  #                 vorbis; 192 kbit/s.
+  #   viewport_origin, viewport_up  where the object is looked at from, as for
+  #                 the projections ('pc render --view' sets them). Unset is the
+  #                 3D view's: from the front right, a little above.
+  #   zoom          closer than the 3D view frames the object (above 1), or
+  #                 further (below).
+  #   background    the colour behind the object: the editor's, '#1F1F1F'.
+  #   antialias     each frame is drawn this many times larger each way and
+  #                 shrunk, which smooths the edges: 2. 1 is about four times as
+  #                 fast to draw.
+  #   line_weight   how wide a line that bounds no face is, in pixels.
+  #   threads       how many frames are drawn at once: one per core, up to four.
+  #   fade_in, fade_out, fade_color   seconds of fading from and to a colour
+  #                 (black) at the start and the end.
+  #   text          text over the picture: a string (shown throughout, at the
+  #                 bottom) or a list of them, or of maps with 'text', 'start',
+  #                 'end' or 'duration' (seconds), 'position' (top, center,
+  #                 bottom, left, right, top-left, top-right, bottom-left,
+  #                 bottom-right), 'size' (a fraction of the frame's height),
+  #                 'font', 'color', 'outline', 'shadow', 'box'.
+  #   logo          an image in a corner: its path, or a map with 'path',
+  #                 'position' (top-right), 'width' (a fraction of the frame's)
+  #                 and 'opacity'.
+  #   audio         a soundtrack: the path of anything GStreamer can play, or a
+  #                 map with 'path', 'start' (which extract of it, in seconds
+  #                 from its start), 'volume', 'fade_in', 'fade_out' and 'loop'.
+  #                 Cut to the length of the video.
+  #   filters       GStreamer video filters the frames go through, each
+  #                 '<element> <property>=<value> ...' ('videobalance
+  #                 saturation=1.3').
+  #   title         the title the container says the video has.
+  #
+  # A relative path in 'logo' and 'audio' is read from the package of the object
+  # being rendered. A video that reads a file - one of those, or the video it is
+  # appended to - is not cached, since what the file holds is not in the
+  # question the cache keys on.
+  #
+  # 'reproducible' is declared for the protocol's sake and decides nothing: a
+  # container is stamped with the time it was written, and an encoder running
+  # on several threads is not held to the same bytes twice.
+  mp4:
+    desc: A video of the object turning, as H.264 in MP4 - what every social network takes.
+    path: render_video.py
+    extension: mp4
+    container_format: mp4
+    dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
+    size: reels
+    fps: 30
+    speed: [0, 0, 30]
+    preset: medium
+    quality: 65
+    reproducible: false
+
+  m4v:
+    desc: The MP4 video under the extension Apple's players file it under.
+    path: render_video.py
+    extension: m4v
+    container_format: mp4
+    dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
+    size: reels
+    fps: 30
+    speed: [0, 0, 30]
+    preset: medium
+    quality: 65
+    reproducible: false
+
+  mov:
+    desc: A video of the object turning, as H.264 in QuickTime.
+    path: render_video.py
+    extension: mov
+    container_format: mov
+    dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
+    size: reels
+    fps: 30
+    speed: [0, 0, 30]
+    preset: medium
+    quality: 65
+    reproducible: false
+
+  qt:
+    desc: The QuickTime video under its older extension.
+    path: render_video.py
+    extension: qt
+    container_format: mov
+    dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
+    size: reels
+    fps: 30
+    speed: [0, 0, 30]
+    preset: medium
+    quality: 65
+    reproducible: false
+
+  mkv:
+    desc: A video of the object turning, as H.264 in Matroska.
+    path: render_video.py
+    extension: mkv
+    container_format: mkv
+    dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
+    size: reels
+    fps: 30
+    speed: [0, 0, 30]
+    preset: medium
+    quality: 65
+    reproducible: false
+
+  webm:
+    desc: A video of the object turning, as VP9 in WebM - what a web page plays without a plugin.
+    path: render_video.py
+    extension: webm
+    container_format: webm
+    dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
+    size: reels
+    fps: 30
+    speed: [0, 0, 30]
+    preset: medium
+    quality: 65
+    reproducible: false
+
+  avi:
+    desc: A video of the object turning, as H.264 in AVI.
+    path: render_video.py
+    extension: avi
+    container_format: avi
+    dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
+    size: reels
+    fps: 30
+    speed: [0, 0, 30]
+    preset: medium
+    quality: 65
+    reproducible: false
+
+  wmv:
+    # Without a soundtrack: see 'CONTAINERS' in 'video_encode.py' for why.
+    desc: A video of the object turning, as Windows Media Video in ASF.
+    path: render_video.py
+    extension: wmv
+    container_format: asf
+    dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
+    size: reels
+    fps: 30
+    speed: [0, 0, 30]
+    preset: medium
+    quality: 65
+    reproducible: false
+
+  asf:
+    desc: The Windows Media video under the container's own extension.
+    path: render_video.py
+    extension: asf
+    container_format: asf
+    dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
+    size: reels
+    fps: 30
+    speed: [0, 0, 30]
+    preset: medium
+    quality: 65
+    reproducible: false
+
+  ogv:
+    # Keeps no tags, so a video appended to it starts from 'start_angle'.
+    desc: A video of the object turning, as Theora in Ogg - free of patents throughout.
+    path: render_video.py
+    extension: ogv
+    container_format: ogg
+    dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
+    size: reels
+    fps: 30
+    speed: [0, 0, 30]
+    preset: medium
+    quality: 65
     reproducible: false
