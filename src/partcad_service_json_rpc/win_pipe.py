@@ -70,6 +70,14 @@ _JOIN_BELOW = 64 * 1024
 STOPPED_STACKS_SECONDS = 10.0
 
 
+# How long the tasks still pending when the daemon stops serving get to unwind
+# once cancelled, a round at a time, and how many rounds: a handler that is
+# cancelled goes on to close its connection, and one waiting for its client's
+# running request to finish is cancelled again (see '_finish_tasks').
+_FINISH_SECONDS = 5.0
+_FINISH_ROUNDS = 2
+
+
 def report_stacks_until_exit() -> None:
     """Have every thread's stack written to stderr every ``STOPPED_STACKS_SECONDS`` from now on.
 
@@ -261,9 +269,39 @@ def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
             if watcher is not None:
                 watcher.stop()
             dispatch.stop()
+            _finish_tasks(loop)
             loop.close()
         finally:
             faulthandler.cancel_dump_traceback_later()
+
+
+def _finish_tasks(loop) -> None:
+    """Cancel what is still pending on ``loop``, and let it unwind, before the loop is closed.
+
+    What ``asyncio.run`` does before it closes a loop, and what this one did not:
+    a stop ends the serving coroutine, and with it ``run_until_complete``, while
+    connections are still being served -- each one's handler, and the task
+    writing to it (:class:`PipeWriter`). A task still pending when its loop is
+    closed is destroyed later, as the interpreter exits, and asyncio logs an
+    error for each one. Telemetry sends an error on from a thread it starts then,
+    and on Python before 3.12 starting a thread while the interpreter exits
+    never returns: every stopped daemon on Python 3.10 waited there until it was
+    killed. Bounded (``_FINISH_SECONDS`` a round), because a handler unwinding
+    waits for its client's running request, and the exceptions the tasks ended
+    with are retrieved, since one that is not is logged at the same moment.
+    """
+    finished = set()
+    for _ in range(_FINISH_ROUNDS):
+        pending = {task for task in asyncio.all_tasks(loop) if not task.done()}
+        if not pending:
+            break
+        finished |= pending
+        for task in pending:
+            task.cancel()
+        loop.run_until_complete(asyncio.wait(pending, timeout=_FINISH_SECONDS))
+    for task in finished:
+        if task.done() and not task.cancelled():
+            task.exception()
 
 
 def _connection_handler(
