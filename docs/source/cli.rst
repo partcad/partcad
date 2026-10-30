@@ -199,6 +199,12 @@ and ``pc`` waits up to 1800 seconds instead of 300 for as long as that lasts. A 
 lengthens the wait, never shortens it, and ``PC_DAEMON_IDLE_TIMEOUT`` still sets the default (``0`` waits
 forever, whatever an assembly declares).
 
+Setting up a sandbox is the same kind of silence, and ``pc`` waits it out without anybody declaring anything.
+``pip`` says nothing while it downloads, and a new sandbox's first install fetches a couple of hundred megabytes
+of wheels, so while the daemon creates a sandbox or installs into one, ``pc`` waits up to 30 minutes rather than
+five. On a network that is slow or down, the command ends with ``pip``'s own error -- a host it could not
+resolve, a package it could not fetch -- rather than with "the PartCAD service stopped responding".
+
 Declaring a timeout is also saying the assembly is slow, and ``--fast-only`` (``-f``) leaves out every assembly
 and scene that says so::
 

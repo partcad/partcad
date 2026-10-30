@@ -425,7 +425,10 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
 
     # TODO(clairbee): Make an async version of this function
     def once_conda_locked_attempt(self):
-        with pc_logging.Action("Conda", "create", self.version):
+        with (
+            pc_logging.Action("Conda", "create", self.version),
+            self.install_window(self.path, "creating the sandbox " + self.path),
+        ):
             if self.conda_path is None:
                 raise Exception("ERROR: PartCAD is configured to use conda, but conda is missing")
 

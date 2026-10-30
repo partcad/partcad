@@ -32,6 +32,15 @@ whole connection, and the work running beside a quick assembly still deserves
 the default. A client told to wait forever (``PC_DAEMON_IDLE_TIMEOUT=0``) keeps
 waiting forever.
 
+The daemon opens one of its own, too, around work it knows to be long and
+silent whatever anybody declared: installing into a sandbox. ``pip`` says
+nothing while it downloads, and a cold sandbox's first install is a couple of
+hundred megabytes of wheels, so on a slow network the default ran out first and
+the user was told that the service had stopped responding -- while it was
+working, and before ``pip`` could report what was actually wrong. Such a window
+carries a :data:`REASON` saying what it is for, which is what a client quotes
+when even that runs out; one without is an object's declared timeout.
+
 Declaring one is also saying the assembly is slow, and that is the other thing
 this key is read for: a command run with ``--fast-only`` -- a recursive render
 or test of a whole tree, typically -- passes over every assembly (and scene)
@@ -56,6 +65,11 @@ KINDS = (START, END)
 
 # Where a marker carries the seconds.
 SECONDS = "seconds"
+
+# Where a window the daemon opened of its own accord says what it is for, in
+# words a message can quote ("installing build123d==0.11.1 in ..."). Absent
+# from an object's declared timeout, which is described from the declaration.
+REASON = "reason"
 
 # The kinds of object that can declare one. A scene is an assembly -- the same
 # files, the same tree, built the same way -- so it can be just as slow.
@@ -86,9 +100,12 @@ def declared(config: Any) -> Optional[float]:
     return seconds(config.get(KEY))
 
 
-def event(kind: str, value: float, package: Optional[str], item: Optional[str]) -> dict:
+def event(kind: str, value: float, package: Optional[str], item: Optional[str], reason: Optional[str] = None) -> dict:
     """The structured ``log`` event one marker travels as."""
-    return {"kind": kind, SECONDS: value, "package": package, "item": item}
+    marker = {"kind": kind, SECONDS: value, "package": package, "item": item}
+    if reason:
+        marker[REASON] = reason
+    return marker
 
 
 def subject(marker: dict) -> str:
@@ -96,3 +113,9 @@ def subject(marker: dict) -> str:
     package = marker.get("package") or ""
     item = marker.get("item")
     return "%s:%s" % (package, item) if item else package
+
+
+def reason(marker: dict) -> Optional[str]:
+    """What a window the daemon opened of its own accord is for, or None for a declared timeout."""
+    value = marker.get(REASON)
+    return value if isinstance(value, str) and value else None

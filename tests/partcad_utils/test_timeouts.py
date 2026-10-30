@@ -44,6 +44,24 @@ def test_a_marker_says_what_declared_it():
     assert timeouts.subject(timeouts.event(timeouts.END, 900.0, "//pub/robots", None)) == "//pub/robots"
 
 
+def test_a_window_the_daemon_opened_says_what_it_is_for():
+    """A sandbox install is nobody's declaration, so it says what it is in words."""
+    reason = "installing build123d==0.11.1 in /sandbox"
+    marker = timeouts.event(timeouts.START, 1800.0, "3.11", "build123d==0.11.1 in /sandbox", reason)
+    assert marker[timeouts.REASON] == reason
+    assert timeouts.reason(marker) == reason
+
+
+def test_a_declared_timeout_carries_no_reason():
+    """Its marker is the one it always was, which is what an older client reads."""
+    marker = timeouts.event(timeouts.START, 900.0, "//pub/robots", "arm")
+    assert timeouts.REASON not in marker
+    assert timeouts.reason(marker) is None
+    # Words or nothing: a reason a client cannot quote is no reason.
+    assert timeouts.reason({**marker, timeouts.REASON: 42}) is None
+    assert timeouts.reason({**marker, timeouts.REASON: ""}) is None
+
+
 def test_the_markers_are_not_progress_events():
     """A client replaying progress must not mistake a window for an action."""
     from partcad_utils.logging_remote_server import PC_EVENTS

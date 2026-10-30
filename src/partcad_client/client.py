@@ -402,7 +402,7 @@ class DaemonClient:
         seconds = timeouts.seconds(params.get(timeouts.SECONDS))
         if seconds is None:
             return
-        window = (seconds, timeouts.subject(params))
+        window = (seconds, timeouts.subject(params), timeouts.reason(params))
         if params.get("kind") == timeouts.START:
             self._windows.append(window)
         elif window in self._windows:
@@ -418,7 +418,7 @@ class DaemonClient:
         """
         bound = self._base_timeout
         if bound > 0 and self._windows:
-            bound = max(bound, max(seconds for seconds, _ in self._windows))
+            bound = max(bound, max(seconds for seconds, _, _ in self._windows))
         if bound == self._timeout:
             return
         self._timeout = bound
@@ -466,9 +466,13 @@ class DaemonClient:
         )
         if self._windows and self._timeout > self._base_timeout:
             # Said, because a wait longer than the one the user configured is
-            # otherwise a mystery: it is the declaration that asked for it.
-            _, declared_by = max(self._windows)
-            summary += " That is the 'timeout: %g' %s declares." % (self._timeout, declared_by)
+            # otherwise a mystery: a declaration asked for it, or the service
+            # said it was doing something that takes that long.
+            _, declared_by, reason = max(self._windows, key=lambda window: window[0])
+            if reason:
+                summary += " That is how long the service allows for %s." % reason
+            else:
+                summary += " That is the 'timeout: %g' %s declares." % (self._timeout, declared_by)
         _logger.error("%s\n%s", summary, self._where_to_look())
         return summary
 
