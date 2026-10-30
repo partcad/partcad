@@ -32,6 +32,7 @@ serves it over a socket.
 import asyncio
 import collections
 import contextlib
+import faulthandler
 import os
 import subprocess
 import sys
@@ -60,6 +61,13 @@ _PIECE = 1024 * 1024
 
 # Frames smaller than this are written together, as the socket daemon joins them.
 _JOIN_BELOW = 64 * 1024
+
+# How long after it stops serving the daemon is expected to be gone, and how
+# often from then on it writes where every thread of it is, into 'daemon.log',
+# for as long as it is not. Below the 30 s a client waits for a stopped daemon
+# to go ('partcad_client.daemon.STOP_TIMEOUT') before it kills it: a daemon
+# that cannot exit is otherwise killed with nothing to say what held it.
+STOPPED_STACKS_SECONDS = 10.0
 
 
 def _launcher_argv() -> list:
@@ -233,6 +241,11 @@ def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
     try:
         loop.run_until_complete(_serve())
     finally:
+        # Armed before anything below, which is where a daemon on its way out
+        # can stop: closing the loop waits for its pipes' pending reads and
+        # writes to be cancelled, and the interpreter for its threads.
+        with contextlib.suppress(AttributeError, OSError, RuntimeError, ValueError):
+            faulthandler.dump_traceback_later(STOPPED_STACKS_SECONDS, repeat=True)
         if watcher is not None:
             watcher.stop()
         dispatch.stop()
