@@ -71,7 +71,9 @@ class MemcachedServer:
         """Close every connection being served, and wait for their handlers to end."""
         handlers = list(self._handlers)
         for handler, writer in handlers:
-            writer.close()
+            # Aborted rather than closed: a close waits for what is still
+            # buffered to be sent, to a client that may not be reading.
+            writer.transport.abort()
             handler.cancel()
         await asyncio.gather(*[handler for handler, _ in handlers], return_exceptions=True)
 
