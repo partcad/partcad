@@ -194,9 +194,12 @@ def main(argv=None) -> int:
 
     # Internal: the detached Windows child serves a specific named pipe.
     if args.serve_pipe is not None:  # pragma: no cover - Windows only
-        from .win_pipe import serve_pipe
+        from .win_pipe import report_stacks_until_exit, serve_pipe
 
         serve_pipe(_build_session(args), build_registry(), args.serve_pipe, settings=settings_argv(args))
+        # What is left is the interpreter's exit, which waits for the threads
+        # this process still has: a daemon held there says where.
+        report_stacks_until_exit()
         return 0
 
     if args.http is not None:

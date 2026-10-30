@@ -70,6 +70,16 @@ _JOIN_BELOW = 64 * 1024
 STOPPED_STACKS_SECONDS = 10.0
 
 
+def report_stacks_until_exit() -> None:
+    """Have every thread's stack written to stderr every ``STOPPED_STACKS_SECONDS`` from now on.
+
+    Until the process exits, or until ``faulthandler.cancel_dump_traceback_later``.
+    Nothing happens when stderr is not a file faulthandler can write to.
+    """
+    with contextlib.suppress(AttributeError, OSError, RuntimeError, ValueError):
+        faulthandler.dump_traceback_later(STOPPED_STACKS_SECONDS, repeat=True)
+
+
 def _launcher_argv() -> list:
     """How to run this service again as a new process.
 
@@ -243,13 +253,17 @@ def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
     finally:
         # Armed before anything below, which is where a daemon on its way out
         # can stop: closing the loop waits for its pipes' pending reads and
-        # writes to be cancelled, and the interpreter for its threads.
-        with contextlib.suppress(AttributeError, OSError, RuntimeError, ValueError):
-            faulthandler.dump_traceback_later(STOPPED_STACKS_SECONDS, repeat=True)
-        if watcher is not None:
-            watcher.stop()
-        dispatch.stop()
-        loop.close()
+        # writes to be cancelled. And put away once that is done, because the
+        # process may have more to do -- the daemon goes on to exit, which is
+        # watched the same way ('__main__'), and a test goes on to its next.
+        report_stacks_until_exit()
+        try:
+            if watcher is not None:
+                watcher.stop()
+            dispatch.stop()
+            loop.close()
+        finally:
+            faulthandler.cancel_dump_traceback_later()
 
 
 def _connection_handler(
