@@ -706,7 +706,10 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         with self.sync_lock(write=True):
             command = self._create_locked()
             if command:
-                with pc_logging.Action("Docker", self.version, self.path):
+                with (
+                    pc_logging.Action("Docker", self.version, self.path),
+                    self.install_window(self.path, "creating the sandbox " + self.path),
+                ):
                     exitcode, _, stderr = self.run_onced_locked(command)
                 self._created(exitcode, stderr)
             elif self._environment_built:
@@ -719,7 +722,10 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         async with self.async_lock(write=True):
             command = self._create_locked()
             if command:
-                with pc_logging.Action("Docker", self.version, self.path):
+                with (
+                    pc_logging.Action("Docker", self.version, self.path),
+                    self.install_window(self.path, "creating the sandbox " + self.path),
+                ):
                     exitcode, _, stderr = await self.run_async_onced_locked(command)
                 self._created(exitcode, stderr)
             elif self._environment_built:

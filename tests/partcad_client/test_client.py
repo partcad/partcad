@@ -637,6 +637,57 @@ def test_the_stall_report_names_the_declaration(socket_dir):
         server.stop()
 
 
+def test_a_sandbox_install_is_waited_for_and_pip_s_own_error_arrives(socket_dir):
+    """Quiet for longer than the default while pip works, and what pip said is what the caller reads.
+
+    The daemon side of this is 'runtime_python.INSTALL_WINDOW_SECONDS'. Before
+    it, a slow first install ended in "the PartCAD service stopped responding"
+    while the service was still installing, before pip had said anything.
+    """
+    reason = "installing build123d==0.11.1 in /sandbox"
+    pip_said = "Error in [pip install build123d==0.11.1]: Failed to resolve 'files.pythonhosted.org'"
+
+    def installs(session, params):
+        session.emitter.emit("log", timeouts.event(timeouts.START, 5.0, "3.11", "build123d", reason))
+        time.sleep(1.0)
+        session.emitter.emit("log", {"kind": "log", "levelno": logging.ERROR, "message": pip_said})
+        session.emitter.emit("log", timeouts.event(timeouts.END, 5.0, "3.11", "build123d", reason))
+        return "failed to convert"
+
+    server, path = _serve(socket_dir, {"convert": installs})
+    try:
+        client = _windowed_client(path, 0.3)
+        seen = []
+        assert client.call("convert", on_event=lambda method, params: seen.append(params)) == "failed to convert"
+        assert pip_said in [event.get("message") for event in seen]
+        client.close()
+    finally:
+        server.stop()
+
+
+def test_the_stall_report_names_what_the_service_was_doing(socket_dir):
+    """An install that outlasts even its own window is named, rather than called a declaration."""
+    release = threading.Event()
+    reason = "installing build123d==0.11.1 in /sandbox"
+
+    def wedged_install(session, params):
+        session.emitter.emit("log", timeouts.event(timeouts.START, 1.0, "3.11", "build123d", reason))
+        release.wait(30)
+        return "eventually"
+
+    server, path = _serve(socket_dir, {"wedged": wedged_install})
+    try:
+        client = _windowed_client(path, 0.3)
+        with pytest.raises(DaemonStalled) as caught:
+            client.call("wedged")
+        assert "That is how long the service allows for %s." % reason in str(caught.value)
+        assert "'timeout:" not in str(caught.value)
+        client.close()
+    finally:
+        release.set()
+        server.stop()
+
+
 def test_a_window_does_not_outlive_its_request(socket_dir):
     """One left open by a request that ended must not stretch the next."""
     release = threading.Event()

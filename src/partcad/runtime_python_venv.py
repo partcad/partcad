@@ -136,7 +136,10 @@ class VenvPythonRuntime(runtime_python.PythonRuntime):
         with self.sync_lock(write=True):
             command = self._create_locked()
             if command:
-                with pc_logging.Action("Venv", self.version, self.path):
+                with (
+                    pc_logging.Action("Venv", self.version, self.path),
+                    self.install_window(self.path, "creating the sandbox " + self.path),
+                ):
                     exitcode, _, stderr = self.run_onced_locked(command)
                 self._created(exitcode, stderr)
         # Outside the lock above rather than inside it: the base takes the same
@@ -149,7 +152,10 @@ class VenvPythonRuntime(runtime_python.PythonRuntime):
         async with self.async_lock(write=True):
             command = self._create_locked()
             if command:
-                with pc_logging.Action("Venv", self.version, self.path):
+                with (
+                    pc_logging.Action("Venv", self.version, self.path),
+                    self.install_window(self.path, "creating the sandbox " + self.path),
+                ):
                     exitcode, _, stderr = await self.run_async_onced_locked(command)
                 self._created(exitcode, stderr)
         await super().once_async()

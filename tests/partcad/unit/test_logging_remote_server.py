@@ -159,6 +159,21 @@ def test_a_timeout_window_is_forwarded_with_its_seconds():
     ]
 
 
+def test_a_window_nothing_declared_is_forwarded_with_its_reason():
+    """A sandbox install's window, which the client names if it gives up all the same."""
+    events, hook = _collector()
+    remote_server.init(hook)
+
+    with pc_logging.Timeout(1800.0, "3.11", "build123d", reason="installing build123d"):
+        pass
+
+    markers = [e for e in events if e["kind"] in ("timeout_start", "timeout_end")]
+    assert [(e["kind"], e["seconds"], e["reason"]) for e in markers] == [
+        ("timeout_start", 1800.0, "installing build123d"),
+        ("timeout_end", 1800.0, "installing build123d"),
+    ]
+
+
 def test_an_object_that_declares_no_timeout_opens_no_window():
     """So that whatever works on an object can wrap it without asking first."""
     events, hook = _collector()

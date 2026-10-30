@@ -225,14 +225,15 @@ def default_action_end(self_ops, op: str, package: str, item: str = None):
         debug("Finished action: %s: %s: %s" % (op, package, item))
 
 
-# The window an object's declared timeout is open for (see 'Timeout' below). It
-# means something only to a client waiting on a daemon, so the default -- the
-# in-process backends -- is to do nothing with it.
-def default_timeout_start(self_ops, seconds: float, package: str, item: str | None = None):
+# The window a long, silent stretch of work is open for -- an object's declared
+# timeout, or a sandbox install (see 'Timeout' below). It means something only
+# to a client waiting on a daemon, so the default -- the in-process backends --
+# is to do nothing with it.
+def default_timeout_start(self_ops, seconds: float, package: str, item: str | None = None, reason: str | None = None):
     pass
 
 
-def default_timeout_end(self_ops, seconds: float, package: str, item: str | None = None):
+def default_timeout_end(self_ops, seconds: float, package: str, item: str | None = None, reason: str | None = None):
     pass
 
 
@@ -379,18 +380,23 @@ class Timeout(object):
     ``partcad_utils.timeouts``). ``seconds`` of None is an object that declares
     none, and is nothing everywhere -- so a caller can wrap every object
     without asking first.
+
+    ``reason`` is for a window nothing declared: work PartCAD itself knows to
+    be long and silent, such as a sandbox install, saying what it is so that a
+    client that gives up all the same names that rather than a declaration.
     """
 
-    def __init__(self, seconds: float | None, package: str, item: str | None = None):
+    def __init__(self, seconds: float | None, package: str, item: str | None = None, reason: str | None = None):
         self.seconds = seconds
         self.package = package
         self.item = item
+        self.reason = reason
 
     def __enter__(self):
         if self.seconds is not None:
-            ops.timeout_start(self.seconds, self.package, self.item)
+            ops.timeout_start(self.seconds, self.package, self.item, self.reason)
         return self
 
     def __exit__(self, *_args):
         if self.seconds is not None:
-            ops.timeout_end(self.seconds, self.package, self.item)
+            ops.timeout_end(self.seconds, self.package, self.item, self.reason)
