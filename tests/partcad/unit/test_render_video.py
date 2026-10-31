@@ -169,6 +169,28 @@ def test_one_number_is_a_speed_about_z():
         render_video._vector({"speed": [1, 2]}, "speed", render_video.DEFAULT_SPEED)
 
 
+def test_the_cli_reads_a_speed_the_way_the_renderer_does():
+    import rich_click as click
+
+    from partcad_cli.click.video import speed_vector
+
+    assert speed_vector(None, None, None) is None
+    assert speed_vector(None, None, "15") == [0.0, 0.0, 15.0]
+    assert speed_vector(None, None, "1,2 3") == [1.0, 2.0, 3.0]
+    for value in ("fast", "1,2"):
+        with pytest.raises(click.BadParameter):
+            speed_vector(None, None, value)
+
+
+def test_a_request_hands_on_only_the_video_options_it_gives():
+    from partcad_service_json_rpc.core.operations import _video
+
+    assert _video({}) == {}
+    # 'append' is a flag: false is the same as not asking.
+    assert _video({"size": "square", "fps": None, "append": False, "quality": 0}) == {"size": "square", "quality": 0}
+    assert _video({"append": True, "speed": [0, 0, 90]}) == {"append": True, "speed": [0, 0, 90]}
+
+
 def test_angles_stay_within_a_turn():
     assert render_video.angles_at((0, 0, 350), (0, 0, 30), 1.0) == pytest.approx((0, 0, 20))
 
