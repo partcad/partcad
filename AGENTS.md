@@ -58,7 +58,10 @@ a CAD addon, or documentation.
   announces (as a pair of `log` markers, like the process and action ones), and the client waits that long
   instead of its default five minutes for as long as it is open. A client reading the markers differently from
   the daemon writing them gives up on exactly the assemblies that said they would be slow. The same key is
-  what `--fast-only` leaves an assembly out for (`partcad.fast_only`).
+  what `--fast-only` leaves an assembly out for (`partcad.fast_only`). The daemon opens a window of its own,
+  with a `reason` and nobody's declaration, around creating a sandbox and every install into one
+  (`runtime_python.INSTALL_WINDOW_SECONDS`): `pip` is silent while it downloads, and without it a slow network
+  ended in "the service stopped responding" before `pip` could say what was wrong.
 
   `garage` is the one piece here that only *clients* touch: the user's Build vs Buy choices, one file per
   object under `~/.partcad/garage/default/bvb/`, written by the IDE and read by `pc instructions`, and sent to

@@ -28,6 +28,8 @@ writer that drops a client that stops reading.
 import asyncio
 import base64
 import contextlib
+import gc
+import logging
 import socket
 import sys
 import threading
@@ -381,3 +383,72 @@ def test_the_pipe_writer_sends_everything_in_order_to_a_client_that_reads():
     assert [m["params"] for m in got[:300]] == list(range(300))
     assert got[300]["result"] == b"\x01" * 3000000
     assert dropped is None
+
+
+def _reported_by_asyncio(records) -> list:
+    return [r.getMessage() for r in records if r.name == "asyncio" and r.levelno >= logging.ERROR]
+
+
+def test_what_a_stop_leaves_pending_is_unwound_before_the_loop_closes(caplog):
+    """A stop leaves handlers and their writers pending; closed with them, the loop reported each at exit.
+
+    Reported as an error, which telemetry sends on from a thread it starts as
+    the interpreter exits -- and on Python before 3.12 that never returns, which
+    held every stopped Windows daemon on 3.10 until it was killed.
+    """
+    caplog.set_level(logging.ERROR, logger="asyncio")
+    loop = asyncio.new_event_loop()
+    closed = []
+
+    async def writer():
+        await asyncio.Event().wait()
+
+    async def handler():
+        try:
+            await asyncio.Event().wait()
+        finally:
+            # A handler goes on to close its connection, which takes awaiting.
+            await asyncio.sleep(0)
+            closed.append(True)
+
+    async def failing():
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            raise RuntimeError("the connection was already gone")
+
+    tasks = [loop.create_task(coroutine()) for coroutine in (writer, handler, failing)]
+    loop.run_until_complete(asyncio.sleep(0))
+
+    service_win_pipe._finish_tasks(loop)
+    loop.close()
+
+    assert all(task.done() for task in tasks)
+    assert closed == [True]
+    del tasks
+    gc.collect()
+    assert _reported_by_asyncio(caplog.records) == []
+
+
+def test_a_task_that_will_not_unwind_does_not_hold_the_stop(monkeypatch):
+    monkeypatch.setattr(service_win_pipe, "_FINISH_SECONDS", 0.05)
+    loop = asyncio.new_event_loop()
+    released = []
+
+    async def stubborn():
+        while not released:
+            with contextlib.suppress(asyncio.CancelledError):
+                await asyncio.sleep(3600)
+
+    task = loop.create_task(stubborn())
+    loop.run_until_complete(asyncio.sleep(0))
+
+    started = time.monotonic()
+    service_win_pipe._finish_tasks(loop)
+    assert time.monotonic() - started < 10
+    assert not task.done()
+
+    released.append(True)
+    task.cancel()
+    loop.run_until_complete(task)
+    loop.close()

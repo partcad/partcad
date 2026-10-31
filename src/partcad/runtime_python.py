@@ -168,6 +168,26 @@ PIP_CONSTRAINTS = [
 ]
 
 
+# How long a client waits on one install into a sandbox -- one 'pip install',
+# or creating a sandbox or a layer, which 'venv --upgrade-deps' and 'conda
+# create' do by downloading -- before it gives up on the daemon (see
+# 'partcad_utils.timeouts').
+#
+# pip says nothing while it downloads, and the base's first install brings
+# build123d, OCP, scipy and the rest of ~40 wheels, about 150 MB. On a slow
+# network that outlasted the client's default five minutes of silence, and the
+# command ended in "the PartCAD service stopped responding" while the daemon was
+# still installing, before pip could say what was wrong. So the install says how
+# long it may take instead, and pip's own error -- a host it cannot resolve, a
+# download it gave up on after its retries -- is what the user reads.
+#
+# Long enough for a slow download to finish and for a package pip has to build
+# from source; short enough that a pip which will never return is still given
+# up on. It bounds the client's wait and nothing else: the install itself is
+# deliberately unbounded (see 'run_async_onced').
+INSTALL_WINDOW_SECONDS = 1800.0
+
+
 # pip treats an already-recorded distribution as satisfied and leaves its files
 # alone, so re-asserting cadquery-ocp over a novtk install is a no-op without
 # this.
@@ -519,7 +539,10 @@ class PythonRuntime(runtime.Runtime):
         path = session["path"]
         created = not os.path.exists(path)
         if created:
-            with pc_logging.Action("v-env", self.version, session["name"]):
+            with (
+                pc_logging.Action("v-env", self.version, session["name"]),
+                self.install_window(session["name"], "creating the layer " + path),
+            ):
                 pc_logging.debug("Creating a layer: %s" % path)
                 exitcode, _, stderr = self.run_onced_locked(["-m", "venv", "--upgrade-deps", path])
             layer_created(path, exitcode, stderr)
@@ -541,7 +564,10 @@ class PythonRuntime(runtime.Runtime):
         path = session["path"]
         created = not os.path.exists(path)
         if created:
-            with pc_logging.Action("v-env", self.version, session["name"]):
+            with (
+                pc_logging.Action("v-env", self.version, session["name"]),
+                self.install_window(session["name"], "creating the layer " + path),
+            ):
                 pc_logging.debug("Creating a layer: %s" % path)
                 exitcode, _, stderr = await self.run_async_onced_locked(["-m", "venv", "--upgrade-deps", path])
             layer_created(path, exitcode, stderr)
@@ -1018,6 +1044,10 @@ class PythonRuntime(runtime.Runtime):
         item = get_local_partcad_pkg(python_package) if python_package == "partcad" else python_package
         return item if path is None else item + " in " + path
 
+    def install_window(self, item, reason):
+        """The wait a client allows while this sandbox installs ``item`` (see INSTALL_WINDOW_SECONDS)."""
+        return pc_logging.Timeout(INSTALL_WINDOW_SECONDS, self.version, item, reason=reason)
+
     def pip_install_command(self, python_package, force):
         return [
             "-m",
@@ -1052,7 +1082,8 @@ class PythonRuntime(runtime.Runtime):
         """Install one package. The environment's write lock is already held."""
         if self.installed_onced(python_package, path, force):
             return
-        with pc_logging.Action("PipInst", self.version, self.install_label(python_package, path)):
+        label = self.install_label(python_package, path)
+        with pc_logging.Action("PipInst", self.version, label), self.install_window(label, "installing " + label):
             exitcode, _, stderr = self.run_onced_locked(self.pip_install_command(python_package, force), path=path)
         self.record_install_unless_killed(python_package, path, exitcode, stderr)
 
@@ -1060,7 +1091,8 @@ class PythonRuntime(runtime.Runtime):
         """The asynchronous twin of install_onced_locked()."""
         if self.installed_onced(python_package, path, force):
             return
-        with pc_logging.Action("PipInst", self.version, self.install_label(python_package, path)):
+        label = self.install_label(python_package, path)
+        with pc_logging.Action("PipInst", self.version, label), self.install_window(label, "installing " + label):
             exitcode, _, stderr = await self.run_async_onced_locked(
                 self.pip_install_command(python_package, force), path=path
             )

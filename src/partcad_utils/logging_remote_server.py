@@ -68,19 +68,26 @@ def _action_end(op: str, package: str, item: str = None) -> None:
     _emit_event("action_end", op, package, item)
 
 
-def _timeout_start(seconds: float, package: str, item: str = None) -> None:
-    _emit_timeout(timeouts.START, seconds, package, item)
+def _timeout_start(seconds: float, package: str, item: str = None, reason: str = None) -> None:
+    _emit_timeout(timeouts.START, seconds, package, item, reason)
 
 
-def _timeout_end(seconds: float, package: str, item: str = None) -> None:
-    _emit_timeout(timeouts.END, seconds, package, item)
+def _timeout_end(seconds: float, package: str, item: str = None, reason: str = None) -> None:
+    _emit_timeout(timeouts.END, seconds, package, item, reason)
 
 
-def _emit_timeout(kind: str, seconds: float, package: str, item: str = None) -> None:
+def _emit_timeout(kind: str, seconds: float, package: str, item: str = None, reason: str = None) -> None:
     """A timeout window marker, as a pc_event record like the others."""
     logging.getLogger("partcad").critical(
         "%s: %gs: %s: %s" % (kind, seconds, package, item),
-        extra={"pc_event": kind, "op": None, "package": package, "item": item, timeouts.SECONDS: seconds},
+        extra={
+            "pc_event": kind,
+            "op": None,
+            "package": package,
+            "item": item,
+            timeouts.SECONDS: seconds,
+            timeouts.REASON: reason,
+        },
     )
 
 
@@ -93,6 +100,7 @@ def record_to_event(record: logging.LogRecord) -> dict:
             getattr(record, timeouts.SECONDS, None),
             getattr(record, "package", None),
             getattr(record, "item", None),
+            getattr(record, timeouts.REASON, None),
         )
     if pc_event is not None:
         return {
