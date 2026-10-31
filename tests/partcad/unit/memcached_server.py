@@ -65,13 +65,17 @@ class MemcachedServer:
         self.port = server.sockets[0].getsockname()[1]
         ready.set()
         async with server:
-            try:
-                await server.serve_forever()
-            finally:
-                for handler, writer in list(self._handlers):
-                    writer.close()
-                    handler.cancel()
-                await asyncio.gather(*[handler for handler, _ in self._handlers], return_exceptions=True)
+            await server.serve_forever()
+
+    async def close_connections(self) -> None:
+        """Close every connection being served, and wait for their handlers to end."""
+        handlers = list(self._handlers)
+        for handler, writer in handlers:
+            # Aborted rather than closed: a close waits for what is still
+            # buffered to be sent, to a client that may not be reading.
+            writer.transport.abort()
+            handler.cancel()
+        await asyncio.gather(*[handler for handler, _ in handlers], return_exceptions=True)
 
     async def _serve(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         handler = (asyncio.current_task(), writer)
@@ -159,7 +163,12 @@ def serve_memcached(max_item_size: int = DEFAULT_MAX_ITEM_SIZE):
     try:
         yield server
     finally:
-        # Cancelling the task, not stopping the loop: 'loop.stop()' interrupts
+        # The connections first. A cancelled 'Server.serve_forever()' waits for
+        # every connection to be dropped ('Server.wait_closed'), and a client
+        # does not drop its own: on Python 3.12 that wait never ends. 3.11 did
+        # not wait, and 3.13 closes the connections itself first.
+        asyncio.run_coroutine_threadsafe(server.close_connections(), loop).result(timeout=10)
+        # Then the task, not the loop: 'loop.stop()' interrupts
         # 'run_until_complete' without unwinding 'async with server', so the
         # listening socket would still be open after 'loop.close()'.
         loop.call_soon_threadsafe(serving["task"].cancel)

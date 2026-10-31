@@ -283,6 +283,18 @@ def _pc_executable() -> str:
     return found if os.path.exists(found) else shutil.which("pc")
 
 
+def say(message: str) -> None:
+    """Print ``message``, escaping what the console cannot encode rather than failing on it.
+
+    This test runs with ``-s``, so a print goes to the real console, and on
+    Windows that is a code page (cp1252 on GitHub's runners) far short of what
+    the editor shows: the FEA tab's text carries a '\u25be', and printing it
+    failed the test on every Windows run with the analysis excused.
+    """
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    print(message.encode(encoding, "backslashreplace").decode(encoding))
+
+
 def pc(env: dict, *args: str, cwd: str = EXAMPLES, timeout: float = BUILD_TIMEOUT) -> str:
     """Run `pc --no-ansi <args>` and return everything it printed; fail on a non-zero exit."""
     completed = subprocess.run(
@@ -674,7 +686,7 @@ def test_install_open_view_and_analyse_in_a_real_editor(session):
             # Linux image -- macOS, and Windows' Windows-container daemon -- so the
             # solver the implementation's image carries could never have been had.
             # Everything else about the tab still has to hold.
-            print("NOTE: the FEA was not run, and is excused -- no container runtime here:\n%s" % probe["fea"]["text"])
+            say("NOTE: the FEA was not run, and is excused -- no container runtime here:\n%s" % probe["fea"]["text"])
         else:
             assert probe["fea"]["errors"] == [], probe["fea"]["text"]
         assert "error" not in [severity.lower() for severity in probe["fea"]["severities"]], probe["fea"]["text"]
