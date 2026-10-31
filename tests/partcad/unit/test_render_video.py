@@ -579,6 +579,28 @@ def test_without_gstreamer_nothing_is_drawn(monkeypatch, tmp_path):
     assert "GStreamer is not installed" in result["exception"] and "gstreamer1.0-plugins-good" in result["exception"]
 
 
+def test_the_encoder_imports_where_a_frozen_bundle_does():
+    """'pc healthcheck' loads 'video_encode.py' in the PartCAD that runs it, which may be a frozen bundle.
+
+    A bundle carries only the standard library modules its own code imports, and
+    this file is data to it, so a module only the sandbox side needs - 'wave' - is
+    absent there: imported at the top, it took 'pc healthcheck' down in every
+    bundle. And a wheel declares no numpy.
+    """
+    import subprocess
+
+    script = (
+        "import sys\n"
+        "sys.modules['numpy'] = None\n"
+        "sys.modules['wave'] = None\n"
+        "sys.path.insert(0, %r)\n"
+        "import video_encode\n"
+        "video_encode.find_tool(video_encode.LAUNCH)\n" % RENDER_DIR
+    )
+    run = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120)
+    assert run.returncode == 0, run.stderr
+
+
 @pytest.mark.skipif(os.name == "nt", reason="an executable is a file with an extension on Windows")
 def test_find_tool_looks_where_it_is_told(tmp_path):
     tool = tmp_path / video_encode.LAUNCH

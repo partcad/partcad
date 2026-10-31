@@ -24,7 +24,10 @@ H.264 with OpenH264.
 
 Nothing here imports anything but the standard library, and numpy where frames
 and samples are handled: it is tested without the CAD stack, and 'pc
-healthcheck' asks it where GStreamer is from a PartCAD that has no numpy.
+healthcheck' asks it where GStreamer is from a PartCAD that has no numpy. Nor
+from one that has all of the standard library: a frozen bundle carries only
+the modules its own code imports, and this file is data to it, so what only the
+sandbox side needs ('wave') is imported where it is used.
 """
 
 import functools
@@ -34,7 +37,6 @@ import shutil
 import socket
 import subprocess
 import tempfile
-import wave
 
 LAUNCH = "gst-launch-1.0"
 INSPECT = "gst-inspect-1.0"
@@ -557,6 +559,8 @@ def fade_audio(samples, fade_in=0.0, fade_out=0.0, volume=1.0):
 
 def write_wav(path, samples):
     """'samples' as a 16-bit WAV file, which is what the encoding pipeline reads the soundtrack from."""
+    import wave
+
     import numpy as np
 
     data = (np.clip(samples, -1.0, 1.0) * 32767.0).round().astype("<i2").tobytes()

@@ -1121,4 +1121,3 @@ except one that reads a file: a soundtrack, a logo, or the video it is appended
 to. What those hold is not in the question the cache keys on, so such a video is
 made afresh every time. ``reproducible`` decides nothing for a video: a
 container is stamped with the time it is written.
-
