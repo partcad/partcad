@@ -77,7 +77,7 @@
           {
             "id": "package",
             "title": "Your first package",
-            "description": "The first time it starts, the IDE creates a PartCAD package in `~/.partcad/projects/start` and opens it as the workspace. It is an ordinary folder with a `partcad.yaml` in it, so `pc` in a terminal works with the same package.\n[Open the starter package](command:partcadIde.openStarterPackage)\n[What a package declares](https://partcad.readthedocs.io/en/latest/configuration.html)",
+            "description": "The first time it starts, the IDE creates a PartCAD package in `~/.partcad/projects/start` and opens it as the workspace. It is an ordinary folder with a `partcad.yaml` in it, so `pc` in a terminal works with the same package.\n[Open the starter package](command:partcadIde.openStarterPackage)\n[What a package declares](https://partcad.readthedocs.io/en/latest/config_package.html)",
             "media": {
               "markdown": "media/package.md"
             },
@@ -100,7 +100,7 @@
           {
             "id": "part",
             "title": "Add a part",
-            "description": "A part is a CAD script -- CadQuery, build123d or OpenSCAD -- or a file PartCAD imports. Adding one writes the script and registers it in `partcad.yaml`.\n[Add a part](command:partcad.addPart)\n[How parts are declared](https://partcad.readthedocs.io/en/latest/configuration.html)",
+            "description": "A part is a CAD script -- CadQuery, build123d or OpenSCAD -- or a file PartCAD imports. Adding one writes the script and registers it in `partcad.yaml`.\n[Add a part](command:partcad.addPart)\n[How parts are declared](https://partcad.readthedocs.io/en/latest/config_parts.html)",
             "media": {
               "markdown": "media/part.md"
             },
@@ -111,7 +111,7 @@
           {
             "id": "viewer",
             "title": "See it in 3D",
-            "description": "The Digital Thread shows the shape the script produces, and reloads it when you save. Select a part in the PartCAD Explorer to display it.\n[Open the Digital Thread](command:partcad.viewer)\n[What the workbench does](https://partcad.readthedocs.io/en/latest/features.html)",
+            "description": "The Digital Thread shows the shape the script produces, and reloads it when you save. Select a part in the PartCAD Explorer to display it.\n[Open the Digital Thread](command:partcad.viewer)\n[What the workbench does](https://partcad.readthedocs.io/en/latest/tools_vscode.html)",
             "media": {
               "markdown": "media/viewer.md"
             },

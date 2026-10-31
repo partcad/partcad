@@ -5,17 +5,17 @@ Everything below is at
 
 * [Tutorial](https://partcad.readthedocs.io/en/latest/tutorial.html) --
   a package from nothing, one command at a time.
-* [Configuration](https://partcad.readthedocs.io/en/latest/configuration.html) --
+* [Product data](https://partcad.readthedocs.io/en/latest/config_package.html) --
   everything `partcad.yaml` can say: packages, dependencies, parts, sketches,
   interfaces, parameters.
 * [Assemblies](https://partcad.readthedocs.io/en/latest/assy.html) --
   the `.assy` format, and how parts from other packages are placed.
 * [CLI reference](https://partcad.readthedocs.io/en/latest/cli.html) --
   every `pc` command and its options.
-* [Additional features](https://partcad.readthedocs.io/en/latest/features.html) --
+* [VS Code / IDE](https://partcad.readthedocs.io/en/latest/tools_vscode.html) --
   what the workbench, the Explorer and the Inspector do.
-* [Simulation](https://partcad.readthedocs.io/en/latest/simulation.html) and
-  [use cases](https://partcad.readthedocs.io/en/latest/use_cases.html) --
+* [Simulation](https://partcad.readthedocs.io/en/latest/digital_thread/lifecycle/simulation.html) and
+  [use cases](https://partcad.readthedocs.io/en/latest/digital_thread/use_cases.html) --
   where a design goes after it is drawn.
 * [Installation](https://partcad.readthedocs.io/en/latest/installation.html) --
   PartCAD on another machine, in a terminal, or in an editor you already have.

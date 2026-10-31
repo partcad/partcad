@@ -27,8 +27,12 @@ BOOTSTRAP = COMPONENT_ROOT / "bootstrap"
 EXTENSION_JS = (BOOTSTRAP / "extension.js").read_text(encoding="utf-8")
 
 # The documentation the welcome window sends people to. Every page it names is a
-# page in `docs/source`, which is what this repository publishes there.
-DOCUMENTATION = re.compile(r"https://partcad\.readthedocs\.io/en/latest/([a-z_]+)\.html")
+# page in `docs/source`, which is what this repository publishes there. A page
+# can sit in a subdirectory -- `digital_thread/use_cases` -- and a link at one
+# was not checked at all while this matched a bare name: the two the welcome
+# window carries today arrived in the same change that fixed sixteen links at
+# pages which had moved, and nothing would have caught the next one.
+DOCUMENTATION = re.compile(r"https://partcad\.readthedocs\.io/en/latest/([a-z_]+(?:/[a-z_]+)*)\.html")
 
 # The commands a walkthrough may use without any extension contributing them:
 # the editor's own. Prefixes rather than a list -- what this is really checking
