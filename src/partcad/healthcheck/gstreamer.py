@@ -7,8 +7,9 @@
 
 The video file types ('mp4', 'mov', 'webm', ...) draw their frames in the
 sandbox and hand them to GStreamer, which pip cannot install. Where the 'docker'
-sandbox renders, they run in PartCAD's GStreamer image and nothing is needed
-here; anywhere else it is the machine's own 'gst-launch-1.0'.
+or 'remote' sandbox renders, they run in PartCAD's GStreamer image and nothing
+is needed here; in any other sandbox it is the machine's own 'gst-launch-1.0' -
+even on a machine with Docker running, when its owner chose that sandbox.
 
 Reported and not failed, like a missing conda: a machine that renders no video
 is not a broken machine. What it finds is what a video render would say before
@@ -31,6 +32,19 @@ from .tests import SEVERITY_WARNING, HealthCheckReport, HealthCheckTest
 # GStreamer without one of them writes some videos and not others, which is
 # worth knowing before a render says so.
 ELEMENTS = ("x264enc", "mp4mux", "vp9enc", "webmmux", "textoverlay", "gdkpixbufoverlay", "avenc_aac")
+
+
+def _sandbox() -> str:
+    """The sandbox a video renders in here, picked as 'Context.preferred_python_sandbox' picks it.
+
+    A machine with Docker running whose owner chose 'venv' renders on the
+    host, and needs the host's GStreamer.
+    """
+    if user_config.python_sandbox_declared:
+        return user_config.python_sandbox
+    if getattr(user_config, "use_docker_python_declared", False):
+        return "docker"
+    return "docker" if pc_runtime.docker_enabled() else user_config.python_sandbox
 
 
 def _video_encode():
@@ -59,23 +73,18 @@ class GStreamerCheck(HealthCheckTest):
 
     def test(self) -> HealthCheckReport:
         self.findings = []
-        if user_config.python_sandbox == "remote":
-            # A 'remote' sandbox runs the video file types in PartCAD's
-            # GStreamer image, on its own machine: nothing here is used.
+        sandbox = _sandbox()
+        if sandbox == "remote" or (sandbox == "docker" and pc_runtime.docker_enabled()):
+            # These run the video file types in PartCAD's GStreamer image -
+            # 'remote' on its own machine: nothing here is used.
             report = HealthCheckReport(self.name, self.findings, False)
-            report.debug("The 'remote' sandbox encodes videos in PartCAD's GStreamer image")
+            report.debug("The '%s' sandbox encodes videos in PartCAD's GStreamer image" % sandbox)
             return report
         encode = _video_encode()
         launcher = encode.find_tool(encode.LAUNCH)
         if launcher is None:
-            # The 'docker' sandbox runs the video file types in PartCAD's
-            # GStreamer image.
-            if not pc_runtime.docker_enabled():
-                self.findings.append(encode.MISSING % (encode.LAUNCH, encode.ENV_VAR))
-            report = HealthCheckReport(self.name, self.findings, False)
-            if not self.findings:
-                report.debug("No local GStreamer; videos are encoded in PartCAD's GStreamer image")
-            return report
+            self.findings.append(encode.MISSING % (encode.LAUNCH, encode.ENV_VAR))
+            return HealthCheckReport(self.name, self.findings, False)
         # The discoverer reads back where an appended video's turn stopped, and
         # Debian packages it apart from 'gst-launch-1.0' (plugins-base-apps).
         if encode.find_tool(encode.DISCOVERER) is None:

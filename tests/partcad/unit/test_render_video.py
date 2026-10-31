@@ -251,16 +251,58 @@ def test_the_healthcheck_asks_after_the_discoverer(monkeypatch):
         has_element=lambda name: True,
     )
     monkeypatch.setattr(gstreamer, "_video_encode", lambda: encode)
-    monkeypatch.setattr(gstreamer.user_config, "python_sandbox", "venv")
+    monkeypatch.setattr(gstreamer.pc_runtime, "docker_enabled", lambda: True)
+
+    def choose(sandbox):
+        # The fields behind 'python_sandbox': its setter also marks it
+        # declared, which undoing a patch of the property would not unmark.
+        monkeypatch.setattr(gstreamer.user_config, "_python_sandbox", sandbox)
+        monkeypatch.setattr(gstreamer.user_config, "_python_sandbox_declared", True)
+        check = gstreamer.GStreamerCheck()
+        check.test()
+        return check.findings
+
+    # Docker running does not help a sandbox its owner chose to be the host.
+    findings = choose("venv")
+    assert len(findings) == 1 and "gstreamer1.0-plugins-base-apps" in findings[0]
+
+    # 'docker' and 'remote' encode in PartCAD's image, so nothing here is asked after.
+    assert choose("docker") == []
+    assert choose("remote") == []
+
+
+def test_the_healthcheck_wants_a_local_gstreamer_for_a_host_sandbox(monkeypatch):
+    """Docker running is no GStreamer for a sandbox that renders on the host."""
+    import types
+
+    from partcad.healthcheck import gstreamer
+
+    encode = types.SimpleNamespace(
+        LAUNCH=video_encode.LAUNCH,
+        ENV_VAR=video_encode.ENV_VAR,
+        MISSING=video_encode.MISSING,
+        find_tool=lambda name: None,
+    )
+    monkeypatch.setattr(gstreamer, "_video_encode", lambda: encode)
+    monkeypatch.setattr(gstreamer.pc_runtime, "docker_enabled", lambda: True)
+    monkeypatch.setattr(gstreamer.user_config, "_python_sandbox", "conda")
+    monkeypatch.setattr(gstreamer.user_config, "_python_sandbox_declared", True)
     check = gstreamer.GStreamerCheck()
     check.test()
-    assert len(check.findings) == 1 and "gstreamer1.0-plugins-base-apps" in check.findings[0]
+    assert len(check.findings) == 1 and video_encode.LAUNCH in check.findings[0]
 
-    # A 'remote' sandbox encodes in PartCAD's image, so nothing here is asked after.
-    monkeypatch.setattr(gstreamer.user_config, "python_sandbox", "remote")
+    # Nothing declared: Docker is what PartCAD picks, and it has the image.
+    monkeypatch.setattr(gstreamer.user_config, "_python_sandbox_declared", False)
+    monkeypatch.setattr(gstreamer.user_config, "use_docker_python_declared", False, raising=False)
     check = gstreamer.GStreamerCheck()
     check.test()
     assert check.findings == []
+
+    # Nor Docker: the sandbox PartCAD falls back to renders on the host.
+    monkeypatch.setattr(gstreamer.pc_runtime, "docker_enabled", lambda: False)
+    check = gstreamer.GStreamerCheck()
+    check.test()
+    assert len(check.findings) == 1
 
 
 def test_fades_mix_toward_their_colour():
