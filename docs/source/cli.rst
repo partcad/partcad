@@ -1500,3 +1500,16 @@ Other commands
   built and nothing is instantiated to produce it; the interfaces named in those declarations are resolved
   once per package and kept for the rest of the run. ``--keyword`` and ``--interface`` may be given together,
   and then both have to hold.
+
+  A package served by a repository plugin that searches its own catalog -- a model site's, which nobody can
+  list -- is asked for the keyword instead of being matched locally (see :ref:`repositories`). What it finds
+  is printed as names to instantiate, parameters and all, with the page each came from under it::
+
+    $ pc search parts -P //pub/universe/thingiverse/models -k "cable clip" --limit 2
+    PartCAD parts with 'cable clip' keyword:
+        //pub/universe/thingiverse/models 763622;file=1234567       Cable clip: cable_clip.stl
+                                                                    https://www.thingiverse.com/thing:763622
+        ...
+
+  ``pc search parts`` takes ``-n``/``--limit``, the most to ask each such package for. A package matched
+  locally reports every match, as before.

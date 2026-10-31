@@ -1042,6 +1042,30 @@ class Project(project_config.Configuration):
     def _fetch_object_config(self, kind: str, name: str):
         return None
 
+    def resolves_instances(self, kind: str) -> bool:
+        """Whether this package resolves the parametrized instances of 'kind' itself.
+
+        Every package derives an instance ('<base>;<param>=<value>,...') from
+        its base declaration, with the parameters' defaults set to the values
+        the name gives - unless it says otherwise. A package served by a
+        repository plugin can (see 'ProjectExternalRepository'), because what
+        it serves may differ by more than the parameter values: another file,
+        in another format.
+        """
+        return False
+
+    def _fetch_object_instance_config(self, kind: str, name: str):
+        """The declaration of the instance 'name', for a package that 'resolves_instances(kind)', or None."""
+        return None
+
+    def searches(self, kind: str) -> bool:
+        """Whether this package answers a search for 'kind' itself, rather than being matched locally."""
+        return False
+
+    def search(self, kind: str, text: str, limit: typing.Optional[int] = None) -> list:
+        """The objects of 'kind' this package finds for 'text', when it 'searches()' that kind."""
+        return []
+
     def dependencies(self) -> dict:
         """The declared child-package dependencies of this package.
 
@@ -2330,6 +2354,37 @@ class Project(project_config.Configuration):
             declarations.update(declared)
         return pc_config.normalized_array_values(declarations, params, f"{self.name}:{base_object_name}")
 
+    def _instantiate_resolved_instance(
+        self, factory_name: str, objects, config_class, base_object_name: str, result_name: str, instance: dict
+    ):
+        """Create the instance 'result_name' from the declaration the package resolved it to.
+
+        Called with the object's lock held (see 'get_object'). The declaration
+        is the instance's own: its parameters, if it declares any, already
+        carry the values the name asks for, so nothing is applied to it here.
+        It is normalized the way any declaration is, and is not added to the
+        package's enumeration - an instance is reached by its name, and a
+        listing of the package is not made longer by having asked for one.
+        """
+        if self._skipped_by(factory_name, result_name, instance) is not None:
+            return None
+        pc_logging.debug("Initializing an instance the package resolved itself: %s" % result_name)
+        try:
+            config = config_class.normalize(
+                result_name, copy.deepcopy(instance), f"{self.name}:{result_name}", self.ctx.user_config
+            )
+            config["orig_name"] = base_object_name
+            if factory_name in LAZY_OBJECT_KINDS and "manufacturable" not in config:
+                config["manufacturable"] = self.is_manufacturable
+            factory.instantiate(factory_name, config["type"], self.ctx, self, self, config)
+        except Exception as e:
+            self.record_broken_object(factory_name, result_name, e)
+            return None
+        if result_name not in objects:
+            self.record_broken_object(factory_name, result_name, "the factory produced no object")
+            return None
+        return objects[result_name]
+
     def get_object(
         self,
         factory_name: str,
@@ -2478,6 +2533,27 @@ class Project(project_config.Configuration):
             # carries. Taking the mapping instead meant every named lookup
             # materialized it, and a plugin-backed package answered 'get_part'
             # with a round trip for its entire catalog.
+            #
+            # Unless the package resolves the instance itself. A repository
+            # plugin may say so (see 'ProjectExternalRepository'), and then
+            # what it hands back for the whole name is the object: another
+            # file, in another format, is as much a property of the instance
+            # as a parameter's value is, and nothing derived from the base
+            # declaration could say which.
+            #
+            # Such a package resolves every instance of the kind, and one it
+            # has no answer for does not exist. Falling back to the base would
+            # be worse than failing: 'model;file=<a typo>' would build the
+            # model's default file under a name that says it is another one.
+            if not self.skipped and self.resolves_instances(factory_name):
+                instance = self._fetch_object_instance_config(factory_name, result_name)
+                if instance is None:
+                    if not quiet:
+                        pc_logging.error("Object '%s' not found in '%s'", result_name, self.name)
+                    return None
+                return self._instantiate_resolved_instance(
+                    factory_name, objects, config_class, base_object_name, result_name, instance
+                )
             config = get_config(base_object_name)
             if config is None:
                 reason = self._refused_names.get(factory_name, {}).get(base_object_name)

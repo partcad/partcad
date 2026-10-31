@@ -4245,6 +4245,10 @@ def search_objects(session, params):
     # shapes that implement this interface or anything derived from it. Only the
     # kinds that have ports take it; "packages" and "interfaces" do not.
     interface = params.get("interface") or None
+    # At most this many from each package whose repository plugin searches
+    # itself (see 'ProjectExternalRepository.search'); a package matched
+    # locally reports everything that matches, as it always has.
+    limit = params.get("limit") or None
     package = ctx.resolve_package_path(selected)
 
     from partcad.actions.package import search_packages
@@ -4279,7 +4283,7 @@ def search_objects(session, params):
         output = "PartCAD %s with '%s' keyword:\n" % (kind, keyword)
     with pc.logging.Process("Search " + kind.capitalize(), package):
         found = (
-            search_fn(ctx, package, recursive, keyword, interface)
+            search_fn(ctx, package, recursive, keyword, interface, limit)
             if takes_interface
             else search_fn(ctx, package, recursive, keyword)
         )
@@ -4307,6 +4311,12 @@ def search_objects(session, params):
                 line = "\t" + "%s %s" % (project_name, obj.name)
                 line += " " + " " * (84 - len(line))
                 desc = obj.desc if obj.desc is not None else ""
+                # A hit a repository plugin found is a name to instantiate, and
+                # where it came from is worth a line of its own: it is the page
+                # a person looks at before deciding it is the one.
+                url = getattr(obj, "url", None) if getattr(obj, "is_search_hit", False) else None
+                if isinstance(url, str) and url:
+                    desc = (desc + "\n" + url) if desc else url
                 desc = desc.replace("\n", "\n\t" + " " * (len(line) - 1))
                 line += "%s" % desc
             output += line + "\n"

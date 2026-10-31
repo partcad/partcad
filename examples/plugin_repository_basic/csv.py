@@ -16,6 +16,7 @@
 
 import base64
 import os
+import urllib.parse
 
 
 def load_parts():
@@ -55,14 +56,38 @@ def get_file(rel_path):
         return None
 
 
+def search(parts, query):
+    """The parts whose name or description holds every word of the query, as {name: config}.
+
+    'query' is the query string of a 'search/part?q=<text>&limit=<n>' key. A
+    repository with a catalog nobody can list answers this from the catalog's
+    own search instead; this one has its parts at hand, so it matches them.
+    """
+    fields = urllib.parse.parse_qs(query)
+    words = " ".join(fields.get("q", [""])).lower().split()
+    limit = int(fields.get("limit", ["0"])[0] or 0)
+    found = {}
+    for name, config in parts.items():
+        text = (name + " " + config.get("desc", "")).lower()
+        if all(word in text for word in words):
+            found[name] = config
+            if limit and len(found) >= limit:
+                break
+    return found
+
+
 def get(key):
     if key.startswith("files/"):
         return get_file(key[len("files/") :])
     parts = load_parts()
+    if key.startswith("search/part?"):
+        return search(parts, key.partition("?")[2])
     data = {
         "objects/part": parts,
         "deps": [],
-        "meta": {"desc": "A CSV-backed example repository"},
+        # 'searchKinds' says the repository answers 'search/part?...' itself,
+        # so 'pc search parts' asks it rather than matching what it lists.
+        "meta": {"desc": "A CSV-backed example repository", "searchKinds": ["part"]},
     }
     for name, config in parts.items():
         data["objects/part/" + name] = config

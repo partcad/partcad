@@ -919,3 +919,211 @@ def test_a_package_still_loading_resolves_its_plugin_from_itself(tmp_path):
     ctx, ext, fake = _plugin_package_under_a_root(tmp_path, {"deps": []})
     del ctx.projects[ext.name]  # not registered yet: still being loaded
     assert ext._get_repository() is fake
+
+
+# --- What a repository may do beyond serving declarations ---------------------
+
+
+def test_an_instance_the_repository_resolves_is_its_own_declaration(tmp_path):
+    """A repository that says it resolves instances is asked for the instance by its whole name.
+
+    What comes back is the instance - here another file, in another format,
+    which no parameter value applied to the base could have said.
+    """
+    data = {
+        "meta": {"instanceKinds": ["part"]},
+        "objects/part/thing": {
+            "type": "stl",
+            "path": "thing/1.stl",
+            "parameters": {"format": {"type": "string", "default": "stl"}},
+        },
+        "objects/part/thing;format=step": {
+            "type": "step",
+            "path": "thing/2.step",
+            "parameters": {"format": {"type": "string", "default": "step"}},
+        },
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(data)
+    repo._repository = fake
+
+    part = repo.get_part("thing;format=step", quiet=True)
+
+    assert part is not None
+    assert "objects/part/thing;format=step" in fake.keys
+    assert part.config["type"] == "step"
+    assert part.config["orig_name"] == "thing"
+    # Normalized like any declaration, and fetched from the plugin like any of its files.
+    assert part.config["fileFrom"] == "plugin"
+    assert part.config["manufacturable"] is True
+    # Reached by its name, and not added to what the package lists.
+    assert "thing;format=step" not in (repo._object_configs.get("part") or {})
+
+
+def test_an_instance_is_named_the_way_partcad_spells_it(tmp_path):
+    """The parameters sorted, so one instance is one key however it was asked for."""
+    data = {
+        "meta": {"instanceKinds": ["part"]},
+        "objects/part/thing": {
+            "type": "stl",
+            "path": "thing/1.stl",
+            "parameters": {"file": {"type": "string", "default": "1"}, "format": {"type": "string", "default": ""}},
+        },
+        "objects/part/thing;file=2,format=step": {"type": "step", "path": "thing/2.step"},
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    repo._repository = FakeRepository(data)
+
+    part = repo.get_part("thing;format=step,file=2", quiet=True)
+
+    assert part is not None and part.config["type"] == "step"
+
+
+def test_a_repository_that_does_not_resolve_instances_is_never_asked_for_one(tmp_path):
+    """Without 'instanceKinds' the parameters are applied to the base, as they always were."""
+    data = {
+        "meta": {},
+        "objects/part/widget": {"type": "step", "path": "w.step", "parameters": {"width": {"default": 2.0}}},
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(data)
+    repo._repository = fake
+
+    part = repo.get_part("widget;width=3", quiet=True)
+
+    assert part is not None
+    assert not any(";" in key for key in fake.keys)
+    assert part.config["parameters"]["width"]["default"] == 3.0
+
+
+def test_an_instance_the_repository_has_no_answer_for_does_not_exist(tmp_path):
+    """A repository that resolves instances resolves all of them; one it has no answer for is not there.
+
+    Falling back to the base would build the model's default file under a name
+    that says it is another one.
+    """
+    data = {
+        "meta": {"instanceKinds": ["part"]},
+        "objects/part/widget": {"type": "step", "path": "w.step", "parameters": {"file": {"type": "string"}}},
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(data)
+    repo._repository = fake
+
+    assert repo.get_part("widget;file=typo", quiet=True) is None
+    assert "objects/part/widget;file=typo" in fake.keys
+
+
+def test_a_hit_that_is_not_a_declaration_is_listed_and_not_remembered(tmp_path):
+    """A repository may find what it cannot serve; that is a hit, not an object."""
+    data = {
+        "meta": {"searchKinds": ["part"]},
+        "search/part?q=clip": {"elsewhere-1": {"desc": "Found on a site nobody serves", "url": "https://x/1"}},
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    repo._repository = FakeRepository(data)
+
+    hits = repo.search("part", "clip")
+
+    assert [hit.desc for hit in hits] == ["Found on a site nobody serves"]
+    assert "objects/part/elsewhere-1" not in repo._request_cache
+
+
+def test_a_repository_that_searches_is_asked_with_a_query_string(tmp_path):
+    data = {
+        "meta": {"searchKinds": ["part"]},
+        "search/part?q=cable+clip&limit=2": {
+            "763622;file=1": {"type": "stl", "path": "a.stl", "desc": "Cable clip", "url": "https://x/1"},
+            "763623": {"type": "stl", "path": "b.stl", "desc": "Another clip"},
+        },
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(data)
+    repo._repository = fake
+
+    assert repo.searches("part")
+    assert not repo.searches("assembly")
+    hits = repo.search("part", "cable clip", 2)
+
+    assert [hit.name for hit in hits] == ["763622;file=1", "763623"]
+    assert hits[0].desc == "Cable clip" and hits[0].url == "https://x/1"
+    assert hits[0].project_name == "//ext" and hits[0].is_search_hit
+    # What the search said about each hit is what instantiating it reads, so
+    # the plugin is not asked about it again.
+    asked = list(fake.keys)
+    assert repo.object_config("part", "763623")["desc"] == "Another clip"
+    assert fake.keys == asked
+
+
+def test_a_search_is_never_kept_on_disk(tmp_path):
+    """A catalog moves on, so the same search asked again is asked again."""
+    data = {"meta": {"searchKinds": ["part"]}, "search/part?q=clip": {"a": {"type": "stl", "path": "a.stl"}}}
+    ctx = pc.Context("examples")
+    cache = Cache("external/test-search", ctx.user_config)
+    first = ProjectExternalRepository(ctx, "//ext", str(tmp_path), cache=cache, config_obj={})
+    first._repository = FakeRepository(data)
+    assert [hit.name for hit in first.search("part", "clip")] == ["a"]
+
+    second = ProjectExternalRepository(ctx, "//ext", str(tmp_path), cache=cache, config_obj={})
+    fake = FakeRepository(data)
+    second._repository = fake
+    assert [hit.name for hit in second.search("part", "clip")] == ["a"]
+    assert "search/part?q=clip" in fake.keys
+
+
+def test_a_search_is_scoped_to_the_subfolder(tmp_path):
+    data = {"meta": {"searchKinds": ["part"]}, "motors/meta": {"searchKinds": ["part"]}}
+    data["motors/search/part?q=nema"] = {"nema17": {"type": "step", "path": "n.step"}}
+    ctx = pc.Context("examples")
+    child = ProjectExternalRepository(ctx, "//ext/motors", str(tmp_path), subfolder="motors", config_obj={})
+    child._repository = FakeRepository(data)
+
+    assert [hit.name for hit in child.search("part", "nema")] == ["nema17"]
+
+
+def test_a_repository_that_does_not_search_is_not_asked_to(tmp_path):
+    data = {"meta": {"objectKinds": ["part"]}}
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(data)
+    repo._repository = fake
+
+    assert not repo.searches("part")
+    assert repo.search("part", "clip") == []
+    assert not any(key.startswith("search/") for key in fake.keys)
+
+
+def test_a_malformed_search_answer_is_reported_rather_than_listed(tmp_path, caplog):
+    data = {"meta": {"searchKinds": ["part"]}, "search/part?q=clip": "not a mapping"}
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    repo._repository = FakeRepository(data)
+
+    assert repo.search("part", "clip") == []
+
+
+def test_the_search_action_asks_a_repository_that_searches(tmp_path, monkeypatch):
+    """'pc search parts' hands the keyword to the repository rather than matching what it lists."""
+    from partcad.actions.shape import search_parts
+
+    data = {
+        "meta": {"searchKinds": ["part"], "objectKinds": ["part"]},
+        "objects/part": {},
+        "search/part?q=clip&limit=3": {"763622": {"type": "stl", "path": "a.stl", "desc": "Cable clip"}},
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(data)
+    repo._repository = fake
+    monkeypatch.setattr(ctx, "get_project", lambda name: repo if name == "//ext" else None)
+
+    found = search_parts(ctx, "//ext", False, "clip", None, 3)
+
+    assert [hit.name for hit in found] == ["763622"]
+    assert "objects/part" not in fake.keys

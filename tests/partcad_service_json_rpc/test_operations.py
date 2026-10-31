@@ -918,8 +918,9 @@ def fake_search(select, takes_interface=True):
     interface, exactly as the real ones do not.
     """
 
-    def search(ctx, package, recursive, keyword, interface=None):
+    def search(ctx, package, recursive, keyword, interface=None, limit=None):
         search.interface = interface
+        search.limit = limit
         names = [package]
         if recursive:
             # `_search` seeds the list with the package itself and then appends
@@ -937,6 +938,7 @@ def fake_search(select, takes_interface=True):
         return found
 
     search.interface = None
+    search.limit = None
     if not takes_interface:
 
         def search_without_interface(ctx, package, recursive, keyword):
@@ -1029,6 +1031,51 @@ def test_search_objects_says_so_when_both_are_given(monkeypatch):
     output = lines_of(session.partcad.logging.only("info"))
     assert output[0] == "PartCAD parts implementing 'm3-thru' with 'cube' keyword:"
     assert output[-1] == "Matches: 1"
+
+
+def test_a_hit_a_repository_found_is_printed_with_where_it_came_from(monkeypatch):
+    """A hit is a name to instantiate, and the page it came from is its own line under it."""
+    install_fake_search(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    hit = FakeObject("763622;file=1234", desc="Cable clip", project_name="//")
+    hit.is_search_hit = True
+    hit.url = "https://www.thingiverse.com/thing:763622"
+    root.add("parts", hit)
+
+    operations.search_objects(session, {"kind": "parts", "package": "//", "keyword": "clip"})
+
+    output = lines_of(session.partcad.logging.only("info"))
+    assert output[1].startswith("\t// 763622;file=1234")
+    assert output[1].endswith("Cable clip")
+    assert output[2].strip() == "https://www.thingiverse.com/thing:763622"
+    assert output[-1] == "Matches: 1"
+
+
+def test_a_part_that_is_not_a_hit_is_printed_without_its_url(monkeypatch):
+    """A declared part may say where it is from too, and the listing has never printed that."""
+    install_fake_search(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    part = FakeObject("clip", desc="a clip", project_name="//")
+    part.url = "https://example.com/clip"
+    root.add("parts", part)
+
+    operations.search_objects(session, {"kind": "parts", "package": "//", "keyword": "clip"})
+
+    output = lines_of(session.partcad.logging.only("info"))
+    assert not any("example.com" in line for line in output)
+
+
+def test_the_limit_reaches_the_search(monkeypatch):
+    """What '--limit' says is handed to the search, which hands it to each repository that searches itself."""
+    install_fake_search(monkeypatch)
+    session, _ = make_session()
+    search_parts = sys.modules["partcad.actions.shape"].search_parts
+
+    operations.search_objects(session, {"kind": "parts", "package": "//", "keyword": "clip", "limit": 5})
+
+    assert search_parts.limit == 5
 
 
 def test_searching_packages_by_interface_is_refused(monkeypatch):

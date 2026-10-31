@@ -40,13 +40,31 @@ from ...service import run
     ),
     show_envvar=True,
 )
+@click.option(
+    "-n",
+    "--limit",
+    "limit",
+    type=click.IntRange(min=1),
+    help=(
+        "At most this many parts from each package whose repository plugin searches its own catalog "
+        "(a remote one: Thingiverse, GrabCAD, ...). Packages matched locally report every match"
+    ),
+    show_envvar=True,
+)
 @click.pass_obj
-def cli(cli_ctx, recursive: bool, package: str, keyword: str, interface: str) -> None:
+def cli(cli_ctx, recursive: bool, package: str, keyword: str, interface: str, limit: int) -> None:
     if not keyword and not interface:
         raise click.UsageError("Nothing to search for: pass --keyword, --interface, or both")
     run(
         cli_ctx,
         "search.objects",
-        {"kind": "parts", "package": package, "recursive": recursive, "keyword": keyword, "interface": interface},
+        {
+            "kind": "parts",
+            "package": package,
+            "recursive": recursive,
+            "keyword": keyword,
+            "interface": interface,
+            "limit": limit,
+        },
         needs_context=True,
     )

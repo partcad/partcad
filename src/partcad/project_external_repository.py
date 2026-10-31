@@ -10,6 +10,8 @@
 import asyncio
 import json
 import threading
+import typing
+import urllib.parse
 
 from . import logging as pc_logging
 from . import tags as pc_tags
@@ -24,9 +26,56 @@ _MISSING = object()
 # '_served_kinds()'.
 OBJECT_KINDS_KEY = "objectKinds"
 
+# What it calls the kinds it searches itself, and the kinds whose parametrized
+# instances it resolves itself. See 'searches()' and
+# 'resolves_instances()'.
+SEARCH_KINDS_KEY = "searchKinds"
+INSTANCE_KINDS_KEY = "instanceKinds"
+
+# The key a search is asked under: 'search/<kind>?q=<text>&limit=<n>'. A query
+# string rather than more path segments, because the text is anything a user
+# typed - slashes included - and a query string is the one spelling of it every
+# language a plugin may be written in can take apart.
+SEARCH_KEY = "search"
+
 # Distinguishes "the metadata has not been parsed yet" from a parse that
 # concluded the package declares nothing.
 _UNPARSED = object()
+
+
+class SearchHit:
+    """One object a repository plugin found for a search, named the way it is instantiated.
+
+    Not the object itself: a search over a remote catalog answers with
+    twenty names, and making twenty parts out of them - a factory each, and
+    for an instance a second question to the plugin about its base - is a
+    cost paid for nothing when all that is printed is a name and what it is.
+    The name is what instantiates it ('pc inspect <package>:<name>'), and the
+    declaration the plugin sent with it is kept, so that doing that in the
+    same process asks the plugin nothing more.
+    """
+
+    # How a reader that cannot import this class - the JSON-RPC operations,
+    # tested against stand-ins for 'partcad' - tells a hit from an object.
+    is_search_hit = True
+
+    def __init__(self, project, kind: str, name: str, config):
+        self.project = project
+        self.project_name = project.name
+        self.kind = kind
+        self.name = name
+        self.config = config if isinstance(config, dict) else {}
+        desc = self.config.get("desc")
+        self.desc = desc.strip() if isinstance(desc, str) else None
+        self.url = self.config.get("url")
+
+    def matches(self, keyword) -> bool:
+        # The repository already did the matching; it is the one that knows
+        # what its catalog says about each object.
+        return True
+
+    def __repr__(self):
+        return "SearchHit(%s:%s)" % (self.project_name, self.name)
 
 
 class ProjectExternalRepository(ProjectPlugin):
@@ -93,6 +142,9 @@ class ProjectExternalRepository(ProjectPlugin):
         # rather than once per kind asked about - and so that a malformed
         # declaration is complained about once rather than ten times.
         self._served_kinds_parsed = _UNPARSED
+        # 'searchKinds' and 'instanceKinds', parsed once each (see
+        # '_declared_kinds()').
+        self._declared_kinds_memo: dict[str, frozenset] = {}
         # Whether the package-level metadata has been applied to this package
         # yet. The traversal applies it as it goes; a package looked up on its
         # own is applied the first time something needs what it says (see
@@ -273,9 +325,13 @@ class ProjectExternalRepository(ProjectPlugin):
             return self._request_cache.get(self._scope(key), _MISSING)
 
     def _parse_served_kinds(self, meta):
+        return self._parse_kinds(meta, OBJECT_KINDS_KEY)
+
+    def _parse_kinds(self, meta, key: str):
+        """The kinds the metadata lists under 'key', or None when it lists none or not as a list."""
         if not isinstance(meta, dict):
             return None
-        kinds = meta.get(OBJECT_KINDS_KEY)
+        kinds = meta.get(key)
         if kinds is None:
             return None
         if not isinstance(kinds, (list, tuple, set)) or not all(isinstance(k, str) for k in kinds):
@@ -283,10 +339,129 @@ class ProjectExternalRepository(ProjectPlugin):
             # been said at all, and say why once.
             pc_logging.warning(
                 "%s: ignoring '%s' in the package metadata: expected a list of strings, got %r"
-                % (self.name, OBJECT_KINDS_KEY, kinds)
+                % (self.name, key, kinds)
             )
             return None
         return frozenset(kinds)
+
+    def _declared_kinds(self, key: str) -> frozenset:
+        """The kinds the package metadata lists under 'key', fetching the metadata if need be.
+
+        Unlike 'objectKinds', which narrows what is asked and so is never worth
+        a round trip of its own, these widen it: a package that searches, or
+        resolves an instance, is asked something it would otherwise never be.
+        The only way to know is to read what it says, and the metadata is one
+        key, cached like any other.
+        """
+        if key not in self._declared_kinds_memo:
+            self._declared_kinds_memo[key] = self._parse_kinds(self.get_data("meta"), key) or frozenset()
+        return self._declared_kinds_memo[key]
+
+    # --- What a repository may do beyond serving declarations ---
+
+    def resolves_instances(self, kind: str) -> bool:
+        """Whether the repository resolves the parametrized instances of 'kind' itself.
+
+        A package's metadata may list, under 'instanceKinds', the kinds whose
+        parametrized instances the repository resolves. For those,
+        'objects/<kind>/<base>;<param>=<value>,...' is asked for instead of the
+        parameters being applied to the base declaration, and the declaration
+        that comes back is the instance - or, when none does, there is no such
+        instance.
+
+        That is what lets a parameter choose something the base declaration
+        cannot express by its defaults alone: which of a model's files to
+        read, and in which format, where the file is the part.
+        """
+        return self._serves_kind(kind) and kind in self._declared_kinds(INSTANCE_KINDS_KEY)
+
+    def _fetch_object_instance_config(self, kind, name):
+        """The instance 'name' as the repository resolves it, or None.
+
+        The name is the one PartCAD spells it with - the parameters sorted by
+        name, a list as its items separated by commas
+        ('format_parameterized_name') - so it is the same key whichever order
+        the instance was asked for in.
+        """
+        return self._augment(self.get_data("objects/" + kind + "/" + name))
+
+    def searches(self, kind: str) -> bool:
+        """Whether this package's repository searches 'kind' itself.
+
+        Said by the package metadata, under 'searchKinds'. A repository with a
+        catalog too large to list - every model on a site, every size of a
+        fastener - serves no enumeration to match a keyword against, so it is
+        asked instead; and a repository that lists everything still knows its
+        catalog better than a substring match of its declarations does.
+        """
+        return kind in self._declared_kinds(SEARCH_KINDS_KEY)
+
+    def search(self, kind: str, text: str, limit: typing.Optional[int] = None) -> list:
+        """The objects of 'kind' the repository finds for 'text', as 'SearchHit's, best first.
+
+        Asked as 'search/<kind>?q=<text>[&limit=<n>]', and answered with
+        '{name: config, ...}' in the order the repository ranks them - the same
+        shape as an enumeration, so a hit is a declaration like any other. A
+        name may carry parameters ('<base>;<param>=<value>,...'), which is how
+        a hit that is one file of a model says which.
+
+        The answer is not kept on disk: a catalog moves on, and the space of
+        queries is everything anyone has ever typed. Each declaration it
+        carried is remembered for the rest of the process, so instantiating a
+        hit asks nothing again.
+        """
+        if self.skipped or not self.searches(kind):
+            return []
+        query = {"q": text or ""}
+        if limit:
+            query["limit"] = int(limit)
+        scoped = self._scope("%s/%s?%s" % (SEARCH_KEY, kind, urllib.parse.urlencode(query)))
+        repository = self._repository_for(scoped)
+        if repository is None:
+            return []
+
+        async def ask():
+            try:
+                return await repository.get_data(scoped)
+            except Exception as e:
+                pc_logging.error("%s: failed to search the repository: %s" % (self.name, e))
+                return None
+
+        try:
+            asyncio.get_running_loop()
+            on_a_loop = True
+        except RuntimeError:
+            on_a_loop = False
+        # The same bridge as 'get_data', for the same reason: a search can be
+        # asked from a loop (the daemon's), and nesting 'asyncio.run' raises.
+        answer = self._run_elsewhere(ask()) if on_a_loop else asyncio.run(ask())
+
+        if answer is None:
+            return []
+        if isinstance(answer, list):
+            # A list of names is a search that found names and said nothing
+            # else about them; that is still an answer.
+            answer = {name: None for name in answer if isinstance(name, str)}
+        if not isinstance(answer, dict):
+            pc_logging.error(
+                "%s: the repository answered a search with %s, not {name: config}" % (self.name, type(answer).__name__)
+            )
+            return []
+
+        hits = []
+        for name, config in answer.items():
+            if not isinstance(name, str) or not name:
+                continue
+            if isinstance(config, dict) and config.get("type"):
+                # Only a declaration: a hit may also be a name and a
+                # description of something the repository found and cannot
+                # serve, which is worth listing and is not an object.
+                with self._request_lock:
+                    self._request_cache.setdefault(self._scope("objects/%s/%s" % (kind, name)), config)
+            hits.append(SearchHit(self, kind, name, config))
+            if limit and len(hits) >= int(limit):
+                break
+        return hits
 
     def _serves_kind(self, kind: str) -> bool:
         kinds = self._served_kinds()

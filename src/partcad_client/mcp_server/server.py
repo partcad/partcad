@@ -353,6 +353,14 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             Optional[str],
             Field(description="Only objects that implement this interface, or one derived from it."),
         ] = None,
+        limit: Annotated[
+            Optional[int],
+            Field(
+                description="At most this many from each package that searches a remote catalog itself "
+                "(a repository plugin for a model site). Its matches are names to instantiate, parameters and all.",
+                ge=1,
+            ),
+        ] = None,
     ) -> CallToolResult:
         """Find parts, sketches, assemblies, scenes, interfaces or packages by keyword or by interface.
 
@@ -361,6 +369,8 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         request = {"kind": kind, "package": package, "recursive": recursive, "keyword": keyword}
         if interface:
             request["interface"] = interface
+        if limit:
+            request["limit"] = limit
         return await run(ctx, "search.objects", request)
 
     @server.tool(name="instructions", title="Assembly instructions", annotations=_READS)
