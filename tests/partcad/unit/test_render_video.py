@@ -225,6 +225,10 @@ def test_a_sandbox_that_cannot_see_the_package_says_so(tmp_path):
     elsewhere = str(tmp_path / "on-the-client")
     with pytest.raises(render_video.OptionError, match="cannot see the package's files"):
         render_video.media_path("music.mp3", {"package_dir": elsewhere}, "audio")
+    # An absolute path is not read from the package, and is found wherever it is.
+    music = tmp_path / "music.mp3"
+    music.write_bytes(b"")
+    assert render_video.media_path(str(music), {"package_dir": elsewhere}, "audio") == str(music)
 
 
 def test_the_healthcheck_asks_after_the_discoverer(monkeypatch):
@@ -242,9 +246,16 @@ def test_the_healthcheck_asks_after_the_discoverer(monkeypatch):
         has_element=lambda name: True,
     )
     monkeypatch.setattr(gstreamer, "_video_encode", lambda: encode)
+    monkeypatch.setattr(gstreamer.user_config, "python_sandbox", "venv")
     check = gstreamer.GStreamerCheck()
     check.test()
     assert len(check.findings) == 1 and "gstreamer1.0-plugins-base-apps" in check.findings[0]
+
+    # A 'remote' sandbox encodes in PartCAD's image, so nothing here is asked after.
+    monkeypatch.setattr(gstreamer.user_config, "python_sandbox", "remote")
+    check = gstreamer.GStreamerCheck()
+    check.test()
+    assert check.findings == []
 
 
 def test_fades_mix_toward_their_colour():

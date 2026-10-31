@@ -261,17 +261,19 @@ def media_path(value, request, key):
     if not isinstance(value, str) or not value.strip():
         raise OptionError("'%s' names a file, not %r" % (key, value))
     path = os.path.expanduser(value.strip())
-    package = request.get("package_dir")
-    if package and not os.path.isdir(package):
-        # A sandbox that exchanges files rather than sharing them - 'remote',
-        # or 'docker' with 'useDockerRemote' - is sent the directories its
-        # command names and nothing else, and this is not one of them.
-        raise OptionError(
-            "'%s' names a file of the package, and this sandbox cannot see the package's files: it is sent "
-            "only what its command names. Render with a sandbox that shares them - 'venv', 'conda', or "
-            "'docker' without 'useDockerRemote'" % key
-        )
     if not os.path.isabs(path):
+        package = request.get("package_dir")
+        if package and not os.path.isdir(package):
+            # A sandbox that exchanges files rather than sharing them -
+            # 'remote', or 'docker' with 'useDockerRemote' - is sent the
+            # directories its command names and nothing else, and this is not
+            # one of them. Only a relative path is read from it: an absolute
+            # one is wherever it says, and is a file there or is not.
+            raise OptionError(
+                "'%s' names a file of the package, and this sandbox cannot see the package's files: it is "
+                "sent only what its command names. Render with a sandbox that shares them - 'venv', 'conda', "
+                "or 'docker' without 'useDockerRemote'" % key
+            )
         path = os.path.join(package or os.getcwd(), path)
     if not os.path.isfile(path):
         raise OptionError("'%s' names '%s', which is not a file" % (key, path))

@@ -59,12 +59,18 @@ class GStreamerCheck(HealthCheckTest):
 
     def test(self) -> HealthCheckReport:
         self.findings = []
+        if user_config.python_sandbox == "remote":
+            # A 'remote' sandbox runs the video file types in PartCAD's
+            # GStreamer image, on its own machine: nothing here is used.
+            report = HealthCheckReport(self.name, self.findings, False)
+            report.debug("The 'remote' sandbox encodes videos in PartCAD's GStreamer image")
+            return report
         encode = _video_encode()
         launcher = encode.find_tool(encode.LAUNCH)
         if launcher is None:
             # The 'docker' sandbox runs the video file types in PartCAD's
-            # GStreamer image; a 'remote' one does too, on its own machine.
-            if not pc_runtime.docker_enabled() and user_config.python_sandbox != "remote":
+            # GStreamer image.
+            if not pc_runtime.docker_enabled():
                 self.findings.append(encode.MISSING % (encode.LAUNCH, encode.ENV_VAR))
             report = HealthCheckReport(self.name, self.findings, False)
             if not self.findings:
