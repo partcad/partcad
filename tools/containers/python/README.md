@@ -69,8 +69,8 @@ ghcr.io/partcad/partcad-container-python:<release>-py<version>-gstreamer-<arch>
 The `gstreamer` target of the same Dockerfile: this image, plus GStreamer with the plugins the video file types
 of `//builtin/render` encode with, and a font for the text they put over the picture. Built for the one Python
 version `//builtin/render` runs in (`sandbox_versions.DEFAULT_PYTHON_VERSION`). Nothing but those file types
-pulls it, and only on a machine rendering in the `docker` sandbox; anywhere else they use the machine's own
-GStreamer.
+pulls it: a machine rendering in the `docker` sandbox runs them in it, and a `remote` sandbox does on its own
+machine. Anywhere else they use the machine's own GStreamer.
 
 ```shell
 docker build --target gstreamer \

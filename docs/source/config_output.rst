@@ -1083,7 +1083,9 @@ with what each defaults to, is the comment above the video file types in
   in, cut to the length of the video, faded and set to a ``volume``, and
   ``loop``-ed to fill a video longer than what is left of it. ``filters`` are
   GStreamer video filters the frames go through (``videobalance
-  saturation=1.3``). A relative path is read from the package of the object.
+  saturation=1.3``). A relative path is read from the package of the object,
+  which a sandbox has to be able to see: a ``remote`` one, or ``docker`` with
+  ``useDockerRemote``, is sent only what its command names, and says so.
 
 Where GStreamer comes from
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1093,7 +1095,8 @@ PartCAD's GStreamer image as its ``dockerImage`` (see `Bringing dependencies pip
 cannot install`_): ``partcad-container-python`` with GStreamer in it, published
 beside the plain one for the interpreter ``//builtin/render`` runs in. A machine
 rendering in the ``docker`` sandbox -- the default wherever Docker runs --
-renders its videos there and needs nothing else. Anywhere else it is the
+renders its videos there and needs nothing else, and so does one rendering in a
+``remote`` sandbox, whose service runs the image. Anywhere else it is the
 machine's own ``gst-launch-1.0``: on the ``PATH``, where GStreamer's installers
 put it on macOS and Windows, or wherever ``PC_GSTREAMER`` says, with the
 ``good``, ``bad``, ``ugly`` and ``libav`` plugins and the Pango text overlay. On

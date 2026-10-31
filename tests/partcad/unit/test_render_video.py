@@ -220,6 +220,33 @@ def test_a_missing_file_is_named(tmp_path):
         render_video.media_path("nowhere.mp3", {"package_dir": str(tmp_path)}, "audio")
 
 
+def test_a_sandbox_that_cannot_see_the_package_says_so(tmp_path):
+    """A 'remote' sandbox is sent what its command names; the package is not, and its path is the client's."""
+    elsewhere = str(tmp_path / "on-the-client")
+    with pytest.raises(render_video.OptionError, match="cannot see the package's files"):
+        render_video.media_path("music.mp3", {"package_dir": elsewhere}, "audio")
+
+
+def test_the_healthcheck_asks_after_the_discoverer(monkeypatch):
+    """Debian packages 'gst-discoverer-1.0' apart from 'gst-launch-1.0', and an append needs it."""
+    import types
+
+    from partcad.healthcheck import gstreamer
+
+    encode = types.SimpleNamespace(
+        LAUNCH=video_encode.LAUNCH,
+        DISCOVERER=video_encode.DISCOVERER,
+        ENV_VAR=video_encode.ENV_VAR,
+        MISSING=video_encode.MISSING,
+        find_tool=lambda name: "/usr/bin/gst-launch-1.0" if name == video_encode.LAUNCH else None,
+        has_element=lambda name: True,
+    )
+    monkeypatch.setattr(gstreamer, "_video_encode", lambda: encode)
+    check = gstreamer.GStreamerCheck()
+    check.test()
+    assert len(check.findings) == 1 and "gstreamer1.0-plugins-base-apps" in check.findings[0]
+
+
 def test_fades_mix_toward_their_colour():
     image = np.full((2, 2, 3), 200, dtype=np.uint8)
     first = render_video.faded(image, 0, 10, 100, 1.0, 0.0, (0, 0, 0))
@@ -543,6 +570,25 @@ def test_a_video_is_written_and_appended_to(tmp_path, name):
     assert not second.get("warnings")
     frames = list(video_encode.decode_frames(path, 160, 120, 10, limit=100))
     assert len(frames) == 20
+
+
+@needs_gstreamer
+def test_an_append_is_never_remembered(tmp_path):
+    """Its first run has nothing to append to, and remembered, it was what every later run got back."""
+    path = str(tmp_path / "turn.mp4")
+    request = {
+        "wrapped": _box(),
+        "container_format": "mp4",
+        "size": "64x48",
+        "fps": 10,
+        "duration": 0.5,
+        "antialias": 1,
+        "append": True,
+    }
+    first = render_video.process(path, dict(request))
+    assert first["success"], first.get("exception")
+    assert first["video"]["appended_to"] is None
+    assert first["files"] is None
 
 
 @needs_gstreamer

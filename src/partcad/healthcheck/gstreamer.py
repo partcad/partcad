@@ -22,6 +22,7 @@ import os
 
 from partcad import output
 from partcad import runtime as pc_runtime
+from partcad.user_config import user_config
 
 from .tests import SEVERITY_WARNING, HealthCheckReport, HealthCheckTest
 
@@ -61,12 +62,21 @@ class GStreamerCheck(HealthCheckTest):
         encode = _video_encode()
         launcher = encode.find_tool(encode.LAUNCH)
         if launcher is None:
-            if not pc_runtime.docker_enabled():
+            # The 'docker' sandbox runs the video file types in PartCAD's
+            # GStreamer image; a 'remote' one does too, on its own machine.
+            if not pc_runtime.docker_enabled() and user_config.python_sandbox != "remote":
                 self.findings.append(encode.MISSING % (encode.LAUNCH, encode.ENV_VAR))
             report = HealthCheckReport(self.name, self.findings, False)
             if not self.findings:
                 report.debug("No local GStreamer; videos are encoded in PartCAD's GStreamer image")
             return report
+        # The discoverer reads back where an appended video's turn stopped, and
+        # Debian packages it apart from 'gst-launch-1.0' (plugins-base-apps).
+        if encode.find_tool(encode.DISCOVERER) is None:
+            self.findings.append(
+                "There is no '%s' beside the GStreamer at %s: a video appended to fails. On Debian and Ubuntu "
+                "it is in gstreamer1.0-plugins-base-apps." % (encode.DISCOVERER, launcher)
+            )
         missing = [element for element in ELEMENTS if not encode.has_element(element)]
         if missing:
             self.findings.append(

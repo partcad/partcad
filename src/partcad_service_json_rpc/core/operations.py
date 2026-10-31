@@ -4389,8 +4389,8 @@ def render_objects(session, params):
 
     ``size``, ``fps``, ``duration``, ``speed``, ``append``, ``preset`` and
     ``quality`` do the same for a video (`VIDEO_OPTIONS`): they are fields of
-    the video file types of ``//builtin/render``, and a file type that is not a
-    video never reads them.
+    the video file types of ``//builtin/render``, handed to every file type
+    rendered like the viewport, so ``quality`` sets a JPEG's as well.
 
     ``filter`` keeps only some of the links of one assembly or scene, so that
     what is written is a view of it (see `partcad.assembly_filter`). It writes
@@ -4670,8 +4670,9 @@ def _section(params):
 # What a request may say about a video, for this one run: the fields of the
 # video file types of '//builtin/render' that 'pc render' offers as options
 # (see 'partcad_cli.click.video'). Handed on as export parameters, like the
-# viewport, so that each overrides what the file type's configuration says and
-# a file type that is not a video never reads them.
+# viewport, so that each overrides what the file type's configuration says, and
+# handed to every file type the run renders: what one means is the file type's
+# to say, and 'quality' means a JPEG's quality too.
 VIDEO_OPTIONS = ("size", "fps", "duration", "speed", "append", "preset", "quality")
 
 

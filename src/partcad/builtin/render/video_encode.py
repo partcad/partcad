@@ -213,9 +213,10 @@ def find_tool(name=LAUNCH, environ=None):
 MISSING = (
     "GStreamer is not installed where this video is rendered: '%s' was not found on the PATH, in '%s', or where "
     "GStreamer's installers put it. Install GStreamer with its 'good', 'bad', 'ugly' and 'libav' plugins "
-    "(on Debian and Ubuntu: apt install gstreamer1.0-tools gstreamer1.0-plugins-good gstreamer1.0-plugins-bad "
-    "gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-x), or render with Docker running, where the video "
-    "file types run in PartCAD's GStreamer image."
+    "(on Debian and Ubuntu: apt install gstreamer1.0-tools gstreamer1.0-plugins-base-apps "
+    "gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav "
+    "gstreamer1.0-x), or render in the 'docker' or 'remote' sandbox, where the video file types run in "
+    "PartCAD's GStreamer image."
 )
 
 

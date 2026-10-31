@@ -261,8 +261,18 @@ def media_path(value, request, key):
     if not isinstance(value, str) or not value.strip():
         raise OptionError("'%s' names a file, not %r" % (key, value))
     path = os.path.expanduser(value.strip())
+    package = request.get("package_dir")
+    if package and not os.path.isdir(package):
+        # A sandbox that exchanges files rather than sharing them - 'remote',
+        # or 'docker' with 'useDockerRemote' - is sent the directories its
+        # command names and nothing else, and this is not one of them.
+        raise OptionError(
+            "'%s' names a file of the package, and this sandbox cannot see the package's files: it is sent "
+            "only what its command names. Render with a sandbox that shares them - 'venv', 'conda', or "
+            "'docker' without 'useDockerRemote'" % key
+        )
     if not os.path.isabs(path):
-        path = os.path.join(request.get("package_dir") or os.getcwd(), path)
+        path = os.path.join(package or os.getcwd(), path)
     if not os.path.isfile(path):
         raise OptionError("'%s' names '%s', which is not a file" % (key, path))
     return path
@@ -681,8 +691,11 @@ def _process(path, request):
     # time the same file is asked for (see 'output.FILES_KEY'). One that read a
     # file - the video it was appended to, a soundtrack, a logo - says nothing
     # (None, which is not a list): what those files hold is not in the
-    # question, so the same question can have another answer.
-    read_a_file = previous is not None or request.get("audio") is not None or request.get("logo") is not None
+    # question, so the same question can have another answer. An append says
+    # nothing whether or not there was a video to append to this time: its
+    # first run, remembered, was the answer every later run of it got - the
+    # first part, put back over the parts that should have followed it.
+    read_a_file = bool(request.get("append")) or request.get("audio") is not None or request.get("logo") is not None
     result = {"success": True, "exception": None, "files": None if read_a_file else []}
     if warnings:
         result["warnings"] = warnings

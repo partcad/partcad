@@ -7,8 +7,10 @@
 
 Each is a field of the video file types of '//builtin/render' ('mp4', 'mov',
 'webm', ...), which a package declares once in its 'render:' section and these
-override - so they mean exactly what the fields mean, and a file type that is
-not a video ignores them, as a video ignores '--with-ports'. What each one
+override - so they mean exactly what the fields mean. Like '--view', each is
+handed to every file type a run renders, and means something to the ones that
+have a field of that name: the videos, and for '--quality' a JPEG as well,
+whose 'quality' is the same 0 to 100. What each one
 accepts is the implementation's to say ('render_video.py'); what is checked here
 is only what can be checked without it, so that a typo costs a message rather
 than a round trip to the daemon.
@@ -90,7 +92,10 @@ _OPTIONS = (
     ),
     click.option(
         "--quality",
-        help="How much of the picture survives a video's encoder, 0 to 100 (65 by default)",
+        help=(
+            "How much of the picture survives a video's encoder, 0 to 100 (65 by default). Like the other "
+            "options here it is handed to every file type rendered, so it sets a JPEG's quality too"
+        ),
         type=click.FloatRange(min=0, max=100),
         show_envvar=True,
     ),
