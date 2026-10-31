@@ -15,6 +15,6 @@ a container -- rather than showing an empty canvas.
 
 ### Documentation
 
-* [The workbench, view by view](https://partcad.readthedocs.io/en/latest/features.html)
+* [The workbench, view by view](https://partcad.readthedocs.io/en/latest/tools_vscode.html)
 * [Tutorial: inspect the part](https://partcad.readthedocs.io/en/latest/tutorial.html)
 * [When the 3D view stays empty](https://partcad.readthedocs.io/en/latest/troubleshooting.html)
