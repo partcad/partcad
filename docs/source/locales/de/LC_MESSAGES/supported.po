@@ -1,0 +1,759 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/supported.rst:3
+msgid "Supported formats and features"
+msgstr "Unterstützte Formate und Funktionen"
+
+#: ../../source/supported.rst:5
+msgid ""
+"What PartCAD reads, writes and does, in one place. An item marked *(in "
+"progress)* is accepted by the schema or planned, and not yet delivered. The "
+":doc:`/config_package` chapter and those beside it say what each kind of "
+"object is, and :doc:`/config_package` and the chapters beside it how it is "
+"declared."
+msgstr ""
+"Was PartCAD liest, schreibt und tut, an einer Stelle. Ein Punkt, der mit "
+"*(in Arbeit)* markiert ist, wird vom Schema akzeptiert oder ist geplant und "
+"noch nicht ausgeliefert. Das Kapitel :doc:`/config_package` und die daneben "
+"sagen, was jede Art von Objekt ist, und :doc:`/config_package` und die "
+"Kapitel daneben, wie es deklariert wird."
+
+#: ../../source/supported.rst:11
+msgid "Operating systems"
+msgstr "Betriebssysteme"
+
+#: ../../source/supported.rst:13
+msgid "Windows"
+msgstr "Windows"
+
+#: ../../source/supported.rst:14
+msgid "Linux"
+msgstr "Linux"
+
+#: ../../source/supported.rst:15
+msgid "macOS"
+msgstr "macOS"
+
+#: ../../source/supported.rst:19
+msgid "Caching"
+msgstr "Caching"
+
+#: ../../source/supported.rst:21
+msgid ""
+"Rendered models (OpenSCAD, CadQuery, build123d and Chili3D included) are "
+"cached:"
+msgstr ""
+"Gerenderte Modelle (OpenSCAD, CadQuery, build123d und Chili3D "
+"eingeschlossen) werden zwischengespeichert:"
+
+#: ../../source/supported.rst:23
+msgid "In memory"
+msgstr "Im Speicher"
+
+#: ../../source/supported.rst:24
+msgid "On disk"
+msgstr "Auf der Festplatte"
+
+#: ../../source/supported.rst:25
+msgid "In a memcached server shared by a team or a CI fleet (``cacheRemote``)"
+msgstr ""
+"In einem memcached-Server, den ein Team oder eine CI-Flotte gemeinsam nutzt "
+"(``cacheRemote``)"
+
+#: ../../source/supported.rst:26
+msgid "In an S3 bucket that outlives both (``cacheS3``)"
+msgstr "In einem S3-Bucket, der beide überdauert (``cacheS3``)"
+
+#: ../../source/supported.rst:28
+msgid "See :ref:`caching`."
+msgstr "Siehe :ref:`caching`."
+
+#: ../../source/supported.rst:32
+msgid "Collaboration"
+msgstr "Zusammenarbeit"
+
+#: ../../source/supported.rst:34
+msgid "Versioning of CAD designs using Git"
+msgstr "Versionierung von CAD-Designs mit Git"
+
+#: ../../source/supported.rst:36
+msgid "Mechanical"
+msgstr "Mechanik"
+
+#: ../../source/supported.rst:37
+msgid "Electronics"
+msgstr "Elektronik"
+
+#: ../../source/supported.rst:38
+msgid ""
+"Software: firmware images, binaries and disk images shipped as objects of a "
+"package, reproducible by vendor and SKU, by file, or by ``fileHash``"
+msgstr ""
+"Software: Firmware-Images, Binärdateien und Datenträgerabbilder, die als "
+"Objekte eines Pakets ausgeliefert werden, reproduzierbar über Vendor und "
+"SKU, über die Datei oder über ``fileHash``"
+
+#: ../../source/supported.rst:41
+msgid "Automated generation of Markdown documentation"
+msgstr "Automatische Erzeugung von Markdown-Dokumentation"
+
+#: ../../source/supported.rst:42
+msgid "Parametric (hardware and software) bill of materials"
+msgstr "Parametrische Stückliste (Hardware und Software)"
+
+#: ../../source/supported.rst:43
+msgid "Publish models online on PartCAD.org"
+msgstr "Modelle online auf PartCAD.org veröffentlichen"
+
+#: ../../source/supported.rst:44
+msgid "Publish models online on your website *(in progress)*"
+msgstr "Modelle online auf Ihrer Website veröffentlichen *(in Arbeit)*"
+
+#: ../../source/supported.rst:45
+msgid "Publish configurable parts and assemblies online *(in progress)*"
+msgstr ""
+"Konfigurierbare Teile und Baugruppen online veröffentlichen *(in Arbeit)*"
+
+#: ../../source/supported.rst:46
+msgid ""
+"Purchase of assemblies and parts online, both marketplace and SaaS *(in "
+"progress)*"
+msgstr ""
+"Kauf von Baugruppen und Teilen online, sowohl Marktplatz als auch SaaS *(in "
+"Arbeit)*"
+
+#: ../../source/supported.rst:47
+msgid "Automated purchase of parts via the command line"
+msgstr "Automatisierter Kauf von Teilen über die Befehlszeile"
+
+#: ../../source/supported.rst:51
+msgid "Part models (3D)"
+msgstr "Teilemodelle (3D)"
+
+#: ../../source/supported.rst:53 ../../source/supported.rst:85
+msgid "Using scripting languages:"
+msgstr "Mit Skriptsprachen:"
+
+#: ../../source/supported.rst:55 ../../source/supported.rst:87
+msgid "`CadQuery`_"
+msgstr "`CadQuery`_"
+
+#: ../../source/supported.rst:56 ../../source/supported.rst:88
+msgid "`build123d`_"
+msgstr "`build123d`_"
+
+#: ../../source/supported.rst:57
+msgid "`Chili3D`_"
+msgstr "`Chili3D`_"
+
+#: ../../source/supported.rst:58
+msgid "`OpenSCAD`_"
+msgstr "`OpenSCAD`_"
+
+#: ../../source/supported.rst:59
+msgid "`SDF`_"
+msgstr "`SDF`_"
+
+#: ../../source/supported.rst:61
+msgid "Using CAD files:"
+msgstr "Mit CAD-Dateien:"
+
+#: ../../source/supported.rst:63 ../../source/supported.rst:248
+msgid "STEP"
+msgstr "STEP"
+
+#: ../../source/supported.rst:64 ../../source/supported.rst:249
+msgid "BREP"
+msgstr "BREP"
+
+#: ../../source/supported.rst:65 ../../source/supported.rst:250
+msgid "STL"
+msgstr "STL"
+
+#: ../../source/supported.rst:66 ../../source/supported.rst:251
+msgid "3MF"
+msgstr "3MF"
+
+#: ../../source/supported.rst:67 ../../source/supported.rst:253
+msgid "OBJ"
+msgstr "OBJ"
+
+#: ../../source/supported.rst:68
+msgid "glTF (``.gltf`` with its buffers, or ``.glb``)"
+msgstr "glTF (``.gltf`` mit seinen Puffern oder ``.glb``)"
+
+#: ../../source/supported.rst:70
+msgid "Using file formats of third-party tools:"
+msgstr "Mit Dateiformaten von Drittanbieter-Werkzeugen:"
+
+#: ../../source/supported.rst:72
+msgid "`KiCad EDA`_ (PCB)"
+msgstr "`KiCad EDA`_ (PCB)"
+
+#: ../../source/supported.rst:73
+msgid ""
+"FreeCAD documents (``.FCStd``), without FreeCAD: read with `cadmpeg`_, "
+"downloaded on first use"
+msgstr ""
+"FreeCAD-Dokumente (``.FCStd``), ohne FreeCAD: gelesen mit `cadmpeg`_, beim "
+"ersten Gebrauch heruntergeladen"
+
+#: ../../source/supported.rst:75
+msgid ""
+"Using a part type the package defines itself (``partTypes``), including one "
+"that reads a file format of its own:"
+msgstr ""
+"Mit einem Teiletyp, den das Paket selbst definiert (``partTypes``), "
+"einschließlich eines, der ein eigenes Dateiformat liest:"
+
+#: ../../source/supported.rst:78
+msgid ""
+"`SolidCraft`_ designs (``.solidcraft``), Rhino (``.3dm``) and IGES, from the"
+" SolidCraft plugin package (`partcad-solidcraft`_), which downloads "
+"SolidCraft on first use or runs in its own container image"
+msgstr ""
+"`SolidCraft`_-Designs (``.solidcraft``), Rhino (``.3dm``) und IGES, aus dem "
+"SolidCraft-Plugin-Paket (`partcad-solidcraft`_), das SolidCraft beim ersten "
+"Gebrauch herunterlädt oder in seinem eigenen Container-Image läuft"
+
+#: ../../source/supported.rst:83
+msgid "Part and interface blueprints (2D)"
+msgstr "Teile- und Interface-Zeichnungen (2D)"
+
+#: ../../source/supported.rst:90
+msgid "Using file formats:"
+msgstr "Mit Dateiformaten:"
+
+#: ../../source/supported.rst:92 ../../source/supported.rst:239
+msgid "DXF"
+msgstr "DXF"
+
+#: ../../source/supported.rst:93 ../../source/supported.rst:236
+msgid "SVG"
+msgstr "SVG"
+
+#: ../../source/supported.rst:97
+msgid "Assembly models (3D)"
+msgstr "Baugruppenmodelle (3D)"
+
+#: ../../source/supported.rst:99
+msgid "Using the ``Assembly YAML`` format (see :doc:`/assy`)"
+msgstr "Mit dem Format ``Assembly YAML`` (siehe :doc:`/assy`)"
+
+#: ../../source/supported.rst:101
+msgid "Automatically maintaining the bill of materials"
+msgstr "Automatische Pflege der Stückliste"
+
+#: ../../source/supported.rst:102
+msgid ""
+"Generating user-friendly visual assembly instructions (PDF and HTML "
+"instruction books)"
+msgstr ""
+"Erzeugen benutzerfreundlicher visueller Montageanweisungen (PDF- und HTML-"
+"Anleitungsbücher)"
+
+#: ../../source/supported.rst:104
+msgid "Using URDF, with links, joints and physics"
+msgstr "Mit URDF, mit Links, Gelenken und Physik"
+
+#: ../../source/supported.rst:105
+msgid "Using a STEP file that stays the source"
+msgstr "Mit einer STEP-Datei, die die Quelle bleibt"
+
+#: ../../source/supported.rst:106
+msgid ""
+"``pc filter`` declares a second assembly made of some of the links of an "
+"existing one: a sub-assembly carved out of a big one without editing it by "
+"hand"
+msgstr ""
+"``pc filter`` deklariert eine zweite Baugruppe aus einigen der Links einer "
+"bestehenden: eine Unterbaugruppe, aus einer großen herausgeschnitten, ohne "
+"sie von Hand zu bearbeiten"
+
+#: ../../source/supported.rst:111
+msgid "Scenes (3D)"
+msgstr "Szenen (3D)"
+
+#: ../../source/supported.rst:113
+msgid ""
+"Placed arrangements of objects: a workcell, a table, a simulation world."
+msgstr ""
+"Platzierte Anordnungen von Objekten: eine Arbeitszelle, ein Tisch, eine "
+"Simulationswelt."
+
+#: ../../source/supported.rst:115
+msgid "Stating where things are, rather than how they got there"
+msgstr "Angeben, wo die Dinge sind, und nicht, wie sie dorthin gekommen sind"
+
+#: ../../source/supported.rst:116
+msgid ""
+"Reading and writing an engine's own scene format through the package that "
+"implements it: `partcad-sim-gazebo`_ for a Gazebo world (SDFormat), "
+"`partcad-sim-mujoco`_ for MJCF, each also declaring the reader, the exporter"
+" and the ``pc ide open`` entry for its engine"
+msgstr ""
+"Lesen und Schreiben des eigenen Szenenformats einer Engine über das Paket, "
+"das es implementiert: `partcad-sim-gazebo`_ für eine Gazebo-Welt (SDFormat),"
+" `partcad-sim-mujoco`_ für MJCF, wobei jedes auch den Leser, den Exporter "
+"und den ``pc ide open``-Eintrag für seine Engine deklariert"
+
+#: ../../source/supported.rst:122
+msgid "Simulation"
+msgstr "Simulation"
+
+#: ../../source/supported.rst:124
+msgid ""
+"What an object is supposed to do once the world is switched on. See "
+":doc:`/digital_thread/lifecycle/simulation`."
+msgstr ""
+"Was ein Objekt tun soll, sobald die Welt eingeschaltet ist. Siehe "
+":doc:`/digital_thread/lifecycle/simulation`."
+
+#: ../../source/supported.rst:126
+msgid ""
+"``simulate:`` on a part, an assembly or a scene: a scene, where in it the "
+"object goes, and the condition that says whether it went as it should"
+msgstr ""
+"``simulate:`` an einem Teil, einer Baugruppe oder einer Szene: eine Szene, "
+"wohin darin das Objekt kommt, und die Bedingung, die sagt, ob es so gelaufen"
+" ist, wie es sollte"
+
+#: ../../source/supported.rst:128
+msgid ""
+"What becomes a rigid body: every element of a scene, recursively, and "
+"everything inside an assembly attached to it, its connections that keep a "
+"degree of freedom joints; a scene element may be ``fixed: true`` to the "
+"world, and a scene may place a scene"
+msgstr ""
+"Was zu einem starren Körper wird: jedes Element einer Szene, rekursiv, und "
+"alles in einer Baugruppe daran befestigt, wobei ihre Verbindungen, die einen"
+" Freiheitsgrad belassen, Gelenke sind; ein Szenenelement darf mit ``fixed: "
+"true`` an der Welt sein, und eine Szene darf eine Szene platzieren"
+
+#: ../../source/supported.rst:131
+msgid "``pc sim``, which runs it and validates the result"
+msgstr "``pc sim``, das sie ausführt und das Ergebnis validiert"
+
+#: ../../source/supported.rst:132
+msgid ""
+"``pc test`` holds every object to it, as its ``sim`` check: write the claim "
+"first, then make it pass"
+msgstr ""
+"``pc test`` hält jedes Objekt daran fest, als seine ``sim``-Prüfung: "
+"schreiben Sie die Behauptung zuerst, und bringen Sie sie dann zum Bestehen"
+
+#: ../../source/supported.rst:133
+msgid ""
+"Simulation plugins, declared the way export and render implementations are: "
+"a scene goes in, ``before`` and ``after`` come out. The simulator is a "
+"package, not part of the ``partcad`` wheel: `partcad-sim-mujoco`_ runs one "
+"in MuJoCo and `partcad-sim-gazebo`_ one in Gazebo"
+msgstr ""
+"Simulations-Plugins, deklariert so, wie Export- und Render-Implementierungen"
+" es sind: eine Szene geht hinein, ``before`` und ``after`` kommen heraus. "
+"Der Simulator ist ein Paket und nicht Teil des ``partcad``-Wheels: `partcad-"
+"sim-mujoco`_ führt eine in MuJoCo aus und `partcad-sim-gazebo`_ eine in "
+"Gazebo"
+
+#: ../../source/supported.rst:136
+msgid ""
+"``mu`` on a material, so that what a part is made of decides whether it "
+"stands up: written out as SDFormat's ``<mu>``, URDF's ``<mu1>`` and MJCF's "
+"``friction``"
+msgstr ""
+"``mu`` an einem Material, sodass das, woraus ein Teil besteht, entscheidet, "
+"ob es stehen bleibt: ausgeschrieben als ``<mu>`` von SDFormat, ``<mu1>`` von"
+" URDF und ``friction`` von MJCF"
+
+#: ../../source/supported.rst:141
+msgid "Engineering analysis"
+msgstr "Technische Analyse"
+
+#: ../../source/supported.rst:143
+msgid "What the part does before anything is cut."
+msgstr "Was das Teil tut, bevor irgendetwas geschnitten wird."
+
+#: ../../source/supported.rst:145
+msgid ""
+"``pc cae fea``, finite element analysis: the part says what holds it "
+"(``fix:``) and what pulls on it (``load:``) in terms of its own interfaces, "
+"so the boundary conditions survive a change of geometry"
+msgstr ""
+"``pc cae fea``, Finite-Elemente-Analyse: das Teil gibt über seine eigenen "
+"Interfaces an, was es hält (``fix:``) und was an ihm zieht (``load:``), "
+"sodass die Randbedingungen eine Änderung der Geometrie überdauern"
+
+#: ../../source/supported.rst:147
+msgid ""
+"``pc cae dynamic``, modal analysis: the natural frequencies of a part, held "
+"as it is"
+msgstr ""
+"``pc cae dynamic``, Modalanalyse: die Eigenfrequenzen eines Teils, so "
+"gehalten, wie es gehalten wird"
+
+#: ../../source/supported.rst:148
+msgid ""
+"``pc cae thermal``, heat transfer: what is held at a temperature, heated and"
+" cooled"
+msgstr ""
+"``pc cae thermal``, Wärmeübertragung: was auf einer Temperatur gehalten, "
+"geheizt und gekühlt wird"
+
+#: ../../source/supported.rst:149
+msgid ""
+"``pc cae cfd``, computational fluid dynamics: where the flow goes in and "
+"out, the rest a wall"
+msgstr ""
+"``pc cae cfd``, numerische Strömungsmechanik: wo die Strömung hinein- und "
+"hinausgeht, der Rest eine Wand"
+
+#: ../../source/supported.rst:150
+msgid ""
+"Each a map of named scenarios, as ``simulate:`` is of simulations: ``pc cae "
+"fea`` runs them all, ``-f`` one, and ``pc test`` holds the part to every one"
+msgstr ""
+"Jede eine Abbildung benannter Szenarien, wie ``simulate:`` eine von "
+"Simulationen ist: ``pc cae fea`` führt sie alle aus, ``-f`` eines, und ``pc "
+"test`` hält das Teil an jedem einzelnen fest"
+
+#: ../../source/supported.rst:152
+msgid ""
+"The **FEA**, **Dynamic FEA**, **Heat Transfer** and **CFD** tabs of the "
+"Digital Thread list the scenarios of the object on screen, and run the one "
+"selected"
+msgstr ""
+"Die Tabs **FEA**, **Dynamic FEA**, **Heat Transfer** und **CFD** des Digital"
+" Thread listen die Szenarien des Objekts auf dem Bildschirm auf und führen "
+"das ausgewählte aus"
+
+#: ../../source/supported.rst:157
+msgid "Materials"
+msgstr "Materialien"
+
+#: ../../source/supported.rst:159
+msgid "What a part is made of, as an object of a package."
+msgstr "Woraus ein Teil besteht, als Objekt eines Pakets."
+
+#: ../../source/supported.rst:161
+msgid ""
+"A ``materials:`` section, and standard catalogues to inherit from rather "
+"than restate: ``//pub/std/manufacturing/material/plastic`` and "
+"``.../metal``, named by designation and temper (``al-6061-t6``, ``ss-316l``,"
+" ``ti-6al-4v``, ``petg``, ``peek``)"
+msgstr ""
+"Ein ``materials:``-Abschnitt und Standardkataloge, von denen geerbt wird, "
+"statt neu anzugeben: ``//pub/std/manufacturing/material/plastic`` und "
+"``.../metal``, benannt nach Bezeichnung und Zustand (``al-6061-t6``, "
+"``ss-316l``, ``ti-6al-4v``, ``petg``, ``peek``)"
+
+#: ../../source/supported.rst:164
+msgid ""
+"Reported by ``pc info``, carried into the bill of materials, and used by "
+"simulation (``mu``) and by analysis"
+msgstr ""
+"Berichtet von ``pc info``, in die Stückliste übernommen und von der "
+"Simulation (``mu``) und von der Analyse verwendet"
+
+#: ../../source/supported.rst:169
+msgid "Manufacturing"
+msgstr "Fertigung"
+
+#: ../../source/supported.rst:171
+msgid "How it gets made, and the program that makes it."
+msgstr "Wie es hergestellt wird, und das Programm, das es herstellt."
+
+#: ../../source/supported.rst:173
+msgid ""
+"Manufacturing methods: ``additive``, ``subtractive``, ``sheet_metal`` and "
+"``forming``"
+msgstr ""
+"Fertigungsmethoden: ``additive``, ``subtractive``, ``sheet_metal`` und "
+"``forming``"
+
+#: ../../source/supported.rst:174
+msgid ""
+"``pcbBasic`` *(in progress: the schema accepts it; the manufacturability "
+"test is not implemented yet)*"
+msgstr ""
+"``pcbBasic`` *(in Arbeit: das Schema akzeptiert es; der Fertigbarkeitstest "
+"ist noch nicht implementiert)*"
+
+#: ../../source/supported.rst:175
+msgid ""
+"``pc cam`` produces the route files: the object's outline offset by the "
+"cutter radius and cut at a series of depths, the 2.5D program a CNC router "
+"or a mill runs"
+msgstr ""
+"``pc cam`` erzeugt die Bahndateien: die Kontur des Objekts, um den "
+"Fräserradius versetzt und in einer Reihe von Tiefen geschnitten, das "
+"2,5D-Programm, das eine CNC-Oberfräse oder eine Fräsmaschine ausführt"
+
+#: ../../source/supported.rst:177
+msgid ""
+"A made part is procured as the **stock it is made from**, so the bill of "
+"materials orders sheet and bar rather than a part nobody sells"
+msgstr ""
+"Ein hergestelltes Teil wird als das **Rohmaterial, aus dem es besteht**, "
+"beschafft, die Stückliste bestellt also Blech und Stangen und nicht ein "
+"Teil, das niemand verkauft"
+
+#: ../../source/supported.rst:179
+msgid ""
+"**Build vs Buy**: a switch per line item deciding whether it is made or "
+"bought, with the lines that can be neither marked ``Incomplete``; the choice"
+" is what the bill of materials and the instructions below are then written "
+"against"
+msgstr ""
+"**Build vs Buy**: ein Schalter je Position, der entscheidet, ob sie "
+"hergestellt oder gekauft wird, wobei die Positionen, die keines von beidem "
+"sein können, als ``Incomplete`` markiert sind; die Wahl ist das, wogegen die"
+" Stückliste und die Anweisungen unten dann geschrieben werden"
+
+#: ../../source/supported.rst:182
+msgid ""
+"``pc instructions`` writes the assembly instructions as PDF or HTML: this "
+"assembly's own steps, or with ``-r``/``-b`` the steps of every sub-assembly "
+"built and how to make every part built, each put in just before the step "
+"that first needs it"
+msgstr ""
+"``pc instructions`` schreibt die Montageanweisungen als PDF oder HTML: die "
+"eigenen Schritte dieser Baugruppe, oder mit ``-r``/``-b`` die Schritte jeder"
+" gebauten Unterbaugruppe und die Herstellung jedes gebauten Teils, jeweils "
+"unmittelbar vor dem Schritt eingefügt, der es zuerst braucht"
+
+#: ../../source/supported.rst:188
+msgid "AI agents"
+msgstr "KI-Agenten"
+
+#: ../../source/supported.rst:190
+msgid ""
+"Tooling for AI agents doing mechanical design. See :doc:`/ai_agents/mcp`."
+msgstr ""
+"Werkzeuge für KI-Agenten, die mechanisches Design betreiben. Siehe "
+":doc:`/ai_agents/mcp`."
+
+#: ../../source/supported.rst:192
+msgid ""
+"Agent Skills any ``SKILL.md``-aware coding agent can load (``ai-agents/`` in"
+" the repository), installed by ``pc init``, and distributed as the ``pc`` "
+"plugin for Claude Code (see :ref:`claude-plugin`)"
+msgstr ""
+"Agent Skills, die jeder ``SKILL.md``-fähige Coding-Agent laden kann (``ai-"
+"agents/`` im Repository), installiert von ``pc init`` und verteilt als das "
+"``pc``-Plugin für Claude Code (siehe :ref:`claude-plugin`)"
+
+#: ../../source/supported.rst:195
+msgid ""
+"Generate a part, an assembly or a 2D sketch (``/pc:gen``, ``/pc:gen-part``, "
+"``/pc:gen-assembly``, ``/pc:gen-sketch``): the agent authors the CAD script "
+"and validates it by rendering"
+msgstr ""
+"Ein Teil, eine Baugruppe oder eine 2D-Skizze erzeugen (``/pc:gen``, "
+"``/pc:gen-part``, ``/pc:gen-assembly``, ``/pc:gen-sketch``): der Agent "
+"schreibt das CAD-Skript und validiert es durch Rendern"
+
+#: ../../source/supported.rst:197
+msgid ""
+"Describe an existing object (``/pc:describe``), search the catalog "
+"(``/pc:search``), add interfaces (``/pc:add-interfaces``)"
+msgstr ""
+"Ein vorhandenes Objekt beschreiben (``/pc:describe``), den Katalog "
+"durchsuchen (``/pc:search``), Interfaces hinzufügen (``/pc:add-interfaces``)"
+
+#: ../../source/supported.rst:199
+msgid ""
+"Validate an object against its ``requirements:`` (``/pc:validate``): ``pc "
+"test`` for the ports, interfaces and physics it measures, and the agent's "
+"judgement of every feature from simulations, renders, the bill of materials "
+"and the assembly instructions"
+msgstr ""
+"Ein Objekt gegen seine ``requirements:`` validieren (``/pc:validate``): ``pc"
+" test`` für die Ports, Interfaces und Physik, die es messen kann, und das "
+"Urteil des Agenten über jedes Feature aus Simulationen, Renderings, der "
+"Stückliste und den Montageanweisungen"
+
+#: ../../source/supported.rst:202
+msgid "Set a project up (``/pc:init``, ``/pc:setup``)"
+msgstr "Ein Projekt einrichten (``/pc:init``, ``/pc:setup``)"
+
+#: ../../source/supported.rst:204
+msgid ""
+"An MCP server (``pc mcp``) any MCP client can drive PartCAD through: list, "
+"inspect, render (as an image), test and export objects, and every other "
+"daemon method behind one ``execute`` tool. It is in the MCP Registry, in the"
+" ``pc`` plugin, registered by the VS Code extension and written into new "
+"packages by ``pc init``"
+msgstr ""
+"Ein MCP-Server (``pc mcp``), über den jeder MCP-Client PartCAD steuern kann:"
+" Objekte auflisten, inspizieren, rendern (als Bild), testen und exportieren,"
+" und jede andere Daemon-Methode hinter einem einzigen ``execute``-Werkzeug. "
+"Er steht in der MCP Registry, im ``pc``-Plugin, wird von der VS-Code-"
+"Erweiterung registriert und von ``pc init`` in neue Pakete geschrieben"
+
+#: ../../source/supported.rst:208
+msgid ""
+"``--no-ansi`` output on every command, so an agent parses plain text rather "
+"than progress bars"
+msgstr ""
+"``--no-ansi``-Ausgabe bei jedem Befehl, sodass ein Agent einfachen Text und "
+"keine Fortschrittsbalken parst"
+
+#: ../../source/supported.rst:209
+msgid ""
+"Free-form ``comment:`` context in ``Assembly YAML``, written for whoever "
+"reads the assembly next"
+msgstr ""
+"Freier ``comment:``-Kontext in ``Assembly YAML``, geschrieben für den, der "
+"die Baugruppe als Nächster liest"
+
+#: ../../source/supported.rst:213
+msgid "The Digital Thread"
+msgstr "Der Digital Thread"
+
+#: ../../source/supported.rst:215
+msgid ""
+"Object-Oriented Programming approach to maintaining part interfaces and "
+"mating information"
+msgstr ""
+"Objektorientierter Programmieransatz für die Pflege von Teile-Interfaces und"
+" Paarungsinformationen"
+
+#: ../../source/supported.rst:216
+msgid ""
+"Live preview of 3D models while working in Visual Studio Code, with the "
+"requirements an object declares and whether ``pc test`` finds them met, 2D "
+"renders, dimensioned drawings, engineering analysis, the build-or-buy "
+"decision, the bill of materials, the assembly instructions and supplier "
+"quotes on tabs beside the 3D view, and a software fallback that still draws "
+"the model in a window with no WebGL, such as a virtual machine or a remote "
+"desktop (see :doc:`/tools_vscode`)"
+msgstr ""
+"Live-Vorschau von 3D-Modellen während der Arbeit in Visual Studio Code, mit "
+"den Anforderungen, die ein Objekt deklariert, und der Angabe, ob ``pc test``"
+" sie als erfüllt findet, 2D-Renderings, bemaßten Zeichnungen, technischer "
+"Analyse, der Build-oder-Buy-Entscheidung, der Stückliste, den "
+"Montageanweisungen und Lieferantenangeboten auf Tabs neben der 3D-Ansicht, "
+"und einem Software-Fallback, der das Modell auch ohne WebGL noch in einem "
+"Fenster zeichnet, etwa in einer virtuellen Maschine oder auf einem Remote-"
+"Desktop (siehe :doc:`/tools_vscode`)"
+
+#: ../../source/supported.rst:221
+msgid ""
+"Open an object in the application that made it (``pc ide open``): FreeCAD, "
+"Blender, KiCad, and Gazebo or MuJoCo from the plugin package for that "
+"engine, SolidCraft from its plugin package. Installed locally, or run in a "
+"container when it is not; an object the application cannot read is converted"
+" on the way, and what is edited there is brought back into the object's own "
+"file when it closes"
+msgstr ""
+"Ein Objekt in der Anwendung öffnen, die es erstellt hat (``pc ide open``): "
+"FreeCAD, Blender, KiCad und Gazebo oder MuJoCo aus dem Plugin-Paket für "
+"diese Engine, SolidCraft aus seinem Plugin-Paket. Lokal installiert, oder in"
+" einem Container ausgeführt, wenn es das nicht ist; ein Objekt, das die "
+"Anwendung nicht lesen kann, wird auf dem Weg konvertiert, und was dort "
+"bearbeitet wird, wird beim Schließen in die eigene Datei des Objekts "
+"zurückgeholt"
+
+#: ../../source/supported.rst:225
+msgid ""
+"Ask the IDE what it is showing (``pc ide state``): the Explorer's selection,"
+" the Inspector's parameters, and the Digital Thread's tab, filters and a "
+"screenshot, for an AI agent working beside you to look at what you see"
+msgstr ""
+"Die IDE fragen, was sie anzeigt (``pc ide state``): die Auswahl im Explorer,"
+" die Parameter im Inspector und den Tab, die Filter und einen Screenshot des"
+" Digital Thread, für einen KI-Agenten, der neben Ihnen arbeitet, um sich "
+"anzusehen, was Sie sehen"
+
+#: ../../source/supported.rst:231
+msgid "Outputs"
+msgstr "Ausgaben"
+
+#: ../../source/supported.rst:233
+msgid ""
+"2D projections, from any viewing angle (``--view``, or an arbitrary one), "
+"with the connection ports and interfaces drawn on top if asked:"
+msgstr ""
+"2D-Projektionen, aus jedem Blickwinkel (``--view``, oder einem beliebigen), "
+"auf Wunsch mit den eingezeichneten Verbindungsports und Interfaces:"
+
+#: ../../source/supported.rst:237
+msgid "PNG"
+msgstr "PNG"
+
+#: ../../source/supported.rst:238
+msgid "JPEG"
+msgstr "JPEG"
+
+#: ../../source/supported.rst:241
+msgid "Documents:"
+msgstr "Dokumente:"
+
+#: ../../source/supported.rst:243
+msgid "Markdown package and assembly documents"
+msgstr "Markdown-Dokumente für Pakete und Baugruppen"
+
+#: ../../source/supported.rst:244
+msgid "PDF and HTML assembly instruction books"
+msgstr "PDF- und HTML-Montageanleitungsbücher"
+
+#: ../../source/supported.rst:246
+msgid "3D models exported to CAD files:"
+msgstr "3D-Modelle, exportiert in CAD-Dateien:"
+
+#: ../../source/supported.rst:252
+msgid "ThreeJS"
+msgstr "ThreeJS"
+
+#: ../../source/supported.rst:254
+msgid "IGES"
+msgstr "IGES"
+
+#: ../../source/supported.rst:255
+msgid "glTF"
+msgstr "glTF"
+
+#: ../../source/supported.rst:256
+msgid "URDF"
+msgstr "URDF"
+
+#: ../../source/supported.rst:257
+msgid ""
+"Gazebo world (SDFormat) and MJCF (MuJoCo), from the plugin package for that "
+"engine"
+msgstr ""
+"Gazebo-Welt (SDFormat) und MJCF (MuJoCo), aus dem Plugin-Paket für diese "
+"Engine"
+
+#: ../../source/supported.rst:258
+msgid ""
+"`SolidCraft`_ designs (``.solidcraft``), from the SolidCraft plugin package"
+msgstr ""
+"`SolidCraft`_-Designs (``.solidcraft``), aus dem SolidCraft-Plugin-Paket"
+
+#: ../../source/supported.rst:260
+msgid ""
+"Output types a package implements itself, for both ``render:`` and "
+"``export:``. See :doc:`/config_output`."
+msgstr ""
+"Ausgabetypen, die ein Paket selbst implementiert, sowohl für ``render:`` als"
+" auch für ``export:``. Siehe :doc:`/config_output`."

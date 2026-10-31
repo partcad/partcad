@@ -1,0 +1,238 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/index.rst:5
+msgid "Product Lifecycle"
+msgstr "Ciclo de vida del producto"
+
+#: ../../source/digital_thread/lifecycle/index.rst:19
+msgid ""
+"A product's life is a sequence of questions, and PartCAD keeps the answer to"
+" every one of them in the same place: the declaration of the object the "
+"question is about. This chapter takes the phases one at a time."
+msgstr ""
+"La vida de un producto es una secuencia de preguntas, y PartCAD guarda la "
+"respuesta a todas ellas en el mismo lugar: la declaración del objeto del que"
+" trata la pregunta. Este capítulo toma las fases una a una."
+
+#: ../../source/digital_thread/lifecycle/index.rst:23
+msgid ""
+"The phases are an order of **questions** rather than an order of work. "
+"Nothing has to be finished before the next thing starts, and no phase is "
+"ever closed: each is asked of the same object, and asked again whenever "
+"anything it depends on changes. A part whose script changed is a part whose "
+"mass, whose analyses, whose bill of materials line and whose checks are all "
+"out of date at once, and PartCAD's answer to that is not a notification -- "
+"it is that none of those answers was stored to begin with."
+msgstr ""
+"Las fases son un orden de **preguntas** y no un orden de trabajo. Nada tiene"
+" que estar terminado antes de que empiece lo siguiente, y ninguna fase se "
+"cierra nunca: cada una se pregunta del mismo objeto, y se vuelve a preguntar"
+" cada vez que cambia algo de lo que depende. Una pieza cuyo script ha "
+"cambiado es una pieza cuya masa, cuyos análisis, cuya línea en la lista de "
+"materiales y cuyas comprobaciones están todas desactualizadas a la vez, y la"
+" respuesta de PartCAD a eso no es una notificación -- es que ninguna de esas"
+" respuestas estaba almacenada en primer lugar."
+
+#: ../../source/digital_thread/lifecycle/index.rst:35
+msgid "Phase"
+msgstr "Fase"
+
+#: ../../source/digital_thread/lifecycle/index.rst:36
+msgid "The question it asks"
+msgstr "La pregunta que plantea"
+
+#: ../../source/digital_thread/lifecycle/index.rst:37
+msgid "Where it is answered"
+msgstr "Dónde se responde"
+
+#: ../../source/digital_thread/lifecycle/index.rst:38
+msgid ":doc:`Requirements </digital_thread/lifecycle/requirements>`"
+msgstr ":doc:`Requirements </digital_thread/lifecycle/requirements>`"
+
+#: ../../source/digital_thread/lifecycle/index.rst:39
+msgid ""
+"What does this have to be and do, in the words of whoever asked for it?"
+msgstr "¿Qué tiene que ser y hacer esto, en las palabras de quien lo pidió?"
+
+#: ../../source/digital_thread/lifecycle/index.rst:40
+msgid "``requirements:`` on the object, written before the design"
+msgstr "``requirements:`` en el objeto, escritos antes del diseño"
+
+#: ../../source/digital_thread/lifecycle/index.rst:41
+msgid ":doc:`Design </digital_thread/lifecycle/design>`"
+msgstr ":doc:`Design </digital_thread/lifecycle/design>`"
+
+#: ../../source/digital_thread/lifecycle/index.rst:42
+msgid "What *is* it: its geometry, its parameters, how it connects?"
+msgstr "¿Qué *es*: su geometría, sus parámetros, cómo se conecta?"
+
+#: ../../source/digital_thread/lifecycle/index.rst:43
+msgid "the part's script or file, an assembly's links, sketches, scenes"
+msgstr ""
+"el script o el archivo de la pieza, los enlaces de un ensamblaje, bocetos, "
+"escenas"
+
+#: ../../source/digital_thread/lifecycle/index.rst:44
+msgid ":doc:`Analysis </digital_thread/lifecycle/analysis>`"
+msgstr ":doc:`Analysis </digital_thread/lifecycle/analysis>`"
+
+#: ../../source/digital_thread/lifecycle/index.rst:45
+msgid "What does engineering say about it?"
+msgstr "¿Qué dice la ingeniería sobre ello?"
+
+#: ../../source/digital_thread/lifecycle/index.rst:46
+msgid ""
+"``physics:``, materials, ``fea:``, ``dynamic:``, ``thermal:``, ``cfd:``"
+msgstr ""
+"``physics:``, materiales, ``fea:``, ``dynamic:``, ``thermal:``, ``cfd:``"
+
+#: ../../source/digital_thread/lifecycle/index.rst:47
+msgid ":doc:`Manufacturing </digital_thread/lifecycle/manufacturing>`"
+msgstr ":doc:`Manufacturing </digital_thread/lifecycle/manufacturing>`"
+
+#: ../../source/digital_thread/lifecycle/index.rst:48
+msgid ""
+"How does it come to exist -- what is bought, what is built, in what order?"
+msgstr "¿Cómo llega a existir -- qué se compra, qué se fabrica, en qué orden?"
+
+#: ../../source/digital_thread/lifecycle/index.rst:49
+msgid "``manufacturing:``, ``vendor:``/``sku:``, materials, instructions"
+msgstr "``manufacturing:``, ``vendor:``/``sku:``, materiales, instrucciones"
+
+#: ../../source/digital_thread/lifecycle/index.rst:50
+msgid ":doc:`Validation </digital_thread/lifecycle/validation>`"
+msgstr ":doc:`Validation </digital_thread/lifecycle/validation>`"
+
+#: ../../source/digital_thread/lifecycle/index.rst:51
+msgid "Is it what it claims to be, and does it do what it is supposed to?"
+msgstr "¿Es lo que afirma ser, y hace lo que se supone que debe hacer?"
+
+#: ../../source/digital_thread/lifecycle/index.rst:52
+msgid ""
+"every claim above, checked by ``pc test``, ``pc sim`` and ``simulate:``"
+msgstr ""
+"todas las afirmaciones anteriores, comprobadas por ``pc test``, ``pc sim`` y"
+" ``simulate:``"
+
+#: ../../source/digital_thread/lifecycle/index.rst:53
+msgid ":doc:`Operations </digital_thread/lifecycle/operations>`"
+msgstr ":doc:`Operations </digital_thread/lifecycle/operations>`"
+
+#: ../../source/digital_thread/lifecycle/index.rst:54
+msgid "How is the thing that was made actually doing?"
+msgstr "¿Cómo le va realmente a la cosa que se fabricó?"
+
+#: ../../source/digital_thread/lifecycle/index.rst:55
+msgid "nothing yet; the phase is reserved"
+msgstr "nada todavía; la fase está reservada"
+
+#: ../../source/digital_thread/lifecycle/index.rst:57
+msgid ""
+"The order is the order of *dependency*, which is why it reads the way it "
+"does: a design is judged against requirements, an analysis is run on a "
+"design, what is manufactured is what was designed and analysed, and "
+"validation is the question whether the whole chain holds. Read backwards it "
+"is the more useful statement: nothing downstream of a change survives it."
+msgstr ""
+"El orden es el orden de *dependencia*, y por eso se lee como se lee: un "
+"diseño se juzga contra unos requisitos, un análisis se ejecuta sobre un "
+"diseño, lo que se fabrica es lo que se diseñó y se analizó, y la validación "
+"es la pregunta de si toda la cadena se sostiene. Leído del revés es la "
+"afirmación más útil: nada que esté aguas abajo de un cambio lo sobrevive."
+
+#: ../../source/digital_thread/lifecycle/index.rst:65
+msgid "Three ways into every phase"
+msgstr "Tres vías de entrada a cada fase"
+
+#: ../../source/digital_thread/lifecycle/index.rst:67
+msgid ""
+"Each phase can be worked on three ways, and every chapter below says what "
+"they are for that phase:"
+msgstr ""
+"En cada fase se puede trabajar de tres maneras, y cada capítulo de más abajo"
+" dice cuáles son para esa fase:"
+
+#: ../../source/digital_thread/lifecycle/index.rst:70
+msgid ""
+"**The Digital Thread panel.** The panel of the :ref:`PartCAD IDE <partcad-"
+"ide>` and of the :ref:`Visual Studio Code extension <vscode-extension>` is "
+"this list of phases, as a strip of tabs over whichever object is selected. "
+"Five of them are always there -- **Design**, **Analysis**, "
+"**Manufacturing**, **Validation** and **Operations** -- and **Requirements**"
+" appears in front of them for an object that declares any. Most of the five "
+"open a **second strip** of their own underneath, and every tab of it has a "
+"chapter here, under the phase it belongs to: the object three ways under "
+"Design, the four analyses under Analysis, the five steps from a decision to "
+"an instruction book under Manufacturing, and the two ways of checking under "
+"Validation. **Operations** is shown disabled, because there is nothing in it"
+" yet."
+msgstr ""
+"**El panel Digital Thread.** El panel del :ref:`IDE de PartCAD <partcad-"
+"ide>` y de la :ref:`extensión de Visual Studio Code <vscode-extension>` es "
+"esta lista de fases, como una tira de pestañas sobre el objeto que esté "
+"seleccionado. Cinco de ellas están siempre presentes -- **Design**, "
+"**Analysis**, **Manufacturing**, **Validation** y **Operations** -- y "
+"**Requirements** aparece delante de ellas para un objeto que declare alguno."
+" La mayoría de esas cinco abre debajo una **segunda tira** propia, y cada "
+"pestaña de esta tiene un capítulo aquí, bajo la fase a la que pertenece: el "
+"objeto de tres maneras bajo Design, los cuatro análisis bajo Analysis, los "
+"cinco pasos que van de una decisión a un manual de instrucciones bajo "
+"Manufacturing, y las dos formas de comprobar bajo Validation. **Operations**"
+" se muestra deshabilitada, porque todavía no hay nada en ella."
+
+#: ../../source/digital_thread/lifecycle/index.rst:82
+msgid ""
+"Each of those chapters is written the same way -- what the tab shows (**In "
+"the UI**), what the same answer is called from a terminal (**On the command "
+"line**), and which **agent skills** work in it -- because those are the "
+"three ways in, and they are three ways to the same answer rather than three "
+"features."
+msgstr ""
+"Cada uno de esos capítulos está escrito de la misma manera -- qué muestra la"
+" pestaña (**En la interfaz**), cómo se llama la misma respuesta desde un "
+"terminal (**En la línea de comandos**), y qué **skills de agente** funcionan"
+" en ella -- porque esas son las tres vías de entrada, y son tres caminos a "
+"la misma respuesta en lugar de tres funcionalidades."
+
+#: ../../source/digital_thread/lifecycle/index.rst:87
+msgid ""
+"**The command line.** Every tab is a ``pc`` command with a window around it,"
+" and the command is the one to reach for in a script, in CI, or when the "
+"answer matters more than the picture. :doc:`/cli` is the full reference."
+msgstr ""
+"**La línea de comandos.** Cada pestaña es un comando ``pc`` con una ventana "
+"a su alrededor, y el comando es lo que hay que usar en un script, en la CI, "
+"o cuando la respuesta importa más que la imagen. :doc:`/cli` es la "
+"referencia completa."
+
+#: ../../source/digital_thread/lifecycle/index.rst:91
+msgid ""
+"**Agent skills.** A :doc:`skill </ai_agents/skills>` is a procedure an AI "
+"coding agent follows, and the skills PartCAD ships are grouped by the phase "
+"they serve. A skill runs the same commands, so nothing it produces depends "
+"on the agent that ran it."
+msgstr ""
+"**Skills de agente.** Una :doc:`skill </ai_agents/skills>` es un "
+"procedimiento que sigue un agente de programación con IA, y las skills que "
+"trae PartCAD están agrupadas por la fase a la que sirven. Una skill ejecuta "
+"los mismos comandos, así que nada de lo que produce depende del agente que "
+"la ejecutó."

@@ -1,0 +1,150 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:5
+msgid "Build vs Buy"
+msgstr "Build vs Buy"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:7
+msgid ""
+"**Build vs Buy** is the first of the Manufacturing tabs, and the one the "
+"other four follow from: for every part, piece of stock and sub-assembly the "
+"object is made of, a switch saying whether *you* are going to make it or buy"
+" it."
+msgstr ""
+"**Build vs Buy** ist der erste der Manufacturing-Tabs und der, aus dem die "
+"anderen vier folgen: für jedes Teil, jedes Stück Rohmaterial und jede "
+"Unterbaugruppe, aus denen das Objekt besteht, ein Schalter, der sagt, ob "
+"*Sie* es herstellen oder kaufen werden."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:11
+msgid ""
+"It is the one decision in the whole Digital Thread that is **not** in the "
+"package. The package says what can be bought and how what can be made is "
+"made; which of the two a particular person chooses is a fact about who has "
+"which machines, so it is kept on the machine of whoever made it. A checkout "
+"does not carry it, and two people can build the same product differently "
+"without the product differing."
+msgstr ""
+"Es ist die eine Entscheidung im ganzen Digital Thread, die **nicht** im "
+"Paket steht. Das Paket sagt, was gekauft werden kann und wie das, was "
+"hergestellt werden kann, hergestellt wird; welches von beiden eine bestimmte"
+" Person wählt, ist eine Tatsache darüber, wer welche Maschinen hat, sie wird"
+" daher auf dem Rechner dessen gehalten, der sie getroffen hat. Ein Checkout "
+"trägt sie nicht mit, und zwei Personen können dasselbe Produkt "
+"unterschiedlich bauen, ohne dass sich das Produkt unterscheidet."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:19
+msgid "In the UI"
+msgstr "In der Benutzeroberfläche"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:21
+msgid ""
+"Every line is one thing the object is made of, with a picture of it, how "
+"many are needed, its size, its weight and its material, and a **Build** / "
+"**Buy** switch."
+msgstr ""
+"Jede Zeile ist ein Ding, aus dem das Objekt besteht, mit einem Bild davon, "
+"der benötigten Anzahl, seiner Größe, seinem Gewicht und seinem Material, und"
+" einem **Build**-/**Buy**-Schalter."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:25
+msgid ""
+"A line that can only be bought, or only be built, has its switch fixed and "
+"says why -- a part with a ``vendor:`` and no ``manufacturing:`` cannot be "
+"made here, and one with a ``manufacturing:`` and no supplier cannot be "
+"bought."
+msgstr ""
+"Eine Zeile, die nur gekauft oder nur gebaut werden kann, hat ihren Schalter "
+"festgesetzt und sagt, warum -- ein Teil mit einem ``vendor:`` und ohne "
+"``manufacturing:`` kann hier nicht hergestellt werden, und eines mit einem "
+"``manufacturing:`` und ohne Lieferant kann nicht gekauft werden."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:29
+msgid ""
+"A line that can be neither is marked **Incomplete**. That is the useful "
+"failure of this tab: it is where a part nobody can obtain shows itself, "
+"before anybody orders anything."
+msgstr ""
+"Eine Zeile, die keines von beiden kann, ist als **Incomplete** markiert. Das"
+" ist der nützliche Fehlschlag dieses Tabs: hier zeigt sich ein Teil, das "
+"niemand beschaffen kann, bevor irgendjemand irgendetwas bestellt."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:32
+msgid ""
+"Building a line brings in what *it* is made of -- its stock, its own parts "
+"-- and buying it hides them, because what is bought is bought whole."
+msgstr ""
+"Eine Zeile zu bauen holt das herein, woraus *sie* besteht -- ihr "
+"Rohmaterial, ihre eigenen Teile --, und sie zu kaufen verbirgt das, denn was"
+" gekauft wird, wird als Ganzes gekauft."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:35
+msgid ""
+"The Manufacturing group's Build vs Buy tab: a line per item, each with a "
+"picture and a Build/Buy switch"
+msgstr ""
+"Der Build-vs-Buy-Tab der Gruppe Manufacturing: eine Zeile je Position, jede "
+"mit einem Bild und einem Build/Buy-Schalter"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:40
+msgid ""
+"The choices are written under ``~/.partcad/garage/default/bvb/``, one file "
+"per object, and ``pc instructions`` reads the same files -- which is what "
+"makes it write the steps for what you are building rather than for "
+"everything the package could build. Where nothing has been chosen, a line "
+"that can be either is **bought**, which is what the bill of materials "
+"assumes."
+msgstr ""
+"Die Entscheidungen werden unter ``~/.partcad/garage/default/bvb/`` "
+"geschrieben, eine Datei je Objekt, und ``pc instructions`` liest dieselben "
+"Dateien -- und das ist es, was es die Schritte für das schreiben lässt, was "
+"Sie bauen, und nicht für alles, was das Paket bauen könnte. Wo nichts "
+"gewählt wurde, wird eine Zeile, die beides sein kann, **gekauft**, und das "
+"ist es, was die Stückliste annimmt."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:47
+msgid "On the command line"
+msgstr "Auf der Befehlszeile"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:49
+msgid ""
+"There is no ``pc`` command that makes these choices, and that is deliberate:"
+" they are the one input to this phase that is nobody else's to guess. What "
+"reads them is:"
+msgstr ""
+"Es gibt keinen ``pc``-Befehl, der diese Entscheidungen trifft, und das ist "
+"Absicht: sie sind die eine Eingabe in diese Phase, die niemand anders zu "
+"erraten hat. Was sie liest, ist:"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:60
+msgid "Agent skills"
+msgstr "Agent-Skills"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:62
+msgid ""
+"No skill chooses. ``/pc:validate`` reads the bill of materials and the "
+"assembly instructions that follow from whatever was chosen, as part of "
+"giving a requirement its verdict."
+msgstr ""
+"Kein Skill wählt. ``/pc:validate`` liest die Stückliste und die "
+"Montageanweisungen, die aus dem folgen, was gewählt wurde, um einer "
+"Anforderung ihr Urteil zu geben."

@@ -1,0 +1,256 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/config_scenes.rst:3
+msgid "Scenes"
+msgstr "Сцены"
+
+#: ../../source/config_scenes.rst:8
+msgid "What a scene is"
+msgstr "Что такое сцена"
+
+#: ../../source/config_scenes.rst:11
+msgid ""
+"A scene is a placed arrangement of objects - a workcell, a table with parts "
+"laid out on it, a simulation world. It is built out of the same files as an "
+"assembly, and differs in intent: an assembly is a product that was put "
+"together, and a scene states only where things are. A scene can also say "
+"what its world is like, the gravity in it and the fluid it is filled with, "
+"and it is what a simulation places an object in. A Gazebo world or a MuJoCo "
+"model is read as a scene, and a scene is written out as either, through the "
+"engine's plugin package. See :ref:`scenes` and "
+":doc:`/digital_thread/lifecycle/simulation`."
+msgstr ""
+"Сцена -- это размещённая компоновка объектов: рабочая ячейка, стол с "
+"разложенными на нём деталями, мир для симуляции. Она строится из тех же "
+"файлов, что и сборка, и отличается замыслом: сборка -- это продукт, который "
+"собрали, а сцена указывает только то, где что находится. Сцена может также "
+"сказать, каков её мир, какая в ней гравитация и какой жидкостью она "
+"заполнена, и именно в неё симуляция помещает объект. Мир Gazebo или модель "
+"MuJoCo читаются как сцена, а сцена записывается как любой из этих форматов "
+"-- через пакет плагина для соответствующего движка. См. :ref:`scenes` и "
+":doc:`/digital_thread/lifecycle/simulation`."
+
+#: ../../source/config_scenes.rst:21
+msgid ""
+"A **scene** is a placed arrangement of objects: a workcell, a table with the"
+" parts laid out on it, a simulation world. It is built the way an assembly "
+"is, out of the very same files, and everything that works on an assembly "
+"works on a scene -- it renders, it exports, it has a bill of materials, ``pc"
+" ide view`` shows it."
+msgstr ""
+"**Сцена** — это размещённая расстановка объектов: рабочая ячейка, стол с "
+"разложенными на нём деталями, мир для симуляции. Она строится так же, как "
+"сборка, из тех же самых файлов, и всё, что работает со сборкой, работает и "
+"со сценой: она отрисовывается, экспортируется, у неё есть спецификация "
+"материалов, её показывает ``pc ide view``."
+
+#: ../../source/config_scenes.rst:27
+msgid ""
+"What separates the two is intent, and one rule follows from it. An assembly "
+"is a *product*: it says what it is made of and, through the ``how:`` section"
+" of each ``connect:``, how it is put together, which is what the assembly "
+"instruction book (``pc render -t pdf``) is generated from. A scene states "
+"only an end state. Nothing in it was assembled, so there is nothing to say "
+"about the assembling, and ``how:`` is rejected rather than ignored (see "
+":doc:`/assy`)."
+msgstr ""
+"Эти два различает замысел, и из него следует одно правило. Сборка -- это "
+"*продукт*: она говорит, из чего она состоит и, через раздел ``how:`` каждого"
+" ``connect:``, как её собирают, а именно из этого генерируется книга "
+"инструкций по сборке (``pc render -t pdf``). Сцена указывает только конечное"
+" состояние. Ничто в ней не собиралось, поэтому о сборке сказать нечего, и "
+"``how:`` отвергается, а не игнорируется (см. :doc:`/assy`)."
+
+#: ../../source/config_scenes.rst:36
+msgid "Declare scenes"
+msgstr "Объявление сцен"
+
+#: ../../source/config_scenes.rst:67
+msgid ""
+"The declaration points at the file that holds the scene and nothing else: "
+"there is no assembly object in between. An ``.assy`` file in an "
+"``assemblies:`` section is an assembly, and the very same file in a "
+"``scenes:`` section is a scene."
+msgstr ""
+"Объявление указывает на файл, в котором находится сцена, и больше ни на что:"
+" промежуточного объекта-сборки нет. Файл ``.assy`` в разделе ``assemblies:``"
+" — это сборка, а тот же самый файл в разделе ``scenes:`` — сцена."
+
+#: ../../source/config_scenes.rst:83
+msgid "Scenes take parameters, aliases and enriches exactly as assemblies do:"
+msgstr ""
+"Сцены принимают параметры, псевдонимы и enrich ровно так же, как сборки:"
+
+#: ../../source/config_scenes.rst:94
+msgid ""
+"A scene's ASSY file may place another scene (``scene:``) and weld what a "
+"link places to the world (``fixed: true``), and neither is allowed in an "
+"assembly: in a scene every element is a rigid body of its own, and in an "
+"assembly everything is attached to it. See :ref:`assy-scenes` for the keys "
+"and :ref:`sim-bodies` for the rule."
+msgstr ""
+"Файл ASSY сцены может размещать другую сцену (``scene:``) и приваривать то, "
+"что размещает звено, к миру (``fixed: true``), и ни то, ни другое не "
+"разрешено в сборке: в сцене каждый элемент является отдельным твёрдым телом,"
+" а в сборке всё к ней прикреплено. Ключи см. в :ref:`assy-scenes`, а правило"
+" -- в :ref:`sim-bodies`."
+
+#: ../../source/config_scenes.rst:101
+msgid "Gravity, and the fluid a scene is filled with"
+msgstr "Гравитация и жидкость, которой заполнена сцена"
+
+#: ../../source/config_scenes.rst:102
+msgid ""
+"A scene is a world as well as an arrangement, and may say two things about "
+"that world which an assembly cannot: the gravity in it, and the fluid it is "
+"filled with."
+msgstr ""
+"Сцена является не только компоновкой, но и миром, и может сказать об этом "
+"мире две вещи, которых не может сказать сборка: какая в нём гравитация и "
+"какой жидкостью он заполнен."
+
+#: ../../source/config_scenes.rst:114
+msgid ""
+"``gravity:`` is a vector in **m/s^2**, in the scene's own frame: ``[0, 0, "
+"-9.81]`` is Earth with Z up, ``[0, 0, -1.62]`` the Moon, ``[0, 0, 0]`` free "
+"fall. It is SI because every physical quantity PartCAD states is SI -- only "
+"lengths and angles are millimetres and degrees (see the note under "
+":ref:`materials`). A scene that states none leaves it to the engine, whose "
+"own default is Earth's along -Z. Anything but three numbers is an error, and"
+" a gravity above 1000 m/s^2 -- a vector written in mm/s^2 by mistake is a "
+"thousand g -- is reported as one that is probably in the wrong unit."
+msgstr ""
+"``gravity:`` -- это вектор в **м/с^2**, в собственной системе координат "
+"сцены: ``[0, 0, -9.81]`` -- это Земля с осью Z вверх, ``[0, 0, -1.62]`` -- "
+"Луна, ``[0, 0, 0]`` -- свободное падение. Это СИ, потому что каждая "
+"физическая величина, которую указывает PartCAD, задана в СИ -- только длины "
+"и углы заданы в миллиметрах и градусах (см. примечание в :ref:`materials`). "
+"Сцена, которая его не указывает, оставляет это движку, собственное значение "
+"по умолчанию у которого -- земная гравитация вдоль -Z. Что угодно, кроме "
+"трёх чисел, является ошибкой, а гравитация выше 1000 м/с^2 -- вектор, "
+"записанный по ошибке в мм/с^2, даёт тысячу g -- отмечается как, вероятно, "
+"заданная не в той единице."
+
+#: ../../source/config_scenes.rst:123
+msgid ""
+"``medium:`` names a :ref:`material <materials>`, resolved the way a part's "
+"material is (``:brine`` is the ``brine`` this package catalogues), and its "
+"``density`` (kg/m^3) and ``viscosity`` (Pa*s) are what a simulation drags "
+"and buoys what moves through the scene with. "
+"``//pub/std/manufacturing/material/fluid`` catalogues ``air``, ``water`` and"
+" ``seawater``. A scene that names none is a vacuum, which is what every "
+"engine assumes. A medium naming a material nothing answers to is an error "
+"rather than a vacuum, and one whose material states neither a density nor a "
+"viscosity is reported."
+msgstr ""
+"``medium:`` называет :ref:`материал <materials>`, разрешаемый так же, как "
+"материал детали (``:brine`` -- это тот ``brine``, который каталогизирует "
+"этот пакет), а его ``density`` (кг/м^3) и ``viscosity`` (Па*с) -- это то, "
+"чем симуляция создаёт сопротивление и выталкивает то, что движется сквозь "
+"сцену. ``//pub/std/manufacturing/material/fluid`` каталогизирует ``air``, "
+"``water`` и ``seawater``. Сцена, которая не называет среды, является "
+"вакуумом, и именно это предполагает каждый движок. Среда, называющая "
+"материал, на который ничто не откликается, является ошибкой, а не вакуумом, "
+"а о среде, материал которой не указывает ни плотности, ни вязкости, "
+"сообщается."
+
+#: ../../source/config_scenes.rst:133
+msgid ""
+"``pc info`` reports the world a scene resolved to. What each engine makes of"
+" either key, and what it does not model, is in :ref:`sim-scenes` and "
+":ref:`sim-engines`."
+msgstr ""
+"``pc info`` сообщает тот мир, в который разрешилась сцена. Что делает с "
+"каждым из этих ключей каждый движок и чего он не моделирует, написано в "
+":ref:`sim-scenes` и :ref:`sim-engines`."
+
+#: ../../source/config_scenes.rst:138
+msgid "Scene types a plugin adds"
+msgstr "Типы сцен, которые добавляет плагин"
+
+#: ../../source/config_scenes.rst:139
+msgid ""
+"Beside ``assy``, a scene may be declared in a format an :doc:`import plugin "
+"</plugins/importers>` reads, and PartCAD itself ships none of them:"
+msgstr ""
+"Помимо ``assy``, сцена может быть объявлена в формате, который читает "
+":doc:`плагин импорта </plugins/importers>`, и сам PartCAD не поставляет ни "
+"одного из них:"
+
+#: ../../source/config_scenes.rst:142
+msgid "``sim-gazebo:world``"
+msgstr "``sim-gazebo:world``"
+
+#: ../../source/config_scenes.rst:143
+msgid ""
+"An `SDFormat <http://sdformat.org/>`_ ``.world`` file, read as a scene "
+"directly. Declared by `partcad-sim-gazebo "
+"<https://github.com/partcad/partcad-sim-gazebo>`_."
+msgstr ""
+"Файл ``.world`` в формате `SDFormat <http://sdformat.org/>`_, читаемый как "
+"сцена напрямую. Объявляется пакетом `partcad-sim-gazebo "
+"<https://github.com/partcad/partcad-sim-gazebo>`_."
+
+#: ../../source/config_scenes.rst:147
+msgid "``sim-mujoco:mjcf``"
+msgstr "``sim-mujoco:mjcf``"
+
+#: ../../source/config_scenes.rst:148
+msgid ""
+"A `MuJoCo <https://mujoco.org/>`_ model, which is the one format that is "
+"both a scene type and an assembly type -- the section that declares it is "
+"what decides which. Declared by `partcad-sim-mujoco "
+"<https://github.com/partcad/partcad-sim-mujoco>`_."
+msgstr ""
+"Модель `MuJoCo <https://mujoco.org/>`_, которая является единственным "
+"форматом, который одновременно является и типом сцены, и типом сборки, -- и "
+"решает это тот раздел, который её объявляет. Объявляется пакетом `partcad-"
+"sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_."
+
+#: ../../source/config_scenes.rst:153
+msgid ""
+"Both are read, written and opened by the same package that simulates the "
+"format. :doc:`/plugins/importers` describes each in full, with the commands "
+"that import, export and convert between them."
+msgstr ""
+"Оба формата читаются, записываются и открываются тем же пакетом, который их "
+"симулирует. :doc:`/plugins/importers` описывает каждый из них полностью, "
+"вместе с теми командами, которые импортируют, экспортируют и преобразуют "
+"между ними."
+
+#: ../../source/config_scenes.rst:158
+msgid "Simulating a scene"
+msgstr "Симуляция сцены"
+
+#: ../../source/config_scenes.rst:159
+msgid ""
+"A scene can be the thing a claim is about, not only the world another object"
+" is tested in: a stack of blocks that stands, a pile that does not slide. It"
+" declares ``simulate:`` exactly as a part or an assembly does, and ``pc "
+"sim`` and ``pc test`` hold it to it. See :ref:`Simulating a scene "
+"<validating-a-scene>` in the Validation phase."
+msgstr ""
+"Сцена может быть тем, о чём заявление, а не только тем миром, в котором "
+"проверяется другой объект: штабель блоков, который стоит, насыпь, которая не"
+" сползает. Она объявляет ``simulate:`` в точности так же, как деталь или "
+"сборка, а ``pc sim`` и ``pc test`` проверяют её по этому. См. "
+":ref:`Симуляция сцены <validating-a-scene>` в фазе Validation."

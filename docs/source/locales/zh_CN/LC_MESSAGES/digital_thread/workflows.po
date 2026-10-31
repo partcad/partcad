@@ -1,0 +1,132 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/workflows.rst:3
+msgid "Workflows"
+msgstr "工作流"
+
+#: ../../source/digital_thread/workflows.rst:5
+msgid ""
+"A workflow is a path through the phases of "
+":doc:`/digital_thread/lifecycle/index`, which that chapter takes one at a "
+"time. These are the shapes the path takes in practice -- each one crossing "
+"several phases, in the order somebody actually works in rather than the "
+"order the phases are listed in."
+msgstr ""
+"工作流就是穿过 :doc:`/digital_thread/lifecycle/index` "
+"各阶段的一条路径，而那一章是逐个阶段来讲的。下面这些是这条路径在实践中呈现的形态 -- "
+"每一条都横跨若干个阶段，并按人们实际工作的顺序排列，而不是按各阶段被列出的顺序。"
+
+#: ../../source/digital_thread/workflows.rst:13
+msgid "From an idea to a part"
+msgstr "从一个想法到一个零件"
+
+#: ../../source/digital_thread/workflows.rst:15
+msgid ""
+"Describe the part to an agent: ``/pc:gen-part`` (or ``/pc:gen-assembly``) "
+"writes the ``requirements:`` down from the description first, in its own "
+"terms, and only then models it (see :ref:`claude-plugin`)."
+msgstr ""
+"把这个零件描述给智能体：``/pc:gen-part`` （或者 ``/pc:gen-assembly`` ）会先依据这段描述、用它自己的说法把 "
+"``requirements:`` 写下来，然后才去建模（参见 :ref:`claude-plugin` ）。"
+
+#: ../../source/digital_thread/workflows.rst:18
+msgid ""
+"``pc test`` proves it builds, can be made, and has the ports, interfaces and"
+" physical properties it is required to have."
+msgstr "``pc test`` 证明它能构建、能被制造，并且具备它被要求具备的那些端口、接口和物理属性。"
+
+#: ../../source/digital_thread/workflows.rst:20
+msgid ""
+"``/pc:validate`` runs everything, looks at the part from every angle that "
+"matters, and gives each requirement a verdict -- met, not met, or \"cannot "
+"tell\", with the evidence named."
+msgstr ""
+"``/pc:validate`` 把一切都运行一遍、从每一个重要的角度看这个零件，并给每一项需求下一个结论 -- "
+"满足、不满足，或者“无法判定”，并指明依据。"
+
+#: ../../source/digital_thread/workflows.rst:25
+msgid "Changing a design without breaking it"
+msgstr "改设计而不把它改坏"
+
+#: ../../source/digital_thread/workflows.rst:27
+msgid ""
+"Edit the script or the declaration; the Digital Thread shows the object "
+"again as soon as it is saved."
+msgstr "编辑那个脚本或那份声明；一保存，Digital Thread 就会重新显示该对象。"
+
+#: ../../source/digital_thread/workflows.rst:29
+msgid ""
+"Open **Validation**: every check runs again, through the cache, so what did "
+"not change is not asked again. A failure says what it found; an interference"
+" leaves an assembly of the two parts and what they share to look at."
+msgstr ""
+"打开 "
+"**Validation**：每一项检查都会重新运行，并走缓存，所以没有变化的部分不会被再问一遍。失败会说明它发现了什么；而一次干涉会留下一个由那两个零件及它们共有部分组成的装配体供查看。"
+
+#: ../../source/digital_thread/workflows.rst:32
+msgid ""
+"``pc test`` and ``pc sim`` in CI hold every change to the same checks, and "
+"rendered pictures checked in beside the package make a change in how "
+"anything looks a diff somebody reviews."
+msgstr ""
+"CI 中的 ``pc test`` 和 ``pc sim`` "
+"用同样这些检查来约束每一次改动，而与包并列签入的那些渲染图，则让任何外观上的变化都变成有人要审阅的一个 diff。"
+
+#: ../../source/digital_thread/workflows.rst:37
+msgid "From a design to an order"
+msgstr "从一个设计到一张订单"
+
+#: ../../source/digital_thread/workflows.rst:39
+msgid ""
+"**Manufacturing → Build vs Buy** decides, per part and sub-assembly, what is"
+" made and what is ordered; the choice is kept on the machine of whoever made"
+" it."
+msgstr ""
+"**Manufacturing → Build vs Buy** 逐个零件和子装配体地决定什么自制、什么采购；这个选择保存在做出它的那个人的机器上。"
+
+#: ../../source/digital_thread/workflows.rst:42
+msgid ""
+"``pc bom`` lists what that takes, ``pc supply quote`` asks suppliers for it,"
+" and ``pc supply order`` orders it."
+msgstr ""
+"``pc bom`` 列出那需要什么，``pc supply quote`` 去向供应商询价，而 ``pc supply order`` 下单。"
+
+#: ../../source/digital_thread/workflows.rst:44
+msgid ""
+"``pc instructions`` writes the book that puts it together, step by step, and"
+" ``pc cam`` the programs the machines cut its parts with."
+msgstr ""
+"``pc instructions`` 写出把它装起来的那本说明书，一步一步地写；而 ``pc cam`` 写出机床切削它各个零件所用的那些程序。"
+
+#: ../../source/digital_thread/workflows.rst:48
+msgid "Reviewing somebody else's product"
+msgstr "审阅别人的产品"
+
+#: ../../source/digital_thread/workflows.rst:50
+msgid ""
+"``pc test -P <package>...`` checks every object of a package and everything "
+"below it. In the Digital Thread, each object shows its requirements, its "
+"design, its analyses, how it is made, and its checks with what each one "
+"found -- the whole thread of one object on one screen."
+msgstr ""
+"``pc test -P <package>...`` 会检查某个包及其下方一切的每一个对象。在 Digital Thread "
+"里，每一个对象都会显示它的需求、它的设计、它的各项分析、它是怎么制造的，以及它的各项检查和每一项检查的发现 -- 一个对象的整条主线，都在同一个屏幕上。"

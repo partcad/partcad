@@ -1,0 +1,354 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/plugins/simulations.rst:5
+msgid "Simulations"
+msgstr "Simulationen"
+
+#: ../../source/plugins/simulations.rst:7
+msgid ""
+"A **simulation plugin** teaches PartCAD to run a physics simulator. It is "
+"the third kind of implementation declared in the same form as :doc:`an "
+"output type </plugins/output>` -- a ``path`` to a script, the sandbox that "
+"script needs, and the parameters it is handed -- and it is what turns an "
+"object's claim about its *behaviour* into something that can be checked."
+msgstr ""
+"Ein **Simulations-Plugin** bringt PartCAD bei, einen Physiksimulator "
+"auszuführen. Es ist die dritte Art von Implementierung, die in derselben "
+"Form deklariert wird wie :doc:`ein Ausgabetyp </plugins/output>` -- ein "
+"``path`` zu einem Skript, die Sandbox, die dieses Skript braucht, und die "
+"Parameter, die es erhält -- und es ist das, was die Behauptung eines Objekts"
+" über sein *Verhalten* in etwas verwandelt, das geprüft werden kann."
+
+#: ../../source/plugins/simulations.rst:13
+msgid ""
+"A part says what it **is**. ``simulate:`` is where a part, an assembly or a "
+"scene says what it is supposed to **do** once it is placed in a world and "
+"the world is switched on -- or, more often, what it is supposed *not* to do:"
+" not fall over, not slide off, not come apart. ``pc sim`` runs those, and "
+"``pc test`` holds the object to them every time it runs, as its ``sim`` "
+"check."
+msgstr ""
+"Ein Teil sagt, was es **ist**. ``simulate:`` ist der Ort, an dem ein Teil, "
+"eine Baugruppe oder eine Szene sagt, was sie **tun** soll, sobald sie in "
+"eine Welt gestellt und die Welt eingeschaltet wird -- oder, häufiger, was "
+"sie *nicht* tun soll: nicht umfallen, nicht abrutschen, nicht "
+"auseinanderfallen. ``pc sim`` führt die aus, und ``pc test`` hält das Objekt"
+" bei jedem Lauf daran, als seine ``sim``-Prüfung."
+
+#: ../../source/plugins/simulations.rst:19
+msgid ""
+"**PartCAD ships no simulator.** It ships the concept -- this section, the "
+"sandbox a plugin runs in, and the export a scene reaches the simulator "
+"through -- and a package supplies the physics."
+msgstr ""
+"**PartCAD liefert keinen Simulator mit.** Es liefert das Konzept mit -- "
+"diesen Abschnitt, die Sandbox, in der ein Plugin läuft, und den Export, über"
+" den eine Szene den Simulator erreicht -- und ein Paket liefert die Physik."
+
+#: ../../source/plugins/simulations.rst:24
+msgid "What a simulation plugin is for"
+msgstr "Wofür ein Simulations-Plugin da ist"
+
+#: ../../source/plugins/simulations.rst:26
+msgid ""
+"**Proving a behavioural requirement.** A ``simulate:`` entry that names a "
+"``feature:`` of the object's ``requirements:`` becomes the evidence for that"
+" feature, which is otherwise a sentence no program can measure."
+msgstr ""
+"**Eine Verhaltensanforderung belegen.** Ein ``simulate:``-Eintrag, der ein "
+"``feature:`` der ``requirements:`` des Objekts nennt, wird zum Nachweis für "
+"dieses Feature, das sonst ein Satz ist, den kein Programm messen kann."
+
+#: ../../source/plugins/simulations.rst:29
+msgid ""
+"**Catching what geometry cannot show.** A stack that stands, a gripper that "
+"holds, a robot that does not tip on a slope: nothing about the shapes says "
+"any of it."
+msgstr ""
+"**Das fangen, was Geometrie nicht zeigen kann.** Ein Stapel, der steht, ein "
+"Greifer, der hält, ein Roboter, der auf einer Schräge nicht kippt: nichts an"
+" den Formen sagt irgendetwas davon."
+
+#: ../../source/plugins/simulations.rst:32
+msgid ""
+"**Regression-testing motion.** The simulations run in ``pc test``, through "
+"the cache, so a change that makes a mechanism bind is a failed check rather "
+"than a discovery."
+msgstr ""
+"**Bewegung durch Regressionstests sichern.** Die Simulationen laufen in ``pc"
+" test``, über den Cache, eine Änderung, die einen Mechanismus klemmen lässt,"
+" ist daher eine fehlgeschlagene Prüfung und keine Entdeckung."
+
+#: ../../source/plugins/simulations.rst:35
+msgid ""
+"**Wrapping one engine once.** A plugin brings the engine, the scene format "
+"it reads and the vocabulary it reports in, so every package using it writes "
+"the same kind of ``validation:``."
+msgstr ""
+"**Eine Engine einmal umhüllen.** Ein Plugin bringt die Engine, das "
+"Szenenformat, das sie liest, und das Vokabular, in dem sie berichtet, jedes "
+"Paket, das es verwendet, schreibt daher dieselbe Art von ``validation:``."
+
+#: ../../source/plugins/simulations.rst:40
+msgid "Using one"
+msgstr "Eines verwenden"
+
+#: ../../source/plugins/simulations.rst:42
+msgid "Declare the simulation on the object, naming the plugin by full path:"
+msgstr ""
+"Deklarieren Sie die Simulation am Objekt und benennen Sie das Plugin mit "
+"vollem Pfad:"
+
+#: ../../source/plugins/simulations.rst:57
+msgid ""
+"What each key means is in :ref:`sim-declaring`, the scene an object is "
+"placed in and how to write one in :ref:`sim-scenes`, and what a "
+"``validation:`` is evaluated over in :ref:`sim-validation`."
+msgstr ""
+"Was jeder Schlüssel bedeutet, steht in :ref:`sim-declaring`, die Szene, in "
+"die ein Objekt gestellt wird, und wie man eine schreibt, in :ref:`sim-"
+"scenes`, und worüber ein ``validation:`` ausgewertet wird, in :ref:`sim-"
+"validation`."
+
+#: ../../source/plugins/simulations.rst:61
+msgid ""
+"Every run is also asked for a picture of the scene before and after, taken "
+"from where the scene is rendered from: the ``viewport_origin`` and "
+"``viewport_up`` of its ``render: png:``, or of its package's when the scene "
+"states none; see :doc:`/digital_thread/lifecycle/simulation`."
+msgstr ""
+"Von jedem Lauf wird außerdem ein Bild der Szene davor und danach verlangt, "
+"aufgenommen von dort, von wo die Szene gerendert wird: dem "
+"``viewport_origin`` und ``viewport_up`` ihres ``render: png:``, oder dem "
+"ihres Pakets, wenn die Szene keines angibt; siehe "
+":doc:`/digital_thread/lifecycle/simulation`."
+
+#: ../../source/plugins/simulations.rst:66
+msgid "Then:"
+msgstr "Dann:"
+
+#: ../../source/plugins/simulations.rst:75
+msgid ""
+"Every run is also asked for a picture of the scene before and after, taken "
+"from where the scene is rendered from: the ``viewport_origin`` and "
+"``viewport_up`` of its ``render: png:``, or of its package's when the scene "
+"states none."
+msgstr ""
+"Von jedem Lauf wird außerdem ein Bild der Szene davor und danach verlangt, "
+"aufgenommen von dort, von wo die Szene gerendert wird: dem "
+"``viewport_origin`` und ``viewport_up`` ihres ``render: png:``, oder dem "
+"ihres Pakets, wenn die Szene keines angibt."
+
+#: ../../source/plugins/simulations.rst:80
+msgid "Writing one"
+msgstr "Eines schreiben"
+
+#: ../../source/plugins/simulations.rst:82
+msgid ""
+"A simulation plugin is the third kind of implementation a package can "
+"declare, beside the export and render ones of :ref:`output-files`, and it is"
+" declared in exactly the same form -- a ``path`` to a script, the sandbox "
+"that script needs, and the parameters it is handed:"
+msgstr ""
+"Ein Simulations-Plugin ist die dritte Art von Implementierung, die ein Paket"
+" deklarieren kann, neben den Export- und Render-Implementierungen aus "
+":ref:`output-files`, und es wird in genau derselben Form deklariert -- ein "
+"``path`` zu einem Skript, die Sandbox, die dieses Skript braucht, und die "
+"Parameter, die ihm übergeben werden:"
+
+#: ../../source/plugins/simulations.rst:100
+msgid ""
+"The contract is narrow on purpose: **a scene with the subject in it goes in,"
+" as a file in the format** ``format:`` **names, and JSON carrying** "
+"``before`` **and** ``after`` **comes out.** The scene arrives as a file "
+"because a simulator reads its own model format and PartCAD already knows how"
+" to write several -- which is also what keeps a plugin free of any CAD "
+"dependency."
+msgstr ""
+"Der Vertrag ist mit Absicht eng: **eine Szene mit dem Subjekt darin geht "
+"hinein, als Datei in dem Format, das** ``format:`` **benennt, und JSON mit**"
+" ``before`` **und** ``after`` **kommt heraus.** Die Szene kommt als Datei "
+"an, weil ein Simulator sein eigenes Modellformat liest und PartCAD bereits "
+"weiß, wie es mehrere schreibt -- was zugleich ein Plugin frei von jeder CAD-"
+"Abhängigkeit hält."
+
+#: ../../source/plugins/simulations.rst:106
+msgid ""
+"The exporter for ``format:`` is looked up in the plugin's own package as "
+"well as in the scene's, beneath it, which is how a plugin implements the "
+"format it reads: an engine's scene format belongs to that engine's plugin, "
+"so each plugin declares the ``export:`` that writes it beside the "
+"``simulation:`` that runs it, and a package that re-tunes that export for "
+"its own scenes still wins. ``formatOptions:`` is how the plugin asks for the"
+" export -- a physics run wants every body free to move, the opposite of what"
+" a scene means on its own."
+msgstr ""
+"Der Exporter für ``format:`` wird sowohl im eigenen Paket des Plugins als "
+"auch, darunter, in dem der Szene nachgeschlagen, und so implementiert ein "
+"Plugin das Format, das es liest: das Szenenformat einer Engine gehört dem "
+"Plugin dieser Engine, jedes Plugin deklariert daher den ``export:``, der es "
+"schreibt, neben der ``simulation:``, die es ausführt, und ein Paket, das "
+"diesen Export für seine eigenen Szenen neu abstimmt, gewinnt dennoch. "
+"``formatOptions:`` ist die Art, wie das Plugin den Export anfordert -- ein "
+"Physiklauf will jeden Körper frei beweglich, das Gegenteil davon, was eine "
+"Szene für sich bedeutet."
+
+#: ../../source/plugins/simulations.rst:114
+msgid ""
+"The script runs in a PartCAD sandbox with two globals. ``request`` holds the"
+" plugin's declared parameters, overridden by the ``params:`` of the "
+"declaration being run, and then ``scene_file`` (the absolute path of the "
+"exported scene), ``scene_format``, ``scene_name``, ``subject`` (the full "
+"path of the object being simulated), ``subject_kind`` and ``simulation`` "
+"(the declaration's name). ``path`` is a directory the run may write anything"
+" into -- a trajectory, a log -- which is kept and cached with the result. "
+"The script sets ``output``, or defines ``process(path, request)`` returning "
+"it:"
+msgstr ""
+"Das Skript läuft in einer PartCAD-Sandbox mit zwei globalen Variablen. "
+"``request`` enthält die deklarierten Parameter des Plugins, überschrieben "
+"durch das ``params:`` der ausgeführten Deklaration, und dann ``scene_file`` "
+"(den absoluten Pfad der exportierten Szene), ``scene_format``, "
+"``scene_name``, ``subject`` (den vollen Pfad des simulierten Objekts), "
+"``subject_kind`` und ``simulation`` (den Namen der Deklaration). ``path`` "
+"ist ein Verzeichnis, in das der Lauf alles schreiben darf -- eine "
+"Trajektorie, ein Log --, das behalten und mit dem Ergebnis "
+"zwischengespeichert wird. Das Skript setzt ``output`` oder definiert "
+"``process(path, request)``, das es zurückgibt:"
+
+#: ../../source/plugins/simulations.rst:128
+msgid ""
+"A success without ``before`` and ``after``, each an object, is refused. What"
+" is inside them, and anything else beside them, is the plugin's own "
+"vocabulary: PartCAD carries it to the ``validation:`` expression and reads "
+"none of it. The two plugins PartCAD maintains share one vocabulary, "
+"described in :ref:`sim-validation`, and a plugin that reports the same is "
+"one whose validations read the same."
+msgstr ""
+"Ein Erfolg ohne ``before`` und ``after``, jeweils ein Objekt, wird "
+"zurückgewiesen. Was darin steht, und alles andere daneben, ist das eigene "
+"Vokabular des Plugins: PartCAD trägt es zum ``validation:``-Ausdruck und "
+"liest nichts davon. Die zwei Plugins, die PartCAD pflegt, teilen ein "
+"Vokabular, beschrieben in :ref:`sim-validation`, und ein Plugin, das "
+"dasselbe berichtet, ist eines, dessen Validierungen sich gleich lesen."
+
+#: ../../source/plugins/simulations.rst:136
+msgid "An example"
+msgstr "Ein Beispiel"
+
+#: ../../source/plugins/simulations.rst:138
+msgid ""
+"**PartCAD ships none of these.** A simulator is somebody's program with a "
+"release cycle of its own, so PartCAD ships the concept -- this section, the "
+"sandbox a plugin runs in, and the export a scene reaches it through -- and a"
+" package supplies the physics. :ref:`sim-engines` lists the two there are."
+msgstr ""
+"**PartCAD liefert keines davon mit.** Ein Simulator ist irgendjemandes "
+"Programm mit einem eigenen Release-Zyklus, PartCAD liefert daher das Konzept"
+" mit -- diesen Abschnitt, die Sandbox, in der ein Plugin läuft, und den "
+"Export, über den eine Szene es erreicht -- und ein Paket liefert die Physik."
+" :ref:`sim-engines` listet die zwei auf, die es gibt."
+
+#: ../../source/plugins/simulations.rst:143
+msgid ""
+"Each of the two is one package carrying everything its format needs -- the "
+":doc:`importer </plugins/importers>` that reads it, the :doc:`export type "
+"</plugins/output>` that writes it, the :doc:`application entry "
+"</plugins/applications>` that opens it, and the simulation plugin that runs "
+"it:"
+msgstr ""
+"Jedes der beiden ist ein Paket, das alles trägt, was sein Format braucht -- "
+"den :doc:`Importer </plugins/importers>`, der es liest, den :doc:`Exporttyp "
+"</plugins/output>`, der es schreibt, den :doc:`Anwendungseintrag "
+"</plugins/applications>`, der es öffnet, und das Simulations-Plugin, das es "
+"ausführt:"
+
+#: ../../source/plugins/simulations.rst:152
+msgid "package"
+msgstr "Paket"
+
+#: ../../source/plugins/simulations.rst:153
+msgid "engine"
+msgstr "Engine"
+
+#: ../../source/plugins/simulations.rst:154
+msgid "the type to name"
+msgstr "der zu benennende Typ"
+
+#: ../../source/plugins/simulations.rst:155
+msgid "`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_"
+msgstr "`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_"
+
+#: ../../source/plugins/simulations.rst:156
+msgid "`MuJoCo <https://mujoco.org/>`_"
+msgstr "`MuJoCo <https://mujoco.org/>`_"
+
+#: ../../source/plugins/simulations.rst:157
+msgid "``sim-mujoco:mujoco``"
+msgstr "``sim-mujoco:mujoco``"
+
+#: ../../source/plugins/simulations.rst:158
+msgid "`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_"
+msgstr "`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_"
+
+#: ../../source/plugins/simulations.rst:159
+msgid "`Gazebo <https://gazebosim.org/>`_"
+msgstr "`Gazebo <https://gazebosim.org/>`_"
+
+#: ../../source/plugins/simulations.rst:160
+msgid "``sim-gazebo:gazebo``"
+msgstr "``sim-gazebo:gazebo``"
+
+#: ../../source/plugins/simulations.rst:162
+msgid ""
+"``examples/feature_simulate`` is the worked example. Its scenes are "
+"arrangements of blocks that each declare a ``simulate:`` entry with a "
+"``validation:`` over how far anything moved: ``stable`` is supposed to "
+"stand, ``unstable``, ``slippery`` and ``tilted`` are supposed not to, and "
+"``tank`` is filled with water so that buoyancy and drag are exercised too."
+msgstr ""
+"``examples/feature_simulate`` ist das durchgearbeitete Beispiel. Seine "
+"Szenen sind Anordnungen von Blöcken, die je einen ``simulate:``-Eintrag mit "
+"einem ``validation:`` darüber deklarieren, wie weit sich etwas bewegt hat: "
+"``stable`` soll stehen, ``unstable``, ``slippery`` und ``tilted`` sollen es "
+"nicht, und ``tank`` ist mit Wasser gefüllt, sodass auch Auftrieb und "
+"Widerstand erprobt werden."
+
+#: ../../source/plugins/simulations.rst:175
+msgid ""
+":ref:`sim-engines` says what each engine models and what it does not, and "
+":ref:`sim-validation` the vocabulary the two PartCAD maintains report in -- "
+"a plugin that reports the same is one whose validations read the same."
+msgstr ""
+":ref:`sim-engines` sagt, was jede Engine modelliert und was nicht, und "
+":ref:`sim-validation` das Vokabular, in dem die zwei berichten, die PartCAD "
+"pflegt -- ein Plugin, das dasselbe berichtet, ist eines, dessen "
+"Validierungen sich gleich lesen."
+
+#: ../../source/plugins/simulations.rst:179
+msgid ""
+"See :doc:`/digital_thread/lifecycle/simulation` for the whole chapter on "
+"simulating, and :ref:`sim-declaring` for every key of the declaration."
+msgstr ""
+"Siehe :doc:`/digital_thread/lifecycle/simulation` für das ganze Kapitel über"
+" das Simulieren, und :ref:`sim-declaring` für jeden Schlüssel der "
+"Deklaration."

@@ -1,0 +1,58 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/maintenance/security.rst:3
+msgid "Security"
+msgstr "安全性"
+
+#: ../../source/maintenance/security.rst:6
+msgid ""
+"As code-CAD is gaining popularity in the community, the topic of supply "
+"chain security and the risk of running arbitrary third-party code is not "
+"sufficiently addressed. PartCAD aims to close that gap for open-source "
+"software in a way that exceeds anything commercial software has to offer at "
+"the moment."
+msgstr ""
+"随着代码化 CAD 在社区中日益流行，供应链安全以及运行任意第三方代码所带来的风险"
+"这一话题尚未得到充分重视。PartCAD 旨在为开源软件弥补这一空白，其方式超越了目"
+"前任何商业软件所能提供的水平。"
+
+#: ../../source/maintenance/security.rst:11
+msgid ""
+"PartCAD is capable of rendering scripted parts in sandboxed environments: "
+"``CadQuery``, ``build123d`` and ``sdf`` use Python, and ``Chili3D`` uses "
+"JavaScript."
+msgstr ""
+"PartCAD 能够在沙箱环境中渲染脚本化的零件： ``CadQuery`` 、 ``build123d`` 和 "
+"``sdf`` 使用 Python，而 ``Chili3D`` 使用 JavaScript。"
+
+#: ../../source/maintenance/security.rst:15
+msgid ""
+"At the moment it is only useful from a dependency management perspective (it "
+"allows third-party packages to bring their Python and npm dependencies "
+"without polluting your own environments), in the future, PartCAD aims to "
+"achieve security isolation of the sandboxed environments. That will "
+"fundamentally change the security implications of using scripted models "
+"shared online."
+msgstr ""
+"目前，这仅从依赖管理的角度有用（它允许第三方包引入自己的 Python 和 npm 依赖，"
+"而不会污染你自己的环境）；未来，PartCAD 的目标是实现沙箱环境的安全隔离。这将"
+"从根本上改变使用在线共享的脚本化模型所带来的安全影响。"

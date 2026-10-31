@@ -1,0 +1,1876 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:2
+msgid "Test"
+msgstr "Test"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:4
+msgid ""
+"``pc test`` holds an object to every claim its declaration makes that can be"
+" measured. It is a list of checks, each asking one question of one object; "
+"this page is that list, and it is the same text the Digital Thread shows "
+"beside each check on the **Validation → Test** tab."
+msgstr ""
+"``pc test`` hält ein Objekt an jeder messbaren Behauptung fest, die seine "
+"Deklaration aufstellt. Es ist eine Liste von Prüfungen, von denen jede eine "
+"Frage an ein Objekt stellt; diese Seite ist diese Liste, und es ist derselbe"
+" Text, den der Digital Thread neben jeder Prüfung auf dem Tab **Validation →"
+" Test** zeigt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:10
+msgid "In the UI"
+msgstr "In der Benutzeroberfläche"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:12
+msgid ""
+"**Validation → Test** is the first tab of the Validation group and the one "
+"tab that is always enabled, since every object of a package has checks."
+msgstr ""
+"**Validation → Test** ist der erste Tab der Gruppe Validation und der eine "
+"Tab, der immer aktiviert ist, denn jedes Objekt eines Pakets hat Prüfungen."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:15
+msgid ""
+"Down the left, every check ``pc test`` runs, in the order it runs them, each"
+" with its verdict: passed, failed, warned, skipped, or not applicable -- the"
+" last saying *why*, so a check that did not apply is never mistaken for one "
+"that passed."
+msgstr ""
+"Links jede Prüfung, die ``pc test`` ausführt, in der Reihenfolge, in der es "
+"sie ausführt, jede mit ihrem Urteil: bestanden, fehlgeschlagen, gewarnt, "
+"übersprungen oder nicht zutreffend -- das Letzte mit der Angabe, *warum*, "
+"sodass eine Prüfung, die nicht zutraf, nie für eine bestandene gehalten "
+"wird."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:19
+msgid ""
+"In the middle, the check selected: what it found this time, and under that "
+"what the check asks, when it does not apply, what each failure means and "
+"what to do about it -- the text of this page, which is where it comes from."
+msgstr ""
+"In der Mitte die ausgewählte Prüfung: was sie dieses Mal gefunden hat, und "
+"darunter, was die Prüfung fragt, wann sie nicht zutrifft, was jeder "
+"Fehlschlag bedeutet und was dagegen zu tun ist -- der Text dieser Seite, von"
+" der er stammt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:22
+msgid ""
+"For a failure that left something behind to look at, a button that opens it."
+" An interference leaves an assembly of the two parts that overlap, placed "
+"where the assembly places them, and a sub-assembly named ``interference`` "
+"holding what they share: switch the two parts off in the 3D tab and what is "
+"left is the overlap."
+msgstr ""
+"Für einen Fehlschlag, der etwas zum Ansehen hinterlassen hat, eine "
+"Schaltfläche, die es öffnet. Eine Durchdringung hinterlässt eine Baugruppe "
+"aus den zwei überlappenden Teilen, platziert dort, wo die Baugruppe sie "
+"platziert, und eine Unterbaugruppe namens ``interference``, die den "
+"gemeinsamen Anteil enthält: schalten Sie die zwei Teile im 3D-Tab aus, und "
+"was übrig bleibt, ist die Überlappung."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:28
+msgid ""
+"The Validation group's Test tab: every check with its verdict, and the "
+"selected check explained"
+msgstr ""
+"Der Test-Tab der Gruppe Validation: jede Prüfung mit ihrem Urteil und die "
+"ausgewählte Prüfung erklärt"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:33
+msgid ""
+"The checks **run** when the tab is first opened, as ``pc test <object>`` "
+"runs them and through the same cache, so the panel and the command line give"
+" the same answer; **Run again** asks afresh. An object that belongs to no "
+"package -- a shape shown from a script -- has nothing to ask PartCAD about, "
+"and the tab says so. ``pc ide view --validation-test`` opens it from a "
+"terminal."
+msgstr ""
+"Die Prüfungen **laufen**, wenn der Tab erstmals geöffnet wird, so wie ``pc "
+"test <object>`` sie ausführt und über denselben Cache, sodass das Panel und "
+"die Befehlszeile dieselbe Antwort geben; **Run again** fragt erneut. Ein "
+"Objekt, das zu keinem Paket gehört -- eine aus einem Skript gezeigte Form "
+"--, hat PartCAD nichts zu fragen, und der Tab sagt das. ``pc ide view "
+"--validation-test`` öffnet ihn von einem Terminal aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:40
+msgid "On the command line"
+msgstr "Auf der Befehlszeile"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:48
+msgid ""
+"Every check is asked of every object, and the checks that have nothing to "
+"ask of it -- an assembly's checks of a part, the analyses of a part that "
+"declares none -- say so and pass. Each verdict is one of:"
+msgstr ""
+"Jede Prüfung wird an jedes Objekt gestellt, und die Prüfungen, die ihm "
+"nichts zu fragen haben -- die Prüfungen einer Baugruppe an einem Teil, die "
+"Analysen eines Teils, das keine deklariert --, sagen das und bestehen. Jedes"
+" Urteil ist eines von diesen:"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:52
+msgid "**passed**;"
+msgstr "**bestanden**;"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:53
+msgid "**failed**: the claim does not hold, and the check says what it found;"
+msgstr ""
+"**fehlgeschlagen**: die Behauptung gilt nicht, und die Prüfung sagt, was sie"
+" gefunden hat;"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:54
+msgid ""
+"**warned**: a finding on an object nobody is going to make "
+"(``manufacturable: false``), reported and not failed;"
+msgstr ""
+"**gewarnt**: ein Befund an einem Objekt, das niemand herstellen wird "
+"(``manufacturable: false``), berichtet und nicht als Fehlschlag gewertet;"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:56
+msgid ""
+"**skipped**: the question could not be put on this machine -- a solver that "
+"is not installed, a container runtime that is not running -- said out loud, "
+"and not failed;"
+msgstr ""
+"**übersprungen**: die Frage konnte auf diesem Rechner nicht gestellt werden "
+"-- ein Solver, der nicht installiert ist, eine Container-Laufzeitumgebung, "
+"die nicht läuft --, laut gesagt und nicht als Fehlschlag gewertet;"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:59
+msgid ""
+"**not applicable**: the check has nothing to ask of this object, and says "
+"why."
+msgstr ""
+"**nicht zutreffend**: die Prüfung hat diesem Objekt nichts zu fragen und "
+"sagt, warum."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:61
+msgid ""
+"A verdict is cached under everything it depends on, so asking again about an"
+" object that has not changed costs a lookup; a failure read from the cache "
+"is said again as \"remembered from an earlier run\", and ``pc --cache-bypass"
+" test`` asks afresh. Asked about one object by name, a check may be stricter"
+" than when it is walked to as part of a package -- ``sim`` fails a "
+"simulation with no condition to check rather than skipping it."
+msgstr ""
+"Ein Urteil liegt unter allem im Cache, wovon es abhängt; erneut nach einem "
+"Objekt zu fragen, das sich nicht geändert hat, kostet also eine Nachfrage; "
+"ein aus dem Cache gelesener Fehlschlag wird erneut mit \"remembered from an "
+"earlier run\" gesagt, und ``pc --cache-bypass test`` fragt neu. Wird eine "
+"Prüfung zu einem Objekt namentlich gestellt, kann sie strenger sein als "
+"dann, wenn sie als Teil eines Pakets erreicht wird -- ``sim`` lässt eine "
+"Simulation ohne zu prüfende Bedingung scheitern, statt sie zu überspringen."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:69
+msgid "The checks"
+msgstr "Die Prüfungen"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:71
+msgid ""
+"They are listed in the order ``pc test`` runs them: the nearly free ones "
+"first, then those that measure geometry, then the analyses and the "
+"simulations, which are the most expensive."
+msgstr ""
+"Sie sind in der Reihenfolge aufgeführt, in der ``pc test`` sie ausführt: die"
+" nahezu kostenlosen zuerst, dann die, die Geometrie messen, dann die "
+"Analysen und die Simulationen, die die teuersten sind."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:80
+msgid "``cad``: Builds"
+msgstr "``cad``: Baut"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:82
+msgid ""
+"**Applies to** every part, assembly, scene and sketch. ``pc test -f cad "
+"<object>`` runs it alone."
+msgstr ""
+"**Gilt für** jedes Teil, jede Baugruppe, jede Szene und jede Skizze. ``pc "
+"test -f cad <object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:84
+msgid ""
+"Whether the object builds: its script runs, its file reads, its assembly "
+"puts together, and something comes out. It is the first question, and every "
+"other check that looks at geometry takes it as answered - a check that finds"
+" no shape to measure passes and leaves the failure here, so that one broken "
+"object is one failure and not a dozen."
+msgstr ""
+"Ob das Objekt baut: sein Skript läuft, seine Datei liest sich, seine "
+"Baugruppe setzt sich zusammen, und es kommt etwas heraus. Es ist die erste "
+"Frage, und jede andere Prüfung, die auf Geometrie schaut, nimmt sie als "
+"beantwortet an - eine Prüfung, die keine Form zum Messen findet, besteht und"
+" lässt den Fehlschlag hier, sodass ein kaputtes Objekt ein Fehlschlag ist "
+"und nicht ein Dutzend."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:87
+#: ../../source/digital_thread/lifecycle/testing.rst:111
+#: ../../source/digital_thread/lifecycle/testing.rst:141
+#: ../../source/digital_thread/lifecycle/testing.rst:161
+#: ../../source/digital_thread/lifecycle/testing.rst:184
+#: ../../source/digital_thread/lifecycle/testing.rst:204
+#: ../../source/digital_thread/lifecycle/testing.rst:226
+#: ../../source/digital_thread/lifecycle/testing.rst:251
+#: ../../source/digital_thread/lifecycle/testing.rst:277
+#: ../../source/digital_thread/lifecycle/testing.rst:302
+#: ../../source/digital_thread/lifecycle/testing.rst:327
+#: ../../source/digital_thread/lifecycle/testing.rst:355
+#: ../../source/digital_thread/lifecycle/testing.rst:378
+#: ../../source/digital_thread/lifecycle/testing.rst:398
+#: ../../source/digital_thread/lifecycle/testing.rst:417
+#: ../../source/digital_thread/lifecycle/testing.rst:436
+#: ../../source/digital_thread/lifecycle/testing.rst:457
+#: ../../source/digital_thread/lifecycle/testing.rst:484
+#: ../../source/digital_thread/lifecycle/testing.rst:507
+#: ../../source/digital_thread/lifecycle/testing.rst:535
+#: ../../source/digital_thread/lifecycle/testing.rst:563
+#: ../../source/digital_thread/lifecycle/testing.rst:591
+#: ../../source/digital_thread/lifecycle/testing.rst:619
+msgid "When it does not apply"
+msgstr "Wann sie nicht zutrifft"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:89
+msgid "Never: everything PartCAD tests is built first."
+msgstr "Nie: alles, was PartCAD testet, wird zuerst gebaut."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:92
+#: ../../source/digital_thread/lifecycle/testing.rst:116
+#: ../../source/digital_thread/lifecycle/testing.rst:146
+#: ../../source/digital_thread/lifecycle/testing.rst:166
+#: ../../source/digital_thread/lifecycle/testing.rst:189
+#: ../../source/digital_thread/lifecycle/testing.rst:209
+#: ../../source/digital_thread/lifecycle/testing.rst:231
+#: ../../source/digital_thread/lifecycle/testing.rst:256
+#: ../../source/digital_thread/lifecycle/testing.rst:282
+#: ../../source/digital_thread/lifecycle/testing.rst:307
+#: ../../source/digital_thread/lifecycle/testing.rst:332
+#: ../../source/digital_thread/lifecycle/testing.rst:360
+#: ../../source/digital_thread/lifecycle/testing.rst:383
+#: ../../source/digital_thread/lifecycle/testing.rst:403
+#: ../../source/digital_thread/lifecycle/testing.rst:422
+#: ../../source/digital_thread/lifecycle/testing.rst:441
+#: ../../source/digital_thread/lifecycle/testing.rst:462
+#: ../../source/digital_thread/lifecycle/testing.rst:489
+#: ../../source/digital_thread/lifecycle/testing.rst:512
+#: ../../source/digital_thread/lifecycle/testing.rst:540
+#: ../../source/digital_thread/lifecycle/testing.rst:568
+#: ../../source/digital_thread/lifecycle/testing.rst:596
+#: ../../source/digital_thread/lifecycle/testing.rst:624
+msgid "When it fails"
+msgstr "Wann sie fehlschlägt"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:94
+msgid ""
+"``Failed to get the shape``: building it produced nothing. The reason is in "
+"the log above the verdict - the error the script raised, the file that could"
+" not be read or fetched, the link of an assembly that names an object nobody"
+" declares. Build it on its own to see it again: ``pc --no-ansi info "
+"<object>`` or ``pc --no-ansi render -t png <object>``."
+msgstr ""
+"``Failed to get the shape``: das Bauen hat nichts erzeugt. Der Grund steht "
+"im Protokoll über dem Urteil - der Fehler, den das Skript ausgelöst hat, die"
+" Datei, die nicht gelesen oder geholt werden konnte, der Link einer "
+"Baugruppe, der ein Objekt nennt, das niemand deklariert. Bauen Sie es für "
+"sich allein, um es erneut zu sehen: ``pc --no-ansi info <object>`` oder ``pc"
+" --no-ansi render -t png <object>``."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:95
+msgid ""
+"A verdict remembered from an earlier run is said again with \"remembered "
+"from an earlier run\": once the cause is fixed, ``pc --cache-bypass test`` "
+"asks again rather than reading the cache."
+msgstr ""
+"Ein Urteil, das aus einem früheren Lauf erinnert wird, wird erneut mit "
+"\"remembered from an earlier run\" gesagt: sobald die Ursache behoben ist, "
+"fragt ``pc --cache-bypass test`` erneut, anstatt den Cache zu lesen."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:100
+msgid "``manufacturability``: Can be made or bought"
+msgstr "``manufacturability``: Kann hergestellt oder gekauft werden"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:102
+msgid ""
+"**Applies to** every object that does not say ``manufacturable: false``. "
+"``pc test -f manufacturability <object>`` runs it alone."
+msgstr ""
+"**Gilt für** jedes Objekt, das nicht ``manufacturable: false`` sagt. ``pc "
+"test -f manufacturability <object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:104
+msgid ""
+"Whether the object can be had: bought from somebody who sells it, or made by"
+" a method it declares. It asks for exactly what ``pc supply`` would order "
+"and what ``pc instructions`` would tell somebody to do."
+msgstr ""
+"Ob das Objekt zu bekommen ist: gekauft bei jemandem, der es verkauft, oder "
+"hergestellt mit einem Verfahren, das es deklariert. Sie fragt genau nach "
+"dem, was ``pc supply`` bestellen würde und was ``pc instructions`` jemandem "
+"zu tun aufgeben würde."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:106
+msgid ""
+"Every object has to be reproducible: one read from a file the package "
+"fetches (``fileFrom:``) has to pin the file with ``fileHash:``, or name a "
+"vendor and SKU to order it by, so that it is known which bytes it is made "
+"from."
+msgstr ""
+"Jedes Objekt muss reproduzierbar sein: eines, das aus einer Datei gelesen "
+"wird, die das Paket holt (``fileFrom:``), muss die Datei mit ``fileHash:`` "
+"festschreiben oder einen Vendor und eine SKU nennen, über die sie zu "
+"bestellen ist, damit bekannt ist, aus welchen Bytes es gemacht ist."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:107
+msgid ""
+"A part is bought (``vendor:`` and ``sku:``, and a supplier that carries it) "
+"or made (``manufacturing:`` with a ``method:``). A part that is made needs a"
+" manufacturing tolerance, and the stock it is made from (``manufacturing: "
+"source:``) has to pass these checks itself. The ``software:`` it declares "
+"has to resolve, to the file that was meant."
+msgstr ""
+"Ein Teil wird gekauft (``vendor:`` und ``sku:``, und ein Lieferant, der es "
+"führt) oder hergestellt (``manufacturing:`` mit einem ``method:``). Ein "
+"Teil, das hergestellt wird, braucht eine Fertigungstoleranz, und das "
+"Rohmaterial, aus dem es hergestellt wird (``manufacturing: source:``), muss "
+"diese Prüfungen selbst bestehen. Die ``software:``, die es deklariert, muss "
+"sich auflösen, und zwar auf die Datei, die gemeint war."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:108
+msgid ""
+"An assembly is either sold assembled (bought, and nothing inside it is "
+"looked at), or assembled: then every step has to be one somebody can follow "
+"- each item after the first says what it is joined to and how - and "
+"everything it is procured from has to pass these checks on its own."
+msgstr ""
+"Eine Baugruppe wird entweder zusammengebaut verkauft (gekauft, und nichts in"
+" ihr wird betrachtet) oder zusammengebaut: dann muss jeder Schritt einer "
+"sein, dem jemand folgen kann - jedes Element nach dem ersten sagt, womit und"
+" wie es gefügt wird -, und alles, woraus sie beschafft wird, muss diese "
+"Prüfungen für sich bestehen."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:113
+msgid ""
+"An object that says ``manufacturable: false`` - a model of something "
+"somebody else makes, an import kept as it arrived, a scene (which is not "
+"manufacturable unless it says so). A sketch is checked for being "
+"reproducible and for nothing else."
+msgstr ""
+"Ein Objekt, das ``manufacturable: false`` sagt - ein Modell von etwas, das "
+"jemand anders herstellt, ein Import, der so behalten wird, wie er angekommen"
+" ist, eine Szene (die nicht fertigbar ist, sofern sie es nicht sagt). Eine "
+"Skizze wird auf Reproduzierbarkeit geprüft und auf nichts anderes."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:118
+msgid ""
+"``It is not reproducible: ...``: pin the file with ``fileHash:`` (``pc add``"
+" writes one for an object it adds from a URL), carry the file in the "
+"package, or name a ``vendor:`` and ``sku:``."
+msgstr ""
+"``It is not reproducible: ...``: schreiben Sie die Datei mit ``fileHash:`` "
+"fest (``pc add`` schreibt einen für ein Objekt, das es von einer URL "
+"hinzufügt), führen Sie die Datei im Paket mit, oder nennen Sie ein "
+"``vendor:`` und ein ``sku:``."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:119
+msgid ""
+"``Cannot be purchased or manufactured``: add a ``manufacturing:`` section "
+"with a ``method:`` (see the ``manufacturability-*`` checks for each method),"
+" or a ``vendor:`` and ``sku:`` - or say ``manufacturable: false`` if nobody "
+"is going to make it."
+msgstr ""
+"``Cannot be purchased or manufactured``: fügen Sie einen "
+"``manufacturing:``-Abschnitt mit einem ``method:`` hinzu (siehe die "
+"``manufacturability-*``-Prüfungen für jedes Verfahren) oder ein ``vendor:`` "
+"und ein ``sku:`` - oder sagen Sie ``manufacturable: false``, wenn niemand es"
+" herstellen wird."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:120
+msgid ""
+"``No suppliers found`` / ``No suppliers provide the part``: name a supplier "
+"that carries it, or make it instead."
+msgstr ""
+"``No suppliers found`` / ``No suppliers provide the part``: nennen Sie einen"
+" Lieferanten, der es führt, oder stellen Sie es stattdessen her."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:121
+msgid ""
+"``No manufacturing tolerance is specified``: give the part a ``tolerance``, "
+"which a part that is made needs to be made to anything."
+msgstr ""
+"``No manufacturing tolerance is specified``: geben Sie dem Teil eine "
+"``tolerance``, die ein Teil, das hergestellt wird, braucht, um überhaupt auf"
+" ein Maß gefertigt zu werden."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:122
+msgid ""
+"``The stock '...' it is made from is not found`` / ``cannot be had``: fix "
+"the name under ``manufacturing: source:``, or make the stock obtainable."
+msgstr ""
+"``The stock '...' it is made from is not found`` / ``cannot be had``: "
+"korrigieren Sie den Namen unter ``manufacturing: source:``, oder machen Sie "
+"das Rohmaterial beschaffbar."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:123
+msgid ""
+"``Step '...' can't be followed: ...``: give that link a ``connect:`` and say"
+" how it goes on - a ``how:``, or a mating or an interface that says it."
+msgstr ""
+"``Step '...' can't be followed: ...``: geben Sie diesem Link ein "
+"``connect:`` und sagen Sie, wie es zusammengeht - ein ``how:``, oder eine "
+"Paarung oder ein Interface, das es sagt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:124
+msgid ""
+"``Missing part or assembly '...' is referenced`` / ``Non-manufacturable ... "
+"is referenced``: what the assembly is made of has to exist and be "
+"manufacturable."
+msgstr ""
+"``Missing part or assembly '...' is referenced`` / ``Non-manufacturable ... "
+"is referenced``: woraus die Baugruppe besteht, muss existieren und fertigbar"
+" sein."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:127
+#: ../../source/digital_thread/lifecycle/testing.rst:237
+#: ../../source/digital_thread/lifecycle/testing.rst:263
+#: ../../source/digital_thread/lifecycle/testing.rst:288
+#: ../../source/digital_thread/lifecycle/testing.rst:339
+#: ../../source/digital_thread/lifecycle/testing.rst:470
+#: ../../source/digital_thread/lifecycle/testing.rst:521
+#: ../../source/digital_thread/lifecycle/testing.rst:549
+#: ../../source/digital_thread/lifecycle/testing.rst:577
+#: ../../source/digital_thread/lifecycle/testing.rst:605
+#: ../../source/digital_thread/lifecycle/testing.rst:633
+msgid "Settings"
+msgstr "Einstellungen"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:129
+msgid ""
+"``manufacturable:`` on the object or its package; ``vendor:``, ``sku:``, "
+"``fileFrom:``, ``fileHash:``, ``software:``, ``manufacturing:`` and the "
+"part's ``tolerance``."
+msgstr ""
+"``manufacturable:`` am Objekt oder an seinem Paket; ``vendor:``, ``sku:``, "
+"``fileFrom:``, ``fileHash:``, ``software:``, ``manufacturing:`` und die "
+"``tolerance`` des Teils."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:134
+msgid "``manufacturability-additive``: Additive: a closed solid"
+msgstr ""
+"``manufacturability-additive``: Additiv: ein geschlossener Volumenkörper"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:136
+msgid ""
+"**Applies to** a part with ``manufacturing: method: additive``. ``pc test -f"
+" manufacturability-additive <object>`` runs it alone."
+msgstr ""
+"**Gilt für** ein Teil mit ``manufacturing: method: additive``. ``pc test -f "
+"manufacturability-additive <object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:138
+msgid ""
+"Whether a part to be printed is a closed solid: a body with no open edges, "
+"which is what a slicer needs to know what is inside it."
+msgstr ""
+"Ob ein Teil, das gedruckt werden soll, ein geschlossener Volumenkörper ist: "
+"ein Körper ohne offene Kanten, was ein Slicer braucht, um zu wissen, was "
+"darin ist."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:143
+#: ../../source/digital_thread/lifecycle/testing.rst:163
+#: ../../source/digital_thread/lifecycle/testing.rst:186
+#: ../../source/digital_thread/lifecycle/testing.rst:206
+msgid "Anything but a part, and a part made by any other method."
+msgstr ""
+"Alles außer einem Teil, und ein Teil, das mit irgendeinem anderen Verfahren "
+"hergestellt wird."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:148
+msgid ""
+"``The shape is not solid``: the part has open edges - faces that do not "
+"meet. Close the model in the tool it comes from, or export it as a solid "
+"rather than as a surface."
+msgstr ""
+"``The shape is not solid``: das Teil hat offene Kanten - Flächen, die nicht "
+"aneinanderstoßen. Schließen Sie das Modell in dem Werkzeug, aus dem es "
+"kommt, oder exportieren Sie es als Volumenkörper und nicht als Fläche."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:149
+#: ../../source/digital_thread/lifecycle/testing.rst:192
+msgid "``Failed to get the shape``: it did not build; see ``cad``."
+msgstr "``Failed to get the shape``: es hat nicht gebaut; siehe ``cad``."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:154
+msgid "``manufacturability-subtractive``: Subtractive: cut from its stock"
+msgstr ""
+"``manufacturability-subtractive``: Subtraktiv: aus seinem Rohmaterial "
+"geschnitten"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:156
+msgid ""
+"**Applies to** a part with ``manufacturing: method: subtractive``. ``pc test"
+" -f manufacturability-subtractive <object>`` runs it alone."
+msgstr ""
+"**Gilt für** ein Teil mit ``manufacturing: method: subtractive``. ``pc test "
+"-f manufacturability-subtractive <object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:158
+msgid ""
+"Whether a part to be cut out of stock can be: the stock is named, the "
+"machine sections can be read, the part is a closed solid, and it lies inside"
+" its stock with material to take away. Cutting removes material and never "
+"adds it, so a part that sticks out of its stock cannot be cut from it."
+msgstr ""
+"Ob ein Teil, das aus Rohmaterial geschnitten werden soll, das auch kann: das"
+" Rohmaterial ist benannt, die Maschinenabschnitte lassen sich lesen, das "
+"Teil ist ein geschlossener Volumenkörper, und es liegt innerhalb seines "
+"Rohmaterials, mit Material zum Abnehmen. Schneiden nimmt Material weg und "
+"fügt nie welches hinzu; ein Teil, das aus seinem Rohmaterial herausragt, "
+"kann daher nicht daraus geschnitten werden."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:168
+msgid ""
+"``The subtractive declaration states no 'source'``: name the stock the part "
+"is cut from under ``manufacturing: source:``."
+msgstr ""
+"``The subtractive declaration states no 'source'``: nennen Sie unter "
+"``manufacturing: source:`` das Rohmaterial, aus dem das Teil geschnitten "
+"wird."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:169
+msgid ""
+"``The subtractive declaration says ...``: a ``cnc:``, ``laser:``, ``drill:``"
+" or ``cut:`` section has a key it does not take, or a value it cannot read; "
+"the sentence names it."
+msgstr ""
+"``The subtractive declaration says ...``: ein ``cnc:``-, ``laser:``-, "
+"``drill:``- oder ``cut:``-Abschnitt hat einen Schlüssel, den er nicht "
+"annimmt, oder einen Wert, den er nicht lesen kann; der Satz benennt ihn."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:170
+msgid ""
+"``It does not fit the stock '...': ... mm3 of it is outside``: make the "
+"stock larger, or place it so that it encloses the part."
+msgstr ""
+"``It does not fit the stock '...': ... mm3 of it is outside``: machen Sie "
+"das Rohmaterial größer oder platzieren Sie es so, dass es das Teil "
+"umschließt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:171
+msgid ""
+"``The stock '...' is the same solid as the part, so nothing is cut from "
+"it``: ``source:`` names the part itself, or a copy of it; name the blank "
+"instead."
+msgstr ""
+"``The stock '...' is the same solid as the part, so nothing is cut from "
+"it``: ``source:`` nennt das Teil selbst oder eine Kopie davon; nennen Sie "
+"stattdessen den Rohling."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:172
+msgid ""
+"``The shape is not solid``: close the model, as for ``manufacturability-"
+"additive``."
+msgstr ""
+"``The shape is not solid``: schließen Sie das Modell, wie bei "
+"``manufacturability-additive``."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:177
+msgid "``manufacturability-forming``: Forming: a closed solid"
+msgstr ""
+"``manufacturability-forming``: Umformen: ein geschlossener Volumenkörper"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:179
+msgid ""
+"**Applies to** a part with ``manufacturing: method: forming``. ``pc test -f "
+"manufacturability-forming <object>`` runs it alone."
+msgstr ""
+"**Gilt für** ein Teil mit ``manufacturing: method: forming``. ``pc test -f "
+"manufacturability-forming <object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:181
+msgid ""
+"Whether a part to be formed - moulded, cast, pressed - is a closed solid."
+msgstr ""
+"Ob ein Teil, das umgeformt werden soll - gespritzt, gegossen, gepresst -, "
+"ein geschlossener Volumenkörper ist."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:191
+msgid "``The shape is not solid``: the part has open edges; close the model."
+msgstr ""
+"``The shape is not solid``: das Teil hat offene Kanten; schließen Sie das "
+"Modell."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:197
+msgid "``manufacturability-sheet-metal``: Sheet metal: a flat blank and bends"
+msgstr ""
+"``manufacturability-sheet-metal``: Blech: ein flacher Rohling und Biegungen"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:199
+msgid ""
+"**Applies to** a part with ``manufacturing: method: sheet_metal``. ``pc test"
+" -f manufacturability-sheet-metal <object>`` runs it alone."
+msgstr ""
+"**Gilt für** ein Teil mit ``manufacturing: method: sheet_metal``. ``pc test "
+"-f manufacturability-sheet-metal <object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:201
+msgid ""
+"Whether a sheet metal part can be bent out of what it names: a blank that is"
+" flat on both faces (``source:``), and a sketch of the bend lines "
+"(``instructions:``) in which every line says its angle, its inner radius and"
+" which way it goes. Both questions are asked every time, so one run says "
+"everything that is wrong."
+msgstr ""
+"Ob ein Blechteil aus dem gebogen werden kann, was es nennt: ein Rohling, der"
+" auf beiden Seiten flach ist (``source:``), und eine Skizze der Biegelinien "
+"(``instructions:``), in der jede Linie ihren Winkel, ihren Innenradius und "
+"ihre Richtung angibt. Beide Fragen werden jedes Mal gestellt, sodass ein "
+"Lauf alles sagt, was falsch ist."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:211
+msgid ""
+"``The sheet metal declaration states no 'source'`` (or ``'instructions'``): "
+"name the flat blank and the sketch of the bend lines."
+msgstr ""
+"``The sheet metal declaration states no 'source'`` (oder "
+"``'instructions'``): nennen Sie den flachen Rohling und die Skizze der "
+"Biegelinien."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:212
+msgid ""
+"``... is not flat on the bottom`` (or ``top``): ``source:`` has to be the "
+"flat blank, not the bent part."
+msgstr ""
+"``... is not flat on the bottom`` (oder ``top``): ``source:`` muss der "
+"flache Rohling sein, nicht das gebogene Teil."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:213
+msgid ""
+"``... draws no bend lines``: the sketch has to draw each bend as a line; a "
+"layer can be picked with parameters (``bends;include=BEND_UP,BEND_DOWN``)."
+msgstr ""
+"``... draws no bend lines``: die Skizze muss jede Biegung als Linie "
+"zeichnen; eine Ebene lässt sich mit Parametern auswählen "
+"(``bends;include=BEND_UP,BEND_DOWN``)."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:214
+msgid ""
+"``The bend drawn by the ... cannot be made: ...``: annotate the line with an"
+" ``angle`` above 0 and below 360 degrees, a ``radius`` above 0 (a bend, not "
+"a fold), and a ``direction`` of ``up`` or ``down``."
+msgstr ""
+"``The bend drawn by the ... cannot be made: ...``: versehen Sie die Linie "
+"mit einem ``angle`` über 0 und unter 360 Grad, einem ``radius`` über 0 (eine"
+" Biegung, kein Falz) und einer ``direction`` von ``up`` oder ``down``."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:219
+msgid "``manufacturability-laser``: Laser: faces along or across the beam"
+msgstr ""
+"``manufacturability-laser``: Laser: Flächen längs oder quer zum Strahl"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:221
+msgid ""
+"**Applies to** a part made by ``method: subtractive`` that names a "
+"``laser:`` machine. ``pc test -f manufacturability-laser <object>`` runs it "
+"alone."
+msgstr ""
+"**Gilt für** ein Teil, das mit ``method: subtractive`` hergestellt wird und "
+"eine ``laser:``-Maschine nennt. ``pc test -f manufacturability-laser "
+"<object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:223
+msgid ""
+"Whether a laser cutting along the tool axis can make the part: every face "
+"has to be either a wall along the axis or a face across it, and there has to"
+" be a wall to cut. A laser cuts straight through, so a chamfer, a taper or a"
+" fillet that is neither is not something it can make. Thickness, material "
+"and power are not checked."
+msgstr ""
+"Ob ein Laser, der entlang der Werkzeugachse schneidet, das Teil herstellen "
+"kann: jede Fläche muss entweder eine Wand längs der Achse oder eine Fläche "
+"quer dazu sein, und es muss eine Wand zum Schneiden geben. Ein Laser "
+"schneidet gerade durch; eine Fase, eine Verjüngung oder eine Rundung, die "
+"keines von beiden ist, kann er daher nicht herstellen. Dicke, Material und "
+"Leistung werden nicht geprüft."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:228
+msgid ""
+"Anything but a part, a part made by another method, and a subtractive part "
+"that names no ``laser:`` machine - a part that names no machine at all is "
+"taken to be milled."
+msgstr ""
+"Alles außer einem Teil, ein Teil, das mit einem anderen Verfahren "
+"hergestellt wird, und ein subtraktives Teil, das keine ``laser:``-Maschine "
+"nennt - ein Teil, das überhaupt keine Maschine nennt, gilt als gefräst."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:233
+msgid ""
+"``A laser cutting along ... cannot make it: N of its faces are neither along"
+" ... nor across it``: remove the faces at an angle (the worst is named), or "
+"set ``toolAxis:`` to the direction the beam really goes."
+msgstr ""
+"``A laser cutting along ... cannot make it: N of its faces are neither along"
+" ... nor across it``: entfernen Sie die schräg liegenden Flächen (die "
+"schlimmste wird genannt), oder setzen Sie ``toolAxis:`` auf die Richtung, in"
+" die der Strahl wirklich geht."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:234
+msgid ""
+"``It has no wall along ... for a laser to cut``: the axis is wrong, or the "
+"part is not something a laser makes."
+msgstr ""
+"``It has no wall along ... for a laser to cut``: die Achse ist falsch, oder "
+"das Teil ist nichts, was ein Laser herstellt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:239
+msgid ""
+"``manufacturing: laser:`` - ``toolAxis:`` (or ``along:``, default ``-Z``) "
+"and the job keys (``kerf``, ``power``, ``feed``, ``direction``, "
+"``implementation``)."
+msgstr ""
+"``manufacturing: laser:`` - ``toolAxis:`` (oder ``along:``, Standard ``-Z``)"
+" und die Job-Schlüssel (``kerf``, ``power``, ``feed``, ``direction``, "
+"``implementation``)."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:244
+msgid "``manufacturability-drill``: Drill: round holes along the axis"
+msgstr "``manufacturability-drill``: Bohren: runde Löcher längs der Achse"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:246
+msgid ""
+"**Applies to** a part made by ``method: subtractive`` that names a "
+"``drill:`` machine. ``pc test -f manufacturability-drill <object>`` runs it "
+"alone."
+msgstr ""
+"**Gilt für** ein Teil, das mit ``method: subtractive`` hergestellt wird und "
+"eine ``drill:``-Maschine nennt. ``pc test -f manufacturability-drill "
+"<object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:248
+msgid ""
+"Whether a drill working along the tool axis can make what is taken away: "
+"every wall has to be along the axis and round. Measured on the material "
+"removed from the stock when ``source:`` names one, and on the part itself "
+"otherwise."
+msgstr ""
+"Ob ein Bohrer, der entlang der Werkzeugachse arbeitet, das herstellen kann, "
+"was weggenommen wird: jede Wand muss längs der Achse und rund sein. Gemessen"
+" am Material, das vom Rohmaterial entfernt wird, wenn ``source:`` eines "
+"nennt, und sonst am Teil selbst."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:253
+msgid ""
+"Anything but a part, a part made by another method, and a subtractive part "
+"that names no ``drill:`` machine."
+msgstr ""
+"Alles außer einem Teil, ein Teil, das mit einem anderen Verfahren "
+"hergestellt wird, und ein subtraktives Teil, das keine ``drill:``-Maschine "
+"nennt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:258
+msgid ""
+"``There is no hole along ... for a drill to make``: the axis is wrong, or "
+"there is nothing to drill."
+msgstr ""
+"``There is no hole along ... for a drill to make``: die Achse ist falsch, "
+"oder es gibt nichts zu bohren."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:259
+msgid ""
+"``A drill only makes round holes, and N of the M walls along ... are not "
+"round``: make the holes round, or cut the other shapes another way. When the"
+" stock is not named, the part's own outline counts as drilled: name it with "
+"``source:``."
+msgstr ""
+"``A drill only makes round holes, and N of the M walls along ... are not "
+"round``: machen Sie die Löcher rund, oder schneiden Sie die anderen Formen "
+"anders. Wenn das Rohmaterial nicht benannt ist, zählt die eigene Außenkontur"
+" des Teils als gebohrt: benennen Sie es mit ``source:``."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:260
+msgid ""
+"``A drill working along ... cannot make it``: some walls are not along the "
+"axis; check ``toolAxis:``."
+msgstr ""
+"``A drill working along ... cannot make it``: einige Wände liegen nicht "
+"längs der Achse; prüfen Sie ``toolAxis:``."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:265
+msgid ""
+"``manufacturing: drill:`` - ``toolAxis:`` (or ``along:``), and the job keys "
+"(``diameter``, ``peck``, ``plunge``, ``speed``, ``safe_z``); "
+"``manufacturing: source:``."
+msgstr ""
+"``manufacturing: drill:`` - ``toolAxis:`` (oder ``along:``) und die Job-"
+"Schlüssel (``diameter``, ``peck``, ``plunge``, ``speed``, ``safe_z``); "
+"``manufacturing: source:``."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:270
+msgid "``manufacturability-cut``: Cut: the cuts make the part"
+msgstr "``manufacturability-cut``: Schneiden: die Schnitte ergeben das Teil"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:272
+msgid ""
+"**Applies to** a part made by ``method: subtractive`` that names a ``cut:`` "
+"machine. ``pc test -f manufacturability-cut <object>`` runs it alone."
+msgstr ""
+"**Gilt für** ein Teil, das mit ``method: subtractive`` hergestellt wird und "
+"eine ``cut:``-Maschine nennt. ``pc test -f manufacturability-cut <object>`` "
+"führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:274
+msgid ""
+"Whether cutting the stock where the part says gives the part: each declared "
+"cut is a plane, the stock is cut at every one, and what is left has to be "
+"the part. No cut may take nothing off."
+msgstr ""
+"Ob das Rohmaterial, dort geschnitten, wo das Teil es angibt, das Teil "
+"ergibt: jeder deklarierte Schnitt ist eine Ebene, das Rohmaterial wird an "
+"jedem davon geschnitten, und was übrig bleibt, muss das Teil sein. Kein "
+"Schnitt darf nichts abnehmen."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:279
+msgid ""
+"Anything but a part, a part made by another method, and a subtractive part "
+"that names no ``cut:`` machine. A part that names no stock passes here, "
+"since ``manufacturability-subtractive`` already says so."
+msgstr ""
+"Alles außer einem Teil, ein Teil, das mit einem anderen Verfahren "
+"hergestellt wird, und ein subtraktives Teil, das keine ``cut:``-Maschine "
+"nennt. Ein Teil, das kein Rohmaterial nennt, besteht hier, denn "
+"``manufacturability-subtractive`` sagt das schon."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:284
+msgid ""
+"``Cut #N (...) takes nothing off the stock``: the length is longer than the "
+"stock, or the axis points away from it."
+msgstr ""
+"``Cut #N (...) takes nothing off the stock``: die Länge ist größer als das "
+"Rohmaterial, oder die Achse zeigt davon weg."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:285
+msgid ""
+"``Cutting the stock '...' at ... does not make it: ...``: the cuts leave too"
+" much or too little; correct the lengths or the axes."
+msgstr ""
+"``Cutting the stock '...' at ... does not make it: ...``: die Schnitte "
+"lassen zu viel oder zu wenig übrig; korrigieren Sie die Längen oder die "
+"Achsen."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:290
+msgid ""
+"``manufacturing: cut:`` - ``toolAxis:`` (or ``along:``) and ``cuts:``, each "
+"a ``length`` and an optional axis of its own."
+msgstr ""
+"``manufacturing: cut:`` - ``toolAxis:`` (oder ``along:``) und ``cuts:``, "
+"jeder mit einer ``length`` und einer optionalen eigenen Achse."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:295
+msgid "``connect``: Connection instructions"
+msgstr "``connect``: Verbindungsanweisungen"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:297
+msgid ""
+"**Applies to** assemblies and scenes. ``pc test -f connect <object>`` runs "
+"it alone."
+msgstr ""
+"**Gilt für** Baugruppen und Szenen. ``pc test -f connect <object>`` führt "
+"sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:299
+msgid ""
+"Whether the assembly's connection instructions can be followed as written: "
+"whether anything had to be bent to put it together - a ``how:`` whose "
+"minimum is above its maximum, two interfaces that disagree about the thread "
+"they share and neither cuts its own, a motion or a physics the joined ends "
+"contradict, a joint named twice, a chain that closes on itself. An assembly "
+"that says nothing about how its items go on has nothing to contradict, and "
+"passes."
+msgstr ""
+"Ob die Verbindungsanweisungen der Baugruppe so befolgt werden können, wie "
+"sie geschrieben sind: ob etwas verbogen werden musste, um sie "
+"zusammenzusetzen - ein ``how:``, dessen Minimum über seinem Maximum liegt, "
+"zwei Interfaces, die sich über das Gewinde, das sie teilen, nicht einig sind"
+" und von denen keines sein eigenes schneidet, eine Bewegung oder eine "
+"Physik, der die gefügten Enden widersprechen, ein zweimal benanntes Gelenk, "
+"eine Kette, die sich auf sich selbst schließt. Eine Baugruppe, die nichts "
+"darüber sagt, wie ihre Elemente aufeinanderkommen, hat nichts, dem sie "
+"widersprechen könnte, und besteht."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:304
+#: ../../source/digital_thread/lifecycle/testing.rst:329
+#: ../../source/digital_thread/lifecycle/testing.rst:459
+msgid "Anything but an assembly or a scene."
+msgstr "Alles außer einer Baugruppe oder einer Szene."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:309
+msgid ""
+"Each failure is ``<link>: <what had to be repaired>``. Fix the declaration "
+"it names: the ``how:`` of that link, the interfaces or the mating it joins, "
+"or the joint. The list of what is reported is in \"Testing the "
+"instructions\" of the assembly documentation."
+msgstr ""
+"Jeder Fehlschlag lautet ``<link>: <what had to be repaired>``. Korrigieren "
+"Sie die Deklaration, die er nennt: das ``how:`` dieses Links, die Interfaces"
+" oder die Paarung, die er fügt, oder das Gelenk. Die Liste des Berichteten "
+"steht in \"Die Anweisungen prüfen\" der Baugruppen-Dokumentation."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:314
+msgid "``connectivity``: Everything is held in place"
+msgstr "``connectivity``: Alles wird an seinem Platz gehalten"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:316
+msgid ""
+"**Applies to** assemblies and scenes. ``pc test -f connectivity <object>`` "
+"runs it alone."
+msgstr ""
+"**Gilt für** Baugruppen und Szenen. ``pc test -f connectivity <object>`` "
+"führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:318
+msgid ""
+"Whether everything an assembly places is placed once, on a port that takes "
+"it, and held there. Three mistakes that render perfectly:"
+msgstr ""
+"Ob alles, was eine Baugruppe platziert, einmal platziert ist, an einem Port,"
+" der es annimmt, und dort gehalten wird. Drei Fehler, die sich einwandfrei "
+"rendern:"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:320
+msgid "the same part twice in the same place;"
+msgstr "dasselbe Teil zweimal an derselben Stelle;"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:321
+msgid ""
+"two items connected to one port, when its interface does not say "
+"``multiConnect: true``;"
+msgstr ""
+"zwei Elemente, die mit einem Port verbunden sind, wenn sein Interface nicht "
+"``multiConnect: true`` sagt;"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:322
+msgid ""
+"an item placed by coordinates (``location:``) among items that connect, "
+"which says where it ends up but not what holds it there."
+msgstr ""
+"ein Element, das über Koordinaten platziert wird (``location:``), zwischen "
+"Elementen, die sich verbinden, was sagt, wo es landet, aber nicht, was es "
+"dort hält."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:324
+msgid ""
+"An assembly that is to be made (``manufacturable``) is held to more: no item"
+" may be placed by coordinates, and every item after the first has to connect"
+" to something."
+msgstr ""
+"Eine Baugruppe, die hergestellt werden soll (``manufacturable``), wird an "
+"mehr gehalten: kein Element darf über Koordinaten platziert werden, und "
+"jedes Element nach dem ersten muss sich mit etwas verbinden."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:334
+msgid ""
+"``'a' and 'b' are the same part in the same place``: remove one, or move it."
+msgstr ""
+"``'a' and 'b' are the same part in the same place``: entfernen Sie eines "
+"oder verschieben Sie es."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:335
+msgid ""
+"``'a' and 'b' are both connected to '...' of '...'``: connect one of them "
+"elsewhere, or say ``multiConnect: true`` on the interface if the port does "
+"take several."
+msgstr ""
+"``'a' and 'b' are both connected to '...' of '...'``: verbinden Sie eines "
+"von beiden anderswo, oder sagen Sie ``multiConnect: true`` am Interface, "
+"wenn der Port tatsächlich mehrere annimmt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:336
+msgid ""
+"``'...' is placed by coordinates ...``: replace its ``location:`` with a "
+"``connect:`` to what holds it."
+msgstr ""
+"``'...' is placed by coordinates ...``: ersetzen Sie sein ``location:`` "
+"durch ein ``connect:`` zu dem, was es hält."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:341
+msgid ""
+"On the assembly: ``connectivity: allowDuplicates: true`` to allow the same "
+"part twice in one place, and ``connectivity: requireAnchored: false`` to "
+"allow items placed by coordinates."
+msgstr ""
+"An der Baugruppe: ``connectivity: allowDuplicates: true``, um dasselbe Teil "
+"zweimal an einer Stelle zuzulassen, und ``connectivity: requireAnchored: "
+"false``, um über Koordinaten platzierte Elemente zuzulassen."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:346
+msgid "``requirements``: Meets its requirements"
+msgstr "``requirements``: Erfüllt seine Anforderungen"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:348
+msgid ""
+"**Applies to** objects whose ``requirements:`` require ports, interfaces or "
+"physical properties. ``pc test -f requirements <object>`` runs it alone."
+msgstr ""
+"**Gilt für** Objekte, deren ``requirements:`` Ports, Interfaces oder "
+"physikalische Eigenschaften fordern. ``pc test -f requirements <object>`` "
+"führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:350
+msgid ""
+"Whether the model is what its ``requirements:`` say it has to be, as far as "
+"that can be measured: each required port is there, facing where it has to; "
+"each required interface is implemented, its instances where they have to be;"
+" and each required physical property - its mass, its centre of mass, its "
+"inertia, its friction - has a value that meets the requirement. Asked again "
+"every time, never read from the cache."
+msgstr ""
+"Ob das Modell das ist, was seine ``requirements:`` sagen, dass es sein muss,"
+" soweit das messbar ist: jeder geforderte Port ist vorhanden und zeigt "
+"dorthin, wohin er zeigen muss; jedes geforderte Interface ist implementiert,"
+" seine Instanzen dort, wo sie sein müssen; und jede geforderte physikalische"
+" Eigenschaft - seine Masse, sein Massenschwerpunkt, seine Trägheit, seine "
+"Reibung - hat einen Wert, der die Anforderung erfüllt. Wird jedes Mal neu "
+"gestellt, nie aus dem Cache gelesen."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:352
+msgid ""
+"The ``features:`` are sentences rather than measurements, and are judged by "
+"the ``/pc:validate`` agent skill. What this check asks of them is only that "
+"a ``simulate:`` entry or an analysis scenario naming one (``feature:``) "
+"names one that is declared."
+msgstr ""
+"Die ``features:`` sind Sätze und keine Messungen und werden von dem Agent-"
+"Skill ``/pc:validate`` beurteilt. Was diese Prüfung von ihnen verlangt, ist "
+"nur, dass ein ``simulate:``-Eintrag oder ein Analyse-Szenario, das eines "
+"nennt (``feature:``), eines nennt, das deklariert ist."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:357
+msgid ""
+"An object that requires no port, interface or physical property, and whose "
+"simulations and analysis scenarios name no feature."
+msgstr ""
+"Ein Objekt, das keinen Port, kein Interface und keine physikalische "
+"Eigenschaft fordert und dessen Simulationen und Analyse-Szenarien kein "
+"Feature nennen."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:362
+msgid ""
+"Each failure is ``<section>: <name>: <required>: <found>`` - what was asked "
+"for and what is there instead."
+msgstr ""
+"Jeder Fehlschlag lautet ``<section>: <name>: <required>: <found>`` - was "
+"gefordert wurde und was stattdessen da ist."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:364
+msgid ""
+"A port or an interface instance that is missing, or faces the wrong way: "
+"move it in the model, or correct the requirement if the requirement is what "
+"is wrong."
+msgstr ""
+"Ein Port oder eine Interface-Instanz, die fehlt oder in die falsche Richtung"
+" zeigt: verschieben Sie sie im Modell, oder korrigieren Sie die Anforderung,"
+" wenn die Anforderung das Falsche ist."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:365
+msgid ""
+"``not known: ...``: PartCAD could not find out the value - a mass with no "
+"density to work it out from. State the value in a ``physics:`` section, or "
+"give the part a ``material:`` with a density. \"Not known\" is not \"met\"."
+msgstr ""
+"``not known: ...``: PartCAD konnte den Wert nicht ermitteln - eine Masse "
+"ohne Dichte, aus der sie sich errechnen ließe. Geben Sie den Wert in einem "
+"``physics:``-Abschnitt an, oder geben Sie dem Teil ein ``material:`` mit "
+"einer Dichte. \"Nicht bekannt\" ist nicht \"erfüllt\"."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:366
+msgid ""
+"``unreadable``: the requirement itself cannot be read; the detail says why."
+msgstr ""
+"``unreadable``: die Anforderung selbst lässt sich nicht lesen; die "
+"Einzelheit sagt, warum."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:371
+msgid "``degenerate``: Has size in every direction"
+msgstr "``degenerate``: Hat Ausdehnung in jeder Richtung"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:373
+msgid ""
+"**Applies to** parts. ``pc test -f degenerate <object>`` runs it alone."
+msgstr ""
+"**Gilt für** Teile. ``pc test -f degenerate <object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:375
+msgid ""
+"Whether a part has size in every direction. A part that built as a flat disc"
+" or an empty box - a brick whose subfile could not be fetched, a script that"
+" returned the wrong thing - renders, exports and measures, and is not the "
+"part that was meant. Read from the box measured when the part was built, so "
+"it costs next to nothing."
+msgstr ""
+"Ob ein Teil in jeder Richtung Ausdehnung hat. Ein Teil, das als flache "
+"Scheibe oder leerer Kasten gebaut wurde - ein Stein, dessen Unterdatei nicht"
+" geholt werden konnte, ein Skript, das das Falsche zurückgegeben hat - "
+"rendert, exportiert und vermisst sich und ist nicht das Teil, das gemeint "
+"war. Aus dem Kasten gelesen, der beim Bauen des Teils gemessen wurde, kostet"
+" es also so gut wie nichts."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:380
+msgid ""
+"A sketch, which is flat by definition, and an assembly or a scene, which is "
+"checked through its parts."
+msgstr ""
+"Eine Skizze, die per Definition flach ist, und eine Baugruppe oder eine "
+"Szene, die über ihre Teile geprüft wird."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:385
+msgid ""
+"``The shape built but occupies no space at all``: nothing came out of the "
+"build but an empty shape; find the geometry that went missing."
+msgstr ""
+"``The shape built but occupies no space at all``: aus dem Bauen kam nichts "
+"als eine leere Form heraus; finden Sie die Geometrie, die verloren gegangen "
+"ist."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:386
+msgid ""
+"``The shape is flat in ...``: it is less than a thousandth of a millimetre "
+"thick in one direction - a missing extrusion, a missing file, a surface "
+"where a solid was meant."
+msgstr ""
+"``The shape is flat in ...``: es ist in einer Richtung weniger als ein "
+"Tausendstel Millimeter dick - eine fehlende Extrusion, eine fehlende Datei, "
+"eine Fläche dort, wo ein Volumenkörper gemeint war."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:391
+msgid "``shell``: A body, not a skin"
+msgstr "``shell``: Ein Körper, keine Haut"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:393
+msgid "**Applies to** parts. ``pc test -f shell <object>`` runs it alone."
+msgstr ""
+"**Gilt für** Teile. ``pc test -f shell <object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:395
+msgid ""
+"Whether a part is a body rather than a skin: a set of faces with nothing "
+"said about which side of them is material renders and exports like the part "
+"that was meant, while every boolean against it comes back with no solid in "
+"it - so interference, CAM, FEA and any mass computed from it are wrong. Read"
+" straight out of the geometry the part has already produced, so it costs "
+"nothing."
+msgstr ""
+"Ob ein Teil ein Körper und keine Haut ist: eine Menge von Flächen, bei der "
+"nichts darüber gesagt ist, welche ihrer Seiten Material ist, rendert und "
+"exportiert sich wie das Teil, das gemeint war, während jede boolesche "
+"Operation dagegen ohne Volumenkörper darin zurückkommt - Durchdringung, CAM,"
+" FEA und jede daraus berechnete Masse sind damit falsch. Direkt aus der "
+"Geometrie gelesen, die das Teil schon erzeugt hat, kostet es also nichts."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:400
+#: ../../source/digital_thread/lifecycle/testing.rst:438
+msgid ""
+"A sketch, which is not a body, and an assembly or a scene, which is checked "
+"through its parts."
+msgstr ""
+"Eine Skizze, die kein Körper ist, und eine Baugruppe oder eine Szene, die "
+"über ihre Teile geprüft wird."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:405
+msgid ""
+"``The shape is a skin rather than a body: N shell(s) that no solid bounds "
+"itself with``. A shell a script returns is closed into a solid "
+"automatically, so either those faces enclose nothing - close them - or they "
+"come from a file that states the part as a surface: export it from its tool "
+"as a solid instead."
+msgstr ""
+"``The shape is a skin rather than a body: N shell(s) that no solid bounds "
+"itself with``. Eine Schale, die ein Skript zurückgibt, wird automatisch zu "
+"einem Volumenkörper geschlossen; entweder umschließen diese Flächen also "
+"nichts - schließen Sie sie - oder sie kommen aus einer Datei, die das Teil "
+"als Fläche angibt: exportieren Sie es aus seinem Werkzeug stattdessen als "
+"Volumenkörper."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:410
+msgid "``solidity``: Not inside out"
+msgstr "``solidity``: Nicht nach innen gekehrt"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:412
+msgid "**Applies to** parts. ``pc test -f solidity <object>`` runs it alone."
+msgstr ""
+"**Gilt für** Teile. ``pc test -f solidity <object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:414
+msgid ""
+"Whether every solid of a part has a positive volume. A solid whose faces are"
+" oriented inward measures the right size and a negative volume: it renders "
+"correctly, and every boolean against it is wrong. Asked before "
+"``interference``, deliberately, since an inside-out part overlaps things it "
+"is nowhere near."
+msgstr ""
+"Ob jeder Volumenkörper eines Teils ein positives Volumen hat. Ein "
+"Volumenkörper, dessen Flächen nach innen orientiert sind, vermisst sich mit "
+"der richtigen Größe und einem negativen Volumen: er rendert korrekt, und "
+"jede boolesche Operation dagegen ist falsch. Absichtlich vor "
+"``interference`` gestellt, denn ein nach innen gekehrtes Teil überlappt "
+"Dinge, denen es nirgends nahe ist."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:419
+msgid ""
+"A sketch, which has no solid, and an assembly or a scene, which is checked "
+"through its parts."
+msgstr ""
+"Eine Skizze, die keinen Volumenkörper hat, und eine Baugruppe oder eine "
+"Szene, die über ihre Teile geprüft wird."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:424
+msgid ""
+"``... a constituent solid measures ... mm^3``: negative means the faces are "
+"oriented inward - fix their winding in the source (an LDraw part, for one, "
+"has to state it); zero means the solid encloses nothing."
+msgstr ""
+"``... a constituent solid measures ... mm^3``: negativ bedeutet, dass die "
+"Flächen nach innen orientiert sind - korrigieren Sie ihre Umlaufrichtung in "
+"der Quelle (ein LDraw-Teil etwa muss sie angeben); null bedeutet, dass der "
+"Volumenkörper nichts umschließt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:429
+msgid "``validity``: A well-formed solid"
+msgstr "``validity``: Ein wohlgeformter Volumenkörper"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:431
+msgid "**Applies to** parts. ``pc test -f validity <object>`` runs it alone."
+msgstr ""
+"**Gilt für** Teile. ``pc test -f validity <object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:433
+msgid ""
+"Whether the geometry kernel certifies a part's solid as well formed. It "
+"reports and never fails: the parts it has the most to say about are often "
+"ones nothing is functionally wrong with. A part it reports on is one to "
+"expect trouble from in anything exacting - booleans, meshing for print, CAM "
+"- so treat a strange result from those as this rather than as the tool."
+msgstr ""
+"Ob der Geometriekern den Volumenkörper eines Teils als wohlgeformt "
+"bescheinigt. Sie berichtet und schlägt nie fehl: die Teile, über die sie am "
+"meisten zu sagen hat, sind oft solche, an denen funktional nichts falsch "
+"ist. Ein Teil, über das sie berichtet, ist eines, von dem bei allem "
+"Anspruchsvollen Ärger zu erwarten ist - boolesche Operationen, Vernetzen für"
+" den Druck, CAM -, nehmen Sie ein seltsames Ergebnis von dort also als dies "
+"und nicht als Fehler des Werkzeugs."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:443
+msgid ""
+"It does not fail. When it says ``the geometry is a solid but not a well "
+"formed one``, rebuild the part more simply where it can be - fewer tiny "
+"faces, no self-intersections - or re-export it from its source."
+msgstr ""
+"Sie schlägt nicht fehl. Wenn sie ``the geometry is a solid but not a well "
+"formed one`` sagt, bauen Sie das Teil einfacher auf, wo das möglich ist - "
+"weniger winzige Flächen, keine Selbstdurchdringungen -, oder exportieren Sie"
+" es aus seiner Quelle erneut."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:448
+msgid "``interference``: Parts do not overlap"
+msgstr "``interference``: Teile überlappen sich nicht"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:450
+msgid ""
+"**Applies to** assemblies and scenes. ``pc test -f interference <object>`` "
+"runs it alone."
+msgstr ""
+"**Gilt für** Baugruppen und Szenen. ``pc test -f interference <object>`` "
+"führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:452
+msgid ""
+"Whether the parts of an assembly share space. Boxes are used only to pick "
+"the pairs worth asking about; the answer comes from intersecting the two "
+"solids and measuring what they share. Each sub-assembly declared in the "
+"package answers for its own inside with its own verdict, so only what "
+"crosses its boundary is looked at here. It is the most expensive of the "
+"geometry checks."
+msgstr ""
+"Ob die Teile einer Baugruppe Raum teilen. Kästen werden nur verwendet, um "
+"die Paare auszuwählen, die eine Frage wert sind; die Antwort kommt daraus, "
+"die zwei Volumenkörper zu schneiden und zu messen, was sie teilen. Jede im "
+"Paket deklarierte Unterbaugruppe antwortet für ihr eigenes Inneres mit ihrem"
+" eigenen Urteil, hier wird also nur betrachtet, was ihre Grenze "
+"überschreitet. Sie ist die teuerste der Geometrieprüfungen."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:454
+msgid ""
+"An overlap that is meant to be there is read from the joint between the two:"
+" a port, an interface or a mating that says ``selfScrew`` (a screw cutting "
+"its own thread, a nail making its own hole), a mating that says ``snapIn`` "
+"(a pin pushed past a feature), a connection whose ``how:`` says either, and "
+"a connection's ``interferes:``, naming the further items the same act of "
+"joining drives through. Nothing is ever excused for a pair of parts by name."
+msgstr ""
+"Eine Überlappung, die dort sein soll, wird aus der Fügestelle zwischen den "
+"beiden gelesen: ein Port, ein Interface oder eine Paarung, die ``selfScrew``"
+" sagt (eine Schraube, die ihr eigenes Gewinde schneidet, ein Nagel, der sein"
+" eigenes Loch macht), eine Paarung, die ``snapIn`` sagt (ein Stift, der über"
+" ein Merkmal hinausgedrückt wird), eine Verbindung, deren ``how:`` eines von"
+" beiden sagt, und das ``interferes:`` einer Verbindung, das die weiteren "
+"Elemente nennt, durch die derselbe Fügevorgang hindurchtreibt. Nichts wird "
+"je für ein namentlich genanntes Teilepaar entschuldigt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:464
+msgid ""
+"``'a' and 'b' share N mm^3``: the two are in each other. Each such failure "
+"leaves an assembly to look at: the two parts where the assembly places them,"
+" and a sub-assembly named ``interference`` holding what they share, one part"
+" per volume. Open it from the IDE's Test tab, or with ``pc ide view`` and "
+"its name (``<assembly>/interference/<a>+<b>``), and switch the two parts off"
+" to see the overlap alone. Then move one of them - or, if the overlap is the"
+" joint, say so on the joint."
+msgstr ""
+"``'a' and 'b' share N mm^3``: die beiden stecken ineinander. Jeder solche "
+"Fehlschlag hinterlässt eine Baugruppe zum Ansehen: die zwei Teile dort, wo "
+"die Baugruppe sie platziert, und eine Unterbaugruppe namens "
+"``interference``, die den gemeinsamen Anteil enthält, ein Teil je Volumen. "
+"Öffnen Sie sie über den Test-Tab der IDE oder mit ``pc ide view`` und ihrem "
+"Namen (``<assembly>/interference/<a>+<b>``) und schalten Sie die zwei Teile "
+"aus, um die Überlappung allein zu sehen. Verschieben Sie dann eines von "
+"beiden - oder sagen Sie es an der Fügestelle, wenn die Überlappung die "
+"Fügestelle ist."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:465
+msgid ""
+"``'...' does not pass on its own``: a sub-assembly has overlaps of its own; "
+"test it."
+msgstr ""
+"``'...' does not pass on its own``: eine Unterbaugruppe hat eigene "
+"Überlappungen; testen Sie sie."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:466
+msgid ""
+"``'...' names '...' in 'interferes:', which is not a link``: correct the "
+"name; it is a link of the same ``links:`` list as the connection."
+msgstr ""
+"``'...' names '...' in 'interferes:', which is not a link``: korrigieren Sie"
+" den Namen; es ist ein Link derselben ``links:``-Liste wie die Verbindung."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:467
+msgid ""
+"An object marked ``manufacturable: false`` (a scene, unless it says "
+"otherwise) is told what overlaps rather than failed for it."
+msgstr ""
+"Einem Objekt, das mit ``manufacturable: false`` markiert ist (einer Szene, "
+"sofern sie nichts anderes sagt), wird gesagt, was überlappt, anstatt dass es"
+" daran scheitert."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:472
+msgid ""
+"On the assembly: ``interference: minVolume:`` (in mm^3, default 0.05), below"
+" which an overlap is taken for the arithmetic of two surfaces that touch, "
+"and ``interference: minFraction:``, the same floor as a share of the smaller"
+" part."
+msgstr ""
+"An der Baugruppe: ``interference: minVolume:`` (in mm^3, Standard 0,05), "
+"unterhalb dessen eine Überlappung für die Arithmetik zweier sich berührender"
+" Oberflächen genommen wird, und ``interference: minFraction:``, dieselbe "
+"Untergrenze als Anteil des kleineren Teils."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:477
+msgid "``cam``: A machine route can be produced"
+msgstr "``cam``: Eine Maschinenbahn lässt sich erzeugen"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:479
+msgid ""
+"**Applies to** parts and sketches that name a machine to be cut on. ``pc "
+"test -f cam <object>`` runs it alone."
+msgstr ""
+"**Gilt für** Teile und Skizzen, die eine Maschine nennen, auf der "
+"geschnitten werden soll. ``pc test -f cam <object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:481
+msgid ""
+"Whether the program a machine cuts the object with can be produced: for "
+"every ``cnc:``, ``laser:`` or ``drill:`` machine it names, the post-"
+"processor that machine uses writes a route, and the route is thrown away. "
+"The same code as ``pc cam``."
+msgstr ""
+"Ob das Programm, mit dem eine Maschine das Objekt schneidet, erzeugt werden "
+"kann: für jede ``cnc:``-, ``laser:``- oder ``drill:``-Maschine, die es "
+"nennt, schreibt der Postprozessor dieser Maschine eine Bahn, und die Bahn "
+"wird weggeworfen. Derselbe Code wie ``pc cam``."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:486
+msgid ""
+"An object that names no machine to be routed on - nothing under "
+"``manufacturing:`` asks for one, or only a ``cut:`` machine, which needs no "
+"program."
+msgstr ""
+"Ein Objekt, das keine Maschine nennt, für die eine Bahn zu erzeugen wäre - "
+"nichts unter ``manufacturing:`` verlangt eine, oder nur eine "
+"``cut:``-Maschine, die kein Programm braucht."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:491
+msgid "A sentence about the section: a job key it cannot read; fix it."
+msgstr ""
+"Ein Satz über den Abschnitt: ein Job-Schlüssel, den er nicht lesen kann; "
+"korrigieren Sie ihn."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:492
+msgid ""
+"``the 'cam' implementation could not be resolved``: the implementation the "
+"machine names is not a dependency of the package, or does not declare the "
+"file type."
+msgstr ""
+"``the 'cam' implementation could not be resolved``: die Implementierung, die"
+" die Maschine nennt, ist keine Abhängigkeit des Pakets oder deklariert den "
+"Dateityp nicht."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:493
+msgid ""
+"``no route was produced by ...``: the post-processor's error follows; fix "
+"the tool or the outline it names, or run ``pc cam`` to see the whole report."
+msgstr ""
+"``no route was produced by ...``: der Fehler des Postprozessors folgt; "
+"korrigieren Sie das Werkzeug oder die Kontur, die er nennt, oder führen Sie "
+"``pc cam`` aus, um den ganzen Bericht zu sehen."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:495
+msgid ""
+"It is skipped, with a warning, where the implementation cannot run on this "
+"machine: start a container runtime, or install what it needs."
+msgstr ""
+"Sie wird mit einer Warnung übersprungen, wo die Implementierung auf diesem "
+"Rechner nicht laufen kann: starten Sie eine Container-Laufzeitumgebung, oder"
+" installieren Sie, was sie braucht."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:500
+msgid "``fea``: Structural analysis (FEA)"
+msgstr "``fea``: Festigkeitsanalyse (FEA)"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:502
+msgid ""
+"**Applies to** parts that declare an ``fea:`` section. ``pc test -f fea "
+"<object>`` runs it alone."
+msgstr ""
+"**Gilt für** Teile, die einen ``fea:``-Abschnitt deklarieren. ``pc test -f "
+"fea <object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:504
+msgid ""
+"Whether a part holds up under the loads each scenario of its ``fea:`` "
+"section declares: every scenario is run by the implementation configured, "
+"and the part passes when each of them ran and found nothing - the same "
+"analyses as ``pc cae fea``, which runs one of them with ``-f <scenario>``."
+msgstr ""
+"Ob ein Teil unter den Lasten hält, die jedes Szenario seines "
+"``fea:``-Abschnitts deklariert: jedes Szenario wird von der konfigurierten "
+"Implementierung ausgeführt, und das Teil besteht, wenn jedes davon gelaufen "
+"ist und nichts gefunden hat - dieselben Analysen wie ``pc cae fea``, das "
+"eines davon mit ``-f <scenario>`` ausführt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:509
+msgid "Anything but a part, and a part that declares no ``fea:`` section."
+msgstr ""
+"Alles außer einem Teil, und ein Teil, das keinen ``fea:``-Abschnitt "
+"deklariert."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:514
+msgid ""
+"A sentence about a scenario (``'fea: loaded:' declares neither 'fix:' nor "
+"'load:'``, a key it does not take): fix the scenario it names."
+msgstr ""
+"Ein Satz über ein Szenario (``'fea: loaded:' declares neither 'fix:' nor "
+"'load:'``, ein Schlüssel, den es nicht annimmt): korrigieren Sie das "
+"Szenario, das er nennt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:515
+msgid ""
+"``FEA 'loaded' could not be run by ...``: the solver or the mesher is not "
+"installed, or failed; the report says which. Install it, or name another "
+"implementation."
+msgstr ""
+"``FEA 'loaded' could not be run by ...``: der Solver oder der Vernetzer ist "
+"nicht installiert oder ist fehlgeschlagen; der Bericht sagt, welcher. "
+"Installieren Sie ihn, oder nennen Sie eine andere Implementierung."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:516
+msgid ""
+"``FEA 'loaded' findings: ...``: the analysis ran and found a problem - a "
+"stress, a deflection - at the place named. Change the design, or the load if"
+" the load is what is wrong."
+msgstr ""
+"``FEA 'loaded' findings: ...``: die Analyse ist gelaufen und hat an der "
+"genannten Stelle ein Problem gefunden - eine Spannung, eine Verformung. "
+"Ändern Sie das Design, oder die Last, wenn die Last das Falsche ist."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:518
+#: ../../source/digital_thread/lifecycle/testing.rst:546
+#: ../../source/digital_thread/lifecycle/testing.rst:574
+#: ../../source/digital_thread/lifecycle/testing.rst:602
+msgid ""
+"It is skipped, with a warning, only where the implementation runs in a "
+"container and there is no container runtime here."
+msgstr ""
+"Sie wird nur dann mit einer Warnung übersprungen, wenn die Implementierung "
+"in einem Container läuft und es hier keine Container-Laufzeitumgebung gibt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:523
+msgid ""
+"``fea: <scenario>: fix:``, ``load:`` (a force; a bare number is kilograms), "
+"``gravity:``, ``implementation:`` and ``params:``; the user setting "
+"``caeFeaImplementation``."
+msgstr ""
+"``fea: <scenario>: fix:``, ``load:`` (eine Kraft; eine bloße Zahl ist "
+"Kilogramm), ``gravity:``, ``implementation:`` und ``params:``; die "
+"Benutzereinstellung ``caeFeaImplementation``."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:528
+msgid "``dynamic``: Vibration analysis (Dynamic FEA)"
+msgstr "``dynamic``: Schwingungsanalyse (dynamische FEA)"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:530
+msgid ""
+"**Applies to** parts that declare a ``dynamic:`` section. ``pc test -f "
+"dynamic <object>`` runs it alone."
+msgstr ""
+"**Gilt für** Teile, die einen ``dynamic:``-Abschnitt deklarieren. ``pc test "
+"-f dynamic <object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:532
+msgid ""
+"Whether a part, held as each scenario of its ``dynamic:`` section says, "
+"rings only where it may: the modal analysis of every scenario is run by the "
+"implementation configured, and the part passes when each ran and found "
+"nothing - the same analyses as ``pc cae dynamic``. A natural frequency is a "
+"property of the part and how it is held, not of what it carries, so a "
+"scenario says only where it is held."
+msgstr ""
+"Ob ein Teil, so gehalten, wie jedes Szenario seines ``dynamic:``-Abschnitts "
+"es angibt, nur dort schwingt, wo es das darf: die Modalanalyse jedes "
+"Szenarios wird von der konfigurierten Implementierung ausgeführt, und das "
+"Teil besteht, wenn jede gelaufen ist und nichts gefunden hat - dieselben "
+"Analysen wie ``pc cae dynamic``. Eine Eigenfrequenz ist eine Eigenschaft des"
+" Teils und seiner Halterung, nicht dessen, was es trägt; ein Szenario gibt "
+"daher nur an, wo es gehalten wird."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:537
+msgid "Anything but a part, and a part that declares no ``dynamic:`` section."
+msgstr ""
+"Alles außer einem Teil, und ein Teil, das keinen ``dynamic:``-Abschnitt "
+"deklariert."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:542
+msgid ""
+"A sentence about a scenario (``'dynamic: bolted:' declares none of 'fix:'``,"
+" a key it does not take, such as ``load:``): fix the scenario it names."
+msgstr ""
+"Ein Satz über ein Szenario (``'dynamic: bolted:' declares none of 'fix:'``, "
+"ein Schlüssel, den es nicht annimmt, etwa ``load:``): korrigieren Sie das "
+"Szenario, das er nennt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:543
+msgid ""
+"``DYNAMIC 'bolted' could not be run by ...``: the solver or the mesher is "
+"not installed, or failed; the report says which. Install it, or name another"
+" implementation."
+msgstr ""
+"``DYNAMIC 'bolted' could not be run by ...``: der Solver oder der Vernetzer "
+"ist nicht installiert oder ist fehlgeschlagen; der Bericht sagt, welcher. "
+"Installieren Sie ihn, oder nennen Sie eine andere Implementierung."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:544
+msgid ""
+"``DYNAMIC 'bolted' findings: ...``: the analysis ran and found a problem - a"
+" mode where the part must not ring. Change how it is held, or its stiffness "
+"or mass."
+msgstr ""
+"``DYNAMIC 'bolted' findings: ...``: die Analyse ist gelaufen und hat ein "
+"Problem gefunden - eine Mode dort, wo das Teil nicht schwingen darf. Ändern "
+"Sie seine Halterung oder seine Steifigkeit oder Masse."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:551
+msgid ""
+"``dynamic: <scenario>: fix:`` (the interfaces it is held by), "
+"``implementation:`` and ``params:``; the user setting "
+"``caeDynamicImplementation``."
+msgstr ""
+"``dynamic: <scenario>: fix:`` (die Interfaces, über die es gehalten wird), "
+"``implementation:`` und ``params:``; die Benutzereinstellung "
+"``caeDynamicImplementation``."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:556
+msgid "``thermal``: Heat transfer"
+msgstr "``thermal``: Wärmeübertragung"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:558
+msgid ""
+"**Applies to** parts that declare a ``thermal:`` section. ``pc test -f "
+"thermal <object>`` runs it alone."
+msgstr ""
+"**Gilt für** Teile, die einen ``thermal:``-Abschnitt deklarieren. ``pc test "
+"-f thermal <object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:560
+msgid ""
+"Whether a part, heated and cooled as each scenario of its ``thermal:`` "
+"section says, stays as cool as it has to: every scenario is run by the "
+"implementation configured, and the part passes when each ran and found "
+"nothing - the same analyses as ``pc cae thermal``."
+msgstr ""
+"Ob ein Teil, so geheizt und gekühlt, wie jedes Szenario seines "
+"``thermal:``-Abschnitts es angibt, so kühl bleibt, wie es muss: jedes "
+"Szenario wird von der konfigurierten Implementierung ausgeführt, und das "
+"Teil besteht, wenn jedes gelaufen ist und nichts gefunden hat - dieselben "
+"Analysen wie ``pc cae thermal``."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:565
+msgid "Anything but a part, and a part that declares no ``thermal:`` section."
+msgstr ""
+"Alles außer einem Teil, und ein Teil, das keinen ``thermal:``-Abschnitt "
+"deklariert."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:570
+msgid ""
+"A sentence about a scenario (``'thermal: in-use:' declares none of "
+"'temperature:', 'heat:', 'convection:'``, a key it does not take): fix the "
+"scenario it names."
+msgstr ""
+"Ein Satz über ein Szenario (``'thermal: in-use:' declares none of "
+"'temperature:', 'heat:', 'convection:'``, ein Schlüssel, den es nicht "
+"annimmt): korrigieren Sie das Szenario, das er nennt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:571
+msgid ""
+"``THERMAL 'in-use' could not be run by ...``: the solver or the mesher is "
+"not installed, or failed; the report says which. Install it, or name another"
+" implementation."
+msgstr ""
+"``THERMAL 'in-use' could not be run by ...``: der Solver oder der Vernetzer "
+"ist nicht installiert oder ist fehlgeschlagen; der Bericht sagt, welcher. "
+"Installieren Sie ihn, oder nennen Sie eine andere Implementierung."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:572
+msgid ""
+"``THERMAL 'in-use' findings: ...``: the analysis ran and found a problem - a"
+" temperature the part must not reach - at the place named. Change the "
+"design, how it is cooled, or the heat if the heat is what is wrong."
+msgstr ""
+"``THERMAL 'in-use' findings: ...``: die Analyse ist gelaufen und hat an der "
+"genannten Stelle ein Problem gefunden - eine Temperatur, die das Teil nicht "
+"erreichen darf. Ändern Sie das Design, die Kühlung oder die Wärme, wenn die "
+"Wärme das Falsche ist."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:579
+msgid ""
+"``thermal: <scenario>: temperature:`` (held at, in Celsius), ``heat:`` (put "
+"in, in watts), ``convection:`` (a film coefficient, in W/(m^2\\*K)), "
+"``implementation:`` and ``params:``; the user setting "
+"``caeThermalImplementation``."
+msgstr ""
+"``thermal: <scenario>: temperature:`` (gehalten auf, in Celsius), ``heat:`` "
+"(eingebracht, in Watt), ``convection:`` (ein Wärmeübergangskoeffizient, in "
+"W/(m^2\\*K)), ``implementation:`` und ``params:``; die Benutzereinstellung "
+"``caeThermalImplementation``."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:584
+msgid "``cfd``: Flow analysis (CFD)"
+msgstr "``cfd``: Strömungsanalyse (CFD)"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:586
+msgid ""
+"**Applies to** parts that declare a ``cfd:`` section. ``pc test -f cfd "
+"<object>`` runs it alone."
+msgstr ""
+"**Gilt für** Teile, die einen ``cfd:``-Abschnitt deklarieren. ``pc test -f "
+"cfd <object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:588
+msgid ""
+"Whether a part behaves in the flow each scenario of its ``cfd:`` section "
+"declares: every scenario is run by the implementation configured, and the "
+"part passes when each ran and found nothing - the same analyses as ``pc cae "
+"cfd``."
+msgstr ""
+"Ob ein Teil sich in der Strömung verhält, die jedes Szenario seines "
+"``cfd:``-Abschnitts deklariert: jedes Szenario wird von der konfigurierten "
+"Implementierung ausgeführt, und das Teil besteht, wenn jedes gelaufen ist "
+"und nichts gefunden hat - dieselben Analysen wie ``pc cae cfd``."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:593
+msgid "Anything but a part, and a part that declares no ``cfd:`` section."
+msgstr ""
+"Alles außer einem Teil, und ein Teil, das keinen ``cfd:``-Abschnitt "
+"deklariert."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:598
+msgid "A sentence about a scenario: fix the scenario it names."
+msgstr ""
+"Ein Satz über ein Szenario: korrigieren Sie das Szenario, das er nennt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:599
+msgid ""
+"``CFD '<scenario>' could not be run by ...``: the solver is not installed, "
+"or failed; the report says which."
+msgstr ""
+"``CFD '<scenario>' could not be run by ...``: der Solver ist nicht "
+"installiert oder ist fehlgeschlagen; der Bericht sagt, welcher."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:600
+msgid ""
+"``CFD '<scenario>' findings: ...``: the analysis ran and found a problem at "
+"the place named."
+msgstr ""
+"``CFD '<scenario>' findings: ...``: die Analyse ist gelaufen und hat an der "
+"genannten Stelle ein Problem gefunden."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:607
+msgid ""
+"``cfd: <scenario>: fix:``, ``load:``, ``outlet:``, ``implementation:`` and "
+"``params:``; the user setting ``caeCfdImplementation``."
+msgstr ""
+"``cfd: <scenario>: fix:``, ``load:``, ``outlet:``, ``implementation:`` und "
+"``params:``; die Benutzereinstellung ``caeCfdImplementation``."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:612
+msgid "``sim``: Does what its simulations say"
+msgstr "``sim``: Tut, was seine Simulationen sagen"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:614
+msgid ""
+"**Applies to** parts, assemblies and scenes that declare ``simulate:``. ``pc"
+" test -f sim <object>`` runs it alone."
+msgstr ""
+"**Gilt für** Teile, Baugruppen und Szenen, die ``simulate:`` deklarieren. "
+"``pc test -f sim <object>`` führt sie allein aus."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:616
+msgid ""
+"Whether the object does what its ``simulate:`` section says it does: each "
+"simulation is run - the object placed in its scene and handed to the "
+"simulation plugin - and its ``validation:`` condition has to hold over what "
+"came back. The same runs as ``pc sim``, which also prints everything the "
+"plugin reported (``--json``). It is the most expensive question ``pc test`` "
+"asks, and is asked last."
+msgstr ""
+"Ob das Objekt tut, was sein ``simulate:``-Abschnitt sagt, dass es tut: jede "
+"Simulation wird ausgeführt - das Objekt in seine Szene gestellt und dem "
+"Simulations-Plugin übergeben -, und ihre ``validation:``-Bedingung muss über"
+" dem gelten, was zurückkam. Dieselben Läufe wie ``pc sim``, das außerdem "
+"alles ausgibt, was das Plugin berichtet hat (``--json``). Es ist die "
+"teuerste Frage, die ``pc test`` stellt, und wird zuletzt gestellt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:621
+msgid ""
+"Anything but a part, an assembly or a scene, and one that declares no "
+"simulation."
+msgstr ""
+"Alles außer einem Teil, einer Baugruppe oder einer Szene, und eines, das "
+"keine Simulation deklariert."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:626
+msgid ""
+"``... ran, and its 'validation' does not hold``: the object did not behave "
+"as claimed. Run ``pc sim --json`` to see ``before`` and ``after``, then "
+"change the design, or the condition if the condition is what is wrong."
+msgstr ""
+"``... ran, and its 'validation' does not hold``: das Objekt hat sich nicht "
+"so verhalten wie behauptet. Führen Sie ``pc sim --json`` aus, um ``before`` "
+"und ``after`` zu sehen, und ändern Sie dann das Design oder die Bedingung, "
+"wenn die Bedingung das Falsche ist."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:627
+msgid ""
+"``... could not be run``: the plugin or the scene the entry names is not "
+"found, or the simulator failed; the report says which."
+msgstr ""
+"``... could not be run``: das Plugin oder die Szene, die der Eintrag nennt, "
+"wird nicht gefunden, oder der Simulator ist fehlgeschlagen; der Bericht "
+"sagt, was davon."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:628
+msgid ""
+"``... states no 'validation'``: asked about by name, an entry with no "
+"condition fails; add one over ``before`` and ``after``. Walked to as part of"
+" a package, it is skipped instead."
+msgstr ""
+"``... states no 'validation'``: namentlich gefragt, schlägt ein Eintrag ohne"
+" Bedingung fehl; fügen Sie eine über ``before`` und ``after`` hinzu. Als "
+"Teil eines Pakets erreicht, wird er stattdessen übersprungen."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:630
+msgid ""
+"It is skipped, with a warning, where the simulator runs in a container and "
+"there is no container runtime here."
+msgstr ""
+"Sie wird mit einer Warnung übersprungen, wo der Simulator in einem Container"
+" läuft und es hier keine Container-Laufzeitumgebung gibt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:635
+msgid ""
+"``simulate: <name>:`` - ``simulation:`` (the plugin), ``scene:``, "
+"``validation:``, and ``feature:``, the feature of the requirements it "
+"demonstrates."
+msgstr ""
+"``simulate: <name>:`` - ``simulation:`` (das Plugin), ``scene:``, "
+"``validation:`` und ``feature:``, das Feature der Anforderungen, das sie "
+"belegt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:640
+msgid "Agent skills"
+msgstr "Agent-Skills"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:642
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:643
+msgid ""
+"Runs ``pc test`` as the first thing it does, and then goes beyond it: it "
+"runs every simulation and every analysis scenario, renders the object from "
+"every angle that matters with its ports and interfaces drawn, reads the bill"
+" of materials and the assembly instructions of an assembly, and gives every "
+"requirement a verdict -- met, not met, or \"cannot tell\" -- with the "
+"evidence named. The ``features:`` half of a requirement is prose, which no "
+"check here can measure, and it is judged there and nowhere else."
+msgstr ""
+"Führt als Erstes ``pc test`` aus und geht dann darüber hinaus: es führt jede"
+" Simulation und jedes Analyse-Szenario aus, rendert das Objekt aus jedem "
+"Blickwinkel, auf den es ankommt, mit eingezeichneten Ports und Interfaces, "
+"liest die Stückliste und die Montageanweisungen einer Baugruppe und gibt "
+"jeder Anforderung ein Urteil -- erfüllt, nicht erfüllt oder \"nicht "
+"feststellbar\" -- mit dem genannten Nachweis. Die ``features:``-Hälfte einer"
+" Anforderung ist Prosa, die keine Prüfung hier messen kann, und sie wird "
+"dort und nirgends sonst beurteilt."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:651
+msgid "``/pc:sim-assembly-fea``"
+msgstr "``/pc:sim-assembly-fea``"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:652
+msgid ""
+"Produces the ``fea:`` scenario that the ``fea`` check below then holds the "
+"part to, out of what a simulation of its assembly measured."
+msgstr ""
+"Erzeugt das ``fea:``-Szenario, an dem die ``fea``-Prüfung unten das Teil "
+"dann festhält, aus dem, was eine Simulation seiner Baugruppe gemessen hat."
+
+#: ../../source/digital_thread/lifecycle/testing.rst:655
+msgid ""
+"Every skill runs these same commands, through the same cache, so a verdict "
+"an agent reports is a verdict you can reproduce by hand."
+msgstr ""
+"Jeder Skill führt dieselben Befehle über denselben Cache aus; ein Urteil, "
+"das ein Agent berichtet, ist daher ein Urteil, das Sie von Hand "
+"reproduzieren können."

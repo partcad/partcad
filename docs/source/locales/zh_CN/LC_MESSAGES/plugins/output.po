@@ -1,0 +1,195 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/plugins/output.rst:3
+msgid "Output file types"
+msgstr "输出文件类型"
+
+#: ../../source/plugins/output.rst:5
+msgid ""
+"An **output plugin** teaches PartCAD to write a file. ``pc export`` writes "
+"3D and CAD files, ``pc render`` writes 2D projections, and which file types "
+"either of them knows is an ``export:`` or a ``render:`` section -- one "
+"subsection per file type, each naming the script that writes it and the "
+"sandbox that script needs."
+msgstr ""
+"**输出插件** 教 PartCAD 写出一个文件。``pc export`` 写出 3D 和 CAD 文件，``pc render`` 写出 2D "
+"投影，而它们各自认识哪些文件类型，由一个 ``export:`` 或 ``render:`` 小节来决定 -- "
+"每种文件类型一个子小节，每一个都指名写出它的那个脚本以及那个脚本所需要的沙箱。"
+
+#: ../../source/plugins/output.rst:11
+msgid ""
+"PartCAD ships implementations for the formats everybody uses (STEP, BREP, "
+"STL, 3MF, OBJ, IGES, glTF, three.js, PNG, SVG, DXF, ...), so a package "
+"usually writes these sections only to **configure** a built-in type -- where"
+" its files go, at what resolution, from which viewpoint. Declaring a "
+"``path`` is what turns the same section into a plugin."
+msgstr ""
+"PartCAD "
+"为大家都在用的那些格式自带了实现（STEP、BREP、STL、3MF、OBJ、IGES、glTF、three.js、PNG、SVG、DXF "
+"……），所以包通常写这些小节只是为了 **配置** 某个内置类型 -- 它的文件写到哪里、用什么分辨率、从哪个视角。而声明一个 ``path`` "
+"正是把同一个小节变成插件的那一步。"
+
+#: ../../source/plugins/output.rst:17
+msgid ""
+":ref:`output-files` is the reference for every field and for how the two "
+"sections fall back on each other. This chapter is about the plugin case."
+msgstr ":ref:`output-files` 是关于每一个字段、以及这两个小节如何互相回退的参考资料。本章讲的是插件这一种情形。"
+
+#: ../../source/plugins/output.rst:21
+msgid "What an output type is for"
+msgstr "输出类型的用途"
+
+#: ../../source/plugins/output.rst:23
+msgid ""
+"**A format PartCAD does not write** -- a vendor's exchange format, a "
+"simulator's scene file, a format with a license PartCAD cannot carry."
+msgstr ""
+"**一种 PartCAD 写不出来的格式** -- 某个厂商的交换格式、某个仿真器的场景文件，或者某种许可条款使 PartCAD 无法携带的格式。"
+
+#: ../../source/plugins/output.rst:25
+msgid ""
+"**A document rather than a shape**: a report, a label, a cut list, a packing"
+" slip. Anything a command can be asked to write for an object is a render "
+"type."
+msgstr "**一份文档而不是一个形状**：一份报告、一张标签、一份下料单、一张装箱单。任何可以让命令针对某个对象去写出的东西，都是一种渲染类型。"
+
+#: ../../source/plugins/output.rst:27
+msgid ""
+"**The other half of an** :doc:`importer </plugins/importers>`. Reading a "
+"format and writing it are one piece of knowledge, so the package that "
+"declares the reader declares the writer beside it, and ``pc convert`` then "
+"moves objects between the two."
+msgstr ""
+"**作为** :doc:`导入器 </plugins/importers>` "
+"的另一半。读取一种格式和写出这种格式是同一份知识，所以声明读取器的那个包会把写出器声明在它旁边，而 ``pc convert`` "
+"随后就能在两者之间搬运对象。"
+
+#: ../../source/plugins/output.rst:31
+msgid ""
+"**A dialect of a format PartCAD already writes**, where a particular "
+"downstream tool wants something specific."
+msgstr "**PartCAD 已经能写的某种格式的一个方言**，用于某个下游工具想要某种特定形式的场合。"
+
+#: ../../source/plugins/output.rst:35
+msgid "Using one"
+msgstr "使用一种输出类型"
+
+#: ../../source/plugins/output.rst:37
+msgid ""
+"Import the package and name the type, with that package's name in front of "
+"it:"
+msgstr "导入那个包，并在类型名前面加上那个包的名字来指名它："
+
+#: ../../source/plugins/output.rst:44
+msgid ""
+"A type can also be declared for an object so that it is produced whenever "
+"the object is, with its own parameters -- which is the usual way to use one:"
+msgstr "类型也可以为某个对象声明，这样只要该对象被产出，它就会被一并产出，并带上它自己的参数 -- 这也是通常使用它的方式："
+
+#: ../../source/plugins/output.rst:56
+msgid "Writing one"
+msgstr "编写一种输出类型"
+
+#: ../../source/plugins/output.rst:73
+msgid ""
+"**Which section to declare it in is a promise, not a detail.** An "
+"``export:`` type promises geometry another tool can go on working with; a "
+"``render:`` type promises an output file and nothing more. A drawing, a "
+"picture or a report is the latter -- declare it under ``render:``, where it "
+"stays reachable from both commands, rather than under ``export:``, where it "
+"would promise a part it cannot deliver."
+msgstr ""
+"**把它声明在哪个小节里是一项承诺，而不是一个细节。** ``export:`` 类型承诺的是另一个工具可以继续在上面工作的几何；而 "
+"``render:`` 类型承诺的只是一个输出文件，别无其他。一张图纸、一张图片或一份报告属于后者 -- 请把它声明在 ``render:`` "
+"下，那里两条命令都能触及到它；而不要声明在 ``export:`` 下，那会让它承诺一个它交付不出来的零件。"
+
+#: ../../source/plugins/output.rst:80
+msgid "Two fields are worth dwelling on:"
+msgstr "有两个字段值得多说几句："
+
+#: ../../source/plugins/output.rst:82
+msgid "``reproducible``"
+msgstr "``reproducible``"
+
+#: ../../source/plugins/output.rst:83
+msgid ""
+"Whether the same object has to produce the same bytes every time. It is "
+"``false`` by default because the reproducible path is often the slower one; "
+"every drawing checked in under ``examples/`` sets it, because a checked-in "
+"file that changes on every run is a diff rather than a baseline. See "
+"``output.REPRODUCIBLE_KEY``."
+msgstr ""
+"同一个对象是否每次都必须产出同样的字节。它默认为 ``false`` ，因为可复现的那条路往往更慢；而 ``examples/`` "
+"下签入的每一张图都设置了它，因为一个每次运行都会变的签入文件只是一个 diff，而不是一个基线。参见 "
+"``output.REPRODUCIBLE_KEY`` 。"
+
+#: ../../source/plugins/output.rst:89
+msgid "``exclude``"
+msgstr "``exclude``"
+
+#: ../../source/plugins/output.rst:90
+msgid ""
+"The object kinds this type is not written for. A sketch has no business "
+"being exported as an STL, and saying so once here is better than failing per"
+" object."
+msgstr "不为之写出这种类型的那些对象种类。草图没有理由被导出成 STL，而在这里说一次，要比按对象逐个失败好。"
+
+#: ../../source/plugins/output.rst:94
+msgid "An example"
+msgstr "一个例子"
+
+#: ../../source/plugins/output.rst:96
+msgid ""
+"`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ and "
+"`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ are "
+"the pair to read. Each declares, for one format, all four of the plugins "
+"that format needs: the :doc:`importer </plugins/importers>` that reads it, "
+"the output type that writes it, the :doc:`application entry "
+"</plugins/applications>` that opens it, and the :doc:`simulation plugin "
+"</plugins/simulations>` that runs it."
+msgstr ""
+"`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ 和 "
+"`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ "
+"是值得一起读的那一对。每一个都为同一种格式声明了那种格式所需要的全部四种插件：读取它的 :doc:`导入器 </plugins/importers>` "
+"、写出它的输出类型、打开它的 :doc:`应用程序条目 </plugins/applications>` ，以及运行它的 :doc:`仿真插件 "
+"</plugins/simulations>` 。"
+
+#: ../../source/plugins/output.rst:103
+msgid ""
+"That is the point of the example rather than an accident of packaging. The "
+"export is what the simulator is handed its scene through, so the two cannot "
+"disagree about the format; and because the exporter for a simulation "
+"plugin's ``format:`` is looked up in the plugin's own package as well as in "
+"the scene's, a plugin **implements the format it reads**:"
+msgstr ""
+"这才是这个例子的要点，而不是打包时的偶然安排。导出正是仿真器拿到它那个场景的途径，所以两者不可能对该格式说法不一；而由于仿真插件 ``format:``"
+" 所对应的导出器既会在该插件自己的包里查找、也会在场景所在的包里查找，插件就 **实现了它所读取的那种格式**："
+
+#: ../../source/plugins/output.rst:115
+msgid ""
+"A package that re-tunes that export for its own scenes still wins over the "
+"plugin's own declaration, which is what ``formatOptions:`` on the simulation"
+" declaration is for: a physics run wants every body free to move, the "
+"opposite of what a scene means on its own."
+msgstr ""
+"一个为自己的场景重新调整了那个导出的包，仍然会胜过插件自己的声明，而这正是仿真声明上的 ``formatOptions:`` "
+"的用处：一次物理运行希望每个刚体都能自由运动，这与场景本身所表达的恰好相反。"

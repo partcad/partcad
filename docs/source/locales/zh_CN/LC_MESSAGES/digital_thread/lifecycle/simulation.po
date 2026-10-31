@@ -1,0 +1,3376 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:3
+#: ../../source/digital_thread/lifecycle/simulation.rst:971
+msgid "Simulation"
+msgstr "仿真"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:5
+msgid ""
+"A part, an assembly or a scene can say what it is supposed to *do* once it "
+"is placed in a world and the world is switched on -- stand, stay stacked, "
+"sink, float, turn its heavy side down -- and PartCAD can check that claim by"
+" simulating it, the same way ``pc test`` checks that it can be made. This "
+"page is how to use that: declaring a simulation, the world it runs in, the "
+"physical properties it reads, running it, the engines that do the physics, "
+"writing the condition that decides whether it passed, and the robot "
+"description formats -- URDF, SDFormat, MJCF -- that the same machinery reads"
+" and writes."
+msgstr ""
+"零件、装配体或场景可以声明：当它被放进一个世界、而这个世界被开启之后，它应该 *做* 什么 -- 立得住、保持堆叠、下沉、浮起、把重的一侧转到下方 --"
+" 而 PartCAD 可以通过仿真来检查这个断言，就像 ``pc test`` "
+"检查它能否被制造出来一样。本页讲的就是如何使用它：声明一个仿真、它运行所在的世界、它读取的物理属性、如何运行它、负责物理计算的引擎、如何写出判定是否通过的条件，以及同一套机制能够读写的机器人描述格式"
+" -- URDF、SDFormat、MJCF。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:14
+msgid ""
+"Why it is built the way it is, what has been decided and not built yet, and "
+"the plan, are in the simulation `design record`_."
+msgstr "它为什么被设计成这样、哪些事情已经决定但还没有实现，以及后续计划，都在仿真的 `design record`_ 中。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:29
+msgid "What simulation is for"
+msgstr "仿真是用来做什么的"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:31
+msgid ""
+"A drawing says what a product *is*. Much of what makes it right is what it "
+"*does*: a stack of parts that stands, a fixture that does not tip, a float "
+"that rises, a hull that turns its keel down. None of that can be read off "
+"the geometry, and a claim that nobody checks is one readers learn to trust "
+"and should not."
+msgstr ""
+"图纸说明一个产品 *是* 什么。而让它正确的很大一部分在于它 *做* "
+"什么：一摞零件立得住、一个夹具不会倾倒、一个浮子会浮起、一个船体会把龙骨转到下方。这些都无法从几何形状里读出来，而一个没人检查过的断言，恰恰是读者会渐渐相信、却不应该相信的东西。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:37
+msgid ""
+"So a part, an assembly or a scene states the claim, in a ``simulate:`` "
+"section -- the world it is placed in, where it goes, the engine that runs "
+"it, and a condition over what happened -- and PartCAD runs it and judges it:"
+msgstr ""
+"所以零件、装配体或场景会在 ``simulate:`` 小节里写下这个断言 -- "
+"它被放进哪个世界、放在什么位置、由哪个引擎来运行，以及一个关于运行结果的条件 -- 然后由 PartCAD 运行并判定它："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:41
+msgid ""
+"``pc sim`` runs the simulations an object declares and reports what each "
+"engine said;"
+msgstr "``pc sim`` 运行对象所声明的各个仿真，并报告每个引擎给出的结果；"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:43
+msgid ""
+"``pc test`` holds every object to them, as its ``sim`` check, every time it "
+"runs."
+msgstr "``pc test`` 每次运行时都会以它的 ``sim`` 检查项来约束每一个对象。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:46
+msgid ""
+"The second is what makes it worth writing the claim *first*. Declare what "
+"the part has to do, watch ``pc test`` fail, and change the design until it "
+"passes: test-driven development, for a physical product. Once it passes it "
+"stays checked, and an edit that breaks the claim -- a heavier part, a "
+"slipperier material, a centre of mass moved -- fails the next test run "
+"rather than the first prototype."
+msgstr ""
+"正是后者让人值得 *先* 写下断言。先声明零件必须做到什么，看着 ``pc test`` "
+"失败，再改设计直到它通过：这就是实物产品的测试驱动开发。一旦通过，它就一直处于受检状态；而任何破坏这个断言的修改 -- "
+"更重的零件、更滑的材料、移动过的质心 -- 会让下一次测试运行失败，而不是让第一个样机失败。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:53
+msgid ""
+"PartCAD implements no physics of its own. An engine is a package that a "
+"project imports -- `partcad-sim-mujoco`_ for MuJoCo, `partcad-sim-gazebo`_ "
+"for Gazebo -- and PartCAD's part is everything around it: placing the object"
+" in the world, writing that world out in the engine's own format with every "
+"part's mass and friction in it, running the engine in a sandbox that "
+"installs it, and judging the result. A simulation is therefore as good as "
+"the engine's model and the physical properties it is handed, and :ref:`sim-"
+"limitations` says what is not modelled."
+msgstr ""
+"PartCAD 自己不实现任何物理。引擎是项目导入的一个包 -- MuJoCo 用 `partcad-sim-mujoco`_ ，Gazebo 用 "
+"`partcad-sim-gazebo`_ -- 而 PartCAD "
+"负责它周围的一切：把对象放进世界、用引擎自己的格式把这个世界写出来（其中带上每个零件的质量和摩擦）、在为它安装好依赖的沙箱里运行引擎，以及判定结果。因此一次仿真的质量取决于引擎的模型和交给它的物理属性，:ref:`sim-"
+"limitations` 说明了哪些东西没有被建模。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:66
+msgid "Quick start"
+msgstr "快速开始"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:68
+msgid ""
+"``examples/feature_simulate`` is a package of small claims that can each be "
+"checked, run in MuJoCo through `partcad-sim-mujoco`_. From that directory:"
+msgstr ""
+"``examples/feature_simulate`` 是一个由若干可逐一检查的小断言组成的包，通过 `partcad-sim-mujoco`_ 在"
+" MuJoCo 中运行。在该目录下："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:81
+msgid ""
+"Nothing has to be installed first. The MuJoCo plugin is a dependency of the "
+"package, and PartCAD installs MuJoCo into the sandbox it runs the plugin in."
+msgstr "不需要先安装任何东西。MuJoCo 插件是这个包的依赖，PartCAD 会把 MuJoCo 安装到运行该插件的沙箱里。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:84
+msgid ""
+"A declaration is a dependency on an engine and one entry under "
+"``simulate:``. This is ``stable``:"
+msgstr "一次声明就是对某个引擎的一项依赖，加上 ``simulate:`` 下的一个条目。下面是 ``stable`` ："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:110
+msgid ""
+"The validation says that no block moved 5 mm in any direction. ``pc sim "
+"stable`` says whether it held; ``pc sim --json stable`` prints everything "
+"the engine reported as well, which is where to look before writing a "
+"validation of your own."
+msgstr ""
+"这里的校验条件是：没有任何一块在任何方向上移动了 5 mm。``pc sim stable`` 会给出它是否成立；``pc sim --json "
+"stable`` 还会把引擎报告的全部内容打印出来，在自己动手写校验条件之前应该先看这里。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:115
+msgid ""
+"``stable`` is a **scene** rather than an assembly, and so are the other two "
+"stacks: two blocks set one on another are an arrangement, not a product, so "
+"each block is a body of its own, free to slide and to fall. See :ref:`sim-"
+"bodies`."
+msgstr ""
+"``stable`` 是一个 **场景** "
+"而不是装配体，另外两摞也一样：一块叠在另一块上面只是一种摆放，而不是一个产品，所以每一块都是各自独立的刚体，可以自由滑动和坠落。参见 "
+":ref:`sim-bodies` 。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:120
+msgid ""
+"The rest of the example reads the same way. ``stable`` and ``unstable`` are "
+"the same two blocks and differ by 18 mm. ``stable`` and ``slippery`` differ "
+"by one word, the material, and both run in ``tilted``, a scene whose gravity"
+" leans 15 degrees: on a level floor nothing pushes a block sideways, so its "
+"friction is never asked anything. ``tank`` is a scene filled with water. "
+"``float`` and ``buoy`` are the same cube as ``block``, and state what they "
+"weigh because a sealed float is hollow and its geometry does not say so. The"
+" example's ``README.md`` walks through each of them."
+msgstr ""
+"示例的其余部分也是同样的读法。``stable`` 和 ``unstable`` 是同样的两块，只差 18 mm。``stable`` 和 "
+"``slippery`` 只差一个词，也就是材料，而两者都在 ``tilted`` 这个重力倾斜 15 "
+"度的场景中运行：在水平地面上没有任何力把方块往侧向推，它的摩擦也就无从体现。``tank`` 是一个注满水的场景。``float`` 和 "
+"``buoy`` 是与 ``block`` 相同的立方体，但各自写明了自身的重量，因为密封的浮子是中空的，而几何形状并不能说明这一点。该示例的 "
+"``README.md`` 对它们逐一做了讲解。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:129
+msgid ""
+"``examples/feature_simulate_joints`` is the other half: assemblies whose "
+"parts move on their joints -- a pendulum, and one of every other kind of "
+"joint -- each held to its closed form, in MuJoCo and, for every kind Gazebo "
+"builds, in Gazebo. See :ref:`sim-mechanisms`."
+msgstr ""
+"``examples/feature_simulate_joints`` 是另一半：零件沿各自关节运动的装配体 -- 一个摆，以及其他每种关节各一个 "
+"-- 每一个都被约束到它的解析解，在 MuJoCo 中运行；对于 Gazebo 能够构建的每一种关节，也在 Gazebo 中运行。参见 "
+":ref:`sim-mechanisms` 。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:138
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:140
+msgid ""
+"**Validation → Simulation** is this page as a tab, for a part, an assembly "
+"or a scene that declares ``simulate:``."
+msgstr ""
+"**Validation → Simulation**\\ （校验 → 仿真）就是以标签页形式呈现的本页内容，适用于声明了 ``simulate:`` "
+"的零件、装配体或场景。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:143
+msgid ""
+"The simulations are listed down the left in the order they are declared, "
+"with the first selected and a mark before each name saying how its last run "
+"went: a green tick passed, a red cross failed, a red exclamation could not "
+"run, and a dot ran with nothing to check. Selecting one **runs** it, exactly"
+" as ``pc sim -f <name>`` runs it and through the same cache, so the tab and "
+"the command line give the same verdict."
+msgstr ""
+"各个仿真按声明顺序列在左侧，默认选中第一个，每个名称前面有一个标记，说明它上一次运行的结果：绿色对勾表示通过，红色叉号表示失败，红色叹号表示无法运行，圆点表示运行了但没有可检查的条件。选中某一个就会"
+" **运行** 它，与 ``pc sim -f <name>`` 的运行方式完全相同，并且走同一套缓存，所以标签页和命令行给出的结论是一致的。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:150
+msgid ""
+"What is shown is the run. The video the plugin recorded plays in a player "
+"with the usual controls -- play and pause, replay, a step back and forward, "
+"a position to drag, the speed, and full screen, which takes the editor into "
+"Zen Mode while it lasts. Until it is played, the player's still is the two "
+"pictures the plugin took: before anything moved on the left, when the run "
+"was over on the right, with an arrow between them. A run whose plugin "
+"recorded no video shows those two side by side instead, and a plugin that "
+"takes no pictures at all has not failed -- a line says so where they would "
+"be. All of it is drawn from the viewpoint the scene is rendered from (see "
+":ref:`sim-snapshots` and :ref:`sim-video`)."
+msgstr ""
+"显示出来的就是这一次运行。插件录制的视频会在一个带有常规控件的播放器里播放 -- "
+"播放与暂停、重播、后退一步和前进一步、可拖动的进度、速度，以及全屏（全屏期间编辑器会进入 Zen "
+"Mode）。在播放之前，播放器显示的静止画面是插件拍下的两张图片：左边是任何东西开始运动之前，右边是运行结束时，中间有一个箭头。如果某次运行的插件没有录制视频，就把这两张图片并排显示；而完全不拍图片的插件并不算失败"
+" -- 本该放图片的位置会有一行文字说明。所有这些都是从场景被渲染时所用的视角绘制的（参见 :ref:`sim-snapshots` 和 "
+":ref:`sim-video` ）。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:161
+msgid ""
+"Over the player, as on the Draft tab, **Simulated by** names the plugin -- "
+"filled in with the one the simulation names, offering the ones PartCAD knows"
+" of, and taking any other name typed into it, which runs it with that one "
+"the way ``pc sim --plugin`` does -- and **Simulate** runs it afresh. Under "
+"the player, **Criteria**, **Before** and **After** open on a click: the "
+"``validation:`` expression, and the ``before`` and ``after`` the plugin "
+"reported, which are exactly what that expression is evaluated over. A "
+"validation that passed for the wrong reason is found here."
+msgstr ""
+"播放器上方，与 Draft 标签页一样，**Simulated by** 指出所用的插件 -- 其中预填的是该仿真指名的插件，下拉给出 PartCAD "
+"已知的插件，也接受手工输入的任何其他名称，输入后就用那个插件来运行，效果与 ``pc sim --plugin`` 相同 -- 而 "
+"**Simulate** 会重新运行一次。播放器下方，**Criteria**、**Before** 和 **After** 点击即可展开：分别是 "
+"``validation:`` 表达式，以及插件报告的 ``before`` 和 ``after`` "
+"，而那个表达式正是在它们之上求值的。因为错误的原因而通过的校验，就是在这里被发现的。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:170
+msgid ""
+"The Validation group's Simulation tab: the simulation that was run, the "
+"scene before and after it, and the criteria"
+msgstr "Validation 组的 Simulation 标签页：所运行的仿真、仿真前后的场景，以及判定条件"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:175
+msgid ""
+"The video's size is this machine's to say rather than the package's -- "
+"``simulation.videoResolution``, HD unless it says otherwise -- and the "
+":ref:`view panel's <dt-design-3d>` viewpoint applies here too: choosing one "
+"runs the simulation again with its pictures taken from there, because the "
+"viewpoint is part of the question a run is cached under."
+msgstr ""
+"视频的尺寸由本机决定，而不是由包决定 -- ``simulation.videoResolution`` ，没有另行说明时为 HD -- 而 "
+":ref:`视图面板 <dt-design-3d>` "
+"的视角在这里同样适用：选择一个视角会重新运行仿真，并从那个视角拍摄图片，因为视角也是一次运行被缓存时所依据的那个问题的一部分。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:181
+msgid ""
+"The tab is disabled for anything that declares no simulation; Validation "
+"itself never is, for its :doc:`Test tab "
+"</digital_thread/lifecycle/testing>`. ``pc ide view --validation-"
+"simulation`` opens it from a terminal, and ``--scenario <name>`` selects one"
+" simulation by name."
+msgstr ""
+"对于没有声明任何仿真的对象，这个标签页是禁用的；而 Validation 本身永远不会禁用，因为它还有 :doc:`Test 标签页 "
+"</digital_thread/lifecycle/testing>` 。``pc ide view --validation-"
+"simulation`` 可以从终端打开它，``--scenario <name>`` 则按名称选择其中一个仿真。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:190
+msgid "On the command line"
+msgstr "在命令行中"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:202
+msgid ""
+"``pc sim`` is this page in one command, and ``pc test``'s ``sim`` check is "
+"the same runs with a pass or a fail on the end. `Running a simulation`_ "
+"below is the full account -- every option, what a run costs, what is cached,"
+" and what happens when one hangs or crashes -- and ``pc sim`` in :doc:`/cli`"
+" is the command reference."
+msgstr ""
+"``pc sim`` 就是本页内容的单条命令形式，而 ``pc test`` 的 ``sim`` "
+"检查项就是同样的运行，只是最后多一个通过或失败的结论。下面的 `Running a simulation`_ 是完整说明 -- "
+"每一个选项、一次运行的代价、哪些内容会被缓存，以及某次运行卡住或崩溃时会发生什么 -- 而 :doc:`/cli` 中的 ``pc sim`` "
+"是命令参考。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:212
+msgid "Declaring a simulation"
+msgstr "声明一个仿真"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:214
+msgid ""
+"``simulate:`` is an optional section of a part, an assembly or a scene. Each"
+" entry is one simulation under a name of its own -- the name is what ``-f`` "
+"selects and what a report prints beside the verdict -- and states:"
+msgstr ""
+"``simulate:`` 是零件、装配体或场景的一个可选小节。每个条目都是一个带有自己名称的仿真 -- 这个名称就是 ``-f`` "
+"所选择的、也是报告中与结论一同打印出来的 -- 它写明："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:218
+msgid "``scene``"
+msgstr "``scene``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:219
+msgid ""
+"The world the object is placed in, by full path. It may be left out: the "
+"default, ``//builtin/scene:subject``, is an empty world that holds the "
+"object and nothing else, which is what \"does this stand up on its own\" "
+"means. A world with more in it -- a fixture to stand on, a tank of water, a "
+"tilted floor -- is a scene of your own; see :ref:`sim-scenes`."
+msgstr ""
+"对象被放入的那个世界，用完整路径给出。它可以省略：默认值 ``//builtin/scene:subject`` "
+"是一个空世界，其中只有这个对象，别无他物，这正是“它自己能不能立住”这个问题的含义。包含更多内容的世界 -- "
+"一个可以立在上面的夹具、一池水、一块倾斜的地面 -- 就是你自己的场景；参见 :ref:`sim-scenes` 。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:225
+msgid "``offset``"
+msgstr "``offset``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:226
+msgid ""
+"Where the object's origin goes in that scene, as a location (``[[x, y, z], "
+"[axis x, axis y, axis z], angle]``, in millimetres and degrees). It is "
+"stated here rather than in the scene because it is a fact about *this* "
+"object -- where its origin sits relative to the floor it is meant to stand "
+"on -- and the scene is shared. The blocks of ``feature_simulate`` are drawn "
+"about their own centres, so each stack is lifted 10 mm to stand on the "
+"floor; ``buoy`` is also turned 60 degrees, to be released tilted."
+msgstr ""
+"对象的原点在该场景中的位置，以一个位置给出（ ``[[x, y, z], [axis x, axis y, axis z], angle]`` "
+"，单位为毫米和度）。它写在这里而不是写在场景里，因为这是关于 *这个* 对象的事实 -- 它的原点相对于它要立在上面的地面处于什么位置 -- "
+"而场景是共享的。``feature_simulate`` 中的方块都是以各自中心为原点绘制的，所以每一摞都抬高 10 mm "
+"才能立在地面上；``buoy`` 还额外转了 60 度，以便倾斜着被释放。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:234
+msgid "``simulation``"
+msgstr "``simulation``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:235
+msgid ""
+"The engine plugin that runs it, by full path: ``sim-mujoco:mujoco`` is the "
+"``mujoco`` simulation of the package this one imported as ``sim-mujoco``. "
+"There is no default, since PartCAD implements no simulator; see :ref:`sim-"
+"engines`."
+msgstr ""
+"运行它的引擎插件，用完整路径给出：``sim-mujoco:mujoco`` 指的是本包以 ``sim-mujoco`` 名义导入的那个包里的 "
+"``mujoco`` 仿真。它没有默认值，因为 PartCAD 自身不实现任何仿真器；参见 :ref:`sim-engines` 。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:240
+msgid "``params``"
+msgstr "``params``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:241
+msgid ""
+"Values of the plugin's own parameters for this run -- ``duration``, "
+"``samples``, ``gravity`` and the others each plugin lists (see :ref:`sim-"
+"engines`)."
+msgstr ""
+"本次运行中插件自身参数的取值 -- ``duration``、``samples``、``gravity`` 以及每个插件各自列出的其他参数（参见 "
+":ref:`sim-engines` ）。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:245
+msgid "``validation``"
+msgstr "``validation``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:246
+msgid ""
+"A Python expression over what the engine reported, true when what happened "
+"is what was supposed to happen; see :ref:`sim-validation`."
+msgstr "一个基于引擎所报告内容的 Python 表达式，当实际发生的正是本应发生的事情时为真；参见 :ref:`sim-validation` 。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:249
+msgid "``desc``"
+msgstr "``desc``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:250
+msgid "The claim in words, for whoever reads the result."
+msgstr "用文字表述的断言，供查看结果的人阅读。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:252
+msgid "``feature``"
+msgstr "``feature``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:253
+msgid ""
+"The feature of the object's :ref:`requirements` that this simulation "
+"demonstrates, by name, or a list of them. Nothing that runs the simulation "
+"reads it: it is what lets a reader of the requirements -- the IDE's "
+"Requirements tab, an agent running ``/pc:validate`` -- see which features a "
+"simulation stands behind. ``pc test`` fails an object one of whose "
+"simulations names a feature its requirements do not declare."
+msgstr ""
+"本仿真所证明的、对象 :ref:`requirements` "
+"中的那个特性，按名称给出，也可以是一组名称。运行仿真的过程不会读取它：它的作用是让需求的读者 -- IDE 的 Requirements 标签页、运行 "
+"``/pc:validate`` 的智能体 -- 看出哪些特性有仿真作为支撑。如果某个对象的某个仿真指名了一个它的需求并未声明的特性，``pc "
+"test`` 会判该对象失败。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:260
+msgid ""
+"An object may declare as many simulations as it likes, and two of them can "
+"make opposite claims about one part in two worlds: ``float`` rises in "
+"``tank`` and falls in the default scene, which is a vacuum."
+msgstr ""
+"一个对象可以声明任意多个仿真，其中两个甚至可以在两个世界里对同一个零件给出相反的断言：``float`` 在 ``tank`` "
+"中浮起，而在默认场景（真空）中下落。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:264
+msgid ""
+"Relative names in a declaration -- ``sim-mujoco:mujoco``, ``:tilted`` -- "
+"resolve from the package the object is in, not from where the command was "
+"run, so ``pc test -P //...`` run at the root of a tree resolves each of them"
+" the way ``pc sim`` in that package would."
+msgstr ""
+"声明中的相对名称 -- ``sim-mujoco:mujoco``、``:tilted`` -- "
+"是相对于对象所在的包解析的，而不是相对于命令运行所在的位置，所以在一棵树的根目录运行 ``pc test -P //...`` "
+"解析它们的方式，与在那个包里运行 ``pc sim`` 时相同。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:269
+msgid ""
+"``simulate:`` is not part of what the object is built from: declaring or "
+"editing a simulation does not rebuild the object. The section's schema is "
+"under :ref:`simulate`."
+msgstr ""
+"``simulate:`` 不属于构建对象所依据的内容：声明或修改一个仿真不会导致对象重新构建。该小节的模式定义见 :ref:`simulate` 。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:277
+msgid "Scenes as worlds"
+msgstr "把场景作为世界"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:279
+msgid ""
+"A simulation is never of an object alone: it is of an object *in a world*. "
+"That world is an ordinary :ref:`scene <scenes>`, of any scene type, with one"
+" thing about it that makes it a simulation scene -- it takes the object as a"
+" parameter."
+msgstr ""
+"仿真从来不是只针对对象本身：它针对的是 *处于某个世界中的* 对象。那个世界就是一个普通的 :ref:`场景 <scenes>` "
+"，可以是任何场景类型，只有一点使它成为仿真场景 -- 它把对象作为参数接收。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:284
+msgid "The default scene"
+msgstr "默认场景"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:286
+msgid ""
+"``//builtin/scene:subject`` holds the object being simulated and nothing "
+"else. It states no gravity, so a run in it is under the engine's own -- "
+"Earth's, along -Z -- and no medium, so it is a vacuum. The floor the object "
+"stands on and the light it is drawn in are not part of the scene: each "
+"engine's exporter writes its own (see :ref:`sim-engines`)."
+msgstr ""
+"``//builtin/scene:subject`` 只装下被仿真的那个对象，别无他物。它没有声明重力，所以在其中的运行使用引擎自带的重力 -- "
+"地球重力，沿 -Z 方向 -- 也没有声明介质，所以它是真空。对象所站的地面和绘制它时用的光照都不属于场景：每个引擎的导出器都会自己写出这些（参见 "
+":ref:`sim-engines` ）。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:293
+msgid "Writing a simulation scene"
+msgstr "编写一个仿真场景"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:295
+msgid ""
+"When a simulation runs, PartCAD sets three parameters of the scene it names,"
+" and a scene that is to hold the object declares them:"
+msgstr "仿真运行时，PartCAD 会设置它所指名场景的三个参数，而一个要装下对象的场景必须声明它们："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:298
+msgid "``subject``"
+msgstr "``subject``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:299
+msgid ""
+"The full path of the object being simulated (``//package:part``). It is "
+"assigned whatever else the declaration says, which is what lets one scene "
+"serve every object that names it."
+msgstr ""
+"被仿真对象的完整路径（ ``//package:part`` ）。无论声明中还写了什么，它都会被赋值，正是这一点让一个场景可以服务于所有指名它的对象。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:303
+msgid "``subject_kind``"
+msgstr "``subject_kind``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:304
+msgid ""
+"``part``, ``assembly`` or ``scene``, because an ASSY link names each with a "
+"key of its own (``part:``, ``assembly:``, ``scene:``). A scene placed in the"
+" world keeps every element of it a body of its own (see :ref:`sim-bodies`)."
+msgstr ""
+"``part``、``assembly`` 或 ``scene``，因为 ASSY 链接用各自专门的键来指名它们（ "
+"``part:``、``assembly:``、``scene:`` ）。被放入世界中的场景，其每一个元素仍然各自是一个独立的刚体（参见 "
+":ref:`sim-bodies` ）。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:308
+msgid "``subject_offset``"
+msgstr "``subject_offset``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:309
+msgid ""
+"The declaration's ``offset``, as seven numbers separated by spaces -- the "
+"translation, then the axis, then the angle. Not the location as it is "
+"written everywhere else, because a parameter value has to be spellable "
+"inside an instance name, where ``,`` and ``;`` are separators."
+msgstr ""
+"声明中的 ``offset``，写成以空格分隔的七个数字 -- "
+"先是平移，然后是轴，最后是角度。它不是其他地方所用的那种位置写法，因为参数取值必须能够写进实例名称里，而在实例名称中 ``,`` 和 ``;`` "
+"是分隔符。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:314
+msgid ""
+"An ASSY file is a Jinja2 template (see :ref:`sim-templates`), and that is "
+"how the scene places the object. This is ``tilted.assy`` from "
+"``examples/feature_simulate``, whole:"
+msgstr ""
+"ASSY 文件是一个 Jinja2 模板（参见 :ref:`sim-templates` ），场景正是借此放置对象。下面是 "
+"``examples/feature_simulate`` 中 ``tilted.assy`` 的全文："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:326
+msgid ""
+"and its declaration, which gives each parameter a default so that the scene "
+"on its own -- what ``pc render`` draws and ``pc ide view`` shows -- holds "
+"something:"
+msgstr ""
+"以及它的声明，其中为每个参数给出了默认值，使得这个场景单独存在时 -- 也就是 ``pc render`` 画出来、``pc ide view`` "
+"显示出来的样子 -- 里面也有东西："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:348
+msgid ""
+"A scene that declares no ``subject`` parameter cannot hold the object, and a"
+" simulation that names one fails. Anything else the world needs -- a "
+"fixture, a ramp, a bin -- is linked into the scene beside the subject, like "
+"any other part of it."
+msgstr ""
+"没有声明 ``subject`` 参数的场景装不下对象，指名它的仿真会失败。这个世界所需的其他一切 -- 一个夹具、一个斜坡、一个料箱 -- "
+"都像场景的其他组成部分一样，与被仿真对象并列地链接进场景。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:354
+msgid "Gravity, and the fluid a scene is filled with"
+msgstr "重力，以及场景中注满的流体"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:356
+msgid ""
+"A scene may say what its world is like as well as where things are in it: "
+"the gravity in it, and the fluid it is filled with."
+msgstr "场景除了说明其中各个物体的位置，也可以说明它的世界是什么样的：其中的重力，以及它注满的流体。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:368
+msgid ""
+"``gravity:`` is a vector, so a world whose Z axis is not up says so, and so "
+"does a ramp with no edge -- ``tilted`` above is a level floor under a "
+"gravity that leans, which for sliding is the same thing. ``medium:`` names a"
+" :ref:`material <materials>`, and its ``density`` and ``viscosity`` are what"
+" the engine drags and buoys a body with; "
+"``//pub/std/manufacturing/material/fluid`` catalogues ``air``, ``water`` and"
+" ``seawater``. Both are optional, and leaving them out is what every engine "
+"assumes: its own gravity, in a vacuum. The keys, their units and what is "
+"refused are in :ref:`scenes`; what each engine makes of a medium is in "
+":ref:`sim-engines`."
+msgstr ""
+"``gravity:`` 是一个矢量，所以 Z 轴不朝上的世界可以这样说明，没有边缘的斜坡也可以 -- 上面的 ``tilted`` "
+"就是处于一个倾斜重力之下的水平地面，就滑动而言两者是一回事。``medium:`` 指名一种 :ref:`材料 <materials>` ，其 "
+"``density`` 和 ``viscosity`` "
+"就是引擎用来对刚体施加阻力和浮力的依据；``//pub/std/manufacturing/material/fluid`` 收录了 "
+"``air``、``water`` 和 "
+"``seawater``。两者都是可选的，省略它们就是每个引擎的默认假设：引擎自带的重力，真空环境。这些键、它们的单位以及哪些取值会被拒绝都在 "
+":ref:`scenes` 中；每个引擎如何理解介质则在 :ref:`sim-engines` 中。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:378
+msgid ""
+"A ``simulate:`` cannot ask the default scene for water. The fluid a part is "
+"simulated in is a fact about the world, like the fixture it stands on, so a "
+"package that wants its part under water writes a scene that is under water, "
+"as ``tank`` is. A medium parameter on the built-in scene would be a second "
+"way of saying the same thing, resolved against ``//builtin/scene`` rather "
+"than against the package that wrote it."
+msgstr ""
+"``simulate:`` "
+"无法要求默认场景提供水。零件在什么流体中被仿真，是关于那个世界的事实，就像它所站的夹具一样，所以想让自己的零件处于水下的包，要像 ``tank`` "
+"那样写一个处于水下的场景。在内置场景上加一个介质参数，就等于用第二种方式表达同一件事，而且它是相对于 ``//builtin/scene`` "
+"解析的，而不是相对于写下它的那个包。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:385
+msgid ""
+"**Which gravity a run is under**, in order: the declaration's own ``params: "
+"{gravity: [...]}``, for that run; the scene's ``gravity:``; the engine's "
+"default (MuJoCo's 9.81 m/s², SDFormat's 9.8, both along -Z)."
+msgstr ""
+"**一次运行处于哪个重力之下**，按优先顺序：声明自身的 ``params: {gravity: [...]}`` ，只对那一次运行有效；场景的 "
+"``gravity:`` ；引擎的默认值（MuJoCo 为 9.81 m/s²，SDFormat 为 9.8，都沿 -Z 方向）。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:393
+msgid "What becomes a body"
+msgstr "什么会成为一个刚体"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:395
+msgid ""
+"Which parts of a world move together is the decision everything in a "
+"simulation rests on, and PartCAD makes it from what the two kinds of "
+"arrangement already mean: an **assembly** is a product somebody put "
+"together, and a **scene** only states where things are."
+msgstr ""
+"世界中哪些零件一起运动，是仿真里一切结论所依赖的判断，而 PartCAD 是从两种摆放方式各自已有的含义推出它的：**装配体** 是有人装起来的产品，而"
+" **场景** 只说明各物体的位置。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:404
+msgid "How a link is placed"
+msgstr "链接是如何放置的"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:405
+msgid "Inside an assembly"
+msgstr "在装配体中"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:406
+msgid "Inside a scene"
+msgstr "在场景中"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:407
+msgid "``location:``"
+msgstr "``location:``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:408
+msgid "attached to what holds it"
+msgstr "固连到承载它的东西上"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:409
+#: ../../source/digital_thread/lifecycle/simulation.rst:412
+#: ../../source/digital_thread/lifecycle/simulation.rst:415
+msgid "a body of its own"
+msgstr "各自是一个独立的刚体"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:410
+msgid "``connect:`` that keeps no degree of freedom"
+msgstr "不保留任何自由度的 ``connect:``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:411
+msgid "attached to what it is connected to"
+msgstr "固连到与它相连的东西上"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:413
+msgid "``connect:`` that keeps one (see :ref:`assy-joints`)"
+msgstr "保留一个自由度的 ``connect:`` （参见 :ref:`assy-joints` ）"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:414
+msgid "a joint to what it is connected to"
+msgstr "与它相连的东西之间形成一个关节"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:416
+msgid "an assembly"
+msgstr "一个装配体"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:417
+msgid ""
+"attached or jointed by its link, as a part is; its own joints still move"
+msgstr "像零件一样，按其链接被固连或形成关节；它自身的关节仍然可以运动"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:418
+msgid "one tree of bodies, its root free"
+msgstr "一棵刚体树，其根为自由"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:419
+msgid "a scene (``scene:``)"
+msgstr "一个场景（ ``scene:`` ）"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:420
+msgid "not allowed"
+msgstr "不允许"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:421
+msgid "every element a body of its own, recursively"
+msgstr "每个元素各自是一个独立的刚体，并递归适用"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:423
+msgid ""
+"**Every element of a scene is a body of its own**, and so is every element "
+"of a scene placed inside it. A scene's ``connect:`` places one object "
+"against another and attaches nothing, which is what makes a stack of blocks "
+"a scene: each block is where it is, and nothing holds it there."
+msgstr ""
+"**场景的每个元素都各自是一个独立的刚体**，放在它里面的场景的每个元素也是如此。场景的 ``connect:`` "
+"只是把一个对象摆到另一个对象旁边，并不固连任何东西，这正是一摞方块之所以是场景的原因：每一块都在它所在的位置，而没有任何东西把它固定在那里。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:427
+msgid ""
+"**Everything inside an assembly is attached.** Parts attached to each other "
+"are *one* rigid body -- there are no fixed joints -- whose mass, centre of "
+"mass and inertia are its parts' added up (see :ref:`sim-physics`). A "
+"connection that keeps a degree of freedom is a joint between two bodies, so "
+"an assembly is one body, or a tree of them on its joints."
+msgstr ""
+"**装配体内部的一切都是固连的。** 相互固连的零件是 *一个* 刚体 -- 不存在固定关节 -- 它的质量、质心和惯量是各零件的叠加（参见 "
+":ref:`sim-physics` ）。保留了自由度的连接是两个刚体之间的关节，所以装配体要么是一个刚体，要么是一棵由关节连成的刚体树。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:432
+msgid ""
+"**An assembly placed in a scene** is one tree of bodies, and its root body "
+"is free."
+msgstr "**放入场景中的装配体** 是一棵刚体树，而它的根刚体是自由的。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:434
+msgid ""
+"**An element marked** ``fixed: true`` is welded to the world -- a table, a "
+"tank's walls, a robot bolted to the floor. Free is the default, so without "
+"it every element of a scene falls under gravity. ``fixed:`` is a scene's to "
+"say: an assembly is fixed or free as a whole, by the link that places it in "
+"a scene, and fixing a scene fixes every element of it."
+msgstr ""
+"**标记为** ``fixed: true`` 的元素被焊接在世界上 -- "
+"一张桌子、一个水池的池壁、一台用螺栓固定在地面上的机器人。默认是自由的，所以不加它的话，场景的每个元素都会在重力下坠落。``fixed:`` "
+"由场景来说明：装配体作为一个整体是固定还是自由，由把它放入场景的那个链接决定，而固定一个场景就固定了它的每一个元素。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:452
+msgid ""
+"A scene that is itself the claim -- a stack that stands, a pile that does "
+"not slide -- declares ``simulate:`` the way a part does, and the world it is"
+" simulated in places it with a ``scene:`` link, which ``subject_kind`` asks "
+"for. ``pc sim`` and ``pc test`` find one by its name, as they find a part. "
+"The ASSY keys are under :ref:`assy-scenes`."
+msgstr ""
+"本身就是断言的场景 -- 立得住的一摞、不滑动的一堆 -- 会像零件那样声明 ``simulate:`` ，而仿真它的那个世界用一个 "
+"``scene:`` 链接来放置它，这正是 ``subject_kind`` 所要求的。``pc sim`` 和 ``pc test`` "
+"像找零件一样按名称找到它。相关的 ASSY 键见 :ref:`assy-scenes` 。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:458
+msgid ""
+"The rule is PartCAD's one copy of it, in the module the engine plugins "
+"import for it (``kinematics.py``, beside ``mass_properties.py``): the bodies"
+" of a tree, each with its parts, its frame, what it hangs off and its "
+"combined mass, and each joint with its kind and the frames a format states "
+"one in. **MuJoCo writes it**: `partcad-sim-mujoco`_ makes one MJCF body per "
+"body of the rule, welds a ``fixed: true`` element to the world, and writes "
+"every joint (see :ref:`sim-mechanisms`), and so does the URDF export, a link"
+" per body and a joint per pair (:ref:`sim-urdf`). **Gazebo does not yet**: a"
+" Gazebo run still makes every part with geometry a free body of its own, "
+"which is the rule for a scene of parts and not for the parts of an assembly."
+" See :ref:`sim-limitations`."
+msgstr ""
+"这条规则在 PartCAD 中只有一份，位于引擎插件为此导入的那个模块里（ ``kinematics.py`` ，就在 "
+"``mass_properties.py`` "
+"旁边）：一棵树的各个刚体，每个刚体带着它的零件、它的坐标系、它挂在谁身上以及它的合并质量，还有每个关节及其类型和某种格式表述该关节所用的坐标系。**MuJoCo"
+" 会写出它**：`partcad-sim-mujoco`_ 为规则中的每个刚体生成一个 MJCF body，把 ``fixed: true`` "
+"的元素焊接到世界上，并写出每一个关节（参见 :ref:`sim-mechanisms` ），URDF 导出也是如此，每个刚体一个 "
+"link、每一对刚体一个 joint（ :ref:`sim-urdf` ）。**Gazebo 还没有**：Gazebo "
+"的运行目前仍然把每一个有几何形状的零件都做成各自独立的自由刚体，而那是零件场景的规则，不是装配体中零件的规则。参见 :ref:`sim-"
+"limitations` 。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:472
+msgid "Mechanisms"
+msgstr "机构"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:474
+msgid ""
+"An assembly whose connections keep a degree of freedom is a **mechanism**, "
+"and what it does can often be worked out on paper -- which makes it the kind"
+" of claim a simulation is best at checking. "
+"``examples/feature_simulate_joints`` is a pendulum, checked against its "
+"closed form, beside one assembly of every other kind of joint, checked "
+"against theirs (its ``README.md`` has the table):"
+msgstr ""
+"连接保留了自由度的装配体就是一个 **机构** ，而它会做什么往往可以在纸上算出来 -- "
+"这让它成为仿真最擅长检查的那类断言。``examples/feature_simulate_joints`` "
+"是一个摆，用它的解析解来检查，旁边还有其他每种关节各一个装配体，各自用自己的解析解来检查（其 ``README.md`` 中有对照表）："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:485
+msgid ""
+"Three things make one, and each is a declaration PartCAD already reads:"
+msgstr "三样东西构成一个机构，而每一样都是 PartCAD 本来就会读取的声明："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:487
+msgid ""
+"**A joint.** A connection whose interfaces keep a freedom once joined -- "
+"``motion: revolute`` on the frame's ``axle`` interface, here -- is a joint "
+"between two bodies (see :ref:`assy-joints`). Name it with ``joint:``, since "
+"the name is what a validation reads: "
+"``after[\"joints\"][\"swing\"][\"pos\"]``."
+msgstr ""
+"**一个关节。** 接合之后其接口仍保留某个自由度的连接 -- 这里是机架 ``axle`` 接口上的 ``motion: revolute`` -- "
+"就是两个刚体之间的一个关节（参见 :ref:`assy-joints` ）。用 ``joint:`` "
+"给它命名，因为校验表达式读的就是这个名称：``after[\"joints\"][\"swing\"][\"pos\"]``。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:491
+msgid ""
+"**Where it starts.** ``toParams`` places the joint where the run starts, and"
+" the parameter at zero is the joint's zero. The engine is told the same, so "
+"a reading of a joint is its value as PartCAD states it: the pendulum starts "
+"at ``90`` and passes ``0`` at the bottom."
+msgstr ""
+"**它从哪里开始。** ``toParams`` "
+"把关节放到运行开始时的位置，而参数取零就是关节的零点。引擎被告知的是同一件事，所以读取一个关节得到的就是 PartCAD 所表述的那个值：摆从 "
+"``90`` 开始，在最低点经过 ``0``。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:495
+msgid ""
+"**What holds it.** An assembly placed in a scene is one tree of bodies whose"
+" root is free, so a pendulum in the scene PartCAD ships falls, frame and "
+"all. Simulate it in a scene that places it ``fixed: true`` -- the example's "
+"``bolted`` -- and the root is welded to the world while the joints still "
+"move."
+msgstr ""
+"**什么把它托住。** 放入场景中的装配体是一棵根为自由的刚体树，所以 PartCAD 自带场景中的摆会连同机架一起坠落。把它放在一个以 "
+"``fixed: true`` 放置它的场景中仿真 -- 也就是示例中的 ``bolted`` -- 根就被焊接到世界上，而各个关节仍然可以运动。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:510
+msgid ""
+"How each kind of joint is written -- a hinge or a slide per freedom, a ball,"
+" an equality for a screw's thread or a ``mimic``; what of a joint's "
+"``physics:`` is written and what is reported -- is in the plugin's "
+"documentation. Two things are worth knowing when writing a claim:"
+msgstr ""
+"每种关节是如何写出的 -- 每个自由度一个铰链或一个滑动、一个球铰、螺纹用的等式约束或者 ``mimic`` ；关节的 ``physics:`` "
+"中哪些内容会被写出、哪些会被报告 -- 都在插件的文档里。写断言时有两件事值得知道："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:515
+msgid ""
+"**Sample the run finely enough for the claim.** A validation that asks when "
+"something happened reads ``result[\"samples\"]``; ``params: {samples: ...}``"
+" sets how many, and ``timestep`` how finely the engine steps between them. "
+"The pendulum reads every millisecond on a half-millisecond step in MuJoCo, "
+"and reads the instant it reaches the bottom *between* the two readings "
+"either side of it, which places it far more finely than either. That is also"
+" what lets one validation hold in Gazebo, whose readings are its pose "
+"messages, 60 a second of the wall clock: a Gazebo run that asks for more "
+"than that is run slower than real time to get them, so the joint examples "
+"ask Gazebo for one every 21 ms or so, and each lands up to one message late."
+msgstr ""
+"**采样要足够细，以支撑这个断言。** 询问某件事何时发生的校验会读取 ``result[\"samples\"]`` ；``params: "
+"{samples: ...}`` 设定采样的数量，而 ``timestep`` 设定引擎在两次采样之间以多细的步长推进。在 MuJoCo "
+"中，摆以半毫秒的步长每毫秒读取一次，并在它到达最低点前后的两次读数 *之间* 推算出到达那一刻的时间，这比任何一次读数都精细得多。正因如此，同一个校验在"
+" Gazebo 中也能成立 -- Gazebo 的读数就是它的位姿消息，按墙上时钟每秒 60 条：要求多于这个数量的 Gazebo "
+"运行会被放慢到低于实时速度来取得它们，所以关节示例向 Gazebo 要求大约每 21 ms 一次，而每次读数最多会晚一条消息。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:525
+msgid ""
+"**The two bodies of a joint do not collide with each other.** A pin sits in "
+"its bore by design, and the engine is told so."
+msgstr "**一个关节的两个刚体之间不发生碰撞。** 销钉按设计就坐在它的孔里，而引擎也被告知了这一点。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:532
+msgid "Materials and physical properties"
+msgstr "材料与物理属性"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:534
+msgid ""
+"Whether a stack stands, a float rises or a block slides is decided by what "
+"the parts are made of as much as by their shape. The model an engine is "
+"handed carries, for every part, its mass, its centre of mass and its "
+"inertia, its sliding friction, and -- for a scene filled with a fluid -- the"
+" volume it displaces and where that volume is centred. PartCAD works each of"
+" them out once, the same way for every engine, for ``pc info`` and for the "
+"URDF export, so what ``pc info`` says a part weighs is what a simulation of "
+"it weighs."
+msgstr ""
+"一摞东西能不能立住、浮子会不会浮起、方块会不会滑动，既取决于零件的形状，也同样取决于它们由什么做成。交给引擎的模型里，对每一个零件都带上它的质量、它的质心和惯量、它的滑动摩擦，以及"
+" -- 对注满流体的场景而言 -- 它排开的体积和该体积的形心位置。PartCAD 把这些量各算一次，对每个引擎都一样，``pc info`` 和 "
+"URDF 导出用的也是同一份，所以 ``pc info`` 说某个零件有多重，它在仿真里就有多重。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:543
+msgid "What a part is made of"
+msgstr "零件由什么做成"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:545
+msgid ""
+"A :ref:`material <materials>` is a set of facts about a substance, declared "
+"in a ``materials:`` section and shared like any other object. A simulation "
+"reads three of them: ``density``, in kg/m³, which gives a part its mass, "
+"centre of mass and inertia; ``mu``, the dimensionless coefficient of sliding"
+" friction; and ``viscosity``, in Pa·s, which only a fluid states. The "
+"standard catalogues listed there cover the usual plastics, metals and "
+"fluids."
+msgstr ""
+"一种 :ref:`材料 <materials>` 就是关于某种物质的一组事实，在 ``materials:`` "
+"小节中声明，并像其他对象一样被共享。仿真会读取其中三项：``density``，单位 "
+"kg/m³，它决定零件的质量、质心和惯量；``mu``，无量纲的滑动摩擦系数；以及 ``viscosity``，单位 "
+"Pa·s，只有流体才会给出它。那里列出的标准目录涵盖了常见的塑料、金属和流体。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:552
+msgid ""
+"A part names its material with the ``material`` parameter, on the part types"
+" that make one homogeneous body (see :ref:`parameters`), and the part type "
+"records the answer as the ``material`` property of the shape it makes, which"
+" is what every exporter reads. That is also how two parts built by one "
+"script can be made of different things, as ``block`` and ``block_ptfe`` are "
+"in ``feature_simulate``:"
+msgstr ""
+"零件用 ``material`` 参数指名它的材料，这适用于生成单一均质体的那些零件类型（参见 :ref:`parameters` "
+"），而零件类型会把这个答案记录为它所生成形状的 ``material`` "
+"属性，所有导出器读取的都是这个属性。这也是同一个脚本构建出的两个零件可以由不同材料做成的原因，就像 ``feature_simulate`` 中的 "
+"``block`` 和 ``block_ptfe`` 那样："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:571
+msgid "Stating what the material cannot say"
+msgstr "写明材料无法说明的东西"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:573
+msgid ""
+"A part states a value under ``properties: physics:`` when its geometry and "
+"its material cannot say it. A sealed float is drawn as the solid it "
+"displaces, but it is hollow, so it states its mass; a float with a lead "
+"weight in its bottom also states where it balances:"
+msgstr ""
+"当零件的几何形状和材料都无法说明某个值时，零件就在 ``properties: physics:`` "
+"下写明它。密封的浮子是按它所排开的实体来绘制的，但它是中空的，所以它写明自己的质量；底部带铅块的浮子还会写明它的平衡位置："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:589
+msgid ""
+"A stated value beats the material, because a measured part beats the "
+"substance it is made of, and whatever the part does not state is still "
+"worked out: the float above turns the way its solid says it does, at the "
+"weight it states."
+msgstr ""
+"写明的值优先于材料，因为实测过的零件优先于它所用的物质，而零件没有写明的部分仍然会被算出来：上面那个浮子按它的实体所决定的方式转动，但按它写明的重量计算。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:594
+msgid "Where each value comes from"
+msgstr "每个值的来源"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:596
+msgid ""
+"Each value is the first of these that applies -- what the part states; what "
+"its solid comes to at the density of its material; and, for an export only, "
+"the export's ``density`` parameter or else 2700 kg/m³ (aluminium). Friction "
+"is what the part states, or else its material's ``mu``, or else the engine's"
+" default. The mass, the centre of mass and the inertia come from one "
+"density, so they cannot disagree. The full order, and every property a part "
+"can state, is under :ref:`properties`."
+msgstr ""
+"每个值取下列第一个适用的来源 -- 零件写明的值；它的实体在其材料密度下算出的值；以及仅在导出时，导出的 ``density`` 参数，否则取 2700"
+" kg/m³（铝）。摩擦取零件写明的值，否则取其材料的 "
+"``mu``，否则取引擎的默认值。质量、质心和惯量来自同一个密度，所以它们不可能互相矛盾。完整的优先顺序以及零件可以写明的每一项属性都在 "
+":ref:`properties` 下。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:604
+msgid ""
+"The volume a part displaces and that volume's centroid -- its centre of "
+"buoyancy -- are always measured from the solid, never stated: a float states"
+" 3 g and still pushes aside the whole 8 cm³ of its cube, and is lifted from "
+"the cube's middle whatever its stated centre of mass. That difference "
+"between where a body balances and where it is lifted is what turns ``buoy`` "
+"upright."
+msgstr ""
+"零件排开的体积以及该体积的形心 -- 也就是它的浮心 -- 始终是从实体测量出来的，从不写明：浮子写明 3 g，但仍然排开它那个立方体完整的 8 "
+"cm³，而且无论它写明的质心在哪里，浮力都从立方体的中心作用上去。刚体的平衡位置与受浮力位置之间的这个差别，正是 ``buoy`` 会自行立正的原因。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:610
+msgid ""
+"Two cases are worth knowing about. A part that names no material with a "
+"density, and states no mass, has no known mass: ``pc info`` says so rather "
+"than inventing one, while an export -- and so a simulation -- weighs it at "
+"2700 kg/m³, because an engine handed a body with no mass makes one up "
+"regardless. Give it a material. And a part with no solid in it, an open "
+"mesh, has no volume to weigh or to buoy."
+msgstr ""
+"有两种情况值得知道。一个既没有指名带密度的材料、也没有写明质量的零件，其质量是未知的：``pc info`` 会如实说明，而不是凭空编一个；而导出 --"
+" 从而仿真 -- 会按 2700 kg/m³ "
+"来计算它的重量，因为交给引擎一个没有质量的刚体，引擎反正也会自己编一个。给它一个材料。另外，内部没有实体的零件，也就是一张开放网格，没有可供计重或产生浮力的体积。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:618
+msgid "What pc info shows"
+msgstr "pc info 显示什么"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:620
+msgid ""
+"``pc info`` reports all of this as ``MassProperties``: each value with its "
+"unit and where it came from -- ``stated``, ``the material :aluminium``, "
+"``derived: 8000 mm^3 at 2700 kg/m^3``, ``measured``. An assembly reports its"
+" parts added up in its own frame and names any part it could not weigh, and "
+"the material itself is reported as ``Material``, with its density and its "
+"friction. See ``pc info`` in :doc:`/cli`."
+msgstr ""
+"``pc info`` 把这一切都报告为 ``MassProperties``：每个值都带着它的单位和来源 -- ``stated``、``the "
+"material :aluminium``、``derived: 8000 mm^3 at 2700 "
+"kg/m^3``、``measured``。装配体会在自己的坐标系中报告各零件的叠加结果，并指出任何它无法计重的零件；材料本身则报告为 "
+"``Material``，带上它的密度和摩擦。参见 :doc:`/cli` 中的 ``pc info``。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:627
+msgid ""
+"The values are cached, keyed on the part's geometry and on what they were "
+"derived from, so an edit to the CAD, to the material's density or to a "
+"stated value is picked up, and an edit to anything else costs nothing."
+msgstr ""
+"这些值会被缓存，缓存键取决于零件的几何形状以及它们的推导来源，所以对 "
+"CAD、对材料密度或对某个写明值的修改都会被察觉到，而对其他任何内容的修改都不付出代价。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:631
+msgid ""
+"Every one of these quantities is SI except lengths, which are millimetres, "
+"and angles, which are degrees -- the units every engine states them in, so "
+"nothing is converted on its way into a model (see the note under "
+":ref:`materials`). They are plain numbers: a unit written into a value, "
+"``\"9.81 m/s^2\"``, is not accepted."
+msgstr ""
+"这些量全部采用 SI 单位，只有长度和角度例外 -- "
+"长度用毫米，角度用度，这正是每个引擎表述它们所用的单位，所以在进入模型的过程中不需要做任何换算（参见 :ref:`materials` "
+"下的提示）。它们都是纯数字：把单位写进值里，像 ``\"9.81 m/s^2\"`` 这样，是不被接受的。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:641
+msgid "Running a simulation"
+msgstr "运行仿真"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:644
+msgid "``pc sim``"
+msgstr "``pc sim``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:655
+msgid ""
+"It exits non-zero when a validation does not hold or a run cannot be made. A"
+" declaration with no ``validation:`` is run and reported as having run, "
+"which is how to look at what a plugin reports before writing the condition. "
+"Each run gets a directory of its own under PartCAD's state directory, one "
+"per object and simulation and emptied by the next run, holding the scene "
+"file the engine was handed, its meshes, whatever the plugin wrote and the "
+"pictures it took (see :ref:`sim-snapshots`). See ``pc sim`` in :doc:`/cli` "
+"for every option."
+msgstr ""
+"当校验不成立或某次运行无法进行时，它以非零状态退出。没有 ``validation:`` "
+"的声明会被运行，并报告为已运行，这正是在写条件之前查看插件报告了什么的办法。每次运行在 PartCAD "
+"的状态目录下都有自己的目录，每个对象每个仿真一个，并由下一次运行清空，其中保存交给引擎的场景文件、它的网格、插件写出的任何内容以及它拍下的图片（参见 "
+":ref:`sim-snapshots` ）。每一个选项都见 :doc:`/cli` 中的 ``pc sim``。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:663
+msgid "Three of those options are about what is asked and what is kept:"
+msgstr "其中三个选项关系到要求了什么以及保留了什么："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:674
+msgid ""
+"``--plugin`` runs a simulation with another plugin than the one it names; "
+"everything else the declaration says -- the scene, the offset, the "
+"parameters, the validation -- is asked of that plugin instead, and the "
+"answer is cached as the different question it is. ``--before`` and "
+"``--after`` write the two states a validation is evaluated over, as YAML, or"
+" as JSON with ``--json`` or a path ending in ``.json``. ``--video`` writes "
+"the video the plugin recorded of the run (see :ref:`sim-video`). They write "
+"one simulation's, so name the object and, when it declares several, the "
+"simulation with ``-f``, and they write it on the machine the command runs "
+"on, whichever machine ran the simulation."
+msgstr ""
+"``--plugin`` 用另一个插件而不是声明所指名的插件来运行仿真；声明中说的其他一切 -- 场景、偏移、参数、校验 -- "
+"都改向那个插件提出，而答案会作为它本来就不同的那个问题被缓存。``--before`` 和 ``--after`` 把校验所依据的两个状态写出来，格式为"
+" YAML，或者在使用 ``--json`` 或以 ``.json`` 结尾的路径时为 JSON。``--video`` "
+"写出插件为该次运行录制的视频（参见 :ref:`sim-video` ）。它们只写出一个仿真的内容，所以要指名对象，并且当对象声明了多个仿真时，用 "
+"``-f`` 指名其中一个；而它们是写在运行该命令的那台机器上，无论仿真是在哪台机器上跑的。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:687
+msgid "``pc test``'s ``sim`` check"
+msgstr "``pc test`` 的 ``sim`` 检查项"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:689
+msgid ""
+"``pc test`` holds an object to the same claims every time it runs, as its "
+"``sim`` check -- ``pc test -f sim`` runs that check alone -- so a "
+"``simulate:`` is checked whenever the package is tested rather than whenever"
+" somebody remembers to ask. It runs a simulation through the same code ``pc "
+"sim`` does, and shares its cache."
+msgstr ""
+"``pc test`` 每次运行时都以同样的断言来约束对象，作为它的 ``sim`` 检查项 -- ``pc test -f sim`` "
+"只运行这一项检查 -- 所以 ``simulate:`` 是在每次测试这个包的时候都被检查，而不是在有人想起来要检查的时候。它通过与 ``pc "
+"sim`` 相同的代码来运行仿真，并共享它的缓存。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:695
+msgid ""
+"It applies to a part, an assembly or a scene that declares ``simulate:`` and"
+" to nothing else, so a package of bolts pays nothing for it. The verdicts:"
+msgstr "它只适用于声明了 ``simulate:`` 的零件、装配体或场景，别无其他，所以一个装螺栓的包不会为它付出任何代价。各种结论："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:702
+msgid "What happened"
+msgstr "发生了什么"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:703
+msgid "Verdict"
+msgstr "结论"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:704
+msgid ""
+"Every simulation the object declares ran, and every ``validation:`` held"
+msgstr "对象声明的每一个仿真都运行了，并且每一个 ``validation:`` 都成立"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:705
+msgid "pass"
+msgstr "通过"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:706
+msgid "A ``validation:`` did not hold, or could not be evaluated"
+msgstr "某个 ``validation:`` 不成立，或者无法求值"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:707
+#: ../../source/digital_thread/lifecycle/simulation.rst:711
+#: ../../source/digital_thread/lifecycle/simulation.rst:713
+msgid "fail"
+msgstr "失败"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:708
+msgid ""
+"A run could not be made: no ``simulation:`` named, a plugin or a scene that "
+"cannot be found, a simulator that will not install on this platform, a "
+"sandbox that will not build, a crash"
+msgstr "无法进行运行：没有指名 ``simulation:``、找不到插件或场景、仿真器无法在本平台安装、沙箱无法构建、发生崩溃"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:712
+msgid "A run did not finish within its budget (see :ref:`sim-timeouts`)"
+msgstr "运行没有在它的预算内完成（参见 :ref:`sim-timeouts` ）"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:714
+msgid ""
+"The plugin names a ``container:`` or a ``dockerImage``, and this machine has"
+" no container runtime"
+msgstr "插件指名了 ``container:`` 或 ``dockerImage``，而本机没有容器运行时"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:716
+msgid "skip, with a ``WARNING`` carrying the whole report"
+msgstr "跳过，并附带一条载有完整报告的 ``WARNING``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:717
+msgid "The declaration states no ``validation:``"
+msgstr "声明中没有写明 ``validation:``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:718
+msgid "skip when a package or a tree is tested; fail when the object is named"
+msgstr "测试一个包或一棵树时跳过；指名该对象时失败"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:720
+msgid ""
+"A failure names the object, the simulation and the reason. Not running is a "
+"failure rather than a skip, for the reason the engineering analyses give "
+"(see :ref:`engineering-analysis`): the object asked a question, and a plugin"
+" that answered nothing has failed. The one excuse is a plugin that was never"
+" given the environment it said it needs -- it named an image, and there is "
+"nowhere for an image to run. MuJoCo is a wheel and its plugin names no "
+"image, so a MuJoCo run that fails has failed on any machine; the Gazebo "
+"plugin names one, so a Gazebo run that cannot be made on a machine with no "
+"container runtime is skipped. A plugin or a scene that cannot be found is "
+"never excused: it is wrong wherever the package is opened. A run that timed "
+"out is a failure for the same reason, with the same one excuse: a run that "
+"hangs is a defect -- of the plugin, of the model, or of how long the package"
+" says the run takes -- and skipping it would pass a claim nobody can ever "
+"check."
+msgstr ""
+"失败信息会指出对象、仿真和原因。没能运行算作失败而不是跳过，理由与工程分析相同（参见 :ref:`engineering-analysis` "
+"）：对象提出了一个问题，而什么都没回答的插件就是失败了。唯一的免责情形是插件从来没有得到它所声明需要的环境 -- "
+"它指名了一个镜像，而这里根本没有地方运行镜像。MuJoCo 是一个 wheel，它的插件不指名任何镜像，所以 MuJoCo "
+"运行一旦失败，在任何机器上都是失败；Gazebo 插件指名了一个镜像，所以在没有容器运行时的机器上无法进行的 Gazebo "
+"运行会被跳过。找不到插件或场景从来不被免责：无论在哪里打开这个包，它都是错的。超时的运行同样算作失败，并且同样只有那一种免责情形：卡住的运行是一个缺陷 "
+"-- 插件的缺陷、模型的缺陷，或者包对运行耗时的说法的缺陷 -- 而跳过它就等于让一个谁都无法检查的断言通过。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:734
+msgid ""
+"A declaration with no ``validation:`` has nothing to be judged by, so ``pc "
+"test`` does not run it, and what that costs depends on what was asked. "
+"Testing a package, it is skipped with a ``WARNING`` saying why: the claim "
+"may be one somebody is still writing, and the rest of the package deserves "
+"its verdict. Testing the object by name -- ``pc test stable`` -- it fails: "
+"somebody asked whether this object does what it says, and it says nothing."
+msgstr ""
+"没有 ``validation:`` 的声明没有任何判定依据，所以 ``pc test`` "
+"不运行它，而这样做的代价取决于所要求的是什么。测试一个包时，它会被跳过，并附带一条说明原因的 "
+"``WARNING``：这个断言可能是某人还在写的，而包的其余部分理应得到它的结论。按名称测试该对象时 -- ``pc test stable`` --"
+" 它会失败：有人问了这个对象是否做到它所声明的事情，而它什么也没说。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:741
+msgid ""
+"``--fast-only`` passes over an object that declares a ``timeout:``, as it "
+"does for every check. An object's simulations are checked where the object "
+"is tested in its own right, and not again for every assembly whose "
+"manufacturability check walks the parts it is made of."
+msgstr ""
+"``--fast-only`` 会跳过声明了 ``timeout:`` "
+"的对象，对每一项检查都是如此。对象的各个仿真是在该对象自身被测试时检查的，而不会在每个要走查其组成零件可制造性的装配体那里再检查一遍。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:749
+msgid "When a run hangs or crashes"
+msgstr "运行卡住或崩溃时"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:751
+msgid ""
+"Every run has a **budget**: how long it may take, in wall-clock seconds, "
+"from the moment the plugin's interpreter starts. Building the sandbox and "
+"installing the engine into it come before that and are not counted, and "
+"neither is exporting the scene. The budget is the first of these that says "
+"anything:"
+msgstr ""
+"每次运行都有一份 "
+"**预算**：从插件的解释器启动那一刻算起，它最多可以用多少墙上时钟秒数。构建沙箱并把引擎安装进去发生在这之前，不计入其中，导出场景也不计入。预算取下列第一个有说明的来源："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:756
+msgid ""
+"``simulation.timeout`` in ``~/.partcad/config.yaml``, or "
+"``PC_SIMULATION_TIMEOUT``: this machine's, over everything else -- the one "
+"setting for somebody who cannot edit the package, on a slow machine or in a "
+"CI job that would rather fail fast;"
+msgstr ""
+"``~/.partcad/config.yaml`` 中的 ``simulation.timeout``，或者 "
+"``PC_SIMULATION_TIMEOUT``：本机的设定，优先于其他一切 -- "
+"这是给那些无法修改包的人准备的唯一设定，适用于慢机器，或者宁愿尽早失败的 CI 作业；"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:760
+msgid ""
+"``timeout`` in the declaration's ``params:``, for one simulation that is "
+"known to be slow (or quick);"
+msgstr "声明的 ``params:`` 中的 ``timeout``，用于已知较慢（或较快）的某一个仿真；"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:762
+msgid "``timeout`` in the plugin's own declaration;"
+msgstr "插件自身声明中的 ``timeout``；"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:763
+msgid ""
+"otherwise the larger of five minutes and ten seconds for every second of "
+"simulated ``duration``."
+msgstr "否则取五分钟与“仿真 ``duration`` 每一秒折十秒”两者中较大的那个。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:766
+msgid ""
+"A value that is not a positive number of seconds is passed over, so the "
+"budget can be moved and never switched off."
+msgstr "不是正秒数的取值会被忽略，所以预算可以调整，但永远无法关闭。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:782
+msgid ""
+"When the budget is spent the run is **stopped, with everything it started** "
+"-- the engine's server and whatever is watching it -- and fails, saying "
+"which plugin, which budget, what set it and how to raise it:"
+msgstr ""
+"预算用尽时，这次运行会被 **连同它启动的一切一起停掉** -- 引擎的服务端以及监视它的任何东西 -- "
+"并且判为失败，同时说明是哪个插件、哪份预算、是什么设定了它，以及如何提高它："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:794
+msgid ""
+"It is stopped from inside the sandbox, by the wrapper that runs the plugin, "
+"because that is where the engine is: in the ``docker`` sandbox all PartCAD "
+"started is a ``docker exec``. PartCAD keeps a bound of its own half a minute"
+" longer, for a run so wedged that nothing inside it can act, and kills the "
+"whole process tree when that one passes, on Windows too."
+msgstr ""
+"它是从沙箱内部、由运行插件的那个 wrapper 停掉的，因为引擎就在那里：在 ``docker`` 沙箱中，PartCAD 启动的全部内容就是一次 "
+"``docker exec``。PartCAD "
+"自己还保留一个比它长半分钟的上限，用于应对卡死到内部什么都动不了的运行，并在那个上限也用尽时杀掉整棵进程树，在 Windows 上也是如此。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:800
+msgid ""
+"A plugin that dies instead -- a non-zero exit, a signal, output that is not "
+"an answer -- fails with how it ended and the last lines it wrote to standard"
+" error, which is where a traceback ends and a crash says what killed it:"
+msgstr ""
+"如果插件不是超时而是直接死掉 -- 非零退出、信号、不是答案的输出 -- "
+"它会以它是怎么结束的、以及它写到标准错误的最后几行来报告失败，而那里正是回溯信息结束的地方，也是崩溃说明自己被什么杀掉的地方："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:810
+msgid ""
+"Whatever a plugin leaves running when it returns is stopped too, since a "
+"process that outlives the run holds its output open and the run would last "
+"as long as it does."
+msgstr "插件返回时还留着在运行的任何东西也会被停掉，因为比运行活得更久的进程会一直占着它的输出，这会让这次运行一直持续到它结束为止。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:814
+msgid ""
+"Neither a timeout nor a crash is cached, and ``pc test`` remembers no "
+"verdict reached on one, so the next run tries again. The engine plugins add "
+"nets of their own and stop a little before the budget is spent, to say how "
+"far they got: the MuJoCo plugin stops a run whose state has diverged and "
+"names where, and the Gazebo plugin stops waiting the moment its server dies "
+"and quotes what the server said. Each one's README says what it checks."
+msgstr ""
+"超时和崩溃都不会被缓存，``pc test`` "
+"也不会记住在它们之上得出的任何结论，所以下一次运行会重新尝试。各个引擎插件还加了自己的防护网，并在预算用尽之前稍早停下，以便说明它们进行到了哪里：MuJoCo"
+" 插件会停掉状态已经发散的运行并指出发散位置，Gazebo 插件则在它的服务端一死就停止等待，并引用服务端所说的话。每个插件的 README "
+"都说明了它检查什么。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:824
+msgid "Pictures of a run"
+msgstr "运行的图片"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:826
+msgid ""
+"Every run is also asked for two pictures of the scene: one before anything "
+"moved and one when the run is over. They are what the IDE's **Validation → "
+"Simulation** tab shows, with an arrow between them -- as the still of the "
+"video of the run (see :ref:`sim-video`), or side by side where there is none"
+" -- and the one thing a reader can check a verdict against without reading "
+"numbers -- a validation that passed for the wrong reason, a block that fell "
+"*through* another rather than off it, is plain to see in them."
+msgstr ""
+"每次运行还会被要求提供场景的两张图片：一张是任何东西开始运动之前，一张是运行结束时。它们就是 IDE 的 **Validation → "
+"Simulation** 标签页所显示的内容，两张之间有一个箭头 -- 作为该次运行视频的静止画面（参见 :ref:`sim-video` "
+"），或者在没有视频时并排显示 -- 也是读者无需读数字就能用来核对结论的唯一依据：因为错误的原因而通过的校验、从另一块方块 *里面* "
+"穿过去而不是从它上面掉下来的方块，在图片里一目了然。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:834
+msgid ""
+"They are taken from where the scene is looked at when it is rendered: the "
+"``viewport_origin`` and ``viewport_up`` of its ``render: png:`` "
+"configuration, read exactly as ``pc render -t png`` reads them -- the "
+"scene's own, or failing that its package's -- and the corner a part is drawn"
+" from when neither says anything. So a package that has said how its world "
+"is best looked at has said it once, for both:"
+msgstr ""
+"它们的拍摄位置就是渲染该场景时观察它的位置：即其 ``render: png:`` 配置中的 ``viewport_origin`` 和 "
+"``viewport_up`` ，读取方式与 ``pc render -t png`` "
+"完全相同——先取场景自己的，没有的话再取其所在包的——两者都没有给出时，则取绘制零件时所用的那个斜角视角。因此，一个包只要说明过它的世界最适合从哪里观看，就只需说明一次，两处通用："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:855
+msgid ""
+"The plugin is handed this in the request as ``snapshot`` -- the viewpoint, "
+"the picture's ``width`` and ``height`` (the PNG's), and the name of the file"
+" each picture goes to, relative to the directory the run may write into -- "
+"and says which it drew in its result:"
+msgstr ""
+"插件在请求中以 ``snapshot`` 的形式收到这些信息——视角、图片的 ``width`` 和 ``height`` （即 PNG "
+"的宽高），以及每张图片要写入的文件名（相对于本次运行可以写入的目录）——并在其结果中说明它画出了哪几张："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:869
+msgid ""
+"Pictures are optional. A plugin that cannot draw on the machine it runs on, "
+"or that predates them, reports none and the run is exactly as good: no "
+"verdict depends on a picture. ``pc sim`` says where the pictures of each run"
+" were written, and ``--json`` lists them under ``snapshots``. Both plugins "
+"draw them from their engine's own geometry at the engine's own poses, on the"
+" CPU, so a picture needs no GPU in the sandbox."
+msgstr ""
+"图片是可选的。在其运行的机器上无法绘图的插件，或者早于这项功能出现的插件，不会报告任何图片，而这次运行同样有效：没有哪个判定结果依赖于图片。 ``pc "
+"sim`` 会说明每次运行的图片写到了哪里， ``--json`` 则把它们列在 ``snapshots`` "
+"之下。两个插件都根据各自引擎自己的几何体、按引擎自己的位姿、在 CPU 上绘制这些图片，因此生成图片并不需要沙箱里有 GPU。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:879
+msgid "A video of a run"
+msgstr "运行的视频"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:881
+msgid ""
+"Every run is asked for a video of the whole of it as well: from the same "
+"viewpoint as the pictures, 25 frames for every second of *simulated* time, "
+"from the start of the run to its end -- so that it plays the run in real "
+"time, 251 frames for ten seconds. It is what the IDE's **Validation → "
+"Simulation** tab plays, in a player with the usual controls -- play and "
+"pause, replay, a position to drag, the speed, full screen -- with the before"
+" and after pictures, and an arrow between them, as the still it shows until "
+"it is played. A run whose plugin recorded none is shown as two pictures side"
+" by side."
+msgstr ""
+"每次运行还会被要求提供整段过程的视频：与图片同一视角，每一秒 *仿真* 时间 25 帧，从运行开始到结束 -- 这样它就能按实时速度播放这次运行，十秒即"
+" 251 帧。它就是 IDE 的 **Validation → Simulation** 标签页所播放的内容，播放器带有常规控件 -- "
+"播放与暂停、重播、可拖动的进度、速度、全屏 -- "
+"并以前后两张图片以及它们之间的箭头作为播放前显示的静止画面。如果某次运行的插件没有录制视频，就显示为并排的两张图片。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:890
+msgid ""
+"Its size is this machine's to say rather than the package's, since it is "
+"about the screen it is watched on and the time a run may spend drawing it: "
+"``simulation.videoResolution`` in ``~/.partcad/config.yaml``, or "
+"``PC_SIMULATION_VIDEO_RESOLUTION``. HD -- 1280 by 720 -- unless it says "
+"otherwise:"
+msgstr ""
+"它的尺寸由本机决定，而不是由包决定，因为这关系到观看它的屏幕，以及一次运行可以花在绘制它上面的时间：``~/.partcad/config.yaml``"
+" 中的 ``simulation.videoResolution``，或者 "
+"``PC_SIMULATION_VIDEO_RESOLUTION``。没有另行说明时为 HD -- 1280 乘 720："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:902
+msgid ""
+"``none`` records no video at all, which is the setting for a machine that "
+"only runs ``pc test`` and has no use for one: drawing the frames is most of "
+"what a short run of a small scene costs."
+msgstr "``none`` 完全不录视频，这适合只运行 ``pc test`` 而用不上视频的机器：对于小场景的短时运行，绘制这些帧占了大部分开销。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:906
+msgid ""
+"The plugin is handed this in the request as ``video`` -- the format (WebM, "
+"with VP9 in it: the one pairing every browser plays, including the webview "
+"the IDE draws in, which plays no H.264), the name of the file, the frame "
+"rate, the size and the viewpoint -- and says whether it recorded it in its "
+"result:"
+msgstr ""
+"插件在请求中以 ``video`` 得到这些信息 -- 格式（WebM，内含 VP9：这是所有浏览器都能播放的那个组合，包括 IDE 用来绘制界面的 "
+"webview，而它不播放 H.264）、文件名、帧率、尺寸和视角 -- 并在它的结果中说明自己是否录制了它："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:915
+msgid ""
+"Like the pictures it is optional, and part of the question the run is cached"
+" under: a video wanted at another size is another run. ``pc sim`` says where"
+" it was written, ``--json`` names it under ``video``, and ``--video <path>``"
+" saves a copy where you say. Both plugins draw its frames the way they draw "
+"the pictures, from the poses their engine reported at each frame's instant, "
+"and encode them with the FFmpeg the ``imageio-ffmpeg`` wheel carries. They "
+"draw it last, inside what is left of the run's budget, and give it up with a"
+" warning rather than let it cost the run its answer."
+msgstr ""
+"和图片一样它是可选的，而且是运行被缓存时所依据问题的一部分：换一个尺寸要的视频就是另一次运行。``pc sim`` "
+"会说明它写到了哪里，``--json`` 在 ``video`` 下给出它的名称，而 ``--video <path>`` "
+"会把副本保存到你指定的位置。两个插件绘制其帧的方式与绘制图片相同，依据各自引擎在每一帧那一刻所报告的位姿，并用 ``imageio-ffmpeg`` "
+"wheel 自带的 FFmpeg 编码。它们最后才绘制视频，并且只用运行预算剩下的部分，一旦不够就带一条警告放弃，而不会让它把这次运行的答案也搭进去。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:927
+msgid "Caching runs"
+msgstr "缓存运行结果"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:929
+msgid ""
+"A run is cached the way an engineering analysis is (see \"Analyses, routes "
+"and simulations\" under :ref:`caching`): what the plugin reported together "
+"with the whole run directory, so asking the same question again puts those "
+"files back and runs nothing, and only a run that succeeded is kept -- never "
+"one that timed out or crashed."
+msgstr ""
+"一次运行的缓存方式与工程分析相同（参见 :ref:`caching` 下的“Analyses, routes and "
+"simulations”）：插件报告的内容连同整个运行目录一起缓存，所以再提同样的问题时会把那些文件放回去而不运行任何东西；而且只有成功的运行才会被保留"
+" -- 超时或崩溃的运行从不保留。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:935
+msgid ""
+"For a simulation the question is the scene -- which covers the object, a "
+"parameter of it, and so its geometry and everything it is built from -- plus"
+" the plugin and every option it resolved to, its environment, the "
+"declaration's ``params``, the exporter and its options, the pictures the run"
+" is asked to take, and the content of every script involved. A ``medium:`` "
+"is in it as the facts it resolved to rather than as a name, so a correction "
+"to the density of ``:water`` in the package that catalogues it runs the "
+"simulation again. The pictures come back with a cached run like any other "
+"file it wrote, and a scene looked at from somewhere else is a different "
+"question, which runs again."
+msgstr ""
+"对仿真而言，问题就是场景——它涵盖了对象（场景的一个参数），因而也涵盖了对象的几何体及其构成的一切——再加上插件及其解析出的每一个选项、它的环境、声明中的"
+" ``params`` 、导出器及其选项、要求这次运行拍摄的图片，以及所涉及的每个脚本的内容。 ``medium:`` "
+"以其解析出的事实而非名称计入其中，因此在为 ``:water`` "
+"编目的包中修正其密度，会让仿真重新运行。图片与缓存的运行一同取回，就像它写下的任何其他文件一样；而从别处观察的场景是另一个问题，会重新运行。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:945
+msgid ""
+"A ``validation:`` is not part of the question: editing one re-judges the "
+"cached run rather than repeating it, in ``pc sim`` and in ``pc test`` alike."
+" ``pc test``'s verdict is cached too, keyed on the declarations as written, "
+"``validation:`` included, and on the key of every run it was judged on, so "
+"nothing else changes it. A skip, a run that did not deliver, a declaration "
+"that does not resolve and one with no ``validation:`` are worked out afresh "
+"every time."
+msgstr ""
+"``validation:`` 不属于那个问题的一部分：修改它只会对缓存的运行重新作出判定，而不会重跑，在 ``pc sim`` 和 ``pc "
+"test`` 中都是如此。``pc test`` 的结论也会被缓存，缓存键取决于写下来的那些声明（包括 ``validation:`` "
+"），以及它所依据的每一次运行的键，所以没有其他东西会改变它。跳过、没有交付结果的运行、无法解析的声明以及没有 ``validation:`` "
+"的声明，每次都重新算一遍。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:957
+msgid "Engine plugins"
+msgstr "引擎插件"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:959
+msgid ""
+"An engine is a package, imported like any other dependency. Each of the two "
+"PartCAD maintains declares four things about its engine's own format, "
+"because they are one piece of knowledge: a reader for it (``import:``), a "
+"writer (``export:``), the simulation (``simulation:``) and the application "
+"that opens it (``open:``). Importing the package is what makes all four work"
+" at once."
+msgstr ""
+"引擎就是一个包，像其他依赖一样被导入。PartCAD 维护的那两个包，每一个都就其引擎自己的格式声明了四件事，因为它们本是同一份知识：它的读取器（ "
+"``import:`` ）、写出器（ ``export:`` ）、仿真（ ``simulation:`` ）以及打开它的应用程序（ ``open:`` "
+"）。导入这个包就让这四样东西同时可用。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:969
+#: ../../source/digital_thread/lifecycle/simulation.rst:1054
+msgid "Engine"
+msgstr "Engine"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:970
+#: ../../source/digital_thread/lifecycle/simulation.rst:1729
+msgid "Package"
+msgstr "包"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:972
+msgid "Where the engine comes from"
+msgstr "引擎从哪里来"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:973
+#: ../../source/digital_thread/lifecycle/simulation.rst:1056
+#: ../../source/digital_thread/lifecycle/simulation.rst:1123
+msgid "MuJoCo"
+msgstr "MuJoCo"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:974
+#: ../../source/digital_thread/lifecycle/simulation.rst:1737
+msgid "`partcad-sim-mujoco`_"
+msgstr "`partcad-sim-mujoco`_"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:975
+msgid "``sim-mujoco:mujoco``"
+msgstr "``sim-mujoco:mujoco``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:976
+msgid ""
+"the ``mujoco`` wheel, which PartCAD installs into the plugin's sandbox -- "
+"nothing to install by hand"
+msgstr "``mujoco`` wheel，PartCAD 会把它安装到插件的沙箱里 -- 不需要手工安装任何东西"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:978
+#: ../../source/digital_thread/lifecycle/simulation.rst:1124
+msgid "Gazebo"
+msgstr "Gazebo"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:979
+#: ../../source/digital_thread/lifecycle/simulation.rst:1733
+msgid "`partcad-sim-gazebo`_"
+msgstr "`partcad-sim-gazebo`_"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:980
+msgid "``sim-gazebo:gazebo``"
+msgstr "``sim-gazebo:gazebo``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:981
+msgid ""
+"a ``gz`` on ``PATH`` or in a ROS installation, or else the container image "
+"the plugin names, which needs a container runtime"
+msgstr "位于 ``PATH`` 上或某个 ROS 安装中的 ``gz``，否则就是插件所指名的容器镜像，而那需要容器运行时"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:984
+msgid ""
+"The names assume the package is imported as ``sim-mujoco`` or ``sim-"
+"gazebo``, as every example here does. Each plugin's repository documents its"
+" engine in full; what follows is what a claim depends on."
+msgstr ""
+"这些名称假定该包是以 ``sim-mujoco`` 或 ``sim-gazebo`` "
+"的名义导入的，本文的每个示例都是这样。每个插件的仓库都完整地记录了它的引擎；下面讲的是一个断言所依赖的内容。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:989
+msgid "What a run is"
+msgstr "一次运行是什么"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:991
+msgid ""
+"Before the plugin starts, PartCAD builds the scene with the object in it and"
+" writes it out in the engine's format, with every part's mass, inertia and "
+"friction in it and, for a scene that states them, its gravity and its "
+"medium. The plugin is handed that file, steps it for ``duration`` seconds of"
+" simulated time, and reports the state of the world before and after (see "
+":ref:`sim-validation`)."
+msgstr ""
+"插件启动之前，PartCAD "
+"会构建出装有该对象的场景，并用引擎的格式把它写出来，其中带上每个零件的质量、惯量和摩擦，以及（对写明了这些内容的场景）它的重力和介质。插件拿到那个文件，把它推进"
+" ``duration`` 秒的仿真时间，并报告世界在运行前后的状态（参见 :ref:`sim-validation` ）。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:998
+msgid ""
+"**What is free in a run is free to move.** The plugin asks the export for "
+"that, through the ``formatOptions`` of its declaration -- ``static: false`` "
+"-- since a file written to be looked at welds every body to the world "
+"instead. In MuJoCo, the bodies are the ones :ref:`sim-bodies` says: every "
+"element of a scene is a body of its own, an assembly is one tree of bodies "
+"on its joints, and an element marked ``fixed: true`` is welded to the world."
+" In Gazebo every part with geometry is still a rigid body of its own, which "
+"is the rule for a scene of parts and not yet for the parts of an assembly "
+"(see :ref:`sim-limitations`). Each exporter also writes a ground plane under"
+" the world and a light over it."
+msgstr ""
+"**一次运行中自由的东西就可以自由运动。** 插件通过其声明的 ``formatOptions`` 向导出提出这个要求 -- ``static: "
+"false`` -- 因为为了观看而写出的文件会把每个刚体都焊接到世界上。在 MuJoCo 中，刚体就是 :ref:`sim-bodies` "
+"所说的那些：场景的每个元素各自是一个刚体，装配体是一棵由关节连成的刚体树，而标记为 ``fixed: true`` 的元素被焊接到世界上。在 "
+"Gazebo 中，每一个有几何形状的零件目前仍然各自是一个刚体，而那是零件场景的规则，还不是装配体中零件的规则（参见 :ref:`sim-"
+"limitations` ）。每个导出器还会在世界下面写一个地平面，并在它上方放一个光源。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1008
+msgid ""
+"The parameters both plugins take, as fields of the plugin's declaration or "
+"for one run in a declaration's ``params:``:"
+msgstr "两个插件都接受的参数，可以作为插件声明的字段，也可以在某个声明的 ``params:`` 中只对一次运行生效："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1015
+msgid "Parameter"
+msgstr "参数"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1016
+msgid "Default"
+msgstr "默认"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1017
+msgid "Meaning"
+msgstr "含义"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1018
+msgid "``duration``"
+msgstr "``duration``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1019
+msgid "``10.0``"
+msgstr "``10.0``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1020
+msgid "Seconds of simulated time to run for."
+msgstr "要运行的仿真时间秒数。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1021
+msgid "``timestep``"
+msgstr "``timestep``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1022
+msgid "the engine's"
+msgstr "引擎的"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1023
+msgid "The integration step, in seconds."
+msgstr "积分步长，单位为秒。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1024
+#: ../../source/digital_thread/lifecycle/simulation.rst:1292
+msgid "``gravity``"
+msgstr "``gravity``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1025
+msgid "the scene's"
+msgstr "场景的"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1026
+msgid ""
+"In m/s², in the scene's frame; overrides the scene's ``gravity:`` for this "
+"run."
+msgstr "单位 m/s²，在场景的坐标系中；对本次运行覆盖场景的 ``gravity:``。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1028
+msgid "``samples``"
+msgstr "``samples``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1029
+msgid "``0``"
+msgstr "``0``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1030
+msgid ""
+"Report the state at this many evenly spaced instants as well, as "
+"``samples``."
+msgstr "另外在这么多个等间隔的时刻报告状态，作为 ``samples``。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1032
+msgid "``timeout``"
+msgstr "``timeout``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1033
+msgid "see :ref:`sim-timeouts`"
+msgstr "参见 :ref:`sim-timeouts`"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1034
+msgid ""
+"The run's budget, in wall-clock seconds. PartCAD stops the run when it is "
+"spent; both plugins stop a little before, to say how far they got."
+msgstr "这次运行的预算，单位为墙上时钟秒数。预算用尽时 PartCAD 会停掉这次运行；两个插件都会稍早一点停下，以便说明它们进行到了哪里。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1038
+msgid "Friction and contact"
+msgstr "摩擦与接触"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1040
+msgid ""
+"Each part's friction coefficient is written into every format in its own "
+"spelling -- MJCF's first ``friction`` component, SDFormat's "
+"``<surface><friction><ode><mu>``, URDF's ``<gazebo><mu1>`` -- and is the "
+"same dimensionless number in all of them. A part that states no friction and"
+" names no material with a ``mu`` gets the engine's default, which is a "
+"number nobody chose."
+msgstr ""
+"每个零件的摩擦系数会以各自格式的写法写进每一种格式 -- MJCF 的第一个 ``friction`` 分量、SDFormat 的 "
+"``<surface><friction><ode><mu>``、URDF 的 ``<gazebo><mu1>`` -- "
+"而在所有格式中它都是同一个无量纲数。既没有写明摩擦、也没有指名带 ``mu`` 的材料的零件，会得到引擎的默认值，而那是一个谁都没有选过的数。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1047
+msgid ""
+"A contact has two sides, and how their coefficients combine is the engine's "
+"model rather than the part's. The two engines do not agree:"
+msgstr "接触有两侧，而它们的系数如何合成，取决于引擎的模型而不是零件。两个引擎的做法并不一致："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1055
+msgid "The coefficient of a contact between A and B"
+msgstr "A 与 B 之间接触的系数"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1057
+msgid ""
+"the **larger** of the two (no exporter here sets the ``priority`` that would"
+" change that)"
+msgstr "两者中 **较大** 的那个（这里的导出器都不设置能改变这一点的 ``priority`` ）"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1059
+msgid "Gazebo (DART)"
+msgstr "Gazebo（DART）"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1060
+msgid "the **smaller** of the two"
+msgstr "两者中 **较小** 的那个"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1062
+msgid ""
+"So two blocks of one material meet at that material's ``mu`` in both. A "
+"block on the floor does not: the ground plane each exporter writes states no"
+" friction, which is 1.0 in both formats, so in MuJoCo every block grips the "
+"floor at 1.0 or more, and in Gazebo at its own ``mu`` or less. In "
+"``slippery``, run in MuJoCo, it is the top PTFE block that slides off the "
+"bottom one, and not the stack along the floor."
+msgstr ""
+"所以在两者中，同一种材料的两块方块相遇时都取该材料的 ``mu``。方块与地面之间则不是：每个导出器写出的地平面都没有写明摩擦，而那在两种格式中都等于 "
+"1.0，所以在 MuJoCo 中每块方块抓住地面的系数是 1.0 或更大，而在 Gazebo 中是它自己的 ``mu`` 或更小。在 MuJoCo "
+"中运行的 ``slippery`` 里，滑落的是上面那块 PTFE 方块从下面那块上滑下来，而不是整摞沿地面滑动。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1069
+msgid ""
+"MuJoCo's contacts are soft: a body under a steady sideways load slips at a "
+"small steady rate even well inside its friction cone, and with MuJoCo's own "
+"defaults an aluminium stack slid apart in a world tilted by only 6 degrees. "
+"So the MJCF exporter writes MuJoCo's own remedies into every model -- "
+"elliptic friction cones, an ``impratio`` of 10 and three NoSlip iterations, "
+"which are its ``cone``, ``impratio`` and ``noslip_iterations`` parameters --"
+" and with them a stack holds or slides as its friction says. Measured that "
+"way, two 20 mm cubes in ``tilted`` for ten seconds, with nothing changed but"
+" the coefficient both are given:"
+msgstr ""
+"MuJoCo 的接触是软的：承受稳定侧向载荷的刚体，即使远在它的摩擦锥以内，也会以一个很小的稳定速率滑移；而用 MuJoCo "
+"自己的默认值，一摞铝块在只倾斜 6 度的世界里就滑散了。所以 MJCF 导出器会把 MuJoCo 自己的对策写进每一个模型 -- 椭圆摩擦锥、取 10 "
+"的 ``impratio`` 以及三次 NoSlip 迭代，也就是它的 ``cone``、``impratio`` 和 "
+"``noslip_iterations`` 参数 -- 有了这些，一摞东西是立住还是滑动就按它的摩擦来决定。按这种方式测量，两个 20 mm 的立方体在"
+" ``tilted`` 中运行十秒，除了两者都被赋予的那个系数之外什么都不改："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1083
+msgid "Sliding friction"
+msgstr "滑动摩擦"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1084
+msgid "What happens to the top block"
+msgstr "上面那块方块会发生什么"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1085
+msgid "0.04 (PTFE)"
+msgstr "0.04（PTFE）"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1086
+msgid "slides 69 mm and falls 20 mm, its own height, to the floor"
+msgstr "滑移 69 mm，并下落 20 mm（也就是它自身的高度）落到地面上"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1087
+msgid "0.1"
+msgstr "0.1"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1088
+msgid "slides 63 mm and falls"
+msgstr "滑移 63 mm 并落下"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1089
+msgid "0.2"
+msgstr "0.2"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1090
+msgid "slides 56 mm and falls"
+msgstr "滑移 56 mm 并落下"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1091
+msgid "0.25"
+msgstr "0.25"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1092
+msgid "slides 32 mm and falls"
+msgstr "滑移 32 mm 并落下"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1093
+msgid "0.28"
+msgstr "0.28"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1094
+msgid "slides 34 mm and falls"
+msgstr "滑移 34 mm 并落下"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1095
+msgid "0.3"
+msgstr "0.3"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1096
+msgid "stays: 0.5 mm of creep, 0.4 mm of settling"
+msgstr "留在原处：0.5 mm 的蠕移，0.4 mm 的沉降"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1097
+msgid "0.4"
+msgstr "0.4"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1098
+#: ../../source/digital_thread/lifecycle/simulation.rst:1100
+msgid "the same"
+msgstr "同上"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1099
+msgid "1.05 (aluminium)"
+msgstr "1.05（铝）"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1102
+msgid ""
+"A block on a 15-degree slope slides when its friction is below tan 15°, "
+"0.268; MuJoCo's soft contacts put the line a little higher, between 0.28 and"
+" 0.3, so a claim close to a threshold needs margin. On a level floor with "
+"gravity straight down every row stays put, PTFE included, because nothing "
+"pushes a block sideways."
+msgstr ""
+"在 15 度斜面上，当方块的摩擦低于 tan 15°，即 0.268 时，它会滑动；MuJoCo 的软接触把这条界线稍微抬高了一点，落在 0.28 到 "
+"0.3 之间，所以靠近阈值的断言需要留出余量。在重力垂直向下的水平地面上，每一行都原地不动，PTFE 也一样，因为没有任何力把方块往侧向推。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1107
+msgid ""
+"``friction2``, a coefficient across a second direction, travels between "
+"SDFormat and URDF. MJCF has no second direction -- its other two "
+"``friction`` components are torsional and rolling coefficients, which are "
+"different quantities -- so a ``friction2`` is reported as one MJCF cannot "
+"state, and torsional and rolling friction in an MJCF file that is read are "
+"counted as dropped."
+msgstr ""
+"``friction2`` 是第二个方向上的系数，它在 SDFormat 和 URDF 之间原样传递。MJCF 没有第二个方向 -- 它另外两个 "
+"``friction`` 分量分别是扭转系数和滚动系数，属于不同的物理量 -- 所以 ``friction2`` 会被报告为 MJCF "
+"无法表达的属性，而读入 MJCF 文件时遇到的扭转摩擦和滚动摩擦则被计为丢弃。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1114
+msgid "A scene filled with a fluid"
+msgstr "注满流体的场景"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1116
+msgid "What the two engines make of a scene's world:"
+msgstr "两个引擎如何理解场景的世界："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1122
+msgid "Effect"
+msgstr "效应"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1125
+msgid "the scene's ``gravity:``"
+msgstr "场景的 ``gravity:``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1126
+#: ../../source/digital_thread/lifecycle/simulation.rst:1127
+#: ../../source/digital_thread/lifecycle/simulation.rst:1129
+#: ../../source/digital_thread/lifecycle/simulation.rst:1132
+msgid "modelled"
+msgstr "已建模"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1128
+msgid "drag, from the fluid's density and viscosity"
+msgstr "阻力，来自流体的密度和黏度"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1130
+#: ../../source/digital_thread/lifecycle/simulation.rst:1133
+#: ../../source/digital_thread/lifecycle/simulation.rst:1137
+#: ../../source/digital_thread/lifecycle/simulation.rst:1139
+#: ../../source/digital_thread/lifecycle/simulation.rst:1140
+#: ../../source/digital_thread/lifecycle/simulation.rst:1142
+#: ../../source/digital_thread/lifecycle/simulation.rst:1143
+msgid "not modelled"
+msgstr "未建模"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1131
+msgid "buoyancy, ρ · V · g"
+msgstr "浮力，ρ · V · g"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1134
+msgid ""
+"acting at the centre of buoyancy, so that a body with its weight low down "
+"rights itself"
+msgstr "作用在浮心上，使得重量偏低的刚体会自行立正"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1136
+msgid "modelled, in ``pc sim``"
+msgstr "已建模，在 ``pc sim`` 中"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1138
+msgid "a free surface: floating at a waterline, partly submerged"
+msgstr "自由液面：在水线处漂浮，部分浸没"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1141
+msgid "added mass, lift, the Magnus effect"
+msgstr "附加质量、升力、马格努斯效应"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1145
+msgid ""
+"**MuJoCo** is handed the fluid's density and viscosity, which turn on its "
+"passive fluid model: drag, quadratic in speed from the density and linear "
+"from the viscosity, acting on the box each body's mass and inertia describe."
+" That model has no buoyancy at all, so the MJCF exporter adds it, as "
+"Archimedes has it: a lift of the fluid's density times the volume PartCAD "
+"measured times gravity, acting at the centre of buoyancy. Where that point "
+"is not the centre of mass, the lift turns the body, which is what rights "
+"``buoy``: released tilted 60 degrees in ``tank``, it turns its heavy side "
+"down within a second. The lift's turning moment is applied by the plugin at "
+"every step of a run, so the same model opened in MuJoCo's own viewer floats "
+"but does not right itself."
+msgstr ""
+"**MuJoCo** "
+"拿到流体的密度和黏度，它们会启用它的被动流体模型：阻力，其中由密度给出与速度平方成正比的部分、由黏度给出线性部分，作用在每个刚体的质量和惯量所描述的那个盒子上。那个模型完全没有浮力，所以"
+" MJCF 导出器自己把它加上，按阿基米德原理：流体密度乘以 PartCAD "
+"测得的体积再乘以重力所得的浮力，作用在浮心上。当那个点不是质心时，浮力会使刚体转动，这正是 ``buoy`` 自行立正的原因：在 ``tank`` "
+"中倾斜 60 度被释放，它会在一秒之内把重的一侧转到下方。浮力的转动力矩是由插件在运行的每一步施加的，所以同一个模型在 MuJoCo "
+"自己的查看器里打开时会漂浮，但不会自行立正。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1156
+msgid ""
+"**Gazebo** writes the scene's gravity and nothing for its medium, and its "
+"export says so: the buoyancy system Gazebo Harmonic has measures a mesh "
+"without its scale, which would buoy PartCAD's millimetre meshes by a billion"
+" times their volume, and a world that names any system of its own loses all "
+"of Gazebo's default ones. A Gazebo run of a scene filled with water is a run"
+" in a vacuum."
+msgstr ""
+"**Gazebo** 写出场景的重力，而对它的介质什么都不写，它的导出也如实说明了这一点：Gazebo Harmonic "
+"自带的浮力系统测量网格时不考虑其缩放，这会让 PartCAD 的毫米网格获得十亿倍于其体积的浮力；而且一个指名了任何自有系统的世界会丢掉 Gazebo "
+"的全部默认系统。注满水的场景在 Gazebo 中的运行就是真空中的运行。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1163
+msgid "Writing a plugin of your own"
+msgstr "编写你自己的插件"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1165
+msgid ""
+"A simulation plugin is declared the way an export implementation is -- a "
+"script, the sandbox it needs, and its parameters -- and the contract is "
+"narrow: a scene with the object in it goes in, as a file in the format the "
+"plugin names, and JSON carrying ``before`` and ``after`` comes out -- and, "
+"if it can draw them, the two pictures of :ref:`sim-snapshots` and the video "
+"of :ref:`sim-video`. See :ref:`simulate`."
+msgstr ""
+"仿真插件的声明方式与导出实现相同 -- 一个脚本、它需要的沙箱，以及它的参数 -- "
+"而契约很窄：输入是一个装有该对象的场景，形式为插件所指名格式的文件；输出是载有 ``before`` 和 ``after`` 的 JSON -- "
+"以及，如果它画得出来的话，:ref:`sim-snapshots` 所说的两张图片和 :ref:`sim-video` 所说的视频。参见 "
+":ref:`simulate` 。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1172
+msgid ""
+"The exporter that writes that file is handed the scene's tree (``decode: "
+"false``), and whatever it writes, which nodes are one body and how the "
+"joints between them move are not its to work out: ``kinematics.bodies()`` --"
+" importable in its sandbox the way ``mass_properties`` is -- answers both, "
+"the same way for every format, from what each node of the tree says it holds"
+" (``kind``), whether it is ``fixed``, and its ``joint``."
+msgstr ""
+"写出那个文件的导出器拿到的是场景的树（ ``decode: false`` "
+"），而无论它写出什么，哪些节点属于同一个刚体、它们之间的关节如何运动，都不由它自己去推算：``kinematics.bodies()`` -- "
+"在它的沙箱中可以像 ``mass_properties`` 那样导入 -- "
+"会回答这两个问题，对每种格式都用同样的方式，依据的是树上每个节点声明自己装了什么（ ``kind`` ）、它是否 ``fixed``，以及它的 "
+"``joint``。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1183
+msgid "Writing a validation"
+msgstr "编写校验条件"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1185
+msgid "``validation:`` is one Python expression, evaluated over three names:"
+msgstr "``validation:`` 是一个 Python 表达式，在三个名称之上求值："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1187
+msgid "``before`` and ``after``"
+msgstr "``before`` 和 ``after``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1188
+msgid ""
+"The state of the world when the run started and when it ended, as the plugin"
+" reported it."
+msgstr "运行开始时和结束时世界的状态，由插件报告。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1191
+msgid "``result``"
+msgstr "``result``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1192
+msgid ""
+"The whole of what the plugin returned, ``before`` and ``after`` included."
+msgstr "插件返回的全部内容，包括 ``before`` 和 ``after``。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1194
+msgid ""
+"It may call the builtins that work over numbers and collections -- ``abs``, "
+"``all``, ``any``, ``min``, ``max``, ``sum``, ``len``, ``zip``, ``sorted``, "
+"``round``, ``pow``, ``range``, ``enumerate``, ``map``, ``filter`` and the "
+"type constructors -- and nothing else: no imports, no ``math``, nothing that"
+" reaches the filesystem (``x ** 0.5`` is a square root). That is not a "
+"security boundary; it is what keeps a validation readable as an assertion. "
+"An expression that raises is a validation that did not hold, and is reported"
+" with the exception."
+msgstr ""
+"它可以调用那些作用于数字和集合的内置函数 -- "
+"``abs``、``all``、``any``、``min``、``max``、``sum``、``len``、``zip``、``sorted``、``round``、``pow``、``range``、``enumerate``、``map``、``filter``"
+" 以及各类型构造函数 -- 别无其他：不能 import，没有 ``math``，也没有任何能触及文件系统的东西（ ``x ** 0.5`` "
+"就是平方根）。这不是一道安全边界；它的作用是让校验条件读起来仍然像一句断言。抛出异常的表达式等于校验不成立，并会连同该异常一起被报告。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1203
+msgid "What the plugins report"
+msgstr "插件报告什么"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1205
+msgid ""
+"PartCAD reads nothing inside ``before`` and ``after``: what is in them is "
+"the plugin's vocabulary. The two plugins PartCAD maintains report the same "
+"one, so a validation reads the same against either engine:"
+msgstr ""
+"PartCAD 不读取 ``before`` 和 ``after`` 内部的任何内容：里面的东西属于插件的词汇表。PartCAD "
+"维护的那两个插件报告的是同一套词汇，所以同一个校验条件在两个引擎上读起来都一样："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1213
+msgid "Key"
+msgstr "键"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1214
+msgid "Content"
+msgstr "内容"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1215
+msgid "``time``"
+msgstr "``time``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1216
+msgid "Simulated seconds at the reading."
+msgstr "读数时刻的仿真秒数。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1217
+msgid "``bodies.<name>.pos``"
+msgstr "``bodies.<name>.pos``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1218
+msgid ""
+"The body's position, ``[x, y, z]`` in **millimetres**, in the world's frame "
+"-- for a body hanging off a mechanism as much as for one standing free, in "
+"either engine."
+msgstr ""
+"刚体的位置，``[x, y, z]`` ，以 **毫米** 为单位，在世界坐标系中 -- "
+"对挂在机构上的刚体和自由站立的刚体都一样，在两个引擎中都是如此。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1221
+msgid "``bodies.<name>.quat``"
+msgstr "``bodies.<name>.quat``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1222
+msgid "The body's orientation, ``[w, x, y, z]``, in the world's frame."
+msgstr "刚体的姿态，``[w, x, y, z]`` ，在世界坐标系中。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1223
+msgid "``joints.<name>.type``"
+msgstr "``joints.<name>.type``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1224
+msgid ""
+"``revolute``, ``continuous`` (a turn with no limit), ``prismatic`` or "
+"``ball``. Moving to the joint's PartCAD type (:ref:`joints`), keyed by "
+"PartCAD's joint name, as the engine plugins take up the native joint types: "
+"``continuous`` then reads ``revolute``."
+msgstr ""
+"``revolute``、``continuous``\\ （无限制的转动）、``prismatic`` 或 "
+"``ball``。随着引擎插件采用原生关节类型，它正在向关节的 PartCAD 类型（ :ref:`joints` ）迁移，并以 PartCAD "
+"的关节名称为键：届时 ``continuous`` 会读作 ``revolute``。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1228
+msgid "``joints.<name>.pos``, ``joints.<name>.vel``"
+msgstr "``joints.<name>.pos``、``joints.<name>.vel``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1229
+msgid ""
+"Degrees and deg/s for a turn, millimetres and mm/s for a move. A ball joint "
+"reports ``quat`` and an angular velocity ``[x, y, z]`` in deg/s instead."
+msgstr ""
+"转动用度和 deg/s，移动用毫米和 mm/s。球关节报告的则是 ``quat`` 和一个以 deg/s 为单位的角速度 ``[x, y, z]``。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1232
+msgid "``joints.<name>.effort``"
+msgstr "``joints.<name>.effort``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1233
+msgid ""
+"What the model's actuators exert along the joint, in N·m or N. MuJoCo only."
+msgstr "模型的执行器沿该关节施加的量，单位为 N·m 或 N。仅 MuJoCo 提供。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1235
+msgid "``bodies.<name>.loads``"
+msgstr "``bodies.<name>.loads``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1236
+msgid ""
+"What acts on the body: its weight, its contacts, the force and the moment "
+"each of its joints passes it. See :ref:`sim-loads`."
+msgstr "作用在该刚体上的东西：它的重量、它的各个接触，以及它的每个关节传给它的力和力矩。参见 :ref:`sim-loads` 。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1238
+msgid "``bodies.<name>.mass``, ``com``, ``acc``, ``angvel``, ``angacc``"
+msgstr "``bodies.<name>.mass``、``com``、``acc``、``angvel``、``angacc``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1239
+msgid ""
+"Its mass in kg, its centre of mass in mm, how that is accelerating in m/s², "
+"and how fast the body turns and how fast that changes, in deg/s and deg/s² "
+"-- all in the world's frame."
+msgstr ""
+"它的质量，单位 kg；它的质心，单位 mm；质心的加速度，单位 m/s²；以及刚体转动的快慢和这个快慢的变化率，单位 deg/s 和 deg/s² --"
+" 全部在世界坐标系中。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1243
+msgid ""
+"A body is named after the link that places it -- an ASSY link's ``name:`` --"
+" and made unique where two would collide. Walking every body, ``for name in "
+"before[\"bodies\"]``, is the robust form, and the one every example uses."
+msgstr ""
+"刚体以放置它的那个链接命名 -- 也就是 ASSY 链接的 ``name:`` -- 并在两个名称会冲突时作唯一化处理。遍历每一个刚体，也就是 "
+"``for name in before[\"bodies\"]`` ，是稳妥的写法，每个示例用的都是它。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1247
+msgid ""
+"**A validation reads PartCAD's names**, whatever the engine's file had to "
+"call things. Each format has rules of its own about names -- SDFormat "
+"reserves ``world``, which is what PartCAD's default world is called, and "
+"MJCF has a body called ``world`` of its own -- so a name the file cannot "
+"hold is written there under another one (``world-2``), the export says so in"
+" a warning, and the run reports it under PartCAD's name again: "
+"``after[\"bodies\"][\"world\"]`` for a body called ``world``, in MuJoCo and "
+"in Gazebo alike. What the engine called it is in ``<scene file>.names.json``"
+" in the run's directory, if you need it."
+msgstr ""
+"**校验条件读取的是 PartCAD 的名称**，不管引擎的文件不得不把东西叫做什么。每种格式对名称都有自己的规则 -- SDFormat 保留了 "
+"``world`` ，而这恰好是 PartCAD 默认世界的名字，MJCF 也有一个自己的叫 ``world`` 的 body -- "
+"所以文件装不下的名称会在那里以另一个名字写出（ ``world-2`` ），导出会以警告说明这一点，而运行结果仍然以 PartCAD "
+"的名称来报告它：一个叫 ``world`` 的刚体就是 ``after[\"bodies\"][\"world\"]`` ，在 MuJoCo 和 "
+"Gazebo 中都一样。如果你需要知道引擎把它叫成了什么，那在运行目录下的 ``<scene file>.names.json`` 里。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1256
+msgid ""
+"A free body is not reported as a joint, since ``bodies`` already says where "
+"it is; so a scene of parts reports ``joints: {}``. A mechanism's joints are "
+"reported under the names PartCAD gives them (see :ref:`sim-mechanisms`), and"
+" a joint the engine writes as several -- a screw's turn and move -- as "
+"``<name>.<parameter>`` each. A joint's ``pos`` is its value as PartCAD "
+"states it: the ``toParams`` it starts at, and nought at its zero."
+msgstr ""
+"自由刚体不会被报告为关节，因为 ``bodies`` 已经说明了它在哪里；所以一个由零件组成的场景报告的是 ``joints: "
+"{}``。机构的各个关节以 PartCAD 给它们的名称报告（参见 :ref:`sim-mechanisms` ），而引擎写成多个的关节 -- "
+"螺纹的转动和移动 -- 则各自报告为 ``<name>.<parameter>``。关节的 ``pos`` 就是 PartCAD 所表述的那个值：从它的"
+" ``toParams`` 开始，在它的零点处为零。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1263
+msgid ""
+"Beside ``before`` and ``after``, ``result`` carries ``samples`` -- a list of"
+" the same readings at evenly spaced instants, when the run asked for any -- "
+"and what the run was: which engine ran it, the ``duration``, the ``gravity``"
+" it was actually under in m/s², and the ``medium`` for a MuJoCo run in a "
+"fluid. Whatever the engine could not report is named in ``warnings`` rather "
+"than reported as zero."
+msgstr ""
+"除了 ``before`` 和 ``after``，``result`` 还带有 ``samples`` -- "
+"当运行要求采样时，它就是在等间隔时刻取得的同样那些读数的列表 -- 以及这次运行是什么：哪个引擎运行了它、``duration``、它实际所处的 "
+"``gravity``\\ （单位 m/s²），以及在流体中进行的 MuJoCo 运行的 ``medium``。引擎无法报告的内容会在 "
+"``warnings`` 中被指出，而不是报告为零。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1273
+msgid "What holds each body, and how hard"
+msgstr "是什么托住每个刚体，以及用了多大的力"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1275
+msgid ""
+"Every body in a reading says what acts on it, as ``loads`` -- the loads a "
+"stress analysis of the body, or of a part in it, starts from. Each load is "
+"one thing acting on the body:"
+msgstr ""
+"读数中的每个刚体都会说明作用在它上面的东西，作为 ``loads`` -- "
+"也就是对该刚体、或对其中某个零件做应力分析时的起点载荷。每一项载荷都是作用在该刚体上的一样东西："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1283
+msgid "``kind``"
+msgstr "``kind``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1284
+msgid "What it is"
+msgstr "含义"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1285
+msgid "``joint``"
+msgstr "``joint``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1286
+msgid ""
+"What one of its joints passes it: the joint to the body it hangs from, and "
+"each joint of a body hanging from it. ``joint`` names it."
+msgstr "它的某个关节传给它的东西：通往它所悬挂的那个刚体的关节，以及悬挂在它身上的每个刚体的关节。``joint`` 给出它的名称。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1288
+msgid "``fixed``"
+msgstr "``fixed``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1289
+msgid "What holds a body a scene fixes: its weld to the world."
+msgstr "托住一个被场景固定的刚体的东西：它与世界之间的焊接。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1290
+msgid "``contact``"
+msgstr "``contact``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1291
+msgid ""
+"Every contact with one other body, added up; ``contacts`` says how many."
+msgstr "与另外某一个刚体的全部接触的合计；``contacts`` 给出有多少个。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1293
+msgid "Its weight, at its centre of mass."
+msgstr "它的重量，作用在它的质心上。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1294
+msgid "``buoyancy``"
+msgstr "``buoyancy``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1295
+msgid "The lift of the fluid it is in, at its centre of buoyancy."
+msgstr "它所处流体给它的浮力，作用在它的浮心上。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1297
+msgid ""
+"and says where it comes from (``from``: the body at the other end, ``world``"
+" for the world and the ground, the body itself for its weight and its lift),"
+" where it acts (``at``, mm, in the world's frame), the ``force`` on *this* "
+"body in N, and the ``torque`` about ``at`` in N·m, both in the world's "
+"frame:"
+msgstr ""
+"并说明它从哪里来（ ``from`` ：另一端的那个刚体，世界和地面则为 ``world`` ，重量和浮力则为该刚体本身）、它作用在哪里（ ``at``"
+" ，单位 mm，在世界坐标系中）、作用在 *这个* 刚体上的 ``force`` （单位 N），以及关于 ``at`` 的 ``torque`` （单位"
+" N·m），两者都在世界坐标系中："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1316
+msgid ""
+"A joint's load is everything it passes from one body to the other: what its "
+"constraint holds against, and what its spring, its damper, its friction and "
+"an actuator on it exert along the freedom it keeps. So a hinge held by a "
+"stiff spring -- a worm drive that does not back-drive, say -- reports the "
+"moment that holds the arm up, and a hinge with nothing on it reports none "
+"about its axis. The body hanging from a joint reports its load from the body"
+" above, and the body above the same load reversed. A free body's six "
+"freedoms pass nothing, and are not a load."
+msgstr ""
+"关节的载荷就是它从一个刚体传给另一个刚体的全部内容：它的约束所抵住的东西，以及它的弹簧、阻尼器、摩擦和它上面的执行器沿它所保留的那个自由度施加的东西。所以由一根刚硬弹簧托住的铰链"
+" -- 比如说一个不会被反向驱动的蜗轮传动 -- "
+"会报告把手臂举住的那个力矩，而上面什么都没有的铰链关于它的轴线则不报告任何力矩。悬挂在关节下方的刚体报告它来自上方刚体的载荷，而上方刚体报告同一载荷的反向。自由刚体的六个自由度什么都不传递，也就不算一项载荷。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1325
+msgid ""
+"**They add up**: the forces on a body are its ``mass`` times its ``acc``, "
+"and a validation can say so -- the knee above carries the arm's weight and "
+"the moment of it, with the arm at rest:"
+msgstr ""
+"**它们是能对上的**：作用在刚体上的各力之和等于它的 ``mass`` 乘以它的 ``acc``，而校验条件可以把这一点写出来 -- "
+"上面那个膝关节承担着手臂的重量和它的力矩，此时手臂处于静止："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1336
+msgid ""
+"**Which body a part is in.** A body is the parts welded together (see "
+":ref:`sim-bodies`), so a load on a body is not yet a load on any one part in"
+" it. ``result[\"parts\"]`` says which body each part is in: each part by its"
+" path of labels (``subject/lower/knee-worm-gear/gear``), the part it is, the"
+" body, and where it sits in that body's frame. With the body's pose in a "
+"reading that is where the part is, which is what turns a body's loads into a"
+" part's -- the ``/pc:sim-assembly-fea`` skill does that, and adds the part a"
+" scenario of its stress analysis that applies them, named after the "
+"simulation, beside any it already has (:ref:`pc cae <cae>`). What passes "
+"between two parts welded into one body is the body's own business: a rigid "
+"simulation does not see it, and says nothing about it."
+msgstr ""
+"**零件在哪个刚体里。** 刚体就是焊接在一起的那些零件（参见 :ref:`sim-bodies` "
+"），所以作用在刚体上的载荷还不等于作用在其中任何一个零件上的载荷。``result[\"parts\"]`` "
+"说明每个零件在哪个刚体里：每个零件以它的标签路径给出（ ``subject/lower/knee-worm-gear/gear`` "
+"）、它是什么零件、属于哪个刚体，以及它在该刚体坐标系中的位置。结合某次读数中该刚体的位姿，那就是这个零件所在的位置，而这正是把刚体的载荷变成零件载荷的办法"
+" -- ``/pc:sim-assembly-fea`` "
+"技能做的就是这件事，它还会给这个零件添加一个施加这些载荷的应力分析场景，以该仿真命名，与它已有的场景并列（ :ref:`pc cae <cae>` "
+"）。焊接成同一个刚体的两个零件之间传递什么，是该刚体自己的事：刚体仿真看不到它，也对它什么都不说。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1348
+msgid ""
+"A run that asks for poses alone says ``params: {loads: false}``. MuJoCo "
+"reports every load; Gazebo reports what its joints transmit and each body's "
+"weight, and says in ``warnings`` what it cannot (see :ref:`sim-engines`)."
+msgstr ""
+"只要位姿的运行写 ``params: {loads: false}``。MuJoCo 报告全部载荷；Gazebo "
+"报告它的各个关节所传递的内容以及每个刚体的重量，并在 ``warnings`` 中说明它报告不了的内容（参见 :ref:`sim-engines` ）。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1353
+msgid "Some validations"
+msgstr "一些校验条件示例"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1355
+msgid "No body moved 5 mm in any direction:"
+msgstr "没有任何刚体在任何方向上移动了 5 mm："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1364
+msgid ""
+"Something ended up more than 5 mm lower than it started -- a block fell off:"
+msgstr "有东西最终比它起始时低了 5 mm 以上 -- 一块方块掉下来了："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1370
+msgid "Everything rose more than 100 mm -- it floats:"
+msgstr "所有东西都上升了 100 mm 以上 -- 它浮起来了："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1376
+msgid ""
+"Upright at the end -- the vertical component of a body's own Z axis, worked "
+"out from ``quat``, is 1 when it is upright and 0 when it lies on its side:"
+msgstr "结束时保持直立 -- 由 ``quat`` 算出的刚体自身 Z 轴的竖直分量，直立时为 1，侧躺时为 0："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1386
+msgid ""
+"Held at every sampled instant and not only at the end -- nothing rose or "
+"sank 5 mm on the way -- with ``params: {samples: 20}``:"
+msgstr ""
+"在每一个采样时刻都成立，而不只是在结束时 -- 过程中没有任何东西上升或下沉 5 mm -- 配合 ``params: {samples: 20}`` "
+"："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1397
+msgid ""
+"Choose thresholds well clear of both outcomes. A stack that holds still "
+"creeps and settles by half a millimetre, because contacts are soft; a block "
+"that comes off moves tens. A threshold between the two, like the 5 mm above,"
+" says which happened and nothing else."
+msgstr ""
+"阈值要选得离两种结果都足够远。立得住的一摞仍然会有半毫米的蠕移和沉降，因为接触是软的；掉下来的方块则会移动几十毫米。取一个处于两者之间的阈值，比如上面的"
+" 5 mm，就只说明发生了哪一种结果，而不说明别的。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1406
+msgid "Robot description formats"
+msgstr "机器人描述格式"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1408
+msgid ""
+"The machinery that writes a world out for an engine also reads and writes "
+"the formats robots and worlds are described in, so a model somebody else "
+"wrote is an object you can place parts in, and an object built out of parts "
+"is a model an engine can run."
+msgstr ""
+"为引擎写出世界的那套机制，同时也能读写用来描述机器人和世界的那些格式，所以别人写的模型就是一个你可以往里放零件的对象，而由零件搭出来的对象也就是一个引擎能运行的模型。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1416
+#: ../../source/digital_thread/lifecycle/simulation.rst:1599
+msgid "URDF"
+msgstr "URDF"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1418
+msgid ""
+"`URDF <https://wiki.ros.org/urdf>`_ is the one of these PartCAD implements "
+"itself, because it describes a robot rather than any one engine's world, and"
+" ROS, MuJoCo, PyBullet and Isaac all read it."
+msgstr ""
+"`URDF <https://wiki.ros.org/urdf>`_ 是这几种格式中 PartCAD "
+"自己实现的那一个，因为它描述的是机器人，而不是某一个引擎的世界，而且 ROS、MuJoCo、PyBullet 和 Isaac 都能读取它。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1423
+msgid "Reading one"
+msgstr "读取一个"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1430
+msgid ""
+"``add`` declares an assembly of type ``urdf``. Its links become parts named "
+"``<assembly>/<link>`` -- ordinary parts, which ``pc ide view robot/forearm``"
+" and ``pc export -t step robot/wrist`` work on like any other -- placed with"
+" every joint at zero, but for a joint whose limits leave zero out: a legged "
+"robot's knee that cannot straighten, a gripper that cannot close to nought. "
+"Such a joint starts at the bound nearest zero, where the robot can stand, "
+"rather than against its own stop, which would fail ``pc test``'s ``connect``"
+" check; and the links below it are placed with it there. A link's "
+"``<inertial>``, the friction and contact settings of its ``<gazebo>`` block "
+"and its ``<material>`` become named properties of its part, in PartCAD's "
+"units, and are written back on export. URDF that PartCAD has no property for"
+" stops the import, naming what it found, rather than being carried along "
+"unread. How links become parts, which of a link's shapes is used, and the "
+"declaration's options are under :ref:`assembly-urdf`."
+msgstr ""
+"``add`` 声明一个类型为 ``urdf`` 的装配体。它的 link 会变成名为 ``<assembly>/<link>`` 的零件 -- "
+"普通的零件，``pc ide view robot/forearm`` 和 ``pc export -t step robot/wrist`` "
+"对它们的处理与对其他零件一样 -- "
+"放置时每个关节都取零，但如果某个关节的限位范围不包含零则例外：比如一台足式机器人无法伸直的膝关节、一个无法完全闭合到零的夹爪。这样的关节会从最接近零的那个限位开始，也就是机器人能站住的位置，而不是顶在它自己的限位挡块上（那会使"
+" ``pc test`` 的 ``connect`` 检查失败）；它下方的各个 link 也按这个位置放置。link 的 "
+"``<inertial>``、它的 ``<gazebo>`` 块中的摩擦与接触设置，以及它的 "
+"``<material>``，都会变成其零件的具名属性，使用 PartCAD 的单位，并在导出时写回。遇到 PartCAD 没有对应属性的 URDF "
+"内容，导入会中止并指出它发现了什么，而不是不加解读地照抄下去。link 如何变成零件、使用 link 的哪一个形状，以及该声明的各个选项，都在 "
+":ref:`assembly-urdf` 下。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1444
+msgid ""
+"Its **joints are the assembly's**, so a ``urdf`` assembly is a mechanism as "
+"it is read, without converting it: each movable joint is the joint of the "
+"link it moves, with its axis, limits, dynamics, soft limits and mimic (``pc "
+"info robot`` lists them, as it does an ASSY assembly's), and each link on a "
+"fixed joint is welded to its parent -- one rigid body with it, which turns "
+"when the parent does (:ref:`sim-bodies`). A joint with no ``<axis>`` turns "
+"about URDF's default, X. A link with no geometry is no part, so the joints "
+"on either side of it are one joint of their freedoms together, named after "
+"the first."
+msgstr ""
+"它的 **关节就是这个装配体的关节**，所以一个 ``urdf`` 装配体在被读入时就已经是一个机构，不需要转换：每个可动关节都是它所驱动那个 link"
+" 的关节，带着它的轴线、限位、动力学、软限位和 mimic（ ``pc info robot`` 会列出它们，就像列出 ASSY "
+"装配体的那样），而每个处在固定关节上的 link 都被焊接到它的父级 -- 与它同为一个刚体，父级转动时它也随之转动（ :ref:`sim-"
+"bodies` ）。没有 ``<axis>`` 的关节绕 URDF 的默认轴 X 转动。没有几何形状的 link "
+"不构成零件，所以它两侧的关节会合并成一个关节，自由度合在一起，并以第一个关节命名。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1453
+msgid ""
+"``import`` converts instead, the way ``pc convert assembly -t assy`` does "
+"below, and leaves the package holding PartCAD's own objects with nothing "
+"pointing back at the URDF."
+msgstr ""
+"``import`` 则会做转换，方式与下面的 ``pc convert assembly -t assy`` 一样，之后包里留下的是 PartCAD "
+"自己的对象，没有任何东西再指回那个 URDF。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1460
+msgid "Writing one"
+msgstr "写出一个"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1466
+msgid ""
+"The export writes the mechanism the assembly is: **a link per rigid body** "
+"and **a joint per pair of bodies**, by the rule of :ref:`sim-bodies`. Every "
+"part welded into a body is a ``<visual>`` and a ``<collision>`` of its link,"
+" at its place in the link and named after the part, so a link of several "
+"shapes -- a URDF's, read in, or several parts bolted together -- goes out as"
+" itself; a shape used more than once is written once. An assembly's root "
+"body is the URDF's root link, named after the one part it is made of when it"
+" is made of one (a robot's base) and after the assembly otherwise. A part on"
+" its own is one link, and an assembly in which nothing moves is one link of "
+"all its parts. Links and joints keep PartCAD's names wherever URDF's readers"
+" can hold them; a name they cannot -- a link called ``world``, which Gazebo,"
+" ROS and MoveIt all take to be the world itself, or one with a ``/`` or a "
+"space in it -- is written under the nearest one they can (``world-2``, "
+"``a_b``), and the export says which."
+msgstr ""
+"导出写出的就是该装配体所构成的机构：按 :ref:`sim-bodies` 的规则，**每个刚体一个 link**，**每一对刚体一个 "
+"joint**。焊接进某个刚体的每一个零件都是其 link 的一个 ``<visual>`` 和一个 ``<collision>``，位于它在该 "
+"link 中的位置，并以该零件命名，所以由多个形状组成的 link -- 读入的 URDF 的 link，或者几个用螺栓固定在一起的零件 -- "
+"会按它本来的样子写出；被用到多次的形状只写一次。装配体的根刚体就是 URDF 的根 "
+"link，当它只由一个零件构成时就以那个零件命名（比如机器人的底座），否则以该装配体命名。单独的零件就是一个 "
+"link，而内部没有任何东西可动的装配体就是把它所有零件装在一起的一个 link。只要 URDF 的读取器装得下，link 和 joint 就保留 "
+"PartCAD 的名称；装不下的名称 -- 比如叫 ``world`` 的 link（Gazebo、ROS 和 MoveIt "
+"都会把它当成世界本身），或者名字里有 ``/`` 或空格的 -- 会以它们装得下的最接近的名称写出（ ``world-2``、``a_b`` "
+"），而导出会说明用了哪一个。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1480
+msgid ""
+"Every link carries the mass, centre of mass and inertia of its body -- its "
+"parts' added up, each at its own density, or what a measured link states "
+"about itself (:ref:`sim-physics`) -- in ``<inertial>``, its friction and "
+"contact properties in a ``<gazebo>`` block, and each shape's material and "
+"colour in its ``<material>``."
+msgstr ""
+"每个 link 都在 ``<inertial>`` 中带上它所属刚体的质量、质心和惯量 -- 也就是它各零件按各自密度叠加的结果，或者一个实测 link"
+" 对自身的说明（ :ref:`sim-physics` ）-- 在一个 ``<gazebo>`` 块中带上它的摩擦与接触属性，并在它的 "
+"``<material>`` 中带上每个形状的材料和颜色。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1486
+msgid "Each joint is written by its type (:ref:`joints`):"
+msgstr "每个关节按它的类型写出（ :ref:`joints` ）："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1492
+msgid "The joint is"
+msgstr "该关节是"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1493
+msgid "In URDF"
+msgstr "在 URDF 中"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1494
+msgid "``revolute``, bounded on either side"
+msgstr "``revolute`` ，两侧都有限位"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1495
+msgid "``revolute``, with ``<limit>``"
+msgstr "``revolute`` ，带 ``<limit>``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1496
+msgid "``revolute``, bounded on neither"
+msgstr "``revolute`` ，两侧都没有限位"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1497
+msgid "``continuous``"
+msgstr "``continuous``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1498
+msgid "``prismatic``"
+msgstr "``prismatic``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1499
+msgid "``prismatic``, with ``<limit>``"
+msgstr "``prismatic`` ，带 ``<limit>``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1500
+msgid "``planar``, the moves first or the turn first"
+msgstr "``planar`` ，先写移动或先写转动"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1501
+msgid "``planar``, its ``<axis>`` the normal"
+msgstr "``planar`` ，其 ``<axis>`` 为法向"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1502
+msgid "``floating``: a body of its own"
+msgstr "``floating`` ：各自是一个独立的刚体"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1503
+msgid "``floating``, from the link of the body it was connected to"
+msgstr "``floating`` ，自它原本相连那个刚体的 link 出发"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1504
+msgid "``cylindrical``, ``screw``, ``universal``, ``ball`` or ``composite``"
+msgstr "``cylindrical``、``screw``、``universal``、``ball`` 或 ``composite``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1505
+msgid "**refused**: URDF has no type for it"
+msgstr "**被拒绝**：URDF 没有对应的类型"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1507
+msgid ""
+"A refusal is an error that names every joint the URDF cannot hold, its type,"
+" and the ways on: simulate the mechanism in MuJoCo, which writes every type;"
+" or model the body the joint stands for -- for a cylindrical pair a sleeve "
+"and its carriage, for a universal joint the cross -- and join it by native "
+"joints. Nothing is written with a mass PartCAD did not derive."
+msgstr ""
+"拒绝是一个错误，它会指出 URDF 装不下的每一个关节、它的类型，以及可行的出路：在 MuJoCo "
+"中仿真这个机构，因为它写得出每一种类型；或者把该关节所代表的刚体建模出来 -- 圆柱对就建一个套筒和它的滑座，万向节就建那个十字轴 -- "
+"再用原生关节把它们连起来。任何东西都不会以 PartCAD 并未推导出的质量被写出。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1513
+msgid ""
+"A URDF that is read **only for its kinematics** -- by ROS's "
+"``robot_state_publisher`` or by MoveIt -- can have them all the same:"
+msgstr ""
+"一个 **只为其运动学** 而被读取的 URDF -- 由 ROS 的 ``robot_state_publisher`` 或 MoveIt 读取 --"
+" 仍然可以把它们全都写出来："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1522
+msgid ""
+"writes each such joint as a ``revolute``, ``continuous`` or ``prismatic`` "
+"joint per freedom through links with no ``<inertial>`` named "
+"``<joint>_link1``, ``<joint>_link2`` ..., which is URDF's own idiom for a "
+"frame; a screw's move is a ``<mimic>`` of its turn by the lead. Every "
+"simulator that reads a URDF drops or refuses those links (libsdformat leaves"
+" out a link with no ``<inertial>`` and its joints), so the export says so, "
+"joint by joint."
+msgstr ""
+"把每一个这样的关节按自由度写成一个 ``revolute``、``continuous`` 或 ``prismatic`` 关节，中间经过没有 "
+"``<inertial>`` 的 link，名为 ``<joint>_link1``、``<joint>_link2`` ……这正是 URDF "
+"自己表示坐标系的惯用做法；螺纹的移动则是它的转动按导程给出的一个 ``<mimic>``。所有读取 URDF 的仿真器都会丢弃或拒绝这些 "
+"link（libsdformat 会把没有 ``<inertial>`` 的 link 及其关节略去），所以导出会逐个关节地说明这一点。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1529
+msgid "Frames and units:"
+msgstr "坐标系与单位："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1531
+msgid ""
+"**The child link's frame is the joint's moving frame**, so ``<axis>`` is the"
+" freedom's own axis as its parameter's ``dir`` states it, and every part "
+"sits in its link where the joint leaves the body. A URDF converted to ASSY "
+"and exported again comes back with its own link frames and axes."
+msgstr ""
+"**子 link 的坐标系就是关节的运动坐标系**，所以 ``<axis>`` 就是该自由度自身的轴线，与其参数的 ``dir`` "
+"所表述的一致，而每个零件都位于它在该 link 中的位置，也就是关节离开该刚体的位置。转换成 ASSY 再导出的 URDF 会带着它自己的 link "
+"坐标系和轴线回来。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1535
+msgid ""
+"**Metres and radians** at the boundary and nowhere else: limits, velocities,"
+" soft limits and a mimic's offset are converted from millimetres and "
+"degrees; ``<dynamics>`` (``damping``, ``friction``) is already per radian or"
+" per metre in SI, as PartCAD states it (:ref:`assy-joints`). ``maxEffort`` "
+"and ``maxVelocity`` are ``<limit effort velocity>``, a joint's "
+"``softLimits`` its ``<safety_controller>``, its ``mimic`` a ``<mimic>``, and"
+" the solver settings of its ``physics:`` (``springStiffness``, "
+"``stopCfm``...) its ``<gazebo>`` block."
+msgstr ""
+"**米和弧度** 只出现在边界上，别处都不用：限位、速度、软限位以及 mimic 的偏移量都从毫米和度换算过来；``<dynamics>`` （ "
+"``damping``、``friction`` ）本来就按 SI 以每弧度或每米计，与 PartCAD 的表述一致（ :ref:`assy-"
+"joints` ）。``maxEffort`` 和 ``maxVelocity`` 对应 ``<limit effort velocity>``，关节的"
+" ``softLimits`` 对应它的 ``<safety_controller>``，它的 ``mimic`` 对应一个 "
+"``<mimic>``，而它 ``physics:`` 中的求解器设置（ ``springStiffness``、``stopCfm`` ……）对应它的"
+" ``<gazebo>`` 块。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1543
+msgid ""
+"**The root.** A free root body is the URDF's root link, placed where the "
+"tree places it. A body welded to the world (a scene element marked ``fixed: "
+"true``) hangs off a link named ``world`` by a ``fixed`` joint, which is how "
+"a URDF says \"bolted down\"; and since a URDF has one root, the free bodies "
+"of a scene of several hang off ``world`` by ``floating`` joints."
+msgstr ""
+"**根。** 自由的根刚体就是 URDF 的根 link，放置在树给它的位置。被焊接到世界上的刚体（场景中标记为 ``fixed: true`` "
+"的元素）通过一个 ``fixed`` 关节挂在一个名为 ``world`` 的 link 下，这正是 URDF 表示“用螺栓固定住”的方式；而由于一个 "
+"URDF 只有一个根，含有多个自由刚体的场景，其各个自由刚体通过 ``floating`` 关节挂在 ``world`` 下。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1549
+msgid "What a URDF cannot state is **reported**, never dropped in silence:"
+msgstr "URDF 无法表述的内容会被 **报告** 出来，绝不会被悄悄丢掉："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1551
+msgid ""
+"**the starting value** of a joint (what ``toParams`` sets it to): URDF has "
+"no starting position, and what reads one -- ROS's tools, a robot's drivers "
+"-- takes a joint's zero to be where its hardware reads zero, so the robot is"
+" written at PartCAD's zero of every joint rather than re-zeroed at its "
+"start;"
+msgstr ""
+"关节的 **起始值**\\ （ ``toParams`` 把它设成的那个值）：URDF 没有起始位置，而读取它的东西 -- ROS "
+"的工具、机器人的驱动程序 -- 会把关节的零点当成它的硬件读数为零的位置，所以机器人是按 PartCAD "
+"中每个关节的零点写出的，而不是按它的起始位置重新置零；"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1555
+msgid ""
+"**a chain through massless links**, under ``composites: massless``, and a "
+"screw written as one, as approximate, since few simulators honour a "
+"``<mimic>``;"
+msgstr ""
+"**经过无质量 link 的链条**，在 ``composites: massless`` "
+"之下，以及以这种方式写出的螺纹，都算作近似，因为很少有仿真器遵循 ``<mimic>`` ；"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1557
+msgid ""
+"**a default**: URDF requires ``<limit effort velocity>`` on a ``revolute`` "
+"and a ``prismatic`` joint, and one that states no ``maxEffort`` or "
+"``maxVelocity`` gets the export's ``effort`` (1000 N·m or N) and "
+"``velocity`` (100 rad/s or m/s) -- large enough to limit nothing a passive "
+"mechanism does. URDF has no open bound: a ``revolute`` open on one side, or "
+"a ``prismatic`` on either, is written a million degrees or millimetres away "
+"there;"
+msgstr ""
+"**一个默认值**：URDF 要求 ``revolute`` 和 ``prismatic`` 关节带有 ``<limit effort "
+"velocity>``，而没有写明 ``maxEffort`` 或 ``maxVelocity`` 的关节会取导出的 ``effort`` （1000 "
+"N·m 或 N）和 ``velocity`` （100 rad/s 或 m/s）-- 大到不会限制被动机构的任何动作。URDF 没有开放边界：一侧开放的"
+" ``revolute``，或者任一侧开放的 ``prismatic``，在那里会被写成一百万度或一百万毫米之外；"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1563
+msgid ""
+"the bounds of a ``planar`` or a ``floating`` joint's freedoms, a ball's one "
+"bound, the soft limits or mimic of a joint written as a chain, and a "
+"property PartCAD holds that URDF has no element for;"
+msgstr ""
+"``planar`` 或 ``floating`` 关节各自由度的边界、球关节的那一个边界、以链条形式写出的关节的软限位或 mimic，以及 "
+"PartCAD 持有而 URDF 没有对应元素的属性；"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1566
+msgid ""
+"``dummyMass`` or ``dummyInertia``, where a package still passes them: the "
+"export took them once, for links of a mass nobody measured, and writes none."
+msgstr ""
+"``dummyMass`` 或 ``dummyInertia``，在包仍然传入它们的情况下：导出曾经接受过它们，用于质量没人测过的 "
+"link，现在一个都不写。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1569
+msgid ""
+"``effort``, ``velocity`` and ``composites`` are parameters of the export, "
+"set in a package's own ``export:`` entry for ``urdf`` like any other "
+"(:ref:`output-files`)."
+msgstr ""
+"``effort``、``velocity`` 和 ``composites`` 是导出的参数，像其他参数一样在包自己针对 ``urdf`` 的 "
+"``export:`` 条目中设定（ :ref:`output-files` ）。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1574
+msgid "Converting"
+msgstr "转换"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1581
+msgid ""
+"``pc convert assembly`` rewrites the package rather than producing a file. "
+"To URDF, it writes the ``.urdf`` and its meshes and switches the declaration"
+" over. To ASSY, it writes an ``stl`` part for every link, an interface pair "
+"for every joint, and an ``.assy`` that places the parts with ``connect:`` --"
+" an assembly stated the way PartCAD states one, not a transcription of "
+"coordinates."
+msgstr ""
+"``pc convert assembly`` 会改写这个包，而不是产出一个文件。转换到 URDF 时，它写出 ``.urdf`` "
+"及其网格文件，并把声明切换过去。转换到 ASSY 时，它为每个 link 写出一个 ``stl`` 零件、为每个关节写出一对接口，再写出一个用 "
+"``connect:`` 放置这些零件的 ``.assy`` -- 这是一个按 PartCAD 自己的方式表述出来的装配体，而不是一份坐标的誊抄。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1590
+msgid "How joints become interfaces"
+msgstr "关节如何变成接口"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1592
+msgid ""
+"Each URDF joint becomes a pair of :ref:`interfaces <interfaces>`, and each "
+"link is connected to its parent through them:"
+msgstr "每个 URDF 关节都会变成一对 :ref:`接口 <interfaces>` ，而每个 link 都通过它们与其父级相连："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1600
+msgid "PartCAD"
+msgstr "PartCAD"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1601
+msgid "the joint, parent side"
+msgstr "关节，父侧"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1602
+msgid ""
+"a **socket** interface with one port, which the parent part implements at "
+"the joint's origin, under an instance named after the joint"
+msgstr "一个带有单个端口的 **插座（socket）** 接口，由父零件在关节原点处实现，所在实例以该关节命名"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1604
+msgid "the joint, child side"
+msgstr "关节，子侧"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1605
+msgid ""
+"a **plug** interface, which the child part implements at its own origin, "
+"with ``mates:`` naming the socket"
+msgstr "一个 **插头（plug）** 接口，由子零件在它自己的原点处实现，并用 ``mates:`` 指名那个插座"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1607
+msgid "``axis``, ``limit`` lower and upper"
+msgstr "``axis`` ，以及 ``limit`` 的 lower 和 upper"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1608
+msgid ""
+"a freedom-of-movement parameter of the socket per degree of freedom -- "
+"``angle`` for a revolute or continuous joint, ``offset`` for a prismatic "
+"one, ``moveX``, ``moveY`` and ``turnZ`` for a planar one about Z, all six "
+"for a floating one -- whose ``dir`` is the URDF axis and whose range is the "
+"limits in degrees or millimetres; and ``motion: {dof: [...]}`` naming them. "
+"A continuous joint's parameter states no range, which is how an open bound "
+"is stated: it is a ``revolute`` open on both sides, and nothing writes "
+"``continuous`` into the package."
+msgstr ""
+"插座上的一个运动自由度参数，每个自由度一个 -- 转动关节或连续转动关节用 ``angle``，移动关节用 ``offset``，绕 Z 的平面关节用 "
+"``moveX``、``moveY`` 和 ``turnZ``，浮动关节则六个全有 -- 其 ``dir`` 就是 URDF "
+"的轴线，其取值范围就是以度或毫米表示的限位；再加上指名它们的 ``motion: {dof: "
+"[...]}``。连续转动关节的参数不写取值范围，这正是表述开放边界的方式：它就是一个两侧都开放的 ``revolute``，而没有任何东西会把 "
+"``continuous`` 写进包里。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1616
+msgid "``safety_controller``, ``mimic``"
+msgstr "``safety_controller``、``mimic``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1617
+msgid "``motion: {softLimits, mimic}``"
+msgstr "``motion: {softLimits, mimic}``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1618
+msgid "``limit`` effort and velocity, ``dynamics``"
+msgstr "``limit`` 的 effort 和 velocity，以及 ``dynamics``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1619
+msgid "``physics: {maxEffort, maxVelocity, damping, friction}``"
+msgstr "``physics: {maxEffort, maxVelocity, damping, friction}``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1620
+msgid "a joint's ``<gazebo>`` block"
+msgstr "关节的 ``<gazebo>`` 块"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1621
+msgid "``physics: {springStiffness, springReference, stopCfm, ...}``"
+msgstr "``physics: {springStiffness, springReference, stopCfm, ...}``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1622
+msgid "``calibration``"
+msgstr "``calibration``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1623
+msgid ""
+"nothing: a reference for commissioning a real robot, which says nothing "
+"about the model; counted and reported"
+msgstr "没有对应物：这是调试真实机器人时用的参考值，对模型本身没有任何说明；会被计数并报告"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1625
+msgid "the child link's attachment"
+msgstr "子 link 的附着关系"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1626
+msgid ""
+"``connect: {with: <plug>, name: <parent>, to: <socket>, toInstance: <joint>,"
+" joint: <joint>}``, so the joint keeps the URDF's name"
+msgstr ""
+"``connect: {with: <plug>, name: <parent>, to: <socket>, toInstance: <joint>,"
+" joint: <joint>}``，这样关节就保留了 URDF 中的名称"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1629
+msgid ""
+"The parent implements the socket exactly at the joint's origin, so the "
+"numbers in the ``.assy`` can be checked against the URDF. The socket's port "
+"is the half turn that two connected ports face each other by, which a "
+"connection undoes: the frame the parameters are read in is the URDF joint "
+"frame itself, so each ``dir`` is the URDF axis as the URDF states it -- "
+"URDF's default of X where it states none -- and an export writes the URDF's "
+"own frames back. Limits are converted from radians and metres once, on the "
+"way in. A fixed joint's socket declares ``dof: []``, and its child is welded"
+" to its parent."
+msgstr ""
+"父级正好在关节的原点处实现这个插座，所以 ``.assy`` 里的数字可以直接与 URDF "
+"对照检查。插座的端口是两个相连端口彼此相对所差的那半圈转动，而连接会把它抵消掉：读取这些参数所在的坐标系就是 URDF 的关节坐标系本身，所以每个 "
+"``dir`` 都是 URDF 所表述的那条 URDF 轴线 -- 它没有表述时就是 URDF 的默认轴 X -- 而导出会把 URDF "
+"自己的坐标系写回去。限位只在读入时从弧度和米换算一次。固定关节的插座声明 ``dof: []``，而它的子级被焊接到它的父级上。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1638
+msgid ""
+"Joints of one kind -- the same type, axis, limits, dynamics and mimic -- "
+"share one interface pair, since what differs between them is where they are,"
+" which is the instance's location: a four-wheeled robot gets one pair for "
+"its wheels. Nothing is matched against the library of real interfaces, "
+"because a URDF joint says nothing about the hardware that implements it."
+msgstr ""
+"同一类的关节 -- 类型、轴线、限位、动力学和 mimic 都相同 -- "
+"共用一对接口，因为它们之间的差别在于所处位置，而那是实例的位置：一台四轮机器人的轮子只需要一对接口。任何东西都不会被拿去与真实接口库做匹配，因为 "
+"URDF 关节对实现它的硬件什么都没说。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1644
+msgid ""
+"The parameters are what let the assembly be **posed**: ``connect: {toParams:"
+" {angle: 90}}`` places the child where the URDF joint at 90 degrees would, "
+"and everything below it follows; it is also the joint's starting value "
+"(:ref:`assy-joints`). The converter writes one itself for a joint whose "
+"limits leave URDF's zero out: such a joint starts at the bound nearest zero,"
+" which is its parameter's ``default`` and its connection's ``toParams``, so "
+"the converted assembly is drawn with that joint there -- as the robot can "
+"stand, and as a ``urdf`` assembly reads it. Its export is still the URDF at "
+"its own zero."
+msgstr ""
+"正是这些参数让装配体可以被 **摆位**：``connect: {toParams: {angle: 90}}`` 把子级放到 URDF 关节处于 90"
+" 度时它会在的位置，它下方的一切也随之跟上；它同时也是该关节的起始值（ :ref:`assy-joints` ）。对于限位范围不包含 URDF "
+"零点的关节，转换器会自己写一个：这样的关节从最接近零的那个限位开始，那就是它参数的 ``default`` 和它连接的 "
+"``toParams``，所以转换出来的装配体是以那个关节处在该位置绘制的 -- 也就是机器人能站住的样子，也是一个 ``urdf`` "
+"装配体读出来的样子。它的导出仍然是处于自身零点的那个 URDF。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1656
+msgid "What a round trip keeps"
+msgstr "往返转换保留了什么"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1658
+msgid ""
+"A URDF read as a ``urdf`` assembly and exported is the robot it was, and so "
+"is one converted to ASSY and exported, except that the converter folds a "
+"chain of movable joints through a link with no geometry into its last joint,"
+" and says so: every movable joint under its name, with its type, its frame, "
+"its axis, its limits, its dynamics, its soft limits and what it mimics, and "
+"every shape where it was. An ASSY assembly exported and read back is the "
+"mechanism it was, joint for joint. What changes is what PartCAD and URDF "
+"mean by a link:"
+msgstr ""
+"作为 ``urdf`` 装配体读入再导出的 URDF 还是它原来那台机器人，转换成 ASSY 再导出的也是，只有一点不同：转换器会把经过没有几何形状的 "
+"link 的一串可动关节折叠进它的最后一个关节，并且会说明这一点。每一个可动关节都带着它的名称、类型、坐标系、轴线、限位、动力学、软限位以及它所 "
+"mimic 的对象，每一个形状也都在它原来的位置。导出再读回的 ASSY 装配体还是它原来那个机构，关节一个不差。变化的是 PartCAD 和 URDF"
+" 对 link 的理解："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1671
+msgid "Kept"
+msgstr "保留"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1672
+msgid "Lost, or changed"
+msgstr "丢失或改变"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1673
+msgid ""
+"every movable joint: name, type, frame, axis, limits, effort, velocity, "
+"dynamics, soft limits, mimic, and the joint's ``<gazebo>`` settings"
+msgstr ""
+"每一个可动关节：名称、类型、坐标系、轴线、限位、effort、velocity、动力学、软限位、mimic，以及该关节的 ``<gazebo>`` 设置"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1675
+msgid ""
+"the starting value of a joint, which URDF has no place for; the URDF is the "
+"robot at zero"
+msgstr "关节的起始值，URDF 没有地方放它；这个 URDF 是处于零位的机器人"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1677
+msgid "every link that is a rigid body of its own, under its name"
+msgstr "每一个自身就是一个刚体的 link，以它的名称保留"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1678
+msgid ""
+"a link on a fixed joint: it is one body with its parent, so it comes back as"
+" a shape of the parent's link, where it was"
+msgstr "处在固定关节上的 link：它与它的父级同为一个刚体，所以它会作为父级那个 link 的一个形状回来，位置不变"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1680
+msgid ""
+"the kinematics of a chain through a link with no geometry, read as a "
+"``urdf`` assembly"
+msgstr "经过没有几何形状的 link 的那串链条的运动学，在作为 ``urdf`` 装配体读入时"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1682
+msgid ""
+"that link's name: it composes into a joint URDF has no type for (two turns "
+"through it are a universal joint), which comes back under ``composites: "
+"massless`` as the chain it was, through a massless link named after the "
+"joint; converted to ASSY, the chain is folded into its last joint"
+msgstr ""
+"那个 link 的名称：它会合成为一个 URDF 没有对应类型的关节（经过它的两次转动就是一个万向节），在 ``composites: "
+"massless`` 之下它会按原来的链条形式回来，经过一个以该关节命名的无质量 link；转换成 ASSY 时，这串链条会被折叠进它的最后一个关节"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1687
+msgid ""
+"a cylindrical, universal, ball or screw joint, under ``composites: "
+"massless``, as a chain through massless links, read back as the joint it was"
+msgstr ""
+"圆柱、万向、球或螺纹关节，在 ``composites: massless`` 之下写成经过无质量 link 的链条，读回时仍然是它原来那个关节"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1690
+msgid ""
+"the joint's single native element; a screw's coupling is a ``<mimic>`` few "
+"simulators honour; and, without the option, the export, which refuses"
+msgstr "该关节单一的原生元素；螺纹的耦合是一个很少有仿真器遵循的 ``<mimic>`` ；而在不加该选项时，丢失的就是导出本身 -- 它会拒绝"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1693
+msgid ""
+"every shape, at the placement it had, under the name of its part within its "
+"link"
+msgstr "每一个形状，位于它原有的放置位置，以它在其 link 内所属零件的名称命名"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1695
+msgid ""
+"every name that carries a package path, which a ROS name cannot; nesting: an"
+" ASSY may group its parts, and a URDF's only grouping is its links"
+msgstr "每一个带有包路径的名称，而 ROS 的名称装不下它；还有嵌套：ASSY 可以把它的零件分组，而 URDF 唯一的分组就是它的 link"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1697
+msgid "geometry, as a triangle mesh"
+msgstr "几何体，以三角网格的形式"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1698
+msgid "exact B-rep geometry; the mesh is a tessellation at a chosen tolerance"
+msgstr "精确的 B-rep 几何；网格只是按某个选定容差做出的网格化结果"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1699
+msgid "shape sharing: one mesh, many links"
+msgstr "形状共享：一个网格，多个 link"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1700
+msgid "parametrization: an ASSY parameter, an enrich, an alias"
+msgstr "参数化：ASSY 参数、enrich、别名"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1701
+msgid ""
+"mass, inertia, friction, contact settings and appearance -- per body, "
+"combined from its parts"
+msgstr "质量、惯量、摩擦、接触设置和外观 -- 按刚体给出，由它的各个零件合并而来"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1703
+msgid ""
+"which part in which package a link came from -- the digital thread itself"
+msgstr "link 来自哪个包中的哪个零件 -- 也就是 Digital Thread 本身"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1705
+msgid ""
+"``pc convert assembly -t assy`` keeps all of that as interfaces and "
+"connections, with one more loss: a chain of joints through a link with no "
+"geometry is folded into the placement of the last of them, and said to be. "
+"The geometry a link was not built from becomes a part of its own, "
+"``<assembly>/<link>/<visual|collision>``, and what an assembly cannot hold "
+"-- transmissions, sensors, ``ros2_control`` blocks -- is counted and "
+"reported at import and in ``pc info``, so the loss is visible rather than "
+"silent."
+msgstr ""
+"``pc convert assembly -t assy`` 把这一切都保留为接口和连接，只多丢一样东西：经过没有几何形状的 link "
+"的一串关节会被折叠进其中最后一个关节的放置里，并且会说明这一点。link "
+"并非由之构建出来的那些几何体会变成各自独立的零件，``<assembly>/<link>/<visual|collision>`` "
+"；而装配体装不下的内容 -- 传动装置、传感器、``ros2_control`` 块 -- 会在导入时以及在 ``pc info`` "
+"中被计数并报告，所以这些丢失是看得见的，而不是悄无声息的。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1716
+msgid "SDFormat and MJCF"
+msgstr "SDFormat 与 MJCF"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1718
+msgid ""
+"`SDFormat <http://sdformat.org/>`_, what Gazebo describes a world in, and "
+"`MJCF <https://mujoco.readthedocs.io/en/stable/XMLreference.html>`_, what "
+"MuJoCo describes a model in, are read and written the same way URDF is -- "
+"but by the engine's plugin package rather than by PartCAD, so a package "
+"imports the plugin and names the format through it:"
+msgstr ""
+"`SDFormat <http://sdformat.org/>`_ 是 Gazebo 描述世界所用的格式，`MJCF "
+"<https://mujoco.readthedocs.io/en/stable/XMLreference.html>`_ 是 MuJoCo "
+"描述模型所用的格式，它们的读写方式与 URDF 相同 -- 但由引擎的插件包负责，而不是由 PartCAD "
+"负责，所以包要导入该插件，并通过它来指名这个格式："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1728
+msgid "Format"
+msgstr "格式"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1730
+msgid "Declared as"
+msgstr "声明为"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1731
+msgid "Written by"
+msgstr "由什么写出"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1732
+msgid "SDFormat"
+msgstr "SDFormat"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1734
+msgid "a scene of type ``sim-gazebo:world``"
+msgstr "类型为 ``sim-gazebo:world`` 的场景"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1735
+msgid "``pc export -t sim-gazebo:world``"
+msgstr "``pc export -t sim-gazebo:world``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1736
+msgid "MJCF"
+msgstr "MJCF"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1738
+msgid "a scene or an assembly of type ``sim-mujoco:mjcf``"
+msgstr "类型为 ``sim-mujoco:mjcf`` 的场景或装配体"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1739
+msgid "``pc export -t sim-mujoco:mjcf``"
+msgstr "``pc export -t sim-mujoco:mjcf``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1754
+msgid ""
+"A bare ``type: world``, or ``pc export -t mjcf``, resolves to nothing and "
+"says which package to name. A world is always a scene; an MJCF file can be "
+"either, and the section that declares it says which (see :ref:`scenes`, "
+"which also has each reader's options)."
+msgstr ""
+"光写 ``type: world`` 或者 ``pc export -t mjcf`` "
+"解析不到任何东西，并会告诉你该指名哪个包。世界总是一个场景；MJCF 文件两者都可以是，由声明它的那个小节决定是哪一种（参见 :ref:`scenes`"
+" ，那里也列出了每个读取器的选项）。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1766
+msgid ""
+"Both readers are best-effort in the way the URDF one is: what a static "
+"arrangement cannot hold -- joints, lights, sensors, actuators, engine "
+"plugins -- is counted and reported, and ``pc info`` lists it. A file written"
+" for looking at is not one written for running: by default each exporter "
+"welds every body to the world, because a scene on its own states where "
+"things are, and a simulation asks the export for the opposite. What each "
+"format keeps, and every export parameter, is documented in the plugin's "
+"repository, including the parts of MJCF that are easy to get wrong (angles "
+"are degrees by default, an orientation has five spellings, and a box's "
+"``size`` is its half-extents)."
+msgstr ""
+"两个读取器都像 URDF 读取器那样采取尽力而为的做法：静态摆放装不下的内容 -- 关节、灯光、传感器、执行器、引擎插件 -- "
+"都会被计数并报告，``pc info`` "
+"会把它们列出来。为观看而写出的文件不是为运行而写出的文件：默认情况下每个导出器都会把每个刚体焊接到世界上，因为场景本身只说明各物体的位置，而仿真向导出要求的恰恰相反。每种格式保留了什么，以及每一个导出参数，都记录在插件的仓库里，包括"
+" MJCF 中那些容易弄错的地方（角度默认为度，姿态有五种写法，而盒子的 ``size`` 是它的半边长）。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1779
+msgid "Every description is a template"
+msgstr "每一份描述都是一个模板"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1781
+msgid ""
+"A URDF, a ``.world`` and an MJCF model are rendered as `Jinja2 "
+"<https://jinja.palletsprojects.com/>`_ templates before they are read, "
+"exactly as an ASSY file is, so one file can describe a family of robots or "
+"worlds. The parameters reach every one of them under the same names: "
+"``param_<name>`` for each parameter the object declares, and ``name`` for "
+"the object's own name."
+msgstr ""
+"URDF、``.world`` 和 MJCF 模型在被读取之前都会先作为 `Jinja2 "
+"<https://jinja.palletsprojects.com/>`_ 模板渲染，与 ASSY "
+"文件完全一样，所以一个文件可以描述一族机器人或一族世界。参数以同样的名称送达它们每一个：对象声明的每个参数对应 "
+"``param_<name>``，而对象自身的名称对应 ``name``。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1802
+msgid ""
+"The rendered file is written under PartCAD's own state directory, never "
+"beside the original, and the file is used as it is when rendering changes "
+"nothing. What it references keeps resolving against the directory the "
+"package declared it in, so a ``package://`` mesh, a ``model://`` include or "
+"an MJCF ``<asset>`` file works in a template as it does outside one."
+msgstr ""
+"渲染后的文件写在 PartCAD "
+"自己的状态目录下，而不是放在原文件旁边；当渲染没有改变任何内容时，文件会按原样使用。它所引用的内容仍然相对包声明它时所在的那个目录来解析，所以 "
+"``package://`` 网格、``model://`` 包含和 MJCF 的 ``<asset>`` 文件在模板中的表现与在模板之外完全一样。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1812
+msgid "Opening a scene in a simulator"
+msgstr "在仿真器中打开场景"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1819
+msgid ""
+"Both open a window on the machine the command was run on -- from an "
+"installation there, or with ``--use-docker`` from a container when there is "
+"none -- and never on the daemon's machine, which can be somebody else's. The"
+" ``gazebo`` and ``mujoco`` applications are declared by the engine plugins, "
+"so they are offered in a workspace that imports one. The editor extension's "
+"**Open in** menu runs the same command, and offers each engine for scenes in"
+" its own format only."
+msgstr ""
+"两者都在运行该命令的那台机器上打开窗口 -- 用那里的安装，或者在没有安装时用 ``--use-docker`` 从容器里打开 -- "
+"而绝不会在守护进程所在的机器上打开，因为那可能是别人的机器。``gazebo`` 和 ``mujoco`` "
+"应用程序由引擎插件声明，所以只有在导入了某个插件的工作区里才会提供它们。编辑器扩展的 **Open in** "
+"菜单运行的是同一条命令，并且只为各自格式的场景提供对应的引擎。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1826
+msgid ""
+"Each engine is handed a file that already is in its format. MuJoCo reads "
+"MJCF and nothing else, and ``pc ide open`` converts no scene into it: MJCF "
+"is written by the MuJoCo plugin's exporter, and a file handed to ``pc ide "
+"open`` has no package around it to reach that plugin through. A Gazebo "
+"world, or anything else that is not MJCF, is refused with the export that "
+"does work -- write the scene out first, and open what was written:"
+msgstr ""
+"每个引擎拿到的文件本来就已经是它的格式。MuJoCo 只读 MJCF，别的都不读，而 ``pc ide open`` 不会把任何场景转换成它：MJCF "
+"是由 MuJoCo 插件的导出器写出的，而交给 ``pc ide open`` 的文件周围没有包，无法通过包去找到那个插件。Gazebo "
+"世界，或者任何其他不是 MJCF 的东西，都会被拒绝，并告知确实可行的那个导出 -- 先把场景写出来，再打开写出的东西："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1838
+msgid ""
+"An ASSY scene is refused too, for a reason of its own: it is nothing but "
+"references to the parts of a package, and a file opened on its own has no "
+"package to resolve them against. See ``pc ide open`` in :doc:`/cli`."
+msgstr ""
+"ASSY 场景同样会被拒绝，理由是它自己的：它除了对某个包各零件的引用之外什么都没有，而单独打开的文件没有包可供解析这些引用。参见 "
+":doc:`/cli` 中的 ``pc ide open``。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1846
+msgid "Examples"
+msgstr "示例"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1848
+msgid ""
+"Three packages under `examples/ "
+"<https://github.com/partcad/partcad/tree/main/examples>`_ are the worked "
+"cases, in the order they are worth reading. Each is a package you can clone "
+"and run, and each is held to its answer by PartCAD's own CI."
+msgstr ""
+"`examples/ <https://github.com/partcad/partcad/tree/main/examples>`_ "
+"下有三个包是完整的实例，按值得阅读的顺序排列。每一个都是你可以克隆下来运行的包，而且每一个都由 PartCAD 自己的 CI 约束到它应有的答案。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1854
+msgid ""
+"`feature_simulate "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_simulate>`_"
+msgstr ""
+"`feature_simulate "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_simulate>`_"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1856
+msgid ""
+"The smallest claims that can be checked: two blocks, stacked. ``stable`` has"
+" the upper one squarely on the lower; ``unstable`` has it pushed 18 mm out "
+"of 20 off the edge, so its centre of mass is past the corner it rests on. "
+"Nothing static tells them apart -- both render, export and list the same way"
+" -- and what separates them is what happens when the world is switched on."
+msgstr ""
+"最小的可检查断言：两块方块，叠在一起。``stable`` 让上面那块端正地压在下面那块上；``unstable`` 把它推出边缘，20 mm 中有 "
+"18 mm 悬空，于是它的质心越过了它所搁着的那个角。任何静态手段都无法把它们区分开 -- 两者渲染、导出和列举出来都一样 -- "
+"真正把它们分开的，是世界被打开之后发生的事情。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1862
+msgid ""
+"``slippery`` is ``stable`` with one word changed: PTFE instead of aluminium."
+" Same geometry, same locations, same scene, same simulation, and the top "
+"block ends up on the floor -- in ``tilted``, a world whose gravity leans 15 "
+"degrees, because on a level floor nothing pulls a block sideways and "
+"friction is never asked anything. ``sink``, ``float`` and ``buoy`` are the "
+"same cube in water."
+msgstr ""
+"``slippery`` 就是改了一个词的 ``stable``：用 PTFE "
+"代替铝。几何形状相同、位置相同、场景相同、仿真相同，而上面那块方块最终落到了地面上 -- 这是在 ``tilted`` 里，一个重力倾斜 15 "
+"度的世界，因为在水平地面上没有任何力把方块往侧向拉，摩擦也就无从体现。``sink``、``float`` 和 ``buoy`` "
+"则是同一个立方体在水中。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1876
+msgid ""
+"feature_simulate's \"stable\" run on the Simulation tab: the stack before "
+"and after"
+msgstr "feature_simulate 的“stable”在 Simulation 标签页上的运行结果：这摞方块的前后对比"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1882
+msgid ""
+"`feature_simulate_joints "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_simulate_joints>`_"
+msgstr ""
+"`feature_simulate_joints "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_simulate_joints>`_"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1884
+msgid ""
+"A **mechanism** -- an assembly whose parts move against each other on their "
+"joints -- and one of every kind of joint PartCAD has, each held to what can "
+"be worked out on paper. ``pendulum`` is a 300 × 20 × 10 mm bar hung by one "
+"end from a frame, released level; its speed through the bottom, when it gets"
+" there and its small-angle period are all closed forms, and the validations "
+"write the formulas out. Then ``wound``, ``door``, ``incline``, ``collar``, "
+"``nut``, ``hooke``, ``spherical``, ``cone``, ``wall``, ``stage``, ``loose`` "
+"and ``locked`` -- revolute bounded and unbounded, prismatic, cylindrical, "
+"screw, universal, ball, planar, composite, floating and fixed."
+msgstr ""
+"一个 **机构** -- 也就是零件之间沿各自关节相对运动的装配体 -- 以及 PartCAD "
+"所有关节类型各一个，每一个都被约束到可以在纸上算出来的结果。``pendulum`` 是一根 300 × 20 × 10 mm "
+"的杆，一端挂在机架上，水平释放；它通过最低点时的速度、它到达那里的时刻以及它的小角度周期都有解析解，而各个校验条件把公式原样写了出来。接下来是 "
+"``wound``、``door``、``incline``、``collar``、``nut``、``hooke``、``spherical``、``cone``、``wall``、``stage``、``loose``"
+" 和 ``locked`` -- 有限位和无限位的转动、移动、圆柱、螺纹、万向、球、平面、复合、浮动和固定。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1894
+msgid ""
+"Every run is held to its formula in MuJoCo, and in Gazebo for every kind "
+"Gazebo builds; the four it refuses rather than invent a link nobody measured"
+" are named in the package's ``README.md``. Nothing here depends on the "
+"material: the mass cancels out of every answer."
+msgstr ""
+"每一次运行都在 MuJoCo 中被约束到它的公式，而对于 Gazebo 能构建的每一种关节，在 Gazebo "
+"中也是如此；它宁愿拒绝也不愿凭空编出一个没人测过的 link 的那四种，在该包的 ``README.md`` "
+"中有列出。这里没有任何东西取决于材料：每个答案里的质量都会约掉。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1907
+msgid ""
+"feature_simulate_joints' pendulum on the Simulation tab: released level on "
+"the left, and where it got to on the right"
+msgstr "feature_simulate_joints 的摆在 Simulation 标签页上：左边是水平释放的时刻，右边是它最后到达的位置"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1913
+msgid ""
+"`feature_simulate_fea "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_simulate_fea>`_"
+msgstr ""
+"`feature_simulate_fea "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_simulate_fea>`_"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1915
+msgid ""
+"The whole way from a simulation to a stress analysis, on a real mechanism: "
+"one arm of `OpenVMP <https://github.com/openvmp/openvmp-models>`_'s Don1 "
+"robot, and the worm gear in its knee. The simulation says what acts on every"
+" body at the end of the run; the ``/pc:sim-assembly-fea`` skill (see "
+":doc:`/digital_thread/lifecycle/analysis_fea`) works out which of those "
+"loads reach one part and where, and writes the part an ``fea:`` scenario "
+"that applies them."
+msgstr ""
+"从仿真一路走到应力分析的完整过程，在一个真实机构上：`OpenVMP <https://github.com/openvmp/openvmp-"
+"models>`_ 的 Don1 机器人的一条手臂，以及它膝关节里的蜗轮。仿真说明运行结束时作用在每个刚体上的东西；``/pc:sim-"
+"assembly-fea`` 技能（参见 :doc:`/digital_thread/lifecycle/analysis_fea` "
+"）算出其中哪些载荷传到了某一个零件上以及传到哪里，并给这个零件写出一个施加这些载荷的 ``fea:`` 场景。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1923
+msgid ""
+"A worm drive does not run backwards, so the knee stays where the motor left "
+"it and the gear's teeth are what hold it there. The assembly keeps that as "
+"the knee joint's spring; the scene bolts the lower arm to the world upside "
+"down with the upper arm level, and letting go drops the upper arm onto the "
+"worm's give."
+msgstr ""
+"蜗轮传动不会被反向驱动，所以膝关节会停在电机把它留下的位置，而齿轮的齿就是把它固定在那里的东西。装配体把这一点保存为膝关节的弹簧；场景把下臂倒过来用螺栓固定在世界上，上臂保持水平，一松手，上臂就落到蜗轮所给出的那一点让量上。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1935
+msgid ""
+"feature_simulate_fea's arm on the Simulation tab: let go level on the left, "
+"at rest where the worm holds it on the right"
+msgstr "feature_simulate_fea 的手臂在 Simulation 标签页上：左边是水平松手的时刻，右边是它静止在蜗轮把它托住的位置"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1942
+msgid "Agent skills"
+msgstr "智能体技能"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1944
+msgid "``/pc:sim-assembly-fea``"
+msgstr "``/pc:sim-assembly-fea``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1945
+msgid ""
+"Runs an assembly's simulation, reads what acts on the body a part is welded "
+"into at the end of it, and writes that part an ``fea:`` scenario applying "
+"those loads in its own frame. It is the bridge from \"what the world does to"
+" this mechanism\" to \"what this one part has to survive\"."
+msgstr ""
+"运行一个装配体的仿真，读取运行结束时作用在某个零件被焊接进去的那个刚体上的东西，并给该零件写出一个在它自己坐标系中施加这些载荷的 ``fea:`` "
+"场景。它是从“世界对这个机构做了什么”通往“这一个零件必须承受什么”的桥梁。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1950
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1951
+msgid ""
+"Runs every simulation as part of giving each requirement a verdict, and "
+"reports one that names a ``feature:`` as evidence for that feature. A "
+"simulation is the only kind of evidence that can settle a claim about "
+"behaviour."
+msgstr ""
+"在给每一项需求下结论的过程中运行每一个仿真，并把指名了某个 ``feature:`` "
+"的仿真作为该特性的证据来报告。仿真是唯一能够为一项关于行为的断言下定论的证据类型。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1956
+msgid ""
+"No skill writes a ``simulate:`` section from a description. What a thing is "
+"supposed to do, and the condition that decides whether it did, are claims "
+"somebody has to mean."
+msgstr ""
+"没有任何技能会根据一段描述写出 ``simulate:`` 小节。一样东西应该做什么，以及判定它是否做到的那个条件，都是必须有人真心确认的断言。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1964
+msgid "Limitations"
+msgstr "局限"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1966
+msgid ""
+"What a run does not model today, so that a claim is not written against it:"
+msgstr "下面是目前一次运行所不建模的内容，以免有人针对它写断言："
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1968
+msgid ""
+"**Mechanisms in MuJoCo only.** PartCAD decides what becomes a body (see "
+":ref:`sim-bodies`), and the MuJoCo plugin writes it -- the bodies, the welds"
+" and the joints. The Gazebo plugin does not yet: in a Gazebo run every part "
+"with geometry is still a free body of its own, so an assembly's parts come "
+"apart under gravity, its joints are not written and a ``fixed: true`` "
+"element is held by nothing but the floor under it. Writing them there is the"
+" next step for its exporter; see the `design record`_."
+msgstr ""
+"**机构只在 MuJoCo 中可用。** PartCAD 决定什么会成为刚体（参见 :ref:`sim-bodies` ），而 MuJoCo "
+"插件把它写出来 -- 刚体、焊接和关节。Gazebo 插件还做不到：在 Gazebo "
+"的运行中，每一个有几何形状的零件仍然各自是一个自由刚体，所以装配体的各零件会在重力下散开，它的关节不会被写出，而一个 ``fixed: true`` "
+"元素除了它下面的地面之外没有任何东西托住。把它们写进那里是它的导出器的下一步工作；参见 `design record`_ 。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1975
+msgid ""
+"**No closed loops.** A link is placed once, against a link already placed, "
+"so a four-bar linkage cannot be stated (see :ref:`assy-joints`)."
+msgstr ""
+"**没有闭环。** link 只被放置一次，相对于一个已经放置好的 link，所以无法表述四连杆机构（参见 :ref:`assy-joints` ）。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1977
+msgid ""
+"**Joints are what their interfaces say, and no more.** A joint's damping, "
+"friction and spring are written; its ``maxEffort`` and ``maxVelocity`` are "
+"not, because nothing drives a joint yet. A ball joint's limits, and a "
+"``mimic`` between joints of more than one freedom, are reported rather than "
+"written. A coupling -- a screw's thread, a ``mimic`` -- is held as MuJoCo "
+"holds every constraint: very nearly, and a little softly under load."
+msgstr ""
+"**关节就是它的接口所说的那样，不多也不少。** 关节的阻尼、摩擦和弹簧会被写出；它的 ``maxEffort`` 和 ``maxVelocity`` "
+"不会，因为目前还没有任何东西驱动关节。球关节的限位，以及自由度多于一个的关节之间的 ``mimic``，都只是被报告而不被写出。耦合 -- "
+"螺纹、``mimic`` -- 的保持程度就是 MuJoCo 保持任何约束的程度：非常接近，而在载荷下略微有些软。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1983
+msgid ""
+"**No inputs.** A run starts at rest, where the scene places everything, and "
+"nothing moves it but gravity, contact and the fluid: no initial velocity, no"
+" motor, no controller, no sensor."
+msgstr ""
+"**没有输入。** "
+"运行从静止开始，一切都在场景放置它们的位置，而除了重力、接触和流体之外没有任何东西推动它们：没有初速度、没有电机、没有控制器、没有传感器。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1986
+msgid ""
+"**Contact is against the part's own shape.** There is no separate, simpler "
+"collision shape. MuJoCo collides only convex shapes and takes the convex "
+"hull of anything else, so in MuJoCo a pocket, a slot or the gap between a "
+"gripper's fingers is filled in."
+msgstr ""
+"**接触是针对零件自身形状的。** 不存在另外一个更简单的碰撞形状。MuJoCo 只对凸形状做碰撞，对其他形状一律取凸包，所以在 MuJoCo "
+"中，一个凹坑、一道槽，或者夹爪两指之间的缝隙，都会被填实。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1990
+msgid ""
+"**One friction coefficient per body**, the sliding one, combined with the "
+"other body's by the engine's own rule (see `Friction and contact`_)."
+msgstr ""
+"**每个刚体只有一个摩擦系数**，即滑动摩擦系数，并按引擎自己的规则与另一个刚体的系数合成（参见 `Friction and contact`_ ）。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1992
+msgid ""
+"**No water surface.** A fluid fills the whole world: a body lighter than it "
+"rises for as long as the run lasts rather than coming to float at a "
+"waterline, and nothing is ever partly submerged."
+msgstr "**没有水面。** 流体注满整个世界：比它轻的刚体会在整个运行期间一直上升，而不会停下来漂浮在水线上，也没有任何东西会处于部分浸没的状态。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1995
+msgid ""
+"**Sealed cavities are flooded.** A body displaces its solid's volume, so a "
+"hollow part is buoyed as if it were open. Draw a float as the solid it "
+"displaces, and state its mass."
+msgstr ""
+"**密封腔体会被灌满。** 刚体排开的是它实体的体积，所以中空的零件得到的浮力就像它是开放的一样。把浮子画成它所排开的那个实体，并写明它的质量。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:1998
+msgid ""
+"**No added mass, lift or Magnus effect**, and drag is MuJoCo's simplest "
+"model of it."
+msgstr "**没有附加质量、升力或马格努斯效应**，而阻力用的是 MuJoCo 最简单的那个模型。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:2000
+msgid ""
+"**No fluid in Gazebo** at all: a Gazebo run of a scene filled with water is "
+"a run in a vacuum, and its export says so."
+msgstr "**Gazebo 中完全没有流体**：注满水的场景在 Gazebo 中的运行就是真空中的运行，它的导出也如实说明了这一点。"
+
+#: ../../source/digital_thread/lifecycle/simulation.rst:2002
+msgid ""
+"**No units inside values**: a gravity is ``[0, 0, -9.81]``, not ``\"9.81 "
+"m/s^2\"``."
+msgstr "**值里面不带单位**：重力是 ``[0, 0, -9.81]``，不是 ``\"9.81 m/s^2\"``。"

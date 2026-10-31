@@ -1,0 +1,168 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:5
+msgid "Heat Transfer"
+msgstr "传热"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:7
+msgid ""
+"**Heat Transfer** is the question how hot a part gets, heated and cooled as "
+"it is: a steady-state thermal analysis of the solid, reporting the "
+"temperature through it. It is what says whether a heatsink is big enough."
+msgstr ""
+"**Heat Transfer** "
+"问的是一个零件按它当前的加热和冷却方式会热到什么程度：对该实体做稳态热分析，并报告其中各处的温度。正是它说明一个散热器是否足够大。"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:11
+msgid ""
+"The question is asked by a ``thermal:`` section on the part, a map of named "
+"scenarios, and answered by a solver a package supplies. "
+":doc:`/digital_thread/lifecycle/analysis` explains what every analysis has "
+"in common."
+msgstr ""
+"这个问题由零件上的一个 ``thermal:`` "
+"小节提出，它是一个具名场景的映射，而由某个包所提供的求解器来回答。:doc:`/digital_thread/lifecycle/analysis` "
+"讲的是每一项分析的共同之处。"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:17
+msgid "What the scenario says"
+msgstr "场景说明什么"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:19
+msgid "Three conditions, each naming interfaces the part implements:"
+msgstr "三个条件，每一个都指名零件所实现的接口："
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:21
+msgid "``temperature:``"
+msgstr "``temperature:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:22
+msgid ""
+"a temperature per interface type or named instance, in Celsius (``40 C``) --"
+" the surface is held there."
+msgstr "按接口类型或具名实例给出的一个温度，单位为摄氏度（ ``40 C`` ）-- 该表面被维持在那个温度。"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:25
+msgid "``heat:``"
+msgstr "``heat:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:26
+msgid "a power put in through the port's surface, in watts (``2 W``)."
+msgstr "通过该端口表面输入的一个功率，单位为瓦（ ``2 W`` ）。"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:28
+msgid "``convection:``"
+msgstr "``convection:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:29
+msgid ""
+"a film coefficient in W/(m²·K) -- that surface is cooled against the "
+"ambient."
+msgstr "一个以 W/(m²·K) 为单位的表面换热系数 -- 该表面对环境散热。"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:31
+msgid ""
+"**Every other surface is insulated.** A part that states only where heat "
+"goes in is a part with nowhere for it to go, so each scenario has to say how"
+" it leaves: held at a temperature, or cooled by a film."
+msgstr ""
+"**其他所有表面都是绝热的。** "
+"一个只说明热量从哪里进来的零件，就是一个热量无处可去的零件，所以每个场景都必须说明它是怎么出去的：被维持在某个温度，或者通过表面换热被冷却。"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:52
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:54
+msgid ""
+"The scenarios are listed down the left with the first selected, each marked "
+"with how its last run went, and selecting one runs it. What is shown is the "
+"temperature field over the model the implementation produced, with the "
+"findings under it; **Analysed by** chooses the solver and **Analyse** runs "
+"it again."
+msgstr ""
+"各个场景列在左侧，默认选中第一个，每一个都带着它上一次运行结果的标记，而选中某一个就会运行它。显示出来的是实现方所产出模型上的温度场，各项发现列在它下面；**Analysed"
+" by** 用来选择求解器，而 **Analyse** 会再运行一次。"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:59
+msgid ""
+"The Analysis group's Heat Transfer tab: the scenario list and the "
+"temperature field"
+msgstr "Analysis 组的 Heat Transfer 标签页：场景列表和温度场"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:64
+msgid ""
+"The tab is enabled for a part that declares ``thermal:`` and disabled for "
+"everything else."
+msgstr "这个标签页对声明了 ``thermal:`` 的零件启用，而对其他一切都禁用。"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:68
+msgid "On the command line"
+msgstr "在命令行中"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:78
+msgid "Who runs it"
+msgstr "由谁来运行它"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:80
+msgid ""
+"The default is `partcad-cae-elmer <https://github.com/partcad/partcad-cae-"
+"elmer>`_, which runs `Elmer <https://www.elmerfem.org/>`_; "
+"``caeThermalImplementation`` names another. `Code_Aster <https://www.code-"
+"aster.org/>`_ and `MOOSE <https://mooseframework.inl.gov/>`_ do this "
+"analysis too."
+msgstr ""
+"默认是 `partcad-cae-elmer <https://github.com/partcad/partcad-cae-elmer>`_ ，它运行"
+" `Elmer <https://www.elmerfem.org/>`_ ；``caeThermalImplementation`` "
+"可以指名另一个。`Code_Aster <https://www.code-aster.org/>`_ 和 `MOOSE "
+"<https://mooseframework.inl.gov/>`_ 也能做这项分析。"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:87
+msgid "An example"
+msgstr "一个例子"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:89
+msgid ""
+"`examples/feature_cae "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cae>`_ "
+"declares ``cantilever``'s ``tip-heated`` scenario: the root held at 20 °C "
+"and 1 W put in at the tip. The temperature the tip reaches is ``P·L/(k·A)``,"
+" and the package's ``README.md`` prints what the solver measured beside it."
+msgstr ""
+"`examples/feature_cae "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cae>`_ 声明了 "
+"``cantilever`` 的 ``tip-heated`` 场景：根部被维持在 20 °C，而端部输入 1 W。端部所达到的温度为 "
+"``P·L/(k·A)`` ，而该包的 ``README.md`` 会把求解器所测得的结果与它并列打印出来。"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:95
+msgid "Agent skills"
+msgstr "智能体技能"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:97
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:98
+msgid ""
+"Runs every scenario as part of giving each requirement a verdict, and "
+"reports one that names a ``feature:`` as evidence for that feature."
+msgstr "在给每一项需求下结论的过程中运行每一个场景，并把指名了某个 ``feature:`` 的场景作为该特性的证据来报告。"

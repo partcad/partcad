@@ -1,0 +1,108 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:5
+msgid "Draft"
+msgstr "Draft"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:7
+msgid ""
+"**Draft** is a dimensioned technical drawing of a part or an assembly -- the"
+" drawing somebody is handed to make the thing, with its views laid out, its "
+"dimensions and its title block."
+msgstr ""
+"**Draft** -- это чертёж детали или сборки с размерами: тот чертёж, который "
+"передают человеку, чтобы он изготовил вещь, с разложенными видами, размерами"
+" и основной надписью."
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:11
+msgid ""
+"PartCAD does not draw it. A **drawing package** does, the way an export "
+"implementation writes a file (see :doc:`/plugins/output`), and the tab names"
+" the one it used."
+msgstr ""
+"PartCAD его не рисует. Его рисует **чертёжный пакет**, так же как реализация"
+" экспорта записывает файл (см. :doc:`/plugins/output`), и вкладка называет "
+"тот пакет, который она использовала."
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:16
+msgid "In the UI"
+msgstr "В интерфейсе"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:18
+msgid ""
+"**Drawn by** names the drawing package: ``//pub/feature/render/draftwright``"
+" unless you choose or type another, exactly as ``pc render -e`` names one. "
+"The formats offered are whatever that package declares -- PDF, SVG and DXF "
+"for draftwright -- and **Save…** writes the file."
+msgstr ""
+"**Drawn by** называет чертёжный пакет: ``//pub/feature/render/draftwright``,"
+" если вы не выберете или не наберёте другой, в точности как его называет "
+"``pc render -e``. Предлагаемые форматы -- те, которые объявляет этот пакет "
+"(PDF, SVG и DXF для draftwright), а **Save…** записывает файл."
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:23
+msgid ""
+"A picture is shown on the tab and can be zoomed, dragged and put back with a"
+" double-click. A PDF or a DXF cannot be drawn there; it is saved and opened "
+"in another program instead."
+msgstr ""
+"Картинка показывается на вкладке, её можно масштабировать, перетаскивать и "
+"возвращать на место двойным щелчком. PDF или DXF там нарисовать нельзя; "
+"вместо этого они сохраняются и открываются в другой программе."
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:27
+msgid ""
+"The Design group's Draft tab: a dimensioned drawing, with \"Drawn by\" above"
+" it"
+msgstr "Вкладка Draft группы Design: чертёж с размерами и \"Drawn by\" над ним"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:32
+msgid ""
+"The first drawing takes a few minutes, while PartCAD installs the drawing "
+"package into the sandbox it runs in; afterwards it is as quick as any other "
+"render, and cached under everything it depends on. A drawing package lays "
+"its views out itself, so the :ref:`view panel's <dt-design-3d>` axis buttons"
+" and viewpoint are disabled here and say why -- a section is not, and the "
+"drawing is made of the cut object."
+msgstr ""
+"Первый чертёж занимает несколько минут, пока PartCAD устанавливает чертёжный"
+" пакет в ту песочницу, в которой он работает; после этого он так же быстр, "
+"как любая другая отрисовка, и кэшируется по всему, от чего он зависит. "
+"Чертёжный пакет сам раскладывает свои виды, поэтому кнопки осей и точка "
+"зрения :ref:`панели вида <dt-design-3d>` здесь отключены и говорят почему, "
+"-- а сечение нет, и чертёж делается по разрезанному объекту."
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:40
+msgid "On the command line"
+msgstr "В командной строке"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:49
+msgid "Agent skills"
+msgstr "Навыки агентов"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:51
+msgid "``/pc:render``"
+msgstr "``/pc:render``"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:52
+msgid "Asks for a drawing like any other rendered file."
+msgstr "Запрашивает чертёж как любой другой отрисованный файл."

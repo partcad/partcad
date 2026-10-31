@@ -1,0 +1,231 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:5
+msgid "Buy"
+msgstr "Buy"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:7
+msgid ""
+"**Buy** is what is bought: where each line can be obtained, and a quote per "
+"supplier. It is the other half of :doc:`Build vs Buy "
+"</digital_thread/lifecycle/manufacturing_bvb>` -- every line whose switch "
+"says *buy* is asked about here."
+msgstr ""
+"**Buy** es lo que se compra: dónde se puede obtener cada línea, y un "
+"presupuesto por proveedor. Es la otra mitad de :doc:`Build vs Buy "
+"</digital_thread/lifecycle/manufacturing_bvb>` -- aquí se pregunta por cada "
+"línea cuyo interruptor dice *buy*."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:13
+msgid "In the UI"
+msgstr "En la interfaz"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:15
+msgid ""
+"A line per thing bought, and under each the suppliers that carry it with "
+"what each one quoted. A line nobody carries says so, which is the same "
+"finding the ``manufacturability`` check reports from the command line."
+msgstr ""
+"Una línea por cada cosa que se compra, y bajo cada una los proveedores que "
+"la tienen con lo que presupuestó cada uno. Una línea que nadie tiene lo "
+"indica, que es el mismo hallazgo del que informa la comprobación "
+"``manufacturability`` desde la línea de comandos."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:19
+msgid ""
+"The Manufacturing group's Buy tab: what is bought, from whom, and for how "
+"much"
+msgstr ""
+"La pestaña Buy del grupo Manufacturing: qué se compra, a quién y por cuánto"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:25
+msgid "On the command line"
+msgstr "En la línea de comandos"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:35
+msgid ""
+"``find`` and ``quote`` take parts and assemblies alike. An assembly that is "
+"sold assembled is ordered as one item, and the walk down stops at every sub-"
+"assembly that is; ``-r`` walks all the way to the parts regardless."
+msgstr ""
+"``find`` y ``quote`` aceptan tanto piezas como ensamblajes. Un ensamblaje "
+"que se vende montado se pide como un solo artículo, y el recorrido hacia "
+"abajo se detiene en cada subensamblaje que lo sea; ``-r`` llega hasta las "
+"piezas de todos modos."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:42
+msgid "Providers and suppliers"
+msgstr "Proveedores y suministradores"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:44
+msgid ""
+"PartCAD currently supports two types of providers -- entities that can "
+"provide parts and assemblies -- ``store`` and ``manufacturer``. ``store`` "
+"quotes and orders parts from existing lists, by ``vendor`` and ``SKU``. "
+"``manufacturer`` quotes and orders parts from their 3D model, by making them"
+" -- 3D printing them, for instance."
+msgstr ""
+"PartCAD admite actualmente dos tipos de proveedores -- entidades que pueden "
+"proporcionar piezas y ensamblajes -- ``store`` y ``manufacturer``. ``store``"
+" presupuesta y pide piezas a partir de listas existentes, por ``vendor`` y "
+"``SKU``. ``manufacturer`` presupuesta y pide piezas a partir de su modelo "
+"3D, fabricándolas -- imprimiéndolas en 3D, por ejemplo."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:68
+msgid ""
+"Assemblies that are sold in an assembled state are declared the same way, "
+"using ``vendor`` and ``sku`` on the assembly itself."
+msgstr ""
+"Los ensamblajes que se venden ya ensamblados se declaran de la misma manera,"
+" usando ``vendor`` y ``sku`` en el propio ensamblaje."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:71
+msgid ""
+"See :ref:`procurement` for more information about declaring purchasable "
+"objects, and :ref:`providers` for more information about the providers and "
+"how PartCAD selects them."
+msgstr ""
+"Consulte :ref:`procurement` para obtener más información sobre cómo declarar"
+" objetos comprables, y :ref:`providers` para obtener más información sobre "
+"los proveedores y cómo los selecciona PartCAD."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:75
+msgid ""
+"In the future, PartCAD will support ``assembler``, which is supposed to "
+"produce an assembly given assembly instructions and using parts ordered from"
+" ``store``-s and ``manufacturer``-s."
+msgstr ""
+"En el futuro, PartCAD admitirá ``assembler``, que se supone que producirá un"
+" ensamblaje a partir de instrucciones de ensamblaje y usando piezas pedidas "
+"a ``store``-s y ``manufacturer``-s."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:79
+msgid ""
+"Currently, the provider has to be explicitly specified in the quote or order"
+" request, or explicitly specified as one of the suppliers in the package "
+"where the parts are declared, or in the package of the assembly they are "
+"procured for:"
+msgstr ""
+"Actualmente, el proveedor tiene que especificarse explícitamente en la "
+"solicitud de presupuesto o de pedido, o especificarse explícitamente como "
+"uno de los suministradores en el paquete donde se declaran las piezas, o en "
+"el paquete del ensamblaje para el que se abastecen:"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:90
+msgid ""
+"A supplier is written from the point of view of the package that lists it, "
+"and is resolved against that package the way every other reference it makes "
+"is: a bare name is one of its own providers, while a qualified one lets it "
+"buy from a provider defined elsewhere instead of declaring one of its own."
+msgstr ""
+"Un suministrador se escribe desde el punto de vista del paquete que lo "
+"enumera, y se resuelve contra ese paquete igual que cualquier otra "
+"referencia que haga: un nombre a secas es uno de sus propios proveedores, "
+"mientras que uno cualificado le permite comprar a un proveedor definido en "
+"otro sitio en lugar de declarar uno propio."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:95
+msgid ""
+"A package served by a repository plugin has no ``partcad.yaml`` to write "
+"this in, so its plugin states the same section in the package's ``meta``, "
+"and it is read the same way (see :ref:`repositories`):"
+msgstr ""
+"Un paquete servido por un plugin de repositorio no tiene ningún "
+"``partcad.yaml`` en el que escribir esto, así que su plugin indica la misma "
+"sección en el ``meta`` del paquete, y se lee de la misma manera (consulte "
+":ref:`repositories`):"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:103
+msgid ""
+"A package that builds assemblies out of somebody else's parts can say where "
+"to buy them, too. When ``pc supply`` breaks an assembly (or a scene) down "
+"into what it is procured from, every one of those parts is looked for first "
+"at the suppliers of the package the assembly is declared in, and then at the"
+" ones its own package names. So a package of models built from a parts "
+"library that knows nothing of a particular store can still be quoted at that"
+" store:"
+msgstr ""
+"Un paquete que construye ensamblajes con piezas de otra persona también "
+"puede decir dónde comprarlas. Cuando ``pc supply`` descompone un ensamblaje "
+"(o una escena) en aquello de lo que se abastece, cada una de esas piezas se "
+"busca primero en los proveedores del paquete en el que se declara el "
+"ensamblaje, y después en los que nombra su propio paquete. Así, un paquete "
+"de modelos construido a partir de una biblioteca de piezas que no sabe nada "
+"de una tienda concreta puede presupuestarse igualmente en esa tienda:"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:120
+msgid ""
+"A part asked for on its own, rather than as part of an assembly, is looked "
+"for at its own package's suppliers only, and so is every part ``pc test`` "
+"checks."
+msgstr ""
+"Una pieza que se pide por sí sola, en lugar de como parte de un ensamblaje, "
+"se busca solo en los proveedores de su propio paquete, y lo mismo ocurre con"
+" cada pieza que comprueba ``pc test``."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:123
+msgid ""
+"In the future PartCAD will be able to select providers based on the location"
+" and preferences of the requester, while leaving the possibility to enforce "
+"the use of a specific provider for corresponding parts (for example, for "
+"parts that are using a patented design)."
+msgstr ""
+"En el futuro, PartCAD podrá seleccionar proveedores según la ubicación y las"
+" preferencias del solicitante, dejando la posibilidad de forzar el uso de un"
+" proveedor específico para las piezas correspondientes (por ejemplo, para "
+"piezas que usan un diseño patentado)."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:129
+msgid "Examples"
+msgstr "Ejemplos"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:131
+msgid ""
+"`examples/provider_store "
+"<https://github.com/partcad/partcad/tree/main/examples/provider_store>`_ "
+"declares a ``store`` provider and parts bought from it; "
+"`examples/provider_manufacturer "
+"<https://github.com/partcad/partcad/tree/main/examples/provider_manufacturer>`_"
+" declares a ``manufacturer`` and parts it makes from their models."
+msgstr ""
+"`examples/provider_store "
+"<https://github.com/partcad/partcad/tree/main/examples/provider_store>`_ "
+"declara un proveedor ``store`` y piezas compradas en él; "
+"`examples/provider_manufacturer "
+"<https://github.com/partcad/partcad/tree/main/examples/provider_manufacturer>`_"
+" declara un ``manufacturer`` y piezas que fabrica a partir de sus modelos."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:137
+msgid "Agent skills"
+msgstr "Skills de agente"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:139
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_buy.rst:140
+msgid ""
+"Reads the bill of materials, which is what is procured, as part of giving a "
+"requirement its verdict."
+msgstr ""
+"Lee la lista de materiales, que es lo que se abastece, como parte de dar su "
+"veredicto a un requisito."

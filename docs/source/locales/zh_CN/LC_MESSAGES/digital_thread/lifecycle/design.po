@@ -1,0 +1,319 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/design.rst:2
+msgid "Design"
+msgstr "设计"
+
+#: ../../source/digital_thread/lifecycle/design.rst:13
+msgid ""
+"Design is what the object *is*: its geometry, the numbers it is built from, "
+"and how it connects to the objects around it. In PartCAD a design is not a "
+"drawing anybody makes by hand but a declaration a program builds -- so it "
+"can be rebuilt, varied, reviewed as a diff, and asked questions of by every "
+"other phase."
+msgstr ""
+"设计就是对象 *是* 什么：它的几何、构建它所依据的那些数字，以及它与周围各对象如何连接。在 PartCAD "
+"中，设计不是谁手工画出来的图，而是一份由程序构建出来的声明 -- 因此它可以被重新构建、被变化、作为 diff 被评审，并被其他每一个阶段提出问题。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:19
+msgid "What PartCAD captures"
+msgstr "PartCAD 记录了什么"
+
+#: ../../source/digital_thread/lifecycle/design.rst:22
+msgid "Objects"
+msgstr "对象"
+
+#: ../../source/digital_thread/lifecycle/design.rst:24
+msgid ":ref:`Sketches <sketches>`"
+msgstr ":ref:`草图 <sketches>`"
+
+#: ../../source/digital_thread/lifecycle/design.rst:25
+msgid ""
+"Two-dimensional shapes: basic outlines, DXF and SVG files, scripts. What a "
+"part is extruded or swept from, and what the boundary of a port is drawn "
+"with."
+msgstr "二维形状：基本轮廓、DXF 和 SVG 文件、脚本。它们是零件被拉伸或扫掠出来的依据，也是端口边界用来绘制的东西。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:28
+msgid ":ref:`Interfaces <interfaces>`"
+msgstr ":ref:`接口 <interfaces>`"
+
+#: ../../source/digital_thread/lifecycle/design.rst:29
+msgid ""
+"How objects connect: a named set of ports, implemented by parts and "
+"assemblies, inherited from more general interfaces, and mated with the "
+"interfaces they fit. An M3 through hole is an interface; so is a LEGO stud."
+msgstr ""
+"各对象如何连接：一组具名端口，由零件和装配体实现，从更一般的接口继承而来，并与它们所适配的接口形成配合。一个 M3 通孔就是一个接口；一个 LEGO "
+"凸点也是。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:33
+msgid ":ref:`Parts <parts>`"
+msgstr ":ref:`零件 <parts>`"
+
+#: ../../source/digital_thread/lifecycle/design.rst:34
+msgid ""
+"A solid, built by a script (CadQuery, build123d, OpenSCAD, ...) or read from"
+" a file (STEP, BREP, STL, ...), with :ref:`parameters <parameters>` that "
+"vary it and ports where other objects attach (see :ref:`part-types`)."
+msgstr ""
+"一个实体，由脚本构建（CadQuery、build123d、OpenSCAD……）或者从文件读入（STEP、BREP、STL……），带有可以让它变化的 "
+":ref:`参数 <parameters>` ，以及供其他对象附着的端口（参见 :ref:`part-types` ）。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:38
+msgid ":ref:`Assemblies <assemblies>`"
+msgstr ":ref:`装配体 <assemblies>`"
+
+#: ../../source/digital_thread/lifecycle/design.rst:39
+msgid ""
+"Parts and other assemblies put together: each link placed by connecting one "
+"of its ports to a port of something already placed rather than by "
+"coordinates where it can be, so that the assembly says what holds each item "
+"and moves when its parts change (see :doc:`/assy` and :ref:`joints`)."
+msgstr ""
+"把零件和其他装配体装到一起：每一条链接的放置方式是把它的某个端口连到某个已经放置好的东西的端口上，而不是用坐标放到它可以在的地方，这样装配体说的就是什么固定住每一个项目，并且在它的零件发生变化时随之变动（参见"
+" :doc:`/assy` 和 :ref:`joints` ）。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:44
+msgid ":ref:`Scenes <scenes>`"
+msgstr ":ref:`场景 <scenes>`"
+
+#: ../../source/digital_thread/lifecycle/design.rst:45
+msgid ""
+"Where assemblies are placed in a world -- the floor a robot stands on, the "
+"slope a simulation tilts it on. A scene is not something anybody makes."
+msgstr "各个装配体在一个世界中被摆放的位置 -- 机器人所站的地面、仿真把它倾斜放置的那个斜坡。场景不是谁去制造出来的东西。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:49
+msgid "Properties"
+msgstr "属性"
+
+#: ../../source/digital_thread/lifecycle/design.rst:51
+msgid ""
+"What an object is made of (:ref:`materials`), what it is called by whoever "
+"sells it, its colour, and any other :ref:`properties <properties>` -- read "
+"by the phases after this one rather than by the geometry."
+msgstr ""
+"一个对象由什么做成（ :ref:`materials` ）、卖它的人把它叫做什么、它的颜色，以及任何其他 :ref:`属性 <properties>` "
+"-- 这些是由本阶段之后的各个阶段读取的，而不是由几何读取的。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:56
+msgid "Reuse"
+msgstr "复用"
+
+#: ../../source/digital_thread/lifecycle/design.rst:58
+msgid ""
+"An object is used by name, from its own package or from any package "
+"imported: ``//pub/std/metric/m3:m3-thru`` is the same interface wherever it "
+"is used. A file fetched from elsewhere is pinned with its hash, so that the "
+"design says exactly which bytes it was built from (see "
+":ref:`reproducibility`)."
+msgstr ""
+"对象是按名称使用的，可以来自它自己的包，也可以来自任何被导入的包：``//pub/std/metric/m3:m3-thru`` "
+"不管在哪里被使用都是同一个接口。从别处抓取来的文件会连同它的哈希一起被固定住，这样设计说明的就是它究竟是由哪些字节构建出来的（参见 "
+":ref:`reproducibility` ）。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:64
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/lifecycle/design.rst:66
+msgid ""
+"**Design** is what the Digital Thread opens on, and it is three tabs over "
+"one object -- the same geometry asked for three different ways. Each has a "
+"chapter of its own:"
+msgstr ""
+"**Design** 是 Digital Thread 打开时所处的那一组，它是覆盖在同一个对象之上的三个标签页 -- "
+"用三种不同的方式去问同一份几何。每一个都有自己的一章："
+
+#: ../../source/digital_thread/lifecycle/design.rst:70
+msgid ":doc:`3D </digital_thread/lifecycle/design_3d>`"
+msgstr ":doc:`3D </digital_thread/lifecycle/design_3d>`"
+
+#: ../../source/digital_thread/lifecycle/design.rst:71
+msgid ""
+"The shape to turn, with a tree of what it is made of -- its links, its ports"
+" and its interfaces -- to switch on and off. The tree is the assembly's "
+"structure, so this is where a link placed by the wrong port shows itself. It"
+" is the only tab always there, and the only one an object outside any "
+"package has."
+msgstr ""
+"可以转动的那个形状，旁边还有一棵说明它由什么构成的树 -- 它的各条链接、它的各个端口和它的各个接口 -- "
+"可以逐项打开和关闭。这棵树就是装配体的结构，所以一条放在错误端口上的链接正是在这里显露出来的。它是唯一一个始终存在的标签页，也是位于任何包之外的对象唯一拥有的那一个。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:77
+msgid ":doc:`2D </digital_thread/lifecycle/design_2d>`"
+msgstr ":doc:`2D </digital_thread/lifecycle/design_2d>`"
+
+#: ../../source/digital_thread/lifecycle/design.rst:78
+msgid ""
+"The object rendered to a picture by PartCAD, as ``pc render`` renders it, "
+"and saved from the tab. The same boxes decide what is drawn and which ports "
+"are drawn on it."
+msgstr ""
+"由 PartCAD 渲染成图片的那个对象，渲染方式与 ``pc render`` "
+"相同，并可以从这个标签页保存下来。决定画出什么、以及在它上面画出哪些端口的，是同样那些复选框。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:82
+msgid ":doc:`Draft </digital_thread/lifecycle/design_draft>`"
+msgstr ":doc:`Draft </digital_thread/lifecycle/design_draft>`"
+
+#: ../../source/digital_thread/lifecycle/design.rst:83
+msgid ""
+"A dimensioned drawing of a part or an assembly, laid out by a drawing "
+"package rather than by PartCAD, which the tab names."
+msgstr "零件或装配体的带尺寸图纸，其版面由某个制图包而不是由 PartCAD 安排，而该标签页会指出那是哪一个包。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:86
+msgid ""
+"The Digital Thread's Design group: its three tabs, the object tree and the "
+"3D view"
+msgstr "Digital Thread 的 Design 组：它的三个标签页、对象树和 3D 视图"
+
+#: ../../source/digital_thread/lifecycle/design.rst:91
+msgid ""
+"The panel is driven by whatever is selected in the PartCAD Explorer, and the"
+" :ref:`view panel <dt-design-3d>` down its right -- the orientation gizmo, "
+"the axis views, the sections and the viewpoint -- is shared by all three: a "
+"section set on the 3D tab is the section the 2D and Draft tabs draw."
+msgstr ""
+"这个面板由 PartCAD Explorer 中所选中的东西驱动，而它右侧的 :ref:`视图面板 <dt-design-3d>` -- "
+"方位小控件、各轴视图、各个剖切和视角 -- 是三者共用的：在 3D 标签页上设定的剖切，就是 2D 和 Draft 标签页所画的那个剖切。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:96
+msgid ""
+"The editing loop runs through this group. **Edit** in the Explorer opens the"
+" file an object *is* -- the script a part is written in, an ASSY file, a "
+"package's ``partcad.yaml`` -- in an editor beside the panel, and **Display**"
+" puts the result back on screen; what a save costs is only what changed, "
+"since every answer is keyed on the files it was built from. See :ref:`Edit "
+"<vscode-edit>` in :doc:`/tools_vscode`."
+msgstr ""
+"编辑的循环就在这一组里进行。Explorer 中的 **Edit** 会在面板旁边的编辑器里打开某个对象所 *就是* 的那个文件 -- "
+"零件所用的那个脚本、一个 ASSY 文件、某个包的 ``partcad.yaml`` -- 而 **Display** "
+"把结果重新放回屏幕上；一次保存的代价只是真正变动的那部分，因为每一个答案都是按它所由之构建的那些文件来做键的。参见 "
+":doc:`/tools_vscode` 中的 :ref:`Edit <vscode-edit>` 。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:105
+msgid "On the command line"
+msgstr "在命令行中"
+
+#: ../../source/digital_thread/lifecycle/design.rst:107
+msgid ""
+"``pc info`` says what an object is and what it measures: its bounding box, "
+"volume, ports and interfaces, parameters and physical properties."
+msgstr "``pc info`` 说明一个对象是什么以及它的各项测量值：它的包围盒、体积、端口和接口、参数以及物理属性。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:109
+msgid ""
+"``pc render`` draws it -- a picture from any view, with its ports and "
+"interfaces drawn on, or a dimensioned drawing -- and ``pc export`` writes it"
+" in another format (see :ref:`output-files`). ``pc convert`` changes what "
+"the object *is*, by rewriting its declaration to point at the new file."
+msgstr ""
+"``pc render`` 把它画出来 -- 从任意视图画一张图片、在上面画出它的端口和接口，或者画一张带尺寸的图纸 -- 而 ``pc "
+"export`` 把它写成另一种格式（参见 :ref:`output-files` ）。``pc convert`` 则改变该对象 *是* "
+"什么，办法是改写它的声明让它指向新的文件。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:113
+msgid ""
+"``pc list`` and ``pc search`` find what already exists, here or in :doc:`the"
+" public repository </public_repository>`, so that a part is reused rather "
+"than drawn again."
+msgstr ""
+"``pc list`` 和 ``pc search`` 用来找出已经存在的东西，可以是本地的，也可以是 :doc:`公共仓库 "
+"</public_repository>` 里的，这样零件就能被复用，而不必重新画一遍。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:116
+msgid ""
+"``pc ide view`` shows an object in the Digital Thread from a terminal, and "
+"``pc ide open`` opens it in a CAD application on this machine."
+msgstr ""
+"``pc ide view`` 从终端把一个对象显示到 Digital Thread 中，而 ``pc ide open`` 则在本机的某个 CAD "
+"应用程序中打开它。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:118
+msgid ""
+"``pc lint`` reads a ``partcad.yaml`` or an ASSY file as it renders and "
+"reports what is wrong with it before anything is built."
+msgstr ""
+"``pc lint`` 按 ``partcad.yaml`` 或 ASSY 文件渲染出来的样子读取它，并在任何东西被构建之前报告它有什么问题。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:122
+msgid "Agent skills"
+msgstr "智能体技能"
+
+#: ../../source/digital_thread/lifecycle/design.rst:124
+msgid "``/pc:gen``"
+msgstr "``/pc:gen``"
+
+#: ../../source/digital_thread/lifecycle/design.rst:125
+msgid ""
+"Decides whether the request is a part, an assembly or a sketch and follows "
+"the matching skill below. The one to use when it does not matter which it "
+"is."
+msgstr "判断请求是零件、装配体还是草图，并遵循下面相应的那项技能。在到底是哪一类并不要紧时，就用这一个。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:128
+msgid "``/pc:gen-part``, ``/pc:gen-assembly``, ``/pc:gen-sketch``"
+msgstr "``/pc:gen-part``、``/pc:gen-assembly``、``/pc:gen-sketch``"
+
+#: ../../source/digital_thread/lifecycle/design.rst:129
+msgid ""
+"Model from a description. Each validates what it wrote by rendering it -- "
+"from several angles, because a single projection hides whatever is behind it"
+" -- and comparing each view against the description it started from."
+msgstr ""
+"根据一段描述建模。每一项都会通过渲染来校验它所写出的东西 -- 从多个角度渲染，因为单独一张投影会把它背后的东西全都藏起来 -- "
+"并把每一个视图与它当初所依据的那段描述作对比。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:133
+msgid "``/pc:add-interfaces``"
+msgstr "``/pc:add-interfaces``"
+
+#: ../../source/digital_thread/lifecycle/design.rst:134
+msgid ""
+"Adds ``interfaces``, ports and ``implements:`` to a part that has none, so "
+"it can be mated by connection instead of by hand-written coordinates. It "
+"works the positions out of the geometry and proves them twice: by drawing "
+"them on the part, and by mating two instances in a throwaway assembly."
+msgstr ""
+"给一个还没有接口的零件添加 ``interfaces`` 、端口和 ``implements:`` "
+"，这样它就能用连接而不是手写坐标来配合。它从几何中算出那些位置，并两次验证它们：一次是把它们画在零件上，另一次是在一个用完即弃的装配体里把两个实例配合起来。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:139
+msgid "``/pc:search``, ``/pc:describe``"
+msgstr "``/pc:search``、``/pc:describe``"
+
+#: ../../source/digital_thread/lifecycle/design.rst:140
+msgid ""
+"Find an existing object, and write a description of one from its measured "
+"size and its renders into the object's ``summary:``."
+msgstr "找出一个已有对象，并根据它的实测尺寸和渲染图为它写出一段描述，写进该对象的 ``summary:`` 中。"
+
+#: ../../source/digital_thread/lifecycle/design.rst:143
+msgid "``/pc:render``, ``/pc:export``, ``/pc:convert``"
+msgstr "``/pc:render``、``/pc:export``、``/pc:convert``"
+
+#: ../../source/digital_thread/lifecycle/design.rst:144
+msgid "Produce pictures and files from what is declared."
+msgstr "从已声明的内容产出图片和文件。"

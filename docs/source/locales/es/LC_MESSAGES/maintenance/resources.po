@@ -1,0 +1,145 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/maintenance/resources.rst:5
+msgid "Machine Resources"
+msgstr "Recursos de la máquina"
+
+#: ../../source/maintenance/resources.rst:8
+msgid "``threadsMax`` says how much of the machine PartCAD may use:"
+msgstr "``threadsMax`` dice cuánto de la máquina puede usar PartCAD:"
+
+#: ../../source/maintenance/resources.rst:15
+msgid ""
+"The equivalents everywhere else are ``PC_THREADS_MAX`` in the environment "
+"and ``--threads-max`` on the command line, in the usual order of precedence."
+" It sizes two things:"
+msgstr ""
+"Los equivalentes en los demás sitios son ``PC_THREADS_MAX`` en el entorno y "
+"``--threads-max`` en la línea de comandos, en el orden de precedencia "
+"habitual. Dimensiona dos cosas:"
+
+#: ../../source/maintenance/resources.rst:19
+msgid ""
+"**How many sandbox processes run at once.** This is the limit that is "
+"strict, and the one that matters: every script PartCAD runs is a whole CAD "
+"interpreter, several hundred megabytes of it, so it is the number of these "
+"and not the number of threads that decides whether a recursive render keeps "
+"the machine busy or runs it out of memory."
+msgstr ""
+"**Cuántos procesos de sandbox se ejecutan a la vez.** Este es el límite "
+"estricto, y el que importa: cada script que ejecuta PartCAD es un intérprete"
+" CAD completo, de varios cientos de megabytes, así que es el número de estos"
+" y no el número de hilos lo que decide si un renderizado recursivo mantiene "
+"la máquina ocupada o la deja sin memoria."
+
+#: ../../source/maintenance/resources.rst:24
+msgid "**The thread pools** PartCAD's own work runs on. Not a strict limit."
+msgstr ""
+"**Los pools de hilos** en los que se ejecuta el trabajo propio de PartCAD. "
+"No es un límite estricto."
+
+#: ../../source/maintenance/resources.rst:26
+msgid ""
+"**It is never lower than 4.** A lower value, from any of those places, is "
+"raised to 4, and PartCAD says so::"
+msgstr ""
+"**Nunca es menor que 4.** Un valor más bajo, venga de cualquiera de esos "
+"sitios, se eleva a 4, y PartCAD lo indica::"
+
+#: ../../source/maintenance/resources.rst:31
+msgid ""
+"Four is the least PartCAD runs with, for performance: a recursive render "
+"starts every object of a package at once and spends most of its time waiting"
+" for sandbox processes, so it is how many of those run side by side that "
+"decides how long it takes."
+msgstr ""
+"Cuatro es el mínimo con el que se ejecuta PartCAD, por rendimiento: un "
+"renderizado recursivo arranca todos los objetos de un paquete a la vez y "
+"pasa la mayor parte del tiempo esperando procesos de sandbox, así que es "
+"cuántos de esos se ejecutan en paralelo lo que decide cuánto tarda."
+
+#: ../../source/maintenance/resources.rst:36
+msgid ""
+"It used to be the least PartCAD *could* run with. ``pc render -r`` once "
+"stopped making progress altogether with ``threadsMax: 2``: an object built "
+"from another one -- an alias, an enrich, an extrusion of a sketch -- held a "
+"thread of the pool while it waited for a second one to build the other "
+"object on, and a recursive render started enough of them at once for every "
+"thread to end up waiting. Nothing waits like that any more: an object built "
+"from another one builds it on the thread it already has, on a pool of any "
+"size. A lower value would no longer stop anything; it is raised to four all "
+"the same."
+msgstr ""
+"Antes era el mínimo con el que PartCAD *podía* ejecutarse. ``pc render -r`` "
+"llegó a dejar de avanzar por completo con ``threadsMax: 2``: un objeto "
+"construido a partir de otro -- un alias, un enrich, una extrusión de un "
+"boceto -- retenía un hilo del pool mientras esperaba un segundo hilo en el "
+"que construir el otro objeto, y un renderizado recursivo arrancaba "
+"suficientes de ellos a la vez para que todos los hilos acabaran esperando. "
+"Ya nada espera así: un objeto construido a partir de otro lo construye en el"
+" hilo que ya tiene, en un pool de cualquier tamaño. Un valor más bajo ya no "
+"detendría nada; se eleva a cuatro de todos modos."
+
+#: ../../source/maintenance/resources.rst:45
+msgid ""
+"When nothing sets it, PartCAD runs one sandbox process per CPU core -- and "
+"still never fewer than four, so on a machine with fewer cores than that it "
+"notes, once::"
+msgstr ""
+"Cuando nada lo establece, PartCAD ejecuta un proceso de sandbox por núcleo "
+"de CPU -- y aun así nunca menos de cuatro, así que en una máquina con menos "
+"núcleos que eso lo anota, una vez::"
+
+#: ../../source/maintenance/resources.rst:50
+msgid ""
+"Everything still works on such a machine, more slowly. The note is "
+"information rather than a warning, since nothing about the command it comes "
+"with can change it; ``pc healthcheck`` reports the same thing as a warning, "
+"in its ``CpuCores`` check. The cores counted are the ones the machine has, "
+"not the ones a CPU affinity mask or a container's CPU quota leaves to "
+"PartCAD; set ``threadsMax`` where those are smaller."
+msgstr ""
+"Todo sigue funcionando en una máquina así, más despacio. La nota es "
+"información y no una advertencia, ya que nada del comando con el que viene "
+"puede cambiarla; ``pc healthcheck`` informa de lo mismo como advertencia, en"
+" su comprobación ``CpuCores``. Los núcleos que se cuentan son los que tiene "
+"la máquina, no los que una máscara de afinidad de CPU o la cuota de CPU de "
+"un contenedor dejan a PartCAD; establezca ``threadsMax`` cuando esos sean "
+"menores."
+
+#: ../../source/maintenance/resources.rst:57
+msgid ""
+"A command served by the daemon runs with **your** ``threadsMax``, not with "
+"the one the daemon was started with: it travels with the rest of your "
+"configuration on every request, and the daemon sizes its sandbox processes "
+"for each request it serves. So ``PC_THREADS_MAX=6 pc render -r`` runs six at"
+" a time even on a daemon that has been running since before the variable was"
+" set. The thread pools are the exception: they belong to the daemon's "
+"process, and keep the size it started with."
+msgstr ""
+"Un comando servido por el daemon se ejecuta con **su** ``threadsMax``, no "
+"con el que se arrancó el daemon: viaja con el resto de su configuración en "
+"cada petición, y el daemon dimensiona sus procesos de sandbox para cada "
+"petición que sirve. Así que ``PC_THREADS_MAX=6 pc render -r`` ejecuta seis a"
+" la vez incluso en un daemon que lleva en marcha desde antes de que se "
+"estableciera la variable. Los pools de hilos son la excepción: pertenecen al"
+" proceso del daemon, y conservan el tamaño con el que arrancó."

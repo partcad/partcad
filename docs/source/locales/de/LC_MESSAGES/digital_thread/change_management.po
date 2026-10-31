@@ -1,0 +1,545 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/change_management.rst:2
+msgid "Change Management"
+msgstr "Änderungsmanagement"
+
+#: ../../source/digital_thread/change_management.rst:4
+msgid ""
+"A product of any size soon depends on packages of its own: a library of the "
+"company's standard parts, the interfaces its products share, the assemblies "
+"one team builds and another uses. Those packages change, and a change to one"
+" is a change to everything built from it. This page is about making those "
+"changes on purpose."
+msgstr ""
+"Ein Produkt beliebiger Größe hängt schon bald von eigenen Paketen ab: einer "
+"Bibliothek der Standardteile des Unternehmens, den Interfaces, die seine "
+"Produkte teilen, den Baugruppen, die ein Team baut und ein anderes "
+"verwendet. Diese Pakete ändern sich, und eine Änderung an einem ist eine "
+"Änderung an allem, was daraus gebaut ist. Diese Seite handelt davon, diese "
+"Änderungen absichtlich vorzunehmen."
+
+#: ../../source/digital_thread/change_management.rst:8
+msgid ""
+"None of it is new. It is how the public index, `partcad-index "
+"<https://github.com/partcad/partcad-index>`_, is run -- a package of "
+"packages that every package ``pc init`` creates depends on -- and the rules "
+"that keep it working are the rules that keep a library of your own working. "
+"They are repeated here for that library, and the index's `CONTRIBUTING.md "
+"<https://github.com/partcad/partcad-index/blob/devel/CONTRIBUTING.md>`_ is "
+"the same advice as the public index applies it."
+msgstr ""
+"Nichts davon ist neu. So wird der öffentliche Index, `partcad-index "
+"<https://github.com/partcad/partcad-index>`_, betrieben -- ein Paket von "
+"Paketen, von dem jedes Paket abhängt, das ``pc init`` erzeugt --, und die "
+"Regeln, die ihn funktionsfähig halten, sind die Regeln, die eine eigene "
+"Bibliothek funktionsfähig halten. Sie werden hier für diese Bibliothek "
+"wiederholt, und die `CONTRIBUTING.md <https://github.com/partcad/partcad-"
+"index/blob/devel/CONTRIBUTING.md>`_ des Index ist derselbe Rat, wie der "
+"öffentliche Index ihn anwendet."
+
+#: ../../source/digital_thread/change_management.rst:18
+msgid "The rules"
+msgstr "Die Regeln"
+
+#: ../../source/digital_thread/change_management.rst:20
+msgid ""
+"**Pin every dependency to a particular revision**, with or without "
+"``track:``."
+msgstr ""
+"**Schreiben Sie jede Abhängigkeit auf eine bestimmte Revision fest**, mit "
+"oder ohne ``track:``."
+
+#: ../../source/digital_thread/change_management.rst:21
+msgid "**Say which PartCAD every package needs**, with ``partcad:``."
+msgstr ""
+"**Geben Sie an, welches PartCAD jedes Paket braucht**, mit ``partcad:``."
+
+#: ../../source/digital_thread/change_management.rst:22
+msgid "**Merge every change to** ``devel``. Nothing merges to ``main``."
+msgstr ""
+"**Führen Sie jede Änderung in** ``devel`` zusammen. Nichts wird in ``main`` "
+"zusammengeführt."
+
+#: ../../source/digital_thread/change_management.rst:23
+msgid ""
+"**Move** ``main`` **only by fast-forward from** ``devel``. That is the "
+"release."
+msgstr ""
+"**Bewegen Sie** ``main`` **nur durch Fast-Forward von** ``devel``. Das ist "
+"das Release."
+
+#: ../../source/digital_thread/change_management.rst:24
+msgid ""
+"**Treat a branch somebody tracks as a promise.** It keeps working for "
+"everybody it worked for when they started tracking it; a breaking change "
+"goes to a new branch."
+msgstr ""
+"**Behandeln Sie einen Branch, den jemand verfolgt, als Versprechen.** Er "
+"funktioniert weiterhin für jeden, für den er funktionierte, als er anfing, "
+"ihn zu verfolgen; eine brechende Änderung geht in einen neuen Branch."
+
+#: ../../source/digital_thread/change_management.rst:26
+msgid "**Have a library's index pin an exact commit of every package in it.**"
+msgstr ""
+"**Lassen Sie den Index einer Bibliothek einen exakten Commit jedes Pakets "
+"darin festschreiben.**"
+
+#: ../../source/digital_thread/change_management.rst:28
+msgid "The sections below say what each one is for."
+msgstr "Die Abschnitte unten sagen, wofür jede einzelne da ist."
+
+#: ../../source/digital_thread/change_management.rst:32
+msgid "Pin every dependency"
+msgstr "Jede Abhängigkeit festschreiben"
+
+#: ../../source/digital_thread/change_management.rst:34
+msgid ""
+"A ``git`` dependency says which branch it follows with ``track:`` and which "
+"commit of it the package is built against with ``revision:`` (see "
+":ref:`pinning-dependencies`):"
+msgstr ""
+"Eine ``git``-Abhängigkeit gibt mit ``track:`` an, welchem Branch sie folgt, "
+"und mit ``revision:``, gegen welchen Commit davon das Paket gebaut wird "
+"(siehe :ref:`pinning-dependencies`):"
+
+#: ../../source/digital_thread/change_management.rst:46
+msgid ""
+"``pc add dep`` and ``pc init`` write it that way, and loading a package "
+"never moves it. (``pc init`` pins only when it can ask the repository where "
+"the branch is: offline, or when the repository cannot be reached, it leaves "
+"``revision:`` out and warns, and ``pc update`` writes it later.) ``pc "
+"update`` moves it when you ask: it moves every ``revision:`` to the tip of "
+"its ``track:`` and leaves the change in ``partcad.yaml`` for you to review "
+"and commit. So:"
+msgstr ""
+"``pc add dep`` und ``pc init`` schreiben sie so, und das Laden eines Pakets "
+"bewegt sie nie. (``pc init`` schreibt nur dann fest, wenn es das Repository "
+"fragen kann, wo der Branch steht: offline, oder wenn das Repository nicht "
+"erreichbar ist, lässt es ``revision:`` weg und warnt, und ``pc update`` "
+"schreibt sie später.) ``pc update`` bewegt sie, wenn Sie es verlangen: es "
+"bewegt jede ``revision:`` auf die Spitze ihres ``track:`` und lässt die "
+"Änderung in ``partcad.yaml`` zurück, damit Sie sie prüfen und committen. "
+"Also:"
+
+#: ../../source/digital_thread/change_management.rst:52
+msgid ""
+"every checkout of a commit builds against the same commits of everything it "
+"depends on, today and in a year;"
+msgstr ""
+"jeder Checkout eines Commits baut gegen dieselben Commits von allem, wovon "
+"er abhängt, heute und in einem Jahr;"
+
+#: ../../source/digital_thread/change_management.rst:53
+msgid ""
+"what changed between two builds is in the history of your own repository, as"
+" a diff of ``revision:`` lines;"
+msgstr ""
+"was sich zwischen zwei Builds geändert hat, steht in der Historie Ihres "
+"eigenen Repositorys, als Diff von ``revision:``-Zeilen;"
+
+#: ../../source/digital_thread/change_management.rst:54
+msgid ""
+"taking a dependency's new commits is a change you make, in a commit of its "
+"own, and can revert."
+msgstr ""
+"die neuen Commits einer Abhängigkeit zu übernehmen ist eine Änderung, die "
+"Sie vornehmen, in einem eigenen Commit, und die Sie zurücknehmen können."
+
+#: ../../source/digital_thread/change_management.rst:56
+msgid ""
+"Run ``pc update`` as a change of its own and review what moved, the way a "
+"dependency bot's pull request is reviewed -- on a schedule, if you want one."
+" Do not use ``forceUpdate`` (``--force-update``) to keep up to date: it "
+"follows ``track:`` past the pin without writing anything down, which is "
+"right for trying out what a dependency is about to release and wrong for "
+"anything you will need to reproduce."
+msgstr ""
+"Führen Sie ``pc update`` als eigene Änderung aus und prüfen Sie, was sich "
+"bewegt hat, so wie der Pull Request eines Abhängigkeits-Bots geprüft wird --"
+" nach einem Zeitplan, wenn Sie einen wollen. Verwenden Sie nicht "
+"``forceUpdate`` (``--force-update``), um aktuell zu bleiben: es folgt "
+"``track:`` über den Pin hinaus, ohne etwas aufzuschreiben, was richtig ist, "
+"um auszuprobieren, was eine Abhängigkeit gerade veröffentlichen will, und "
+"falsch für alles, was Sie reproduzieren müssen."
+
+#: ../../source/digital_thread/change_management.rst:61
+msgid ""
+"A dependency of the ``local`` type, and every sub-directory of a package "
+"that holds a ``partcad.yaml``, needs no pin: it is in the same repository, "
+"so the commit you check out *is* its pin. Packages that always change "
+"together belong in one repository for that reason -- a change and every "
+"package it affects then land in one commit, and there is nothing to "
+"coordinate."
+msgstr ""
+"Eine Abhängigkeit des Typs ``local``, und jedes Unterverzeichnis eines "
+"Pakets, das eine ``partcad.yaml`` enthält, braucht keinen Pin: sie liegt im "
+"selben Repository, der Commit, den Sie auschecken, *ist* also ihr Pin. "
+"Pakete, die sich immer gemeinsam ändern, gehören aus diesem Grund in ein "
+"Repository -- eine Änderung und jedes Paket, das sie betrifft, landen dann "
+"in einem Commit, und es gibt nichts zu koordinieren."
+
+#: ../../source/digital_thread/change_management.rst:68
+msgid "Say which PartCAD a package needs"
+msgstr "Angeben, welches PartCAD ein Paket braucht"
+
+#: ../../source/digital_thread/change_management.rst:70
+msgid ""
+"``partcad:`` in a package's ``partcad.yaml`` is the oldest PartCAD it works "
+"with:"
+msgstr ""
+"``partcad:`` in der ``partcad.yaml`` eines Pakets ist das älteste PartCAD, "
+"mit dem es funktioniert:"
+
+#: ../../source/digital_thread/change_management.rst:76
+msgid ""
+"A PartCAD older than that refuses the package with ``Incompatible PartCAD "
+"version!`` rather than loading it and getting it wrong. That matters more "
+"than it sounds: PartCAD gives a field a new meaning from time to time, and "
+"an older PartCAD reading a package written for the newer meaning does not "
+"fail -- it computes something else. The public index's fluids are an "
+"example: their densities are in kg/m³, and the PartCAD before the one they "
+"require would have read the same numbers in g/mm³ and made water a million "
+"times too dense."
+msgstr ""
+"Ein PartCAD, das älter ist als das, weist das Paket mit ``Incompatible "
+"PartCAD version!`` zurück, anstatt es zu laden und falsch zu verstehen. Das "
+"ist wichtiger, als es klingt: PartCAD gibt einem Feld von Zeit zu Zeit eine "
+"neue Bedeutung, und ein älteres PartCAD, das ein für die neuere Bedeutung "
+"geschriebenes Paket liest, schlägt nicht fehl -- es berechnet etwas anderes."
+" Die Fluide des öffentlichen Index sind ein Beispiel: ihre Dichten sind in "
+"kg/m³, und das PartCAD vor dem, das sie verlangen, hätte dieselben Zahlen in"
+" g/mm³ gelesen und Wasser millionenfach zu dicht gemacht."
+
+#: ../../source/digital_thread/change_management.rst:82
+msgid ""
+"``pc init`` writes the version that ran it, which is correct and usually "
+"higher than it needs to be. Keep it as low as is true: every release you "
+"exclude is a user you make upgrade. Raise it when the package starts using "
+"something a newer PartCAD added -- or use the new form only where it is "
+"available, and keep the old one for the rest (see :ref:`serving-two-"
+"partcads`)."
+msgstr ""
+"``pc init`` schreibt die Version, die es ausgeführt hat, was korrekt und "
+"meist höher ist als nötig. Halten Sie sie so niedrig, wie es wahr ist: jedes"
+" Release, das Sie ausschließen, ist ein Nutzer, den Sie zum Aktualisieren "
+"zwingen. Erhöhen Sie sie, wenn das Paket etwas zu verwenden beginnt, das ein"
+" neueres PartCAD hinzugefügt hat -- oder verwenden Sie die neue Form nur "
+"dort, wo sie verfügbar ist, und behalten Sie die alte für den Rest (siehe "
+":ref:`serving-two-partcads`)."
+
+#: ../../source/digital_thread/change_management.rst:87
+msgid ""
+"Pin the PartCAD your CI runs as well, the way you pin anything else it "
+"installs, and upgrade it in a change of its own. Upgrade PartCAD first and "
+"raise ``partcad:`` after, never the other way round."
+msgstr ""
+"Schreiben Sie auch das PartCAD fest, das Ihre CI ausführt, so wie Sie alles "
+"andere festschreiben, was sie installiert, und aktualisieren Sie es in einer"
+" eigenen Änderung. Aktualisieren Sie PartCAD zuerst und erhöhen Sie "
+"``partcad:`` danach, nie umgekehrt."
+
+#: ../../source/digital_thread/change_management.rst:92
+msgid "Branches: devel and main"
+msgstr "Branches: devel und main"
+
+#: ../../source/digital_thread/change_management.rst:94
+msgid "Give every package repository two long-lived branches:"
+msgstr "Geben Sie jedem Paket-Repository zwei langlebige Branches:"
+
+#: ../../source/digital_thread/change_management.rst:96
+msgid "``devel``"
+msgstr "``devel``"
+
+#: ../../source/digital_thread/change_management.rst:97
+msgid ""
+"What every change is merged to, after review and CI. It is the newest state,"
+" and it may be ahead of what anybody depends on."
+msgstr ""
+"Das, in das jede Änderung nach Review und CI zusammengeführt wird. Es ist "
+"der neueste Zustand, und es kann vor dem liegen, wovon irgendjemand abhängt."
+
+#: ../../source/digital_thread/change_management.rst:100
+msgid "``main``"
+msgstr "``main``"
+
+#: ../../source/digital_thread/change_management.rst:101
+msgid ""
+"What other packages track. It moves only by fast-forward to a commit of "
+"``devel`` that has been tested -- never by a merge of its own, and never by "
+"a commit made on it:"
+msgstr ""
+"Das, was andere Pakete verfolgen. Es bewegt sich nur durch Fast-Forward auf "
+"einen Commit von ``devel``, der getestet wurde -- nie durch einen eigenen "
+"Merge und nie durch einen Commit, der darauf gemacht wird:"
+
+#: ../../source/digital_thread/change_management.rst:109
+msgid ""
+"So ``main`` is always a commit that ``devel`` has had, and a consumer's ``pc"
+" update`` takes a release, never work in progress. Make ``devel`` the "
+"default branch and protect ``main`` so that nothing merges to it."
+msgstr ""
+"``main`` ist also immer ein Commit, den ``devel`` schon hatte, und das ``pc "
+"update`` eines Konsumenten holt ein Release und niemals laufende Arbeit. "
+"Machen Sie ``devel`` zum Standard-Branch und schützen Sie ``main``, sodass "
+"nichts darin zusammengeführt wird."
+
+#: ../../source/digital_thread/change_management.rst:112
+msgid ""
+"PartCAD and the public index are both run this way. To try your packages "
+"against what the index is about to release, ``--devel-index`` "
+"(``PC_DEVEL_INDEX=true``) makes any command use the index's ``devel`` "
+"instead of its ``main``."
+msgstr ""
+"PartCAD und der öffentliche Index werden beide so betrieben. Um Ihre Pakete "
+"gegen das zu probieren, was der Index gerade veröffentlichen will, lässt "
+"``--devel-index`` (``PC_DEVEL_INDEX=true``) jeden Befehl das ``devel`` des "
+"Index statt seines ``main`` verwenden."
+
+#: ../../source/digital_thread/change_management.rst:118
+msgid "A tracked branch is a promise"
+msgstr "Ein verfolgter Branch ist ein Versprechen"
+
+#: ../../source/digital_thread/change_management.rst:120
+msgid ""
+"Once another package tracks a branch of yours, every commit you push to it "
+"reaches that package at its next ``pc update``. The branch therefore has to "
+"keep working for everybody it worked for when they started tracking it:"
+msgstr ""
+"Sobald ein anderes Paket einen Ihrer Branches verfolgt, erreicht jeder "
+"Commit, den Sie darauf pushen, dieses Paket bei seinem nächsten ``pc "
+"update``. Der Branch muss daher weiterhin für jeden funktionieren, für den "
+"er funktionierte, als er anfing, ihn zu verfolgen:"
+
+#: ../../source/digital_thread/change_management.rst:124
+msgid ""
+"with every PartCAD release it supported then -- a commit to it must not "
+"raise ``partcad:``;"
+msgstr ""
+"mit jedem PartCAD-Release, das er damals unterstützte -- ein Commit darauf "
+"darf ``partcad:`` nicht erhöhen;"
+
+#: ../../source/digital_thread/change_management.rst:125
+msgid ""
+"with every package that uses it: every part, assembly, sketch, interface, "
+"port, parameter and sub-package stays, under the same name, with the same "
+"units, defaults and placement."
+msgstr ""
+"mit jedem Paket, das ihn verwendet: jedes Teil, jede Baugruppe, jede Skizze,"
+" jedes Interface, jeder Port, jeder Parameter und jedes Unterpaket bleibt, "
+"unter demselben Namen, mit denselben Einheiten, Standardwerten und "
+"Platzierungen."
+
+#: ../../source/digital_thread/change_management.rst:128
+msgid ""
+"Anything new goes beside what is there. Mark what is being replaced as "
+"deprecated in its ``desc:``, and remove it on a new branch, later."
+msgstr ""
+"Alles Neue kommt neben das, was da ist. Markieren Sie, was ersetzt wird, in "
+"seinem ``desc:`` als veraltet, und entfernen Sie es später, auf einem neuen "
+"Branch."
+
+#: ../../source/digital_thread/change_management.rst:131
+msgid ""
+"The public index states this exactly: a branch it tracks keeps supporting "
+"every PartCAD release since the one the package's own ``partcad:`` required "
+"when the index started tracking that branch. Hold the packages of a library "
+"of your own to the same."
+msgstr ""
+"Der öffentliche Index gibt genau das an: ein Branch, den er verfolgt, "
+"unterstützt weiterhin jedes PartCAD-Release seit dem, das das eigene "
+"``partcad:`` des Pakets verlangte, als der Index anfing, diesen Branch zu "
+"verfolgen. Halten Sie die Pakete einer eigenen Bibliothek an dasselbe."
+
+#: ../../source/digital_thread/change_management.rst:137
+msgid "Making a breaking change"
+msgstr "Eine brechende Änderung vornehmen"
+
+#: ../../source/digital_thread/change_management.rst:139
+msgid ""
+"A breaking change is one after which something that used the package stops "
+"working or comes out different: removing or renaming an object, a port or a "
+"parameter; changing a parameter's meaning, units or default; moving a port, "
+"so that what is mated to it moves; requiring a newer PartCAD."
+msgstr ""
+"Eine brechende Änderung ist eine, nach der etwas, das das Paket verwendete, "
+"nicht mehr funktioniert oder anders herauskommt: ein Objekt, einen Port oder"
+" einen Parameter entfernen oder umbenennen; die Bedeutung, die Einheiten "
+"oder den Standardwert eines Parameters ändern; einen Port verschieben, "
+"sodass sich mitverschiebt, was daran gepaart ist; ein neueres PartCAD "
+"verlangen."
+
+#: ../../source/digital_thread/change_management.rst:143
+msgid ""
+"**Avoid it if you can.** Add the new beside the old, and nothing breaks."
+msgstr ""
+"**Vermeiden Sie sie, wenn Sie können.** Fügen Sie das Neue neben das Alte, "
+"und nichts bricht."
+
+#: ../../source/digital_thread/change_management.rst:144
+msgid ""
+"**Make it on a new branch** -- ``v2``, or ``partcad-0.8.210`` after the "
+"PartCAD it needs -- and declare that PartCAD in ``partcad:``."
+msgstr ""
+"**Nehmen Sie sie auf einem neuen Branch vor** -- ``v2``, oder "
+"``partcad-0.8.210`` nach dem PartCAD, das sie braucht -- und deklarieren Sie"
+" dieses PartCAD in ``partcad:``."
+
+#: ../../source/digital_thread/change_management.rst:146
+msgid ""
+"**Leave the old branch as it is.** Never force-push, rebase or delete a "
+"branch that is or was tracked: the commits other packages pinned have to "
+"stay fetchable, for as long as anyone may check out a commit that names "
+"them."
+msgstr ""
+"**Lassen Sie den alten Branch, wie er ist.** Machen Sie nie einen Force-"
+"Push, nie einen Rebase und löschen Sie nie einen Branch, der verfolgt wird "
+"oder wurde: die Commits, die andere Pakete festgeschrieben haben, müssen "
+"abrufbar bleiben, so lange, wie irgendjemand einen Commit auschecken könnte,"
+" der sie nennt."
+
+#: ../../source/digital_thread/change_management.rst:149
+msgid ""
+"**Move each consumer deliberately**, in a change of its own: switch its "
+"``track:`` to the new branch, run ``pc update``, and fix what the new branch"
+" broke, in the same commit."
+msgstr ""
+"**Bewegen Sie jeden Konsumenten absichtlich**, in einer eigenen Änderung: "
+"stellen Sie sein ``track:`` auf den neuen Branch um, führen Sie ``pc "
+"update`` aus und beheben Sie im selben Commit, was der neue Branch gebrochen"
+" hat."
+
+#: ../../source/digital_thread/change_management.rst:151
+msgid ""
+"**Release in order.** A package may require a PartCAD only once that PartCAD"
+" is released, and a consumer may move to a package only once the package's "
+"new branch is ready. When a change spans several of your packages, release "
+"the one depended on first, then the ones that depend on it."
+msgstr ""
+"**Veröffentlichen Sie in der richtigen Reihenfolge.** Ein Paket darf ein "
+"PartCAD erst dann verlangen, wenn dieses PartCAD veröffentlicht ist, und ein"
+" Konsument darf erst dann auf ein Paket wechseln, wenn der neue Branch des "
+"Pakets bereit ist. Wenn eine Änderung mehrere Ihrer Pakete umspannt, "
+"veröffentlichen Sie zuerst das, von dem abhängig ist, dann die, die davon "
+"abhängen."
+
+#: ../../source/digital_thread/change_management.rst:155
+msgid ""
+"When the same change has to reach many consumers, make it in three releases "
+"rather than one -- the way PartCAD changes what a package may say (see "
+":ref:`release-process`): first add the new form beside the old one and "
+"release that; then move every consumer to the new form, each at its own "
+"pace; then remove the old form, on a new branch, once nothing pinned uses "
+"it."
+msgstr ""
+"Wenn dieselbe Änderung viele Konsumenten erreichen muss, nehmen Sie sie in "
+"drei Releases statt in einem vor -- so, wie PartCAD ändert, was ein Paket "
+"sagen darf (siehe :ref:`release-process`): fügen Sie zuerst die neue Form "
+"neben die alte und veröffentlichen Sie das; bewegen Sie dann jeden "
+"Konsumenten auf die neue Form, jeden in seinem eigenen Tempo; entfernen Sie "
+"dann die alte Form, auf einem neuen Branch, sobald nichts Festgeschriebenes "
+"sie mehr verwendet."
+
+#: ../../source/digital_thread/change_management.rst:162
+msgid "An internal index for a package library"
+msgstr "Ein interner Index für eine Paketbibliothek"
+
+#: ../../source/digital_thread/change_management.rst:164
+msgid ""
+"A library of more than a few packages is easiest to consume the way the "
+"public index is consumed: one repository whose ``partcad.yaml`` files are a "
+"tree of dependencies on the library's packages, each one pinned. A product "
+"then depends on the library once:"
+msgstr ""
+"Eine Bibliothek mit mehr als ein paar Paketen lässt sich am leichtesten so "
+"konsumieren, wie der öffentliche Index konsumiert wird: ein Repository, "
+"dessen ``partcad.yaml``-Dateien ein Baum von Abhängigkeiten auf die Pakete "
+"der Bibliothek sind, jede einzelne festgeschrieben. Ein Produkt hängt dann "
+"einmal von der Bibliothek ab:"
+
+#: ../../source/digital_thread/change_management.rst:177
+msgid ""
+"and refers to everything in it by path, ``//lib/fasteners/m3:screw``, "
+"however the library's repositories are split up or moved."
+msgstr ""
+"und verweist über den Pfad auf alles darin, ``//lib/fasteners/m3:screw``, "
+"wie auch die Repositories der Bibliothek aufgeteilt oder verschoben werden."
+
+#: ../../source/digital_thread/change_management.rst:180
+msgid "Run that repository as the public index is run:"
+msgstr ""
+"Betreiben Sie dieses Repository so, wie der öffentliche Index betrieben "
+"wird:"
+
+#: ../../source/digital_thread/change_management.rst:182
+msgid ""
+"**Every** ``git`` **dependency in it pins an exact commit**, under the "
+"``track:`` of the branch it follows. What a product gets from the library "
+"changes only when a change to the index changes a ``revision:``."
+msgstr ""
+"**Jede** ``git``-**Abhängigkeit darin schreibt einen exakten Commit fest**, "
+"unter dem ``track:`` des Branches, dem sie folgt. Was ein Produkt aus der "
+"Bibliothek bekommt, ändert sich nur, wenn eine Änderung am Index eine "
+"``revision:`` ändert."
+
+#: ../../source/digital_thread/change_management.rst:184
+msgid "**Every package in it declares** ``partcad:``."
+msgstr "**Jedes Paket darin deklariert** ``partcad:``."
+
+#: ../../source/digital_thread/change_management.rst:185
+msgid ""
+"**Changes merge to its** ``devel``, **and its** ``main`` **moves only by "
+"fast-forward** from ``devel``, once ``devel`` has been tested with the "
+"products that use it."
+msgstr ""
+"**Änderungen werden in sein** ``devel`` **zusammengeführt, und sein** "
+"``main`` **bewegt sich nur durch Fast-Forward** von ``devel``, sobald "
+"``devel`` mit den Produkten getestet wurde, die es verwenden."
+
+#: ../../source/digital_thread/change_management.rst:187
+msgid ""
+"**Pins move in reviewed changes.** ``pc update`` in a checkout of the index "
+"moves every tracked dependency to the tip of its branch at once; the diff is"
+" the list of packages that changed, to review before it is merged."
+msgstr ""
+"**Pins bewegen sich in geprüften Änderungen.** ``pc update`` in einem "
+"Checkout des Index bewegt jede verfolgte Abhängigkeit auf einmal auf die "
+"Spitze ihres Branches; der Diff ist die Liste der Pakete, die sich geändert "
+"haben, zum Prüfen, bevor er zusammengeführt wird."
+
+#: ../../source/digital_thread/change_management.rst:189
+msgid ""
+"**A package's breaking change switches its** ``track:`` **to a new branch**,"
+" in a change to the index that also fixes every package of the library that "
+"used what broke."
+msgstr ""
+"**Die brechende Änderung eines Pakets stellt sein** ``track:`` **auf einen "
+"neuen Branch um**, in einer Änderung am Index, die auch jedes Paket der "
+"Bibliothek behebt, das das Gebrochene verwendete."
+
+#: ../../source/digital_thread/change_management.rst:192
+msgid ""
+"Products ``pc update`` to take a release of the library, and every product "
+"can be on a different one."
+msgstr ""
+"Produkte führen ``pc update`` aus, um ein Release der Bibliothek zu "
+"übernehmen, und jedes Produkt kann auf einem anderen sein."

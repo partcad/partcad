@@ -1,0 +1,99 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:5
+msgid "Draft"
+msgstr "Draft"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:7
+msgid ""
+"**Draft** is a dimensioned technical drawing of a part or an assembly -- the"
+" drawing somebody is handed to make the thing, with its views laid out, its "
+"dimensions and its title block."
+msgstr ""
+"**Draft** 是零件或装配体的一张带尺寸的技术图纸 -- 也就是交到某人手上去把东西做出来的那张图，上面安排好了各个视图、各项尺寸和标题栏。"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:11
+msgid ""
+"PartCAD does not draw it. A **drawing package** does, the way an export "
+"implementation writes a file (see :doc:`/plugins/output`), and the tab names"
+" the one it used."
+msgstr ""
+"PartCAD 不画它。画它的是一个 **制图包**，方式与导出实现写出一个文件相同（参见 :doc:`/plugins/output` "
+"），而该标签页会指出它用的是哪一个。"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:16
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:18
+msgid ""
+"**Drawn by** names the drawing package: ``//pub/feature/render/draftwright``"
+" unless you choose or type another, exactly as ``pc render -e`` names one. "
+"The formats offered are whatever that package declares -- PDF, SVG and DXF "
+"for draftwright -- and **Save…** writes the file."
+msgstr ""
+"**Drawn by** 指出所用的制图包：除非你另选或手工输入，否则就是 ``//pub/feature/render/draftwright`` "
+"，与 ``pc render -e`` 指名一个制图包的方式完全相同。所提供的格式就是那个包所声明的那些 -- 对 draftwright 而言是 "
+"PDF、SVG 和 DXF -- 而 **Save…** 会把文件写出来。"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:23
+msgid ""
+"A picture is shown on the tab and can be zoomed, dragged and put back with a"
+" double-click. A PDF or a DXF cannot be drawn there; it is saved and opened "
+"in another program instead."
+msgstr "标签页上会显示一张图片，可以缩放、拖动，并双击复位。PDF 或 DXF 无法在那里绘制；它们会被保存下来，再用别的程序打开。"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:27
+msgid ""
+"The Design group's Draft tab: a dimensioned drawing, with \"Drawn by\" above"
+" it"
+msgstr "Design 组的 Draft 标签页：一张带尺寸的图纸，上方是“Drawn by”"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:32
+msgid ""
+"The first drawing takes a few minutes, while PartCAD installs the drawing "
+"package into the sandbox it runs in; afterwards it is as quick as any other "
+"render, and cached under everything it depends on. A drawing package lays "
+"its views out itself, so the :ref:`view panel's <dt-design-3d>` axis buttons"
+" and viewpoint are disabled here and say why -- a section is not, and the "
+"drawing is made of the cut object."
+msgstr ""
+"第一张图会花几分钟，因为 PartCAD "
+"要先把那个制图包安装到它所运行的那个沙箱里；之后它就和其他任何渲染一样快，并且会按它所依赖的一切内容被缓存。制图包自己安排它的各个视图，所以 "
+":ref:`视图面板 <dt-design-3d>` 的那些轴按钮和视角在这里是禁用的，并会说明原因 -- "
+"而剖切不禁用，图纸就是用剖切之后的对象画出来的。"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:40
+msgid "On the command line"
+msgstr "在命令行中"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:49
+msgid "Agent skills"
+msgstr "智能体技能"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:51
+msgid "``/pc:render``"
+msgstr "``/pc:render``"
+
+#: ../../source/digital_thread/lifecycle/design_draft.rst:52
+msgid "Asks for a drawing like any other rendered file."
+msgstr "像索取其他任何渲染文件那样去索取一张图纸。"

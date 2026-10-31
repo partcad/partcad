@@ -1,0 +1,89 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/maintenance/git.rst:5
+msgid "Git Configuration"
+msgstr "Конфигурация Git"
+
+#: ../../source/maintenance/git.rst:8
+msgid ""
+"PartCAD imports packages from git repositories without the ``git`` command "
+"line tool: it speaks the git protocols itself, through the ``libgit2`` "
+"library that ships with its dependencies. Nothing has to be installed "
+"alongside it for imports to work."
+msgstr ""
+"PartCAD импортирует пакеты из git-репозиториев без инструмента командной "
+"строки ``git``: он сам работает по протоколам git через библиотеку "
+"``libgit2``, которая поставляется с его зависимостями. Для работы импорта "
+"ничего дополнительно устанавливать не нужно."
+
+#: ../../source/maintenance/git.rst:12
+msgid ""
+"By default, PartCAD uses the system's Git configuration when importing "
+"packages using git, which it reads from ``~/.gitconfig`` whether or not git "
+"itself is installed. If you want to override these configurations, you can "
+"add your overrides in ``~/.partcad/config.yaml`` as shown below:"
+msgstr ""
+"По умолчанию при импорте пакетов с помощью git PartCAD использует системную "
+"конфигурацию Git, которую он читает из ``~/.gitconfig`` независимо от того, "
+"установлен ли сам git. Если вы хотите переопределить эти настройки, вы "
+"можете добавить свои переопределения в ``~/.partcad/config.yaml``, как "
+"показано ниже:"
+
+#: ../../source/maintenance/git.rst:26
+msgid ""
+"Cloning over SSH is faster and more reliable because it uses an efficient "
+"protocol with lower overhead, supports compression, and maintains stable "
+"connections via key-based authentication. SSH avoids HTTPS rate limits, "
+"handles firewalls better, and eliminates credential prompts, making it ideal"
+" for large repositories or frequent interactions."
+msgstr ""
+"Клонирование по SSH быстрее и надёжнее, поскольку использует эффективный "
+"протокол с меньшими накладными расходами, поддерживает сжатие и поддерживает"
+" стабильные соединения за счёт аутентификации по ключам. SSH обходит "
+"ограничения частоты запросов HTTPS, лучше работает с межсетевыми экранами и "
+"устраняет запросы учётных данных, что делает его идеальным для больших "
+"репозиториев или частых взаимодействий."
+
+#: ../../source/maintenance/git.rst:32
+msgid ""
+"Repositories reached over SSH are authenticated with the keys held by the "
+"running SSH agent, and then with the default key files "
+"(``~/.ssh/id_ed25519``, ``~/.ssh/id_ecdsa``, ``~/.ssh/id_rsa``). A key "
+"protected by a passphrase only works through the agent, since PartCAD never "
+"asks for one: a repository it cannot authenticate to fails with an error "
+"rather than waiting for a prompt that nothing would answer."
+msgstr ""
+"Репозитории, доступные по SSH, аутентифицируются с помощью ключей, "
+"хранящихся в запущенном SSH-агенте, а затем с помощью файлов ключей по "
+"умолчанию (``~/.ssh/id_ed25519``, ``~/.ssh/id_ecdsa``, ``~/.ssh/id_rsa``). "
+"Ключ, защищённый парольной фразой, работает только через агент, поскольку "
+"PartCAD никогда её не запрашивает: репозиторий, к которому он не может "
+"аутентифицироваться, завершается ошибкой, а не ждёт запроса, на который "
+"никто не ответит."
+
+#: ../../source/maintenance/git.rst:38
+msgid ""
+"If you have SSH keys configured then you can add the following to the "
+"~/.partcad/config.yaml:"
+msgstr ""
+"Если у вас настроены SSH-ключи, то вы можете добавить следующее в "
+"~/.partcad/config.yaml:"

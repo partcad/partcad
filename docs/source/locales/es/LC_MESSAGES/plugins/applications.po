@@ -1,0 +1,347 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/plugins/applications.rst:5
+msgid "Applications"
+msgstr "Aplicaciones"
+
+#: ../../source/plugins/applications.rst:7
+msgid ""
+"An **application plugin** teaches PartCAD which third-party program opens a "
+"file, and how. ``pc ide open`` launches one on the object or file it is "
+"given, and which applications it knows is an ``open:`` section -- one entry "
+"per application, and **data all the way down**: where the application is on "
+"each operating system, what to run it as, which container to fall back to "
+"when it is not installed, and what it can read."
+msgstr ""
+"Un **plugin de aplicación** le enseña a PartCAD qué programa de terceros "
+"abre un archivo, y cómo. ``pc ide open`` lanza uno sobre el objeto o el "
+"archivo que se le indica, y las aplicaciones que conoce son una sección "
+"``open:`` -- una entrada por aplicación, y **datos de arriba abajo**: dónde "
+"está la aplicación en cada sistema operativo, con qué nombre ejecutarla, a "
+"qué contenedor recurrir cuando no está instalada, y qué puede leer."
+
+#: ../../source/plugins/applications.rst:14
+msgid ""
+"None of it is logic. Finding the binary, creating the container, forwarding "
+"the X display and converting a file the application cannot read is the same "
+"for every tool and happens once, in ``partcad_client.external``. That is why"
+" adding an application is a few lines of YAML rather than a code change."
+msgstr ""
+"Nada de ello es lógica. Encontrar el binario, crear el contenedor, reenviar "
+"el display de X y convertir un archivo que la aplicación no puede leer es lo"
+" mismo para cada herramienta y ocurre una sola vez, en "
+"``partcad_client.external``. Por eso añadir una aplicación son unas pocas "
+"líneas de YAML en lugar de un cambio de código."
+
+#: ../../source/plugins/applications.rst:20
+msgid "What an application entry is for"
+msgstr "Para qué sirve una entrada de aplicación"
+
+#: ../../source/plugins/applications.rst:22
+msgid ""
+"**Opening an object in the tool that suits it** -- a board in KiCad, a mesh "
+"in Blender, a solid in FreeCAD -- straight from the package, without "
+"exporting by hand first."
+msgstr ""
+"**Abrir un objeto en la herramienta que le conviene** -- una placa en KiCad,"
+" una malla en Blender, un sólido en FreeCAD -- directamente desde el "
+"paquete, sin exportar antes a mano."
+
+#: ../../source/plugins/applications.rst:25
+msgid ""
+"**Teaching PartCAD an in-house or a vendor tool**, so everybody opens it the"
+" same way and nobody keeps a path to it in their head."
+msgstr ""
+"**Enseñarle a PartCAD una herramienta interna o de un fabricante**, para que"
+" todo el mundo la abra igual y nadie tenga que recordar una ruta hasta ella."
+
+#: ../../source/plugins/applications.rst:27
+msgid ""
+"**Giving a machine with nothing installed a way in.** An entry naming a "
+"``container:`` runs the application in a container with the host's display "
+"forwarded into it."
+msgstr ""
+"**Dar una vía de entrada a una máquina que no tiene nada instalado.** Una "
+"entrada que nombra un ``container:`` ejecuta la aplicación en un contenedor "
+"con el display del host reenviado hacia dentro."
+
+#: ../../source/plugins/applications.rst:30
+msgid ""
+"**Letting a simulator's plugin own its own viewer.** The package that reads "
+"a format declares the application entry for it too, so importing that "
+"package is all it takes."
+msgstr ""
+"**Permitir que el plugin de un simulador sea dueño de su propio visor.** El "
+"paquete que lee un formato declara también la entrada de aplicación para él,"
+" así que basta con importar ese paquete."
+
+#: ../../source/plugins/applications.rst:35
+msgid "Using one"
+msgstr "Usar una"
+
+#: ../../source/plugins/applications.rst:43
+msgid ""
+"``pc ide open`` **blocks until the application closes**, and an edit to a "
+"converted copy is converted back over the object's source when that source "
+"is a file. The VS Code extension's per-part \"Open in...\" menu runs the "
+"same command."
+msgstr ""
+"``pc ide open`` **se bloquea hasta que la aplicación se cierra**, y una "
+"edición en una copia convertida se convierte de vuelta sobre el origen del "
+"objeto cuando ese origen es un archivo. El menú \"Open in...\" por pieza de "
+"la extensión de VS Code ejecuta el mismo comando."
+
+#: ../../source/plugins/applications.rst:48
+msgid "Writing one"
+msgstr "Escribir una"
+
+#: ../../source/plugins/applications.rst:63
+msgid ""
+"``formats:`` is the one that decides most: what the application opens, "
+"**best first** -- its own formats (``fcstd``, ``blend``, ``kicad_pcb``) and "
+"PartCAD's part types (``step``, ``stl``). An object in one of them is handed"
+" over as it is. Any other is converted to the first one on the list that "
+"PartCAD can write, and ``pc ide open`` then waits for the application to "
+"close: when the converted copy was changed, it is converted back into the "
+"object's own format and written over its source, where that source is a file"
+" (a STEP, an STL...) rather than a script."
+msgstr ""
+"``formats:`` es el que más decide: lo que abre la aplicación, **lo mejor "
+"primero** -- sus propios formatos (``fcstd``, ``blend``, ``kicad_pcb``) y "
+"los tipos de pieza de PartCAD (``step``, ``stl``). Un objeto en uno de ellos"
+" se entrega tal cual. Cualquier otro se convierte al primero de la lista que"
+" PartCAD puede escribir, y ``pc ide open`` espera entonces a que se cierre "
+"la aplicación: si la copia convertida cambió, se convierte de nuevo al "
+"formato propio del objeto y se escribe sobre su origen, cuando ese origen es"
+" un archivo (un STEP, un STL...) y no un script."
+
+#: ../../source/plugins/applications.rst:71
+msgid ""
+"Two more are about what an application is really handed. ``companions:`` "
+"names the extensions the application really opens, for a file that sits "
+"beside the one PartCAD was pointed at -- a ``kicad`` part *is* the STEP file"
+" KiCad's CLI writes, and the board is the project next to it. ``sceneType:``"
+" says which description language an application reads, for one that reads an"
+" arrangement rather than geometry, and ``sceneExtensions:`` the extensions a"
+" file in it is stored in: MuJoCo reads MJCF, kept in ``.xml``. A scene in "
+"that language -- by its declared type, or else by one of those extensions, "
+"since the file itself is not read -- is handed over as it is, and one in any"
+" other is refused rather than converted, with the export that writes it -- "
+"the language is the engine plugin's, and a file handed to ``pc ide open`` "
+"has no package around it to reach that plugin through."
+msgstr ""
+"Otras dos tratan de lo que realmente se entrega a una aplicación. "
+"``companions:`` nombra las extensiones que la aplicación abre realmente, "
+"para un archivo que está junto a aquel al que se apuntó a PartCAD -- una "
+"pieza ``kicad`` *es* el archivo STEP que escribe la CLI de KiCad, y la placa"
+" es el proyecto que está a su lado. ``sceneType:`` dice qué lenguaje de "
+"descripción lee una aplicación, para una que lee una disposición en lugar de"
+" geometría, y ``sceneExtensions:`` las extensiones en las que se guarda un "
+"archivo escrito en él: MuJoCo lee MJCF, guardado en ``.xml``. Una escena en "
+"ese lenguaje -- por su tipo declarado, o bien por una de esas extensiones, "
+"ya que el archivo mismo no se lee -- se entrega tal cual, y una en cualquier"
+" otro se rechaza en lugar de convertirse, nombrando la exportación que lo "
+"escribe -- el lenguaje es del plugin del motor, y un archivo entregado a "
+"``pc ide open`` no tiene un paquete a su alrededor por el que llegar a ese "
+"plugin."
+
+#: ../../source/plugins/applications.rst:84
+msgid ""
+"``container:`` has the shape a plugin's implementation gives it -- "
+"``image``, and ``python`` for an image whose ``python3`` is not on ``PATH`` "
+"-- and the container is started the way every other PartCAD container is "
+"(see :ref:`useDockerRemote <use-docker-remote>`), with the file mounted or, "
+"under ``useDockerRemote``, uploaded. ``image:``, ``ownFormats:``, "
+"``meshVia:`` and ``imports:`` are what an entry said before ``container:`` "
+"and ``formats:``; they are still read, into those, and ``pc ide open`` says "
+"once that they are deprecated."
+msgstr ""
+"``container:`` tiene la forma que le da la implementación de un plugin -- "
+"``image``, y ``python`` para una imagen cuyo ``python3`` no está en el "
+"``PATH`` --, y el contenedor se arranca como cualquier otro contenedor de "
+"PartCAD (véase :ref:`useDockerRemote <use-docker-remote>`), con el archivo "
+"montado o, con ``useDockerRemote``, subido. ``image:``, ``ownFormats:``, "
+"``meshVia:`` e ``imports:`` son lo que decía una entrada antes de "
+"``container:`` y ``formats:``; se siguen leyendo, convirtiéndose en estos, y"
+" ``pc ide open`` avisa una vez de que están obsoletos."
+
+#: ../../source/plugins/applications.rst:92
+msgid ""
+"A package's entry **replaces a built-in of the same name**, which is how the"
+" plugin for a simulation engine comes to own the application for it."
+msgstr ""
+"La entrada de un paquete **sustituye a una integrada del mismo nombre**, que"
+" es la forma en que el plugin de un motor de simulación llega a ser dueño de"
+" la aplicación para él."
+
+#: ../../source/plugins/applications.rst:96
+msgid "What it is, and is not"
+msgstr "Qué es, y qué no es"
+
+#: ../../source/plugins/applications.rst:98
+msgid ""
+"``pc ide open`` is otherwise a **client-side** command and stays one: it is "
+"handed a path, the file is already on disk, and the window belongs to "
+"whoever ran the command -- a daemon can be remote. So the built-in entries "
+"are read straight out of the wheel the client is running from, with no "
+"context and no daemon, and only the applications a *package* declares are "
+"asked of the daemon (``open.tools``). It answers which applications exist; "
+"it never opens one, and there is no method for opening a file."
+msgstr ""
+"Por lo demás, ``pc ide open`` es un comando **del lado del cliente** y lo "
+"seguirá siendo: se le entrega una ruta, el archivo ya está en disco, y la "
+"ventana pertenece a quien ejecutó el comando -- un daemon puede ser remoto. "
+"Así que las entradas integradas se leen directamente del wheel desde el que "
+"se ejecuta el cliente, sin contexto y sin daemon, y solo se le preguntan al "
+"daemon las aplicaciones que declara un *paquete* (``open.tools``). Él "
+"responde qué aplicaciones existen; nunca abre ninguna, y no hay ningún "
+"método para abrir un archivo."
+
+#: ../../source/plugins/applications.rst:107
+msgid "An example"
+msgstr "Un ejemplo"
+
+#: ../../source/plugins/applications.rst:109
+msgid ""
+"PartCAD ships three entries in ``//builtin/open`` -- FreeCAD, KiCad and "
+"Blender -- and they are the three to read before writing one, because "
+"between them they cover every interesting case:"
+msgstr ""
+"PartCAD trae tres entradas en ``//builtin/open`` -- FreeCAD, KiCad y Blender"
+" -- y son las tres que hay que leer antes de escribir una, porque entre "
+"ellas cubren todos los casos interesantes:"
+
+#: ../../source/plugins/applications.rst:113
+msgid "``freecad``"
+msgstr "``freecad``"
+
+#: ../../source/plugins/applications.rst:114
+msgid ""
+"The plain case. ``formats: [fcstd, step, brep, iges, stl, obj]`` -- its own "
+"project file first, then what a part already is when PartCAD reads it from a"
+" file, with **STEP leading the conversions** so that a script converted for "
+"FreeCAD arrives as the solid it is rather than as triangles. Its "
+"``container:`` image is ``:latest`` rather than pinned, because somebody "
+"asking for a container wants the current FreeCAD."
+msgstr ""
+"El caso simple. ``formats: [fcstd, step, brep, iges, stl, obj]`` -- primero "
+"su propio archivo de proyecto, después lo que ya es una pieza cuando PartCAD"
+" la lee de un archivo, con **STEP a la cabeza de las conversiones** para que"
+" un script convertido para FreeCAD llegue como el sólido que es y no como "
+"triángulos. Su imagen de ``container:`` es ``:latest`` en lugar de estar "
+"fijada, porque quien pide un contenedor quiere el FreeCAD actual."
+
+#: ../../source/plugins/applications.rst:121
+msgid "``kicad``"
+msgstr "``kicad``"
+
+#: ../../source/plugins/applications.rst:122
+msgid ""
+"The ``companions:`` case, and the one worth understanding before writing an "
+"entry. ``formats: [kicad_pro, kicad_pcb, kicad_sch]`` -- the project and the"
+" two files it is made of -- and ``companions: [.kicad_pro, .kicad_pcb, "
+".kicad_sch]``. A ``kicad`` part *is* the STEP file KiCad's CLI writes out of"
+" the board; the board is the project beside it, and that is what opening "
+"KiCad means. **Nothing PartCAD can write is a board**, so a file with no "
+"project beside it is refused rather than converted. Its image is the one "
+"PartCAD already builds for ``kicad`` parts, pinned to the running release, "
+"so there is one KiCad container in the product rather than two."
+msgstr ""
+"El caso de ``companions:``, y el que vale la pena entender antes de escribir"
+" una entrada. ``formats: [kicad_pro, kicad_pcb, kicad_sch]`` -- el proyecto "
+"y los dos archivos de los que está hecho -- y ``companions: [.kicad_pro, "
+".kicad_pcb, .kicad_sch]``. Una pieza ``kicad`` *es* el archivo STEP que la "
+"CLI de KiCad escribe a partir de la placa; la placa es el proyecto que está "
+"a su lado, y eso es lo que significa abrir KiCad. **Nada de lo que PartCAD "
+"puede escribir es una placa**, así que un archivo sin un proyecto al lado se"
+" rechaza en lugar de convertirse. Su imagen es la que PartCAD ya construye "
+"para las piezas ``kicad``, fijada al release en ejecución, así que hay un "
+"contenedor de KiCad en el producto en lugar de dos."
+
+#: ../../source/plugins/applications.rst:132
+msgid "``blender``"
+msgstr "``blender``"
+
+#: ../../source/plugins/applications.rst:133
+msgid ""
+"The mesh case. ``formats: [blend, stl, obj, ply, glb, fbx, x3d]`` -- its own"
+" ``.blend`` first, then the meshes it imports, with STL first among those "
+"because it is the first one PartCAD writes and **every part type converts to"
+" it**, which makes this one rule rather than a table of exceptions."
+msgstr ""
+"El caso de las mallas. ``formats: [blend, stl, obj, ply, glb, fbx, x3d]`` --"
+" primero su propio ``.blend``, después las mallas que importa, con STL a la "
+"cabeza de estas porque es la primera que PartCAD escribe y **todos los tipos"
+" de pieza se convierten a ella**, lo que hace de esto una regla en lugar de "
+"una tabla de excepciones."
+
+#: ../../source/plugins/applications.rst:138
+msgid "Both of the simulator packages declare an entry of their own:"
+msgstr "Los dos paquetes de simuladores declaran una entrada propia:"
+
+#: ../../source/plugins/applications.rst:143
+msgid "package"
+msgstr "paquete"
+
+#: ../../source/plugins/applications.rst:144
+msgid "application"
+msgstr "aplicación"
+
+#: ../../source/plugins/applications.rst:145
+msgid "what it opens"
+msgstr "qué abre"
+
+#: ../../source/plugins/applications.rst:146
+msgid "`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_"
+msgstr "`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_"
+
+#: ../../source/plugins/applications.rst:147
+msgid "Gazebo"
+msgstr "Gazebo"
+
+#: ../../source/plugins/applications.rst:148
+msgid "a scene already in SDFormat (``sceneType:``)"
+msgstr "una escena que ya está en SDFormat (``sceneType:``)"
+
+#: ../../source/plugins/applications.rst:149
+msgid "`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_"
+msgstr "`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_"
+
+#: ../../source/plugins/applications.rst:150
+msgid "MuJoCo"
+msgstr "MuJoCo"
+
+#: ../../source/plugins/applications.rst:151
+msgid "a scene already in MJCF, kept in ``.xml``"
+msgstr "una escena que ya está en MJCF, guardada en ``.xml``"
+
+#: ../../source/plugins/applications.rst:160
+msgid ""
+"A scene in a language the application does not read is **refused rather than"
+" converted**, naming the export that would write it: the language belongs to"
+" the engine's plugin, and a file handed to ``pc ide open`` has no package "
+"around it to reach that plugin through."
+msgstr ""
+"Una escena en un lenguaje que la aplicación no lee se **rechaza en lugar de "
+"convertirse**, nombrando la exportación que la escribiría: el lenguaje "
+"pertenece al plugin del motor, y un archivo entregado a ``pc ide open`` no "
+"tiene un paquete a su alrededor por el que llegar a ese plugin."

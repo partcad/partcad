@@ -1,0 +1,301 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/plugins/applications.rst:5
+msgid "Applications"
+msgstr "应用程序"
+
+#: ../../source/plugins/applications.rst:7
+msgid ""
+"An **application plugin** teaches PartCAD which third-party program opens a "
+"file, and how. ``pc ide open`` launches one on the object or file it is "
+"given, and which applications it knows is an ``open:`` section -- one entry "
+"per application, and **data all the way down**: where the application is on "
+"each operating system, what to run it as, which container to fall back to "
+"when it is not installed, and what it can read."
+msgstr ""
+"**应用程序插件** 教 PartCAD 认识由哪个第三方程序来打开某个文件，以及怎么打开。``pc ide open`` "
+"会针对交给它的那个对象或文件启动一个应用程序，而它认识哪些应用程序，由一个 ``open:`` 小节来决定 -- 每个应用程序一个条目，而且 "
+"**从头到尾都是数据**：该应用程序在每种操作系统上位于何处、以什么方式运行它、在它没有安装时退回到哪个容器，以及它读得了什么。"
+
+#: ../../source/plugins/applications.rst:14
+msgid ""
+"None of it is logic. Finding the binary, creating the container, forwarding "
+"the X display and converting a file the application cannot read is the same "
+"for every tool and happens once, in ``partcad_client.external``. That is why"
+" adding an application is a few lines of YAML rather than a code change."
+msgstr ""
+"这里面没有一点逻辑。找到可执行文件、创建容器、把 X 显示转发进去，以及转换应用程序读不了的文件，对每一种工具都是一样的，而且只做一次，在 "
+"``partcad_client.external`` 里。正因如此，添加一个应用程序只是几行 YAML，而不是一次代码改动。"
+
+#: ../../source/plugins/applications.rst:20
+msgid "What an application entry is for"
+msgstr "应用程序条目的用途"
+
+#: ../../source/plugins/applications.rst:22
+msgid ""
+"**Opening an object in the tool that suits it** -- a board in KiCad, a mesh "
+"in Blender, a solid in FreeCAD -- straight from the package, without "
+"exporting by hand first."
+msgstr ""
+"**用适合它的工具打开某个对象** -- 用 KiCad 打开电路板、用 Blender 打开网格、用 FreeCAD 打开实体 -- "
+"直接从包里打开，而不必先手工导出。"
+
+#: ../../source/plugins/applications.rst:25
+msgid ""
+"**Teaching PartCAD an in-house or a vendor tool**, so everybody opens it the"
+" same way and nobody keeps a path to it in their head."
+msgstr "**教 PartCAD 认识一个内部工具或某个厂商的工具**，这样每个人打开它的方式都一样，也没人需要把它的路径记在脑子里。"
+
+#: ../../source/plugins/applications.rst:27
+msgid ""
+"**Giving a machine with nothing installed a way in.** An entry naming a "
+"``container:`` runs the application in a container with the host's display "
+"forwarded into it."
+msgstr ""
+"**给一台什么都没装的机器一条进路。** 一个指名了 ``container:`` 的条目，会在容器中运行该应用程序，并把宿主的显示转发进去。"
+
+#: ../../source/plugins/applications.rst:30
+msgid ""
+"**Letting a simulator's plugin own its own viewer.** The package that reads "
+"a format declares the application entry for it too, so importing that "
+"package is all it takes."
+msgstr "**让仿真器的插件自己拥有它自己的查看器。** 读取某种格式的那个包，同时也为它声明应用程序条目，所以只要导入那个包就够了。"
+
+#: ../../source/plugins/applications.rst:35
+msgid "Using one"
+msgstr "使用一个应用程序插件"
+
+#: ../../source/plugins/applications.rst:43
+msgid ""
+"``pc ide open`` **blocks until the application closes**, and an edit to a "
+"converted copy is converted back over the object's source when that source "
+"is a file. The VS Code extension's per-part \"Open in...\" menu runs the "
+"same command."
+msgstr ""
+"``pc ide open`` **会一直阻塞到该应用程序关闭**，而对转换后副本所做的编辑，在对象的来源是一个文件时会被转换回去并覆盖那个来源。VS "
+"Code 扩展中针对每个零件的“Open in...”菜单运行的是同一条命令。"
+
+#: ../../source/plugins/applications.rst:48
+msgid "Writing one"
+msgstr "编写一个应用程序条目"
+
+#: ../../source/plugins/applications.rst:63
+msgid ""
+"``formats:`` is the one that decides most: what the application opens, "
+"**best first** -- its own formats (``fcstd``, ``blend``, ``kicad_pcb``) and "
+"PartCAD's part types (``step``, ``stl``). An object in one of them is handed"
+" over as it is. Any other is converted to the first one on the list that "
+"PartCAD can write, and ``pc ide open`` then waits for the application to "
+"close: when the converted copy was changed, it is converted back into the "
+"object's own format and written over its source, where that source is a file"
+" (a STEP, an STL...) rather than a script."
+msgstr ""
+"``formats:`` "
+"起的作用最大：应用程序能打开什么，**最佳的排在前面**——它自己的格式（``fcstd``、``blend``、``kicad_pcb``）以及 "
+"PartCAD 的零件类型（``step``、``stl``）。属于其中之一的对象按原样交出。其他对象会转换为列表中 PartCAD "
+"能写出的第一种格式，然后 ``pc ide open`` "
+"等待应用程序关闭：如果转换后的副本被修改了，就把它转换回对象自己的格式并覆盖其来源——前提是来源是文件（STEP、STL 等），而不是脚本。"
+
+#: ../../source/plugins/applications.rst:71
+msgid ""
+"Two more are about what an application is really handed. ``companions:`` "
+"names the extensions the application really opens, for a file that sits "
+"beside the one PartCAD was pointed at -- a ``kicad`` part *is* the STEP file"
+" KiCad's CLI writes, and the board is the project next to it. ``sceneType:``"
+" says which description language an application reads, for one that reads an"
+" arrangement rather than geometry, and ``sceneExtensions:`` the extensions a"
+" file in it is stored in: MuJoCo reads MJCF, kept in ``.xml``. A scene in "
+"that language -- by its declared type, or else by one of those extensions, "
+"since the file itself is not read -- is handed over as it is, and one in any"
+" other is refused rather than converted, with the export that writes it -- "
+"the language is the engine plugin's, and a file handed to ``pc ide open`` "
+"has no package around it to reach that plugin through."
+msgstr ""
+"另外两个字段关系到应用程序真正拿到的是什么。``companions:`` 列出应用程序真正能打开的那些扩展名，用于与 PartCAD "
+"所指向文件并排存放的文件 -- ``kicad`` 零件 *本身就是* KiCad 的 CLI 写出的那个 STEP "
+"文件，而电路板是它旁边的那个工程。``sceneType:`` 说明某个应用程序读取哪种描述语言，适用于读取摆放而不是几何的应用程序，而 "
+"``sceneExtensions:`` 说明用这种语言写的文件存放在哪些扩展名下：MuJoCo 读取 MJCF，而它保存在 ``.xml`` "
+"里。用那种语言写的场景 -- 按它所声明的类型判定，或者按那些扩展名之一判定，因为文件本身并不会被读取 -- "
+"会原样交过去；而用其他任何语言写的场景会被拒绝而不是被转换，并告知写出它的那个导出 -- 这种语言属于引擎插件，而交给 ``pc ide open`` "
+"的文件周围没有包，无法通过包去找到那个插件。"
+
+#: ../../source/plugins/applications.rst:84
+msgid ""
+"``container:`` has the shape a plugin's implementation gives it -- "
+"``image``, and ``python`` for an image whose ``python3`` is not on ``PATH`` "
+"-- and the container is started the way every other PartCAD container is "
+"(see :ref:`useDockerRemote <use-docker-remote>`), with the file mounted or, "
+"under ``useDockerRemote``, uploaded. ``image:``, ``ownFormats:``, "
+"``meshVia:`` and ``imports:`` are what an entry said before ``container:`` "
+"and ``formats:``; they are still read, into those, and ``pc ide open`` says "
+"once that they are deprecated."
+msgstr ""
+"``container:`` 的形式与插件实现中的相同——``image``，以及当镜像的 ``python3`` 不在 ``PATH`` 上时使用的 "
+"``python``——容器的启动方式与 PartCAD 的其他容器一样（参见 :ref:`useDockerRemote <use-docker-"
+"remote>`），文件以挂载方式提供，或者在 ``useDockerRemote`` "
+"下以上传方式提供。``image:``、``ownFormats:``、``meshVia:`` 和 ``imports:`` 是在有 "
+"``container:`` 和 ``formats:`` 之前条目的写法；它们仍会被读取并转换为后者，``pc ide open`` "
+"会提示一次它们已被弃用。"
+
+#: ../../source/plugins/applications.rst:92
+msgid ""
+"A package's entry **replaces a built-in of the same name**, which is how the"
+" plugin for a simulation engine comes to own the application for it."
+msgstr "包里的条目会 **替换掉同名的内置条目**，而仿真引擎的插件正是借此拥有了针对它的那个应用程序。"
+
+#: ../../source/plugins/applications.rst:96
+msgid "What it is, and is not"
+msgstr "它是什么，又不是什么"
+
+#: ../../source/plugins/applications.rst:98
+msgid ""
+"``pc ide open`` is otherwise a **client-side** command and stays one: it is "
+"handed a path, the file is already on disk, and the window belongs to "
+"whoever ran the command -- a daemon can be remote. So the built-in entries "
+"are read straight out of the wheel the client is running from, with no "
+"context and no daemon, and only the applications a *package* declares are "
+"asked of the daemon (``open.tools``). It answers which applications exist; "
+"it never opens one, and there is no method for opening a file."
+msgstr ""
+"除此之外，``pc ide open`` 是一条 **客户端** "
+"命令，而且会一直如此：交给它的是一个路径，文件已经在磁盘上，而窗口属于运行该命令的人——守护进程则可能在远端。因此内置条目直接从客户端所运行的 "
+"wheel 中读取，既不需要上下文也不需要守护进程；只有 *包* "
+"所声明的应用程序才会去问守护进程（``open.tools``）。它回答存在哪些应用程序；它从不打开应用程序，也没有用于打开文件的方法。"
+
+#: ../../source/plugins/applications.rst:107
+msgid "An example"
+msgstr "一个例子"
+
+#: ../../source/plugins/applications.rst:109
+msgid ""
+"PartCAD ships three entries in ``//builtin/open`` -- FreeCAD, KiCad and "
+"Blender -- and they are the three to read before writing one, because "
+"between them they cover every interesting case:"
+msgstr ""
+"PartCAD 在 ``//builtin/open`` 中附带了三个条目 -- FreeCAD、KiCad 和 Blender -- "
+"而在自己写一个之前值得读的就是这三个，因为它们合起来覆盖了每一种值得注意的情形："
+
+#: ../../source/plugins/applications.rst:113
+msgid "``freecad``"
+msgstr "``freecad``"
+
+#: ../../source/plugins/applications.rst:114
+msgid ""
+"The plain case. ``formats: [fcstd, step, brep, iges, stl, obj]`` -- its own "
+"project file first, then what a part already is when PartCAD reads it from a"
+" file, with **STEP leading the conversions** so that a script converted for "
+"FreeCAD arrives as the solid it is rather than as triangles. Its "
+"``container:`` image is ``:latest`` rather than pinned, because somebody "
+"asking for a container wants the current FreeCAD."
+msgstr ""
+"最朴素的情形。``formats: [fcstd, step, brep, iges, stl, obj]`` -- 先是它自己的工程文件，然后是 "
+"PartCAD 从文件读入某个零件时它本来就是的那些格式，而 **STEP 领先于各种转换**，这样为 FreeCAD "
+"转换出来的脚本到达时就是它本来那个实体，而不是一堆三角形。它的 ``container:`` 镜像用的是 ``:latest`` "
+"而不是固定版本，因为会去要一个容器的人，想要的是当前的 FreeCAD。"
+
+#: ../../source/plugins/applications.rst:121
+msgid "``kicad``"
+msgstr "``kicad``"
+
+#: ../../source/plugins/applications.rst:122
+msgid ""
+"The ``companions:`` case, and the one worth understanding before writing an "
+"entry. ``formats: [kicad_pro, kicad_pcb, kicad_sch]`` -- the project and the"
+" two files it is made of -- and ``companions: [.kicad_pro, .kicad_pcb, "
+".kicad_sch]``. A ``kicad`` part *is* the STEP file KiCad's CLI writes out of"
+" the board; the board is the project beside it, and that is what opening "
+"KiCad means. **Nothing PartCAD can write is a board**, so a file with no "
+"project beside it is refused rather than converted. Its image is the one "
+"PartCAD already builds for ``kicad`` parts, pinned to the running release, "
+"so there is one KiCad container in the product rather than two."
+msgstr ""
+"``companions:`` 的情形，也是在写一个条目之前最值得搞懂的那一个。``formats: [kicad_pro, kicad_pcb, "
+"kicad_sch]`` -- 那个工程以及构成它的那两种文件 -- 加上 ``companions: [.kicad_pro, .kicad_pcb,"
+" .kicad_sch]`` 。一个 ``kicad`` 零件 *本身就是* KiCad 的 CLI 从那块板子写出来的 STEP "
+"文件；而板子是它旁边的那个工程，打开 KiCad 指的正是这件事。**PartCAD "
+"写得出来的东西里没有一个是电路板**，所以旁边没有工程的文件会被拒绝，而不是被转换。它的镜像就是 PartCAD 本来就为 ``kicad`` "
+"零件构建的那一个，并固定到正在运行的那个发布版，所以产品里只有一个 KiCad 容器，而不是两个。"
+
+#: ../../source/plugins/applications.rst:132
+msgid "``blender``"
+msgstr "``blender``"
+
+#: ../../source/plugins/applications.rst:133
+msgid ""
+"The mesh case. ``formats: [blend, stl, obj, ply, glb, fbx, x3d]`` -- its own"
+" ``.blend`` first, then the meshes it imports, with STL first among those "
+"because it is the first one PartCAD writes and **every part type converts to"
+" it**, which makes this one rule rather than a table of exceptions."
+msgstr ""
+"网格的情形。``formats: [blend, stl, obj, ply, glb, fbx, x3d]`` -- 先是它自己的 "
+"``.blend`` ，然后是它能导入的那些网格格式，其中 STL 排在最前，因为它是 PartCAD 最先写出的那一种，而且 "
+"**每一种零件类型都能转换成它**，这就让这里只需要一条规则，而不是一张例外表。"
+
+#: ../../source/plugins/applications.rst:138
+msgid "Both of the simulator packages declare an entry of their own:"
+msgstr "两个仿真器包各自都声明了一个自己的条目："
+
+#: ../../source/plugins/applications.rst:143
+msgid "package"
+msgstr "包"
+
+#: ../../source/plugins/applications.rst:144
+msgid "application"
+msgstr "应用程序"
+
+#: ../../source/plugins/applications.rst:145
+msgid "what it opens"
+msgstr "它打开什么"
+
+#: ../../source/plugins/applications.rst:146
+msgid "`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_"
+msgstr "`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_"
+
+#: ../../source/plugins/applications.rst:147
+msgid "Gazebo"
+msgstr "Gazebo"
+
+#: ../../source/plugins/applications.rst:148
+msgid "a scene already in SDFormat (``sceneType:``)"
+msgstr "一个已经是 SDFormat 的场景（ ``sceneType:`` ）"
+
+#: ../../source/plugins/applications.rst:149
+msgid "`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_"
+msgstr "`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_"
+
+#: ../../source/plugins/applications.rst:150
+msgid "MuJoCo"
+msgstr "MuJoCo"
+
+#: ../../source/plugins/applications.rst:151
+msgid "a scene already in MJCF, kept in ``.xml``"
+msgstr "一个已经是 MJCF、并保存在 ``.xml`` 中的场景"
+
+#: ../../source/plugins/applications.rst:160
+msgid ""
+"A scene in a language the application does not read is **refused rather than"
+" converted**, naming the export that would write it: the language belongs to"
+" the engine's plugin, and a file handed to ``pc ide open`` has no package "
+"around it to reach that plugin through."
+msgstr ""
+"用应用程序读不了的语言写的场景会 **被拒绝而不是被转换**，并指出会写出它的那个导出：这种语言属于引擎的插件，而交给 ``pc ide open`` "
+"的文件周围没有包，无法通过包去找到那个插件。"

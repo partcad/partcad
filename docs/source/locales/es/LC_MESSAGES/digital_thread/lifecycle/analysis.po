@@ -1,0 +1,737 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:4
+msgid "Analysis"
+msgstr "Análisis"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:16
+msgid ""
+"Analysis is what engineering says about a design before anything is made: "
+"what it weighs and where its centre of mass is, how it carries a load, how a"
+" fluid flows around it, how it behaves once gravity and contact are switched"
+" on. Each answer is worked out from the design as it is now, so it is never "
+"an answer about last week's version."
+msgstr ""
+"El análisis es lo que la ingeniería dice sobre un diseño antes de que se "
+"fabrique nada: cuánto pesa y dónde está su centro de masas, cómo soporta una"
+" carga, cómo fluye un fluido a su alrededor, cómo se comporta una vez "
+"encendidas la gravedad y el contacto. Cada respuesta se calcula a partir del"
+" diseño tal como está ahora, así que nunca es una respuesta sobre la versión"
+" de la semana pasada."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:23
+msgid "What PartCAD captures"
+msgstr "Qué captura PartCAD"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:26
+msgid "Physical properties"
+msgstr "Propiedades físicas"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:28
+msgid ""
+"What an object weighs, its centre of mass, its inertia, its friction: stated"
+" in a ``physics:`` section, lent by its :ref:`material <materials>` (a "
+"density, a friction coefficient), or worked out from the solid -- and, for "
+"an assembly, combined from its parts. ``pc info`` reports each value with "
+"where it came from, and a requirement on one is checked against the same "
+"value (see :doc:`/digital_thread/lifecycle/requirements`)."
+msgstr ""
+"Lo que pesa un objeto, su centro de masas, su inercia, su fricción: "
+"declarados en una sección ``physics:``, prestados por su :ref:`material "
+"<materials>` (una densidad, un coeficiente de fricción), o calculados a "
+"partir del sólido -- y, para un ensamblaje, combinados a partir de sus "
+"piezas. ``pc info`` informa de cada valor junto con su procedencia, y un "
+"requisito sobre uno de ellos se comprueba contra ese mismo valor (véase "
+":doc:`/digital_thread/lifecycle/requirements`)."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:36
+msgid "Engineering analyses"
+msgstr "Análisis de ingeniería"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:38
+msgid ""
+"A part says what holds it, what it carries and how it is heated and cooled, "
+"in a section named after the analysis -- ``fea:`` for a finite element "
+"analysis, ``dynamic:`` for the frequencies it rings at, ``thermal:`` for "
+"heat transfer, ``cfd:`` for computational fluid dynamics -- because the "
+"conditions are a property of the part rather than of the solver asked about "
+"it. Each section is a map of named scenarios, one per question of that kind "
+"the part is asked, the way ``simulate:`` is a map of simulations. Each "
+"condition names an interface the part implements, so it lands where the part"
+" connects. ``pc cae fea``, ``pc cae dynamic``, ``pc cae thermal`` and ``pc "
+"cae cfd`` run the scenarios through the implementation configured -- all of "
+"them, or one with ``-f`` -- and report what each finds. A scenario may name "
+"the feature of the requirements it demonstrates (``feature:``), which makes "
+"it evidence for that feature, as a simulation's is. See :ref:`engineering-"
+"analysis` and :ref:`cae`."
+msgstr ""
+"Una pieza dice qué la sujeta, qué soporta y cómo se calienta y se enfría, en"
+" una sección que lleva el nombre del análisis -- ``fea:`` para un análisis "
+"por elementos finitos, ``dynamic:`` para las frecuencias a las que vibra, "
+"``thermal:`` para la transferencia de calor, ``cfd:`` para la dinámica de "
+"fluidos computacional -- porque las condiciones son una propiedad de la "
+"pieza y no del solver al que se pregunta por ella. Cada sección es un mapa "
+"de escenarios con nombre, uno por cada pregunta de esa clase que se hace a "
+"la pieza, igual que ``simulate:`` es un mapa de simulaciones. Cada condición"
+" nombra una interfaz que la pieza implementa, de modo que cae allí donde la "
+"pieza se conecta. ``pc cae fea``, ``pc cae dynamic``, ``pc cae thermal`` y "
+"``pc cae cfd`` ejecutan los escenarios a través de la implementación "
+"configurada -- todos, o uno con ``-f`` -- e informan de lo que encuentra "
+"cada uno. Un escenario puede nombrar la característica de los requisitos que"
+" demuestra (``feature:``), lo que lo convierte en evidencia de esa "
+"característica, igual que la de una simulación. Véanse :ref:`engineering-"
+"analysis` y :ref:`cae`."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:53
+msgid "Simulations"
+msgstr "Simulaciones"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:55
+msgid ""
+"A part, an assembly or a scene says what it is supposed to *do* in a "
+"``simulate:`` section: the scene it is placed in, the simulation plugin that"
+" runs it, and a ``validation:`` condition over what happened that holds when"
+" it went as it should -- \"after ten seconds on a 10° slope it is still "
+"upright\". ``pc sim`` runs them. A simulation may name the feature of the "
+"requirements it demonstrates (``feature:``), which makes it evidence for "
+"that feature. See :doc:`/digital_thread/lifecycle/simulation` and "
+":ref:`simulate`."
+msgstr ""
+"Una pieza, un ensamblaje o una escena dice qué se supone que *hace* en una "
+"sección ``simulate:``: la escena en la que se coloca, el plugin de "
+"simulación que la ejecuta, y una condición ``validation:`` sobre lo que "
+"ocurrió que se cumple cuando fue como debía -- \"después de diez segundos en"
+" una pendiente de 10° sigue en pie\". ``pc sim`` las ejecuta. Una simulación"
+" puede nombrar la característica de los requisitos que demuestra "
+"(``feature:``), lo que la convierte en evidencia de esa característica. "
+"Véanse :doc:`/digital_thread/lifecycle/simulation` y :ref:`simulate`."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:64
+msgid "Analysis and validation"
+msgstr "Análisis y validación"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:66
+msgid ""
+"An analysis answers a question; validation asks whether the answer is the "
+"one that was needed. The same runs serve both: ``pc test`` runs every "
+"scenario of every ``fea:``, ``dynamic:``, ``thermal:`` and ``cfd:``, and "
+"every ``simulate:`` entry, declared as its checks of the same names (``sim``"
+" for a simulation), and fails an object any of whose scenarios finds a "
+"problem or whose simulation does not behave as it says (see "
+":doc:`/digital_thread/lifecycle/validation`)."
+msgstr ""
+"Un análisis responde a una pregunta; la validación pregunta si la respuesta "
+"es la que se necesitaba. Las mismas ejecuciones sirven para ambas cosas: "
+"``pc test`` ejecuta todos los escenarios de cada ``fea:``, ``dynamic:``, "
+"``thermal:`` y ``cfd:``, y cada entrada de ``simulate:``, declaradas como "
+"sus comprobaciones de los mismos nombres (``sim`` para una simulación), y da"
+" por fallado un objeto cualquiera de cuyos escenarios encuentre un problema "
+"o cuya simulación no se comporte como dice (véase "
+":doc:`/digital_thread/lifecycle/validation`)."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:74
+msgid "In the UI"
+msgstr "En la interfaz"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:76
+msgid ""
+"**Analysis** holds a tab per analysis, each enabled for a part that declares"
+" scenarios of it and disabled -- with the reason on hover -- for everything "
+"else. Each lists the scenarios down the left, runs the one selected with the"
+" solver chosen over it, and shows the model it produced and what it found. "
+"Each has a chapter of its own:"
+msgstr ""
+"**Analysis** contiene una pestaña por análisis, cada una activada para una "
+"pieza que declara escenarios de él y desactivada -- con el motivo al pasar "
+"el puntero -- para todo lo demás. Cada una enumera los escenarios a la "
+"izquierda, ejecuta el seleccionado con el solver elegido arriba, y muestra "
+"el modelo que produjo y lo que encontró. Cada una tiene un capítulo propio:"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:82
+msgid ":doc:`FEA </digital_thread/lifecycle/analysis_fea>`"
+msgstr ":doc:`FEA </digital_thread/lifecycle/analysis_fea>`"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:83
+msgid ""
+"Does the part hold up under what it carries: the stress in it, and how far "
+"it moves. Read from ``fea:``."
+msgstr ""
+"¿Resiste la pieza bajo lo que soporta?: la tensión en ella, y cuánto se "
+"desplaza. Se lee de ``fea:``."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:86
+msgid ":doc:`Dynamic FEA </digital_thread/lifecycle/analysis_dynamic>`"
+msgstr ":doc:`Dynamic FEA </digital_thread/lifecycle/analysis_dynamic>`"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:87
+msgid ""
+"At which frequencies does it ring, held as it is held, and in what shape. "
+"Read from ``dynamic:``."
+msgstr ""
+"¿A qué frecuencias vibra, sujeta tal como está sujeta, y con qué forma? Se "
+"lee de ``dynamic:``."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:90
+msgid ":doc:`Heat Transfer </digital_thread/lifecycle/analysis_thermal>`"
+msgstr ":doc:`Heat Transfer </digital_thread/lifecycle/analysis_thermal>`"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:91
+msgid ""
+"How hot does it get, heated and cooled as it is. Read from ``thermal:``."
+msgstr ""
+"¿Cuánto se calienta, calentada y enfriada tal como está? Se lee de "
+"``thermal:``."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:93
+msgid ":doc:`CFD </digital_thread/lifecycle/analysis_cfd>`"
+msgstr ":doc:`CFD </digital_thread/lifecycle/analysis_cfd>`"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:94
+msgid ""
+"How does a fluid flow through it -- where the part *is* the fluid volume. "
+"Read from ``cfd:``."
+msgstr ""
+"¿Cómo fluye un fluido a través de ella -- donde la pieza *es* el volumen de "
+"fluido? Se lee de ``cfd:``."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:97
+msgid ""
+"The Analysis group: its four tabs, the scenario list, and the result of the "
+"one selected"
+msgstr ""
+"El grupo Analysis: sus cuatro pestañas, la lista de escenarios y el "
+"resultado del seleccionado"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:102
+msgid ""
+"These tabs are the exception to \"every tab is a question\": looking at one "
+"**runs** the analysis. That is why each is a chapter rather than a line -- "
+"what it costs, what it needs installed and what its failure means are "
+"particular to the analysis."
+msgstr ""
+"Estas pestañas son la excepción a \"cada pestaña es una pregunta\": mirar "
+"una **ejecuta** el análisis. Por eso cada una es un capítulo y no una línea "
+"-- lo que cuesta, lo que necesita instalado y lo que significa su fallo son "
+"particulares de cada análisis."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:107
+msgid ""
+"The simulations are not here. They are run from :ref:`Validation → "
+"Simulation <sim-in-the-ui>`, because what a simulation answers is whether "
+"the object does what it says it does, which is a question of validation "
+"rather than of analysis."
+msgstr ""
+"Las simulaciones no están aquí. Se ejecutan desde :ref:`Validation → "
+"Simulation <sim-in-the-ui>`, porque lo que responde una simulación es si el "
+"objeto hace lo que dice que hace, que es una cuestión de validación y no de "
+"análisis."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:114
+msgid "On the command line"
+msgstr "En la línea de comandos"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:125
+msgid ""
+"Each analysis has a chapter of its own above, with the keys its section "
+"takes and the packages that implement it. What follows here is what they "
+"have in common."
+msgstr ""
+"Cada análisis tiene un capítulo propio más arriba, con las claves que admite"
+" su sección y los paquetes que lo implementan. Lo que sigue aquí es lo que "
+"tienen en común."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:130
+msgid "Running an analysis"
+msgstr "Ejecutar un análisis"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:133
+msgid ""
+"A part can say what holds it, what it carries, how it is heated and where a "
+"fluid goes through it, and PartCAD can put that question to a solver. There "
+"are four questions, each its own command: ``pc cae fea`` for a finite "
+"element analysis, ``pc cae dynamic`` for its natural frequencies, ``pc cae "
+"thermal`` for heat transfer, and ``pc cae cfd`` for computational fluid "
+"dynamics. The conditions live on the part, in a section named after the "
+"analysis, because they are a property of the part rather than of whoever "
+"analyses it -- a bracket is bolted down at the same holes whichever solver "
+"is asked about it. A part is asked more than one question of each kind -- a "
+"shelf bracket loaded, and the same bracket knocked sideways -- so the "
+"section is a map of named **scenarios**, the way ``simulate:`` is a map of "
+"named simulations:"
+msgstr ""
+"Una pieza puede decir qué la sujeta, qué soporta, cómo se calienta y por "
+"dónde la atraviesa un fluido, y PartCAD puede plantear esa pregunta a un "
+"solver. Hay cuatro preguntas, cada una con su propio comando: ``pc cae fea``"
+" para un análisis por elementos finitos, ``pc cae dynamic`` para sus "
+"frecuencias naturales, ``pc cae thermal`` para la transferencia de calor y "
+"``pc cae cfd`` para la dinámica de fluidos computacional. Las condiciones "
+"viven en la pieza, en una sección que lleva el nombre del análisis, porque "
+"son una propiedad de la pieza y no de quien la analiza -- un soporte se "
+"atornilla por los mismos agujeros sea cual sea el solver al que se pregunte "
+"por él. A una pieza se le hace más de una pregunta de cada clase -- un "
+"soporte de estante cargado, y el mismo soporte golpeado de lado -- así que "
+"la sección es un mapa de **escenarios** con nombre, igual que ``simulate:`` "
+"es un mapa de simulaciones con nombre:"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:180
+msgid ""
+"``pc cae fea :bracket`` runs every scenario of the analysis and ``-f`` runs "
+"one (``pc cae fea -f loaded :bracket``); ``pc test`` holds the part to all "
+"of them. Beside its conditions a scenario may say what it is (``desc:``), "
+"which feature of the part's :ref:`requirements <requirements>` it "
+"demonstrates (``feature:``, a name or a list -- the IDE's Requirements tab "
+"lists it there, as it lists a simulation), who runs it (``implementation:``,"
+" below) and the implementation's parameters for that scenario alone "
+"(``params:``, a finer ``mesh_size`` say). A scenario cannot be named after "
+"any of those keys or after a condition. A section written the way it was "
+"before scenarios -- ``fea:`` holding ``fix:`` and ``load:`` itself -- is "
+"still read, as one scenario named ``default``, and PartCAD says once that it"
+" is deprecated: move its conditions under a name."
+msgstr ""
+"``pc cae fea :bracket`` ejecuta todos los escenarios del análisis y ``-f`` "
+"ejecuta uno (``pc cae fea -f loaded :bracket``); ``pc test`` exige a la "
+"pieza todos ellos. Junto a sus condiciones, un escenario puede decir qué es "
+"(``desc:``), qué característica de los :ref:`requisitos <requirements>` de "
+"la pieza demuestra (``feature:``, un nombre o una lista -- la pestaña "
+"Requirements del IDE la enumera allí, igual que enumera una simulación), "
+"quién lo ejecuta (``implementation:``, más abajo) y los parámetros de la "
+"implementación para ese escenario en concreto (``params:``, un ``mesh_size``"
+" más fino, por ejemplo). Un escenario no puede llamarse como ninguna de esas"
+" claves ni como una condición. Una sección escrita como se escribía antes de"
+" los escenarios -- ``fea:`` conteniendo él mismo ``fix:`` y ``load:`` -- se "
+"sigue leyendo, como un único escenario llamado ``default``, y PartCAD dice "
+"una vez que está obsoleta: mueva sus condiciones bajo un nombre."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:193
+msgid ""
+"Every key names :ref:`interfaces <interfaces>` the part implements, so the "
+"same declaration that says where a part connects also says where it is held,"
+" pulled, heated and cooled. A ``load`` is a force: write a number and a "
+"unit, or a bare number for a mass in kilograms, which PartCAD weighs into "
+"newtons at 9.8 N/kg. A ``temperature`` is in Celsius, a ``heat`` a power in "
+"watts, a ``convection`` a film coefficient in W/(m²·K). ``cfd:`` reads "
+"``load:`` as where the flow is driven in and ``outlet:`` as where it leaves;"
+" every other surface of the fluid volume is a wall. :ref:`pc cae <cae>` "
+"lists every key each analysis takes."
+msgstr ""
+"Cada clave nombra :ref:`interfaces <interfaces>` que la pieza implementa, de"
+" modo que la misma declaración que dice dónde se conecta una pieza dice "
+"también dónde se la sujeta, se tira de ella, se la calienta y se la enfría. "
+"Un ``load`` es una fuerza: escriba un número y una unidad, o un número a "
+"secas para una masa en kilogramos, que PartCAD convierte en newtons a razón "
+"de 9,8 N/kg. Una ``temperature`` va en grados Celsius, un ``heat`` es una "
+"potencia en vatios, una ``convection`` un coeficiente de película en "
+"W/(m²·K). ``cfd:`` lee ``load:`` como el lugar por donde se impulsa el flujo"
+" y ``outlet:`` como el lugar por donde sale; todas las demás superficies del"
+" volumen de fluido son una pared. :ref:`pc cae <cae>` enumera todas las "
+"claves que admite cada análisis."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:202
+msgid ""
+"A condition lands on the **surface its port stands for**. A port is a "
+"coordinate frame, and a frame cannot say how wide an inlet is; a sketch can."
+" An interface that draws a port with a sketch -- a ``basic`` ``circle:`` for"
+" the end of a bore -- has that sketch placed by the port's frame, Z out of "
+"the surface, and PartCAD imprints it on the part before the solver runs: the"
+" implementation is handed the faces each port covers, and a force or a power"
+" is spread over exactly their area. A port with no sketch covers the face it"
+" lies on."
+msgstr ""
+"Una condición cae sobre la **superficie que representa su puerto**. Un "
+"puerto es un marco de coordenadas, y un marco no puede decir lo ancha que es"
+" una entrada; un boceto sí. Una interfaz que dibuja un puerto con un boceto "
+"-- un ``circle:`` ``basic`` para el extremo de un taladro -- tiene ese "
+"boceto colocado por el marco del puerto, con Z saliendo de la superficie, y "
+"PartCAD lo imprime en la pieza antes de que se ejecute el solver: a la "
+"implementación se le entregan las caras que cubre cada puerto, y una fuerza "
+"o una potencia se reparte exactamente sobre su área. Un puerto sin boceto "
+"cubre la cara sobre la que se asienta."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:210
+msgid ""
+"PartCAD ships no solver. The analysis is run by an implementation package, "
+"declared in a ``cae:`` section exactly as an export or a render "
+"implementation is declared in its own (see :ref:`cae-section`), and named by"
+" the user configuration option named after the analysis: "
+"``caeFeaImplementation``, ``caeDynamicImplementation``, "
+"``caeThermalImplementation`` and ``caeCfdImplementation``. The defaults, and"
+" the other implementations there are:"
+msgstr ""
+"PartCAD no incluye ningún solver. El análisis lo ejecuta un paquete de "
+"implementación, declarado en una sección ``cae:`` exactamente igual que una "
+"implementación de exportación o de renderizado se declara en la suya (véase "
+":ref:`cae-section`), y nombrado por la opción de la configuración del "
+"usuario que lleva el nombre del análisis: ``caeFeaImplementation``, "
+"``caeDynamicImplementation``, ``caeThermalImplementation`` y "
+"``caeCfdImplementation``. Los valores predeterminados, y las demás "
+"implementaciones que hay:"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:220
+msgid "package"
+msgstr "paquete"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:221
+msgid "solver"
+msgstr "solver"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:222
+msgid "analyses"
+msgstr "análisis"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:223
+msgid ""
+"`partcad-cae-calculix <https://github.com/partcad/partcad-cae-calculix>`_"
+msgstr ""
+"`partcad-cae-calculix <https://github.com/partcad/partcad-cae-calculix>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:224
+msgid "`CalculiX <https://www.calculix.de/>`_"
+msgstr "`CalculiX <https://www.calculix.de/>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:225
+msgid "``fea`` (the default)"
+msgstr "``fea`` (el predeterminado)"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:226
+msgid "`partcad-cae-elmer <https://github.com/partcad/partcad-cae-elmer>`_"
+msgstr "`partcad-cae-elmer <https://github.com/partcad/partcad-cae-elmer>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:227
+msgid "`Elmer <https://www.elmerfem.org/>`_"
+msgstr "`Elmer <https://www.elmerfem.org/>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:228
+msgid "``fea``, ``dynamic`` (the default), ``thermal`` (the default), ``cfd``"
+msgstr ""
+"``fea``, ``dynamic`` (el predeterminado), ``thermal`` (el predeterminado), "
+"``cfd``"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:229
+msgid ""
+"`partcad-cae-openfoam <https://github.com/partcad/partcad-cae-openfoam>`_"
+msgstr ""
+"`partcad-cae-openfoam <https://github.com/partcad/partcad-cae-openfoam>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:230
+msgid "`OpenFOAM <https://www.openfoam.com/>`_"
+msgstr "`OpenFOAM <https://www.openfoam.com/>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:231
+msgid "``cfd`` (the default)"
+msgstr "``cfd`` (el predeterminado)"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:232
+msgid ""
+"`partcad-cae-code-aster <https://github.com/partcad/partcad-cae-code-"
+"aster>`_"
+msgstr ""
+"`partcad-cae-code-aster <https://github.com/partcad/partcad-cae-code-"
+"aster>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:233
+msgid "`Code_Aster <https://www.code-aster.org/>`_"
+msgstr "`Code_Aster <https://www.code-aster.org/>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:234
+msgid "``fea``, ``dynamic``, ``thermal``"
+msgstr "``fea``, ``dynamic``, ``thermal``"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:235
+msgid "`partcad-cae-moose <https://github.com/partcad/partcad-cae-moose>`_"
+msgstr "`partcad-cae-moose <https://github.com/partcad/partcad-cae-moose>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:236
+msgid "`MOOSE <https://mooseframework.inl.gov/>`_"
+msgstr "`MOOSE <https://mooseframework.inl.gov/>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:237
+msgid "``fea``, ``dynamic``, ``thermal``, ``cfd``"
+msgstr "``fea``, ``dynamic``, ``thermal``, ``cfd``"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:238
+msgid ""
+"`partcad-cae-code-saturne <https://github.com/partcad/partcad-cae-code-"
+"saturne>`_"
+msgstr ""
+"`partcad-cae-code-saturne <https://github.com/partcad/partcad-cae-code-"
+"saturne>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:239
+msgid "`code_saturne <https://www.code-saturne.org/>`_"
+msgstr "`code_saturne <https://www.code-saturne.org/>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:240
+msgid "``cfd``"
+msgstr "``cfd``"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:242
+msgid ""
+"Each package's README says what it needs and what every parameter means. "
+"Each names a ``dockerImage`` carrying its solver and mesher, so a container "
+"runtime is all it asks of a host that has neither installed -- and each also"
+" runs a solver installed on the host, when there is no container runtime or "
+"it is turned off. ``pc cae fea --implementation`` overrides the choice for "
+"one run, and so does choosing or typing another solver in \"Analysed by\" "
+"over the model in the IDE's analysis tabs."
+msgstr ""
+"El README de cada paquete dice qué necesita y qué significa cada parámetro. "
+"Cada uno nombra un ``dockerImage`` que lleva su solver y su mallador, así "
+"que un runtime de contenedores es todo lo que pide a un host que no tenga "
+"ninguno de los dos instalados -- y cada uno ejecuta también un solver "
+"instalado en el host, cuando no hay runtime de contenedores o está "
+"desactivado. ``pc cae fea --implementation`` anula la elección para una "
+"ejecución, y lo mismo hace elegir o escribir otro solver en \"Analysed by\","
+" sobre el modelo, en las pestañas de análisis del IDE."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:250
+msgid ""
+"A scenario may also name its own, which is what it was written against:"
+msgstr ""
+"Un escenario también puede nombrar el suyo propio, que es aquel contra el "
+"que se escribió:"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:260
+msgid ""
+"That sits between the other two: ``-i`` on the command line wins, then the "
+"scenario, then the user configuration. It is how a package ships an analysis"
+" that works for whoever opens it, without every reader first pointing their "
+"own configuration at the right place."
+msgstr ""
+"Eso se sitúa entre los otros dos: ``-i`` en la línea de comandos gana, "
+"después el escenario, después la configuración del usuario. Es la forma de "
+"que un paquete distribuya un análisis que funciona para quien lo abra, sin "
+"que cada lector tenga que apuntar primero su propia configuración al lugar "
+"correcto."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:265
+msgid ""
+"A **relative** package name here -- ``calculix:fea`` rather than "
+"``//pub/feature/cae/calculix:fea`` -- means the package this one imported "
+"under that name, and is resolved from the package the declaration is written"
+" in. That is not where a name a *user* types is resolved from: ``pc cae fea "
+"-i calculix:fea`` means the ``calculix`` beside the user, like every other "
+"name a command line carries. The difference matters under ``pc test -P "
+"//...`` over a tree of packages, which runs with the tree's root current "
+"while every part in it sits one or more packages below."
+msgstr ""
+"Un nombre de paquete **relativo** aquí -- ``calculix:fea`` en lugar de "
+"``//pub/feature/cae/calculix:fea`` -- significa el paquete que este importó "
+"bajo ese nombre, y se resuelve desde el paquete en el que está escrita la "
+"declaración. No es desde donde se resuelve un nombre que escribe un "
+"*usuario*: ``pc cae fea -i calculix:fea`` significa el ``calculix`` que está"
+" junto al usuario, como cualquier otro nombre que lleva una línea de "
+"comandos. La diferencia importa bajo ``pc test -P //...`` sobre un árbol de "
+"paquetes, que se ejecuta con la raíz del árbol como paquete actual mientras "
+"que cada pieza de él está uno o más paquetes por debajo."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:274
+msgid ""
+"What comes back from each scenario is two things: the model, written to "
+"``<part>.<analysis>.<scenario>.<extension>`` in whichever format the "
+"implementation chose (``bracket.fea.loaded.glb``), and the **findings** -- a"
+" JSON array of what the analysis has to say about the part. ``pc test`` "
+"gains a check per analysis -- ``fea``, ``dynamic``, ``thermal``, ``cfd`` -- "
+"that runs every scenario of it and fails a part any of whose scenarios "
+"produced a finding, naming the scenario; they apply only to a part that "
+"declares the matching section, so a package of bolts pays nothing for them. "
+"There is one way to pass -- the analysis ran and reported nothing -- and "
+"everything else **fails**: a malformed section, a plugin that cannot be "
+"resolved (not a dependency, misspelt, declaring no such file type), a plugin"
+" that resolves and cannot run (no mesher, no solver, a sandbox that will not"
+" build, a crash), and an analysis that ran and found something."
+msgstr ""
+"Lo que vuelve de cada escenario son dos cosas: el modelo, escrito en "
+"``<part>.<analysis>.<scenario>.<extension>`` en el formato que haya elegido "
+"la implementación (``bracket.fea.loaded.glb``), y los **hallazgos** -- un "
+"array JSON de lo que el análisis tiene que decir sobre la pieza. ``pc test``"
+" gana una comprobación por análisis -- ``fea``, ``dynamic``, ``thermal``, "
+"``cfd`` -- que ejecuta todos sus escenarios y da por fallada una pieza "
+"cualquiera de cuyos escenarios haya producido un hallazgo, nombrando el "
+"escenario; se aplican solo a una pieza que declare la sección "
+"correspondiente, así que un paquete de tornillos no paga nada por ellas. Hay"
+" una sola forma de pasar -- el análisis se ejecutó y no informó de nada -- y"
+" todo lo demás **falla**: una sección mal formada, un plugin que no se puede"
+" resolver (no es una dependencia, está mal escrito, no declara tal tipo de "
+"archivo), un plugin que se resuelve y no puede ejecutarse (sin mallador, sin"
+" solver, un sandbox que no se construye, una caída), y un análisis que se "
+"ejecutó y encontró algo."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:288
+msgid ""
+"Not running is deliberately not a skip. A skip says the question does not "
+"apply here; a part that declares ``fea:`` has asked, and a plugin that was "
+"asked and delivered nothing has failed. The consequence is the point: "
+"declaring ``fea:`` in a shared package makes ``pc test`` fail for everyone "
+"who has not installed what that implementation needs. A package that does "
+"not want that should not declare the section. What the failure carries is "
+"*why* -- the implementation's own sentence, plus which implementation was "
+"asked and which machine it did not work on, because \"gmsh is not "
+"installed\" is a puzzle and the same sentence under "
+"``//pub/feature/cae/calculix:fea on Linux-aarch64`` is an answer."
+msgstr ""
+"Que no se ejecute deliberadamente no es un \"omitido\". Un \"omitido\" dice "
+"que la pregunta no se aplica aquí; una pieza que declara ``fea:`` ha "
+"preguntado, y un plugin al que se le preguntó y no entregó nada ha fallado. "
+"La consecuencia es precisamente la idea: declarar ``fea:`` en un paquete "
+"compartido hace que ``pc test`` falle para todo el que no haya instalado lo "
+"que necesita esa implementación. Un paquete que no quiera eso no debería "
+"declarar la sección. Lo que lleva el fallo es el *porqué*: la frase de la "
+"propia implementación, más qué implementación se pidió y en qué máquina no "
+"funcionó, porque \"gmsh no está instalado\" es un acertijo y esa misma frase"
+" bajo ``//pub/feature/cae/calculix:fea on Linux-aarch64`` es una respuesta."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:298
+msgid ""
+"There is **one** excuse, and it is the case where the implementation was "
+"never given the environment it says it needs. An implementation naming a "
+"``container:`` or a ``dockerImage`` is stating that a container is how what "
+"pip cannot install arrives; on a machine with no container runtime that "
+"statement has nowhere to land, nothing was ever asked, and the check skips "
+"with a ``WARNING`` carrying the whole report rather than failing. It is "
+"narrow in both directions. An implementation that names no image gets no "
+"excuse at all -- it said it runs in an ordinary sandbox, and a machine with "
+"a working sandbox is a machine it was supposed to work on. And a container "
+"runtime that *is* here removes the excuse entirely: a registry that cannot "
+"be reached, an image that will not start, a solver missing from the image "
+"are all things somebody can fix, and calling them \"unavailable\" would hide"
+" exactly the failures a plugin's own CI exists to catch."
+msgstr ""
+"Hay **una** excusa, y es el caso en el que a la implementación nunca se le "
+"dio el entorno que dice necesitar. Una implementación que nombra un "
+"``container:`` o un ``dockerImage`` está afirmando que un contenedor es la "
+"vía por la que llega lo que pip no puede instalar; en una máquina sin "
+"runtime de contenedores esa afirmación no tiene dónde aterrizar, nunca se "
+"preguntó nada, y la comprobación se omite con un ``WARNING`` que lleva el "
+"informe completo en lugar de fallar. Es estrecha en ambas direcciones. Una "
+"implementación que no nombra ninguna imagen no tiene excusa alguna -- dijo "
+"que se ejecuta en un sandbox ordinario, y una máquina con un sandbox que "
+"funciona es una máquina en la que se suponía que debía funcionar. Y un "
+"runtime de contenedores que *sí* está aquí elimina la excusa por completo: "
+"un registro al que no se puede llegar, una imagen que no arranca o un solver"
+" que falta en la imagen son todas cosas que alguien puede arreglar, y "
+"llamarlas \"no disponibles\" ocultaría exactamente los fallos para cuya "
+"detección existe la CI de un plugin."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:311
+msgid ""
+"A Docker daemon running **Windows** containers does not count as a container"
+" runtime for this, or for choosing a sandbox. Every image PartCAD builds, "
+"pulls or documents is a Linux image, and such a daemon answers a ping and "
+"then fails every pull with ``no matching manifest for windows/amd64``."
+msgstr ""
+"Un daemon de Docker que ejecuta contenedores de **Windows** no cuenta aquí "
+"como runtime de contenedores, ni para elegir un sandbox. Todas las imágenes "
+"que PartCAD compila, descarga o documenta son imágenes de Linux, y un daemon"
+" así responde a un ping y luego falla en cada descarga con ``no matching "
+"manifest for windows/amd64``."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:316
+msgid ""
+"The same policy, from the same code, decides ``pc test``'s ``sim`` check, "
+"which holds a part, an assembly or a scene to the ``simulate:`` claims it "
+"makes: a simulator that resolved and did not run is a failure, but for the "
+"one excuse, and a simulation plugin that cannot be found is never excused. "
+"See \"Running a simulation\" in :doc:`/digital_thread/lifecycle/simulation`."
+msgstr ""
+"La misma política, desde el mismo código, decide la comprobación ``sim`` de "
+"``pc test``, que exige a una pieza, un ensamblaje o una escena las "
+"afirmaciones que hace su ``simulate:``: un simulador que se resolvió y no se"
+" ejecutó es un fallo, salvo por la única excusa, y a un plugin de simulación"
+" que no se puede encontrar nunca se le excusa. Véase \"Ejecutar una "
+"simulación\" en :doc:`/digital_thread/lifecycle/simulation`."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:322
+msgid ""
+"``examples/feature_cae`` is the set of cases to check an implementation "
+"against -- a cantilever analysed for stress, for its natural frequencies and"
+" for heat, and a pipe for flow, one scenario each, each with a closed-form "
+"answer to compare the solver with. The pipe's inlet and outlet are drawn "
+"with the bore's circle, so the pressure driving it is the inlet's force over"
+" exactly the bore's area. That example's ``README.md`` has what each "
+"implementation measured."
+msgstr ""
+"``examples/feature_cae`` es el conjunto de casos contra el que comprobar una"
+" implementación -- una viga en voladizo analizada a tensión, a sus "
+"frecuencias naturales y a calor, y un tubo a flujo, un escenario cada uno, "
+"cada uno con una respuesta en forma cerrada con la que comparar el solver. "
+"La entrada y la salida del tubo se dibujan con el círculo del taladro, así "
+"que la presión que lo impulsa es la fuerza de la entrada sobre exactamente "
+"el área del taladro. El ``README.md`` de ese ejemplo recoge lo que midió "
+"cada implementación."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:330
+msgid "See :ref:`pc cae <cae>` for the command and the units it accepts."
+msgstr ""
+"Consulte :ref:`pc cae <cae>` para el comando y las unidades que acepta."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:333
+msgid "Agent skills"
+msgstr "Agent Skills"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:335
+msgid "``/pc:sim-assembly-fea``"
+msgstr "``/pc:sim-assembly-fea``"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:336
+msgid ""
+"Turns what a simulation measured into a stress analysis of one part. It runs"
+" the assembly's ``simulate:`` entry, reads the forces and moments acting on "
+"the body the part is welded into at the end of the run, works out which of "
+"them load that part and where, and writes a new named scenario into the "
+"part's ``fea:`` section beside any already there. It is the bridge between "
+"the two halves of this phase: a simulation says what the world does to an "
+"assembly, and this turns that into the load case one part has to survive."
+msgstr ""
+"Convierte lo que midió una simulación en un análisis de tensiones de una "
+"pieza. Ejecuta la entrada ``simulate:`` del ensamblaje, lee las fuerzas y "
+"los momentos que actúan al final de la ejecución sobre el cuerpo en el que "
+"la pieza está soldada, averigua cuáles de ellos cargan esa pieza y dónde, y "
+"escribe un nuevo escenario con nombre en la sección ``fea:`` de la pieza, "
+"junto a los que ya hubiera. Es el puente entre las dos mitades de esta fase:"
+" una simulación dice qué le hace el mundo a un ensamblaje, y esto lo "
+"convierte en el caso de carga que una pieza tiene que sobrevivir."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:344
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:345
+msgid ""
+"Runs every analysis scenario as part of giving each requirement a verdict, "
+"and reports a scenario that names a ``feature:`` as evidence for that "
+"feature."
+msgstr ""
+"Ejecuta todos los escenarios de análisis como parte de dar un veredicto a "
+"cada requisito, e informa de un escenario que nombra un ``feature:`` como "
+"evidencia de esa característica."
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:348
+msgid ""
+"There is no skill that writes an ``fea:`` section from a description. The "
+"conditions are an engineering judgement about how the part is really held "
+"and loaded, and a plausible-looking guess at them produces a plausible-"
+"looking number that is wrong."
+msgstr ""
+"No hay ninguna skill que escriba una sección ``fea:`` a partir de una "
+"descripción. Las condiciones son un juicio de ingeniería sobre cómo está "
+"realmente sujeta y cargada la pieza, y una conjetura de aspecto plausible "
+"sobre ellas produce un número de aspecto plausible que es erróneo."

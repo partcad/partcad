@@ -1,0 +1,383 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/plugins/importers.rst:5
+msgid "Importers"
+msgstr "导入器"
+
+#: ../../source/plugins/importers.rst:7
+msgid ""
+"An **import plugin** teaches PartCAD to read a file format. ``urdf``, ``sim-"
+"mujoco:mjcf`` and ``sim-gazebo:world`` are not object types PartCAD hard-"
+"codes: each is one entry of an ``import:`` section -- a declaration saying "
+"which script reads that format, what its sandbox needs, and which object "
+"kinds it may produce -- and a package writes one to teach PartCAD a format "
+"of its own."
+msgstr ""
+"**导入插件** 教 PartCAD 读取一种文件格式。``urdf`` 、 ``sim-mujoco:mjcf`` 和 ``sim-"
+"gazebo:world`` 并不是 PartCAD 硬编码进去的对象类型：它们每一个都是一个 ``import:`` 小节中的一个条目 -- "
+"一段声明，说明由哪个脚本来读取那种格式、它的沙箱需要什么，以及它可以产出哪些对象种类 -- 而包写一个这样的条目，就是为了教 PartCAD "
+"认识一种它自己的格式。"
+
+#: ../../source/plugins/importers.rst:13
+msgid ""
+"That is not a hypothetical. ``urdf`` is the only one of those three PartCAD "
+"ships, and the other two are entries of exactly this kind in the plugin "
+"package for their engine."
+msgstr "这不是假设。那三个里面只有 ``urdf`` 是 PartCAD 自带的，而另外两个就是它们各自引擎的插件包中这类条目。"
+
+#: ../../source/plugins/importers.rst:18
+msgid "What an importer is for"
+msgstr "导入器的用途"
+
+#: ../../source/plugins/importers.rst:20
+msgid ""
+"**Reading somebody else's description of an assembly or a scene** -- a robot"
+" in URDF, a world in SDFormat, a model in MJCF -- so that it becomes objects"
+" of a package and can be inspected, rendered, exported and simulated like "
+"anything else PartCAD declares."
+msgstr ""
+"**读取别人对某个装配体或场景的描述** -- URDF 中的一台机器人、SDFormat 中的一个世界、MJCF 中的一个模型 -- "
+"使它成为某个包的对象，从而可以像 PartCAD 所声明的其他任何东西一样被检视、渲染、导出和仿真。"
+
+#: ../../source/plugins/importers.rst:24
+msgid ""
+"**Bringing a vendor format into the thread** without converting it first. "
+"The file stays the source of truth, and PartCAD reads it again whenever it "
+"changes."
+msgstr "**把某个厂商的格式带进主线**，而不必先把它转换掉。那个文件仍然是事实来源，而只要它发生变化，PartCAD 就会重新读取它。"
+
+#: ../../source/plugins/importers.rst:26
+msgid ""
+"**Giving a format a round trip.** Reading and writing one format are one "
+"piece of knowledge, so a package that declares the importer usually declares"
+" the matching :doc:`export type </plugins/output>` beside it, and ``pc "
+"convert`` then moves objects between the two."
+msgstr ""
+"**给一种格式一条往返之路。** 读取和写出同一种格式是同一份知识，所以声明导入器的那个包通常会把配套的 :doc:`导出类型 "
+"</plugins/output>` 声明在它旁边，而 ``pc convert`` 随后就能在两者之间搬运对象。"
+
+#: ../../source/plugins/importers.rst:30
+msgid ""
+"**Teaching a proprietary or in-house format** to PartCAD in one place, as a "
+"package your other packages import, rather than converting files by hand."
+msgstr "**把一种专有格式或内部格式在一个地方教给 PartCAD**，作为一个供你其他包导入的包，而不是手工去转换文件。"
+
+#: ../../source/plugins/importers.rst:34
+msgid "Using one"
+msgstr "使用一个导入插件"
+
+#: ../../source/plugins/importers.rst:36
+msgid ""
+"Import the package that declares the format and name the type through it. "
+"The section the declaration goes in -- ``assemblies:`` or ``scenes:`` -- is "
+"what says what the file *is*:"
+msgstr ""
+"导入声明了那种格式的那个包，并通过它来指名该类型。声明所在的那个小节 -- ``assemblies:`` 还是 ``scenes:`` -- "
+"才是说明这个文件 *是* 什么的东西："
+
+#: ../../source/plugins/importers.rst:52
+msgid "Three commands exist for a file the package does not declare yet:"
+msgstr "对于包尚未声明的文件，有三条命令可用："
+
+#: ../../source/plugins/importers.rst:60
+msgid ""
+"``pc info`` on the result reports what the reader had to drop, which is the "
+"first thing to look at after importing anything."
+msgstr "对结果运行 ``pc info`` 会报告读取器不得不丢弃了什么，而这正是导入任何东西之后第一件该看的事。"
+
+#: ../../source/plugins/importers.rst:64
+msgid "Writing one"
+msgstr "编写一个导入插件"
+
+#: ../../source/plugins/importers.rst:66
+msgid "One entry per format, in an ``import:`` section:"
+msgstr "每种格式一个条目，写在一个 ``import:`` 小节中："
+
+#: ../../source/plugins/importers.rst:83
+msgid ""
+"An object then names it the way it names any object type. A reader in the "
+"same package is named directly; one in another package is named by full "
+"path, exactly as a :ref:`partType <part-types>` or a ``simulation:`` plugin "
+"is."
+msgstr ""
+"对象随后就像指名任何对象类型那样指名它。同一个包里的读取器直接按名称指名；而另一个包里的读取器则按完整路径指名，与 :ref:`partType "
+"<part-types>` 或 ``simulation:`` 插件完全一样。"
+
+#: ../../source/plugins/importers.rst:87
+msgid ""
+"The reader itself is handed the file and its parameters, and returns a tree "
+"of placed shapes as plain data -- each node naming the *file* its geometry "
+"is read from rather than carrying geometry. The part factory for that file's"
+" own format reads it afterwards, so a mesh a scene references is never "
+"copied or rewritten. Only the primitives a format defines (a box, a "
+"cylinder, a sphere) have no file to name, and the reader writes those out "
+"itself. See ``wrappers/wrapper_import.py`` for the contract in full."
+msgstr ""
+"读取器本身拿到的是文件及其参数，返回的则是一棵已摆放形状的树，以纯数据表示——每个节点指明其几何读自哪个 "
+"*文件*，而不是直接携带几何。随后由该文件自身格式的零件工厂去读取它，因此场景引用的网格永远不会被复制或改写。只有格式自身定义的基本体（长方体、圆柱、球）没有文件可供指明，这些由读取器自己写出。完整的约定见"
+" ``wrappers/wrapper_import.py``。"
+
+#: ../../source/plugins/importers.rst:95
+msgid ""
+"The file is a Jinja2 template like every other text file an assembly or a "
+"scene is declared by, and is rendered before the reader sees it. A format "
+"whose files are bytes (a DWG, say) says so, and its files are handed to the "
+"reader exactly as they are on disk, never opened as text:"
+msgstr ""
+"这个文件和用来声明装配体或场景的其他每一个文本文件一样，都是 Jinja2 模板，并在读取器看到它之前先被渲染。而文件内容是字节的格式（比如 "
+"DWG）会把这一点说明出来，于是它的文件会按它们在磁盘上的原样交给读取器，绝不会被当作文本打开："
+
+#: ../../source/plugins/importers.rst:108
+msgid ""
+"It is the declaration that decides, never the file's content: a binary file "
+"whose bytes happen to decode is still not rendered, and a text format's file"
+" that is not UTF-8 is reported as the broken template it is. Every object "
+"PartCAD reads from a file is one of three kinds in this respect -- handed "
+"over as it is, rendered as a template, or bytes -- and "
+"``partcad.file_source`` is where that is decided."
+msgstr ""
+"作决定的是那段声明，而绝不是文件的内容：一个二进制文件即使它的字节恰好能解码，也仍然不会被渲染；而一个文本格式的文件如果不是 "
+"UTF-8，就会按它本来的样子被报告为一个损坏的模板。PartCAD 从文件读入的每一个对象，在这方面都属于三种之一 -- "
+"原样交过去、作为模板渲染，或者字节 -- 而 ``partcad.file_source`` 就是作出这个决定的地方。"
+
+#: ../../source/plugins/importers.rst:115
+msgid ""
+"A reader runs where an output implementation of the same package would: in "
+"the sandbox its own package describes (``pythonVersion``, "
+"``pythonRequirements``, ``dockerImage``), never the one the package "
+"declaring the object does. It is also handed ``request[\"cache_dir\"]``, the"
+" directory its package keeps what it downloads on first use in -- a "
+"converter pip cannot install, for one -- exactly as a ``partType`` and an "
+"output implementation are."
+msgstr ""
+"读取器运行的位置，与同一个包的输出实现会运行的位置相同：在它自己的包所描述的那个沙箱中（ ``pythonVersion`` 、 "
+"``pythonRequirements`` 、 ``dockerImage`` ），而绝不是声明该对象的那个包所描述的沙箱。它同样会拿到 "
+"``request[\"cache_dir\"]`` ，也就是它的包用来存放它首次使用时下载之物的那个目录 -- 比如一个 pip 装不上的转换器 --"
+" 与 ``partType`` 和输出实现完全一样。"
+
+#: ../../source/plugins/importers.rst:122
+msgid ""
+"Two fields are worth dwelling on. ``kinds:`` is a claim the core holds the "
+"declaration to: a format that describes one robot is an assembly and "
+"declaring it under ``scenes:`` is an error, while a format used for both -- "
+"MJCF is the one that routinely is -- says both and lets the section decide. "
+"``dropped:`` words what the reader counted: every one of these formats "
+"describes something a static tree cannot hold, and the division of labour is"
+" that the *reader* counts what it had to drop and the *declaration* says "
+"what to call it."
+msgstr ""
+"有两个字段值得细说。``kinds:`` 是核心会据以约束该声明的一项主张：描述单个机器人的格式是装配体，把它声明在 ``scenes:`` "
+"下就是错误；而两者兼用的格式——MJCF 就经常如此——则两种都写上，交由小节来决定。``dropped:`` "
+"为读取器所统计的东西提供措辞：这些格式无一例外都描述了静态树容纳不下的内容，而分工是：由 *读取器* 统计它不得不丢弃了什么，由 *声明* "
+"来说明该怎么称呼它。"
+
+#: ../../source/plugins/importers.rst:130
+msgid ""
+"The section shares its name with what ``dependencies:`` used to be called, "
+"and that spelling is reported rather than silently migrated now: a package "
+"whose ``import:`` entries carry a ``type:`` of "
+"``git``/``tar``/``local``/``external``, or any of the transport-only keys "
+"(``url``, ``relPath``, ``revision``, ...), is told to rename the section, "
+"and those entries are dropped instead of being fetched as packages. Nothing "
+"is migrated for it."
+msgstr ""
+"这个小节的名字与 ``dependencies:`` 过去的叫法相同，而如今这种写法会被报告出来，而不是被悄悄迁移：如果某个包的 ``import:``"
+" 条目带有 ``git`` / ``tar`` / ``local`` / ``external`` 之类的 "
+"``type:``，或者带有任何仅用于传输的键（``url``、 ``relPath``、 ``revision`` "
+"等），它会被提示重命名该小节，而这些条目会被丢弃，不再作为包去获取。不会为它迁移任何东西。"
+
+#: ../../source/plugins/importers.rst:137
+msgid ""
+"How loudly depends on whose package it is. In the package you are standing "
+"in it is an error and the package is broken -- the command exits non-zero "
+"and nothing loads out of it, because that is the file you can fix. In an "
+"imported package it is a warning naming the package, the entry and the fix: "
+"such a package is very often somebody else's, several levels below anything "
+"you wrote, and one of them anywhere in an index must not fail every command "
+"that merely walks past it. That package goes on providing everything else it"
+" declares; what is lost is exactly what the section named."
+msgstr ""
+"提示有多严厉取决于那是谁的包。在你所处的包里，这是一个错误，而且包是坏的——命令以非零状态退出，不会从中加载任何东西，因为那正是你能修改的文件。在导入的包里，这是一条警告，指出包、条目和修复办法：这类包往往是别人的，位于你所写内容之下好几层，而索引中任何一处出现这种情况，都不应该让每一条仅仅路过它的命令失败。那个包会继续提供它声明的其余一切；丢失的恰好就是那个小节所指明的内容。"
+
+#: ../../source/plugins/importers.rst:146
+msgid ""
+"PartCAD ships **one** of these, in ``//builtin/import``: ``urdf``, which "
+"stays there because a URDF describes a robot rather than any one engine's "
+"world, and ROS, MuJoCo, PyBullet and Isaac all read it. ``mjcf`` and "
+"``world`` belong to `partcad-sim-mujoco <https://github.com/partcad/partcad-"
+"sim-mujoco>`_ and `partcad-sim-gazebo <https://github.com/partcad/partcad-"
+"sim-gazebo>`_ respectively, beside the exporter and the simulator that share"
+" their knowledge of the format: reading a format and writing it are one "
+"piece of knowledge, and this is what lets the pair travel together and be "
+"versioned together."
+msgstr ""
+"PartCAD 只自带其中 **一个**，位于 ``//builtin/import`` 中：``urdf``。它留在那里，是因为 URDF "
+"描述的是机器人而不是某一个引擎的世界，而 ROS、MuJoCo、PyBullet 和 Isaac 都会读取它。``mjcf`` 和 ``world`` "
+"则分别属于 `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ "
+"和 `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-"
+"gazebo>`_，与同样掌握该格式知识的导出器和仿真器放在一起：读取一种格式和写出这种格式是同一份知识，这正是让这一对能够结伴同行、一同版本化的原因。"
+
+#: ../../source/plugins/importers.rst:155
+msgid ""
+"Each of those packages declares the reader, the writer, the simulator and "
+"the ``open:`` entry for its format, and the wheel carries none of them. So "
+"``type: sim-gazebo:world`` and ``type: sim-mujoco:mjcf`` are the spellings "
+"that resolve, in a package that imports the plugin; a bare ``type: world`` "
+"resolves to nothing and says which package to name."
+msgstr ""
+"这些包各自为自己的格式声明读取器、写入器、仿真器以及 ``open:`` 条目，而 wheel "
+"中一个都不包含。因此，在导入了相应插件的包里，能够解析的写法是 ``type: sim-gazebo:world`` 和 ``type: sim-"
+"mujoco:mjcf``；裸写的 ``type: world`` 解析不到任何东西，并会提示应当指名哪个包。"
+
+#: ../../source/plugins/importers.rst:162
+msgid "Examples"
+msgstr "示例"
+
+#: ../../source/plugins/importers.rst:164
+msgid ""
+"Both of the formats below are read, written, opened and simulated by one "
+"package each, which is the shape to copy: the knowledge of a format belongs "
+"beside the engine that uses it."
+msgstr "下面这两种格式都各由一个包来读取、写出、打开和仿真，而这正是值得照抄的形状：一种格式的知识应该放在使用它的那个引擎旁边。"
+
+#: ../../source/plugins/importers.rst:169
+msgid "Gazebo worlds -- ``sim-gazebo:world``"
+msgstr "Gazebo 世界 -- ``sim-gazebo:world``"
+
+#: ../../source/plugins/importers.rst:171
+msgid ""
+"The ``sim-gazebo:world`` type reads an `SDFormat <http://sdformat.org/>`_ "
+"``.world`` file -- what Gazebo describes a simulation world in -- as a scene"
+" directly, with no conversion step. It is declared by `partcad-sim-gazebo "
+"<https://github.com/partcad/partcad-sim-gazebo>`_ rather than by PartCAD "
+"itself, beside the exporter, the ``pc ide open`` entry and the simulator "
+"that share their knowledge of the format, so a package that uses it imports "
+"that package and names the type through it. Every model is placed where its "
+"``<pose>`` puts it, every link where its own pose puts it inside the model, "
+"and every shape becomes a part of the package named "
+"``<scene>/<model>/<link>``. Those parts are ordinary parts: they can be "
+"inspected, rendered and exported on their own."
+msgstr ""
+"``sim-gazebo:world`` 类型直接把 `SDFormat <http://sdformat.org/>`_ 的 ``.world`` "
+"文件——Gazebo 用来描述仿真世界的格式——读取为场景，不需要任何转换步骤。它由 `partcad-sim-gazebo "
+"<https://github.com/partcad/partcad-sim-gazebo>`_ 声明，而不是由 PartCAD "
+"本身声明，与同样掌握该格式的导出器、 ``pc ide open`` "
+"入口和仿真器放在一起；因此使用它的包需要导入那个包，并通过它来指名该类型。每个模型都放在它的 ``<pose>`` "
+"所指定的位置，每个连杆放在它自身的位姿在模型内所指定的位置，而每个形状都会变成包中一个名为 ``<scene>/<model>/<link>`` "
+"的零件。这些零件都是普通零件：它们可以被单独查看、渲染和导出。"
+
+#: ../../source/plugins/importers.rst:184
+msgid ""
+"\"SDF\" means two unrelated things in PartCAD. The ``sdf`` *part* type is a "
+"signed distance function. This is **SDFormat**, and PartCAD calls it "
+"``world`` throughout, after the files it lives in."
+msgstr ""
+"“SDF”在 PartCAD 中指两件互不相干的事情。 ``sdf`` *零件* 类型指的是有符号距离函数。而这里说的是 **SDFormat** "
+"，PartCAD 全程按它所在文件的名称把它称作 ``world`` 。"
+
+#: ../../source/plugins/importers.rst:188
+msgid ""
+"It is a best-effort reader: SDFormat describes a running simulation and a "
+"scene describes where things are, so joints, lights, sensors, plugins, "
+"actors, physics settings and the ground plane are counted and reported "
+"rather than passed over in silence. ``pc info`` lists what was dropped. See "
+":ref:`sim-engine-formats` for the whole picture."
+msgstr ""
+"它是一个尽力而为的读取器：SDFormat "
+"描述的是一次正在运行的仿真，而场景描述的是各物体所处的位置，所以关节、灯光、传感器、插件、角色、物理设置和地平面都会被计数并报告，而不是被默不作声地略过。``pc"
+" info`` 会列出被丢弃的内容。完整情况参见 :ref:`sim-engine-formats` 。"
+
+#: ../../source/plugins/importers.rst:194
+msgid ""
+"The reverse direction is the ``sim-gazebo:world`` export file type, declared"
+" by the same package:"
+msgstr "反方向是 ``sim-gazebo:world`` 导出文件类型，由同一个包声明："
+
+#: ../../source/plugins/importers.rst:201
+msgid ""
+"and ``pc convert scene`` moves a scene between the two formats, rewriting "
+"the package around it:"
+msgstr "而 ``pc convert scene`` 可以在这两种格式之间转换场景，并改写它周围的包："
+
+#: ../../source/plugins/importers.rst:209
+msgid ""
+"``pc import scene -t sim-gazebo:world warehouse.world`` does the first of "
+"those in one step for a file the package does not declare yet, leaving the "
+"package holding PartCAD's own objects. ``pc add scene sim-gazebo:world "
+"warehouse.world`` declares the file where it lies instead."
+msgstr ""
+"对于包尚未声明的文件， ``pc import scene -t sim-gazebo:world warehouse.world`` "
+"会一步完成上面的第一种转换，使包中留下 PartCAD 自己的对象。而 ``pc add scene sim-gazebo:world "
+"warehouse.world`` 则是就地声明该文件。"
+
+#: ../../source/plugins/importers.rst:215
+msgid "MuJoCo models -- ``sim-mujoco:mjcf``"
+msgstr "MuJoCo 模型 -- ``sim-mujoco:mjcf``"
+
+#: ../../source/plugins/importers.rst:217
+msgid ""
+"The ``sim-mujoco:mjcf`` type reads a `MuJoCo <https://mujoco.org/>`_ model "
+"as a scene, the same way ``sim-gazebo:world`` reads a Gazebo one. It is "
+"declared by `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-"
+"mujoco>`_, for the reason the world type is declared by the Gazebo one: "
+"every body is placed where its ``pos`` and orientation put it inside the "
+"body that holds it, and every geom becomes a part of the package named "
+"``<scene>/<body>``."
+msgstr ""
+"``sim-mujoco:mjcf`` 类型把 `MuJoCo <https://mujoco.org/>`_ 模型读取为场景，方式与 ``sim-"
+"gazebo:world`` 读取 Gazebo 世界相同。它由 `partcad-sim-mujoco "
+"<https://github.com/partcad/partcad-sim-mujoco>`_ 声明，原因与 world 类型由 Gazebo "
+"的那个包声明相同：每个 body 都放在它的 ``pos`` 和朝向在容纳它的 body 内所指定的位置，而每个 geom 都会变成包中一个名为 "
+"``<scene>/<body>`` 的零件。"
+
+#: ../../source/plugins/importers.rst:224
+msgid ""
+"It is the one format that is **both** a scene type and an assembly type, and"
+" which of the two a given file is depends on the section that declares it "
+"rather than on the file. A URDF describes one robot and a ``.world`` "
+"describes one world; an MJCF file is used for both -- the same element holds"
+" a manipulator and the table it is bolted to -- and nothing in it says which"
+" it is. So the package says so:"
+msgstr ""
+"它是唯一一种 **同时** 既是场景类型又是装配体类型的格式，而某个具体文件究竟属于哪一种，取决于声明它的小节，而不是文件本身。URDF "
+"描述的是一个机器人， ``.world`` 描述的是一个世界；而 MJCF "
+"文件两者都用——同一个元素里既有一台机械手，也有它被螺栓固定于其上的工作台——文件本身并不说明它是哪一种。于是由包来说明："
+
+#: ../../source/plugins/importers.rst:243
+msgid ""
+"It is a best-effort reader in the same way the world reader is: joints, "
+"actuators, tendons, sensors, lights, cameras, contacts and keyframes are "
+"counted and reported, and ``pc info`` lists what was dropped. The reverse "
+"direction is the ``sim-mujoco:mjcf`` export file type, which writes an "
+"``.xml`` file plus the meshes it references:"
+msgstr ""
+"它和 world 读取器一样是尽力而为的读取器：关节、执行器、腱、传感器、灯光、相机、接触和关键帧都会被统计并报告出来，而 ``pc info`` "
+"会列出被丢弃的内容。反方向是 ``sim-mujoco:mjcf`` 导出文件类型，它会写出一个 ``.xml`` 文件以及它所引用的网格文件："
+
+#: ../../source/plugins/importers.rst:254
+msgid ""
+"It is also the format ``pc sim`` hands a scene to MuJoCo in (see :ref:`sim-"
+"engines`), and the one ``pc ide open --with mujoco`` expects a file to "
+"already be in (see :ref:`sim-opening`)."
+msgstr ""
+"它同时也是 ``pc sim`` 把场景交给 MuJoCo 时所用的那种格式（参见 :ref:`sim-engines` ），也是 ``pc ide "
+"open --with mujoco`` 要求文件本来就处于的那种格式（参见 :ref:`sim-opening` ）。"

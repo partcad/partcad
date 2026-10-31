@@ -1,0 +1,107 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/public_repository.rst:2
+msgid "Public Repository"
+msgstr "公共仓库"
+
+#: ../../source/public_repository.rst:4
+msgid ""
+"The public PartCAD repository is created and maintained by the community "
+"based on the PartCAD standards and conventions. It is hosted on `GitHub "
+"<https://github.com/partcad/partcad-index>`_."
+msgstr ""
+"公共 PartCAD 仓库由社区依据 PartCAD 标准与约定创建和维护。它托管在 `GitHub "
+"<https://github.com/partcad/partcad-index>`_ 上。"
+
+#: ../../source/public_repository.rst:10
+msgid "Nothing to install"
+msgstr "无需安装任何东西"
+
+#: ../../source/public_repository.rst:12
+msgid ""
+"PartCAD retrieves the contents of this repository, and of every other "
+"repository and package a package imports, as it needs them. No manual action"
+" is needed to \"install\" it: a package created by ``pc init`` declares the "
+"public index as a dependency, and the first command that needs something "
+"from it fetches it."
+msgstr ""
+"PartCAD 会在需要时取回这个仓库的内容，以及某个包所导入的其他每一个仓库和包的内容。不需要任何手工动作去“安装”它：由 ``pc init`` "
+"创建的包会把公共索引声明为一个依赖，而第一条需要从它那里取东西的命令就会把它抓下来。"
+
+#: ../../source/public_repository.rst:16
+msgid ""
+"If you suspect something is wrong with the locally cached copy, ``pc system "
+"status`` says where the cached files are, and ``pc system reset`` clears "
+"them."
+msgstr ""
+"如果你怀疑本地缓存的那份副本有问题，``pc system status`` 会说明缓存文件在哪里，而 ``pc system reset`` "
+"会把它们清掉。"
+
+#: ../../source/public_repository.rst:21
+msgid "Who maintains what"
+msgstr "谁维护什么"
+
+#: ../../source/public_repository.rst:23
+msgid ""
+"The top levels of the package hierarchy are expected to be maintained by the"
+" PartCAD community. Lower levels of the hierarchy are expected to be "
+"maintained by vendors and other communities. PartCAD community does not aim "
+"to achieve the uniqueness of parts and assemblies. Moreover, everyone is "
+"invited to provide their alternative models as long as they provide a "
+"different level of model quality or different level of package quality "
+"management processes, and as long the package data properly reflects the "
+"quality that the maintainer provides and commits to maintain. This way "
+"PartCAD users have a choice of which model to use based on their specific "
+"needs."
+msgstr ""
+"包层级结构的顶层部分预计将由 PartCAD 社区维护。层级中较低的部分则预计由供应商和其他社区维护。PartCAD "
+"社区并不追求让零件和装配体保持唯一。此外，只要能够提供不同层次的模型质量或不同层次的包质量管理流程，并且只要包数据能够如实反映维护者所提供并承诺维护的质量，就欢迎任何人提供他们自己的替代模型。这样一来，PartCAD"
+" 用户就可以根据自身的具体需求来选择使用哪个模型。"
+
+#: ../../source/public_repository.rst:36
+msgid "How it keeps working"
+msgstr "它是如何保持可用的"
+
+#: ../../source/public_repository.rst:38
+msgid ""
+"Every package in it is pinned to an exact commit, declares the oldest "
+"PartCAD it works with, and keeps the branch the repository tracks working "
+"for everybody who already uses it; a breaking change goes to a new branch "
+"instead. Changes are merged to its ``devel`` branch, and ``main`` -- what "
+"packages created by ``pc init`` track -- only moves by fast-forward from it."
+" `CONTRIBUTING.md <https://github.com/partcad/partcad-"
+"index/blob/devel/CONTRIBUTING.md>`_ in the repository has the details, and "
+":doc:`/digital_thread/change_management` gives the same advice for a library"
+" of packages of your own."
+msgstr ""
+"其中每一个包都固定到一个确切的提交、声明它所能配合的最老的 "
+"PartCAD，并让该仓库所跟踪的那个分支对每一个已经在用它的人继续可用；破坏性改动则改去一个新分支。各项改动合并到它的 ``devel`` 分支，而 "
+"``main`` -- 也就是由 ``pc init`` 创建的包所跟踪的那个分支 -- 只通过从它快进来移动。该仓库中的 "
+"`CONTRIBUTING.md <https://github.com/partcad/partcad-"
+"index/blob/devel/CONTRIBUTING.md>`_ 有详细内容，而 "
+":doc:`/digital_thread/change_management` 为你自己的包库给出了同样的建议。"
+
+#: ../../source/public_repository.rst:47
+msgid ""
+"Contributing a part, an assembly or an interface to it is covered in "
+":doc:`/contributing`."
+msgstr "向它贡献一个零件、一个装配体或一个接口，参见 :doc:`/contributing` 。"

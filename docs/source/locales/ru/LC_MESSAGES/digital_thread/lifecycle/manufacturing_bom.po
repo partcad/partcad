@@ -1,0 +1,99 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:5
+msgid "Bill of Materials"
+msgstr "Спецификация материалов"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:7
+msgid ""
+"**Bill of Materials** is what has to be procured in order to have the "
+"object: every line item, counted. It is :doc:`/config_bom` as a tab, and the"
+" same answer ``pc bom`` prints."
+msgstr ""
+"**Bill of Materials** -- это то, что надо закупить, чтобы иметь объект: "
+"каждая строка, с подсчётом. Это :doc:`/config_bom` в виде вкладки и тот же "
+"ответ, который печатает ``pc bom``."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:11
+msgid ""
+"What it is *not* is a list of parts. A part that is made is its **stock** --"
+" you buy the sheet, not the panel cut out of it -- and a sub-assembly that "
+"declares a ``vendor:`` and an ``sku:`` is one item ordered whole, with "
+"nothing inside it looked at. What is built and what is bought comes from "
+":doc:`Build vs Buy </digital_thread/lifecycle/manufacturing_bvb>`; where "
+"nothing was chosen, a line that can be either is bought."
+msgstr ""
+"А чем это *не* является -- так это списком деталей. Изготавливаемая деталь "
+"входит как её **заготовка**: вы покупаете лист, а не вырезанную из него "
+"панель, -- а подсборка, которая объявляет ``vendor:`` и ``sku:``, является "
+"одним заказываемым целиком элементом, и внутрь неё не смотрят. То, что "
+"изготавливается, и то, что покупается, берётся из :doc:`Build vs Buy "
+"</digital_thread/lifecycle/manufacturing_bvb>`; там, где ничего не было "
+"выбрано, строка, которая может быть и той и другой, считается покупаемой."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:19
+msgid "In the UI"
+msgstr "В интерфейсе"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:21
+msgid ""
+"One row per line item, with how many of each. For a part or an assembly."
+msgstr ""
+"По строке на каждую позицию, с указанием количества каждой. Для детали или "
+"сборки."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:23
+msgid ""
+"The Manufacturing group's Bill of Materials tab: every line item, counted"
+msgstr ""
+"Вкладка Bill of Materials группы Manufacturing: каждая позиция, с подсчётом"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:29
+msgid "On the command line"
+msgstr "В командной строке"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:37
+msgid ""
+":doc:`/config_bom` explains how interfaces, ``alias`` and ``enrich`` make a "
+"line item interchangeable -- an abstract position in the bill of materials "
+"that a concrete part fills."
+msgstr ""
+":doc:`/config_bom` объясняет, как интерфейсы, ``alias`` и ``enrich`` делают "
+"позицию взаимозаменяемой -- абстрактной позицией в спецификации материалов, "
+"которую заполняет конкретная деталь."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:42
+msgid "Agent skills"
+msgstr "Навыки агентов"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:44
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:45
+msgid ""
+"Reads the bill of materials as part of giving a requirement its verdict: a "
+"line of it is evidence for a feature that no measurement can judge."
+msgstr ""
+"Читает спецификацию материалов в рамках вынесения вердикта по требованию: её"
+" строка является доказательством для той функции, о которой не может судить "
+"никакое измерение."

@@ -1,0 +1,222 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/plugins/part_types.rst:3
+msgid "Part types"
+msgstr "Tipos de pieza"
+
+#: ../../source/plugins/part_types.rst:5
+msgid ""
+"A **part type plugin** teaches PartCAD how to build a part. The types "
+"PartCAD implements itself -- ``build123d``, ``cadquery``, ``openscad``, "
+"``step``, ``stl``, and the rest of :ref:`the list <part-types>` -- are what "
+"a part's ``type:`` normally names. A ``partTypes:`` section declares one "
+"more, belonging to the package that writes it, and parts then name that "
+"instead."
+msgstr ""
+"Un **plugin de tipo de pieza** le enseña a PartCAD cómo construir una pieza."
+" Los tipos que PartCAD implementa por sí mismo -- ``build123d``, "
+"``cadquery``, ``openscad``, ``step``, ``stl`` y el resto de :ref:`la lista "
+"<part-types>` -- son lo que normalmente nombra el ``type:`` de una pieza. "
+"Una sección ``partTypes:`` declara uno más, perteneciente al paquete que la "
+"escribe, y las piezas nombran entonces ese en su lugar."
+
+#: ../../source/plugins/part_types.rst:11
+msgid ""
+"It is worth doing when **a family of parts is produced the same way every "
+"time** and the difference between them is a handful of parameters rather "
+"than a script each: parts generated from a table, fetched from a catalogue, "
+"or built by a modelling helper the package already has. Twenty bolts become "
+"twenty parameter sets and one script, not twenty scripts."
+msgstr ""
+"Vale la pena hacerlo cuando **una familia de piezas se produce de la misma "
+"manera todas las veces** y la diferencia entre ellas es un puñado de "
+"parámetros en lugar de un script para cada una: piezas generadas a partir de"
+" una tabla, obtenidas de un catálogo o construidas por un ayudante de "
+"modelado que el paquete ya tiene. Veinte tornillos se convierten en veinte "
+"conjuntos de parámetros y un script, no en veinte scripts."
+
+#: ../../source/plugins/part_types.rst:18
+msgid "What a part type is for"
+msgstr "Para qué sirve un tipo de pieza"
+
+#: ../../source/plugins/part_types.rst:20
+msgid ""
+"**A parametric family.** One script, a ``parameters:`` block per part. The "
+"script is the only place the geometry is written down, so a fix to it fixes "
+"every part of the family at once."
+msgstr ""
+"**Una familia paramétrica.** Un script, un bloque ``parameters:`` por pieza."
+" El script es el único lugar donde está escrita la geometría, así que un "
+"arreglo en él arregla todas las piezas de la familia a la vez."
+
+#: ../../source/plugins/part_types.rst:23
+msgid ""
+"**A catalogue.** A type that reads a vendor's table or API and returns the "
+"shape for a given part number, so the package's parts are the part numbers."
+msgstr ""
+"**Un catálogo.** Un tipo que lee la tabla o la API de un fabricante y "
+"devuelve la forma de un número de pieza dado, de modo que las piezas del "
+"paquete son los números de pieza."
+
+#: ../../source/plugins/part_types.rst:25
+msgid ""
+"**A house modelling convention** -- a profile system, a sheet-metal "
+"enclosure, a connector family -- published once as a package other packages "
+"import."
+msgstr ""
+"**Una convención de modelado de la casa** -- un sistema de perfiles, una "
+"carcasa de chapa, una familia de conectores -- publicada una sola vez como "
+"un paquete que otros paquetes importan."
+
+#: ../../source/plugins/part_types.rst:28
+msgid ""
+"**A kernel or a helper PartCAD does not know about.** The script runs in its"
+" own sandbox and can import whatever it needs."
+msgstr ""
+"**Un núcleo o un ayudante que PartCAD no conoce.** El script se ejecuta en "
+"su propio sandbox y puede importar lo que necesite."
+
+#: ../../source/plugins/part_types.rst:32
+msgid "Using one"
+msgstr "Usar uno"
+
+#: ../../source/plugins/part_types.rst:34
+msgid ""
+"A ``type:`` beginning with ``:`` names a part type of the part's own package"
+" and is expanded to ``<package path>:<name>`` when the package loads. Write "
+"the package path out to use another package's:"
+msgstr ""
+"Un ``type:`` que empieza por ``:`` nombra un tipo de pieza del paquete "
+"propio de la pieza y se expande a ``<package path>:<name>`` cuando el "
+"paquete carga. Escriba la ruta del paquete completa para usar el de otro "
+"paquete:"
+
+#: ../../source/plugins/part_types.rst:52
+msgid ""
+"A part built this way is an ordinary part in every other respect: it "
+"renders, exports, tests, goes into assemblies and into a bill of materials. "
+"A part type is listed like any other object but **is never a shape in its "
+"own right** -- it is how parts are made, not one of them."
+msgstr ""
+"Una pieza construida así es una pieza corriente en todo lo demás: se "
+"renderiza, se exporta, se prueba, entra en ensamblajes y en una lista de "
+"materiales. Un tipo de pieza se enumera como cualquier otro objeto, pero "
+"**nunca es una forma por derecho propio** -- es cómo se hacen las piezas, no"
+" una de ellas."
+
+#: ../../source/plugins/part_types.rst:58
+msgid "Writing one"
+msgstr "Escribir uno"
+
+#: ../../source/plugins/part_types.rst:77
+msgid ""
+"The script is run in the sandbox once per part, with the part's ``request`` "
+"in its globals -- the resolved ``parameters`` among them -- and leaves the "
+"geometry in a global ``output``:"
+msgstr ""
+"El script se ejecuta en el sandbox una vez por pieza, con la ``request`` de "
+"la pieza en sus variables globales -- entre ellas los ``parameters`` "
+"resueltos -- y deja la geometría en una variable global ``output``:"
+
+#: ../../source/plugins/part_types.rst:89
+msgid ""
+"Because the script runs in a sandbox it may import OCP, build123d or "
+"CadQuery. This is the same mechanism as an :doc:`output implementation "
+"</plugins/output>`, pointed at building a shape rather than at writing a "
+"file."
+msgstr ""
+"Como el script se ejecuta en un sandbox, puede importar OCP, build123d o "
+"CadQuery. Este es el mismo mecanismo que una :doc:`implementación de salida "
+"</plugins/output>`, apuntada a construir una forma en lugar de a escribir un"
+" archivo."
+
+#: ../../source/plugins/part_types.rst:93
+msgid "Two things to get right:"
+msgstr "Dos cosas que hay que hacer bien:"
+
+#: ../../source/plugins/part_types.rst:95
+msgid "``CACHE_VERSION``"
+msgstr "``CACHE_VERSION``"
+
+#: ../../source/plugins/part_types.rst:96
+msgid ""
+"A part built by a part type is cached like any other, keyed on the version "
+"the script reports as well as on the part's own configuration -- a module-"
+"level ``CACHE_VERSION = <int>``, read **without running the script**. Raise "
+"it whenever a change to the script changes the parts it builds; an edit that"
+" does not -- a comment, a refactoring -- then costs nobody a rebuild. "
+"Forgetting to raise it is the one failure mode here, and it shows up as a "
+"stale shape."
+msgstr ""
+"Una pieza construida por un tipo de pieza se guarda en caché como cualquier "
+"otra, con clave en la versión que informa el script además de en la "
+"configuración propia de la pieza -- un ``CACHE_VERSION = <int>`` a nivel de "
+"módulo, leído **sin ejecutar el script**. Súbalo siempre que un cambio en el"
+" script cambie las piezas que construye; una edición que no lo haga -- un "
+"comentario, una refactorización -- no le cuesta entonces a nadie una "
+"reconstrucción. Olvidarse de subirlo es el único modo de fallo que hay aquí,"
+" y se manifiesta como una forma obsoleta."
+
+#: ../../source/plugins/part_types.rst:103
+msgid "``pythonRequirements`` belongs to the plugin"
+msgstr "``pythonRequirements`` pertenece al plugin"
+
+#: ../../source/plugins/part_types.rst:104
+msgid ""
+"It is read from the package that ships the script and from nowhere else, so "
+"a part type's dependencies never reach the package using it."
+msgstr ""
+"Se lee del paquete que trae el script y de ningún otro sitio, así que las "
+"dependencias de un tipo de pieza nunca llegan al paquete que lo usa."
+
+#: ../../source/plugins/part_types.rst:108
+msgid "An example"
+msgstr "Un ejemplo"
+
+#: ../../source/plugins/part_types.rst:110
+msgid ""
+"``examples/produce_part_wrapper`` is the whole thing in two files. The "
+"package declares one part type and one part built with it:"
+msgstr ""
+"``examples/produce_part_wrapper`` es todo el asunto en dos archivos. El "
+"paquete declara un tipo de pieza y una pieza construida con él:"
+
+#: ../../source/plugins/part_types.rst:129
+msgid "``box_wrapper.py`` is the script above. From that directory:"
+msgstr "``box_wrapper.py`` es el script de más arriba. Desde ese directorio:"
+
+#: ../../source/plugins/part_types.rst:139
+msgid "The part built by the box partType, shown in the Digital Thread"
+msgstr ""
+"La pieza construida por el partType box, mostrada en el Digital Thread"
+
+#: ../../source/plugins/part_types.rst:144
+msgid ""
+"``box`` is absent from ``pc list parts``, because it is a ``partType`` and "
+"not a part -- PartCAD counts the two as different kinds of object "
+"(``partType`` is one of the ten in ``Project.OBJECT_KINDS``), and only one "
+"of them is a shape."
+msgstr ""
+"``box`` no aparece en ``pc list parts``, porque es un ``partType`` y no una "
+"pieza -- PartCAD cuenta los dos como tipos de objeto distintos (``partType``"
+" es uno de los diez de ``Project.OBJECT_KINDS``), y solo uno de ellos es una"
+" forma."

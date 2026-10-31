@@ -1,0 +1,181 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/maintenance/telemetry.rst:3
+msgid "Telemetry"
+msgstr "遥测"
+
+#: ../../source/maintenance/telemetry.rst:7
+msgid "Public Repositories"
+msgstr "公共仓库"
+
+#: ../../source/maintenance/telemetry.rst:9
+msgid ""
+"By default PartCAD collects telemetry data to improve the user experience "
+"and to help understand how the tool is being used. The data collected "
+"includes the following:"
+msgstr ""
+"默认情况下，PartCAD 会收集遥测数据，以改善用户体验并帮助了解该工具的使用情"
+"况。所收集的数据包括以下内容："
+
+#: ../../source/maintenance/telemetry.rst:13
+msgid "What commands are being run?"
+msgstr "正在运行哪些命令？"
+
+#: ../../source/maintenance/telemetry.rst:14
+msgid "How much time is consumed by each step?"
+msgstr "每个步骤消耗了多少时间？"
+
+#: ../../source/maintenance/telemetry.rst:15
+msgid "What errors and exceptions are being raised?"
+msgstr "抛出了哪些错误和异常？"
+
+#: ../../source/maintenance/telemetry.rst:17
+msgid ""
+"PartCAD uses `OpenTelemetry <https://opentelemetry.io/>`_ to collect "
+"telemetry data. You can disable telemetry by setting the following "
+"configuration:"
+msgstr ""
+"PartCAD 使用 `OpenTelemetry <https://opentelemetry.io/>`_ 来收集遥测数据。你"
+"可以通过设置以下配置来禁用遥测："
+
+#: ../../source/maintenance/telemetry.rst:26
+msgid ""
+"Alternatively, you can disable telemetry by setting the following "
+"environment variable:"
+msgstr "或者，你也可以通过设置以下环境变量来禁用遥测："
+
+#: ../../source/maintenance/telemetry.rst:32
+msgid "You can also change telemetry settings using CLI:"
+msgstr "你还可以使用 CLI 来更改遥测设置："
+
+#: ../../source/maintenance/telemetry.rst:42
+msgid ""
+"How deep the traces go is a separate setting. By default PartCAD reports the "
+"operations it names for itself -- the process a command is, and the action "
+"each object it works on is -- and nothing below them:"
+msgstr ""
+"追踪深入到什么程度是一项单独的设置。默认情况下，PartCAD 只报告它为自己命名的"
+"那些操作——一条命令所对应的过程，以及它所处理的每个对象所对应的动作——再往下的"
+"内容一概不报告："
+
+#: ../../source/maintenance/telemetry.rst:51
+msgid ""
+"``methods`` adds a span for every instrumented method underneath those, "
+"which is what a trace needs to answer \"where inside this did the time go\". "
+"It is expensive in a way that is easy to miss: creating one part passes "
+"through a dozen instrumented methods, so a package of eight thousand of them "
+"costs a quarter of a million spans to list. Turn it on while you are looking "
+"at something, not for good."
+msgstr ""
+"``methods`` 会为这些操作下面每一个被插桩的方法都添加一个 span，追踪要回答“时"
+"间究竟花在了它内部的哪里”正需要这些。它的开销大得很容易被忽视：创建一个零件要"
+"经过十来个被插桩的方法，因此光是列出一个有八千个零件的包就要付出二十五万个 "
+"span 的代价。只在你正查看某个问题时打开它，不要一直开着。"
+
+#: ../../source/maintenance/telemetry.rst:58
+msgid "``pc system telemetry info`` reports both settings."
+msgstr "``pc system telemetry info`` 会报告这两项设置。"
+
+#: ../../source/maintenance/telemetry.rst:61
+msgid "Private Repositories"
+msgstr "私有仓库"
+
+#: ../../source/maintenance/telemetry.rst:63
+msgid ""
+"If you are systemically using PartCAD in your organization then it makes "
+"sense to collect your own telemetry data to understand how the tool is being "
+"used in your organization, and to learn how to improve your organization "
+"performance."
+msgstr ""
+"如果你在组织中系统性地使用 PartCAD，那么收集你自己的遥测数据是有意义的，这样"
+"可以了解该工具在你组织中的使用情况，并学习如何提升你组织的效能。"
+
+#: ../../source/maintenance/telemetry.rst:67
+msgid ""
+"The only OpenTelemetry backend provider currently supported is `Sentry "
+"<https://sentry.io/>`_. Create an organization account on Sentry and obtain "
+"a DSN key."
+msgstr ""
+"目前唯一受支持的 OpenTelemetry 后端提供方是 `Sentry <https://sentry.io/>`_ 。"
+"请在 Sentry 上创建一个组织账户并获取一个 DSN 密钥。"
+
+#: ../../source/maintenance/telemetry.rst:77
+msgid "Other OpenTelemetry backend providers can be supported on request."
+msgstr "如有需要，也可以支持其他 OpenTelemetry 后端提供方。"
+
+#: ../../source/maintenance/telemetry.rst:81
+msgid "Personally Identifiable Information"
+msgstr "个人身份信息"
+
+#: ../../source/maintenance/telemetry.rst:84
+msgid ""
+"The user section in ``~/.partcad/config.yaml`` defines the default personal "
+"and contact details used throughout the system. These details include the "
+"user's name, email, phone number, company, and address information."
+msgstr ""
+"``~/.partcad/config.yaml`` 中的 user 部分定义了整个系统所使用的默认个人信息和"
+"联系方式。这些信息包括用户的姓名、电子邮件、电话号码、公司以及地址信息。"
+
+#: ../../source/maintenance/telemetry.rst:105
+msgid "Address Configuration"
+msgstr "地址配置"
+
+#: ../../source/maintenance/telemetry.rst:107
+msgid ""
+"Users can override any details from the user section by specifying "
+"shippingAddress and billingAddress separately."
+msgstr ""
+"用户可以通过分别指定 shippingAddress 和 billingAddress 来覆盖 user 部分中的任"
+"意信息。"
+
+#: ../../source/maintenance/telemetry.rst:139
+msgid "**Override Behavior**"
+msgstr "**覆盖行为**"
+
+#: ../../source/maintenance/telemetry.rst:141
+msgid ""
+"If shippingAddress is not specified, the system will use the user details "
+"for shipping."
+msgstr "如果未指定 shippingAddress，系统将使用 user 中的信息进行配送。"
+
+#: ../../source/maintenance/telemetry.rst:142
+msgid ""
+"If billingAddress is not specified, the system will use the user details for "
+"billing."
+msgstr "如果未指定 billingAddress，系统将使用 user 中的信息进行账单结算。"
+
+#: ../../source/maintenance/telemetry.rst:143
+msgid ""
+"If shippingAddress or billingAddress is provided, it completely replaces the "
+"corresponding fields from user."
+msgstr ""
+"如果提供了 shippingAddress 或 billingAddress，它将完全替换 user 中对应的字"
+"段。"
+
+#: ../../source/maintenance/telemetry.rst:145
+msgid ""
+"This setup allows full customization of shipping and billing details, "
+"supporting scenarios where items need to be sent to different recipients or "
+"addresses."
+msgstr ""
+"这样的设置允许对配送和账单信息进行完全自定义，从而支持需要将物品寄送给不同收"
+"件人或不同地址的场景。"

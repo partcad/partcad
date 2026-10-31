@@ -1,0 +1,225 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:2
+msgid "Requirements"
+msgstr "需求"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:4
+msgid ""
+"A requirement is what the object was asked to be, written from the point of "
+"view of whoever asked for it and before anybody designs anything. It is the "
+"first link of the thread and the one everything else is held to: the design "
+"is judged against it, the analyses and simulations are evidence for it, and "
+"validation is the question whether it is met."
+msgstr ""
+"需求就是这个对象当初被要求成为什么，它是站在提出要求那一方的角度、在任何人开始设计之前写下的。它是主线的第一环，也是其他一切都要被它约束的那一环：设计要对照它来评判，各项分析和仿真是支持它的依据，而校验问的就是它是否被满足。"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:11
+msgid "What PartCAD captures"
+msgstr "PartCAD 记录了什么"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:13
+msgid ""
+"A part, an assembly, a scene or a sketch may declare a ``requirements:`` "
+"section. :ref:`requirements` describes it in full; in short, it has two "
+"halves, which are checked two ways:"
+msgstr ""
+"零件、装配体、场景或草图都可以声明一个 ``requirements:`` 小节。:ref:`requirements` "
+"对它有完整描述；简而言之，它分为两半，而这两半的检查方式不同："
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:36
+msgid "``features``"
+msgstr "``features``"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:37
+msgid ""
+"What the object has to have or do, in the words of whoever asked. A feature "
+"is a sentence, not a number, and no program can measure it: it is judged "
+"from evidence -- a simulation that names it, a view in which it can be seen,"
+" a line of the bill of materials -- by a person or by the ``/pc:validate`` "
+"agent skill."
+msgstr ""
+"该对象必须具备或必须做到的东西，用提出要求那一方的话来说。特性是一句话，不是一个数字，任何程序都无法测量它：它是依据各种依据来判定的 -- "
+"一个指名了它的仿真、一张能看出它的视图、物料清单上的一行 -- 判定者可以是一个人，也可以是 ``/pc:validate`` 智能体技能。"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:42
+msgid "``ports``, ``interfaces`` and ``physics``"
+msgstr "``ports`` 、 ``interfaces`` 和 ``physics``"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:43
+msgid ""
+"What PartCAD can measure: a port that has to be there and face a given way, "
+"an interface that has to be implemented and where, a physical property that "
+"has to have a value. Any part of each may be ``null`` -- no requirement -- "
+"and a value may be a constant, a comparison (``>0``, ``<=1``, ``!0``) or "
+"several of them. ``pc test`` checks every one of them, every time."
+msgstr ""
+"PartCAD "
+"能够测量的东西：某个必须存在并朝向特定方向的端口、某个必须被实现并且实现在何处的接口、某项必须具有特定取值的物理属性。其中每一项的任何部分都可以是 "
+"``null`` -- 表示没有要求 -- 而取值可以是一个常量、一个比较（ ``>0`` 、 ``<=1`` 、 ``!0`` "
+"），或者若干个这样的东西。``pc test`` 每一次都会把它们逐一检查过。"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:49
+msgid ""
+"A ``simulate:`` entry names the feature it demonstrates with ``feature:``, "
+"which is how a simulation becomes evidence for a requirement rather than a "
+"test that happens to exist."
+msgstr ""
+"``simulate:`` 条目会用 ``feature:`` "
+"指名它所证明的那项特性，而正是这一点让一个仿真成为某项需求的依据，而不只是一个碰巧存在的测试。"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:54
+msgid "Writing requirements first"
+msgstr "先写需求"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:56
+msgid ""
+"Requirements written after the design describe the design, and then "
+"everything meets them. They are worth having when they are written first, "
+"from the description, in its own terms -- \"four M3 holes on a 40 mm "
+"square\" rather than \"the holes in sketch 3\". The ``/pc:gen-part`` and "
+"``/pc:gen-assembly`` agent skills do exactly that before they model "
+"anything; written by hand, the same order holds."
+msgstr ""
+"在设计之后才写的需求描述的是设计本身，于是什么都能满足它们。需求值得拥有，前提是它们是先写下来的，依据那段描述，并用那段描述自己的说法 -- “在 40"
+" mm 方形上的四个 M3 孔”，而不是“草图 3 里的那些孔”。``/pc:gen-part`` 和 ``/pc:gen-assembly`` "
+"智能体技能在建任何模型之前做的正是这件事；手写时，同样的顺序照样成立。"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:63
+msgid ""
+"Keep to what was asked for. A requirement the design imposes on itself -- a "
+"stock size, a tool -- belongs to manufacturing, not here."
+msgstr "只写当初所要求的东西。设计给自己提出的要求 -- 一个坯料尺寸、一把刀具 -- 属于制造，不属于这里。"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:67
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:69
+msgid ""
+"An object that declares requirements gets a **Requirements** tab in front of"
+" all the others. It is the one tab with no strip of its own -- there is "
+"nothing to divide it into, because a requirement is one thing either met or "
+"not."
+msgstr ""
+"声明了需求的对象会在所有其他标签页之前多出一个 **Requirements** 标签页。它是唯一一个没有自己那条标签条的标签页 -- "
+"因为没有什么可以把它分开，一项需求就是一件要么满足要么不满足的事。"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:73
+msgid ""
+"It lists every port, interface and physical property required, each with a "
+"green or a red mark from the same check ``pc test`` runs, and then a table "
+"of the features. Each feature carries its description and a banner per thing"
+" that validates it: one for every simulation that names it with "
+"``feature:``, one for every analysis scenario that does (**FEA: loaded**), "
+"and an **LLM** banner -- \"Validate using /pc-validate\" -- since a sentence"
+" is for an agent or a person to judge and for no program to measure."
+msgstr ""
+"它会列出每一项被要求的端口、接口和物理属性，每一项都带着一个来自 ``pc test`` "
+"所运行的那同一项检查的绿色或红色标记，然后是一张特性表。每一项特性都带着它的描述，以及每一样校验它的东西各一条横幅：每一个用 ``feature:`` "
+"指名了它的仿真各一条、每一个这样做的分析场景各一条（**FEA: loaded**），再加上一条 **LLM** 横幅 -- “Validate "
+"using /pc-validate” -- 因为一句话是要由智能体或人来判定的，任何程序都测量不了。"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:81
+msgid ""
+"The Requirements tab: the measured requirements with their marks, and the "
+"features with what validates each"
+msgstr "Requirements 标签页：带标记的那些可测量需求，以及各项特性及其校验依据"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:86
+msgid ""
+"``pc ide view`` has a flag per tab of the five groups and none for this one:"
+" the tab is there for an object that declares ``requirements:`` and absent "
+"for every other object, so there is nothing to ask for."
+msgstr ""
+"``pc ide view`` 对那五个组的每一个标签页都有一个标志，而对这一个没有：这个标签页对声明了 ``requirements:`` "
+"的对象就在那里，对其他任何对象则根本不存在，所以也就没有什么可供索取的。"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:91
+msgid "On the command line"
+msgstr "在命令行中"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:93
+msgid ""
+"``pc test`` runs the ``requirements`` check (see :ref:`test-requirements`): "
+"every measured requirement, with what was found instead of each one not met."
+" A value PartCAD cannot find out -- a mass with no density to work it out "
+"from -- fails as \"not known\" rather than passing."
+msgstr ""
+"``pc test`` 会运行 ``requirements`` 检查（参见 :ref:`test-requirements` "
+"）：检查每一项可测量的需求，并对每一项未被满足的需求说明实际发现了什么。PartCAD 查不出来的取值 -- 比如没有密度可据以算出质量 -- "
+"会以“不知道”判为失败，而不是让它通过。"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:97
+msgid "``pc sim`` runs every simulation, including those that name a feature."
+msgstr "``pc sim`` 运行每一个仿真，包括那些指名了某项特性的仿真。"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:98
+msgid ""
+"``/pc:validate`` gathers the rest of the evidence -- renders from every "
+"angle that matters, the bill of materials and the assembly instructions -- "
+"and gives each requirement a verdict. See "
+":doc:`/digital_thread/lifecycle/validation`."
+msgstr ""
+"``/pc:validate`` 会把其余的依据都收集起来 -- 从每一个重要角度的渲染图、物料清单和装配说明 -- 并给每一项需求下一个结论。参见 "
+":doc:`/digital_thread/lifecycle/validation` 。"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:102
+msgid ""
+"``pc info`` prints the section as it is read, which is how to see what a "
+"template or an :ref:`enrich <part-types>` left behind. ``pc lint`` reports a"
+" ``requirements:`` that is malformed before anything is built."
+msgstr ""
+"``pc info`` 会把这个小节按它被读取的样子打印出来，而这正是查看某个模板或某个 :ref:`enrich <part-types>` "
+"留下了什么的办法。``pc lint`` 会在任何东西被构建之前报告一个格式有误的 ``requirements:`` 。"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:107
+msgid "Agent skills"
+msgstr "智能体技能"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:109
+msgid "``/pc:gen-part`` and ``/pc:gen-assembly``"
+msgstr "``/pc:gen-part`` 和 ``/pc:gen-assembly``"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:110
+msgid ""
+"Write the ``requirements:`` down first, from the description and in its own "
+"terms, and only then model anything. This is the order that makes "
+"requirements worth having, and it is the reason to generate from a "
+"description rather than to describe what was generated."
+msgstr ""
+"先把 ``requirements:`` "
+"写下来，依据那段描述并用它自己的说法，然后才去建任何模型。正是这个顺序让需求变得值得拥有，这也是为什么要从一段描述出发去生成，而不是去描述已经生成出来的东西。"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:115
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:116
+msgid ""
+"Gives every requirement a verdict -- met, not met, or \"cannot tell\" -- and"
+" names the evidence for each. It is the only one of the skills that judges "
+"the ``features:`` half, because a sentence is what an agent or a person can "
+"read and a program cannot measure."
+msgstr ""
+"给每一项需求下一个结论 -- 满足、不满足，或者“无法判定” -- 并为每一项指明依据。它是这些技能中唯一会去判定 ``features:`` "
+"那一半的，因为一句话是智能体或人读得懂、而程序测量不了的东西。"
