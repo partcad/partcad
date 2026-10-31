@@ -6,6 +6,13 @@ Two kinds of image live here, and they are not the same kind of thing.
   architecture. These are what the `docker` sandbox runs by default, and what a third-party package builds
   `FROM` when it needs something pip cannot install. Everything in the *Base image contract* below is a
   promise these make and that a derived image inherits.
+
+  The same Dockerfile has a second target, `gstreamer`: the base image with GStreamer and its plugins in it,
+  tagged `<release>-py<version>-gstreamer`, for the Python version `//builtin/render` runs in alone. It is
+  what the video file types of `//builtin/render` name as their `dockerImage` (with `{version}` and
+  `{python}` for PartCAD to fill in), so a machine rendering in the `docker` sandbox encodes videos there. A
+  stage rather than an image of its own, because it is this image plus a layer; and not in the base image,
+  which every sandbox pulls and which stays the floor under every derived image.
 * **Application images** -- `partcad-container-kicad`. A tool PartCAD drives rather than an interpreter it
   runs scripts in.
 

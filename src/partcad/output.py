@@ -488,6 +488,16 @@ REPRODUCIBLE_KEY = "reproducible"
 # runs in a sandbox and cannot import this.
 FILES_KEY = "files"
 
+# The request key that says where the package of the object being written is on
+# this machine: the directory a relative path in a file type's parameters is
+# read from - the soundtrack and the logo of a video (see '//builtin/render').
+# Like 'cache_dir', it is put in after the request has been keyed on, because it
+# is a path on this machine: two machines rendering the same object with the
+# same parameters ask the same question. Which also means an implementation that
+# reads a file through it has to say so by not saying what it wrote (see
+# FILES_KEY), since what that file holds is in no key.
+PACKAGE_DIR_KEY = "package_dir"
+
 # What 'wrapper_export.py' is handed when one call writes several files of one
 # object, and what it answers each of them with (see 'Shape._run_together_locked'
 # and the wrapper's docstring): the requests under BATCH_OUTPUTS_KEY, each under
@@ -701,7 +711,22 @@ class Implementation:
         which image the `docker` sandbox is built from, and a machine using
         another sandbox ignores it and installs `python_requirements` -- which
         is why a package that declares one still has to declare those.
+
+        A declaration may leave the release and the interpreter for PartCAD to
+        fill in, as '{version}' and '{python}' (see
+        `partcad_utils.container_image.expand`): it is how '//builtin/render'
+        names PartCAD's GStreamer image for its videos without naming a release.
         """
+        declared = self.docker_image_declared
+        if declared is None:
+            return None
+        from partcad_utils import container_image
+
+        return container_image.expand(declared, python=self.python_version())
+
+    @property
+    def docker_image_declared(self) -> Optional[str]:
+        """`docker_image` as it was declared, placeholders and all: what a cached answer is keyed on."""
         declared = self._declared("dockerImage")
         if declared:
             return str(declared)
@@ -759,7 +784,10 @@ class Implementation:
             "python",
             self.python_version(),
             environment_requirements(self.project, {"pythonRequirements": self.python_requirements}),
-            image=container.get("image") or self.docker_image,
+            # As declared: '{version}' filled in would move every key on every
+            # release, which is what keying on the image the runtime ran must
+            # never do (see 'partcad.cache_artifacts').
+            image=container.get("image") or self.docker_image_declared,
         )
 
     def source_cache_key(self) -> str:

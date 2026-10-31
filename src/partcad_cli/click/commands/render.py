@@ -17,12 +17,13 @@ from ..exclude import exclude_option, exclude_params
 from ..link_filter import filter_option, filter_params
 from ..parameters import param_option, param_params
 from ..service import run
+from ..video import video_options, video_params
 from ..viewport import viewport_options, viewport_params
 
 
 @click.command(
     help=(
-        "Render a 2D projection of parts, assemblies, or scenes onto a plane. "
+        "Render a 2D projection of parts, assemblies, or scenes onto a plane, or a video of one turning. "
         "OBJECT may be written '...:<name>' to mean every object of that name in this "
         "package and in every package below it. " + object_kind.LOOKED_UP
     ),
@@ -37,7 +38,10 @@ from ..viewport import viewport_options, viewport_params
 @click.option(
     "-t",
     "--format",
-    help="The type of file to render: readme, pdf, html, svg, png, jpeg, dxf, or any type a package implements itself",
+    help=(
+        "The type of file to render: readme, pdf, html, svg, png, jpeg, dxf, a video (mp4, m4v, mov, qt, "
+        "mkv, webm, avi, wmv, asf, ogv), or any type a package implements itself"
+    ),
     type=str,
     show_envvar=True,
 )
@@ -141,6 +145,7 @@ from ..viewport import viewport_options, viewport_params
     is_flag=True,
     show_envvar=True,
 )
+@video_options
 @exclude_option
 @filter_option
 @param_option
@@ -166,6 +171,13 @@ def cli(
     with_interfaces,
     with_all,
     with_internals,
+    size,
+    fps,
+    duration,
+    speed,
+    append,
+    preset,
+    quality,
     exclude,
     ports,
     link_filter,
@@ -182,6 +194,7 @@ def cli(
             "format": format,
             "ignore_manufacturability": ignore_manufacturability,
             **viewport_params(view, viewport_origin, viewport_up),
+            **video_params(size, fps, duration, speed, append, preset, quality),
             "package": package,
             "options_package": options_package,
             "recursive": recursive,

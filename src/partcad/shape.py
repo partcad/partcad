@@ -2250,6 +2250,13 @@ class Shape(ShapeConfiguration):
             # about what the file will contain.
             if getattr(impl, "project", None) is not None:
                 request.setdefault("cache_dir", output.package_cache_dir(ctx, impl.project))
+            # And the directory of the package the object is in, for the same
+            # reason: what a file type names by a relative path - the soundtrack
+            # and the logo of a video - is named from there, the way every other
+            # path in a 'partcad.yaml' is.
+            package = ctx.get_project(self.project_name) if ctx is not None and self.project_name else None
+            if getattr(package, "config_dir", None):
+                request.setdefault(output.PACKAGE_DIR_KEY, os.path.abspath(package.config_dir))
 
         together = len(outputs) > 1
         impl = outputs[0].impl

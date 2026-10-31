@@ -457,6 +457,42 @@ at all).
   `file_factory.unreproducible_reason()` below, which is about whether an object can be *made* twice, not
   whether a file is written twice the same.)
 
+- **Videos** (`./src/partcad/builtin/render/render_video.py`, `video_scene.py`, `video_encode.py`):
+  `//builtin/render` declares ten video file types (`mp4`, `m4v`, `mov`, `qt`, `mkv`, `webm`, `avi`, `wmv`,
+  `asf`, `ogv`), all one script: a video of the object turning, drawn the way the Digital Thread's 3D view
+  draws it with Animate ticked, and encoded by GStreamer. Three things about it are load-bearing.
+
+  * **The frames are drawn by numpy, not by a GPU** (`video_scene.py`). The view is three.js in a webview,
+    and a sandbox has no browser; so the camera, the light rig, the Phong material, the tone mapping and the
+    colours of `ide/vscode/src/webview/scene.ts` are written out again, constant for constant, with the
+    shading worked out at the corners of each triangle and blended across it. That is only close to a
+    GPU's per-pixel light because large triangles are split first (`refine`, `MAX_EDGE`): a flat face OCCT
+    meshes as two triangles showed the diagonal between them as a crease. A change to what the 3D view
+    draws -- its lights, its camera, its background -- is a change to this module too.
+  * **GStreamer is a program, run as `gst-launch-1.0`** (`video_encode.py`), with the frames on its standard
+    input. pip cannot install it, so each video file type names PartCAD's GStreamer image as its
+    `dockerImage`, `ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer` -- the
+    `gstreamer` target of `tools/containers/python/Dockerfile`, built for `DEFAULT_PYTHON_VERSION` alone --
+    and elsewhere the machine's own is used. `{version}` and `{python}` are filled in by
+    `partcad_utils.container_image.expand` (`Implementation.docker_image`), and what is keyed is the
+    declaration as written (`Implementation.docker_image_declared`), so a release moves no key. A machine
+    rendering without PartCAD's own image is told at debug level, not warned (`Context._note_image_skipped`,
+    `container_image.is_partcad_image`): the implementation says what is missing itself.
+  * **`append` keeps where the turn stopped in a tag of the container** (`video_encode.state_text`), and the
+    video appended to is decoded by a separate GStreamer process and handed to the encoding one over a
+    socket on this machine (`Pipeline._send_prefix`), rather than decoded inside it: a demuxer sends the old
+    file's tags ahead of its frames, a muxer keeps the first value of each tag it is told, and the new
+    state was lost. Raw frames carry no tags. Each muxer keeps different tags (`CONTAINERS['state_tag']`).
+    Ogg keeps none of them for a Theora stream -- `theoraenc` is no `GstTagSetter`, so its comment header
+    is written empty -- and its state goes into that header as Vorbis comments (`PARTCAD_ANGLES=...`)
+    once the file is written (`write_comments`): the one page holding the header is rebuilt with Ogg's own
+    CRC (`ogg_crc`, not zlib's), keeping its sequence number, and every other page is copied byte for byte;
+    `read_state` reads them back. ASF carries no sound, because GStreamer's ASF muxer drops video frames once
+    it interleaves audio and libav's writes broken timestamps. A video that reads a file -- the one it is
+    appended to, a soundtrack, a logo -- reports no `files`, so it is not cached; the file's path is
+    `request["package_dir"]` (`output.PACKAGE_DIR_KEY`), which is added after the request is keyed on, as
+    `cache_dir` is.
+
 - **Engineering analysis** (`./src/partcad/cae.py`, `Shape.analyze_async()`, `./src/partcad/test/cae.py`):
   `pc cae fea`/`dynamic`/`thermal`/`cfd` are a third output section, `cae:`, resolved by the very code that resolves
   `export:` and `render:` -- same `path`/`package`, same sandbox, same meta-wrapper (`wrapper_export.py`), and
