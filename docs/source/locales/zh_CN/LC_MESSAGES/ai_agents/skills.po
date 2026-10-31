@@ -1,0 +1,429 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/ai_agents/skills.rst:3
+msgid "Skills"
+msgstr "技能"
+
+#: ../../source/ai_agents/skills.rst:5
+msgid ""
+"PartCAD ships a library of `Agent Skills "
+"<https://code.claude.com/docs/en/skills>`_ -- a directory of ``SKILL.md`` "
+"files, each one a procedure an AI coding agent follows to do a job with "
+"PartCAD. They are vendor-neutral: anything that reads ``SKILL.md`` can use "
+"them."
+msgstr ""
+"PartCAD 附带一个 `Agent Skills <https://code.claude.com/docs/en/skills>`_ 库 -- "
+"一个装满 ``SKILL.md`` 文件的目录，每一个文件都是一套 AI 编码智能体用 PartCAD "
+"完成某项工作所遵循的流程。它们与厂商无关：任何能读 ``SKILL.md`` 的东西都可以用它们。"
+
+#: ../../source/ai_agents/skills.rst:9
+msgid ""
+"They are not a different PartCAD. Each skill runs the same commands "
+"documented in :doc:`/cli`, so nothing a skill produces depends on the agent "
+"that produced it, and anything a skill does you can do by hand."
+msgstr ""
+"它们不是另一个 PartCAD。每一项技能运行的都是 :doc:`/cli` "
+"中所记载的那些同样的命令，所以技能产出的任何东西都不取决于是哪个智能体产出的，而技能所做的任何事你都可以手工做。"
+
+#: ../../source/ai_agents/skills.rst:14
+msgid "Getting them"
+msgstr "怎么拿到它们"
+
+#: ../../source/ai_agents/skills.rst:16
+msgid ""
+"The skills ship inside the ``partcad`` wheel, so if you have PartCAD you "
+"have them:"
+msgstr "这些技能就装在 ``partcad`` wheel 里面，所以只要你有 PartCAD 就有它们："
+
+#: ../../source/ai_agents/skills.rst:24
+msgid ""
+"``pc init`` writes the Claude Code plugin into the repository and "
+"``pc-``-prefixed copies into ``.cursor/skills``, so an agent opening that "
+"repository finds them with nothing to install. :doc:`/ai_agents/plugins` "
+"covers the other way in -- installing the published plugin into the agent "
+"instead of into the repository."
+msgstr ""
+"``pc init`` 会把 Claude Code 插件写进仓库，并把带 ``pc-`` 前缀的副本写进 ``.cursor/skills`` "
+"，于是打开那个仓库的智能体不需要安装任何东西就能找到它们。:doc:`/ai_agents/plugins` 讲的是另一条路 -- "
+"把已发布的插件安装到智能体里，而不是安装到仓库里。"
+
+#: ../../source/ai_agents/skills.rst:28
+msgid ""
+"Re-running ``pc init`` updates the installed copies and **removes the skills"
+" PartCAD has stopped shipping**. A retired skill left behind goes on "
+"describing a command line that has moved, and an agent follows it anyway. "
+"Under ``.cursor/skills`` only copies PartCAD stamped are removed, since the "
+"``pc-`` prefix is not proof of authorship."
+msgstr ""
+"重新运行 ``pc init`` 会更新已安装的那些副本，并且 **移除 PartCAD "
+"已经不再附带的技能**。一个被留下来的退役技能会继续描述一套已经变动过的命令行，而智能体照样会照着它做。在 ``.cursor/skills`` "
+"下面，只有带 PartCAD 戳记的副本才会被移除，因为 ``pc-`` 前缀并不能证明作者是谁。"
+
+#: ../../source/ai_agents/skills.rst:33
+msgid ""
+"``pc healthcheck`` reports installed skills that came from an older PartCAD "
+"than the one now installed: ``pc upgrade`` replaces PartCAD and leaves the "
+"skills where they are, so something has to notice."
+msgstr ""
+"``pc healthcheck`` 会报告那些来自比当前所装 PartCAD 更老版本的已安装技能：``pc upgrade`` 替换的是 "
+"PartCAD，而把技能原样留在那里，所以总得有东西来留意这件事。"
+
+#: ../../source/ai_agents/skills.rst:39
+msgid "The skills PartCAD ships"
+msgstr "PartCAD 附带的那些技能"
+
+#: ../../source/ai_agents/skills.rst:41
+msgid ""
+"Fourteen of them. The name in each heading is what you type in Claude Code; "
+"under Cursor the same skill is ``pc-<name>``, and an agent that chooses "
+"skills by their description will reach for the right one without being told."
+msgstr ""
+"一共十四项。每个标题里的名称就是你在 Claude Code 里输入的内容；在 Cursor 下，同一项技能叫 "
+"``pc-<name>``，而一个按描述来挑选技能的智能体，不用别人告诉它也会伸手去取正确的那一个。"
+
+#: ../../source/ai_agents/skills.rst:47
+msgid "Setting up"
+msgstr "搭建环境"
+
+#: ../../source/ai_agents/skills.rst:49
+msgid "``/pc:setup``"
+msgstr "``/pc:setup``"
+
+#: ../../source/ai_agents/skills.rst:50
+msgid ""
+"Puts ``pc`` on this machine so the other skills have something to run, and "
+"does nothing if a working one is already there -- the first thing it does is"
+" check, because the common case is that PartCAD is installed and the agent "
+"should get on with the job."
+msgstr ""
+"把 ``pc`` 装到本机上，让其他技能有东西可以运行；而如果已经有一个能用的了，它什么都不做 -- 它做的第一件事就是检查，因为常见情形是 "
+"PartCAD 已经装好了，智能体应该直接去干正事。"
+
+#: ../../source/ai_agents/skills.rst:55
+msgid ""
+"It installs one of two ways and asks which if it matters: the **standalone "
+"build** from the GitHub releases, which carries its own Python and needs "
+"none on the machine, or the **wheel** into the Python environment that is "
+"currently active, which is the one to pick if anything is going to ``import "
+"partcad``. When the agent is running inside Visual Studio Code or VSCodium "
+"it also installs the PartCAD extension into that editor -- and works out "
+"which editor it is in rather than guessing, stopping early when there is "
+"nothing to do."
+msgstr ""
+"它有两种安装方式，并在这件事有影响时询问选哪一种：来自 GitHub 发布页的 **standalone 构建**，它自带 Python，机器上不需要有"
+" Python；或者把 **wheel** 装进当前激活的那个 Python 环境，如果后面有东西要 ``import partcad`` "
+"，就该选这一种。当智能体运行在 Visual Studio Code 或 VSCodium 里面时，它还会把 PartCAD 扩展装进那个编辑器 -- "
+"而且它会去弄清楚自己身处哪个编辑器，而不是靠猜；在没什么可做时就提前停下。"
+
+#: ../../source/ai_agents/skills.rst:63
+msgid "``/pc:init``"
+msgstr "``/pc:init``"
+
+#: ../../source/ai_agents/skills.rst:64
+msgid ""
+"Creates a package in the current directory by running ``pc init``, which "
+"writes a ``partcad.yaml`` and installs the skills into the repository. It "
+"locates the command first and falls back to ``/pc:setup`` when there is "
+"nothing installed."
+msgstr ""
+"通过运行 ``pc init`` 在当前目录中创建一个包，这会写出一个 ``partcad.yaml`` "
+"并把那些技能安装进仓库。它会先定位这条命令，而在什么都没装的情况下退回到 ``/pc:setup`` 。"
+
+#: ../../source/ai_agents/skills.rst:70
+msgid "Generating geometry"
+msgstr "生成几何"
+
+#: ../../source/ai_agents/skills.rst:72
+msgid "``/pc:gen``"
+msgstr "``/pc:gen``"
+
+#: ../../source/ai_agents/skills.rst:73
+msgid ""
+"The one to use when it does not matter which kind of object the request is. "
+"It decides whether what was asked for is a single part, a multi-part "
+"assembly or a 2D sketch, and then follows the matching skill below. \"Model "
+"me a shelf bracket\" is a part; \"model me a gearbox\" is an assembly; "
+"\"draw me the profile\" is a sketch."
+msgstr ""
+"当请求属于哪一类对象并不要紧时，就用这一个。它会判断所要求的东西是单个零件、一个多零件装配体，还是一张 2D "
+"草图，然后遵循下面相应的那项技能。“给我建个搁板支架”是零件；“给我建个齿轮箱”是装配体；“把那个轮廓画给我”是草图。"
+
+#: ../../source/ai_agents/skills.rst:79
+msgid "``/pc:gen-part``"
+msgstr "``/pc:gen-part``"
+
+#: ../../source/ai_agents/skills.rst:80
+msgid ""
+"Models one part from a description, and the order it works in is the point:"
+msgstr "根据一段描述建出一个零件，而它的工作顺序正是关键所在："
+
+#: ../../source/ai_agents/skills.rst:82
+msgid ""
+"It reads the request, and chooses a representation -- build123d, CadQuery, "
+"OpenSCAD, or a primitive -- rather than defaulting to one."
+msgstr "它读取请求，并选择一种表示方式 -- build123d、CadQuery、OpenSCAD，或者一个基本体 -- 而不是默认用某一种。"
+
+#: ../../source/ai_agents/skills.rst:84
+msgid ""
+"**It writes down what the part is required to be before it writes any "
+"geometry**, as the ``requirements:`` section, in the terms of the request "
+"(\"four M3 holes on a 40 mm square\") rather than in terms of the model it "
+"is about to build. Requirements written afterwards describe the design, and "
+"then everything meets them."
+msgstr ""
+"**它在写出任何几何之前先把这个零件必须是什么样写下来**，作为 ``requirements:`` 小节，用请求里的说法（“在 40 mm "
+"方形上的四个 M3 孔”），而不是用它即将构建的那个模型的说法。事后才写的需求描述的是设计本身，于是什么都能满足它们。"
+
+#: ../../source/ai_agents/skills.rst:89
+msgid ""
+"It authors and registers the script, then validates it with ``pc test``."
+msgstr "它编写并注册脚本，然后用 ``pc test`` 校验它。"
+
+#: ../../source/ai_agents/skills.rst:90
+msgid ""
+"It renders the part **from several angles and compares each view against the"
+" description**, because a single projection hides whatever is behind it -- "
+"then iterates on what the comparison found."
+msgstr ""
+"它 **从多个角度渲染该零件，并把每一个视图都与描述作对比**，因为单独一张投影会把它背后的东西全都藏起来 -- 然后根据对比所发现的问题进行迭代。"
+
+#: ../../source/ai_agents/skills.rst:94
+msgid "``/pc:gen-assembly``"
+msgstr "``/pc:gen-assembly``"
+
+#: ../../source/ai_agents/skills.rst:95
+msgid ""
+"Models an assembly, and is the longest of the skills because putting things "
+"together is where the hard-won rules live. It decomposes the request, takes "
+"an inventory of parts that already exist and generates only what is missing,"
+" authors the ``.assy``, and groups whatever repeats into sub-assemblies."
+msgstr ""
+"建出一个装配体，它是这些技能中最长的一项，因为把东西装到一起正是那些来之不易的规则所在之处。它会分解请求、清点已经存在的零件并只生成缺少的那些、编写 "
+"``.assy`` ，并把任何重复出现的东西归并成子装配体。"
+
+#: ../../source/ai_agents/skills.rst:100
+msgid ""
+"Its last step is the valuable one: it **replaces the coordinates it started "
+"with by connections**, so the assembly ends up saying what holds each item "
+"rather than where each item happens to sit. That is what makes the assembly "
+"survive a change to one of its parts. The rules it follows there are the "
+"ones that are easy to get wrong -- find the pairs by where the ports "
+"actually are; grow the order outwards from what is already placed rather "
+"than following the order the thing is built in; the first item needs no "
+"location at all; a turn is a *difference* between two ports, not an "
+"orientation; let sub-assemblies join each other; and, above all, **do not "
+"predict a mate -- try it**, and look at the result."
+msgstr ""
+"它的最后一步才是最有价值的：它会 "
+"**把一开始所用的坐标替换成连接**，于是这个装配体最终说的是什么固定住每一个项目，而不是每一个项目恰好摆在哪里。正是这一点让装配体能在它某个零件发生改动之后依然成立。它在那里遵循的规则，都是容易弄错的那些"
+" -- 按端口实际所在的位置去找配对；从已经放置好的东西向外扩展顺序，而不是照着东西的装配顺序来；第一个项目完全不需要位置；转动是两个端口之间的 *差*"
+" ，而不是一个朝向；让子装配体彼此接合；而最重要的是，**不要去预测一个配合 -- 去试它**，并且看结果。"
+
+#: ../../source/ai_agents/skills.rst:111
+msgid "``/pc:gen-sketch``"
+msgstr "``/pc:gen-sketch``"
+
+#: ../../source/ai_agents/skills.rst:112
+msgid ""
+"Authors a 2D sketch -- build123d, CadQuery, DXF, SVG or a basic outline -- "
+"and validates it by rendering it to SVG and comparing that against the "
+"description. Sketches are what parts are extruded and swept from, and what a"
+" port's boundary is drawn with."
+msgstr ""
+"编写一张 2D 草图 -- build123d、CadQuery、DXF、SVG 或者一个基本轮廓 -- 并通过把它渲染成 SVG "
+"再与描述作对比来校验它。草图是零件被拉伸和扫掠出来的依据，也是端口边界用来绘制的东西。"
+
+#: ../../source/ai_agents/skills.rst:117
+msgid "``/pc:add-interfaces``"
+msgstr "``/pc:add-interfaces``"
+
+#: ../../source/ai_agents/skills.rst:118
+msgid ""
+"Adds ``interfaces``, ports and ``implements:`` to a part that has none, so "
+"that PartCAD can mate it by connection instead of by hand-written "
+"coordinates."
+msgstr ""
+"给一个还没有接口的零件添加 ``interfaces`` 、端口和 ``implements:`` ，这样 PartCAD "
+"就能用连接而不是手写坐标来给它配合。"
+
+#: ../../source/ai_agents/skills.rst:121
+msgid ""
+"It works the port positions out of the geometry -- by rendering the part and"
+" by reading its source -- and then **proves them twice**: by drawing the "
+"ports on the part and looking at them, and by mating two instances of the "
+"part in a throwaway assembly and looking at that. A port that is in the "
+"wrong place or facing the wrong way is invisible in the declaration and "
+"obvious in either picture."
+msgstr ""
+"它从几何中算出各端口的位置 -- 通过渲染该零件以及阅读它的源码 -- 然后 "
+"**两次验证它们**：一次是把端口画在零件上并看一看，另一次是在一个用完即弃的装配体里把该零件的两个实例配合起来再看一看。一个位置不对或朝向不对的端口，在声明里是看不出来的，而在这两张图里任何一张上都一目了然。"
+
+#: ../../source/ai_agents/skills.rst:130
+msgid "Finding and describing"
+msgstr "查找与描述"
+
+#: ../../source/ai_agents/skills.rst:132
+msgid "``/pc:search``"
+msgstr "``/pc:search``"
+
+#: ../../source/ai_agents/skills.rst:133
+msgid ""
+"Finds parts and assemblies in the catalog whose name, description or source "
+"matches a natural-language query, by running ``pc search``; then presents "
+"the matches and, if you pick one, inspects or renders it. The reason to "
+"reach for it first is that the public repository already has the fastener, "
+"the bearing or the motor, and a part that is reused is a part nobody has to "
+"validate."
+msgstr ""
+"通过运行 ``pc search`` "
+"，在目录中查找名称、描述或源码与某个自然语言查询相匹配的零件和装配体；然后把匹配项呈现出来，如果你挑中一个，就去检视或渲染它。之所以值得先伸手去用它，是因为公共仓库里已经有那个紧固件、那个轴承或那个电机了，而被复用的零件就是谁都不必再去校验的零件。"
+
+#: ../../source/ai_agents/skills.rst:139
+msgid "``/pc:describe``"
+msgstr "``/pc:describe``"
+
+#: ../../source/ai_agents/skills.rst:140
+msgid ""
+"Writes a narratable, accessibility-oriented description of an existing "
+"object and stores it in the object's ``summary:``, where ``pc ide view`` and"
+" the Explorer show it. It does not guess from the name: it measures the "
+"bounding box and the volume, renders three views, renders a dimensioned "
+"drawing where one is available, and writes the description from those."
+msgstr ""
+"为一个已有对象写出一段可供朗读、面向无障碍访问的描述，并把它保存在该对象的 ``summary:`` 中，``pc ide view`` 和 "
+"Explorer 会显示它。它不会凭名字去猜：它会测量包围盒和体积、渲染三个视图、在有带尺寸图纸可用时渲染一张，并据此写出描述。"
+
+#: ../../source/ai_agents/skills.rst:148
+msgid "Producing files"
+msgstr "产出文件"
+
+#: ../../source/ai_agents/skills.rst:150
+msgid "``/pc:render``"
+msgstr "``/pc:render``"
+
+#: ../../source/ai_agents/skills.rst:151
+msgid ""
+"Draws an object as a PNG, JPEG, SVG or DXF. It handles both cases -- ``pc "
+"render`` for an object a package declares, ``pc adhoc render`` for a file "
+"that belongs to no package -- and that distinction is the first thing it "
+"works out."
+msgstr ""
+"把一个对象画成 PNG、JPEG、SVG 或 DXF。它能处理两种情形 -- 对于包所声明的对象用 ``pc render`` "
+"，对于不属于任何包的文件用 ``pc adhoc render`` -- 而它首先要弄清楚的就是这个区别。"
+
+#: ../../source/ai_agents/skills.rst:155
+msgid ""
+"What it adds over the bare command is the judgement: which angle answers the"
+" question (front, top, iso, or an arbitrary direction), rendering several "
+"angles at once when one will not do, drawing the ports and interfaces on top"
+" when the question is about how something connects, and rendering part of an"
+" assembly when the whole of it would be unreadable."
+msgstr ""
+"它在裸命令之上加的是判断力：哪个角度能回答这个问题（正面、俯视、等轴，或者任意方向）、在一个角度不够时一次渲染多个角度、在问题关乎某样东西如何连接时在上面画出端口和接口，以及在整个装配体会看不清时只渲染它的一部分。"
+
+#: ../../source/ai_agents/skills.rst:161
+msgid "``/pc:export``"
+msgstr "``/pc:export``"
+
+#: ../../source/ai_agents/skills.rst:162
+msgid ""
+"Writes a CAD file out of an object a package declares -- STEP, BREP, STL, "
+"3MF, OBJ, IGES, glTF, three.js, URDF, or a file type the package implements "
+"itself -- and **changes nothing in** ``partcad.yaml``. It can export part of"
+" an assembly rather than all of it. Use it to hand something to somebody "
+"else."
+msgstr ""
+"把包所声明的某个对象写成一个 CAD 文件 -- "
+"STEP、BREP、STL、3MF、OBJ、IGES、glTF、three.js、URDF，或者某个包自行实现的文件类型 -- 并且 **完全不改动**"
+" ``partcad.yaml`` 。它可以只导出装配体的一部分而不是全部。要把东西交给别人时用它。"
+
+#: ../../source/ai_agents/skills.rst:167
+msgid "``/pc:convert``"
+msgstr "``/pc:convert``"
+
+#: ../../source/ai_agents/skills.rst:168
+msgid ""
+"Changes what something *is*, which is the difference from exporting. For an "
+"object in a package it rewrites the declaration to point at the new file, so"
+" the package now says the object is a STEP where it used to say it was a "
+"script. For a bare file it converts the file and touches no package."
+msgstr ""
+"改变某样东西 *是什么*，这正是它与导出的区别。对于包中的对象，它会改写声明，让它指向新的文件，于是这个包现在说该对象是一个 "
+"STEP，而从前它说那是一个脚本。对于一个裸文件，它只转换这个文件，不碰任何包。"
+
+#: ../../source/ai_agents/skills.rst:175
+msgid "Checking and analysing"
+msgstr "检查与分析"
+
+#: ../../source/ai_agents/skills.rst:177
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/ai_agents/skills.rst:178
+msgid ""
+"The skill for the :doc:`Validation phase "
+"</digital_thread/lifecycle/validation>`, and the only one that judges a "
+"requirement no program can measure."
+msgstr ""
+":doc:`校验阶段 </digital_thread/lifecycle/validation>` "
+"所用的技能，也是唯一一项会去判定任何程序都无法测量的那类需求的技能。"
+
+#: ../../source/ai_agents/skills.rst:181
+msgid ""
+"It reads what the object's ``requirements:`` section asks for, runs ``pc "
+"test`` for the ports, interfaces and physical properties PartCAD measures, "
+"runs every simulation and every engineering analysis scenario, renders the "
+"object from every angle that matters with its ports and interfaces drawn, "
+"and -- for an assembly -- reads the bill of materials and the assembly "
+"instructions. Then it gives every requirement a verdict: **met, not met, or "
+"\"cannot tell\"**, with the evidence named for each. The third verdict is "
+"what keeps it honest; a feature it has no evidence for is reported as "
+"unjudged rather than passed."
+msgstr ""
+"它读取该对象 ``requirements:`` 小节所要求的内容、对 PartCAD 能测量的端口、接口和物理属性运行 ``pc test`` "
+"、运行每一个仿真和每一个工程分析场景、从每一个重要的角度渲染该对象并画出它的端口和接口，而对于装配体还会读取物料清单和装配说明。然后它给每一项需求下一个结论：**满足、不满足，或者“无法判定”**，并为每一项指明依据。第三种结论正是让它保持诚实的东西；一项它找不到任何依据的特性会被报告为未判定，而不是算作通过。"
+
+#: ../../source/ai_agents/skills.rst:190
+msgid "``/pc:sim-assembly-fea``"
+msgstr "``/pc:sim-assembly-fea``"
+
+#: ../../source/ai_agents/skills.rst:191
+msgid ""
+"Turns what a simulation measured into a stress analysis of one part, which "
+"is a thing neither tool does on its own."
+msgstr "把仿真所测得的结果变成对某一个零件的应力分析，而这件事两个工具单独都做不到。"
+
+#: ../../source/ai_agents/skills.rst:194
+msgid ""
+"It runs the assembly's ``simulate:`` entry, reads the forces and moments "
+"acting at the end of the run on the body the part is welded into, works out "
+"which of them actually load that part and where they land, and writes a new "
+"named scenario into the part's ``fea:`` section beside any already there. "
+"Then it runs ``pc cae fea`` on it and shows the result where there is "
+"somewhere to show it. The step that matters is the third: a force on a "
+"welded body is not a force on the part until somebody decides which of it "
+"the part carries."
+msgstr ""
+"它运行该装配体的 ``simulate:`` "
+"条目，读取运行结束时作用在该零件被焊接进去的那个刚体上的力和力矩，算出其中哪些确实加在那个零件上以及它们落在哪里，然后在该零件的 ``fea:`` "
+"小节中写入一个新的具名场景，与已有的场景并列。随后它对这个场景运行 ``pc cae fea`` "
+"，并在有地方可以显示结果时把结果显示出来。真正要紧的是第三步：作用在一个焊接刚体上的力，在有人判定该零件承担了其中哪一部分之前，还不是作用在这个零件上的力。"

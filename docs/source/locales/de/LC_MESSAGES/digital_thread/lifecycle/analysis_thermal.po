@@ -1,0 +1,193 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:5
+msgid "Heat Transfer"
+msgstr "Wärmeübertragung"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:7
+msgid ""
+"**Heat Transfer** is the question how hot a part gets, heated and cooled as "
+"it is: a steady-state thermal analysis of the solid, reporting the "
+"temperature through it. It is what says whether a heatsink is big enough."
+msgstr ""
+"**Wärmeübertragung** ist die Frage, wie heiß ein Teil wird, so geheizt und "
+"gekühlt, wie es geheizt und gekühlt wird: eine stationäre Thermalanalyse des"
+" Volumenkörpers, die die Temperatur darin berichtet. Sie ist das, was sagt, "
+"ob ein Kühlkörper groß genug ist."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:11
+msgid ""
+"The question is asked by a ``thermal:`` section on the part, a map of named "
+"scenarios, and answered by a solver a package supplies. "
+":doc:`/digital_thread/lifecycle/analysis` explains what every analysis has "
+"in common."
+msgstr ""
+"Die Frage wird von einem ``thermal:``-Abschnitt am Teil gestellt, einer "
+"Abbildung benannter Szenarien, und von einem Solver beantwortet, den ein "
+"Paket liefert. :doc:`/digital_thread/lifecycle/analysis` erklärt, was jede "
+"Analyse gemeinsam hat."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:17
+msgid "What the scenario says"
+msgstr "Was das Szenario angibt"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:19
+msgid "Three conditions, each naming interfaces the part implements:"
+msgstr ""
+"Drei Bedingungen, jede benennt Interfaces, die das Teil implementiert:"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:21
+msgid "``temperature:``"
+msgstr "``temperature:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:22
+msgid ""
+"a temperature per interface type or named instance, in Celsius (``40 C``) --"
+" the surface is held there."
+msgstr ""
+"eine Temperatur je Interface-Typ oder benannter Instanz, in Celsius (``40 "
+"C``) -- die Oberfläche wird dort gehalten."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:25
+msgid "``heat:``"
+msgstr "``heat:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:26
+msgid "a power put in through the port's surface, in watts (``2 W``)."
+msgstr ""
+"eine Leistung, die über die Oberfläche des Ports eingebracht wird, in Watt "
+"(``2 W``)."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:28
+msgid "``convection:``"
+msgstr "``convection:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:29
+msgid ""
+"a film coefficient in W/(m²·K) -- that surface is cooled against the "
+"ambient."
+msgstr ""
+"ein Wärmeübergangskoeffizient in W/(m²·K) -- diese Oberfläche wird gegen die"
+" Umgebung gekühlt."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:31
+msgid ""
+"**Every other surface is insulated.** A part that states only where heat "
+"goes in is a part with nowhere for it to go, so each scenario has to say how"
+" it leaves: held at a temperature, or cooled by a film."
+msgstr ""
+"**Jede andere Oberfläche ist isoliert.** Ein Teil, das nur angibt, wo Wärme "
+"hineingeht, ist ein Teil, für das es nirgendwohin geht; jedes Szenario muss "
+"daher sagen, wie sie austritt: auf einer Temperatur gehalten oder über einen"
+" Wärmeübergang gekühlt."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:52
+msgid "In the UI"
+msgstr "In der Benutzeroberfläche"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:54
+msgid ""
+"The scenarios are listed down the left with the first selected, each marked "
+"with how its last run went, and selecting one runs it. What is shown is the "
+"temperature field over the model the implementation produced, with the "
+"findings under it; **Analysed by** chooses the solver and **Analyse** runs "
+"it again."
+msgstr ""
+"Die Szenarien sind links aufgelistet, das erste ausgewählt, jedes markiert "
+"mit dem Ausgang seines letzten Laufs, und eines auszuwählen führt es aus. "
+"Gezeigt wird das Temperaturfeld über dem Modell, das die Implementierung "
+"erzeugt hat, mit den Befunden darunter; **Analysed by** wählt den Solver, "
+"und **Analyse** führt es erneut aus."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:59
+msgid ""
+"The Analysis group's Heat Transfer tab: the scenario list and the "
+"temperature field"
+msgstr ""
+"Der Heat-Transfer-Tab der Gruppe Analysis: die Szenarienliste und das "
+"Temperaturfeld"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:64
+msgid ""
+"The tab is enabled for a part that declares ``thermal:`` and disabled for "
+"everything else."
+msgstr ""
+"Der Tab ist für ein Teil aktiviert, das ``thermal:`` deklariert, und für "
+"alles andere deaktiviert."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:68
+msgid "On the command line"
+msgstr "Auf der Befehlszeile"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:78
+msgid "Who runs it"
+msgstr "Wer es ausführt"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:80
+msgid ""
+"The default is `partcad-cae-elmer <https://github.com/partcad/partcad-cae-"
+"elmer>`_, which runs `Elmer <https://www.elmerfem.org/>`_; "
+"``caeThermalImplementation`` names another. `Code_Aster <https://www.code-"
+"aster.org/>`_ and `MOOSE <https://mooseframework.inl.gov/>`_ do this "
+"analysis too."
+msgstr ""
+"Der Standard ist `partcad-cae-elmer <https://github.com/partcad/partcad-cae-"
+"elmer>`_, das `Elmer <https://www.elmerfem.org/>`_ ausführt; "
+"``caeThermalImplementation`` benennt ein anderes. `Code_Aster "
+"<https://www.code-aster.org/>`_ und `MOOSE "
+"<https://mooseframework.inl.gov/>`_ führen diese Analyse ebenfalls aus."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:87
+msgid "An example"
+msgstr "Ein Beispiel"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:89
+msgid ""
+"`examples/feature_cae "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cae>`_ "
+"declares ``cantilever``'s ``tip-heated`` scenario: the root held at 20 °C "
+"and 1 W put in at the tip. The temperature the tip reaches is ``P·L/(k·A)``,"
+" and the package's ``README.md`` prints what the solver measured beside it."
+msgstr ""
+"`examples/feature_cae "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cae>`_ "
+"deklariert das Szenario ``tip-heated`` von ``cantilever``: die Wurzel auf 20"
+" °C gehalten und 1 W an der Spitze eingebracht. Die Temperatur, die die "
+"Spitze erreicht, ist ``P·L/(k·A)``, und die ``README.md`` des Pakets gibt "
+"daneben aus, was der Solver gemessen hat."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:95
+msgid "Agent skills"
+msgstr "Agent-Skills"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:97
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:98
+msgid ""
+"Runs every scenario as part of giving each requirement a verdict, and "
+"reports one that names a ``feature:`` as evidence for that feature."
+msgstr ""
+"Führt jedes Szenario aus, um jeder Anforderung ein Urteil zu geben, und "
+"berichtet eines, das ein ``feature:`` nennt, als Nachweis für dieses "
+"Feature."

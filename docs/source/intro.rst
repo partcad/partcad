@@ -1,41 +1,56 @@
 Introduction
 ############
 
-==========
-Background
-==========
-
-PartCAD was initially just an internal library in the
-`OpenVMP project <https://github.com/openvmp/openvmp>`_
-to maintain the blueprints of OpenVMP robots in a way that allows reconfiguring
-the blueprints based on the specific needs (parameters), and allows to maintain
-the bill of materials and all the necessary data to purchase the required parts.
-
-The OpenVMP project has surfaced the need for an open source Product Lifecycle
-Management (PLM) system that would use Git for collaboration on the designs
-themselves, the supplementary documentation and supplier information
-(and integration).
-To address that need PartCAD was published as a standalone framework to be used
-by any project.
-
 ========
 Overview
 ========
 
-PartCAD can be perceived as consisting of four parts:
+**PartCAD is the programming language for manufacturable things.**
 
-- PartCAD standards and conventions on how to maintain product information
+A PartCAD package is a Git repository with a ``partcad.yaml`` in it. That file declares the things the
+product is made of -- parts, as CAD scripts or CAD files; assemblies and scenes that place them; the
+interfaces they mate through; the materials they are made of; the requirements they have to meet. PartCAD
+renders, tests, simulates, analyses and documents what is declared there, and produces the bill of
+materials, the sourcing and the assembly instructions from that same source.
 
-- The public repository of products created and maintained by the community based
-  on the PartCAD standards and conventions
+Everything is text. So a product is versioned, reviewed, branched and merged the way software is, by people
+and by AI agents alike -- and nothing in the chain from a requirement to a purchase order is a binary nobody
+can diff.
 
-- Tools that operate with public and private repositories for as
-  long as they are maintained following the PartCAD standards and conventions
+What PartCAD works with
+=======================
 
-- Libraries and frameworks to programmatically interact with product information in
-  public and private PartCAD repositories
+* **Parts** written as code (`CadQuery <https://github.com/CadQuery/cadquery>`_,
+  `build123d <https://github.com/gumyr/build123d>`_, `OpenSCAD <https://openscad.org/>`_,
+  `Chili3D <https://github.com/xiangechen/chili3d>`_, `SDF <https://github.com/fogleman/sdf>`_) or read from
+  a file (STEP, BREP, STL, 3MF, OBJ, glTF, KiCad PCBs, FreeCAD documents), plus whatever format a plugin
+  package adds.
+* **Assemblies and scenes** in Assembly YAML, URDF or a STEP file, with interfaces and mating as objects of
+  their own rather than coordinates written out by hand.
+* **Outputs**: the CAD formats above, Gazebo and MuJoCo worlds, 2D projections, dimensioned drawings,
+  Markdown documentation, and PDF or HTML instruction books.
+* **Engineering**: finite element, modal, thermal and fluid analysis (``pc cae``), simulation in MuJoCo or
+  Gazebo (``pc sim``), 2.5D toolpaths (``pc cam``), and materials and manufacturing methods that carry
+  through into the bill of materials.
+* **Supply chain**: a build-or-buy decision per line item, stock-based procurement for the parts that are
+  made rather than bought, and ordering from the command line.
+* **AI agents**: Agent Skills for Claude Code and Cursor, an MCP server (``pc mcp``), and plain-text
+  ``--no-ansi`` output on every command so that an agent parses text rather than progress bars.
+* **Caching** in memory, on disk, on a memcached server and in an S3 bucket, so that a team or a CI fleet
+  renders each model once.
 
-Detailed documentation on all of the above can be found in the 'Design' section.
+:doc:`/supported` has the full list, including what is accepted but not yet delivered.
+
+What PartCAD is not
+===================
+
+It is not a drawing tool, and it does not want to be. It is the layer *underneath* the drawing tools: the
+specification of a manufacturable product, in a form a human, a CI job and an AI model can each read, change
+and check. Which drawing tool produced a part is the part's business; PartCAD's business is that the product
+made of it can be built, sourced and audited.
+
+Keeping that specification on your own machines, in Git, and portable between CAD tools and manufacturers is
+the point of the whole exercise. :doc:`/digital_thread/use_cases` has the shapes this takes in practice.
 
 =====================
 What a package holds
@@ -77,7 +92,7 @@ and, if necessary, collected and managed using PartCAD tools:
   configurator, manufacturing/assembly instructions and more
 
 The full list of formats read and written, and of the analyses, simulations and manufacturing steps
-PartCAD runs, is in :doc:`supported`.
+PartCAD runs, is in :doc:`/supported`.
 
 ===============================
 Product development and testing
@@ -134,3 +149,20 @@ third-party tools. Neither is part of this repository yet.
 - An inventory tool to manage the list of parts and final products in stock, as well as to track and manage
   all in-progress or completed orders, to **immediately bring supply chains up and to scale them up while
   keeping all data private on-prem** and not incurring any costs (for cloud services and alike)
+
+=======
+History
+=======
+
+PartCAD was initially just an internal library in the
+`OpenVMP project <https://github.com/openvmp/openvmp>`_
+to maintain the blueprints of OpenVMP robots in a way that allows reconfiguring
+the blueprints based on the specific needs (parameters), and allows to maintain
+the bill of materials and all the necessary data to purchase the required parts.
+
+The OpenVMP project has surfaced the need for an open source Product Lifecycle
+Management (PLM) system that would use Git for collaboration on the designs
+themselves, the supplementary documentation and supplier information
+(and integration).
+To address that need PartCAD was published as a standalone framework to be used
+by any project.

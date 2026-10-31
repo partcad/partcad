@@ -1,0 +1,283 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/introduction.rst:5
+msgid "Introduction"
+msgstr "Einführung"
+
+#: ../../source/digital_thread/introduction.rst:7
+msgid ""
+"A *digital thread* is the one record of a product that every phase of its "
+"life reads from and adds to: what it was asked to be, how it was designed, "
+"what analysing it said, how it is made or bought, whether what was made is "
+"what was asked for -- and, once it exists, how it is doing. A *digital twin*"
+" is that record kept true to one physical thing for as long as the thing "
+"lasts. The thread is what the twin is made of."
+msgstr ""
+"Ein *Digital Thread* ist die eine Aufzeichnung eines Produkts, aus der jede "
+"Phase seines Lebens liest und zu der jede hinzufügt: was es sein sollte, wie"
+" es entworfen wurde, was die Analyse gesagt hat, wie es hergestellt oder "
+"gekauft wird, ob das Hergestellte das ist, was verlangt wurde -- und, sobald"
+" es existiert, wie es ihm geht. Ein *Digital Twin* ist diese Aufzeichnung, "
+"die für ein physisches Ding so lange wahr gehalten wird, wie das Ding "
+"besteht. Der Thread ist das, woraus der Twin besteht."
+
+#: ../../source/digital_thread/introduction.rst:14
+msgid ""
+"PartCAD is designed to be that record for manufacturable physical products, "
+"from the first sentence about an idea to the order for the parts. This "
+"chapter explains how; :doc:`/digital_thread/lifecycle/index` takes the "
+"phases one at a time, and :doc:`/digital_thread/workflows` the work that "
+"runs through them."
+msgstr ""
+"PartCAD ist dafür entworfen, diese Aufzeichnung für fertigbare physische "
+"Produkte zu sein, vom ersten Satz über eine Idee bis zur Bestellung der "
+"Teile. Dieses Kapitel erklärt, wie; :doc:`/digital_thread/lifecycle/index` "
+"nimmt die Phasen eine nach der anderen vor und "
+":doc:`/digital_thread/workflows` die Arbeit, die durch sie läuft."
+
+#: ../../source/digital_thread/introduction.rst:21
+msgid "Everything is a declaration in a package"
+msgstr "Alles ist eine Deklaration in einem Paket"
+
+#: ../../source/digital_thread/introduction.rst:23
+msgid ""
+"There is no database and no export step between the phases. A product is a "
+":ref:`package <packages>` -- a ``partcad.yaml`` and the files beside it, "
+"kept in git like source code -- and each phase of its life is a section of "
+"the declaration of the same object:"
+msgstr ""
+"Es gibt keine Datenbank und keinen Exportschritt zwischen den Phasen. Ein "
+"Produkt ist ein :ref:`Paket <packages>` -- eine ``partcad.yaml`` und die "
+"Dateien daneben, in Git gehalten wie Quellcode -- und jede Phase seines "
+"Lebens ist ein Abschnitt der Deklaration desselben Objekts:"
+
+#: ../../source/digital_thread/introduction.rst:32
+msgid "Phase"
+msgstr "Phase"
+
+#: ../../source/digital_thread/introduction.rst:33
+msgid "What the object declares"
+msgstr "Was das Objekt deklariert"
+
+#: ../../source/digital_thread/introduction.rst:34
+msgid "What answers questions about it"
+msgstr "Was Fragen dazu beantwortet"
+
+#: ../../source/digital_thread/introduction.rst:35
+msgid "In the UI"
+msgstr "In der Benutzeroberfläche"
+
+#: ../../source/digital_thread/introduction.rst:36
+msgid ":doc:`Requirements </digital_thread/lifecycle/requirements>`"
+msgstr ":doc:`Requirements </digital_thread/lifecycle/requirements>`"
+
+#: ../../source/digital_thread/introduction.rst:37
+msgid "``requirements:`` -- features, ports, interfaces, physical properties"
+msgstr ""
+"``requirements:`` -- Features, Ports, Interfaces, physikalische "
+"Eigenschaften"
+
+#: ../../source/digital_thread/introduction.rst:38
+msgid "``pc test``, ``/pc:validate``"
+msgstr "``pc test``, ``/pc:validate``"
+
+#: ../../source/digital_thread/introduction.rst:39
+msgid "**Requirements**"
+msgstr "**Requirements**"
+
+#: ../../source/digital_thread/introduction.rst:40
+msgid ":doc:`Design </digital_thread/lifecycle/design>`"
+msgstr ":doc:`Design </digital_thread/lifecycle/design>`"
+
+#: ../../source/digital_thread/introduction.rst:41
+msgid ""
+"the part's script or file, its parameters, ports and interfaces; an "
+"assembly's links and connections; sketches, scenes"
+msgstr ""
+"das Skript oder die Datei des Teils, seine Parameter, Ports und Interfaces; "
+"die Links und Verbindungen einer Baugruppe; Skizzen, Szenen"
+
+#: ../../source/digital_thread/introduction.rst:43
+msgid "``pc info``, ``pc render``, ``pc export``"
+msgstr "``pc info``, ``pc render``, ``pc export``"
+
+#: ../../source/digital_thread/introduction.rst:44
+msgid "**Design**"
+msgstr "**Design**"
+
+#: ../../source/digital_thread/introduction.rst:45
+msgid ":doc:`Analysis </digital_thread/lifecycle/analysis>`"
+msgstr ":doc:`Analysis </digital_thread/lifecycle/analysis>`"
+
+#: ../../source/digital_thread/introduction.rst:46
+msgid ""
+"``physics:``, materials, ``fea:``, ``dynamic:``, ``thermal:``, ``cfd:``, "
+"``simulate:``"
+msgstr ""
+"``physics:``, Materialien, ``fea:``, ``dynamic:``, ``thermal:``, ``cfd:``, "
+"``simulate:``"
+
+#: ../../source/digital_thread/introduction.rst:48
+msgid "``pc info``, ``pc cae``, ``pc sim``"
+msgstr "``pc info``, ``pc cae``, ``pc sim``"
+
+#: ../../source/digital_thread/introduction.rst:49
+msgid "**Analysis**"
+msgstr "**Analysis**"
+
+#: ../../source/digital_thread/introduction.rst:50
+msgid ":doc:`Manufacturing </digital_thread/lifecycle/manufacturing>`"
+msgstr ":doc:`Manufacturing </digital_thread/lifecycle/manufacturing>`"
+
+#: ../../source/digital_thread/introduction.rst:51
+msgid ""
+"``manufacturing:``, ``vendor:`` and ``sku:``, materials, tolerances, "
+"software, an assembly's instructions"
+msgstr ""
+"``manufacturing:``, ``vendor:`` und ``sku:``, Materialien, Toleranzen, "
+"Software, die Anweisungen einer Baugruppe"
+
+#: ../../source/digital_thread/introduction.rst:53
+msgid "``pc bom``, ``pc supply``, ``pc instructions``, ``pc cam``"
+msgstr "``pc bom``, ``pc supply``, ``pc instructions``, ``pc cam``"
+
+#: ../../source/digital_thread/introduction.rst:54
+msgid "**Manufacturing**"
+msgstr "**Manufacturing**"
+
+#: ../../source/digital_thread/introduction.rst:55
+msgid ":doc:`Validation </digital_thread/lifecycle/validation>`"
+msgstr ":doc:`Validation </digital_thread/lifecycle/validation>`"
+
+#: ../../source/digital_thread/introduction.rst:56
+msgid "the claims all of the above make, checked"
+msgstr "die Behauptungen, die alles oben aufstellt, geprüft"
+
+#: ../../source/digital_thread/introduction.rst:57
+msgid "``pc test``, ``pc sim``, ``/pc:validate``"
+msgstr "``pc test``, ``pc sim``, ``/pc:validate``"
+
+#: ../../source/digital_thread/introduction.rst:58
+msgid "**Validation**"
+msgstr "**Validation**"
+
+#: ../../source/digital_thread/introduction.rst:60
+msgid ""
+"Because every phase is written into one declaration, nothing is copied from "
+"one phase to the next, and nothing can fall out of step: the mass a "
+"requirement is checked against is the mass ``pc info`` reports, worked out "
+"from the same solid and the same material the bill of materials orders; the "
+"bracket the instructions tell somebody to bolt on is the bracket that was "
+"analysed. Changing the design is changing the one record, and every answer "
+"that depended on it is asked again."
+msgstr ""
+"Weil jede Phase in eine Deklaration geschrieben wird, wird nichts von einer "
+"Phase in die nächste kopiert, und nichts kann aus dem Takt fallen: die "
+"Masse, gegen die eine Anforderung geprüft wird, ist die Masse, die ``pc "
+"info`` berichtet, aus demselben Volumenkörper und demselben Material "
+"ausgerechnet, das die Stückliste bestellt; die Konsole, die die Anweisungen "
+"jemandem anzuschrauben aufgeben, ist die Konsole, die analysiert wurde. Das "
+"Design zu ändern heißt, die eine Aufzeichnung zu ändern, und jede Antwort, "
+"die davon abhing, wird erneut gestellt."
+
+#: ../../source/digital_thread/introduction.rst:67
+msgid ""
+"One thing is deliberately left out of the package: which of the things that "
+"can be either built or bought a particular person chooses to build (**Build "
+"vs Buy**). The package says what can be bought and how what can be made is "
+"made; the choice between them is a decision about who has which machines, "
+"and is kept on the machine of whoever made it. A checkout does not carry it,"
+" so the build plan and the order that follow from it can differ from one "
+"person to the next while the product they describe does not."
+msgstr ""
+"Eines wird absichtlich aus dem Paket herausgelassen: welche der Dinge, die "
+"entweder gebaut oder gekauft werden können, eine bestimmte Person zu bauen "
+"wählt (**Build vs Buy**). Das Paket sagt, was gekauft werden kann und wie "
+"das, was hergestellt werden kann, hergestellt wird; die Wahl zwischen beidem"
+" ist eine Entscheidung darüber, wer welche Maschinen hat, und wird auf dem "
+"Rechner dessen gehalten, der sie getroffen hat. Ein Checkout trägt sie nicht"
+" mit, der Bauplan und die Bestellung, die daraus folgen, können sich also "
+"von einer Person zur nächsten unterscheiden, während das Produkt, das sie "
+"beschreiben, es nicht tut."
+
+#: ../../source/digital_thread/introduction.rst:76
+msgid "Every answer is computed, not stored"
+msgstr "Jede Antwort wird berechnet, nicht gespeichert"
+
+#: ../../source/digital_thread/introduction.rst:78
+msgid ""
+"What PartCAD says about an object -- a picture, a mass, a bill of materials,"
+" a verdict -- is worked out from the declaration when it is asked for, and "
+"cached under a key made of everything the answer depends on (see "
+":ref:`caching`). A cached answer is never stale: change what it depends on "
+"and the key changes with it. That is what lets one record serve every phase "
+"without anybody having to remember to regenerate anything."
+msgstr ""
+"Was PartCAD über ein Objekt sagt -- ein Bild, eine Masse, eine Stückliste, "
+"ein Urteil -- wird aus der Deklaration ausgerechnet, wenn danach gefragt "
+"wird, und unter einem Schlüssel zwischengespeichert, der aus allem gebildet "
+"ist, wovon die Antwort abhängt (siehe :ref:`caching`). Eine "
+"zwischengespeicherte Antwort ist nie veraltet: ändern Sie, wovon sie "
+"abhängt, und der Schlüssel ändert sich mit. Das ist es, was eine "
+"Aufzeichnung jede Phase bedienen lässt, ohne dass irgendjemand daran denken "
+"muss, etwas neu zu erzeugen."
+
+#: ../../source/digital_thread/introduction.rst:86
+msgid "Every claim can be checked"
+msgstr "Jede Behauptung lässt sich prüfen"
+
+#: ../../source/digital_thread/introduction.rst:88
+msgid ""
+"A declaration states claims: this part is made by laser cutting, this "
+"assembly's parts do not overlap, this mass is under 50 grams, this robot "
+"does not tip over. ``pc test`` checks every claim that can be measured, ``pc"
+" sim`` every claim about behaviour that a simulation can show, and the "
+"``/pc:validate`` agent skill judges the rest from evidence it gathers and "
+"names. See :doc:`/digital_thread/lifecycle/validation`."
+msgstr ""
+"Eine Deklaration stellt Behauptungen auf: dieses Teil wird durch "
+"Laserschneiden hergestellt, die Teile dieser Baugruppe überlappen sich "
+"nicht, diese Masse liegt unter 50 Gramm, dieser Roboter kippt nicht um. ``pc"
+" test`` prüft jede Behauptung, die messbar ist, ``pc sim`` jede Behauptung "
+"über Verhalten, die eine Simulation zeigen kann, und der Agent-Skill "
+"``/pc:validate`` beurteilt den Rest aus Nachweisen, die er sammelt und "
+"benennt. Siehe :doc:`/digital_thread/lifecycle/validation`."
+
+#: ../../source/digital_thread/introduction.rst:95
+msgid "Packages build on packages"
+msgstr "Pakete bauen auf Paketen auf"
+
+#: ../../source/digital_thread/introduction.rst:97
+msgid ""
+"A package imports others -- standard fasteners, a supplier's catalogue, a "
+"colleague's sub-assembly -- and uses their objects by name "
+"(``//pub/std/...``). The thread of a product runs through every package it "
+"is made of: the screw's interface is the screw package's, its supplier is "
+"the supplier's, and both are read where they are declared rather than copied"
+" in."
+msgstr ""
+"Ein Paket importiert andere -- Standard-Verbindungselemente, den Katalog "
+"eines Lieferanten, die Unterbaugruppe eines Kollegen -- und verwendet deren "
+"Objekte über ihren Namen (``//pub/std/...``). Der Thread eines Produkts "
+"läuft durch jedes Paket, aus dem es besteht: das Interface der Schraube "
+"gehört dem Schraubenpaket, ihr Lieferant dem Lieferantenpaket, und beide "
+"werden dort gelesen, wo sie deklariert sind, statt hereinkopiert zu werden."

@@ -133,7 +133,7 @@ A parameter can also be given for one command instead of written down. The two
 that aim a 2D projection -- ``viewport_origin``, which is the direction the shape
 is looked at from, and ``viewport_up``, which way is up in the picture -- are
 ``pc render --viewport-origin``/``--viewport-up``, with ``--view`` naming the
-common directions (see :doc:`cli`). Passed that way they layer on top of
+common directions (see :doc:`/cli`). Passed that way they layer on top of
 everything below, package and object alike, for that run only.
 
 Two names are not entirely the package's own, and the request has two keys of
@@ -643,7 +643,7 @@ lands, and still re-tunes any parameter it wants to.
 ``readme``, ``pdf`` and ``html`` are the outputs ``render:`` accepts that no
 implementation writes: PartCAD assembles them itself out of what the package
 declares and the images the other file types leave behind (see ``pc render`` in
-:doc:`cli`).
+:doc:`/cli`).
 
 That holds for as long as nobody writes them. A ``pdf:`` or ``html:`` that names
 a ``path`` is a package saying that this file is one of its own -- a drawing, a
@@ -927,7 +927,7 @@ the file type asks:
 
 ``pc render --with-ports``, ``--with-interfaces``, ``--with-all`` and
 ``--with-internals`` ask for the same things for one invocation (see
-:doc:`cli`); declaring them on a file type asks for them permanently, which is
+:doc:`/cli`); declaring them on a file type asks for them permanently, which is
 how a package keeps a drawing of its connections checked in beside the plain
 one. The two add up rather than override: a file type declared with
 ``with_ports: true`` draws them whether or not the option was given.

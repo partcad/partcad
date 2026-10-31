@@ -1,0 +1,365 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/design.rst:2
+msgid "Design"
+msgstr "Проектирование"
+
+#: ../../source/digital_thread/lifecycle/design.rst:13
+msgid ""
+"Design is what the object *is*: its geometry, the numbers it is built from, "
+"and how it connects to the objects around it. In PartCAD a design is not a "
+"drawing anybody makes by hand but a declaration a program builds -- so it "
+"can be rebuilt, varied, reviewed as a diff, and asked questions of by every "
+"other phase."
+msgstr ""
+"Проектирование -- это то, чем объект *является*: его геометрия, те числа, из"
+" которых он построен, и то, как он соединяется с объектами вокруг него. В "
+"PartCAD проект -- это не чертёж, который кто-то рисует вручную, а "
+"объявление, которое строит программа, -- поэтому его можно пересобрать, "
+"варьировать, просматривать как дифф и задавать ему вопросы из любой другой "
+"фазы."
+
+#: ../../source/digital_thread/lifecycle/design.rst:19
+msgid "What PartCAD captures"
+msgstr "Что PartCAD фиксирует"
+
+#: ../../source/digital_thread/lifecycle/design.rst:22
+msgid "Objects"
+msgstr "Объекты"
+
+#: ../../source/digital_thread/lifecycle/design.rst:24
+msgid ":ref:`Sketches <sketches>`"
+msgstr ":ref:`Эскизы <sketches>`"
+
+#: ../../source/digital_thread/lifecycle/design.rst:25
+msgid ""
+"Two-dimensional shapes: basic outlines, DXF and SVG files, scripts. What a "
+"part is extruded or swept from, and what the boundary of a port is drawn "
+"with."
+msgstr ""
+"Двумерные формы: базовые контуры, файлы DXF и SVG, скрипты. То, из чего "
+"деталь выдавливается или протягивается, и то, чем рисуется граница порта."
+
+#: ../../source/digital_thread/lifecycle/design.rst:28
+msgid ":ref:`Interfaces <interfaces>`"
+msgstr ":ref:`Интерфейсы <interfaces>`"
+
+#: ../../source/digital_thread/lifecycle/design.rst:29
+msgid ""
+"How objects connect: a named set of ports, implemented by parts and "
+"assemblies, inherited from more general interfaces, and mated with the "
+"interfaces they fit. An M3 through hole is an interface; so is a LEGO stud."
+msgstr ""
+"Как объекты соединяются: именованный набор портов, реализуемый деталями и "
+"сборками, наследуемый от более общих интерфейсов и сопрягаемый с теми "
+"интерфейсами, к которым он подходит. Проходное отверстие M3 -- это "
+"интерфейс; им же является и шип LEGO."
+
+#: ../../source/digital_thread/lifecycle/design.rst:33
+msgid ":ref:`Parts <parts>`"
+msgstr ":ref:`Детали <parts>`"
+
+#: ../../source/digital_thread/lifecycle/design.rst:34
+msgid ""
+"A solid, built by a script (CadQuery, build123d, OpenSCAD, ...) or read from"
+" a file (STEP, BREP, STL, ...), with :ref:`parameters <parameters>` that "
+"vary it and ports where other objects attach (see :ref:`part-types`)."
+msgstr ""
+"Тело, построенное скриптом (CadQuery, build123d, OpenSCAD, ...) или "
+"прочитанное из файла (STEP, BREP, STL, ...), с :ref:`параметрами "
+"<parameters>`, которые его варьируют, и портами, в которых крепятся другие "
+"объекты (см. :ref:`part-types`)."
+
+#: ../../source/digital_thread/lifecycle/design.rst:38
+msgid ":ref:`Assemblies <assemblies>`"
+msgstr ":ref:`Сборки <assemblies>`"
+
+#: ../../source/digital_thread/lifecycle/design.rst:39
+msgid ""
+"Parts and other assemblies put together: each link placed by connecting one "
+"of its ports to a port of something already placed rather than by "
+"coordinates where it can be, so that the assembly says what holds each item "
+"and moves when its parts change (see :doc:`/assy` and :ref:`joints`)."
+msgstr ""
+"Детали и другие сборки, соединённые вместе: каждое звено размещается "
+"соединением одного из его портов с портом чего-то уже размещённого, а не "
+"координатами, где это возможно, чтобы сборка говорила, что держит каждый "
+"элемент, и двигалась при изменении её деталей (см. :doc:`/assy` и "
+":ref:`joints`)."
+
+#: ../../source/digital_thread/lifecycle/design.rst:44
+msgid ":ref:`Scenes <scenes>`"
+msgstr ":ref:`Сцены <scenes>`"
+
+#: ../../source/digital_thread/lifecycle/design.rst:45
+msgid ""
+"Where assemblies are placed in a world -- the floor a robot stands on, the "
+"slope a simulation tilts it on. A scene is not something anybody makes."
+msgstr ""
+"Где сборки размещены в мире -- пол, на котором стоит робот, склон, на "
+"который его наклоняет симуляция. Сцена -- это не то, что кто-то "
+"изготавливает."
+
+#: ../../source/digital_thread/lifecycle/design.rst:49
+msgid "Properties"
+msgstr "Свойства"
+
+#: ../../source/digital_thread/lifecycle/design.rst:51
+msgid ""
+"What an object is made of (:ref:`materials`), what it is called by whoever "
+"sells it, its colour, and any other :ref:`properties <properties>` -- read "
+"by the phases after this one rather than by the geometry."
+msgstr ""
+"Из чего объект сделан (:ref:`materials`), как он называется у того, кто его "
+"продаёт, его цвет и любые другие :ref:`свойства <properties>` -- всё это "
+"читается фазами после этой, а не геометрией."
+
+#: ../../source/digital_thread/lifecycle/design.rst:56
+msgid "Reuse"
+msgstr "Повторное использование"
+
+#: ../../source/digital_thread/lifecycle/design.rst:58
+msgid ""
+"An object is used by name, from its own package or from any package "
+"imported: ``//pub/std/metric/m3:m3-thru`` is the same interface wherever it "
+"is used. A file fetched from elsewhere is pinned with its hash, so that the "
+"design says exactly which bytes it was built from (see "
+":ref:`reproducibility`)."
+msgstr ""
+"Объект используется по имени, из собственного пакета или из любого "
+"импортированного пакета: ``//pub/std/metric/m3:m3-thru`` -- это один и тот "
+"же интерфейс, где бы он ни использовался. Файл, полученный откуда-то ещё, "
+"закрепляется своим хешем, чтобы проект говорил в точности, из каких байтов "
+"он был построен (см. :ref:`reproducibility`)."
+
+#: ../../source/digital_thread/lifecycle/design.rst:64
+msgid "In the UI"
+msgstr "В интерфейсе"
+
+#: ../../source/digital_thread/lifecycle/design.rst:66
+msgid ""
+"**Design** is what the Digital Thread opens on, and it is three tabs over "
+"one object -- the same geometry asked for three different ways. Each has a "
+"chapter of its own:"
+msgstr ""
+"**Design** -- это то, с чего открывается Digital Thread, и это три вкладки "
+"над одним объектом: та же геометрия, запрошенная тремя разными способами. У "
+"каждой своя глава:"
+
+#: ../../source/digital_thread/lifecycle/design.rst:70
+msgid ":doc:`3D </digital_thread/lifecycle/design_3d>`"
+msgstr ":doc:`3D </digital_thread/lifecycle/design_3d>`"
+
+#: ../../source/digital_thread/lifecycle/design.rst:71
+msgid ""
+"The shape to turn, with a tree of what it is made of -- its links, its ports"
+" and its interfaces -- to switch on and off. The tree is the assembly's "
+"structure, so this is where a link placed by the wrong port shows itself. It"
+" is the only tab always there, and the only one an object outside any "
+"package has."
+msgstr ""
+"Форма, которую можно вращать, с деревом того, из чего она состоит -- её "
+"звеньев, её портов и её интерфейсов, -- которые можно включать и выключать. "
+"Дерево -- это структура сборки, поэтому именно здесь обнаруживает себя "
+"звено, размещённое не тем портом. Это единственная вкладка, которая есть "
+"всегда, и единственная, которая есть у объекта вне всякого пакета."
+
+#: ../../source/digital_thread/lifecycle/design.rst:77
+msgid ":doc:`2D </digital_thread/lifecycle/design_2d>`"
+msgstr ":doc:`2D </digital_thread/lifecycle/design_2d>`"
+
+#: ../../source/digital_thread/lifecycle/design.rst:78
+msgid ""
+"The object rendered to a picture by PartCAD, as ``pc render`` renders it, "
+"and saved from the tab. The same boxes decide what is drawn and which ports "
+"are drawn on it."
+msgstr ""
+"Объект, отрисованный PartCAD в картинку так, как его отрисовывает ``pc "
+"render``, и сохраняемый из вкладки. Те же флажки решают, что рисуется и "
+"какие порты на этом нарисованы."
+
+#: ../../source/digital_thread/lifecycle/design.rst:82
+msgid ":doc:`Draft </digital_thread/lifecycle/design_draft>`"
+msgstr ":doc:`Draft </digital_thread/lifecycle/design_draft>`"
+
+#: ../../source/digital_thread/lifecycle/design.rst:83
+msgid ""
+"A dimensioned drawing of a part or an assembly, laid out by a drawing "
+"package rather than by PartCAD, which the tab names."
+msgstr ""
+"Чертёж детали или сборки с размерами, скомпонованный чертёжным пакетом, а не"
+" PartCAD, и вкладка этот пакет называет."
+
+#: ../../source/digital_thread/lifecycle/design.rst:86
+msgid ""
+"The Digital Thread's Design group: its three tabs, the object tree and the "
+"3D view"
+msgstr ""
+"Группа Design в Digital Thread: её три вкладки, дерево объекта и 3D-вид"
+
+#: ../../source/digital_thread/lifecycle/design.rst:91
+msgid ""
+"The panel is driven by whatever is selected in the PartCAD Explorer, and the"
+" :ref:`view panel <dt-design-3d>` down its right -- the orientation gizmo, "
+"the axis views, the sections and the viewpoint -- is shared by all three: a "
+"section set on the 3D tab is the section the 2D and Draft tabs draw."
+msgstr ""
+"Панель управляется тем, что выделено в PartCAD Explorer, а :ref:`панель вида"
+" <dt-design-3d>` справа от неё -- гизмо ориентации, виды по осям, сечения и "
+"точка зрения -- общая для всех трёх: сечение, заданное на вкладке 3D, -- это"
+" то сечение, которое рисуют вкладки 2D и Draft."
+
+#: ../../source/digital_thread/lifecycle/design.rst:96
+msgid ""
+"The editing loop runs through this group. **Edit** in the Explorer opens the"
+" file an object *is* -- the script a part is written in, an ASSY file, a "
+"package's ``partcad.yaml`` -- in an editor beside the panel, and **Display**"
+" puts the result back on screen; what a save costs is only what changed, "
+"since every answer is keyed on the files it was built from. See :ref:`Edit "
+"<vscode-edit>` in :doc:`/tools_vscode`."
+msgstr ""
+"Цикл редактирования идёт через эту группу. **Edit** в Explorer открывает тот"
+" файл, которым объект *является* -- скрипт, на котором написана деталь, файл"
+" ASSY, ``partcad.yaml`` пакета, -- в редакторе рядом с панелью, а "
+"**Display** возвращает результат на экран; сохранение стоит лишь столько, "
+"сколько изменилось, поскольку каждый ответ строится по ключу тех файлов, из "
+"которых он был собран. См. :ref:`Edit <vscode-edit>` в :doc:`/tools_vscode`."
+
+#: ../../source/digital_thread/lifecycle/design.rst:105
+msgid "On the command line"
+msgstr "В командной строке"
+
+#: ../../source/digital_thread/lifecycle/design.rst:107
+msgid ""
+"``pc info`` says what an object is and what it measures: its bounding box, "
+"volume, ports and interfaces, parameters and physical properties."
+msgstr ""
+"``pc info`` говорит, чем является объект и что он измеряет: его габаритный "
+"ящик, объём, порты и интерфейсы, параметры и физические свойства."
+
+#: ../../source/digital_thread/lifecycle/design.rst:109
+msgid ""
+"``pc render`` draws it -- a picture from any view, with its ports and "
+"interfaces drawn on, or a dimensioned drawing -- and ``pc export`` writes it"
+" in another format (see :ref:`output-files`). ``pc convert`` changes what "
+"the object *is*, by rewriting its declaration to point at the new file."
+msgstr ""
+"``pc render`` его рисует -- картинку с любого вида, с нарисованными на ней "
+"портами и интерфейсами, или чертёж с размерами, -- а ``pc export`` "
+"записывает его в другом формате (см. :ref:`output-files`). ``pc convert`` "
+"меняет то, чем объект *является*, перезаписывая его объявление так, чтобы "
+"оно указывало на новый файл."
+
+#: ../../source/digital_thread/lifecycle/design.rst:113
+msgid ""
+"``pc list`` and ``pc search`` find what already exists, here or in :doc:`the"
+" public repository </public_repository>`, so that a part is reused rather "
+"than drawn again."
+msgstr ""
+"``pc list`` и ``pc search`` находят то, что уже существует, здесь или в "
+":doc:`публичном репозитории </public_repository>`, чтобы деталь была "
+"повторно использована, а не нарисована заново."
+
+#: ../../source/digital_thread/lifecycle/design.rst:116
+msgid ""
+"``pc ide view`` shows an object in the Digital Thread from a terminal, and "
+"``pc ide open`` opens it in a CAD application on this machine."
+msgstr ""
+"``pc ide view`` показывает объект в Digital Thread из терминала, а ``pc ide "
+"open`` открывает его в CAD-приложении на этой машине."
+
+#: ../../source/digital_thread/lifecycle/design.rst:118
+msgid ""
+"``pc lint`` reads a ``partcad.yaml`` or an ASSY file as it renders and "
+"reports what is wrong with it before anything is built."
+msgstr ""
+"``pc lint`` читает ``partcad.yaml`` или файл ASSY в том виде, в каком он "
+"разворачивается, и сообщает, что с ним не так, до того, как что-либо будет "
+"собрано."
+
+#: ../../source/digital_thread/lifecycle/design.rst:122
+msgid "Agent skills"
+msgstr "Навыки агентов"
+
+#: ../../source/digital_thread/lifecycle/design.rst:124
+msgid "``/pc:gen``"
+msgstr "``/pc:gen``"
+
+#: ../../source/digital_thread/lifecycle/design.rst:125
+msgid ""
+"Decides whether the request is a part, an assembly or a sketch and follows "
+"the matching skill below. The one to use when it does not matter which it "
+"is."
+msgstr ""
+"Решает, является ли запрос деталью, сборкой или эскизом, и следует "
+"соответствующему навыку ниже. Тот навык, который стоит использовать, когда "
+"неважно, что именно это."
+
+#: ../../source/digital_thread/lifecycle/design.rst:128
+msgid "``/pc:gen-part``, ``/pc:gen-assembly``, ``/pc:gen-sketch``"
+msgstr "``/pc:gen-part``, ``/pc:gen-assembly``, ``/pc:gen-sketch``"
+
+#: ../../source/digital_thread/lifecycle/design.rst:129
+msgid ""
+"Model from a description. Each validates what it wrote by rendering it -- "
+"from several angles, because a single projection hides whatever is behind it"
+" -- and comparing each view against the description it started from."
+msgstr ""
+"Моделируют по описанию. Каждый проверяет написанное отрисовкой -- с "
+"нескольких углов, потому что одна проекция скрывает всё, что за ней, -- и "
+"сравнением каждого вида с тем описанием, с которого он начинал."
+
+#: ../../source/digital_thread/lifecycle/design.rst:133
+msgid "``/pc:add-interfaces``"
+msgstr "``/pc:add-interfaces``"
+
+#: ../../source/digital_thread/lifecycle/design.rst:134
+msgid ""
+"Adds ``interfaces``, ports and ``implements:`` to a part that has none, so "
+"it can be mated by connection instead of by hand-written coordinates. It "
+"works the positions out of the geometry and proves them twice: by drawing "
+"them on the part, and by mating two instances in a throwaway assembly."
+msgstr ""
+"Добавляет ``interfaces``, порты и ``implements:`` к детали, у которой их "
+"нет, чтобы её можно было сопрягать по соединению, а не по написанным вручную"
+" координатам. Он вычисляет положения по геометрии и доказывает их дважды: "
+"рисуя их на детали и сопрягая два экземпляра в одноразовой сборке."
+
+#: ../../source/digital_thread/lifecycle/design.rst:139
+msgid "``/pc:search``, ``/pc:describe``"
+msgstr "``/pc:search``, ``/pc:describe``"
+
+#: ../../source/digital_thread/lifecycle/design.rst:140
+msgid ""
+"Find an existing object, and write a description of one from its measured "
+"size and its renders into the object's ``summary:``."
+msgstr ""
+"Находят существующий объект и пишут его описание по его измеренному размеру "
+"и его отрисовкам в ``summary:`` объекта."
+
+#: ../../source/digital_thread/lifecycle/design.rst:143
+msgid "``/pc:render``, ``/pc:export``, ``/pc:convert``"
+msgstr "``/pc:render``, ``/pc:export``, ``/pc:convert``"
+
+#: ../../source/digital_thread/lifecycle/design.rst:144
+msgid "Produce pictures and files from what is declared."
+msgstr "Создают картинки и файлы из того, что объявлено."

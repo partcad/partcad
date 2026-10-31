@@ -1,0 +1,264 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/plugins/repositories.rst:3
+msgid "Repositories"
+msgstr "仓库"
+
+#: ../../source/plugins/repositories.rst:5
+msgid ""
+"A **repository plugin** serves the contents of a package: its objects, its "
+"child packages and its metadata. It is what backs an ``external`` dependency"
+" -- a package that is not a directory, not a git clone and not a tarball, "
+"but a script PartCAD asks."
+msgstr ""
+"**仓库插件** 提供一个包的内容：它的各个对象、它的子包，以及它的元数据。它就是 ``external`` 依赖背后的那样东西 -- "
+"一个既不是目录、也不是 git 克隆、也不是 tar 包，而是一个由 PartCAD 去询问的脚本的包。"
+
+#: ../../source/plugins/repositories.rst:10
+msgid ""
+"It is the most unusual of the plugin kinds, because it does not add a "
+"capability to a package you write: it **replaces the package**. Everything "
+"else in PartCAD reads a ``partcad.yaml`` and the files beside it; a plugin-"
+"backed package has no source tree at all, and answers questions about itself"
+" instead."
+msgstr ""
+"它是各类插件中最不寻常的一种，因为它并不是给你所编写的包添加某项能力：它 **替代了那个包**。PartCAD 中其他一切都是读取一个 "
+"``partcad.yaml`` 以及它旁边的那些文件；而由插件支撑的包完全没有源码树，它改为回答关于它自己的各种问题。"
+
+#: ../../source/plugins/repositories.rst:15
+msgid ""
+":ref:`repositories` is the reference for the declaration and for every key "
+"the protocol defines."
+msgstr ":ref:`repositories` 是关于这种声明以及该协议所定义的每一个键的参考资料。"
+
+#: ../../source/plugins/repositories.rst:19
+msgid "What a repository is for"
+msgstr "仓库的用途"
+
+#: ../../source/plugins/repositories.rst:21
+msgid ""
+"**A catalogue nobody wants to check in.** A supplier's whole range is tens "
+"of thousands of parts; a plugin turns the supplier's own data into PartCAD "
+"objects on demand, and nothing is copied."
+msgstr ""
+"**一份谁都不想签入版本库的目录册。** 一个供应商的全部产品线有几万个零件；插件会按需把供应商自己的数据变成 PartCAD "
+"对象，而什么都不必复制过来。"
+
+#: ../../source/plugins/repositories.rst:24
+msgid ""
+"**A live source.** An ERP system, a PLM database, an internal part register "
+"-- the authority is the system, and the package is a view of it that is "
+"never out of date."
+msgstr ""
+"**一个实时的数据源。** 一套 ERP 系统、一个 PLM 数据库、一份内部零件登记表 -- "
+"权威在那个系统那里，而这个包是它的一个永远不会过时的视图。"
+
+#: ../../source/plugins/repositories.rst:27
+msgid ""
+"**A generated family too large to enumerate.** Every size of a fastener, "
+"every length of a profile: the plugin answers for the one that was asked "
+"for."
+msgstr "**一个大到无法逐一列举的生成族。** 某种紧固件的每一个尺寸、某种型材的每一个长度：插件只回答被问到的那一个。"
+
+#: ../../source/plugins/repositories.rst:29
+msgid ""
+"**A format that is already a table.** A CSV, a spreadsheet, a JSON dump: one"
+" short script turns it into a package."
+msgstr "**一种本来就是表格的格式。** 一个 CSV、一张电子表格、一份 JSON 导出：一个简短的脚本就能把它变成一个包。"
+
+#: ../../source/plugins/repositories.rst:33
+msgid "Using one"
+msgstr "使用一个仓库插件"
+
+#: ../../source/plugins/repositories.rst:35
+msgid "A dependency of ``type: external`` names the plugin that serves it:"
+msgstr "``type: external`` 的依赖会指名为它提供服务的那个插件："
+
+#: ../../source/plugins/repositories.rst:44
+msgid ""
+"Everything below that is ordinary. The objects the plugin serves are listed,"
+" inspected, rendered, tested and put into assemblies like any others:"
+msgstr "再往下的一切都很普通。插件所提供的那些对象可以像其他任何对象一样被列出、被检视、被渲染、被测试，并被放进装配体里："
+
+#: ../../source/plugins/repositories.rst:55
+msgid "Writing one"
+msgstr "编写一个仓库插件"
+
+#: ../../source/plugins/repositories.rst:73
+msgid ""
+"``basic`` repositories are Python scripts, run the way a provider script is "
+"-- with the input in the global ``request`` and the output in the global "
+"``output``. ``enrich`` repositories are references to another repository "
+"with some parameters fixed, which is how one script serves several packages."
+msgstr ""
+"``basic`` 仓库就是 Python 脚本，运行方式与提供方脚本相同 -- 输入放在全局的 ``request`` 中，输出放在全局的 "
+"``output`` 中。``enrich`` 仓库则是对另一个仓库的引用，其中固定了一些参数，而一个脚本正是靠这一点服务于多个包。"
+
+#: ../../source/plugins/repositories.rst:78
+msgid ""
+"**A repository script answers one generic key/value request.** There is no "
+"method per kind of object:"
+msgstr "**仓库脚本回答的是一个通用的键/值请求。** 不存在按对象种类划分的方法："
+
+#: ../../source/plugins/repositories.rst:81
+msgid "``request[\"api\"] == \"get\"``, ``request[\"key\"]`` is the key being asked for"
+msgstr "``request[\"api\"] == \"get\"`` ，而 ``request[\"key\"]`` 就是被问到的那个键"
+
+#: ../../source/plugins/repositories.rst:82
+msgid "``output[\"result\"]`` is the value, or ``null`` when the key is unknown"
+msgstr "``output[\"result\"]`` 就是那个值，而在键未知时为 ``null``"
+
+#: ../../source/plugins/repositories.rst:84
+msgid ""
+"The keys address every kind of data uniformly, which is why serving a new "
+"kind of object or a new piece of metadata needs no new API:"
+msgstr "这些键以统一的方式寻址每一种数据，正因如此，要提供一种新的对象种类或一项新的元数据，并不需要新的 API："
+
+#: ../../source/plugins/repositories.rst:87
+msgid "``objects/<kind>``"
+msgstr "``objects/<kind>``"
+
+#: ../../source/plugins/repositories.rst:88
+msgid ""
+"Every object of a kind, as ``{name: config, ...}``. The kinds are the ten in"
+" ``Project.OBJECT_KINDS``: ``material``, ``interface``, ``sketch``, "
+"``part``, ``assembly``, ``scene``, ``provider``, ``repository``, "
+"``software``, ``partType``."
+msgstr ""
+"某一种类的全部对象，形式为 ``{name: config, ...}`` 。这些种类就是 ``Project.OBJECT_KINDS`` "
+"中的那十种：``material`` 、 ``interface`` 、 ``sketch`` 、 ``part`` 、 ``assembly`` 、 "
+"``scene`` 、 ``provider`` 、 ``repository`` 、 ``software`` 、 ``partType`` 。"
+
+#: ../../source/plugins/repositories.rst:93
+msgid "``objects/<kind>/<name>``"
+msgstr "``objects/<kind>/<name>``"
+
+#: ../../source/plugins/repositories.rst:94
+msgid ""
+"One object's config, fetched without listing the whole repository. Answer "
+"this one and a package of ten thousand parts costs one request per part "
+"used."
+msgstr "单个对象的配置，取它时不必列出整个仓库。只要回答这一个键，一个有一万个零件的包就只需为每个用到的零件付出一次请求。"
+
+#: ../../source/plugins/repositories.rst:97
+msgid "``deps``"
+msgstr "``deps``"
+
+#: ../../source/plugins/repositories.rst:98
+msgid "The names of the child packages."
+msgstr "各个子包的名称。"
+
+#: ../../source/plugins/repositories.rst:100
+msgid "``meta``"
+msgstr "``meta``"
+
+#: ../../source/plugins/repositories.rst:101
+msgid ""
+"Package-level properties -- ``desc``, ``render``, ``manufacturable``, "
+"``suppliers`` -- and ``objectKinds``."
+msgstr ""
+"包一级的属性 -- ``desc`` 、 ``render`` 、 ``manufacturable`` 、 ``suppliers`` -- 以及 "
+"``objectKinds`` 。"
+
+#: ../../source/plugins/repositories.rst:104
+msgid "``files/<path>``"
+msgstr "``files/<path>``"
+
+#: ../../source/plugins/repositories.rst:105
+msgid ""
+"The base64-encoded content of a file an object references by ``path``. A "
+"plugin-backed package has no source tree, so a file-backed object's file is "
+"fetched from the plugin and materialized into the package's cache directory "
+"when the object is built."
+msgstr ""
+"某个对象通过 ``path`` 引用的那个文件，其内容以 base64 "
+"编码给出。由插件支撑的包没有源码树，所以以文件为依托的对象在被构建时，它的文件会从插件取来并落到该包的缓存目录里。"
+
+#: ../../source/plugins/repositories.rst:110
+msgid ""
+"For a hierarchy, a child package's requests are **prefixed with its "
+"subfolder**: a child in ``motors`` asks for ``motors/objects/part``, "
+"``motors/deps`` and so on, all served by the same script."
+msgstr ""
+"对于层次结构，子包的请求会 **带上它那个子文件夹作为前缀**：位于 ``motors`` 中的子包会去请求 "
+"``motors/objects/part`` 、 ``motors/deps`` 等等，而这些全都由同一个脚本来提供。"
+
+#: ../../source/plugins/repositories.rst:115
+msgid "Examples"
+msgstr "示例"
+
+#: ../../source/plugins/repositories.rst:117
+msgid "Three example packages, in increasing order of realism."
+msgstr "三个示例包，按贴近真实的程度递增排列。"
+
+#: ../../source/plugins/repositories.rst:119
+msgid "``examples/plugin_repository_basic``"
+msgstr "``examples/plugin_repository_basic``"
+
+#: ../../source/plugins/repositories.rst:120
+msgid ""
+"A flat package of parts read from a CSV file. The whole plugin is one short "
+"script, ``csv.py``, and the data is ``example.csv`` beside it. It declares "
+"the repository twice -- a ``basic`` one taking a ``filename`` parameter, and"
+" an ``enrich`` of it with the filename fixed -- which is the pattern to "
+"copy."
+msgstr ""
+"一个从 CSV 文件读入的扁平零件包。整个插件就是一个简短的脚本 ``csv.py`` ，而数据是放在它旁边的 ``example.csv`` "
+"。它把这个仓库声明了两次 -- 一个接受 ``filename`` 参数的 ``basic`` 仓库，以及对它的一个把文件名固定下来的 "
+"``enrich`` -- 这就是值得照抄的那个模式。"
+
+#: ../../source/plugins/repositories.rst:131
+msgid ""
+"The part it serves is an ordinary part in the Digital Thread -- the package "
+"it belongs to simply has no source tree:"
+msgstr "它所提供的那个零件，在 Digital Thread 中就是一个普通的零件 -- 只不过它所属的那个包根本没有源码树："
+
+#: ../../source/plugins/repositories.rst:134
+msgid ""
+"A part served by the CSV repository plugin, shown in the Digital Thread"
+msgstr "由 CSV 仓库插件提供的一个零件，显示在 Digital Thread 中"
+
+#: ../../source/plugins/repositories.rst:142
+msgid "``examples/plugin_repository_tree``"
+msgstr "``examples/plugin_repository_tree``"
+
+#: ../../source/plugins/repositories.rst:143
+msgid ""
+"The same idea with a hierarchy, which is where the subfolder prefix is "
+"exercised:"
+msgstr "同样的思路，但带层次结构，而这正是子文件夹前缀得到检验的地方："
+
+#: ../../source/plugins/repositories.rst:153
+msgid "``examples/plugin_repository_full``"
+msgstr "``examples/plugin_repository_full``"
+
+#: ../../source/plugins/repositories.rst:154
+msgid ""
+"The realistic one: the data is served by an HTTP endpoint (``server.py``) "
+"that the plugin (``remote.py``) calls, rather than hardcoded in the script. "
+"This is the shape an ERP or a PLM integration has. The endpoint has pytests "
+"of its own, independent of PartCAD, which is the other half of the lesson --"
+" a plugin that talks to a service is two things to test, not one."
+msgstr ""
+"贴近真实的那一个：数据由一个 HTTP 端点（ ``server.py`` ）提供，由插件（ ``remote.py`` "
+"）去调用它，而不是硬编码在脚本里。ERP 或 PLM 集成就是这个形状。那个端点有它自己的 pytest，独立于 PartCAD，而这正是这一课的另一半"
+" -- 一个要与某个服务对话的插件，要测的是两样东西，而不是一样。"

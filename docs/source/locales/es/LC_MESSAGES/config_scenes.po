@@ -1,0 +1,259 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/config_scenes.rst:3
+msgid "Scenes"
+msgstr "Escenas"
+
+#: ../../source/config_scenes.rst:8
+msgid "What a scene is"
+msgstr "Qué es una escena"
+
+#: ../../source/config_scenes.rst:11
+msgid ""
+"A scene is a placed arrangement of objects - a workcell, a table with parts "
+"laid out on it, a simulation world. It is built out of the same files as an "
+"assembly, and differs in intent: an assembly is a product that was put "
+"together, and a scene states only where things are. A scene can also say "
+"what its world is like, the gravity in it and the fluid it is filled with, "
+"and it is what a simulation places an object in. A Gazebo world or a MuJoCo "
+"model is read as a scene, and a scene is written out as either, through the "
+"engine's plugin package. See :ref:`scenes` and "
+":doc:`/digital_thread/lifecycle/simulation`."
+msgstr ""
+"Una escena es una disposición colocada de objetos - una celda de trabajo, "
+"una mesa con piezas extendidas sobre ella, un mundo de simulación. Está "
+"construida con los mismos archivos que un ensamblaje, y se diferencia en la "
+"intención: un ensamblaje es un producto que se ha montado, y una escena "
+"declara solo dónde están las cosas. Una escena también puede decir cómo es "
+"su mundo, la gravedad que hay en él y el fluido del que está llena, y es "
+"aquello en lo que una simulación coloca un objeto. Un mundo de Gazebo o un "
+"modelo de MuJoCo se lee como una escena, y una escena se escribe como "
+"cualquiera de los dos, a través del paquete de plugin del motor. Véanse "
+":ref:`scenes` y :doc:`/digital_thread/lifecycle/simulation`."
+
+#: ../../source/config_scenes.rst:21
+msgid ""
+"A **scene** is a placed arrangement of objects: a workcell, a table with the"
+" parts laid out on it, a simulation world. It is built the way an assembly "
+"is, out of the very same files, and everything that works on an assembly "
+"works on a scene -- it renders, it exports, it has a bill of materials, ``pc"
+" ide view`` shows it."
+msgstr ""
+"Una **escena** es una disposición de objetos ya colocados: una celda de "
+"trabajo, una mesa con las piezas puestas encima, un mundo de simulación. Se "
+"construye igual que un ensamblaje, a partir de exactamente los mismos "
+"archivos, y todo lo que funciona sobre un ensamblaje funciona sobre una "
+"escena -- se renderiza, se exporta, tiene una lista de materiales, ``pc ide "
+"view`` la muestra."
+
+#: ../../source/config_scenes.rst:27
+msgid ""
+"What separates the two is intent, and one rule follows from it. An assembly "
+"is a *product*: it says what it is made of and, through the ``how:`` section"
+" of each ``connect:``, how it is put together, which is what the assembly "
+"instruction book (``pc render -t pdf``) is generated from. A scene states "
+"only an end state. Nothing in it was assembled, so there is nothing to say "
+"about the assembling, and ``how:`` is rejected rather than ignored (see "
+":doc:`/assy`)."
+msgstr ""
+"Lo que separa a los dos es la intención, y de ella se sigue una regla. Un "
+"ensamblaje es un *producto*: dice de qué está hecho y, a través de la "
+"sección ``how:`` de cada ``connect:``, cómo se monta, que es a partir de lo "
+"que se genera el manual de instrucciones de montaje (``pc render -t pdf``). "
+"Una escena declara solo un estado final. Nada en ella se montó, así que no "
+"hay nada que decir sobre el montaje, y ``how:`` se rechaza en lugar de "
+"ignorarse (véase :doc:`/assy`)."
+
+#: ../../source/config_scenes.rst:36
+msgid "Declare scenes"
+msgstr "Declarar escenas"
+
+#: ../../source/config_scenes.rst:67
+msgid ""
+"The declaration points at the file that holds the scene and nothing else: "
+"there is no assembly object in between. An ``.assy`` file in an "
+"``assemblies:`` section is an assembly, and the very same file in a "
+"``scenes:`` section is a scene."
+msgstr ""
+"La declaración apunta al archivo que contiene la escena y a nada más: no hay"
+" ningún objeto de ensamblaje por medio. Un archivo ``.assy`` en una sección "
+"``assemblies:`` es un ensamblaje, y ese mismo archivo en una sección "
+"``scenes:`` es una escena."
+
+#: ../../source/config_scenes.rst:83
+msgid "Scenes take parameters, aliases and enriches exactly as assemblies do:"
+msgstr ""
+"Las escenas admiten parámetros, alias y enriquecimientos exactamente igual "
+"que los ensamblajes:"
+
+#: ../../source/config_scenes.rst:94
+msgid ""
+"A scene's ASSY file may place another scene (``scene:``) and weld what a "
+"link places to the world (``fixed: true``), and neither is allowed in an "
+"assembly: in a scene every element is a rigid body of its own, and in an "
+"assembly everything is attached to it. See :ref:`assy-scenes` for the keys "
+"and :ref:`sim-bodies` for the rule."
+msgstr ""
+"El archivo ASSY de una escena puede colocar otra escena (``scene:``) y "
+"soldar al mundo lo que coloca un enlace (``fixed: true``), y ninguna de las "
+"dos cosas se permite en un ensamblaje: en una escena cada elemento es un "
+"cuerpo rígido propio, y en un ensamblaje todo está unido a él. Véase "
+":ref:`assy-scenes` para las claves y :ref:`sim-bodies` para la regla."
+
+#: ../../source/config_scenes.rst:101
+msgid "Gravity, and the fluid a scene is filled with"
+msgstr "La gravedad, y el fluido del que está llena una escena"
+
+#: ../../source/config_scenes.rst:102
+msgid ""
+"A scene is a world as well as an arrangement, and may say two things about "
+"that world which an assembly cannot: the gravity in it, and the fluid it is "
+"filled with."
+msgstr ""
+"Una escena es un mundo además de una disposición, y puede decir dos cosas "
+"sobre ese mundo que un ensamblaje no puede: la gravedad que hay en él y el "
+"fluido del que está llena."
+
+#: ../../source/config_scenes.rst:114
+msgid ""
+"``gravity:`` is a vector in **m/s^2**, in the scene's own frame: ``[0, 0, "
+"-9.81]`` is Earth with Z up, ``[0, 0, -1.62]`` the Moon, ``[0, 0, 0]`` free "
+"fall. It is SI because every physical quantity PartCAD states is SI -- only "
+"lengths and angles are millimetres and degrees (see the note under "
+":ref:`materials`). A scene that states none leaves it to the engine, whose "
+"own default is Earth's along -Z. Anything but three numbers is an error, and"
+" a gravity above 1000 m/s^2 -- a vector written in mm/s^2 by mistake is a "
+"thousand g -- is reported as one that is probably in the wrong unit."
+msgstr ""
+"``gravity:`` es un vector en **m/s^2**, en el sistema de referencia propio "
+"de la escena: ``[0, 0, -9.81]`` es la Tierra con Z hacia arriba, ``[0, 0, "
+"-1.62]`` la Luna, ``[0, 0, 0]`` caída libre. Está en SI porque toda magnitud"
+" física que PartCAD declara está en SI -- solo las longitudes y los ángulos "
+"son milímetros y grados (véase la nota bajo :ref:`materials`). Una escena "
+"que no declara ninguna se lo deja al motor, cuyo propio valor predeterminado"
+" es la de la Tierra a lo largo de -Z. Cualquier cosa que no sean tres "
+"números es un error, y una gravedad superior a 1000 m/s^2 -- un vector "
+"escrito en mm/s^2 por error son mil g -- se informa como una que "
+"probablemente está en la unidad equivocada."
+
+#: ../../source/config_scenes.rst:123
+msgid ""
+"``medium:`` names a :ref:`material <materials>`, resolved the way a part's "
+"material is (``:brine`` is the ``brine`` this package catalogues), and its "
+"``density`` (kg/m^3) and ``viscosity`` (Pa*s) are what a simulation drags "
+"and buoys what moves through the scene with. "
+"``//pub/std/manufacturing/material/fluid`` catalogues ``air``, ``water`` and"
+" ``seawater``. A scene that names none is a vacuum, which is what every "
+"engine assumes. A medium naming a material nothing answers to is an error "
+"rather than a vacuum, and one whose material states neither a density nor a "
+"viscosity is reported."
+msgstr ""
+"``medium:`` nombra un :ref:`material <materials>`, resuelto igual que el "
+"material de una pieza (``:brine`` es el ``brine`` que cataloga este "
+"paquete), y su ``density`` (kg/m^3) y su ``viscosity`` (Pa*s) son aquello "
+"con lo que una simulación arrastra y hace flotar lo que se mueve por la "
+"escena. ``//pub/std/manufacturing/material/fluid`` cataloga ``air``, "
+"``water`` y ``seawater``. Una escena que no nombra ninguno es un vacío, que "
+"es lo que supone cualquier motor. Un medio que nombra un material al que "
+"nada responde es un error y no un vacío, y uno cuyo material no declara ni "
+"una densidad ni una viscosidad se informa."
+
+#: ../../source/config_scenes.rst:133
+msgid ""
+"``pc info`` reports the world a scene resolved to. What each engine makes of"
+" either key, and what it does not model, is in :ref:`sim-scenes` and "
+":ref:`sim-engines`."
+msgstr ""
+"``pc info`` informa del mundo al que se resolvió una escena. Qué hace cada "
+"motor con cualquiera de las dos claves, y qué no modela, está en :ref:`sim-"
+"scenes` y :ref:`sim-engines`."
+
+#: ../../source/config_scenes.rst:138
+msgid "Scene types a plugin adds"
+msgstr "Tipos de escena que añade un plugin"
+
+#: ../../source/config_scenes.rst:139
+msgid ""
+"Beside ``assy``, a scene may be declared in a format an :doc:`import plugin "
+"</plugins/importers>` reads, and PartCAD itself ships none of them:"
+msgstr ""
+"Además de ``assy``, una escena se puede declarar en un formato que lea un "
+":doc:`plugin de importación </plugins/importers>`, y PartCAD en sí no "
+"incluye ninguno de ellos:"
+
+#: ../../source/config_scenes.rst:142
+msgid "``sim-gazebo:world``"
+msgstr "``sim-gazebo:world``"
+
+#: ../../source/config_scenes.rst:143
+msgid ""
+"An `SDFormat <http://sdformat.org/>`_ ``.world`` file, read as a scene "
+"directly. Declared by `partcad-sim-gazebo "
+"<https://github.com/partcad/partcad-sim-gazebo>`_."
+msgstr ""
+"Un archivo ``.world`` de `SDFormat <http://sdformat.org/>`_, leído "
+"directamente como una escena. Lo declara `partcad-sim-gazebo "
+"<https://github.com/partcad/partcad-sim-gazebo>`_."
+
+#: ../../source/config_scenes.rst:147
+msgid "``sim-mujoco:mjcf``"
+msgstr "``sim-mujoco:mjcf``"
+
+#: ../../source/config_scenes.rst:148
+msgid ""
+"A `MuJoCo <https://mujoco.org/>`_ model, which is the one format that is "
+"both a scene type and an assembly type -- the section that declares it is "
+"what decides which. Declared by `partcad-sim-mujoco "
+"<https://github.com/partcad/partcad-sim-mujoco>`_."
+msgstr ""
+"Un modelo de `MuJoCo <https://mujoco.org/>`_, que es el único formato que es"
+" a la vez un tipo de escena y un tipo de ensamblaje -- la sección que lo "
+"declara es lo que decide cuál de los dos. Lo declara `partcad-sim-mujoco "
+"<https://github.com/partcad/partcad-sim-mujoco>`_."
+
+#: ../../source/config_scenes.rst:153
+msgid ""
+"Both are read, written and opened by the same package that simulates the "
+"format. :doc:`/plugins/importers` describes each in full, with the commands "
+"that import, export and convert between them."
+msgstr ""
+"Los dos son leídos, escritos y abiertos por el mismo paquete que simula el "
+"formato. :doc:`/plugins/importers` describe cada uno por completo, con los "
+"comandos que importan, exportan y convierten entre ellos."
+
+#: ../../source/config_scenes.rst:158
+msgid "Simulating a scene"
+msgstr "Simular una escena"
+
+#: ../../source/config_scenes.rst:159
+msgid ""
+"A scene can be the thing a claim is about, not only the world another object"
+" is tested in: a stack of blocks that stands, a pile that does not slide. It"
+" declares ``simulate:`` exactly as a part or an assembly does, and ``pc "
+"sim`` and ``pc test`` hold it to it. See :ref:`Simulating a scene "
+"<validating-a-scene>` in the Validation phase."
+msgstr ""
+"Una escena puede ser aquello de lo que trata una afirmación, y no solo el "
+"mundo en el que se prueba otro objeto: una pila de bloques que se mantiene, "
+"un montón que no se desliza. Declara ``simulate:`` exactamente igual que una"
+" pieza o un ensamblaje, y ``pc sim`` y ``pc test`` se lo exigen. Véase "
+":ref:`Simular una escena <validating-a-scene>` en la fase Validation."

@@ -1,0 +1,1565 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:2
+msgid "Test"
+msgstr "测试"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:4
+msgid ""
+"``pc test`` holds an object to every claim its declaration makes that can be"
+" measured. It is a list of checks, each asking one question of one object; "
+"this page is that list, and it is the same text the Digital Thread shows "
+"beside each check on the **Validation → Test** tab."
+msgstr ""
+"``pc test`` 会就对象声明中每一项可测量的断言来约束它。它是一张检查清单，每一项检查向一个对象提出一个问题；本页就是这张清单，而 "
+"Digital Thread 在 **Validation → Test** 标签页上每项检查旁边显示的也是同一段文字。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:10
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:12
+msgid ""
+"**Validation → Test** is the first tab of the Validation group and the one "
+"tab that is always enabled, since every object of a package has checks."
+msgstr ""
+"**Validation → Test** 是 Validation 组的第一个标签页，也是唯一一个始终启用的标签页，因为包里的每个对象都有检查项。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:15
+msgid ""
+"Down the left, every check ``pc test`` runs, in the order it runs them, each"
+" with its verdict: passed, failed, warned, skipped, or not applicable -- the"
+" last saying *why*, so a check that did not apply is never mistaken for one "
+"that passed."
+msgstr ""
+"左侧列出 ``pc test`` 运行的每一项检查，按它运行的顺序，并各带一个结论：通过、失败、警告、跳过，或者不适用 -- 最后一种会说明 "
+"*为什么*，这样一项并不适用的检查就绝不会被误当成通过了的检查。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:19
+msgid ""
+"In the middle, the check selected: what it found this time, and under that "
+"what the check asks, when it does not apply, what each failure means and "
+"what to do about it -- the text of this page, which is where it comes from."
+msgstr ""
+"中间是所选的那项检查：它这一次发现了什么，下面是这项检查问的是什么、它在什么情况下不适用、每种失败意味着什么以及该怎么处理 -- "
+"也就是本页的文字，它正是从这里来的。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:22
+msgid ""
+"For a failure that left something behind to look at, a button that opens it."
+" An interference leaves an assembly of the two parts that overlap, placed "
+"where the assembly places them, and a sub-assembly named ``interference`` "
+"holding what they share: switch the two parts off in the 3D tab and what is "
+"left is the overlap."
+msgstr ""
+"对于留下了可供查看的东西的失败，会有一个按钮打开它。干涉会留下一个由两个重叠零件组成的装配体，按该装配体放置它们的位置摆放，还有一个名为 "
+"``interference`` 的子装配体，装着它们共有的部分：在 3D 标签页里把那两个零件关掉，剩下的就是重叠部分。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:28
+msgid ""
+"The Validation group's Test tab: every check with its verdict, and the "
+"selected check explained"
+msgstr "Validation 组的 Test 标签页：每项检查及其结论，以及所选检查的说明"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:33
+msgid ""
+"The checks **run** when the tab is first opened, as ``pc test <object>`` "
+"runs them and through the same cache, so the panel and the command line give"
+" the same answer; **Run again** asks afresh. An object that belongs to no "
+"package -- a shape shown from a script -- has nothing to ask PartCAD about, "
+"and the tab says so. ``pc ide view --validation-test`` opens it from a "
+"terminal."
+msgstr ""
+"标签页第一次被打开时，这些检查就会 **运行**，运行方式与 ``pc test <object>`` "
+"相同，并走同一套缓存，所以面板和命令行给出的答案是一致的；**Run again** 则重新提问。不属于任何包的对象 -- 比如从脚本显示出来的形状 "
+"-- 没有什么可以向 PartCAD 询问的，标签页会如实说明。``pc ide view --validation-test`` 可以从终端打开它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:40
+msgid "On the command line"
+msgstr "在命令行中"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:48
+msgid ""
+"Every check is asked of every object, and the checks that have nothing to "
+"ask of it -- an assembly's checks of a part, the analyses of a part that "
+"declares none -- say so and pass. Each verdict is one of:"
+msgstr ""
+"每一项检查都会向每一个对象提出，而那些对它没有什么可问的检查 -- 装配体的检查用在零件上、分析检查用在没有声明分析的零件上 -- "
+"会如实说明并通过。每个结论都是下列之一："
+
+#: ../../source/digital_thread/lifecycle/testing.rst:52
+msgid "**passed**;"
+msgstr "**通过**；"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:53
+msgid "**failed**: the claim does not hold, and the check says what it found;"
+msgstr "**失败**：断言不成立，检查会说明它发现了什么；"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:54
+msgid ""
+"**warned**: a finding on an object nobody is going to make "
+"(``manufacturable: false``), reported and not failed;"
+msgstr "**警告**：在一个没人会去制造的对象（ ``manufacturable: false`` ）上有所发现，只报告而不判失败；"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:56
+msgid ""
+"**skipped**: the question could not be put on this machine -- a solver that "
+"is not installed, a container runtime that is not running -- said out loud, "
+"and not failed;"
+msgstr "**跳过**：这个问题在本机提不出来 -- 没有安装的求解器、没有运行的容器运行时 -- 会明说出来，而不判失败；"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:59
+msgid ""
+"**not applicable**: the check has nothing to ask of this object, and says "
+"why."
+msgstr "**不适用**：这项检查对该对象没有什么可问的，并说明原因。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:61
+msgid ""
+"A verdict is cached under everything it depends on, so asking again about an"
+" object that has not changed costs a lookup; a failure read from the cache "
+"is said again as \"remembered from an earlier run\", and ``pc --cache-bypass"
+" test`` asks afresh. Asked about one object by name, a check may be stricter"
+" than when it is walked to as part of a package -- ``sim`` fails a "
+"simulation with no condition to check rather than skipping it."
+msgstr ""
+"结论会按它所依赖的一切内容被缓存，所以对一个没有变化的对象再提一次问，代价只是一次查表；从缓存读出的失败会再次以“remembered from an "
+"earlier run”的形式说明，而 ``pc --cache-bypass test`` "
+"会重新提问。按名称针对某一个对象提问时，某项检查可能比它作为包的一部分被走查到时更严格 -- ``sim`` 对没有判定条件的仿真会判失败，而不是跳过。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:69
+msgid "The checks"
+msgstr "各项检查"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:71
+msgid ""
+"They are listed in the order ``pc test`` runs them: the nearly free ones "
+"first, then those that measure geometry, then the analyses and the "
+"simulations, which are the most expensive."
+msgstr "它们按 ``pc test`` 运行的顺序列出：几乎没有代价的在最前面，然后是测量几何的，再然后是分析和仿真，它们是代价最高的。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:80
+msgid "``cad``: Builds"
+msgstr "``cad``：能构建"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:82
+msgid ""
+"**Applies to** every part, assembly, scene and sketch. ``pc test -f cad "
+"<object>`` runs it alone."
+msgstr "**适用于** 每个零件、装配体、场景和草图。``pc test -f cad <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:84
+msgid ""
+"Whether the object builds: its script runs, its file reads, its assembly "
+"puts together, and something comes out. It is the first question, and every "
+"other check that looks at geometry takes it as answered - a check that finds"
+" no shape to measure passes and leaves the failure here, so that one broken "
+"object is one failure and not a dozen."
+msgstr ""
+"对象能否构建出来：它的脚本能运行、它的文件能读取、它的装配能装起来，并且有东西出来。这是第一个问题，而所有其他查看几何的检查都把它当作已经回答过了 - "
+"一项找不到形状可测的检查会通过，并把失败留在这里，这样一个坏掉的对象只对应一次失败，而不是十几次。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:87
+#: ../../source/digital_thread/lifecycle/testing.rst:111
+#: ../../source/digital_thread/lifecycle/testing.rst:141
+#: ../../source/digital_thread/lifecycle/testing.rst:161
+#: ../../source/digital_thread/lifecycle/testing.rst:184
+#: ../../source/digital_thread/lifecycle/testing.rst:204
+#: ../../source/digital_thread/lifecycle/testing.rst:226
+#: ../../source/digital_thread/lifecycle/testing.rst:251
+#: ../../source/digital_thread/lifecycle/testing.rst:277
+#: ../../source/digital_thread/lifecycle/testing.rst:302
+#: ../../source/digital_thread/lifecycle/testing.rst:327
+#: ../../source/digital_thread/lifecycle/testing.rst:355
+#: ../../source/digital_thread/lifecycle/testing.rst:378
+#: ../../source/digital_thread/lifecycle/testing.rst:398
+#: ../../source/digital_thread/lifecycle/testing.rst:417
+#: ../../source/digital_thread/lifecycle/testing.rst:436
+#: ../../source/digital_thread/lifecycle/testing.rst:457
+#: ../../source/digital_thread/lifecycle/testing.rst:484
+#: ../../source/digital_thread/lifecycle/testing.rst:507
+#: ../../source/digital_thread/lifecycle/testing.rst:535
+#: ../../source/digital_thread/lifecycle/testing.rst:563
+#: ../../source/digital_thread/lifecycle/testing.rst:591
+#: ../../source/digital_thread/lifecycle/testing.rst:619
+msgid "When it does not apply"
+msgstr "何时不适用"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:89
+msgid "Never: everything PartCAD tests is built first."
+msgstr "从不：PartCAD 测试的每样东西都是先被构建出来的。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:92
+#: ../../source/digital_thread/lifecycle/testing.rst:116
+#: ../../source/digital_thread/lifecycle/testing.rst:146
+#: ../../source/digital_thread/lifecycle/testing.rst:166
+#: ../../source/digital_thread/lifecycle/testing.rst:189
+#: ../../source/digital_thread/lifecycle/testing.rst:209
+#: ../../source/digital_thread/lifecycle/testing.rst:231
+#: ../../source/digital_thread/lifecycle/testing.rst:256
+#: ../../source/digital_thread/lifecycle/testing.rst:282
+#: ../../source/digital_thread/lifecycle/testing.rst:307
+#: ../../source/digital_thread/lifecycle/testing.rst:332
+#: ../../source/digital_thread/lifecycle/testing.rst:360
+#: ../../source/digital_thread/lifecycle/testing.rst:383
+#: ../../source/digital_thread/lifecycle/testing.rst:403
+#: ../../source/digital_thread/lifecycle/testing.rst:422
+#: ../../source/digital_thread/lifecycle/testing.rst:441
+#: ../../source/digital_thread/lifecycle/testing.rst:462
+#: ../../source/digital_thread/lifecycle/testing.rst:489
+#: ../../source/digital_thread/lifecycle/testing.rst:512
+#: ../../source/digital_thread/lifecycle/testing.rst:540
+#: ../../source/digital_thread/lifecycle/testing.rst:568
+#: ../../source/digital_thread/lifecycle/testing.rst:596
+#: ../../source/digital_thread/lifecycle/testing.rst:624
+msgid "When it fails"
+msgstr "何时失败"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:94
+msgid ""
+"``Failed to get the shape``: building it produced nothing. The reason is in "
+"the log above the verdict - the error the script raised, the file that could"
+" not be read or fetched, the link of an assembly that names an object nobody"
+" declares. Build it on its own to see it again: ``pc --no-ansi info "
+"<object>`` or ``pc --no-ansi render -t png <object>``."
+msgstr ""
+"``Failed to get the shape``：构建它没有产出任何东西。原因在结论上方的日志里 - "
+"脚本抛出的错误、无法读取或抓取的文件、装配体中指名了没人声明的对象的那条链接。单独构建它就能再看到一次：``pc --no-ansi info "
+"<object>`` 或 ``pc --no-ansi render -t png <object>``。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:95
+msgid ""
+"A verdict remembered from an earlier run is said again with \"remembered "
+"from an earlier run\": once the cause is fixed, ``pc --cache-bypass test`` "
+"asks again rather than reading the cache."
+msgstr ""
+"从早先某次运行记住的结论会再次带着“remembered from an earlier run”说明：原因修好之后，``pc --cache-"
+"bypass test`` 会重新提问，而不是读缓存。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:100
+msgid "``manufacturability``: Can be made or bought"
+msgstr "``manufacturability``：可以制造或采购"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:102
+msgid ""
+"**Applies to** every object that does not say ``manufacturable: false``. "
+"``pc test -f manufacturability <object>`` runs it alone."
+msgstr ""
+"**适用于** 每一个没有声明 ``manufacturable: false`` 的对象。``pc test -f manufacturability"
+" <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:104
+msgid ""
+"Whether the object can be had: bought from somebody who sells it, or made by"
+" a method it declares. It asks for exactly what ``pc supply`` would order "
+"and what ``pc instructions`` would tell somebody to do."
+msgstr ""
+"对象能否得到：从卖它的人那里买到，或者用它声明的某种方式制造出来。它问的正是 ``pc supply`` 会去订购什么、``pc "
+"instructions`` 会叫人做什么。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:106
+msgid ""
+"Every object has to be reproducible: one read from a file the package "
+"fetches (``fileFrom:``) has to pin the file with ``fileHash:``, or name a "
+"vendor and SKU to order it by, so that it is known which bytes it is made "
+"from."
+msgstr ""
+"每个对象都必须是可复现的：从包所抓取的文件（ ``fileFrom:`` ）读入的对象，必须用 ``fileHash:`` "
+"把该文件固定下来，或者指名一个可以据以订购它的供应商和 SKU，这样才知道它是由哪些字节做成的。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:107
+msgid ""
+"A part is bought (``vendor:`` and ``sku:``, and a supplier that carries it) "
+"or made (``manufacturing:`` with a ``method:``). A part that is made needs a"
+" manufacturing tolerance, and the stock it is made from (``manufacturing: "
+"source:``) has to pass these checks itself. The ``software:`` it declares "
+"has to resolve, to the file that was meant."
+msgstr ""
+"零件要么是买来的（ ``vendor:`` 和 ``sku:`` ，加上一个有货的供应商），要么是制造的（带 ``method:`` 的 "
+"``manufacturing:`` ）。制造出来的零件需要一个制造公差，而它所用的坯料（ ``manufacturing: source:`` "
+"）本身也必须通过这些检查。它声明的 ``software:`` 必须能解析到本来要指的那个文件。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:108
+msgid ""
+"An assembly is either sold assembled (bought, and nothing inside it is "
+"looked at), or assembled: then every step has to be one somebody can follow "
+"- each item after the first says what it is joined to and how - and "
+"everything it is procured from has to pass these checks on its own."
+msgstr ""
+"装配体要么是整装出售的（买来的，里面的东西不再过问），要么是装起来的：那么每一个步骤都必须是有人能照着做的 - "
+"第一项之后的每一项都要说明它与什么接合以及如何接合 - 而它所采购的一切都必须各自通过这些检查。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:113
+msgid ""
+"An object that says ``manufacturable: false`` - a model of something "
+"somebody else makes, an import kept as it arrived, a scene (which is not "
+"manufacturable unless it says so). A sketch is checked for being "
+"reproducible and for nothing else."
+msgstr ""
+"声明了 ``manufacturable: false`` 的对象 - "
+"别人制造的东西的模型、保持原样的导入件、场景（场景除非自己声明，否则不算可制造）。草图只检查是否可复现，别的都不检查。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:118
+msgid ""
+"``It is not reproducible: ...``: pin the file with ``fileHash:`` (``pc add``"
+" writes one for an object it adds from a URL), carry the file in the "
+"package, or name a ``vendor:`` and ``sku:``."
+msgstr ""
+"``It is not reproducible: ...``：用 ``fileHash:`` 把文件固定下来（ ``pc add`` 从 URL "
+"添加对象时会写一个）、把文件带在包里，或者指名一个 ``vendor:`` 和 ``sku:``。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:119
+msgid ""
+"``Cannot be purchased or manufactured``: add a ``manufacturing:`` section "
+"with a ``method:`` (see the ``manufacturability-*`` checks for each method),"
+" or a ``vendor:`` and ``sku:`` - or say ``manufacturable: false`` if nobody "
+"is going to make it."
+msgstr ""
+"``Cannot be purchased or manufactured``：加一个带 ``method:`` 的 "
+"``manufacturing:`` 小节（每种方式参见对应的 ``manufacturability-*`` 检查），或者加一个 "
+"``vendor:`` 和 ``sku:`` - 或者，如果根本没人会去做它，就声明 ``manufacturable: false``。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:120
+msgid ""
+"``No suppliers found`` / ``No suppliers provide the part``: name a supplier "
+"that carries it, or make it instead."
+msgstr ""
+"``No suppliers found`` / ``No suppliers provide the "
+"part``：指名一个有货的供应商，或者改为自己制造。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:121
+msgid ""
+"``No manufacturing tolerance is specified``: give the part a ``tolerance``, "
+"which a part that is made needs to be made to anything."
+msgstr ""
+"``No manufacturing tolerance is specified``：给这个零件一个 ``tolerance`` "
+"，制造出来的零件需要它才谈得上做到什么精度。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:122
+msgid ""
+"``The stock '...' it is made from is not found`` / ``cannot be had``: fix "
+"the name under ``manufacturing: source:``, or make the stock obtainable."
+msgstr ""
+"``The stock '...' it is made from is not found`` / ``cannot be had``：修正 "
+"``manufacturing: source:`` 下的名称，或者让这种坯料变得可以得到。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:123
+msgid ""
+"``Step '...' can't be followed: ...``: give that link a ``connect:`` and say"
+" how it goes on - a ``how:``, or a mating or an interface that says it."
+msgstr ""
+"``Step '...' can't be followed: ...``：给那条链接一个 ``connect:`` ，并说明它是怎么装上去的 - 一个"
+" ``how:`` ，或者一个能说明这一点的配合或接口。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:124
+msgid ""
+"``Missing part or assembly '...' is referenced`` / ``Non-manufacturable ... "
+"is referenced``: what the assembly is made of has to exist and be "
+"manufacturable."
+msgstr ""
+"``Missing part or assembly '...' is referenced`` / ``Non-manufacturable ... "
+"is referenced``：装配体所由之构成的东西必须存在并且可制造。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:127
+#: ../../source/digital_thread/lifecycle/testing.rst:237
+#: ../../source/digital_thread/lifecycle/testing.rst:263
+#: ../../source/digital_thread/lifecycle/testing.rst:288
+#: ../../source/digital_thread/lifecycle/testing.rst:339
+#: ../../source/digital_thread/lifecycle/testing.rst:470
+#: ../../source/digital_thread/lifecycle/testing.rst:521
+#: ../../source/digital_thread/lifecycle/testing.rst:549
+#: ../../source/digital_thread/lifecycle/testing.rst:577
+#: ../../source/digital_thread/lifecycle/testing.rst:605
+#: ../../source/digital_thread/lifecycle/testing.rst:633
+msgid "Settings"
+msgstr "相关设置"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:129
+msgid ""
+"``manufacturable:`` on the object or its package; ``vendor:``, ``sku:``, "
+"``fileFrom:``, ``fileHash:``, ``software:``, ``manufacturing:`` and the "
+"part's ``tolerance``."
+msgstr ""
+"对象或其包上的 ``manufacturable:`` "
+"；``vendor:``、``sku:``、``fileFrom:``、``fileHash:``、``software:``、``manufacturing:``"
+" 以及零件的 ``tolerance``。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:134
+msgid "``manufacturability-additive``: Additive: a closed solid"
+msgstr "``manufacturability-additive``：增材：一个封闭实体"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:136
+msgid ""
+"**Applies to** a part with ``manufacturing: method: additive``. ``pc test -f"
+" manufacturability-additive <object>`` runs it alone."
+msgstr ""
+"**适用于** 带 ``manufacturing: method: additive`` 的零件。``pc test -f "
+"manufacturability-additive <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:138
+msgid ""
+"Whether a part to be printed is a closed solid: a body with no open edges, "
+"which is what a slicer needs to know what is inside it."
+msgstr "要打印的零件是否是一个封闭实体：一个没有开放边的体，切片软件需要这一点才能知道它内部是什么。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:143
+#: ../../source/digital_thread/lifecycle/testing.rst:163
+#: ../../source/digital_thread/lifecycle/testing.rst:186
+#: ../../source/digital_thread/lifecycle/testing.rst:206
+msgid "Anything but a part, and a part made by any other method."
+msgstr "除零件以外的任何东西，以及用其他任何方式制造的零件。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:148
+msgid ""
+"``The shape is not solid``: the part has open edges - faces that do not "
+"meet. Close the model in the tool it comes from, or export it as a solid "
+"rather than as a surface."
+msgstr ""
+"``The shape is not solid``：零件有开放边 - "
+"也就是没有相接的面。在它来源的工具里把模型封闭起来，或者把它作为实体而不是作为曲面导出。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:149
+#: ../../source/digital_thread/lifecycle/testing.rst:192
+msgid "``Failed to get the shape``: it did not build; see ``cad``."
+msgstr "``Failed to get the shape``：它没有构建成功；参见 ``cad``。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:154
+msgid "``manufacturability-subtractive``: Subtractive: cut from its stock"
+msgstr "``manufacturability-subtractive``：减材：从坯料上切出来"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:156
+msgid ""
+"**Applies to** a part with ``manufacturing: method: subtractive``. ``pc test"
+" -f manufacturability-subtractive <object>`` runs it alone."
+msgstr ""
+"**适用于** 带 ``manufacturing: method: subtractive`` 的零件。``pc test -f "
+"manufacturability-subtractive <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:158
+msgid ""
+"Whether a part to be cut out of stock can be: the stock is named, the "
+"machine sections can be read, the part is a closed solid, and it lies inside"
+" its stock with material to take away. Cutting removes material and never "
+"adds it, so a part that sticks out of its stock cannot be cut from it."
+msgstr ""
+"要从坯料上切出来的零件能否切得出来：坯料有指名、各个机床小节能读得通、零件是一个封闭实体，而且它落在它的坯料内部，有材料可以去掉。切削只去除材料，从不增加材料，所以伸出坯料之外的零件没法从坯料上切出来。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:168
+msgid ""
+"``The subtractive declaration states no 'source'``: name the stock the part "
+"is cut from under ``manufacturing: source:``."
+msgstr ""
+"``The subtractive declaration states no 'source'``：在 ``manufacturing: "
+"source:`` 下指名这个零件所由之切出的坯料。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:169
+msgid ""
+"``The subtractive declaration says ...``: a ``cnc:``, ``laser:``, ``drill:``"
+" or ``cut:`` section has a key it does not take, or a value it cannot read; "
+"the sentence names it."
+msgstr ""
+"``The subtractive declaration says ...``：某个 ``cnc:``、``laser:``、``drill:`` 或"
+" ``cut:`` 小节里有一个它不接受的键，或者一个它读不懂的取值；那句话会把它指出来。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:170
+msgid ""
+"``It does not fit the stock '...': ... mm3 of it is outside``: make the "
+"stock larger, or place it so that it encloses the part."
+msgstr ""
+"``It does not fit the stock '...': ... mm3 of it is "
+"outside``：把坯料做大一些，或者摆放它，使它把零件完全包住。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:171
+msgid ""
+"``The stock '...' is the same solid as the part, so nothing is cut from "
+"it``: ``source:`` names the part itself, or a copy of it; name the blank "
+"instead."
+msgstr ""
+"``The stock '...' is the same solid as the part, so nothing is cut from "
+"it``：``source:`` 指的是零件本身，或者它的一个副本；请改为指名毛坯。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:172
+msgid ""
+"``The shape is not solid``: close the model, as for ``manufacturability-"
+"additive``."
+msgstr ""
+"``The shape is not solid``：把模型封闭起来，做法与 ``manufacturability-additive`` 相同。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:177
+msgid "``manufacturability-forming``: Forming: a closed solid"
+msgstr "``manufacturability-forming``：成形：一个封闭实体"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:179
+msgid ""
+"**Applies to** a part with ``manufacturing: method: forming``. ``pc test -f "
+"manufacturability-forming <object>`` runs it alone."
+msgstr ""
+"**适用于** 带 ``manufacturing: method: forming`` 的零件。``pc test -f "
+"manufacturability-forming <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:181
+msgid ""
+"Whether a part to be formed - moulded, cast, pressed - is a closed solid."
+msgstr "要成形的零件 - 注塑、铸造、冲压 - 是否是一个封闭实体。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:191
+msgid "``The shape is not solid``: the part has open edges; close the model."
+msgstr "``The shape is not solid``：零件有开放边；把模型封闭起来。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:197
+msgid "``manufacturability-sheet-metal``: Sheet metal: a flat blank and bends"
+msgstr "``manufacturability-sheet-metal``：钣金：一张平板毛坯和一些折弯"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:199
+msgid ""
+"**Applies to** a part with ``manufacturing: method: sheet_metal``. ``pc test"
+" -f manufacturability-sheet-metal <object>`` runs it alone."
+msgstr ""
+"**适用于** 带 ``manufacturing: method: sheet_metal`` 的零件。``pc test -f "
+"manufacturability-sheet-metal <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:201
+msgid ""
+"Whether a sheet metal part can be bent out of what it names: a blank that is"
+" flat on both faces (``source:``), and a sketch of the bend lines "
+"(``instructions:``) in which every line says its angle, its inner radius and"
+" which way it goes. Both questions are asked every time, so one run says "
+"everything that is wrong."
+msgstr ""
+"钣金零件能否从它所指名的东西折弯出来：一张两面都平的毛坯（ ``source:`` ），以及一张画出折弯线的草图（ ``instructions:`` "
+"），其中每条线都写明它的角度、它的内半径以及它的折弯方向。这两个问题每次都会被问到，所以一次运行就能把所有问题都说出来。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:211
+msgid ""
+"``The sheet metal declaration states no 'source'`` (or ``'instructions'``): "
+"name the flat blank and the sketch of the bend lines."
+msgstr ""
+"``The sheet metal declaration states no 'source'`` （或 ``'instructions'`` "
+"）：指名那张平板毛坯和那张画折弯线的草图。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:212
+msgid ""
+"``... is not flat on the bottom`` (or ``top``): ``source:`` has to be the "
+"flat blank, not the bent part."
+msgstr ""
+"``... is not flat on the bottom`` （或 ``top`` ）：``source:`` "
+"必须是那张平板毛坯，而不是折弯之后的零件。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:213
+msgid ""
+"``... draws no bend lines``: the sketch has to draw each bend as a line; a "
+"layer can be picked with parameters (``bends;include=BEND_UP,BEND_DOWN``)."
+msgstr ""
+"``... draws no bend lines``：草图必须把每一道折弯画成一条线；可以用参数挑选图层（ "
+"``bends;include=BEND_UP,BEND_DOWN`` ）。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:214
+msgid ""
+"``The bend drawn by the ... cannot be made: ...``: annotate the line with an"
+" ``angle`` above 0 and below 360 degrees, a ``radius`` above 0 (a bend, not "
+"a fold), and a ``direction`` of ``up`` or ``down``."
+msgstr ""
+"``The bend drawn by the ... cannot be made: ...``：给这条线标注一个大于 0 且小于 360 度的 "
+"``angle`` 、一个大于 0 的 ``radius`` （是折弯，而不是对折），以及一个取 ``up`` 或 ``down`` 的 "
+"``direction``。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:219
+msgid "``manufacturability-laser``: Laser: faces along or across the beam"
+msgstr "``manufacturability-laser``：激光：面要么顺着光束、要么横截光束"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:221
+msgid ""
+"**Applies to** a part made by ``method: subtractive`` that names a "
+"``laser:`` machine. ``pc test -f manufacturability-laser <object>`` runs it "
+"alone."
+msgstr ""
+"**适用于** 以 ``method: subtractive`` 制造并指名了 ``laser:`` 机床的零件。``pc test -f "
+"manufacturability-laser <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:223
+msgid ""
+"Whether a laser cutting along the tool axis can make the part: every face "
+"has to be either a wall along the axis or a face across it, and there has to"
+" be a wall to cut. A laser cuts straight through, so a chamfer, a taper or a"
+" fillet that is neither is not something it can make. Thickness, material "
+"and power are not checked."
+msgstr ""
+"沿刀具轴线切割的激光能否做出这个零件：每一个面都必须要么是顺着该轴线的壁面，要么是横截该轴线的面，而且必须有壁面可切。激光是直直切透的，所以既不属于这两者的倒角、锥面或圆角，它都做不出来。厚度、材料和功率不在检查范围内。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:228
+msgid ""
+"Anything but a part, a part made by another method, and a subtractive part "
+"that names no ``laser:`` machine - a part that names no machine at all is "
+"taken to be milled."
+msgstr ""
+"除零件以外的任何东西、用其他方式制造的零件，以及没有指名 ``laser:`` 机床的减材零件 - 完全没有指名机床的零件会被当作铣削来处理。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:233
+msgid ""
+"``A laser cutting along ... cannot make it: N of its faces are neither along"
+" ... nor across it``: remove the faces at an angle (the worst is named), or "
+"set ``toolAxis:`` to the direction the beam really goes."
+msgstr ""
+"``A laser cutting along ... cannot make it: N of its faces are neither along"
+" ... nor across it``：去掉那些带角度的面（最严重的那个会被指出来），或者把 ``toolAxis:`` 设成光束实际的方向。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:234
+msgid ""
+"``It has no wall along ... for a laser to cut``: the axis is wrong, or the "
+"part is not something a laser makes."
+msgstr ""
+"``It has no wall along ... for a laser to cut``：轴线不对，或者这个零件不是激光做得出来的东西。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:239
+msgid ""
+"``manufacturing: laser:`` - ``toolAxis:`` (or ``along:``, default ``-Z``) "
+"and the job keys (``kerf``, ``power``, ``feed``, ``direction``, "
+"``implementation``)."
+msgstr ""
+"``manufacturing: laser:`` - ``toolAxis:`` （或 ``along:`` ，默认为 ``-Z`` "
+"）以及各项作业键（ ``kerf``、``power``、``feed``、``direction``、``implementation`` ）。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:244
+msgid "``manufacturability-drill``: Drill: round holes along the axis"
+msgstr "``manufacturability-drill``：钻孔：沿轴线的圆孔"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:246
+msgid ""
+"**Applies to** a part made by ``method: subtractive`` that names a "
+"``drill:`` machine. ``pc test -f manufacturability-drill <object>`` runs it "
+"alone."
+msgstr ""
+"**适用于** 以 ``method: subtractive`` 制造并指名了 ``drill:`` 机床的零件。``pc test -f "
+"manufacturability-drill <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:248
+msgid ""
+"Whether a drill working along the tool axis can make what is taken away: "
+"every wall has to be along the axis and round. Measured on the material "
+"removed from the stock when ``source:`` names one, and on the part itself "
+"otherwise."
+msgstr ""
+"沿刀具轴线工作的钻头能否做出被去掉的那部分：每一个壁面都必须顺着该轴线并且是圆的。当 ``source:`` "
+"指名了坯料时，测量的是从坯料上去除掉的材料，否则测量的是零件本身。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:253
+msgid ""
+"Anything but a part, a part made by another method, and a subtractive part "
+"that names no ``drill:`` machine."
+msgstr "除零件以外的任何东西、用其他方式制造的零件，以及没有指名 ``drill:`` 机床的减材零件。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:258
+msgid ""
+"``There is no hole along ... for a drill to make``: the axis is wrong, or "
+"there is nothing to drill."
+msgstr "``There is no hole along ... for a drill to make``：轴线不对，或者根本没有东西要钻。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:259
+msgid ""
+"``A drill only makes round holes, and N of the M walls along ... are not "
+"round``: make the holes round, or cut the other shapes another way. When the"
+" stock is not named, the part's own outline counts as drilled: name it with "
+"``source:``."
+msgstr ""
+"``A drill only makes round holes, and N of the M walls along ... are not "
+"round``：把孔做成圆的，或者用别的方式加工其他形状。没有指名坯料时，零件自身的外轮廓也会被算作钻出来的：请用 ``source:`` 指名坯料。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:260
+msgid ""
+"``A drill working along ... cannot make it``: some walls are not along the "
+"axis; check ``toolAxis:``."
+msgstr ""
+"``A drill working along ... cannot make it``：有些壁面不顺着该轴线；检查 ``toolAxis:``。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:265
+msgid ""
+"``manufacturing: drill:`` - ``toolAxis:`` (or ``along:``), and the job keys "
+"(``diameter``, ``peck``, ``plunge``, ``speed``, ``safe_z``); "
+"``manufacturing: source:``."
+msgstr ""
+"``manufacturing: drill:`` - ``toolAxis:`` （或 ``along:`` ），以及各项作业键（ "
+"``diameter``、``peck``、``plunge``、``speed``、``safe_z`` ）；``manufacturing: "
+"source:``。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:270
+msgid "``manufacturability-cut``: Cut: the cuts make the part"
+msgstr "``manufacturability-cut``：锯切：这些切口切出零件"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:272
+msgid ""
+"**Applies to** a part made by ``method: subtractive`` that names a ``cut:`` "
+"machine. ``pc test -f manufacturability-cut <object>`` runs it alone."
+msgstr ""
+"**适用于** 以 ``method: subtractive`` 制造并指名了 ``cut:`` 机床的零件。``pc test -f "
+"manufacturability-cut <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:274
+msgid ""
+"Whether cutting the stock where the part says gives the part: each declared "
+"cut is a plane, the stock is cut at every one, and what is left has to be "
+"the part. No cut may take nothing off."
+msgstr ""
+"按零件所说的位置切坯料能否得到这个零件：每一个声明的切口都是一个平面，坯料在每一个平面处被切开，而剩下的必须正是这个零件。任何一个切口都不得什么都切不掉。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:279
+msgid ""
+"Anything but a part, a part made by another method, and a subtractive part "
+"that names no ``cut:`` machine. A part that names no stock passes here, "
+"since ``manufacturability-subtractive`` already says so."
+msgstr ""
+"除零件以外的任何东西、用其他方式制造的零件，以及没有指名 ``cut:`` 机床的减材零件。没有指名坯料的零件在这里通过，因为 "
+"``manufacturability-subtractive`` 已经说过这件事了。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:284
+msgid ""
+"``Cut #N (...) takes nothing off the stock``: the length is longer than the "
+"stock, or the axis points away from it."
+msgstr "``Cut #N (...) takes nothing off the stock``：长度超过了坯料，或者轴线指向了坯料之外。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:285
+msgid ""
+"``Cutting the stock '...' at ... does not make it: ...``: the cuts leave too"
+" much or too little; correct the lengths or the axes."
+msgstr ""
+"``Cutting the stock '...' at ... does not make it: "
+"...``：这些切口留下的太多或太少；修正各个长度或轴线。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:290
+msgid ""
+"``manufacturing: cut:`` - ``toolAxis:`` (or ``along:``) and ``cuts:``, each "
+"a ``length`` and an optional axis of its own."
+msgstr ""
+"``manufacturing: cut:`` - ``toolAxis:`` （或 ``along:`` ）以及 ``cuts:`` "
+"，其中每一项都有一个 ``length`` 和一个可选的自有轴线。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:295
+msgid "``connect``: Connection instructions"
+msgstr "``connect``：连接说明"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:297
+msgid ""
+"**Applies to** assemblies and scenes. ``pc test -f connect <object>`` runs "
+"it alone."
+msgstr "**适用于** 装配体和场景。``pc test -f connect <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:299
+msgid ""
+"Whether the assembly's connection instructions can be followed as written: "
+"whether anything had to be bent to put it together - a ``how:`` whose "
+"minimum is above its maximum, two interfaces that disagree about the thread "
+"they share and neither cuts its own, a motion or a physics the joined ends "
+"contradict, a joint named twice, a chain that closes on itself. An assembly "
+"that says nothing about how its items go on has nothing to contradict, and "
+"passes."
+msgstr ""
+"装配体的连接说明能否照着写下来的样子执行：把它装到一起是否需要勉强迁就什么 - 一个最小值大于最大值的 ``how:`` "
+"、两个对共用螺纹说法不一致而又都不自行加工螺纹的接口、一个被接合两端所否定的运动或物理设定、一个被命名两次的关节、一条自我闭合的链条。对自己各项目如何装上去什么都不说的装配体，没有什么可以自相矛盾，因而通过。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:304
+#: ../../source/digital_thread/lifecycle/testing.rst:329
+#: ../../source/digital_thread/lifecycle/testing.rst:459
+msgid "Anything but an assembly or a scene."
+msgstr "除装配体或场景以外的任何东西。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:309
+msgid ""
+"Each failure is ``<link>: <what had to be repaired>``. Fix the declaration "
+"it names: the ``how:`` of that link, the interfaces or the mating it joins, "
+"or the joint. The list of what is reported is in \"Testing the "
+"instructions\" of the assembly documentation."
+msgstr ""
+"每一次失败的形式都是 ``<link>: <what had to be repaired>``。修正它所指名的那处声明：那条链接的 ``how:`` "
+"、它所接合的接口或配合，或者那个关节。所报告内容的清单在装配体文档的“Testing the instructions”一节中。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:314
+msgid "``connectivity``: Everything is held in place"
+msgstr "``connectivity``：一切都被固定在位"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:316
+msgid ""
+"**Applies to** assemblies and scenes. ``pc test -f connectivity <object>`` "
+"runs it alone."
+msgstr "**适用于** 装配体和场景。``pc test -f connectivity <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:318
+msgid ""
+"Whether everything an assembly places is placed once, on a port that takes "
+"it, and held there. Three mistakes that render perfectly:"
+msgstr "装配体所放置的每样东西是否都只被放置一次、放在一个接受它的端口上，并且被固定在那里。有三种渲染起来毫无问题的错误："
+
+#: ../../source/digital_thread/lifecycle/testing.rst:320
+msgid "the same part twice in the same place;"
+msgstr "同一个零件在同一个位置出现两次；"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:321
+msgid ""
+"two items connected to one port, when its interface does not say "
+"``multiConnect: true``;"
+msgstr "两个项目连到了同一个端口上，而它的接口并没有声明 ``multiConnect: true`` ；"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:322
+msgid ""
+"an item placed by coordinates (``location:``) among items that connect, "
+"which says where it ends up but not what holds it there."
+msgstr "在相互连接的各项目之间，有一项是按坐标（ ``location:`` ）放置的，它说明了这一项最终在哪里，却没有说明是什么把它固定在那里。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:324
+msgid ""
+"An assembly that is to be made (``manufacturable``) is held to more: no item"
+" may be placed by coordinates, and every item after the first has to connect"
+" to something."
+msgstr ""
+"要被制造出来的装配体（ ``manufacturable`` ）受到更严格的约束：任何项目都不得按坐标放置，而第一项之后的每一项都必须连接到某样东西上。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:334
+msgid ""
+"``'a' and 'b' are the same part in the same place``: remove one, or move it."
+msgstr "``'a' and 'b' are the same part in the same place``：去掉一个，或者把它移开。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:335
+msgid ""
+"``'a' and 'b' are both connected to '...' of '...'``: connect one of them "
+"elsewhere, or say ``multiConnect: true`` on the interface if the port does "
+"take several."
+msgstr ""
+"``'a' and 'b' are both connected to '...' of "
+"'...'``：把其中一个连到别处，或者，如果那个端口确实能接受多个，就在接口上声明 ``multiConnect: true``。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:336
+msgid ""
+"``'...' is placed by coordinates ...``: replace its ``location:`` with a "
+"``connect:`` to what holds it."
+msgstr ""
+"``'...' is placed by coordinates ...``：把它的 ``location:`` 换成一个指向固定它的那样东西的 "
+"``connect:``。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:341
+msgid ""
+"On the assembly: ``connectivity: allowDuplicates: true`` to allow the same "
+"part twice in one place, and ``connectivity: requireAnchored: false`` to "
+"allow items placed by coordinates."
+msgstr ""
+"在装配体上：``connectivity: allowDuplicates: true`` "
+"允许同一个零件在同一位置出现两次，``connectivity: requireAnchored: false`` 允许按坐标放置的项目。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:346
+msgid "``requirements``: Meets its requirements"
+msgstr "``requirements``：满足它的需求"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:348
+msgid ""
+"**Applies to** objects whose ``requirements:`` require ports, interfaces or "
+"physical properties. ``pc test -f requirements <object>`` runs it alone."
+msgstr ""
+"**适用于** 其 ``requirements:`` 要求了端口、接口或物理属性的对象。``pc test -f requirements "
+"<object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:350
+msgid ""
+"Whether the model is what its ``requirements:`` say it has to be, as far as "
+"that can be measured: each required port is there, facing where it has to; "
+"each required interface is implemented, its instances where they have to be;"
+" and each required physical property - its mass, its centre of mass, its "
+"inertia, its friction - has a value that meets the requirement. Asked again "
+"every time, never read from the cache."
+msgstr ""
+"在可以测量的范围内，模型是否就是它的 ``requirements:`` "
+"所说的样子：每一个被要求的端口都在，并朝着它该朝的方向；每一个被要求的接口都已实现，它的各个实例都在它们该在的位置；而每一项被要求的物理属性 - "
+"质量、质心、惯量、摩擦 - 都有一个满足该需求的取值。每次都重新提问，从不从缓存读取。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:352
+msgid ""
+"The ``features:`` are sentences rather than measurements, and are judged by "
+"the ``/pc:validate`` agent skill. What this check asks of them is only that "
+"a ``simulate:`` entry or an analysis scenario naming one (``feature:``) "
+"names one that is declared."
+msgstr ""
+"``features:`` 是句子而不是测量值，由 ``/pc:validate`` 智能体技能来判定。这项检查对它们的要求仅仅是：指名了某个特性的 "
+"``simulate:`` 条目或分析场景（ ``feature:`` ），所指名的特性必须是已声明的。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:357
+msgid ""
+"An object that requires no port, interface or physical property, and whose "
+"simulations and analysis scenarios name no feature."
+msgstr "没有要求任何端口、接口或物理属性，并且其各个仿真和分析场景都没有指名任何特性的对象。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:362
+msgid ""
+"Each failure is ``<section>: <name>: <required>: <found>`` - what was asked "
+"for and what is there instead."
+msgstr ""
+"每一次失败的形式都是 ``<section>: <name>: <required>: <found>`` - 要求的是什么，而实际有的是什么。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:364
+msgid ""
+"A port or an interface instance that is missing, or faces the wrong way: "
+"move it in the model, or correct the requirement if the requirement is what "
+"is wrong."
+msgstr "缺失的、或者朝向不对的端口或接口实例：在模型里把它挪对，或者，如果错的是需求本身，就修正需求。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:365
+msgid ""
+"``not known: ...``: PartCAD could not find out the value - a mass with no "
+"density to work it out from. State the value in a ``physics:`` section, or "
+"give the part a ``material:`` with a density. \"Not known\" is not \"met\"."
+msgstr ""
+"``not known: ...``：PartCAD 没能查出这个值 - 比如没有密度可据以算出质量。请在 ``physics:`` "
+"小节中写明该值，或者给这个零件一个带密度的 ``material:``。“不知道”不等于“已满足”。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:366
+msgid ""
+"``unreadable``: the requirement itself cannot be read; the detail says why."
+msgstr "``unreadable``：需求本身就读不懂；详细信息会说明原因。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:371
+msgid "``degenerate``: Has size in every direction"
+msgstr "``degenerate``：在每个方向上都有尺寸"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:373
+msgid ""
+"**Applies to** parts. ``pc test -f degenerate <object>`` runs it alone."
+msgstr "**适用于** 零件。``pc test -f degenerate <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:375
+msgid ""
+"Whether a part has size in every direction. A part that built as a flat disc"
+" or an empty box - a brick whose subfile could not be fetched, a script that"
+" returned the wrong thing - renders, exports and measures, and is not the "
+"part that was meant. Read from the box measured when the part was built, so "
+"it costs next to nothing."
+msgstr ""
+"零件在每个方向上是否都有尺寸。构建出来是一张平盘或一个空盒子的零件 - 子文件抓取失败的积木块、返回了错误东西的脚本 - "
+"照样能渲染、导出和测量，但它并不是本来要的那个零件。这是从零件构建时所测得的那个包围盒读出的，所以几乎没有代价。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:380
+msgid ""
+"A sketch, which is flat by definition, and an assembly or a scene, which is "
+"checked through its parts."
+msgstr "草图（它按定义就是平的），以及装配体或场景（它们通过各自的零件来检查）。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:385
+msgid ""
+"``The shape built but occupies no space at all``: nothing came out of the "
+"build but an empty shape; find the geometry that went missing."
+msgstr ""
+"``The shape built but occupies no space at "
+"all``：构建除了一个空形状之外什么都没出来；去找一找丢失的那部分几何。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:386
+msgid ""
+"``The shape is flat in ...``: it is less than a thousandth of a millimetre "
+"thick in one direction - a missing extrusion, a missing file, a surface "
+"where a solid was meant."
+msgstr ""
+"``The shape is flat in ...``：它在某一个方向上的厚度不足千分之一毫米 - "
+"缺少了拉伸、缺少了文件，或者本该是实体的地方放了一张曲面。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:391
+msgid "``shell``: A body, not a skin"
+msgstr "``shell``：是一个体，而不是一张皮"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:393
+msgid "**Applies to** parts. ``pc test -f shell <object>`` runs it alone."
+msgstr "**适用于** 零件。``pc test -f shell <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:395
+msgid ""
+"Whether a part is a body rather than a skin: a set of faces with nothing "
+"said about which side of them is material renders and exports like the part "
+"that was meant, while every boolean against it comes back with no solid in "
+"it - so interference, CAM, FEA and any mass computed from it are wrong. Read"
+" straight out of the geometry the part has already produced, so it costs "
+"nothing."
+msgstr ""
+"零件是一个体还是一张皮：一组面，如果没有说明它们哪一侧是材料，那么它渲染和导出起来与本来要的那个零件一模一样，而针对它的每一次布尔运算返回的结果里却没有实体"
+" - 于是干涉、CAM、FEA 以及任何据此算出的质量都是错的。这是直接从零件已经生成的几何中读出的，所以没有任何代价。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:400
+#: ../../source/digital_thread/lifecycle/testing.rst:438
+msgid ""
+"A sketch, which is not a body, and an assembly or a scene, which is checked "
+"through its parts."
+msgstr "草图（它不是一个体），以及装配体或场景（它们通过各自的零件来检查）。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:405
+msgid ""
+"``The shape is a skin rather than a body: N shell(s) that no solid bounds "
+"itself with``. A shell a script returns is closed into a solid "
+"automatically, so either those faces enclose nothing - close them - or they "
+"come from a file that states the part as a surface: export it from its tool "
+"as a solid instead."
+msgstr ""
+"``The shape is a skin rather than a body: N shell(s) that no solid bounds "
+"itself with``。脚本返回的壳会被自动封闭成实体，所以要么是那些面什么都没围住 - 把它们封闭起来 - "
+"要么它们来自一个把零件表述成曲面的文件：请改为从它的工具里按实体导出。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:410
+msgid "``solidity``: Not inside out"
+msgstr "``solidity``：没有里外翻转"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:412
+msgid "**Applies to** parts. ``pc test -f solidity <object>`` runs it alone."
+msgstr "**适用于** 零件。``pc test -f solidity <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:414
+msgid ""
+"Whether every solid of a part has a positive volume. A solid whose faces are"
+" oriented inward measures the right size and a negative volume: it renders "
+"correctly, and every boolean against it is wrong. Asked before "
+"``interference``, deliberately, since an inside-out part overlaps things it "
+"is nowhere near."
+msgstr ""
+"零件的每一个实体是否都具有正体积。各面朝内的实体，测出来尺寸是对的而体积是负的：它渲染起来正常，而针对它的每一次布尔运算都是错的。它被有意放在 "
+"``interference`` 之前提问，因为里外翻转的零件会与它根本挨不着的东西发生重叠。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:419
+msgid ""
+"A sketch, which has no solid, and an assembly or a scene, which is checked "
+"through its parts."
+msgstr "草图（它没有实体），以及装配体或场景（它们通过各自的零件来检查）。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:424
+msgid ""
+"``... a constituent solid measures ... mm^3``: negative means the faces are "
+"oriented inward - fix their winding in the source (an LDraw part, for one, "
+"has to state it); zero means the solid encloses nothing."
+msgstr ""
+"``... a constituent solid measures ... mm^3``：为负说明各面朝内 - 在源文件中修正它们的绕向（比如 "
+"LDraw 零件就必须写明这一点）；为零说明这个实体什么都没围住。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:429
+msgid "``validity``: A well-formed solid"
+msgstr "``validity``：一个良构的实体"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:431
+msgid "**Applies to** parts. ``pc test -f validity <object>`` runs it alone."
+msgstr "**适用于** 零件。``pc test -f validity <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:433
+msgid ""
+"Whether the geometry kernel certifies a part's solid as well formed. It "
+"reports and never fails: the parts it has the most to say about are often "
+"ones nothing is functionally wrong with. A part it reports on is one to "
+"expect trouble from in anything exacting - booleans, meshing for print, CAM "
+"- so treat a strange result from those as this rather than as the tool."
+msgstr ""
+"几何内核是否认定零件的实体是良构的。它只报告，从不判失败：它最有话说的那些零件，往往在功能上并没有任何问题。被它报告过的零件，在任何讲究精度的场合 - "
+"布尔运算、为打印做网格化、CAM - 都要预料到会出麻烦，所以遇到这些环节给出奇怪结果时，先往这里找原因，而不是怪工具。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:443
+msgid ""
+"It does not fail. When it says ``the geometry is a solid but not a well "
+"formed one``, rebuild the part more simply where it can be - fewer tiny "
+"faces, no self-intersections - or re-export it from its source."
+msgstr ""
+"它不会判失败。当它说 ``the geometry is a solid but not a well formed one`` "
+"时，在可能的地方把零件重建得更简单一些 - 少一些细碎的面、没有自相交 - 或者从它的来源重新导出一次。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:448
+msgid "``interference``: Parts do not overlap"
+msgstr "``interference``：零件之间不重叠"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:450
+msgid ""
+"**Applies to** assemblies and scenes. ``pc test -f interference <object>`` "
+"runs it alone."
+msgstr "**适用于** 装配体和场景。``pc test -f interference <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:452
+msgid ""
+"Whether the parts of an assembly share space. Boxes are used only to pick "
+"the pairs worth asking about; the answer comes from intersecting the two "
+"solids and measuring what they share. Each sub-assembly declared in the "
+"package answers for its own inside with its own verdict, so only what "
+"crosses its boundary is looked at here. It is the most expensive of the "
+"geometry checks."
+msgstr ""
+"装配体的各零件是否占用了同一块空间。包围盒只用来挑出值得追问的那些配对；答案来自对两个实体求交并测量它们共有的部分。包里声明的每一个子装配体都用自己的结论为它自己内部负责，所以这里只看跨越它边界的部分。它是几何类检查中代价最高的一项。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:454
+msgid ""
+"An overlap that is meant to be there is read from the joint between the two:"
+" a port, an interface or a mating that says ``selfScrew`` (a screw cutting "
+"its own thread, a nail making its own hole), a mating that says ``snapIn`` "
+"(a pin pushed past a feature), a connection whose ``how:`` says either, and "
+"a connection's ``interferes:``, naming the further items the same act of "
+"joining drives through. Nothing is ever excused for a pair of parts by name."
+msgstr ""
+"本来就该存在的重叠，是从两者之间的接合方式读出来的：声明了 ``selfScrew`` "
+"的端口、接口或配合（自攻螺钉自己切出螺纹、钉子自己开出孔），声明了 ``snapIn`` 的配合（销钉被推过某个特征），其 ``how:`` "
+"声明了上述任一项的连接，以及连接的 ``interferes:`` "
+"，它指名同一次接合动作还会压过去的其他项目。任何时候都不会按零件配对的名字来给出豁免。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:464
+msgid ""
+"``'a' and 'b' share N mm^3``: the two are in each other. Each such failure "
+"leaves an assembly to look at: the two parts where the assembly places them,"
+" and a sub-assembly named ``interference`` holding what they share, one part"
+" per volume. Open it from the IDE's Test tab, or with ``pc ide view`` and "
+"its name (``<assembly>/interference/<a>+<b>``), and switch the two parts off"
+" to see the overlap alone. Then move one of them - or, if the overlap is the"
+" joint, say so on the joint."
+msgstr ""
+"``'a' and 'b' share N "
+"mm^3``：两者嵌进了彼此。每一次这样的失败都会留下一个装配体供查看：这两个零件按装配体放置它们的位置摆放，再加上一个名为 "
+"``interference`` 的子装配体，装着它们共有的部分，每一块体积一个零件。从 IDE 的 Test 标签页打开它，或者用 ``pc ide "
+"view`` 加上它的名称（ ``<assembly>/interference/<a>+<b>`` "
+"），再把那两个零件关掉，就能单独看到重叠部分。然后把其中一个挪开 - 或者，如果这个重叠本身就是接合方式，就在接合处把它写明。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:465
+msgid ""
+"``'...' does not pass on its own``: a sub-assembly has overlaps of its own; "
+"test it."
+msgstr "``'...' does not pass on its own``：某个子装配体自身就有重叠；去测试它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:466
+msgid ""
+"``'...' names '...' in 'interferes:', which is not a link``: correct the "
+"name; it is a link of the same ``links:`` list as the connection."
+msgstr ""
+"``'...' names '...' in 'interferes:', which is not a "
+"link``：修正这个名称；它应当是与该连接同属一个 ``links:`` 列表的一条链接。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:467
+msgid ""
+"An object marked ``manufacturable: false`` (a scene, unless it says "
+"otherwise) is told what overlaps rather than failed for it."
+msgstr "标记为 ``manufacturable: false`` 的对象（场景，除非它另有声明）只会被告知哪里有重叠，而不会因此被判失败。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:472
+msgid ""
+"On the assembly: ``interference: minVolume:`` (in mm^3, default 0.05), below"
+" which an overlap is taken for the arithmetic of two surfaces that touch, "
+"and ``interference: minFraction:``, the same floor as a share of the smaller"
+" part."
+msgstr ""
+"在装配体上：``interference: minVolume:`` （单位 mm^3，默认 "
+"0.05），低于它的重叠会被当作两个相接表面的算术误差；以及 ``interference: minFraction:`` "
+"，同样的下限，但按较小那个零件的占比给出。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:477
+msgid "``cam``: A machine route can be produced"
+msgstr "``cam``：能生成机床加工路径"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:479
+msgid ""
+"**Applies to** parts and sketches that name a machine to be cut on. ``pc "
+"test -f cam <object>`` runs it alone."
+msgstr "**适用于** 指名了要在其上切削的机床的零件和草图。``pc test -f cam <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:481
+msgid ""
+"Whether the program a machine cuts the object with can be produced: for "
+"every ``cnc:``, ``laser:`` or ``drill:`` machine it names, the post-"
+"processor that machine uses writes a route, and the route is thrown away. "
+"The same code as ``pc cam``."
+msgstr ""
+"机床用来切削该对象的程序能否生成出来：对它所指名的每一台 ``cnc:``、``laser:`` 或 ``drill:`` "
+"机床，由那台机床所用的后处理器写出一条加工路径，然后把这条路径丢掉。用的代码与 ``pc cam`` 相同。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:486
+msgid ""
+"An object that names no machine to be routed on - nothing under "
+"``manufacturing:`` asks for one, or only a ``cut:`` machine, which needs no "
+"program."
+msgstr ""
+"没有指名任何需要生成加工路径的机床的对象 - 也就是 ``manufacturing:`` 下没有任何内容要求机床，或者只有一台 ``cut:`` "
+"机床，而它不需要程序。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:491
+msgid "A sentence about the section: a job key it cannot read; fix it."
+msgstr "一句关于该小节的说明：有一个它读不懂的作业键；修正它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:492
+msgid ""
+"``the 'cam' implementation could not be resolved``: the implementation the "
+"machine names is not a dependency of the package, or does not declare the "
+"file type."
+msgstr ""
+"``the 'cam' implementation could not be "
+"resolved``：机床所指名的实现不是该包的依赖，或者没有声明这种文件类型。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:493
+msgid ""
+"``no route was produced by ...``: the post-processor's error follows; fix "
+"the tool or the outline it names, or run ``pc cam`` to see the whole report."
+msgstr ""
+"``no route was produced by ...``：后面紧跟着后处理器的错误；修正它所指名的刀具或轮廓，或者运行 ``pc cam`` "
+"查看完整报告。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:495
+msgid ""
+"It is skipped, with a warning, where the implementation cannot run on this "
+"machine: start a container runtime, or install what it needs."
+msgstr "当该实现无法在本机运行时，它会被跳过并给出警告：启动一个容器运行时，或者把它所需要的东西安装上。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:500
+msgid "``fea``: Structural analysis (FEA)"
+msgstr "``fea``：结构分析（FEA）"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:502
+msgid ""
+"**Applies to** parts that declare an ``fea:`` section. ``pc test -f fea "
+"<object>`` runs it alone."
+msgstr "**适用于** 声明了 ``fea:`` 小节的零件。``pc test -f fea <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:504
+msgid ""
+"Whether a part holds up under the loads each scenario of its ``fea:`` "
+"section declares: every scenario is run by the implementation configured, "
+"and the part passes when each of them ran and found nothing - the same "
+"analyses as ``pc cae fea``, which runs one of them with ``-f <scenario>``."
+msgstr ""
+"零件在它 ``fea:`` 小节每个场景所声明的载荷下是否撑得住：每个场景都由所配置的实现来运行，当每个场景都运行过并且没有任何发现时，零件就通过 - "
+"这与 ``pc cae fea`` 做的是同样的分析，后者用 ``-f <scenario>`` 运行其中一个。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:509
+msgid "Anything but a part, and a part that declares no ``fea:`` section."
+msgstr "除零件以外的任何东西，以及没有声明 ``fea:`` 小节的零件。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:514
+msgid ""
+"A sentence about a scenario (``'fea: loaded:' declares neither 'fix:' nor "
+"'load:'``, a key it does not take): fix the scenario it names."
+msgstr ""
+"一句关于某个场景的说明（ ``'fea: loaded:' declares neither 'fix:' nor 'load:'`` "
+"，或者一个它不接受的键）：修正它所指名的那个场景。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:515
+msgid ""
+"``FEA 'loaded' could not be run by ...``: the solver or the mesher is not "
+"installed, or failed; the report says which. Install it, or name another "
+"implementation."
+msgstr ""
+"``FEA 'loaded' could not be run by "
+"...``：求解器或网格器没有安装，或者运行失败；报告会说明是哪一个。把它安装上，或者指名另一个实现。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:516
+msgid ""
+"``FEA 'loaded' findings: ...``: the analysis ran and found a problem - a "
+"stress, a deflection - at the place named. Change the design, or the load if"
+" the load is what is wrong."
+msgstr ""
+"``FEA 'loaded' findings: ...``：分析运行了，并在所指名的位置发现了问题 - "
+"一处应力、一处变形。修改设计，或者，如果错的是载荷，就修改载荷。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:518
+#: ../../source/digital_thread/lifecycle/testing.rst:546
+#: ../../source/digital_thread/lifecycle/testing.rst:574
+#: ../../source/digital_thread/lifecycle/testing.rst:602
+msgid ""
+"It is skipped, with a warning, only where the implementation runs in a "
+"container and there is no container runtime here."
+msgstr "只有当该实现在容器中运行而本机没有容器运行时时，它才会被跳过并给出警告。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:523
+msgid ""
+"``fea: <scenario>: fix:``, ``load:`` (a force; a bare number is kilograms), "
+"``gravity:``, ``implementation:`` and ``params:``; the user setting "
+"``caeFeaImplementation``."
+msgstr ""
+"``fea: <scenario>: fix:``、``load:`` "
+"（一个力；光写一个数字时单位为千克）、``gravity:``、``implementation:`` 和 ``params:`` ；用户设置 "
+"``caeFeaImplementation``。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:528
+msgid "``dynamic``: Vibration analysis (Dynamic FEA)"
+msgstr "``dynamic``：振动分析（动力学 FEA）"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:530
+msgid ""
+"**Applies to** parts that declare a ``dynamic:`` section. ``pc test -f "
+"dynamic <object>`` runs it alone."
+msgstr "**适用于** 声明了 ``dynamic:`` 小节的零件。``pc test -f dynamic <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:532
+msgid ""
+"Whether a part, held as each scenario of its ``dynamic:`` section says, "
+"rings only where it may: the modal analysis of every scenario is run by the "
+"implementation configured, and the part passes when each ran and found "
+"nothing - the same analyses as ``pc cae dynamic``. A natural frequency is a "
+"property of the part and how it is held, not of what it carries, so a "
+"scenario says only where it is held."
+msgstr ""
+"零件按它 ``dynamic:`` "
+"小节每个场景所说的方式被固定住之后，是否只在允许的地方共振：每个场景的模态分析都由所配置的实现来运行，当每个场景都运行过并且没有任何发现时，零件就通过 "
+"- 这与 ``pc cae dynamic`` "
+"做的是同样的分析。固有频率是零件本身及其固定方式的属性，而不是它所承载之物的属性，所以场景只说明它被固定在哪里。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:537
+msgid "Anything but a part, and a part that declares no ``dynamic:`` section."
+msgstr "除零件以外的任何东西，以及没有声明 ``dynamic:`` 小节的零件。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:542
+msgid ""
+"A sentence about a scenario (``'dynamic: bolted:' declares none of 'fix:'``,"
+" a key it does not take, such as ``load:``): fix the scenario it names."
+msgstr ""
+"一句关于某个场景的说明（ ``'dynamic: bolted:' declares none of 'fix:'`` ，或者一个它不接受的键，比如 "
+"``load:`` ）：修正它所指名的那个场景。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:543
+msgid ""
+"``DYNAMIC 'bolted' could not be run by ...``: the solver or the mesher is "
+"not installed, or failed; the report says which. Install it, or name another"
+" implementation."
+msgstr ""
+"``DYNAMIC 'bolted' could not be run by "
+"...``：求解器或网格器没有安装，或者运行失败；报告会说明是哪一个。把它安装上，或者指名另一个实现。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:544
+msgid ""
+"``DYNAMIC 'bolted' findings: ...``: the analysis ran and found a problem - a"
+" mode where the part must not ring. Change how it is held, or its stiffness "
+"or mass."
+msgstr ""
+"``DYNAMIC 'bolted' findings: ...``：分析运行了，并发现了问题 - "
+"一个零件不得共振的模态。改变它的固定方式，或者改变它的刚度或质量。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:551
+msgid ""
+"``dynamic: <scenario>: fix:`` (the interfaces it is held by), "
+"``implementation:`` and ``params:``; the user setting "
+"``caeDynamicImplementation``."
+msgstr ""
+"``dynamic: <scenario>: fix:`` （把它固定住的那些接口）、``implementation:`` 和 ``params:``"
+" ；用户设置 ``caeDynamicImplementation``。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:556
+msgid "``thermal``: Heat transfer"
+msgstr "``thermal``：传热"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:558
+msgid ""
+"**Applies to** parts that declare a ``thermal:`` section. ``pc test -f "
+"thermal <object>`` runs it alone."
+msgstr "**适用于** 声明了 ``thermal:`` 小节的零件。``pc test -f thermal <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:560
+msgid ""
+"Whether a part, heated and cooled as each scenario of its ``thermal:`` "
+"section says, stays as cool as it has to: every scenario is run by the "
+"implementation configured, and the part passes when each ran and found "
+"nothing - the same analyses as ``pc cae thermal``."
+msgstr ""
+"零件按它 ``thermal:`` "
+"小节每个场景所说的方式被加热和冷却之后，是否保持在它该有的温度之下：每个场景都由所配置的实现来运行，当每个场景都运行过并且没有任何发现时，零件就通过 -"
+" 这与 ``pc cae thermal`` 做的是同样的分析。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:565
+msgid "Anything but a part, and a part that declares no ``thermal:`` section."
+msgstr "除零件以外的任何东西，以及没有声明 ``thermal:`` 小节的零件。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:570
+msgid ""
+"A sentence about a scenario (``'thermal: in-use:' declares none of "
+"'temperature:', 'heat:', 'convection:'``, a key it does not take): fix the "
+"scenario it names."
+msgstr ""
+"一句关于某个场景的说明（ ``'thermal: in-use:' declares none of 'temperature:', 'heat:', "
+"'convection:'`` ，或者一个它不接受的键）：修正它所指名的那个场景。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:571
+msgid ""
+"``THERMAL 'in-use' could not be run by ...``: the solver or the mesher is "
+"not installed, or failed; the report says which. Install it, or name another"
+" implementation."
+msgstr ""
+"``THERMAL 'in-use' could not be run by "
+"...``：求解器或网格器没有安装，或者运行失败；报告会说明是哪一个。把它安装上，或者指名另一个实现。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:572
+msgid ""
+"``THERMAL 'in-use' findings: ...``: the analysis ran and found a problem - a"
+" temperature the part must not reach - at the place named. Change the "
+"design, how it is cooled, or the heat if the heat is what is wrong."
+msgstr ""
+"``THERMAL 'in-use' findings: ...``：分析运行了，并在所指名的位置发现了问题 - "
+"一个零件不得达到的温度。修改设计、修改它的冷却方式，或者，如果错的是热量，就修改热量。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:579
+msgid ""
+"``thermal: <scenario>: temperature:`` (held at, in Celsius), ``heat:`` (put "
+"in, in watts), ``convection:`` (a film coefficient, in W/(m^2\\*K)), "
+"``implementation:`` and ``params:``; the user setting "
+"``caeThermalImplementation``."
+msgstr ""
+"``thermal: <scenario>: temperature:`` （被维持的温度，单位摄氏度）、``heat:`` "
+"（输入的热量，单位瓦）、``convection:`` （表面换热系数，单位 W/(m^2\\*K) ）、``implementation:`` 和 "
+"``params:`` ；用户设置 ``caeThermalImplementation``。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:584
+msgid "``cfd``: Flow analysis (CFD)"
+msgstr "``cfd``：流动分析（CFD）"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:586
+msgid ""
+"**Applies to** parts that declare a ``cfd:`` section. ``pc test -f cfd "
+"<object>`` runs it alone."
+msgstr "**适用于** 声明了 ``cfd:`` 小节的零件。``pc test -f cfd <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:588
+msgid ""
+"Whether a part behaves in the flow each scenario of its ``cfd:`` section "
+"declares: every scenario is run by the implementation configured, and the "
+"part passes when each ran and found nothing - the same analyses as ``pc cae "
+"cfd``."
+msgstr ""
+"零件在它 ``cfd:`` 小节每个场景所声明的流动中表现如何：每个场景都由所配置的实现来运行，当每个场景都运行过并且没有任何发现时，零件就通过 - "
+"这与 ``pc cae cfd`` 做的是同样的分析。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:593
+msgid "Anything but a part, and a part that declares no ``cfd:`` section."
+msgstr "除零件以外的任何东西，以及没有声明 ``cfd:`` 小节的零件。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:598
+msgid "A sentence about a scenario: fix the scenario it names."
+msgstr "一句关于某个场景的说明：修正它所指名的那个场景。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:599
+msgid ""
+"``CFD '<scenario>' could not be run by ...``: the solver is not installed, "
+"or failed; the report says which."
+msgstr ""
+"``CFD '<scenario>' could not be run by ...``：求解器没有安装，或者运行失败；报告会说明是哪一个。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:600
+msgid ""
+"``CFD '<scenario>' findings: ...``: the analysis ran and found a problem at "
+"the place named."
+msgstr "``CFD '<scenario>' findings: ...``：分析运行了，并在所指名的位置发现了问题。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:607
+msgid ""
+"``cfd: <scenario>: fix:``, ``load:``, ``outlet:``, ``implementation:`` and "
+"``params:``; the user setting ``caeCfdImplementation``."
+msgstr ""
+"``cfd: <scenario>: fix:``、``load:``、``outlet:``、``implementation:`` 和 "
+"``params:`` ；用户设置 ``caeCfdImplementation``。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:612
+msgid "``sim``: Does what its simulations say"
+msgstr "``sim``：做到它的各个仿真所声明的事"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:614
+msgid ""
+"**Applies to** parts, assemblies and scenes that declare ``simulate:``. ``pc"
+" test -f sim <object>`` runs it alone."
+msgstr ""
+"**适用于** 声明了 ``simulate:`` 的零件、装配体和场景。``pc test -f sim <object>`` 单独运行它。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:616
+msgid ""
+"Whether the object does what its ``simulate:`` section says it does: each "
+"simulation is run - the object placed in its scene and handed to the "
+"simulation plugin - and its ``validation:`` condition has to hold over what "
+"came back. The same runs as ``pc sim``, which also prints everything the "
+"plugin reported (``--json``). It is the most expensive question ``pc test`` "
+"asks, and is asked last."
+msgstr ""
+"对象是否做到它 ``simulate:`` 小节所说它会做的事：每一个仿真都会被运行 - 对象被放进它的场景并交给仿真插件 - 而它的 "
+"``validation:`` 条件必须在返回的结果上成立。这与 ``pc sim`` 做的是同样的运行，后者还会把插件报告的全部内容打印出来（ "
+"``--json`` ）。它是 ``pc test`` 提出的代价最高的问题，因此被放在最后提问。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:621
+msgid ""
+"Anything but a part, an assembly or a scene, and one that declares no "
+"simulation."
+msgstr "除零件、装配体或场景以外的任何东西，以及没有声明任何仿真的对象。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:626
+msgid ""
+"``... ran, and its 'validation' does not hold``: the object did not behave "
+"as claimed. Run ``pc sim --json`` to see ``before`` and ``after``, then "
+"change the design, or the condition if the condition is what is wrong."
+msgstr ""
+"``... ran, and its 'validation' does not hold``：对象的表现与所声明的不符。运行 ``pc sim "
+"--json`` 查看 ``before`` 和 ``after``，然后修改设计，或者，如果错的是条件，就修改条件。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:627
+msgid ""
+"``... could not be run``: the plugin or the scene the entry names is not "
+"found, or the simulator failed; the report says which."
+msgstr "``... could not be run``：该条目所指名的插件或场景找不到，或者仿真器运行失败；报告会说明是哪一种。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:628
+msgid ""
+"``... states no 'validation'``: asked about by name, an entry with no "
+"condition fails; add one over ``before`` and ``after``. Walked to as part of"
+" a package, it is skipped instead."
+msgstr ""
+"``... states no 'validation'``：按名称提问时，没有条件的条目会判失败；请基于 ``before`` 和 ``after``"
+" 加一个条件。而作为包的一部分被走查到时，它会被跳过。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:630
+msgid ""
+"It is skipped, with a warning, where the simulator runs in a container and "
+"there is no container runtime here."
+msgstr "当仿真器在容器中运行而本机没有容器运行时时，它会被跳过并给出警告。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:635
+msgid ""
+"``simulate: <name>:`` - ``simulation:`` (the plugin), ``scene:``, "
+"``validation:``, and ``feature:``, the feature of the requirements it "
+"demonstrates."
+msgstr ""
+"``simulate: <name>:`` - ``simulation:`` （插件）、``scene:``、``validation:``，以及 "
+"``feature:`` ，即它所证明的需求中的那个特性。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:640
+msgid "Agent skills"
+msgstr "智能体技能"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:642
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:643
+msgid ""
+"Runs ``pc test`` as the first thing it does, and then goes beyond it: it "
+"runs every simulation and every analysis scenario, renders the object from "
+"every angle that matters with its ports and interfaces drawn, reads the bill"
+" of materials and the assembly instructions of an assembly, and gives every "
+"requirement a verdict -- met, not met, or \"cannot tell\" -- with the "
+"evidence named. The ``features:`` half of a requirement is prose, which no "
+"check here can measure, and it is judged there and nowhere else."
+msgstr ""
+"它做的第一件事就是运行 ``pc "
+"test``，然后再走得更远：它运行每一个仿真和每一个分析场景，从每一个重要的角度渲染该对象并画出它的端口和接口，读取装配体的物料清单和装配说明，并给每一项需求下一个结论"
+" -- 满足、不满足，或者“无法判定” -- 并指明依据。需求中 ``features:`` "
+"那一半是散文，这里的任何检查都无法测量它，它只在那里被判定，别处都不判。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:651
+msgid "``/pc:sim-assembly-fea``"
+msgstr "``/pc:sim-assembly-fea``"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:652
+msgid ""
+"Produces the ``fea:`` scenario that the ``fea`` check below then holds the "
+"part to, out of what a simulation of its assembly measured."
+msgstr "它根据对零件所属装配体的仿真所测得的结果，生成下面 ``fea`` 检查用来约束该零件的那个 ``fea:`` 场景。"
+
+#: ../../source/digital_thread/lifecycle/testing.rst:655
+msgid ""
+"Every skill runs these same commands, through the same cache, so a verdict "
+"an agent reports is a verdict you can reproduce by hand."
+msgstr "每个技能运行的都是这些同样的命令，走的是同一套缓存，所以智能体报告的结论，你都可以自己手工复现出来。"

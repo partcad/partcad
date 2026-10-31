@@ -1,0 +1,147 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/maintenance/resources.rst:5
+msgid "Machine Resources"
+msgstr "Ресурсы машины"
+
+#: ../../source/maintenance/resources.rst:8
+msgid "``threadsMax`` says how much of the machine PartCAD may use:"
+msgstr ""
+"``threadsMax`` говорит, какую часть машины PartCAD может использовать:"
+
+#: ../../source/maintenance/resources.rst:15
+msgid ""
+"The equivalents everywhere else are ``PC_THREADS_MAX`` in the environment "
+"and ``--threads-max`` on the command line, in the usual order of precedence."
+" It sizes two things:"
+msgstr ""
+"Эквиваленты во всех остальных местах -- это ``PC_THREADS_MAX`` в окружении и"
+" ``--threads-max`` в командной строке, в обычном порядке приоритета. Он "
+"задаёт размер двух вещей:"
+
+#: ../../source/maintenance/resources.rst:19
+msgid ""
+"**How many sandbox processes run at once.** This is the limit that is "
+"strict, and the one that matters: every script PartCAD runs is a whole CAD "
+"interpreter, several hundred megabytes of it, so it is the number of these "
+"and not the number of threads that decides whether a recursive render keeps "
+"the machine busy or runs it out of memory."
+msgstr ""
+"**Сколько процессов песочницы работает одновременно.** Это тот предел, "
+"который строг, и тот, который важен: каждый скрипт, который выполняет "
+"PartCAD, -- это целый CAD-интерпретатор, несколько сотен мегабайт, поэтому "
+"именно их число, а не число потоков, решает, будет ли рекурсивная отрисовка "
+"держать машину занятой или исчерпает её память."
+
+#: ../../source/maintenance/resources.rst:24
+msgid "**The thread pools** PartCAD's own work runs on. Not a strict limit."
+msgstr ""
+"**Размер пулов потоков**, на которых выполняется собственная работа PartCAD."
+" Это не строгий предел."
+
+#: ../../source/maintenance/resources.rst:26
+msgid ""
+"**It is never lower than 4.** A lower value, from any of those places, is "
+"raised to 4, and PartCAD says so::"
+msgstr ""
+"**Оно никогда не бывает меньше 4.** Меньшее значение, откуда бы оно ни "
+"пришло, поднимается до 4, и PartCAD об этом говорит::"
+
+#: ../../source/maintenance/resources.rst:31
+msgid ""
+"Four is the least PartCAD runs with, for performance: a recursive render "
+"starts every object of a package at once and spends most of its time waiting"
+" for sandbox processes, so it is how many of those run side by side that "
+"decides how long it takes."
+msgstr ""
+"Четыре -- это минимум, с которым работает PartCAD, из соображений "
+"производительности: рекурсивная отрисовка запускает все объекты пакета сразу"
+" и большую часть времени проводит в ожидании процессов песочницы, поэтому "
+"именно то, сколько их работает рядом, решает, сколько это займёт."
+
+#: ../../source/maintenance/resources.rst:36
+msgid ""
+"It used to be the least PartCAD *could* run with. ``pc render -r`` once "
+"stopped making progress altogether with ``threadsMax: 2``: an object built "
+"from another one -- an alias, an enrich, an extrusion of a sketch -- held a "
+"thread of the pool while it waited for a second one to build the other "
+"object on, and a recursive render started enough of them at once for every "
+"thread to end up waiting. Nothing waits like that any more: an object built "
+"from another one builds it on the thread it already has, on a pool of any "
+"size. A lower value would no longer stop anything; it is raised to four all "
+"the same."
+msgstr ""
+"Раньше это был минимум, с которым PartCAD *мог* работать. Когда-то ``pc "
+"render -r`` вообще перестала продвигаться при ``threadsMax: 2``: объект, "
+"собираемый из другого объекта -- alias, enrich, выдавливание эскиза, -- "
+"держал поток пула, пока ждал второй поток для сборки другого объекта, а "
+"рекурсивная отрисовка запускала их столько сразу, что ждать оказывались все "
+"потоки. Теперь так ничто не ждёт: объект, собираемый из другого объекта, "
+"собирает его на том потоке, который у него уже есть, при пуле любого "
+"размера. Меньшее значение больше ничего не остановило бы; его всё равно "
+"поднимают до четырёх."
+
+#: ../../source/maintenance/resources.rst:45
+msgid ""
+"When nothing sets it, PartCAD runs one sandbox process per CPU core -- and "
+"still never fewer than four, so on a machine with fewer cores than that it "
+"notes, once::"
+msgstr ""
+"Когда его ничто не задаёт, PartCAD выполняет по одному процессу песочницы на"
+" ядро процессора -- и всё равно никогда меньше четырёх, поэтому на машине, "
+"где ядер меньше, он один раз замечает::"
+
+#: ../../source/maintenance/resources.rst:50
+msgid ""
+"Everything still works on such a machine, more slowly. The note is "
+"information rather than a warning, since nothing about the command it comes "
+"with can change it; ``pc healthcheck`` reports the same thing as a warning, "
+"in its ``CpuCores`` check. The cores counted are the ones the machine has, "
+"not the ones a CPU affinity mask or a container's CPU quota leaves to "
+"PartCAD; set ``threadsMax`` where those are smaller."
+msgstr ""
+"На такой машине всё по-прежнему работает, только медленнее. Это примечание "
+"является информацией, а не предупреждением, поскольку ничто в той команде, с"
+" которой оно приходит, этого изменить не может; ``pc healthcheck`` сообщает "
+"то же самое как предупреждение, в своей проверке ``CpuCores``. Считаются те "
+"ядра, которые есть у машины, а не те, которые PartCAD оставляют маска "
+"привязки к процессорам или квота процессора в контейнере; задайте "
+"``threadsMax`` там, где они меньше."
+
+#: ../../source/maintenance/resources.rst:57
+msgid ""
+"A command served by the daemon runs with **your** ``threadsMax``, not with "
+"the one the daemon was started with: it travels with the rest of your "
+"configuration on every request, and the daemon sizes its sandbox processes "
+"for each request it serves. So ``PC_THREADS_MAX=6 pc render -r`` runs six at"
+" a time even on a daemon that has been running since before the variable was"
+" set. The thread pools are the exception: they belong to the daemon's "
+"process, and keep the size it started with."
+msgstr ""
+"Команда, обслуживаемая демоном, выполняется с **вашим** ``threadsMax``, а не"
+" с тем, с которым был запущен демон: он путешествует вместе с остальной "
+"вашей конфигурацией при каждом запросе, и демон подбирает число своих "
+"процессов песочницы для каждого запроса, который он обслуживает. Поэтому "
+"``PC_THREADS_MAX=6 pc render -r`` выполняет по шесть за раз даже на том "
+"демоне, который работает с момента, предшествовавшего установке этой "
+"переменной. Исключение -- пулы потоков: они принадлежат процессу демона и "
+"сохраняют тот размер, с которым он запустился."

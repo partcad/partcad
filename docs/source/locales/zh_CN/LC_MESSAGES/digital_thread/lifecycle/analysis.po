@@ -1,0 +1,609 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:4
+msgid "Analysis"
+msgstr "分析"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:16
+msgid ""
+"Analysis is what engineering says about a design before anything is made: "
+"what it weighs and where its centre of mass is, how it carries a load, how a"
+" fluid flows around it, how it behaves once gravity and contact are switched"
+" on. Each answer is worked out from the design as it is now, so it is never "
+"an answer about last week's version."
+msgstr ""
+"分析就是工程在任何东西被制造出来之前对一个设计所作的论断：它有多重、质心在哪里、它如何承载载荷、流体如何绕它流动、重力和接触一打开它会有什么表现。每一个答案都是依据设计当前的状态算出来的，所以它绝不会是关于上周那个版本的答案。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:23
+msgid "What PartCAD captures"
+msgstr "PartCAD 记录了什么"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:26
+msgid "Physical properties"
+msgstr "物理属性"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:28
+msgid ""
+"What an object weighs, its centre of mass, its inertia, its friction: stated"
+" in a ``physics:`` section, lent by its :ref:`material <materials>` (a "
+"density, a friction coefficient), or worked out from the solid -- and, for "
+"an assembly, combined from its parts. ``pc info`` reports each value with "
+"where it came from, and a requirement on one is checked against the same "
+"value (see :doc:`/digital_thread/lifecycle/requirements`)."
+msgstr ""
+"一个对象有多重、它的质心、它的惯量、它的摩擦：可以在 ``physics:`` 小节中写明，可以由它的 :ref:`材料 <materials>` "
+"提供（一个密度、一个摩擦系数），也可以从实体算出来 -- 而对于装配体，则由它的各个零件合并而来。``pc info`` "
+"会报告每一个值及其来源，而针对某个值的需求也是对照同一个值来检查的（参见 "
+":doc:`/digital_thread/lifecycle/requirements` ）。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:36
+msgid "Engineering analyses"
+msgstr "工程分析"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:38
+msgid ""
+"A part says what holds it, what it carries and how it is heated and cooled, "
+"in a section named after the analysis -- ``fea:`` for a finite element "
+"analysis, ``dynamic:`` for the frequencies it rings at, ``thermal:`` for "
+"heat transfer, ``cfd:`` for computational fluid dynamics -- because the "
+"conditions are a property of the part rather than of the solver asked about "
+"it. Each section is a map of named scenarios, one per question of that kind "
+"the part is asked, the way ``simulate:`` is a map of simulations. Each "
+"condition names an interface the part implements, so it lands where the part"
+" connects. ``pc cae fea``, ``pc cae dynamic``, ``pc cae thermal`` and ``pc "
+"cae cfd`` run the scenarios through the implementation configured -- all of "
+"them, or one with ``-f`` -- and report what each finds. A scenario may name "
+"the feature of the requirements it demonstrates (``feature:``), which makes "
+"it evidence for that feature, as a simulation's is. See :ref:`engineering-"
+"analysis` and :ref:`cae`."
+msgstr ""
+"零件在一个以该分析命名的小节中说明什么固定住它、它承载什么，以及它是如何被加热和冷却的 -- 有限元分析用 ``fea:`` ，它共振的频率用 "
+"``dynamic:`` ，传热用 ``thermal:`` ，计算流体动力学用 ``cfd:`` -- "
+"因为这些条件是零件的属性，而不是被问到它的那个求解器的属性。每个小节都是具名场景的映射，零件被问到的那一类的每一个问题对应一个场景，就像 "
+"``simulate:`` 是各个仿真的映射那样。每个条件都指名零件所实现的某个接口，这样它就落在零件相连的位置上。``pc cae "
+"fea``、``pc cae dynamic``、``pc cae thermal`` 和 ``pc cae cfd`` "
+"会通过所配置的实现来运行这些场景 -- 全部运行，或者用 ``-f`` 运行其中一个 -- 并报告每一个发现了什么。场景可以指名它所证明的那项需求特性（"
+" ``feature:`` ），这会让它成为该特性的证据，与仿真的情形一样。参见 :ref:`engineering-analysis` 和 "
+":ref:`cae` 。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:53
+msgid "Simulations"
+msgstr "仿真"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:55
+msgid ""
+"A part, an assembly or a scene says what it is supposed to *do* in a "
+"``simulate:`` section: the scene it is placed in, the simulation plugin that"
+" runs it, and a ``validation:`` condition over what happened that holds when"
+" it went as it should -- \"after ten seconds on a 10° slope it is still "
+"upright\". ``pc sim`` runs them. A simulation may name the feature of the "
+"requirements it demonstrates (``feature:``), which makes it evidence for "
+"that feature. See :doc:`/digital_thread/lifecycle/simulation` and "
+":ref:`simulate`."
+msgstr ""
+"零件、装配体或场景在 ``simulate:`` 小节中说明它应该 *做* 什么：它被放入的那个场景、运行它的那个仿真插件，以及一个关于运行结果的 "
+"``validation:`` 条件，当它按应有方式运行时该条件成立 -- 比如“在 10° 斜坡上十秒之后它仍然直立”。``pc sim`` "
+"运行它们。仿真可以指名它所证明的那项需求特性（ ``feature:`` ），这会让它成为该特性的证据。参见 "
+":doc:`/digital_thread/lifecycle/simulation` 和 :ref:`simulate` 。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:64
+msgid "Analysis and validation"
+msgstr "分析与校验"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:66
+msgid ""
+"An analysis answers a question; validation asks whether the answer is the "
+"one that was needed. The same runs serve both: ``pc test`` runs every "
+"scenario of every ``fea:``, ``dynamic:``, ``thermal:`` and ``cfd:``, and "
+"every ``simulate:`` entry, declared as its checks of the same names (``sim``"
+" for a simulation), and fails an object any of whose scenarios finds a "
+"problem or whose simulation does not behave as it says (see "
+":doc:`/digital_thread/lifecycle/validation`)."
+msgstr ""
+"分析回答一个问题；校验问的是这个答案是否就是当初所需要的那个。同样的运行同时服务于两者：``pc test`` 会运行每一个 "
+"``fea:``、``dynamic:``、``thermal:`` 和 ``cfd:`` 的每一个场景，以及每一个 ``simulate:`` "
+"条目，作为它同名的那些检查（仿真对应的是 ``sim`` ），并会让任何一个场景发现了问题、或者仿真表现与其所声明不符的对象失败（参见 "
+":doc:`/digital_thread/lifecycle/validation` ）。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:74
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:76
+msgid ""
+"**Analysis** holds a tab per analysis, each enabled for a part that declares"
+" scenarios of it and disabled -- with the reason on hover -- for everything "
+"else. Each lists the scenarios down the left, runs the one selected with the"
+" solver chosen over it, and shows the model it produced and what it found. "
+"Each has a chapter of its own:"
+msgstr ""
+"**Analysis** 下每一项分析各有一个标签页，对声明了该项分析场景的零件启用，而对其他一切都禁用 -- "
+"把鼠标悬停在上面会显示原因。每一个标签页都在左侧列出各个场景，用在它上方选定的求解器运行所选中的那一个，并显示它所产出的模型以及它发现了什么。每一个都有自己的一章："
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:82
+msgid ":doc:`FEA </digital_thread/lifecycle/analysis_fea>`"
+msgstr ":doc:`FEA </digital_thread/lifecycle/analysis_fea>`"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:83
+msgid ""
+"Does the part hold up under what it carries: the stress in it, and how far "
+"it moves. Read from ``fea:``."
+msgstr "零件在它所承载的东西下能否撑得住：其中的应力，以及它移动了多远。读自 ``fea:`` 。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:86
+msgid ":doc:`Dynamic FEA </digital_thread/lifecycle/analysis_dynamic>`"
+msgstr ":doc:`Dynamic FEA </digital_thread/lifecycle/analysis_dynamic>`"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:87
+msgid ""
+"At which frequencies does it ring, held as it is held, and in what shape. "
+"Read from ``dynamic:``."
+msgstr "按它当前的固定方式，它在哪些频率上共振，以及以什么形状共振。读自 ``dynamic:`` 。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:90
+msgid ":doc:`Heat Transfer </digital_thread/lifecycle/analysis_thermal>`"
+msgstr ":doc:`Heat Transfer </digital_thread/lifecycle/analysis_thermal>`"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:91
+msgid ""
+"How hot does it get, heated and cooled as it is. Read from ``thermal:``."
+msgstr "按它当前的加热和冷却方式，它会热到什么程度。读自 ``thermal:`` 。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:93
+msgid ":doc:`CFD </digital_thread/lifecycle/analysis_cfd>`"
+msgstr ":doc:`CFD </digital_thread/lifecycle/analysis_cfd>`"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:94
+msgid ""
+"How does a fluid flow through it -- where the part *is* the fluid volume. "
+"Read from ``cfd:``."
+msgstr "流体如何从它内部流过 -- 此时零件 *就是* 那个流体体积。读自 ``cfd:`` 。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:97
+msgid ""
+"The Analysis group: its four tabs, the scenario list, and the result of the "
+"one selected"
+msgstr "Analysis 组：它的四个标签页、场景列表，以及所选中那一个的结果"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:102
+msgid ""
+"These tabs are the exception to \"every tab is a question\": looking at one "
+"**runs** the analysis. That is why each is a chapter rather than a line -- "
+"what it costs, what it needs installed and what its failure means are "
+"particular to the analysis."
+msgstr ""
+"这些标签页是“每个标签页都是一个提问”这一说法的例外：查看其中一个就会 **运行** 该项分析。这也是为什么每一个都占一章而不是一行 -- "
+"它的代价、它需要安装什么，以及它失败意味着什么，都是因分析而异的。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:107
+msgid ""
+"The simulations are not here. They are run from :ref:`Validation → "
+"Simulation <sim-in-the-ui>`, because what a simulation answers is whether "
+"the object does what it says it does, which is a question of validation "
+"rather than of analysis."
+msgstr ""
+"各个仿真不在这里。它们是从 :ref:`Validation → Simulation <sim-in-the-ui>` "
+"运行的，因为仿真所回答的是对象是否做到它所声明的事，而这是一个校验问题，不是分析问题。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:114
+msgid "On the command line"
+msgstr "在命令行中"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:125
+msgid ""
+"Each analysis has a chapter of its own above, with the keys its section "
+"takes and the packages that implement it. What follows here is what they "
+"have in common."
+msgstr "上面每一项分析都有自己的一章，其中说明它的小节接受哪些键，以及哪些包实现了它。这里接下来讲的是它们的共同之处。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:130
+msgid "Running an analysis"
+msgstr "运行一项分析"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:133
+msgid ""
+"A part can say what holds it, what it carries, how it is heated and where a "
+"fluid goes through it, and PartCAD can put that question to a solver. There "
+"are four questions, each its own command: ``pc cae fea`` for a finite "
+"element analysis, ``pc cae dynamic`` for its natural frequencies, ``pc cae "
+"thermal`` for heat transfer, and ``pc cae cfd`` for computational fluid "
+"dynamics. The conditions live on the part, in a section named after the "
+"analysis, because they are a property of the part rather than of whoever "
+"analyses it -- a bracket is bolted down at the same holes whichever solver "
+"is asked about it. A part is asked more than one question of each kind -- a "
+"shelf bracket loaded, and the same bracket knocked sideways -- so the "
+"section is a map of named **scenarios**, the way ``simulate:`` is a map of "
+"named simulations:"
+msgstr ""
+"零件可以说明什么固定住它、它承载什么、它是如何被加热的，以及流体从哪里穿过它，而 PartCAD "
+"可以把这个问题提交给求解器。一共有四个问题，每一个都有自己的命令：``pc cae fea`` 用于有限元分析，``pc cae dynamic`` "
+"用于求它的固有频率，``pc cae thermal`` 用于传热，而 ``pc cae cfd`` "
+"用于计算流体动力学。这些条件写在零件上，位于一个以该分析命名的小节中，因为它们是零件的属性，而不是分析它的那个人的属性 -- "
+"不管被问到的是哪个求解器，支架都是在同样那几个孔处被螺栓固定住的。同一类的问题，零件会被问到不止一个 -- 一个受载的搁板支架，以及同一个支架被横向撞击"
+" -- 所以这个小节是具名 **场景** 的映射，就像 ``simulate:`` 是具名仿真的映射那样："
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:180
+msgid ""
+"``pc cae fea :bracket`` runs every scenario of the analysis and ``-f`` runs "
+"one (``pc cae fea -f loaded :bracket``); ``pc test`` holds the part to all "
+"of them. Beside its conditions a scenario may say what it is (``desc:``), "
+"which feature of the part's :ref:`requirements <requirements>` it "
+"demonstrates (``feature:``, a name or a list -- the IDE's Requirements tab "
+"lists it there, as it lists a simulation), who runs it (``implementation:``,"
+" below) and the implementation's parameters for that scenario alone "
+"(``params:``, a finer ``mesh_size`` say). A scenario cannot be named after "
+"any of those keys or after a condition. A section written the way it was "
+"before scenarios -- ``fea:`` holding ``fix:`` and ``load:`` itself -- is "
+"still read, as one scenario named ``default``, and PartCAD says once that it"
+" is deprecated: move its conditions under a name."
+msgstr ""
+"``pc cae fea :bracket`` 运行该项分析的每一个场景，而 ``-f`` 运行其中一个（ ``pc cae fea -f loaded"
+" :bracket`` ）；``pc test`` 则以全部场景来约束该零件。除了各项条件，场景还可以说明它是什么（ ``desc:`` "
+"）、它证明了零件 :ref:`需求 <requirements>` 中的哪一项特性（ ``feature:`` ，一个名称或一个列表 -- IDE 的 "
+"Requirements 标签页会把它列在那里，就像列出仿真那样）、由谁来运行它（ ``implementation:`` "
+"，见下文），以及仅用于那一个场景的实现参数（ ``params:`` ，比如更细的 ``mesh_size`` "
+"）。场景不能以上述任何一个键命名，也不能以某个条件命名。按场景出现之前的写法写出的小节 -- ``fea:`` 自己直接装着 ``fix:`` 和 "
+"``load:`` -- 仍然会被读取，视为一个名为 ``default`` 的场景，而 PartCAD "
+"会提示一次说它已被废弃：请把它的条件挪到一个名称之下。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:193
+msgid ""
+"Every key names :ref:`interfaces <interfaces>` the part implements, so the "
+"same declaration that says where a part connects also says where it is held,"
+" pulled, heated and cooled. A ``load`` is a force: write a number and a "
+"unit, or a bare number for a mass in kilograms, which PartCAD weighs into "
+"newtons at 9.8 N/kg. A ``temperature`` is in Celsius, a ``heat`` a power in "
+"watts, a ``convection`` a film coefficient in W/(m²·K). ``cfd:`` reads "
+"``load:`` as where the flow is driven in and ``outlet:`` as where it leaves;"
+" every other surface of the fluid volume is a wall. :ref:`pc cae <cae>` "
+"lists every key each analysis takes."
+msgstr ""
+"每个键都指名零件所实现的 :ref:`接口 <interfaces>` "
+"，于是那条说明零件在哪里相连的声明，同时也说明了它在哪里被固定、被拉拽、被加热和被冷却。``load`` "
+"是一个力：写成数字加单位，或者光写一个数字表示以千克为单位的质量，PartCAD 会按 9.8 N/kg 把它换算成牛顿。``temperature``"
+" 的单位是摄氏度，``heat`` 是以瓦为单位的功率，``convection`` 是以 W/(m²·K) 为单位的表面换热系数。``cfd:`` 把"
+" ``load:`` 读作流动被驱入的位置，把 ``outlet:`` 读作它离开的位置；流体体积的其他每一个表面都是壁面。:ref:`pc cae "
+"<cae>` 列出了每一项分析所接受的每一个键。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:202
+msgid ""
+"A condition lands on the **surface its port stands for**. A port is a "
+"coordinate frame, and a frame cannot say how wide an inlet is; a sketch can."
+" An interface that draws a port with a sketch -- a ``basic`` ``circle:`` for"
+" the end of a bore -- has that sketch placed by the port's frame, Z out of "
+"the surface, and PartCAD imprints it on the part before the solver runs: the"
+" implementation is handed the faces each port covers, and a force or a power"
+" is spread over exactly their area. A port with no sketch covers the face it"
+" lies on."
+msgstr ""
+"条件落在 **它的端口所代表的那个表面** 上。端口是一个坐标系，而坐标系说不出入口有多宽；草图可以。用草图绘制某个端口的接口 -- 比如用一个 "
+"``basic`` 的 ``circle:`` 表示孔的端面 -- 它那张草图会按端口的坐标系放置，Z 轴指向表面外侧，而 PartCAD "
+"会在求解器运行之前把它印到零件上：实现方拿到的是每个端口所覆盖的那些面，而力或功率正好分摊在它们的面积上。没有草图的端口覆盖它所在的那个面。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:210
+msgid ""
+"PartCAD ships no solver. The analysis is run by an implementation package, "
+"declared in a ``cae:`` section exactly as an export or a render "
+"implementation is declared in its own (see :ref:`cae-section`), and named by"
+" the user configuration option named after the analysis: "
+"``caeFeaImplementation``, ``caeDynamicImplementation``, "
+"``caeThermalImplementation`` and ``caeCfdImplementation``. The defaults, and"
+" the other implementations there are:"
+msgstr ""
+"PartCAD 不提供任何求解器。分析由一个实现包来运行，它在 ``cae:`` 小节中声明，方式与导出或渲染的实现在各自小节中的声明完全相同（参见 "
+":ref:`cae-section` "
+"），并由以该分析命名的那个用户配置选项来指名：``caeFeaImplementation``、``caeDynamicImplementation``、``caeThermalImplementation``"
+" 和 ``caeCfdImplementation``。各默认值，以及现有的其他实现："
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:220
+msgid "package"
+msgstr "包"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:221
+msgid "solver"
+msgstr "求解器"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:222
+msgid "analyses"
+msgstr "各项分析"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:223
+msgid ""
+"`partcad-cae-calculix <https://github.com/partcad/partcad-cae-calculix>`_"
+msgstr ""
+"`partcad-cae-calculix <https://github.com/partcad/partcad-cae-calculix>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:224
+msgid "`CalculiX <https://www.calculix.de/>`_"
+msgstr "`CalculiX <https://www.calculix.de/>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:225
+msgid "``fea`` (the default)"
+msgstr "``fea`` （默认）"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:226
+msgid "`partcad-cae-elmer <https://github.com/partcad/partcad-cae-elmer>`_"
+msgstr "`partcad-cae-elmer <https://github.com/partcad/partcad-cae-elmer>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:227
+msgid "`Elmer <https://www.elmerfem.org/>`_"
+msgstr "`Elmer <https://www.elmerfem.org/>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:228
+msgid "``fea``, ``dynamic`` (the default), ``thermal`` (the default), ``cfd``"
+msgstr "``fea``、``dynamic`` （默认）、``thermal`` （默认）、``cfd``"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:229
+msgid ""
+"`partcad-cae-openfoam <https://github.com/partcad/partcad-cae-openfoam>`_"
+msgstr ""
+"`partcad-cae-openfoam <https://github.com/partcad/partcad-cae-openfoam>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:230
+msgid "`OpenFOAM <https://www.openfoam.com/>`_"
+msgstr "`OpenFOAM <https://www.openfoam.com/>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:231
+msgid "``cfd`` (the default)"
+msgstr "``cfd`` （默认）"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:232
+msgid ""
+"`partcad-cae-code-aster <https://github.com/partcad/partcad-cae-code-"
+"aster>`_"
+msgstr ""
+"`partcad-cae-code-aster <https://github.com/partcad/partcad-cae-code-"
+"aster>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:233
+msgid "`Code_Aster <https://www.code-aster.org/>`_"
+msgstr "`Code_Aster <https://www.code-aster.org/>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:234
+msgid "``fea``, ``dynamic``, ``thermal``"
+msgstr "``fea``、``dynamic``、``thermal``"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:235
+msgid "`partcad-cae-moose <https://github.com/partcad/partcad-cae-moose>`_"
+msgstr "`partcad-cae-moose <https://github.com/partcad/partcad-cae-moose>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:236
+msgid "`MOOSE <https://mooseframework.inl.gov/>`_"
+msgstr "`MOOSE <https://mooseframework.inl.gov/>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:237
+msgid "``fea``, ``dynamic``, ``thermal``, ``cfd``"
+msgstr "``fea``、``dynamic``、``thermal``、``cfd``"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:238
+msgid ""
+"`partcad-cae-code-saturne <https://github.com/partcad/partcad-cae-code-"
+"saturne>`_"
+msgstr ""
+"`partcad-cae-code-saturne <https://github.com/partcad/partcad-cae-code-"
+"saturne>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:239
+msgid "`code_saturne <https://www.code-saturne.org/>`_"
+msgstr "`code_saturne <https://www.code-saturne.org/>`_"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:240
+msgid "``cfd``"
+msgstr "``cfd``"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:242
+msgid ""
+"Each package's README says what it needs and what every parameter means. "
+"Each names a ``dockerImage`` carrying its solver and mesher, so a container "
+"runtime is all it asks of a host that has neither installed -- and each also"
+" runs a solver installed on the host, when there is no container runtime or "
+"it is turned off. ``pc cae fea --implementation`` overrides the choice for "
+"one run, and so does choosing or typing another solver in \"Analysed by\" "
+"over the model in the IDE's analysis tabs."
+msgstr ""
+"每个包的 README 都说明它需要什么以及每个参数是什么意思。每一个都指名了一个带有它的求解器和网格器的 ``dockerImage`` "
+"，所以对于两者都没有装的主机，它只要求一个容器运行时 -- 而当没有容器运行时、或者它被关掉时，每一个也都能运行装在主机上的求解器。``pc cae "
+"fea --implementation`` 可以为单次运行覆盖这个选择，而在 IDE 各分析标签页中模型上方的“Analysed "
+"by”里另选或手工输入另一个求解器也是一样的效果。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:250
+msgid ""
+"A scenario may also name its own, which is what it was written against:"
+msgstr "场景也可以指名它自己的实现，也就是它当初是针对哪一个写出来的："
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:260
+msgid ""
+"That sits between the other two: ``-i`` on the command line wins, then the "
+"scenario, then the user configuration. It is how a package ships an analysis"
+" that works for whoever opens it, without every reader first pointing their "
+"own configuration at the right place."
+msgstr ""
+"它处在另外两者之间：命令行上的 ``-i`` "
+"优先级最高，然后是场景，再然后是用户配置。正是靠这一点，一个包才能发布一项对任何打开它的人都能用的分析，而不必让每个读者先把自己的配置指到正确的地方。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:265
+msgid ""
+"A **relative** package name here -- ``calculix:fea`` rather than "
+"``//pub/feature/cae/calculix:fea`` -- means the package this one imported "
+"under that name, and is resolved from the package the declaration is written"
+" in. That is not where a name a *user* types is resolved from: ``pc cae fea "
+"-i calculix:fea`` means the ``calculix`` beside the user, like every other "
+"name a command line carries. The difference matters under ``pc test -P "
+"//...`` over a tree of packages, which runs with the tree's root current "
+"while every part in it sits one or more packages below."
+msgstr ""
+"这里的 **相对** 包名——比如 ``calculix:fea`` 而不是 ``//pub/feature/cae/calculix:fea`` "
+"——指的是本包以该名称导入的那个包，并从声明所在的那个包出发解析。 *用户* 输入的名称并不是从那里解析的： ``pc cae fea -i "
+"calculix:fea`` 指的是用户身边的那个 ``calculix`` ，就像命令行上携带的其他任何名称一样。这个区别在对一整棵包树执行 ``pc"
+" test -P //...`` 时尤其要紧：此时当前包是整棵树的根，而其中的每个零件都位于下面一层或多层的包里。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:274
+msgid ""
+"What comes back from each scenario is two things: the model, written to "
+"``<part>.<analysis>.<scenario>.<extension>`` in whichever format the "
+"implementation chose (``bracket.fea.loaded.glb``), and the **findings** -- a"
+" JSON array of what the analysis has to say about the part. ``pc test`` "
+"gains a check per analysis -- ``fea``, ``dynamic``, ``thermal``, ``cfd`` -- "
+"that runs every scenario of it and fails a part any of whose scenarios "
+"produced a finding, naming the scenario; they apply only to a part that "
+"declares the matching section, so a package of bolts pays nothing for them. "
+"There is one way to pass -- the analysis ran and reported nothing -- and "
+"everything else **fails**: a malformed section, a plugin that cannot be "
+"resolved (not a dependency, misspelt, declaring no such file type), a plugin"
+" that resolves and cannot run (no mesher, no solver, a sandbox that will not"
+" build, a crash), and an analysis that ran and found something."
+msgstr ""
+"每一个场景返回的是两样东西：模型，写入 ``<part>.<analysis>.<scenario>.<extension>`` ，格式由实现方选择（ "
+"``bracket.fea.loaded.glb`` ）；以及 **各项发现** -- 一个 JSON "
+"数组，内容是该分析对这个零件有什么要说的。``pc test`` 为每一项分析增加一项检查 -- "
+"``fea``、``dynamic``、``thermal``、``cfd`` -- "
+"它会运行该项分析的每一个场景，并让任何一个场景产生了发现的零件失败，同时指出是哪个场景；它们只适用于声明了相应小节的零件，所以一个装满螺栓的包不会为它们付出任何代价。通过只有一种方式"
+" -- 分析运行了，并且什么都没报告 -- 其他一切都算 "
+"**失败**：格式有误的小节、无法解析的插件（不是依赖、拼错了、没有声明这种文件类型）、能够解析却无法运行的插件（没有网格器、没有求解器、沙箱构建不起来、发生崩溃），以及运行了并且发现了问题的分析。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:288
+msgid ""
+"Not running is deliberately not a skip. A skip says the question does not "
+"apply here; a part that declares ``fea:`` has asked, and a plugin that was "
+"asked and delivered nothing has failed. The consequence is the point: "
+"declaring ``fea:`` in a shared package makes ``pc test`` fail for everyone "
+"who has not installed what that implementation needs. A package that does "
+"not want that should not declare the section. What the failure carries is "
+"*why* -- the implementation's own sentence, plus which implementation was "
+"asked and which machine it did not work on, because \"gmsh is not "
+"installed\" is a puzzle and the same sentence under "
+"``//pub/feature/cae/calculix:fea on Linux-aarch64`` is an answer."
+msgstr ""
+"跑不起来被刻意地不算作跳过。跳过的含义是这个问题在这里不适用；而声明了 ``fea:`` "
+"的零件已经提出了问题，被问到却什么也没给出的插件就是失败了。这个后果正是要点所在：在一个共享的包里声明 ``fea:`` "
+"，会让所有没有安装该实现所需环境的人在 ``pc test`` 时失败。不希望如此的包就不应该声明这个小节。失败信息中携带的是 *原因* "
+"——实现自己给出的那句话，再加上被询问的是哪个实现、以及它在哪台机器上没能工作，因为“gmsh 未安装”是个谜，而同一句话加上 "
+"``//pub/feature/cae/calculix:fea on Linux-aarch64`` 就成了答案。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:298
+msgid ""
+"There is **one** excuse, and it is the case where the implementation was "
+"never given the environment it says it needs. An implementation naming a "
+"``container:`` or a ``dockerImage`` is stating that a container is how what "
+"pip cannot install arrives; on a machine with no container runtime that "
+"statement has nowhere to land, nothing was ever asked, and the check skips "
+"with a ``WARNING`` carrying the whole report rather than failing. It is "
+"narrow in both directions. An implementation that names no image gets no "
+"excuse at all -- it said it runs in an ordinary sandbox, and a machine with "
+"a working sandbox is a machine it was supposed to work on. And a container "
+"runtime that *is* here removes the excuse entirely: a registry that cannot "
+"be reached, an image that will not start, a solver missing from the image "
+"are all things somebody can fix, and calling them \"unavailable\" would hide"
+" exactly the failures a plugin's own CI exists to catch."
+msgstr ""
+"只有 **一条** 可以开脱的理由，那就是实现从未获得它声称自己需要的环境。一个指定了 ``container:`` 或 ``dockerImage``"
+" 的实现，等于在声明 pip "
+"装不了的东西要靠容器来提供；在没有容器运行时的机器上，这个声明无处落地，也就从未真正问出过问题，于是该检查会以一条携带完整报告的 ``WARNING``"
+" "
+"跳过，而不是失败。这条理由在两个方向上都很窄。没有指定任何镜像的实现完全得不到开脱——它说过自己在普通沙箱里运行，而一台沙箱能正常工作的机器，本来就是它应当能工作的机器。而只要容器运行时"
+" *确实* "
+"在这里，这条理由就彻底不成立了：镜像仓库连不上、镜像启动不了、镜像里缺少求解器，这些都是有人能够修复的问题，把它们称作“不可用”，恰恰会掩盖插件自身的 "
+"CI 本就是为了捕捉的那些失败。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:311
+msgid ""
+"A Docker daemon running **Windows** containers does not count as a container"
+" runtime for this, or for choosing a sandbox. Every image PartCAD builds, "
+"pulls or documents is a Linux image, and such a daemon answers a ping and "
+"then fails every pull with ``no matching manifest for windows/amd64``."
+msgstr ""
+"运行 **Windows** 容器的 Docker 守护进程，在这里不算容器运行时，在选择沙箱时也不算。PartCAD "
+"构建、拉取或在文档中提到的每一个镜像都是 Linux 镜像，而这样的守护进程会正常响应 ping，然后对每一次拉取都报出 ``no matching "
+"manifest for windows/amd64`` 。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:316
+msgid ""
+"The same policy, from the same code, decides ``pc test``'s ``sim`` check, "
+"which holds a part, an assembly or a scene to the ``simulate:`` claims it "
+"makes: a simulator that resolved and did not run is a failure, but for the "
+"one excuse, and a simulation plugin that cannot be found is never excused. "
+"See \"Running a simulation\" in :doc:`/digital_thread/lifecycle/simulation`."
+msgstr ""
+"同样的策略，出自同一份代码，也决定着 ``pc test`` 的 ``sim`` 检查，它以零件、装配体或场景所作的 ``simulate:`` "
+"断言来约束它们：能够解析却没有运行的仿真器算失败，只有那一种免责情形除外；而找不到的仿真插件从来不被免责。参见 "
+":doc:`/digital_thread/lifecycle/simulation` 中的“Running a simulation”。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:322
+msgid ""
+"``examples/feature_cae`` is the set of cases to check an implementation "
+"against -- a cantilever analysed for stress, for its natural frequencies and"
+" for heat, and a pipe for flow, one scenario each, each with a closed-form "
+"answer to compare the solver with. The pipe's inlet and outlet are drawn "
+"with the bore's circle, so the pressure driving it is the inlet's force over"
+" exactly the bore's area. That example's ``README.md`` has what each "
+"implementation measured."
+msgstr ""
+"``examples/feature_cae`` 是用来对照检验某个实现的那套案例 -- "
+"一根悬臂梁，分别就应力、固有频率和热作分析，再加一根管子作流动分析，每项各一个场景，每一个都有解析解可以与求解器作对比。管子的入口和出口是用孔的圆来绘制的，所以驱动它的压力就是入口的力除以恰好等于孔的那个面积。该示例的"
+" ``README.md`` 里记录了每个实现所测得的结果。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:330
+msgid "See :ref:`pc cae <cae>` for the command and the units it accepts."
+msgstr "关于该命令及其接受的单位，请参见 :ref:`pc cae <cae>` 。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:333
+msgid "Agent skills"
+msgstr "智能体技能"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:335
+msgid "``/pc:sim-assembly-fea``"
+msgstr "``/pc:sim-assembly-fea``"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:336
+msgid ""
+"Turns what a simulation measured into a stress analysis of one part. It runs"
+" the assembly's ``simulate:`` entry, reads the forces and moments acting on "
+"the body the part is welded into at the end of the run, works out which of "
+"them load that part and where, and writes a new named scenario into the "
+"part's ``fea:`` section beside any already there. It is the bridge between "
+"the two halves of this phase: a simulation says what the world does to an "
+"assembly, and this turns that into the load case one part has to survive."
+msgstr ""
+"把仿真所测得的结果变成对某一个零件的应力分析。它会运行该装配体的 ``simulate:`` "
+"条目，读取运行结束时作用在该零件被焊接进去的那个刚体上的力和力矩，算出其中哪些载荷加在那个零件上以及加在哪里，然后在该零件的 ``fea:`` "
+"小节中写入一个新的具名场景，与已有的场景并列。它是这一阶段两半之间的桥梁：仿真说明世界对一个装配体做了什么，而这件事把它变成某一个零件必须承受的载荷工况。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:344
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:345
+msgid ""
+"Runs every analysis scenario as part of giving each requirement a verdict, "
+"and reports a scenario that names a ``feature:`` as evidence for that "
+"feature."
+msgstr "在给每一项需求下结论的过程中运行每一个分析场景，并把指名了某个 ``feature:`` 的场景作为该特性的证据来报告。"
+
+#: ../../source/digital_thread/lifecycle/analysis.rst:348
+msgid ""
+"There is no skill that writes an ``fea:`` section from a description. The "
+"conditions are an engineering judgement about how the part is really held "
+"and loaded, and a plausible-looking guess at them produces a plausible-"
+"looking number that is wrong."
+msgstr ""
+"没有任何技能会根据一段描述写出 ``fea:`` "
+"小节。这些条件是关于零件实际如何被固定和加载的工程判断，而对它们看似合理的猜测只会产出一个看似合理却是错的数字。"

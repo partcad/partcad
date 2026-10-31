@@ -1,0 +1,150 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/maintenance/automation.rst:3
+msgid "Automation"
+msgstr "Automatisierung"
+
+#: ../../source/maintenance/automation.rst:6
+msgid ""
+"PartCAD allows you to set CLI options and override user configurations "
+"specified in ``~/.partcad/config.yaml`` using environment variables. This "
+"can be particularly useful for setting configurations dynamically or in "
+"environments where modifying configuration files is not feasible."
+msgstr ""
+"Mit PartCAD können Sie CLI-Optionen setzen und in ``~/.partcad/config.yaml``"
+" angegebene Benutzerkonfigurationen mithilfe von Umgebungsvariablen "
+"überschreiben. Dies kann besonders nützlich sein, um Konfigurationen "
+"dynamisch festzulegen oder in Umgebungen, in denen das Ändern von "
+"Konfigurationsdateien nicht praktikabel ist."
+
+#: ../../source/maintenance/automation.rst:11
+msgid ""
+"Generally, all of PartCAD's environment variables are prefixed with ``PC``."
+msgstr ""
+"Generell sind alle Umgebungsvariablen von PartCAD mit ``PC`` vorangestellt."
+
+#: ../../source/maintenance/automation.rst:13
+msgid ""
+"For CLI options, the environment variable prefix depends on the command "
+"being used. You can use the `--help` option to determine the corresponding "
+"environment variable for each CLI option."
+msgstr ""
+"Bei CLI-Optionen hängt das Präfix der Umgebungsvariable vom verwendeten "
+"Befehl ab. Sie können die Option `--help` verwenden, um die entsprechende "
+"Umgebungsvariable für jede CLI-Option zu ermitteln."
+
+#: ../../source/maintenance/automation.rst:17
+msgid "Here are some examples:"
+msgstr "Hier sind einige Beispiele:"
+
+#: ../../source/maintenance/automation.rst:24
+msgid ""
+"Note that, these environment variables will be overridden if the CLI option "
+"is specified."
+msgstr ""
+"Beachten Sie, dass diese Umgebungsvariablen überschrieben werden, wenn die "
+"CLI-Option angegeben wird."
+
+#: ../../source/maintenance/automation.rst:26
+msgid ""
+"For user configurations, the environment variables are of the format ``PC_``"
+" followed by the configuration option name in upper snake case (camelCase "
+"word boundaries become underscores). For example, to override the "
+"``pythonSandbox`` configuration, you would set the environment variable "
+"``PC_PYTHON_SANDBOX``."
+msgstr ""
+"Bei Benutzerkonfigurationen haben die Umgebungsvariablen das Format ``PC_``,"
+" gefolgt vom Namen der Konfigurationsoption in Upper-Snake-Case (camelCase-"
+"Wortgrenzen werden zu Unterstrichen). Um zum Beispiel die Konfiguration "
+"``pythonSandbox`` zu überschreiben, würden Sie die Umgebungsvariable "
+"``PC_PYTHON_SANDBOX`` setzen."
+
+#: ../../source/maintenance/automation.rst:31
+msgid ""
+"Note that environment variable names are case-sensitive. Always use "
+"uppercase letters for the ``PC`` prefix and the rest of the variable name, "
+"as shown in the examples above."
+msgstr ""
+"Beachten Sie, dass bei Namen von Umgebungsvariablen Groß- und "
+"Kleinschreibung berücksichtigt wird. Verwenden Sie immer Großbuchstaben für "
+"das ``PC``-Präfix und den Rest des Variablennamens, wie in den obigen "
+"Beispielen gezeigt."
+
+#: ../../source/maintenance/automation.rst:34
+msgid ""
+"In this case, these environment variables will take precedence over the "
+"values specified in ``~/.partcad/config.yaml``."
+msgstr ""
+"In diesem Fall haben diese Umgebungsvariablen Vorrang vor den in "
+"``~/.partcad/config.yaml`` angegebenen Werten."
+
+#: ../../source/maintenance/automation.rst:39
+msgid "Parameter Configuration"
+msgstr "Parameterkonfiguration"
+
+#: ../../source/maintenance/automation.rst:42
+msgid ""
+"The configuration file (``~/.partcad/config.yaml``) allows users to define "
+"reusable parameters, which can be accessed dynamically within the provider "
+"configurations."
+msgstr ""
+"Die Konfigurationsdatei (``~/.partcad/config.yaml``) erlaubt es Benutzern, "
+"wiederverwendbare Parameter zu definieren, auf die innerhalb der "
+"Anbieterkonfigurationen dynamisch zugegriffen werden kann."
+
+#: ../../source/maintenance/automation.rst:45
+msgid ""
+"In ``~/.partcad/config.yaml``, parameters are stored under a parameters "
+"section."
+msgstr ""
+"In ``~/.partcad/config.yaml`` werden Parameter unter einem Abschnitt "
+"parameters gespeichert."
+
+#: ../../source/maintenance/automation.rst:47
+#: ../../source/maintenance/automation.rst:70
+msgid "Example:"
+msgstr "Beispiel:"
+
+#: ../../source/maintenance/automation.rst:57
+msgid ""
+"Object IDs are used to reference different types of objects within a "
+"package, such as sketches, parts, assemblies, scenes, interfaces, and "
+"providers."
+msgstr ""
+"Objekt-IDs werden verwendet, um verschiedene Arten von Objekten innerhalb "
+"eines Pakets zu referenzieren, etwa Skizzen, Teile, Baugruppen, Szenen, "
+"Interfaces und Anbieter."
+
+#: ../../source/maintenance/automation.rst:63
+msgid "Accessing Parameters in Providers"
+msgstr "Zugriff auf Parameter in Anbietern"
+
+#: ../../source/maintenance/automation.rst:65
+msgid ""
+"In the providers section, parameters can be referenced dynamically using a "
+"function ``get_from_config()``, ensuring that sensitive or reusable values "
+"(e.g., API keys, URLs) do not need to be hardcoded multiple times."
+msgstr ""
+"Im Abschnitt providers können Parameter dynamisch über eine Funktion "
+"``get_from_config()`` referenziert werden, wodurch sichergestellt wird, dass"
+" sensible oder wiederverwendbare Werte (z. B. API-Schlüssel, URLs) nicht "
+"mehrfach fest codiert werden müssen."

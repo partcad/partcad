@@ -1,8 +1,17 @@
-CLI command reference
-#####################
+Command Line (CLI)
+##################
 
-This page lists every command in the PartCAD command line interface. Both ``pc`` and ``partcad`` invoke the
-same tool. Run ``pc <command> --help`` at any time to see the full, up-to-date options for a command.
+The command line tools are the complete set of PartCAD features: everything PartCAD can do, it can do from
+here, and every other interface -- the editor extension, the Desktop Application, the FreeCAD add-on, the MCP
+server -- is a client of the same ``partcad-json-rpc`` service these commands talk to. Whatever one of them
+can do, a command can do too.
+
+They come from the ``partcad`` package, which carries the Python module and that service with them, and the
+main tool is called ``pc``. ``partcad`` is a second name for the same program. :doc:`/installation` has the
+ways to get them.
+
+This page lists every command. Run ``pc <command> --help`` at any time to see the full, up-to-date options
+for a command.
 
 Common options, such as ``-v``/``-q`` (verbosity), ``--no-ansi`` (plain-text logs), ``--offline``,
 ``--threads-max``, and ``-p PATH`` (select the package), apply to every command.
@@ -166,7 +175,7 @@ What either spelling produces is named by its values too -- in the log, in the c
 written to. The name lists the parameters sorted by name, and a list by its items in the order they were given,
 separated by commas, whether it was written ``include=BEND_UP,BEND_DOWN`` or handed over as a list by an
 assembly's ``params:`` or the editor: one list of values is one object in memory and one entry in the cache
-(see the ``array`` parameter type in :doc:`config_parts`). A file name is made the same way:
+(see the ``array`` parameter type in :doc:`/config_parts`). A file name is made the same way:
 ``"bolt;size=M4,length=30"`` and ``bolt -p length=30 -p size=M4`` both render to ``bolt_length_30_size_M4.svg``,
 and the list above to ``panel_include_BEND_UP_BEND_DOWN.svg``. The characters a shell or a filesystem would take
 for something else are written as ``_``, so ``room;medium=//pub/std/materials:air`` renders to
@@ -365,7 +374,7 @@ Package commands
   does not know is an error, because a typo that installs nothing looks exactly like an agent that is not
   supported yet.
 
-  With the skills, each agent is also given the **MCP server**, ``pc mcp`` (see :doc:`mcp`): a ``partcad``
+  With the skills, each agent is also given the **MCP server**, ``pc mcp`` (see :doc:`/ai_agents/mcp`): a ``partcad``
   entry in ``.mcp.json`` for Claude Code and in ``.cursor/mcp.json`` for Cursor, pointed at the package with
   ``-p``. The other servers in those files are left as they are, and the ``partcad`` entry is rewritten each
   time. ``--no-mcp`` leaves both files alone.
@@ -449,7 +458,7 @@ Object commands
   ``-s``/``-i``/``-a``/``-S`` say it is a sketch, interface, assembly, or scene instead of looking it up.
   The tests cover whether the object builds (``cad``), whether it can be manufactured or purchased
   (``manufacturability`` and the methods below it), whether an assembly's connection instructions can be
-  followed (``connect``; see "Testing the instructions" in :doc:`assy`), whether the route a machine would cut
+  followed (``connect``; see "Testing the instructions" in :doc:`/assy`), whether the route a machine would cut
   it with can be produced (``cam``; see :ref:`pc cam <cam>`), whether every scenario of the engineering
   analyses a part asks for comes back clean (``fea``, ``dynamic``, ``thermal`` and ``cfd``; see
   :ref:`pc cae <cae>`), whether a
@@ -457,7 +466,7 @@ Object commands
   whether the object has the ports, interfaces and physical properties its ``requirements:`` say it has to
   (``requirements``; see :ref:`requirements`). Those last seven apply only to an object that declares the
   matching section, so a package that declares none pays nothing for them. Every check is listed, with when it
-  applies and what to do when it fails, in :doc:`digital_thread/testing`. ``requirements`` fails a
+  applies and what to do when it fails, in :doc:`/digital_thread/lifecycle/testing`. ``requirements`` fails a
   requirement on something it cannot find out -- a mass with no material to work it out from -- rather than
   passing it, and says, for each requirement not met, what it found instead. The features a section lists are
   prose, and are for the ``/pc:validate`` agent skill to judge.
@@ -528,14 +537,14 @@ Object commands
   cannot be found is never excused. A declaration with no ``validation:`` is not run by ``pc test``: it is
   skipped when a package is tested and fails when the object is tested by name. This command is for asking on
   purpose: one simulation by name, and everything the plugin reported, which is why it does run such a
-  declaration and says it ran. See "Running a simulation" in :doc:`simulation`.
+  declaration and says it ran. See "Running a simulation" in :doc:`/digital_thread/lifecycle/simulation`.
 
   PartCAD implements no simulator: a package imports one and names it in ``simulation:``
   (`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ is the MuJoCo one and
   `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ the Gazebo one; each also declares
   the reader, the writer and the ``pc ide open`` entry for that engine's own scene format). The *scene* does
   have a built-in default -- an empty world holding the object -- so a simulation of a part standing on its
-  own is a few lines. See :doc:`simulation` and ``examples/feature_simulate``.
+  own is a few lines. See :doc:`/digital_thread/lifecycle/simulation` and ``examples/feature_simulate``.
 
 ``pc info``
   Show detailed information about a part, assembly, scene, or software, including its parameters. Name the
@@ -760,7 +769,7 @@ Object commands
   the others are run all the same -- so it can be used as a gate.
 
   Who runs the analysis is ``<package>:<file type>``. It defaults to the :doc:`user configuration
-  <configuration>` option named after the analysis — ``caeFeaImplementation`` (``//pub/feature/cae/calculix:fea``),
+  </maintenance/automation>` option named after the analysis — ``caeFeaImplementation`` (``//pub/feature/cae/calculix:fea``),
   ``caeDynamicImplementation`` (``//pub/feature/cae/elmer:dynamic``), ``caeThermalImplementation``
   (``//pub/feature/cae/elmer:thermal``) and ``caeCfdImplementation`` (``//pub/feature/cae/openfoam:cfd``) — a
   scenario's own ``implementation:`` outranks that, and ``-i``/``--implementation`` outranks both for one run. PartCAD
@@ -789,7 +798,7 @@ Object commands
   well.
 
   **A machine with no container runtime is the one excuse.** An implementation naming a ``container:`` or a
-  ``dockerImage`` (see :doc:`configuration`) is saying that a container is how what pip cannot install
+  ``dockerImage`` (see :doc:`/config_package`) is saying that a container is how what pip cannot install
   arrives; where there is no container runtime to run it in, nothing was ever asked, and the check skips with
   a ``WARNING`` carrying the whole report. It still declares the requirements that let it run in a ``conda``
   or ``venv`` sandbox, so a host with the non-Python pieces installed natively runs it there and a failure
@@ -1135,7 +1144,7 @@ Object commands
   * the item going on: everything placed before the step in grey — the assembly so far, which is what the
     reader has in front of them — and the item in blue, held off the joint, with a line drawn across the gap
     it opens. That gap is half of the largest dimension of the item and what it is joined to, unless the step
-    sets ``exploded:`` in its ``connect:`` or ``connectPorts:`` section (see :doc:`assy`);
+    sets ``exploded:`` in its ``connect:`` or ``connectPorts:`` section (see :doc:`/assy`);
   * when it is fastened, beside it, the fasteners going in: only the parts they join, in place, and the
     fasteners pulled out of their holes along the line they go in by;
   * the words of the ASSY file — the node's ``description`` — and below them, smaller, the model's account of
@@ -1418,7 +1427,7 @@ Interacting with AI agents
     pc -p packages/robot mcp --allow-path ../shared  # a package below the root, and one more folder
 
   The agent may name files only inside the workspace unless ``--allow-path DIR`` (repeatable) or
-  ``--allow-any-path`` says otherwise. :doc:`mcp` lists the tools and how each MCP client is set up.
+  ``--allow-any-path`` says otherwise. :doc:`/ai_agents/mcp` lists the tools and how each MCP client is set up.
 
 *****************
 Workflow commands

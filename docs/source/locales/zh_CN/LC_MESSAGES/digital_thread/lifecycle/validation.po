@@ -1,0 +1,281 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:2
+msgid "Validation"
+msgstr "校验"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:12
+msgid ""
+"Validation is the question whether the object is what it was asked to be, "
+"and whether every claim its declaration makes holds: that it builds, that it"
+" can be made, that its parts do not overlap, that it weighs what it has to, "
+"that it does what its simulations say. It is asked last and asked again "
+"whenever anything changes, which is what makes the rest of the thread "
+"trustworthy."
+msgstr ""
+"校验问的是：这个对象是否就是当初所要求的样子，以及它声明中所作的每一条断言是否成立：它能构建、它能被制造、它的零件之间不重叠、它的重量符合要求、它做到了它的各个仿真所声明的事。它是最后被问到的，而且只要有任何东西发生变化就会被再问一遍，正是这一点让主线的其余部分值得信赖。"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:19
+msgid "Three ways of asking"
+msgstr "三种提问方式"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:21
+msgid "``pc test``"
+msgstr "``pc test``"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:22
+msgid ""
+"Every claim that can be measured, by a list of checks that each ask one "
+"thing -- whether it builds, whether it can be made or bought, whether its "
+"parts overlap, whether its ports and physical properties are the ones "
+"required. Each check applies only to the objects it has something to ask of,"
+" and says what it found when it fails. "
+":doc:`/digital_thread/lifecycle/testing` lists them all."
+msgstr ""
+"每一条可测量的断言，由一张检查清单来问，其中每一项检查只问一件事 -- "
+"它能不能构建、它能不能被制造或采购、它的零件之间是否重叠、它的端口和物理属性是否就是所要求的那些。每一项检查只适用于它确实有东西可问的那些对象，并在失败时说明它发现了什么。:doc:`/digital_thread/lifecycle/testing`"
+" 把它们全都列了出来。"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:28
+msgid "``pc sim``"
+msgstr "``pc sim``"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:29
+msgid ""
+"Every claim about behaviour: each simulation an object declares is run, and "
+"its ``validation:`` condition has to hold. ``pc test`` runs the same "
+"simulations as its ``sim`` check; ``pc sim --json`` also prints everything "
+"the simulator reported, which is how a validation that passed for the wrong "
+"reason is found."
+msgstr ""
+"每一条关于行为的断言：对象所声明的每一个仿真都会被运行，而它的 ``validation:`` 条件必须成立。``pc test`` 作为它的 "
+"``sim`` 检查项运行同样这些仿真；而 ``pc sim --json`` "
+"还会把仿真器报告的全部内容打印出来，一个因错误原因而通过的校验正是这样被发现的。"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:35
+#: ../../source/digital_thread/lifecycle/validation.rst:142
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:36
+msgid ""
+"Everything else. The agent skill runs ``pc test`` and ``pc sim``, renders "
+"the object from every angle that matters with its ports and interfaces "
+"drawn, reads the bill of materials and the assembly instructions of an "
+"assembly, and gives every requirement a verdict -- met, not met, or \"cannot"
+" tell\" -- with the evidence named. The features of the requirements, being "
+"prose, are judged here and only here."
+msgstr ""
+"其他的一切。这项智能体技能会运行 ``pc test`` 和 ``pc sim`` "
+"、从每一个重要的角度渲染该对象并画出它的端口和接口、读取装配体的物料清单和装配说明，并给每一项需求下一个结论 -- 满足、不满足，或者“无法判定” --"
+" 并指明依据。需求中的那些特性，由于是散文，是在这里、也只在这里被判定的。"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:44
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:46
+msgid ""
+"**Validation** is always there, since every object has checks. It holds "
+"three tabs, two of which have anything in them today, and each of those has "
+"a chapter of its own:"
+msgstr "**Validation** 始终都在，因为每一个对象都有检查项。它下面有三个标签页，其中两个目前里面有内容，而这两个各有自己的一章："
+
+#: ../../source/digital_thread/lifecycle/validation.rst:50
+msgid ":doc:`Test </digital_thread/lifecycle/testing>`"
+msgstr ":doc:`Test </digital_thread/lifecycle/testing>`"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:51
+msgid ""
+"Every check ``pc test`` runs, in the order it runs them, each with its "
+"verdict -- and, for the one selected, what it asks, what it found this time,"
+" and what to do about it. The first tab, and always enabled."
+msgstr ""
+"``pc test`` 运行的每一项检查，按它运行的顺序排列，各带一个结论 -- "
+"而对所选中的那一项，还会说明它问的是什么、它这一次发现了什么，以及该怎么处理。它是第一个标签页，并且永远启用。"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:55
+msgid ":ref:`Simulation <sim-in-the-ui>`"
+msgstr ":ref:`Simulation <sim-in-the-ui>`"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:56
+msgid ""
+"Every simulation the object declares, run and played back: whether its "
+"``validation:`` held, the video of the run, and the ``before`` and ``after``"
+" the expression was evaluated over. For a part, an assembly or a scene that "
+"declares ``simulate:``."
+msgstr ""
+"对象所声明的每一个仿真，运行并回放：它的 ``validation:`` 是否成立、该次运行的视频，以及该表达式所依据的那个 ``before`` 和 "
+"``after`` 。适用于声明了 ``simulate:`` 的零件、装配体或场景。"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:61
+msgid "**Process Emulation**"
+msgstr "**Process Emulation**"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:62
+msgid ""
+"The question of how *making* it would go. Reserved, always disabled, and "
+"holding nothing yet (see :doc:`/digital_thread/lifecycle/operations`)."
+msgstr ""
+"关于 *制造* 它的过程会怎么走的问题。目前预留，始终禁用，里面还什么都没有（参见 "
+":doc:`/digital_thread/lifecycle/operations` ）。"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:65
+msgid ""
+"The Validation group: its three tabs, every check pc test runs, and the "
+"verdicts"
+msgstr "Validation 组：它的三个标签页、pc test 运行的每一项检查，以及各项结论"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:70
+msgid ""
+"Both working tabs **run** what they show, the first time they are looked at "
+"-- the checks as ``pc test <object>`` runs them, a simulation as ``pc sim -f"
+" <name>`` runs it -- and through the same cache, so the panel and the "
+"command line give the same answer and **Run again** is how to ask afresh. An"
+" object that belongs to no package, such as a shape shown from a script, has"
+" nothing to ask PartCAD about, and the Test tab says so."
+msgstr ""
+"两个已经可用的标签页在第一次被查看时都会 **运行** 它们所显示的东西 -- 各项检查按 ``pc test <object>`` "
+"的方式运行，某个仿真按 ``pc sim -f <name>`` 的方式运行 -- 并且走同一套缓存，所以面板和命令行给出的答案是一致的，而 **Run"
+" again** 就是重新提问的办法。不属于任何包的对象，比如从脚本显示出来的形状，没有什么可以向 PartCAD 询问的，Test 标签页会如实说明。"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:79
+msgid "On the command line"
+msgstr "在命令行中"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:81
+msgid ""
+"``pc test`` is the whole of this phase in one command. It takes an object, "
+"or ``-P <package>`` for every object of a package and everything below it, "
+"and runs every check that has something to ask of each one:"
+msgstr ""
+"``pc test`` 就是这整个阶段的单条命令形式。它接受一个对象，或者用 ``-P <package>`` "
+"接受某个包及其下方一切的每一个对象，并对每一个对象运行所有对它有东西可问的检查："
+
+#: ../../source/digital_thread/lifecycle/validation.rst:92
+msgid ""
+"``pc sim`` runs the simulations alone -- ``-f <name>`` for one of them, and "
+"``--json`` to print everything the simulator reported rather than only the "
+"verdict. ``pc cae fea`` and its siblings run the engineering analyses, whose"
+" findings ``pc test`` reports as checks of their own (see "
+":doc:`/digital_thread/lifecycle/analysis`)."
+msgstr ""
+"``pc sim`` 只运行各个仿真 -- 用 ``-f <name>`` 运行其中一个，用 ``--json`` "
+"打印仿真器所报告的全部内容而不只是结论。``pc cae fea`` 及其同族则运行各项工程分析，而它们的发现会被 ``pc test`` "
+"作为各自同名的检查项报告出来（参见 :doc:`/digital_thread/lifecycle/analysis` ）。"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:98
+msgid ""
+"Every verdict is cached under everything it depends on, so the command line,"
+" the panel and CI give the same answer and an unchanged object costs a "
+"lookup."
+msgstr "每一个结论都按它所依赖的一切内容被缓存，所以命令行、面板和 CI 给出的答案是一致的，而一个没有变化的对象只需付出一次查表的代价。"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:104
+msgid "Simulating a scene"
+msgstr "对一个场景做仿真"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:106
+msgid ""
+"A scene can be the thing a claim is about, not only the world it is tested "
+"in: a stack of blocks that stands, a pile that does not slide. It declares "
+"``simulate:`` exactly as a part or an assembly does (see :ref:`sim-"
+"declaring`), and is simulated as the subject of a world -- the built-in one,"
+" or a scene of the package's own -- whose link places it with ``scene:``, "
+"since PartCAD hands that world ``subject_kind: scene``:"
+msgstr ""
+"场景可以是断言所针对的那样东西，而不只是它被测试所处的那个世界：一摞立得住的方块、一堆不滑动的东西。它声明 ``simulate:`` "
+"的方式与零件或装配体完全相同（参见 :ref:`sim-declaring` ），并作为某个世界的被仿真对象来仿真 -- "
+"可以是内置的那个世界，也可以是该包自己的某个场景 -- 而那个世界的链接会用 ``scene:`` 来放置它，因为 PartCAD 交给那个世界的是 "
+"``subject_kind: scene`` ："
+
+#: ../../source/digital_thread/lifecycle/validation.rst:125
+msgid ""
+"``pc sim stable`` runs it, and ``pc test`` holds the scene to it as its "
+"``sim`` check like any other object. ``examples/feature_simulate`` declares "
+"its three stacks this way."
+msgstr ""
+"``pc sim stable`` 会运行它，而 ``pc test`` 会像对其他任何对象一样，以它的 ``sim`` "
+"检查项来约束这个场景。``examples/feature_simulate`` 就是这样声明它那三摞方块的。"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:130
+msgid "Validating continuously"
+msgstr "持续地校验"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:132
+msgid ""
+"A check that runs only when somebody remembers to run it is a check that "
+"stops being run. ``pc test -P <package>...`` in CI holds every change to "
+"every check of every object; ``--fast-only`` leaves out the objects that say"
+" they are slow (see :ref:`fast-only`). Verdicts are cached under everything "
+"they depend on, so an unchanged object costs a lookup, and ``pc --cache-"
+"bypass test`` asks again regardless."
+msgstr ""
+"一项只有在有人想起来才会运行的检查，就是一项终将不再被运行的检查。CI 中的 ``pc test -P <package>...`` "
+"会用每一个对象的每一项检查来约束每一次改动；而 ``--fast-only`` 会把那些自称很慢的对象排除在外（参见 :ref:`fast-only` "
+"）。各项结论都按它们所依赖的一切内容被缓存，所以一个没有变化的对象只需付出一次查表的代价，而 ``pc --cache-bypass test`` "
+"则不管怎样都会重新提问。"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:140
+msgid "Agent skills"
+msgstr "智能体技能"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:143
+msgid ""
+"The skill for this phase. It runs ``pc test`` and ``pc sim``, renders the "
+"object from every angle that matters with its ports and interfaces drawn, "
+"reads the bill of materials and the assembly instructions of an assembly, "
+"and gives every requirement a verdict with the evidence named. The "
+"``features:`` half of the requirements -- prose, which no program can "
+"measure -- is judged here and nowhere else."
+msgstr ""
+"这个阶段所用的技能。它会运行 ``pc test`` 和 ``pc sim`` "
+"、从每一个重要的角度渲染该对象并画出它的端口和接口、读取装配体的物料清单和装配说明，并给每一项需求下一个结论并指明依据。需求中 "
+"``features:`` 那一半 -- 散文，任何程序都无法测量它 -- 是在这里、也只在这里被判定的。"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:150
+msgid "``/pc:sim-assembly-fea``"
+msgstr "``/pc:sim-assembly-fea``"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:151
+msgid ""
+"Turns the forces a simulation measured into an FEA scenario on one part, "
+"which is then checked like any other (see "
+":doc:`/digital_thread/lifecycle/analysis`)."
+msgstr ""
+"把仿真所测得的那些力变成某一个零件上的一个 FEA 场景，而它随后会像其他任何场景一样被检查（参见 "
+":doc:`/digital_thread/lifecycle/analysis` ）。"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:155
+msgid "``/pc:render``"
+msgstr "``/pc:render``"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:156
+msgid ""
+"Produces the views that are the evidence for a feature nothing can measure."
+msgstr "产出那些视图，它们就是某个无法被测量的特性的证据。"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:158
+msgid ""
+"A skill runs the same commands, through the same cache, so a verdict an "
+"agent reports is a verdict you can reproduce by hand."
+msgstr "技能运行的是同样的命令，走的是同一套缓存，所以智能体报告的结论，你都可以自己手工复现出来。"

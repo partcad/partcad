@@ -318,7 +318,7 @@ at all).
   collecting for that check and that object (`test._report`). A check says whether it applies in
   `inapplicable()` -- from what the object is and declares, without building it or reading the cache -- and its
   `test()` asks the same method, so the two cannot disagree. The catalog is the text of every check, read by
-  the IDE's Test tab and generated into `docs/source/digital_thread/testing.rst`
+  the IDE's Test tab and generated into `docs/source/digital_thread/lifecycle/testing.rst`
   (`python -m partcad.test.catalog --write`); a test fails when a check has no entry or the page is stale. The
   interference check leaves an assembly behind for each pair it reports (`test/interference_artifact.py`): the
   two parts where the assembly places them and a sub-assembly `interference` of what they share, as `brep`

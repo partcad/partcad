@@ -6,7 +6,7 @@
 """What each check of `pc test` is, written once for the IDE and the documentation.
 
 The IDE's Test tab shows an entry of 'partcad.test.catalog' beside each verdict,
-and 'docs/source/digital_thread/testing.rst' lists the same entries. Neither
+and 'docs/source/digital_thread/lifecycle/testing.rst' lists the same entries. Neither
 may describe a check that does not exist, leave one out, or say something the
 other does not.
 """

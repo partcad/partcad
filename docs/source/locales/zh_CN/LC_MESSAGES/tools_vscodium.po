@@ -1,0 +1,106 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/tools_vscodium.rst:3
+msgid "VSCodium"
+msgstr "VSCodium"
+
+#: ../../source/tools_vscodium.rst:5
+msgid ""
+"`VSCodium <https://vscodium.com/>`_ is a build of the same source Visual "
+"Studio Code is built from, with Microsoft's branding, telemetry and "
+"marketplace configuration removed, published under the MIT license. The "
+"PartCAD extension runs in it exactly as it does in Visual Studio Code -- it "
+"is the same ``.vsix`` -- and everything in :doc:`/tools_vscode` applies here"
+" too."
+msgstr ""
+"`VSCodium <https://vscodium.com/>`_ 是用 Visual Studio Code "
+"所用的同一份源码构建出来的版本，其中去掉了 Microsoft 的品牌标识、遥测和应用市场配置，以 MIT 许可证发布。PartCAD "
+"扩展在它里面的运行方式与在 Visual Studio Code 中完全相同 -- 用的就是同一个 ``.vsix`` -- 而 "
+":doc:`/tools_vscode` 中的一切在这里同样适用。"
+
+#: ../../source/tools_vscodium.rst:10
+msgid "Two things differ, and both are about where extensions come from."
+msgstr "有两点不同，而两者都关乎扩展从哪里来。"
+
+#: ../../source/tools_vscodium.rst:14
+msgid "Installing"
+msgstr "安装"
+
+#: ../../source/tools_vscodium.rst:16
+msgid ""
+"The easiest way is to let PartCAD do it, which fetches the ``.vsix`` from "
+"the GitHub release rather than from a marketplace:"
+msgstr "最简单的办法是让 PartCAD 来做，它会从 GitHub 发布页而不是从某个应用市场取那个 ``.vsix`` ："
+
+#: ../../source/tools_vscodium.rst:23
+msgid ""
+"With no ``--with``, ``pc ide install`` takes the first of ``partcad-ide``, "
+"``codium`` and ``code`` it finds on the ``PATH``, so on a machine with only "
+"VSCodium that is already VSCodium. By hand:"
+msgstr ""
+"不加 ``--with`` 时，``pc ide install`` 会取 ``partcad-ide`` 、 ``codium`` 和 "
+"``code`` 中在 ``PATH`` 上最先找到的那一个，所以在只装了 VSCodium 的机器上，那本来就是 VSCodium。手工安装："
+
+#: ../../source/tools_vscodium.rst:32
+msgid "The marketplace"
+msgstr "应用市场"
+
+#: ../../source/tools_vscodium.rst:34
+msgid ""
+"VSCodium is configured for `Open VSX <https://open-vsx.org/>`_ rather than "
+"the Visual Studio Marketplace, whose terms restrict it to Microsoft's own "
+"products. So ``codium --install-extension PartCAD.partcad-official`` "
+"resolves against Open VSX, and what is published there may lag the Visual "
+"Studio Marketplace. Installing the ``.vsix`` from the `release "
+"<https://github.com/partcad/partcad/releases>`_ -- which is what ``pc ide "
+"install`` does -- sidesteps that and is always the current version."
+msgstr ""
+"VSCodium 配置的是 `Open VSX <https://open-vsx.org/>`_ 而不是 Visual Studio "
+"Marketplace，后者的条款把它限制在 Microsoft 自己的产品上。所以 ``codium --install-extension "
+"PartCAD.partcad-official`` 是向 Open VSX 解析的，而那里发布的版本可能落后于 Visual Studio "
+"Marketplace。从 `release <https://github.com/partcad/partcad/releases>`_ 安装那个 "
+"``.vsix`` -- 也就是 ``pc ide install`` 所做的事 -- 可以绕开这一点，而且拿到的总是当前版本。"
+
+#: ../../source/tools_vscodium.rst:41
+msgid ""
+"The same holds for the extensions PartCAD works alongside. Pylance in "
+"particular is proprietary and licensed for Microsoft's products only, so it "
+"is not available here; open-source Python type checking is."
+msgstr ""
+"对与 PartCAD 配套使用的那些扩展也是同样的情况。尤其是 Pylance，它是专有的、而且只授权用于 Microsoft "
+"的产品，所以这里用不了；而开源的 Python 类型检查是可以用的。"
+
+#: ../../source/tools_vscodium.rst:46
+msgid "Or take the whole thing"
+msgstr "或者干脆整套拿走"
+
+#: ../../source/tools_vscodium.rst:48
+msgid ""
+"The :ref:`Desktop Application <partcad-ide>` *is* VSCodium -- rebranded, "
+"with the PartCAD extension, the extensions PartCAD works with, and the "
+"command line tools already inside it, opening in the PartCAD workbench. If "
+"you are installing VSCodium in order to use PartCAD, install that instead "
+"and skip this page."
+msgstr ""
+":ref:`Desktop Application <partcad-ide>` *就是* VSCodium -- 换了品牌，里面已经装好了 "
+"PartCAD 扩展、与 PartCAD 配套的那些扩展以及那套命令行工具，启动后直接进入 PartCAD 工作台。如果你装 VSCodium "
+"的目的就是为了用 PartCAD，那就直接装它，并跳过本页。"

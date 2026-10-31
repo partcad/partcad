@@ -1,0 +1,135 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:5
+msgid "Assembly"
+msgstr "Baugruppe"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:7
+msgid ""
+"**Assembly** is the assembly instruction book: a page per step, drawn, to "
+"read here or save. It is for an assembly, and it is what :doc:`Build "
+"</digital_thread/lifecycle/manufacturing_build>` lists the steps of -- the "
+"same steps, in the same order, as a document."
+msgstr ""
+"**Assembly** ist das Montageanleitungsbuch: eine Seite je Schritt, "
+"gezeichnet, zum Lesen hier oder zum Speichern. Es ist für eine Baugruppe, "
+"und es ist das, wovon :doc:`Build "
+"</digital_thread/lifecycle/manufacturing_build>` die Schritte auflistet -- "
+"dieselben Schritte, in derselben Reihenfolge, als Dokument."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:12
+msgid ""
+"The book is written from the assembly itself. Each link of the ASSY file "
+"says what it is joined to and how -- pushed, snapped or screwed in -- so the"
+" step that adds it can be written out for a person to follow, with the two "
+"parts drawn pulled apart by the ``exploded:`` gap of the connection. Nothing"
+" about the book is declared separately from the assembly, which is why it "
+"cannot fall out of step with it."
+msgstr ""
+"Das Buch wird aus der Baugruppe selbst geschrieben. Jeder Link der ASSY-"
+"Datei sagt, womit und wie er gefügt wird -- gedrückt, eingeschnappt oder "
+"eingeschraubt --, sodass der Schritt, der ihn hinzufügt, für einen Menschen "
+"zum Nachvollziehen ausgeschrieben werden kann, mit den zwei Teilen um den "
+"``exploded:``-Spalt der Verbindung auseinandergezogen gezeichnet. Nichts am "
+"Buch wird getrennt von der Baugruppe deklariert, und darum kann es nicht aus"
+" dem Takt mit ihr fallen."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:20
+msgid "In the UI"
+msgstr "In der Benutzeroberfläche"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:22
+msgid ""
+"The document, as **PDF** or **HTML**, with **Recursive** and **Build parts**"
+" -- which are ``pc instructions -r -b`` -- and **Save…**."
+msgstr ""
+"Das Dokument, als **PDF** oder **HTML**, mit **Recursive** und **Build "
+"parts** -- das sind ``pc instructions -r -b`` -- und **Save…**."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:25
+msgid ""
+"The Manufacturing group's Assembly tab: the assembly instruction book, page "
+"by page"
+msgstr ""
+"Der Assembly-Tab der Gruppe Manufacturing: das Montageanleitungsbuch, Seite "
+"für Seite"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:30
+msgid ""
+"Manufacturing is for a part or an assembly; for a scene, a sketch or an "
+"interface the whole group is disabled, and this tab is for an assembly "
+"alone."
+msgstr ""
+"Manufacturing ist für ein Teil oder eine Baugruppe; für eine Szene, eine "
+"Skizze oder ein Interface ist die ganze Gruppe deaktiviert, und dieser Tab "
+"ist allein für eine Baugruppe."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:34
+msgid "On the command line"
+msgstr "Auf der Befehlszeile"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:43
+msgid ""
+"``-r`` puts in the steps of every sub-assembly that is built, each just "
+"before the step that adds it, and ``-b`` how to make every part that is "
+"built, each just before the step that first needs it. Both read the "
+":doc:`Build vs Buy </digital_thread/lifecycle/manufacturing_bvb>` choices "
+"made on this machine."
+msgstr ""
+"``-r`` fügt die Schritte jeder Unterbaugruppe ein, die gebaut wird, jeweils "
+"unmittelbar vor dem Schritt, der sie hinzufügt, und ``-b`` die Herstellung "
+"jedes Teils, das gebaut wird, jeweils unmittelbar vor dem Schritt, der es "
+"zuerst braucht. Beide lesen die :doc:`Build vs Buy "
+"</digital_thread/lifecycle/manufacturing_bvb>`-Entscheidungen, die auf "
+"diesem Rechner getroffen wurden."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:50
+msgid "How the steps are decided"
+msgstr "Wie die Schritte entschieden werden"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:52
+msgid ""
+"See :ref:`how an assembly is manufactured <assembly-manufacturing>` and "
+":doc:`/assy` for what each ``connect:`` says about the joining -- the "
+"mating, the ``how:``, the torque and the thread -- and "
+":doc:`/digital_thread/lifecycle/testing` for the ``connect`` check, which is"
+" what reports a step the declaration says nothing about."
+msgstr ""
+"Siehe :ref:`wie eine Baugruppe gefertigt wird <assembly-manufacturing>` und "
+":doc:`/assy` dazu, was jedes ``connect:`` über das Fügen sagt -- die "
+"Paarung, das ``how:``, das Drehmoment und das Gewinde -- und "
+":doc:`/digital_thread/lifecycle/testing` für die ``connect``-Prüfung, die "
+"das ist, was einen Schritt berichtet, über den die Deklaration nichts sagt."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:59
+msgid "Agent skills"
+msgstr "Agent-Skills"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:61
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:62
+msgid ""
+"Reads the assembly instructions as part of giving a requirement its verdict."
+msgstr ""
+"Liest die Montageanweisungen, um einer Anforderung ihr Urteil zu geben."

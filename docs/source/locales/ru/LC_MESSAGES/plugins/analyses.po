@@ -1,0 +1,349 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/plugins/analyses.rst:3
+msgid "Analyses and toolpaths"
+msgstr "Расчёты и траектории"
+
+#: ../../source/plugins/analyses.rst:5
+msgid ""
+"``cae:`` and ``cam:`` are two more sections of the same shape as :doc:`an "
+"output type </plugins/output>` -- a ``path`` to a script, the sandbox it "
+"needs, and the parameters it is handed -- and they are where **an "
+"engineering analysis** and **a machine route** are implemented."
+msgstr ""
+"``cae:`` и ``cam:`` -- ещё два раздела такого же вида, как :doc:`тип вывода "
+"</plugins/output>`: ``path`` к скрипту, нужная ему песочница и те параметры,"
+" которые ему передаются, -- и именно в них реализуются **инженерный расчёт**"
+" и **траектория для станка**."
+
+#: ../../source/plugins/analyses.rst:10
+msgid ""
+"They are the two kinds of plugin where the *question* lives on the object "
+"and only the *answer* lives in the plugin. A part says what holds it, what "
+"it carries and how it is heated, in an ``fea:``, ``dynamic:``, ``thermal:`` "
+"or ``cfd:`` section; it says what is cut out of it in its ``manufacturing:``"
+" section. Those are properties of the part rather than of whoever is asked "
+"about it -- a bracket is bolted down at the same holes whichever solver "
+"runs, and a panel is 18 mm thick whichever router cuts it -- so the plugin "
+"supplies the solver and never the conditions."
+msgstr ""
+"Это два вида плагинов, где *вопрос* живёт на объекте, а в плагине живёт "
+"только *ответ*. Деталь говорит, что её держит, что она несёт и как она "
+"нагревается, в разделе ``fea:``, ``dynamic:``, ``thermal:`` или ``cfd:``; "
+"она говорит, что из неё вырезается, в своём разделе ``manufacturing:``. Это "
+"свойства детали, а не того, кого о ней спрашивают -- кронштейн привинчен за "
+"те же отверстия, какой бы решатель ни работал, а панель толщиной 18 мм, "
+"какой бы фрезер её ни резал, -- поэтому плагин поставляет решатель и никогда"
+" условия."
+
+#: ../../source/plugins/analyses.rst:20
+msgid "What they are for"
+msgstr "Для чего они нужны"
+
+#: ../../source/plugins/analyses.rst:22
+msgid "``cae:`` -- analyses"
+msgstr "``cae:`` -- расчёты"
+
+#: ../../source/plugins/analyses.rst:23
+msgid ""
+"Structural analysis (``fea``), the frequencies a part rings at "
+"(``dynamic``), heat transfer (``thermal``) and fluid flow (``cfd``). A "
+"plugin wraps a solver and a mesher and reports **findings**: what it has to "
+"say about the part."
+msgstr ""
+"Расчёт прочности (``fea``), частоты, на которых звенит деталь (``dynamic``),"
+" теплопередача (``thermal``) и течение жидкости (``cfd``). Плагин "
+"оборачивает решатель и построитель сетки и сообщает **находки**: то, что он "
+"может сказать о детали."
+
+#: ../../source/plugins/analyses.rst:27
+msgid "``cam:`` -- toolpaths"
+msgstr "``cam:`` -- траектории"
+
+#: ../../source/plugins/analyses.rst:28
+msgid ""
+"The program a machine cuts the part with. A plugin wraps a post-processor "
+"for a controller that wants a dialect of its own."
+msgstr ""
+"Программа, по которой станок режет деталь. Плагин оборачивает постпроцессор "
+"для контроллера, которому нужен собственный диалект."
+
+#: ../../source/plugins/analyses.rst:31
+msgid ""
+"The reason both are plugins is the same: a solver is somebody's program with"
+" a release cycle, a licence and an install procedure of its own, and a "
+"controller dialect is somebody's firmware. PartCAD ships the concept -- the "
+"sections, the sandbox, the scenarios, the caching, the checks -- and a "
+"package supplies the program."
+msgstr ""
+"Причина, по которой и то и другое является плагинами, одна: решатель -- это "
+"чья-то программа со своим циклом выпуска, своей лицензией и своей процедурой"
+" установки, а диалект контроллера -- это чья-то прошивка. PartCAD поставляет"
+" концепцию -- разделы, песочницу, сценарии, кэширование, проверки, -- а "
+"пакет поставляет программу."
+
+#: ../../source/plugins/analyses.rst:38
+msgid "Using one"
+msgstr "Как им пользоваться"
+
+#: ../../source/plugins/analyses.rst:40
+msgid ""
+"**For an analysis**, PartCAD ships no implementation, so one has to be "
+"named. The user configuration option for each analysis says which package "
+"and file type runs it by default -- ``caeFeaImplementation``, "
+"``caeDynamicImplementation``, ``caeThermalImplementation``, "
+"``caeCfdImplementation``:"
+msgstr ""
+"**Для расчёта** PartCAD не поставляет реализации, поэтому её надо назвать. "
+"Параметр пользовательской конфигурации для каждого расчёта говорит, какой "
+"пакет и какой тип файла выполняет его по умолчанию: "
+"``caeFeaImplementation``, ``caeDynamicImplementation``, "
+"``caeThermalImplementation``, ``caeCfdImplementation``:"
+
+#: ../../source/plugins/analyses.rst:51
+msgid ""
+"A scenario may also name its own with ``implementation:``, which is how a "
+"package ships an analysis that works for whoever opens it. The order is: "
+"``-i`` on the command line, then the scenario, then the user configuration."
+msgstr ""
+"Сценарий может также назвать свою через ``implementation:``, и именно так "
+"пакет поставляет расчёт, который работает у того, кто его откроет. Порядок "
+"таков: ``-i`` в командной строке, затем сценарий, затем пользовательская "
+"конфигурация."
+
+#: ../../source/plugins/analyses.rst:55
+msgid ""
+"**For a route**, PartCAD *does* ship one -- ``//builtin/cam`` writes G-code,"
+" and ``camImplementation`` names it by default:"
+msgstr ""
+"**Для траектории** PartCAD реализацию *всё же* поставляет: ``//builtin/cam``"
+" пишет G-код, а ``camImplementation`` называет его по умолчанию:"
+
+#: ../../source/plugins/analyses.rst:64
+msgid ""
+":doc:`/digital_thread/lifecycle/analysis` and :ref:`machine routes <cam-"
+"routes>` are the chapters on using these; the list of solver packages there "
+"is the list of plugins that exist."
+msgstr ""
+":doc:`/digital_thread/lifecycle/analysis` и :ref:`траектории для станка "
+"<cam-routes>` -- это главы о том, как ими пользоваться; список пакетов "
+"решателей там и является списком существующих плагинов."
+
+#: ../../source/plugins/analyses.rst:69
+msgid "Writing one"
+msgstr "Как написать свой"
+
+#: ../../source/plugins/analyses.rst:81
+msgid ""
+"Three things differ from an output type, and all three follow from an "
+"analysis not being a file type of the object:"
+msgstr ""
+"От типа вывода отличаются три вещи, и все три следуют из того, что расчёт не"
+" является типом файла объекта:"
+
+#: ../../source/plugins/analyses.rst:84
+msgid ""
+"**There is no built-in package to fall back on.** An export implementation "
+"cannot stand in for an analysis, and an ``fea`` declared under ``export:`` "
+"is an export format that happens to be called ``fea``."
+msgstr ""
+"**Встроенного пакета, на который можно откатиться, нет.** Реализация "
+"экспорта не может подменить расчёт, а ``fea``, объявленный в ``export:``, --"
+" это формат экспорта, который просто называется ``fea``."
+
+#: ../../source/plugins/analyses.rst:88
+msgid ""
+"**``extension`` is required.** Which model format an analysis writes -- a 3D"
+" field, a 2D plot -- is the implementation's decision, and guessing on its "
+"behalf would put a name on a file whose contents are something else."
+msgstr ""
+"**``extension`` обязателен.** Какой формат модели записывает расчёт — "
+"трёхмерное поле, двумерный график — решает реализация, и угадывание за неё "
+"дало бы файлу имя, не соответствующее его содержимому."
+
+#: ../../source/plugins/analyses.rst:92
+msgid ""
+"**The implementation reports findings.** Beside ``success`` it returns "
+"``findings``, a JSON array of what it has to say about the part. An empty "
+"one is a pass, and is what the analysis checks of ``pc test`` require."
+msgstr ""
+"**Реализация сообщает находки.** Помимо ``success`` она возвращает "
+"``findings`` -- массив JSON того, что она может сказать о детали. Пустой "
+"массив означает прохождение, и именно его требуют проверки расчётов в ``pc "
+"test``."
+
+#: ../../source/plugins/analyses.rst:96
+msgid ""
+"A plugin that needs a solver ``pip`` cannot install names a ``dockerImage`` "
+"carrying it, which is the one case where a check that could not run is "
+"excused rather than failed -- and only on a machine with no container "
+"runtime at all. :doc:`/digital_thread/lifecycle/analysis` sets out that "
+"policy in full, because it decides what a shared package costs everybody who"
+" opens it."
+msgstr ""
+"Плагин, которому нужен решатель, не устанавливаемый через ``pip``, называет "
+"``dockerImage``, который его несёт, и это единственный случай, когда "
+"проверку, которая не смогла выполниться, оправдывают, а не проваливают, -- и"
+" только на машине, где вообще нет среды выполнения контейнеров. "
+":doc:`/digital_thread/lifecycle/analysis` излагает эту политику полностью, "
+"потому что именно она решает, во что общий пакет обходится каждому, кто его "
+"откроет."
+
+#: ../../source/plugins/analyses.rst:103
+msgid "An example"
+msgstr "Пример"
+
+#: ../../source/plugins/analyses.rst:105
+msgid "Six solver packages exist, each wrapping one program:"
+msgstr ""
+"Существует шесть пакетов решателей, каждый из которых оборачивает одну "
+"программу:"
+
+#: ../../source/plugins/analyses.rst:110
+msgid "package"
+msgstr "пакет"
+
+#: ../../source/plugins/analyses.rst:111
+msgid "solver"
+msgstr "решатель"
+
+#: ../../source/plugins/analyses.rst:112
+msgid "analyses"
+msgstr "расчёты"
+
+#: ../../source/plugins/analyses.rst:113
+msgid ""
+"`partcad-cae-calculix <https://github.com/partcad/partcad-cae-calculix>`_"
+msgstr ""
+"`partcad-cae-calculix <https://github.com/partcad/partcad-cae-calculix>`_"
+
+#: ../../source/plugins/analyses.rst:114
+msgid "`CalculiX <https://www.calculix.de/>`_"
+msgstr "`CalculiX <https://www.calculix.de/>`_"
+
+#: ../../source/plugins/analyses.rst:115
+msgid "``fea`` (the default)"
+msgstr "``fea`` (по умолчанию)"
+
+#: ../../source/plugins/analyses.rst:116
+msgid "`partcad-cae-elmer <https://github.com/partcad/partcad-cae-elmer>`_"
+msgstr "`partcad-cae-elmer <https://github.com/partcad/partcad-cae-elmer>`_"
+
+#: ../../source/plugins/analyses.rst:117
+msgid "`Elmer <https://www.elmerfem.org/>`_"
+msgstr "`Elmer <https://www.elmerfem.org/>`_"
+
+#: ../../source/plugins/analyses.rst:118
+msgid "``fea``, ``dynamic`` (the default), ``thermal`` (the default), ``cfd``"
+msgstr ""
+"``fea``, ``dynamic`` (по умолчанию), ``thermal`` (по умолчанию), ``cfd``"
+
+#: ../../source/plugins/analyses.rst:119
+msgid ""
+"`partcad-cae-openfoam <https://github.com/partcad/partcad-cae-openfoam>`_"
+msgstr ""
+"`partcad-cae-openfoam <https://github.com/partcad/partcad-cae-openfoam>`_"
+
+#: ../../source/plugins/analyses.rst:120
+msgid "`OpenFOAM <https://www.openfoam.com/>`_"
+msgstr "`OpenFOAM <https://www.openfoam.com/>`_"
+
+#: ../../source/plugins/analyses.rst:121
+msgid "``cfd`` (the default)"
+msgstr "``cfd`` (по умолчанию)"
+
+#: ../../source/plugins/analyses.rst:122
+msgid ""
+"`partcad-cae-code-aster <https://github.com/partcad/partcad-cae-code-"
+"aster>`_"
+msgstr ""
+"`partcad-cae-code-aster <https://github.com/partcad/partcad-cae-code-"
+"aster>`_"
+
+#: ../../source/plugins/analyses.rst:123
+msgid "`Code_Aster <https://www.code-aster.org/>`_"
+msgstr "`Code_Aster <https://www.code-aster.org/>`_"
+
+#: ../../source/plugins/analyses.rst:124
+msgid "``fea``, ``dynamic``, ``thermal``"
+msgstr "``fea``, ``dynamic``, ``thermal``"
+
+#: ../../source/plugins/analyses.rst:125
+msgid "`partcad-cae-moose <https://github.com/partcad/partcad-cae-moose>`_"
+msgstr "`partcad-cae-moose <https://github.com/partcad/partcad-cae-moose>`_"
+
+#: ../../source/plugins/analyses.rst:126
+msgid "`MOOSE <https://mooseframework.inl.gov/>`_"
+msgstr "`MOOSE <https://mooseframework.inl.gov/>`_"
+
+#: ../../source/plugins/analyses.rst:127
+msgid "``fea``, ``dynamic``, ``thermal``, ``cfd``"
+msgstr "``fea``, ``dynamic``, ``thermal``, ``cfd``"
+
+#: ../../source/plugins/analyses.rst:128
+msgid ""
+"`partcad-cae-code-saturne <https://github.com/partcad/partcad-cae-code-"
+"saturne>`_"
+msgstr ""
+"`partcad-cae-code-saturne <https://github.com/partcad/partcad-cae-code-"
+"saturne>`_"
+
+#: ../../source/plugins/analyses.rst:129
+msgid "`code_saturne <https://www.code-saturne.org/>`_"
+msgstr "`code_saturne <https://www.code-saturne.org/>`_"
+
+#: ../../source/plugins/analyses.rst:130
+msgid "``cfd``"
+msgstr "``cfd``"
+
+#: ../../source/plugins/analyses.rst:132
+msgid ""
+"Each names a ``dockerImage`` carrying its solver and mesher, so a container "
+"runtime is all it asks of a host that has neither installed -- and each also"
+" runs a solver installed on the host, when there is no container runtime or "
+"it is turned off. Each package's README says what every parameter means."
+msgstr ""
+"Каждый называет ``dockerImage``, несущий его решатель и построитель сетки, "
+"поэтому от хоста, на котором не установлено ни то ни другое, требуется "
+"только среда выполнения контейнеров -- и каждый также работает с решателем, "
+"установленным на хосте, когда среды выполнения контейнеров нет или она "
+"отключена. README каждого пакета говорит, что означает каждый параметр."
+
+#: ../../source/plugins/analyses.rst:137
+msgid ""
+"``examples/feature_cae`` is the set of cases to check an implementation "
+"against -- a cantilever analysed for stress, for its natural frequencies and"
+" for heat, and a pipe for flow, one scenario each, **each with a closed-form"
+" answer to compare the solver with**. That is what makes it a conformance "
+"suite rather than a demonstration, and its ``README.md`` has what each "
+"implementation measured. ``examples/feature_cam`` is the same idea for "
+"routes: three operations on three objects, and a fourth that declares "
+"nothing and is passed over."
+msgstr ""
+"``examples/feature_cae`` -- это набор случаев, по которым можно проверить "
+"реализацию: консоль, рассчитанная на напряжение, на собственные частоты и на"
+" тепло, и труба -- на течение, по одному сценарию каждая, **и у каждого есть"
+" ответ в замкнутой форме, с которым можно сравнить решатель**. Именно это "
+"делает его набором проверки соответствия, а не демонстрацией, и в его "
+"``README.md`` написано, что измерила каждая реализация. "
+"``examples/feature_cam`` -- та же идея для траекторий: три операции на трёх "
+"объектах и четвёртый, который ничего не объявляет и пропускается."

@@ -1,0 +1,155 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/config_bom.rst:3
+msgid "Interchangeable BOM"
+msgstr "可互换的 BOM"
+
+#: ../../source/config_bom.rst:5
+msgid ""
+"A bill of materials is usually a flat list of exact things to buy. PartCAD "
+"lets it be something more useful: a list of what each position has to *be*, "
+"which a package can then satisfy with a particular product. The same "
+"assembly can be quoted from two different suppliers, or built from what is "
+"in the drawer, without the assembly changing."
+msgstr ""
+"物料清单通常是一张要去采购的确切物品的平铺清单。PartCAD 让它可以成为更有用的东西：一张说明每个位置必须 *是* "
+"什么的清单，而某个包随后可以用一个具体产品去满足它。同一个装配体可以从两家不同的供应商那里询价，或者用抽屉里现有的东西搭起来，而装配体本身不必改动。"
+
+#: ../../source/config_bom.rst:10
+msgid ""
+"This is the object-oriented part of PartCAD, and it is built out of three "
+"things that are documented elsewhere in this section: :doc:`interfaces "
+"</config_interfaces>`, which say how a part connects; ``alias``, which gives"
+" an existing part another name; and ``enrich``, which makes an opinionated "
+"version of an existing part by fixing some of its parameters. Put together, "
+"they let a part be refined by steps, from \"something that bolts on here\" "
+"to \"this exact item from this exact vendor\"."
+msgstr ""
+"这就是 PartCAD 中面向对象的那一部分，而它是由本节其他地方所记载的三样东西搭出来的：:doc:`接口 </config_interfaces>`"
+" ，它说明零件如何连接；``alias`` ，它给一个已有零件另起一个名字；以及 ``enrich`` "
+"，它通过固定某些参数来做出一个已有零件的特定版本。把它们合在一起，就能让一个零件被逐步细化，从“某个能装在这里的东西”一直到“来自这家特定厂商的这个确切物品”。"
+
+#: ../../source/config_bom.rst:18
+msgid "Abstract and concrete parts"
+msgstr "抽象零件与具体零件"
+
+#: ../../source/config_bom.rst:20
+msgid ""
+"A part declaration does not have to say where the part comes from. What "
+"makes a part usable in an assembly is its geometry and its interfaces -- "
+"where it sits, and what it mates with. A part that has those and no "
+"``vendor``/``sku`` is **abstract**: the assembly knows how it fits, and not "
+"yet which product it is."
+msgstr ""
+"零件声明不必说明这个零件从哪里来。让一个零件能在装配体中被使用的，是它的几何和它的接口 -- 也就是它坐在哪里、与什么配合。具备这些、而又没有 "
+"``vendor`` / ``sku`` 的零件是 **抽象的**：装配体知道它怎么装上去，而还不知道它是哪个产品。"
+
+#: ../../source/config_bom.rst:24
+msgid ""
+"A part that does name a ``vendor`` and an ``sku`` is **concrete**. It is a "
+"thing somebody sells, and ``pc supply`` can quote and order it (see "
+":ref:`procurement`)."
+msgstr ""
+"而确实指名了 ``vendor`` 和 ``sku`` 的零件是 **具体的**。它是某人在卖的一样东西，而 ``pc supply`` "
+"可以为它询价和下单（参见 :ref:`procurement` ）。"
+
+#: ../../source/config_bom.rst:27
+msgid "Between the two there is a chain, and each link narrows the choice:"
+msgstr "两者之间有一条链，而每一环都把选择范围收窄一些："
+
+#: ../../source/config_bom.rst:58
+msgid ""
+"Each of those is a part in its own right, and each can be used in an "
+"assembly. ``alias`` does the same without changing anything -- a local name "
+"for a part that lives somewhere else, so an assembly refers to ``:bolt`` and"
+" the package decides what that is."
+msgstr ""
+"其中每一个本身都是一个零件，而每一个都可以在装配体中使用。``alias`` 做同样的事而什么都不改 -- "
+"它是给住在别处的某个零件起的一个本地名字，这样装配体引用的是 ``:bolt`` ，而由包来决定那是什么。"
+
+#: ../../source/config_bom.rst:64
+msgid "Why the interface is what matters"
+msgstr "为什么关键在于接口"
+
+#: ../../source/config_bom.rst:66
+msgid ""
+"An assembly that mates by :ref:`interfaces <interfaces>` rather than by "
+"coordinates does not name positions; it names connections. So replacing one "
+"bolt with another bolt that implements the same interface does not move "
+"anything: the mate is recomputed from the new part's ports. That is what "
+"makes a position in the bill of materials interchangeable rather than merely"
+" editable."
+msgstr ""
+"一个靠 :ref:`接口 <interfaces>` "
+"而不是靠坐标来配合的装配体，并不指名位置；它指名的是连接。所以把一个螺栓换成另一个实现了同一接口的螺栓，并不会让任何东西移动：那个配合会从新零件的端口重新算出来。正是这一点让物料清单中的一个位置成为可互换的，而不只是可编辑的。"
+
+#: ../../source/config_bom.rst:71
+msgid ""
+"It is also what makes the refinement chain above safe. An ``enrich`` of a "
+"part keeps the source's interfaces, so a part narrowed three times still "
+"mates the way the abstract one did -- and ``pc test`` checks that it does, "
+"since the connection test is run against whatever the assembly actually "
+"resolves to."
+msgstr ""
+"这也正是让上面那条细化链是安全的原因。对某个零件的 ``enrich`` "
+"会保留源对象的那些接口，所以一个被细化过三次的零件，配合方式仍然与那个抽象零件一样 -- 而 ``pc test`` "
+"会检查这一点确实成立，因为连接测试是针对装配体实际解析到的那个东西来运行的。"
+
+#: ../../source/config_bom.rst:77
+msgid "Assemblies can be either, and so can you"
+msgstr "装配体可以是其中任一种，你也可以"
+
+#: ../../source/config_bom.rst:79
+msgid ""
+"An assembly may name concrete parts, in which case its bill of materials is "
+"a list of products and ``pc supply`` can price it as it stands. Or it may "
+"name abstract ones, in which case it is a design that somebody -- you, a "
+"downstream package, a customer -- completes by choosing products for its "
+"positions. A package of your own that imports such an assembly and declares "
+"``enrich``\\ es for its abstract parts is how that choice is written down, "
+"versioned and reviewed like everything else."
+msgstr ""
+"装配体可以指名具体零件，这时它的物料清单就是一张产品清单，而 ``pc supply`` "
+"可以按它当前的样子给它定价。或者它可以指名抽象零件，这时它就是一份设计，由某个人 -- 你、某个下游的包、某个客户 -- "
+"通过为它的各个位置挑选产品来把它补完。而你自己的一个包，如果它导入了这样的装配体并为它的那些抽象零件声明了 ``enrich`` "
+"，那就是把这个选择写下来、做版本管理并像其他一切那样接受评审的办法。"
+
+#: ../../source/config_bom.rst:87
+msgid ""
+"Making an assembly that still contains abstract parts *manufacturable* -- "
+"having PartCAD choose products for the open positions, or order against the "
+"interface rather than against an SKU -- is not implemented yet. Today an "
+"assembly is procured from the parts it actually resolves to, so the "
+"positions have to be concrete by the time you ask ``pc supply`` or ``pc "
+"bom`` for an answer."
+msgstr ""
+"让一个仍然含有抽象零件的装配体 *可制造* -- 也就是让 PartCAD 为那些空缺位置挑选产品，或者按接口而不是按 SKU 去下单 -- "
+"目前还没有实现。今天装配体是按它实际解析到的那些零件来采购的，所以在你向 ``pc supply`` 或 ``pc bom`` "
+"要答案的时候，那些位置必须已经是具体的了。"
+
+#: ../../source/config_bom.rst:92
+msgid ""
+"See :doc:`/config_making` for how a concrete part is bought or made, and "
+":doc:`/cli` for ``pc bom``, which prints the list the assembly resolves to."
+msgstr ""
+"一个具体零件是怎么被采购或制造的，参见 :doc:`/config_making` ；而 ``pc bom`` 参见 :doc:`/cli` "
+"，它会打印出该装配体所解析到的那张清单。"

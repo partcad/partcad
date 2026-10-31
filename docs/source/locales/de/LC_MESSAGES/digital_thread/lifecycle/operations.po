@@ -1,0 +1,149 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:2
+msgid "Operations"
+msgstr "Operations"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:4
+msgid ""
+"Operations is the phase after the product exists: how the thing that was "
+"made is actually doing. It is the phase that turns a digital thread into a "
+"*digital twin* -- a record kept true to one physical object, with its serial"
+" number, for as long as that object lasts."
+msgstr ""
+"Operations ist die Phase, nachdem das Produkt existiert: wie es dem Ding, "
+"das hergestellt wurde, tatsächlich geht. Es ist die Phase, die aus einem "
+"Digital Thread einen *Digital Twin* macht -- eine Aufzeichnung, die für ein "
+"physisches Objekt wahr gehalten wird, mit seiner Seriennummer, so lange, wie"
+" dieses Objekt besteht."
+
+#: ../../source/digital_thread/lifecycle/operations.rst:9
+msgid ""
+"**Nothing is collected yet.** This page is here because the phase is part of"
+" the lifecycle and because the Digital Thread reserves its place, not "
+"because there is a feature to describe."
+msgstr ""
+"**Es wird noch nichts erfasst.** Diese Seite ist hier, weil die Phase Teil "
+"des Lebenszyklus ist und weil der Digital Thread ihren Platz reserviert, und"
+" nicht, weil es eine Funktion zu beschreiben gäbe."
+
+#: ../../source/digital_thread/lifecycle/operations.rst:14
+msgid "In the UI"
+msgstr "In der Benutzeroberfläche"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:16
+msgid ""
+"**Operations** is the last of the five groups in the Digital Thread's tab "
+"strip, and it is the one group that is always shown **disabled** -- for "
+"every object, whatever it declares. It has no strip of its own, so this "
+"phase has no sub-tabs and there is nothing to picture: every screenshot of "
+"the panel on these pages shows it, greyed, at the end of the row. Hovering "
+"over it says why."
+msgstr ""
+"**Operations** ist die letzte der fünf Gruppen in der Tab-Leiste des Digital"
+" Thread und die eine Gruppe, die immer **deaktiviert** gezeigt wird -- für "
+"jedes Objekt, was es auch deklariert. Sie hat keine eigene Leiste, diese "
+"Phase hat also keine Untertabs und es gibt nichts abzubilden: jeder "
+"Screenshot des Panels auf diesen Seiten zeigt sie, ausgegraut, am Ende der "
+"Reihe. Wer darüber fährt, erfährt, warum."
+
+#: ../../source/digital_thread/lifecycle/operations.rst:22
+msgid ""
+"**Process Emulation**, the third tab of :doc:`Validation "
+"</digital_thread/lifecycle/validation>`, is reserved in the same way and for"
+" the related question of how making it would go. It holds nothing yet "
+"either."
+msgstr ""
+"**Process Emulation**, der dritte Tab von :doc:`Validation "
+"</digital_thread/lifecycle/validation>`, ist auf dieselbe Weise reserviert, "
+"für die verwandte Frage, wie das Herstellen ausgehen würde. Darin steckt "
+"bisher ebenfalls nichts."
+
+#: ../../source/digital_thread/lifecycle/operations.rst:27
+msgid "On the command line"
+msgstr "Auf der Befehlszeile"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:29
+msgid ""
+"Nothing. No section of a ``partcad.yaml`` records anything about an "
+"individual made item, and no ``pc`` command reads or writes one: a package "
+"describes a *type* of thing -- what to make, and how -- and says nothing "
+"about the instances that were made from it. ``pc ide view`` has a flag for "
+"every tab of the other four groups and none for this one."
+msgstr ""
+"Nichts. Kein Abschnitt einer ``partcad.yaml`` hält irgendetwas über ein "
+"einzelnes hergestelltes Exemplar fest, und kein ``pc``-Befehl liest oder "
+"schreibt eines: ein Paket beschreibt eine *Art* von Ding -- was herzustellen"
+" ist und wie -- und sagt nichts über die Exemplare, die daraus hergestellt "
+"wurden. ``pc ide view`` hat ein Flag für jeden Tab der anderen vier Gruppen "
+"und keines für diese."
+
+#: ../../source/digital_thread/lifecycle/operations.rst:36
+msgid "Agent skills"
+msgstr "Agent-Skills"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:38
+msgid ""
+"None. A skill is a procedure for working on a package, and this phase has "
+"nothing in a package to work on. ``/pc:validate`` is the nearest thing: it "
+"judges whether what was designed meets what was asked for, which is the "
+"question this phase would ask again of the thing that was actually made."
+msgstr ""
+"Keine. Ein Skill ist eine Vorgehensweise, um an einem Paket zu arbeiten, und"
+" diese Phase hat nichts in einem Paket, woran zu arbeiten wäre. "
+"``/pc:validate`` kommt dem am nächsten: er beurteilt, ob das Entworfene das "
+"erfüllt, wonach gefragt wurde, und das ist die Frage, die diese Phase erneut"
+" an das Ding stellen würde, das tatsächlich hergestellt wurde."
+
+#: ../../source/digital_thread/lifecycle/operations.rst:44
+msgid "What is already in place"
+msgstr "Was schon vorhanden ist"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:46
+msgid ""
+"What the other phases already give this one is the part that is hard: one "
+"record per object, every answer computed from it rather than stored beside "
+"it, and a pin on every dependency, so that the design a made item was made "
+"from can be checked out again exactly as it was (see "
+":doc:`/digital_thread/change_management`). A twin needs that before it needs"
+" telemetry."
+msgstr ""
+"Was die anderen Phasen dieser hier schon geben, ist der schwierige Teil: "
+"eine Aufzeichnung je Objekt, jede Antwort daraus berechnet statt daneben "
+"gespeichert, und ein Pin an jeder Abhängigkeit, sodass das Design, aus dem "
+"ein hergestelltes Exemplar gemacht wurde, genau so wieder ausgecheckt werden"
+" kann, wie es war (siehe :doc:`/digital_thread/change_management`). Ein Twin"
+" braucht das, bevor er Telemetrie braucht."
+
+#: ../../source/digital_thread/lifecycle/operations.rst:52
+msgid ""
+"Until there is something here, the way to keep track of what was made is "
+":doc:`Manufacturing </digital_thread/lifecycle/manufacturing>` -- the bill "
+"of materials, what was ordered and from whom, and the instructions somebody "
+"followed -- together with git: the commit a build was made from is the "
+"record of what was built."
+msgstr ""
+"Bis es hier etwas gibt, ist der Weg, nachzuhalten, was hergestellt wurde, "
+":doc:`Manufacturing </digital_thread/lifecycle/manufacturing>` -- die "
+"Stückliste, was bestellt wurde und bei wem, und die Anweisungen, denen "
+"jemand gefolgt ist -- zusammen mit Git: der Commit, aus dem ein Build "
+"gemacht wurde, ist die Aufzeichnung dessen, was gebaut wurde."

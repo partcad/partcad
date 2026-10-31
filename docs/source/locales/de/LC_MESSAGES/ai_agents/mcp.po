@@ -1,0 +1,462 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/ai_agents/mcp.rst:3
+msgid "MCP server"
+msgstr "MCP-Server"
+
+#: ../../source/ai_agents/mcp.rst:5
+msgid ""
+"``pc mcp`` serves the `Model Context Protocol "
+"<https://modelcontextprotocol.io>`_ (MCP) on stdio. It is how an AI agent "
+"drives PartCAD without a shell: any MCP client -- Claude Code, Claude "
+"Desktop, Cursor, Visual Studio Code and the rest -- starts it as a "
+"subprocess and calls its tools to see what a package holds, read an object's"
+" declaration, look at it, test it and write it out, and to reach everything "
+"else PartCAD's daemon can do."
+msgstr ""
+"``pc mcp`` bedient das `Model Context Protocol "
+"<https://modelcontextprotocol.io>`_ (MCP) auf stdio. So steuert ein KI-Agent"
+" PartCAD ohne eine Shell: jeder MCP-Client -- Claude Code, Claude Desktop, "
+"Cursor, Visual Studio Code und die übrigen -- startet es als Unterprozess "
+"und ruft seine Werkzeuge auf, um zu sehen, was ein Paket enthält, die "
+"Deklaration eines Objekts zu lesen, es anzusehen, es zu testen und es "
+"herauszuschreiben, und um alles andere zu erreichen, was PartCADs Daemon "
+"kann."
+
+#: ../../source/ai_agents/mcp.rst:11
+msgid ""
+"The server is a client of the workspace's daemon, exactly like the other "
+"``pc`` commands: it starts the daemon if none is running, and the daemon "
+"loads the packages, runs the CAD scripts in their sandboxes and renders. So "
+"an agent needs nothing installed but PartCAD, and the agent's renders, tests"
+" and exports come from the same warm context as the ones you run in a "
+"terminal."
+msgstr ""
+"Der Server ist ein Client des Daemons des Arbeitsbereichs, genau wie die "
+"anderen ``pc``-Befehle: er startet den Daemon, wenn keiner läuft, und der "
+"Daemon lädt die Pakete, führt die CAD-Skripte in ihren Sandboxes aus und "
+"rendert. Ein Agent braucht daher nichts installiert außer PartCAD, und die "
+"Renderings, Tests und Exporte des Agenten kommen aus demselben warmen "
+"Kontext wie die, die Sie in einem Terminal ausführen."
+
+#: ../../source/ai_agents/mcp.rst:16
+msgid ""
+"The agent still writes and edits ``partcad.yaml`` and the CAD scripts with "
+"its own file tools; the daemon reloads what changed. The MCP server is for "
+"everything after that -- looking at the result and checking it."
+msgstr ""
+"Der Agent schreibt und bearbeitet ``partcad.yaml`` und die CAD-Skripte "
+"weiterhin mit seinen eigenen Dateiwerkzeugen; der Daemon lädt neu, was sich "
+"geändert hat. Der MCP-Server ist für alles danach da -- das Ergebnis ansehen"
+" und es prüfen."
+
+#: ../../source/ai_agents/mcp.rst:21
+msgid "Starting"
+msgstr "Starten"
+
+#: ../../source/ai_agents/mcp.rst:30
+msgid ""
+"Nothing is started until the first tool call that needs the daemon, so a "
+"server started in a directory that is not a package yet still starts, and "
+"says so when it is asked to do something. Its log goes to stderr, which MCP "
+"clients show in their server logs; stdout is the protocol."
+msgstr ""
+"Es wird nichts gestartet, bis der erste Werkzeugaufruf kommt, der den Daemon"
+" braucht; ein Server, der in einem Verzeichnis gestartet wird, das noch kein"
+" Paket ist, startet also trotzdem und sagt es, wenn er gebeten wird, etwas "
+"zu tun. Sein Log geht auf stderr, was MCP-Clients in ihren Server-Logs "
+"zeigen; stdout ist das Protokoll."
+
+#: ../../source/ai_agents/mcp.rst:36
+msgid "Setting up a client"
+msgstr "Einen Client einrichten"
+
+#: ../../source/ai_agents/mcp.rst:39
+msgid "Claude Code"
+msgstr "Claude Code"
+
+#: ../../source/ai_agents/mcp.rst:41
+msgid ""
+"The ``pc`` plugin (see :ref:`claude-plugin`) brings the server along with "
+"the skills, and ``pc init`` adds it to the ``.mcp.json`` of the repository "
+"it sets up. Anywhere else:"
+msgstr ""
+"Das ``pc``-Plugin (siehe :ref:`claude-plugin`) bringt den Server zusammen "
+"mit den Skills mit, und ``pc init`` fügt ihn der ``.mcp.json`` des "
+"Repositorys hinzu, das es einrichtet. Überall sonst:"
+
+#: ../../source/ai_agents/mcp.rst:51
+msgid "Cursor"
+msgstr "Cursor"
+
+#: ../../source/ai_agents/mcp.rst:53
+msgid "``pc init`` adds it to ``.cursor/mcp.json``. By hand:"
+msgstr "``pc init`` fügt ihn der ``.cursor/mcp.json`` hinzu. Von Hand:"
+
+#: ../../source/ai_agents/mcp.rst:64
+msgid "Visual Studio Code"
+msgstr "Visual Studio Code"
+
+#: ../../source/ai_agents/mcp.rst:66
+msgid ""
+"The PartCAD extension registers one server for every workspace folder that "
+"holds a ``partcad.yaml``, using the ``pc`` it found or downloaded -- there "
+"is nothing to configure. Without the extension, in ``.vscode/mcp.json``:"
+msgstr ""
+"Die PartCAD-Erweiterung registriert einen Server für jeden "
+"Arbeitsbereichsordner, der eine ``partcad.yaml`` enthält, und verwendet "
+"dabei das ``pc``, das sie gefunden oder heruntergeladen hat -- es gibt "
+"nichts zu konfigurieren. Ohne die Erweiterung, in ``.vscode/mcp.json``:"
+
+#: ../../source/ai_agents/mcp.rst:78
+msgid "Claude Desktop"
+msgstr "Claude Desktop"
+
+#: ../../source/ai_agents/mcp.rst:80
+msgid ""
+"Claude Desktop starts servers from no particular directory, so name the "
+"package with an absolute path, in ``claude_desktop_config.json``:"
+msgstr ""
+"Claude Desktop startet Server aus keinem bestimmten Verzeichnis, benennen "
+"Sie das Paket daher mit einem absoluten Pfad, in "
+"``claude_desktop_config.json``:"
+
+#: ../../source/ai_agents/mcp.rst:92
+msgid "The MCP Registry"
+msgstr "Die MCP Registry"
+
+#: ../../source/ai_agents/mcp.rst:94
+msgid ""
+"The server is listed in the `MCP Registry "
+"<https://registry.modelcontextprotocol.io>`_ as "
+"``io.github.partcad/partcad``, which is what clients that install servers "
+"from the registry find. Such a client runs it as ``uvx partcad mcp``, and "
+"offers ``PC_PATH`` for the package to serve."
+msgstr ""
+"Der Server ist in der `MCP Registry "
+"<https://registry.modelcontextprotocol.io>`_ als "
+"``io.github.partcad/partcad`` eingetragen, und das ist es, was Clients "
+"finden, die Server aus der Registry installieren. Ein solcher Client führt "
+"ihn als ``uvx partcad mcp`` aus und bietet ``PC_PATH`` für das zu bedienende"
+" Paket an."
+
+#: ../../source/ai_agents/mcp.rst:100
+msgid "Tools"
+msgstr "Werkzeuge"
+
+#: ../../source/ai_agents/mcp.rst:102
+msgid ""
+"Each tool is one daemon method, with the parameters the ``pc`` command it "
+"mirrors sends. The ones that name an object -- ``info``, ``render``, "
+"``export``, ``test``, ``bom`` and ``instructions`` -- take ``params``, the "
+"values of the object's own parameters by name, which is ``-p "
+"<name>=<value>`` on the command line (see :ref:`parameter-values`)."
+msgstr ""
+"Jedes Werkzeug ist eine Daemon-Methode, mit den Parametern, die der "
+"``pc``-Befehl sendet, den es widerspiegelt. Die, die ein Objekt benennen -- "
+"``info``, ``render``, ``export``, ``test``, ``bom`` und ``instructions`` --,"
+" nehmen ``params``, die Werte der eigenen Parameter des Objekts nach Namen, "
+"was auf der Befehlszeile ``-p <name>=<value>`` ist (siehe :ref:`parameter-"
+"values`)."
+
+#: ../../source/ai_agents/mcp.rst:111
+msgid "Tool"
+msgstr "Werkzeug"
+
+#: ../../source/ai_agents/mcp.rst:112
+msgid "Mirrors"
+msgstr "Spiegelt"
+
+#: ../../source/ai_agents/mcp.rst:113
+msgid "What it does"
+msgstr "Was es tut"
+
+#: ../../source/ai_agents/mcp.rst:114
+msgid "``list_objects``"
+msgstr "``list_objects``"
+
+#: ../../source/ai_agents/mcp.rst:115
+msgid "``pc list``"
+msgstr "``pc list``"
+
+#: ../../source/ai_agents/mcp.rst:116
+msgid ""
+"The packages, parts, sketches, assemblies, scenes, interfaces, materials or "
+"software of a package."
+msgstr ""
+"Die Pakete, Teile, Skizzen, Baugruppen, Szenen, Interfaces, Materialien oder"
+" Software eines Pakets."
+
+#: ../../source/ai_agents/mcp.rst:117
+msgid "``info``"
+msgstr "``info``"
+
+#: ../../source/ai_agents/mcp.rst:118
+msgid "``pc info``"
+msgstr "``pc info``"
+
+#: ../../source/ai_agents/mcp.rst:119
+msgid ""
+"An object's configuration, parameters and properties, or the package's."
+msgstr ""
+"Die Konfiguration, Parameter und Eigenschaften eines Objekts, oder die des "
+"Pakets."
+
+#: ../../source/ai_agents/mcp.rst:120
+msgid "``render``"
+msgstr "``render``"
+
+#: ../../source/ai_agents/mcp.rst:121
+msgid "``pc render``"
+msgstr "``pc render``"
+
+#: ../../source/ai_agents/mcp.rst:122
+msgid ""
+"Renders one object and returns the picture: PNG (the default) or JPEG as an "
+"image, SVG as text."
+msgstr ""
+"Rendert ein Objekt und gibt das Bild zurück: PNG (der Standard) oder JPEG "
+"als Bild, SVG als Text."
+
+#: ../../source/ai_agents/mcp.rst:123
+msgid "``export``"
+msgstr "``export``"
+
+#: ../../source/ai_agents/mcp.rst:124
+msgid "``pc export``"
+msgstr "``pc export``"
+
+#: ../../source/ai_agents/mcp.rst:125
+msgid ""
+"Writes one object to a file in the workspace: STEP, STL, 3MF, OBJ, glTF, "
+"BREP, PNG, SVG, ..."
+msgstr ""
+"Schreibt ein Objekt in eine Datei im Arbeitsbereich: STEP, STL, 3MF, OBJ, "
+"glTF, BREP, PNG, SVG, ..."
+
+#: ../../source/ai_agents/mcp.rst:126
+msgid "``test``"
+msgstr "``test``"
+
+#: ../../source/ai_agents/mcp.rst:127
+msgid "``pc test``"
+msgstr "``pc test``"
+
+#: ../../source/ai_agents/mcp.rst:128
+msgid "Checks objects against the requirements and tests they declare."
+msgstr "Prüft Objekte gegen die Anforderungen und Tests, die sie deklarieren."
+
+#: ../../source/ai_agents/mcp.rst:129
+msgid "``lint``"
+msgstr "``lint``"
+
+#: ../../source/ai_agents/mcp.rst:130
+msgid "``pc lint``"
+msgstr "``pc lint``"
+
+#: ../../source/ai_agents/mcp.rst:131
+msgid "Checks a package's ``partcad.yaml``, ASSY files and scripts."
+msgstr ""
+"Prüft die ``partcad.yaml``, die ASSY-Dateien und die Skripte eines Pakets."
+
+#: ../../source/ai_agents/mcp.rst:132
+msgid "``bom``"
+msgstr "``bom``"
+
+#: ../../source/ai_agents/mcp.rst:133
+msgid "``pc bom``"
+msgstr "``pc bom``"
+
+#: ../../source/ai_agents/mcp.rst:134
+msgid "What has to be bought or made to build an object."
+msgstr "Was gekauft oder hergestellt werden muss, um ein Objekt zu bauen."
+
+#: ../../source/ai_agents/mcp.rst:135
+msgid "``search``"
+msgstr "``search``"
+
+#: ../../source/ai_agents/mcp.rst:136
+msgid "``pc search``"
+msgstr "``pc search``"
+
+#: ../../source/ai_agents/mcp.rst:137
+msgid ""
+"Finds objects or packages by keyword or by the interface they implement."
+msgstr ""
+"Findet Objekte oder Pakete über ein Schlüsselwort oder über das Interface, "
+"das sie implementieren."
+
+#: ../../source/ai_agents/mcp.rst:138
+msgid "``instructions``"
+msgstr "``instructions``"
+
+#: ../../source/ai_agents/mcp.rst:139
+msgid "``pc instructions``"
+msgstr "``pc instructions``"
+
+#: ../../source/ai_agents/mcp.rst:140
+msgid ""
+"The step-by-step build of an assembly, with this machine's Build vs Buy "
+"choices applied."
+msgstr ""
+"Der schrittweise Aufbau einer Baugruppe, mit den Build-vs-Buy-Entscheidungen"
+" dieses Rechners angewandt."
+
+#: ../../source/ai_agents/mcp.rst:141
+msgid "``version``"
+msgstr "``version``"
+
+#: ../../source/ai_agents/mcp.rst:142
+msgid "``pc version``"
+msgstr "``pc version``"
+
+#: ../../source/ai_agents/mcp.rst:143
+msgid "The version of the server and of the daemon serving the workspace."
+msgstr ""
+"Die Version des Servers und des Daemons, der den Arbeitsbereich bedient."
+
+#: ../../source/ai_agents/mcp.rst:144
+msgid "``list_methods``"
+msgstr "``list_methods``"
+
+#: ../../source/ai_agents/mcp.rst:146
+msgid "Every daemon method, with a one-line summary."
+msgstr "Jede Daemon-Methode, mit einer einzeiligen Zusammenfassung."
+
+#: ../../source/ai_agents/mcp.rst:147
+msgid "``execute``"
+msgstr "``execute``"
+
+#: ../../source/ai_agents/mcp.rst:149
+msgid ""
+"Runs any daemon method: CAE, CAM, simulations, ``add``, ``import``, "
+"``convert``, ``install`` and the rest."
+msgstr ""
+"Führt jede Daemon-Methode aus: CAE, CAM, Simulationen, ``add``, ``import``, "
+"``convert``, ``install`` und die übrigen."
+
+#: ../../source/ai_agents/mcp.rst:151
+msgid ""
+"``execute`` takes a method name and its parameters as ``pc`` sends them; the"
+" workspace's context is added for it. It refuses the few methods that act on"
+" something that is not the agent's: resetting, stopping or reconfiguring the"
+" daemon every client of the workspace shares, and changing the user's own "
+"settings (``list_methods`` marks them). A healthcheck that fixes the host is"
+" refused too."
+msgstr ""
+"``execute`` nimmt einen Methodennamen und seine Parameter so an, wie ``pc`` "
+"sie sendet; der Kontext des Arbeitsbereichs wird dafür ergänzt. Es weist die"
+" wenigen Methoden zurück, die auf etwas wirken, das nicht dem Agenten "
+"gehört: den Daemon zurücksetzen, stoppen oder umkonfigurieren, den jeder "
+"Client des Arbeitsbereichs teilt, und die eigenen Einstellungen des Nutzers "
+"ändern (``list_methods`` markiert sie). Ein Healthcheck, der den Host "
+"reparieren würde, wird ebenfalls zurückgewiesen."
+
+#: ../../source/ai_agents/mcp.rst:156
+msgid ""
+"Two resources are served as well: ``partcad://workspace`` (where the "
+"workspace is, which files the agent may use, and its package tree) and "
+"``partcad://methods`` (what ``list_methods`` returns)."
+msgstr ""
+"Zwei Ressourcen werden ebenfalls bedient: ``partcad://workspace`` (wo der "
+"Arbeitsbereich ist, welche Dateien der Agent verwenden darf, und sein "
+"Paketbaum) und ``partcad://methods`` (was ``list_methods`` zurückgibt)."
+
+#: ../../source/ai_agents/mcp.rst:161
+msgid "Results and errors"
+msgstr "Ergebnisse und Fehler"
+
+#: ../../source/ai_agents/mcp.rst:163
+msgid ""
+"Every tool returns one JSON text block: ``ok``; the daemon's ``result`` when"
+" there is one; ``errors``, the error lines the daemon logged; and ``log``, "
+"everything else it logged while it worked. Most of PartCAD answers by "
+"logging -- ``pc list`` prints a table -- so for ``list_objects``, ``info``, "
+"``test`` and ``search`` the log *is* the answer. A render's picture follows "
+"the text block as an image."
+msgstr ""
+"Jedes Werkzeug gibt einen JSON-Textblock zurück: ``ok``; das ``result`` des "
+"Daemons, wenn es eines gibt; ``errors``, die Fehlerzeilen, die der Daemon "
+"protokolliert hat; und ``log``, alles andere, was er während der Arbeit "
+"protokolliert hat. Das meiste von PartCAD antwortet über das Protokollieren "
+"-- ``pc list`` gibt eine Tabelle aus --, für ``list_objects``, ``info``, "
+"``test`` und ``search`` *ist* das Log also die Antwort. Das Bild eines "
+"Renderings folgt dem Textblock als Bild."
+
+#: ../../source/ai_agents/mcp.rst:168
+msgid ""
+"A failure is a result with ``ok`` false and the error in it, never a "
+"protocol error: an object that does not build, a test that fails, a daemon "
+"that cannot be reached, a path outside the workspace. Only a malformed tool "
+"call is refused by the protocol. When the connection to the daemon is lost "
+"in the middle of a call, the result says the call may or may not have "
+"finished -- the server never sends it again on its own -- and the next call "
+"reconnects."
+msgstr ""
+"Ein Fehlschlag ist ein Ergebnis mit ``ok`` auf falsch und dem Fehler darin, "
+"nie ein Protokollfehler: ein Objekt, das nicht baut, ein Test, der "
+"fehlschlägt, ein Daemon, der nicht erreicht werden kann, ein Pfad außerhalb "
+"des Arbeitsbereichs. Nur ein fehlerhafter Werkzeugaufruf wird vom Protokoll "
+"zurückgewiesen. Wenn die Verbindung zum Daemon mitten in einem Aufruf "
+"verloren geht, sagt das Ergebnis, dass der Aufruf fertig geworden sein kann "
+"oder nicht -- der Server sendet ihn nie von selbst erneut --, und der "
+"nächste Aufruf verbindet sich neu."
+
+#: ../../source/ai_agents/mcp.rst:174
+msgid ""
+"The first render or test of an object builds it in its sandbox, which can "
+"take minutes; clients that ask for progress are told what the daemon is "
+"working on."
+msgstr ""
+"Das erste Rendering oder der erste Test eines Objekts baut es in seiner "
+"Sandbox, was Minuten dauern kann; Clients, die nach dem Fortschritt fragen, "
+"wird gesagt, woran der Daemon gerade arbeitet."
+
+#: ../../source/ai_agents/mcp.rst:179
+msgid "Which files it may touch"
+msgstr "Welche Dateien es anrühren darf"
+
+#: ../../source/ai_agents/mcp.rst:181
+msgid ""
+"A path an agent names -- where ``export`` writes, and every path parameter "
+"``execute`` passes on -- has to be inside the workspace, and not inside a "
+"hidden directory there (``.git``, ``.env``, an editor's settings). A "
+"relative path is relative to the workspace, never to wherever the client "
+"started the server. Symbolic links are followed before the check, so a link "
+"out of the workspace is outside it."
+msgstr ""
+"Ein Pfad, den ein Agent benennt -- wohin ``export`` schreibt, und jeder "
+"Pfadparameter, den ``execute`` weitergibt -- muss innerhalb des "
+"Arbeitsbereichs liegen und nicht innerhalb eines versteckten Verzeichnisses "
+"dort (``.git``, ``.env``, die Einstellungen eines Editors). Ein relativer "
+"Pfad ist relativ zum Arbeitsbereich, nie zu dem Ort, an dem der Client den "
+"Server gestartet hat. Symbolischen Links wird vor der Prüfung gefolgt, ein "
+"Link aus dem Arbeitsbereich hinaus liegt also außerhalb davon."
+
+#: ../../source/ai_agents/mcp.rst:191
+msgid ""
+"This is a limit on what the agent names, not a jail for PartCAD: the daemon "
+"still reads whatever a package's own configuration points at."
+msgstr ""
+"Das ist eine Grenze für das, was der Agent benennt, und kein Gefängnis für "
+"PartCAD: der Daemon liest weiterhin alles, worauf die eigene Konfiguration "
+"eines Pakets zeigt."

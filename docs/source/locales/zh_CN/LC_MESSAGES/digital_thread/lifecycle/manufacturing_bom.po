@@ -1,0 +1,88 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:5
+msgid "Bill of Materials"
+msgstr "物料清单"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:7
+msgid ""
+"**Bill of Materials** is what has to be procured in order to have the "
+"object: every line item, counted. It is :doc:`/config_bom` as a tab, and the"
+" same answer ``pc bom`` prints."
+msgstr ""
+"**Bill of Materials** 讲的是为了拥有这个对象必须采购什么：每一个清单条目，并计数。它就是以标签页形式呈现的 "
+":doc:`/config_bom` ，也是 ``pc bom`` 所打印出来的同一个答案。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:11
+msgid ""
+"What it is *not* is a list of parts. A part that is made is its **stock** --"
+" you buy the sheet, not the panel cut out of it -- and a sub-assembly that "
+"declares a ``vendor:`` and an ``sku:`` is one item ordered whole, with "
+"nothing inside it looked at. What is built and what is bought comes from "
+":doc:`Build vs Buy </digital_thread/lifecycle/manufacturing_bvb>`; where "
+"nothing was chosen, a line that can be either is bought."
+msgstr ""
+"它 *不是* 一张零件清单。自制的零件就是它的 **坯料** -- 你买的是那张板材，而不是从它上面切下来的那块面板 -- 而声明了 "
+"``vendor:`` 和 ``sku:`` 的子装配体是一个整体订购的条目，它内部的东西一概不再过问。什么是自制、什么是采购，来自 "
+":doc:`Build vs Buy </digital_thread/lifecycle/manufacturing_bvb>` "
+"；而在什么都还没选过的地方，一个两者皆可的条目算作采购。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:19
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:21
+msgid ""
+"One row per line item, with how many of each. For a part or an assembly."
+msgstr "每个清单条目一行，并标明每一种各需要几个。适用于零件或装配体。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:23
+msgid ""
+"The Manufacturing group's Bill of Materials tab: every line item, counted"
+msgstr "Manufacturing 组的 Bill of Materials 标签页：每一个清单条目，并计数"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:29
+msgid "On the command line"
+msgstr "在命令行中"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:37
+msgid ""
+":doc:`/config_bom` explains how interfaces, ``alias`` and ``enrich`` make a "
+"line item interchangeable -- an abstract position in the bill of materials "
+"that a concrete part fills."
+msgstr ""
+":doc:`/config_bom` 解释了接口、``alias`` 和 ``enrich`` 如何让一个清单条目变得可互换 -- "
+"也就是物料清单中一个由某个具体零件来填充的抽象位置。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:42
+msgid "Agent skills"
+msgstr "智能体技能"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:44
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:45
+msgid ""
+"Reads the bill of materials as part of giving a requirement its verdict: a "
+"line of it is evidence for a feature that no measurement can judge."
+msgstr "在给某项需求下结论的过程中读取物料清单：它的某一行就是某个无法用测量来判定的特性的依据。"

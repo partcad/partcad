@@ -1,0 +1,821 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/config_assemblies.rst:3
+msgid "Assemblies"
+msgstr "装配体"
+
+#: ../../source/config_assemblies.rst:15
+msgid "What an assembly is"
+msgstr "装配体是什么"
+
+#: ../../source/config_assemblies.rst:18
+msgid ""
+"Assemblies are parametrized instructions on how to put parts and other "
+"assemblies together."
+msgstr "装配体是关于如何将零件和其他装配体组合到一起的参数化说明。"
+
+#: ../../source/config_assemblies.rst:21
+msgid ""
+"PartCAD is expected to have an ever-growing list of ways to define "
+"assemblies using existing parts."
+msgstr "预计 PartCAD 使用现有零件定义装配体的方式会不断增加。"
+
+#: ../../source/config_assemblies.rst:24
+msgid "ASSY: assembly YAML"
+msgstr "ASSY：装配体 YAML"
+
+#: ../../source/config_assemblies.rst:26
+msgid ""
+"The native format. The idea behind ASSY is to create a simplistic way to "
+"enumerate parts, define their parameters and define how parts connect."
+msgstr "原生格式。ASSY 背后的理念是提供一种极其简单的方式来枚举零件、定义它们的参数并定义零件之间如何连接。"
+
+#: ../../source/config_assemblies.rst:29
+#: ../../source/config_assemblies.rst:492
+msgid "STEP"
+msgstr "STEP"
+
+#: ../../source/config_assemblies.rst:31
+msgid ""
+"A STEP file that carries an assembly structure, used as an assembly "
+"directly, with its components becoming parts of the package."
+msgstr "一个携带装配结构的 STEP 文件，可直接用作装配体，其中的各个组件会成为该包中的零件。"
+
+#: ../../source/config_assemblies.rst:34
+#: ../../source/config_assemblies.rst:351
+msgid "URDF"
+msgstr "URDF"
+
+#: ../../source/config_assemblies.rst:36
+msgid ""
+"A `URDF <https://wiki.ros.org/urdf>`_ robot description used as an assembly "
+"directly. Its links become the same tree of placed parts an ASSY file "
+"produces, evaluated with every joint at its zero position. PartCAD can also "
+"write a URDF (plus the meshes it references) from any assembly."
+msgstr ""
+"一份 `URDF <https://wiki.ros.org/urdf>`_ 机器人描述，可直接用作装配体。它的连杆会构成与 ASSY "
+"文件所生成的相同的那棵已放置零件树，并在每个关节都处于零位的状态下求值。PartCAD 也可以从任意装配体写出 URDF（以及它所引用的网格）。"
+
+#: ../../source/config_assemblies.rst:41
+msgid ""
+"A URDF is a description of a *simulatable* robot. What it says about a link "
+"itself - mass, inertia, friction and contact, material and colour - becomes "
+"named PartCAD properties of the part that link turns into, and goes back out"
+" on export. What an assembly built out of rigid placements has nowhere to "
+"put - the motion of a joint, collision geometry, sensors, transmissions - is"
+" dropped, and reported. :ref:`sim-urdf` says what survives a round trip; the"
+" simulation `design record "
+"<https://github.com/partcad/partcad/blob/devel/docs/design/simulation.md>`__"
+" says what closing the gap would take."
+msgstr ""
+"URDF 是对一台 *可仿真* 机器人的描述。它关于某个 link 本身所说的内容 - 质量、惯量、摩擦与接触、材料和颜色 - 会变成该 link "
+"所转成那个零件的具名 PartCAD 属性，并在导出时写回去。而一个由刚性放置搭出来的装配体无处安放的东西 - 关节的运动、碰撞几何、传感器、传动装置 "
+"- 会被丢弃，并被报告出来。往返转换能保留什么见 :ref:`sim-urdf` ；而要把这个差距补上需要什么，见仿真的 `design record "
+"<https://github.com/partcad/partcad/blob/devel/docs/design/simulation.md>`__"
+" 。"
+
+#: ../../source/config_assemblies.rst:50
+msgid ""
+"For an assembly defined by a file another tool produced - the STEP and the "
+"URDF above - nothing is copied into the package, so the file stays the "
+"source of truth."
+msgstr "对于由其他工具生成的文件所定义的装配体——即上面的 STEP 和 URDF——不会有任何内容被复制进包中，因此该文件始终是事实来源。"
+
+#: ../../source/config_assemblies.rst:56
+msgid "Declare assemblies"
+msgstr "声明装配体"
+
+#: ../../source/config_assemblies.rst:58
+msgid ""
+"Assemblies are defined using the ``partcad.yaml`` file in the package "
+"folder. The syntax for defining assemblies is as follows:"
+msgstr "装配体使用包目录中的 ``partcad.yaml`` 文件来定义。定义装配体的语法如下："
+
+#: ../../source/config_assemblies.rst:110
+msgid ""
+"The ``assy`` type is used to define assemblies in `Assembly YAML` format, "
+"and the ``step`` type reads the structure out of a STEP file (see "
+":ref:`assembly_step`). The ``urdf`` type reads a robot description as an "
+"assembly directly (see :ref:`assembly-urdf`). A format an engine's plugin "
+"package implements is named through that package -- ``sim-mujoco:mjcf`` for "
+"a MuJoCo model, which is also a :ref:`scene <scenes>` type, the section that"
+" declares it being what decides which it is. The ``path`` parameter "
+"specifies the source file path, and the ``parameters`` section allows for "
+"defining parameters that can be used within the assembly. The source file "
+"does not have to be a part of the package: ``fileFrom`` and ``fileUrl`` pull"
+" it from a remote location on first use, exactly as they do for :ref:`parts`"
+" (see :ref:`files`). This holds for every assembly type -- a vendor's STEP "
+"assembly is declared with its URL and read from there."
+msgstr ""
+"``assy`` 类型用来以 `Assembly YAML` 格式定义装配体，而 ``step`` 类型从一个 STEP 文件中读出结构（参见 "
+":ref:`assembly_step` ）。``urdf`` 类型把一份机器人描述直接当作装配体读入（参见 :ref:`assembly-urdf` "
+"）。由某个引擎的插件包所实现的格式要通过那个包来指名 -- 比如 MuJoCo 模型用 ``sim-mujoco:mjcf`` ，而它同时也是一种 "
+":ref:`场景 <scenes>` 类型，由声明它的那个小节决定它究竟是哪一种。``path`` 参数指定源文件路径，而 ``parameters``"
+" 小节允许定义可在该装配体内部使用的参数。源文件不必是该包的一部分：``fileFrom`` 和 ``fileUrl`` "
+"会在首次使用时从远端位置把它拉下来，与它们对 :ref:`parts` 的做法完全相同（参见 :ref:`files` "
+"）。这一点对每一种装配体类型都成立 -- 某个厂商的 STEP 装配体就是用它的 URL 声明出来、并从那里读取的。"
+
+#: ../../source/config_assemblies.rst:123
+msgid ""
+"``timeout`` is for an assembly that is known to be slow. PartCAD waits five "
+"minutes for the daemon to say *something* while it works, and one large "
+"assembly built or rendered in a sandbox can say nothing for longer than "
+"that; one that declares ``timeout: 1800`` is waited on for half an hour "
+"instead, for as long as it is being worked on. It never shortens the wait, "
+"and it does not change the assembly's cache key. Declaring it also marks the"
+" assembly as slow: ``--fast-only`` leaves it out of a render, a test or a "
+"listing, which is what a sweep over a large tree in CI wants (see "
+":ref:`fast-only`). A scene takes the same key."
+msgstr ""
+"``timeout`` 用于那些已知很慢的装配体。PartCAD 在守护进程工作期间最多等待五分钟以听到 *某种* "
+"动静，而一个在沙箱中构建或渲染的大型装配体可能在更长的时间里毫无声息；声明了 ``timeout: 1800`` "
+"的装配体则会被等待半小时，只要它仍在被处理。它绝不会缩短等待时间，也不会改变装配体的缓存键。声明它同时还会把该装配体标记为慢： ``--fast-"
+"only`` 会把它排除在渲染、测试或列表之外，而这正是在 CI 中扫描一棵大型树时所需要的（参见 :ref:`fast-only` "
+"）。场景使用同样的键。"
+
+#: ../../source/config_assemblies.rst:133
+msgid ""
+"``dependencies`` is for the files the source file pulls in by itself -- a "
+"Jinja macro file, another ``.assy`` it includes. The parts and assemblies an"
+" ``assy`` file links to need no listing there: an assembly's cache key "
+"covers theirs, so editing one of them rebuilds every assembly using it. The "
+"same holds for the sketch of an ``extrude`` or ``sweep`` part, and for the "
+"assembly a ``compound`` part is made from."
+msgstr ""
+"``dependencies`` 用于源文件自行引入的那些文件——一个 Jinja 宏文件，或它所包含的另一个 ``.assy`` 文件。 "
+"``assy`` "
+"文件所链接到的零件和装配体无需列在那里：装配体的缓存键已经涵盖了它们的缓存键，所以编辑其中任何一个，都会让使用它的每一个装配体重新构建。对于 "
+"``extrude`` 或 ``sweep`` 零件所用的草图，以及 ``compound`` 零件所基于的装配体，情况也一样。"
+
+#: ../../source/config_assemblies.rst:143
+msgid "Ports and interfaces of an assembly"
+msgstr "装配体的端口与接口"
+
+#: ../../source/config_assemblies.rst:145
+msgid ""
+"An assembly is connected to other things the way a part is: by its ports, "
+"and by the interfaces those ports belong to (see :ref:`interfaces`). What it"
+" does not have is a part's way of getting them. A part is one solid and says"
+" where its ports are on it; an assembly is made of parts that already carry "
+"ports, already placed -- and an assembly's port is one of those, seen from "
+"outside."
+msgstr ""
+"装配体与其他东西相连的方式和零件一样：通过它的端口，以及这些端口所属的接口（参见 :ref:`interfaces` "
+"）。它所没有的，是零件获得这些端口的那套办法。零件是单个实体，它直接说明端口位于自身的什么位置；而装配体是由已经携带端口、并且已经被放置好的零件组成的——装配体的端口就是其中之一，只不过是从外部来看的。"
+
+#: ../../source/config_assemblies.rst:151
+msgid ""
+"So an assembly does not state a coordinate somebody worked out by hand. It "
+"says which one it means:"
+msgstr "因此装配体不会给出某人手工算出的坐标。它只说明自己指的是哪一个："
+
+#: ../../source/config_assemblies.rst:166
+msgid ""
+"The key is the new name. The value names what is being externalized: two "
+"elements are **a node and one of its ports**, three are **a node, an "
+"interface it implements and the instance of it**. Nothing else changes as a "
+"result: a mapped port is a port of this assembly like any other, and a "
+"mapped interface instance brings in exactly what an ``implements:`` of the "
+"same interface would have -- the same port names (``mount-3mm-thru-"
+"opening-m3``), the same freedom of movement, and the same ancestors, so an "
+"assembly that externalizes an ``m4-thru-3`` can be connected as an "
+"``m4-thru`` like anything else."
+msgstr ""
+"键是新的名称。值则指明被对外暴露的是什么：两个元素表示 **一个节点和它的一个端口** ，三个元素表示 "
+"**一个节点、它所实现的一个接口，以及该接口的实例** "
+"。除此之外没有任何变化：被映射的端口就是这个装配体的普通端口，而被映射的接口实例所带来的内容，与对同一接口写 ``implements:`` "
+"完全一致——相同的端口名称（ ``mount-3mm-thru-opening-m3`` ）、相同的运动自由度、相同的祖先接口，因此一个对外暴露 "
+"``m4-thru-3`` 的装配体，可以像其他任何东西一样作为 ``m4-thru`` 来连接。"
+
+#: ../../source/config_assemblies.rst:175
+msgid ""
+"What the map does **not** do is rename an interface. The interface is read "
+"off the node and kept: it is a contract, and an assembly is in no position "
+"to restate one. The *instance* name is the assembly's to choose, because an "
+"instance is a place rather than a kind -- the bracket calls it ``outer``, "
+"and the mount it is part of calls it ``mount``."
+msgstr ""
+"映射 **不会** 做的事情是重命名接口。接口是从节点上读取出来并原样保留的：它是一份契约，而装配体没有资格重新表述它。至于 *实例* "
+"的名称，则由装配体自行选择，因为实例代表的是位置而不是种类——支架把它叫做 ``outer`` ，而包含该支架的安装件把它叫做 ``mount`` 。"
+
+#: ../../source/config_assemblies.rst:182
+msgid "Which nodes can be named"
+msgstr "哪些节点可以被指名"
+
+#: ../../source/config_assemblies.rst:184
+msgid ""
+"The first element is the **node name from the Assembly YAML file** -- a "
+"link's ``name:``, or the part or assembly name where the link has none (see "
+":doc:`/assy`) -- and not the name of the part. An assembly places the same "
+"part six times; five of those are not the one being externalized."
+msgstr ""
+"第一个元素是 **Assembly YAML 文件中的节点名称** -- 也就是某条链接的 ``name:`` "
+"，或者在该链接没有名称时取那个零件或装配体的名称（参见 :doc:`/assy` ）-- "
+"而不是零件的名称。一个装配体会把同一个零件放置六次；其中五次都不是正在被对外暴露的那一个。"
+
+#: ../../source/config_assemblies.rst:189
+msgid ""
+"The anonymous ``links:`` containers an ASSY file is built out of contribute "
+"nothing to the name: they are the file's own structure rather than things, "
+"so every node is named exactly as the file names it however deeply the file "
+"nests it. A node inside a *named* container is reached through it, with "
+"``/``::"
+msgstr ""
+"构成 ASSY 文件的那些匿名 ``links:`` "
+"容器对名称没有任何贡献：它们属于文件自身的结构，而不是实际的东西，因此无论文件把节点嵌套得多深，每个节点的名称都与文件中给它的名称完全一致。位于 "
+"*有名称的* 容器内部的节点，则要用 ``/`` 经由该容器来访问::"
+
+#: ../../source/config_assemblies.rst:197
+msgid ""
+"A node name may be written in terms of the assembly's own parameters, the "
+"way ``ports:`` and ``implements:`` may be -- ``map: {mount: [\"%which%\", "
+"handle]}`` -- which is how an assembly parametrized by what it holds "
+"externalizes the right one."
+msgstr ""
+"节点名称可以用装配体自身的参数来书写，就像 ``ports:`` 和 ``implements:`` 那样—— ``map: {mount: "
+"[\"%which%\", handle]}`` ——以自己所持有的东西为参数的装配体，正是这样对外暴露出正确的那一个。"
+
+#: ../../source/config_assemblies.rst:202
+msgid ""
+"A sub-assembly that some package declares is a different matter: it is an "
+"object with a boundary of its own, and the map does not reach inside it. To "
+"reach a port in there, that sub-assembly externalizes it and this one maps "
+"*that*. A boundary is crossed one object at a time, which is what keeps an "
+"assembly free to be rearranged inside without breaking whatever connects to "
+"it."
+msgstr ""
+"由某个包声明的子装配体则是另一回事：它是拥有自身边界的对象，映射无法伸进它的内部。要访问其中的端口，需由那个子装配体先把端口对外暴露，然后本装配体再映射"
+" *那个* 端口。边界一次只跨越一层，正是这一点让装配体可以自由地重新调整内部结构，而不会破坏与它相连的任何东西。"
+
+#: ../../source/config_assemblies.rst:209
+msgid "What a map cannot say"
+msgstr "映射无法表达的东西"
+
+#: ../../source/config_assemblies.rst:211
+msgid ""
+"Some of an assembly's connections are not a port of anything inside it -- "
+"the face a fixture is clamped by, a datum the whole product is aligned to. "
+"Those are declared the way a part declares them, with ``ports:`` and "
+"``implements:``, which an assembly takes in exactly the same spelling as "
+":ref:`parts`."
+msgstr ""
+"装配体的某些连接并不是它内部任何东西的端口——比如夹具夹持的那个面，或整个产品对齐所依据的基准。这些要像零件那样，用 ``ports:`` 和 "
+"``implements:`` 来声明；装配体接受的写法与 :ref:`parts` 完全相同。"
+
+#: ../../source/config_assemblies.rst:216
+msgid ""
+"The two are read in order: the map first, then ``ports:``, then "
+"``implements:``. So a declaration may refer to what the map produced -- an "
+"``implements:`` instance may sit at a mapped port instead of at a "
+"coordinate:"
+msgstr ""
+"它们是按顺序读取的：先是映射，然后是 ``ports:`` ，最后是 ``implements:`` 。因此声明可以引用映射所产生的结果—— "
+"``implements:`` 的实例可以位于某个被映射的端口上，而不必位于某个坐标上："
+
+#: ../../source/config_assemblies.rst:231
+msgid ""
+"A ``ports:`` entry that uses a name the map already produced wins, and says "
+"so in the log: two things under one name is a mistake worth hearing about."
+msgstr ""
+"如果 ``ports:`` 条目使用了映射已经产生的名称，则以该条目为准，并且会在日志中说明这一点：同一个名称下有两样东西，是一个值得被提醒的错误。"
+
+#: ../../source/config_assemblies.rst:235
+msgid "The boundary"
+msgstr "边界"
+
+#: ../../source/config_assemblies.rst:237
+msgid ""
+"What an assembly externalizes is what it *has*, everywhere: ``pc info`` "
+"lists those ports, the viewer marks them, ``pc render --with-ports`` draws "
+"them, a ``connect:`` in an ASSY file reaches them, and ``pc search "
+"--interface`` finds the assembly by them. What is inside it and not "
+"externalized is its own business. An assembly that declares no ``map:``, no "
+"``ports:`` and no ``implements:`` therefore has no ports at all -- which is "
+"the answer to \"what can I connect to this\", not a failure. ``pc render "
+"--with-internals`` looks inside one anyway, for finding the connection that "
+"went wrong (see :doc:`/cli`)."
+msgstr ""
+"装配体对外暴露什么，就等于它在任何地方 *拥有* 什么：``pc info`` 会列出那些端口、查看器会标出它们、``pc render --with-"
+"ports`` 会画出它们、ASSY 文件中的 ``connect:`` 能触及它们，而 ``pc search --interface`` "
+"能靠它们找到这个装配体。而它内部没有被对外暴露的东西，是它自己的事。因此，一个既没有声明 ``map:`` 、也没有声明 ``ports:`` 和 "
+"``implements:`` 的装配体根本没有任何端口 -- 而这是对“我能把东西连到它什么地方”这个问题的回答，而不是一次失败。``pc "
+"render --with-internals`` 不管怎样都会看进它内部，以便找出那个出了问题的连接（参见 :doc:`/cli` ）。"
+
+#: ../../source/config_assemblies.rst:249
+msgid "New names for what an object has"
+msgstr "给对象所拥有之物起新名字"
+
+#: ../../source/config_assemblies.rst:251
+msgid ""
+"An entry with no node names something the object has of its own, and gives "
+"it a name that says what it is for. That is what a ``map:`` is for on a "
+"part, and on an enrich or an alias of anything: their own is what they point"
+" at, the same geometry with the same ports. Anything else's own is what it "
+"declares in ``ports:`` and ``implements:``. In the list form that is "
+"``[<port>]``; the long form spells out by key what the list form says by "
+"position -- ``node``, ``port``, or ``interface`` and ``instance`` -- and is "
+"the one that can name an interface of the object's own, since "
+"``[<interface>, <instance>]`` would read as a node and a port."
+msgstr ""
+"没有节点的条目指名的是该对象自己所拥有的某样东西，并给它起一个说明它用途的名字。这正是 ``map:`` 在零件上、以及在对任何东西的 enrich 或"
+" alias 上的用处：它们自己拥有的东西就是它们所指向的那个东西，同样的几何、同样的端口。而其他任何东西自己拥有的，就是它在 ``ports:`` 和"
+" ``implements:`` 中所声明的内容。在列表形式中那是 ``[<port>]`` ；而长形式则按键把列表形式按位置表达的东西写明白 -- "
+"``node`` 、 ``port`` ，或者 ``interface`` 加 ``instance`` -- "
+"而且它才是那个能指名对象自有接口的形式，因为 ``[<interface>, <instance>]`` 会被读成一个节点加一个端口。"
+
+#: ../../source/config_assemblies.rst:261
+msgid ""
+"The long form also places the new name *near* what it names rather than on "
+"it: ``moveX``, ``moveY`` and ``moveZ`` in millimetres and ``turnX``, "
+"``turnY`` and ``turnZ`` in degrees, in the frame of what is named -- the "
+"moves, then the turns, the way an interface's freedom of movement is "
+"applied. A leg cut to length from a standard post knows where its own "
+"corners are; the desk it is for says where on it an apron goes:"
+msgstr ""
+"长形式还会把新名字放在它所指名之物 *附近* 而不是放在它身上：以毫米计的 ``moveX`` 、 ``moveY`` 和 ``moveZ`` "
+"，以及以度计的 ``turnX`` 、 ``turnY`` 和 ``turnZ`` ，都位于被指名之物的坐标系中 -- "
+"先移动，再转动，与接口的运动自由度被施加的顺序一样。一条从标准立柱上按长度截下来的腿知道它自己的各个角在哪里；而它所服务的那张桌子说明的是围板装在它上面的什么位置："
+
+#: ../../source/config_assemblies.rst:284
+msgid ""
+"An interface instance is mapped the same way, and the result is a new "
+"instance of the same interface: ``corner: {interface: m3-thru, instance: TL,"
+" moveX: -1}`` adds ``corner`` beside ``TL``."
+msgstr ""
+"接口实例也是同样的映射方式，而结果是同一个接口的一个新实例：``corner: {interface: m3-thru, instance: TL, "
+"moveX: -1}`` 会在 ``TL`` 旁边加上 ``corner`` 。"
+
+#: ../../source/config_assemblies.rst:288
+msgid ""
+"The names a map gives are *added* to what the object has. An enrich or an "
+"alias of a part keeps every port and interface of what it points at, as it "
+"does without a ``map:``, unless it declares ``ports:`` or ``implements:`` of"
+" its own or moves the geometry with ``offset:`` -- the rule it has always "
+"followed. An assembly, which has no ports but the ones it states, has the "
+"ones its map names."
+msgstr ""
+"映射所给出的名字是 *添加* 到该对象已有内容之上的。对零件的 enrich 或 alias 会保留它所指向之物的每一个端口和接口，与没有 "
+"``map:`` 时一样，除非它自己声明了 ``ports:`` 或 ``implements:`` ，或者用 ``offset:`` 移动了几何 --"
+" 这是它一向遵循的规则。而装配体除了它自己写明的端口之外本来没有端口，所以它拥有的就是它的映射所指名的那些。"
+
+#: ../../source/config_assemblies.rst:295
+msgid ""
+"An entry that names a port of what an enrich or an alias points at follows "
+"the reference's ``offset:``, since the port moves with the geometry it is "
+"on. One that declares ``scale:`` cannot map those ports at all: where a port"
+" is on the scaled geometry is not something a map can say, and it is "
+"reported."
+msgstr ""
+"指名了 enrich 或 alias 所指向之物的某个端口的条目，会跟随该引用的 ``offset:`` ，因为端口随它所在的几何一起移动。而声明了 "
+"``scale:`` 的引用根本无法映射那些端口：端口在缩放后的几何上位于何处，不是映射说得出来的，而这会被报告出来。"
+
+#: ../../source/config_assemblies.rst:301
+msgid "Other assembly types"
+msgstr "其他装配体类型"
+
+#: ../../source/config_assemblies.rst:303
+msgid ""
+"``map:`` is written for ``assy``, where the node names are the ones somebody"
+" wrote in the file. It works for ``step`` and ``urdf`` assemblies as best it"
+" can -- the nodes are then the components or the links, named as the "
+"imported file names them, which is not something this package controls. "
+"Where that does not fit, those assemblies state their ports the way a part "
+"does, with ``ports:`` and ``implements:``."
+msgstr ""
+"``map:`` 是为 ``assy`` 设计的，那里的节点名称是有人写在文件里的。对于 ``step`` 和 ``urdf`` "
+"装配体，它会尽力工作——此时节点是组件或连杆，名称由被导入的文件决定，而这并不是本包所能控制的。在不适用的场合，这些装配体就像零件那样，用 "
+"``ports:`` 和 ``implements:`` 来声明自己的端口。"
+
+#: ../../source/config_assemblies.rst:312
+msgid ""
+"**Manufacturing.** ``assy`` is the only manufacturing method an assembly "
+"has: it is put together by following the instructions in its own Assembly "
+"YAML file, rather than made the way a part is. Every assembly of type "
+"``assy`` gets that method with the type, so ``manufacturing`` never has to "
+"be spelled out:"
+msgstr ""
+"**制造。** ``assy`` 是装配体唯一的制造方式：它是按照自己的 Assembly YAML "
+"文件中的说明装配起来的，而不是像零件那样被制造出来。每个 ``assy`` 类型的装配体都随类型一起获得该方式，因此 ``manufacturing``"
+" 永远不必写明："
+
+#: ../../source/config_assemblies.rst:325
+msgid ""
+"Whether an assembly is *held to* that -- whether ``pc test`` checks that its"
+" parts can be obtained and its connection instructions followed -- is what "
+"``manufacturable`` says, exactly as for parts."
+msgstr ""
+"装配体是否要 *受此约束* ——即 ``pc test`` 是否会检查它的零件能否获得、它的连接说明能否被执行——由 "
+"``manufacturable`` 来决定，这与零件完全一致。"
+
+#: ../../source/config_assemblies.rst:329
+msgid ""
+"The optional ``offset`` parameter specifies the location of the assembly "
+"using an OCCT Location object. See \"Implementation Detail\" for more "
+"information on the OCCT Location object."
+msgstr ""
+"可选的 ``offset`` 参数使用一个 OCCT Location 对象来指定装配体的位置。关于 OCCT Location "
+"对象的更多信息，请参见“Implementation Detail”。"
+
+#: ../../source/config_assemblies.rst:332
+msgid "Here is an example of an assembly definition:"
+msgstr "下面是一个装配体定义的示例："
+
+#: ../../source/config_assemblies.rst:346
+msgid ""
+"In this example, an assembly named ``example_assembly`` is defined with a "
+"parameter ``length`` and an offset."
+msgstr "在这个示例中，定义了一个名为 ``example_assembly`` 的装配体，它带有一个参数 ``length`` 和一个偏移量。"
+
+#: ../../source/config_assemblies.rst:353
+msgid ""
+"The ``urdf`` type uses a `URDF <https://wiki.ros.org/urdf>`_ file - the "
+"robot description format of ROS - as an assembly directly, with no "
+"conversion step:"
+msgstr ""
+"``urdf`` 类型直接把 `URDF <https://wiki.ros.org/urdf>`_ 文件——ROS "
+"的机器人描述格式——用作装配体，不需要任何转换步骤："
+
+#: ../../source/config_assemblies.rst:367
+msgid ""
+"``pc add assembly urdf <path>`` writes that declaration for a URDF that is "
+"already inside the package. ``pc import assembly <path>`` is the other "
+"choice: it converts instead of declaring, leaving the package with an "
+"``stl`` part per link, an interface pair per joint and an ``.assy``, exactly"
+" as ``pc convert assembly -t assy`` does below. Both commands work the way "
+"they do for a STEP file - ``add`` points at a file, ``import`` turns one "
+"into PartCAD's own objects."
+msgstr ""
+"``pc add assembly urdf <path>`` 会为已经位于包内的 URDF 写出这段声明。另一个选择是 ``pc import "
+"assembly <path>`` ：它进行转换而不是声明，会在包中留下每个连杆一个 ``stl`` 零件、每个关节一对接口，以及一个 "
+"``.assy`` 文件，与下文的 ``pc convert assembly -t assy`` 完全一样。这两个命令的行为与处理 STEP "
+"文件时相同—— ``add`` 指向一个文件，而 ``import`` 把文件变成 PartCAD 自己的对象。"
+
+#: ../../source/config_assemblies.rst:375
+msgid ""
+"**One part per shape, in one flat list.** A link that has a single "
+"``<visual>`` (or ``<collision>``) becomes the part ``<assembly name>/<link "
+"name>``. A link that has several becomes a *sub-assembly* of one part each, "
+"named ``<assembly name>/<link name>/<element name or index>``. Every link is"
+" a direct child of the assembly, placed where the joints between it and the "
+"robot's root link put it with **every joint at its zero position**, and each"
+" shape keeps the offset its own ``<origin>`` gave it. The result is the same"
+" in-memory representation an `Assembly YAML`_ file produces, so everything "
+"else - rendering, export, BoM, inspection - treats the two alike. The "
+"assembly is the container that holds the links, the robot's root link "
+"included; it is not one of them and carries no properties of its own."
+msgstr ""
+"**每个形状一个零件，排成一张扁平的列表。** 只有一个 ``<visual>`` （或 ``<collision>`` ）的连杆会变成零件 "
+"``<assembly name>/<link name>`` 。有多个的连杆则会变成一个 *子装配体* ，其中每个形状一个零件，名为 "
+"``<assembly name>/<link name>/<element name or index>`` "
+"。每个连杆都是装配体的直接子节点，其位置由它与机器人根连杆之间的那些关节在 **每个关节都处于零位** 时所决定，而每个形状都保留它自己的 "
+"``<origin>`` 给出的偏移。其结果与 `Assembly YAML`_ "
+"文件所产生的内存表示完全相同，因此其余的一切——渲染、导出、物料清单、查看——对两者一视同仁。装配体是容纳这些连杆（包括机器人的根连杆）的容器；它本身不是其中之一，也不携带任何属于自己的属性。"
+
+#: ../../source/config_assemblies.rst:387
+msgid ""
+"The joint tree deliberately does not become nesting. A URDF's tree is its "
+"*kinematics*, and an assembly is one static configuration of it, so a link "
+"hanging off another says nothing that the link's own placement does not "
+"already say - while nesting per joint would make an arm as deep as it has "
+"joints. The kinematics are not lost: **every link carries the joint that "
+"moves it**, from the link it hangs off, with the joint's axis, limits and "
+"dynamics (``pc info`` lists them), and a link on a fixed joint is welded to "
+"its parent, so the assembly is the robot's mechanism without being converted"
+" (see :ref:`sim-urdf`). The only nesting left is the one that means "
+"something, a link whose several shapes group together."
+msgstr ""
+"关节树有意不变成嵌套。URDF 的树是它的 *运动学*，而装配体是它的一个静态构型，所以一个 link 挂在另一个下面，并不比该 link "
+"自身的放置多说出什么 - 而按关节逐层嵌套会让一条手臂深到它有多少个关节。运动学并没有丢：**每一个 link "
+"都带着驱动它的那个关节**，来自它所挂靠的那个 link，并带上该关节的轴线、限位和动力学（ ``pc info`` 会列出它们）；而处在固定关节上的 "
+"link 会被焊接到它的父级，所以这个装配体不经转换就已经是那台机器人的机构（参见 :ref:`sim-urdf` "
+"）。唯一留下来的嵌套是那个确有含义的：一个由多个形状组合而成的 link。"
+
+#: ../../source/config_assemblies.rst:398
+msgid ""
+"Those parts are ordinary parts. ``pc ide view robot/forearm`` and ``pc "
+"export -t step robot/wrist`` work on them like on any other. They are not "
+"declared in ``partcad.yaml`` - the URDF is what declares them - so a package"
+" handed one of these names builds the assembly that owns it first."
+msgstr ""
+"这些零件就是普通的零件。 ``pc ide view robot/forearm`` 和 ``pc export -t step "
+"robot/wrist`` 对它们的作用与对任何其他零件一样。它们并没有在 ``partcad.yaml`` 中声明——声明它们的是 "
+"URDF——因此当包接到这样一个名称时，会先构建拥有它的那个装配体。"
+
+#: ../../source/config_assemblies.rst:403
+msgid ""
+"**Nothing is rewritten that does not have to be.** A ``mesh`` reference "
+"becomes a part that reads the very file the URDF named (``package://``, "
+"``file://`` and paths relative to the URDF file are all resolved), for the "
+"mesh formats PartCAD reads - ``stl``, ``obj``, ``step``, ``brep`` and "
+"``3mf``. The ``<origin>`` that places it becomes a PartCAD location, not a "
+"transform baked into a copy of the geometry. A mesh ``scale`` is honoured: "
+"URDF reads mesh coordinates as metres after scaling, PartCAD works in "
+"millimetres. Only ``box``, ``cylinder`` and ``sphere`` are generated, "
+"because there is no file to point at."
+msgstr ""
+"**不必改写的东西一概不改写。** 对于 PartCAD 能读取的网格格式—— ``stl`` 、 ``obj`` 、 ``step`` 、 "
+"``brep`` 和 ``3mf`` ——一个 ``mesh`` 引用会变成一个零件，该零件读取的正是 URDF 所指明的那个文件（ "
+"``package://`` 、 ``file://`` 以及相对于 URDF 文件的路径都会被解析）。放置它的 ``<origin>`` 会变成一个 "
+"PartCAD 位置，而不是被烘焙进几何体副本里的变换。网格的 ``scale`` 会被遵守：URDF 在缩放之后按米来解读网格坐标，而 PartCAD"
+" 以毫米为单位工作。只有 ``box`` 、 ``cylinder`` 和 ``sphere`` 会被生成出来，因为没有文件可供指向。"
+
+#: ../../source/config_assemblies.rst:412
+msgid ""
+"A link that states both a visual and a collision shape is built from the "
+"**collision** one: that is what a simulator resolves contact against, and a "
+"model that bothers to state both means it to be the physical shape. "
+"``ignoreCollision: true`` reverses that for every link, and a list of link "
+"names reverses it for those links only."
+msgstr ""
+"同时给出了视觉形状和碰撞形状的连杆，会以 **碰撞** 形状来构建：仿真器正是用它来求解接触的，而一个特意同时给出两者的模型，意在让它成为物理形状。 "
+"``ignoreCollision: true`` 会对每个连杆反转这一行为，而给出一个连杆名称列表，则只对这些连杆反转。"
+
+#: ../../source/config_assemblies.rst:418
+msgid ""
+"What a link says about its physics becomes **named PartCAD properties** of "
+"the part, one property per URDF value and in PartCAD's own units: "
+"``<inertial>`` becomes ``mass``, ``centerOfMass`` and ``inertia``, and the "
+"friction and contact settings of a ``<gazebo>`` block become ``friction``, "
+"``contactStiffness`` and the rest. Its ``<material>`` becomes ``material`` "
+"and ``color``. Nothing is stashed under a container of its own, nothing "
+"records the link's name or its parent - the part *is* named after the link, "
+"and the joint tree is this very file - and URDF that PartCAD has no property"
+" for stops the import rather than being carried opaquely. ``strict`` extends"
+" that to ``<gazebo>``, whose vocabulary is open and where an unknown setting"
+" is otherwise only reported."
+msgstr ""
+"连杆关于自身物理属性的描述，会变成该零件的 **具名 PartCAD 属性** ，每个 URDF 值对应一个属性，并采用 PartCAD 自己的单位： "
+"``<inertial>`` 会变成 ``mass`` 、 ``centerOfMass`` 和 ``inertia`` ，而 ``<gazebo>``"
+" 块中的摩擦与接触设置会变成 ``friction`` 、 ``contactStiffness`` 等等。它的 ``<material>`` 会变成 "
+"``material`` 和 ``color`` 。没有任何东西被塞进专属于自己的容器里，也没有任何东西记录连杆的名称或它的父节点——零件本身 *就是*"
+" 以连杆命名的，而关节树就是这个文件本身——至于 PartCAD 没有对应属性的那些 URDF 内容，会直接中止导入，而不是被不透明地带过去。 "
+"``strict`` 把这一做法扩展到 ``<gazebo>`` ：它的词汇表是开放的，其中未知的设置在默认情况下只会被报告出来。"
+
+#: ../../source/config_assemblies.rst:429
+msgid ""
+"The geometry a link was *not* built from is kept too, as the part "
+"``<assembly name>/<link name>/<visual|collision>``: defined and exportable, "
+"but not placed in the assembly. What cannot be represented at all "
+"(transmissions, sensors, calibration references) is counted and reported; "
+"``pc info`` shows the tally."
+msgstr ""
+"link *并非* 由之构建出来的那些几何也会被保留，作为零件 ``<assembly name>/<link "
+"name>/<visual|collision>`` "
+"：已定义、可导出，但不会被放置在该装配体中。而完全无法表示的内容（传动装置、传感器、标定参考值）会被计数并报告；``pc info`` 会显示这个计数。"
+
+#: ../../source/config_assemblies.rst:435
+msgid ""
+"The reverse direction is ``pc export -t urdf``, which writes a ``.urdf`` "
+"file plus a directory of the STL files it references, from any part or "
+"assembly, and ``pc convert assembly`` rewrites the package around the "
+"assembly and switches its declared type:"
+msgstr ""
+"反方向是 ``pc export -t urdf`` ，它可以从任何零件或装配体写出一个 ``.urdf`` 文件，外加它所引用的那些 STL "
+"文件所在的目录；而 ``pc convert assembly`` 会改写该装配体周围的那个包，并切换它所声明的类型："
+
+#: ../../source/config_assemblies.rst:445
+msgid ""
+"What an export writes into each link, how a URDF's joints become interfaces,"
+" and what a round trip keeps and loses are in :ref:`sim-urdf`. Neither "
+"direction of the conversion has an ad-hoc equivalent: ``pc adhoc convert`` "
+"refuses both formats, because an ASSY file is a set of references to the "
+"parts of a package and a URDF becomes a part per link - neither means "
+"anything without one."
+msgstr ""
+"导出会往每一个 link 里写什么、URDF 的各个关节如何变成接口，以及往返转换保留和丢失了什么，都在 :ref:`sim-urdf` "
+"中。这个转换的两个方向都没有即时等价物：``pc adhoc convert`` 对这两种格式都拒绝，因为 ASSY 文件是对某个包各零件的一组引用，而"
+" URDF 会变成每个 link 一个零件 - 两者离开包都没有任何意义。"
+
+#: ../../source/config_assemblies.rst:452
+msgid "Assembly YAML"
+msgstr "Assembly YAML"
+
+#: ../../source/config_assemblies.rst:454
+msgid "Here is an example of an assembly defined using `Assembly YAML`:"
+msgstr "下面是一个使用 `Assembly YAML` 定义的装配体示例："
+
+#: ../../source/config_assemblies.rst:457
+#: ../../source/config_assemblies.rst:569
+msgid "Configuration"
+msgstr "配置"
+
+#: ../../source/config_assemblies.rst:457
+msgid "Result"
+msgstr "结果"
+
+#: ../../source/config_assemblies.rst:485
+msgid ""
+"The example above shows an assembly created using ``Assembly YAML``. Other "
+"methods to define assemblies are coming soon (e.g. using ``CadQuery`` or "
+"``build123d``). The assembly file syntax is described in the ``Assembly "
+"YAML`` section of this documentation."
+msgstr ""
+"上面的示例展示了一个使用 ``Assembly YAML`` 创建的装配体。定义装配体的其他方式即将推出（例如使用 ``CadQuery`` 或 "
+"``build123d`` ）。装配体文件的语法在本文档的 ``Assembly YAML`` 一节中有描述。"
+
+#: ../../source/config_assemblies.rst:494
+msgid ""
+"A STEP file that carries an assembly structure already says what an assembly"
+" says: a tree of named components, each placed by a transform. The ``step`` "
+"type reads it and uses it as the assembly itself, with no intermediate file:"
+msgstr ""
+"带有装配结构的 STEP 文件，已经说出了装配体所要说的内容：一棵由具名组件构成的树，每个组件由一个变换来放置。 ``step`` "
+"类型读取它，并直接把它当作装配体本身，不需要任何中间文件："
+
+#: ../../source/config_assemblies.rst:506
+msgid ""
+"``pc add assembly step <file>.step`` writes that declaration for an existing"
+" file."
+msgstr "``pc add assembly step <file>.step`` 会为一个已有的文件写出这段声明。"
+
+#: ../../source/config_assemblies.rst:509
+msgid ""
+"Every component of the STEP file becomes an ordinary PartCAD part, named "
+"``<assembly name>/<component name>``. Those parts are inspected, rendered, "
+"exported and referenced from other assemblies like any other part -- they "
+"are simply declared by the STEP file rather than by ``partcad.yaml``:"
+msgstr ""
+"STEP 文件中的每个组件都会变成一个普通的 PartCAD 零件，名为 ``<assembly name>/<component name>`` "
+"。这些零件可以像其他任何零件一样被查看、渲染、导出，以及被其他装配体引用——它们只不过是由 STEP 文件而不是由 ``partcad.yaml`` "
+"声明的："
+
+#: ../../source/config_assemblies.rst:519
+msgid ""
+"A group inside the STEP file becomes a nested assembly, so the tree PartCAD "
+"shows is the tree the CAD tool exported. Components that are the same "
+"geometry in several places are recognized as one part placed several times, "
+"which is what makes the bill of materials come out right."
+msgstr ""
+"STEP 文件内部的分组会变成嵌套的装配体，因此 PartCAD 显示的树就是 CAD "
+"工具导出的那棵树。在多处出现、几何体相同的组件会被识别为同一个零件被放置了多次，正是这一点让物料清单的结果正确无误。"
+
+#: ../../source/config_assemblies.rst:524
+msgid ""
+"Nothing is written into the package: the geometry PartCAD extracts for each "
+"component is derived data and lives in PartCAD's own internal state "
+"directory. The source file itself does not have to be in the package either "
+"-- with ``fileFrom``/``fileUrl`` (see :ref:`files`) a vendor's STEP assembly"
+" is declared by its URL and downloaded the first time it is used:"
+msgstr ""
+"不会有任何东西被写入包中：PartCAD 为每个组件提取的几何体属于派生数据，存放在 PartCAD "
+"自己的内部状态目录里。源文件本身也不必位于包内——借助 ``fileFrom``/``fileUrl`` （参见 :ref:`files` ），供应商的"
+" STEP 装配体可以用它的 URL 来声明，并在首次使用时下载："
+
+#: ../../source/config_assemblies.rst:539
+msgid "Compared to ``pc import assembly``"
+msgstr "与 ``pc import assembly`` 的比较"
+
+#: ../../source/config_assemblies.rst:541
+msgid ""
+"``pc import assembly`` reads the very same file with the very same reader, "
+"but it is a one-shot conversion: it writes a STEP file per component and an "
+"``Assembly YAML`` file into the package, and from then on the package owns "
+"them and the original file is never consulted again."
+msgstr ""
+"``pc import assembly`` 用完全相同的读取器读取完全相同的文件，但它是一次性的转换：它会向包中写入每个组件一个 STEP "
+"文件，以及一个 ``Assembly YAML`` 文件；从此以后这些内容归包所有，原始文件再也不会被参考。"
+
+#: ../../source/config_assemblies.rst:546
+msgid ""
+"Use ``type: step`` when the STEP file is to remain the source of truth: a "
+"vendor's file, a file regenerated by another CAD tool, or a file pulled from"
+" a URL. Every change to it is picked up on the next use, and nothing has to "
+"be kept in sync by hand."
+msgstr ""
+"当 STEP 文件要继续作为权威来源时，使用 ``type: step`` ：例如供应商的文件、由另一款 CAD 工具重新生成的文件，或从 URL "
+"拉取的文件。对它的每一次修改都会在下次使用时被采纳，不需要手工保持任何同步。"
+
+#: ../../source/config_assemblies.rst:551
+msgid ""
+"Use ``pc import assembly`` when the structure is to be taken over: the "
+"resulting parts and ``.assy`` file are ordinary package content that can be "
+"renamed, re-arranged, given interfaces and connections, or replaced part by "
+"part."
+msgstr ""
+"当要把这个结构接管过来时，使用 ``pc import assembly`` ：由此产生的零件和 ``.assy`` "
+"文件都是普通的包内容，可以重命名、重新编排、添加接口与连接，也可以逐个零件地替换。"
+
+#: ../../source/config_assemblies.rst:556
+msgid "References"
+msgstr "引用"
+
+#: ../../source/config_assemblies.rst:558
+msgid ""
+"It is also possible to declare assemblies by referencing other assemblies "
+"that are already defined elsewhere. Both methods work the same way they do "
+"for :ref:`parts`: an assembly takes parameters like anything else, so an "
+"assembly with other values is another instance of the same assembly, and "
+"that is what an ``enrich`` of it asks for."
+msgstr ""
+"也可以通过引用别处已经定义好的其他装配体来声明装配体。这两种方式的工作原理与 :ref:`parts` "
+"完全相同：装配体和其他东西一样接受参数，所以取用其他参数值的装配体是同一个装配体的另一个实例，而这正是对它做 ``enrich`` 时所要求的。"
+
+#: ../../source/config_assemblies.rst:568
+msgid "Method"
+msgstr "方式"
+
+#: ../../source/config_assemblies.rst:570
+msgid "Description"
+msgstr "描述"
+
+#: ../../source/config_assemblies.rst:571
+msgid "Alias"
+msgstr "Alias"
+
+#: ../../source/config_assemblies.rst:578
+msgid ""
+"Create a shallow clone of the existing assembly. For example, to make it "
+"easier to reference it locally."
+msgstr "创建现有装配体的一个浅层克隆。例如，为了更方便地在本地引用它。"
+
+#: ../../source/config_assemblies.rst:580
+msgid "Enrich"
+msgstr "Enrich"
+
+#: ../../source/config_assemblies.rst:589
+msgid ""
+"Create an opinionated alternative to the existing assembly by setting some "
+"of its parameters, the same way a part is enriched."
+msgstr "创建一个现有装配体的、带有既定倾向的替代版本，做法是设置它的部分参数，方式与零件被扩充的方式相同。"
+
+#: ../../source/config_assemblies.rst:593
+msgid "Procurement"
+msgstr "采购"
+
+#: ../../source/config_assemblies.rst:595
+msgid ""
+"Not every assembly has to be assembled: some are sold assembled, as a kit or"
+" as a pre-built module. Such an assembly is declared purchasable the same "
+"way a part is (see :ref:`procurement`):"
+msgstr ""
+"并不是每个装配体都必须自己装配：有些是以组装好的形式出售的，可能是一套件，也可能是一个预制模块。这样的装配体声明为可购买的方式与零件相同（参见 "
+":ref:`procurement` ）："
+
+#: ../../source/config_assemblies.rst:608
+msgid ""
+"``vendor``, ``sku`` and ``count_per_sku`` have the same meaning as they do "
+"for parts, with the assembly itself being what is ordered."
+msgstr ""
+"``vendor`` 、 ``sku`` 和 ``count_per_sku`` 的含义与它们对零件的含义相同，只不过被订购的是装配体本身。"
+
+#: ../../source/config_assemblies.rst:619
+msgid ""
+"An assembly that has both ``vendor`` and ``sku`` set is considered "
+"purchasable, and is not required to declare how it is manufactured: ``pc "
+"test`` only checks that a supplier carries it. An assembly without them is "
+"manufactured by producing its parts and putting them together, which "
+"requires everything it is procured from -- its parts, and the sub-assemblies"
+" that are sold assembled -- to be obtainable by itself."
+msgstr ""
+"同时设置了 ``vendor`` 和 ``sku`` 的装配体被视为可购买的，不需要声明它是如何制造的： ``pc test`` "
+"只会检查是否有供应商供货。没有设置它们的装配体，则通过生产它的零件并把它们组装起来来制造，这就要求它所采购的一切——它的零件，以及那些以组装好的形式出售的子装配体——自身都能够获得。"
+
+#: ../../source/config_assemblies.rst:626
+msgid ""
+"Declaring an assembly purchasable does not stop it from being modelled and "
+"rendered as usual: the links between its parts still describe what is inside"
+" the box."
+msgstr "把装配体声明为可购买的，并不妨碍它照常被建模和渲染：它各个零件之间的连接依然描述了盒子里面有什么。"
+
+#: ../../source/config_assemblies.rst:630
+msgid ""
+"This is also where ``pc supply find`` and ``pc supply quote`` stop looking "
+"inside. An assembly is otherwise procured as the objects it is made of, and "
+"the same question is asked about each sub-assembly in turn: one that is sold"
+" assembled is ordered as a single item, and one that is not is broken down "
+"further. Pass ``--recursive`` to order the parts even where the assembly "
+"holding them could have been bought whole -- for example to compare the cost"
+" of building it against the cost of buying it."
+msgstr ""
+"这也是 ``pc supply find`` 和 ``pc supply quote`` "
+"停止向内查看的地方。在其他情况下，装配体会按照构成它的那些对象来采购，并对每一个子装配体依次提出同样的问题：以组装好的形式出售的，作为单个条目订购；不是这样的，则继续向下拆解。传入"
+" ``--recursive`` ，即使持有这些零件的装配体本可以整体买下，也仍然订购这些零件——例如用来比较自行制造与直接购买的成本。"
+
+#: ../../source/config_assemblies.rst:647
+msgid ""
+"An assembly embedded in the parent's own source file (the nested ``links:`` "
+"of an Assembly YAML file) is not an object of any package, so there is no "
+"name to order it by. Such an assembly is always procured as its contents, "
+"and declaring a vendor for it has no effect."
+msgstr ""
+"嵌入在父级自身源文件中的装配体（Assembly YAML 文件里嵌套的 ``links:`` "
+"）不是任何包的对象，因此没有可用来订购它的名称。这样的装配体始终按其内容来采购，为它声明供应商不会有任何效果。"

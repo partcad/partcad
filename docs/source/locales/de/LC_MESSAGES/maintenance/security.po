@@ -1,0 +1,64 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/maintenance/security.rst:3
+msgid "Security"
+msgstr "Sicherheit"
+
+#: ../../source/maintenance/security.rst:6
+msgid ""
+"As code-CAD is gaining popularity in the community, the topic of supply "
+"chain security and the risk of running arbitrary third-party code is not "
+"sufficiently addressed. PartCAD aims to close that gap for open-source "
+"software in a way that exceeds anything commercial software has to offer at "
+"the moment."
+msgstr ""
+"Da Code-CAD in der Community an Beliebtheit gewinnt, wird das Thema "
+"Lieferkettensicherheit und das Risiko, beliebigen Drittanbietercode "
+"auszuführen, nicht ausreichend behandelt. PartCAD hat zum Ziel, diese Lücke "
+"für Open-Source-Software auf eine Weise zu schließen, die alles übertrifft, "
+"was kommerzielle Software derzeit zu bieten hat."
+
+#: ../../source/maintenance/security.rst:11
+msgid ""
+"PartCAD is capable of rendering scripted parts in sandboxed environments: "
+"``CadQuery``, ``build123d`` and ``sdf`` use Python, and ``Chili3D`` uses "
+"JavaScript."
+msgstr ""
+"PartCAD kann skriptbasierte Teile in Sandbox-Umgebungen rendern: "
+"``CadQuery``, ``build123d`` und ``sdf`` verwenden Python, ``Chili3D`` "
+"verwendet JavaScript."
+
+#: ../../source/maintenance/security.rst:15
+msgid ""
+"At the moment it is only useful from a dependency management perspective (it "
+"allows third-party packages to bring their Python and npm dependencies "
+"without polluting your own environments), in the future, PartCAD aims to "
+"achieve security isolation of the sandboxed environments. That will "
+"fundamentally change the security implications of using scripted models "
+"shared online."
+msgstr ""
+"Derzeit ist dies nur aus Sicht der Abhängigkeitsverwaltung nützlich (es "
+"erlaubt Paketen von Drittanbietern, ihre Python- und npm-Abhängigkeiten "
+"mitzubringen, ohne die eigenen Umgebungen zu verunreinigen); in Zukunft hat "
+"PartCAD zum Ziel, eine sicherheitstechnische Isolation der Sandbox-"
+"Umgebungen zu erreichen. Das wird die sicherheitsrelevanten Auswirkungen der "
+"Verwendung online geteilter skriptbasierter Modelle grundlegend verändern."

@@ -1,0 +1,169 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:5
+msgid "Dynamic FEA"
+msgstr "Dynamic FEA"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:7
+msgid ""
+"**Dynamic FEA** is the question at which frequencies a part rings, held as "
+"it is held: a modal analysis of the solid, reporting its natural frequencies"
+" and the shape it moves in at each one. It is what says whether a bracket "
+"will be shaken by the motor bolted to it."
+msgstr ""
+"**Dynamic FEA** "
+"问的是一个零件按它当前的固定方式会在哪些频率上共振：对该实体做模态分析，报告它的固有频率以及它在每一个频率上所采取的运动形状。正是它说明一个支架会不会被用螺栓固定在它上面的电机振起来。"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:12
+msgid ""
+"The question is asked by a ``dynamic:`` section on the part, a map of named "
+"scenarios, and answered by a solver a package supplies. "
+":doc:`/digital_thread/lifecycle/analysis` explains what every analysis has "
+"in common."
+msgstr ""
+"这个问题由零件上的一个 ``dynamic:`` "
+"小节提出，它是一个具名场景的映射，而由某个包所提供的求解器来回答。:doc:`/digital_thread/lifecycle/analysis` "
+"讲的是每一项分析的共同之处。"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:18
+msgid "What the scenario says"
+msgstr "场景说明什么"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:20
+msgid "One condition:"
+msgstr "一个条件："
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:22
+msgid "``fix:``"
+msgstr "``fix:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:23
+msgid ""
+"a list of interface types held still, or a map from a type to the instances "
+"of it meant. The natural frequencies of everything else are what is found."
+msgstr "一组被固定住的接口类型，或者一个从某个类型到其所指实例的映射。被求出来的就是其余部分的固有频率。"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:26
+msgid ""
+"There is no load. A modal analysis asks what the part does when nothing "
+"drives it, so ``load:`` is refused here rather than ignored -- it would read"
+" as a boundary condition and not be one. How many modes are reported is the "
+"implementation's parameter (``modes``), stated in the package's ``cae:`` "
+"section or per scenario in ``params:``."
+msgstr ""
+"没有载荷。模态分析问的是在没有任何东西驱动它时零件会怎样，所以 ``load:`` 在这里会被拒绝而不是被忽略 -- "
+"它看起来像边界条件而其实不是。报告多少个模态是实现方的参数（ ``modes`` ），在包的 ``cae:`` 小节中给出，或者在 "
+"``params:`` 中按场景给出。"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:45
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:47
+msgid ""
+"The scenarios are listed down the left with the first selected, each marked "
+"with how its last run went, and selecting one runs it. What is shown is the "
+"model the implementation produced -- the mode shapes, drawn as geometry to "
+"turn and zoom -- with the frequencies and any findings under it."
+msgstr ""
+"各个场景列在左侧，默认选中第一个，每一个都带着它上一次运行结果的标记，而选中某一个就会运行它。显示出来的是实现方所产出的模型 -- "
+"也就是那些模态形状，作为几何绘制出来，可以转动和缩放 -- 各个频率以及任何发现列在它下面。"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:52
+msgid ""
+"**Analysed by** names the solver and takes another; **Analyse** runs the "
+"scenario again. Both work exactly as they do on the :doc:`FEA tab "
+"</digital_thread/lifecycle/analysis_fea>`."
+msgstr ""
+"**Analysed by** 指出所用的求解器，也可以换一个；**Analyse** 会把该场景再运行一次。两者的工作方式与它们在 :doc:`FEA"
+" 标签页 </digital_thread/lifecycle/analysis_fea>` 上完全相同。"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:56
+msgid ""
+"The Analysis group's Dynamic FEA tab: the scenario list and the mode shape"
+msgstr "Analysis 组的 Dynamic FEA 标签页：场景列表和模态形状"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:61
+msgid ""
+"The tab is enabled for a part that declares ``dynamic:``, and disabled -- "
+"with the reason on hover -- for everything else."
+msgstr "这个标签页对声明了 ``dynamic:`` 的零件启用，而对其他一切都禁用 -- 鼠标悬停时会显示原因。"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:65
+msgid "On the command line"
+msgstr "在命令行中"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:75
+msgid "Who runs it"
+msgstr "由谁来运行它"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:77
+msgid ""
+"The default is `partcad-cae-elmer <https://github.com/partcad/partcad-cae-"
+"elmer>`_, which runs `Elmer <https://www.elmerfem.org/>`_; "
+"``caeDynamicImplementation`` names another. `Code_Aster <https://www.code-"
+"aster.org/>`_ and `MOOSE <https://mooseframework.inl.gov/>`_ do this "
+"analysis too."
+msgstr ""
+"默认是 `partcad-cae-elmer <https://github.com/partcad/partcad-cae-elmer>`_ ，它运行"
+" `Elmer <https://www.elmerfem.org/>`_ ；``caeDynamicImplementation`` "
+"可以指名另一个。`Code_Aster <https://www.code-aster.org/>`_ 和 `MOOSE "
+"<https://mooseframework.inl.gov/>`_ 也能做这项分析。"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:84
+msgid "An example"
+msgstr "一个例子"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:86
+msgid ""
+"`examples/feature_cae "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cae>`_ "
+"declares ``cantilever``'s ``clamped`` scenario: the same steel bar, clamped "
+"at the root and left to ring. Its first natural frequency is a closed form, "
+"and the package's ``README.md`` compares what the solver reported with it. "
+"The scenario asks for six modes, which is enough to see the first bending "
+"pair, the first torsion mode and the second bending pair."
+msgstr ""
+"`examples/feature_cae "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cae>`_ 声明了 "
+"``cantilever`` 的 ``clamped`` 场景：同一根钢条，在根部被夹住，然后任它自由振动。它的第一阶固有频率有解析解，而该包的 "
+"``README.md`` 会把求解器所报告的结果与它作比较。该场景要求六个模态，这足以看到第一对弯曲模态、第一个扭转模态和第二对弯曲模态。"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:94
+msgid "Agent skills"
+msgstr "智能体技能"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:96
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:97
+msgid ""
+"Runs every scenario as part of giving each requirement a verdict, and "
+"reports one that names a ``feature:`` as evidence for that feature."
+msgstr "在给每一项需求下结论的过程中运行每一个场景，并把指名了某个 ``feature:`` 的场景作为该特性的证据来报告。"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:100
+msgid ""
+"As with FEA, nothing writes a ``dynamic:`` section from a description: what "
+"holds the part is a judgement about the real assembly."
+msgstr "与 FEA 一样，没有任何东西会根据一段描述写出 ``dynamic:`` 小节：什么固定住这个零件，是一项关于真实装配体的判断。"

@@ -2,6 +2,29 @@
 Parts
 #####
 
+==============
+What a part is
+==============
+
+
+PartCAD has an ever-growing list of ways to define the part model:
+
+- Files
+
+  - `STEP <https://en.wikipedia.org/wiki/ISO_10303>`_
+  - `BREP <https://en.wikipedia.org/wiki/Boundary_representation>`_
+  - `STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_
+  - `3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_
+  - `OBJ <https://en.wikipedia.org/wiki/Wavefront_.obj_file>`_
+
+- Scripts
+
+  - `OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_
+  - `CadQuery <https://github.com/CadQuery/cadquery>`_
+  - `build123d <https://github.com/gumyr/build123d>`_
+  - `sdf <https://github.com/fogleman/sdf>`_
+
+
 .. _parts:
 
 =====
@@ -108,11 +131,11 @@ bus bar:
 The ``threadStep``, ``selfScrew`` and ``multiConnect`` fields of an interface are inherited by the
 interfaces that inherit it, and by the connections made through it. Two
 interfaces that are connected have to agree on their thread unless one of them
-cuts its own. See :doc:`assy`.
+cuts its own. See :doc:`/assy`.
 
 The fields of the ``connect`` section are the defaults for the ``holdWith*`` and
 ``holdTo*`` fields of the ``how`` section of an Assembly YAML
-``connect``/``connectPorts`` node. See :doc:`assy`.
+``connect``/``connectPorts`` node. See :doc:`/assy`.
 
 ``images`` names the pictures a part was modeled from -- a technical drawing, a
 photograph, a sketch -- as paths relative to the package. They are what
@@ -668,7 +691,7 @@ did declare keys the cache like any other input, because it is one.
 
 A tolerance of ``0.0`` means nobody said. It reads as a demand for perfect
 precision, which is not something a manufacturer can be asked for, so
-:doc:`pc test <cli>` fails a part that is going to be *made* and has no
+:doc:`pc test </cli>` fails a part that is going to be *made* and has no
 tolerance - including a part reached through an assembly in the package. A part
 that is bought rather than made is not asked: it comes as it comes.
 
@@ -779,7 +802,7 @@ Tolerance on the types that state it in the file
 
 ``step`` and ``kicad`` reject the ``tolerance`` *parameter*, for the reason
 above, which would leave them with no way to say how precisely a part has to be
-made and nothing to answer :doc:`pc test <cli>` with. They have one, because a
+made and nothing to answer :doc:`pc test </cli>` with. They have one, because a
 STEP file has somewhere of its own to say it: AP242 carries the whole of GD&T -
 a plus/minus tolerance on a dimension, a flatness or a position tolerance on a
 feature - so PartCAD reads the file.
@@ -871,7 +894,7 @@ not invalidate it any more than renaming a part does. ``pc system reset``, or a
 change to something the assembly does hash, is what picks them up.
 
 ``color`` is what a shape is drawn in: by ``pc render``'s ``svg``, ``png`` and
-``jpeg`` (see :doc:`config_output`) and by the IDE's Digital Thread, in every
+``jpeg`` (see :doc:`/config_output`) and by the IDE's Digital Thread, in every
 pane that draws the shape in 3D. An assembly that states one colours everything
 inside it that states none, and a part inside it that states its own keeps it.
 A shape that states no colour -- most of them -- is drawn in goldenrod,

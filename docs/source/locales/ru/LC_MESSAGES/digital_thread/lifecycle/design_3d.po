@@ -1,0 +1,203 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:5
+msgid "3D"
+msgstr "3D"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:7
+msgid ""
+"**3D** is the shape itself, drawn in the panel and turned with the mouse. It"
+" is the one tab that is always there: it arrives over the viewer protocol "
+"from whichever ``partcad`` was asked to show the object, so even a shape "
+"shown from a script -- something that belongs to no package at all -- has "
+"this tab and nothing else."
+msgstr ""
+"**3D** -- это сама форма, нарисованная в панели и вращаемая мышью. Это "
+"единственная вкладка, которая есть всегда: она приходит по протоколу "
+"просмотрщика от того ``partcad``, которого попросили показать объект, "
+"поэтому даже у формы, показанной из скрипта -- у того, что вообще не "
+"принадлежит никакому пакету, -- есть эта вкладка и больше ничего."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:13
+msgid ""
+"Everything else in the Digital Thread is a question about a named object. "
+"This is the object."
+msgstr ""
+"Всё остальное в Digital Thread -- это вопрос об именованном объекте. А это "
+"сам объект."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:17
+msgid "In the UI"
+msgstr "В интерфейсе"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:19
+msgid ""
+"Down the left is **what is on screen**, with a checkbox on every line. The "
+"list is the object itself: a part or a sketch is one line, an assembly or a "
+"scene a line per thing it holds -- named as the ASSY file names it, as "
+"deeply as the file nests them -- and an interface a line per port it is "
+"drawn with. Unticking a line hides it and everything under it; ticking it "
+"again brings back exactly what was showing before, and a tick drawn grey "
+"rather than solid says that something underneath it is hidden."
+msgstr ""
+"Слева -- **то, что на экране**, с флажком на каждой строке. Этот список и "
+"есть сам объект: деталь или эскиз -- одна строка, сборка или сцена -- по "
+"строке на каждую содержащуюся в ней вещь (названную так, как её называет "
+"файл ASSY, и с той вложенностью, с какой файл их вкладывает), а интерфейс --"
+" по строке на каждый порт, которым он нарисован. Снятие флажка со строки "
+"скрывает её и всё под ней; повторная установка возвращает ровно то, что "
+"показывалось раньше, а флажок, нарисованный серым, а не сплошным, говорит, "
+"что что-то под ним скрыто."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:27
+msgid ""
+"Under each line is what that object says about connections: a line per "
+"**interface** instance with its ports under it, and a ``ports`` line for the"
+" ports belonging to no interface. Every port is drawn as a coordinate frame "
+"-- the same frames ``pc render --with-ports`` draws on a projection -- and a"
+" port whose interface gives it a sketch shows that too, half see-through, in"
+" the blue of its ``+Z``: the shape the connection happens across, which is "
+"what makes an opening readable as one. The ``<ports>`` and ``<interfaces>`` "
+"lines start folded up, because an assembly of forty parts has a frame at "
+"every hole of every one of them and all of it at once shows nothing; an "
+"object's own ports start out drawn, the ports of everything inside it do "
+"not."
+msgstr ""
+"Под каждой строкой находится то, что этот объект говорит о соединениях: по "
+"строке на каждый экземпляр **интерфейса** с его портами под ней и строка "
+"``ports`` для портов, не принадлежащих ни одному интерфейсу. Каждый порт "
+"нарисован как система координат -- те же системы координат, которые ``pc "
+"render --with-ports`` рисует на проекции, -- а порт, которому его интерфейс "
+"даёт эскиз, показывает и его, полупрозрачным, в синем цвете своего ``+Z``: "
+"это та форма, по которой происходит соединение, и именно она делает "
+"отверстие читаемым как отверстие. Строки ``<ports>`` и ``<interfaces>`` "
+"изначально свёрнуты, потому что у сборки из сорока деталей есть система "
+"координат в каждом отверстии каждой из них, и всё это сразу не показывает "
+"ничего; собственные порты объекта изначально нарисованы, а порты всего, что "
+"внутри него, -- нет."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:38
+msgid ""
+"Pointing at a part or a sub-assembly makes it **flicker** in the view, which"
+" is how to tell which of the shapes on screen a line is without moving the "
+"camera."
+msgstr ""
+"Наведение на деталь или подсборку заставляет её **мигать** в виде, и именно "
+"так можно понять, какой из форм на экране соответствует строка, не двигая "
+"камеру."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:41
+msgid ""
+"Down the right is the **view panel**, folded away until the side bar button "
+"at the top of that edge brings it out -- and then out on every tab at once. "
+"From the top: an **orientation gizmo** to drag the view round, or click an "
+"axis to look along it; a button per axis (**X**, **-X**, **Y**, **-Y**, "
+"**Z**, **-Z**), which are the views ``pc render --view`` names; a two-ended "
+"**section** slider per axis, starting at the faces of the bounding box, "
+"which cuts the exact geometry before it is drawn rather than clipping the "
+"picture; the **viewpoint** as ``viewport_origin``, ``viewport_up`` and a "
+"target, ready to be copied into a ``render:`` section or onto ``pc render "
+"--viewport-origin``; and **Animate** and **Opacity**, which turn the model "
+"on its own and make it see-through."
+msgstr ""
+"Справа -- **панель вида**, свёрнутая до тех пор, пока её не вытащит кнопка "
+"боковой панели в верху этого края, -- и затем она вытащена сразу на всех "
+"вкладках. Сверху вниз: **гизмо ориентации**, которое можно перетаскивать, "
+"чтобы вращать вид, или щёлкнуть по оси, чтобы посмотреть вдоль неё; по "
+"кнопке на каждую ось (**X**, **-X**, **Y**, **-Y**, **Z**, **-Z**), и это те"
+" виды, которые называет ``pc render --view``; двусторонний ползунок "
+"**сечения** на каждую ось, начинающийся на гранях габаритного ящика, который"
+" режет точную геометрию до отрисовки, а не отсекает картинку; **точка "
+"зрения** в виде ``viewport_origin``, ``viewport_up`` и цели, готовая к "
+"копированию в раздел ``render:`` или в ``pc render --viewport-origin``; и "
+"**Animate** с **Opacity**, которые вращают модель саму по себе и делают её "
+"прозрачной."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:52
+msgid ""
+"The Design group's 3D tab: the tree of what is on screen, the shape, and the"
+" view panel"
+msgstr ""
+"Вкладка 3D группы Design: дерево того, что на экране, сама форма и панель "
+"вида"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:57
+msgid ""
+"The view uses the graphics card where the window can (WebGL, else WebGPU). "
+"In a window that cannot -- a virtual machine, a remote desktop, a driver the"
+" editor could not use -- it draws without one: flat-shaded and slower, and a"
+" big model drawn as boxes while it is being turned. A note in the corner "
+"says so. A `3Dconnexion <https://3dconnexion.com/>`_ **SpaceMouse** moves "
+"the model here too; see :doc:`/tools_vscode`."
+msgstr ""
+"Вид использует графическую карту там, где окно это может (WebGL, иначе "
+"WebGPU). В окне, которое не может -- виртуальная машина, удалённый рабочий "
+"стол, драйвер, который редактор не смог использовать, -- он рисует без неё: "
+"с плоским затенением и медленнее, а большая модель при вращении рисуется как"
+" набор ящиков. Примечание в углу об этом говорит. **SpaceMouse** от "
+"`3Dconnexion <https://3dconnexion.com/>`_ тоже двигает модель здесь; см. "
+":doc:`/tools_vscode`."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:65
+msgid "On the command line"
+msgstr "В командной строке"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:74
+msgid ""
+"``pc ide view`` shows an object in the Digital Thread from a terminal, and "
+"``pc ide state`` reports what the panel is showing -- including the boxes "
+"ticked in this tree and a screenshot of the tab on screen, which is what an "
+"agent working beside you reads."
+msgstr ""
+"``pc ide view`` показывает объект в Digital Thread из терминала, а ``pc ide "
+"state`` сообщает, что показывает панель, -- включая флажки, установленные в "
+"этом дереве, и снимок экрана той вкладки, которая на экране, а это то, что "
+"читает работающий рядом с вами агент."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:80
+msgid "Agent skills"
+msgstr "Навыки агентов"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:82
+msgid "``/pc:gen-part``, ``/pc:gen-assembly``, ``/pc:gen-sketch``"
+msgstr "``/pc:gen-part``, ``/pc:gen-assembly``, ``/pc:gen-sketch``"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:83
+msgid ""
+"Model from a description, and check what they wrote by rendering it from "
+"several angles rather than by looking at one."
+msgstr ""
+"Моделируют по описанию и проверяют написанное, отрисовывая его с нескольких "
+"углов, а не глядя на один."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:86
+msgid "``/pc:add-interfaces``"
+msgstr "``/pc:add-interfaces``"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:87
+msgid ""
+"Works the ports out of the geometry and proves them twice -- drawn on the "
+"part, and mated in a throwaway assembly -- which is what this tab shows."
+msgstr ""
+"Вычисляет порты по геометрии и доказывает их дважды -- нарисованными на "
+"детали и сопряжёнными в одноразовой сборке, -- а это именно то, что "
+"показывает эта вкладка."

@@ -6,9 +6,9 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: PartCAD \n"
+"Project-Id-Version: PartCAD\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-05 14:45+0000\n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: ru <LL@li.org>\n"
@@ -16,9 +16,8 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
-"n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
-"Generated-By: Babel 2.17.0\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/config_objects.rst:3
 msgid "Objects and common metadata"
@@ -39,16 +38,16 @@ msgid ""
 "visualization of :ref:`interfaces` or to provide detailed instructions for "
 "AI actors."
 msgstr ""
-":ref:`sketches` — это 2D-объекты, которые можно использовать для создания 3D-"
-"объектов (например, с помощью :ref:`extrude` или :ref:`sweep`), но также "
+":ref:`sketches` — это 2D-объекты, которые можно использовать для создания "
+"3D-объектов (например, с помощью :ref:`extrude` или :ref:`sweep`), но также "
 "можно использовать для облегчения визуализации :ref:`interfaces` или для "
 "предоставления подробных инструкций ИИ-акторам."
 
 #: ../../source/config_objects.rst:16
 msgid ""
 ":ref:`interfaces` are abstract objects that describe the endpoint of a "
-"connection between parts and provide sufficient information to automatically "
-"determine the mating of parts."
+"connection between parts and provide sufficient information to automatically"
+" determine the mating of parts."
 msgstr ""
 ":ref:`interfaces` — это абстрактные объекты, которые описывают конечную "
 "точку соединения между деталями и предоставляют достаточно информации для "
@@ -59,8 +58,8 @@ msgid ""
 ":ref:`parts` are 3D objects that are meant to be available for purchase or "
 "manufacturing."
 msgstr ""
-":ref:`parts` — это 3D-объекты, которые предполагается доступными для покупки "
-"или производства."
+":ref:`parts` — это 3D-объекты, которые предполагается доступными для покупки"
+" или производства."
 
 #: ../../source/config_objects.rst:21
 msgid ""
@@ -76,8 +75,8 @@ msgid ""
 "simulation world - stating where things are and not how they got there."
 msgstr ""
 ":ref:`Сцены <scenes>` — это размещённые расстановки объектов (рабочая "
-"ячейка, стол, мир симуляции), в которых указано, где что находится, а не "
-"как оно туда попало."
+"ячейка, стол, мир симуляции), в которых указано, где что находится, а не как"
+" оно туда попало."
 
 #: ../../source/config_objects.rst:26
 msgid ""
@@ -93,22 +92,67 @@ msgid ""
 ":ref:`providers` are implementations of a way to get parts and assemblies "
 "(to purchase them or to manufacture them)."
 msgstr ""
-":ref:`providers` — это реализации способа получения деталей и сборок (для их "
-"покупки или производства)."
+":ref:`providers` — это реализации способа получения деталей и сборок (для их"
+" покупки или производства)."
 
-#: ../../source/config_objects.rst:33
+#: ../../source/config_objects.rst:35
+msgid "One name, one object"
+msgstr "Одно имя, один объект"
+
+#: ../../source/config_objects.rst:37
+msgid ""
+"Within a package a name means **one** object, whatever kind it is. A package"
+" may not declare a part and an assembly both called ``bracket``, and it may "
+"not give one object an ``aliases:`` entry that takes another object's name. "
+"PartCAD keeps the name for one of them and refuses the other as the package "
+"loads, naming both; ``pc lint`` and the editor report it where the second "
+"one is written."
+msgstr ""
+"Внутри пакета имя означает **один** объект, какого бы вида он ни был. Пакет "
+"не может объявить и деталь, и сборку с именем ``bracket``, и не может дать "
+"одному объекту запись ``aliases:``, которая занимает имя другого объекта. "
+"PartCAD сохраняет имя за одним из них и отвергает другой при загрузке "
+"пакета, называя оба; ``pc lint`` и редактор сообщают об этом там, где "
+"написан второй."
+
+#: ../../source/config_objects.rst:42
+msgid ""
+"The kinds that share this namespace are the ones a command can name: parts, "
+"interfaces, assemblies, sketches, scenes and software. :ref:`Materials "
+"<materials>`, :ref:`providers <providers>`, :ref:`repositories "
+"<repositories>` and :ref:`part types <part-types>` have namespaces of their "
+"own, because nothing names one of them without also saying what it is -- a "
+"part's ``material:``, ``pc supply --provider``, a part's ``type:``."
+msgstr ""
+"Это пространство имён разделяют те виды, которые может назвать команда: "
+"детали, интерфейсы, сборки, эскизы, сцены и программное обеспечение. У "
+":ref:`материалов <materials>`, :ref:`поставщиков <providers>`, "
+":ref:`репозиториев <repositories>` и :ref:`типов деталей <part-types>` "
+"собственные пространства имён, потому что ничто не называет их, не сказав "
+"при этом, что это: ``material:`` детали, ``pc supply --provider``, ``type:``"
+" детали."
+
+#: ../../source/config_objects.rst:48
+msgid ""
+"What that buys on the command line -- naming an object without saying its "
+"kind -- is in :ref:`object-names`."
+msgstr ""
+"Что это даёт в командной строке -- возможность назвать объект, не говоря его"
+" вид, -- описано в :ref:`object-names`."
+
+#: ../../source/config_objects.rst:53
 msgid "Common Metadata"
 msgstr "Общие метаданные"
 
-#: ../../source/config_objects.rst:35
+#: ../../source/config_objects.rst:55
 msgid "All :ref:`objects` in PartCAD may carry the following metadata:"
 msgstr "Все :ref:`objects` в PartCAD могут нести следующие метаданные:"
 
-#: ../../source/config_objects.rst:40
+#: ../../source/config_objects.rst:60
 msgid "Tags"
 msgstr "Теги"
 
-#: ../../source/config_objects.rst:42
+#: ../../source/config_objects.rst:62
 msgid ""
 "Not everything a package can be built out of exists everywhere. The KiCad "
 "example is the case this was introduced for: KiCad publishes its official "
@@ -117,15 +161,15 @@ msgid ""
 "of the design, not a fault in it, and the package saying so is better than "
 "every consumer of it finding out at use."
 msgstr ""
-"Не всё, из чего можно собрать пакет, существует везде. Пример с KiCad — "
-"тот самый случай, ради которого это было введено: KiCad публикует свои "
+"Не всё, из чего можно собрать пакет, существует везде. Пример с KiCad — тот "
+"самый случай, ради которого это было введено: KiCad публикует свои "
 "официальные образы контейнеров только для ``linux/amd64``, поэтому "
-"песочницу, в которой PartCAD запускает ``kicad-cli``, на хосте с Arm "
-"вообще нельзя получить. Это свойство конструкции, а не её дефект, и "
-"лучше, когда об этом говорит пакет, чем когда каждый его потребитель "
-"выясняет это в момент использования."
+"песочницу, в которой PartCAD запускает ``kicad-cli``, на хосте с Arm вообще "
+"нельзя получить. Это свойство конструкции, а не её дефект, и лучше, когда об"
+" этом говорит пакет, чем когда каждый его потребитель выясняет это в момент "
+"использования."
 
-#: ../../source/config_objects.rst:49
+#: ../../source/config_objects.rst:69
 msgid ""
 "A **tag** is a short string naming something that is true of *here*. Every "
 "context carries the tags true of itself."
@@ -133,29 +177,28 @@ msgstr ""
 "**Тег** — это короткая строка, называющая то, что верно *здесь*. Каждый "
 "контекст несёт теги, верные для него самого."
 
-#: ../../source/config_objects.rst:52
+#: ../../source/config_objects.rst:72
 msgid "What the machine is:"
 msgstr "Чем является машина:"
 
-#: ../../source/config_objects.rst:54
+#: ../../source/config_objects.rst:74
 msgid ""
 "the CPU architecture -- ``x86_64`` and ``amd64`` on 64-bit Intel/AMD, "
 "``arm64``, ``aarch64`` and ``arm`` on 64-bit Arm (all of them, so that a "
 "package need not know which spelling the host happens to report);"
 msgstr ""
-"архитектура процессора — ``x86_64`` и ``amd64`` на 64-разрядных "
-"Intel/AMD, ``arm64``, ``aarch64`` и ``arm`` на 64-разрядных Arm (все "
-"сразу, чтобы пакету не нужно было знать, каким написанием хост о себе "
-"сообщает);"
+"архитектура процессора — ``x86_64`` и ``amd64`` на 64-разрядных Intel/AMD, "
+"``arm64``, ``aarch64`` и ``arm`` на 64-разрядных Arm (все сразу, чтобы "
+"пакету не нужно было знать, каким написанием хост о себе сообщает);"
 
-#: ../../source/config_objects.rst:57
+#: ../../source/config_objects.rst:77
 msgid ""
 "the operating system -- ``linux``, ``macos`` (also ``darwin``), ``windows``;"
 msgstr ""
 "операционная система — ``linux``, ``macos`` (а также ``darwin``), "
 "``windows``;"
 
-#: ../../source/config_objects.rst:58
+#: ../../source/config_objects.rst:78
 msgid ""
 "the operating system and its version, as ``<os>-<version>``. On Linux that "
 "is the distribution rather than the kernel, read from ``/etc/os-release``: "
@@ -164,56 +207,55 @@ msgid ""
 "``windows-11``."
 msgstr ""
 "операционная система вместе с версией, в виде ``<os>-<version>``. В Linux "
-"это дистрибутив, а не ядро, прочитанный из ``/etc/os-release``: "
-"``ubuntu`` и ``ubuntu-24.04``, а также всё, что названо в ``ID_LIKE`` "
-"(``debian``). В macOS — ``macos-26`` и ``macos-26.1``. В Windows — "
-"``windows-11``."
+"это дистрибутив, а не ядро, прочитанный из ``/etc/os-release``: ``ubuntu`` и"
+" ``ubuntu-24.04``, а также всё, что названо в ``ID_LIKE`` (``debian``). В "
+"macOS — ``macos-26`` и ``macos-26.1``. В Windows — ``windows-11``."
 
-#: ../../source/config_objects.rst:63
+#: ../../source/config_objects.rst:83
 msgid ""
 "How PartCAD is configured to work -- one tag per boolean option, carried in "
-"one of two spellings, the option's name when it is on and that name prefixed "
-"with ``!`` when it is off:"
+"one of two spellings, the option's name when it is on and that name prefixed"
+" with ``!`` when it is off:"
 msgstr ""
-"Как настроена работа PartCAD — по одному тегу на каждый логический "
-"параметр, в одном из двух написаний: имя параметра, когда он включён, и "
-"то же имя с префиксом ``!``, когда он выключен:"
+"Как настроена работа PartCAD — по одному тегу на каждый логический параметр,"
+" в одном из двух написаний: имя параметра, когда он включён, и то же имя с "
+"префиксом ``!``, когда он выключен:"
 
-#: ../../source/config_objects.rst:67
+#: ../../source/config_objects.rst:87
 msgid ""
 "``useDocker`` / ``!useDocker`` -- whether PartCAD may use Docker at all;"
 msgstr ""
 "``useDocker`` / ``!useDocker`` — может ли PartCAD вообще использовать "
 "Docker;"
 
-#: ../../source/config_objects.rst:68
+#: ../../source/config_objects.rst:88
 msgid "``useDockerPython`` / ``!useDockerPython``;"
 msgstr "``useDockerPython`` / ``!useDockerPython``;"
 
-#: ../../source/config_objects.rst:69
+#: ../../source/config_objects.rst:89
 msgid "``useDockerKicad`` / ``!useDockerKicad``."
 msgstr "``useDockerKicad`` / ``!useDockerKicad``."
 
-#: ../../source/config_objects.rst:71
+#: ../../source/config_objects.rst:91
 msgid ""
 "These report each option **as configured**, not as it ends up applying: "
 "``useDocker`` is a master switch over the other two, so ``useDockerKicad`` "
 "and ``!useDocker`` can hold at once. Both spellings exist so that either "
 "answer can be named -- a package that cares which way an option is set "
 "should not have to guess what an absent tag meant. Note that ``!`` is part "
-"of a tag's name, not an operator: a tag is matched, never evaluated, and ``!"
-"`` means nothing anywhere else."
+"of a tag's name, not an operator: a tag is matched, never evaluated, and "
+"``!`` means nothing anywhere else."
 msgstr ""
-"Эти теги сообщают о каждом параметре **так, как он настроен**, а не так, "
-"как он в итоге применяется: ``useDocker`` — главный переключатель над "
-"двумя остальными, поэтому ``useDockerKicad`` и ``!useDocker`` могут "
-"действовать одновременно. Оба написания существуют, чтобы можно было "
-"назвать любой из ответов: пакету, которому важно, как именно задан "
-"параметр, не должно приходиться догадываться, что означало отсутствие "
-"тега. Обратите внимание, что ``!`` — часть имени тега, а не оператор: тег "
-"сопоставляется, а не вычисляется, и нигде больше ``!`` ничего не означает."
+"Эти теги сообщают о каждом параметре **так, как он настроен**, а не так, как"
+" он в итоге применяется: ``useDocker`` — главный переключатель над двумя "
+"остальными, поэтому ``useDockerKicad`` и ``!useDocker`` могут действовать "
+"одновременно. Оба написания существуют, чтобы можно было назвать любой из "
+"ответов: пакету, которому важно, как именно задан параметр, не должно "
+"приходиться догадываться, что означало отсутствие тега. Обратите внимание, "
+"что ``!`` — часть имени тега, а не оператор: тег сопоставляется, а не "
+"вычисляется, и нигде больше ``!`` ничего не означает."
 
-#: ../../source/config_objects.rst:79
+#: ../../source/config_objects.rst:99
 msgid ""
 "Anything PartCAD cannot work out for itself -- that this is the build "
 "machine, that this host is behind a proxy -- is added by the user, through "
@@ -227,7 +269,7 @@ msgstr ""
 "через переменную окружения ``PC_TAGS``. ``pc system status`` выводит весь "
 "итоговый набор:"
 
-#: ../../source/config_objects.rst:89
+#: ../../source/config_objects.rst:109
 msgid ""
 "Tags are matched case-insensitively, and are shown in the spelling PartCAD "
 "names them by -- which is why ``useDocker`` is camelCase (it is an option "
@@ -237,15 +279,15 @@ msgstr ""
 "которым их называет PartCAD, — поэтому ``useDocker`` записан в camelCase "
 "(это имя параметра), а ``arm64`` — нет."
 
-#: ../../source/config_objects.rst:93
+#: ../../source/config_objects.rst:113
 msgid ""
 "A package, or any object of a package, may then declare the conditions it "
 "does **not** work under, using ``unless``:"
 msgstr ""
-"Пакет или любой объект пакета может затем объявить условия, при которых "
-"он **не** работает, с помощью ``unless``:"
+"Пакет или любой объект пакета может затем объявить условия, при которых он "
+"**не** работает, с помощью ``unless``:"
 
-#: ../../source/config_objects.rst:108
+#: ../../source/config_objects.rst:128
 msgid ""
 "``unless`` is a list of **clauses**, and *any one* of them excluding is "
 "enough (OR). A clause is either a single tag, or a list of tags that must "
@@ -253,28 +295,27 @@ msgid ""
 "there is only one, so all of these are valid:"
 msgstr ""
 "``unless`` — это список **условий**, и достаточно, чтобы сработало *любое "
-"одно* из них (ИЛИ). Условие — это либо один тег, либо список тегов, "
-"которые должны выполняться *все* вместе (И). Любой из уровней можно "
-"записать как голый тег, когда он один, поэтому все приведённые ниже "
-"записи допустимы:"
+"одно* из них (ИЛИ). Условие — это либо один тег, либо список тегов, которые "
+"должны выполняться *все* вместе (И). Любой из уровней можно записать как "
+"голый тег, когда он один, поэтому все приведённые ниже записи допустимы:"
 
-#: ../../source/config_objects.rst:119
+#: ../../source/config_objects.rst:139
 msgid ""
 "An empty clause is refused rather than ignored: it would hold everywhere."
-msgstr "Пустое условие отвергается, а не игнорируется: оно выполнялось бы везде."
+msgstr ""
+"Пустое условие отвергается, а не игнорируется: оно выполнялось бы везде."
 
-#: ../../source/config_objects.rst:121
+#: ../../source/config_objects.rst:141
 msgid ""
-"Wherever a clause holds, the declaration is skipped -- it is not enumerated, "
-"not listed, and not instantiated -- and PartCAD says so once, at ``INFO``, "
+"Wherever a clause holds, the declaration is skipped -- it is not enumerated,"
+" not listed, and not instantiated -- and PartCAD says so once, at ``INFO``, "
 "naming the clause that did it:"
 msgstr ""
 "Везде, где условие выполняется, объявление пропускается — оно не "
 "перечисляется, не выводится в списках и не инстанцируется, — и PartCAD "
-"сообщает об этом один раз, на уровне ``INFO``, называя сработавшее "
-"условие:"
+"сообщает об этом один раз, на уровне ``INFO``, называя сработавшее условие:"
 
-#: ../../source/config_objects.rst:129
+#: ../../source/config_objects.rst:149
 msgid ""
 "Skipping a package skips what it brings in: its subfolders and its declared "
 "dependencies are not imported either."
@@ -282,7 +323,7 @@ msgstr ""
 "Пропуск пакета пропускает и то, что он приносит с собой: его подпапки и "
 "объявленные им зависимости тоже не импортируются."
 
-#: ../../source/config_objects.rst:132
+#: ../../source/config_objects.rst:152
 msgid ""
 "Note that there is deliberately no inverse condition (\"only on\"). A "
 "declaration is expected to work everywhere; naming the exceptions keeps the "
@@ -291,53 +332,285 @@ msgid ""
 msgstr ""
 "Обратите внимание, что обратного условия («только на») намеренно нет. "
 "Предполагается, что объявление работает везде; перечисление исключений "
-"оставляет обычный случай незаписанным и не даёт платформе, которой пока "
-"не существует, молча исключить всё, что было написано до неё."
+"оставляет обычный случай незаписанным и не даёт платформе, которой пока не "
+"существует, молча исключить всё, что было написано до неё."
 
-#: ../../source/config_objects.rst:137
+#: ../../source/config_objects.rst:157
 msgid ""
 "A reference to an object that was skipped does not resolve. An alias or an "
 "``enrich`` built on an object excluded here has to carry the same "
 "``unless``, or it will be left pointing at nothing."
 msgstr ""
 "Ссылка на пропущенный объект не разрешается. Псевдоним или ``enrich``, "
-"построенный на исключённом здесь объекте, обязан нести такой же "
-"``unless``, иначе он останется указывать в пустоту."
+"построенный на исключённом здесь объекте, обязан нести такой же ``unless``, "
+"иначе он останется указывать в пустоту."
 
-#: ../../source/config_objects.rst:144
+#: ../../source/config_objects.rst:164
 msgid "Requirements"
 msgstr "Требования"
 
-#: ../../source/config_objects.rst:146
+#: ../../source/config_objects.rst:166
 msgid ""
-"Objects may contain a list of requirements in free form (any YAML syntax "
-"works). These requirements help describe the object in more detail. They are "
-"not used by PartCAD itself, but by AI or human actors to create, improve, or "
-"better understand the object."
+"A part, an assembly, a scene or a sketch may say what it is required to be. "
+"Requirements are written before the design is, from the point of view of "
+"whoever asked for it, and they are what the design is judged against: by "
+"``pc test``, by the simulations that name them, and by whoever reads the "
+"evidence -- a person, or an AI agent running ``/pc:validate``. The PartCAD "
+"extension for Visual Studio Code shows them on a tab of their own, in front "
+"of the others, with a mark beside each that ``pc test`` checks."
 msgstr ""
-"Объекты могут содержать список требований в свободной форме (подходит любой "
-"синтаксис YAML). Эти требования помогают более подробно описать объект. Они "
-"не используются самим PartCAD, а используются ИИ или людьми для создания, "
-"улучшения или лучшего понимания объекта."
+"Деталь, сборка, сцена или эскиз может сказать, чем она должна быть. "
+"Требования пишутся до проекта, с точки зрения того, кто это попросил, и "
+"именно по ним оценивается проект: командой ``pc test``, теми симуляциями, "
+"которые их называют, и тем, кто читает доказательства -- человеком или ИИ-"
+"агентом, выполняющим ``/pc:validate``. Расширение PartCAD для Visual Studio "
+"Code показывает их на отдельной вкладке, перед остальными, с меткой рядом с "
+"каждым, которую проверяет ``pc test``."
 
-#: ../../source/config_objects.rst:151
+#: ../../source/config_objects.rst:174
 msgid ""
-"The requirements are from the user’s perspective and serve to guide the "
-"design. Once the design is complete, it may impose further requirements (for "
-"example, on manufacturing), but those are not part of this section. This "
-"section exclusively covers the requirements used to create the design."
+"They are from the user's perspective and serve to guide the design. Once the"
+" design is complete it may impose further requirements of its own -- on "
+"manufacturing, say -- but those are not part of this section."
 msgstr ""
-"Требования формулируются с точки зрения пользователя и служат для "
-"направления процесса проектирования. После завершения проектирования оно "
-"может накладывать дополнительные требования (например, на производство), но "
-"они не являются частью этой секции. Эта секция охватывает исключительно "
-"требования, используемые для создания проекта."
+"Они формулируются с точки зрения пользователя и служат для направления "
+"проектирования. После завершения проектирования оно может накладывать "
+"дополнительные собственные требования -- скажем, на производство, -- но они "
+"не являются частью этого раздела."
 
-#: ../../source/config_objects.rst:190
+#: ../../source/config_objects.rst:194
+msgid "``features``"
+msgstr "``features``"
+
+#: ../../source/config_objects.rst:195
+msgid ""
+"What the object has to have or do: a name for each, and a sentence saying "
+"what. Most of what anybody asks of a product is said this way, and PartCAD "
+"does not judge it. A ``simulate:`` entry may name the feature it "
+"demonstrates (``feature:``, see "
+":doc:`/digital_thread/lifecycle/simulation`); every feature, demonstrated or"
+" not, is for whoever reads the evidence to judge -- the renders, the "
+"simulations, the bill of materials and the assembly instructions. That is "
+"what the ``/pc:validate`` agent skill does."
+msgstr ""
+"Что объект должен иметь или делать: имя для каждого и предложение о том, что"
+" именно. Большая часть того, что кто-либо просит у продукта, говорится "
+"именно так, и PartCAD об этом не судит. Запись ``simulate:`` может назвать "
+"ту функцию, которую она демонстрирует (``feature:``, см. "
+":doc:`/digital_thread/lifecycle/simulation`); о каждой функции, "
+"демонстрируемой или нет, судит тот, кто читает доказательства -- отрисовки, "
+"симуляции, спецификацию материалов и инструкции по сборке. Именно это делает"
+" навык агента ``/pc:validate``."
+
+#: ../../source/config_objects.rst:203
+msgid "``ports``"
+msgstr "``ports``"
+
+#: ../../source/config_objects.rst:204
+msgid ""
+"The ports the object has to have, by name, and as much of where each one is "
+"as matters. ``null`` only requires that the port is there."
+msgstr ""
+"Те порты, которые объект должен иметь, по имени, и столько сведений о том, "
+"где находится каждый из них, сколько имеет значение. ``null`` требует только"
+" того, чтобы порт был."
+
+#: ../../source/config_objects.rst:207
+msgid "``interfaces``"
+msgstr "``interfaces``"
+
+#: ../../source/config_objects.rst:208
+msgid ""
+"The interfaces the object has to implement, named the way ``implements:`` "
+"names them. Implementing an interface that inherits a required one counts: "
+"something that implements ``m3-thru`` implements ``m3``. ``null`` requires "
+"any instance, anywhere; a location requires that some instance is there; an "
+"instance name, a list of them, or a mapping of instance names to locations "
+"requires those instances (``\"\"`` is the unnamed one)."
+msgstr ""
+"Те интерфейсы, которые объект должен реализовать, названные так, как их "
+"называет ``implements:``. Реализация интерфейса, который наследует "
+"требуемый, считается: то, что реализует ``m3-thru``, реализует и ``m3``. "
+"``null`` требует любого экземпляра в любом месте; расположение требует, "
+"чтобы какой-нибудь экземпляр был там; имя экземпляра, их список либо "
+"отображение имён экземпляров в расположения требуют именно этих экземпляров "
+"(``\"\"`` -- безымянный)."
+
+#: ../../source/config_objects.rst:215
+msgid "``physics``"
+msgstr "``physics``"
+
+#: ../../source/config_objects.rst:216
+msgid ""
+"The physical properties the object has to have: any field of a ``physics`` "
+"section a shape may state (see :doc:`/digital_thread/lifecycle/simulation`) "
+"-- ``mass``, ``centerOfMass``, ``inertia``, ``density``, ``friction`` and "
+"the rest. The value checked is the one ``pc info`` reports: what the object "
+"states in ``properties: physics:``; failing that, what its material lends "
+"(its ``density``, and its ``mu`` as the ``friction``); failing that, what "
+"its solid works out to -- the mass at that density, the centre of mass, the "
+"inertia -- or for an assembly what its parts add up to. A property PartCAD "
+"cannot find out fails the requirement: not known is not met, and that "
+"includes the mass of an assembly one of whose parts weighs nothing PartCAD "
+"knows, since what the others add up to is not what it weighs."
+msgstr ""
+"Те физические свойства, которые объект должен иметь: любое поле раздела "
+"``physics``, какое может указать форма (см. "
+":doc:`/digital_thread/lifecycle/simulation`) -- ``mass``, ``centerOfMass``, "
+"``inertia``, ``density``, ``friction`` и остальные. Проверяется то значение,"
+" которое сообщает ``pc info``: то, что объект указывает в ``properties: "
+"physics:``; если его нет -- то, что одалживает его материал (его "
+"``density``, а его ``mu`` -- как ``friction``); если и этого нет -- то, что "
+"даёт его тело: масса при этой плотности, центр масс, инерция, -- а для "
+"сборки то, что складывается из её деталей. Свойство, которое PartCAD не "
+"может выяснить, проваливает требование: неизвестно -- это не выполнено, и "
+"это касается и массы сборки, одна из деталей которой весит нечто, "
+"неизвестное PartCAD, поскольку то, что складывается из остальных, -- это не "
+"её вес."
+
+#: ../../source/config_objects.rst:228
+msgid ""
+"``pc test`` checks the last three against the model -- its ``requirements`` "
+"check, ``pc test -f requirements`` to run it alone -- and says, for each one"
+" that is not met, what it found instead."
+msgstr ""
+"``pc test`` проверяет последние три по модели -- это его проверка "
+"``requirements``, а ``pc test -f requirements`` выполняет только её -- и "
+"говорит для каждого невыполненного, что он нашёл вместо этого."
+
+#: ../../source/config_objects.rst:233
+msgid "Required values"
+msgstr "Требуемые значения"
+
+#: ../../source/config_objects.rst:235
+msgid ""
+"Almost anything in a port, an interface or a physical property can be "
+"``null``, and most of it should be: ``null`` is no requirement. \"A port "
+"called ``top`` that faces down\" is a requirement; \"a port at these exact "
+"coordinates\" is usually a design decision written down too early."
+msgstr ""
+"Почти всё в порте, интерфейсе или физическом свойстве может быть ``null``, и"
+" большей частью должно быть: ``null`` -- это отсутствие требования. \"Порт с"
+" именем ``top``, обращённый вниз\" -- это требование; \"порт точно в этих "
+"координатах\" обычно является проектным решением, записанным слишком рано."
+
+#: ../../source/config_objects.rst:240
+msgid ""
+"What is not ``null`` is a constant -- a number, a string or a boolean -- or "
+"a comparison: ``>0``, ``>=1``, ``<10``, ``<=1``, ``!0`` (not 0, also "
+"``!=0``) or ``=5``. Several are joined with commas, and the two kinds join "
+"differently: constants are alternatives, comparisons all have to hold, and a"
+" value given both has to be one of the constants *and* meet every "
+"comparison."
+msgstr ""
+"То, что не является ``null``, -- это константа (число, строка или логическое"
+" значение) либо сравнение: ``>0``, ``>=1``, ``<10``, ``<=1``, ``!0`` (не 0, "
+"также ``!=0``) или ``=5``. Несколько соединяются запятыми, и два вида "
+"соединяются по-разному: константы являются альтернативами, сравнения должны "
+"выполняться все, а значение, для которого даны и те и другие, должно быть "
+"одной из константы *и* удовлетворять каждому сравнению."
+
+#: ../../source/config_objects.rst:254
+msgid ""
+"Quote a comparison: YAML reads ``>`` and ``!`` at the start of a value as "
+"syntax of its own."
+msgstr ""
+"Берите сравнение в кавычки: YAML читает ``>`` и ``!`` в начале значения как "
+"собственный синтаксис."
+
+#: ../../source/config_objects.rst:258
+msgid "Where a port or an interface instance is"
+msgstr "Где находится порт или экземпляр интерфейса"
+
+#: ../../source/config_objects.rst:260
+msgid "A location requirement is three things, each of which may be ``null``:"
+msgstr ""
+"Требование к расположению состоит из трёх вещей, каждая из которых может "
+"быть ``null``:"
+
+#: ../../source/config_objects.rst:262
+msgid "``position``"
+msgstr "``position``"
+
+#: ../../source/config_objects.rst:263
+msgid ""
+"Where the frame's origin is, in millimetres, in the object's own frame."
+msgstr ""
+"Где находится начало координат системы, в миллиметрах, в собственной системе"
+" координат объекта."
+
+#: ../../source/config_objects.rst:264
+msgid "``direction``"
+msgstr "``direction``"
+
+#: ../../source/config_objects.rst:265
+msgid ""
+"The way the frame's Z axis points -- the way a port *faces*. Three plain "
+"numbers are compared as the unit vector they point along."
+msgstr ""
+"То, куда направлена ось Z системы координат, -- то есть то, куда *обращён* "
+"порт. Три простых числа сравниваются как тот единичный вектор, вдоль "
+"которого они направлены."
+
+#: ../../source/config_objects.rst:267
+msgid "``angle``"
+msgstr "``angle``"
+
+#: ../../source/config_objects.rst:268
+msgid ""
+"How far, in degrees, the frame is turned about that direction: how far its X"
+" axis is from where the shortest turn from +Z to the direction leaves it. "
+"For a port written as a turn about Z, that is the angle it was written with."
+msgstr ""
+"Насколько, в градусах, система координат повёрнута вокруг этого направления:"
+" насколько её ось X отстоит от того места, где её оставляет кратчайший "
+"поворот от +Z к этому направлению. Для порта, записанного как поворот вокруг"
+" Z, это тот угол, с которым он был записан."
+
+#: ../../source/config_objects.rst:272
+msgid ""
+"They are written as a mapping by those names, or as a list of three in that "
+"order -- the order a port's own location is written in:"
+msgstr ""
+"Они записываются как отображение по этим именам либо как список из трёх в "
+"этом порядке -- в том порядке, в котором записывается собственное "
+"расположение порта:"
+
+#: ../../source/config_objects.rst:288
+msgid ""
+"The middle element of a *port's* location is the axis it is rotated about, "
+"and of a requirement it is the direction the port faces. They are not the "
+"same thing, deliberately: a port facing down is written ``[[0, 0, 0], [1, 0,"
+" 0], 180]`` -- half a turn about X -- and it meets the requirement ``[null, "
+"[0, 0, -1], null]``."
+msgstr ""
+"Средний элемент расположения *порта* -- это та ось, вокруг которой он "
+"повёрнут, а в требовании -- то направление, куда порт обращён. Это не одно и"
+" то же, и это намеренно: порт, обращённый вниз, записывается как ``[[0, 0, "
+"0], [1, 0, 0], 180]`` -- полуоборот вокруг X -- и он удовлетворяет "
+"требованию ``[null, [0, 0, -1], null]``."
+
+#: ../../source/config_objects.rst:295
+msgid "Earlier spellings"
+msgstr "Прежние написания"
+
+#: ../../source/config_objects.rst:297
+msgid ""
+"The section used to be free-form text, and that is still read -- as "
+"features: a paragraph is the feature ``general``, a list is one feature per "
+"item, and a key of the mapping that is not one of the four above is a "
+"feature named after it."
+msgstr ""
+"Раньше этот раздел был свободным текстом, и это по-прежнему читается -- как "
+"функции: абзац является функцией ``general``, список даёт по одной функции "
+"на элемент, а ключ отображения, не являющийся одним из четырёх перечисленных"
+" выше, является функцией, названной по нему."
+
+#: ../../source/config_objects.rst:314
 msgid "Files"
 msgstr "Файлы"
 
-#: ../../source/config_objects.rst:192
+#: ../../source/config_objects.rst:316
 msgid ""
 "For objects that are defined using a source file, the default file path is "
 "the name of the object plus the extension of that file type."
@@ -345,7 +618,7 @@ msgstr ""
 "Для объектов, определяемых с помощью исходного файла, путь к файлу по "
 "умолчанию — это имя объекта плюс расширение файла данного типа."
 
-#: ../../source/config_objects.rst:195
+#: ../../source/config_objects.rst:319
 msgid ""
 "An alternative file path (absolute or relative to the package path) can be "
 "defined explicitly using the `path` parameter:"
@@ -353,11 +626,11 @@ msgstr ""
 "Альтернативный путь к файлу (абсолютный или относительно пути пакета) можно "
 "задать явно с помощью параметра `path`:"
 
-#: ../../source/config_objects.rst:205
+#: ../../source/config_objects.rst:329
 msgid ""
-"When the source file is not kept in the package source repository but has to "
-"be pulled from a remote location (a STEP file published by the part vendor, "
-"for example), declare where to get it from using ``fileFrom`` and "
+"When the source file is not kept in the package source repository but has to"
+" be pulled from a remote location (a STEP file published by the part vendor,"
+" for example), declare where to get it from using ``fileFrom`` and "
 "``fileUrl``:"
 msgstr ""
 "Когда исходный файл не хранится в репозитории исходного кода пакета, а "
@@ -365,7 +638,7 @@ msgstr ""
 "опубликованный поставщиком детали), укажите, откуда его брать, с помощью "
 "``fileFrom`` и ``fileUrl``:"
 
-#: ../../source/config_objects.rst:218
+#: ../../source/config_objects.rst:342
 msgid ""
 "The file is fetched lazily: nothing is downloaded until the object is used "
 "for the first time, and the downloaded file is reused afterwards. Since the "
@@ -374,51 +647,51 @@ msgid ""
 msgstr ""
 "Файл загружается лениво: до первого использования объекта ничего не "
 "скачивается, а скачанный файл затем переиспользуется. Поскольку файл не "
-"считается частью пакета, PartCAD не жалуется на его отсутствие при "
-"загрузке пакета."
+"считается частью пакета, PartCAD не жалуется на его отсутствие при загрузке "
+"пакета."
 
-#: ../../source/config_objects.rst:223
+#: ../../source/config_objects.rst:347
 msgid ""
 "``fileFrom`` and ``fileUrl`` must be declared together. They are recognized "
 "in :ref:`parts`, :ref:`sketches`, :ref:`assemblies` (an assembly's source "
-"file is pulled the same way, whether it is an ``.assy`` file or a CAD "
-"file), :ref:`scenes` and :ref:`software`."
+"file is pulled the same way, whether it is an ``.assy`` file or a CAD file),"
+" :ref:`scenes` and :ref:`software`."
 msgstr ""
 "``fileFrom`` и ``fileUrl`` должны объявляться вместе. Они распознаются в "
 ":ref:`деталях <parts>`, :ref:`эскизах <sketches>`, :ref:`сборках "
-"<assemblies>` (исходный файл сборки получается тем же способом, будь то "
-"файл ``.assy`` или CAD-файл), :ref:`сценах <scenes>` и :ref:`программном "
+"<assemblies>` (исходный файл сборки получается тем же способом, будь то файл"
+" ``.assy`` или CAD-файл), :ref:`сценах <scenes>` и :ref:`программном "
 "обеспечении <software>`."
 
-#: ../../source/config_objects.rst:231
+#: ../../source/config_objects.rst:355
 msgid "Pinning what is downloaded"
 msgstr "Закрепление того, что загружается"
 
-#: ../../source/config_objects.rst:233
+#: ../../source/config_objects.rst:357
 msgid ""
 "A URL serves whatever it serves at the moment it is fetched. The same "
 "declaration can produce a different file tomorrow -- the vendor revises the "
 "model, the branch moves, the host is not the one you thought. ``fileHash``, "
 "beside ``fileUrl``, pins the bytes:"
 msgstr ""
-"URL отдаёт то, что отдаёт в момент обращения. То же самое объявление "
-"завтра может дать другой файл: поставщик пересмотрел модель, ветка ушла "
-"вперёд, хост оказался не тем, о котором вы думали. ``fileHash``, "
-"указанный рядом с ``fileUrl``, закрепляет байты:"
+"URL отдаёт то, что отдаёт в момент обращения. То же самое объявление завтра "
+"может дать другой файл: поставщик пересмотрел модель, ветка ушла вперёд, "
+"хост оказался не тем, о котором вы думали. ``fileHash``, указанный рядом с "
+"``fileUrl``, закрепляет байты:"
 
-#: ../../source/config_objects.rst:247
+#: ../../source/config_objects.rst:371
 msgid ""
 "The download is refused unless the file hashes to this, and the bytes that "
 "were refused are deleted rather than left behind -- the next run skips the "
 "download when the file is already there, and would otherwise reuse the file "
 "the hash had just rejected."
 msgstr ""
-"Загрузка отвергается, если хеш файла не совпадает с указанным, и "
-"отвергнутые байты удаляются, а не остаются лежать: следующий запуск "
-"пропускает загрузку, если файл уже на месте, и иначе переиспользовал бы "
-"тот самый файл, который хеш только что отверг."
+"Загрузка отвергается, если хеш файла не совпадает с указанным, и отвергнутые"
+" байты удаляются, а не остаются лежать: следующий запуск пропускает "
+"загрузку, если файл уже на месте, и иначе переиспользовал бы тот самый файл,"
+" который хеш только что отверг."
 
-#: ../../source/config_objects.rst:252
+#: ../../source/config_objects.rst:376
 msgid ""
 "Write it as ``<algorithm>:<digest>`` over ``md5``, ``sha1``, ``sha256`` or "
 "``sha512``. A bare digest works too, and the algorithm is read from its "
@@ -429,7 +702,7 @@ msgstr ""
 "определяется по её длине — именно в таком виде её публикует большинство "
 "поставщиков."
 
-#: ../../source/config_objects.rst:256
+#: ../../source/config_objects.rst:380
 msgid ""
 "``fileHash`` is recognized wherever ``fileFrom`` is, and it is **optional "
 "but required for reproducibility**. The schema never demands one, of any "
@@ -437,64 +710,64 @@ msgid ""
 "omits it. What such an object cannot do is promise that the next run "
 "produces the same thing, and manufacturing is repetition -- so ``pc test`` "
 "refuses to call it manufacturable (see :ref:`reproducibility`). Pull a "
-"vendor's model down and never claim it can be made, and none of this touches "
-"you."
+"vendor's model down and never claim it can be made, and none of this touches"
+" you."
 msgstr ""
 "``fileHash`` распознаётся везде, где распознаётся ``fileFrom``, и он "
-"**необязателен, но обязателен для воспроизводимости**. Схема никогда его "
-"не требует ни у какого вида объектов, и ничто не отказывается загружать, "
+"**необязателен, но обязателен для воспроизводимости**. Схема никогда его не "
+"требует ни у какого вида объектов, и ничто не отказывается загружать, "
 "собирать или проверять объект, который его опускает. Чего такой объект не "
 "может, так это пообещать, что следующий запуск даст то же самое, а "
-"производство — это повторение, поэтому ``pc test`` отказывается признать "
-"его технологичным (см. :ref:`reproducibility`). Скачивайте модель "
-"поставщика и никогда не утверждайте, что её можно изготовить, — и ничто "
-"из этого вас не коснётся."
+"производство — это повторение, поэтому ``pc test`` отказывается признать его"
+" технологичным (см. :ref:`reproducibility`). Скачивайте модель поставщика и "
+"никогда не утверждайте, что её можно изготовить, — и ничто из этого вас не "
+"коснётся."
 
-#: ../../source/config_objects.rst:264
+#: ../../source/config_objects.rst:388
 msgid ""
 "``pc add`` writes one for you. Given a URL instead of a path it fetches the "
 "file once and records the hash of what came back, so an object added that "
 "way is pinned from the moment it exists."
 msgstr ""
-"``pc add`` записывает его за вас. Получив URL вместо пути, команда один "
-"раз загружает файл и записывает хеш того, что пришло, так что объект, "
+"``pc add`` записывает его за вас. Получив URL вместо пути, команда один раз "
+"загружает файл и записывает хеш того, что пришло, так что объект, "
 "добавленный таким образом, закреплён с момента своего появления."
 
-#: ../../source/config_objects.rst:268
+#: ../../source/config_objects.rst:392
 msgid ""
-"A file served by a repository plugin -- what PartCAD uses for a package with "
-"no source tree of its own -- may carry a ``fileHash`` too, and it is "
+"A file served by a repository plugin -- what PartCAD uses for a package with"
+" no source tree of its own -- may carry a ``fileHash`` too, and it is "
 "verified the same way. It is not yet required, because nothing has been put "
 "in place for such a package to pin what its plugin serves."
 msgstr ""
 "Файл, который отдаёт плагин репозитория — то, что PartCAD использует для "
 "пакета без собственного дерева исходного кода, — тоже может нести "
-"``fileHash``, и он проверяется так же. Пока он не требуется, потому что "
-"для такого пакета ещё не предусмотрено способа закрепить то, что отдаёт "
-"его плагин."
+"``fileHash``, и он проверяется так же. Пока он не требуется, потому что для "
+"такого пакета ещё не предусмотрено способа закрепить то, что отдаёт его "
+"плагин."
 
-#: ../../source/config_objects.rst:273
+#: ../../source/config_objects.rst:397
 msgid ""
 "This has nothing to do with the hashes PartCAD computes for itself -- a "
 "shape's cache key, or the commit a package was read at. Those identify "
 "something PartCAD built or fetched; ``fileHash`` states, in advance, which "
 "bytes a package is asking for."
 msgstr ""
-"Это не имеет никакого отношения к хешам, которые PartCAD вычисляет для "
-"себя, — к ключу кэша формы или к коммиту, на котором был прочитан пакет. "
-"Те идентифицируют то, что PartCAD собрал или получил; а ``fileHash`` "
-"заранее указывает, какие именно байты запрашивает пакет."
+"Это не имеет никакого отношения к хешам, которые PartCAD вычисляет для себя,"
+" — к ключу кэша формы или к коммиту, на котором был прочитан пакет. Те "
+"идентифицируют то, что PartCAD собрал или получил; а ``fileHash`` заранее "
+"указывает, какие именно байты запрашивает пакет."
 
-#: ../../source/config_objects.rst:281
+#: ../../source/config_objects.rst:405
 msgid "Reproducibility and manufacturability"
 msgstr "Воспроизводимость и технологичность"
 
-#: ../../source/config_objects.rst:283
+#: ../../source/config_objects.rst:407
 msgid ""
 "Manufacturing is repetition: the run after this one has to produce the same "
 "thing, so everything that goes into a product has to be gettable a second "
-"time and be the same thing. There are three ways an object can promise that, "
-"and the ``manufacturability`` check of ``pc test`` fails one that offers "
+"time and be the same thing. There are three ways an object can promise that,"
+" and the ``manufacturability`` check of ``pc test`` fails one that offers "
 "none of them:"
 msgstr ""
 "Производство — это повторение: следующий запуск обязан дать то же самое, "
@@ -503,7 +776,7 @@ msgstr ""
 "``manufacturability`` команды ``pc test`` бракует объект, который не "
 "предлагает ни одного из них:"
 
-#: ../../source/config_objects.rst:288
+#: ../../source/config_objects.rst:412
 msgid ""
 "**It is bought.** A ``vendor`` and an ``sku`` name a thing to order, and "
 "ordering it again is what \"the same again\" means for it -- whatever file "
@@ -511,23 +784,24 @@ msgid ""
 "identity of it. Only :ref:`parts` and :ref:`assemblies` can say this; the "
 "schema gives ``vendor``/``sku`` to those two alone."
 msgstr ""
-"**Он покупается.** ``vendor`` и ``sku`` называют то, что можно заказать, "
-"и повторный заказ и есть то, что для него означает «снова то же самое»; "
-"какой бы файл ни нёс при этом объявление, он является чертежом того, что "
-"приедет, а не его идентичностью. Сказать так могут только :ref:`детали "
-"<parts>` и :ref:`сборки <assemblies>`: схема даёт ``vendor``/``sku`` лишь "
-"этим двум видам."
+"**Он покупается.** ``vendor`` и ``sku`` называют то, что можно заказать, и "
+"повторный заказ и есть то, что для него означает «снова то же самое»; какой "
+"бы файл ни нёс при этом объявление, он является чертежом того, что приедет, "
+"а не его идентичностью. Сказать так могут только :ref:`детали <parts>` и "
+":ref:`сборки <assemblies>`: схема даёт ``vendor``/``sku`` лишь этим двум "
+"видам."
 
-#: ../../source/config_objects.rst:293
+#: ../../source/config_objects.rst:417
 msgid ""
 "**The package carries the file.** Its revision identifies the file exactly."
-msgstr "**Пакет несёт файл в себе.** Ревизия пакета идентифицирует файл точно."
+msgstr ""
+"**Пакет несёт файл в себе.** Ревизия пакета идентифицирует файл точно."
 
-#: ../../source/config_objects.rst:294
+#: ../../source/config_objects.rst:418
 msgid "**The file is pinned** with a ``fileHash``."
 msgstr "**Файл закреплён** с помощью ``fileHash``."
 
-#: ../../source/config_objects.rst:296
+#: ../../source/config_objects.rst:420
 msgid ""
 "A :ref:`sketch <sketches>` cannot be bought, so for it the second and third "
 "are the whole of it -- nothing manufactures a drawing, but a part extruded "
@@ -540,10 +814,9 @@ msgstr ""
 "выдавленная из него, воспроизводима ровно настолько, насколько был "
 "воспроизводим чертёж. С :ref:`программным обеспечением <software>` то же "
 "самое и по той же причине: образ прошивки, который никто не может "
-"идентифицировать, обесценивает спецификацию материалов, в которой он "
-"назван."
+"идентифицировать, обесценивает спецификацию материалов, в которой он назван."
 
-#: ../../source/config_objects.rst:308
+#: ../../source/config_objects.rst:432
 msgid ""
 "The rule is about being *identified*, not about being available -- the file "
 "may download perfectly well and still be a different file than it was last "
@@ -553,16 +826,16 @@ msgstr ""
 "прекрасно загружаться и при этом быть не тем файлом, которым он был месяц "
 "назад."
 
-#: ../../source/config_objects.rst:311
+#: ../../source/config_objects.rst:435
 msgid ""
 "Software is the one kind of object where a missing ``fileHash`` is reported "
 "by ``pc lint`` as well, before anything is built or fetched at all."
 msgstr ""
-"Программное обеспечение — единственный вид объектов, для которого "
-"отсутствие ``fileHash`` сообщает и ``pc lint``, ещё до того как что-либо "
-"собрано или загружено."
+"Программное обеспечение — единственный вид объектов, для которого отсутствие"
+" ``fileHash`` сообщает и ``pc lint``, ещё до того как что-либо собрано или "
+"загружено."
 
-#: ../../source/config_objects.rst:314
+#: ../../source/config_objects.rst:438
 msgid ""
 "A file served by a repository plugin is exempt from all of this for now. A "
 "``fileHash`` given for one is verified like any other; it is simply not "
@@ -574,11 +847,11 @@ msgstr ""
 "пока не требуется, потому что для пакета, за которым стоит плагин, ещё не "
 "предусмотрено способа закрепить то, что отдаёт его плагин."
 
-#: ../../source/config_objects.rst:320
+#: ../../source/config_objects.rst:444
 msgid "Parameters"
 msgstr "Параметры"
 
-#: ../../source/config_objects.rst:322
+#: ../../source/config_objects.rst:446
 msgid ""
 "Objects may declare parameters. Once parameters are declared, each use of "
 "such objects may be accompanied by a set of parameter values. The parameter "
@@ -593,10 +866,10 @@ msgstr ""
 "параметров. Значения параметров разрешаются и применяются к объекту, "
 "создавая параметризованный вариант объекта. Параметризованный вариант "
 "остаётся сохранённым (например, во время выполнения) как отдельный объект в "
-"том же пакете, где объявлен исходный объект. Это позволяет использовать один "
-"и тот же параметризованный объект многократно."
+"том же пакете, где объявлен исходный объект. Это позволяет использовать один"
+" и тот же параметризованный объект многократно."
 
-#: ../../source/config_objects.rst:337
+#: ../../source/config_objects.rst:461
 msgid ""
 "The short form ``<param name>: <default value>`` may be used whenever the "
 "type can be inferred from the value."
@@ -604,7 +877,7 @@ msgstr ""
 "Краткую форму ``<param name>: <default value>`` можно использовать всякий "
 "раз, когда тип можно вывести из значения."
 
-#: ../../source/config_objects.rst:340
+#: ../../source/config_objects.rst:464
 msgid ""
 "Assemblies declare parameters the same way. Their values are passed to the "
 "``.assy`` file as ``param_<param name>`` when its Jinja templates are "
@@ -613,47 +886,47 @@ msgstr ""
 "Сборки объявляют параметры таким же образом. Их значения передаются в файл "
 "``.assy`` как ``param_<param name>`` при разрешении его Jinja-шаблонов:"
 
-#: ../../source/config_objects.rst:461
+#: ../../source/config_objects.rst:481
 msgid ""
 "One parameter of an ``assy`` assembly is PartCAD's own rather than the "
-"file's: ``exploded``, ``false`` unless something sets it. Set, the "
-"assembly is drawn with its items pulled apart -- each one backed out of "
-"what it is connected to, along the connection, by the ``exploded:`` of "
-"its ``connect:`` or ``connectPorts:`` section (see :doc:`assy`) or by "
-"half of the larger of the two, and carried along with whatever it is "
-"connected to that has moved itself. It is the same gap an assembly "
-"instruction book shows each step with."
+"file's: ``exploded``, ``false`` unless something sets it. Set, the assembly "
+"is drawn with its items pulled apart -- each one backed out of what it is "
+"connected to, along the connection, by the ``exploded:`` of its ``connect:``"
+" or ``connectPorts:`` section (see :doc:`assy`) or by half of the larger of "
+"the two, and carried along with whatever it is connected to that has moved "
+"itself. It is the same gap an assembly instruction book shows each step "
+"with."
 msgstr ""
 "Один параметр сборки ``assy`` принадлежит самому PartCAD, а не файлу: "
 "``exploded``, ``false``, пока его ничто не задаёт. Если он задан, сборка "
 "рисуется с разнесёнными элементами -- каждый отодвигается от того, с чем "
-"соединён, вдоль соединения, на ``exploded:`` своего раздела ``connect:`` "
-"или ``connectPorts:`` (см. :doc:`assy`) или на половину большего из двух,"
-" и перемещается вместе с тем, с чем соединён, если то само сдвинулось. "
-"Это тот же зазор, с которым инструкция по сборке показывает каждый шаг."
+"соединён, вдоль соединения, на ``exploded:`` своего раздела ``connect:`` или"
+" ``connectPorts:`` (см. :doc:`assy`) или на половину большего из двух, и "
+"перемещается вместе с тем, с чем соединён, если то само сдвинулось. Это тот "
+"же зазор, с которым инструкция по сборке показывает каждый шаг."
 
-#: ../../source/config_objects.rst:469
+#: ../../source/config_objects.rst:489
 msgid ""
-"Only the assembly's own items move. An item that is an assembly itself --"
-" a sub-assembly, or a nested ``links:`` list -- moves as one piece, with "
-"everything in it where it was. Whatever belongs to an item moves with it:"
-" its ports are drawn on it where it is drawn (``--with-ports``, ``--with-"
+"Only the assembly's own items move. An item that is an assembly itself -- a "
+"sub-assembly, or a nested ``links:`` list -- moves as one piece, with "
+"everything in it where it was. Whatever belongs to an item moves with it: "
+"its ports are drawn on it where it is drawn (``--with-ports``, ``--with-"
 "internals``), and so is a port the assembly's ``map:`` takes from it."
 msgstr ""
-"Двигаются только собственные элементы сборки. Элемент, который сам "
-"является сборкой, -- подсборка или вложенный список ``links:``, -- "
-"двигается целиком, и всё внутри него остаётся на своих местах. То, что "
-"принадлежит элементу, двигается вместе с ним: его порты рисуются на нём "
-"там, где рисуется он сам (``--with-ports``, ``--with-internals``), как и "
-"порт, который ``map:`` сборки берёт у него."
+"Двигаются только собственные элементы сборки. Элемент, который сам является "
+"сборкой, -- подсборка или вложенный список ``links:``, -- двигается целиком,"
+" и всё внутри него остаётся на своих местах. То, что принадлежит элементу, "
+"двигается вместе с ним: его порты рисуются на нём там, где рисуется он сам "
+"(``--with-ports``, ``--with-internals``), как и порт, который ``map:`` "
+"сборки берёт у него."
 
-#: ../../source/config_objects.rst:475
+#: ../../source/config_objects.rst:495
 msgid ""
-"``logo;exploded=true`` is a parametrized variant like any other: an "
-"object of its own, with a cache key of its own, so it is built, rendered "
-"and exported once and read back from the cache afterwards. ``pc render "
-"logo -p exploded=true`` asks for it from the command line (see :ref"
-":`parameter-values`), and an alias gives it a name of its own:"
+"``logo;exploded=true`` is a parametrized variant like any other: an object "
+"of its own, with a cache key of its own, so it is built, rendered and "
+"exported once and read back from the cache afterwards. ``pc render logo -p "
+"exploded=true`` asks for it from the command line (see :ref:`parameter-"
+"values`), and an alias gives it a name of its own:"
 msgstr ""
 "``logo;exploded=true`` -- параметризованный вариант, как любой другой: "
 "отдельный объект со своим ключом кеша, поэтому он строится, рендерится и "
@@ -661,47 +934,47 @@ msgstr ""
 "exploded=true`` запрашивает его из командной строки (см. :ref:`parameter-"
 "values`), а псевдоним даёт ему собственное имя:"
 
-#: ../../source/config_objects.rst:492
+#: ../../source/config_objects.rst:512
 msgid ""
-"Only the ``assy`` type accepts it, because only an ASSY file says what "
-"each item is connected to; declaring ``exploded`` on an assembly read "
-"from a STEP file is an error."
+"Only the ``assy`` type accepts it, because only an ASSY file says what each "
+"item is connected to; declaring ``exploded`` on an assembly read from a STEP"
+" file is an error."
 msgstr ""
-"Его принимает только тип ``assy``, потому что только файл ASSY говорит, с"
-" чем соединён каждый элемент; объявить ``exploded`` для сборки, "
-"прочитанной из файла STEP, -- ошибка."
+"Его принимает только тип ``assy``, потому что только файл ASSY говорит, с "
+"чем соединён каждый элемент; объявить ``exploded`` для сборки, прочитанной "
+"из файла STEP, -- ошибка."
 
-#: ../../source/config_objects.rst:358
+#: ../../source/config_objects.rst:517
 msgid "Other"
 msgstr "Прочее"
 
-#: ../../source/config_objects.rst:360
+#: ../../source/config_objects.rst:519
 msgid "There are other optional fields that are common to all objects:"
 msgstr "Существуют и другие необязательные поля, общие для всех объектов:"
 
-#: ../../source/config_objects.rst:362
+#: ../../source/config_objects.rst:521
 msgid "``desc``: <text>"
 msgstr "``desc``: <text>"
 
-#: ../../source/config_objects.rst:364
+#: ../../source/config_objects.rst:523
 msgid "Description of the object."
 msgstr "Описание объекта."
 
-#: ../../source/config_objects.rst:366
+#: ../../source/config_objects.rst:525
 msgid "``offset``: <OCCT Location object>"
 msgstr "``offset``: <OCCT Location object>"
 
-#: ../../source/config_objects.rst:368
+#: ../../source/config_objects.rst:527
 msgid "Defines the offset to apply to the CAD model when this object is used."
 msgstr ""
 "Определяет смещение, применяемое к CAD-модели при использовании этого "
 "объекта."
 
-#: ../../source/config_objects.rst:370
+#: ../../source/config_objects.rst:529
 msgid "``cache``: <bool> (default: `True`)"
 msgstr "``cache``: <bool> (по умолчанию: `True`)"
 
-#: ../../source/config_objects.rst:372
+#: ../../source/config_objects.rst:531
 msgid ""
 "The value `false` indicates the intent to exclude this object from any "
 "caching behavior. It may be due to storage size or time considerations, or "
@@ -712,3 +985,14 @@ msgstr ""
 "кэширования. Это может быть связано с соображениями размера хранилища или "
 "времени либо с известными проблемами отслеживания зависимостей. Оно не "
 "переопределяет никакие глобальные настройки кэширования."
+
+#~ msgid ""
+#~ "Objects may contain a list of requirements in free form (any YAML syntax "
+#~ "works). These requirements help describe the object in more detail. They are"
+#~ " not used by PartCAD itself, but by AI or human actors to create, improve, "
+#~ "or better understand the object."
+#~ msgstr ""
+#~ "Объекты могут содержать список требований в свободной форме (подходит любой "
+#~ "синтаксис YAML). Эти требования помогают более подробно описать объект. Они "
+#~ "не используются самим PartCAD, а используются ИИ или людьми для создания, "
+#~ "улучшения или лучшего понимания объекта."

@@ -6,77 +6,452 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: PartCAD \n"
+"Project-Id-Version: PartCAD\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
 "Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=utf-8\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/intro.rst:2
 msgid "Introduction"
 msgstr "简介"
 
 #: ../../source/intro.rst:6
-msgid "Background"
-msgstr "背景"
-
-#: ../../source/intro.rst:8
-msgid ""
-"PartCAD was initially just an internal library in the `OpenVMP project "
-"<https://github.com/openvmp/openvmp>`_ to maintain the blueprints of "
-"OpenVMP robots in a way that allows reconfiguring the blueprints based on"
-" the specific needs (parameters), and allows to maintain the bill of "
-"materials and all the necessary data to purchase the required parts."
-msgstr "PartCAD 最初只是 `OpenVMP 项目 <https://github.com/openvmp/openvmp>`_ 中的一个内部库，用于维护 OpenVMP 机器人的设计蓝图，使其能够根据具体需求（参数）重新配置蓝图，并维护物料清单以及采购所需零件所需的全部数据。"
-
-#: ../../source/intro.rst:14
-msgid ""
-"The OpenVMP project has surfaced the need for an open source Product "
-"Lifecycle Management (PLM) system that would use Git for collaboration on"
-" the designs themselves, the supplementary documentation and supplier "
-"information (and integration). To address that need PartCAD was published"
-" as a standalone framework to be used by any project."
-msgstr "OpenVMP 项目凸显出对一套开源产品生命周期管理（PLM）系统的需求，该系统会使用 Git 来协作完成设计本身、辅助文档以及供应商信息（及其集成）。为满足这一需求，PartCAD 作为一个可供任何项目使用的独立框架发布。"
-
-#: ../../source/intro.rst:23
 msgid "Overview"
 msgstr "概述"
 
-#: ../../source/intro.rst:25
-msgid "PartCAD can be perceived as consisting of four parts:"
-msgstr "PartCAD 可以看作由以下四个部分组成："
+#: ../../source/intro.rst:8
+msgid "**PartCAD is the programming language for manufacturable things.**"
+msgstr "**PartCAD 是用于可制造之物的编程语言。**"
 
-#: ../../source/intro.rst:27
-msgid "PartCAD standards and conventions on how to maintain product information"
-msgstr "关于如何维护产品信息的 PartCAD 标准与约定"
-
-#: ../../source/intro.rst:29
+#: ../../source/intro.rst:10
 msgid ""
-"The public repository of products created and maintained by the community"
-" based on the PartCAD standards and conventions"
-msgstr "由社区依据 PartCAD 标准与约定创建和维护的公共产品仓库"
+"A PartCAD package is a Git repository with a ``partcad.yaml`` in it. That "
+"file declares the things the product is made of -- parts, as CAD scripts or "
+"CAD files; assemblies and scenes that place them; the interfaces they mate "
+"through; the materials they are made of; the requirements they have to meet."
+" PartCAD renders, tests, simulates, analyses and documents what is declared "
+"there, and produces the bill of materials, the sourcing and the assembly "
+"instructions from that same source."
+msgstr ""
+"一个 PartCAD 包就是一个带有 ``partcad.yaml`` 的 Git 仓库。那个文件声明了产品由什么构成 -- 零件，以 CAD 脚本或 "
+"CAD 文件的形式；放置它们的装配体和场景；它们借以配合的接口；它们所用的材料；它们必须满足的需求。PartCAD "
+"对在那里声明的内容进行渲染、测试、仿真、分析和编写文档，并从同一个源头产出物料清单、采购信息和装配说明。"
+
+#: ../../source/intro.rst:16
+msgid ""
+"Everything is text. So a product is versioned, reviewed, branched and merged"
+" the way software is, by people and by AI agents alike -- and nothing in the"
+" chain from a requirement to a purchase order is a binary nobody can diff."
+msgstr ""
+"一切都是文本。所以产品可以像软件那样被版本管理、评审、分支和合并，人和 AI 智能体都一样 -- 而从需求到采购订单这条链上，没有任何一环是谁都无法做 "
+"diff 的二进制文件。"
+
+#: ../../source/intro.rst:21
+msgid "What PartCAD works with"
+msgstr "PartCAD 处理什么"
+
+#: ../../source/intro.rst:23
+msgid ""
+"**Parts** written as code (`CadQuery "
+"<https://github.com/CadQuery/cadquery>`_, `build123d "
+"<https://github.com/gumyr/build123d>`_, `OpenSCAD <https://openscad.org/>`_,"
+" `Chili3D <https://github.com/xiangechen/chili3d>`_, `SDF "
+"<https://github.com/fogleman/sdf>`_) or read from a file (STEP, BREP, STL, "
+"3MF, OBJ, glTF, KiCad PCBs, FreeCAD documents), plus whatever format a "
+"plugin package adds."
+msgstr ""
+"**零件**，写成代码（ `CadQuery <https://github.com/CadQuery/cadquery>`_ 、 `build123d"
+" <https://github.com/gumyr/build123d>`_ 、 `OpenSCAD "
+"<https://openscad.org/>`_ 、 `Chili3D "
+"<https://github.com/xiangechen/chili3d>`_ 、 `SDF "
+"<https://github.com/fogleman/sdf>`_ "
+"），或者从文件读入（STEP、BREP、STL、3MF、OBJ、glTF、KiCad PCB、FreeCAD 文档），再加上插件包所添加的任何格式。"
+
+#: ../../source/intro.rst:28
+msgid ""
+"**Assemblies and scenes** in Assembly YAML, URDF or a STEP file, with "
+"interfaces and mating as objects of their own rather than coordinates "
+"written out by hand."
+msgstr ""
+"**装配体与场景**，以 Assembly YAML、URDF 或 STEP 文件的形式，其中接口和配合本身就是独立的对象，而不是手工写出来的坐标。"
+
+#: ../../source/intro.rst:30
+msgid ""
+"**Outputs**: the CAD formats above, Gazebo and MuJoCo worlds, 2D "
+"projections, dimensioned drawings, Markdown documentation, and PDF or HTML "
+"instruction books."
+msgstr ""
+"**输出**：上面那些 CAD 格式、Gazebo 和 MuJoCo 世界、2D 投影、带尺寸的图纸、Markdown 文档，以及 PDF 或 HTML"
+" 说明书。"
 
 #: ../../source/intro.rst:32
 msgid ""
-"Tools that operate with public and private repositories for as long as "
-"they are maintained following the PartCAD standards and conventions"
-msgstr "只要公共和私有仓库遵循 PartCAD 标准与约定进行维护，即可对其进行操作的工具"
+"**Engineering**: finite element, modal, thermal and fluid analysis (``pc "
+"cae``), simulation in MuJoCo or Gazebo (``pc sim``), 2.5D toolpaths (``pc "
+"cam``), and materials and manufacturing methods that carry through into the "
+"bill of materials."
+msgstr ""
+"**工程**：有限元、模态、热和流体分析（ ``pc cae`` ）、在 MuJoCo 或 Gazebo 中的仿真（ ``pc sim`` ）、2.5D"
+" 刀路（ ``pc cam`` ），以及会一路带进物料清单的材料和制造方式。"
 
 #: ../../source/intro.rst:35
 msgid ""
-"Libraries and frameworks to programmatically interact with product "
-"information in public and private PartCAD repositories"
-msgstr "用于以编程方式与公共和私有 PartCAD 仓库中的产品信息进行交互的库和框架"
+"**Supply chain**: a build-or-buy decision per line item, stock-based "
+"procurement for the parts that are made rather than bought, and ordering "
+"from the command line."
+msgstr "**供应链**：每个清单条目一个自制还是采购的决定、对自制而非采购的零件按坯料进行采购，以及从命令行下单。"
 
-#: ../../source/intro.rst:38
+#: ../../source/intro.rst:37
 msgid ""
-"Detailed documentation on all of the above can be found in the 'Design' "
-"section."
-msgstr "关于上述所有内容的详细文档，可在“设计”一节中找到。"
+"**AI agents**: Agent Skills for Claude Code and Cursor, an MCP server (``pc "
+"mcp``), and plain-text ``--no-ansi`` output on every command so that an "
+"agent parses text rather than progress bars."
+msgstr ""
+"**AI 智能体**：面向 Claude Code 和 Cursor 的 Agent Skills、一个 MCP 服务器（ ``pc mcp`` "
+"），以及每条命令都支持的纯文本 ``--no-ansi`` 输出，这样智能体解析的是文本而不是进度条。"
+
+#: ../../source/intro.rst:39
+msgid ""
+"**Caching** in memory, on disk, on a memcached server and in an S3 bucket, "
+"so that a team or a CI fleet renders each model once."
+msgstr ""
+"**缓存**，在内存中、在磁盘上、在 memcached 服务器上以及在 S3 存储桶中，使得一个团队或一个 CI 集群对每个模型只渲染一次。"
+
+#: ../../source/intro.rst:42
+msgid ""
+":doc:`/supported` has the full list, including what is accepted but not yet "
+"delivered."
+msgstr ":doc:`/supported` 中有完整列表，包括那些已被接受但尚未交付的内容。"
+
+#: ../../source/intro.rst:45
+msgid "What PartCAD is not"
+msgstr "PartCAD 不是什么"
+
+#: ../../source/intro.rst:47
+msgid ""
+"It is not a drawing tool, and it does not want to be. It is the layer "
+"*underneath* the drawing tools: the specification of a manufacturable "
+"product, in a form a human, a CI job and an AI model can each read, change "
+"and check. Which drawing tool produced a part is the part's business; "
+"PartCAD's business is that the product made of it can be built, sourced and "
+"audited."
+msgstr ""
+"它不是绘图工具，也不想成为绘图工具。它是位于各种绘图工具 *之下* 的那一层：一个可制造产品的规格说明，其形式是人、CI 作业和 AI "
+"模型都能各自读取、修改和检查的。某个零件是哪个绘图工具做出来的，是那个零件自己的事；PartCAD "
+"关心的是由它构成的那个产品能被制造、能被采购、能被审计。"
+
+#: ../../source/intro.rst:52
+msgid ""
+"Keeping that specification on your own machines, in Git, and portable "
+"between CAD tools and manufacturers is the point of the whole exercise. "
+":doc:`/digital_thread/use_cases` has the shapes this takes in practice."
+msgstr ""
+"把这份规格说明留在你自己的机器上、放在 Git 里，并且能在各种 CAD "
+"工具和各家制造商之间移植，正是这一整套做法的意义所在。:doc:`/digital_thread/use_cases` "
+"给出了这件事在实践中呈现的各种形态。"
+
+#: ../../source/intro.rst:57
+msgid "What a package holds"
+msgstr "一个包里装着什么"
+
+#: ../../source/intro.rst:59
+msgid "PartCAD includes tools to package product information:"
+msgstr "PartCAD 包含用于打包产品信息的工具："
+
+#: ../../source/intro.rst:61
+msgid ""
+"Optional (but highly recommended) **high-level requirements** (texts and "
+"drawings)"
+msgstr "可选（但强烈推荐）的 **高层需求**\\ （文字和图纸）"
+
+#: ../../source/intro.rst:62
+msgid ""
+"Optional **detailed design** (mechanical outline, PCB schematics, software "
+"architecture)"
+msgstr "可选的 **详细设计**\\ （机械外形、PCB 原理图、软件架构）"
+
+#: ../../source/intro.rst:63
+msgid ""
+"Implementation (**mechanical CAD files, PCB layout, software artifacts**)"
+msgstr "实现（**机械 CAD 文件、PCB 布局、软件制品**）"
+
+#: ../../source/intro.rst:64
+msgid ""
+"Optionally, the following data can be provided to augment or complement the "
+"output:"
+msgstr "此外还可以提供以下数据，用来增强或补充输出内容："
+
+#: ../../source/intro.rst:66
+msgid "Additional manufacturing process requirements and instructions"
+msgstr "额外的制造工艺要求和说明"
+
+#: ../../source/intro.rst:67
+msgid "Additional product validation instructions"
+msgstr "额外的产品校验说明"
+
+#: ../../source/intro.rst:68
+msgid "**Maintenance instructions**"
+msgstr "**维护说明**"
+
+#: ../../source/intro.rst:70
+msgid "Or any other product related metadata"
+msgstr "或者任何其他与产品相关的元数据"
+
+#: ../../source/intro.rst:72
+msgid ""
+"Such packages are **modular and reusable**, allowing one to build not only "
+"on top of the CAD files of previous products, but to **build on top of their"
+" manufacturing processes** as well."
+msgstr "这样的包是 **模块化且可复用的**，使人不仅能在以往产品的 CAD 文件之上继续构建，还能 **在它们的制造工艺之上继续构建**。"
+
+#: ../../source/intro.rst:77
+msgid "What PartCAD produces"
+msgstr "PartCAD 产出什么"
+
+#: ../../source/intro.rst:79
+msgid ""
+"As a result of maintaining the product information using PartCAD, the "
+"following outputs can be generated and, if necessary, collected and managed "
+"using PartCAD tools:"
+msgstr "用 PartCAD 维护产品信息的结果是：可以生成下列输出，并在必要时用 PartCAD 工具收集和管理它们："
+
+#: ../../source/intro.rst:82
+msgid "**Product documentation** (markdown, html or PDF)"
+msgstr "**产品文档**\\ （markdown、html 或 PDF）"
+
+#: ../../source/intro.rst:83
+msgid "Design validation results"
+msgstr "设计校验结果"
+
+#: ../../source/intro.rst:84
+msgid "Product **bill of materials** (mechanical, electronics, software)"
+msgstr "产品 **物料清单**\\ （机械、电子、软件）"
+
+#: ../../source/intro.rst:85
+msgid "Sourcing information **for all components**"
+msgstr "**所有组件** 的采购信息"
+
+#: ../../source/intro.rst:86
+msgid ""
+"Manufacturing **process specification** (including required equipment if "
+"any)"
+msgstr "制造 **工艺规格说明**\\ （包括所需设备，如果有的话）"
+
+#: ../../source/intro.rst:87
+msgid ""
+"Manufacturing **instructions** (sufficiently documented to be reproduced by "
+"anyone without inquiring any additional information)"
+msgstr "制造 **说明**\\ （文档详尽到任何人都能照着复现，而无需再去打听任何额外信息）"
+
+#: ../../source/intro.rst:89
+msgid "Product **validation** instructions"
+msgstr "产品 **校验** 说明"
+
+#: ../../source/intro.rst:90
+msgid ""
+"Product validation **results** (given access to an experimental product and "
+"the required tools)"
+msgstr "产品校验 **结果**\\ （前提是能接触到试制产品和所需工具）"
+
+#: ../../source/intro.rst:91
+msgid ""
+"Input data for software components to visualize the product on your website,"
+" with a 3D viewer, a configurator, manufacturing/assembly instructions and "
+"more"
+msgstr "供软件组件使用的输入数据，用来在你的网站上展示该产品，配上 3D 查看器、配置器、制造/装配说明等等"
+
+#: ../../source/intro.rst:94
+msgid ""
+"The full list of formats read and written, and of the analyses, simulations "
+"and manufacturing steps PartCAD runs, is in :doc:`/supported`."
+msgstr "所读写格式的完整列表，以及 PartCAD 所运行的各项分析、仿真和制造步骤，都在 :doc:`/supported` 中。"
+
+#: ../../source/intro.rst:99
+msgid "Product development and testing"
+msgstr "产品开发与测试"
+
+#: ../../source/intro.rst:101
+msgid ""
+"Once product information is packaged, it can be versioned and used for "
+"iterative improvements or to produce PartCAD outputs either by human or AI "
+"actors. To achieve that, PartCAD integrates with third-party tools. Below "
+"are just some examples of what third-party integrations can be used for:"
+msgstr ""
+"产品信息一旦被打包，就可以被版本管理，并用于迭代改进，或者由人或 AI 参与者来产出 PartCAD 的各项输出。为此，PartCAD "
+"与第三方工具集成。下面只是第三方集成可以用来做什么的一些例子："
+
+#: ../../source/intro.rst:105
+msgid ""
+"AI tools can be used to **update the mechanical design and implementation "
+"automatically** based on the current state of the requirements"
+msgstr "可以用 AI 工具根据当前的需求状态 **自动更新机械设计与实现**"
+
+#: ../../source/intro.rst:107
+msgid "A legacy CAD tool can be used manually to update the implementation"
+msgstr "可以手工使用传统 CAD 工具来更新实现"
+
+#: ../../source/intro.rst:108
+msgid ""
+"AI tools can be used to validate the design and implementation to identify "
+"product requirement or best practices (e.g. to reduce manufacturing "
+"complexity) violations"
+msgstr "可以用 AI 工具来校验设计与实现，找出违反产品需求或最佳实践（例如为降低制造复杂度）的地方"
+
+#: ../../source/intro.rst:110
+msgid ""
+"**A web interface of an online store or an API of an additive manufacturer**"
+" can be used to source and manufacture parts"
+msgstr "可以用 **某个网店的网页界面，或者某家增材制造商的 API** 来采购和制造零件"
+
+#: ../../source/intro.rst:112
+msgid ""
+"Simulation tools (potentially in conjunction with AI tools) can be used to "
+"validate that the product design matches the product requirements"
+msgstr "可以用仿真工具（可能配合 AI 工具）来校验产品设计是否符合产品需求"
+
+#: ../../source/intro.rst:114
+msgid ""
+"AI tools can be used to review the product implementation for correctness, "
+"safety or compliance"
+msgstr "可以用 AI 工具从正确性、安全性或合规性角度评审产品实现"
+
+#: ../../source/intro.rst:115
+msgid ""
+"Manufacturing processes are **verified for completeness** (e.g. tools "
+"requirements are specified for all operations)"
+msgstr "制造工艺会被 **验证其完整性**\\ （例如所有工序都指定了工具要求）"
+
+#: ../../source/intro.rst:117
+msgid ""
+"Manufacturing instructions are **verified for correctness** (e.g. the "
+"provided manufacturing steps can actually be successfully and safely "
+"performed, and fit within the capabilities of the selected manufacturing "
+"tools)"
+msgstr "制造说明会被 **验证其正确性**\\ （例如所给出的制造步骤确实能够成功且安全地执行，并且在所选制造工具的能力范围之内）"
+
+#: ../../source/intro.rst:121
+msgid ""
+"Some of the iterative improvements or tests can be achieved using PartCAD "
+"built-in features. However, the use of third-party tools is **recommended "
+"for unlocking cutting edge innovations and features**."
+msgstr "其中一部分迭代改进或测试可以用 PartCAD 内置的功能来完成。不过，**为了用上最前沿的创新和功能，还是推荐使用第三方工具**。"
+
+#: ../../source/intro.rst:126
+msgid "Supply chains based on PartCAD"
+msgstr "基于 PartCAD 的供应链"
+
+#: ../../source/intro.rst:128
+msgid ""
+"By letting the user easily switch between third-party engineering tools or "
+"manufacturers without having to migrate product data, PartCAD creates a "
+"competitive environment for service providers to **drive the costs down**."
+msgstr ""
+"由于用户可以在各种第三方工程工具或制造商之间轻松切换而无需迁移产品数据，PartCAD 为服务提供方创造了一个竞争环境，从而 **把成本压下来**。"
+
+#: ../../source/intro.rst:132
+msgid ""
+"Whenever you select third-party tools (if any) to use in your workflows, you"
+" ultimately decide (and make it transparent or auditable) **how secure your "
+"supply chain is and how exposed your product information is**. If you opt "
+"for on-prem tools only, all your product information remains on-prem too. It"
+" makes PartCAD an ultimate solution for achieving data sovereignty for those"
+" willing to keep their product data private. **In the age of cloud data "
+"harvesting (especially for AI training), it makes PartCAD a better "
+"alternative to any cloud-based PDM, PLM or BOM solution**."
+msgstr ""
+"每当你选择要在工作流中使用哪些第三方工具（如果有的话）时，归根结底是你在决定 **你的供应链有多安全、你的产品信息暴露到什么程度**\\ "
+"（并且让这件事透明、可审计）。如果你只选用本地部署的工具，那么你的全部产品信息也都留在本地。这使 PartCAD "
+"成为那些希望把产品数据保持私有的人实现数据主权的终极方案。**在云端数据被大规模收割（尤其是用于 AI 训练）的时代，这使 PartCAD "
+"成为任何基于云的 PDM、PLM 或 BOM 方案的更好替代。**"
+
+#: ../../source/intro.rst:141
+msgid "Operations using PartCAD (planned)"
+msgstr "基于 PartCAD 的运营（计划中）"
+
+#: ../../source/intro.rst:143
+msgid ""
+"PartCAD also works on the following supplementary products, to enable "
+"operations without any use of third-party tools. Neither is part of this "
+"repository yet."
+msgstr "PartCAD 还在开发下列配套产品，以便在完全不使用第三方工具的情况下开展运营。目前两者都还不属于本仓库。"
+
+#: ../../source/intro.rst:146
+msgid ""
+"A CRM for part manufacturing and assembly shops for businesses of any size "
+"(from skilled individuals working in their garage to the biggest factories) "
+"to **immediately start taking orders** for manufacturable products "
+"maintained using PartCAD"
+msgstr ""
+"一个面向零件制造和装配车间的 CRM，让任何规模的企业（从在自家车库里干活的技术好手，到最大的工厂）都能 **立刻开始接单**，承接那些用 "
+"PartCAD 维护的可制造产品"
+
+#: ../../source/intro.rst:149
+msgid ""
+"An inventory tool to manage the list of parts and final products in stock, "
+"as well as to track and manage all in-progress or completed orders, to "
+"**immediately bring supply chains up and to scale them up while keeping all "
+"data private on-prem** and not incurring any costs (for cloud services and "
+"alike)"
+msgstr ""
+"一个库存工具，用来管理在库零件和成品的清单，以及跟踪和管理所有在制或已完成的订单，从而 "
+"**立刻把供应链建起来并把它做大，同时把所有数据私有地留在本地**，也不产生任何（云服务之类的）费用"
+
+#: ../../source/intro.rst:155
+msgid "History"
+msgstr "历史"
+
+#: ../../source/intro.rst:157
+msgid ""
+"PartCAD was initially just an internal library in the `OpenVMP project "
+"<https://github.com/openvmp/openvmp>`_ to maintain the blueprints of OpenVMP"
+" robots in a way that allows reconfiguring the blueprints based on the "
+"specific needs (parameters), and allows to maintain the bill of materials "
+"and all the necessary data to purchase the required parts."
+msgstr ""
+"PartCAD 最初只是 `OpenVMP 项目 <https://github.com/openvmp/openvmp>`_ 中的一个内部库，用于维护"
+" OpenVMP 机器人的设计蓝图，使其能够根据具体需求（参数）重新配置蓝图，并维护物料清单以及采购所需零件所需的全部数据。"
+
+#: ../../source/intro.rst:163
+msgid ""
+"The OpenVMP project has surfaced the need for an open source Product "
+"Lifecycle Management (PLM) system that would use Git for collaboration on "
+"the designs themselves, the supplementary documentation and supplier "
+"information (and integration). To address that need PartCAD was published as"
+" a standalone framework to be used by any project."
+msgstr ""
+"OpenVMP 项目凸显出对一套开源产品生命周期管理（PLM）系统的需求，该系统会使用 Git "
+"来协作完成设计本身、辅助文档以及供应商信息（及其集成）。为满足这一需求，PartCAD 作为一个可供任何项目使用的独立框架发布。"
+
+#~ msgid "Background"
+#~ msgstr "背景"
+
+#~ msgid "PartCAD can be perceived as consisting of four parts:"
+#~ msgstr "PartCAD 可以看作由以下四个部分组成："
+
+#~ msgid ""
+#~ "The public repository of products created and maintained by the community "
+#~ "based on the PartCAD standards and conventions"
+#~ msgstr "由社区依据 PartCAD 标准与约定创建和维护的公共产品仓库"
+
+#~ msgid ""
+#~ "Tools that operate with public and private repositories for as long as they "
+#~ "are maintained following the PartCAD standards and conventions"
+#~ msgstr "只要公共和私有仓库遵循 PartCAD 标准与约定进行维护，即可对其进行操作的工具"
+
+#~ msgid ""
+#~ "Libraries and frameworks to programmatically interact with product "
+#~ "information in public and private PartCAD repositories"
+#~ msgstr "用于以编程方式与公共和私有 PartCAD 仓库中的产品信息进行交互的库和框架"
+
+#~ msgid ""
+#~ "Detailed documentation on all of the above can be found in the 'Design' "
+#~ "section."
+#~ msgstr "关于上述所有内容的详细文档，可在“设计”一节中找到。"

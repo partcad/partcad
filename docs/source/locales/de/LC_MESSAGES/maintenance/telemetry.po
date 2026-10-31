@@ -1,0 +1,200 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/maintenance/telemetry.rst:3
+msgid "Telemetry"
+msgstr "Telemetrie"
+
+#: ../../source/maintenance/telemetry.rst:7
+msgid "Public Repositories"
+msgstr "Öffentliche Repositories"
+
+#: ../../source/maintenance/telemetry.rst:9
+msgid ""
+"By default PartCAD collects telemetry data to improve the user experience "
+"and to help understand how the tool is being used. The data collected "
+"includes the following:"
+msgstr ""
+"Standardmäßig sammelt PartCAD Telemetriedaten, um die Nutzererfahrung zu "
+"verbessern und zu verstehen, wie das Werkzeug verwendet wird. Die "
+"gesammelten Daten umfassen Folgendes:"
+
+#: ../../source/maintenance/telemetry.rst:13
+msgid "What commands are being run?"
+msgstr "Welche Befehle werden ausgeführt?"
+
+#: ../../source/maintenance/telemetry.rst:14
+msgid "How much time is consumed by each step?"
+msgstr "Wie viel Zeit wird für jeden Schritt benötigt?"
+
+#: ../../source/maintenance/telemetry.rst:15
+msgid "What errors and exceptions are being raised?"
+msgstr "Welche Fehler und Ausnahmen werden ausgelöst?"
+
+#: ../../source/maintenance/telemetry.rst:17
+msgid ""
+"PartCAD uses `OpenTelemetry <https://opentelemetry.io/>`_ to collect "
+"telemetry data. You can disable telemetry by setting the following "
+"configuration:"
+msgstr ""
+"PartCAD verwendet `OpenTelemetry <https://opentelemetry.io/>`_, um "
+"Telemetriedaten zu sammeln. Sie können die Telemetrie deaktivieren, indem "
+"Sie die folgende Konfiguration setzen:"
+
+#: ../../source/maintenance/telemetry.rst:26
+msgid ""
+"Alternatively, you can disable telemetry by setting the following "
+"environment variable:"
+msgstr ""
+"Alternativ können Sie die Telemetrie deaktivieren, indem Sie die folgende "
+"Umgebungsvariable setzen:"
+
+#: ../../source/maintenance/telemetry.rst:32
+msgid "You can also change telemetry settings using CLI:"
+msgstr "Sie können die Telemetrieeinstellungen auch über die CLI ändern:"
+
+#: ../../source/maintenance/telemetry.rst:42
+msgid ""
+"How deep the traces go is a separate setting. By default PartCAD reports the "
+"operations it names for itself -- the process a command is, and the action "
+"each object it works on is -- and nothing below them:"
+msgstr ""
+"Wie tief die Traces gehen, ist eine eigene Einstellung. Standardmäßig meldet "
+"PartCAD die Operationen, die es für sich selbst benennt -- den Prozess, der "
+"ein Befehl ist, und die Aktion, die jedes Objekt ist, an dem er arbeitet -- "
+"und nichts darunter:"
+
+#: ../../source/maintenance/telemetry.rst:51
+msgid ""
+"``methods`` adds a span for every instrumented method underneath those, "
+"which is what a trace needs to answer \"where inside this did the time go\". "
+"It is expensive in a way that is easy to miss: creating one part passes "
+"through a dozen instrumented methods, so a package of eight thousand of them "
+"costs a quarter of a million spans to list. Turn it on while you are looking "
+"at something, not for good."
+msgstr ""
+"``methods`` fügt für jede instrumentierte Methode darunter einen Span hinzu, "
+"und das ist es, was ein Trace braucht, um zu beantworten, „wo innerhalb "
+"davon ist die Zeit geblieben“. Es ist auf eine leicht zu übersehende Weise "
+"teuer: ein Teil zu erzeugen durchläuft ein Dutzend instrumentierter "
+"Methoden, sodass ein Paket mit achttausend davon eine Viertelmillion Spans "
+"kostet, nur um aufgelistet zu werden. Schalten Sie es ein, während Sie sich "
+"etwas ansehen, nicht auf Dauer."
+
+#: ../../source/maintenance/telemetry.rst:58
+msgid "``pc system telemetry info`` reports both settings."
+msgstr "``pc system telemetry info`` meldet beide Einstellungen."
+
+#: ../../source/maintenance/telemetry.rst:61
+msgid "Private Repositories"
+msgstr "Private Repositories"
+
+#: ../../source/maintenance/telemetry.rst:63
+msgid ""
+"If you are systemically using PartCAD in your organization then it makes "
+"sense to collect your own telemetry data to understand how the tool is being "
+"used in your organization, and to learn how to improve your organization "
+"performance."
+msgstr ""
+"Wenn Sie PartCAD systematisch in Ihrer Organisation einsetzen, ist es "
+"sinnvoll, eigene Telemetriedaten zu sammeln, um zu verstehen, wie das "
+"Werkzeug in Ihrer Organisation verwendet wird, und um zu lernen, wie Sie die "
+"Leistung Ihrer Organisation verbessern können."
+
+#: ../../source/maintenance/telemetry.rst:67
+msgid ""
+"The only OpenTelemetry backend provider currently supported is `Sentry "
+"<https://sentry.io/>`_. Create an organization account on Sentry and obtain "
+"a DSN key."
+msgstr ""
+"Der derzeit einzige unterstützte OpenTelemetry-Backend-Anbieter ist `Sentry "
+"<https://sentry.io/>`_. Erstellen Sie ein Organisationskonto bei Sentry und "
+"besorgen Sie sich einen DSN-Schlüssel."
+
+#: ../../source/maintenance/telemetry.rst:77
+msgid "Other OpenTelemetry backend providers can be supported on request."
+msgstr ""
+"Weitere OpenTelemetry-Backend-Anbieter können auf Anfrage unterstützt werden."
+
+#: ../../source/maintenance/telemetry.rst:81
+msgid "Personally Identifiable Information"
+msgstr "Personenbezogene Daten"
+
+#: ../../source/maintenance/telemetry.rst:84
+msgid ""
+"The user section in ``~/.partcad/config.yaml`` defines the default personal "
+"and contact details used throughout the system. These details include the "
+"user's name, email, phone number, company, and address information."
+msgstr ""
+"Der Abschnitt user in ``~/.partcad/config.yaml`` definiert die "
+"standardmäßigen persönlichen Angaben und Kontaktdaten, die im gesamten "
+"System verwendet werden. Diese Angaben umfassen Name, E-Mail, Telefonnummer, "
+"Firma und Adressinformationen des Benutzers."
+
+#: ../../source/maintenance/telemetry.rst:105
+msgid "Address Configuration"
+msgstr "Adresskonfiguration"
+
+#: ../../source/maintenance/telemetry.rst:107
+msgid ""
+"Users can override any details from the user section by specifying "
+"shippingAddress and billingAddress separately."
+msgstr ""
+"Benutzer können beliebige Angaben aus dem Abschnitt user überschreiben, "
+"indem sie shippingAddress und billingAddress separat angeben."
+
+#: ../../source/maintenance/telemetry.rst:139
+msgid "**Override Behavior**"
+msgstr "**Überschreibungsverhalten**"
+
+#: ../../source/maintenance/telemetry.rst:141
+msgid ""
+"If shippingAddress is not specified, the system will use the user details "
+"for shipping."
+msgstr ""
+"Wenn shippingAddress nicht angegeben ist, verwendet das System die "
+"Benutzerangaben für den Versand."
+
+#: ../../source/maintenance/telemetry.rst:142
+msgid ""
+"If billingAddress is not specified, the system will use the user details for "
+"billing."
+msgstr ""
+"Wenn billingAddress nicht angegeben ist, verwendet das System die "
+"Benutzerangaben für die Rechnungsstellung."
+
+#: ../../source/maintenance/telemetry.rst:143
+msgid ""
+"If shippingAddress or billingAddress is provided, it completely replaces the "
+"corresponding fields from user."
+msgstr ""
+"Wenn shippingAddress oder billingAddress angegeben wird, ersetzt dies die "
+"entsprechenden Felder aus user vollständig."
+
+#: ../../source/maintenance/telemetry.rst:145
+msgid ""
+"This setup allows full customization of shipping and billing details, "
+"supporting scenarios where items need to be sent to different recipients or "
+"addresses."
+msgstr ""
+"Dieser Aufbau ermöglicht die vollständige Anpassung der Versand- und "
+"Rechnungsangaben und unterstützt Szenarien, in denen Artikel an "
+"unterschiedliche Empfänger oder Adressen gesendet werden müssen."

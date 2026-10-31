@@ -1,0 +1,131 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/design_2d.rst:5
+msgid "2D"
+msgstr "2D"
+
+#: ../../source/digital_thread/lifecycle/design_2d.rst:7
+msgid ""
+"**2D** is the object rendered to a picture, by the same code and with the "
+"same options as ``pc render``. Where the :doc:`3D tab "
+"</digital_thread/lifecycle/design_3d>` draws geometry the window has been "
+"sent, this one asks PartCAD for a *file* and shows it -- so what is on "
+"screen is exactly what the command would write, and the **Save…** button "
+"writes it wherever you choose."
+msgstr ""
+"**2D** -- это объект, отрисованный в картинку, тем же кодом и с теми же "
+"параметрами, что и у ``pc render``. Если :doc:`вкладка 3D "
+"</digital_thread/lifecycle/design_3d>` рисует ту геометрию, которую окну "
+"отправили, то эта просит у PartCAD *файл* и его показывает -- так что на "
+"экране находится в точности то, что записала бы команда, а кнопка **Save…** "
+"записывает это туда, куда вы выберете."
+
+#: ../../source/digital_thread/lifecycle/design_2d.rst:14
+msgid "In the UI"
+msgstr "В интерфейсе"
+
+#: ../../source/digital_thread/lifecycle/design_2d.rst:16
+msgid ""
+"A format is chosen from a list: **PNG**, **JPEG** or **SVG**. The picture is"
+" zoomed with the mouse wheel, dragged with the pointer, and put back with a "
+"double-click."
+msgstr ""
+"Формат выбирается из списка: **PNG**, **JPEG** или **SVG**. Картинка "
+"масштабируется колесом мыши, перетаскивается указателем и возвращается на "
+"место двойным щелчком."
+
+#: ../../source/digital_thread/lifecycle/design_2d.rst:20
+msgid ""
+"The tab has the same tree down its left as the 3D tab, and it means the same"
+" thing: what is ticked is what is drawn, and a port ticked here is a port "
+"drawn on the picture -- what ``pc render --with-ports`` and ``--with-"
+"internals`` produce. The :ref:`view panel <dt-design-3d>` applies as well: "
+"the axis buttons are the views ``pc render --view`` names, so the picture "
+"after clicking **-Y** is the picture ``--view front`` draws, and a section "
+"set on the 3D tab is drawn cut here too, because PartCAD cuts the solid "
+"rather than the image."
+msgstr ""
+"У вкладки слева то же дерево, что и у вкладки 3D, и означает оно то же "
+"самое: то, что отмечено, то и рисуется, а порт, отмеченный здесь, -- это "
+"порт, нарисованный на картинке, то есть то, что создают ``pc render --with-"
+"ports`` и ``--with-internals``. :ref:`Панель вида <dt-design-3d>` действует "
+"тоже: кнопки осей -- это те виды, которые называет ``pc render --view``, "
+"поэтому картинка после щелчка по **-Y** -- это та картинка, которую рисует "
+"``--view front``, а сечение, заданное на вкладке 3D, рисуется разрезанным и "
+"здесь, потому что PartCAD режет само тело, а не изображение."
+
+#: ../../source/digital_thread/lifecycle/design_2d.rst:28
+msgid ""
+"The Design group's 2D tab: the object rendered to a picture, with the format"
+" chooser and Save"
+msgstr ""
+"Вкладка 2D группы Design: объект, отрисованный в картинку, с выбором формата"
+" и кнопкой Save"
+
+#: ../../source/digital_thread/lifecycle/design_2d.rst:33
+msgid "It is for a part, an assembly, a scene or a sketch."
+msgstr "Она предназначена для детали, сборки, сцены или эскиза."
+
+#: ../../source/digital_thread/lifecycle/design_2d.rst:36
+msgid "On the command line"
+msgstr "В командной строке"
+
+#: ../../source/digital_thread/lifecycle/design_2d.rst:45
+msgid ""
+":doc:`/config_output` describes every :ref:`file type <output-files>` and "
+"the options each takes, including how a package's own ``render:`` section "
+"states them once for every object in it rather than on each command."
+msgstr ""
+":doc:`/config_output` описывает каждый :ref:`тип файла <output-files>` и те "
+"параметры, которые принимает каждый, в том числе то, как собственный раздел "
+"``render:`` пакета указывает их один раз для каждого объекта в нём, а не на "
+"каждой команде."
+
+#: ../../source/digital_thread/lifecycle/design_2d.rst:50
+msgid "Agent skills"
+msgstr "Навыки агентов"
+
+#: ../../source/digital_thread/lifecycle/design_2d.rst:52
+msgid "``/pc:render``"
+msgstr "``/pc:render``"
+
+#: ../../source/digital_thread/lifecycle/design_2d.rst:53
+msgid ""
+"Produces the pictures -- several views of one object, since a single "
+"projection hides whatever is behind it. It is how every generating skill "
+"checks what it wrote, and how ``/pc:validate`` gathers the evidence for a "
+"requirement nothing can measure."
+msgstr ""
+"Создаёт картинки -- несколько видов одного объекта, поскольку одна проекция "
+"скрывает всё, что за ней. Именно так каждый генерирующий навык проверяет "
+"написанное и именно так ``/pc:validate`` собирает доказательства для "
+"требования, которое ничто не может измерить."
+
+#: ../../source/digital_thread/lifecycle/design_2d.rst:58
+msgid "``/pc:describe``"
+msgstr "``/pc:describe``"
+
+#: ../../source/digital_thread/lifecycle/design_2d.rst:59
+msgid ""
+"Writes an object's ``summary:`` from its measured size and these renders."
+msgstr ""
+"Пишет ``summary:`` объекта по его измеренному размеру и этим отрисовкам."
