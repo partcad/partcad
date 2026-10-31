@@ -106,12 +106,17 @@ def test_the_docker_image_is_filled_in_and_keyed_as_declared():
     assert "{version}" in impl.docker_image_declared
 
 
-def test_expand_leaves_a_reference_without_placeholders_alone():
+def test_expand_leaves_a_reference_without_placeholders_alone(monkeypatch):
     from partcad_utils import container_image
 
+    # A CI run that builds the images exports the tag it built them under, and
+    # '{version}' is that tag rather than the release.
+    monkeypatch.delenv(container_image.ENV_VAR, raising=False)
     assert container_image.expand("ghcr.io/example/solver:1a2b") == "ghcr.io/example/solver:1a2b"
-    assert container_image.expand("x/y/z:{version}", release="1.2.3").endswith(":1.2.3")
+    assert container_image.expand("x/y/z:{version}", release="1.2.3") == "x/y/z:1.2.3"
     assert container_image.expand("x/y/z:py{python}", python="3.12") == "x/y/z:py3.12"
+    monkeypatch.setenv(container_image.ENV_VAR, "1.2.3-branch-abc")
+    assert container_image.expand("x/y/z:{version}", release="1.2.3") == "x/y/z:1.2.3-branch-abc"
 
 
 # ---------------------------------------------------------------------------
