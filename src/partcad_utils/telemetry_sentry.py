@@ -4,6 +4,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import atexit
 import os
 import platform
 import uuid
@@ -31,6 +32,27 @@ class PartcadSentrySpanProcessor(SentrySpanProcessor):
         super()._update_span_with_otel_data(sentry_span, otel_span)
         # Reduce volume of logs
         sentry_span.description = ""
+
+
+def _close_at_exit() -> None:
+    """Shut the SDK's transport down as the interpreter exits.
+
+    Something can still log an error after the exit handlers have run: asyncio's
+    "Task was destroyed but it is pending!" for a task the interpreter's last
+    garbage collection finds is one. Through 'LoggingIntegration' that error
+    reached the transport, whose worker thread is started by the first event
+    handed to it -- and before Python 3.12, starting a thread while the
+    interpreter finalizes never returns. The process hung there until something
+    killed it. A closed client has no transport, and drops the event instead.
+
+    ``timeout=0``, so closing waits for nothing. The SDK's own
+    'AtexitIntegration' closes with 'shutdown_timeout' instead, which would add up
+    to that long to every exit with an event still unsent. What is already queued
+    is still sent for as long as the worker runs, as it was before: what a
+    process sends at exit stays decided where it was, by the CLI flushing its
+    span itself.
+    """
+    sentry_sdk.get_client().close(timeout=0)
 
 
 def init_sentry(version: str) -> None:
@@ -91,6 +113,10 @@ def init_sentry(version: str) -> None:
         before_send=before_send,
         instrumenter="otel",
     )
+    # Registered now, before whatever registers once telemetry has started --
+    # the CLI's flush of its span ('telemetry_atexit') -- so that, exit handlers
+    # running last registered first, that flush still runs before the close.
+    atexit.register(_close_at_exit)
 
     # Generate a random ID for the user
     guid_file = user_config.get_generated_id_path()
