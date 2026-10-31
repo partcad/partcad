@@ -18,7 +18,9 @@
 //
 
 import * as assert from 'assert';
+import * as THREE from 'three';
 
+import { turnedLike } from '../../webview/cameraView';
 import { ShowNode } from '../../webview/messages';
 import {
     boundsOf,
@@ -220,6 +222,21 @@ suite('The view panel: where a view is looked at from', () => {
         near(turned.origin, [10, 0, 0]);
         near(turned.up, [0, 1, 0]);
         near(orbit(axisView('-y'), 0, 0, Z_POLE).origin, axisView('-y').origin);
+    });
+
+    test('a new object comes in at the angle the turn had reached, at the height and distance a fit gives it', () => {
+        // The 3D view's opening direction, and the camera a quarter turn further
+        // round (about Y, from +Z towards +X, as the orbit controls turn), lower
+        // and further out than a fit would have put it.
+        const fitted = new THREE.Vector3(0.6, 0.5, 0.8);
+        const turned = turnedLike(fitted, new THREE.Vector3(0.8, 0.1, -0.6).multiplyScalar(7));
+        near(turned.toArray() as Vec3, [0.8, 0.5, -0.6]);
+        // Behind it, the long way round.
+        near(turnedLike(fitted, new THREE.Vector3(-0.6, 0.3, -0.8)).toArray() as Vec3, [-0.6, 0.5, -0.8]);
+        // The direction it was given is the next show's too, and stays as it was.
+        near(fitted.toArray() as Vec3, [0.6, 0.5, 0.8]);
+        // Straight down the pole there is no angle to take.
+        near(turnedLike(fitted, new THREE.Vector3(0, 5, 0)).toArray() as Vec3, [0.6, 0.5, 0.8]);
     });
 
     test("the gizmo's axes lie as they are seen: from the front, X right, Z up, -Y towards the reader", () => {

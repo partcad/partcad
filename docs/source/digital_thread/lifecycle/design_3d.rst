@@ -47,7 +47,11 @@ per axis, starting at the faces of the bounding box, which cuts the exact
 geometry before it is drawn rather than clipping the picture; the **viewpoint**
 as ``viewport_origin``, ``viewport_up`` and a target, ready to be copied into a
 ``render:`` section or onto ``pc render --viewport-origin``; and **Animate** and
-**Opacity**, which turn the model on its own and make it see-through.
+**Opacity**, which turn the model on its own and make it see-through. Animate
+is on from the start (but see below for a window with no graphics card). While
+it is on, a different object shown in the view
+starts at the angle the last one had turned to, so a model that changes as an
+agent works on it keeps turning rather than jumping back to the front.
 
 .. image:: /images/dt-design-3d.png
   :width: 100%
@@ -56,8 +60,8 @@ as ``viewport_origin``, ``viewport_up`` and a target, ready to be copied into a
 
 The view uses the graphics card where the window can (WebGL, else WebGPU). In a
 window that cannot -- a virtual machine, a remote desktop, a driver the editor
-could not use -- it draws without one: flat-shaded and slower, and a big model
-drawn as boxes while it is being turned. A note in the corner says so. A
+could not use -- it draws without one: flat-shaded and slower, with Animate off
+until it is ticked, and a big model drawn as boxes while it is being turned. A note in the corner says so. A
 `3Dconnexion <https://3dconnexion.com/>`_ **SpaceMouse** moves the model here
 too; see :doc:`/tools_vscode`.
 
@@ -81,7 +85,9 @@ Agent skills
 
 ``/pc:gen-part``, ``/pc:gen-assembly``, ``/pc:gen-sketch``
   Model from a description, and check what they wrote by rendering it from
-  several angles rather than by looking at one.
+  several angles rather than by looking at one. With this view open,
+  ``/pc:gen-part`` and ``/pc:gen-assembly`` show every version that builds and
+  renders here as they go.
 
 ``/pc:add-interfaces``
   Works the ports out of the geometry and proves them twice -- drawn on the

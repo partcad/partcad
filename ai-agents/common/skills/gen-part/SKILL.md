@@ -36,6 +36,22 @@ Resolve a command as `/pc:init` does (`pc`, then `partcad`, then
 `python -m partcad_cli.click.command`). If none is found, stop and run
 `/pc:setup executable` first.
 
+### Is an IDE watching?
+
+Then ask, once, whether there is an IDE to show the work in as it goes:
+
+```sh
+pc --no-ansi ide state > /dev/null
+```
+
+That asks the PartCAD IDE on this machine (VS Code with the PartCAD extension,
+or the PartCAD IDE itself) what it is showing. It needs no package and no
+daemon, so it can be asked before anything exists. If it fails saying that no
+PartCAD IDE is running, there is none: skip every `pc ide view` below and do not
+bring it up. Any other answer, including an IDE too old to report its state,
+means one is listening, and the part is shown in its 3D view as it takes shape
+(§7).
+
 ## 3. Choose a representation
 
 Pick the script kind that best fits the part — you decide:
@@ -249,11 +265,36 @@ Fix any error or mismatch, then re-test and re-render. Iterate until every view
 matches — no fixed retry count. If the part is right and the numbers are what
 need checking, `/pc:describe` renders a dimensioned drawing of it.
 
+### Show each version that renders
+
+Under an IDE (§2), show each version of the part in its 3D view as soon as it
+passes the basic checks: the geometry builds (`pc test` finds nothing wrong with
+the shape itself; a requirement not met yet does not count against it) and all
+four views above rendered without an error. Do it on every pass through this
+section, right after the renders and before you compare them:
+
+```sh
+pc --no-ansi ide view --design-3d <name>    # the first time: brings the 3D tab forward
+pc --no-ansi ide view <name>                # every time after: stays on whatever tab the person chose
+```
+
+The 3D view turns the model on its own (its Animate box is on by default
+wherever there is a graphics card), and each object shown in it starts at the
+angle the last one had turned to. So each version replaces the previous one while the turn carries on,
+and the person watching sees the part take shape instead of a series of
+restarts. Showing the same name again keeps the camera exactly where it is.
+
+Show only what passed. A version that does not build or render stays off the
+screen, so the view always holds the last version that worked. The show is for
+the person, not a check: the four PNGs are still what you compare. If a show
+warns that no IDE was detected, the window has been closed, so stop showing.
+
 ## 8. Finalize
 
 Summarize what you built — key dimensions, material and mass, and assumptions —
-and how to view it: `pc ide view <name>`. Offer `/pc:validate <name>` for a
-verdict on every requirement, the features included.
+and how to view it: `pc ide view <name>`, which under an IDE is what is already
+on screen (§7). Offer `/pc:validate <name>` for a verdict on every requirement,
+the features included.
 
 If the description claims something physical of the part on its own — it rests
 without rolling, it floats — declare that claim as a `simulate:` and check it

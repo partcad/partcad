@@ -80,6 +80,30 @@ export function vectorFromStage(vector: Vec3, frame: SceneFrame): Vec3 {
 /** How far off the pole a view straight down it is put, in radians: well clear of the controls' own limit. */
 const OFF_POLE = 1e-4;
 
+/** The stage's up, which every stage's camera turns about (see the header). */
+const STAGE_UP = new THREE.Vector3(0, 1, 0);
+
+/**
+ * 'direction' turned about the stage's up to where 'heading' points round it,
+ * its height above the turntable kept: how the 3D view frames a new object
+ * while Animate is turning the camera, so that the new object comes in at the
+ * angle the last one had reached and the turn carries on, rather than every
+ * show starting again from the same side.
+ *
+ * Only the azimuth is taken from 'heading', and not its elevation or its
+ * length, which are what framing decides. A 'heading' straight up or down the
+ * pole has no azimuth to take, and 'direction' comes back as it was. The angle
+ * is the orbit controls' own, measured about Y from +Z towards +X.
+ */
+export function turnedLike(direction: THREE.Vector3, heading: THREE.Vector3): THREE.Vector3 {
+    const turned = direction.clone();
+    if (Math.hypot(heading.x, heading.z) < 1e-9 || Math.hypot(direction.x, direction.z) < 1e-9) {
+        return turned;
+    }
+    const by = Math.atan2(heading.x, heading.z) - Math.atan2(direction.x, direction.z);
+    return turned.applyAxisAngle(STAGE_UP, by);
+}
+
 /** Where 'camera' is looking from, at 'target', in PartCAD's frame. */
 export function readViewpoint(camera: THREE.Camera, target: THREE.Vector3, frame: SceneFrame): Viewpoint {
     const offset = camera.position.clone().sub(target);

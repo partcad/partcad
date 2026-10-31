@@ -63,7 +63,7 @@ import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRe
 
 import { Appearance, DEFAULT_APPEARANCE, appearanceKey, appearanceOf, edgeColor } from './appearance';
 import { calloutsOf } from './callouts';
-import { SceneFrame, fromStage, placeCamera as aimCamera, readViewpoint } from './cameraView';
+import { SceneFrame, fromStage, placeCamera as aimCamera, readViewpoint, turnedLike } from './cameraView';
 import { el } from './dom';
 import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
 import { GeometryCache, geometryCache } from './geometryCache';
@@ -195,6 +195,15 @@ controls.enableDamping = true;
 // which the software renderer cannot afford: off there until it is asked for.
 controls.autoRotate = !software;
 controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
+
+/**
+ * What the Animate box says: on from the start, except where the canvas painter
+ * draws (see above). A SpaceMouse being moved pauses the turn without unticking
+ * it ('animate'), and a new object takes up the turn where the last one left it
+ * ('placeCamera').
+ */
+let autoRotate = controls.autoRotate;
+
 // Any movement of the camera - a drag, the damping after it, a turn of the
 // model on its own - is a new picture, and a new viewpoint for the view panel.
 controls.addEventListener('change', invalidate);
@@ -581,8 +590,18 @@ export function clearGeometry(): void {
  * it or takes a cut away: the cut is a part of the same object, and centred on
  * itself it would jump on the stage every time a slider is let go, with the
  * camera kept where it was. So the object stays where it was put.
+ *
+ * 'heading' is where the camera was, seen from what it looked at, when the show
+ * before this one was of another object and Animate was turning it: the camera
+ * is framed on this one at the angle that turn had reached (see 'placeCamera').
  */
-function frame(group: THREE.Group, box: THREE.Box3, keepCamera: boolean, centred?: THREE.Vector3): void {
+function frame(
+    group: THREE.Group,
+    box: THREE.Box3,
+    keepCamera: boolean,
+    centred?: THREE.Vector3,
+    heading?: THREE.Vector3,
+): void {
     if (box.isEmpty()) {
         return;
     }
@@ -610,7 +629,7 @@ function frame(group: THREE.Group, box: THREE.Box3, keepCamera: boolean, centred
     camera.updateProjectionMatrix();
 
     if (!keepCamera) {
-        placeCamera(radius);
+        placeCamera(radius, heading);
     }
     controls.update();
 }
@@ -624,10 +643,21 @@ function frame(group: THREE.Group, box: THREE.Box3, keepCamera: boolean, centred
  * it - sees less across than up, so a model fitted to the height alone runs off
  * both sides. The canvas is measured first, because a show can arrive before
  * anything has told the camera what shape the canvas has now.
+ *
+ * From 'VIEW_DIRECTION', or, given a 'heading', from that direction turned round
+ * to the heading's azimuth: the same height above the model and the same
+ * distance a fit always has, at the angle the turntable had reached. That is
+ * what lets a new object take the place of the last one while the model goes on
+ * turning, which is how an agent's work in progress reads when it shows each
+ * step of it (a part, then the next version of it, then the assembly it goes
+ * into). The elevation is not carried over: it is the one thing Animate does not
+ * change, so a camera that is at another height was put there by hand, and that
+ * belonged to the last object.
  */
-function placeCamera(radius: number): void {
+function placeCamera(radius: number, heading?: THREE.Vector3): void {
     resizeCanvas();
-    camera.position.copy(VIEW_DIRECTION).multiplyScalar(fitDistance(radius));
+    const direction = heading === undefined ? VIEW_DIRECTION : turnedLike(VIEW_DIRECTION, heading);
+    camera.position.copy(direction).multiplyScalar(fitDistance(radius));
     controls.target.set(0, 0, 0);
     fittedTo = radius;
 }
@@ -1263,6 +1293,15 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     const cut = Boolean(message.section);
     const centred =
         message.keepCamera && (cut || shownCut) && content !== undefined ? content.position.clone() : undefined;
+    // Another object, shown while the last one was turning on its own: it comes
+    // in at the angle the turn had reached, read now - the last one went on
+    // turning while this one loaded - so the model on screen changes and the
+    // turn does not start over (see 'placeCamera'). The same object again keeps
+    // the whole camera, and so the turn, already.
+    const heading =
+        !message.keepCamera && autoRotate && content !== undefined
+            ? camera.position.clone().sub(controls.target)
+            : undefined;
     if (content !== undefined) {
         scene.remove(content);
         disposeTree(content);
@@ -1287,6 +1326,7 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
         geometryBox.isEmpty() ? new THREE.Box3().setFromObject(group) : geometryBox,
         message.keepCamera,
         centred,
+        heading,
     );
     viewListeners.forEach((listener) => listener());
     buildProxies(group);
@@ -1522,9 +1562,6 @@ export function modelBounds(): Bounds | undefined {
         max: [0, 1, 2].map((axis) => Math.max(corners[0][axis], corners[1][axis])) as Bounds['max'],
     };
 }
-
-/** What the Animate box says; a SpaceMouse being moved pauses it without unticking it. */
-let autoRotate = controls.autoRotate;
 
 export function setAutoRotate(enabled: boolean): void {
     autoRotate = enabled;

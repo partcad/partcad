@@ -27,9 +27,16 @@ directly ("a lid that snaps on") gets those as requirements of its own when
 
 ## 2. Inventory or generate the parts
 
+First ask, once, whether an IDE is watching, as `/pc:gen-part` §2 does:
+
 ```sh
-pc --no-ansi list parts          # what already exists to reuse
+pc --no-ansi ide state > /dev/null   # fails saying no PartCAD IDE is running when there is none
+pc --no-ansi list parts              # what already exists to reuse
 ```
+
+If one is, everything this run produces is shown in the IDE's 3D view as it
+takes shape: each part it generates (`/pc:gen-part` §7), then the assembly
+(§6).
 
 Reuse existing parts; generate any missing component with the `/pc:gen-part`
 flow. Each part must pass `pc test` on its own before you compose it, and name
@@ -544,6 +551,33 @@ assembly that uses it.
 Then adjust the placements or mates, re-test, and re-render. Iterate until every
 view matches. `pc ide view <name>` gives an interactive view.
 
+### Show each version that renders
+
+Under an IDE (§2), show the assembly in its 3D view at every step where it
+passes the basic checks: it builds (`pc test` finds nothing wrong with its
+geometry; a requirement not met yet does not count against it) and the four
+views above rendered without an error. That is the first ASSY that does, each
+regrouping into sub-assemblies (§4), each coordinate replaced by a connection
+(§5), and every fix after that. Do it right after the renders, before you
+compare anything:
+
+```sh
+pc --no-ansi ide view <name>
+```
+
+Add `--design-3d` to the first show of the run, if no part was shown before it,
+to bring the 3D tab forward; after that, leave the viewer on whatever tab the
+person has chosen. The 3D view turns the model on its own (its Animate box is
+on by default wherever there is a graphics card), and each object shown in it
+starts at the angle the last one had turned to. So the person watching sees each generated part take
+shape, then the assembly come together and settle, on one continuous turn.
+
+Show only what passed. A version that does not build or render stays off the
+screen, so the view always holds the last version that worked. The show is for
+the person, not a check: the four PNGs and the placement comparison above
+still decide whether the design is right. If a show warns that no IDE was
+detected, the window has been closed, so stop showing.
+
 ## 7. Make it ready to simulate
 
 An assembly that looks right in every view can still tip over, slide apart or
@@ -692,11 +726,11 @@ pc --no-ansi test <name>            # runs the same claims as its `sim` check
 ## 8. Finalize
 
 Summarize the structure — parts, sub-assemblies, key placements, total mass and
-what `pc sim` found — and how to view it (`pc ide view <name>`, or
-`pc render -t png --with-all <name>` for a picture with the connection
-metadata on it). Offer `/pc:validate <name>` (an assembly) for a verdict on
-every requirement, the features included: it reads the bill of materials and the
-assembly instructions as well as the renders.
+what `pc sim` found — and how to view it (`pc ide view <name>`, which under an
+IDE is what is already on screen, or `pc render -t png --with-all <name>` for a
+picture with the connection metadata on it). Offer `/pc:validate <name>` (an
+assembly) for a verdict on every requirement, the features included: it reads
+the bill of materials and the assembly instructions as well as the renders.
 
 Say what is still placed by coordinates and why, one reason per case. "The rest
 use `location:`" tells the next reader nothing; "these four sit where nothing

@@ -200,7 +200,9 @@ out; it stays out, or folded, on every tab at once. From the top:
   ``viewport_up`` a ``render:`` section takes, so they can be copied out into one, or onto
   ``pc render --viewport-origin``, and typed or pasted in -- ``1, 2, 3``, ``[1, 2, 3]`` and ``1 2 3`` all read.
   **Reset** goes back to the view the tab starts out with;
-- **Animate** and **Opacity**, which turn the 3D view's model on its own and make it see-through.
+- **Animate** and **Opacity**, which turn the 3D view's model on its own and make it see-through. Animate is on
+  from the start wherever the view has a graphics card to draw with, and while it is on a different object shown
+  in the view starts at the angle the last one had turned to, so the model goes on turning as it is replaced.
 
 What does not apply on a tab is disabled, and says why: a drawing package lays its views out itself, an
 analysis's result is the solver's mesh rather than geometry PartCAD cuts, and a picture does not animate. On the

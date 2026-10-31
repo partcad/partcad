@@ -91,6 +91,13 @@ Generating geometry
      the description**, because a single projection hides whatever is behind it
      -- then iterates on what the comparison found.
 
+  When the PartCAD IDE (or VS Code with the PartCAD extension) is running beside
+  the agent, every version of the part that builds and renders is also shown in
+  the Digital Thread's 3D view as soon as it does. Each one takes up the turn of
+  the one before, so you watch the part take shape rather than a series of
+  restarts. A version that fails is never shown: the view holds the last one that
+  worked.
+
 ``/pc:gen-assembly``
   Models an assembly, and is the longest of the skills because putting things
   together is where the hard-won rules live. It decomposes the request, takes an
@@ -107,6 +114,10 @@ Generating geometry
   a *difference* between two ports, not an orientation; let sub-assemblies join
   each other; and, above all, **do not predict a mate -- try it**, and look at
   the result.
+
+  Beside an IDE it shows its progress the way ``/pc:gen-part`` does: each part it
+  generates as it takes shape, then every version of the assembly that builds
+  and renders, all on one continuous turn of the 3D view.
 
 ``/pc:gen-sketch``
   Authors a 2D sketch -- build123d, CadQuery, DXF, SVG or a basic outline -- and

@@ -128,6 +128,16 @@ so a model in a narrow panel is not cut off at both sides, and fitted again when
 show fitted while the 3D tab was hidden was fitted to a shape the canvas no longer has — until the camera is moved
 by hand, after which it stays where the user put it.
 
+**A different object takes up the turn.** Animate is on from the start (off only where the canvas painter draws), and
+while it is, a show of another object is fitted from the azimuth the camera had turned to rather than from
+`VIEW_DIRECTION`'s: the same elevation and the distance a fit always gives, at the angle the last object had reached
+(`turnedLike` in `cameraView.ts`, read by `placeCamera` in `scene.ts` at the moment the new model replaces the old).
+So an agent showing each step of its work (`/pc:gen-part`, `/pc:gen-assembly`) reads as one model changing while it
+turns, not a series of restarts from the front. Only the azimuth is carried: Animate does not change the elevation, so
+a camera at another height was put there by hand for the last object. With Animate off, and for the first object, a
+show starts from `VIEW_DIRECTION` as it always did; a show of the same object (`keepCamera`) keeps the whole camera,
+and with it the turn.
+
 **Placements are not baked into the geometry.** A node's `gltf` is its own shape in its own coordinate system
 and its `location` says where the node sits, exactly as the BREP form carries it, so the renderer composes the
 locations down the tree — one `THREE.Group` per node, and a port's triad under the node that declares it. One
