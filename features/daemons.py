@@ -52,6 +52,16 @@ STOP_TIMEOUT = 30.0
 # How many of the largest leftovers a warning names.
 LARGEST = 5
 
+# How much of what a daemon that had to be killed wrote after it was asked to
+# stop is shown, and for how many of them in one behave process: on Windows it
+# writes where each of its threads is while it fails to exit
+# ('win_pipe.STOPPED_STACKS_SECONDS'), and a few of those say what there is to
+# say.
+STOPPED_LOG_BYTES = 32 * 1024
+STOPPED_LOGS_SHOWN = 3
+
+_stopped_logs_shown = 0
+
 
 def watch_scenario_directories(context) -> None:
     """Check, once the scenario's cleanups have run, that its directories are gone.
@@ -84,6 +94,8 @@ def stop_scenario_daemon(context) -> None:
                     % (test_dir, _endpoint(root), _describe(_service_processes()) or "none")
                 )
             return
+        log = os.path.join(workspace.workspace_dir(root), "daemon.log")
+        written = _file_size(log)
         acknowledged = pc_daemon.stop_daemon(root)
     _, alive = psutil.wait_procs(processes, timeout=STOP_TIMEOUT)
     if not alive:
@@ -105,6 +117,33 @@ def stop_scenario_daemon(context) -> None:
     _, survivors = psutil.wait_procs(alive, timeout=5)
     if survivors:
         _warn("could not kill: %s" % _describe(survivors))
+    _show_stopped_log(log, written)
+
+
+def _show_stopped_log(log: str, since: int) -> None:
+    """What a daemon that had to be killed wrote to its log after it was asked to stop."""
+    global _stopped_logs_shown
+    if _stopped_logs_shown >= STOPPED_LOGS_SHOWN:
+        return
+    _stopped_logs_shown += 1
+    try:
+        with open(log, "rb") as f:
+            f.seek(since)
+            tail = f.read(STOPPED_LOG_BYTES)
+    except OSError as e:
+        _warn("its log %s could not be read: %s" % (log, e))
+        return
+    _warn(
+        "what it wrote to %s after it was asked to stop:\n%s"
+        % (log, tail.decode("utf-8", errors="replace").rstrip() or "(nothing)")
+    )
+
+
+def _file_size(path: str) -> int:
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
 
 
 def _check_removed(context) -> None:
