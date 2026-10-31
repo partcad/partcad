@@ -482,9 +482,13 @@ at all).
     video appended to is decoded by a separate GStreamer process and handed to the encoding one over a
     socket on this machine (`Pipeline._send_prefix`), rather than decoded inside it: a demuxer sends the old
     file's tags ahead of its frames, a muxer keeps the first value of each tag it is told, and the new
-    state was lost. Raw frames carry no tags. Each muxer keeps different tags (`CONTAINERS['state_tag']`);
-    Ogg keeps none, and ASF carries no sound, because GStreamer's ASF muxer drops video frames once it
-    interleaves audio and libav's writes broken timestamps. A video that reads a file -- the one it is
+    state was lost. Raw frames carry no tags. Each muxer keeps different tags (`CONTAINERS['state_tag']`).
+    Ogg keeps none of them for a Theora stream -- `theoraenc` is no `GstTagSetter`, so its comment header
+    is written empty -- and its state goes into that header as Vorbis comments (`PARTCAD_ANGLES=...`)
+    once the file is written (`write_comments`): the one page holding the header is rebuilt with Ogg's own
+    CRC (`ogg_crc`, not zlib's), keeping its sequence number, and every other page is copied byte for byte;
+    `read_state` reads them back. ASF carries no sound, because GStreamer's ASF muxer drops video frames once
+    it interleaves audio and libav's writes broken timestamps. A video that reads a file -- the one it is
     appended to, a soundtrack, a logo -- reports no `files`, so it is not cached; the file's path is
     `request["package_dir"]` (`output.PACKAGE_DIR_KEY`), which is added after the request is keyed on, as
     `cache_dir` is.

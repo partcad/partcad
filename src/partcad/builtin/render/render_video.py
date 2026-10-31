@@ -559,10 +559,10 @@ def _process(path, request):
         previous = video_encode.discover(path)
         if not previous["video"]:
             raise OptionError("'append' is set, and '%s' has no video in it to append to" % path)
-        state = video_encode.parse_state(previous["text"])
+        state = video_encode.read_state(path, previous["text"])
         if state is not None:
             start = state
-        elif video_encode.CONTAINERS[container]["state_tag"] is None:
+        elif not video_encode.keeps_state(container):
             warnings.append(
                 "A '%s' file keeps no tags, so '%s' cannot say where its turn stopped, and the part appended to it "
                 "starts at 'start_angle'" % (container, path)
@@ -597,6 +597,12 @@ def _process(path, request):
         tags[state_tag] = video_encode.state_text(end, previous_count + count, fps)
     if request.get("title"):
         tags["title"] = str(request["title"])
+    # Ogg's are Vorbis comments, written once the file is (see 'write_comments').
+    comments = []
+    if video_encode.CONTAINERS[container].get("comments"):
+        comments = video_encode.state_comments(end, previous_count + count, fps)
+        if request.get("title"):
+            comments.append((video_encode.COMMENT_TITLE, str(request["title"])))
 
     directory = os.path.dirname(os.path.abspath(path))
     partial = os.path.join(directory, ".%s.partial" % os.path.basename(path))
@@ -664,6 +670,8 @@ def _process(path, request):
             written_before, written = pipeline.run(
                 frames(painters, start, speed, fps, count, fade_in, fade_out, fade_color), prefix=prefix
             )
+            if comments:
+                video_encode.write_comments(partial, comments)
             os.replace(partial, path)
         finally:
             if os.path.exists(partial):

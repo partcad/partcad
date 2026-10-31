@@ -1067,10 +1067,12 @@ with what each defaults to, is the comment above the video file types in
   part appended to it starts from there, so an object rendered in several runs --
   after each change to it, or at another speed, with other text -- plays as one
   turn. The text, the logo, the fades and the sound of the run are on its own
-  part alone. A video that says
-  nothing about its turn (an ``ogv``, since Ogg keeps no tags, or one PartCAD did
-  not write) is appended to from ``start_angle``, and a video of another size is
-  fitted into the new one's frame, with bars.
+  part alone. An ``ogv`` keeps it as Vorbis comments, the key-value pairs every
+  Ogg stream carries: ``PARTCAD_VIDEO=1``, ``PARTCAD_ANGLES=<x>,<y>,<z>``,
+  ``PARTCAD_FRAMES`` and ``PARTCAD_FPS``, beside its ``TITLE``. A video that says
+  nothing about its turn (one PartCAD did not write) is appended to from
+  ``start_angle``, and a video of another size is fitted into the new one's
+  frame, with bars.
 
 ``text``, ``logo``, ``audio`` and ``filters``
   What makes a recording a post. ``text`` is one or several texts over the

@@ -275,6 +275,62 @@ def test_the_state_reads_back():
     assert video_encode.parse_state("comment: somebody else's") is None
 
 
+def test_the_state_reads_back_from_vorbis_comments():
+    comments = dict(video_encode.state_comments((12.5, -3, 359.999), 360, 30))
+    assert comments == {
+        "PARTCAD_VIDEO": "1",
+        "PARTCAD_ANGLES": "12.5,-3,359.999",
+        "PARTCAD_FRAMES": "360",
+        "PARTCAD_FPS": "30",
+    }
+    assert video_encode.comments_state(comments) == pytest.approx((12.5, -3, 359.999))
+    # Another version of what the pairs mean is not read as this one.
+    assert video_encode.comments_state(dict(comments, PARTCAD_VIDEO="2")) is None
+    assert video_encode.comments_state({"PARTCAD_VIDEO": "1", "PARTCAD_ANGLES": "1,2"}) is None
+
+
+def test_ogg_pages_are_checked_with_oggs_own_crc():
+    """Not zlib's: the polynomial 0x04C11DB7, from nought, neither reflected nor inverted."""
+    assert video_encode.ogg_crc(b"123456789") == 0x89A1897F
+
+
+def test_a_comment_header_is_built_and_read_back():
+    header = video_encode.build_comments(b"\x81theora", b"vendor", [("TITLE", "a = b"), ("PARTCAD_FPS", "30")])
+    assert video_encode.parse_comments(header) == (
+        b"vendor",
+        [("TITLE", "a = b"), ("PARTCAD_FPS", "30")],
+        b"\x81theora",
+    )
+    # Vorbis's ends in a framing bit; Theora's does not.
+    assert video_encode.build_comments(b"\x03vorbis", b"", []).endswith(b"\x01")
+    assert not header.endswith(b"\x01")
+    with pytest.raises(ValueError):
+        video_encode.build_comments(b"\x81theora", b"", [("A=B", "c")])
+
+
+@needs_gstreamer
+def test_comments_are_written_into_a_theora_stream(tmp_path):
+    """GStreamer writes Theora's comment header empty; the page holding it is rewritten, and only that page."""
+    path = str(tmp_path / "turn.ogv")
+    video_encode.Pipeline(path, "ogg", 64, 48, 10).run(np.zeros((5, 48, 64, 3), dtype=np.uint8))
+    before = open(path, "rb").read()
+    video_encode.write_comments(path, [("TITLE", "first"), ("PARTCAD_FPS", "10")])
+    video_encode.write_comments(path, [("TITLE", 'a "title" = ünicode')])
+    comments = video_encode.read_comments(path)
+    assert comments["TITLE"] == 'a "title" = ünicode'
+    assert comments["PARTCAD_FPS"] == "10"
+    after = open(path, "rb").read()
+    # Every page but the one is the bytes it was, and every page's checksum holds.
+    assert after.endswith(before[-1000:])
+    with open(path, "rb") as stream:
+        while True:
+            page = video_encode._read_page(stream)
+            if page is None:
+                break
+            assert page.to_bytes() == page.raw()
+    assert len(list(video_encode.decode_frames(path, 64, 48, 10, limit=20))) == 5
+
+
 def test_quoting_survives_what_a_title_may_hold():
     assert video_encode.prop("title", 'a "b", \\c') == 'title="a \\"b\\", \\\\c"'
 
@@ -478,14 +534,13 @@ def test_a_video_is_written_and_appended_to(tmp_path, name):
     # Read a file, so it is not remembered.
     assert second["files"] is None
     assert second["video"]["appended_to"] == 10
-    keeps_state = video_encode.CONTAINERS[declared["container_format"]]["state_tag"] is not None
-    if keeps_state:
-        assert second["video"]["start_angle"] == pytest.approx([0, 0, 30])
-        assert second["video"]["end_angle"] == pytest.approx([0, 0, 60])
-        assert video_encode.parse_state(video_encode.discover(path)["text"]) == pytest.approx((0, 0, 60))
-    else:
-        assert second["video"]["start_angle"] == pytest.approx([0, 0, 0])
-        assert second["warnings"]
+    # Every container keeps where the turn stopped: in a tag, or in Ogg's
+    # Vorbis comments.
+    assert video_encode.keeps_state(declared["container_format"])
+    assert second["video"]["start_angle"] == pytest.approx([0, 0, 30])
+    assert second["video"]["end_angle"] == pytest.approx([0, 0, 60])
+    assert video_encode.read_state(path, video_encode.discover(path)["text"]) == pytest.approx((0, 0, 60))
+    assert not second.get("warnings")
     frames = list(video_encode.decode_frames(path, 160, 120, 10, limit=100))
     assert len(frames) == 20
 

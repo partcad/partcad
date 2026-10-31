@@ -62,6 +62,18 @@ ROOT_VARIABLES = ("GSTREAMER_1_0_ROOT_MSVC_X86_64", "GSTREAMER_1_0_ROOT_X86_64",
 # 'state_text'.
 STATE_MARKER = "partcad-video/1"
 
+# The same, in an Ogg file, as Vorbis comments: the key-value pairs every Ogg
+# codec carries in a header of its own (see 'write_comments'). One pair per
+# value, rather than 'STATE_MARKER''s sentence in a COMMENT, because that is
+# what the format is made of: a reader of the file sees PARTCAD_ANGLES and its
+# value, as it sees TITLE and its. PARTCAD_VIDEO is the version of what the
+# others mean, as 'STATE_MARKER''s '/1' is.
+COMMENT_VERSION = "PARTCAD_VIDEO"
+COMMENT_ANGLES = "PARTCAD_ANGLES"
+COMMENT_FRAMES = "PARTCAD_FRAMES"
+COMMENT_FPS = "PARTCAD_FPS"
+COMMENT_TITLE = "TITLE"
+
 # The audio every file is mixed in: what a soundtrack is decoded to, cut, faded
 # and written as WAV in, before the encoder of the container's choice takes it.
 AUDIO_RATE = 48000
@@ -76,8 +88,12 @@ AUDIO_CHANNELS = 2
 #                some tags and drops the rest without a word, so this is the
 #                one this muxer was found to keep: the comment everywhere it is
 #                kept, and the album for ASF, which drops the comment. None for
-#                a container that keeps no tag at all, which can still be
-#                appended to, but cannot say where its turn stopped.
+#                Ogg, which keeps none of them -
+#   'comments'   - and keeps its state as Vorbis comments instead, written
+#                into the video's comment header once the file is (see
+#                'write_comments'). GStreamer's Theora encoder writes no tags,
+#                and the Vorbis and Opus ones only into a soundtrack's header,
+#                which a video need not have.
 #   'faststart'  whether the index goes at the front, so that a browser or a
 #                social network can start playing before it has the whole file.
 #
@@ -92,7 +108,7 @@ CONTAINERS = {
     "webm": {"muxer": "webmmux", "video": ("vp9", "vp8"), "audio": ("opus", "vorbis"), "state_tag": "comment"},
     "avi": {"muxer": "avimux", "video": ("h264", "mjpeg", "mpeg4"), "audio": ("mp3",), "state_tag": "comment"},
     "asf": {"muxer": "asfmux", "video": ("wmv2",), "audio": (), "state_tag": "album"},
-    "ogg": {"muxer": "oggmux", "video": ("theora",), "audio": ("vorbis", "opus"), "state_tag": None},
+    "ogg": {"muxer": "oggmux", "video": ("theora",), "audio": ("vorbis", "opus"), "state_tag": None, "comments": True},
 }  # fmt: skip
 
 # The codecs, by name: the encoders that write each one, best first, the parser
@@ -375,6 +391,46 @@ def parse_state(text):
     if not match:
         return None
     return tuple(float(group) for group in match.groups())
+
+
+def keeps_state(container):
+    """Whether a file of 'container' can say where its turn stopped."""
+    spec = CONTAINERS[container]
+    return bool(spec["state_tag"] or spec.get("comments"))
+
+
+def state_comments(angles, frames, fps):
+    """What 'state_text' says, as the Vorbis comments an Ogg file keeps it in: '[(key, value)]'."""
+    return [
+        (COMMENT_VERSION, "1"),
+        (COMMENT_ANGLES, ",".join("%.6g" % angle for angle in angles)),
+        (COMMENT_FRAMES, "%d" % int(frames)),
+        (COMMENT_FPS, "%.6g" % fps),
+    ]
+
+
+def comments_state(comments):
+    """The '(x, y, z)' angles 'state_comments' wrote, out of '{KEY: value}'; None if they are not there."""
+    if comments.get(COMMENT_VERSION) != "1" or COMMENT_ANGLES not in comments:
+        return None
+    try:
+        angles = tuple(float(value) for value in comments[COMMENT_ANGLES].split(","))
+    except ValueError:
+        return None
+    return angles if len(angles) == 3 else None
+
+
+def read_state(path, text=""):
+    """Where the turn of the video at 'path' stopped, or None if it does not say.
+
+    From its Vorbis comments, for an Ogg file, and from what the discoverer
+    printed of its tags ('text', see 'discover') for anything else.
+    """
+    with open(path, "rb") as stream:
+        ogg = stream.read(4) == OGG_CAPTURE
+    if ogg:
+        return comments_state(read_comments(path))
+    return parse_state(text)
 
 
 def discover(path):
@@ -879,3 +935,210 @@ def decode_frames(path, width, height, fps, limit=None):
             raise GStreamerError(
                 "Could not decode '%s': %s" % (path, errors.read().decode("utf-8", "replace").strip()[-1000:])
             )
+
+
+# ---------------------------------------------------------------------------
+# Vorbis comments, in Ogg
+# ---------------------------------------------------------------------------
+#
+# An Ogg file is a sequence of pages, each of one logical stream - one per
+# codec - and each carrying the stream's packets cut into segments of up to 255
+# bytes. Every codec Ogg carries begins with header packets, and the second of
+# them is the stream's comments: a vendor string and a list of 'KEY=value'
+# pairs, the format Vorbis defined and Theora and Opus took over. GStreamer's
+# Theora encoder writes that header empty whatever it is told, so the comments
+# are written into it here, once the file is written: the page that holds the
+# header is rebuilt with the comments in it and its checksum worked out again,
+# and every other byte of the file is copied as it is.
+
+OGG_CAPTURE = b"OggS"
+
+# The identifying start of each codec's comment header, and whether a framing
+# bit follows the comments (Vorbis's does; Theora's and Opus's do not).
+COMMENT_HEADERS = ((b"\x81theora", False), (b"\x03vorbis", True), (b"OpusTags", False))
+
+# Ogg's CRC: the polynomial 0x04C11DB7, from nought, not reflected, not
+# inverted - not zlib's.
+_OGG_CRC = []
+for _byte in range(256):
+    _value = _byte << 24
+    for _ in range(8):
+        _value = ((_value << 1) ^ 0x04C11DB7) if _value & 0x80000000 else (_value << 1)
+    _OGG_CRC.append(_value & 0xFFFFFFFF)
+
+
+def ogg_crc(data):
+    """The checksum of an Ogg page, 'data' being the page with its checksum field nought."""
+    crc = 0
+    for byte in data:
+        crc = ((crc << 8) & 0xFFFFFFFF) ^ _OGG_CRC[((crc >> 24) & 0xFF) ^ byte]
+    return crc
+
+
+class OggPage:
+    """One page of an Ogg file: its header up to the segment count, its segment sizes, and its body."""
+
+    def __init__(self, header, lacing, body):
+        self.header = header
+        self.lacing = lacing
+        self.body = body
+
+    @property
+    def serial(self):
+        return int.from_bytes(self.header[14:18], "little")
+
+    @property
+    def continued(self):
+        """Whether the page begins with the rest of a packet an earlier page began."""
+        return bool(self.header[5] & 1)
+
+    def packets(self):
+        """The packets ending on this page and the one it leaves unfinished: '([bytes], bytes or None)'.
+
+        The first one is only the end of a packet if the page is 'continued'.
+        """
+        finished, current, offset = [], [], 0
+        for size in self.lacing:
+            current.append(self.body[offset : offset + size])
+            offset += size
+            if size < 255:
+                finished.append(b"".join(current))
+                current = []
+        return finished, (b"".join(current) if current else None)
+
+    def raw(self):
+        """The page as it is, checksum included."""
+        return self.header + bytes([len(self.lacing)]) + bytes(self.lacing) + self.body
+
+    def to_bytes(self):
+        """The page with its checksum worked out afresh."""
+        page = bytearray(self.raw())
+        page[22:26] = b"\0\0\0\0"
+        page[22:26] = ogg_crc(bytes(page)).to_bytes(4, "little")
+        return bytes(page)
+
+
+def _read_page(stream):
+    """The next page of 'stream', or None at its end."""
+    header = stream.read(27)
+    if len(header) < 27:
+        return None
+    if header[:4] != OGG_CAPTURE:
+        raise GStreamerError("Not an Ogg page, at %d" % (stream.tell() - len(header)))
+    lacing = stream.read(header[26])
+    body = stream.read(sum(lacing))
+    return OggPage(header[:26], lacing, body)
+
+
+def _lacing(size):
+    """How a packet of 'size' bytes is cut into segments: as many 255s as fit, then the rest, nought included."""
+    return [255] * (size // 255) + [size % 255]
+
+
+def parse_comments(packet):
+    """A comment header as '(vendor, [(key, value)], codec)', or None if 'packet' is not one."""
+    for start, _framing in COMMENT_HEADERS:
+        if packet.startswith(start):
+            break
+    else:
+        return None
+    offset = len(start)
+    length = int.from_bytes(packet[offset : offset + 4], "little")
+    vendor = packet[offset + 4 : offset + 4 + length]
+    offset += 4 + length
+    count = int.from_bytes(packet[offset : offset + 4], "little")
+    offset += 4
+    comments = []
+    for _ in range(count):
+        length = int.from_bytes(packet[offset : offset + 4], "little")
+        text = packet[offset + 4 : offset + 4 + length].decode("utf-8", "replace")
+        offset += 4 + length
+        key, _, value = text.partition("=")
+        comments.append((key, value))
+    return vendor, comments, start
+
+
+def build_comments(start, vendor, comments):
+    """A comment header of the codec 'start' names, holding 'vendor' and 'comments'."""
+    framing = dict(COMMENT_HEADERS)[start]
+    out = bytearray(start)
+    out += len(vendor).to_bytes(4, "little") + vendor
+    out += len(comments).to_bytes(4, "little")
+    for key, value in comments:
+        if not key or "=" in key or not all(0x20 <= ord(char) <= 0x7D for char in key):
+            raise ValueError("Not the key of a Vorbis comment: %r" % (key,))
+        text = ("%s=%s" % (key, value)).encode("utf-8")
+        out += len(text).to_bytes(4, "little") + text
+    if framing:
+        out.append(1)
+    return bytes(out)
+
+
+# How far into an Ogg file its comments are looked for: the header packets of
+# every stream come before any of their data, so they are on the first few pages.
+_HEADER_PAGES = 64
+
+
+def read_comments(path):
+    """The Vorbis comments of the Ogg file at 'path', as '{KEY: value}', keys upper case.
+
+    The comments of every stream in it: the video's, and a soundtrack's.
+    """
+    found = {}
+    pending = {}
+    with open(path, "rb") as stream:
+        for _ in range(_HEADER_PAGES):
+            page = _read_page(stream)
+            if page is None:
+                break
+            finished, unfinished = page.packets()
+            if page.continued and finished:
+                finished[0] = pending.pop(page.serial, b"") + finished[0]
+            elif page.continued and unfinished is not None:
+                unfinished = pending.pop(page.serial, b"") + unfinished
+            for packet in finished:
+                parsed = parse_comments(packet)
+                if parsed is not None:
+                    for key, value in parsed[1]:
+                        found[key.upper()] = value
+            if unfinished is not None:
+                pending[page.serial] = unfinished
+    return found
+
+
+def write_comments(path, comments):
+    """Set 'comments' - '[(key, value)]' - in the comment header of the video in the Ogg file at 'path'.
+
+    Every comment already there under another key is kept. The header's page is
+    rewritten in place, so the file has to be as GStreamer's Ogg muxer writes it:
+    the comment header beginning a page of its own, and ending on it. The page
+    keeps its number, so no other page changes.
+    """
+    keys = {key.upper() for key, _value in comments}
+    rewritten = path + ".comments"
+    done = False
+    with open(path, "rb") as source, open(rewritten, "wb") as target:
+        while not done:
+            page = _read_page(source)
+            if page is None:
+                break
+            finished, _unfinished = page.packets()
+            parsed = parse_comments(finished[0]) if finished and not page.continued else None
+            if parsed is not None and parsed[2] == COMMENT_HEADERS[0][0]:
+                vendor, kept, start = parsed
+                kept = [(key, value) for key, value in kept if key.upper() not in keys]
+                header = build_comments(start, vendor, kept + list(comments))
+                old = len(finished[0])
+                lacing = _lacing(len(header)) + list(page.lacing[len(_lacing(old)) :])
+                if len(lacing) > 255:
+                    raise GStreamerError("The comments of '%s' do not fit on the page its header is on" % path)
+                page = OggPage(page.header, bytes(lacing), header + page.body[old:])
+                done = True
+            # Every page but the rewritten one is copied as it was read, its
+            # checksum and all.
+            target.write(page.to_bytes() if done else page.raw())
+        shutil.copyfileobj(source, target)
+    if not done:
+        os.remove(rewritten)
+        raise GStreamerError("'%s' has no Theora comment header to write the video's comments into" % path)
+    os.replace(rewritten, path)

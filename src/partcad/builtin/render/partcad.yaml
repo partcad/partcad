@@ -199,9 +199,10 @@ render:
   #   start_angle   the angles about X, Y and Z the first frame is drawn at.
   #   append        add to the video already at the output path rather than
   #                 writing it again. The video keeps where its turn stopped in
-  #                 one of its container's tags, and the new part starts there;
-  #                 a video that says nothing (an Ogg file, which keeps no tags,
-  #                 or one PartCAD did not write) is appended to from
+  #                 one of its container's tags - in an Ogg file, as Vorbis
+  #                 comments, PARTCAD_ANGLES=<x>,<y>,<z> and its siblings -
+  #                 and the new part starts there; a video that says nothing
+  #                 (one PartCAD did not write) is appended to from
   #                 'start_angle'. A video that is a different size is fitted
   #                 into the new one's frame, with bars.
   #   preset        the trade between how long encoding takes and how small the
@@ -375,7 +376,10 @@ render:
     reproducible: false
 
   ogv:
-    # Keeps no tags, so a video appended to it starts from 'start_angle'.
+    # Ogg keeps none of GStreamer's tags for a Theora stream, so where its turn
+    # stopped, and its 'title', are written into the stream's Vorbis comments
+    # once the file is: PARTCAD_VIDEO, PARTCAD_ANGLES, PARTCAD_FRAMES,
+    # PARTCAD_FPS and TITLE (see 'video_encode.write_comments').
     desc: A video of the object turning, as Theora in Ogg - free of patents throughout.
     path: render_video.py
     extension: ogv
