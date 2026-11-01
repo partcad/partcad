@@ -285,6 +285,12 @@ a second until the new version fits however it turns. So each version replaces
 the previous one while the turn carries on, and the person watching sees the
 part take shape, never cut off by the frame or lost in the middle of it.
 
+The same name shown again is fitted only while the view's **Auto-fit** box is
+ticked, which it is by default. Someone zoomed in on one feature unticks it, and
+then each new version appears in exactly the view they chose. That is their
+setting: leave it alone, and do not work around it by showing the part under
+another name.
+
 Show only what passed. A version that does not build or render stays off the
 screen, so the view always holds the last version that worked. The show is for
 the person, not a check: the four PNGs are still what you compare. If a show

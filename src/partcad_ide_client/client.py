@@ -322,8 +322,9 @@ def show(
     'keep_camera' says this is the object already on screen, shown again -- after
     an edit, say -- so the viewer keeps what was set up for it (what is ticked,
     the section) rather than starting over. The camera does not jump either way:
-    every show after the Digital Thread's first keeps the angle it is looking from
-    and fits the distance to the new shape over a second.
+    every show after the Digital Thread's first keeps the angle it is looking from,
+    and fits the distance to the new shape over a second -- always for another
+    object, and for the same one again while the IDE's Auto-fit box is ticked.
 
     'tab' is the tab of the viewer to open on (see 'protocol.KEY_TAB'), or None
     to leave the viewer on the one it is on. 'scenario' is which of that tab's

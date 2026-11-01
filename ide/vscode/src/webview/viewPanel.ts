@@ -20,7 +20,9 @@
 //     Reset, back to the view the tab starts with, and - on a view with a camera
 //     of its own to move, which says so with 'onFit' - Fit, which brings the
 //     whole model into view from where it is looked at now;
-//   * Animate and Opacity, which used to be at the bottom of the 3D view's tree.
+//   * Animate and Opacity, which used to be at the bottom of the 3D view's tree,
+//     and - on a view that says what it does with 'onAutoFit', the 3D view's -
+//     Auto-fit between them: whether showing the same object again fits it.
 //
 // One widget for every tab, and the tabs differ in what each part of it can do
 // there: a picture PartCAD renders has a viewpoint but nothing to animate, an
@@ -93,6 +95,12 @@ export interface ViewPanelCallbacks {
     /** The section was changed - a slider let go - or reset (null). */
     onSection: (section: Section | null) => void;
     onAnimate?: (animate: boolean) => void;
+    /**
+     * "Auto-fit": whether showing the same object again fits the view to it, as
+     * showing another object always does. Only a view that fits on a show says
+     * what it does; on any other the box is not there.
+     */
+    onAutoFit?: (autoFit: boolean) => void;
     /** From 0 to 1. */
     onOpacity?: (opacity: number) => void;
 }
@@ -102,12 +110,14 @@ export interface ViewPanelOptions {
     target: boolean;
     /** Whether the model starts out turning on its own, which the Animate box then says. */
     animate?: boolean;
+    /** Whether showing the same object again starts out fitting it, which the Auto-fit box then says. */
+    autoFit?: boolean;
     /**
      * Ids for the Animate box, the Opacity slider and the viewpoint's Reset, for
      * the one panel that is driven from outside the webview (the 3D tab's, by
      * the screenshot script).
      */
-    ids?: { animate?: string; opacity?: string; opacityValue?: string; reset?: string };
+    ids?: { animate?: string; autoFit?: string; opacity?: string; opacityValue?: string; reset?: string };
 }
 
 /** The ends of one section slider, and what they say. */
@@ -134,10 +144,12 @@ export class ViewPanel {
     private readonly fields: { origin: HTMLInputElement; up: HTMLInputElement; target: HTMLInputElement };
     private readonly targetRow: HTMLElement;
     private readonly animate: HTMLInputElement;
+    private readonly autoFit: HTMLInputElement;
     private readonly opacity: HTMLInputElement;
     private readonly opacityValue: HTMLElement;
     private readonly groups: Record<'viewpoint' | 'section' | 'display', HTMLElement>;
     private readonly animateRow: HTMLElement;
+    private readonly autoFitRow: HTMLElement;
     private readonly opacityRow: HTMLElement;
 
     private capabilities: ViewCapabilities = { viewpoint: true, section: true, animate: true, opacity: true };
@@ -226,7 +238,7 @@ export class ViewPanel {
         this.targetRow.hidden = !options.target;
         view.append(origin.row, up.row, target.row, this.viewNote);
 
-        // How the model is drawn: Animate and Opacity.
+        // How the model is drawn: Animate, Auto-fit and Opacity.
         const display = el('div', 'view-group view-display');
         this.animateRow = el('label', 'control-label');
         this.animate = el('input');
@@ -239,6 +251,17 @@ export class ViewPanel {
         }
         this.animate.addEventListener('change', () => this.callbacks.onAnimate?.(this.animate.checked));
         this.animateRow.append(this.animate, el('span', undefined, 'Animate'));
+
+        this.autoFitRow = el('label', 'control-label');
+        this.autoFit = el('input');
+        this.autoFit.type = 'checkbox';
+        this.autoFit.checked = options.autoFit === true;
+        if (options.ids?.autoFit) {
+            this.autoFit.id = options.ids.autoFit;
+        }
+        this.autoFit.addEventListener('change', () => this.callbacks.onAutoFit?.(this.autoFit.checked));
+        this.autoFitRow.append(this.autoFit, el('span', undefined, 'Auto-fit'));
+        this.autoFitRow.hidden = callbacks.onAutoFit === undefined;
 
         this.opacityRow = el('label', 'control-label');
         this.opacity = el('input', 'opacity-slider');
@@ -259,7 +282,7 @@ export class ViewPanel {
             this.callbacks.onOpacity?.(value / 100);
         });
         this.opacityRow.append(el('span', undefined, 'Opacity'), this.opacity, this.opacityValue);
-        display.append(this.animateRow, this.opacityRow);
+        display.append(this.animateRow, this.autoFitRow, this.opacityRow);
 
         this.groups = { viewpoint: view, section, display };
         body.append(gizmoRow, buttons, section, view, display);
@@ -338,6 +361,11 @@ export class ViewPanel {
 
     public get animating(): boolean {
         return this.animate.checked;
+    }
+
+    /** What the Auto-fit box says. */
+    public get autoFitting(): boolean {
+        return this.autoFit.checked;
     }
 
     /** What the Opacity slider says, from 0 to 1. */
@@ -600,6 +628,15 @@ export class ViewPanel {
         this.animate.disabled = animate !== true;
         this.animateRow.title = animate === true ? 'Turn the model on its own' : animate;
         this.animateRow.classList.toggle('disabled', animate !== true);
+        // How the 3D view's camera behaves on its own, as Animate is: it works
+        // where Animate works, and says the same when it does not.
+        this.autoFit.disabled = animate !== true;
+        this.autoFitRow.title =
+            animate === true
+                ? 'Fit the view to the object when the same object is shown again, after an edit; ' +
+                  'another object is always fitted'
+                : animate;
+        this.autoFitRow.classList.toggle('disabled', animate !== true);
         this.opacity.disabled = opacity !== true;
         this.opacityRow.title = opacity === true ? 'How see-through the model is drawn' : opacity;
         this.opacityRow.classList.toggle('disabled', opacity !== true);

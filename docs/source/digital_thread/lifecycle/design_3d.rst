@@ -47,16 +47,18 @@ per axis, starting at the faces of the bounding box, which cuts the exact
 geometry before it is drawn rather than clipping the picture; the **viewpoint**
 as ``viewport_origin``, ``viewport_up`` and a target, ready to be copied into a
 ``render:`` section or onto ``pc render --viewport-origin``, with **Fit** and
-**Reset** beside it; and **Animate** and **Opacity**, which turn the model on
-its own and make it see-through. Animate is on from the start (but see below for
-a window with no graphics card).
+**Reset** beside it; and **Animate**, **Auto-fit** and **Opacity**. Animate
+turns the model on its own, and is on from the start (but see below for a window
+with no graphics card); Opacity makes it see-through.
 
 **Fit** brings the camera in or out, over a second and from where it is looking,
-until the whole model fits with room to spare however it turns; **Reset** goes
-back to the view the tab starts with, at once. Every object shown after the
-first -- another one, or the same one again after an edit -- keeps the angle the
-view was at and is then fitted the way **Fit** fits it, so a model that changes
-as an agent works on it goes on turning and stays in view rather than jumping.
+until the whole model fits however it turns; **Reset** goes back to the view the
+tab starts with, at once. Every object shown after the first keeps the angle the
+view was at, and another object is then fitted the way **Fit** fits it, so a
+model that changes as an agent works on it goes on turning and stays in view
+rather than jumping. The same object shown again after an edit is fitted too
+while **Auto-fit** is ticked, which it is by default; untick it while zoomed in
+on a detail, and a save leaves the view exactly where you put it.
 
 .. image:: /images/dt-design-3d.png
   :width: 100%

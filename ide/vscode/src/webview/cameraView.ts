@@ -80,9 +80,6 @@ export function vectorFromStage(vector: Vec3, frame: SceneFrame): Vec3 {
 /** How far off the pole a view straight down it is put, in radians: well clear of the controls' own limit. */
 const OFF_POLE = 1e-4;
 
-/** How much room a fit leaves round the model: it fits the model's enclosing sphere made 15% larger. */
-export const FIT_MARGIN = 1.15;
-
 /** How long "Fit" takes to get the camera there, in milliseconds: long enough to see where it went. */
 export const FIT_MILLISECONDS = 1000;
 
@@ -99,8 +96,13 @@ export function enclosingRadius(box: THREE.Box3): number {
 
 /**
  * How far from what it looks at a perspective camera has to be for a sphere of
- * 'radius', made 'FIT_MARGIN' larger, to fit the narrower of its two fields of
- * view - so the model fits from whichever side it is seen, whatever the turn.
+ * 'radius' to fit the narrower of its two fields of view - so the model fits
+ * from whichever side it is seen, whatever the turn.
+ *
+ * No margin on top: the sphere is the margin. It holds the model at every
+ * angle, so at any one angle the model's outline sits inside it, short of the
+ * edges, and only a corner turned exactly to where the sphere touches the edge
+ * of the field reaches it.
  *
  * 'fov' is three's: the vertical field, in degrees, and 'aspect' the canvas's
  * width over its height. A canvas taller than it is wide sees less across than
@@ -111,7 +113,7 @@ export function enclosingRadius(box: THREE.Box3): number {
 export function fitDistance(radius: number, fov: number, aspect: number): number {
     const vertical = (fov * Math.PI) / 360;
     const horizontal = Math.atan(Math.tan(vertical) * aspect);
-    return (radius * FIT_MARGIN) / Math.sin(Math.min(vertical, horizontal));
+    return radius / Math.sin(Math.min(vertical, horizontal));
 }
 
 /**

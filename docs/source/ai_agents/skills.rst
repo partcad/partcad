@@ -94,7 +94,8 @@ Generating geometry
   When the PartCAD IDE (or VS Code with the PartCAD extension) is running beside
   the agent, every version of the part that builds and renders is also shown in
   the Digital Thread's 3D view as soon as it does. Each one takes up the turn of
-  the one before, and the view eases in or out until it fits, so you watch the
+  the one before, and the view eases in or out until it fits (unless you have
+  unticked **Auto-fit** to stay zoomed in on a detail), so you watch the
   part take shape rather than a series of restarts. A version that fails is never shown: the view holds the last one that
   worked.
 

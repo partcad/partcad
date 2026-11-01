@@ -125,17 +125,23 @@ reaches a quarter of the model out along its port's positive axes only, so count
 every port — including the ports of everything inside an assembly, which start out unticked. An interface, which
 has no shape but its ports, is framed on those.
 
-**A fit keeps every angle of the model in view, with room to spare.** What is fitted is the sphere about the middle
-of that box which holds all of it (`enclosingRadius` in `cameraView.ts`: half the box's diagonal), made 15% larger
-(`FIT_MARGIN`), into the narrower of the canvas's two fields of view (`fitDistance`) — so a model in a narrow panel
-is not cut off at both sides, and a model that turns is not cut off by the angle it turns to next: a long part seen
-end-on is short, and comes round to its full length a quarter turn later. A fit keeps the camera where it is looking
+**A fit keeps every angle of the model in view.** What is fitted is the sphere about the middle of that box which
+holds all of it (`enclosingRadius` in `cameraView.ts`: half the box's diagonal), into the narrower of the canvas's two
+fields of view (`fitDistance`) — so a model in a narrow panel is not cut off at both sides, and a model that turns is
+not cut off by the angle it turns to next: a long part seen end-on is short, and comes round to its full length a
+quarter turn later. There is no margin on top of the sphere, because the sphere is the margin: at any one angle the
+model's outline sits inside it, and only a corner turned to exactly where the sphere touches the edge of the field
+reaches that edge. A fit keeps the camera where it is looking
 from and only moves it nearer or further, and the point it looks at back to the middle of the model.
 
-**The first show places the camera; every later one fits it, over a second.** With nothing on the stage, a show puts
-the camera at `VIEW_DIRECTION`, already fitted. Every show of the whole object after that — another object, or the
-same one again (`keepCamera`: an edit saved, an agent's next version) — leaves the camera where it is, its angle
-above all, which Animate has been turning, and runs **Fit** (`fit` in `scene.ts`): over `FIT_MILLISECONDS` (one
+**The first show places the camera; a later one fits it, over a second.** With nothing on the stage, a show puts the
+camera at `VIEW_DIRECTION`, already fitted. Every show of another object after that, and of the same one again
+(`keepCamera`: an edit saved, an agent's next version) while the view panel's **Auto-fit** box is ticked — it is by
+default — leaves the camera where it is, its angle above all, which Animate has been turning, and runs **Fit** (`fit`
+in `scene.ts`). Auto-fit unticked, the same object again keeps the whole camera, zoom included, which is what somebody
+zoomed in on one corner of a part they are editing needs from a save; another object is fitted regardless, since the
+view on the last one says nothing about it. The box sits right after Animate, works where Animate works, and is only
+on the 3D tab's panel (`onAutoFit`). A fit runs over `FIT_MILLISECONDS` (one
 second), eased in and out (`fitProgress`), the distance and the target move to the fit, worked out again on every
 frame because the camera goes on turning and the canvas can change shape (`stepFit`). So an agent showing each step
 of its work (`/pc:gen-part`, `/pc:gen-assembly`) reads as one model changing while it turns, never cut off and never
@@ -215,7 +221,7 @@ sight (`rz`) is dropped, and a tilt stops at the poles.
 Down the right of every tab that shows the object — 3D, 2D and Draft, each analysis, and Simulation — is one
 widget, `viewPanel.ts`: the orientation gizmo (`gizmo.ts`), a button per axis view, a two-ended section slider per
 axis, the viewpoint as three editable vectors with **Fit** (where the view has a camera of its own to bring in, which
-it says by giving `onFit`; only the 3D tab does) and **Reset** beside them, and Animate and Opacity. It is a
+it says by giving `onFit`; only the 3D tab does) and **Reset** beside them, and Animate, Auto-fit (the 3D tab only) and Opacity. It is a
 `SidePanel` (`sidePanel.ts`):
 folded into a strip with the editor's side bar button at the top of it, and brought out by that button. Out or
 folded is one answer per side for the whole panel, not per tab, and the right side starts folded.

@@ -571,7 +571,9 @@ person has chosen. The 3D view turns the model on its own (its Animate box is
 on by default wherever there is a graphics card), keeps the angle the turn had
 reached from one object to the next, and brings the camera in or out over a
 second until each fits. So the person watching sees each generated part take
-shape, then the assembly come together and settle, on one continuous turn.
+shape, then the assembly come together and settle, on one continuous turn. A
+name shown again is fitted only while the view's Auto-fit box is ticked (the
+default); someone zoomed in unticks it, and their view stays as they set it.
 
 Show only what passed. A version that does not build or render stays off the
 screen, so the view always holds the last version that worked. The show is for

@@ -212,6 +212,15 @@ controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
  */
 let autoRotate = controls.autoRotate;
 
+/**
+ * What the Auto-fit box says, beside Animate: whether a show of the same object
+ * again - an edit saved, an agent's next version of it - is fitted too, as a
+ * show of another object always is. On from the start, so that a model which
+ * grows or shrinks stays in view; off for somebody zoomed in on one corner of
+ * a part they are editing, whose view a save must not take away.
+ */
+let autoFit = true;
+
 // Any movement of the camera - a drag, the damping after it, a turn of the
 // model on its own - is a new picture, and a new viewpoint for the view panel.
 controls.addEventListener('change', invalidate);
@@ -333,6 +342,11 @@ let fitting: Fitting | undefined;
  * fit depends on the canvas's shape, and a show can be fitted while the 3D tab is
  * hidden, which is to a shape the canvas no longer has. Moving the camera by hand
  * - a drag, the wheel, a SpaceMouse - ends that, and the camera stays put.
+ *
+ * The radius of that fit and not the current show's: a show that keeps the camera
+ * (a cut, or the same object again with Auto-fit off) keeps the view it had, and a
+ * resize after it changes that view by what the canvas did and not by what the
+ * show did.
  *
  * Undefined, too, while a "Fit" is on its way ('fitting'), which follows the
  * canvas itself, and set once it has arrived.
@@ -674,7 +688,7 @@ function clip(distance: number): void {
 /**
  * From 'VIEW_DIRECTION', at Stage's slight elevation, as far back as a fit puts
  * it ('fitDistance' in 'cameraView.ts': every angle of the model in the
- * narrower field, with room to spare), looking at the middle of the model.
+ * narrower field), looking at the middle of the model.
  *
  * The canvas is measured first, because a show can arrive before anything has
  * told the camera what shape the canvas has now.
@@ -709,9 +723,9 @@ export function resetView(): void {
  * fits in the view however it is turned (see 'fitDistance'), looking at its
  * middle, and from the same side it is looking from now.
  *
- * The view panel's Fit button, a SpaceMouse's Fit key, and what every show of
- * the whole object after the first one ends with - another object, or the same
- * one again, which has changed or there would be nothing to show. Gradual,
+ * The view panel's Fit button, a SpaceMouse's Fit key, and what a show of the
+ * whole object after the first one ends with - always for another object, and
+ * for the same one again while Auto-fit is on ('showGeometry'). Gradual,
  * because a view that jumps to another size is a view somebody has to find the
  * model in again; and the angle is not touched, so a model turning on its own
  * goes on turning through it. Taking hold of the view - a drag, the wheel, a
@@ -1389,18 +1403,21 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // is a model centred on something nobody can see. An interface has no shape
     // but its ports, and is framed on those.
     frame(group, geometryBox.isEmpty() ? new THREE.Box3().setFromObject(group) : geometryBox, first, centred);
-    // Every show of the whole object after the first is fitted: another object,
-    // or the same one again - an edit saved, an agent's next version of it -
-    // which may have grown or shrunk. Over a second, from where the camera is
-    // ('fit'). Not a cut or the show that takes one away, which keeps the camera
-    // still for the reason it keeps the model where it was: the slider is moving
+    // Every show of another object after the first is fitted, over a second,
+    // from where the camera is ('fit'); and so is the same one again - an edit
+    // saved, an agent's next version of it, which may have grown or shrunk -
+    // while Auto-fit is on. With it off, the same object again keeps the camera
+    // exactly where it is, as it did before there was a fit at all.
+    //
+    // Not a cut or the show that takes one away, which keeps the camera still
+    // for the reason it keeps the model where it was: the slider is moving
     // through the object, and the view moving under it is two things moving.
     // That includes a fit still on its way from the show before: 'frame' has
     // just pointed it at the cut, so it stops where it is, as it does when
     // somebody takes hold of the view.
     if (centred !== undefined) {
         fitting = undefined;
-    } else if (!first) {
+    } else if (!first && (!message.keepCamera || autoFit)) {
         fit();
     }
     viewListeners.forEach((listener) => listener());
@@ -1644,6 +1661,11 @@ export function setAutoRotate(enabled: boolean): void {
     autoRotate = enabled;
     controls.autoRotate = enabled;
     invalidate();
+}
+
+/** Whether a show of the same object again is fitted, as the Auto-fit box says (see 'autoFit'). */
+export function setAutoFit(enabled: boolean): void {
+    autoFit = enabled;
 }
 
 /**

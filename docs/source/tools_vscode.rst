@@ -200,13 +200,15 @@ out; it stays out, or folded, on every tab at once. From the top:
   ``viewport_up`` a ``render:`` section takes, so they can be copied out into one, or onto
   ``pc render --viewport-origin``, and typed or pasted in -- ``1, 2, 3``, ``[1, 2, 3]`` and ``1 2 3`` all read.
   **Reset** goes back to the view the tab starts out with, and on the 3D tab **Fit** brings the camera in or out, over a
-  second and from where it is looking, until the whole object fits with room to spare however it turns;
-- **Animate** and **Opacity**, which turn the 3D view's model on its own and make it see-through. Animate is on
-  from the start wherever the view has a graphics card to draw with.
+  second and from where it is looking, until the whole object fits however it turns;
+- **Animate**, **Auto-fit** and **Opacity**. Animate turns the 3D view's model on its own, and is on from the start
+  wherever the view has a graphics card to draw with; Auto-fit is explained below; Opacity makes the model
+  see-through.
 
-Every object shown after the first -- another one, or the same one again after an edit -- keeps the angle the view
-was at and is then fitted, gradually, as **Fit** does. So a model that changes, as an agent works on it, goes on
-turning and stays in view rather than jumping back to the front.
+Every object shown after the first keeps the angle the view was at, and another object is then fitted, gradually, as
+**Fit** does. So a model that changes, as an agent works on it, goes on turning and stays in view rather than jumping
+back to the front. The same object shown again after an edit is fitted too while **Auto-fit** is ticked, which it is
+by default; untick it while you are zoomed in on a detail, and a save leaves the view exactly where you put it.
 
 What does not apply on a tab is disabled, and says why: a drawing package lays its views out itself, an
 analysis's result is the solver's mesh rather than geometry PartCAD cuts, and a picture does not animate. On the

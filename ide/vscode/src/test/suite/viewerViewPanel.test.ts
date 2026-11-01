@@ -20,7 +20,7 @@
 import * as assert from 'assert';
 import * as THREE from 'three';
 
-import { FIT_MARGIN, enclosingRadius, fitDistance, fitProgress } from '../../webview/cameraView';
+import { enclosingRadius, fitDistance, fitProgress } from '../../webview/cameraView';
 import { ShowNode } from '../../webview/messages';
 import {
     boundsOf,
@@ -224,7 +224,7 @@ suite('The view panel: where a view is looked at from', () => {
         near(orbit(axisView('-y'), 0, 0, Z_POLE).origin, axisView('-y').origin);
     });
 
-    test('a fit keeps every side of the model in the narrower field, with 15% to spare, however it turns', () => {
+    test('a fit keeps every side of the model in the narrower field however it turns, and no further out', () => {
         // A bar three times as long as it is wide and six times as long as it
         // is deep: end-on it is a sixth of its length across, and it comes round.
         const box = new THREE.Box3(new THREE.Vector3(-30, -10, -5), new THREE.Vector3(30, 10, 5));
@@ -237,9 +237,9 @@ suite('The view panel: where a view is looked at from', () => {
             const vertical = (fov * Math.PI) / 360;
             const half = Math.min(vertical, Math.atan(Math.tan(vertical) * aspect));
             const distance = fitDistance(radius, fov, aspect);
-            // The sphere 15% larger than the one holding the model just touches
-            // the edges of the narrower field.
-            assert.ok(Math.abs(Math.asin((radius * FIT_MARGIN) / distance) - half) < 1e-9, `aspect ${aspect}`);
+            // The sphere holding the model just touches the edges of the
+            // narrower field: no margin on top of it.
+            assert.ok(Math.abs(Math.asin(radius / distance) - half) < 1e-9, `aspect ${aspect}`);
             // And every corner of the model, however the model is turned about
             // the turntable's axis or tumbled over, is inside it.
             const corners = [-1, 1].flatMap((x) =>
@@ -256,7 +256,10 @@ suite('The view panel: where a view is looked at from', () => {
                     }
                 }
             }
-            assert.ok(widest < half, `aspect ${aspect}: ${widest} is outside ${half}`);
+            assert.ok(widest <= half + 1e-12, `aspect ${aspect}: ${widest} is outside ${half}`);
+            // And the fit is tight: as the bar turns, a corner comes close to the
+            // edge, so the sphere is all the room left round the model.
+            assert.ok(widest > 0.9 * half, `aspect ${aspect}: ${widest} leaves more room than the sphere`);
         }
         // Only the narrower field decides: a wide canvas is fitted by its height,
         // a narrow one by its width.
@@ -372,6 +375,7 @@ suite('The view panel: the widget', () => {
             resets: 0,
             fits: 0,
             animate: [] as boolean[],
+            autoFit: [] as boolean[],
             opacity: [] as number[],
         };
         const view = new ViewPanel(
@@ -381,9 +385,14 @@ suite('The view panel: the widget', () => {
                 onFit: () => (asked.fits += 1),
                 onSection: (section) => asked.sections.push(section),
                 onAnimate: (animate) => asked.animate.push(animate),
+                onAutoFit: (autoFit) => asked.autoFit.push(autoFit),
                 onOpacity: (opacity) => asked.opacity.push(opacity),
             },
-            { target: true, ids: { animate: 'animate-checkbox', opacity: 'opacity-slider' } },
+            {
+                target: true,
+                autoFit: true,
+                ids: { animate: 'animate-checkbox', autoFit: 'autofit-checkbox', opacity: 'opacity-slider' },
+            },
         );
         return { view, root: view.element as unknown as FakeElement, asked };
     }
@@ -500,6 +509,40 @@ suite('The view panel: the widget', () => {
             { target: false },
         );
         assert.strictEqual(byClass(picture.element as unknown as FakeElement, 'view-fit')[0].hidden, true);
+    });
+
+    test('Auto-fit sits right after Animate, starts ticked, says when it changes, and goes with Animate', () => {
+        const { view, root, asked } = panel();
+        const animate = all(root, (element) => element.id === 'animate-checkbox')[0];
+        const autoFit = all(root, (element) => element.id === 'autofit-checkbox')[0];
+        // The rows of the display group, in order: the box after Animate's is Auto-fit's.
+        const rows = byClass(root, 'control-label');
+        const row = rows.findIndex((label) => label.children.includes(autoFit));
+        assert.ok(row > 0 && rows[row - 1].children.includes(animate), 'Auto-fit is the row after Animate');
+        assert.strictEqual(rows[row].hidden, false);
+        assert.strictEqual(rows[row].children[1].textContent, 'Auto-fit');
+        assert.strictEqual(autoFit.checked, true);
+        assert.strictEqual(view.autoFitting, true);
+
+        autoFit.checked = false;
+        autoFit.fire('change');
+        assert.deepStrictEqual(asked.autoFit, [false]);
+        assert.strictEqual(view.autoFitting, false);
+
+        // Where the 3D view cannot start, neither can be changed.
+        view.setCapabilities({ ...EVERYTHING, animate: 'The 3D view could not start' });
+        assert.strictEqual(autoFit.disabled, true);
+        assert.strictEqual(rows[row].title, 'The 3D view could not start');
+
+        // A view that does not fit on a show has no Auto-fit at all.
+        const picture = new ViewPanel(
+            { onViewpoint: () => {}, onResetView: () => {}, onSection: () => {} },
+            { target: false, ids: { autoFit: 'autofit-checkbox' } },
+        );
+        const pictureRoot = picture.element as unknown as FakeElement;
+        const box = all(pictureRoot, (element) => element.id === 'autofit-checkbox')[0];
+        const label = byClass(pictureRoot, 'control-label').find((element) => element.children.includes(box));
+        assert.strictEqual(label?.hidden, true);
     });
 
     test('what a tab cannot do is disabled, and says why', () => {
