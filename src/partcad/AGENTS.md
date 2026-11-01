@@ -505,11 +505,14 @@ at all).
     `request["package_dir"]` (`output.PACKAGE_DIR_KEY`), which is added after the request is keyed on, as
     `cache_dir` is. A sandbox that exchanges files (`EXCHANGES_FILES`: `remote`, `docker` with
     `useDockerRemote`) cannot read that path, and is never sent what the request says, only what the
-    command names: so a request whose field names a file of its package (`output.names_a_package_file`)
+    command names: so a request one of whose declared fields names a file of its package (`output.names_a_package_file`)
     gets `--package-dir <index> <directory>` after the triples (`output.PACKAGE_DIR_ARGUMENT`), which
     sends the package and is rewritten to where it landed, and `wrapper_export` takes the group off and
-    puts that directory in the request. Do not resolve such a path in the core instead: what a field
-    means is the implementation's to say.
+    puts that directory in the request. Which fields name such files is declared by the file type,
+    `packageFiles: [logo, audio]` (`Implementation.package_files`, an implementation key and so never a
+    parameter), and no other field is looked at: the package is sent whole, and a line of text that
+    happens to be a file's name must not send it. Do not resolve such a path in the core instead: what a
+    field means is the implementation's to say.
 
 - **Engineering analysis** (`./src/partcad/cae.py`, `Shape.analyze_async()`, `./src/partcad/test/cae.py`):
   `pc cae fea`/`dynamic`/`thermal`/`cfd` are a third output section, `cae:`, resolved by the very code that resolves

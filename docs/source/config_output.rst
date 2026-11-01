@@ -1173,7 +1173,15 @@ and the filters.
   saturation=1.3``). A relative path is read from the package of the object.
   A sandbox that exchanges files rather than sharing them -- ``remote``, or
   ``docker`` with ``useDockerRemote`` -- is sent that package along with the
-  render whenever a field names a file in it, and nothing else of it.
+  render whenever ``logo`` or ``audio`` names a file in it, and nothing else of
+  it.
+
+  Which fields those are is the file type's to declare, as ``packageFiles``: a
+  list of the fields that name files of the object's package -- each a path, a
+  map with a ``path``, or a list of either. The video file types declare
+  ``[logo, audio]``, and an implementation of a package's own that reads such a
+  file declares its own. No other field sends the package, whatever it says: a
+  line of ``text`` that is the name of a file is a line of text.
 
 Where GStreamer comes from
 ^^^^^^^^^^^^^^^^^^^^^^^^^^

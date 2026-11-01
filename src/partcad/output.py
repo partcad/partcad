@@ -332,7 +332,11 @@ def is_document_format(format_name: str, section_obj) -> bool:
 # The first group picks the implementation, the second places the output file.
 # What is left over is what the implementation is handed, so adding a field here
 # hides it from every implementation - including the ones packages write.
-IMPLEMENTATION_KEYS = frozenset({"path", "package", "pythonRequirements", "pythonVersion", "dockerImage", "container"})
+# 'packageFiles' is the implementation's too: which of its fields name files of
+# the object's package (see 'Implementation.package_files').
+IMPLEMENTATION_KEYS = frozenset(
+    {"path", "package", "pythonRequirements", "pythonVersion", "dockerImage", "container", "packageFiles"}
+)
 OUTPUT_KEYS = frozenset({"extension", "prefix", "exclude", "output_dir"})
 RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 
@@ -502,47 +506,45 @@ PACKAGE_DIR_KEY = "package_dir"
 # them, where a path on this machine is a path to nothing: as an argument of the
 # export wrapper, '--package-dir <index> <directory>' after every file's triple,
 # which the sandbox is sent and rewrites as it does every directory an argument
-# names. Only for a request that names a file of its package
-# ('names_a_package_file'), since it sends the package whole. The twin of
-# 'wrapper_export.PACKAGE_DIR_ARGUMENT', which says the rest.
+# names. Only for a request one of whose 'packageFiles' fields names a file of
+# its package ('names_a_package_file'), since it sends the package whole. The
+# twin of 'wrapper_export.PACKAGE_DIR_ARGUMENT', which says the rest.
 PACKAGE_DIR_ARGUMENT = "--package-dir"
 
-# What is not looked through for a file of the package: the object itself, the
-# tree it was decoded from, and the rest of what PartCAD hands every
-# implementation beside the file type's own fields.
-_NOT_PARAMETERS = frozenset(
-    {"wrapped", "shape_tree", "properties", "world", "ports", "boundary", "annotations", "cache_dir", PACKAGE_DIR_KEY}
-)
+
+def _paths_in(value):
+    """The paths a 'packageFiles' field holds: itself, its 'path' when it is a map, each of either in a list."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return _paths_in(value.get("path"))
+    if isinstance(value, (list, tuple)):
+        return [path for item in value for path in _paths_in(item)]
+    return []
 
 
-def names_a_package_file(request, package_dir) -> bool:
-    """Whether a field of 'request' is a relative path to a file in 'package_dir': a logo, a soundtrack.
+def names_a_package_file(request, package_dir, fields) -> bool:
+    """Whether one of 'fields' of 'request' is a relative path to a file in 'package_dir': a logo, a soundtrack.
 
-    Looked for among the file type's own fields - a string, or one in a map or a
-    list of them, as 'logo: {path: ...}' is - and only a path that is there is
-    one: a field that names nothing names nothing to send.
+    'fields' are the ones the file type declares as naming files of the object's
+    package ('packageFiles'), and nothing else is looked at: a field that merely
+    happens to say the name of a file - a line of text over a video - sends
+    nothing. A field is a path, a map with a 'path', or a list of either, and
+    only a path that is there is one: a field that names nothing names nothing
+    to send.
     """
-    if not package_dir or not os.path.isdir(package_dir):
+    if not fields or not package_dir or not os.path.isdir(package_dir):
         return False
-
-    def names(value, depth):
-        if isinstance(value, str):
-            text = value.strip()
-            return (
+    for field in fields:
+        for path in _paths_in(request.get(field)):
+            text = path.strip()
+            if (
                 0 < len(text) <= 1024
-                and "\n" not in text
                 and not os.path.isabs(os.path.expanduser(text))
                 and os.path.isfile(os.path.join(package_dir, text))
-            )
-        if depth >= 3:
-            return False
-        if isinstance(value, dict):
-            return any(names(item, depth + 1) for item in value.values())
-        if isinstance(value, (list, tuple)):
-            return any(names(item, depth + 1) for item in value)
-        return False
-
-    return any(names(value, 0) for key, value in request.items() if key not in _NOT_PARAMETERS)
+            ):
+                return True
+    return False
 
 
 # What 'wrapper_export.py' is handed when one call writes several files of one
@@ -703,6 +705,20 @@ class Implementation:
             or getattr(self.project, "python_version_declared", None)
             or sandbox_versions.DEFAULT_PYTHON_VERSION
         )
+
+    @property
+    def package_files(self) -> list:
+        """The fields of this file type that name files of the object's package, by a relative path.
+
+        What 'packageFiles' declares - the 'logo' and the 'audio' of a video -
+        and the only fields a sandbox that exchanges files is sent the package
+        for (see 'PACKAGE_DIR_ARGUMENT'). A file type that declares none reads
+        nothing of the package, as far as PartCAD knows, and is sent none of it.
+        """
+        fields = self.config.get("packageFiles") or []
+        if isinstance(fields, str):
+            fields = [fields]
+        return [field for field in fields if isinstance(field, str) and field]
 
     @property
     def container(self) -> Optional[dict]:

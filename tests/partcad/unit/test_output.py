@@ -1315,14 +1315,31 @@ def test_a_request_names_a_file_of_its_package_only_where_there_is_one(tmp_path)
     (tmp_path / "media" / "theme.mp3").write_bytes(b"")
     (tmp_path / "logo.png").write_bytes(b"")
     package = str(tmp_path)
+    fields = ["logo", "audio"]
 
-    assert output.names_a_package_file({"audio": "media/theme.mp3"}, package)
-    assert output.names_a_package_file({"logo": {"path": "logo.png", "width": 0.2}}, package)
-    assert output.names_a_package_file({"text": [{"text": "hi"}, "logo.png"]}, package)
-    # A field naming nothing there, an absolute path, and what is not the file
-    # type's own field send nothing.
-    assert not output.names_a_package_file({"audio": "missing.mp3", "size": "reels"}, package)
-    assert not output.names_a_package_file({"logo": str(tmp_path / "logo.png")}, package)
-    assert not output.names_a_package_file({"cache_dir": "logo.png", "shape_tree": {"x": "logo.png"}}, package)
-    assert not output.names_a_package_file({"logo": "logo.png"}, str(tmp_path / "elsewhere"))
-    assert not output.names_a_package_file({"logo": "logo.png"}, None)
+    assert output.names_a_package_file({"audio": "media/theme.mp3"}, package, fields)
+    assert output.names_a_package_file({"logo": {"path": "logo.png", "width": 0.2}}, package, fields)
+    assert output.names_a_package_file({"audio": [{"path": "nowhere.mp3"}, "logo.png"]}, package, fields)
+    # A field naming nothing there, and an absolute path, send nothing.
+    assert not output.names_a_package_file({"audio": "missing.mp3", "size": "reels"}, package, fields)
+    assert not output.names_a_package_file({"logo": str(tmp_path / "logo.png")}, package, fields)
+    # Nor does a field the file type did not declare, whatever it says: a line
+    # of text over a video that is the name of a file is a line of text.
+    assert not output.names_a_package_file({"text": "logo.png", "title": "media/theme.mp3"}, package, fields)
+    assert not output.names_a_package_file({"logo": "logo.png"}, package, [])
+    assert not output.names_a_package_file({"logo": "logo.png"}, str(tmp_path / "elsewhere"), fields)
+    assert not output.names_a_package_file({"logo": "logo.png"}, None, fields)
+
+
+def test_the_videos_declare_the_fields_that_name_package_files():
+    """'packageFiles' is the implementation's: held out of the request, and read off the file type."""
+    import yaml
+
+    with open(os.path.join(output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.RENDER]], "partcad.yaml")) as f:
+        render = yaml.safe_load(f)["render"]
+    videos = {name: config for name, config in render.items() if config.get("path") == "render_video.py"}
+    assert len(videos) == 10
+    for name, config in videos.items():
+        implementation = output.Implementation(output.RENDER, name, config)
+        assert implementation.package_files == ["logo", "audio"], name
+        assert "packageFiles" not in implementation.parameters, name

@@ -2326,7 +2326,7 @@ class Shape(ShapeConfiguration):
             if container or getattr(runtime, "EXCHANGES_FILES", False):
                 for index, output_ in enumerate(outputs):
                     package_dir = output_.request.get(output.PACKAGE_DIR_KEY)
-                    if output.names_a_package_file(output_.request, package_dir):
+                    if output.names_a_package_file(output_.request, package_dir, output_.impl.package_files):
                         command += [output.PACKAGE_DIR_ARGUMENT, str(index), package_dir]
                         if container:
                             input_dirs.append(package_dir)

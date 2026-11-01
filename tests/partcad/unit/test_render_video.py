@@ -768,6 +768,31 @@ def test_a_shaded_picture_leaves_no_mesh_on_the_shape():
         explorer.Next()
 
 
+def test_a_face_that_is_only_its_mesh_is_drawn(tmp_path):
+    """An SDF part's faces have no surface, only a triangulation ('wrapper_sdf'): the copy that is meshed keeps it."""
+    from OCP.BRep import BRep_Builder
+    from OCP.gp import gp_Pnt
+    from OCP.Poly import Poly_Array1OfTriangle, Poly_Triangle, Poly_Triangulation
+    from OCP.TColgp import TColgp_Array1OfPnt
+    from OCP.TopoDS import TopoDS_Face
+
+    corners = [(0, 0, 0), (10, 0, 0), (0, 10, 0), (0, 0, 10)]
+    triangles = [(0, 2, 1), (0, 1, 3), (1, 2, 3), (0, 3, 2)]
+    points = TColgp_Array1OfPnt(1, 12)
+    faces = Poly_Array1OfTriangle(1, 4)
+    for index, triangle in enumerate(triangles):
+        for corner in range(3):
+            points.SetValue(index * 3 + corner + 1, gp_Pnt(*map(float, corners[triangle[corner]])))
+        faces.SetValue(index + 1, Poly_Triangle(index * 3 + 1, index * 3 + 2, index * 3 + 3))
+    face = TopoDS_Face()
+    BRep_Builder().MakeFace(face, Poly_Triangulation(points, faces))
+
+    path = str(tmp_path / "mesh.png")
+    result = render_png.process(path, {"wrapped": face, "style": "shaded", "size": "64x64", "antialias": 1})
+    assert result["success"], result.get("exception")
+    assert (_pixels(path) != 255).any(axis=2).sum() > 100
+
+
 def test_a_frame_of_a_video_is_the_picture_pc_render_draws(monkeypatch, tmp_path):
     """Frame k is the PNG of the fields the video reports, turned by 'speed' times k / fps more: to the pixel."""
     captured = []

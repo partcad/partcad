@@ -287,8 +287,10 @@ render:
   #
   # A relative path in 'logo' and 'audio' is read from the package of the object
   # being rendered - which a sandbox that exchanges files ('remote', 'docker'
-  # with 'useDockerRemote') is sent along with the render when a field names a
-  # file in it. A video that reads a file - one of those, or the video it is
+  # with 'useDockerRemote') is sent along with the render when one of those two
+  # names a file in it. 'packageFiles' is what says which fields they are: it
+  # is the implementation's, and no other field sends the package, whatever it
+  # says. A video that reads a file - one of those, or the video it is
   # appended to - is not cached, since what the file holds is not in the
   # question the cache keys on.
   #
@@ -301,6 +303,8 @@ render:
     extension: mp4
     container_format: mp4
     style: shaded
+    # The fields that name files of the object's package (see the note above).
+    packageFiles: [logo, audio]
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -315,6 +319,8 @@ render:
     extension: m4v
     container_format: mp4
     style: shaded
+    # The fields that name files of the object's package (see the note above).
+    packageFiles: [logo, audio]
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -329,6 +335,8 @@ render:
     extension: mov
     container_format: mov
     style: shaded
+    # The fields that name files of the object's package (see the note above).
+    packageFiles: [logo, audio]
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -343,6 +351,8 @@ render:
     extension: qt
     container_format: mov
     style: shaded
+    # The fields that name files of the object's package (see the note above).
+    packageFiles: [logo, audio]
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -357,6 +367,8 @@ render:
     extension: mkv
     container_format: mkv
     style: shaded
+    # The fields that name files of the object's package (see the note above).
+    packageFiles: [logo, audio]
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -371,6 +383,8 @@ render:
     extension: webm
     container_format: webm
     style: shaded
+    # The fields that name files of the object's package (see the note above).
+    packageFiles: [logo, audio]
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -385,6 +399,8 @@ render:
     extension: avi
     container_format: avi
     style: shaded
+    # The fields that name files of the object's package (see the note above).
+    packageFiles: [logo, audio]
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -400,6 +416,8 @@ render:
     extension: wmv
     container_format: asf
     style: shaded
+    # The fields that name files of the object's package (see the note above).
+    packageFiles: [logo, audio]
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -414,6 +432,8 @@ render:
     extension: asf
     container_format: asf
     style: shaded
+    # The fields that name files of the object's package (see the note above).
+    packageFiles: [logo, audio]
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -432,6 +452,8 @@ render:
     extension: ogv
     container_format: ogg
     style: shaded
+    # The fields that name files of the object's package (see the note above).
+    packageFiles: [logo, audio]
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
