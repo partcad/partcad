@@ -332,7 +332,8 @@ export interface ShowNode {
      * 'KEY_PROPERTIES' in 'partcad/shape_envelope.py'): what it is made of, its
      * colour, its physics. The viewer reads 'color' - "#RRGGBB" or "#RRGGBBAA" -
      * and draws the node, and everything under it that states no colour of its
-     * own, in it (see 'appearance.ts'); nothing else.
+     * own, in it; and 'oneSided', which draws the node from the front of its
+     * faces only (see 'appearance.ts'); nothing else.
      */
     properties?: ShowProperties | null;
 }
@@ -343,6 +344,8 @@ export interface ShowProperties {
     color?: string | null;
     /** The name of the material it is made of. Not read by the viewer: a material states no colour. */
     material?: string | null;
+    /** Drawn from the front of its faces only, and see-through from behind: what a wall reports. */
+    oneSided?: boolean | null;
     [property: string]: unknown;
 }
 

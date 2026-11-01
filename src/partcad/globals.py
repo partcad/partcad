@@ -43,6 +43,7 @@ from .part_factory_sdf import PartFactorySdf
 from .part_factory_step import PartFactoryStep
 from .part_factory_stl import PartFactoryStl
 from .part_factory_sweep import PartFactorySweep
+from .part_factory_wall import PartFactoryWall
 from .part_factory_wrapper import PartFactoryWrapper
 from .plugin_factory_provider_enrich import PluginFactoryProviderEnrich
 from .plugin_factory_provider_manufacturer import PluginFactoryProviderManufacturer
@@ -57,6 +58,7 @@ from .plugin_factory_repository_basic import PluginFactoryRepositoryBasic
 from .plugin_factory_repository_enrich import PluginFactoryRepositoryEnrich
 from .scene import Scene
 from .scene_factory import SceneFactoryAlias, SceneFactoryAssy, SceneFactoryEnrich
+from .scene_factory_walls import SceneFactoryWalls
 from .sketch_factory_alias import SketchFactoryAlias
 from .sketch_factory_basic import SketchFactoryBasic
 from .sketch_factory_build123d import SketchFactoryBuild123d
@@ -97,6 +99,8 @@ factory.register("part", "scad", PartFactoryScad)
 factory.register("part", "kicad", PartFactoryKicad)
 factory.register("part", "extrude", PartFactoryExtrude)
 factory.register("part", "sweep", PartFactorySweep)
+# A surface a room is drawn with, not a body: see 'partcad.surface'.
+factory.register("part", "wall", PartFactoryWall)
 factory.register("part", "alias", PartFactoryAlias)
 factory.register("part", "enrich", PartFactoryEnrich)
 factory.register("part", "compound", PartFactoryCompound)
@@ -118,6 +122,8 @@ factory.register("assembly", "enrich", AssemblyFactoryEnrich)
 factory.register("scene", "assy", SceneFactoryAssy)
 factory.register("scene", "alias", SceneFactoryAlias)
 factory.register("scene", "enrich", SceneFactoryEnrich)
+# The walls of a room, standing on the outline of a sketch: see 'scene_factory_walls'.
+factory.register("scene", "walls", SceneFactoryWalls)
 factory.register("file", "url", FileFactoryUrl)
 factory.register("file", "plugin", FileFactoryPlugin)
 factory.register("provider", "manufacturer", PluginFactoryProviderManufacturer)

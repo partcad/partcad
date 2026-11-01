@@ -33,7 +33,9 @@ from . import output
 from . import physics as pc_physics
 from . import render_overlay
 from . import runtime as pc_runtime
-from . import sandbox_versions, scene_world, shape_ports, shape_section, source_key, sync_threads, wrapper
+from . import sandbox_versions, scene_world, shape_ports, shape_section, source_key
+from . import surface as pc_surface
+from . import sync_threads, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
 from .shape_config import TRANSFORM_KEYS, ShapeConfiguration
@@ -1334,7 +1336,7 @@ class Shape(ShapeConfiguration):
             # converted already, and all that is left is to say what is wrong
             # with it, in the same words.
             verdict = finished.get(shape_envelope.FINISHED_VALIDATED)
-            if self.kind == "part" and shape_envelope.is_shape_object(shape):
+            if self.kind == "part" and shape_envelope.is_shape_object(shape) and self._validates():
                 if verdict is not None:
                     self._not_a_solid(verdict.get("problems") or [])
                 elif ctx is not None:
@@ -1505,8 +1507,14 @@ class Shape(ShapeConfiguration):
             return None
         properties = self.config.get(shape_envelope.KEY_PROPERTIES)
         if not isinstance(properties, dict):
-            return None
+            properties = {}
         properties = {key: value for key, value in properties.items() if value not in (None, {}, [], "")}
+        # The one thing a shape reports by what it *is*: a part that resolves to
+        # a surface type - a wall, or an alias of one, which states no
+        # properties of its own - is drawn from the front of its faces only
+        # (see 'partcad.surface' and 'part_factory_wall.ONE_SIDED_KEY').
+        if pc_surface.ONE_SIDED_KEY not in properties and pc_surface.is_surface(self):
+            properties[pc_surface.ONE_SIDED_KEY] = True
         return properties or None
 
     def material_reference(self) -> Optional[str]:
@@ -4278,6 +4286,15 @@ class Shape(ShapeConfiguration):
         """
         return (self.config or {}).get("type") not in FILE_AUTHORITY_TYPES
 
+    def _validates(self) -> bool:
+        """Whether this part is held to being a body as it leaves its factory: all but a surface part.
+
+        A part whose type builds a surface on purpose - a wall - would only be
+        told what it already is, once per build, and a closed one would be
+        turned into something it was not meant to be (see 'partcad.surface').
+        """
+        return not pc_surface.is_surface(self)
+
     def finish_request(self):
         """What the wrapper that builds this part is asked to do to it before it hands it over.
 
@@ -4307,7 +4324,10 @@ class Shape(ShapeConfiguration):
         """
         if self.kind != "part":
             return None
-        request = {"validate": {"solidify": self._solidifies()}}
+        # A surface part - a wall - is a skin on purpose, and is neither closed
+        # into a solid nor judged for not being one (see 'partcad.surface'): it
+        # is moved and scaled like any part, and that is all.
+        request = {"validate": {"solidify": self._solidifies()}} if self._validates() else {}
         for key in TRANSFORM_KEYS:
             if key in self.config:
                 request[key] = self.transform(key)

@@ -1075,6 +1075,10 @@ class Geometry {
      * A see-through colour is drawn transparent at its own opacity, and remembers
      * that opacity in 'userData.alpha' so the Opacity slider can take it as the
      * part's full strength rather than replacing it (see 'setOpacity').
+     *
+     * A one-sided shape - a wall - is drawn from the front of its faces only,
+     * whatever this show draws everything else with: from behind it is not there,
+     * which is the whole of what it is for (see 'appearance.ts').
      */
     faceMaterial(appearance: Appearance): THREE.Material {
         const key = appearanceKey(appearance);
@@ -1082,7 +1086,7 @@ class Geometry {
         if (material === undefined) {
             material = new THREE.MeshPhongMaterial({
                 color: appearance.color,
-                side: this.side,
+                side: appearance.oneSided ? THREE.FrontSide : this.side,
                 transparent: appearance.opacity < 1,
                 opacity: appearance.opacity,
             });

@@ -46,6 +46,7 @@ There are many ways to produce a PartCAD model that can be consumed by others.
 
 - Place objects into scenes (where things are, not how they got there):
   - [Assembly YAML (ASSY) files read as a scene](./produce_scene_assy/)
+  - [Walls standing on a floor plan, seen into from outside](./produce_scene_walls/)
 
 - Ship software with the hardware:
   - [Firmware images and other files a product ships with](./produce_software/)

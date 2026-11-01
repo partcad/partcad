@@ -906,7 +906,7 @@ def visible_layer(color):
     return "%s-%s" % (VISIBLE_LAYER, color.lstrip("#"))
 
 
-def _by_color(request, warnings):
+def _by_color(request, warnings, origin=None):
     """The shape to draw and the same shape split by colour, as '(whole, groups)'.
 
     'groups' is what 'appearance.split_by_color' answers. The colours are read
@@ -914,35 +914,43 @@ def _by_color(request, warnings):
     the geometry (see 'wrapper_export.py'). A caller that hands this module the
     geometry alone - a script of a package's own that imports it, a test - has
     said nothing about any colour, and everything is drawn in the default one.
+
+    Given 'origin', where the drawing is looked at from, a one-sided shape in
+    the tree - a wall - loses the faces that camera would see from behind
+    ('appearance.split_for_view'): from outside a room, its near walls are
+    looked through.
     """
     whole = request["wrapped"]
     tree = request.get("shape_tree")
     if tree is None:
         return whole, [(appearance.DEFAULT_COLOR, whole)]
+    if origin is not None:
+        return appearance.split_for_view(tree, whole, origin, warnings)
     return whole, appearance.split_by_color(tree, whole, warnings)
 
 
 def process(path, request):
     try:
         warnings = []
-        whole, groups = _by_color(request, warnings)
-        if needs_mesh_normalization(request):
-            groups = [(color, _normalize_mesh(shape)) for color, shape in groups]
-            if len(groups) == 1:
-                whole = groups[0][1]
-            else:
-                whole = ocp_serialize.compound_of(shape for _color, shape in groups)
-
         # The camera, from here on, for everything projected: the shape, the
         # annotations and the overlays all have to be seen from the one place,
         # or what is drawn on top lands somewhere else on the page. See
-        # 'LOOK_AT' for why it is the direction asked for, as a position.
+        # 'LOOK_AT' for why it is the direction asked for, as a position. Worked
+        # out first, because what a one-sided shape shows depends on it.
         origin = tuple(float(component) for component in viewport_origin(request))
         up = viewport_up(request)
         # The object turned in front of that camera, which is drawn by the camera
         # turned the other way about it (see 'viewpoint').
         origin, up = viewpoint.turned(origin, up, viewpoint.turn_of(request))
         look_at = LOOK_AT
+
+        whole, groups = _by_color(request, warnings, origin)
+        if needs_mesh_normalization(request):
+            groups = [(color, _normalize_mesh(shape)) for color, shape in groups]
+            if len(groups) == 1:
+                whole = groups[0][1]
+            else:
+                whole = ocp_serialize.compound_of(shape for _color, shape in groups)
         # Whether this drawing has to come out the same every time it is drawn.
         # Always present in the request - PartCAD puts it there whether or not
         # the file type declared it - but defaulted here all the same, because
