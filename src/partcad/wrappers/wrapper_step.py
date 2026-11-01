@@ -29,37 +29,52 @@ from OCP.TopoDS import (
 
 sys.path.append(os.path.dirname(__file__))
 import ocp_serialize
+import step_cmf
 import step_metadata
 import step_repair
 import wrapper_common
 
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
-# before is produced again.
-CACHE_VERSION = 1
+# before is produced again. 2: the colours and materials the file states are
+# read (see 'step_cmf'); the geometry is the same, byte for byte.
+CACHE_VERSION = 2
+
+
+def _plain(readable_path):
+    """The geometry alone, as every STEP part was read before 'step_cmf'."""
+    reader = STEPControl_Reader()
+    readStatus = reader.ReadFile(readable_path)
+    if readStatus != OCP.IFSelect.IFSelect_RetDone:
+        raise Exception("STEP File could not be loaded")
+    for i in range(reader.NbRootsForTransfer()):
+        reader.TransferRoot(i + 1)
+
+    occ_shapes = []
+    for i in range(reader.NbShapes()):
+        occ_shapes.append(reader.Shape(i + 1))
+
+    builder = TopoDS_Builder()
+    compound = TopoDS_Compound()
+    builder.MakeCompound(compound)
+    for shape in occ_shapes:
+        builder.Add(compound, shape)
+    return compound
 
 
 def process(path, request):
     compound = None
+    section = None
     try:
-        reader = STEPControl_Reader()
         # What OpenCASCADE would crash on is repaired first (see step_repair).
         with step_repair.readable(path) as readable_path:
-            readStatus = reader.ReadFile(readable_path)
-        if readStatus != OCP.IFSelect.IFSelect_RetDone:
-            raise Exception("STEP File could not be loaded")
-        for i in range(reader.NbRootsForTransfer()):
-            reader.TransferRoot(i + 1)
-
-        occ_shapes = []
-        for i in range(reader.NbShapes()):
-            occ_shapes.append(reader.Shape(i + 1))
-
-        builder = TopoDS_Builder()
-        compound = TopoDS_Compound()
-        builder.MakeCompound(compound)
-        for shape in occ_shapes:
-            builder.Add(compound, shape)
+            try:
+                compound, section = step_cmf.read(readable_path)
+            except Exception as e:  # pylint: disable=broad-except
+                # The geometry is the answer asked for, and CMF the extra: a
+                # file the XCAF reader refuses is read as it always was.
+                print("Reading the colours and materials of '%s' failed: %s" % (path, e), file=sys.stderr)
+                compound, section = _plain(readable_path), None
     except Exception as e:
         wrapper_common.handle_exception(e)
         return {
@@ -91,6 +106,7 @@ def process(path, request):
     shape = wrapper_common.finished(
         compound,
         metadata={ocp_serialize.METADATA_SECTIONS: sections} if sections else None,
+        cmf=section,
     )
 
     return {

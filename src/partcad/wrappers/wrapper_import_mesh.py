@@ -23,18 +23,21 @@ import pyexpat  # noqa: F401
 import build123d as b3d
 
 sys.path.append(os.path.dirname(__file__))
+import cmf_capture
 import wrapper_common
 
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
-# before is produced again.
-CACHE_VERSION = 1
+# before is produced again. 2: a 3MF of several objects is all of them, not the
+# first, and each object's colour is carried in the part's CMF section.
+CACHE_VERSION = 2
 
 
 def process(path, request):
+    section = None
     try:
         try:
-            shape = b3d.Mesher().read(path)[0].wrapped
+            shape, section = cmf_capture.read_mesh(path, request.get("cmfConvention", "3mf"))
         except Exception:
             if not request.get("fallback_import_stl", False):
                 raise
@@ -53,7 +56,7 @@ def process(path, request):
         "success": True,
         "exception": None,
         # Validated and moved here, while it is live (see wrapper_common.finished).
-        "shape": wrapper_common.finished(shape),
+        "shape": wrapper_common.finished(shape, cmf=section),
     }
 
 

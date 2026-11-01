@@ -412,3 +412,14 @@ def test_pc_render_draws_each_part_in_its_colour(context, tmp_path, file_type):
     # Anti-aliased, so not only the two colours themselves; but both of them.
     assert (218, 165, 32) in colors
     assert (255, 0, 0) in colors
+
+
+def test_a_colour_too_light_to_see_on_white_is_drawn_darker(real_svg):
+    """A white face - what a STEP file paints a part as often as not - is drawn in grey lines, not invisible ones."""
+    assert real_svg.legible("#FFFFFF") == (188, 188, 188)
+    # Goldenrod, every default drawing, and anything darker are drawn exactly as they are.
+    assert real_svg.legible("#DAA520") == "#DAA520"
+    assert real_svg.legible("#0D0D0D") == "#0D0D0D"
+    # A light colour keeps its hue: a pale blue is still bluer than it is red.
+    red, _green, blue = real_svg.legible("#C0D8FF")
+    assert blue > red

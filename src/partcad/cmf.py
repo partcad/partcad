@@ -526,14 +526,19 @@ def apply_declared(ctx, shape, envelope, recorded: dict):
     caller applies this to the geometry as it was built, on every read rather
     than once before caching it (see 'Shape._with_cmf').
     """
-    from . import shape_envelope
+    from . import cmf_conventions, shape_envelope
 
     declared, drops = declared_set(ctx, shape)
-    if declared is None and not drops:
+    # What the source stated, in its own terms, is converted here too, before
+    # the part's own CMF completes it (see 'partcad.cmf_conventions').
+    converting = cmf_conventions.needs_converting((recorded or {}).get(shape_envelope.METADATA_CMF))
+    if declared is None and not drops and not converting:
         return envelope, recorded
     if not shape_envelope.is_node(envelope):
         return envelope, recorded
     import cmf_section
+
+    convention = _parameter_value(getattr(shape, "config", None), CONVENTION)
 
     done = {}
     summaries = []
@@ -544,6 +549,8 @@ def apply_declared(ctx, shape, envelope, recorded: dict):
             # Opened with the core's own bounded reader: the payload may come
             # out of a shared cache (see 'shape_envelope.brep_plain').
             brep, section = cmf_section.split(shape_envelope.brep_plain(key))
+            if section is not None and any(cmf_conventions.is_raw(entry.origin) for entry in section.sets):
+                section = cmf_conventions.convert(ctx, shape, section, convention)
             section = (section or cmf_section.Section()).without(drops)
             if declared is not None:
                 section = section.completed(declared)

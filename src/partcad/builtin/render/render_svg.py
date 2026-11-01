@@ -37,8 +37,9 @@ import wrapper_common
 
 # What this implementation reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
-# before is produced again.
-CACHE_VERSION = 4
+# before is produced again. 5: a colour too light to see on white is drawn
+# darker (see 'legible').
+CACHE_VERSION = 5
 
 # How this implementation meshes what it is handed, for the files of one
 # object to share a decoding and a mesh when they are written together (see
@@ -845,6 +846,35 @@ def _add_projected(exporter, layer, shapes, origin, up, look_at, reproducible=Fa
         wrapper_common.handle_exception(e)
 
 
+# The lightest a line may be drawn in, as relative luminance (WCAG: white is 1,
+# goldenrod 0.42). A drawing is on white paper, and a face coloured white - what
+# a STEP file paints a part as often as not - would otherwise be drawn in lines
+# nobody can see. A colour lighter than this is drawn darker, hue kept, until it
+# is this light; goldenrod and everything darker are drawn exactly as they are.
+MAX_LINE_LUMINANCE = 0.5
+
+
+def _linear(channel: float) -> float:
+    channel /= 255.0
+    return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+
+
+def _srgb(linear: float) -> int:
+    value = linear * 12.92 if linear <= 0.0031308 else 1.055 * linear ** (1 / 2.4) - 0.055
+    return max(0, min(255, int(round(value * 255))))
+
+
+def legible(color):
+    """'color' as a line on white is drawn in: itself, or darker where it is too light to see (MAX_LINE_LUMINANCE)."""
+    red, green, blue, alpha = appearance.parse(color) if isinstance(color, str) else (*color, 1.0)
+    linear = [_linear(channel) for channel in (red, green, blue)]
+    luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    if luminance <= MAX_LINE_LUMINANCE:
+        return color
+    factor = MAX_LINE_LUMINANCE / luminance
+    return tuple(_srgb(channel * factor) for channel in linear)
+
+
 def line_color(color):
     """A colour as 'ExportSVG' has to be handed it to write exactly that colour.
 
@@ -931,7 +961,7 @@ def process(path, request):
             layer = visible_layer(color)
             exporter.add_layer(
                 layer,
-                line_color=line_color(color),
+                line_color=line_color(legible(color)),
                 line_weight=line_weight,
             )
             # A projection that cannot be added still leaves an SVG behind - an
