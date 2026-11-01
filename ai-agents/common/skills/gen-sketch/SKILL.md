@@ -1,71 +1,442 @@
 ---
 name: gen-sketch
-description: Generate a PartCAD 2D sketch from a natural-language description by authoring the sketch (build123d / cadquery / dxf / svg / basic) and validating it with the PartCAD CLI. Use for /pc:gen-sketch or when the user asks to generate, create, or draw a 2D sketch, profile, outline, or blueprint.
+description: Generate a PartCAD 2D sketch (build123d / cadquery / basic / dxf / svg) whose dimensions are measured to match the request rather than estimated - normalize the input to 2D (a description, a drawing, a photo, a projection, or a 3D model projected with `pc adhoc render`), measure the target dimensions, author a candidate, render it, measure the same dimensions on the rendering with the bundled measure.py, and iterate until every error is within tolerance. Use for /pc:gen-sketch, when the user asks to generate, create, draw or trace a 2D sketch, profile, outline, cross-section, footprint or blueprint, and as the dimension study /pc:gen-part and /pc:gen-assembly run before they model.
 ---
 
 # pc:gen-sketch
 
-Generate one PartCAD **sketch** — a 2D profile — from a description. You author
-the sketch yourself and prove it renders with the PartCAD CLI. There is no
-built-in `ai-*` sketch type; *you* are the model. The hard requirement: the
-sketch **renders without errors**.
+Generate one PartCAD **sketch** — a 2D profile — whose dimensions are the ones
+that were asked for. *You* author the sketch; there is no built-in `ai-*` sketch
+type. Two hard requirements:
 
-The flow mirrors `/pc:gen-part`, adapted to 2D. Treat it as a strong default, not
-a script — but always finish by rendering. (Sketches are not manufacturable, so
-unlike parts they need no `manufacturable:` flag and skip the `cam` tests.)
+- the sketch **renders without errors**, and
+- **every target dimension, measured on the rendering, is within its
+  tolerance** — or the sketch is reported as not meeting it, with the numbers.
 
-## 1. Understand the request
+A sketch that looks right is not the goal. A dimension is right only once it has
+been measured on the result and compared, as a number, with the number it was
+meant to be. So this skill works in a loop that never estimates where it can
+measure: write the targets down (§3), get them out of the input by normalizing
+it to 2D and measuring it (§4, §5), draw a candidate (§6), render it and measure
+the *same* dimensions on the rendering (§7), and compare (§8) — iterating with
+the error in hand until there is none worth the name.
 
-`$ARGUMENTS` is the description. Read it and any `requirements`, and view
-reference images directly. Ask the user to clarify only load-bearing
-ambiguities. Work in millimeters unless told otherwise.
+The same loop is what `/pc:gen-part` and `/pc:gen-assembly` run first, on
+**temporary sketches**, to settle a part's dimensions and an assembly's
+placements before modelling anything (§9).
+
+Sketches are not manufacturable, so unlike parts they need no
+`manufacturable:` flag and skip the `cam` tests.
+
+## 1. Understand the request, and what the input is
+
+`$ARGUMENTS` is the description. Read it and any `requirements`, and look at
+every reference image or file directly. Work in millimetres unless told
+otherwise — an inch is 25.4 mm exactly, and a drawing in inches is converted
+once, in the table of §3, not in the sketch. Ask the user only about genuinely
+load-bearing ambiguities: which view a profile is, whether a dimension is a
+radius or a diameter, which edge it is measured from.
+
+Then say which of five kinds of input this is, because each is normalized to 2D
+differently (§4):
+
+| Input | Example | Normalized by |
+| --- | --- | --- |
+| **2D description** | "a 100 × 60 plate, Ø5 holes 8 mm in from each corner" | nothing: the numbers are stated |
+| **2D object** | a DXF or SVG file; a scan, screenshot or photo of a flat drawing or a flat part | re-rendering the file with `pc adhoc render sketch`; measuring the picture's pixels |
+| **3D description** | "a 40 mm cube with a Ø10 hole through the top, 12 mm from the back" | a temporary part, projected with `pc adhoc render part` |
+| **3D projection** | a multi-view drawing, an isometric, a photo or render of an object | measuring it, with its projection method taken into account |
+| **3D object** | a STEP / STL / BREP / … file, or a part in a package | projecting it with `pc adhoc render part` (or `pc render`) |
 
 ## 2. Make sure PartCAD is available
 
 Resolve a command as `/pc:init` does (`pc`, then `partcad`, then
 `python -m partcad_cli.click.command`). If none is found, stop and run
-`/pc:setup executable` first.
+`/pc:setup executable` first. Pass `--no-ansi` on every run — it is a global
+flag, goes before the subcommand, and sends the log to stderr. The first
+command that renders anything builds PartCAD's CAD sandbox and can take
+minutes; every one after it is quick.
 
-## 3. Choose a representation
+The measuring helper is `measure.py`, beside this file. It needs any Python 3,
+and Pillow only for raster pictures (§5.2):
+
+```sh
+python3 <this skill's directory>/measure.py --help
+```
+
+If an IDE is running (`pc --no-ansi ide state` answers, as in `/pc:gen-part`
+§2), show each candidate that renders with `pc --no-ansi ide view -s <name>`.
+
+## 3. Write the targets down first: the dimension table
+
+Before drawing anything, list every dimension the sketch has to have:
+
+| Dimension | Target (mm) | Tolerance | From | Measured between |
+| --- | --- | --- | --- | --- |
+| width | 100 | ±0.01 | stated | left edge – right edge |
+| hole Ø | 5 | ±0.01 | stated | the circle |
+| hole inset x | 8 | ±0.01 | stated | left edge – hole centre |
+| hole pitch x | 84 | ±0.01 | derived: 100 − 2 × 8 | hole centre – hole centre |
+| slot length | 30.2 | ±0.4 | measured: photo.jpg, row 412 | slot end – slot end |
+
+- **From** is where the number came from: *stated* (word for word from the
+  request or a dimension written on a drawing), *derived* (with the
+  arithmetic), or *measured* (with the file, and the row, column or feature it
+  was measured along, so it can be measured again).
+- **Measured between** names the two features, which is the same as naming the
+  **datum**. "8 from the edge" and "8 from the centre line" are different
+  sketches, and a dimension taken from a different datum than the one it was
+  drawn from is the commonest way to be exactly wrong.
+- **Tolerance.** A stated dimension is drawn from the very number it is
+  checked against, so any error is a modelling mistake: ±0.01 mm unless the
+  request gives one. A measured dimension cannot be held tighter than it was
+  measured (§5), and no dimension may be looser than what it is for — a bolt
+  pattern, a fit or a mating outline asks for the tight end.
+- **Check the table adds up** before drawing. Chains must close (the parts of a
+  dimension add to the whole), stated and measured values of the same thing
+  must agree within their tolerances, and a count must match the pattern it
+  is a count of. A conflict goes to the user with the numbers; it is not split
+  silently in the sketch.
+
+For a sketch that will be kept, the same table goes into the declaration as its
+`requirements:` (§6), the way `/pc:gen-part` writes a part's.
+
+## 4. Normalize the input to 2D and measure the targets
+
+Every input ends up as a 2D drawing whose dimensions can be measured as
+distances. Prefer an **SVG** at every step: PartCAD's SVG renders carry the
+geometry as numbers, in millimetres, and `measure.py` reads them exactly. A
+picture is measured only when a picture is all there is.
+
+### 4.1 2D description
+
+Nothing to normalize: the targets are the stated numbers, and the derived ones
+worked out from them. Go to §6.
+
+### 4.2 2D object
+
+**A DXF or SVG file.** Let PartCAD read it the way a sketch of that type will
+be read, and measure what it read:
+
+```sh
+mkdir -p /tmp/pc-sketch/ref
+pc --no-ansi adhoc render sketch outline.dxf /tmp/pc-sketch/ref/outline.svg
+python3 <this skill's directory>/measure.py svg /tmp/pc-sketch/ref/outline.svg
+```
+
+A DXF is scaled to millimetres by its own `$INSUNITS` (`pc info` on a `dxf`
+sketch says what it said and how much it was scaled by). An **SVG is read at the
+size it says it is printed at** — `width="101mm"` over a `viewBox` 20.2 wide is
+5 mm per unit — so run `measure.py svg` on the original as well: its `page:`
+line gives that scale, and its numbers times that scale must be what the
+re-rendered file measures. When the drawing states any dimension, check the
+scale against it before trusting the rest.
+
+**Never turn a PartCAD render back into an `svg` sketch.** A render's numbers are
+model millimetres, but its page is sized to fit 512 units, so reading it as a
+sketch scales it by whatever that came to.
+
+**A raster picture** — a scan, a screenshot, a photo of a drawing or of a flat
+part lying flat — is measured in pixels and calibrated (§5.2). Read every
+dimension *written* on a drawing as a stated target, and measure only what is
+not written, scaled from what is.
+
+### 4.3 3D description
+
+Materialize it as a **temporary part** and project it, so that which dimensions
+appear in the view, how long they look there and what hides what are measured
+rather than imagined. A bare build123d script is enough, and belongs outside the
+package:
+
+```python
+# /tmp/pc-sketch/study.py -- only what decides the dimensions of the view
+from build123d import Align, Box, BuildPart, Hole, Location, Locations
+
+with BuildPart() as study:
+    Box(40, 40, 40, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    with Locations(Location((0, 20 - 12, 40))):   # 12 mm from the back face (+Y), on the top
+        Hole(radius=5)
+show_object(study.part)
+```
+
+```sh
+for view in front top right; do
+  pc --no-ansi adhoc render part --input build123d --view $view /tmp/pc-sketch/study.py /tmp/pc-sketch/study-$view.svg
+done
+python3 <this skill's directory>/measure.py svg /tmp/pc-sketch/study-top.svg
+```
+
+**`--input build123d` is not optional** for a `.py` file: the type is guessed
+from the extension, and `.py` is guessed to be `sdf`, which fails on a build123d
+script. (`--input cadquery` for a CadQuery one.)
+
+The temporary part is an instrument, not the deliverable: keep it to the
+features the description dimensions. Its value is that a description in 3D
+terms ("on the top, 12 from the back") becomes a 2D distance in a named view,
+and that a description which does not determine a dimension shows it here — the
+view comes out with a feature somewhere you had to choose. Ask about that
+choice, or state it as an assumption in the table.
+
+### 4.4 3D projection
+
+Work out the projection method first (§5.3) — which view each part of a drawing
+is, and how lengths in it relate to lengths in the object — then measure it as
+an SVG (§5.1) or as a picture (§5.2), and correct for the projection.
+
+### 4.5 3D object
+
+Project it into the views the sketch is of:
+
+```sh
+for view in front top right; do
+  pc --no-ansi adhoc render part --view $view bracket.step /tmp/pc-sketch/ref-$view.svg
+done
+```
+
+For an object a package declares, `pc --no-ansi render -t svg --view <view> -O
+<dir> <name>` does the same and applies the package's own render options.
+`pc --no-ansi info <name>` adds the kernel's `BoundingBox` — exact, and the
+first thing to check every measured extent against.
+
+### The views
+
+A projection is orthographic, and in each named view the picture's axes are
+these model axes — which is what makes a number measured in a view a number in
+the model:
+
+| `--view` | picture right | picture up | looking along |
+| --- | --- | --- | --- |
+| `front` | +X | +Z | +Y |
+| `back` | −X | +Z | −Y |
+| `right` | +Y | +Z | −X |
+| `left` | −Y | +Z | +X |
+| `top` | +X | +Y | −Z |
+| `bottom` | +X | −Y | +Z |
+| `iso` | (true isometric from +X −Y +Z) | | |
+
+A sketch is drawn in its own XY plane and rendered as `top` sees it, which is
+also how `type: extrude` uses it (along +Z). So a sketch meant to match a part's
+`front` view takes the part's X as its X and the part's Z as its Y.
+
+## 5. Measuring
+
+### 5.1 An SVG: measured exactly
+
+```sh
+python3 <this skill's directory>/measure.py svg <drawing.svg>
+```
+
+It prints, in the drawing's units with Y up (millimetres, for a PartCAD render):
+
+- `extent` — the overall width and height;
+- `circles` — every diameter and centre;
+- `arcs` — grouped by the circle they are of: radius, centre, sweep;
+- `ellipses` — both diameters and the angle: a circle seen at a slant;
+- `vertical edges, by x` / `horizontal edges, by y` — each X (Y) at which an
+  edge stands, with what it spans. A width or an inset is the difference of two
+  of these;
+- `other straight edges`, and closed outlines nothing else explains (a hexagon
+  is reported across its corners *and* across its flats).
+
+Every position is given from the left and from the bottom of the extent as
+well. Use those, or differences between features, rather than absolute
+coordinates: where a projection puts the model origin depends on the
+hidden-line algorithm that drew it. `--json` gives everything without
+truncation.
+
+By default PartCAD projects through a triangulation, so a curved edge is drawn
+as a polygon whose vertices lie on it (to 0.05 % of the object's size).
+`measure.py` fits each such polygon and marks it `[fitted to N segments,
+residual …]`; a residual near zero is a circle that was drawn as one. Set
+`reproducible: true` on the object's `render: svg:` (§6) and the projection is
+exact instead, with circles and arcs as themselves. `[approximate: …]` is a
+closed curve that is round but was not drawn as a circle — usually Bézier
+curves from another program — and is good to the residual it states.
+
+### 5.2 A raster picture: measured in pixels, then calibrated
+
+```sh
+python3 <this skill's directory>/measure.py image photo.jpg --row 412 --column 230 --calibrate 1043=100
+```
+
+It finds the background (the commonest colour; `--background R,G,B` to say
+it), and reports the box around everything else and, along each `--row` and
+`--column`, every run of ink it crosses with its start, end and centre — the
+centre weighted by intensity, so a line's position is known to a fraction of a
+pixel. `--crop X0,Y0,X1,Y1` keeps it to one view of a sheet.
+
+- **Find the row by eye, measure it by script.** Look at the picture to choose
+  a row or column through the feature, then let the script say where the edges
+  are. Scan two or three neighbouring rows: they agree if the line is clean.
+- **Calibrate on a known length,** between two line *centres* (not the box,
+  which includes the stroke width), as long as the picture allows and along the
+  direction you are going to measure. `--calibrate <px>=<mm>` then reports
+  millimetres.
+- **State the uncertainty.** A clean drawing measures to about half a pixel at
+  each end, so ±1 px over the length, divided by the scale; a photo of a part
+  is worse at its edges. That uncertainty is the measured target's tolerance
+  in §3.
+
+### 5.3 The projection method
+
+A distance measured in a picture is a length in the object only once the
+projection is accounted for:
+
+| Projection | What measures true | Correction |
+| --- | --- | --- |
+| **Orthographic** (one view, or a multi-view drawing) | lengths parallel to the plane of the view, at the drawing's scale | none; a length along the line of sight is not in this view — take it from another one |
+| **Isometric** | lengths along the three isometric axes, all at one scale | calibrate on a known axis-parallel length. A *projection* (PartCAD's `iso`) shows them at ×0.8165 (√⅔), an isometric *drawing* at ×1; calibrating on the picture makes the two the same. A circle on a face is an ellipse: true diameter = major axis ÷ (1.2247 × the axis scale) — in PartCAD's `iso`, the major axis *is* the diameter — and the minor axis is 0.577 of the major. A line not along an axis is not true length: measure its axis components |
+| **Dimetric / trimetric** | lengths along each axis, each at its own scale | calibrate each axis on a known length along it |
+| **Oblique** (cavalier / cabinet) | the front face, true | the receding axis is ×1 (cavalier) or ×0.5 (cabinet) |
+| **Perspective** (a photo, a perspective render) | only lengths in one plane facing the camera, near the known length used to calibrate them | everything else is an estimate: widen its tolerance, and ask for a drawing or a square-on photo if the dimension matters |
+
+A **multi-view drawing** says where each view is by its projection symbol, and
+the two conventions put the same views in opposite places:
+
+- **third-angle** (ANSI, North America): the top view *above* the front, the
+  right-side view to its *right*;
+- **first-angle** (ISO, most of Europe and Asia): the top view *below* the
+  front, the right-side view to its *left*.
+
+Identify it from the symbol in the title block, or from the geometry — a
+feature visible in one view must line up with it in the next — before mapping
+any view to a `--view` name. A drawing read in the wrong convention is mirrored,
+not obviously wrong.
+
+## 6. Author the candidate
+
+Choose a representation:
 
 | Kind | Good for |
 | --- | --- |
 | `build123d` | parametric 2D sketches (recommended default) |
 | `cadquery` | fluent 2D sketching |
-| `dxf` | a DXF outline |
-| `svg` | an SVG outline |
-| `basic` | simple primitive-based sketches |
+| `basic` | one circle, square, rectangle or slot, with holes of the same |
+| `dxf` | an outline that already is a DXF |
+| `svg` | an outline that already is an SVG (see §4.2 for its scale) |
 
-## 4. Author and register
+Write it so that iterating is changing one number:
 
-Write the sketch file first, then register it:
+- **One named constant per row of the table**, called what the table calls it,
+  and every coordinate computed from them from the datum the table names:
+  a hole "8 from the left edge" is at `-WIDTH / 2 + HOLE_INSET_X`, not at a
+  number worked out by hand.
+- **Radius or diameter, every time.** build123d's `Circle` and `Hole` and a
+  `basic` sketch's `circle:` take a *radius*; a drawing's Ø is a diameter.
+- **Centred or cornered.** build123d centres `Rectangle` and its siblings unless
+  told otherwise (`align=`); a `basic` slot is placed by the centre of its first
+  rounded end, and its `length` is over the ends.
+- Python scripts import everything they use (including `math` and the library
+  itself), expose the result with `show_object(<sketch>)`, and export nothing.
 
-```sh
-pc add sketch <kind> <name>.<ext>       # e.g. pc add sketch build123d profile.py
-```
-
-- **build123d / cadquery (Python):** import everything you use (including `math`
-  and the library itself); expose the 2D result with `show_object(<sketch>)`; do
-  not export anything.
-- **dxf / svg:** write the outline file directly.
-
-Record the description in the sketch's `desc:` in `partcad.yaml`. If you started
-the project with `pc init`, delete the empty null sections it leaves.
-
-## 5. Render, compare, and iterate
-
-Rendering is the build gate. Sketches render to SVG:
+Register it — the script first, then:
 
 ```sh
-mkdir -p /tmp/pc-render                          # the -O directory must already exist
-pc render -t svg -O /tmp/pc-render <name>        # writes /tmp/pc-render/<name>.svg
+pc --no-ansi add sketch --desc "<the description>" build123d <name>.py
 ```
 
-View `/tmp/pc-render/<name>.svg` and compare it against the description — the
-outline and every stated dimension. Fix any error or mismatch, then re-render.
-Iterate until it is right.
+(`basic` has no file: write its declaration into `partcad.yaml` by hand.) Then
+make the test render exact, and write the table down:
 
-## 6. Finalize
+```yaml
+sketches:
+  <name>:
+    type: build123d
+    path: <name>.py
+    desc: <the description>
+    render:
+      svg:
+        reproducible: true     # curves drawn as themselves; cheap for a sketch
+    requirements:
+      features:                # the dimension table, one feature per dimension
+        width: 100 mm overall, left edge to right edge
+        hole-pattern: Four Ø5 holes, centres 8 mm in from each edge (pitch 84 × 44)
+```
 
-Summarize what you drew — key dimensions and assumptions — and how to view it:
-`pc ide view <name>`.
+If you started the project with `pc init`, delete the empty null sections it
+leaves.
+
+## 7. Test render, and measure the candidate
+
+```sh
+mkdir -p /tmp/pc-sketch/<name>/1                          # one directory per iteration
+pc --no-ansi render -t svg -O /tmp/pc-sketch/<name>/1 <name>
+python3 <this skill's directory>/measure.py svg /tmp/pc-sketch/<name>/1/<name>.svg
+pc --no-ansi info <name> 2>&1                              # BoundingBox: the kernel's extent
+```
+
+A name with a `/` in it is written into that subdirectory of `-O`
+(`bracket/dims-front` → `<dir>/bracket/dims-front.svg`).
+
+Measure **the same dimensions, between the same features**, as the table says
+the targets were measured — and the extent against `pc info` too. Then look at
+the SVG as well: the numbers say whether each dimension is right, and only
+looking says that every feature is there and nothing else is. When the targets
+came from a picture, render a PNG of the candidate beside it and compare the
+two by eye; measure the candidate in its SVG all the same — it is exact, and
+the picture was the uncertain one.
+
+## 8. Compare, and iterate with the error
+
+Extend the table with what was measured:
+
+| Dimension | Target | Measured | Error | Tolerance | |
+| --- | --- | --- | --- | --- | --- |
+| width | 100 | 100.000 | 0.000 | ±0.01 | ok |
+| hole Ø | 5 | 10.000 | +5.000 | ±0.01 | **out** |
+| hole inset x | 8 | 5.500 | −2.500 | ±0.01 | **out** |
+
+Every error within its tolerance: done. Otherwise the error says what to change,
+and its pattern says where to look:
+
+- **Every error in proportion** (each one the same ratio of its target): a
+  scale — inches, a radius taken for a diameter (×2), an isometric factor
+  (0.8165, 1.2247), an SVG's page scale, a wrong calibration.
+- **The same offset on every position along one axis:** a datum — centred
+  instead of cornered, measured from the other edge, a slot placed by its
+  middle instead of its first end.
+- **One dimension out:** its constant. A dimension that moves one-for-one with
+  its constant is corrected by the error itself (new = old − error); one that
+  does not (a diameter set by a radius moves 2:1, a pitch set by an inset moves
+  −2:1) is corrected by the error divided by that ratio.
+
+Correct, re-render into the next iteration's directory, and measure again —
+keeping each iteration's table, so the history says what each change did. No
+fixed number of rounds; but **if one dimension is still out after two
+corrections, stop nudging it**: the model of how it depends on the constants is
+wrong. Work it out again, or measure it some other way.
+
+If the targets cannot all be met — they disagree with each other, or one of them
+was measured wrong — say so with the numbers rather than splitting the
+difference. Measure the reference again before blaming it, and when it was the
+reference, correct the table and say that you did.
+
+## 9. Temporary sketches: the dimension study
+
+`/pc:gen-part` and `/pc:gen-assembly` run §3–§8 before they model, on sketches
+that exist to settle numbers:
+
+- **One per view that carries dimensions** — usually `front`, `top` and
+  `right` for a part; the footprint (`top`) and an elevation (`front`) for an
+  assembly's placements. Each is drawn in that view's picture coordinates
+  (§4, *The views*), so its numbers are the ones the part's or assembly's own
+  projection in that view must measure.
+- **Named after what they are for:** `<object>/dims-<view>` (`bracket/dims-front`,
+  `gearbox/layout-top`). A file at that path declares the sketch under that
+  name — `pc add sketch build123d bracket/dims-front.py`, run in the package's
+  directory, adds `bracket/dims-front` — and it gets
+  `render: svg: reproducible: true` like any other (§6).
+- **What a study produces is the validated table**, which the part script or
+  the ASSY is written from, and against which the result is measured again.
+
+When the work is finished, a temporary sketch that nothing is built from is
+removed — its declaration and its file — unless the user wants it kept. One
+that a part *is* built from (`type: extrude`, `type: sweep`) is no longer
+temporary: keep it, and give it a `desc:` that says what it is.
+
+## 10. Finalize
+
+Report the sketch and the final dimension table — target, measured, error and
+tolerance for every dimension, and the uncertainty of every measured target —
+how many iterations it took and what each correction was, every assumption, and
+how to view it: `pc ide view -s <name>`.

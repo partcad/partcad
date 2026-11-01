@@ -1,6 +1,6 @@
 ---
 name: gen-assembly
-description: Generate a PartCAD assembly (an ASSY that composes parts with placement and/or mates) from a description, writing down what it is required to be, generating or reusing the component parts and validating the result with the PartCAD CLI. Use for /pc:gen-assembly or when the user asks to generate or create an assembly, mechanism, or multi-part product.
+description: Generate a PartCAD assembly (an ASSY that composes parts with placement and/or mates) from a description, writing down what it is required to be, generating or reusing the component parts, settling the placements on temporary layout sketches that /pc:gen-sketch measures and validates, and validating the result with the PartCAD CLI - including measuring the placements again on the assembly's own projections. Use for /pc:gen-assembly or when the user asks to generate or create an assembly, mechanism, or multi-part product.
 ---
 
 # pc:gen-assembly
@@ -17,6 +17,12 @@ pipeline — this capability is new.
 spatial/mechanical relationships between them: which parts, how many of each, and
 how they attach to or move relative to one another. Clarify only load-bearing
 ambiguities.
+
+Where the components go is a set of dimensions as much as a part's size is:
+the gap between two parts, the pitch of a row of them, how high a shelf sits,
+how far a bracket stands in from an edge. Note every one the description or a
+reference gives; §3 settles them on sketches before any of them becomes a
+`location:`.
 
 Keep apart what the *product* is required to be — what it does, what it mounts
 to, how heavy it may be, what it must be made of or assembled with — from the
@@ -44,6 +50,35 @@ the material it is made of (`/pc:gen-part` §5): the assembly's mass is its
 parts' added up, and a part with none is simply left out of the sum.
 
 ## 3. Author the ASSY
+
+### First, lay the placements out on sketches
+
+Before writing any placement, run `/pc:gen-sketch` §3–§8 on **layout
+sketches** (its §9): `<name>/layout-top`, the footprint, and an elevation —
+`<name>/layout-front` or `<name>/layout-right` — for whichever views carry the
+placements the description, a reference picture or a model of the product gives.
+
+- **The targets are the placement dimensions** — centre to centre, the gap
+  between two faces, an offset from the base, a height — with their source and
+  the two features each is measured between. Normalize the input as
+  `/pc:gen-sketch` §4 says: a photo of the product is a 3D projection, a STEP of
+  the whole of it is projected with `pc adhoc render part`.
+- **Draw each component as its outline in that view**, or at least its box:
+  `pc --no-ansi info <part>` gives its `BoundingBox`, and the box is drawn where
+  the part's *origin* is going, turned the way its `location:` will turn it. A
+  part whose box starts at (−5, −5, 0) and whose origin goes to (40, 20) is a
+  rectangle from (35, 15). Then the position the layout validates for each
+  component *is* its `location:`, not a number to be worked out again.
+- Render, measure the gaps and pitches between the outlines with `measure.py`
+  (in the `/pc:gen-sketch` skill's directory), and iterate until every one is
+  within tolerance. Write the `location:` values
+  from the layout's constants.
+
+A layout is worth drawing even where the components end up joined by
+`connect:` (§5): the connected result has to land where the layout says, and §6
+measures that it does.
+
+### Then write the ASSY
 
 Scaffold (this creates the empty file and the `assemblies:` entry), then write
 `<name>.assy`:
@@ -480,7 +515,7 @@ against the decomposition from §1:
 
 - every component is there, as many times as it should be, and nothing else is;
 - each one is where it belongs in all three axes — a placement is only confirmed
-  by two views that share no viewing direction;
+  by two views that share no viewing direction, and by measuring it (below);
 - each one is oriented as it belongs, including where a symmetric part hides it:
   a flipped bracket reads the same from the front and differs from the top;
 - nothing interpenetrates that should not, and nothing floats where it should
@@ -491,8 +526,34 @@ all four, and `--viewport-origin X,Y,Z` / `--viewport-up X,Y,Z` to look along a
 joint no named view shows. `/pc:render` covers these options in full.
 
 Where a component is in the wrong place and the ASSY uses `connect:` rather
-than `location:`, the views tell you *that* it is wrong; the next section tells
-you *why*.
+than `location:`, the views tell you *that* it is wrong; *When a connection
+comes out wrong*, below, tells you *why*.
+
+### Measure the placements
+
+The PNGs show where things are; the layout's numbers are measured. Render the
+views the layout covered as SVG and measure them with `measure.py`, in the
+`/pc:gen-sketch` skill's directory:
+
+```sh
+for view in top front; do
+  mkdir -p /tmp/pc-render/svg/$view
+  pc --no-ansi render -t svg --view $view -O /tmp/pc-render/svg/$view <name>
+  python3 <the /pc:gen-sketch skill's directory>/measure.py svg /tmp/pc-render/svg/$view/<name>.svg
+done
+```
+
+A whole assembly is a crowded drawing. To measure between two components,
+render only those two — `--filter '[<a>, <b>]'` (`/pc:render` §8), into a
+directory of its own — so every edge measured is attributable to one of them.
+The walk above gives each part's position exactly; compare those with the
+layout's origin positions as well. The projection is what measures a *gap*,
+which depends on the parts' shapes as much as on where they are.
+
+Every row of the layout's table has to be within its tolerance on the
+assembly. One that is not is a placement to correct from the error, the way
+`/pc:gen-sketch` §8 reads it — and, under `connect:`, a port in the wrong place
+on a part (the next section) rather than a number to adjust in the ASSY.
 
 ### When a connection comes out wrong
 
@@ -728,12 +789,16 @@ pc --no-ansi test <name>            # runs the same claims as its `sim` check
 
 ## 8. Finalize
 
-Summarize the structure — parts, sub-assemblies, key placements, total mass and
-what `pc sim` found — and how to view it (`pc ide view <name>`, which under an
+Summarize the structure — parts, sub-assemblies, key placements with the
+layout's table (target, measured on the assembly, error), total mass and what
+`pc sim` found — and how to view it (`pc ide view <name>`, which under an
 IDE is what is already on screen, or `pc render -t png --with-all <name>` for a
 picture with the connection metadata on it). Offer `/pc:validate <name>` (an
 assembly) for a verdict on every requirement, the features included: it reads
 the bill of materials and the assembly instructions as well as the renders.
+
+Remove the layout sketches — their declarations and their files
+(`/pc:gen-sketch` §9) — unless the user wants them kept.
 
 Say what is still placed by coordinates and why, one reason per case. "The rest
 use `location:`" tells the next reader nothing; "these four sit where nothing

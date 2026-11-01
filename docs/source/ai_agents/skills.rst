@@ -86,10 +86,17 @@ Generating geometry
      ("four M3 holes on a 40 mm square") rather than in terms of the model it is
      about to build. Requirements written afterwards describe the design, and
      then everything meets them.
-  3. It authors and registers the script, then validates it with ``pc test``.
-  4. It renders the part **from several angles and compares each view against
-     the description**, because a single projection hides whatever is behind it
-     -- then iterates on what the comparison found.
+  3. **It settles the dimensions in 2D before any geometry**: it runs
+     ``/pc:gen-sketch`` on a temporary sketch of each view that carries
+     dimensions, and iterates each until its measured dimensions match the ones
+     stated, derived or measured from the reference. A part that is one constant
+     profile is then simply an extrusion of the sketch that was validated.
+  4. It authors and registers the script from those numbers, then validates it
+     with ``pc test``.
+  5. It renders the part **from several angles and compares each view against
+     the description**, because a single projection hides whatever is behind it,
+     and **measures the same dimensions again on the part's own projections** --
+     then iterates on what the comparison found.
 
   When the PartCAD IDE (or VS Code with the PartCAD extension) is running beside
   the agent, every version of the part that builds and renders is also shown in
@@ -103,7 +110,10 @@ Generating geometry
   Models an assembly, and is the longest of the skills because putting things
   together is where the hard-won rules live. It decomposes the request, takes an
   inventory of parts that already exist and generates only what is missing,
-  authors the ``.assy``, and groups whatever repeats into sub-assemblies.
+  settles the placements on temporary layout sketches (a footprint and an
+  elevation, measured like any other sketch), authors the ``.assy`` from them,
+  and groups whatever repeats into sub-assemblies. The finished assembly's
+  projections are measured against the same layout.
 
   Its last step is the valuable one: it **replaces the coordinates it started
   with by connections**, so the assembly ends up saying what holds each item
@@ -121,10 +131,26 @@ Generating geometry
   and renders, all on one continuous turn of the 3D view.
 
 ``/pc:gen-sketch``
-  Authors a 2D sketch -- build123d, CadQuery, DXF, SVG or a basic outline -- and
-  validates it by rendering it to SVG and comparing that against the
-  description. Sketches are what parts are extruded and swept from, and what a
-  port's boundary is drawn with.
+  Authors a 2D sketch -- build123d, CadQuery, DXF, SVG or a basic outline --
+  whose dimensions are **measured rather than estimated**. Whatever it is given
+  becomes a 2D drawing it can measure: a description is written down as a table
+  of target dimensions; a DXF or SVG file is re-rendered the way PartCAD reads
+  it; a 3D description becomes a throwaway part that ``pc adhoc render``
+  projects, and so does a 3D file; a drawing or a photo is measured in pixels,
+  with the projection it was drawn in -- orthographic in first or third angle,
+  isometric, oblique, perspective -- taken into account.
+
+  Then it draws a candidate, renders it, and measures the same dimensions on the
+  rendering with the helper it ships beside itself, ``measure.py``, which reads
+  a PartCAD SVG render as the millimetres it is made of (and fits the polygons
+  the default projection draws curves as). Every dimension is compared, as a
+  number, with its target and tolerance, and the sketch is corrected from the
+  error until none is out.
+
+  ``/pc:gen-part`` and ``/pc:gen-assembly`` run the same loop first, on
+  temporary sketches, to settle a part's dimensions and an assembly's placements
+  before they model anything. Sketches are also what parts are extruded and
+  swept from, and what a port's boundary is drawn with.
 
 ``/pc:add-interfaces``
   Adds ``interfaces``, ports and ``implements:`` to a part that has none, so that
