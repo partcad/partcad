@@ -240,7 +240,11 @@ The plugin folder is named `claude`, but the command namespace comes from
   then a candidate is drawn, rendered, measured with the bundled `measure.py`
   (which reads PartCAD's SVG renders as the millimetres they are made of, and
   raster pictures along scan lines), and corrected from the error until every
-  dimension is within tolerance. `/pc:gen-part` and `/pc:gen-assembly` run the
+  dimension is within tolerance. Every size is read off both of PartCAD's
+  projections — `reproducible:` true and false, which draw one geometry as
+  different shapes and different numbers of them (one arc or several, an arc or
+  a run of short lines) — taken through a temporary `<name>/exact` alias, and
+  `measure.py compare` reads the two against each other. `/pc:gen-part` and `/pc:gen-assembly` run the
   same loop first, on temporary sketches. `measure.py` is the second helper the
   library ships beside a `SKILL.md`, after `part_loads.py`;
   `tests/partcad/unit/test_skill_measure.py` holds it to hand-worked drawings.

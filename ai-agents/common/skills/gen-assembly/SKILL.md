@@ -69,9 +69,10 @@ placements the description, a reference picture or a model of the product gives.
   part whose box starts at (−5, −5, 0) and whose origin goes to (40, 20) is a
   rectangle from (35, 15). Then the position the layout validates for each
   component *is* its `location:`, not a number to be worked out again.
-- Render, measure the gaps and pitches between the outlines with `measure.py`
-  (in the `/pc:gen-sketch` skill's directory), and iterate until every one is
-  within tolerance. Write the `location:` values
+- Render with both projections, reconcile them and measure the gaps and
+  pitches between the outlines with `measure.py` (in the `/pc:gen-sketch`
+  skill's directory; its §5.2 and §7), and iterate until every one is within
+  tolerance. Write the `location:` values
   from the layout's constants.
 
 A layout is worth drawing even where the components end up joined by
@@ -546,6 +547,29 @@ done
 A whole assembly is a crowded drawing. To measure between two components,
 render only those two — `--filter '[<a>, <b>]'` (`/pc:render` §8), into a
 directory of its own — so every edge measured is attributable to one of them.
+Render that pair with both of PartCAD's projections and reconcile them, as
+`/pc:gen-sketch` §5.2 says, through a temporary exact alias of the assembly. A
+pair at a time is also what keeps the exact projection cheap: on a whole large
+assembly it takes minutes and can fail outright.
+
+```yaml
+assemblies:
+  <name>/exact:                    # temporary: the assembly, projected exactly
+    type: alias
+    source: :<name>
+    render:
+      svg:
+        reproducible: true
+```
+
+```sh
+D=/tmp/pc-render/svg/top-<a>-<b>
+mkdir -p $D
+pc --no-ansi render -t svg --view top -O $D --filter '[<a>, <b>]' <name>
+pc --no-ansi render -t svg --view top -O $D --filter '[<a>, <b>]' <name>/exact
+python3 <the /pc:gen-sketch skill's directory>/measure.py compare $D/<name>/exact.svg $D/<name>.svg
+```
+
 The walk above gives each part's position exactly; compare those with the
 layout's origin positions as well. The projection is what measures a *gap*,
 which depends on the parts' shapes as much as on where they are.
@@ -797,8 +821,9 @@ picture with the connection metadata on it). Offer `/pc:validate <name>` (an
 assembly) for a verdict on every requirement, the features included: it reads
 the bill of materials and the assembly instructions as well as the renders.
 
-Remove the layout sketches — their declarations and their files
-(`/pc:gen-sketch` §9) — unless the user wants them kept.
+Remove the layout sketches — their declarations, their files and their exact
+aliases (`/pc:gen-sketch` §9) — and the assembly's `<name>/exact` alias (§6),
+unless the user wants them kept.
 
 Say what is still placed by coordinates and why, one reason per case. "The rest
 use `location:`" tells the next reader nothing; "these four sit where nothing

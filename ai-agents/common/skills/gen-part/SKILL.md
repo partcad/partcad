@@ -88,8 +88,9 @@ always — and even when none of the sketches will be used to build it.
    requirements of §5 say what the user asked for in their words.
 3. **Draw a temporary sketch per view that carries dimensions** —
    `<name>/dims-front`, `<name>/dims-top`, `<name>/dims-right`, each in that
-   view's picture coordinates — render each, measure it with `measure.py`, and
-   iterate until every row of the table is within tolerance.
+   view's picture coordinates — render each with both projections, reconcile
+   them and measure with `measure.py` (`/pc:gen-sketch` §5.2, §7), and iterate
+   until every row of the table is within tolerance.
 
 What comes out is the validated table: the source of every number the part is
 built from (§5), and what its own projections are measured against (§7).
@@ -323,14 +324,32 @@ an arbitrary direction. `/pc:render` covers these options in full.
 ### Measure the dimensions on the part
 
 The PNGs show the shape. The numbers are measured the way the sketches' were:
-render the views the study covered as SVG, and measure them with `measure.py`,
-which is in the `/pc:gen-sketch` skill's directory:
+render the views the study covered as SVG with **both** of PartCAD's
+projections, and measure them with `measure.py`, which is in the
+`/pc:gen-sketch` skill's directory. The two draw one part as different shapes
+and different numbers of them — an arc as one curve or as a run of short lines,
+an edge whole or broken — so a reading only one supports is not a reading of
+the part (`/pc:gen-sketch` §5.2 says how to read `compare`). The exact one comes
+from a temporary alias, so the part's own declaration is not touched:
+
+```yaml
+parts:
+  <name>/exact:                    # temporary: the part, projected exactly
+    type: alias
+    source: :<name>
+    render:
+      svg:
+        reproducible: true
+```
 
 ```sh
 for view in front top right; do
-  mkdir -p /tmp/pc-render/svg/$view
-  pc --no-ansi render -t svg --view $view -O /tmp/pc-render/svg/$view <name>
-  python3 <the /pc:gen-sketch skill's directory>/measure.py svg /tmp/pc-render/svg/$view/<name>.svg
+  D=/tmp/pc-render/svg/$view
+  mkdir -p $D
+  pc --no-ansi render -t svg --view $view -O $D <name>          # polygonal: $D/<name>.svg
+  pc --no-ansi render -t svg --view $view -O $D <name>/exact    # exact:     $D/<name>/exact.svg
+  python3 <the /pc:gen-sketch skill's directory>/measure.py compare $D/<name>/exact.svg $D/<name>.svg
+  python3 <the /pc:gen-sketch skill's directory>/measure.py svg $D/<name>/exact.svg
 done
 pc --no-ansi info <name> 2>&1      # BoundingBox: the overall size, from the kernel
 ```
@@ -389,9 +408,10 @@ error), material and mass, and assumptions — and how to view it: `pc ide view 
 on screen (§7). Offer `/pc:validate <name>` for a verdict on every requirement,
 the features included.
 
-Remove the temporary sketches the part is not built from — their declarations
-and their files (`/pc:gen-sketch` §9) — unless the user wants them kept; keep,
-and describe, the one an `extrude` or `sweep` part is built from.
+Remove the temporary sketches the part is not built from — their declarations,
+their files and their exact aliases (`/pc:gen-sketch` §9) — and the part's own
+`<name>/exact` alias (§7), unless the user wants them kept; keep, and describe,
+the sketch an `extrude` or `sweep` part is built from.
 
 If the description claims something physical of the part on its own — it rests
 without rolling, it floats — declare that claim as a `simulate:` and check it

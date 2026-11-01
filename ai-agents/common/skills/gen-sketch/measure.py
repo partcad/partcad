@@ -13,6 +13,8 @@ dimension and a candidate's dimension are compared as numbers:
 
     python measure.py svg <drawing.svg> [--layer NAME]... [--all-layers] [--tolerance T]
                           [--digits N] [--limit N] [--json]
+    python measure.py compare <first.svg> <second.svg> [--layer NAME]... [--agreement A]
+                              [--digits N] [--json]
     python measure.py image <picture.png> [--row Y]... [--column X]... [--no-bbox]
                             [--crop X0,Y0,X1,Y1] [--threshold N] [--background R,G,B]
                             [--px-per-mm K | --calibrate PX=MM] [--json]
@@ -20,10 +22,11 @@ dimension and a candidate's dimension are compared as numbers:
 `svg` reads an SVG -- written for what `pc render -t svg` and `pc adhoc render
 ... x.svg` write, and good for any other SVG too -- and reports, in the drawing's
 own units with Y up: the extent; every circle (diameter and centre); every arc
-(radius, centre, sweep); every ellipse (both diameters, centre, angle); the
-vertical and horizontal edges, grouped by the X or Y they stand at, with what
-they span; the other straight edges; and any closed outline nothing else
-explains. Positions are also given from the left and from the bottom of the
+(radius, centre, sweep), its pieces put together; every ellipse (both
+diameters, centre, angle); the vertical and horizontal edges, grouped by the X
+or Y they stand at, with what they span; the other straight edges, each one
+however many pieces it was drawn in; the splines (curves drawn as Bezier
+curves); and any closed outline nothing else explains. Positions are also given from the left and from the bottom of the
 extent, because where a projection puts its origin depends on the hidden-line
 algorithm that drew it, and a distance between two features does not. The page
 size the file declares is reported beside them, since that -- not the units --
@@ -32,7 +35,11 @@ is the scale PartCAD's `svg` sketch type reads a file at.
 In a PartCAD render the units are millimetres of the plane of the view: the
 numbers in the file are the model's, and only the `scale(1,-1)` on the outer
 group (and the page size on `<svg>`) is about display. A circle the polygonal
-projection drew as a polygon is recognized and fitted, and said to be fitted.
+projection drew as a polygon is recognized and fitted, and said to be fitted --
+an ellipse too, and an arc the hidden-line algorithm cut on a chord; a
+silhouette, which that projection works out from the triangulation and so draws
+only near the curve, is taken as more of the curve whose edge it carries on, or
+as an approximate one, and said to be.
 Only the `Visible*` layers are read when there are any, so the ports, interfaces
 and annotations an overlay adds are not mistaken for geometry.
 
@@ -47,8 +54,16 @@ isometric, a perspective photograph -- is the skill's to say, not this script's.
 Pixel coordinates are the image's own: X to the right, Y down, from the top-left
 corner.
 
-Both print text by default and JSON with `--json`. Nothing but the standard
-library is needed for `svg`.
+`compare` reads two SVGs of one object -- in particular the same view rendered
+with `reproducible: true` and without it, which draw the same geometry as
+different shapes and different numbers of them -- and pairs every feature of
+one with the nearest of its kind in the other: it reports each pair that
+differs by more than the agreement (5e-4 of the size by default, the polygonal
+projection's own error), and each feature only one of them has. It exits 1
+when they disagree.
+
+All three print text by default and JSON with `--json`. Nothing but the
+standard library is needed for `svg` and `compare`.
 """
 
 import argparse
@@ -192,8 +207,10 @@ MAX_ARC_TURN = math.radians(31.0)
 # Fewest segments a polygon has to have for it to be read as a whole circle.
 MIN_CIRCLE_SEGMENTS = 12
 
-# Fewest vertices a polygonized arc is fitted through.
+# Fewest vertices a polygonized arc is fitted through: a circle needs three to
+# be any circle at all, an ellipse five; one more, so that the fit is a test.
 MIN_ARC_VERTICES = 4
+MIN_ELLIPSE_VERTICES = 6
 
 CURVE_SAMPLES = 24
 
@@ -203,18 +220,12 @@ class Drawing:
 
     def __init__(self):
         self.segments = []  # [(p, q, straight)]: lines, and the polylines curves were sampled into
-        self.ellipses = []  # [{"center", "major", "minor", "angle", "arc": None | (start, end, sweep)}]
+        self.conics = []  # every circle, ellipse and arc of either, as _conic() records them
         self.points = []  # every point the extent has to cover
         self.layers = set()
         self.read = set()
         self.page = None
         self.rounding = None  # half the last decimal place the file's numbers are written to
-
-
-def _ellipse_point(center, rx, ry, rotation, t):
-    cos, sin = math.cos(rotation), math.sin(rotation)
-    x, y = rx * math.cos(t), ry * math.sin(t)
-    return (center[0] + x * cos - y * sin, center[1] + x * sin + y * cos)
 
 
 def _add_conic(drawing, transform, center, rx, ry, rotation, t0=0.0, dt=2.0 * math.pi):
@@ -226,22 +237,57 @@ def _add_conic(drawing, transform, center, rx, ry, rotation, t0=0.0, dt=2.0 * ma
         (m00 * cos * rx + m01 * sin * rx, -m00 * sin * ry + m01 * cos * ry),
         (m10 * cos * rx + m11 * sin * rx, -m10 * sin * ry + m11 * cos * ry),
     )
-    major, minor, angle = singular(shape)
-    count = max(8, int(math.ceil(CURVE_SAMPLES * abs(dt) / (2.0 * math.pi))) * 4)
-    samples = [
-        transform.point(*_ellipse_point(center, rx, ry, rotation, t0 + dt * i / count)) for i in range(count + 1)
-    ]
-    drawing.points.extend(samples)
     full = abs(abs(dt) - 2.0 * math.pi) < 1e-9
-    arc = None
-    if not full:
-        start, middle, end = samples[0], samples[count // 2], samples[-1]
-        # Which way it runs once mapped: a mirror reverses it.
-        direction = 1.0 if (shape[0][0] * shape[1][1] - shape[0][1] * shape[1][0]) * dt > 0 else -1.0
-        arc = {"start": start, "middle": middle, "end": end, "sweep": math.degrees(abs(dt)) * direction}
-    drawing.ellipses.append(
-        {"center": transform.point(*center), "major": major, "minor": minor, "angle": angle, "arc": arc}
-    )
+    drawing.conics.append(_conic(transform.point(*center), shape, t0, None if full else dt))
+
+
+def _conic(center, shape, t0=0.0, dt=None, fit=None):
+    """One circle, ellipse, or arc of either: the points center + shape * (cos t, sin t), t from t0 through dt.
+
+    'shape' is a 2x2 matrix, so a circle, an ellipse and either one mapped
+    through any transform are all the same record; 'dt' is None for a whole
+    one. 'fit' says how a fitted one was fitted, and is None for one the file
+    drew as a curve.
+    """
+    major, minor, angle = singular(shape)
+    return {
+        "center": center,
+        "shape": shape,
+        "t0": t0,
+        "dt": dt,
+        "major": major,
+        "minor": minor,
+        "angle": angle,
+        "fit": fit,
+    }
+
+
+def _conic_point(conic, t):
+    (a00, a01), (a10, a11) = conic["shape"]
+    c = conic["center"]
+    return (c[0] + a00 * math.cos(t) + a01 * math.sin(t), c[1] + a10 * math.cos(t) + a11 * math.sin(t))
+
+
+def _conic_extremes(conic):
+    """The points of a conic farthest left, right, down and up -- within its arc -- and the ends of the arc.
+
+    Exact, where a polygon's vertices or a curve's samples only come close: they
+    are what the extent is measured to, so that a circle drawn as a polygon and
+    the same circle drawn as itself give the drawing one size.
+    """
+    (a00, a01), (a10, a11) = conic["shape"]
+    candidates = []
+    for t in (math.atan2(a01, a00), math.atan2(a11, a10)):
+        candidates.extend((t, t + math.pi))
+    t0, dt = conic["t0"], conic["dt"]
+    if dt is None:
+        return [_conic_point(conic, t) for t in candidates]
+    inside = []
+    for t in candidates:
+        along = (t - t0) % (2.0 * math.pi) if dt > 0 else (t0 - t) % (2.0 * math.pi)
+        if along <= abs(dt):
+            inside.append(t)
+    return [_conic_point(conic, t) for t in inside + [t0, t0 + dt]]
 
 
 def _arc_center(p0, p1, rx, ry, rotation, large, sweep):
@@ -530,10 +576,14 @@ def chains(segments, tolerance):
     snap = Points(tolerance)
     edges = []
     neighbours = {}
-    for p, q, _straight in segments:
+    seen = set()
+    for p, q, *_ in segments:
         a, b = snap.key(p), snap.key(q)
-        if a == b:
+        # The exact projection can draw one edge twice (a chamfer seen edge on
+        # is one), and a second copy is not a second edge.
+        if a == b or (min(a, b), max(a, b)) in seen:
             continue
+        seen.add((min(a, b), max(a, b)))
         edges.append((a, b))
         neighbours.setdefault(a, []).append(len(edges) - 1)
         neighbours.setdefault(b, []).append(len(edges) - 1)
@@ -590,23 +640,182 @@ def straighten(points, closed, tolerance):
     return kept
 
 
-def _fits(fit, tolerance):
-    """Whether a fitted circle is what the polygon was drawn from, rather than a curve that is merely round.
+def _fits(residual, size, tolerance):
+    """Whether a fitted curve is what the polygon was drawn from, rather than a curve that is merely close.
 
-    A polygon the projection drew from a circle has every vertex on the circle,
-    to the rounding of the numbers the file was written with ('tolerance' here);
-    a polygon drawn from an ellipse or a spline does not, and a circle through
-    it is a guess. Never looser than a thousandth of the radius, for a file
-    written with so few decimals that its rounding says nothing.
+    A polygon the projection drew from a circle or an ellipse has every vertex
+    on it, to the rounding of the numbers the file was written with
+    ('tolerance' here); a polygon drawn from a spline does not, and a curve
+    through it is a guess. Never looser than a thousandth of the curve's size,
+    for a file written with so few decimals that its rounding says nothing.
     """
-    return fit is not None and fit[2] <= min(tolerance, 1e-3 * fit[1])
+    return residual <= min(tolerance, 1e-3 * size)
+
+
+def _solve(matrix, vector):
+    """'matrix' x = 'vector' by Gaussian elimination with partial pivoting, or None when it is singular."""
+    n = len(vector)
+    rows = [list(row) + [vector[i]] for i, row in enumerate(matrix)]
+    for column in range(n):
+        pivot = max(range(column, n), key=lambda r: abs(rows[r][column]))
+        if abs(rows[pivot][column]) < 1e-300:
+            return None
+        rows[column], rows[pivot] = rows[pivot], rows[column]
+        for r in range(column + 1, n):
+            factor = rows[r][column] / rows[column][column]
+            for c in range(column, n + 1):
+                rows[r][c] -= factor * rows[column][c]
+    solution = [0.0] * n
+    for r in reversed(range(n)):
+        solution[r] = (rows[r][n] - sum(rows[r][c] * solution[c] for c in range(r + 1, n))) / rows[r][r]
+    return solution
+
+
+def fit_ellipse(points):
+    """The least-squares conic through 'points', when it is an ellipse.
+
+    As ((cx, cy), semi-major, semi-minor, angle of the major axis in radians,
+    worst residual), the residual being each point's first-order (Sampson)
+    distance from the ellipse; None when the conic is not an ellipse.
+    """
+    n = len(points)
+    if n < 6:
+        return None
+    mx = sum(p[0] for p in points) / n
+    my = sum(p[1] for p in points) / n
+    scale = max(max(abs(p[0] - mx), abs(p[1] - my)) for p in points) or 1.0
+    rows = []
+    for x, y in points:
+        u, v = (x - mx) / scale, (y - my) / scale
+        rows.append((u * u, u * v, v * v, u, v))
+    normal = [[sum(row[i] * row[j] for row in rows) for j in range(5)] for i in range(5)]
+    solution = _solve(normal, [sum(row[i] for row in rows) for i in range(5)])
+    if solution is None:
+        return None
+    # a u^2 + b uv + c v^2 + d u + e v = 1, in the centred and scaled coordinates.
+    a, b, c, d, e = solution
+    det = 4.0 * a * c - b * b
+    if det <= 0:
+        return None
+    u0 = (b * e - 2.0 * c * d) / det
+    v0 = (b * d - 2.0 * a * e) / det
+    k = 1.0 - (a * u0 * u0 + b * u0 * v0 + c * v0 * v0 + d * u0 + e * v0)
+    mean, spread = (a + c) / 2.0, math.hypot((a - c) / 2.0, b / 2.0)
+    low, high = mean - spread, mean + spread
+    if k <= 0 or low <= 0:
+        return None
+    major, minor = math.sqrt(k / low) * scale, math.sqrt(k / high) * scale
+    angle = 0.5 * math.atan2(b, a - c) + math.pi / 2.0
+    center = (mx + u0 * scale, my + v0 * scale)
+    cos, sin = math.cos(angle), math.sin(angle)
+    worst = 0.0
+    for x, y in points:
+        along = (x - center[0]) * cos + (y - center[1]) * sin
+        across = -(x - center[0]) * sin + (y - center[1]) * cos
+        value = (along / major) ** 2 + (across / minor) ** 2 - 1.0
+        gradient = 2.0 * math.hypot(along / major**2, across / minor**2)
+        worst = max(worst, abs(value) / gradient if gradient else float("inf"))
+    return center, major, minor, angle, worst
+
+
+def _parameter_sweep(conic, points):
+    """Where along a conic 'points' start, and how far they run (radians, signed): its t0 and dt."""
+    (a00, a01), (a10, a11) = conic["shape"]
+    det = a00 * a11 - a01 * a10
+
+    def parameter(p):
+        x, y = p[0] - conic["center"][0], p[1] - conic["center"][1]
+        # shape^-1 * (x, y) is (cos t, sin t).
+        return math.atan2((-a10 * x + a00 * y) / det, (a11 * x - a01 * y) / det)
+
+    ts = [parameter(p) for p in points]
+    total = sum((b - a + math.pi) % (2.0 * math.pi) - math.pi for a, b in zip(ts, ts[1:]))
+    return ts[0], total
+
+
+def _sagitta(conic, point):
+    """How far a point on one of a conic's polygon chords, near 'point', can stand off the curve.
+
+    The polygonal projection ends a curve's visible piece where something hides
+    it, at a point on a chord rather than on the curve; this is how far that
+    point can be off: a chord of the polygon's longest step, on the curve's own
+    radius of curvature there -- with a factor of two to spare, and no more, so
+    that a straight edge carrying on tangent to the curve is not taken for it.
+    """
+    if not conic["fit"]:
+        return 0.0
+    a, b = conic["major"], conic["minor"]
+    t, _ = _parameter_sweep(conic, [point, point])
+    # The parameter is that of 'shape', whose axes need not be the ellipse's own;
+    # the radius of curvature only needs the angle from the major axis.
+    (a00, _a01), (a10, _a11) = conic["shape"]
+    t -= math.atan2(a10, a00) - conic["angle"]
+    radius = (a * a * math.sin(t) ** 2 + b * b * math.cos(t) ** 2) ** 1.5 / (a * b) if a and b else 0.0
+    step = conic["fit"]["step"]
+    return step * step / (4.0 * radius) if radius else 0.0
+
+
+def _fit_vertices(vertices, closed, fit_tolerance, approximate):
+    """A '_conic' record for the circle or ellipse through 'vertices', or None."""
+    circle = fit_circle(vertices)
+    if circle is not None:
+        center, radius, worst = circle
+        if _fits(worst, radius, fit_tolerance) or (approximate and worst <= 1e-3 * radius):
+            fit = {"residual": worst}
+            if not _fits(worst, radius, fit_tolerance):
+                fit["approximate"] = True
+            return _conic(center, ((radius, 0.0), (0.0, radius)), fit=fit)
+    if len(vertices) < (MIN_CIRCLE_SEGMENTS if closed else MIN_ELLIPSE_VERTICES):
+        return None
+    ellipse = fit_ellipse(vertices)
+    if ellipse is None:
+        return None
+    center, major, minor, angle, worst = ellipse
+    if not _fits(worst, major, fit_tolerance):
+        return None
+    cos, sin = math.cos(angle), math.sin(angle)
+    return _conic(center, ((major * cos, -minor * sin), (major * sin, minor * cos)), fit={"residual": worst})
+
+
+def _fitted_conic(points, closed, fit_tolerance, approximate=False):
+    """The circle or ellipse a polygonized run of 'points' was drawn from, as a '_conic' record, or None.
+
+    An open run may end at a point the hidden-line algorithm put on a chord (see
+    '_sagitta'), so when the whole run does not fit, it is fitted without its
+    end vertices, and they are taken back if they are off by no more than that.
+    """
+    vertices = points[:-1] if closed else points
+    trims = [(0, 0)] if closed else [(0, 0), (1, 0), (0, 1), (1, 1)]
+    for head, tail in trims:
+        inner = vertices[head : len(vertices) - tail]
+        if len(inner) < MIN_ARC_VERTICES:
+            continue
+        record = _fit_vertices(inner, closed, fit_tolerance, approximate)
+        if record is None:
+            continue
+        record["fit"]["segments"] = len(points) - 1
+        record["fit"]["step"] = max(distance(p, q) for p, q in zip(points, points[1:]))
+        ends = vertices[:head] + vertices[len(vertices) - tail :]
+        if any(_on_conic(record, p) > max(fit_tolerance, _sagitta(record, p)) for p in ends):
+            continue
+        if not closed:
+            record["t0"], record["dt"] = _parameter_sweep(record, points)
+        return record
+    return None
 
 
 def _arc_runs(points, closed, tolerance, fit_tolerance):
-    """Split a polyline into (arcs it was polygonized from, the segments left straight)."""
+    """Split a polyline into the circles and ellipses it was polygonized from, and what is left.
+
+    Returns (curves, straight segments, unfitted runs): an unfitted run is a
+    stretch that bends like a polygonized curve but is not on one to the file's
+    precision -- a silhouette, which the polygonal projection works out from the
+    triangulation rather than from an edge, or a spline -- and 'analyse' decides
+    what it is.
+    """
     count = len(points) - 1
     if count < 2:
-        return [], [(points[0], points[-1])] if count == 1 else []
+        return [], [(points[0], points[-1])] if count == 1 else [], []
     turns = [turn(points[i - 1], points[i], points[i + 1]) for i in range(1, count)]
     if closed:
         turns = [turn(points[-2], points[0], points[1])] + turns
@@ -616,7 +825,7 @@ def _arc_runs(points, closed, tolerance, fit_tolerance):
     lengths = [distance(points[i], points[i + 1]) for i in range(count)]
 
     def bends(i):
-        """Whether segment i and segment i-1 could be two pieces of one polygonized arc."""
+        """Whether segment i and segment i-1 could be two pieces of one polygonized curve."""
         t = turns[i % count] if closed or i > 0 else None
         if t is None or abs(t) > MAX_ARC_TURN or abs(t) < 1e-9:
             return False
@@ -626,23 +835,21 @@ def _arc_runs(points, closed, tolerance, fit_tolerance):
     if closed:
         corners = [i for i in range(count) if not bends(i)]
         if not corners:
-            signs = {t > 0 for t in turns}
-            fit = fit_circle(points[:-1]) if len(signs) == 1 and count >= MIN_CIRCLE_SEGMENTS else None
-            if _fits(fit, fit_tolerance):
-                return [{"points": points, "fit": fit, "closed": True}], []
-            # A closed curve that turns one way all round and is round to a
-            # thousandth of its radius is a circle drawn some other way -- as
-            # Bezier curves, the way most drawing programs write one -- and is
-            # said to be approximate. An open run is not given that benefit: a
-            # short piece of any smooth curve is round to that much.
-            if fit is not None and fit[2] <= 1e-3 * fit[1]:
-                return [{"points": points, "fit": fit, "closed": True, "approximate": True}], []
+            if len({t > 0 for t in turns}) == 1 and count >= MIN_CIRCLE_SEGMENTS:
+                # A closed curve that turns one way all round and is round to a
+                # thousandth of its radius is a circle drawn some other way --
+                # as Bezier curves, the way most drawing programs write one --
+                # and is said to be approximate. An open run is not given that
+                # benefit: a short piece of any smooth curve is round to that.
+                found = _fitted_conic(points, True, fit_tolerance, approximate=True)
+                if found is not None:
+                    return [found], [], []
         elif corners[0] != 0:
-            # Start at a corner, so that no arc is cut in two where the loop happens to begin.
+            # Start at a corner, so that no curve is cut in two where the loop happens to begin.
             k = corners[0]
             return _arc_runs(points[k:-1] + points[: k + 1], closed, tolerance, fit_tolerance)
 
-    arcs, straight = [], []
+    curves, straight, unfitted = [], [], []
     i = 0
     while i < count:
         j = i + 1
@@ -650,14 +857,18 @@ def _arc_runs(points, closed, tolerance, fit_tolerance):
             j += 1
         run = points[i : j + 1]
         if len(run) >= MIN_ARC_VERTICES:
-            fit = fit_circle(run)
-            if _fits(fit, fit_tolerance):
-                arcs.append({"points": run, "fit": fit, "closed": False})
+            found = _fitted_conic(run, False, fit_tolerance)
+            if found is not None:
+                curves.append(found)
+                i = j
+                continue
+            if len(run) >= MIN_ELLIPSE_VERTICES:
+                unfitted.append(run)
                 i = j
                 continue
         straight.append((points[i], points[i + 1]))
         i += 1
-    return arcs, straight
+    return curves, straight, unfitted
 
 
 def _merge_intervals(intervals, tolerance):
@@ -694,15 +905,210 @@ def _gather(items, same):
     return groups
 
 
-def _slack(a, b, tolerance):
-    """How close two arc pieces have to be to be pieces of one circle: looser for a fitted one."""
-    if a.get("fit") or b.get("fit"):
-        return max(tolerance, 1e-3 * max(a["radius"], b["radius"]))
-    return tolerance
+def _on_conic(conic, point):
+    """How far 'point' is from a conic's curve (to first order), whatever the arc."""
+    (a00, a01), (a10, a11) = conic["shape"]
+    det = a00 * a11 - a01 * a10
+    if det == 0:
+        return float("inf")
+    x, y = point[0] - conic["center"][0], point[1] - conic["center"][1]
+    u, v = (a11 * x - a01 * y) / det, (-a10 * x + a00 * y) / det
+    return abs(math.hypot(u, v) - 1.0) * conic["minor"]
 
 
-def _mean_point(points):
-    return (sum(p[0] for p in points) / len(points), sum(p[1] for p in points) / len(points))
+def _carries(conic, run, fit_tolerance):
+    """Whether every vertex of 'run' is on 'conic' -- to the polygonal projection's own error -- so it is more of it.
+
+    What a silhouette is: the outline of a sphere carrying on from the edge
+    where the sphere meets something, worked out from the triangulation and so
+    only near the curve, and often a polygon step away from the end of the arc
+    the edge gave.
+    """
+    return all(_on_conic(conic, p) <= max(fit_tolerance, _sagitta(conic, p)) for p in run)
+
+
+def _extend(conic, run):
+    """Take 'run' into a fitted curve: as more of the same arc, or as another piece of the same curve.
+
+    A run one polygon step or less from the arc's end carries the arc on -- the
+    step between them is one the polygonal projection dropped where an edge
+    turns into a silhouette. Further away, what lies between is hidden behind
+    something, and the run is a piece of its own, which is how the exact
+    projection draws it too: the curve's sweep is the pieces' added up, and the
+    hidden stretch is in none of them. Returns the new piece, or None.
+    """
+    added = len(run) - 1
+    if conic["dt"] is not None:
+        full = 2.0 * math.pi
+        direction = 1.0 if conic["dt"] > 0 else -1.0
+        length = abs(conic["dt"])
+        # The angle one step of the arc's polygon turns through, and a half more.
+        bridge = 1.5 * length / max(1, conic["fit"]["segments"])
+        start, sweep = _parameter_sweep(conic, run)
+        low = ((start - conic["t0"]) * direction) % full
+        high = low + sweep * direction
+        low, high = min(low, high), max(low, high)
+        if low <= length + bridge:  # it overlaps the arc, or carries it on from its end
+            length = max(length, high)
+        elif full - high <= bridge:  # it carries the arc on back from its start
+            conic["t0"] -= (full - low) * direction
+            length += full - low
+        else:  # something hides what lies between: a piece of its own
+            fit = {"segments": added, "residual": 0.0, "near": added, "step": conic["fit"]["step"]}
+            return dict(conic, t0=start, dt=sweep, fit=fit)
+        conic["dt"] = None if length >= full - 1e-9 else length * direction
+    conic["fit"]["segments"] += added
+    conic["fit"]["near"] = conic["fit"].get("near", 0) + added
+    return None
+
+
+def _approximate_arc(run):
+    """A long run round to a thousandth of its radius, as an approximate arc: a silhouette with no edge to carry on."""
+    if len(run) <= MIN_CIRCLE_SEGMENTS:
+        return None
+    circle = fit_circle(run)
+    if circle is None:
+        return None
+    center, radius, worst = circle
+    if worst > 1e-3 * radius:
+        return None
+    step = max(distance(p, q) for p, q in zip(run, run[1:]))
+    fit = {"segments": len(run) - 1, "residual": worst, "approximate": True, "step": step}
+    record = _conic(center, ((radius, 0.0), (0.0, radius)), fit=fit)
+    record["t0"], record["dt"] = _parameter_sweep(record, run)
+    return record
+
+
+def _collinear(first, second, tolerance):
+    """Whether two segments lie on one line."""
+    (p, q), (r, s) = first, second
+    length = distance(p, q)
+    if length == 0:
+        return False
+    return all(
+        abs((q[0] - p[0]) * (p[1] - point[1]) - (p[0] - point[0]) * (q[1] - p[1])) / length <= tolerance
+        for point in (r, s)
+    )
+
+
+def _absorb(conics, straight, tolerance, fit_tolerance):
+    """Extend each fitted arc over the short segments that carry it on past where its run was cut.
+
+    A hidden-line junction -- a third edge meeting the curve -- ends a run, and
+    a piece of polygon between two junctions can be too short to be fitted on
+    its own: left as it is, it is a scatter of tiny straight edges, and the arc
+    beside it is short by that much. A segment whose far end is on the arc, a
+    small step further along it, is more of the arc. Returns the segments left.
+    """
+    snap = Points(tolerance)
+    ends = {}
+    nodes = []
+    for k, (p, q) in enumerate(straight):
+        a, b = snap.key(p), snap.key(q)
+        nodes.append((a, b))
+        ends.setdefault(a, []).append(k)
+        ends.setdefault(b, []).append(k)
+    used = set()
+    for conic in conics:
+        if conic["fit"] is None or conic["dt"] is None:
+            continue
+        for forward in (True, False):
+            while True:
+                t = conic["t0"] + conic["dt"] if forward else conic["t0"]
+                node = snap.key(_conic_point(conic, t))
+                extended = False
+                for k in ends.get(node, ()):
+                    if k in used:
+                        continue
+                    a, b = nodes[k]
+                    far = straight[k][1] if a == node else straight[k][0]
+                    if _on_conic(conic, far) > max(fit_tolerance, _sagitta(conic, far)):
+                        continue
+                    # A segment that a straight edge carries on from in the same
+                    # direction is a piece of that edge, however near the arc it ends.
+                    if any(
+                        _collinear(straight[k], straight[other], tolerance)
+                        for other in ends.get(b if a == node else a, ())
+                        if other != k and other not in used
+                    ):
+                        continue
+                    start, step = _parameter_sweep(conic, [_conic_point(conic, t), far])
+                    # On along the arc, the way it runs, by no more than one polygon step.
+                    ahead = step * conic["dt"] > 0 if forward else step * conic["dt"] < 0
+                    if not ahead or abs(step) > MAX_ARC_TURN:
+                        continue
+                    used.add(k)
+                    if forward:
+                        conic["dt"] += step
+                    else:
+                        conic["t0"] += step
+                        conic["dt"] -= step
+                    conic["fit"]["segments"] += 1
+                    extended = True
+                    break
+                if not extended or abs(conic["dt"]) >= 2.0 * math.pi:
+                    break
+    return [segment for k, segment in enumerate(straight) if k not in used]
+
+
+def _merge_collinear(segments, tolerance):
+    """Straight segments that lie on one line and touch or overlap, as one segment each.
+
+    The two projections break a straight edge in different places -- the exact
+    one hardly at all, the polygonal one wherever another edge or a mesh vertex
+    touches it -- so it is the merged edge that both agree on.
+    """
+    buckets = {}
+    merged = []
+    for p, q in segments:
+        dx, dy = q[0] - p[0], q[1] - p[1]
+        length = math.hypot(dx, dy)
+        if length == 0:
+            continue
+        angle = math.atan2(dy, dx) % math.pi
+        if angle > math.pi - 1e-9:
+            angle -= math.pi
+        ux, uy = math.cos(angle), math.sin(angle)
+        offset = -uy * p[0] + ux * p[1]
+        s0, s1 = sorted((ux * p[0] + uy * p[1], ux * q[0] + uy * q[1]))
+        key = int(round(angle * 1000.0))
+        for line in (line for k in (key - 1, key, key + 1) for line in buckets.get(k, ())):
+            span = max(line[3] - line[2], s1 - s0)
+            if (
+                abs(math.sin(angle - line[0])) * span <= tolerance
+                and abs(offset - line[1]) <= tolerance
+                and s0 <= line[3] + tolerance
+                and s1 >= line[2] - tolerance
+            ):
+                line[2], line[3] = min(line[2], s0), max(line[3], s1)
+                break
+        else:
+            line = [angle, offset, s0, s1]
+            merged.append(line)
+            buckets.setdefault(key, []).append(line)
+    result = []
+    for angle, offset, s0, s1 in merged:
+        ux, uy = math.cos(angle), math.sin(angle)
+        result.append(((ux * s0 - uy * offset, uy * s0 + ux * offset), (ux * s1 - uy * offset, uy * s1 + ux * offset)))
+    return result
+
+
+def _round(conic, tolerance):
+    return conic["major"] - conic["minor"] <= max(tolerance, 1e-9 * conic["major"])
+
+
+def _same_curve(a, b, tolerance):
+    """Whether two conic pieces are pieces of one circle or one ellipse."""
+    slack = tolerance
+    if a["fit"] or b["fit"]:
+        slack = max(tolerance, 1e-3 * max(a["major"], b["major"]))
+    if distance(a["center"], b["center"]) > slack:
+        return False
+    if abs(a["major"] - b["major"]) > slack or abs(a["minor"] - b["minor"]) > slack:
+        return False
+    if _round(a, slack) and _round(b, slack):
+        return True
+    return abs(math.sin(a["angle"] - b["angle"])) <= 1e-3
 
 
 def _to_segment(point, p, q):
@@ -713,105 +1119,127 @@ def _to_segment(point, p, q):
     return distance(point, (p[0] + t * dx, p[1] + t * dy))
 
 
-def _sweep_of(center, points):
-    """The signed sweep in degrees of an arc through 'points' about 'center'."""
-    total = 0.0
-    for p, q in zip(points, points[1:]):
-        a = math.atan2(p[1] - center[1], p[0] - center[0])
-        b = math.atan2(q[1] - center[1], q[0] - center[0])
-        total += (b - a + math.pi) % (2.0 * math.pi) - math.pi
-    return math.degrees(total)
+def _signed_sweep(conic):
+    """The sweep of an arc in degrees, positive when it runs anticlockwise (Y up)."""
+    (a00, a01), (a10, a11) = conic["shape"]
+    direction = 1.0 if (a00 * a11 - a01 * a10) * conic["dt"] > 0 else -1.0
+    return math.degrees(abs(conic["dt"])) * direction
 
 
 def analyse(drawing, tolerance=None):
     """Classify a drawing into the features the module docstring lists, as a JSON-ready dict."""
-    if not drawing.points:
+    if not drawing.points and not drawing.conics:
         return {"extent": None, "layers": drawing.layers, "read": drawing.read, "page": drawing.page}
-    xs = [p[0] for p in drawing.points]
-    ys = [p[1] for p in drawing.points]
-    extent = {"xmin": min(xs), "xmax": max(xs), "ymin": min(ys), "ymax": max(ys)}
-    extent["width"], extent["height"] = extent["xmax"] - extent["xmin"], extent["ymax"] - extent["ymin"]
-    size = max(extent["width"], extent["height"]) or 1.0
+    points = list(drawing.points)
+    for conic in drawing.conics:
+        points.extend(_conic_extremes(conic))
+    size = max(
+        max(p[0] for p in points) - min(p[0] for p in points), max(p[1] for p in points) - min(p[1] for p in points)
+    )
+    size = size or 1.0
     if tolerance is None:
         tolerance = 1e-5 * size
-    # What a polygon's vertices may stand off the circle it was drawn from: the
-    # file's rounding, with room for the arithmetic of the fit.
-    fit_tolerance = max(20.0 * (drawing.rounding or 0.0), 1e-9 * size)
+    # What a polygon's vertices may stand off the curve it was drawn from: the
+    # file's rounding, with room for the arithmetic of the fit -- and never less
+    # than a millionth of the drawing, which is about what the polygonal
+    # hidden-line algorithm's own arithmetic moves a vertex by in a slanted
+    # view. Looser than that, pieces of silhouettes start to fit curves that
+    # are not there; a curve this misses is left as segments, and said to be.
+    fit_tolerance = max(20.0 * (drawing.rounding or 0.0), 1e-6 * size)
 
-    def place(point):
-        return {
-            "x": point[0],
-            "y": point[1],
-            "from_left": point[0] - extent["xmin"],
-            "from_bottom": point[1] - extent["ymin"],
-        }
-
-    circles, arcs, ellipses = [], [], []
-    # Every piece of a circle or of an ellipse, before the pieces of one are put
-    # together: a full circle is written as two arcs, and a circle the hidden-line
-    # algorithm cut is several.
-    round_pieces, oval_pieces = [], []
-    for conic in drawing.ellipses:
-        if conic["major"] - conic["minor"] <= max(tolerance, 1e-9 * conic["major"]):
-            if conic["arc"] is None:
-                circles.append({**place(conic["center"]), "diameter": 2.0 * conic["major"], "source": "exact"})
-            else:
-                round_pieces.append({"center": conic["center"], "radius": conic["major"], **conic["arc"], "fit": None})
-        else:
-            oval_pieces.append(conic)
-
-    straight, loops = [], []
-    for points, closed in chains(drawing.segments, tolerance):
-        points = straighten(points, closed, tolerance)
-        found, rest = _arc_runs(points, closed, tolerance, fit_tolerance)
-        for arc in found:
-            center, radius, worst = arc["fit"]
-            fitted = {"source": "fitted", "segments": len(arc["points"]) - 1, "residual": worst}
-            if arc.get("approximate"):
-                fitted["approximate"] = True
-            if arc["closed"]:
-                circles.append({**place(center), "diameter": 2.0 * radius, **fitted})
-            else:
-                round_pieces.append(
-                    {
-                        "center": center,
-                        "radius": radius,
-                        "start": arc["points"][0],
-                        "end": arc["points"][-1],
-                        "sweep": _sweep_of(center, arc["points"]),
-                        "fit": fitted,
-                    }
-                )
+    conics = list(drawing.conics)
+    straight, loops, splines = [], [], []
+    # A curve the file drew as Bezier curves is a spline -- build123d writes a
+    # circle or an ellipse as an arc, and anything else as Beziers -- so it is
+    # reported as one, and nothing is fitted to it: over a short enough run a
+    # smooth curve is close to some ellipse. The one exception is a closed one
+    # that is round, which is how most drawing programs write a circle.
+    polygon = [(p, q) for p, q, flat in drawing.segments if flat]
+    for chain, closed in chains([(p, q) for p, q, flat in drawing.segments if not flat], tolerance):
+        flattened = straighten(chain, closed, tolerance)
+        if len(flattened) == 2:
+            polygon.append((flattened[0], flattened[1]))  # a Bezier that is a straight line
+            continue
+        if closed and len(chain) > MIN_CIRCLE_SEGMENTS:
+            round_ = fit_circle(chain[:-1])
+            if round_ is not None and round_[2] <= 1e-3 * round_[1]:
+                center, radius, worst = round_
+                fit = {"segments": len(chain) - 1, "residual": worst, "approximate": True, "step": 0.0}
+                conics.append(_conic(center, ((radius, 0.0), (0.0, radius)), fit=fit))
+                continue
+        xs_, ys_ = [p[0] for p in chain], [p[1] for p in chain]
+        splines.append(
+            {
+                "start": list(chain[0]),
+                "end": list(chain[-1]),
+                "closed": closed,
+                "length": sum(distance(p, q) for p, q in zip(chain, chain[1:])),
+                "box": [min(xs_), min(ys_), max(xs_), max(ys_)],
+                "x": (min(xs_) + max(xs_)) / 2.0,
+                "y": (min(ys_) + max(ys_)) / 2.0,
+            }
+        )
+    # One straight edge, however the projection broke it, before anything is
+    # chained: a piece of it left on its own beside an arc reads as more arc.
+    segments = _merge_collinear(polygon, tolerance)
+    pending = []
+    for chain, closed in chains(segments, tolerance):
+        chain = straighten(chain, closed, tolerance)
+        found, rest, unfitted = _arc_runs(chain, closed, tolerance, fit_tolerance)
+        conics.extend(found)
         straight.extend(rest)
-        if closed and not found and len(points) > 5 and len(rest) == len(points) - 1:
+        pending.extend(unfitted)
+        if closed and not found and len(chain) > 5 and len(rest) == len(chain) - 1:
             lengths = [distance(p, q) for p, q in rest]
             if max(lengths) <= 3.0 * min(lengths):
-                lx = [p[0] for p in points]
-                ly = [p[1] for p in points]
+                lx = [p[0] for p in chain]
+                ly = [p[1] for p in chain]
                 center = ((min(lx) + max(lx)) / 2.0, (min(ly) + max(ly)) / 2.0)
                 loops.append(
                     {
-                        **place(center),
+                        "x": center[0],
+                        "y": center[1],
                         "width": max(lx) - min(lx),
                         "height": max(ly) - min(ly),
                         # Across the corners, and across the flats: a hexagon's two sizes.
-                        "widest": 2.0 * max(distance(p, center) for p in points),
+                        "widest": 2.0 * max(distance(p, center) for p in chain),
                         "narrowest": 2.0 * min(_to_segment(center, p, q) for p, q in rest),
                         "segments": len(rest),
                     }
                 )
+    for run in pending:
+        host = next((c for c in conics if c["fit"] and _carries(c, run, fit_tolerance)), None)
+        if host is not None:
+            piece = _extend(host, run)
+            if piece is not None:
+                conics.append(piece)
+            continue
+        approximate = _approximate_arc(run)
+        if approximate is not None:
+            conics.append(approximate)
+            continue
+        straight.extend(zip(run, run[1:]))
+    straight = _merge_collinear(_absorb(conics, straight, tolerance, fit_tolerance), tolerance)
+    # The extent, now that a fitted curve's own extremes are known too.
+    for conic in conics:
+        if conic["fit"]:
+            points.extend(_conic_extremes(conic))
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    extent = {"xmin": min(xs), "xmax": max(xs), "ymin": min(ys), "ymax": max(ys)}
+    extent["width"], extent["height"] = extent["xmax"] - extent["xmin"], extent["ymax"] - extent["ymin"]
 
-    def near(a, b, slack):
-        return abs(a - b) <= slack
-
-    for group in _gather(
-        round_pieces,
-        lambda a, b: distance(a["center"], b["center"]) <= _slack(a, b, tolerance)
-        and near(a["radius"], b["radius"], _slack(a, b, tolerance)),
-    ):
-        center = _mean_point([piece["center"] for piece in group])
-        radius = sum(piece["radius"] for piece in group) / len(group)
-        fitted = [piece["fit"] for piece in group if piece["fit"]]
+    circles, arcs, ellipses = [], [], []
+    # The pieces of one curve are put together: a full circle is written as two
+    # arcs, and one the hidden-line algorithm cut, or a polygon broke where
+    # another edge meets it, is several.
+    for group in _gather(conics, lambda a, b: _same_curve(a, b, tolerance)):
+        first = group[0]
+        n = float(len(group))
+        center = (sum(c["center"][0] for c in group) / n, sum(c["center"][1] for c in group) / n)
+        major = sum(c["major"] for c in group) / n
+        minor = sum(c["minor"] for c in group) / n
+        fitted = [c["fit"] for c in group if c["fit"]]
         how = {"source": "exact"}
         if fitted:
             how = {
@@ -819,40 +1247,46 @@ def analyse(drawing, tolerance=None):
                 "segments": sum(f["segments"] for f in fitted),
                 "residual": max(f["residual"] for f in fitted),
             }
-        total = sum(abs(piece["sweep"]) for piece in group)
-        if total >= 360.0 - (0.1 if fitted else 1e-6):
-            circles.append({**place(center), "diameter": 2.0 * radius, **how})
+            if any(f.get("approximate") for f in fitted):
+                how["approximate"] = True
+            if any(f.get("near") for f in fitted):
+                how["near"] = sum(f.get("near", 0) for f in fitted)
+        whole = any(c["dt"] is None for c in group)
+        total = 360.0 if whole else sum(math.degrees(abs(c["dt"])) for c in group)
+        whole = whole or total >= 360.0 - (0.1 if fitted else 1e-6)
+        pieces = [] if whole else [c for c in group if c["dt"] is not None]
+        if _round(first, max(tolerance, 1e-3 * major) if fitted else tolerance):
+            if whole:
+                circles.append({"x": center[0], "y": center[1], "diameter": major + minor, **how})
+                continue
+            arcs.append(
+                {
+                    "x": center[0],
+                    "y": center[1],
+                    "radius": (major + minor) / 2.0,
+                    "sweep": total,
+                    "pieces": [
+                        {
+                            "start": list(_conic_point(c, c["t0"])),
+                            "end": list(_conic_point(c, c["t0"] + c["dt"])),
+                            "sweep": _signed_sweep(c),
+                        }
+                        for c in pieces
+                    ],
+                    **how,
+                }
+            )
             continue
-        arcs.append(
-            {
-                **place(center),
-                "radius": radius,
-                "sweep": total,
-                "pieces": [
-                    {"start": list(piece["start"]), "end": list(piece["end"]), "sweep": piece["sweep"]}
-                    for piece in group
-                ],
-                **how,
-            }
-        )
-    for group in _gather(
-        oval_pieces,
-        lambda a, b: distance(a["center"], b["center"]) <= tolerance
-        and near(a["major"], b["major"], tolerance)
-        and near(a["minor"], b["minor"], tolerance)
-        and near(math.sin(a["angle"] - b["angle"]), 0.0, 1e-6),
-    ):
-        first = group[0]
-        sweep = 360.0 if any(c["arc"] is None for c in group) else sum(abs(c["arc"]["sweep"]) for c in group)
         ellipses.append(
             {
-                **place(first["center"]),
-                "major": 2.0 * first["major"],
-                "minor": 2.0 * first["minor"],
+                "x": center[0],
+                "y": center[1],
+                "major": 2.0 * major,
+                "minor": 2.0 * minor,
                 "angle": math.degrees(first["angle"]) % 180.0,
-                "sweep": min(sweep, 360.0),
-                "pieces": len(group),
-                "source": "exact",
+                "sweep": min(total, 360.0),
+                "pieces": len(pieces) or 1,
+                **how,
             }
         )
 
@@ -887,9 +1321,16 @@ def analyse(drawing, tolerance=None):
             )
         return result
 
+    # Where each feature is from the left and the bottom of the drawing, which
+    # does not depend on where the projection put the model's origin.
+    for feature in circles + arcs + ellipses + loops + splines:
+        feature["from_left"] = feature["x"] - extent["xmin"]
+        feature["from_bottom"] = feature["y"] - extent["ymin"]
     circles.sort(key=lambda c: (-round(c["diameter"] / tolerance), c["x"], c["y"]))
     arcs.sort(key=lambda a: (-round(a["radius"] / tolerance), a["x"], a["y"]))
+    ellipses.sort(key=lambda e: (-round(e["major"] / tolerance), e["x"], e["y"]))
     other.sort(key=lambda line: -line["length"])
+    splines.sort(key=lambda curve: -curve["length"])
     return {
         "layers": drawing.layers,
         "read": drawing.read,
@@ -903,6 +1344,7 @@ def analyse(drawing, tolerance=None):
         "horizontal": stations(horizontal, extent["ymin"]),
         "lines": other,
         "loops": loops,
+        "splines": splines,
     }
 
 
@@ -949,11 +1391,17 @@ def format_svg(report, digits=4, limit=40):
     def how(item):
         if item.get("approximate"):
             return (
-                "  [approximate: a closed curve round to within %s, not drawn as a circle; fitted to %d segments]"
+                "  [approximate: round to within %s but not on a circle -- a silhouette, or Bezier curves; %d segments]"
                 % (
                     n(item["residual"]),
                     item["segments"],
                 )
+            )
+        if item.get("source") == "fitted" and item.get("near"):
+            return "  [fitted to %d segments, residual %s; %d more only near it: a silhouette]" % (
+                item["segments"] - item["near"],
+                n(item["residual"]),
+                item["near"],
             )
         if item.get("source") == "fitted":
             return "  [fitted to %d segments, residual %s]" % (item["segments"], n(item["residual"]))
@@ -990,8 +1438,8 @@ def format_svg(report, digits=4, limit=40):
         for i, el in enumerate(report["ellipses"][:limit], 1):
             sweep = "" if el["sweep"] >= 360.0 else "  sweep %.2f deg in %d pieces" % (el["sweep"], el["pieces"])
             out.append(
-                "  E%d  major %s  minor %s  major axis at %.2f deg%s  %s"
-                % (i, n(el["major"]), n(el["minor"]), el["angle"], sweep, where(el))
+                "  E%d  major %s  minor %s  major axis at %.2f deg%s  %s%s"
+                % (i, n(el["major"]), n(el["minor"]), el["angle"], sweep, where(el), how(el))
             )
         more(report["ellipses"])
     for key, label, axis, across, name in (
@@ -1025,6 +1473,27 @@ def format_svg(report, digits=4, limit=40):
                 )
             )
         more(report["lines"])
+    if report.get("splines"):
+        out.append("splines -- curves drawn as Bezier curves, longest first (%d):" % len(report["splines"]))
+        for i, curve in enumerate(report["splines"][:limit], 1):
+            box = curve["box"]
+            out.append(
+                "  S%d  length %s%s  from (%s, %s) to (%s, %s), within x %s .. %s, y %s .. %s"
+                % (
+                    i,
+                    n(curve["length"]),
+                    ", closed" if curve["closed"] else "",
+                    n(curve["start"][0]),
+                    n(curve["start"][1]),
+                    n(curve["end"][0]),
+                    n(curve["end"][1]),
+                    n(box[0]),
+                    n(box[2]),
+                    n(box[1]),
+                    n(box[3]),
+                )
+            )
+        more(report["splines"])
     if report["loops"]:
         out.append("closed outlines nothing above explains (%d):" % len(report["loops"]))
         for i, loop in enumerate(report["loops"][:limit], 1):
@@ -1041,6 +1510,243 @@ def format_svg(report, digits=4, limit=40):
                 )
             )
         more(report["loops"])
+    return "\n".join(out)
+
+
+# ---------------------------------------------------------------------------
+# Two renders of one object, read against each other.
+
+# What each kind of feature is paired by, and what is compared once it is:
+# (key in the report, label, how to read its position, its sizes).
+_KINDS = (
+    ("circles", "circle", lambda f: (f["x"], f["y"]), ("diameter",)),
+    ("arcs", "arc", lambda f: (f["x"], f["y"]), ("radius", "sweep")),
+    ("ellipses", "ellipse", lambda f: (f["x"], f["y"]), ("major", "minor", "sweep")),
+    # An edge standing at an X has no Y to be compared by, and one at a Y no X.
+    ("vertical", "vertical edge", lambda f: (f["at"], None), ("length",)),
+    ("horizontal", "horizontal edge", lambda f: (None, f["at"]), ("length",)),
+    ("loops", "outline", lambda f: (f["x"], f["y"]), ("width", "height")),
+    (
+        "lines",
+        "straight edge",
+        lambda f: ((f["start"][0] + f["end"][0]) / 2.0, (f["start"][1] + f["end"][1]) / 2.0),
+        ("length", "angle"),
+    ),
+)
+
+# A sweep is compared in degrees rather than millimetres: what a sweep is
+# allowed to differ by.
+SWEEP_AGREEMENT = 0.5
+
+
+def _apart(pa, pb, shift):
+    """How far apart two positions are once 'shift' is taken off, over the coordinates both have."""
+    return math.sqrt(sum((a - b - s) ** 2 for a, b, s in zip(pa, pb, shift) if a is not None and b is not None))
+
+
+def _pairs(first, second, position, sizes, shift, slack):
+    """Greedy nearest pairs of two lists of features: (pairs, only in first, only in second)."""
+    candidates = []
+    for i, a in enumerate(first):
+        pa = position(a)
+        for j, b in enumerate(second):
+            pb = position(b)
+            apart = _apart(pa, pb, shift)
+            differ = max(abs(a[s] - b[s]) for s in sizes if s not in ("sweep", "angle"))
+            if apart <= slack and differ <= slack:
+                candidates.append((apart + differ, i, j))
+    taken_a, taken_b, pairs = set(), set(), []
+    for _score, i, j in sorted(candidates):
+        if i not in taken_a and j not in taken_b:
+            taken_a.add(i)
+            taken_b.add(j)
+            pairs.append((first[i], second[j]))
+    return (
+        pairs,
+        [a for i, a in enumerate(first) if i not in taken_a],
+        [b for j, b in enumerate(second) if j not in taken_b],
+    )
+
+
+def _polygons(lines, slack):
+    """Short straight edges grouped by the polygon they are steps of: count, total length and box of each."""
+    groups = []
+    for chain, _closed in chains([(tuple(f["start"]), tuple(f["end"])) for f in lines], slack):
+        xs, ys = [p[0] for p in chain], [p[1] for p in chain]
+        groups.append(
+            {
+                "segments": len(chain) - 1,
+                "length": sum(distance(p, q) for p, q in zip(chain, chain[1:])),
+                "box": [min(xs), min(ys), max(xs), max(ys)],
+            }
+        )
+    return groups
+
+
+def compare(first, second, agreement=None):
+    """Read two reports of one drawing -- the same object rendered two ways -- against each other.
+
+    Every feature of one is paired with the nearest of the same kind in the
+    other, and each pair is compared. 'agreement' is how far apart two readings
+    of one dimension may be and still agree; by default 5e-4 of the drawing's
+    size, which is how far the polygonal projection lets a curve's polygon
+    stand off the curve. Positions are compared as they are, or with the two
+    extents' corners lined up -- whichever pairs more features -- because the
+    two hidden-line algorithms need not put the model's origin in one place.
+    """
+    ea, eb = first["extent"], second["extent"]
+    size = max(ea["width"], ea["height"], eb["width"], eb["height"]) or 1.0
+    if agreement is None:
+        agreement = 5e-4 * size
+    slack = max(4.0 * agreement, 1e-6 * size)
+    shifts = [(0.0, 0.0), (ea["xmin"] - eb["xmin"], ea["ymin"] - eb["ymin"])]
+
+    def matched(shift):
+        return sum(
+            len(_pairs(first[key], second[key], position, sizes, shift, slack)[0])
+            for key, _label, position, sizes in _KINDS
+        )
+
+    shift = max(shifts, key=matched)
+    result = {
+        "agreement": agreement,
+        "shift": list(shift),
+        "extent": {
+            name: {"first": ea[name], "second": eb[name], "difference": ea[name] - eb[name]}
+            for name in ("width", "height")
+        },
+        "kinds": {},
+        "agree": True,
+    }
+    for name in ("width", "height"):
+        if abs(ea[name] - eb[name]) > agreement:
+            result["agree"] = False
+    shortest = 0.01 * size  # a straight edge shorter than this is a polygon's, not a feature
+    for key, label, position, sizes in _KINDS:
+        a_items, b_items = first[key], second[key]
+        if key == "lines":
+            a_items = [f for f in a_items if f["length"] >= shortest]
+            b_items = [f for f in b_items if f["length"] >= shortest]
+        pairs, only_first, only_second = _pairs(a_items, b_items, position, sizes, shift, slack)
+        polygons = {}
+        if key == "lines":
+            # Straight edges much shorter than the drawing that only one side has
+            # are the steps of a curve that side drew as a polygon it could not
+            # fit: one entry per polygon, rather than one per step.
+            for side, items in (("first", only_first), ("second", only_second)):
+                short = [f for f in items if f["length"] < 0.05 * size]
+                polygons[side] = _polygons(short, slack)
+                items[:] = [f for f in items if f["length"] >= 0.05 * size]
+        differing = []
+        for a, b in pairs:
+            deltas = {s: a[s] - b[s] for s in sizes}
+            pa, pb = position(a), position(b)
+            deltas["position"] = _apart(pa, pb, shift)
+            limits = {s: (SWEEP_AGREEMENT if s in ("sweep", "angle") else agreement) for s in deltas}
+            if any(abs(deltas[s]) > limits[s] for s in deltas):
+                differing.append({"first": a, "second": b, "differences": deltas})
+        if differing or only_first or only_second or any(polygons.values()):
+            result["agree"] = False
+        result["kinds"][key] = {
+            "label": label,
+            "paired": len(pairs),
+            "differing": differing,
+            "only_first": only_first,
+            "only_second": only_second,
+        }
+        if polygons:
+            result["kinds"][key]["polygons"] = polygons
+    return result
+
+
+def _describe(feature, key, n):
+    if key == "circles":
+        return "diameter %s at (%s, %s)" % (n(feature["diameter"]), n(feature["x"]), n(feature["y"]))
+    if key == "arcs":
+        return "radius %s sweeping %.2f deg about (%s, %s)" % (
+            n(feature["radius"]),
+            feature["sweep"],
+            n(feature["x"]),
+            n(feature["y"]),
+        )
+    if key == "ellipses":
+        return "%s x %s sweeping %.2f deg about (%s, %s)" % (
+            n(feature["major"]),
+            n(feature["minor"]),
+            feature["sweep"],
+            n(feature["x"]),
+            n(feature["y"]),
+        )
+    if key in ("vertical", "horizontal"):
+        return "%s %s, %s long" % ("x" if key == "vertical" else "y", n(feature["at"]), n(feature["length"]))
+    if key == "loops":
+        return "%s x %s at (%s, %s)" % (n(feature["width"]), n(feature["height"]), n(feature["x"]), n(feature["y"]))
+    return "%s long at %.2f deg, (%s, %s) -> (%s, %s)" % (
+        n(feature["length"]),
+        feature["angle"],
+        n(feature["start"][0]),
+        n(feature["start"][1]),
+        n(feature["end"][0]),
+        n(feature["end"][1]),
+    )
+
+
+def format_compare(result, names, digits=4):
+    def n(value):
+        text = "%.*f" % (digits, value)
+        return "0." + "0" * digits if text.lstrip("-") == "0." + "0" * digits else text
+
+    first, second = names
+    out = ["first: %s" % first, "second: %s" % second]
+    out.append("agreement: %s (and %.1f deg for a sweep)" % (n(result["agreement"]), SWEEP_AGREEMENT))
+    if any(result["shift"]):
+        out.append("positions compared with the second moved by (%s, %s)" % tuple(n(v) for v in result["shift"]))
+    for name, values in result["extent"].items():
+        mark = "" if abs(values["difference"]) <= result["agreement"] else "   <-- differs"
+        out.append(
+            "extent %s: %s vs %s (difference %s)%s"
+            % (name, n(values["first"]), n(values["second"]), n(values["difference"]), mark)
+        )
+    for key, kind in result["kinds"].items():
+        if not (kind["paired"] or kind["only_first"] or kind["only_second"] or any(kind.get("polygons", {}).values())):
+            continue
+        polygons = kind.get("polygons", {})
+        out.append(
+            "%ss: %d paired, %d differing, %d only in the first, %d only in the second"
+            % (
+                kind["label"],
+                kind["paired"],
+                len(kind["differing"]),
+                len(kind["only_first"]) + len(polygons.get("first", [])),
+                len(kind["only_second"]) + len(polygons.get("second", [])),
+            )
+        )
+        for item in kind["differing"]:
+            deltas = ", ".join(
+                "%s %s" % (s, ("%.2f deg" % d) if s in ("sweep", "angle") else n(d))
+                for s, d in item["differences"].items()
+            )
+            out.append(
+                "  differs: %s  vs  %s  (%s)"
+                % (_describe(item["first"], key, n), _describe(item["second"], key, n), deltas)
+            )
+        for item in kind["only_first"]:
+            out.append("  only in the first: %s" % _describe(item, key, n))
+        for item in kind["only_second"]:
+            out.append("  only in the second: %s" % _describe(item, key, n))
+        for side, groups in kind.get("polygons", {}).items():
+            for group in groups:
+                box = group["box"]
+                out.append(
+                    "  only in the %s: %d short steps, %s long in all, within x %s .. %s, y %s .. %s"
+                    " -- a curve drawn as a polygon this could not fit a circle or an ellipse to"
+                    % (side, group["segments"], n(group["length"]), n(box[0]), n(box[2]), n(box[1]), n(box[3]))
+                )
+    out.append(
+        "the two agree on every feature"
+        if result["agree"]
+        else "the two disagree: resolve each line above before trusting a dimension it touches"
+    )
     return "\n".join(out)
 
 
@@ -1232,6 +1938,14 @@ def main(argv=None):
     svg.add_argument("--limit", type=int, default=40, help="Other straight edges to print (default 40)")
     svg.add_argument("--json", action="store_true")
 
+    both = sub.add_parser("compare", help="Read two SVG renders of one object against each other")
+    both.add_argument("first")
+    both.add_argument("second")
+    both.add_argument("--layer", action="append", help="Read only this layer (an id of a <g>); repeat for several")
+    both.add_argument("--agreement", type=float, help="How far two readings may differ (default 5e-4 of the size)")
+    both.add_argument("--digits", type=int, default=4, help="Decimal places to print (default 4)")
+    both.add_argument("--json", action="store_true")
+
     image = sub.add_parser("image", help="Measure a raster image in pixels, along rows and columns")
     image.add_argument("file")
     image.add_argument("--row", type=float, action="append", default=[], help="Scan along this pixel row")
@@ -1246,9 +1960,28 @@ def main(argv=None):
     image.add_argument("--json", action="store_true")
 
     args = parser.parse_args(argv)
+    try:
+        return _run(args)
+    except (OSError, ET.ParseError) as e:
+        sys.exit("measure.py: %s" % e)
+
+
+def _run(args):
+    code = 0
     if args.command == "svg":
         report = analyse(read_svg(args.file, args.layer, args.all_layers), args.tolerance)
         text = json.dumps(report, indent=1) if args.json else format_svg(report, args.digits, args.limit)
+    elif args.command == "compare":
+        reports = [analyse(read_svg(path, args.layer)) for path in (args.first, args.second)]
+        if any(report.get("extent") is None for report in reports):
+            sys.exit("Nothing is drawn on the layers read of %s" % " or ".join((args.first, args.second)))
+        result = compare(*reports, agreement=args.agreement)
+        text = (
+            json.dumps(result, indent=1)
+            if args.json
+            else format_compare(result, (args.first, args.second), args.digits)
+        )
+        code = 0 if result["agree"] else 1
     else:
         report = measure_image(
             args.file,
@@ -1266,7 +1999,7 @@ def main(argv=None):
     except BrokenPipeError:
         # Read through 'head': what was wanted has been printed.
         sys.stderr.close()
-    return 0
+    return code
 
 
 if __name__ == "__main__":

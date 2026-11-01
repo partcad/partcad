@@ -147,6 +147,13 @@ Generating geometry
   number, with its target and tolerance, and the sketch is corrected from the
   error until none is out.
 
+  Every size is read off **both** of PartCAD's projections -- ``reproducible:``
+  true and false -- because they draw the same geometry as different shapes and
+  different numbers of them: one arc where the other has several, an arc where
+  the other has a run of short lines, an edge whole or broken. ``measure.py
+  compare`` reads the two against each other, and a reading only one of them
+  supports is resolved before it is trusted.
+
   ``/pc:gen-part`` and ``/pc:gen-assembly`` run the same loop first, on
   temporary sketches, to settle a part's dimensions and an assembly's placements
   before they model anything. Sketches are also what parts are extruded and

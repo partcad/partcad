@@ -198,14 +198,83 @@ def test_an_ellipse_has_two_diameters(measure, tmp_path):
     assert close(ellipses[1]["major"], 8.0) and close(ellipses[1]["minor"], 2.0)
 
 
-def test_a_polygon_drawn_from_an_ellipse_is_not_an_arc(measure, tmp_path):
-    """Short runs of any smooth curve fit some circle closely; only a polygon on a circle is one."""
+def test_a_polygon_drawn_from_an_ellipse_is_that_ellipse_and_not_an_arc(measure, tmp_path):
+    """The polygonal projection of a hole seen at a slant: its vertices are on the ellipse, so it is one."""
     points = [(20 * math.cos(2 * math.pi * k / 48) / 2, 12 * math.sin(2 * math.pi * k / 48) / 2) for k in range(48)]
     report = measured(measure, tmp_path, render(PLATE + "\n" + polygon_lines(points)))
 
-    assert not report["circles"] and not report["arcs"]
-    (outline,) = report["loops"]
-    assert close(outline["width"], 20.0) and close(outline["height"], 12.0)
+    assert not report["circles"] and not report["arcs"] and not report["loops"]
+    (ellipse,) = report["ellipses"]
+    assert close(ellipse["major"], 20.0) and close(ellipse["minor"], 12.0)
+    assert close(ellipse["angle"] % 180.0, 0.0) and close(ellipse["sweep"], 360.0)
+    assert ellipse["source"] == "fitted"
+
+
+def polyline_lines(points):
+    return "\n".join(line(*p, *q) for p, q in zip(points, points[1:]))
+
+
+def test_an_open_polygon_of_an_ellipse_is_an_elliptic_arc(measure, tmp_path):
+    """A fillet seen in an isometric view: a quarter ellipse between two straight edges it is tangent to."""
+    a, b = 10.0, 5.0
+    arc = [(a * math.cos(math.pi / 2 * k / 12), b * math.sin(math.pi / 2 * k / 12)) for k in range(13)]
+    edges = [(a, -40.0)] + arc + [(-40.0, b)]
+    report = measured(measure, tmp_path, render(PLATE + "\n" + polyline_lines(edges)))
+
+    (ellipse,) = report["ellipses"]
+    assert close(ellipse["major"], 20.0) and close(ellipse["minor"], 10.0)
+    assert close(ellipse["sweep"], 90.0)
+    assert (ellipse["x"], ellipse["y"]) == pytest.approx((0.0, 0.0), abs=1e-6)
+
+
+def test_an_arc_cut_on_a_chord_by_the_hidden_line_algorithm_is_still_the_arc(measure, tmp_path):
+    """Where a curve goes behind something, the polygonal projection ends it on a chord, off the curve."""
+    arc = [(10 * math.cos(math.radians(d)), 10 * math.sin(math.radians(d))) for d in range(0, 91, 10)]
+    end = (10 * math.cos(math.radians(100)), 10 * math.sin(math.radians(100)))
+    cut = ((arc[-1][0] + end[0]) / 2.0, (arc[-1][1] + end[1]) / 2.0)  # half way along the next chord
+    report = measured(measure, tmp_path, render(PLATE + "\n" + polyline_lines(arc + [cut])))
+
+    (piece,) = report["arcs"]
+    assert close(piece["radius"], 10.0, 1e-8)
+    assert piece["sweep"] == pytest.approx(95.0, abs=0.05)
+    assert not report["lines"]
+
+
+def test_an_edge_drawn_twice_is_one_edge(measure, tmp_path):
+    """The exact projection draws a chamfer seen edge on twice; it is still one edge."""
+    report = measured(measure, tmp_path, render(PLATE + "\n" + line(-50, -30, -50, 30)))
+
+    assert [s["length"] for s in report["vertical"]] == pytest.approx([60.0, 60.0])
+    assert not report["lines"]
+
+
+def test_an_edge_broken_where_another_meets_it_is_one_edge(measure, tmp_path):
+    """The polygonal projection breaks a straight edge where a third edge touches it; the exact one does not."""
+    body = "\n".join([line(0, 0, 30, 30), line(30, 30, 40, 40), line(30, 30, 45, 20)])
+    report = measured(measure, tmp_path, render(PLATE + "\n" + body))
+
+    lengths = sorted(round(line_["length"], 6) for line_ in report["lines"])
+    assert lengths == pytest.approx(sorted([round(40 * math.sqrt(2), 6), round(math.hypot(15, 10), 6)]))
+
+
+def test_the_extent_reaches_a_fitted_circles_true_edge(measure, tmp_path):
+    """No vertex of this polygon is at the circle's left or right, and the drawing is still 10 wide."""
+    points = [
+        (5 * math.cos(math.radians(7 + k * 360 / 26)), 5 * math.sin(math.radians(7 + k * 360 / 26))) for k in range(26)
+    ]
+    report = measured(measure, tmp_path, render(polygon_lines(points)))
+
+    assert close(report["extent"]["width"], 10.0, 1e-8) and close(report["extent"]["height"], 10.0, 1e-8)
+
+
+def test_a_bezier_curve_is_a_spline_and_is_not_fitted(measure, tmp_path):
+    """A spline is written as Bezier curves; over a short run some ellipse is always close to one."""
+    report = measured(measure, tmp_path, render(PLATE + '\n      <path d="M -20,0 C -10,15 0,-10 20,5" />'))
+
+    assert not report["ellipses"] and not report["arcs"] and not report["circles"]
+    (spline,) = report["splines"]
+    assert spline["start"] == pytest.approx([-20.0, 0.0]) and spline["end"] == pytest.approx([20.0, 5.0])
+    assert spline["length"] > 40.0
 
 
 def test_a_circle_drawn_as_bezier_curves_is_approximate(measure, tmp_path):
@@ -216,6 +285,99 @@ def test_a_circle_drawn_as_bezier_curves_is_approximate(measure, tmp_path):
 
     assert close(circle["diameter"], 20.0, 0.02)
     assert circle["approximate"] is True
+
+
+# --- two projections of one drawing ----------------------------------------------
+
+# The same drawing twice: as the exact projection writes it, its curves as
+# curves, and as the polygonal one does, its curves as polygons.
+HOLE = '      <circle cx="-42.0" cy="-22.0" r="2.5" />'
+SLOT = '      <path d="M -11,-4 L 11,-4 A 4,4 0 0,1 11,4 L -11,4 A 4,4 0 0,1 -11,-4" />'
+
+
+def polygonal_hole(diameter=5.0, shift=(0.0, 0.0)):
+    r = diameter / 2.0
+    return polygon_lines(
+        [
+            (-42 + shift[0] + r * math.cos(2 * math.pi * k / 26), -22 + shift[1] + r * math.sin(2 * math.pi * k / 26))
+            for k in range(26)
+        ]
+    )
+
+
+def polygonal_slot(shift=(0.0, 0.0)):
+    sx, sy = shift
+    right = [(11 + sx + 4 * math.sin(math.pi * k / 12), sy - 4 * math.cos(math.pi * k / 12)) for k in range(13)]
+    left = [(-11 + sx - 4 * math.sin(math.pi * k / 12), sy + 4 * math.cos(math.pi * k / 12)) for k in range(13)]
+    return polygon_lines(right + left)
+
+
+def shifted_plate(shift):
+    sx, sy = shift
+    return polygon_lines([(-50 + sx, -30 + sy), (50 + sx, -30 + sy), (50 + sx, 30 + sy), (-50 + sx, 30 + sy)])
+
+
+def compared(measure, tmp_path, first, second):
+    return measure.compare(measured(measure, tmp_path, first), measured(measure, tmp_path, second))
+
+
+def test_two_projections_of_one_drawing_agree(measure, tmp_path):
+    exact = render("\n".join([PLATE, HOLE, SLOT]))
+    polygonal = render("\n".join([PLATE, polygonal_hole(), polygonal_slot()]))
+    result = compared(measure, tmp_path, exact, polygonal)
+
+    assert result["agree"], result
+    assert result["kinds"]["circles"]["paired"] == 1 and result["kinds"]["arcs"]["paired"] == 2
+
+
+def test_they_are_compared_wherever_each_put_the_origin(measure, tmp_path):
+    """The two hidden-line algorithms need not put the model's origin in one place on the picture."""
+    exact = render("\n".join([PLATE, HOLE, SLOT]))
+    shift = (3.0, 4.0)
+    polygonal = render("\n".join([shifted_plate(shift), polygonal_hole(shift=shift), polygonal_slot(shift)]))
+    result = compared(measure, tmp_path, exact, polygonal)
+
+    assert result["agree"], result
+    assert result["shift"] == pytest.approx([-3.0, -4.0])
+
+
+def test_a_feature_only_one_projection_drew_is_reported(measure, tmp_path, capsys):
+    exact = render("\n".join([PLATE, HOLE, SLOT]))
+    polygonal = render("\n".join([PLATE, polygonal_slot()]))
+    result = compared(measure, tmp_path, exact, polygonal)
+
+    assert not result["agree"]
+    (missing,) = result["kinds"]["circles"]["only_first"]
+    assert close(missing["diameter"], 5.0)
+
+    first, second = tmp_path / "exact.svg", tmp_path / "polygonal.svg"
+    first.write_text(exact)
+    second.write_text(polygonal)
+    assert measure.main(["compare", str(first), str(second)]) == 1
+    assert "only in the first: diameter 5.0000" in capsys.readouterr().out
+
+
+def test_a_dimension_the_two_disagree_on_is_reported(measure, tmp_path):
+    exact = render("\n".join([PLATE, HOLE]))
+    polygonal = render("\n".join([PLATE, polygonal_hole(diameter=5.1)]))
+    result = compared(measure, tmp_path, exact, polygonal)
+
+    assert not result["agree"]
+    (pair,) = result["kinds"]["circles"]["differing"]
+    assert pair["differences"]["diameter"] == pytest.approx(-0.1)
+
+
+def test_the_steps_of_a_curve_only_one_side_could_fit_are_one_entry(measure, tmp_path):
+    """A polygon of a curve that is neither a circle nor an ellipse is reported once, not step by step."""
+    wave = [(-20 + 2 * k, 10 + 2 * math.sin(k / 2.0) + 0.1 * k * k / 10) for k in range(16)]
+    exact = render("\n".join([PLATE, HOLE]))
+    polygonal = render("\n".join([PLATE, polygonal_hole(), polyline_lines(wave)]))
+    result = compared(measure, tmp_path, exact, polygonal)
+
+    assert not result["agree"]
+    (group,) = result["kinds"]["lines"]["polygons"]["second"]
+    assert group["segments"] == 15
+    assert not result["kinds"]["lines"]["only_second"]
 
 
 def test_the_page_says_what_one_unit_is_printed_at(measure, tmp_path):
