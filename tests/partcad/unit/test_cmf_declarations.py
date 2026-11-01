@@ -361,3 +361,11 @@ def test_the_schema_takes_the_three_sections():
 def test_the_schema_refuses(document):
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(document, get_partcad_schema())
+
+
+def test_a_parametric_declaration_named_without_values_is_its_defaults(ctx):
+    """'//pub/std/color:rgba' alone is drawn in its default colour, not in '#%color%'."""
+    found = _find(ctx, "color", "//vendor:rgba")
+
+    assert found.reference() == "//vendor:rgba"
+    assert cmf.display(ctx, found) == (0, 0, 0, 1.0)

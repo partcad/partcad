@@ -1300,8 +1300,12 @@ class Project(project_config.Configuration):
         object_name = "%s:%s" % (self.name, name)
         config = Configuration.normalize(name, copy.deepcopy(cmf.normalize(kind, config)), object_name)
         instance_name = name
+        # A parametric declaration named without values is its defaults: its
+        # fields rendered with them, as a reference that gives some renders the
+        # rest ('//pub/std/color:rgba' is drawn in its default colour).
+        if parameter_values or config.get("parameters"):
+            config = cmf.with_parameters(config, parameter_values or {}, object_name)
         if parameter_values:
-            config = cmf.with_parameters(config, parameter_values, object_name)
             instance_name = format_parameterized_name(name, parameter_values)
         declaration = (cmf.Color if kind == "color" else cmf.Finish)(instance_name, self.name, config)
         self.register_object(kind, instance_name, declaration)
@@ -1325,8 +1329,10 @@ class Project(project_config.Configuration):
             material_name, copy.deepcopy(config), "%s:%s" % (self.name, material_name), self.ctx.user_config
         )
         instance_name = material_name
+        # Its defaults where it is named without values (see 'init_cmf_by_config').
+        if parameter_values or config.get("parameters"):
+            config = cmf.with_parameters(config, parameter_values or {}, "%s:%s" % (self.name, material_name))
         if parameter_values:
-            config = cmf.with_parameters(config, parameter_values, "%s:%s" % (self.name, material_name))
             instance_name = format_parameterized_name(material_name, parameter_values)
         found = material.Material(instance_name, source_project.name, config)
         self.register_object("material", instance_name, found)
