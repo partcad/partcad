@@ -392,3 +392,32 @@ def test_pc_info_says_what_the_cmf_comes_to(tmp_path):
         ]
     }
     assert list(info["sets"][0])[:2] == ["color", "material"]
+
+
+def test_two_packages_sharing_a_part_s_geometry_each_get_their_own_cmf(tmp_path):
+    """Applied as the part is read, never cached: the key does not cover what a declaration says."""
+    pytest.importorskip("build123d")
+    roots = []
+    for name, display in [("one", "#C91A09"), ("two", "#0055BF")]:
+        root = tmp_path / name
+        root.mkdir()
+        (root / "partcad.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "name": "//" + name,
+                    "colors": {"brand": {"display": display}},
+                    "parts": {"box": {"type": "build123d", "path": "box.py", "parameters": _declare(color=":brand")}},
+                }
+            )
+        )
+        (root / "box.py").write_text("from build123d import Box\nshow_object(Box(1, 2, 3))\n")
+        roots.append(root)
+
+    seen = []
+    for root, name in zip(roots, ["one", "two"]):
+        ctx = pc.Context(str(root))
+        part = ctx.get_part("//%s:box" % name)
+        envelope = asyncio.run(part.get_wrapped(ctx))
+        seen.append(_section_of(envelope).own().color)
+
+    assert seen == ["//one:brand", "//two:brand"]

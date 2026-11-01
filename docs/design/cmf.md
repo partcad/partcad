@@ -180,8 +180,11 @@ history, or drops it with a warning - never silently.
 A part's own CMF - its parameters - is written into the section by the **core**, not by each wrapper: after the part is
 built and after any `offset`/`scale` (which rebuilds the payload), the core opens the payload with its bounded reader,
 completes or replaces the section as `sourceCmf` says, and compresses it again (`partcad.cmf.apply_declared`). It needs
-no kernel - the section is bytes after the BREP - so every part type gets it the same way, whatever built it, and it is
-cached with the result. A payload several nodes carry - the compound a script's components are pieces of - is given one
+no kernel - the section is bytes after the BREP - so every part type gets it the same way, whatever built it. It is
+applied each time the part is read, from a build or from the cache, and is **not** cached: what it comes to turns on
+declarations the shape's cache key does not cover (what a colour's declaration says to draw it in, and later which
+declaration claims a name a source uses), and an entry written with one package's answer would be served to another
+package sharing the geometry. A part that states no CMF pays one dictionary lookup for it. A payload several nodes carry - the compound a script's components are pieces of - is given one
 section, and those components are drawn in the part's own set: their faces are the compound's to address.
 
 Whoever writes a section also records a **summary** in the node's `metadata` - the sets with their face and solid counts, and what

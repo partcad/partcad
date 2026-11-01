@@ -521,8 +521,10 @@ def apply_declared(ctx, shape, envelope, recorded: dict):
     once: the part's own set holds for every face of it, whichever piece a face
     is in. The tree is copied on the way, never changed in place.
 
-    'recorded' is the metadata the shape is cached with, and takes the summary
-    of what the sections come to (see 'cmf_section.merge_summaries').
+    'recorded' is the metadata the shape was built with, and takes the summary
+    of what the sections come to (see 'cmf_section.merge_summaries'). The
+    caller applies this to the geometry as it was built, on every read rather
+    than once before caching it (see 'Shape._with_cmf').
     """
     from . import shape_envelope
 

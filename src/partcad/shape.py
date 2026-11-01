@@ -1264,7 +1264,13 @@ class Shape(ShapeConfiguration):
                     # known yet" and is what sends 'get_metadata_async()' off to
                     # build the shape. A miss here has to leave it saying that.
                     if cached.get(self.kind) is not None:
-                        self._metadata = shape_envelope.metadata_of(cached[self.kind]) or {}
+                        # The entry holds the geometry as it was built; the
+                        # CMF it is drawn and checked with is applied on
+                        # every read (see '_with_cmf').
+                        cached[self.kind], recorded = self._with_cmf(
+                            ctx, cached[self.kind], shape_envelope.metadata_of(cached[self.kind])
+                        )
+                        self._metadata = recorded or {}
                     if to_cache_in_memory.get(self.kind, False):
                         self._wrapped = cached[self.kind]
                     if to_cache_in_memory.get("cmps", False):
@@ -1366,14 +1372,6 @@ class Shape(ShapeConfiguration):
                         recorded, lambda point: [factor * axis for axis in point]
                     )
 
-            # The CMF the part declares (docs/design/cmf.md) completes, or
-            # replaces, what its source stated - in the payload's CMF section,
-            # after any transform above, which rebuilds the payload.
-            if shape is not None and self.kind == "part":
-                from . import cmf as pc_cmf
-
-                shape, recorded = pc_cmf.apply_declared(ctx, self, shape, recorded)
-
             # Whatever produced the envelope - a factory, a wrapper, a
             # transform - the outer layer around it is this shape's own. It
             # is stamped here rather than left to whoever built the payload,
@@ -1386,7 +1384,6 @@ class Shape(ShapeConfiguration):
             # its entry, and a run with every tier switched off all reach here
             # having built the shape and having nowhere to store what that
             # produced - and 'pc info' should still be able to say how big it is.
-            self._metadata = recorded or {}
             if recorded:
                 shape = dict(shape)
                 shape[shape_envelope.KEY_METADATA] = recorded
@@ -1416,12 +1413,40 @@ class Shape(ShapeConfiguration):
                     do_cache_in_memory = to_cache_in_memory.get(self.kind, False)
                 else:
                     do_cache_in_memory = True
-                if do_cache_in_memory:
-                    self._wrapped = shape
             else:
                 # Let the file cache tell us if we need to cache this in memory
+                do_cache_in_memory = True
+
+            # What is cached is the geometry as it was built; what is handed
+            # out is that with the CMF applied, as a hit applies it too.
+            shape, recorded = self._with_cmf(ctx, shape, recorded)
+            self._metadata = recorded or {}
+            if do_cache_in_memory:
                 self._wrapped = shape
             return shape
+
+    def _with_cmf(self, ctx, envelope, recorded):
+        """'(envelope, recorded)' with this part's CMF applied: what its source stated, converted and completed.
+
+        See 'partcad.cmf.apply_declared'. Not cached, and not something a cache
+        entry could hold: what it comes to turns on declarations the shape's key
+        does not cover - what a colour's declaration says to draw it in, which
+        declaration claims a name a STEP file uses - and an entry written with
+        one package's answer would be served to another sharing the geometry.
+        So it is applied as the shape is read, from a build or from the cache,
+        and costs a part with no CMF one look at a dictionary.
+        """
+        if envelope is None or self.kind != "part":
+            return envelope, recorded
+        from . import cmf as pc_cmf
+
+        applied, after = pc_cmf.apply_declared(ctx, self, envelope, recorded)
+        if applied is envelope:
+            return envelope, recorded
+        if after:
+            applied = dict(applied)
+            applied[shape_envelope.KEY_METADATA] = after
+        return applied, after
 
     def _shape_properties(self):
         """What this shape reports about itself, or None if it reports nothing.
