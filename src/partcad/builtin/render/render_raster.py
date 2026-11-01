@@ -28,7 +28,7 @@ reportlab already depends on Pillow, and both styles hand the finished image to
 encoder option is reachable without a single extra package in the sandbox. The
 shaded style adds none either: it is numpy, which build123d brings with it, and
 OCP, which is what everything here projects with. svglib and reportlab are
-imported by the lines style alone, so that a video, which draws shaded, needs
+needed by the lines style alone, so that a video, which draws shaded, needs
 neither in its sandbox.
 
 This module is imported by its siblings rather than run on its own: it is not
@@ -54,6 +54,18 @@ sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 import render_svg
 import viewpoint
+
+# What rasterizes the lines style. A video draws shaded, and its sandbox has
+# neither of them: there they are None, and only a picture of lines - which no
+# video draws - says so.
+try:
+    import svglib.svglib as svglib
+    import reportlab.graphics.renderPM as renderPM
+
+    _LINES_MISSING = None
+except ImportError as e:
+    svglib = renderPM = None
+    _LINES_MISSING = str(e)
 
 # How a picture may be drawn; 'lines' unless the request says otherwise.
 STYLES = ("lines", "shaded")
@@ -412,8 +424,11 @@ def _shaded(path, request, fmt, config_pil):
 
 
 def _lines(path, request, fmt, config_pil):
-    import reportlab.graphics.renderPM as renderPM
-    import svglib.svglib as svglib
+    if svglib is None or renderPM is None:
+        raise OptionError(
+            "a picture of lines is rasterized by svglib and reportlab, and this sandbox has neither (%s): render "
+            "it as a 'png' or a 'jpeg', which ask for them, or in the 'shaded' style" % _LINES_MISSING
+        )
 
     # A private directory, not a bare temporary name: 'tempfile.mktemp()'
     # only invents a path and reserves nothing, leaving a window in which
