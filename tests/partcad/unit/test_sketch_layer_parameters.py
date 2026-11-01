@@ -383,13 +383,13 @@ def test_a_part_type_parameter_needs_no_declaration_either(tmp_path):
 
 
 def test_a_part_type_that_rejects_the_parameter_still_rejects_it(tmp_path, caplog):
-    """A 'step' file states its own material; declaring one is refused as before."""
+    """A 'step' file may hold many solids, so one tolerance for all is refused as before."""
     (tmp_path / "partcad.yaml").write_text(yaml.safe_dump({"name": "//test", "parts": {"bracket": {"type": "step"}}}))
     (tmp_path / "bracket.step").write_text("")
     ctx = pc.Context(str(tmp_path))
 
     with caplog.at_level("ERROR"):
-        assert ctx.get_part("//test:bracket;material=steel") is None
+        assert ctx.get_part("//test:bracket;tolerance=0.1") is None
     assert "parametrize" in caplog.text
 
 

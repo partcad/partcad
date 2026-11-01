@@ -9,11 +9,11 @@
 
 import typing
 
-from . import factory
+from . import cmf, factory
 from . import logging as pc_logging
 from . import shape_envelope, telemetry
 from .part import Part
-from .shape_config import is_a_length
+from .shape_config import NO_DEFAULT, is_a_length
 from .shape_factory import ShapeFactory
 
 
@@ -47,23 +47,25 @@ class PartFactory(ShapeFactory):
     # name may carry inside its own definition (see 'shape-parameter' in the
     # schema, and 'features/lint.feature') are a different thing entirely and
     # are never looked at here.
-    POLICED_OBJECT_TYPE_PARAMETERS: typing.FrozenSet[str] = frozenset({"material", "color", "tolerance"})
+    POLICED_OBJECT_TYPE_PARAMETERS: typing.FrozenSet[str] = frozenset({"tolerance", *cmf.TYPE_PARAMETERS})
 
     # ACCEPTED_OBJECT_TYPE_PARAMETERS is what *this* factory accepts of the
     # policed names, mapped to the default each reads back as when nothing
-    # declares it. 'NO_DEFAULT' means absent stays absent. Empty here, which
-    # makes "does not accept" the default: a type opts in by mixing in a class
-    # that widens the mapping (see 'PartFactoryHomogen'). The types that have
-    # not opted in are deliberate, not an oversight - whether each of them
-    # should accept these has not been decided, and will be settled case by
-    # case. Defaulting to "no" is what leaves that decision open; defaulting to
-    # "yes" would silently make it.
+    # declares it. 'NO_DEFAULT' means absent stays absent.
+    #
+    # The CMF parameters - 'color', 'material', 'finish', 'sourceCmf' and
+    # 'cmfConvention' (see 'partcad.cmf') - are accepted by every part type:
+    # whatever a part is built from, its source may state CMF and its
+    # declaration completes or replaces it (docs/design/cmf.md, "Where CMF
+    # comes from"). 'tolerance' is not: a type opts in by mixing in a class
+    # that widens the mapping (see 'PartFactoryHomogen'), because one
+    # tolerance is only true of one homogeneous body.
     #
     # Only what is *accepted* carries defaults, which is why this is a mapping
     # and the registry above is not. A default is what a type promises about a
     # parameter it honours, and a type that rejects a parameter promises
     # nothing about it.
-    ACCEPTED_OBJECT_TYPE_PARAMETERS: typing.Dict[str, typing.Any] = {}
+    ACCEPTED_OBJECT_TYPE_PARAMETERS: typing.Dict[str, typing.Any] = {name: NO_DEFAULT for name in cmf.TYPE_PARAMETERS}
 
     # Whether a part of this type may carry a 'tolerance:' field of its own, and
     # which format's reader is used to see whether its file states one.
@@ -247,16 +249,14 @@ class PartFactory(ShapeFactory):
     #
     # The two sections are not two spellings of one thing: 'parameters:' is what
     # was *asked of* the type that produces the shape, and 'properties:' is what
-    # the shape *turned out to be* - which is why a 'step' part, whose file
-    # already states a material per solid, does not accept the parameter at all
-    # (see 'PartFactoryHomogen'). But for a type that does accept it, the answer
-    # to "what did this turn out to be made of" is exactly what was asked for,
-    # and nothing else is going to say so: a CadQuery script does not report a
-    # material.
+    # the shape *turned out to be*. Where nothing else says what a part turned
+    # out to be made of, that is what was asked for - a CadQuery script does not
+    # report a material - and where its source does (a STEP file stating one per
+    # solid), what the reader recorded is kept: only the gaps are filled in, the
+    # rule for CMF throughout (docs/design/cmf.md).
     #
-    # 'color' is deliberately absent. The parameter is free-form text ("red")
-    # and the property is '#RRGGBB', so promoting one would need a conversion,
-    # and inventing one here would write a colour nobody stated.
+    # 'color' is not in this table: the parameter names a colour declaration and
+    # the property is '#RRGGBB', so it goes through 'record_declared_color'.
     OBJECT_TYPE_PARAMETER_PROPERTIES = {"material": "material"}
 
     def record_object_type_properties(self, config: object) -> None:
@@ -292,6 +292,40 @@ class PartFactory(ShapeFactory):
                 properties = {}
                 config[shape_envelope.KEY_PROPERTIES] = properties
             properties.setdefault(key, value)
+        self.record_declared_color(config, parameters)
+
+    def record_declared_color(self, config: dict, parameters: dict) -> None:
+        """Record the display of the colour the part declares as the colour it is drawn in.
+
+        The 'color' parameter names a colour declaration (see 'partcad.cmf'),
+        and what a drawing needs of it is its display: '#RRGGBB[AA]', which is
+        what 'properties: color:' holds and every renderer and the IDE read. A
+        colour the source states per face is the payload's to say (see
+        docs/design/cmf.md), and wins where it does; this is the part's own.
+
+        Only where nothing is recorded already, as for the material: a colour
+        a reader found in the file outranks the declaration's.
+        """
+        declared = parameters.get("color")
+        value = declared.get("default") if isinstance(declared, dict) else None
+        if not isinstance(value, str) or not value.strip():
+            return
+        properties = config.get(shape_envelope.KEY_PROPERTIES)
+        if isinstance(properties, dict) and properties.get("color"):
+            return
+        ctx = getattr(self, "ctx", None)
+        package = getattr(self.project, "name", "") if getattr(self, "project", None) is not None else ""
+        reference = cmf.canonical(ctx, "color", value, package, quiet=False)
+        rgba = cmf.rgba_of_reference(reference)
+        if rgba is None:
+            rgba = cmf.display(ctx, cmf.lookup(ctx, "color", reference, package, quiet=True))
+        if rgba is None:
+            pc_logging.warning("%s: the colour '%s' has no display to draw it in" % (config.get("name"), value))
+            return
+        if not isinstance(properties, dict):
+            properties = {}
+            config[shape_envelope.KEY_PROPERTIES] = properties
+        properties["color"] = cmf.css_color.to_hex(rgba)
 
     def _create_part(self, config: object) -> Part:
         self.record_object_type_properties(config)

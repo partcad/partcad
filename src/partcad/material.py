@@ -39,9 +39,7 @@ questions of.
 
 import typing
 
-from . import logging as pc_logging
-from . import telemetry
-from .utils import resolve_resource_path
+from . import cmf, telemetry
 
 # What a material contributes to the physics of a shape made of it: the
 # 'Material' attribute, and the PartCAD property it fills in where the shape
@@ -60,8 +58,8 @@ PHYSICS_FROM_MATERIAL = {"mu": "friction", "density": "density"}
 
 
 @telemetry.instrument()
-class Material:
-    """One material of a package.
+class Material(cmf.Declaration):
+    """One material of a package: a CMF declaration with the physical facts of a substance.
 
     'density' is in kg/m^3, the unit every density in PartCAD is in - a part's
     'physics', an export's 'density' parameter, and every simulation format a
@@ -70,27 +68,18 @@ class Material:
     no second spelling of it anywhere for that number to be mistaken for.
     """
 
-    name: str
-    project_name: str
-    desc: str
     kind: str = "material"
-    config: dict[str, typing.Any]
-    errors: list[str]
 
-    def __init__(self, name: str, project_name: str, config: dict[str, typing.Any] = {}) -> None:
-        self.name = name
-        self.project_name = project_name
-        self.config = config
-        # Stripped the way 'Software' and 'Shape' strip theirs: a folded YAML
-        # scalar ends with a newline, and that newline reaches a generated
-        # README as a trailing line break inside a table cell.
-        desc = config.get("desc", "")
-        self.desc = desc.strip() if isinstance(desc, str) else desc
-        self.errors = []
+    @property
+    def color_claim(self) -> typing.Optional[str]:
+        """The colour the material claims for its natural surface, as written, or None.
 
-    def error(self, msg: str) -> None:
-        self.errors.append(msg)
-        pc_logging.error("%s: %s: %s" % (self.project_name, self.name, msg))
+        A reference to a colour declaration: an unpainted aluminium part is
+        whatever colour aluminium is, and a part made of it that states no colour
+        of its own is that colour (see docs/design/cmf.md).
+        """
+        claim = self.config.get("color")
+        return claim if isinstance(claim, str) and claim.strip() else None
 
     @property
     def formal(self) -> typing.Optional[str]:
@@ -197,10 +186,10 @@ class Material:
         and for the same reason: 'info' is the attribute a factory replaces, so
         the object's own half of the answer needs a name of its own.
         """
-        info = {
-            "Path": self.project_name,
-            "Name": self.name,
-        }
+        info = self.cmf_info()
+        info.pop("Errors", None)
+        if self.color_claim:
+            info["Color"] = self.color_claim
         if self.formal:
             info["Formal"] = self.formal
         if self.full:
@@ -224,12 +213,6 @@ class Material:
     def info(self) -> dict:
         return self.material_info()
 
-    def matches(self, keyword: str) -> bool:
-        if not keyword:
-            return False
-        keyword = keyword.lower()
-        return keyword in self.name.lower() or keyword in str(self.config).lower()
-
 
 def lookup(ctx, ref: str, quiet: bool = False):
     """The (package, material) a fully qualified reference points at.
@@ -246,17 +229,13 @@ def lookup(ctx, ref: str, quiet: bool = False):
     Shaped exactly like 'software.lookup()', because a caller resolving a
     reference should not have to learn a second way of doing it per kind.
     """
-    package_name, name = resolve_resource_path("", ref)
-    project = ctx.get_project(package_name) if ctx is not None else None
-    if project is None:
-        if not quiet:
-            pc_logging.error("The material '%s' is not found: no such package" % ref)
-        return None, None
-    material = project.get_material(name, quiet=quiet)
-    if material is None:
-        # 'get_material' has already said why, unless it was asked not to.
-        return project, None
-    return project, material
+    found = cmf.lookup(ctx, "material", ref, quiet=quiet)
+    if found is None:
+        # 'cmf.lookup' has already said why, unless it was asked not to. The
+        # package is still answered where there is one.
+        package_name, _name = cmf._split(ref, "")
+        return (ctx.get_project(package_name) if ctx is not None else None), None
+    return ctx.get_project(found.project_name), found
 
 
 def physics_of(material) -> dict:

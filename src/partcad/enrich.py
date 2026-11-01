@@ -203,6 +203,15 @@ def enriched_source_name(source_project, target_project, config) -> str:
     # 'config.parameter_overrides').
     overrides = parameter_overrides(getattr(getattr(target_project, "ctx", None), "user_config", None))
     parameters.update(overrides.get(f"{target_project.name}:{config['name']}", {}))
+    # A CMF value names a declaration as the package writing this enrich sees
+    # it (':stone'), and the instance is named by what it resolves to, so that
+    # the same colour reached through two aliases is one item (see
+    # 'partcad.cmf.canonical').
+    from . import cmf
+
+    parameters = cmf.canonical_parameters(
+        getattr(target_project, "ctx", None), parameters, getattr(source_project, "name", "")
+    )
     return format_parameterized_name(source_name, parameters)
 
 

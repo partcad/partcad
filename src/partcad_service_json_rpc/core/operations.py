@@ -2673,7 +2673,9 @@ def list_all(session, params):
 # The key is the name of the package attribute holding the objects, which is why
 # 'software' looks singular here: the section is called that in both numbers.
 _LIST_LABELS = {
+    "colors": "PartCAD colors",
     "materials": "PartCAD materials",
+    "finishes": "PartCAD finishes",
     "parts": "PartCAD parts",
     "sketches": "PartCAD sketches",
     "assemblies": "PartCAD assemblies",
@@ -2684,7 +2686,9 @@ _LIST_LABELS = {
 
 # The kind each section holds one of, for the accessors that are keyed by kind.
 _LIST_KINDS = {
+    "colors": "color",
     "materials": "material",
+    "finishes": "finish",
     "parts": "part",
     "sketches": "sketch",
     "assemblies": "assembly",
@@ -2708,7 +2712,11 @@ _LIST_FROM_OBJECTS = ("interfaces",)
 # ones with geometry in them. A package of firmware images has nothing to render
 # and would be filtered out of the walk exactly as a package of interfaces is
 # (see 'Context.get_packages', and the TODO there about the two).
-_LIST_EVERY_PACKAGE = ("interfaces", "software", "materials")
+_LIST_EVERY_PACKAGE = ("interfaces", "software", "colors", "materials", "finishes")
+
+# The three kinds of CMF declaration (see 'partcad.cmf'), listed alike: name,
+# what it is drawn in, whether it is a claim that it can be had, and what it is.
+_LIST_CMF = ("colors", "materials", "finishes")
 
 
 def list_objects(session, params):
@@ -2750,7 +2758,9 @@ def list_objects(session, params):
         output = _LIST_LABELS.get(kind, "PartCAD objects") + ":\n"
         for project_name in packages:
             project = ctx.projects[project_name]
-            if kind in _LIST_FROM_OBJECTS:
+            if kind in _LIST_CMF:
+                rows = _cmf_rows(ctx, project, _LIST_KINDS[kind])
+            elif kind in _LIST_FROM_OBJECTS:
                 # A snapshot, not the live dictionary: reading an object can
                 # resolve another one into the package - an interface declared
                 # as an alias takes its description from the interface it names
@@ -2787,6 +2797,36 @@ def list_objects(session, params):
             output += "\t<none>\n"
         pc.logging.info(output)
     return None
+
+
+def _cmf_rows(ctx, project, kind: str) -> dict:
+    """{name: description} of a package's CMF declarations, the description led by what they look like.
+
+    'display' and 'manufacturable' first, the way every view shows a CMF
+    declaration (docs/design/cmf.md, "One presentation"): a colour that is only
+    a picture says so before anything else.
+    """
+    from partcad import cmf
+
+    rows = {}
+    for name in project.object_names(kind):
+        declaration = project.get_cmf(kind, name, quiet=True)
+        if declaration is None:
+            rows[name] = "<broken>"
+            continue
+        if declaration.is_alias:
+            rows[name] = "alias of %s" % declaration.source
+            continue
+        if declaration.config.get("parameters"):
+            look = "parametric"
+        elif kind == "finish":
+            look = declaration.cmf_info().get("Display", "-")
+        else:
+            rgba = cmf.display(ctx, declaration)
+            look = cmf.css_color.to_hex(rgba) if rgba is not None else "-"
+        made = "" if declaration.manufacturable else " (display only)"
+        rows[name] = "%-11s%s%s" % (look, " " + declaration.desc if declaration.desc else "", made)
+    return rows
 
 
 def list_packages(session, params):
