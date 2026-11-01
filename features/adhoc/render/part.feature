@@ -106,7 +106,7 @@ Feature: `pc adhoc render part` command
       """
     When I run "pc --no-ansi adhoc render part -e drawing -t nosuch $PARTCAD_ROOT/examples/produce_part_step/bolt.step ./bolt.svg"
     Then the command should exit with a status code of "2"
-    Then STDERR should contain "declares no 'nosuch' file type"
+    Then STDERR should contain "No 'nosuch' file type is declared"
     Then a file named "bolt.svg" should not exist
 
   Scenario: Fail on a package an ad-hoc render cannot reach

@@ -3346,7 +3346,7 @@ def test_adhoc_render_refuses_an_output_file_and_a_directory_both(monkeypatch, t
 
 def test_adhoc_render_reports_what_the_render_refused_as_a_usage_error(monkeypatch, tmp_path):
     """A package it cannot reach, or a file type the package does not declare: nothing was attempted."""
-    refusal = ValueError("opts declares no 'nosuch' file type. It declares: svg-thin")
+    refusal = ValueError("No 'nosuch' file type is declared by /opts. It declares: svg-thin")
     install_fake_render(monkeypatch, part=FakeRenderer(error=refusal))
     session, _ = make_session()
 
@@ -3354,7 +3354,7 @@ def test_adhoc_render_reports_what_the_render_refused_as_a_usage_error(monkeypat
         operations.adhoc_render(session, adhoc_request(tmp_path, output_type="nosuch", options_package="/opts"))
 
     assert excinfo.value.code == operations.USAGE_ERROR
-    assert "declares no 'nosuch'" in str(excinfo.value)
+    assert "No 'nosuch' file type is declared" in str(excinfo.value)
 
 
 def test_adhoc_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch, tmp_path):

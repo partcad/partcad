@@ -314,9 +314,11 @@ def write_output_file(
                 for section in output.SECTIONS:
                     declared.update(output.format_names(options_project.config_obj.get(section)))
                 if output_type not in declared and output_type not in output.all_formats(ctx):
+                    # What is wrong first, and the path after it: an error box
+                    # wraps a long line, and the path is as long as it is.
                     raise AdhocUsageError(
-                        "%s declares no '%s' file type. It declares: %s"
-                        % (options_package, output_type, ", ".join(sorted(declared)) or "none")
+                        "No '%s' file type is declared by %s. It declares: %s"
+                        % (output_type, options_package, ", ".join(sorted(declared)) or "none")
                     )
 
             # Looked up by name and fetched one at a time: a dictionary of bound
