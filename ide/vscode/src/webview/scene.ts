@@ -352,10 +352,26 @@ let fitting: Fitting | undefined;
  * canvas itself, and set once it has arrived.
  */
 let fittedTo: number | undefined;
+
+/**
+ * Whether somebody has hold of the view right now: between the controls' 'start'
+ * and 'end' - a drag, a turn of the wheel, a SpaceMouse push, which says so
+ * through the same two events ('navigable.moving').
+ *
+ * A fit is stopped when somebody takes hold of the view, and that alone is not
+ * enough: a fit can also start while they are holding it - a show arriving in
+ * the middle of a drag, a push - and 'start' has been and gone. So a fit does
+ * not take a step while the view is held ('stepFit').
+ */
+let held = false;
 controls.addEventListener('start', () => {
     fittedTo = undefined;
+    held = true;
     // Two hands on one wheel: whoever takes hold of the view has it.
     fitting = undefined;
+});
+controls.addEventListener('end', () => {
+    held = false;
 });
 
 /** Which way the camera looks at the model from: Stage's default, slightly above. */
@@ -748,6 +764,12 @@ export function fit(): void {
 /** Move a "Fit" on to where it is at 'now', before the controls take their turn; a frame of it is a new picture. */
 function stepFit(now: number): void {
     if (fitting === undefined) {
+        return;
+    }
+    if (held) {
+        // Started while somebody was moving the view: theirs, as one they
+        // took hold of is (see 'held').
+        fitting = undefined;
         return;
     }
     const along = fitProgress(now - fitting.since);
@@ -1407,7 +1429,11 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // from where the camera is ('fit'); and so is the same one again - an edit
     // saved, an agent's next version of it, which may have grown or shrunk -
     // while Auto-fit is on. With it off, the same object again keeps the camera
-    // exactly where it is, as it did before there was a fit at all.
+    // where it was put, as it did before there was a fit at all - and a fit still
+    // on its way from showing another object, less than a second ago, carries on
+    // to the new version of it: nobody has put the camera anywhere on that object
+    // yet (taking hold of the view would have stopped the fit), and stopping it
+    // there would leave a view between the two objects' that nobody chose.
     //
     // Not a cut or the show that takes one away, which keeps the camera still
     // for the reason it keeps the model where it was: the slider is moving
