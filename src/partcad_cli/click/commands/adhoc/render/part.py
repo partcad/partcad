@@ -55,7 +55,7 @@ RENDER_TYPES = ["svg", "png", "jpeg", "dxf"]
 @click.argument("input_filename", type=click.Path(exists=True))
 @click.argument("output_filename", type=click.Path(), required=False)
 @click.pass_obj
-def cli(cli_ctx, input_type, output_type, view, viewport_origin, viewport_up, input_filename, output_filename):
+def cli(cli_ctx, input_type, output_type, view, viewport_origin, viewport_up, turn, input_filename, output_filename):
     """Render a CAD file to a 2D image without modifying project configuration."""
     run(
         cli_ctx,
@@ -67,7 +67,7 @@ def cli(cli_ctx, input_type, output_type, view, viewport_origin, viewport_up, in
             # Absolute so the daemon reads/writes in the user's cwd.
             "input_filename": os.path.abspath(input_filename),
             "output_filename": os.path.abspath(output_filename) if output_filename else None,
-            **viewport_params(view, viewport_origin, viewport_up),
+            **viewport_params(view, viewport_origin, viewport_up, turn),
         },
         needs_context=False,
     )

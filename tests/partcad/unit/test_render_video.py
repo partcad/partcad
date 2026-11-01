@@ -3,13 +3,14 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Unit tests for the video file types of '//builtin/render'.
+"""Unit tests for the shaded pictures and the video file types of '//builtin/render'.
 
-Three modules make a video: 'video_scene.py' draws the frames the way the
-Digital Thread's 3D view draws them, 'video_encode.py' builds and runs the
-GStreamer pipelines, and 'render_video.py' reads the file type's fields and puts
-the two together. All three are imported here by path, as the sandbox imports
-them. What needs GStreamer is skipped on a machine without it; the rest - the
+Three modules make a video: 'render_raster.py' draws each frame in its shaded
+style ('raster_scene.py' is what draws it the way the Digital Thread's 3D view
+does) - the very picture a PNG asked for 'style: shaded' is - 'video_encode.py'
+builds and runs the GStreamer pipelines, and 'render_video.py' reads the file
+type's fields and puts the two together. All of them are imported here by path,
+as the sandbox imports them. What needs GStreamer is skipped on a machine without it; the rest - the
 options, the pipelines as text, the frames as pixels - needs only the CAD stack
 this environment already has.
 """
@@ -32,9 +33,13 @@ for directory in (WRAPPERS_DIR, RENDER_DIR):
     if directory not in sys.path:
         sys.path.append(directory)
 
+import raster_scene  # noqa: E402
+import render_png  # noqa: E402
+import render_raster  # noqa: E402
+import render_svg  # noqa: E402
 import render_video  # noqa: E402
 import video_encode  # noqa: E402
-import video_scene  # noqa: E402
+import viewpoint  # noqa: E402
 
 VIDEO_TYPES = ("mp4", "m4v", "mov", "qt", "mkv", "webm", "avi", "wmv", "asf", "ogv")
 
@@ -71,7 +76,8 @@ def test_every_video_type_is_declared_against_the_renderer():
         # an image of that name.
         assert "container" not in config, name
         assert config["dockerImage"] == "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
-        assert config["size"] in render_video.SIZES, name
+        assert config["size"] in render_raster.SIZES, name
+        assert config["style"] == "shaded", name
         assert config["preset"] in video_encode.PRESETS, name
 
 
@@ -169,17 +175,17 @@ def test_one_number_is_a_speed_about_z():
         render_video._vector({"speed": [1, 2]}, "speed", render_video.DEFAULT_SPEED)
 
 
-def test_the_cli_reads_a_speed_the_way_the_renderer_does():
+def test_the_cli_reads_a_speed_and_a_turn_the_way_the_renderer_does():
     import rich_click as click
 
-    from partcad_cli.click.video import speed_vector
+    from partcad_cli.click.viewport import turn_vector
 
-    assert speed_vector(None, None, None) is None
-    assert speed_vector(None, None, "15") == [0.0, 0.0, 15.0]
-    assert speed_vector(None, None, "1,2 3") == [1.0, 2.0, 3.0]
+    assert turn_vector(None, None, None) is None
+    assert turn_vector(None, None, "15") == [0.0, 0.0, 15.0]
+    assert turn_vector(None, None, "1,2 3") == [1.0, 2.0, 3.0]
     for value in ("fast", "1,2"):
         with pytest.raises(click.BadParameter):
-            speed_vector(None, None, value)
+            turn_vector(None, None, value)
 
 
 def test_a_request_hands_on_only_the_video_options_it_gives():
@@ -189,6 +195,8 @@ def test_a_request_hands_on_only_the_video_options_it_gives():
     # 'append' is a flag: false is the same as not asking.
     assert _video({"size": "square", "fps": None, "append": False, "quality": 0}) == {"size": "square", "quality": 0}
     assert _video({"append": True, "speed": [0, 0, 90]}) == {"append": True, "speed": [0, 0, 90]}
+    # A picture's fields go the same way: a PNG and a video both read them.
+    assert _video({"style": "shaded", "background": "#000000"}) == {"style": "shaded", "background": "#000000"}
 
 
 def test_angles_stay_within_a_turn():
@@ -497,22 +505,22 @@ def test_a_pipeline_appending_puts_the_old_frames_first(monkeypatch):
 
 def test_neutral_tone_mapping_leaves_ordinary_colours_alone():
     color = np.array([[0.5, 0.3, 0.2]])
-    assert video_scene.neutral_tone_mapping(color) == pytest.approx(color - 0.04)
-    bright = video_scene.neutral_tone_mapping(np.array([[3.0, 3.0, 3.0]]))
+    assert raster_scene.neutral_tone_mapping(color) == pytest.approx(color - 0.04)
+    bright = raster_scene.neutral_tone_mapping(np.array([[3.0, 3.0, 3.0]]))
     assert bright.max() < 1.0
 
 
 def test_the_edge_colour_is_the_ides():
-    assert video_scene.edge_color(video_scene.DEFAULT_COLOR) == video_scene.DEFAULT_EDGE_COLOR
+    assert raster_scene.edge_color(raster_scene.DEFAULT_COLOR) == raster_scene.DEFAULT_EDGE_COLOR
     # Darkened by a quarter of its lightness, and a dark one lightened.
-    assert sum(video_scene.edge_color((200, 50, 50))) < 300
-    assert sum(video_scene.edge_color((10, 10, 10))) > 30
+    assert sum(raster_scene.edge_color((200, 50, 50))) < 300
+    assert sum(raster_scene.edge_color((10, 10, 10))) > 30
 
 
 def test_the_ides_colour_is_appearances():
     import appearance
 
-    assert "#%02X%02X%02X" % video_scene.DEFAULT_COLOR == appearance.DEFAULT_COLOR
+    assert "#%02X%02X%02X" % raster_scene.DEFAULT_COLOR == appearance.DEFAULT_COLOR
 
 
 def test_a_triangle_covers_half_its_square():
@@ -520,10 +528,10 @@ def test_a_triangle_covers_half_its_square():
     sx = np.array([[0.0, 100.0, 0.0]])
     sy = np.array([[0.0, 0.0, 100.0]])
     depth = np.ones((1, 3))
-    planes = video_scene.Planes(sx, sy, depth)
+    planes = raster_scene.Planes(sx, sy, depth)
     zbuffer = np.empty(100 * 100, dtype=np.float32)
     owner = np.empty(100 * 100, dtype=np.int64)
-    video_scene.rasterize(sx, sy, planes, 100, 100, 0.01, zbuffer, owner)
+    raster_scene.rasterize(sx, sy, planes, 100, 100, 0.01, zbuffer, owner)
     assert abs(int((owner == 0).sum()) - 5000) <= 100
     assert zbuffer[owner == 0] == pytest.approx(1.0)
 
@@ -532,16 +540,16 @@ def test_the_nearer_of_two_triangles_wins():
     sx = np.array([[0.0, 50.0, 0.0], [0.0, 50.0, 0.0]])
     sy = np.array([[0.0, 0.0, 50.0], [0.0, 0.0, 50.0]])
     depth = np.array([[2.0, 2.0, 2.0], [1.0, 1.0, 1.0]])
-    planes = video_scene.Planes(sx, sy, depth)
+    planes = raster_scene.Planes(sx, sy, depth)
     zbuffer = np.empty(50 * 50, dtype=np.float32)
     owner = np.empty(50 * 50, dtype=np.int64)
-    video_scene.rasterize(sx, sy, planes, 50, 50, 0.01, zbuffer, owner)
+    raster_scene.rasterize(sx, sy, planes, 50, 50, 0.01, zbuffer, owner)
     assert set(np.unique(owner)) == {-1, 1}
 
 
 def test_turning_the_object_is_turning_the_camera_the_other_way():
-    camera = video_scene.Camera(distance=10.0)
-    turn = video_scene.rotation((0, 0, 90))
+    camera = raster_scene.Camera(distance=10.0)
+    turn = raster_scene.rotation((0, 0, 90))
     basis, eye = camera.turned(turn)
     # A point the turn carries in front of the camera is where the camera,
     # turned the other way, sees it.
@@ -552,11 +560,11 @@ def test_turning_the_object_is_turning_the_camera_the_other_way():
 
 
 def test_a_box_is_drawn_in_goldenrod_on_the_background():
-    scene = video_scene.Scene([("#DAA520", _box())], 200)
+    scene = raster_scene.Scene([("#DAA520", _box())], 200)
     # Two triangles a face, each split until no edge is longer than 'MAX_EDGE'.
     assert scene.triangle_count > 12
-    camera = video_scene.Camera(distance=video_scene.fit_distance(scene.radius, 1.0))
-    frame = video_scene.Painter(scene, camera, 120, 120, (0x1F, 0x1F, 0x1F), supersample=2).draw(np.eye(3))
+    camera = raster_scene.Camera(distance=raster_scene.fit_distance(scene.radius, 1.0))
+    frame = raster_scene.Painter(scene, camera, 120, 120, (0x1F, 0x1F, 0x1F), supersample=2).draw(np.eye(3))
     assert frame.shape == (120, 120, 3) and frame.dtype == np.uint8
     assert tuple(frame[0, 0]) == (0x1F, 0x1F, 0x1F)
     middle = frame[60, 60].astype(int)
@@ -565,7 +573,7 @@ def test_a_box_is_drawn_in_goldenrod_on_the_background():
 
 
 def test_every_box_normal_points_out():
-    points, normals, corners = video_scene.triangles(_box(), 0.1)
+    points, normals, corners = raster_scene.triangles(_box(), 0.1)
     centroids = points[corners].mean(axis=1)
     assert np.all(np.sum(normals[corners[:, 0]] * centroids, axis=1) > 0)
     # And the corners turn counter-clockwise about it, seen from outside.
@@ -575,8 +583,8 @@ def test_every_box_normal_points_out():
 
 def test_large_triangles_are_split_and_still_meet():
     """A face's two triangles become many, with no edge longer than asked, covering the same area."""
-    points, normals, corners = video_scene.triangles(_box(40, 40, 40), 0.1)
-    refined_points, refined_normals, refined = video_scene.refine(points, normals, corners, 5.0)
+    points, normals, corners = raster_scene.triangles(_box(40, 40, 40), 0.1)
+    refined_points, refined_normals, refined = raster_scene.refine(points, normals, corners, 5.0)
 
     def area(p, c):
         return 0.5 * np.linalg.norm(np.cross(p[c[:, 1]] - p[c[:, 0]], p[c[:, 2]] - p[c[:, 0]]), axis=1).sum()
@@ -592,11 +600,11 @@ def test_a_sketch_of_lines_is_drawn_as_lines():
     import build123d as b3d
 
     lines = b3d.Compound([b3d.Line((0, 0), (30, 0)), b3d.Line((30, 0), (30, 20))]).wrapped
-    scene = video_scene.Scene([("#DAA520", lines)], 100)
+    scene = raster_scene.Scene([("#DAA520", lines)], 100)
     assert scene.triangle_count == 0 and len(scene.segments) >= 2
-    camera = video_scene.Camera(distance=video_scene.fit_distance(scene.radius, 1.0))
-    frame = video_scene.Painter(scene, camera, 100, 100, (0, 0, 0), line_width=2).draw(np.eye(3))
-    assert (frame.reshape(-1, 3) == video_scene.DEFAULT_EDGE_COLOR).all(axis=1).any()
+    camera = raster_scene.Camera(distance=raster_scene.fit_distance(scene.radius, 1.0))
+    frame = raster_scene.Painter(scene, camera, 100, 100, (0, 0, 0), line_width=2).draw(np.eye(3))
+    assert (frame.reshape(-1, 3) == raster_scene.DEFAULT_EDGE_COLOR).all(axis=1).any()
 
 
 def test_nothing_to_draw_is_said():
@@ -606,7 +614,160 @@ def test_nothing_to_draw_is_said():
     empty = TopoDS_Compound()
     BRep_Builder().MakeCompound(empty)
     with pytest.raises(ValueError, match="nothing to draw"):
-        video_scene.Scene([("#DAA520", empty)], 100)
+        raster_scene.Scene([("#DAA520", empty)], 100)
+
+
+# ---------------------------------------------------------------------------
+# Shaded pictures, the turn, and a frame as a picture
+# ---------------------------------------------------------------------------
+
+
+def _pixels(path):
+    from PIL import Image
+
+    with Image.open(path) as image:
+        return np.asarray(image.convert("RGB"))
+
+
+def test_a_turn_is_the_camera_turned_back():
+    """The front of an object turned a quarter about Z is what its left side was."""
+    origin, up = viewpoint.turned((0, -100, 0), (0, 0, 1), (0, 0, 90))
+    assert origin == pytest.approx((-100, 0, 0), abs=1e-9)
+    assert up == pytest.approx((0, 0, 1), abs=1e-9)
+    # No turn is the viewport exactly as it was, so a picture that asks for none
+    # comes out byte for byte as it did before there was a turn to ask for.
+    assert viewpoint.turned((100, -100, 100), (0, 0, 1), (0, 0, 0)) == ((100, -100, 100), (0, 0, 1))
+    assert viewpoint.turn_of({"turn": 45}) == (0.0, 0.0, 45.0)
+    assert viewpoint.turn_of({"turn": "10, 20, 30"}) == (10.0, 20.0, 30.0)
+    assert viewpoint.turn_of({}) == (0.0, 0.0, 0.0)
+    for value in ([1, 2], "x", True, [0, float("nan"), 0]):
+        with pytest.raises(ValueError):
+            viewpoint.turn_of({"turn": value})
+
+
+def test_the_projection_is_drawn_turned(tmp_path):
+    """The SVG (and so DXF and a PNG of lines) says it looked from where the turn put its camera."""
+    result = render_svg.process(
+        str(tmp_path / "box.svg"),
+        {"wrapped": _box(), "viewport_origin": [0, -100, 0], "viewport_up": [0, 0, 1], "turn": [0, 0, 90]},
+    )
+    assert result["success"], result.get("exception")
+    assert result["viewport"]["viewport_origin"] == pytest.approx([-100, 0, 0], abs=1e-9)
+
+
+def test_a_shaded_png_is_a_lit_picture(tmp_path):
+    path = str(tmp_path / "box.png")
+    result = render_png.process(path, {"wrapped": _box(), "style": "shaded", "size": "96x64", "antialias": 1})
+    assert result["success"], result.get("exception")
+    assert result["files"] == []
+    pixels = _pixels(path)
+    assert pixels.shape == (64, 96, 3)
+    # On white, as a PNG of lines is; goldenrod in the middle, lit.
+    assert (pixels[0, 0] == 255).all()
+    middle = pixels[32, 48].astype(int)
+    assert middle[0] > middle[2] + 40
+    # Where it was looked at from: the 3D view's direction, as a projection says it.
+    assert result["viewport"]["viewport_origin"] == pytest.approx(list(raster_scene.VIEW_DIRECTION))
+
+
+def test_a_picture_style_that_is_not_one_is_refused(tmp_path):
+    result = render_png.process(str(tmp_path / "box.png"), {"wrapped": _box(), "style": "painted"})
+    assert not result["success"] and "'style' is one of lines, shaded" in result["exception"]
+
+
+def test_without_perspective_what_is_further_is_as_large(tmp_path):
+    """Two equal cubes, one behind the other's plane: as wide as each other without perspective, not with it."""
+    import build123d as b3d
+
+    near = b3d.Pos(-15, -20, 0) * b3d.Box(10, 10, 10)
+    far = b3d.Pos(15, 20, 0) * b3d.Box(10, 10, 10)
+    request = {
+        "wrapped": b3d.Compound([near, far]).wrapped,
+        "style": "shaded",
+        "size": "200x100",
+        "antialias": 1,
+        "viewport_origin": [0, -100, 0],
+        "viewport_up": [0, 0, 1],
+    }
+
+    def widths(perspective):
+        path = str(tmp_path / ("p%g.png" % perspective))
+        result = render_png.process(path, dict(request, perspective=perspective))
+        assert result["success"], result.get("exception")
+        covered = (_pixels(path) != 255).any(axis=2).any(axis=0)
+        return int(covered[:100].sum()), int(covered[100:].sum())
+
+    left, right = widths(0)
+    assert abs(left - right) <= 1
+    left, right = widths(50)
+    assert left > right + 2
+
+
+def test_a_shaded_picture_leaves_no_mesh_on_the_shape():
+    """The files of one object may share a decoding: a shaded picture must neither use nor leave a mesh there."""
+    from OCP.BRep import BRep_Tool
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopLoc import TopLoc_Location
+    from OCP.TopoDS import TopoDS
+
+    shape = _box()
+    render_raster.Shaded({"wrapped": shape}, 64, 64).build([])
+    explorer = TopExp_Explorer(shape, TopAbs_FACE)
+    while explorer.More():
+        assert BRep_Tool.Triangulation_s(TopoDS.Face_s(explorer.Current()), TopLoc_Location()) is None
+        explorer.Next()
+
+
+def test_a_frame_of_a_video_is_the_picture_pc_render_draws(monkeypatch, tmp_path):
+    """Frame k is the PNG of the fields the video reports, turned by 'speed' times k / fps more: to the pixel."""
+    captured = []
+
+    class Pipeline:
+        def __init__(self, output, *args, **kwargs):
+            self.output = output
+
+        def run(self, frames, prefix=()):
+            captured.extend(frame.copy() for frame in frames)
+            with open(self.output, "wb") as stream:
+                stream.write(b"video")
+            return 0, len(captured)
+
+    monkeypatch.setattr(video_encode, "launcher", lambda: "gst-launch-1.0")
+    monkeypatch.setattr(video_encode, "has_element", lambda name: True)
+    monkeypatch.setattr(video_encode, "Pipeline", Pipeline)
+    shape = _box()
+    result = render_video.process(
+        str(tmp_path / "turn.mp4"),
+        {
+            "wrapped": shape,
+            "container_format": "mp4",
+            "size": "64x48",
+            "fps": 4,
+            "duration": 1,
+            "speed": [0, 0, 45],
+            "turn": [10, 0, 0],
+            "antialias": 1,
+            "threads": 2,
+        },
+    )
+    assert result["success"], result.get("exception")
+    picture = result["video"]["picture"]
+    assert picture["style"] == "shaded" and picture["size"] == "64x48" and picture["background"] == "#1F1F1F"
+    assert len(captured) == 4
+    for index in (0, 3):
+        turn = render_video.angles_at(picture["turn"], result["video"]["speed"], index / 4.0)
+        path = str(tmp_path / ("frame%d.png" % index))
+        drawn = render_png.process(path, {"wrapped": shape, **picture, "turn": list(turn)})
+        assert drawn["success"], drawn.get("exception")
+        assert (_pixels(path) == captured[index]).all(), index
+
+
+def test_a_video_is_not_drawn_in_lines(tmp_path):
+    result = render_video.process(
+        str(tmp_path / "x.mp4"), {"wrapped": _box(), "container_format": "mp4", "style": "lines"}
+    )
+    assert not result["success"] and "'shaded' style" in result["exception"]
 
 
 # ---------------------------------------------------------------------------
@@ -699,7 +860,7 @@ def test_a_soundtrack_is_cut_to_the_video(tmp_path):
 def test_without_gstreamer_nothing_is_drawn(monkeypatch, tmp_path):
     """A machine without GStreamer hears so before any frame is drawn, and how to get it."""
     monkeypatch.setattr(video_encode, "find_tool", lambda name=None, environ=None: None)
-    monkeypatch.setattr(video_scene, "Scene", lambda *args, **kwargs: pytest.fail("drew without GStreamer"))
+    monkeypatch.setattr(raster_scene, "Scene", lambda *args, **kwargs: pytest.fail("drew without GStreamer"))
     result = render_video.process(str(tmp_path / "x.mp4"), {"wrapped": None, "container_format": "mp4"})
     assert not result["success"]
     assert "GStreamer is not installed" in result["exception"] and "gstreamer1.0-plugins-good" in result["exception"]

@@ -134,8 +134,13 @@ A parameter can also be given for one command instead of written down. The two
 that aim a 2D projection -- ``viewport_origin``, which is the direction the shape
 is looked at from, and ``viewport_up``, which way is up in the picture -- are
 ``pc render --viewport-origin``/``--viewport-up``, with ``--view`` naming the
-common directions (see :doc:`cli`). Passed that way they layer on top of
-everything below, package and object alike, for that run only.
+common directions (see :doc:`cli`). ``turn`` -- ``[x, y, z]`` degrees, or one
+number about Z, that the object is turned by in front of that camera, through
+its middle and about its own axes, the way the 3D view's *Animate* turns it -- is
+``--turn``, and goes with any view: ``--view front --turn 0,0,45`` is the front
+of the object turned an eighth of a turn. Every ``//builtin/render`` file type
+takes it. Passed that way they layer on top of everything below, package and
+object alike, for that run only.
 
 Two names are not entirely the package's own, and the request has two keys of
 PartCAD's own beside them.
@@ -613,8 +618,10 @@ one that ships nothing, because PartCAD implements no solver.
 
 ``//builtin/export`` implements ``step``, ``brep``, ``stl``, ``3mf``, ``obj``,
 ``gltf``, ``iges``, ``threejs`` and ``urdf``. ``//builtin/render`` implements
-``svg``, ``png``, ``jpeg`` and ``dxf``, and the videos ``mp4``, ``m4v``, ``mov``,
-``qt``, ``mkv``, ``webm``, ``avi``, ``wmv``, ``asf`` and ``ogv`` (see `Videos`_).
+``svg``, ``png``, ``jpeg`` and ``dxf`` -- a ``png`` or a ``jpeg`` drawn in lines
+or shaded (see `Pictures: lines or shaded`_) -- and the videos ``mp4``, ``m4v``,
+``mov``, ``qt``, ``mkv``, ``webm``, ``avi``, ``wmv``, ``asf`` and ``ogv`` (see
+`Videos`_).
 Reading their ``partcad.yaml`` is the most direct way to see what parameters each
 file type takes and what a package's own implementation should look like.
 
@@ -966,19 +973,75 @@ two of the assembly it belongs to, each naming ``render_svg.py`` in
 ``//builtin/render`` as its implementation, in the manner of `Using another
 package's implementation`_.
 
+.. _shaded-pictures:
+
+Pictures: lines or shaded
+-------------------------
+
+A ``png`` or a ``jpeg`` is drawn in one of two styles, which its ``style`` field
+picks and ``pc render --style`` picks for one run:
+
+``lines``, the default
+  The SVG projection, rasterized: the visible edges of the object, each in the
+  colour of its part. What every picture under ``examples/`` is.
+
+``shaded``
+  The object lit and in perspective, the way the Digital Thread's 3D view draws
+  it: its camera, its light rig, its material, each part in its colour over the
+  ``background``. It is the very picture every frame of a video is (see
+  `Videos`_), drawn by the same code from the same fields, so any frame of a
+  video can be had as a picture of its own.
+
+.. code-block:: shell
+
+  pc render -t png --style shaded bracket                          # 512x512, on white
+  pc render -t png --style shaded --size square --background '#1F1F1F' bracket
+  pc render -t png --style shaded --view front --turn 0,0,30 bracket
+
+``size`` is ``<width>x<height>`` -- ``512x512`` by default -- or a name a video
+takes too (``square``, ``reels``, ``1080p``, ...); ``width`` and ``height`` each
+override a side of it. A drawing of lines is fitted into it and keeps its own
+proportions; a shaded picture is exactly that size. ``background`` is white for
+both. The rest is a shaded picture's alone:
+
+``perspective``
+  The vertical field of view, in degrees: the 3D view's 50 by default. ``0``,
+  or ``false``, draws without perspective, framed the same -- what a picture
+  measured off, or compared with a drawing, wants.
+
+``zoom``
+  Closer than the 3D view frames the object (above 1), or further (below). The
+  3D view fits a frame to half the object's largest dimension, so the nearest
+  corner of a cube can touch the edge of a square picture there and here
+  alike; ``zoom: 0.9`` leaves it a margin.
+
+``viewport_origin``, ``viewport_up``
+  Unset, the 3D view's: from the front right, a little above, whatever kind of
+  shape it is -- not the corner a drawing of lines is looked at from. ``--view``
+  and ``--turn`` aim it as they aim any projection.
+
+``antialias`` and ``line_weight``
+  How many samples each way a pixel is the mean of (2; 1 is about four times as
+  fast and has harder edges), and how wide a line that bounds no face is: so
+  many pixels in a picture 512 across, and as much wider as a larger one is.
+
+Drawing shaded adds nothing to the sandbox: it is numpy, which build123d brings
+with it, and OCP, which every projection uses already. ``reproducible`` decides
+nothing for it -- it is the same pixels every time on one machine, and on
+another as the same as the tessellation OCCT makes there.
+
 .. _videos:
 
 Videos
 ------
 
-``//builtin/render`` writes a video of an object turning, drawn the way the
-Digital Thread's 3D view draws it with *Animate* ticked: the same camera, the
-same light, the same material, each part in the colour it states and goldenrod
-where it states none, over the editor's background. It turns about its middle,
-at thirty degrees a second about the vertical unless told otherwise -- one turn
-every twelve seconds, which is how long a video is by default -- and is encoded
-by `GStreamer <https://gstreamer.freedesktop.org/>`_ into whichever container
-the file type names:
+``//builtin/render`` writes a video of an object turning, as the Digital
+Thread's 3D view shows it with *Animate* ticked: every frame is a shaded picture
+(see `Pictures: lines or shaded`_) over the editor's background, ``#1F1F1F``. It
+turns about its middle, at thirty degrees a second about the vertical unless told
+otherwise -- one turn every twelve seconds, which is how long a video is by
+default -- and is encoded by `GStreamer <https://gstreamer.freedesktop.org/>`_
+into whichever container the file type names:
 
 ========  ======================================  ==========================
 Type      What it is                              Container
@@ -1031,12 +1094,24 @@ Every option is a field of the file type, so a package says it once:
       audio: { path: media/theme.mp3, start: 30, fade_out: 1 }
       title: Bracket, rev C
 
-``pc render`` sets ``size``, ``fps``, ``duration``, ``speed``, ``append``,
-``preset`` and ``quality`` for one run (``--size``, ``--fps``, ...), on top of
-the package's and the object's, as ``--view`` does for the viewpoint -- which a
-video takes too, as the direction it is looked at from. The full list of fields,
-with what each defaults to, is the comment above the video file types in
-``//builtin/render``'s ``partcad.yaml``.
+``pc render`` sets ``size``, ``background``, ``fps``, ``duration``, ``speed``,
+``append``, ``preset`` and ``quality`` for one run (``--size``, ``--fps``, ...),
+on top of the package's and the object's, as ``--view`` and ``--turn`` do for
+where the object is looked at from -- which a video takes too, and starts its
+turn from. The fields of the picture each frame is -- ``perspective``, ``zoom``,
+``antialias``, ``line_weight`` -- are a picture's. The full list, with what each
+defaults to, is the comment above the video file types in ``//builtin/render``'s
+``partcad.yaml``.
+
+Any frame is a picture ``pc render -t png`` draws: frame *k* is the one with the
+video's fields and ``turn`` grown by ``speed`` × *k* / ``fps``. A video's result
+says what to ask for -- under ``video.picture``, the fields of its first frame
+-- so the frame two seconds into a turn at the default speed is::
+
+    pc render -t png --style shaded --size reels --background '#1F1F1F' --turn 0,0,60 bracket
+
+What the video lays over its frames is its own: the text, the logo, the fades
+and the filters.
 
 ``size``
   Where the video is going. ``reels`` -- 1080 by 1920, 9:16, full screen on a
@@ -1048,10 +1123,10 @@ with what each defaults to, is the comment above the video file types in
   ``21:9``, ``vertical-720p`` and ``vertical-4k``, are there too, and so is any
   ``<width>x<height>``.
 
-``speed`` and ``start_angle``
+``speed`` and ``turn``
   How fast the object turns about each of X, Y and Z, in degrees a second, and
-  where it starts. Each axis turns at its own speed, so ``[0, 0, 30]`` is a
-  turntable and ``[20, 0, 45]`` tumbles.
+  where it starts -- the ``turn`` every projection takes. Each axis turns at its
+  own speed, so ``[0, 0, 30]`` is a turntable and ``[20, 0, 45]`` tumbles.
 
 ``preset`` and ``quality``
   The trade between how long encoding takes and how small the file comes out,
@@ -1071,8 +1146,8 @@ with what each defaults to, is the comment above the video file types in
   Ogg stream carries: ``PARTCAD_VIDEO=1``, ``PARTCAD_ANGLES=<x>,<y>,<z>``,
   ``PARTCAD_FRAMES`` and ``PARTCAD_FPS``, beside its ``TITLE``. A video that says
   nothing about its turn (one PartCAD did not write) is appended to from
-  ``start_angle``, and a video of another size is fitted into the new one's
-  frame, with bars.
+  ``turn``, and a video of another size is fitted into the new one's frame,
+  with bars.
 
 ``text``, ``logo``, ``audio`` and ``filters``
   What makes a recording a post. ``text`` is one or several texts over the
@@ -1112,9 +1187,9 @@ healthcheck`` says the same ahead of time (``GStreamer``).
 What it costs
 ^^^^^^^^^^^^^
 
-Every frame is drawn on the CPU, in the sandbox: a part takes a fraction of a
-second a frame at the default size, so a twelve-second Reel is a minute or two
-on four cores. ``antialias: 1`` -- which draws each frame once rather than at
+Every frame is drawn on the CPU, in the sandbox, as a shaded picture is: a part
+takes a fraction of a second a frame at the default size, so a twelve-second Reel
+is a minute or two on four cores. ``antialias: 1`` -- which draws each frame once rather than at
 twice its size each way -- is about four times faster and has harder edges;
 ``threads`` is how many frames are drawn at once, one per core up to four. The
 encoder's ``preset`` trades the other half.

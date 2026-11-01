@@ -457,18 +457,28 @@ at all).
   `file_factory.unreproducible_reason()` below, which is about whether an object can be *made* twice, not
   whether a file is written twice the same.)
 
-- **Videos** (`./src/partcad/builtin/render/render_video.py`, `video_scene.py`, `video_encode.py`):
-  `//builtin/render` declares ten video file types (`mp4`, `m4v`, `mov`, `qt`, `mkv`, `webm`, `avi`, `wmv`,
-  `asf`, `ogv`), all one script: a video of the object turning, drawn the way the Digital Thread's 3D view
-  draws it with Animate ticked, and encoded by GStreamer. Three things about it are load-bearing.
+- **Pictures and videos** (`./src/partcad/builtin/render/render_raster.py`, `raster_scene.py`,
+  `viewpoint.py`, `render_video.py`, `video_encode.py`): there is **one** raster renderer.
+  `render_raster.py` draws every PNG and JPEG and every frame of a video, in one of two `style`s: `lines`
+  (the default for a picture: the SVG projection, rasterized by svglib) or `shaded` (the Digital Thread's 3D
+  view, drawn by `raster_scene.py`). `//builtin/render` declares ten video file types (`mp4`, `m4v`, `mov`,
+  `qt`, `mkv`, `webm`, `avi`, `wmv`, `asf`, `ogv`), all one script, whose every frame is a `shaded` picture
+  drawn by `render_raster.Shaded` from the same fields a PNG is, turned by the video's `turn` plus its `speed`
+  times the time -- so any frame is `pc render -t png --style shaded --turn ...`, and a test holds them to the
+  same pixels. Do not give a video a way of drawing a frame that a picture does not have. `turn` itself is
+  every render's (`viewpoint.py`, `pc render --turn`): the object turned in front of the camera, which the
+  projection draws by turning its viewport the other way. Three things about it are load-bearing.
 
-  * **The frames are drawn by numpy, not by a GPU** (`video_scene.py`). The view is three.js in a webview,
-    and a sandbox has no browser; so the camera, the light rig, the Phong material, the tone mapping and the
-    colours of `ide/vscode/src/webview/scene.ts` are written out again, constant for constant, with the
-    shading worked out at the corners of each triangle and blended across it. That is only close to a
+  * **The pictures are drawn by numpy, not by a GPU** (`raster_scene.py`). The view is three.js in a
+    webview, and a sandbox has no browser; so the camera, the light rig, the Phong material, the tone mapping
+    and the colours of `ide/vscode/src/webview/scene.ts` are written out again, constant for constant, with
+    the shading worked out at the corners of each triangle and blended across it. That is only close to a
     GPU's per-pixel light because large triangles are split first (`refine`, `MAX_EDGE`): a flat face OCCT
-    meshes as two triangles showed the diagonal between them as a crease. A change to what the 3D view
-    draws -- its lights, its camera, its background -- is a change to this module too.
+    meshes as two triangles showed the diagonal between them as a crease. The camera stands where the 3D
+    view's does, `fitDistance` times the length of its (unnormalized) `VIEW_DIRECTION` (`VIEW_LENGTH`). A
+    change to what the 3D view draws -- its lights, its camera, its background -- is a change to this module
+    too. It meshes a copy of the shape: a PNG shares its decoding with the SVG beside it
+    (`TESSELLATION`), and a mesh left on, or found on, that decoding would make either depend on the other.
   * **GStreamer is a program, run as `gst-launch-1.0`** (`video_encode.py`), with the frames on its standard
     input. pip cannot install it, so each video file type names PartCAD's GStreamer image as its
     `dockerImage`, `ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer` -- the

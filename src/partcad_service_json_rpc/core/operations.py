@@ -1492,6 +1492,7 @@ def adhoc_render(session, params):
             params.get("view"),
             params.get("viewport_origin"),
             params.get("viewport_up"),
+            params.get("turn"),
         )
     except ValueError as e:
         raise JsonRpcError(USAGE_ERROR, str(e)) from e
@@ -4383,14 +4384,16 @@ def render_objects(session, params):
     one package is used against the objects of another.
 
     ``view``, ``viewport_origin`` and ``viewport_up`` re-aim the projection for
-    this one run. They resolve to the very parameters a ``render:`` file type
-    configures, so the override lands on top of the configuration rather than
-    beside it, and a file type that does not project never reads them.
+    this one run, and ``turn`` turns the object in front of it. They resolve to
+    the very parameters a ``render:`` file type configures, so the override
+    lands on top of the configuration rather than beside it, and a file type
+    that does not project never reads them.
 
-    ``size``, ``fps``, ``duration``, ``speed``, ``append``, ``preset`` and
-    ``quality`` do the same for a video (`VIDEO_OPTIONS`): they are fields of
-    the video file types of ``//builtin/render``, handed to every file type
-    rendered like the viewport, so ``quality`` sets a JPEG's as well.
+    ``style``, ``size``, ``background``, ``fps``, ``duration``, ``speed``,
+    ``append``, ``preset`` and ``quality`` do the same for a picture and a video
+    (`VIDEO_OPTIONS`): they are fields of the raster and video file types of
+    ``//builtin/render``, handed to every file type rendered like the viewport,
+    so ``quality`` sets a JPEG's as well.
 
     ``filter`` keeps only some of the links of one assembly or scene, so that
     what is written is a view of it (see `partcad.assembly_filter`). It writes
@@ -4430,6 +4433,7 @@ def render_objects(session, params):
             params.get("view"),
             params.get("viewport_origin"),
             params.get("viewport_up"),
+            params.get("turn"),
         )
     except ValueError as e:
         # A view nobody offers, or a vector that is not one: the request cannot
@@ -4538,10 +4542,10 @@ def render_inline(session, params):
     on top of the projection. They are what the ticked boxes of that panel
     resolve to, so the tab and the command line produce the same picture.
 
-    ``view``, ``viewport_origin`` and ``viewport_up`` aim the projection for this
-    one picture, exactly as they do for ``render.objects``: what the panel's
-    viewpoint fields and its orientation gizmo say. The video options of
-    ``render.objects`` (`VIDEO_OPTIONS`) are taken too, for a video. ``section`` cuts the object
+    ``view``, ``viewport_origin``, ``viewport_up`` and ``turn`` aim the
+    projection for this one picture, exactly as they do for ``render.objects``:
+    what the panel's viewpoint fields and its orientation gizmo say. The picture
+    and video options of ``render.objects`` (`VIDEO_OPTIONS`) are taken too. ``section`` cuts the object
     by a box first -- ``{"x": [lo, hi], ...}`` in millimetres in the frame of the
     object's root, an axis left out not cut (see `partcad.shape_section`) --
     which is what the panel's section sliders ask for.
@@ -4667,17 +4671,18 @@ def _section(params):
         raise JsonRpcError(USAGE_ERROR, str(e)) from e
 
 
-# What a request may say about a video, for this one run: the fields of the
-# video file types of '//builtin/render' that 'pc render' offers as options
-# (see 'partcad_cli.click.video'). Handed on as export parameters, like the
-# viewport, so that each overrides what the file type's configuration says, and
-# handed to every file type the run renders: what one means is the file type's
-# to say, and 'quality' means a JPEG's quality too.
-VIDEO_OPTIONS = ("size", "fps", "duration", "speed", "append", "preset", "quality")
+# What a request may say about a picture or a video, for this one run: the
+# fields of the raster and video file types of '//builtin/render' that 'pc
+# render' offers as options (see 'partcad_cli.click.video'). Handed on as export
+# parameters, like the viewport, so that each overrides what the file type's
+# configuration says, and handed to every file type the run renders: what one
+# means is the file type's to say - 'style', 'size' and 'background' are a PNG's
+# and a JPEG's as much as a video's, and 'quality' is a JPEG's quality too.
+VIDEO_OPTIONS = ("style", "size", "background", "fps", "duration", "speed", "append", "preset", "quality")
 
 
 def _video(params):
-    """The video overrides a request asks for, as export parameters: only the ones it gives."""
+    """The picture and video overrides a request asks for, as export parameters: only the ones it gives."""
     options = {}
     for key in VIDEO_OPTIONS:
         value = params.get(key)
@@ -4688,7 +4693,7 @@ def _video(params):
 
 
 def _viewport(params):
-    """The viewport overrides a request asks for ('view', 'viewport_origin', 'viewport_up'), as export parameters."""
+    """The viewport overrides a request asks for ('view', 'viewport_origin', 'viewport_up', 'turn'), as export parameters."""
     from partcad.render import resolve_viewport
 
     try:
@@ -4696,6 +4701,7 @@ def _viewport(params):
             params.get("view"),
             params.get("viewport_origin"),
             params.get("viewport_up"),
+            params.get("turn"),
         )
     except ValueError as e:
         # A view nobody offers, or a vector that is not one: nothing is drawn

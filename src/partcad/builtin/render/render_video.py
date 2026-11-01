@@ -6,10 +6,17 @@
 """The built-in video renderer (see '//builtin/render' in partcad.yaml).
 
 A video of the object turning, as it turns in the Digital Thread's 3D view with
-Animate ticked: drawn the way that view draws it ('video_scene.py'), turning
-about its middle at a speed of its own about each axis - about the vertical, at
-the IDE's thirty degrees a second, unless told otherwise - and encoded by
-GStreamer into whichever container the file type names ('video_encode.py').
+Animate ticked: turning about its middle at a speed of its own about each axis -
+about the vertical, at the IDE's thirty degrees a second, unless told otherwise
+- and encoded by GStreamer into whichever container the file type names
+('video_encode.py').
+
+Every frame is a picture 'render_raster.py' draws in its shaded style - the
+same code, from the same fields, as 'pc render -t png --style shaded' - turned
+by the video's 'turn' plus its 'speed' times the time. So any frame can be had
+as a picture of its own, and the result says what to ask for ('picture'). What
+the video adds over its frames is its own: the text, the logo, the fades and the
+filters below.
 
 What makes it a post rather than a recording is what GStreamer adds on the way:
 text over the picture, timed or not ('text'); a logo in a corner ('logo'); a
@@ -43,9 +50,9 @@ import numpy as np
 import pyexpat  # noqa: F401
 
 sys.path.append(os.path.dirname(__file__))
-import appearance
+import raster_scene
+import render_raster
 import video_encode
-import video_scene
 import wrapper_common
 
 # What this implementation reports for what it produces (see 'partcad.code_version'):
@@ -53,58 +60,9 @@ import wrapper_common
 # before is produced again.
 CACHE_VERSION = 1
 
-# The sizes 'size' may name. Where a video is posted decides its shape, so the
-# names are mostly the places: the vertical 9:16 every short-video feed plays
-# full screen, the 4:5 and 1:1 a photo feed shows in line, and the 16:9 of
-# everything watched sideways. 1080 pixels across the narrow side, which is
-# what those feeds play at; the broadcast names keep their own.
-SIZES = {
-    # 9:16, full screen on a phone: Instagram Reels and Stories, YouTube Shorts,
-    # TikTok, Facebook Reels, Snapchat.
-    "reels": (1080, 1920),
-    "reel": (1080, 1920),
-    "shorts": (1080, 1920),
-    "tiktok": (1080, 1920),
-    "story": (1080, 1920),
-    "stories": (1080, 1920),
-    "vertical": (1080, 1920),
-    "9:16": (1080, 1920),
-    "vertical-720p": (720, 1280),
-    "vertical-4k": (2160, 3840),
-    # 4:5, the tallest a photo feed shows in line: Instagram, Facebook, LinkedIn.
-    "portrait": (1080, 1350),
-    "4:5": (1080, 1350),
-    # 2:3, Pinterest's pin.
-    "pinterest": (1000, 1500),
-    "2:3": (1000, 1500),
-    # 1:1.
-    "square": (1080, 1080),
-    "1:1": (1080, 1080),
-    # 16:9, watched sideways: YouTube, X, LinkedIn, a slide.
-    "landscape": (1920, 1080),
-    "youtube": (1920, 1080),
-    "16:9": (1920, 1080),
-    "480p": (854, 480),
-    "hd": (1280, 720),
-    "720p": (1280, 720),
-    "fhd": (1920, 1080),
-    "1080p": (1920, 1080),
-    "qhd": (2560, 1440),
-    "1440p": (2560, 1440),
-    "4k": (3840, 2160),
-    "uhd": (3840, 2160),
-    "2160p": (3840, 2160),
-    # 4:3 and the cinema's 21:9.
-    "4:3": (1440, 1080),
-    "21:9": (2560, 1080),
-}
+# The size a video is when nothing says: the vertical 9:16 every short-video
+# feed plays full screen. 'size' names the others ('render_raster.SIZES').
 DEFAULT_SIZE = "reels"
-
-# The smallest and the largest side a video may have, in pixels: one smaller is
-# not a picture of anything, and one larger is no screen's (and GStreamer's
-# encoders refuse it).
-MIN_SIDE = 16
-MAX_SIDE = 7680
 
 DEFAULT_FPS = 30
 MAX_FPS = 240
@@ -118,11 +76,9 @@ DEFAULT_SPEED = (0.0, 0.0, 30.0)
 STILL_DURATION = 5.0
 
 # The editor's background, which is what the IDE's 3D view is drawn over: the
-# PartCAD IDE's, VSCodium's own default theme ("Dark Modern").
+# PartCAD IDE's, VSCodium's own default theme ("Dark Modern"). Declared as the
+# video file types' 'background'; this is for a caller that hands none.
 DEFAULT_BACKGROUND = "#1F1F1F"
-
-DEFAULT_ANTIALIAS = 2
-MAX_ANTIALIAS = 4
 
 # Text over the picture: its height as a fraction of the frame's, and the margin
 # around it and a logo as a fraction of the frame's narrower side.
@@ -150,31 +106,15 @@ POSITIONS = {
 _ENDS = ("src", "sink")
 
 
-class OptionError(ValueError):
-    """A field of the file type that cannot be made sense of."""
+# A field of the file type that cannot be made sense of: the pictures' own, since
+# a frame's fields are a picture's.
+OptionError = render_raster.OptionError
+_number = render_raster.number
 
 
 # ---------------------------------------------------------------------------
 # Options
 # ---------------------------------------------------------------------------
-
-
-def _number(request, key, default, low=None, high=None, integer=False):
-    value = request.get(key)
-    if value is None:
-        return default
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        raise OptionError("'%s' is a number, not %r" % (key, value)) from None
-    if not math.isfinite(number) or (low is not None and number < low) or (high is not None and number > high):
-        bounds = []
-        if low is not None:
-            bounds.append("at least %g" % low)
-        if high is not None:
-            bounds.append("at most %g" % high)
-        raise OptionError("'%s' is %s, not %r" % (key, " and ".join(bounds) or "a finite number", value))
-    return int(round(number)) if integer else number
 
 
 def _vector(request, key, default, single_is=2):
@@ -198,38 +138,19 @@ def _vector(request, key, default, single_is=2):
 
 
 def video_size(request):
-    """The frame's '(width, height)' in pixels: 'width' and 'height' if given, else 'size'.
+    """The frame's '(width, height)' in pixels: a picture's ('render_raster.size_of'), reels when nothing says.
 
-    'size' is a name of 'SIZES', '<width>x<height>', or a list of the two. Each
-    side is made even, which is what a video's colour is halved by.
+    Each side is made even, which is what a video's colour is halved by.
     """
-    size = request.get("size")
-    if size is None:
-        size = DEFAULT_SIZE
-    if isinstance(size, str):
-        text = size.strip().lower()
-        if text in SIZES:
-            width, height = SIZES[text]
-        else:
-            parts = text.replace("×", "x").replace("*", "x").split("x")
-            try:
-                width, height = (int(part) for part in parts)
-            except ValueError:
-                raise OptionError(
-                    "'size' is one of %s, or '<width>x<height>', not %r" % (", ".join(sorted(SIZES)), size)
-                ) from None
-    else:
-        try:
-            width, height = (int(side) for side in size)
-        except (TypeError, ValueError):
-            raise OptionError("'size' is a name, '<width>x<height>' or [width, height], not %r" % (size,)) from None
-    width = _number(request, "width", width, integer=True)
-    height = _number(request, "height", height, integer=True)
+    width, height = render_raster.size_of(request, default=render_raster.SIZES[DEFAULT_SIZE])
     width -= width % 2
     height -= height % 2
     for side in (width, height):
-        if not MIN_SIDE <= side <= MAX_SIDE:
-            raise OptionError("A side of the video is %d pixels; a side is %d to %d" % (side, MIN_SIDE, MAX_SIDE))
+        if not render_raster.MIN_SIDE <= side <= render_raster.MAX_SIDE:
+            raise OptionError(
+                "A side of the video is %d pixels; a side is %d to %d"
+                % (side, render_raster.MIN_SIDE, render_raster.MAX_SIDE)
+            )
     return width, height
 
 
@@ -242,13 +163,6 @@ def duration_of(request, speed):
         return duration
     fastest = max(abs(component) for component in speed)
     return 360.0 / fastest if fastest > 0 else STILL_DURATION
-
-
-def color_of(value, key):
-    parsed = video_scene.parse_color(value if str(value).startswith("#") else "#" + str(value))
-    if parsed is None:
-        raise OptionError("'%s' is a colour, '#RRGGBB', not %r" % (key, value))
-    return parsed[0]
 
 
 def angles_at(start, speed, seconds):
@@ -361,7 +275,7 @@ def color_hex(value, key):
     """A colour field as '#RRGGBB' or '#RRGGBBAA', checked."""
     text = str(value).strip()
     text = text if text.startswith("#") else "#" + text
-    if video_scene.parse_color(text) is None:
+    if raster_scene.parse_color(text) is None:
         raise OptionError("'%s' is a colour, '#RRGGBB' or '#RRGGBBAA', not %r" % (key, value))
     return text
 
@@ -455,8 +369,11 @@ def soundtrack(request, seconds):
 # ---------------------------------------------------------------------------
 
 
-def frames(painters, start, speed, fps, count, fade_in, fade_out, fade_color):
+def frames(shaded, painters, start, speed, fps, count, fade_in, fade_out, fade_color):
     """The new frames, drawn by as many threads as there are 'painters', in order.
+
+    Frame 'index' is the picture 'shaded' draws turned by 'start' plus 'speed'
+    times its time: what 'pc render -t png' draws with the same fields.
 
     numpy lets go of the interpreter while it works on whole arrays, which is
     most of what drawing a frame is, so frames drawn side by side take less time
@@ -469,7 +386,7 @@ def frames(painters, start, speed, fps, count, fade_in, fade_out, fade_color):
     def draw(index):
         painter = pool.get()
         try:
-            image = painter.draw(video_scene.rotation(angles_at(start, speed, index / float(fps))))
+            image = shaded.draw(angles_at(start, speed, index / float(fps)), painter)
         finally:
             pool.put(painter)
         return faded(image, index, fps, count, fade_in, fade_out, fade_color)
@@ -537,10 +454,13 @@ def _process(path, request):
         raise OptionError(
             "'container_format' is one of %s, not %r" % (", ".join(sorted(video_encode.CONTAINERS)), container)
         )
+    # A frame is a shaded picture; a drawing of lines is fitted to each one's
+    # own extent, and would not hold still from one frame to the next.
+    if render_raster.style_of({"style": request.get("style") or "shaded"}) != "shaded":
+        raise OptionError("a video is drawn in the 'shaded' style, not %r" % request.get("style"))
     width, height = video_size(request)
     fps = _number(request, "fps", DEFAULT_FPS, low=1, high=MAX_FPS)
     speed = _vector(request, "speed", DEFAULT_SPEED)
-    start = _vector(request, "start_angle", (0.0, 0.0, 0.0))
     duration = duration_of(request, speed)
     count = max(1, int(round(duration * fps)))
     preset = request.get("preset") or video_encode.DEFAULT_PRESET
@@ -548,17 +468,15 @@ def _process(path, request):
     quality = video_encode.quality_of(request.get("quality"))
     bitrate = _number(request, "bitrate", None, low=1)
     audio_bitrate = _number(request, "audio_bitrate", 192, low=8, high=1024)
-    antialias = _number(request, "antialias", DEFAULT_ANTIALIAS, low=1, high=MAX_ANTIALIAS, integer=True)
-    background = color_of(request.get("background") or DEFAULT_BACKGROUND, "background")
-    fade_color = color_of(request.get("fade_color") or "#000000", "fade_color")
+    fade_color = render_raster.rgb_of({"fade_color": request.get("fade_color") or "#000000"}, "fade_color")
     fade_in = _number(request, "fade_in", 0.0, low=0)
     fade_out = _number(request, "fade_out", 0.0, low=0)
-    zoom = _number(request, "zoom", 1.0, low=0.01, high=100)
-    line_weight = _number(request, "line_weight", None, low=0.1, high=100)
-    if line_weight is None:
-        line_weight = max(1.0, round(min(width, height) / 540.0))
-    origin = request.get("viewport_origin") or video_scene.VIEW_DIRECTION
-    up = request.get("viewport_up") or video_scene.UP
+    # What every frame is a picture of, its fields checked before anything takes
+    # time: where the turn starts, unless the video appended to says otherwise.
+    picture = dict(request)
+    picture.setdefault("background", DEFAULT_BACKGROUND)
+    shaded = render_raster.Shaded(picture, width, height)
+    start = shaded.turn
 
     # GStreamer is asked for before anything is drawn: a machine without it
     # should hear so at once, not after minutes of frames.
@@ -577,30 +495,19 @@ def _process(path, request):
         elif not video_encode.keeps_state(container):
             warnings.append(
                 "A '%s' file keeps no tags, so '%s' cannot say where its turn stopped, and the part appended to it "
-                "starts at 'start_angle'" % (container, path)
+                "starts at 'turn'" % (container, path)
             )
         else:
             warnings.append(
                 "'%s' does not say where its turn stopped - PartCAD did not write it - so the part appended to it "
-                "starts at 'start_angle'" % path
+                "starts at 'turn'" % path
             )
     previous_count = 0
     if previous is not None:
         previous_count = int(round((previous["duration"] or 0.0) * fps))
 
-    # The object, by colour, made ready to be drawn.
-    whole = request["wrapped"]
-    tree = request.get("shape_tree")
-    if tree is None:
-        groups = [(appearance.DEFAULT_COLOR, whole)]
-    else:
-        groups = appearance.split_by_color(tree, whole, warnings)
-    scene = video_scene.Scene(groups, max(width, height), warnings)
-    camera = video_scene.Camera(
-        direction=[float(component) for component in origin],
-        up=[float(component) for component in up],
-        distance=video_scene.fit_distance(scene.radius, width / float(height)) / zoom,
-    )
+    # The object made ready to be drawn.
+    shaded.build(warnings)
 
     tags = {}
     state_tag = video_encode.CONTAINERS[container]["state_tag"]
@@ -667,11 +574,7 @@ def _process(path, request):
             audio=audio_path,
             tags=tags,
         )
-        threads = threads_of(request)
-        painters = [
-            video_scene.Painter(scene, camera, width, height, background, antialias, line_weight)
-            for _ in range(threads)
-        ]
+        painters = [shaded.painter() for _ in range(threads_of(request))]
         prefix = ()
         if previous is not None:
             # A bound, so that a file whose timestamps are wrong cannot have the
@@ -680,7 +583,7 @@ def _process(path, request):
             prefix = video_encode.decode_frames(path, width, height, fps, limit=previous_count + int(fps) + 1)
         try:
             written_before, written = pipeline.run(
-                frames(painters, start, speed, fps, count, fade_in, fade_out, fade_color), prefix=prefix
+                frames(shaded, painters, start, speed, fps, count, fade_in, fade_out, fade_color), prefix=prefix
             )
             if comments:
                 video_encode.write_comments(partial, comments)
@@ -701,10 +604,8 @@ def _process(path, request):
     result = {"success": True, "exception": None, "files": None if read_a_file else []}
     if warnings:
         result["warnings"] = warnings
-    result["viewport"] = {
-        "viewport_origin": [float(component) for component in origin],
-        "viewport_up": [float(component) for component in up],
-    }
+    # Where the first new frame is looked at from, as a picture's result says it.
+    result["viewport"] = shaded.viewport(start)
     result["video"] = {
         "width": width,
         "height": height,
@@ -714,6 +615,10 @@ def _process(path, request):
         "seconds": (written_before + written) / float(fps),
         "start_angle": list(start),
         "end_angle": list(end),
-        "triangles": scene.triangle_count,
+        "triangles": shaded.scene.triangle_count,
+        # The first new frame, as the fields 'pc render -t png' draws it with:
+        # frame 'k' of them is the same with 'turn' grown by 'speed' times k / fps.
+        "picture": shaded.fields(start),
+        "speed": list(speed),
     }
     return result

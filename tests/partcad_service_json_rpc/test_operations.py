@@ -2157,7 +2157,7 @@ def test_a_walk_renders_only_the_packages_that_have_the_object(monkeypatch):
     # 'EmptyShapesError' out of 'Project.render_async()', which used to end the
     # whole run -- so one package without a widget cost every other package its
     # render. The packages are filtered before anything is rendered.
-    _fake_render_module(monkeypatch, lambda view, origin, up: {})
+    _fake_render_module(monkeypatch, lambda view, origin, up, turn=None: {})
     session, _ = make_session()
     session.partcad.output = types.SimpleNamespace(
         all_formats=lambda ctx: ["svg"],
@@ -2783,7 +2783,7 @@ def test_info_shows_the_instance_the_values_name():
 
 
 def test_a_walk_with_values_renders_that_instance_where_the_object_is(monkeypatch):
-    _fake_render_module(monkeypatch, lambda view, origin, up: {})
+    _fake_render_module(monkeypatch, lambda view, origin, up, turn=None: {})
     session, _ = make_session()
     session.partcad.output = types.SimpleNamespace(
         all_formats=lambda ctx: ["svg"],
@@ -2906,7 +2906,7 @@ def test_a_package_that_declares_no_such_file_type_says_what_it_declares():
 
 def test_render_hands_the_resolved_viewport_to_the_context(monkeypatch):
     resolved = {"viewport_origin": [0, -100, 0], "viewport_up": [0, 0, 1]}
-    _fake_render_module(monkeypatch, lambda view, origin, up: dict(resolved))
+    _fake_render_module(monkeypatch, lambda view, origin, up, turn=None: dict(resolved))
 
     session, _ = make_session()
     session.partcad.output = types.SimpleNamespace(
@@ -2938,7 +2938,7 @@ def test_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch):
     the editor extensions speak this protocol directly.
     """
 
-    def _refuse(view, origin, up):
+    def _refuse(view, origin, up, turn=None):
         raise ValueError("Unknown view 'isometric'. Known views: front, back")
 
     _fake_render_module(monkeypatch, _refuse)
@@ -2957,7 +2957,7 @@ def test_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch):
 
 def _render_session(monkeypatch):
     """A session whose output files are recorded rather than written."""
-    _fake_render_module(monkeypatch, lambda view, origin, up: {})
+    _fake_render_module(monkeypatch, lambda view, origin, up, turn=None: {})
     session, _ = make_session()
     session.partcad.output = types.SimpleNamespace(
         all_formats=lambda ctx: ["step"],
@@ -3049,7 +3049,7 @@ def install_fake_render(monkeypatch, part=None, sketch=None, resolve_viewport=No
     sketch = sketch if sketch is not None else FakeRenderer()
     if resolve_viewport is None:
 
-        def resolve_viewport(view, origin, up):
+        def resolve_viewport(view, origin, up, turn=None):
             return {"viewport_origin": [0, -100, 0], "viewport_up": [0, 0, 1]} if view else {}
 
     install_fake_partcad_modules(
@@ -3219,7 +3219,7 @@ def test_adhoc_render_refuses_a_projection_it_does_not_write(monkeypatch, tmp_pa
 def test_adhoc_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch, tmp_path):
     """Nothing is rendered, rather than something aimed somewhere else."""
 
-    def _refuse(view, origin, up):
+    def _refuse(view, origin, up, turn=None):
         raise ValueError("Unknown view 'isometric'. Known views: front, back")
 
     part, _ = install_fake_render(monkeypatch, resolve_viewport=_refuse)

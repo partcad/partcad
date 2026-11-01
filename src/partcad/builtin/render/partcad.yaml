@@ -11,13 +11,19 @@
 # behind, so there is nothing here for a package to replace.
 #
 # `reproducible` is the one field here that is worth reading twice. Unlike the
-# exporters, where it is so far only declared, every file type below acts on it:
-# it picks the hidden-line algorithm the projection goes through, and for DXF
-# the metadata that goes in the header. It is `false` on all four, which is the
-# default everywhere -- a picture produced to be looked at should be the fastest
-# correct one. A package that *keeps* its drawings, so that a diff answers
-# whether they changed, sets it to `true` on the file type; every example in
-# this repository does.
+# exporters, where it is so far only declared, every projection below acts on
+# it: it picks the hidden-line algorithm the projection goes through, and for
+# DXF the metadata that goes in the header. It is `false` on all four, which is
+# the default everywhere -- a picture produced to be looked at should be the
+# fastest correct one. A package that *keeps* its drawings, so that a diff
+# answers whether they changed, sets it to `true` on the file type; every example
+# in this repository does.
+#
+# `turn` is the other field every file type here takes, and none declares:
+# `[x, y, z]` degrees -- or one number, about Z -- that the object is turned by
+# in front of the camera `viewport_origin` and `viewport_up` place, about its own
+# axes and through its middle, the way the 3D view's Animate turns it. `pc
+# render --turn` sets it for one run (see `viewpoint.py`).
 
 name: //builtin/render
 desc: |
@@ -30,7 +36,9 @@ desc: |
 # than repeated on each of the file types below, because it is the same
 # projection underneath all four: `render_png.py`, `render_jpeg.py` and
 # `render_dxf.py` all call `render_svg.process()` and then convert what it
-# wrote. Each file type below adds only what its own conversion step needs.
+# wrote. Each file type below adds only what its own conversion step needs. A
+# shaded picture and a video's frames need nothing more: they are drawn with
+# numpy, which build123d brings, from a mesh OCP makes (`raster_scene.py`).
 #
 # It also decides what a file type *another* package declares against these
 # scripts gets: `Implementation.python_requirements` reads a file type's
@@ -84,16 +92,40 @@ render:
     reproducible: false
 
   png:
-    desc: The SVG projection, rasterized.
+    desc: A picture of the object - the SVG projection rasterized, or shaded as the 3D view draws it.
     path: render_png.py
     extension: png
     pythonRequirements:
       - svglib==1.5.1
       - reportlab==4.4.3
       - rlpycairo==0.3.0
+    # How the picture is drawn: 'lines' - the SVG projection's visible edges,
+    # rasterized - or 'shaded': the object lit and in perspective, the way the
+    # Digital Thread's 3D view draws it, which is also what every frame of a
+    # video is (see 'render_raster.py'). 'pc render --style' picks one for a run.
+    style: lines
     line_weight: 1.0
-    width: 512
-    height: 512
+    # The size of the picture: '<width>x<height>', or a name a video takes too
+    # ('square', 'reels', '1080p', ... - see the videos below). 'width' and
+    # 'height' each override a side of it. A drawing of lines is fitted into it
+    # and keeps its own proportions; a shaded picture is exactly this size.
+    size: 512x512
+    # The fields only a shaded picture reads, and their defaults - every frame of
+    # a video is a shaded picture drawn with the same fields:
+    #
+    #   background    what the object is drawn on: white, '#FFFFFF' (lines are
+    #                 drawn on it too).
+    #   perspective   the vertical field of view, in degrees: the 3D view's 50.
+    #                 0 (or false) draws without perspective, framed the same.
+    #   zoom          closer than the 3D view frames the object (above 1), or
+    #                 further (below).
+    #   antialias     samples each way that a pixel is the mean of: 2. 1 is
+    #                 about four times as fast to draw.
+    #   viewport_origin, viewport_up   unset, the 3D view's - from the front
+    #                 right, a little above - whatever kind of shape it is.
+    #   line_weight   (above) also how wide a line that bounds no face is: so
+    #                 many pixels in a picture 512 across, and as much wider as
+    #                 a larger one is.
     # See 'svg' above.
     port_marker_size: 0.1
     port_label_size: 0.035
@@ -106,16 +138,17 @@ render:
 
   jpeg:
     # The format is named 'jpeg' but the file it writes is a '.jpg'.
-    desc: The SVG projection, rasterized and JPEG-compressed.
+    desc: A picture of the object, as 'png' draws it, JPEG-compressed.
     path: render_jpeg.py
     extension: jpg
     pythonRequirements:
       - svglib==1.5.1
       - reportlab==4.4.3
       - rlpycairo==0.3.0
+    # See 'png' above, which this draws the same picture as.
+    style: lines
     line_weight: 1.0
-    width: 512
-    height: 512
+    size: 512x512
     # See 'svg' above.
     port_marker_size: 0.1
     port_label_size: 0.035
@@ -163,12 +196,13 @@ render:
   # Videos
   # ---------------------------------------------------------------------------
   #
-  # A video of the object turning, drawn the way the Digital Thread's 3D view
-  # draws it with Animate ticked - the same camera, light, material and colours
-  # - by 'render_video.py', and encoded by GStreamer into the container each file
-  # type names as its 'container_format' (not 'container', which is the
-  # protocol's: an implementation declaring one is run in that image). None of
-  # them is written by a bare 'pc render': a package asks for one by declaring
+  # A video of the object turning, as the Digital Thread's 3D view shows it with
+  # Animate ticked, by 'render_video.py': every frame a shaded picture - what
+  # 'png' draws with 'style: shaded', from the same fields, turned by the video's
+  # 'turn' plus 'speed' times the time - encoded by GStreamer into the container
+  # each file type names as its 'container_format' (not 'container', which is
+  # the protocol's: an implementation declaring one is run in that image). None
+  # of them is written by a bare 'pc render': a package asks for one by declaring
   # it, or a command by naming it ('pc render -t mp4').
   #
   # GStreamer is not something pip can install, so each of these names the
@@ -180,7 +214,10 @@ render:
   #
   # The fields every video file type takes. The ones declared below are the
   # ones a package most often changes; every other one has the default
-  # 'render_video.py' gives it, which is what it says here.
+  # 'render_video.py' gives it, which is what it says here. A frame is a shaded
+  # picture, so 'perspective', 'zoom', 'antialias', 'line_weight' and the
+  # viewport are a picture's (see 'png' above); 'background' is the editor's,
+  # '#1F1F1F', rather than a picture's white.
   #
   #   size          where the video is going: 'reels' (1080x1920, the default:
   #                 also 'shorts', 'tiktok', 'story', 'vertical', '9:16'),
@@ -196,15 +233,17 @@ render:
   #   speed         how fast the object turns about X, Y and Z, in degrees a
   #                 second, each axis at its own: [x, y, z], or one number for Z.
   #                 The default is Animate's thirty about the vertical.
-  #   start_angle   the angles about X, Y and Z the first frame is drawn at.
+  #   turn          where the turn starts: the first frame is the picture of
+  #                 the object turned by this, about X, Y and Z, as every
+  #                 render takes it ('pc render --turn').
   #   append        add to the video already at the output path rather than
   #                 writing it again. The video keeps where its turn stopped in
   #                 one of its container's tags - in an Ogg file, as Vorbis
   #                 comments, PARTCAD_ANGLES=<x>,<y>,<z> and its siblings -
   #                 and the new part starts there; a video that says nothing
-  #                 (one PartCAD did not write) is appended to from
-  #                 'start_angle'. A video that is a different size is fitted
-  #                 into the new one's frame, with bars.
+  #                 (one PartCAD did not write) is appended to from 'turn'. A
+  #                 video that is a different size is fitted into the new one's
+  #                 frame, with bars.
   #   preset        the trade between how long encoding takes and how small the
   #                 file is: ultrafast, superfast, veryfast, faster, fast,
   #                 medium, slow, slower, veryslow - x264's names, which every
@@ -218,16 +257,6 @@ render:
   #                 wmv2 - whichever of them the container takes.
   #   audio_codec, audio_bitrate   likewise for the soundtrack: aac, mp3, opus,
   #                 vorbis; 192 kbit/s.
-  #   viewport_origin, viewport_up  where the object is looked at from, as for
-  #                 the projections ('pc render --view' sets them). Unset is the
-  #                 3D view's: from the front right, a little above.
-  #   zoom          closer than the 3D view frames the object (above 1), or
-  #                 further (below).
-  #   background    the colour behind the object: the editor's, '#1F1F1F'.
-  #   antialias     each frame is drawn this many times larger each way and
-  #                 shrunk, which smooths the edges: 2. 1 is about four times as
-  #                 fast to draw.
-  #   line_weight   how wide a line that bounds no face is, in pixels.
   #   threads       how many frames are drawn at once: one per core, up to four.
   #   fade_in, fade_out, fade_color   seconds of fading from and to a colour
   #                 (black) at the start and the end.
@@ -262,6 +291,7 @@ render:
     path: render_video.py
     extension: mp4
     container_format: mp4
+    style: shaded
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -275,6 +305,7 @@ render:
     path: render_video.py
     extension: m4v
     container_format: mp4
+    style: shaded
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -288,6 +319,7 @@ render:
     path: render_video.py
     extension: mov
     container_format: mov
+    style: shaded
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -301,6 +333,7 @@ render:
     path: render_video.py
     extension: qt
     container_format: mov
+    style: shaded
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -314,6 +347,7 @@ render:
     path: render_video.py
     extension: mkv
     container_format: mkv
+    style: shaded
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -327,6 +361,7 @@ render:
     path: render_video.py
     extension: webm
     container_format: webm
+    style: shaded
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -340,6 +375,7 @@ render:
     path: render_video.py
     extension: avi
     container_format: avi
+    style: shaded
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -354,6 +390,7 @@ render:
     path: render_video.py
     extension: wmv
     container_format: asf
+    style: shaded
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -367,6 +404,7 @@ render:
     path: render_video.py
     extension: asf
     container_format: asf
+    style: shaded
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -384,6 +422,7 @@ render:
     path: render_video.py
     extension: ogv
     container_format: ogg
+    style: shaded
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30

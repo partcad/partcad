@@ -3,17 +3,20 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""The Digital Thread's 3D view, drawn on the CPU: what a video of an object is made of.
+"""The Digital Thread's 3D view, drawn on the CPU: the shaded style of every picture PartCAD renders.
 
-'render_video.py' writes a video of an object turning, and what a reader expects
-it to look like is what they already see in the IDE: the 3D tab of the Digital
-Thread with Animate ticked. That view is three.js in a webview
-('ide/vscode/src/webview/scene.ts'), which a sandbox has no browser to run, so
-this module draws the same picture again with numpy:
+A PNG or a JPEG asked for 'style: shaded', and every frame of a video, is drawn
+here ('render_raster.py' is what asks, for both): what a reader expects it to
+look like is what they already see in the IDE, the 3D tab of the Digital Thread.
+That view is three.js in a webview ('ide/vscode/src/webview/scene.ts'), which a
+sandbox has no browser to run, so this module draws the same picture again with
+numpy:
 
   * the camera - a perspective one, 50 degrees from top to bottom, looking at
     the middle of the object from 'VIEW_DIRECTION' and backed off until the
-    object fits the frame ('fit_distance' is 'scene.ts''s 'fitDistance');
+    object fits the frame ('fit_distance' is 'scene.ts''s 'fitDistance'). A
+    field of view of nought is a camera with no perspective at all, framed the
+    same way, which is what a drawing measured off the picture wants;
   * the material - three's MeshPhongMaterial with its defaults, both sides
     drawn, in the colour each part states and goldenrod where it states none
     (see 'appearance.py', which every drawing PartCAD makes shares);
@@ -31,9 +34,10 @@ Animate turns the camera around the model, about the vertical, with the lights
 standing still around the model. Turning the model and everything lighting it
 about the opposite axis, in front of a camera that stands still, draws the same
 picture, and is what is done here: everything is lit once, in the model's own
-frame ('Scene'), and each frame only moves the camera around it ('Camera.turned').
-That is also what makes a turn about any axis, not only the vertical, a matter
-of handing 'draw' another rotation.
+frame ('Scene'), and each picture only moves the camera around it
+('Camera.turned'). That is also what makes a turn about any axis, not only the
+vertical, a matter of handing 'draw' another rotation - the 'turn' every
+render takes ('viewpoint.py'), which a video grows frame by frame.
 
 What is drawn differently, and why:
 
@@ -51,13 +55,19 @@ What is drawn differently, and why:
     ('supersample'), where the GPU samples each pixel several times.
 
 Nothing here imports PartCAD: it runs in the render sandbox, beside the
-implementation that calls it, and reaches OCP only to tessellate.
+implementation that calls it, and reaches OCP only to tessellate. numpy is
+build123d's, which every render sandbox holds already.
 """
 
 import colorsys
 import math
+import os
+import sys
 
 import numpy as np
+
+sys.path.append(os.path.dirname(__file__))
+import viewpoint
 
 # The camera of 'scene.ts': 'new THREE.PerspectiveCamera(50, ...)'. The field of
 # view is the vertical one, in degrees.
@@ -243,6 +253,7 @@ def triangles(shape, tolerance, angular_tolerance=ANGULAR_TOLERANCE):
     the glTF is a primitive of its own.
     """
     from OCP.BRep import BRep_Tool
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
     from OCP.BRepLib import BRepLib_ToolTriangulatedShape
     from OCP.BRepMesh import BRepMesh_IncrementalMesh
     from OCP.TopAbs import TopAbs_FACE, TopAbs_REVERSED
@@ -250,6 +261,13 @@ def triangles(shape, tolerance, angular_tolerance=ANGULAR_TOLERANCE):
     from OCP.TopLoc import TopLoc_Location
     from OCP.TopoDS import TopoDS
 
+    # A copy, with the geometry and without whatever mesh the shape carries:
+    # the files of one object written together may share a decoding (see
+    # 'wrapper_export.TESSELLATION_NAME'), and OCCT keeps a mesh finer than the
+    # one asked for. Meshed in place, this picture would come out depending on
+    # what else was written beside it, and what was written after it would find
+    # this picture's mesh on its faces.
+    shape = BRepBuilderAPI_Copy(shape, True, False).Shape()
     BRepMesh_IncrementalMesh(shape, tolerance, False, angular_tolerance, True)
 
     points, normals, corners = [], [], []
@@ -484,16 +502,16 @@ def specular(points, normals, eye, radius):
 class Scene:
     """An object made ready to be drawn from anywhere: tessellated, centred and lit.
 
-    Built once per video. Everything that does not change as the object turns is
-    worked out here, in the object's own frame - the triangles, the colour each
-    corner of each of them is lit to from either side, the lines - and 'draw'
-    only has to look at it.
+    Built once per picture, and once for all the frames of a video. Everything
+    that does not change as the object turns is worked out here, in the object's
+    own frame - the triangles, the colour each corner of each of them is lit to
+    from either side, the lines - and 'draw' only has to look at it.
     """
 
     def __init__(self, groups, pixels, warnings=None):
         """'groups' is '[(colour, shape)]', a colour being what 'appearance' writes ('#RRGGBB[AA]').
 
-        'pixels' is the larger side of the frame the object will be drawn into,
+        'pixels' is the larger side of the picture the object will be drawn into,
         which is what decides how finely it is tessellated.
         """
         boxes = [box for box in (bounding_box(shape) for _color, shape in groups) if box is not None]
@@ -561,29 +579,46 @@ class Scene:
 
 
 def rotation(degrees):
-    """The turn of the object by '(x, y, z)' degrees: about X, then Y, then Z, each about the fixed axes."""
-    ax, ay, az = (math.radians(float(angle)) for angle in degrees)
-    cx, sx, cy, sy, cz, sz = math.cos(ax), math.sin(ax), math.cos(ay), math.sin(ay), math.cos(az), math.sin(az)
-    rx = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]])
-    ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]])
-    rz = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]])
-    return rz @ ry @ rx
+    """The turn of the object by '(x, y, z)' degrees, as a numpy matrix: 'viewpoint.rotation'."""
+    return np.array(viewpoint.rotation(degrees))
+
+
+# How much further than 'fitDistance' the 3D view's camera stands: 'scene.ts'
+# puts it at 'VIEW_DIRECTION' times that distance, and its 'VIEW_DIRECTION' is
+# not of unit length - and keeps it that far along whichever way it is turned.
+VIEW_LENGTH = math.sqrt(sum(component * component for component in VIEW_DIRECTION))
 
 
 def fit_distance(radius, aspect, fov=FOV):
-    """How far back the camera stands to fit an object of 'radius' ('fitDistance' in 'scene.ts').
+    """How far the camera stands from the middle of an object of 'radius', as the 3D view fits it.
 
-    Whichever of the two fields is the narrower: 'fov' is the vertical one, and a
-    frame taller than it is wide - a phone's - sees less across than up.
+    'fitDistance' in 'scene.ts', times 'VIEW_LENGTH'. Whichever of the two fields
+    is the narrower: 'fov' is the vertical one, and a frame taller than it is
+    wide - a phone's - sees less across than up.
     """
     half_height = math.tan(math.radians(fov) / 2.0)
-    return radius * FIT / (half_height * min(1.0, aspect))
+    return radius * FIT * VIEW_LENGTH / (half_height * min(1.0, aspect))
+
+
+def half_height(radius, aspect):
+    """How far above the middle the top of the picture is, in the object's units, when the object fits it.
+
+    What 'fit_distance' frames a perspective camera to at the object's middle,
+    so that a camera without perspective frames the object the same size.
+    """
+    return radius * FIT * VIEW_LENGTH / min(1.0, aspect)
 
 
 class Camera:
-    """Where the frame is seen from, in the frame of the object as it stands before any turn."""
+    """Where the picture is seen from, in the frame of the object as it stands before any turn.
 
-    def __init__(self, direction=VIEW_DIRECTION, up=UP, distance=1.0, fov=FOV):
+    'fov' is the vertical field of view in degrees, and nought is no perspective
+    at all: then 'height' is how far above the middle of the object the top of
+    the picture is, in the object's units, and 'distance' is only where the
+    light is seen from.
+    """
+
+    def __init__(self, direction=VIEW_DIRECTION, up=UP, distance=1.0, fov=FOV, height=1.0):
         back = np.asarray(direction, dtype=np.float64)
         norm = np.linalg.norm(back)
         if norm == 0:
@@ -599,6 +634,11 @@ class Camera:
         self.basis = np.stack([right, np.cross(back, right), back])
         self.distance = float(distance)
         self.fov = float(fov)
+        self.height = float(height)
+
+    @property
+    def perspective(self):
+        return self.fov > 0
 
     def turned(self, turn):
         """The camera as seen from an object turned by 'turn': '(basis, eye)' in the object's frame.
@@ -612,12 +652,16 @@ class Camera:
         return basis, basis[2] * self.distance
 
 
-def _project(points, basis, eye, width, height, fov):
+def _project(points, basis, eye, width, height, camera):
     """Points of the object's frame on the screen: '(x, y, depth)', depth along the line of sight."""
     local = (points - eye) @ basis.T
     depth = -local[:, 2]
-    focal = 1.0 / math.tan(math.radians(fov) / 2.0)
     aspect = width / float(height)
+    if not camera.perspective:
+        x = (local[:, 0] / (camera.height * aspect) + 1.0) * 0.5 * width
+        y = (1.0 - local[:, 1] / camera.height) * 0.5 * height
+        return x, y, depth
+    focal = 1.0 / math.tan(math.radians(camera.fov) / 2.0)
     safe = np.where(np.abs(depth) > 1e-12, depth, 1e-12)
     x = (local[:, 0] * focal / aspect / safe + 1.0) * 0.5 * width
     y = (1.0 - local[:, 1] * focal / safe) * 0.5 * height
@@ -628,16 +672,17 @@ class Planes:
     """Each triangle's corner weights and depth as planes over the screen.
 
     On the screen, the weight of each corner at a point - and the reciprocal of
-    the depth there - is an affine function of where the point is. So it is
-    worked out once per triangle and per frame, as its slopes from the
-    triangle's first corner, and a pixel costs two multiplications and two
-    additions per quantity rather than the areas of three triangles. From the
-    first corner rather than from the corner of the screen, because the pixels
-    are worked in single precision, and a plane anchored a few thousand pixels
-    away loses the digits a small triangle is drawn with.
+    the depth there, or the depth itself where there is no perspective - is an
+    affine function of where the point is. So it is worked out once per triangle
+    and per frame, as its slopes from the triangle's first corner, and a pixel
+    costs two multiplications and two additions per quantity rather than the
+    areas of three triangles. From the first corner rather than from the corner
+    of the screen, because the pixels are worked in single precision, and a
+    plane anchored a few thousand pixels away loses the digits a small triangle
+    is drawn with.
     """
 
-    def __init__(self, sx, sy, depth):
+    def __init__(self, sx, sy, depth, perspective=True):
         x0, x1, x2 = sx[:, 0], sx[:, 1], sx[:, 2]
         y0, y1, y2 = sy[:, 0], sy[:, 1], sy[:, 2]
         ex1, ey1, ex2, ey2 = x1 - x0, y1 - y0, x2 - x0, y2 - y0
@@ -650,8 +695,10 @@ class Planes:
         # over the whole - and of the third, as slopes along x and y.
         self.l1 = ((ey2 / area).astype(single), (-ex2 / area).astype(single))
         self.l2 = ((-ey1 / area).astype(single), (ex1 / area).astype(single))
-        # Depth is not linear on the screen; its reciprocal is.
-        inverse = 1.0 / np.where(np.abs(depth) > 1e-12, depth, 1e-12)
+        # Depth is not linear on the screen in perspective; its reciprocal is.
+        # Without perspective, depth itself is.
+        self.perspective = perspective
+        inverse = 1.0 / np.where(np.abs(depth) > 1e-12, depth, 1e-12) if perspective else depth
         d1 = inverse[:, 1] - inverse[:, 0]
         d2 = inverse[:, 2] - inverse[:, 0]
         self.inverse0 = inverse[:, 0].astype(single)
@@ -665,9 +712,11 @@ class Planes:
         """Where pixel centres '(x, y)' are from the first corner of each one's triangle."""
         return x - self.x0[triangle], y - self.y0[triangle]
 
-    def inverse_depth(self, triangle, dx, dy):
+    def depth_at(self, triangle, dx, dy):
+        """How far the triangle is at each pixel, from its offsets 'dx' and 'dy'."""
         a, b = self.inverse
-        return self.inverse0[triangle] + a[triangle] * dx + b[triangle] * dy
+        value = self.inverse0[triangle] + a[triangle] * dx + b[triangle] * dy
+        return 1.0 / value if self.perspective else value
 
     def weights(self, triangle, dx, dy):
         """The three corners' weights at each pixel, corrected for perspective: an (P, 3) array."""
@@ -678,8 +727,9 @@ class Planes:
         weights[:, 1] = l1
         weights[:, 2] = l2
         np.clip(weights, 0.0, 1.0, out=weights)
-        # Each corner's weight on the screen, over its depth.
-        weights /= self.depth[triangle]
+        if self.perspective:
+            # Each corner's weight on the screen, over its depth.
+            weights /= self.depth[triangle]
         weights /= np.maximum(weights.sum(axis=1, keepdims=True), np.float32(1e-30))
         return weights
 
@@ -758,7 +808,7 @@ def rasterize(sx, sy, planes, width, height, near, zbuffer, owner, limit=None, s
         py = row_y[pixel_row].astype(np.int64)
         triangle = row_tri[pixel_row]
         dx, dy = planes.offsets(triangle, px.astype(np.float32) + 0.5, py.astype(np.float32) + 0.5)
-        z = 1.0 / planes.inverse_depth(triangle, dx, dy)
+        z = planes.depth_at(triangle, dx, dy)
         pixel = py * width + px
         if limit is not None:
             nearer = z < limit[pixel]
@@ -783,12 +833,13 @@ def _shade(owner, planes, width, corner_colors):
 
 
 class Painter:
-    """What draws the frames of one video: the frame's size and look, and the memory a frame is drawn in.
+    """What draws pictures of one scene: their size and look, and the memory a picture is drawn in.
 
-    'supersample' draws each frame that many times larger each way and shrinks
-    it, which is what smooths the edges. 'line_width' is how wide a line is, in
-    pixels of the frame that comes out. 'background' is the sRGB colour of
-    everything the object does not cover - the editor's background, in the IDE.
+    One picture, for a PNG; every frame, for a video, which is why the memory is
+    kept. 'supersample' draws each picture that many times larger each way and
+    shrinks it, which is what smooths the edges. 'line_width' is how wide a line
+    is, in pixels of the picture that comes out. 'background' is the sRGB colour
+    of everything the object does not cover - the editor's background, in the IDE.
     """
 
     def __init__(self, scene, camera, width, height, background=(0x1F, 0x1F, 0x1F), supersample=1, line_width=1.0):
@@ -807,7 +858,7 @@ class Painter:
         self.layer_owner = None
 
     def draw(self, turn):
-        """One frame, of the object turned by 'turn' (a 3x3 rotation), as (height, width, 3) sRGB bytes."""
+        """One picture, of the object turned by 'turn' (a 3x3 rotation), as (height, width, 3) sRGB bytes."""
         scene, camera, ss = self.scene, self.camera, self.ss
         big_w, big_h = self.width * ss, self.height * ss
         basis, eye = camera.turned(turn)
@@ -817,10 +868,10 @@ class Painter:
         limit = None
 
         if scene.triangle_count:
-            sx, sy, depth = _project(scene.points, basis, eye, big_w, big_h, camera.fov)
+            sx, sy, depth = _project(scene.points, basis, eye, big_w, big_h, camera)
             corners = scene.corners
             tx, ty = sx[corners], sy[corners]
-            planes = Planes(tx, ty, depth[corners])
+            planes = Planes(tx, ty, depth[corners], camera.perspective)
             # Which side of each triangle faces the camera: its corners turn
             # counter-clockwise seen from outside, and the screen's Y runs downwards.
             front = planes.area < 0
@@ -860,7 +911,7 @@ class Painter:
                 image[covered] = np.round((over * alpha + under * (1.0 - alpha)) * 255.0).astype(np.uint8)
 
         if len(scene.segments):
-            _draw_lines(image, limit, scene, basis, eye, big_w, big_h, camera.fov, near, self.line_width * ss)
+            _draw_lines(image, limit, scene, basis, eye, big_w, big_h, camera, near, self.line_width * ss)
 
         frame = image.reshape(big_h, big_w, 3)
         if ss == 1:
@@ -877,14 +928,14 @@ class Painter:
 
 
 def draw(scene, camera, turn, width, height, background=(0x1F, 0x1F, 0x1F), supersample=1, line_width=1.0):
-    """One frame of 'scene', turned by 'turn', as (height, width, 3) sRGB bytes; see 'Painter'."""
+    """One picture of 'scene', turned by 'turn', as (height, width, 3) sRGB bytes; see 'Painter'."""
     return Painter(scene, camera, width, height, background, supersample, line_width).draw(turn)
 
 
-def _draw_lines(image, zbuffer, scene, basis, eye, width, height, fov, near, line_width):
+def _draw_lines(image, zbuffer, scene, basis, eye, width, height, camera, near, line_width):
     """Draw the scene's lines into 'image', in front of nothing that is nearer than they are."""
     ends = scene.segments.reshape(-1, 3)
-    sx, sy, depth = _project(ends, basis, eye, width, height, fov)
+    sx, sy, depth = _project(ends, basis, eye, width, height, camera)
     sx, sy, depth = sx.reshape(-1, 2), sy.reshape(-1, 2), depth.reshape(-1, 2)
     keep = np.all(depth > near, axis=1)
     sx, sy, depth, colors = sx[keep], sy[keep], depth[keep], scene.segment_colors[keep]
@@ -897,8 +948,10 @@ def _draw_lines(image, zbuffer, scene, basis, eye, width, height, fov, near, lin
     t = (np.arange(len(segment)) - starts[segment]) / np.maximum(steps[segment] - 1, 1)
     x = sx[segment, 0] + (sx[segment, 1] - sx[segment, 0]) * t
     y = sy[segment, 0] + (sy[segment, 1] - sy[segment, 0]) * t
-    inverse = (1.0 - t) / depth[segment, 0] + t / depth[segment, 1]
-    z = 1.0 / inverse
+    if camera.perspective:
+        z = 1.0 / ((1.0 - t) / depth[segment, 0] + t / depth[segment, 1])
+    else:
+        z = (1.0 - t) * depth[segment, 0] + t * depth[segment, 1]
     color = colors[segment]
 
     half = max(0.5, float(line_width) / 2.0)

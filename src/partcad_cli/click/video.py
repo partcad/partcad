@@ -3,51 +3,61 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""The video options of 'pc render': how a video of an object is made, for this one run.
+"""The picture and video options of 'pc render': how a raster or a video of an object is made, for this one run.
 
-Each is a field of the video file types of '//builtin/render' ('mp4', 'mov',
-'webm', ...), which a package declares once in its 'render:' section and these
-override - so they mean exactly what the fields mean. Like '--view', each is
-handed to every file type a run renders, and means something to the ones that
-have a field of that name: the videos, and for '--quality' a JPEG as well,
-whose 'quality' is the same 0 to 100. What each one
-accepts is the implementation's to say ('render_video.py'); what is checked here
-is only what can be checked without it, so that a typo costs a message rather
-than a round trip to the daemon.
+Each is a field of the raster file types ('png', 'jpeg') or of the video ones
+('mp4', 'mov', 'webm', ...) of '//builtin/render', which a package declares once
+in its 'render:' section and these override - so they mean exactly what the
+fields mean. Like '--view', each is handed to every file type a run renders, and
+means something to the ones that have a field of that name: '--style',
+'--size' and '--background' to a picture and a video alike, which draw their
+pictures the same way ('render_raster.py'), '--quality' to a video and a JPEG,
+whose 'quality' is the same 0 to 100, and the rest to a video. What each one
+accepts is the implementation's to say; what is checked here is only what can
+be checked without it, so that a typo costs a message rather than a round trip
+to the daemon.
 
-The preset names are inlined rather than imported for the reason 'viewport.py'
-gives: the client does not load the package that renders.
+The preset and style names are inlined rather than imported for the reason
+'viewport.py' gives: the client does not load the package that renders.
 """
 
 import rich_click as click
+
+from .viewport import turn_vector
 
 # x264's names for the trade between encoding time and file size, fastest
 # first; the twin of 'PRESETS' in '//builtin/render/video_encode.py'.
 PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"]
 
-
-def speed_vector(ctx, param, value):
-    """'X,Y,Z' degrees a second as three floats; one number is about Z alone."""
-    if value is None:
-        return None
-    try:
-        vector = [float(component) for component in value.replace(",", " ").split()]
-    except ValueError:
-        raise click.BadParameter("expected 'X,Y,Z' or one number, got: %s" % value, ctx=ctx, param=param) from None
-    if len(vector) == 1:
-        return [0.0, 0.0, vector[0]]
-    if len(vector) != 3:
-        raise click.BadParameter("expected 'X,Y,Z' or one number, got: %s" % value, ctx=ctx, param=param)
-    return vector
-
+# How a picture is drawn; the twin of 'STYLES' in '//builtin/render/render_raster.py'.
+STYLES = ["lines", "shaded"]
 
 _OPTIONS = (
     click.option(
+        "--style",
+        help=(
+            "How a picture is drawn: lines (the projection's visible edges, what a PNG or a JPEG is by "
+            "default) or shaded (lit and in perspective, as the Digital Thread's 3D view draws it - and "
+            "as every frame of a video is drawn)"
+        ),
+        type=click.Choice(STYLES),
+        show_envvar=True,
+    ),
+    click.option(
         "--size",
         help=(
-            "The size of a video, by where it is going: reels (the default: also shorts, tiktok, story, "
-            "vertical), portrait, square, pinterest, landscape (also youtube), 720p, 1080p, 1440p, 4k, "
-            "4:3, 21:9 -- or WIDTHxHEIGHT"
+            "The size of a picture or a video, by where it is going: reels (a video's default: also shorts, "
+            "tiktok, story, vertical), portrait, square, pinterest, landscape (also youtube), 720p, 1080p, "
+            "1440p, 4k, 4:3, 21:9 -- or WIDTHxHEIGHT (a picture's default is 512x512)"
+        ),
+        type=str,
+        show_envvar=True,
+    ),
+    click.option(
+        "--background",
+        help=(
+            "What a picture or a video is drawn on, as '#RRGGBB': white for a PNG or a JPEG, the editor's "
+            "#1F1F1F for a video"
         ),
         type=str,
         show_envvar=True,
@@ -71,7 +81,7 @@ _OPTIONS = (
             "or one number, about Z. 30 about Z by default, as the 3D view's Animate turns it"
         ),
         type=str,
-        callback=speed_vector,
+        callback=turn_vector,
         show_envvar=True,
     ),
     click.option(
@@ -103,16 +113,18 @@ _OPTIONS = (
 
 
 def video_options(command):
-    """Add the video options to a command, in the order they read in '--help'."""
+    """Add the picture and video options to a command, in the order they read in '--help'."""
     for option in reversed(_OPTIONS):
         command = option(command)
     return command
 
 
-def video_params(size, fps, duration, speed, append, preset, quality):
-    """The video options as JSON-RPC params, so every caller sends the same names."""
+def video_params(style, size, background, fps, duration, speed, append, preset, quality):
+    """The picture and video options as JSON-RPC params, so every caller sends the same names."""
     return {
+        "style": style,
         "size": size,
+        "background": background,
         "fps": fps,
         "duration": duration,
         "speed": speed,

@@ -1093,6 +1093,19 @@ Object commands
   assembly instruction book) never reads them. PartCAD is Z-up with ``+Y`` pointing away from the front view,
   which is what puts ``+X`` on the right of it.
 
+  ``--turn`` turns the object in front of that camera instead of moving the camera: by ``X,Y,Z`` degrees about
+  the object's own axes, through its middle, or by one number about Z — the way the 3D view's Animate turns it.
+  It goes with any of the three above, and is the ``turn`` of the file type:
+
+  .. code-block:: shell
+
+    pc render -t svg --view front --turn 0,0,45 -O ./ bracket
+
+  ``--style shaded`` draws a ``png`` or a ``jpeg`` lit and in perspective, as the Digital Thread's 3D view draws
+  it, instead of as the projection's lines; ``--size`` (``512x512`` for a picture, or a name such as ``square``
+  or ``reels``) and ``--background`` go with it. That is also how every frame of a video is drawn, so a frame is
+  a picture of its own — see :ref:`shaded-pictures` and :ref:`videos`.
+
   A rendered file is named after the object, so several views of one object go into directories of their own
   rather than over each other:
 
