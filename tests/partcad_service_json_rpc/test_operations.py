@@ -2931,6 +2931,33 @@ def test_render_hands_the_resolved_viewport_to_the_context(monkeypatch):
     assert rendered and rendered[0]["render_opts"] == resolved
 
 
+@pytest.mark.parametrize("given, sent", [(True, True), ("false", False)])
+def test_render_hands_reproducible_to_the_context(monkeypatch, given, sent):
+    """'pc render --reproducible' lands beside the viewport, over what the file type declares."""
+    _fake_render_module(monkeypatch, lambda view, origin, up: {})
+
+    session, _ = make_session()
+    session.partcad.output = types.SimpleNamespace(
+        all_formats=lambda ctx: ["svg"],
+        NON_WRAPPER_FORMATS=set(),
+        SECTIONS=("export", "render"),
+        format_names=lambda section: [],
+        split_format=lambda project_name, fmt: (fmt, None),
+        REPRODUCIBLE_KEY="reproducible",
+        as_flag=_flag,
+    )
+    rendered = []
+
+    async def _render_async(**kwargs):
+        rendered.append(kwargs)
+
+    session.partcad_ctx.render_async = _render_async
+
+    operations.render_objects(session, {"package": "//", "format": "svg", "reproducible": given})
+
+    assert rendered and rendered[0]["render_opts"] == {"reproducible": sent}
+
+
 def test_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch):
     """Nothing is rendered, rather than something aimed somewhere else.
 
@@ -3034,14 +3061,16 @@ def test_an_unknown_file_type_is_refused_before_anything_is_built(monkeypatch):
 
 
 class FakeRenderer:
-    def __init__(self, error=None):
+    def __init__(self, error=None, written=None):
         self.calls = []
         self.error = error
+        self.written = written
 
     def __call__(self, input_filename, input_type, output_filename, output_type, **options):
         self.calls.append((input_filename, input_type, output_filename, output_type, options))
         if self.error is not None:
             raise self.error
+        return self.written
 
 
 def install_fake_render(monkeypatch, part=None, sketch=None, resolve_viewport=None):
@@ -3090,7 +3119,7 @@ def test_adhoc_render_renders_a_part_and_reports_progress(monkeypatch, tmp_path)
     ]
     assert sketch.calls == []
     assert session.partcad.logging.messages("info") == [
-        "Rendering %s (step) to %s (png)..." % (source, target),
+        "Rendering %s (step) to %s..." % (source, target),
         "Render complete: %s" % target,
     ]
 
@@ -3112,9 +3141,13 @@ def test_adhoc_render_without_a_viewport_passes_none(monkeypatch, tmp_path):
     assert part.calls[0][4] == {}
 
 
-def test_adhoc_render_derives_the_output_path_from_the_projection(monkeypatch, tmp_path):
-    """'jpeg' is the format's name but '.jpg' is the file's."""
-    part, _ = install_fake_render(monkeypatch)
+def test_adhoc_render_leaves_naming_the_output_to_the_render(monkeypatch, tmp_path):
+    """With no output file named, the render names it -- in the input's directory unless one is given.
+
+    The render is what knows the extension: 'jpeg' is the format's name but
+    '.jpg' is the file's, and a file type a package implements says its own.
+    """
+    part, _ = install_fake_render(monkeypatch, part=FakeRenderer(written=str(tmp_path / "bracket.jpg")))
     session, _ = make_session()
     source = tmp_path / "bracket.step"
 
@@ -3123,8 +3156,9 @@ def test_adhoc_render_derives_the_output_path_from_the_projection(monkeypatch, t
         {"kind": "part", "input_filename": str(source), "output_filename": None, "output_type": "jpeg"},
     )
 
-    expected = tmp_path / "bracket.jpg"
-    assert part.calls[0][2:4] == (str(expected), "jpeg")
+    assert part.calls[0][2:4] == (None, "jpeg")
+    assert part.calls[0][4]["output_dir"] == str(tmp_path)
+    assert session.partcad.logging.messages("info")[-1] == "Render complete: %s" % (tmp_path / "bracket.jpg")
 
 
 def test_adhoc_render_infers_jpeg_from_either_spelling(monkeypatch, tmp_path):
@@ -3214,6 +3248,113 @@ def test_adhoc_render_refuses_a_projection_it_does_not_write(monkeypatch, tmp_pa
     assert excinfo.value.code == operations.USAGE_ERROR
     assert "tiff" in str(excinfo.value)
     assert part.calls == [] and sketch.calls == []
+
+
+def _flag(value):
+    """'output.as_flag', for the fakes: a boolean, or a boolean's name."""
+    if isinstance(value, bool):
+        return value
+    if str(value).lower() in ("true", "false"):
+        return str(value).lower() == "true"
+    raise ValueError("'reproducible' has to be true or false, not %r" % (value,))
+
+
+def _with_output(session):
+    session.partcad.output = types.SimpleNamespace(REPRODUCIBLE_KEY="reproducible", as_flag=_flag)
+    return session
+
+
+def adhoc_request(tmp_path, **extra):
+    return {
+        "kind": "part",
+        "input_filename": str(tmp_path / "bracket.py"),
+        "input_type": "build123d",
+        "output_filename": str(tmp_path / "bracket.svg"),
+        **extra,
+    }
+
+
+@pytest.mark.parametrize("given, sent", [(True, True), (False, False), ("false", False)])
+def test_adhoc_render_hands_reproducible_to_the_projection(monkeypatch, tmp_path, given, sent):
+    """'--reproducible' is the file type's 'reproducible', for one run: "false" from a client is false."""
+    part, _ = install_fake_render(monkeypatch)
+    session = _with_output(make_session()[0])
+
+    operations.adhoc_render(session, adhoc_request(tmp_path, reproducible=given))
+
+    assert part.calls[0][4] == {"reproducible": sent}
+
+
+def test_adhoc_render_refuses_a_reproducible_that_is_not_a_flag(monkeypatch, tmp_path):
+    part, _ = install_fake_render(monkeypatch)
+    session = _with_output(make_session()[0])
+
+    with pytest.raises(operations.JsonRpcError) as excinfo:
+        operations.adhoc_render(session, adhoc_request(tmp_path, reproducible="sometimes"))
+
+    assert excinfo.value.code == operations.USAGE_ERROR
+    assert part.calls == []
+
+
+@pytest.mark.parametrize("params", [["depth=12", "label=M4"], {"depth": "12", "label": "M4"}])
+def test_adhoc_render_hands_the_values_to_the_input(monkeypatch, tmp_path, params):
+    """Either shape a client sends them in: what the throwaway package declares them from."""
+    part, _ = install_fake_render(monkeypatch)
+    session, _ = make_session()
+
+    operations.adhoc_render(session, adhoc_request(tmp_path, params=params))
+
+    assert part.calls[0][4] == {"parameters": {"depth": "12", "label": "M4"}}
+
+
+def test_adhoc_render_takes_a_file_type_the_options_package_declares(monkeypatch, tmp_path):
+    """Not one of the built-in projections, and still not refused: the render checks it once the package is read."""
+    part, _ = install_fake_render(monkeypatch)
+    session, _ = make_session()
+
+    operations.adhoc_render(
+        session, adhoc_request(tmp_path, output_type="svg-thin", options_package=str(tmp_path / "opts"))
+    )
+
+    assert part.calls[0][3] == "svg-thin"
+    assert part.calls[0][4] == {"options_package": str(tmp_path / "opts")}
+
+
+def test_adhoc_render_writes_into_the_directory_it_is_given(monkeypatch, tmp_path):
+    part, _ = install_fake_render(monkeypatch)
+    session, _ = make_session()
+    out = tmp_path / "out"
+
+    operations.adhoc_render(
+        session, adhoc_request(tmp_path, output_filename=None, output_dir=str(out), output_type="svg")
+    )
+
+    assert part.calls[0][2] is None
+    assert part.calls[0][4] == {"output_dir": str(out)}
+
+
+def test_adhoc_render_refuses_an_output_file_and_a_directory_both(monkeypatch, tmp_path):
+    part, _ = install_fake_render(monkeypatch)
+    session, _ = make_session()
+
+    with pytest.raises(operations.JsonRpcError) as excinfo:
+        operations.adhoc_render(session, adhoc_request(tmp_path, output_dir=str(tmp_path)))
+
+    assert excinfo.value.code == operations.USAGE_ERROR
+    assert part.calls == []
+
+
+def test_adhoc_render_reports_what_the_render_refused_as_a_usage_error(monkeypatch, tmp_path):
+    """A package it cannot reach, or a file type the package does not declare: nothing was attempted."""
+    refusal = ValueError("opts declares no 'nosuch' file type. It declares: svg-thin")
+    install_fake_render(monkeypatch, part=FakeRenderer(error=refusal))
+    session, _ = make_session()
+
+    with pytest.raises(operations.JsonRpcError) as excinfo:
+        operations.adhoc_render(session, adhoc_request(tmp_path, output_type="nosuch", options_package="/opts"))
+
+    assert excinfo.value.code == operations.USAGE_ERROR
+    assert "declares no 'nosuch'" in str(excinfo.value)
 
 
 def test_adhoc_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch, tmp_path):

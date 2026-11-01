@@ -1,6 +1,6 @@
 ---
 name: gen-sketch
-description: Generate a PartCAD 2D sketch (build123d / cadquery / basic / dxf / svg) whose dimensions are measured to match the request rather than estimated - normalize the input to 2D (a description, a drawing, a photo, a projection, or a 3D model projected with `pc adhoc render`), measure the target dimensions, author a candidate, render it with both of PartCAD's projections (`reproducible:` true and false, which draw the same geometry as different shapes), measure the same dimensions on both with the bundled measure.py and reconcile them, and iterate until every error is within tolerance. Use for /pc:gen-sketch, when the user asks to generate, create, draw or trace a 2D sketch, profile, outline, cross-section, footprint or blueprint, and as the dimension study /pc:gen-part and /pc:gen-assembly run before they model.
+description: Generate a PartCAD 2D sketch (build123d / cadquery / basic / dxf / svg) whose dimensions are measured to match the request rather than estimated - normalize the input to 2D (a description, a drawing, a photo, a projection, or a 3D model projected with `pc adhoc render`), measure the target dimensions, author a candidate, render it with both of PartCAD's projections (`--reproducible` and `--no-reproducible`, which draw the same geometry as different shapes), measure the same dimensions on both with the bundled measure.py and reconcile them, and iterate until every error is within tolerance. Use for /pc:gen-sketch, when the user asks to generate, create, draw or trace a 2D sketch, profile, outline, cross-section, footprint or blueprint, and as the dimension study /pc:gen-part and /pc:gen-assembly run before they model.
 ---
 
 # pc:gen-sketch
@@ -122,8 +122,10 @@ be read, and measure what it read:
 
 ```sh
 mkdir -p /tmp/pc-sketch/ref
-pc --no-ansi adhoc render sketch outline.dxf /tmp/pc-sketch/ref/outline.svg
-python3 <this skill's directory>/measure.py svg /tmp/pc-sketch/ref/outline.svg
+pc --no-ansi adhoc render sketch --no-reproducible outline.dxf /tmp/pc-sketch/ref/outline.svg
+pc --no-ansi adhoc render sketch --reproducible outline.dxf /tmp/pc-sketch/ref/outline.exact.svg
+python3 <this skill's directory>/measure.py compare /tmp/pc-sketch/ref/outline.exact.svg /tmp/pc-sketch/ref/outline.svg
+python3 <this skill's directory>/measure.py svg /tmp/pc-sketch/ref/outline.exact.svg
 ```
 
 A DXF is scaled to millimetres by its own `$INSUNITS` (`pc info` on a `dxf`
@@ -147,8 +149,8 @@ not written, scaled from what is.
 
 Materialize it as a **temporary part** and project it, so that which dimensions
 appear in the view, how long they look there and what hides what are measured
-rather than imagined. A build123d script is enough, and it belongs in a scratch
-package of its own, outside the user's:
+rather than imagined. A build123d script is enough, outside the package — `pc
+adhoc render` projects a file that is in none:
 
 ```python
 # /tmp/pc-sketch/study.py -- only what decides the dimensions of the view
@@ -161,34 +163,26 @@ with BuildPart() as study:
 show_object(study.part)
 ```
 
-```yaml
-# /tmp/pc-sketch/partcad.yaml -- the scratch package
-parts:
-  study:
-    type: build123d
-    path: study.py
-  study/exact:              # the same part, projected exactly (§5.2)
-    type: alias
-    source: :study
-    render:
-      svg:
-        reproducible: true
-```
-
 ```sh
+cd /tmp/pc-sketch
 for view in front top right; do
-  mkdir -p /tmp/pc-sketch/$view
-  pc --no-ansi -p /tmp/pc-sketch render -t svg --view $view -O /tmp/pc-sketch/$view study
-  pc --no-ansi -p /tmp/pc-sketch render -t svg --view $view -O /tmp/pc-sketch/$view study/exact
+  pc --no-ansi adhoc render part --input build123d --view $view --no-reproducible study.py $view.svg
+  pc --no-ansi adhoc render part --input build123d --view $view --reproducible study.py $view.exact.svg
 done
-python3 <this skill's directory>/measure.py compare /tmp/pc-sketch/top/study/exact.svg /tmp/pc-sketch/top/study.svg
-python3 <this skill's directory>/measure.py svg /tmp/pc-sketch/top/study/exact.svg
+python3 <this skill's directory>/measure.py compare top.exact.svg top.svg
+python3 <this skill's directory>/measure.py svg top.exact.svg
 ```
 
-For a quick look, `pc adhoc render part --input build123d --view <view> study.py
-study.svg` needs no package, and draws the polygonal projection only. **`--input
-build123d` is not optional** there: a `.py` is guessed to be `sdf`, which fails
-on a build123d script (`--input cadquery` for a CadQuery one).
+Each view is rendered both ways, as §5.2 asks. **`--input build123d` is not
+optional** for a `.py`: it is guessed to be `sdf`, which fails on a build123d
+script (`--input cadquery` for a CadQuery one).
+
+A dimension the description leaves open is a parameter of the study: assign it
+at the top of the script (`depth = 10` — a build123d or CadQuery script's
+parameters are its top-level assignments), and `-p depth=12` renders another
+value without editing anything. With no output file named, `-t svg -O <dir>`
+writes `study_depth_12.svg` there, so renders of several values sit side by
+side.
 
 The temporary part is an instrument, not the deliverable: keep it to the
 features the description dimensions. Its value is that a description in 3D
@@ -205,12 +199,19 @@ an SVG (§5.1) or as a picture (§5.3), and correct for the projection.
 
 ### 4.5 3D object
 
-Project it into the views the sketch is of — both ways, as §5.2 asks. A file is
-declared in the scratch package of §4.3 (`ref: {type: step, path: bracket.step}`
-and its `ref/exact` alias); `pc adhoc render part --view <view> bracket.step
-ref.svg` gives the polygonal projection alone. An object a package already
-declares is rendered there, beside a temporary `<name>/exact` alias of it (§6),
-and its package's own render options apply.
+Project it into the views the sketch is of — both ways, as §5.2 asks:
+
+```sh
+for view in front top right; do
+  pc --no-ansi adhoc render part --view $view --no-reproducible bracket.step /tmp/pc-sketch/$view.svg
+  pc --no-ansi adhoc render part --view $view --reproducible bracket.step /tmp/pc-sketch/$view.exact.svg
+done
+```
+
+An object a package already declares is rendered with `pc render` instead —
+`pc --no-ansi render -t svg --view <view> --reproducible -O <dir> <name>` and
+the same with `--no-reproducible` — so that its package's own render options
+apply.
 `pc --no-ansi info <name>` adds the kernel's `BoundingBox` — exact, and the
 first thing to check every measured extent against.
 
@@ -308,11 +309,12 @@ measured a pair of components at a time (`/pc:gen-assembly` §6). Where the exac
 projection is not to be had, measure on the polygonal one alone and widen every
 tolerance by its error.
 
-Both are had **without changing the object's declaration**: a temporary alias of
-it carries `reproducible: true` on its own `render: svg:`, and each projection is
-one `pc render` (§6). Do not declare a new file type for it in the package's
-`render:` — a package-level file type changes what a plain `pc render` writes
-for every object in the package.
+Both are had **without changing anything's declaration**: `--reproducible` and
+`--no-reproducible` choose the algorithm for one run of `pc render` or `pc adhoc
+render`, over whatever the file type says. Pass one of them on **every** render
+you measure. Left off, the file type decides, and a package can make either one
+its default — every example in PartCAD's own repository says `reproducible:
+true` — so a "plain" render is not reliably the polygonal one.
 
 ### 5.3 A raster picture: measured in pixels, then calibrated
 
@@ -397,7 +399,7 @@ pc --no-ansi add sketch --desc "<the description>" build123d <name>.py
 ```
 
 (`basic` has no file: write its declaration into `partcad.yaml` by hand.) Then
-write the table down, and declare the alias that draws it exactly (§5.2):
+write the table down:
 
 ```yaml
 sketches:
@@ -409,12 +411,6 @@ sketches:
       features:                # the dimension table, one feature per dimension
         width: 100 mm overall, left edge to right edge
         hole-pattern: Four Ø5 holes, centres 8 mm in from each edge (pitch 84 × 44)
-  <name>/exact:                # temporary: the same sketch, projected exactly
-    type: alias
-    source: :<name>
-    render:
-      svg:
-        reproducible: true
 ```
 
 If you started the project with `pc init`, delete the empty null sections it
@@ -424,18 +420,17 @@ leaves.
 
 ```sh
 D=/tmp/pc-sketch/<name>/1                                  # one directory per iteration
-mkdir -p $D
-pc --no-ansi render -t svg -O $D <name>                    # polygonal: $D/<name>.svg
-pc --no-ansi render -t svg -O $D <name>/exact              # exact:     $D/<name>/exact.svg
-python3 <this skill's directory>/measure.py compare $D/<name>/exact.svg $D/<name>.svg
-python3 <this skill's directory>/measure.py svg $D/<name>/exact.svg
+mkdir -p $D/polygonal $D/exact
+pc --no-ansi render -t svg --no-reproducible -O $D/polygonal <name>
+pc --no-ansi render -t svg --reproducible -O $D/exact <name>
+python3 <this skill's directory>/measure.py compare $D/exact/<name>.svg $D/polygonal/<name>.svg
+python3 <this skill's directory>/measure.py svg $D/exact/<name>.svg
 pc --no-ansi info <name> 2>&1                              # BoundingBox: the kernel's extent
 ```
 
 A name with a `/` in it is written into that subdirectory of `-O`
-(`<name>/exact` → `$D/<name>/exact.svg`, `bracket/dims-front` →
-`$D/bracket/dims-front.svg`). Resolve whatever `compare` reports (§5.2) before
-taking any number from either.
+(`bracket/dims-front` → `$D/exact/bracket/dims-front.svg`). Resolve whatever
+`compare` reports (§5.2) before taking any number from either.
 
 Measure **the same dimensions, between the same features**, as the table says
 the targets were measured — and the extent against `pc info` too. Then look at
@@ -493,22 +488,19 @@ that exist to settle numbers:
 - **Named after what they are for:** `<object>/dims-<view>` (`bracket/dims-front`,
   `gearbox/layout-top`). A file at that path declares the sketch under that
   name — `pc add sketch build123d bracket/dims-front.py`, run in the package's
-  directory, adds `bracket/dims-front` — and it gets an exact alias like any
-  other (`bracket/dims-front/exact`, §6).
+  directory, adds `bracket/dims-front`.
 - **What a study produces is the validated table**, which the part script or
   the ASSY is written from, and against which the result is measured again.
 
 When the work is finished, a temporary sketch that nothing is built from is
-removed — its declaration, its file and its `…/exact` alias — unless the user
-wants it kept. One that a part *is* built from (`type: extrude`, `type: sweep`)
-is no longer temporary: keep it, and give it a `desc:` that says what it is; its
-alias goes either way. The scratch package of §4.3 is deleted with
-`/tmp/pc-sketch`.
+removed — its declaration and its file — unless the user wants it kept. One
+that a part *is* built from (`type: extrude`, `type: sweep`) is no longer
+temporary: keep it, and give it a `desc:` that says what it is. The study
+script of §4.3 goes with `/tmp/pc-sketch`.
 
 ## 10. Finalize
 
-Remove the `<name>/exact` alias (§6) unless the user wants it kept. Report the
-sketch and the final dimension table — target, measured, error and tolerance for
+Report the sketch and the final dimension table — target, measured, error and tolerance for
 every dimension, and the uncertainty of every measured target — what the two
 projections disagreed on and how it was resolved, how many iterations it took
 and what each correction was, every assumption, and how to view it:

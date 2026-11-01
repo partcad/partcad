@@ -548,26 +548,16 @@ A whole assembly is a crowded drawing. To measure between two components,
 render only those two — `--filter '[<a>, <b>]'` (`/pc:render` §8), into a
 directory of its own — so every edge measured is attributable to one of them.
 Render that pair with both of PartCAD's projections and reconcile them, as
-`/pc:gen-sketch` §5.2 says, through a temporary exact alias of the assembly. A
-pair at a time is also what keeps the exact projection cheap: on a whole large
-assembly it takes minutes and can fail outright.
-
-```yaml
-assemblies:
-  <name>/exact:                    # temporary: the assembly, projected exactly
-    type: alias
-    source: :<name>
-    render:
-      svg:
-        reproducible: true
-```
+`/pc:gen-sketch` §5.2 says. A pair at a time is also what keeps the exact
+projection cheap: on a whole large assembly it takes minutes and can fail
+outright.
 
 ```sh
 D=/tmp/pc-render/svg/top-<a>-<b>
-mkdir -p $D
-pc --no-ansi render -t svg --view top -O $D --filter '[<a>, <b>]' <name>
-pc --no-ansi render -t svg --view top -O $D --filter '[<a>, <b>]' <name>/exact
-python3 <the /pc:gen-sketch skill's directory>/measure.py compare $D/<name>/exact.svg $D/<name>.svg
+mkdir -p $D/polygonal $D/exact
+pc --no-ansi render -t svg --view top --no-reproducible -O $D/polygonal --filter '[<a>, <b>]' <name>
+pc --no-ansi render -t svg --view top --reproducible -O $D/exact --filter '[<a>, <b>]' <name>
+python3 <the /pc:gen-sketch skill's directory>/measure.py compare $D/exact/<name>.svg $D/polygonal/<name>.svg
 ```
 
 The walk above gives each part's position exactly; compare those with the
@@ -821,9 +811,8 @@ picture with the connection metadata on it). Offer `/pc:validate <name>` (an
 assembly) for a verdict on every requirement, the features included: it reads
 the bill of materials and the assembly instructions as well as the renders.
 
-Remove the layout sketches — their declarations, their files and their exact
-aliases (`/pc:gen-sketch` §9) — and the assembly's `<name>/exact` alias (§6),
-unless the user wants them kept.
+Remove the layout sketches — their declarations and their files
+(`/pc:gen-sketch` §9) — unless the user wants them kept.
 
 Say what is still placed by coordinates and why, one reason per case. "The rest
 use `location:`" tells the next reader nothing; "these four sit where nothing

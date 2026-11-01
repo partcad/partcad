@@ -243,8 +243,10 @@ The plugin folder is named `claude`, but the command namespace comes from
   dimension is within tolerance. Every size is read off both of PartCAD's
   projections — `reproducible:` true and false, which draw one geometry as
   different shapes and different numbers of them (one arc or several, an arc or
-  a run of short lines) — taken through a temporary `<name>/exact` alias, and
-  `measure.py compare` reads the two against each other. `/pc:gen-part` and `/pc:gen-assembly` run the
+  a run of short lines) — asked for on each render with `--reproducible` and
+  `--no-reproducible`, and `measure.py compare` reads the two against each
+  other. A 3D description is studied as a bare script with `pc adhoc render`,
+  which takes `pc render`'s options. `/pc:gen-part` and `/pc:gen-assembly` run the
   same loop first, on temporary sketches. `measure.py` is the second helper the
   library ships beside a `SKILL.md`, after `part_loads.py`;
   `tests/partcad/unit/test_skill_measure.py` holds it to hand-worked drawings.
@@ -261,7 +263,11 @@ The plugin folder is named `claude`, but the command namespace comes from
   package's own `render:` options apply, and `pc adhoc render` for a bare file.
   The viewing angle is `--view front|top|iso|…`, or `--viewport-origin` /
   `--viewport-up` for an arbitrary one — the same two keys a `render:` file type
-  is configured with in `partcad.yaml`. `--with-ports` / `--with-interfaces` /
+  is configured with in `partcad.yaml` — and `--reproducible` /
+  `--no-reproducible` its `reproducible`, the hidden-line algorithm. `pc adhoc
+  render` takes `pc render`'s options wherever they mean something for a bare
+  file: `-t`, `-O`, `-p` for a script's parameters, and `-e` for a file type a
+  package implements. `--with-ports` / `--with-interfaces` /
   `--with-all` draw the connection metadata on top of the projection, which is
   the only way any of it becomes visible.
 
