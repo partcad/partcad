@@ -19,5 +19,5 @@ not something inside the application.
 
 * [Tutorial](https://partcad.readthedocs.io/en/latest/tutorial.html)
 * [Assemblies](https://partcad.readthedocs.io/en/latest/assy.html)
-* [Configuration reference](https://partcad.readthedocs.io/en/latest/configuration.html)
+* [Configuration reference](https://partcad.readthedocs.io/en/latest/config_package.html)
 * [All the examples, on GitHub](https://github.com/partcad/partcad/tree/main/examples)

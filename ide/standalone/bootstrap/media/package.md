@@ -24,6 +24,6 @@ git, or make another one with `pc init` -- it is a package either way.
 
 ### Documentation
 
-* [Packages and dependencies](https://partcad.readthedocs.io/en/latest/configuration.html)
+* [Packages and dependencies](https://partcad.readthedocs.io/en/latest/config_package.html)
 * [Tutorial: create a package](https://partcad.readthedocs.io/en/latest/tutorial.html)
 * [What `pc init` writes](https://partcad.readthedocs.io/en/latest/cli.html)

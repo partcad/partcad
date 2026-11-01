@@ -1,0 +1,118 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/tools_vscodium.rst:3
+msgid "VSCodium"
+msgstr "VSCodium"
+
+#: ../../source/tools_vscodium.rst:5
+msgid ""
+"`VSCodium <https://vscodium.com/>`_ is a build of the same source Visual "
+"Studio Code is built from, with Microsoft's branding, telemetry and "
+"marketplace configuration removed, published under the MIT license. The "
+"PartCAD extension runs in it exactly as it does in Visual Studio Code -- it "
+"is the same ``.vsix`` -- and everything in :doc:`/tools_vscode` applies here"
+" too."
+msgstr ""
+"`VSCodium <https://vscodium.com/>`_ -- это сборка из того же исходного кода,"
+" из которого собирается Visual Studio Code, но с удалённым брендингом "
+"Microsoft, телеметрией и настройкой маркетплейса, публикуемая под лицензией "
+"MIT. Расширение PartCAD работает в нём в точности так же, как в Visual "
+"Studio Code -- это тот же ``.vsix``, -- и всё из :doc:`/tools_vscode` "
+"применимо и здесь."
+
+#: ../../source/tools_vscodium.rst:10
+msgid "Two things differ, and both are about where extensions come from."
+msgstr "Различаются две вещи, и обе касаются того, откуда берутся расширения."
+
+#: ../../source/tools_vscodium.rst:14
+msgid "Installing"
+msgstr "Установка"
+
+#: ../../source/tools_vscodium.rst:16
+msgid ""
+"The easiest way is to let PartCAD do it, which fetches the ``.vsix`` from "
+"the GitHub release rather than from a marketplace:"
+msgstr ""
+"Проще всего поручить это PartCAD, который получает ``.vsix`` из релиза на "
+"GitHub, а не из маркетплейса:"
+
+#: ../../source/tools_vscodium.rst:23
+msgid ""
+"With no ``--with``, ``pc ide install`` takes the first of ``partcad-ide``, "
+"``codium`` and ``code`` it finds on the ``PATH``, so on a machine with only "
+"VSCodium that is already VSCodium. By hand:"
+msgstr ""
+"Без ``--with`` ``pc ide install`` берёт первое из ``partcad-ide``, "
+"``codium`` и ``code``, что найдёт в ``PATH``, поэтому на машине, где есть "
+"только VSCodium, это уже и будет VSCodium. Вручную:"
+
+#: ../../source/tools_vscodium.rst:32
+msgid "The marketplace"
+msgstr "Маркетплейс"
+
+#: ../../source/tools_vscodium.rst:34
+msgid ""
+"VSCodium is configured for `Open VSX <https://open-vsx.org/>`_ rather than "
+"the Visual Studio Marketplace, whose terms restrict it to Microsoft's own "
+"products. So ``codium --install-extension PartCAD.partcad-official`` "
+"resolves against Open VSX, and what is published there may lag the Visual "
+"Studio Marketplace. Installing the ``.vsix`` from the `release "
+"<https://github.com/partcad/partcad/releases>`_ -- which is what ``pc ide "
+"install`` does -- sidesteps that and is always the current version."
+msgstr ""
+"VSCodium настроен на `Open VSX <https://open-vsx.org/>`_, а не на Visual "
+"Studio Marketplace, условия которого ограничивают его собственными "
+"продуктами Microsoft. Поэтому ``codium --install-extension PartCAD.partcad-"
+"official`` разрешается через Open VSX, а то, что там опубликовано, может "
+"отставать от Visual Studio Marketplace. Установка ``.vsix`` из `релиза "
+"<https://github.com/partcad/partcad/releases>`_ -- что и делает ``pc ide "
+"install`` -- это обходит и всегда даёт текущую версию."
+
+#: ../../source/tools_vscodium.rst:41
+msgid ""
+"The same holds for the extensions PartCAD works alongside. Pylance in "
+"particular is proprietary and licensed for Microsoft's products only, so it "
+"is not available here; open-source Python type checking is."
+msgstr ""
+"То же касается и тех расширений, рядом с которыми работает PartCAD. В "
+"частности, Pylance является проприетарным и лицензирован только для "
+"продуктов Microsoft, поэтому здесь он недоступен; проверка типов Python с "
+"открытым исходным кодом -- доступна."
+
+#: ../../source/tools_vscodium.rst:46
+msgid "Or take the whole thing"
+msgstr "Либо возьмите всё сразу"
+
+#: ../../source/tools_vscodium.rst:48
+msgid ""
+"The :ref:`Desktop Application <partcad-ide>` *is* VSCodium -- rebranded, "
+"with the PartCAD extension, the extensions PartCAD works with, and the "
+"command line tools already inside it, opening in the PartCAD workbench. If "
+"you are installing VSCodium in order to use PartCAD, install that instead "
+"and skip this page."
+msgstr ""
+":ref:`Desktop Application <partcad-ide>` *и есть* VSCodium -- "
+"перебрендированный, с расширением PartCAD, с теми расширениями, с которыми "
+"работает PartCAD, и с инструментами командной строки уже внутри, "
+"открывающийся в рабочем окружении PartCAD. Если вы устанавливаете VSCodium "
+"для того, чтобы пользоваться PartCAD, установите вместо этого его и "
+"пропустите эту страницу."

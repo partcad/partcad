@@ -40,15 +40,15 @@ render takes ('viewpoint.py'), which a video grows frame by frame.
 
 What is drawn differently, and why:
 
-  * The framing. The 3D view fits a frame to half the object's largest
-    dimension, which the nearest corner of a cube leaves; and a frame that is
-    to hold whatever turn the object is drawn at - every frame of a video - has
-    to hold the whole object at any of them. So the camera is framed on the
-    sphere around the object's box ('frame_distance'), at the 'margin' the
-    picture leaves on each side of its narrower side: nothing leaves the
-    picture, whichever way the object is turned. The camera keeps the 3D
-    view's direction, and its light keeps the 3D view's places, which are
-    measured off the object's largest dimension as there.
+  * The margin. The camera is framed as the 3D view frames it, on the sphere
+    around the object's box ('frame_distance' is 'fitDistance' in
+    'cameraView.ts', and 'Scene.sphere' its 'enclosingRadius'), so that no turn
+    of the object - no frame of a video - leaves the picture. The 3D view leaves
+    no margin beyond that sphere, and a picture leaves 'margin' of its narrower
+    side on each side of it, as a picture of a product is expected to; 'margin:
+    0' frames the object exactly as the 3D view does. The light keeps the 3D
+    view's places, which are measured off the object's largest dimension as
+    there.
 
   * The shading is worked out at the corners of each triangle and blended across
     it, where the GPU works it out at every pixel. Nearly all of the light here is

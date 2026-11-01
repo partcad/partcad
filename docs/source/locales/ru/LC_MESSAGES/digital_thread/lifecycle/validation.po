@@ -1,0 +1,329 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:2
+msgid "Validation"
+msgstr "Проверка"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:12
+msgid ""
+"Validation is the question whether the object is what it was asked to be, "
+"and whether every claim its declaration makes holds: that it builds, that it"
+" can be made, that its parts do not overlap, that it weighs what it has to, "
+"that it does what its simulations say. It is asked last and asked again "
+"whenever anything changes, which is what makes the rest of the thread "
+"trustworthy."
+msgstr ""
+"Проверка -- это вопрос о том, является ли объект тем, чем его просили быть, "
+"и выполняется ли каждое заявление, которое делает его объявление: что он "
+"собирается, что его можно изготовить, что его детали не перекрываются, что "
+"он весит столько, сколько должен, что он делает то, что говорят его "
+"симуляции. Этот вопрос задаётся последним и задаётся заново всякий раз, "
+"когда что-то меняется, и именно это делает остальную нить достойной доверия."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:19
+msgid "Three ways of asking"
+msgstr "Три способа спросить"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:21
+msgid "``pc test``"
+msgstr "``pc test``"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:22
+msgid ""
+"Every claim that can be measured, by a list of checks that each ask one "
+"thing -- whether it builds, whether it can be made or bought, whether its "
+"parts overlap, whether its ports and physical properties are the ones "
+"required. Each check applies only to the objects it has something to ask of,"
+" and says what it found when it fails. "
+":doc:`/digital_thread/lifecycle/testing` lists them all."
+msgstr ""
+"Каждое заявление, которое можно измерить, -- списком проверок, каждая из "
+"которых спрашивает об одном: собирается ли объект, можно ли его изготовить "
+"или купить, перекрываются ли его детали, те ли у него порты и физические "
+"свойства, которые требуются. Каждая проверка применяется только к тем "
+"объектам, у которых ей есть что спросить, и говорит, что она нашла, когда не"
+" проходит. :doc:`/digital_thread/lifecycle/testing` перечисляет их все."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:28
+msgid "``pc sim``"
+msgstr "``pc sim``"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:29
+msgid ""
+"Every claim about behaviour: each simulation an object declares is run, and "
+"its ``validation:`` condition has to hold. ``pc test`` runs the same "
+"simulations as its ``sim`` check; ``pc sim --json`` also prints everything "
+"the simulator reported, which is how a validation that passed for the wrong "
+"reason is found."
+msgstr ""
+"Каждое заявление о поведении: каждая симуляция, объявленная объектом, "
+"выполняется, и её условие ``validation:`` должно выполниться. ``pc test`` "
+"выполняет те же симуляции в рамках своей проверки ``sim``; ``pc sim --json``"
+" вдобавок печатает всё, что сообщил симулятор, и именно так обнаруживается "
+"проверка, прошедшая по неправильной причине."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:35
+#: ../../source/digital_thread/lifecycle/validation.rst:142
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:36
+msgid ""
+"Everything else. The agent skill runs ``pc test`` and ``pc sim``, renders "
+"the object from every angle that matters with its ports and interfaces "
+"drawn, reads the bill of materials and the assembly instructions of an "
+"assembly, and gives every requirement a verdict -- met, not met, or \"cannot"
+" tell\" -- with the evidence named. The features of the requirements, being "
+"prose, are judged here and only here."
+msgstr ""
+"Всё остальное. Навык агента выполняет ``pc test`` и ``pc sim``, отрисовывает"
+" объект со всех важных углов с нарисованными портами и интерфейсами, читает "
+"спецификацию материалов и инструкции по сборке для сборки и выносит вердикт "
+"по каждому требованию -- выполнено, не выполнено или \"определить нельзя\" "
+"-- с указанием доказательств. Функции из требований, будучи прозой, судятся "
+"здесь и только здесь."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:44
+msgid "In the UI"
+msgstr "В интерфейсе"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:46
+msgid ""
+"**Validation** is always there, since every object has checks. It holds "
+"three tabs, two of which have anything in them today, and each of those has "
+"a chapter of its own:"
+msgstr ""
+"**Validation** присутствует всегда, поскольку у каждого объекта есть "
+"проверки. В ней три вкладки, в двух из которых сегодня что-то есть, и у "
+"каждой из этих двух своя глава:"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:50
+msgid ":doc:`Test </digital_thread/lifecycle/testing>`"
+msgstr ":doc:`Test </digital_thread/lifecycle/testing>`"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:51
+msgid ""
+"Every check ``pc test`` runs, in the order it runs them, each with its "
+"verdict -- and, for the one selected, what it asks, what it found this time,"
+" and what to do about it. The first tab, and always enabled."
+msgstr ""
+"Каждая проверка, которую выполняет ``pc test``, в том порядке, в каком она "
+"их выполняет, каждая со своим вердиктом -- а для выбранной: о чём она "
+"спрашивает, что она нашла на этот раз и что с этим делать. Первая вкладка, и"
+" всегда включена."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:55
+msgid ":ref:`Simulation <sim-in-the-ui>`"
+msgstr ":ref:`Simulation <sim-in-the-ui>`"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:56
+msgid ""
+"Every simulation the object declares, run and played back: whether its "
+"``validation:`` held, the video of the run, and the ``before`` and ``after``"
+" the expression was evaluated over. For a part, an assembly or a scene that "
+"declares ``simulate:``."
+msgstr ""
+"Каждая симуляция, объявленная объектом, выполненная и воспроизведённая: "
+"выполнилась ли её ``validation:``, видео запуска, а также ``before`` и "
+"``after``, над которыми вычислялось выражение. Для детали, сборки или сцены,"
+" которая объявляет ``simulate:``."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:61
+msgid "**Process Emulation**"
+msgstr "**Process Emulation**"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:62
+msgid ""
+"The question of how *making* it would go. Reserved, always disabled, and "
+"holding nothing yet (see :doc:`/digital_thread/lifecycle/operations`)."
+msgstr ""
+"Вопрос о том, как прошло бы само *изготовление*. Зарезервирована, всегда "
+"отключена и пока ничего не содержит (см. "
+":doc:`/digital_thread/lifecycle/operations`)."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:65
+msgid ""
+"The Validation group: its three tabs, every check pc test runs, and the "
+"verdicts"
+msgstr ""
+"Группа Validation: её три вкладки, каждая проверка, которую выполняет pc "
+"test, и вердикты"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:70
+msgid ""
+"Both working tabs **run** what they show, the first time they are looked at "
+"-- the checks as ``pc test <object>`` runs them, a simulation as ``pc sim -f"
+" <name>`` runs it -- and through the same cache, so the panel and the "
+"command line give the same answer and **Run again** is how to ask afresh. An"
+" object that belongs to no package, such as a shape shown from a script, has"
+" nothing to ask PartCAD about, and the Test tab says so."
+msgstr ""
+"Обе работающие вкладки **выполняют** то, что они показывают, при первом "
+"взгляде на них -- проверки так, как их выполняет ``pc test <object>``, а "
+"симуляцию так, как её выполняет ``pc sim -f <name>``, -- и через тот же кэш,"
+" поэтому панель и командная строка дают один и тот же ответ, а **Run again**"
+" -- это способ спросить заново. У объекта, который не принадлежит никакому "
+"пакету, например у формы, показанной из скрипта, нечего спрашивать у "
+"PartCAD, и вкладка Test так и говорит."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:79
+msgid "On the command line"
+msgstr "В командной строке"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:81
+msgid ""
+"``pc test`` is the whole of this phase in one command. It takes an object, "
+"or ``-P <package>`` for every object of a package and everything below it, "
+"and runs every check that has something to ask of each one:"
+msgstr ""
+"``pc test`` -- это вся эта фаза в одной команде. Она принимает объект либо "
+"``-P <package>`` для каждого объекта пакета и всего, что под ним, и "
+"выполняет каждую проверку, у которой есть что спросить у каждого из них:"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:92
+msgid ""
+"``pc sim`` runs the simulations alone -- ``-f <name>`` for one of them, and "
+"``--json`` to print everything the simulator reported rather than only the "
+"verdict. ``pc cae fea`` and its siblings run the engineering analyses, whose"
+" findings ``pc test`` reports as checks of their own (see "
+":doc:`/digital_thread/lifecycle/analysis`)."
+msgstr ""
+"``pc sim`` выполняет только симуляции -- ``-f <name>`` для одной из них и "
+"``--json``, чтобы напечатать всё, что сообщил симулятор, а не только "
+"вердикт. ``pc cae fea`` и его собратья выполняют инженерные расчёты, находки"
+" которых ``pc test`` сообщает как собственные проверки (см. "
+":doc:`/digital_thread/lifecycle/analysis`)."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:98
+msgid ""
+"Every verdict is cached under everything it depends on, so the command line,"
+" the panel and CI give the same answer and an unchanged object costs a "
+"lookup."
+msgstr ""
+"Каждый вердикт кэшируется по всему, от чего он зависит, поэтому командная "
+"строка, панель и CI дают один и тот же ответ, а неизменившийся объект стоит "
+"одного обращения к кэшу."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:104
+msgid "Simulating a scene"
+msgstr "Симуляция сцены"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:106
+msgid ""
+"A scene can be the thing a claim is about, not only the world it is tested "
+"in: a stack of blocks that stands, a pile that does not slide. It declares "
+"``simulate:`` exactly as a part or an assembly does (see :ref:`sim-"
+"declaring`), and is simulated as the subject of a world -- the built-in one,"
+" or a scene of the package's own -- whose link places it with ``scene:``, "
+"since PartCAD hands that world ``subject_kind: scene``:"
+msgstr ""
+"Сцена может быть тем, о чём заявление, а не только тем миром, в котором оно "
+"проверяется: штабель блоков, который стоит, насыпь, которая не сползает. Она"
+" объявляет ``simulate:`` в точности так же, как деталь или сборка (см. "
+":ref:`sim-declaring`), и симулируется как объект некоторого мира -- "
+"встроенного или собственной сцены пакета, -- чьё звено размещает её через "
+"``scene:``, поскольку PartCAD передаёт этому миру ``subject_kind: scene``:"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:125
+msgid ""
+"``pc sim stable`` runs it, and ``pc test`` holds the scene to it as its "
+"``sim`` check like any other object. ``examples/feature_simulate`` declares "
+"its three stacks this way."
+msgstr ""
+"``pc sim stable`` её выполняет, а ``pc test`` проверяет сцену по ней в "
+"рамках своей проверки ``sim``, как и любой другой объект. "
+"``examples/feature_simulate`` объявляет свои три штабеля именно так."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:130
+msgid "Validating continuously"
+msgstr "Непрерывная проверка"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:132
+msgid ""
+"A check that runs only when somebody remembers to run it is a check that "
+"stops being run. ``pc test -P <package>...`` in CI holds every change to "
+"every check of every object; ``--fast-only`` leaves out the objects that say"
+" they are slow (see :ref:`fast-only`). Verdicts are cached under everything "
+"they depend on, so an unchanged object costs a lookup, and ``pc --cache-"
+"bypass test`` asks again regardless."
+msgstr ""
+"Проверка, которая выполняется только тогда, когда кто-то вспомнит её "
+"выполнить, -- это проверка, которую перестают выполнять. ``pc test -P "
+"<package>...`` в CI подчиняет этому каждое изменение и каждую проверку "
+"каждого объекта; ``--fast-only`` оставляет в стороне те объекты, которые "
+"говорят, что они медленные (см. :ref:`fast-only`). Вердикты кэшируются по "
+"всему, от чего они зависят, поэтому неизменившийся объект стоит одного "
+"обращения к кэшу, а ``pc --cache-bypass test`` спрашивает заново независимо "
+"от этого."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:140
+msgid "Agent skills"
+msgstr "Навыки агентов"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:143
+msgid ""
+"The skill for this phase. It runs ``pc test`` and ``pc sim``, renders the "
+"object from every angle that matters with its ports and interfaces drawn, "
+"reads the bill of materials and the assembly instructions of an assembly, "
+"and gives every requirement a verdict with the evidence named. The "
+"``features:`` half of the requirements -- prose, which no program can "
+"measure -- is judged here and nowhere else."
+msgstr ""
+"Навык для этой фазы. Он выполняет ``pc test`` и ``pc sim``, отрисовывает "
+"объект со всех важных углов с нарисованными портами и интерфейсами, читает "
+"спецификацию материалов и инструкции по сборке для сборки и выносит вердикт "
+"по каждому требованию с указанием доказательств. Половина требований, "
+"выраженная в ``features:`` -- проза, которую не может измерить никакая "
+"программа, -- судится здесь и больше нигде."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:150
+msgid "``/pc:sim-assembly-fea``"
+msgstr "``/pc:sim-assembly-fea``"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:151
+msgid ""
+"Turns the forces a simulation measured into an FEA scenario on one part, "
+"which is then checked like any other (see "
+":doc:`/digital_thread/lifecycle/analysis`)."
+msgstr ""
+"Превращает силы, измеренные симуляцией, в сценарий FEA на одной детали, "
+"который затем проверяется как любой другой (см. "
+":doc:`/digital_thread/lifecycle/analysis`)."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:155
+msgid "``/pc:render``"
+msgstr "``/pc:render``"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:156
+msgid ""
+"Produces the views that are the evidence for a feature nothing can measure."
+msgstr ""
+"Создаёт те виды, которые являются доказательством для функции, которую ничто"
+" не может измерить."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:158
+msgid ""
+"A skill runs the same commands, through the same cache, so a verdict an "
+"agent reports is a verdict you can reproduce by hand."
+msgstr ""
+"Навык выполняет те же команды, через тот же кэш, поэтому вердикт, о котором "
+"сообщает агент, -- это вердикт, который вы можете воспроизвести вручную."

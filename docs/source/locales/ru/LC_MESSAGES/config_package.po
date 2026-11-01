@@ -6,167 +6,367 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: PartCAD \n"
+"Project-Id-Version: PartCAD\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-06 14:39+0000\n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: ru\n"
 "Language-Team: ru <LL@li.org>\n"
-"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
-"n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Language: ru\n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=utf-8\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 "Generated-By: Babel 2.18.0\n"
 
 #: ../../source/config_package.rst:3
 msgid "Packages and dependencies"
 msgstr "Пакеты и зависимости"
 
-#: ../../source/config_package.rst:9
+#: ../../source/config_package.rst:7
+msgid "What a package is"
+msgstr "Что такое пакет"
+
+#: ../../source/config_package.rst:10
+msgid "All data in PartCAD is bundled into 'packages'."
+msgstr "Все данные в PartCAD объединены в «пакеты»."
+
+#: ../../source/config_package.rst:12
+msgid ""
+"Packages are organized in a hierarchical structure where some packages may "
+"define \"dependencies\" that become \"child\" packages. The top-level "
+"package is called \"//\". If a package called \"//package\" has a dependency"
+" called \"sub-package\" then such a sub-package will be called "
+"\"//package/sub-package\"."
+msgstr ""
+"Пакеты организованы в иерархическую структуру, где некоторые пакеты могут "
+"определять «зависимости», которые становятся «дочерними» пакетами. Пакет "
+"верхнего уровня называется \"//\". Если пакет с именем \"//package\" имеет "
+"зависимость с именем \"sub-package\", то такой подпакет будет называться "
+"\"//package/sub-package\"."
+
+#: ../../source/config_package.rst:18
+msgid ""
+"Each package is described using the configuration file ``partcad.yaml`` "
+"placed in the package folder."
+msgstr ""
+"Каждый пакет описывается с помощью конфигурационного файла ``partcad.yaml``,"
+" размещённого в папке пакета."
+
+#: ../../source/config_package.rst:23
+msgid "Monorepos"
+msgstr "Монорепозитории"
+
+#: ../../source/config_package.rst:26
+msgid ""
+"When PartCAD is initialized, the current folder and its ``partcad.yaml`` "
+"become the `current` package, but not the `root` package. The root package "
+"is discovered by traversing the parent directories for as long as there is "
+"another ``partcad.yaml`` found there."
+msgstr ""
+"При инициализации PartCAD текущая папка и её ``partcad.yaml`` становятся "
+"пакетом `current`, но не пакетом `root`. Корневой пакет определяется путём "
+"обхода родительских каталогов до тех пор, пока в них обнаруживается "
+"очередной ``partcad.yaml``."
+
+#: ../../source/config_package.rst:31
+msgid ""
+"This allows to run PartCAD tools from any sub-directory in a monorepo "
+"project while maintaining the same meaning of relative and absolute paths."
+msgstr ""
+"Это позволяет запускать инструменты PartCAD из любого подкаталога проекта-"
+"монорепозитория, сохраняя при этом одинаковое значение относительных и "
+"абсолютных путей."
+
+#: ../../source/config_package.rst:36
+msgid "Paths"
+msgstr "Пути"
+
+#: ../../source/config_package.rst:39
+msgid ""
+"PartCAD uses package paths to identify packages and parts declared in them."
+msgstr ""
+"PartCAD использует пути пакетов для идентификации пакетов и деталей, "
+"объявленных в них."
+
+#: ../../source/config_package.rst:41
+msgid ""
+"The current package has the path ``\"\"`` or ``\".\"``. The root package has"
+" the path ``\"//\"``. For any package ``\"<package-path>\"``, each sub-"
+"directory containing ``partcad.yaml`` and each ``import``-ed dependency "
+"becomes ``\"<package-path>/<sub-package>\"``."
+msgstr ""
+"Текущий пакет имеет путь ``\"\"`` или ``\".\"``. Корневой пакет имеет путь "
+"``\"//\"``. Для любого пакета ``\"<package-path>\"`` каждый подкаталог, "
+"содержащий ``partcad.yaml``, и каждая импортированная (``import``) "
+"зависимость становится ``\"<package-path>/<sub-package>\"``."
+
+#: ../../source/config_package.rst:48
+msgid "Absolute vs relative"
+msgstr "Абсолютные и относительные"
+
+#: ../../source/config_package.rst:50
+msgid ""
+"The absolute package path is the path from the root package to the package. "
+"If the path starts with ``\"//\"`` then it is an absolute path."
+msgstr ""
+"Абсолютный путь пакета — это путь от корневого пакета до пакета. Если путь "
+"начинается с ``\"//\"``, то это абсолютный путь."
+
+#: ../../source/config_package.rst:53
+msgid ""
+"The relative package path is the path from the current package to the "
+"package. If the path does not start with ``\"//\"`` then it is a relative "
+"path. Sometimes it might help to disambiguate the relative path by "
+"prepending ``\"./\"``."
+msgstr ""
+"Относительный путь пакета — это путь от текущего пакета до пакета. Если путь"
+" не начинается с ``\"//\"``, то это относительный путь. Иногда для "
+"устранения неоднозначности относительного пути полезно добавить в начало "
+"``\"./\"``."
+
+#: ../../source/config_package.rst:58
+msgid "Multiple packages"
+msgstr "Несколько пакетов"
+
+#: ../../source/config_package.rst:60
+msgid ""
+"Some PartCAD commands and interfaces allow referencing multiple packages at "
+"once. ``\"<package-path>/\\*\"`` is a reference to all sub-packages in "
+"``\"<package-path>\"``."
+msgstr ""
+"Некоторые команды и интерфейсы PartCAD позволяют ссылаться на несколько "
+"пакетов сразу. ``\"<package-path>/\\*\"`` — это ссылка на все подпакеты в "
+"``\"<package-path>\"``."
+
+#: ../../source/config_package.rst:63
+msgid ""
+"``\"<package-path>/...\"`` is a reference to ``\"<package-path>\"`` and to "
+"all of its sub-packages."
+msgstr ""
+"``\"<package-path>/...\"`` — это ссылка на ``\"<package-path>\"`` и на все "
+"его подпакеты."
+
+#: ../../source/config_package.rst:68
+msgid "Object IDs"
+msgstr "Идентификаторы объектов"
+
+#: ../../source/config_package.rst:71
+msgid ""
+"PartCAD packages contain objects of different types: *sketches*, *parts*, "
+"*assemblies*, *scenes*, *interfaces*, *mates*, *materials*, *providers*, "
+"*software* and *partTypes*. All of them need to get referenced."
+msgstr ""
+"Пакеты PartCAD содержат объекты разных типов: *эскизы*, *детали*, *сборки*, "
+"*сцены*, *интерфейсы*, *сопряжения*, *материалы*, *поставщики*, *программное"
+" обеспечение* и *partTypes*. На все из них нужно уметь ссылаться."
+
+#: ../../source/config_package.rst:77
+msgid "Single object"
+msgstr "Один объект"
+
+#: ../../source/config_package.rst:79
+msgid ""
+"Each object has a unique name within the package (across all object types). "
+"The object can be globally identified using ``\"<package-path>:<object-"
+"name>\"``."
+msgstr ""
+"Каждый объект имеет уникальное имя в пределах пакета (среди всех типов "
+"объектов). Объект можно глобально идентифицировать с помощью ``\"<package-"
+"path>:<object-name>\"``."
+
+#: ../../source/config_package.rst:82
+msgid ""
+"An attempt to reference an object using the object-name alone is considered "
+"a reference to the object in the current package."
+msgstr ""
+"Попытка сослаться на объект, используя только имя объекта, считается ссылкой"
+" на объект в текущем пакете."
+
+#: ../../source/config_package.rst:86
+msgid "Multiple objects"
+msgstr "Несколько объектов"
+
+#: ../../source/config_package.rst:88
+msgid ""
+"Some PartCAD commands and interfaces allow referencing multiple objects at "
+"once. ``\"<single-or-multiple-package-path>/:\\*\"`` is a reference to all "
+"objects in ``\"<single-or-multiple-package-path>\"``."
+msgstr ""
+"Некоторые команды и интерфейсы PartCAD позволяют ссылаться на несколько "
+"объектов сразу. ``\"<single-or-multiple-package-path>/:\\*\"`` — это ссылка "
+"на все объекты в ``\"<single-or-multiple-package-path>\"``."
+
+#: ../../source/config_package.rst:94
+msgid "Parametrized objects"
+msgstr "Параметризованные объекты"
+
+#: ../../source/config_package.rst:96
+msgid ""
+"Some objects (such as *sketches*, *parts*, *assemblies*, *interfaces* and "
+"*providers*) may have parameters specified within the object ID to identify "
+"an instantiation of the object with the given parameters: ``\"<package-"
+"path>:<object-name>;param1=value1,param2=value2\"``."
+msgstr ""
+"Некоторые объекты (такие как *эскизы*, *детали*, *сборки*, *интерфейсы* и "
+"*поставщики*) могут иметь параметры, указанные в идентификаторе объекта, "
+"чтобы идентифицировать экземпляр объекта с заданными параметрами: "
+"``\"<package-path>:<object-name>;param1=value1,param2=value2\"``."
+
+#: ../../source/config_package.rst:113
+msgid "Objects in a cart"
+msgstr "Объекты в корзине"
+
+#: ../../source/config_package.rst:115
+msgid ""
+"Whenever an object (a *part* or an *assembly*) is used for manufacturing or "
+"ordering from a store, the object ID may optionally contain the quantity: "
+"``\"<package-path>:<object-name>;param1=value1,param2=value2#<quantity>\"``."
+msgstr ""
+"Когда объект (*деталь* или *сборка*) используется для производства или "
+"заказа в магазине, идентификатор объекта может дополнительно содержать "
+"количество: ``\"<package-path>:<object-"
+"name>;param1=value1,param2=value2#<quantity>\"``."
+
+#: ../../source/config_package.rst:131
 msgid "Packages"
 msgstr "Пакеты"
 
-#: ../../source/config_package.rst:11
+#: ../../source/config_package.rst:133
 msgid ""
-"The package is defined using the configuration file ``partcad.yaml`` "
-"placed in the package folder. Besides the package properties and, "
-"optionally, a list of imported dependencies, ``partcad.yaml`` declares a "
-"list of :ref:`objects` contained in this package."
+"The package is defined using the configuration file ``partcad.yaml`` placed "
+"in the package folder. Besides the package properties and, optionally, a "
+"list of imported dependencies, ``partcad.yaml`` declares a list of "
+":ref:`objects` contained in this package."
 msgstr ""
 "Пакет определяется с помощью конфигурационного файла ``partcad.yaml``, "
 "размещённого в папке пакета. Помимо свойств пакета и, при необходимости, "
 "списка импортированных зависимостей, ``partcad.yaml`` объявляет список "
 ":ref:`objects`, содержащихся в этом пакете."
 
-#: ../../source/config_package.rst:58
+#: ../../source/config_package.rst:182
 msgid "The package name"
 msgstr "Имя пакета"
 
-#: ../../source/config_package.rst:60
+#: ../../source/config_package.rst:184
 msgid ""
 "A package is always addressed by its **location** -- the package path at "
-"which it was loaded, derived from its parent. For example, a package in "
-"the subfolder ``gobilda`` of the package ``//vendor`` is addressed as "
+"which it was loaded, derived from its parent. For example, a package in the "
+"subfolder ``gobilda`` of the package ``//vendor`` is addressed as "
 "``//vendor/gobilda`` regardless of what it declares about itself."
 msgstr ""
-"Пакет всегда адресуется по его **расположению** -- пути пакета, по "
-"которому он был загружен, производному от его родителя. Например, пакет в"
-" подпапке ``gobilda`` пакета ``//vendor`` адресуется как "
-"``//vendor/gobilda`` независимо от того, что он объявляет о себе."
+"Пакет всегда адресуется по его **расположению** -- пути пакета, по которому "
+"он был загружен, производному от его родителя. Например, пакет в подпапке "
+"``gobilda`` пакета ``//vendor`` адресуется как ``//vendor/gobilda`` "
+"независимо от того, что он объявляет о себе."
 
-#: ../../source/config_package.rst:65
+#: ../../source/config_package.rst:189
 msgid ""
-"The optional ``name`` field declares the package's **identity**: the "
-"package path at which the package expects to be seen. It only takes "
-"effect when the package is loaded as the root (the top-most package of "
-"the current context) -- this lets a package be developed standalone using"
-" the very same package path its consumers will see it at. In every other "
-"case ``name`` does not change where the package is loaded; the location "
-"always wins."
+"The optional ``name`` field declares the package's **identity**: the package"
+" path at which the package expects to be seen. It only takes effect when the"
+" package is loaded as the root (the top-most package of the current context)"
+" -- this lets a package be developed standalone using the very same package "
+"path its consumers will see it at. In every other case ``name`` does not "
+"change where the package is loaded; the location always wins."
 msgstr ""
-"Необязательное поле ``name`` объявляет **идентичность** пакета: путь "
-"пакета, по которому пакет ожидает быть видимым. Оно действует только "
-"тогда, когда пакет загружается как корневой (самый верхний пакет текущего"
-" контекста) -- это позволяет разрабатывать пакет автономно, используя тот"
-" же самый путь пакета, по которому его будут видеть потребители. Во всех "
-"остальных случаях ``name`` не меняет то, где загружается пакет; "
-"расположение всегда имеет приоритет."
+"Необязательное поле ``name`` объявляет **идентичность** пакета: путь пакета,"
+" по которому пакет ожидает быть видимым. Оно действует только тогда, когда "
+"пакет загружается как корневой (самый верхний пакет текущего контекста) -- "
+"это позволяет разрабатывать пакет автономно, используя тот же самый путь "
+"пакета, по которому его будут видеть потребители. Во всех остальных случаях "
+"``name`` не меняет то, где загружается пакет; расположение всегда имеет "
+"приоритет."
 
-#: ../../source/config_package.rst:72
+#: ../../source/config_package.rst:196
 msgid ""
-"This makes it safe to vendor a package -- copy it into your own package "
-"tree to drop a dependency or to follow your own naming convention:"
+"This makes it safe to vendor a package -- copy it into your own package tree"
+" to drop a dependency or to follow your own naming convention:"
 msgstr ""
 "Это делает безопасным вендоринг пакета -- копирование его в собственное "
-"дерево пакетов, чтобы избавиться от зависимости или следовать "
-"собственному соглашению об именовании:"
+"дерево пакетов, чтобы избавиться от зависимости или следовать собственному "
+"соглашению об именовании:"
 
-#: ../../source/config_package.rst:75
+#: ../../source/config_package.rst:199
 msgid ""
 "The vendored copy is loaded at its location in your tree, not at the "
-"``name`` it declares. If the same package is vendored at two locations "
-"(even at two different versions), each is an independent instance, "
-"addressed at its own location, and the two never interact."
+"``name`` it declares. If the same package is vendored at two locations (even"
+" at two different versions), each is an independent instance, addressed at "
+"its own location, and the two never interact."
 msgstr ""
-"Вендоринговая копия загружается по своему расположению в вашем дереве, а "
-"не по объявленному ею ``name``. Если один и тот же пакет вендорится в "
-"двух местах (даже в двух разных версиях), каждый является независимым "
+"Вендоринговая копия загружается по своему расположению в вашем дереве, а не "
+"по объявленному ею ``name``. Если один и тот же пакет вендорится в двух "
+"местах (даже в двух разных версиях), каждый является независимым "
 "экземпляром, адресуемым по своему расположению, и эти два никогда не "
 "взаимодействуют."
 
-#: ../../source/config_package.rst:79
+#: ../../source/config_package.rst:203
 msgid ""
 "References the package makes to itself using its declared ``name`` are "
-"automatically redirected to the location where the copy was actually "
-"loaded. A vendored copy therefore uses itself, instead of silently "
-"pulling in another copy from the package path it was originally taken "
-"from."
+"automatically redirected to the location where the copy was actually loaded."
+" A vendored copy therefore uses itself, instead of silently pulling in "
+"another copy from the package path it was originally taken from."
 msgstr ""
-"Ссылки, которые пакет делает на самого себя, используя объявленное "
-"``name``, автоматически перенаправляются на расположение, куда копия была"
-" фактически загружена. Поэтому вендоринговая копия использует саму себя, "
-"вместо того чтобы незаметно подтягивать другую копию из пути пакета, "
-"откуда она была изначально взята."
+"Ссылки, которые пакет делает на самого себя, используя объявленное ``name``,"
+" автоматически перенаправляются на расположение, куда копия была фактически "
+"загружена. Поэтому вендоринговая копия использует саму себя, вместо того "
+"чтобы незаметно подтягивать другую копию из пути пакета, откуда она была "
+"изначально взята."
 
-#: ../../source/config_package.rst:84
+#: ../../source/config_package.rst:208
 msgid ""
-"As a consequence, a vendored package cannot reference the original copy "
-"of itself by its declared ``name``: that package path always resolves to "
-"the local instance. This is intentional -- referencing two copies of the "
-"same package at once is almost always a mistake, and the alternative "
-"would be an implicit, easily-missed dependency on the upstream package."
+"As a consequence, a vendored package cannot reference the original copy of "
+"itself by its declared ``name``: that package path always resolves to the "
+"local instance. This is intentional -- referencing two copies of the same "
+"package at once is almost always a mistake, and the alternative would be an "
+"implicit, easily-missed dependency on the upstream package."
 msgstr ""
-"Как следствие, вендоринговый пакет не может ссылаться на оригинальную "
-"копию самого себя по объявленному ``name``: этот путь пакета всегда "
-"разрешается в локальный экземпляр. Это сделано намеренно -- ссылка на две"
-" копии одного и того же пакета одновременно почти всегда является "
-"ошибкой, а альтернативой была бы неявная, легко упускаемая зависимость от"
-" вышестоящего пакета."
+"Как следствие, вендоринговый пакет не может ссылаться на оригинальную копию "
+"самого себя по объявленному ``name``: этот путь пакета всегда разрешается в "
+"локальный экземпляр. Это сделано намеренно -- ссылка на две копии одного и "
+"того же пакета одновременно почти всегда является ошибкой, а альтернативой "
+"была бы неявная, легко упускаемая зависимость от вышестоящего пакета."
 
-#: ../../source/config_package.rst:94
+#: ../../source/config_package.rst:218
 msgid "Templates"
 msgstr "Шаблоны"
 
-#: ../../source/config_package.rst:96
+#: ../../source/config_package.rst:220
 msgid ""
-"``partcad.yaml`` is a Jinja2 template rendered to YAML before it is "
-"parsed, so a package can generate declarations rather than write every "
-"one out. These names are available while it is being rendered:"
+"``partcad.yaml`` is a Jinja2 template rendered to YAML before it is parsed, "
+"so a package can generate declarations rather than write every one out. "
+"These names are available while it is being rendered:"
 msgstr ""
-"``partcad.yaml`` — это шаблон Jinja2, который разворачивается в YAML "
-"перед разбором, поэтому пакет может генерировать объявления, а не "
-"выписывать каждое из них. Во время разворачивания доступны следующие "
-"имена:"
+"``partcad.yaml`` — это шаблон Jinja2, который разворачивается в YAML перед "
+"разбором, поэтому пакет может генерировать объявления, а не выписывать "
+"каждое из них. Во время разворачивания доступны следующие имена:"
 
-#: ../../source/config_package.rst:104
+#: ../../source/config_package.rst:228
 msgid "Name"
 msgstr "Имя"
 
-#: ../../source/config_package.rst:105
+#: ../../source/config_package.rst:229
 msgid "What it is"
 msgstr "Что это"
 
-#: ../../source/config_package.rst:106
+#: ../../source/config_package.rst:230
 msgid "``package_name``"
 msgstr "``package_name``"
 
-#: ../../source/config_package.rst:107
+#: ../../source/config_package.rst:231
 msgid "The package path this package is being loaded at."
 msgstr "Путь пакета, по которому загружается этот пакет."
 
-#: ../../source/config_package.rst:108
+#: ../../source/config_package.rst:232
 msgid "``partcad_version``"
 msgstr "``partcad_version``"
 
-#: ../../source/config_package.rst:109
+#: ../../source/config_package.rst:233
 msgid "The version of PartCAD doing the rendering, whole: ``\"0.8.77\"``."
 msgstr ""
 "Версия PartCAD, выполняющего разворачивание шаблона, целиком: "
 "``\"0.8.77\"``."
 
-#: ../../source/config_package.rst:110
+#: ../../source/config_package.rst:234
 msgid ""
 "``partcad_version_major``, ``partcad_version_minor``, "
 "``partcad_version_build``"
@@ -174,15 +374,15 @@ msgstr ""
 "``partcad_version_major``, ``partcad_version_minor``, "
 "``partcad_version_build``"
 
-#: ../../source/config_package.rst:111
+#: ../../source/config_package.rst:235
 msgid "The same version as its three numbers."
 msgstr "Та же версия в виде трёх чисел."
 
-#: ../../source/config_package.rst:112
+#: ../../source/config_package.rst:236
 msgid "``partcad_version_at_least(...)``"
 msgstr "``partcad_version_at_least(...)``"
 
-#: ../../source/config_package.rst:113
+#: ../../source/config_package.rst:237
 msgid ""
 "Whether that version is the one given or newer. Takes a string, "
 "``partcad_version_at_least(\"0.8.77\")``, or the numbers themselves, "
@@ -192,251 +392,452 @@ msgstr ""
 "``partcad_version_at_least(\"0.8.77\")``, или сами числа, "
 "``partcad_version_at_least(0, 8, 77)``."
 
-#: ../../source/config_package.rst:116
+#: ../../source/config_package.rst:240
 msgid "``PI``/``M_PI``, ``E``/``M_E``, ``SQRT_2``, ``SQRT_3``, ``SQRT_5``"
 msgstr "``PI``/``M_PI``, ``E``/``M_E``, ``SQRT_2``, ``SQRT_3``, ``SQRT_5``"
 
-#: ../../source/config_package.rst:117
+#: ../../source/config_package.rst:241
 msgid "The constants a CAD file keeps reaching for."
 msgstr "Константы, к которым постоянно обращается CAD-файл."
 
-#: ../../source/config_package.rst:118
+#: ../../source/config_package.rst:242
 msgid "``INCH``/``INCHES``, ``FOOT``/``FEET``"
 msgstr "``INCH``/``INCHES``, ``FOOT``/``FEET``"
 
-#: ../../source/config_package.rst:119
+#: ../../source/config_package.rst:243
 msgid "Millimetres per imperial unit: 25.4 and 304.8."
 msgstr "Миллиметров в имперской единице: 25.4 и 304.8."
 
-#: ../../source/config_package.rst:121
+#: ../../source/config_package.rst:245
 msgid ""
-"The constants in the last two rows are also what a ``%...%`` expression "
-"can use (see :ref:`expressions`): one table serves both, so a name that "
-"works in ``{{ ... }}`` works in ``%...%`` too."
+"The constants in the last two rows are also what a ``%...%`` expression can "
+"use (see :ref:`expressions`): one table serves both, so a name that works in"
+" ``{{ ... }}`` works in ``%...%`` too."
 msgstr ""
 "Константы из двух последних строк доступны также выражению ``%...%`` (см. "
 ":ref:`expressions`): одна таблица обслуживает оба случая, поэтому имя, "
 "работающее в ``{{ ... }}``, работает и в ``%...%``."
 
-#: ../../source/config_package.rst:125
+#: ../../source/config_package.rst:249
 msgid ""
-"A constant is named in upper case. That is the convention for every name "
-"in that table and for any added to it: what is lower case in an "
-"expression is a function (``sqrt``, ``sin``) or a parameter, and a "
-"parameter is as likely to be called ``e`` as a constant is."
+"A constant is named in upper case. That is the convention for every name in "
+"that table and for any added to it: what is lower case in an expression is a"
+" function (``sqrt``, ``sin``) or a parameter, and a parameter is as likely "
+"to be called ``e`` as a constant is."
 msgstr ""
-"Константа именуется в верхнем регистре. Это соглашение действует для "
-"каждого имени в этой таблице и для любого добавляемого в неё: то, что в "
-"выражении написано строчными буквами, — это функция (``sqrt``, ``sin``) "
-"или параметр, а параметр с тем же успехом может называться ``e``, что и "
-"константа."
+"Константа именуется в верхнем регистре. Это соглашение действует для каждого"
+" имени в этой таблице и для любого добавляемого в неё: то, что в выражении "
+"написано строчными буквами, — это функция (``sqrt``, ``sin``) или параметр, "
+"а параметр с тем же успехом может называться ``e``, что и константа."
 
-#: ../../source/config_package.rst:131
+#: ../../source/config_package.rst:257
 msgid "Serving two PartCADs at once"
 msgstr "Поддержка двух версий PartCAD одновременно"
 
-#: ../../source/config_package.rst:133
+#: ../../source/config_package.rst:259
 msgid ""
-"A package that wants a feature this release has and the last one did not "
-"has a choice: raise its ``partcad:`` requirement, which takes the package"
-" away from everyone who has not updated, or write both forms and pick "
-"between them."
+"A package that wants a feature this release has and the last one did not has"
+" a choice: raise its ``partcad:`` requirement, which takes the package away "
+"from everyone who has not updated, or write both forms and pick between "
+"them."
 msgstr ""
 "У пакета, которому нужна возможность, появившаяся в этом релизе и "
-"отсутствовавшая в предыдущем, есть выбор: поднять требование "
-"``partcad:``, что уводит пакет от всех, кто не обновился, либо написать "
-"обе формы и выбирать между ними."
+"отсутствовавшая в предыдущем, есть выбор: поднять требование ``partcad:``, "
+"что уводит пакет от всех, кто не обновился, либо написать обе формы и "
+"выбирать между ними."
 
-#: ../../source/config_package.rst:145
+#: ../../source/config_package.rst:271
 msgid ""
-"A PartCAD older than these names defines none of them, and a template "
-"that names one there fails to render at all. So a package that has to "
-"work on those asks first -- Jinja2's ``and`` short-circuits, so the call "
-"is never made where the name is absent:"
+"A PartCAD older than these names defines none of them, and a template that "
+"names one there fails to render at all. So a package that has to work on "
+"those asks first -- Jinja2's ``and`` short-circuits, so the call is never "
+"made where the name is absent:"
 msgstr ""
-"PartCAD, который старше этих имён, не определяет ни одного из них, и "
-"шаблон, называющий такое имя, вообще не развернётся. Поэтому пакет, "
-"который обязан работать и на таких версиях, сначала спрашивает — оператор "
-"``and`` в Jinja2 вычисляется по короткой схеме, так что вызов не "
-"выполняется там, где имени нет:"
+"PartCAD, который старше этих имён, не определяет ни одного из них, и шаблон,"
+" называющий такое имя, вообще не развернётся. Поэтому пакет, который обязан "
+"работать и на таких версиях, сначала спрашивает — оператор ``and`` в Jinja2 "
+"вычисляется по короткой схеме, так что вызов не выполняется там, где имени "
+"нет:"
 
-#: ../../source/config_package.rst:154
+#: ../../source/config_package.rst:280
 msgid ""
 "The comparison is made one number at a time, which is the whole point of "
-"having it: ``0.8.9`` is *older* than ``0.8.77``, and every comparison of "
-"the strings says the opposite."
+"having it: ``0.8.9`` is *older* than ``0.8.77``, and every comparison of the"
+" strings says the opposite."
 msgstr ""
 "Сравнение выполняется по одному числу за раз, и в этом весь его смысл: "
 "``0.8.9`` *старше*, чем ``0.8.77``, а любое сравнение строк говорит "
 "обратное."
 
-#: ../../source/config_package.rst:160
-#, python-brace-format, python-format
+#: ../../source/config_package.rst:286
 msgid ""
-"``partcad_version_at_least`` is a function rather than a Jinja2 macro, "
-"which is what it looks like it should be. A macro always renders to "
-"*text*, so a false one comes back as the string ``\"False\"`` -- which is"
-" not empty, and so is true to ``{% if %}``. A comparison that reads as "
-"its own opposite is not a thing to leave lying in a template."
+"``partcad_version_at_least`` is a function rather than a Jinja2 macro, which"
+" is what it looks like it should be. A macro always renders to *text*, so a "
+"false one comes back as the string ``\"False\"`` -- which is not empty, and "
+"so is true to ``{% if %}``. A comparison that reads as its own opposite is "
+"not a thing to leave lying in a template."
 msgstr ""
 "``partcad_version_at_least`` — это функция, а не макрос Jinja2, хотя "
-"выглядит так, будто им должна быть. Макрос всегда разворачивается в "
-"*текст*, поэтому ложный результат возвращается строкой ``\"False\"``, "
-"которая не пуста и, значит, истинна для ``{% if %}``. Сравнение, которое "
-"читается как собственная противоположность, — не та вещь, которую стоит "
-"оставлять в шаблоне."
+"выглядит так, будто им должна быть. Макрос всегда разворачивается в *текст*,"
+" поэтому ложный результат возвращается строкой ``\"False\"``, которая не "
+"пуста и, значит, истинна для ``{% if %}``. Сравнение, которое читается как "
+"собственная противоположность, — не та вещь, которую стоит оставлять в "
+"шаблоне."
 
-#: ../../source/config_package.rst:168
+#: ../../source/config_package.rst:294
 msgid "Validation"
 msgstr "Проверка"
 
-#: ../../source/config_package.rst:170
+#: ../../source/config_package.rst:296
 msgid ""
 "``partcad.yaml`` is checked against a JSON schema "
-"(``src/partcad_utils/schema/partcad.json``) that describes everything "
-"below: which sections exist, which fields each kind of declaration takes,"
-" and which of them exclude or require one another."
+"(``src/partcad_utils/schema/partcad.json``) that describes everything below:"
+" which sections exist, which fields each kind of declaration takes, and "
+"which of them exclude or require one another."
 msgstr ""
 "``partcad.yaml`` проверяется по схеме JSON "
 "(``src/partcad_utils/schema/partcad.json``), которая описывает всё "
-"изложенное ниже: какие разделы существуют, какие поля принимает каждый "
-"вид объявления и какие из них исключают или требуют друг друга."
+"изложенное ниже: какие разделы существуют, какие поля принимает каждый вид "
+"объявления и какие из них исключают или требуют друг друга."
 
-#: ../../source/config_package.rst:175
+#: ../../source/config_package.rst:301
 msgid "Run the check over a package, or over the file alone:"
 msgstr "Запустите проверку для пакета или для одного только файла:"
 
-#: ../../source/config_package.rst:183
+#: ../../source/config_package.rst:309
 msgid ""
-"Every finding names the line and column it came from. ``partcad.yaml`` is"
-" a Jinja2 template rendered to YAML before it is parsed (see "
-"``includePaths`` below), so the checker masks each template construct "
-"before parsing rather than rendering the file, which would need the "
-"values the template is waiting for. It is the same checker :doc:`ASSY "
-"files <assy>` go through, and the `PartCAD extension for VS Code "
+"Every finding names the line and column it came from. ``partcad.yaml`` is a "
+"Jinja2 template rendered to YAML before it is parsed (see ``includePaths`` "
+"below), so the checker renders it the way PartCAD does -- with the version "
+"and constants it may name, and with the ``includePaths`` a package above "
+"gives it -- and reports each finding at the template line and column it came"
+" from. A part marked ``manufacturable: true`` (on itself, on the package, or"
+" on a package above) that is neither an ``alias`` nor an ``enrich`` has to "
+"say how it is had: a ``manufacturing:`` section, or both a ``vendor:`` and "
+"an ``sku:``. It is the same checker :doc:`ASSY files </assy>` go through, "
+"and the `PartCAD extension for VS Code "
 "<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
 "official>`_ runs it on the open document -- so a mistyped section is "
 "underlined as it is typed, including in the file that is stopping the "
-"package from loading at all. Set ``partcad.lint.enabled`` to ``false`` to"
-" turn that off."
+"package from loading at all. Set ``partcad.lint.enabled`` to ``false`` to "
+"turn that off."
 msgstr ""
 "В каждом найденном замечании названы строка и столбец, из которых оно "
-"получено. ``partcad.yaml`` — это шаблон Jinja2, разворачиваемый в YAML "
-"перед разбором (см. ``includePaths`` ниже), поэтому проверяющий маскирует "
-"каждую конструкцию шаблона перед разбором, вместо того чтобы "
-"разворачивать файл, для чего потребовались бы значения, которых шаблон "
-"ждёт. Это тот же проверяющий, через который проходят :doc:`файлы ASSY "
-"<assy>`, и `расширение PartCAD для VS Code "
-"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ "
-"запускает его для открытого документа, так что раздел с опечаткой "
-"подчёркивается прямо по мере набора — в том числе в файле, из-за которого "
-"пакет вообще не загружается. Установите ``partcad.lint.enabled`` в "
+"получено. ``partcad.yaml`` -- это шаблон Jinja2, разворачиваемый в YAML "
+"перед разбором (см. ``includePaths`` ниже), поэтому проверяющий "
+"разворачивает его так же, как это делает PartCAD -- с той версией и теми "
+"константами, которые он может называть, и с тем ``includePaths``, который "
+"даёт ему пакет выше, -- и сообщает каждое замечание в той строке и столбце "
+"шаблона, откуда оно пришло. Деталь, помеченная ``manufacturable: true`` (на "
+"себе самой, на пакете или на пакете выше), которая не является ни ``alias``,"
+" ни ``enrich``, должна сказать, как её получают: раздел ``manufacturing:`` "
+"либо и ``vendor:``, и ``sku:``. Это тот же проверяющий, через который "
+"проходят :doc:`файлы ASSY </assy>`, и `расширение PartCAD для VS Code "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
+"official>`_ запускает его для открытого документа, так что раздел с "
+"опечаткой подчёркивается прямо по мере набора -- в том числе в файле, из-за "
+"которого пакет вообще не загружается. Установите ``partcad.lint.enabled`` в "
 "``false``, чтобы это отключить."
 
-#: ../../source/config_package.rst:196
+#: ../../source/config_package.rst:326
 msgid "Dependencies"
 msgstr "Зависимости"
 
-#: ../../source/config_package.rst:198
-msgid "Here are some examples of a dependency declaration in ``partcad.yaml``:"
+#: ../../source/config_package.rst:328
+msgid ""
+"Here are some examples of a dependency declaration in ``partcad.yaml``:"
 msgstr "Вот несколько примеров объявления зависимости в ``partcad.yaml``:"
 
-#: ../../source/config_package.rst:204
+#: ../../source/config_package.rst:334
 msgid "Method"
 msgstr "Метод"
 
-#: ../../source/config_package.rst:204
+#: ../../source/config_package.rst:334
 msgid "Example"
 msgstr "Пример"
 
-#: ../../source/config_package.rst
+#: ../../source/config_package.rst:0
 msgid "Local package"
 msgstr "Локальный пакет"
 
-#: ../../source/config_package.rst
+#: ../../source/config_package.rst:0
 msgid "(in the same"
 msgstr "(в том же"
 
-#: ../../source/config_package.rst
+#: ../../source/config_package.rst:0
 msgid "source code"
 msgstr "исходном коде"
 
-#: ../../source/config_package.rst
+#: ../../source/config_package.rst:0
 msgid "repository)"
 msgstr "репозитории)"
 
-#: ../../source/config_package.rst:212
+#: ../../source/config_package.rst:342
 msgid "GIT repository :raw-html:`<br />` (HTTPS, SSH)"
 msgstr "GIT-репозиторий :raw-html:`<br />` (HTTPS, SSH)"
 
-#: ../../source/config_package.rst:219
+#: ../../source/config_package.rst:351
 msgid "Hosted tar ball :raw-html:`<br />` (HTTPS)"
 msgstr "Размещённый tar-архив :raw-html:`<br />` (HTTPS)"
 
-#: ../../source/config_package.rst:226
+#: ../../source/config_package.rst:358
 msgid ""
-"Each dependency becomes a subpackage of the current package. All "
-"subfolders of the current package are considered subpackages (of the type"
-" `local`) if they contain a ``partcad.yaml`` file. Subfolders do not need"
-" to be explicitly declared as a dependency, but may be declared to "
-"provide a more detailed description."
+"Each dependency becomes a subpackage of the current package. All subfolders "
+"of the current package are considered subpackages (of the type `local`) if "
+"they contain a ``partcad.yaml`` file. Subfolders do not need to be "
+"explicitly declared as a dependency, but may be declared to provide a more "
+"detailed description."
 msgstr ""
 "Каждая зависимость становится подпакетом текущего пакета. Все подпапки "
-"текущего пакета считаются подпакетами (типа `local`), если они содержат "
-"файл ``partcad.yaml``. Подпапки не обязательно явно объявлять как "
-"зависимость, но их можно объявить, чтобы предоставить более подробное "
-"описание."
+"текущего пакета считаются подпакетами (типа `local`), если они содержат файл"
+" ``partcad.yaml``. Подпапки не обязательно явно объявлять как зависимость, "
+"но их можно объявить, чтобы предоставить более подробное описание."
 
-#: ../../source/config_package.rst:231
+#: ../../source/config_package.rst:364
+msgid ""
+"A subfolder holding a file named ``.pcignore`` (empty; only its presence "
+"counts) is left out of the package around it, along with everything below "
+"it: no package in it is a subpackage, none of its files are part of the "
+"package's sources, and the search for the workspace root stops there, so a "
+"package inside it is a workspace of its own. That is how a plugin package "
+"keeps its tests with it -- a ``tests/`` folder with a ``.pcignore`` in it, "
+"holding packages that import the plugin the way a user's would, through a "
+"``local`` dependency on ``../..`` -- without those test packages turning up "
+"as the plugin's own subpackages wherever the plugin is used."
+msgstr ""
+"Подпапка, в которой лежит файл с именем ``.pcignore`` (пустой; считается "
+"только его наличие), исключается из пакета вокруг неё вместе со всем, что "
+"под ней: ни один пакет в ней не является подпакетом, ни один её файл не "
+"входит в исходники пакета, а поиск корня рабочего пространства там "
+"останавливается, так что пакет внутри неё является отдельным рабочим "
+"пространством. Именно так пакет плагина держит свои тесты при себе -- папка "
+"``tests/`` с ``.pcignore`` внутри, содержащая пакеты, которые импортируют "
+"плагин так же, как это сделал бы пользователь, через зависимость ``local`` "
+"на ``../..``, -- и при этом эти тестовые пакеты не всплывают как собственные"
+" подпакеты плагина всюду, где плагин используется."
+
+#: ../../source/config_package.rst:374
+msgid "Pinning git dependencies"
+msgstr "Закрепление git-зависимостей"
+
+#: ../../source/config_package.rst:376
+msgid ""
+"A ``git`` dependency says which branch it follows with ``track:``, and which"
+" commit of it the package is built against with ``revision:``. ``pc update``"
+" is what connects the two: it asks the repository where the tracked branch "
+"is now, and writes that commit into ``revision:`` -- in your "
+"``partcad.yaml``."
+msgstr ""
+"Зависимость ``git`` говорит, за какой веткой она следует, через ``track:``, "
+"и на каком её коммите собран пакет, через ``revision:``. ``pc update`` -- "
+"то, что связывает эти два: он спрашивает у репозитория, где сейчас находится"
+" отслеживаемая ветка, и записывает этот коммит в ``revision:`` -- в ваш "
+"``partcad.yaml``."
+
+#: ../../source/config_package.rst:389
+msgid ""
+"This is the recommended way to declare every ``git`` dependency, and it is "
+"what ``pc init`` and ``pc add dep`` write for you:"
+msgstr ""
+"Это рекомендуемый способ объявлять каждую зависимость ``git``, и именно его "
+"записывают за вас ``pc init`` и ``pc add dep``:"
+
+#: ../../source/config_package.rst:398
+msgid ""
+"**Loading a package never moves a dependency.** A ``git`` dependency is "
+"downloaded the first time a package needs it and is used exactly as "
+"downloaded from then on. PartCAD does not check again whether its branch has"
+" moved -- not the next day, not ever -- so a package builds the same way "
+"until you decide otherwise."
+msgstr ""
+"**Загрузка пакета никогда не сдвигает зависимость.** Зависимость ``git`` "
+"загружается в первый раз, когда она нужна пакету, и с этого момента "
+"используется в точности такой, какой была загружена. PartCAD не проверяет "
+"заново, сдвинулась ли её ветка -- ни на следующий день, ни когда-либо, -- "
+"поэтому пакет собирается одинаково, пока вы не решите иначе."
+
+#: ../../source/config_package.rst:401
+msgid ""
+"``pc update`` **is how you decide otherwise.** It moves every tracked "
+"dependency of your workspace -- the root package and the ``local`` packages "
+"under it -- to the newest commit of its branch, then downloads what the new "
+"pins name. What changed is a diff in ``partcad.yaml``: review it, commit it,"
+" revert it; and every other checkout of your package builds against the same"
+" commits as soon as it has that commit. Running it again when nothing has "
+"moved changes nothing. On disk a tracked dependency is one copy per branch, "
+"which ``pc update`` moves from commit to commit rather than adding a copy "
+"for every commit it has been pinned to -- unless another workspace open at "
+"the same time is built from that copy at another commit, in which case the "
+"new pin gets a copy of its own and the other workspace's is left where it "
+"is."
+msgstr ""
+"``pc update`` **-- это то, как вы решаете иначе.** Он переводит каждую "
+"отслеживаемую зависимость вашего рабочего пространства -- корневого пакета и"
+" ``local``-пакетов под ним -- на новейший коммит её ветки и затем загружает "
+"то, что называют новые закрепления. То, что изменилось, -- это дифф в "
+"``partcad.yaml``: просмотрите его, закоммитьте, откатите; и каждая другая "
+"рабочая копия вашего пакета собирается на тех же коммитах, как только "
+"получит этот коммит. Повторный запуск, когда ничего не сдвинулось, ничего не"
+" меняет. На диске отслеживаемая зависимость -- это одна копия на ветку, "
+"которую ``pc update`` переводит с коммита на коммит, а не добавляет по копии"
+" на каждый коммит, на котором она была закреплена, -- если только другое "
+"рабочее пространство, открытое в то же время, не собрано из этой копии на "
+"другом коммите: тогда новое закрепление получает собственную копию, а копия "
+"другого рабочего пространства остаётся там, где была."
+
+#: ../../source/config_package.rst:409
+msgid ""
+"A dependency with ``track:`` and no ``revision:`` yet is downloaded at the "
+"newest commit of that branch the first time it is needed, and stays there "
+"until ``pc update`` pins it."
+msgstr ""
+"Зависимость с ``track:`` и ещё без ``revision:`` загружается на новейшем "
+"коммите этой ветки в первый раз, когда она нужна, и остаётся там, пока ``pc "
+"update`` её не закрепит."
+
+#: ../../source/config_package.rst:411
+msgid ""
+"``pc update`` never edits a package it imported. The pins in an imported "
+"package are its maintainers' to move, and they move for you when you ``pc "
+"update`` to a release of that package in which they moved them."
+msgstr ""
+"``pc update`` никогда не правит импортированный пакет. Закрепления в "
+"импортированном пакете -- дело тех, кто его поддерживает, и они сдвигаются у"
+" вас тогда, когда вы через ``pc update`` переходите на тот релиз этого "
+"пакета, в котором они их сдвинули."
+
+#: ../../source/config_package.rst:413
+msgid ""
+"A dependency without ``track:`` works as it always did: ``revision:`` names "
+"a commit, a tag or a branch, and with no ``revision:`` the repository's "
+"default branch is used. A branch named that way is not moved by loading "
+"either. ``pc update`` still fetches its newest commit, but has nowhere to "
+"write it down, so your machine and the next one can be building against "
+"different commits without anything saying so -- add ``track:`` to fix that."
+msgstr ""
+"Зависимость без ``track:`` работает так, как работала всегда: ``revision:`` "
+"называет коммит, тег или ветку, а без ``revision:`` используется ветка "
+"репозитория по умолчанию. Названная так ветка загрузкой тоже не сдвигается. "
+"``pc update`` всё равно получает её новейший коммит, но ему некуда его "
+"записать, поэтому ваша машина и следующая могут собираться на разных "
+"коммитах, и ничто об этом не скажет, -- добавьте ``track:``, чтобы это "
+"исправить."
+
+#: ../../source/config_package.rst:418
+msgid ""
+"``pc update`` only rewrites a ``revision:`` it can find unambiguously: one "
+"plain line in the dependency's own block under the top-level "
+"``dependencies:`` section, or a new line right under its ``track:``. "
+"Comments, the order of the keys and any Jinja2 around the entry are left "
+"exactly as they were. A declaration it cannot edit that way -- one written "
+"in flow style, one a template produces twice, a revision that is itself a "
+"template expression -- is reported, together with the commit to write into "
+"it by hand."
+msgstr ""
+"``pc update`` перезаписывает только тот ``revision:``, который он может "
+"найти однозначно: одну простую строку в собственном блоке зависимости в "
+"разделе ``dependencies:`` верхнего уровня либо новую строку прямо под её "
+"``track:``. Комментарии, порядок ключей и любой Jinja2 вокруг записи "
+"остаются в точности такими, какими были. Объявление, которое он так "
+"отредактировать не может -- записанное в поточном стиле, создаваемое "
+"шаблоном дважды, ревизия, которая сама является выражением шаблона, -- "
+"отмечается в отчёте вместе с тем коммитом, который надо записать в него "
+"вручную."
+
+#: ../../source/config_package.rst:425
+msgid "Forcing auto-update"
+msgstr "Принудительное автообновление"
+
+#: ../../source/config_package.rst:427
+msgid ""
+"The ``forceUpdate`` user setting -- ``--force-update`` on the command line, "
+"``PC_FORCE_UPDATE`` in the environment, ``partcad.forceUpdate`` in the VS "
+"Code extension -- turns automatic updates back on, and goes further than "
+"they ever did: every time a package is loaded, every ``git`` dependency is "
+"fetched again, and one that has ``track:`` is used at the newest commit of "
+"that branch rather than at its ``revision:``. ``partcad.yaml`` is not "
+"changed by it."
+msgstr ""
+"Пользовательская настройка ``forceUpdate`` -- ``--force-update`` в командной"
+" строке, ``PC_FORCE_UPDATE`` в окружении, ``partcad.forceUpdate`` в "
+"расширении для VS Code -- снова включает автоматические обновления и идёт "
+"дальше, чем они когда-либо шли: при каждой загрузке пакета каждая "
+"зависимость ``git`` получается заново, а та, у которой есть ``track:``, "
+"используется на новейшем коммите этой ветки, а не на её ``revision:``. "
+"``partcad.yaml`` при этом не меняется."
+
+#: ../../source/config_package.rst:433
+msgid ""
+"That is for trying a package out against whatever its dependencies are about"
+" to release. It is not a way to keep a package up to date: what it builds "
+"against is then a matter of when you happened to run it, and nothing in the "
+"package records which commits those were. ``pc update`` is."
+msgstr ""
+"Это нужно, чтобы попробовать пакет на том, что его зависимости собираются "
+"выпустить. Это не способ держать пакет в актуальном состоянии: то, на чём он"
+" собирается, оказывается делом того, когда именно вы его запустили, и ничто "
+"в пакете не записывает, какие это были коммиты. Для этого есть ``pc "
+"update``."
+
+#: ../../source/config_package.rst:437
+msgid ""
+"How to run a library of packages that other packages pin -- branches, "
+"releases, and making a breaking change -- is in "
+":doc:`/digital_thread/change_management`."
+msgstr ""
+"О том, как вести библиотеку пакетов, которые закрепляют другие пакеты -- о "
+"ветках, релизах и о том, как делать ломающее изменение, -- написано в "
+":doc:`/digital_thread/change_management`."
+
+#: ../../source/config_package.rst:441
 msgid "External packages"
 msgstr "Внешние пакеты"
 
-#: ../../source/config_package.rst:233
+#: ../../source/config_package.rst:443
 msgid ""
-"A dependency of type ``external`` is a package whose contents are served "
-"by a **repository plugin** instead of being read from a folder "
-"(``local``) or a remote archive (``git``, ``tar``). Its ``plugin`` field "
-"references a repository declared in the ``repositories`` section (see "
+"A dependency of type ``external`` is a package whose contents are served by "
+"a **repository plugin** instead of being read from a folder (``local``) or a"
+" remote archive (``git``, ``tar``). Its ``plugin`` field references a "
+"repository declared in the ``repositories`` section (see "
 ":ref:`repositories`):"
 msgstr ""
 "Зависимость типа ``external`` — это пакет, содержимое которого "
-"предоставляется **плагином репозитория**, а не читается из папки "
-"(``local``) или удалённого архива (``git``, ``tar``). Его поле ``plugin``"
-" ссылается на репозиторий, объявленный в секции ``repositories`` (см. "
+"предоставляется **плагином репозитория**, а не читается из папки (``local``)"
+" или удалённого архива (``git``, ``tar``). Его поле ``plugin`` ссылается на "
+"репозиторий, объявленный в секции ``repositories`` (см. "
 ":ref:`repositories`):"
 
-#: ../../source/config_package.rst:249
+#: ../../source/config_package.rst:459
 msgid ""
 "The package's objects (parts, sketches, assemblies, ...), its child "
-"packages, and its metadata are all fetched from the plugin on demand, "
-"rather than being enumerated up front. This keeps loading cheap even when"
-" the repository is large or remote: a part is fetched only when it is "
-"actually used."
+"packages, and its metadata are all fetched from the plugin on demand, rather"
+" than being enumerated up front. This keeps loading cheap even when the "
+"repository is large or remote: a part is fetched only when it is actually "
+"used."
 msgstr ""
 "Объекты пакета (детали, эскизы, сборки, ...), его дочерние пакеты и его "
-"метаданные — всё это получается от плагина по требованию, а не "
-"перечисляется заранее. Это сохраняет загрузку недорогой, даже когда "
-"репозиторий велик или удалён: деталь загружается только тогда, когда она "
-"фактически используется."
+"метаданные — всё это получается от плагина по требованию, а не перечисляется"
+" заранее. Это сохраняет загрузку недорогой, даже когда репозиторий велик или"
+" удалён: деталь загружается только тогда, когда она фактически используется."
 
-#: ../../source/config_package.rst:254
+#: ../../source/config_package.rst:464
 msgid ""
-"An external package can host a hierarchy. When its children are listed, "
-"the plugin reports child package names; each child is imported as another"
-" external package backed by the same plugin, with a ``subfolder`` that "
-"scopes its requests within the repository. In this way one plugin can "
-"serve an entire tree of packages, each with its own sketches, parts, "
-"assemblies, providers and further children."
+"An external package can host a hierarchy. When its children are listed, the "
+"plugin reports child package names; each child is imported as another "
+"external package backed by the same plugin, with a ``subfolder`` that scopes"
+" its requests within the repository. In this way one plugin can serve an "
+"entire tree of packages, each with its own sketches, parts, assemblies, "
+"providers and further children."
 msgstr ""
 "Внешний пакет может содержать иерархию. Когда перечисляются его дочерние "
-"элементы, плагин сообщает имена дочерних пакетов; каждый дочерний элемент"
-" импортируется как ещё один внешний пакет, обслуживаемый тем же плагином,"
-" с полем ``subfolder``, ограничивающим его запросы в пределах "
-"репозитория. Таким образом один плагин может обслуживать целое дерево "
-"пакетов, каждый со своими эскизами, деталями, сборками, поставщиками и "
-"дальнейшими дочерними элементами."
+"элементы, плагин сообщает имена дочерних пакетов; каждый дочерний элемент "
+"импортируется как ещё один внешний пакет, обслуживаемый тем же плагином, с "
+"полем ``subfolder``, ограничивающим его запросы в пределах репозитория. "
+"Таким образом один плагин может обслуживать целое дерево пакетов, каждый со "
+"своими эскизами, деталями, сборками, поставщиками и дальнейшими дочерними "
+"элементами."
 
-#: ../../source/config_package.rst:261
+#: ../../source/config_package.rst:471
 msgid ""
 "Non-null responses from a plugin are cached on disk, keyed by the plugin "
 "reference and the request; a request the plugin has no answer for is "
@@ -447,92 +848,113 @@ msgid ""
 msgstr ""
 "Ненулевые ответы плагина кэшируются на диске по ключу, составленному из "
 "ссылки на плагин и запроса; запрос, на который у плагина нет ответа, "
-"запоминается только на время того запуска, в котором он был сделан, и "
-"после перезапуска задаётся плагину снова. Тот же ключ называет и каталог, "
-"в который материализуются собственные файлы плагина, и файл, который там "
-"уже есть, отдаётся без повторного обращения к плагину."
+"запоминается только на время того запуска, в котором он был сделан, и после "
+"перезапуска задаётся плагину снова. Тот же ключ называет и каталог, в "
+"который материализуются собственные файлы плагина, и файл, который там уже "
+"есть, отдаётся без повторного обращения к плагину."
 
-#: ../../source/config_package.rst:267
+#: ../../source/config_package.rst:477
 msgid ""
 "The cache does not know when the plugin's code changes, so a plugin that "
-"starts answering differently - a new field on every part it serves, or "
-"the same parts measured another way - would keep being served the stale, "
-"pre-change entries. The plugin says so itself, with a module-level "
-"constant in its script::"
+"starts answering differently - a new field on every part it serves, or the "
+"same parts measured another way - would keep being served the stale, pre-"
+"change entries. The plugin says so itself, with a module-level constant in "
+"its script::"
 msgstr ""
 "Кэш не знает, когда меняется код плагина, поэтому плагину, который начал "
 "отвечать иначе — новое поле у каждой обслуживаемой им детали или те же "
-"детали, измеренные по-другому, — продолжали бы отдавать устаревшие "
-"записи, сделанные до изменения. Плагин сообщает об этом сам, константой "
-"уровня модуля в своём скрипте::"
+"детали, измеренные по-другому, — продолжали бы отдавать устаревшие записи, "
+"сделанные до изменения. Плагин сообщает об этом сам, константой уровня "
+"модуля в своём скрипте::"
 
-#: ../../source/config_package.rst:277
+#: ../../source/config_package.rst:487
 msgid ""
 "It is folded into the cache location, so raising it moves the whole "
-"repository (and every child in its hierarchy) to a fresh cache namespace "
-"at once. It defaults to ``0`` when the script names none, and a "
-"repository with no script of its own - an ``enrich`` one, which rewrites "
-"another repository's answers - has no code to version and stays at ``0``."
+"repository (and every child in its hierarchy) to a fresh cache namespace at "
+"once. It is also part of the cache key of every object the plugin serves: "
+"the plugin built those objects, or said how to build them, so raising it has"
+" every one of them built again -- which is the whole of what a plugin has to"
+" do when it changes what it serves. It defaults to ``0`` when the script "
+"names none, and a ``0`` is left out of every key. A repository with no "
+"script of its own - an ``enrich`` one, which rewrites another repository's "
+"answers - has no code to version and stays at ``0``."
 msgstr ""
-"Она входит в состав расположения кэша, поэтому её увеличение сразу "
-"переводит весь репозиторий (и каждого потомка в его иерархии) в новое "
-"пространство имён кэша. Если скрипт её не называет, она равна ``0``, а у "
-"репозитория без собственного скрипта — типа ``enrich``, который "
-"переписывает ответы другого репозитория, — версионировать нечего, и она "
-"остаётся равной ``0``."
+"Она входит в состав расположения кэша, поэтому её увеличение сразу переводит"
+" весь репозиторий (и каждого потомка в его иерархии) в новое пространство "
+"имён кэша. Она также входит в ключ кэша каждого объекта, который обслуживает"
+" плагин: плагин построил эти объекты или сказал, как их строить, поэтому её "
+"увеличение заставляет построить каждый из них заново -- и в этом состоит "
+"всё, что должен сделать плагин, когда меняет то, что он обслуживает. Если "
+"скрипт её не называет, она равна ``0``, а ``0`` не входит ни в один ключ. У "
+"репозитория без собственного скрипта -- типа ``enrich``, который "
+"переписывает ответы другого репозитория, -- версионировать нечего, и он "
+"остаётся на ``0``."
 
-#: ../../source/config_package.rst:283
+#: ../../source/config_package.rst:497
 msgid ""
-"The number lives in the plugin because it is the plugin's own business. A"
-" package that imports a plugin-backed library has no way of knowing that "
-"the library now measures its parts differently, and should not have to be"
-" told: it would have to be told again in every package that imports it, "
-"and each of them would be a place to forget. So this is not a field of "
-"the dependency that imports the plugin, and PartCAD reads it out of the "
-"script rather than asking for it - the answer is needed before the first "
-"question can be asked. The script is parsed, never executed."
+"Every other piece of code PartCAD runs to produce something it caches "
+"reports a version the same way: a ``partType`` script (see :ref:`part-"
+"types`), a custom implementation of a file type, an analysis, a route or a "
+"simulation (see :ref:`output-files`), and each of PartCAD's own wrappers and"
+" implementations."
+msgstr ""
+"Каждый другой фрагмент кода, который PartCAD выполняет, чтобы создать то, "
+"что он кэширует, сообщает версию так же: скрипт ``partType`` (см. "
+":ref:`part-types`), собственная реализация типа файла, расчёта, траектории "
+"или симуляции (см. :ref:`output-files`), а также каждая из собственных "
+"обёрток и реализаций PartCAD."
+
+#: ../../source/config_package.rst:502
+msgid ""
+"The number lives in the plugin because it is the plugin's own business. A "
+"package that imports a plugin-backed library has no way of knowing that the "
+"library now measures its parts differently, and should not have to be told: "
+"it would have to be told again in every package that imports it, and each of"
+" them would be a place to forget. So this is not a field of the dependency "
+"that imports the plugin, and PartCAD reads it out of the script rather than "
+"asking for it - the answer is needed before the first question can be asked."
+" The script is parsed, never executed."
 msgstr ""
 "Это число живёт в плагине, потому что это дело самого плагина. Пакет, "
 "импортирующий библиотеку, за которой стоит плагин, никак не может узнать, "
 "что библиотека теперь измеряет свои детали иначе, и не должен быть обязан "
-"это узнавать: сообщать об этом пришлось бы заново в каждом пакете, "
-"который её импортирует, и каждый из них был бы местом, где можно забыть. "
-"Поэтому это не поле зависимости, импортирующей плагин, и PartCAD читает "
-"его из скрипта, а не запрашивает: ответ нужен раньше, чем можно задать "
-"первый вопрос. Скрипт разбирается, но никогда не выполняется."
+"это узнавать: сообщать об этом пришлось бы заново в каждом пакете, который "
+"её импортирует, и каждый из них был бы местом, где можно забыть. Поэтому это"
+" не поле зависимости, импортирующей плагин, и PartCAD читает его из скрипта,"
+" а не запрашивает: ответ нужен раньше, чем можно задать первый вопрос. "
+"Скрипт разбирается, но никогда не выполняется."
 
-#: ../../source/config_package.rst:292
+#: ../../source/config_package.rst:511
 msgid ""
-"See ``examples/plugin_repository_basic`` (a package backed by a local "
-"file), ``examples/plugin_repository_full`` (backed by an HTTP endpoint) "
-"and ``examples/plugin_repository_tree`` (a hierarchy of packages)."
+"See ``examples/plugin_repository_basic`` (a package backed by a local file),"
+" ``examples/plugin_repository_full`` (backed by an HTTP endpoint) and "
+"``examples/plugin_repository_tree`` (a hierarchy of packages)."
 msgstr ""
 "См. ``examples/plugin_repository_basic`` (пакет, обслуживаемый локальным "
-"файлом), ``examples/plugin_repository_full`` (обслуживаемый "
-"HTTP-эндпоинтом) и ``examples/plugin_repository_tree`` (иерархия "
-"пакетов)."
+"файлом), ``examples/plugin_repository_full`` (обслуживаемый HTTP-эндпоинтом)"
+" и ``examples/plugin_repository_tree`` (иерархия пакетов)."
 
-#: ../../source/config_package.rst:300
+#: ../../source/config_package.rst:519
 msgid "Repositories"
 msgstr "Репозитории"
 
-#: ../../source/config_package.rst:302
+#: ../../source/config_package.rst:521
 msgid ""
-"A repository plugin serves the contents of a package: its objects, its "
-"child packages and its metadata. It is what backs an ``external`` "
-"dependency (see `External packages`_)."
+"A repository plugin serves the contents of a package: its objects, its child"
+" packages and its metadata. It is what backs an ``external`` dependency (see"
+" `External packages`_)."
 msgstr ""
 "Плагин репозитория предоставляет содержимое пакета: его объекты, его "
 "дочерние пакеты и его метаданные. Именно он стоит за зависимостью "
 "``external`` (см. `External packages`_)."
 
-#: ../../source/config_package.rst:306
-msgid "Repositories are declared in ``partcad.yaml`` using the following syntax:"
+#: ../../source/config_package.rst:525
+msgid ""
+"Repositories are declared in ``partcad.yaml`` using the following syntax:"
 msgstr ""
-"Репозитории объявляются в ``partcad.yaml`` с помощью следующего "
-"синтаксиса:"
+"Репозитории объявляются в ``partcad.yaml`` с помощью следующего синтаксиса:"
 
-#: ../../source/config_package.rst:320
+#: ../../source/config_package.rst:539
 msgid ""
 "``enrich`` repositories are references to other repositories with some "
 "parameters modified to specific values."
@@ -540,58 +962,55 @@ msgstr ""
 "Репозитории ``enrich`` — это ссылки на другие репозитории с некоторыми "
 "параметрами, изменёнными на конкретные значения."
 
-#: ../../source/config_package.rst:323
+#: ../../source/config_package.rst:542
 msgid ""
-"``basic`` repositories are implemented as Python scripts, invoked the "
-"same way as provider scripts (via ``runpy``, with the input in the global"
-" ``request`` and the output in the global ``output``). A repository "
-"script answers a single, generic key/value request:"
+"``basic`` repositories are implemented as Python scripts, invoked the same "
+"way as provider scripts (via ``runpy``, with the input in the global "
+"``request`` and the output in the global ``output``). A repository script "
+"answers a single, generic key/value request:"
 msgstr ""
-"Репозитории ``basic`` реализованы в виде скриптов Python, вызываемых так "
-"же, как скрипты поставщиков (через ``runpy``, с входными данными в "
-"глобальном ``request`` и выходными данными в глобальном ``output``). "
-"Скрипт репозитория отвечает на единственный обобщённый запрос "
-"«ключ/значение»:"
+"Репозитории ``basic`` реализованы в виде скриптов Python, вызываемых так же,"
+" как скрипты поставщиков (через ``runpy``, с входными данными в глобальном "
+"``request`` и выходными данными в глобальном ``output``). Скрипт репозитория"
+" отвечает на единственный обобщённый запрос «ключ/значение»:"
 
-#: ../../source/config_package.rst:328
+#: ../../source/config_package.rst:547
 msgid "`request[\"api\"] == \"get\"`"
 msgstr "`request[\"api\"] == \"get\"`"
 
-#: ../../source/config_package.rst:329
+#: ../../source/config_package.rst:548
 msgid "`request[\"key\"]`: the key being requested"
 msgstr "`request[\"key\"]`: запрашиваемый ключ"
 
-#: ../../source/config_package.rst:330
+#: ../../source/config_package.rst:549
 msgid ""
 "`output[\"result\"]`: the value stored under that key (or ``null`` if "
 "unknown)"
 msgstr ""
-"`output[\"result\"]`: значение, хранящееся под этим ключом (или ``null``,"
-" если неизвестно)"
+"`output[\"result\"]`: значение, хранящееся под этим ключом (или ``null``, "
+"если неизвестно)"
 
-#: ../../source/config_package.rst:332
+#: ../../source/config_package.rst:551
 msgid ""
 "The keys address every kind of data uniformly, so serving a new kind of "
 "object or a new piece of metadata needs no new API:"
 msgstr ""
 "Ключи единообразно адресуют любой вид данных, поэтому для обслуживания "
-"нового вида объекта или нового элемента метаданных не требуется новый "
-"API:"
+"нового вида объекта или нового элемента метаданных не требуется новый API:"
 
-#: ../../source/config_package.rst:335
-#, python-brace-format
+#: ../../source/config_package.rst:554
 msgid ""
-"``objects/<kind>`` -- all objects of a kind, as ``{name: config, ...}``. "
-"The kinds are the ten in ``Project.OBJECT_KINDS``: ``material``, "
-"``interface``, ``sketch``, ``part``, ``assembly``, ``scene``, "
-"``provider``, ``repository``, ``software``, ``partType``"
+"``objects/<kind>`` -- all objects of a kind, as ``{name: config, ...}``. The"
+" kinds are the ten in ``Project.OBJECT_KINDS``: ``material``, ``interface``,"
+" ``sketch``, ``part``, ``assembly``, ``scene``, ``provider``, "
+"``repository``, ``software``, ``partType``"
 msgstr ""
 "``objects/<kind>`` — все объекты одного вида, в виде ``{name: config, "
-"...}``. Видов десять, те же, что в ``Project.OBJECT_KINDS``: "
-"``material``, ``interface``, ``sketch``, ``part``, ``assembly``, "
-"``scene``, ``provider``, ``repository``, ``software``, ``partType``"
+"...}``. Видов десять, те же, что в ``Project.OBJECT_KINDS``: ``material``, "
+"``interface``, ``sketch``, ``part``, ``assembly``, ``scene``, ``provider``, "
+"``repository``, ``software``, ``partType``"
 
-#: ../../source/config_package.rst:339
+#: ../../source/config_package.rst:558
 msgid ""
 "``objects/<kind>/<name>`` -- a single object's config, fetched without "
 "listing the whole repository"
@@ -599,100 +1018,97 @@ msgstr ""
 "``objects/<kind>/<name>`` -- конфигурация одного объекта, получаемая без "
 "перечисления всего репозитория"
 
-#: ../../source/config_package.rst:341
+#: ../../source/config_package.rst:560
 msgid "``deps`` -- the names of the child packages"
 msgstr "``deps`` -- имена дочерних пакетов"
 
-#: ../../source/config_package.rst:342
+#: ../../source/config_package.rst:561
 msgid ""
 "``meta`` -- package-level properties (``desc``, ``render``, "
 "``manufacturable``, ``suppliers``, ...), and ``objectKinds`` (see below)"
 msgstr ""
-"``meta`` — свойства уровня пакета (``desc``, ``render``, "
-"``manufacturable``, ``suppliers``, ...) и ``objectKinds`` (см. ниже)"
+"``meta`` — свойства уровня пакета (``desc``, ``render``, ``manufacturable``,"
+" ``suppliers``, ...) и ``objectKinds`` (см. ниже)"
 
-#: ../../source/config_package.rst:344
+#: ../../source/config_package.rst:563
 msgid ""
 "``files/<path>`` -- the base64-encoded content of a file an object "
 "references by ``path``. A plugin-backed package has no source tree, so a "
-"file-backed object's file is fetched from the plugin and materialized "
-"into the package's cache directory when the object is built."
+"file-backed object's file is fetched from the plugin and materialized into "
+"the package's cache directory when the object is built."
 msgstr ""
-"``files/<path>`` -- содержимое файла в кодировке base64, на который "
-"объект ссылается через ``path``. У пакета, обслуживаемого плагином, нет "
-"дерева исходников, поэтому файл файлового объекта загружается от плагина "
-"и материализуется в каталог кэша пакета при сборке объекта."
+"``files/<path>`` -- содержимое файла в кодировке base64, на который объект "
+"ссылается через ``path``. У пакета, обслуживаемого плагином, нет дерева "
+"исходников, поэтому файл файлового объекта загружается от плагина и "
+"материализуется в каталог кэша пакета при сборке объекта."
 
-#: ../../source/config_package.rst:349
+#: ../../source/config_package.rst:568
 msgid ""
 "For a hierarchy, a child package's requests are prefixed with its "
 "``subfolder``: a child in ``motors`` asks for ``motors/objects/part``, "
 "``motors/deps`` and so on, all served by the same script."
 msgstr ""
-"В иерархии запросы дочернего пакета предваряются его ``subfolder``: "
-"дочерний элемент в ``motors`` запрашивает ``motors/objects/part``, "
-"``motors/deps`` и так далее, и всё это обслуживается тем же скриптом."
+"В иерархии запросы дочернего пакета предваряются его ``subfolder``: дочерний"
+" элемент в ``motors`` запрашивает ``motors/objects/part``, ``motors/deps`` и"
+" так далее, и всё это обслуживается тем же скриптом."
 
-#: ../../source/config_package.rst:354
+#: ../../source/config_package.rst:573
 msgid "Say which kinds a package has"
 msgstr "Укажите, какие виды объектов есть у пакета"
 
-#: ../../source/config_package.rst:356
+#: ../../source/config_package.rst:575
 msgid ""
-"Every key is a separate run of the script, and a package has ten kinds of"
-" object. Something as ordinary as listing the packages that hold anything"
-" to look at asks after four of them, per package, and for a hierarchy of "
-"a hundred packages that is four hundred runs -- most of them to be told "
+"Every key is a separate run of the script, and a package has ten kinds of "
+"object. Something as ordinary as listing the packages that hold anything to "
+"look at asks after four of them, per package, and for a hierarchy of a "
+"hundred packages that is four hundred runs -- most of them to be told "
 "\"none\"."
 msgstr ""
 "Каждый ключ — это отдельный запуск скрипта, а у пакета десять видов "
-"объектов. Такая обыденная вещь, как перечисление пакетов, в которых есть "
-"что посмотреть, спрашивает о четырёх из них на каждый пакет, и для "
-"иерархии из сотни пакетов это четыреста запусков, большинство из которых "
-"получат ответ «нет ни одного»."
+"объектов. Такая обыденная вещь, как перечисление пакетов, в которых есть что"
+" посмотреть, спрашивает о четырёх из них на каждый пакет, и для иерархии из "
+"сотни пакетов это четыреста запусков, большинство из которых получат ответ "
+"«нет ни одного»."
 
-#: ../../source/config_package.rst:361
+#: ../../source/config_package.rst:580
 msgid ""
 "A package's ``meta`` may therefore carry ``objectKinds``, the kinds that "
 "package holds at all:"
 msgstr ""
-"Поэтому ``meta`` пакета может нести ``objectKinds`` — виды, которые "
-"вообще есть в этом пакете:"
+"Поэтому ``meta`` пакета может нести ``objectKinds`` — виды, которые вообще "
+"есть в этом пакете:"
 
-#: ../../source/config_package.rst:368
+#: ../../source/config_package.rst:587
 msgid ""
 "PartCAD then answers \"none\" for every other kind without asking. This "
-"narrows what is asked for and never what may be served: a plugin that "
-"lists a kind it turns out to have none of is simply asked a question it "
-"answers emptily, and a plugin that says nothing is asked about "
-"everything, as before. It is read out of the metadata PartCAD has already"
-" fetched and is never worth a request of its own, so a package reached on"
-" its own -- rather than through a traversal, which reads ``meta`` for "
-"every package as it goes -- is queried exactly as it was."
+"narrows what is asked for and never what may be served: a plugin that lists "
+"a kind it turns out to have none of is simply asked a question it answers "
+"emptily, and a plugin that says nothing is asked about everything, as "
+"before. It is read out of the metadata PartCAD has already fetched and is "
+"never worth a request of its own, so a package reached on its own -- rather "
+"than through a traversal, which reads ``meta`` for every package as it goes "
+"-- is queried exactly as it was."
 msgstr ""
-"После этого PartCAD сам отвечает «нет ни одного» для всех остальных "
-"видов, ни о чём не спрашивая. Это сужает то, что запрашивается, и никогда "
-"— то, что может быть отдано: плагин, перечисливший вид, которого у него в "
-"итоге не оказалось, просто получает вопрос, на который отвечает пустотой, "
-"а плагин, который ничего не сказал, спрашивается обо всём, как и раньше. "
-"Значение читается из метаданных, которые PartCAD уже получил, и никогда "
-"не стоит отдельного запроса, поэтому пакет, к которому обратились "
-"напрямую, — а не в ходе обхода, который и так читает ``meta`` каждого "
-"пакета по пути, — опрашивается ровно так же, как и раньше."
+"После этого PartCAD сам отвечает «нет ни одного» для всех остальных видов, "
+"ни о чём не спрашивая. Это сужает то, что запрашивается, и никогда — то, что"
+" может быть отдано: плагин, перечисливший вид, которого у него в итоге не "
+"оказалось, просто получает вопрос, на который отвечает пустотой, а плагин, "
+"который ничего не сказал, спрашивается обо всём, как и раньше. Значение "
+"читается из метаданных, которые PartCAD уже получил, и никогда не стоит "
+"отдельного запроса, поэтому пакет, к которому обратились напрямую, — а не в "
+"ходе обхода, который и так читает ``meta`` каждого пакета по пути, — "
+"опрашивается ровно так же, как и раньше."
 
-#: ../../source/config_package.rst:376
+#: ../../source/config_package.rst:595
 msgid ""
-"Responses are cached per key (in memory and on disk), so a repository "
-"that is slow or remote is queried as little as possible. See "
-"``examples/plugin_repository_basic``, ``examples/plugin_repository_full``"
-" (an HTTP-backed repository) and ``examples/plugin_repository_tree`` (a "
+"Responses are cached per key (in memory and on disk), so a repository that "
+"is slow or remote is queried as little as possible. See "
+"``examples/plugin_repository_basic``, ``examples/plugin_repository_full`` "
+"(an HTTP-backed repository) and ``examples/plugin_repository_tree`` (a "
 "hierarchy)."
 msgstr ""
 "Ответы кэшируются по ключу (в памяти и на диске), поэтому медленный или "
 "удалённый репозиторий запрашивается как можно реже. См. "
-"``examples/plugin_repository_basic``, ``examples/plugin_repository_full``"
-" (репозиторий на основе HTTP) и ``examples/plugin_repository_tree`` "
+"``examples/plugin_repository_basic``, ``examples/plugin_repository_full`` "
+"(репозиторий на основе HTTP) и ``examples/plugin_repository_tree`` "
 "(иерархия)."
-
-#~ msgid "``PI``/``M_PI``, ``SQRT_2``, ``SQRT_3``, ``SQRT_5``"
-#~ msgstr ""

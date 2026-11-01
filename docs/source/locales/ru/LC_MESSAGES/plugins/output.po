@@ -1,0 +1,228 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/plugins/output.rst:3
+msgid "Output file types"
+msgstr "Выходные типы файлов"
+
+#: ../../source/plugins/output.rst:5
+msgid ""
+"An **output plugin** teaches PartCAD to write a file. ``pc export`` writes "
+"3D and CAD files, ``pc render`` writes 2D projections, and which file types "
+"either of them knows is an ``export:`` or a ``render:`` section -- one "
+"subsection per file type, each naming the script that writes it and the "
+"sandbox that script needs."
+msgstr ""
+"**Плагин вывода** учит PartCAD записывать файл. ``pc export`` записывает 3D-"
+" и CAD-файлы, ``pc render`` записывает 2D-проекции, а то, какие типы файлов "
+"знает любая из этих команд, -- это раздел ``export:`` или ``render:``: по "
+"подразделу на каждый тип файла, и каждый называет тот скрипт, который его "
+"записывает, и ту песочницу, которая этому скрипту нужна."
+
+#: ../../source/plugins/output.rst:11
+msgid ""
+"PartCAD ships implementations for the formats everybody uses (STEP, BREP, "
+"STL, 3MF, OBJ, IGES, glTF, three.js, PNG, SVG, DXF, ...), so a package "
+"usually writes these sections only to **configure** a built-in type -- where"
+" its files go, at what resolution, from which viewpoint. Declaring a "
+"``path`` is what turns the same section into a plugin."
+msgstr ""
+"PartCAD поставляет реализации для тех форматов, которыми пользуются все "
+"(STEP, BREP, STL, 3MF, OBJ, IGES, glTF, three.js, PNG, SVG, DXF, ...), "
+"поэтому обычно пакет пишет эти разделы только для того, чтобы **настроить** "
+"встроенный тип: куда попадают его файлы, с каким разрешением, с какой точки "
+"зрения. Объявление ``path`` -- это то, что превращает тот же раздел в "
+"плагин."
+
+#: ../../source/plugins/output.rst:17
+msgid ""
+":ref:`output-files` is the reference for every field and for how the two "
+"sections fall back on each other. This chapter is about the plugin case."
+msgstr ""
+":ref:`output-files` -- справочник по каждому полю и по тому, как эти два "
+"раздела опираются друг на друга. Эта глава -- о случае плагина."
+
+#: ../../source/plugins/output.rst:21
+msgid "What an output type is for"
+msgstr "Для чего нужен выходной тип"
+
+#: ../../source/plugins/output.rst:23
+msgid ""
+"**A format PartCAD does not write** -- a vendor's exchange format, a "
+"simulator's scene file, a format with a license PartCAD cannot carry."
+msgstr ""
+"**Формат, который PartCAD не пишет** -- формат обмена какого-то поставщика, "
+"файл сцены симулятора, формат с лицензией, которую PartCAD нести не может."
+
+#: ../../source/plugins/output.rst:25
+msgid ""
+"**A document rather than a shape**: a report, a label, a cut list, a packing"
+" slip. Anything a command can be asked to write for an object is a render "
+"type."
+msgstr ""
+"**Документ, а не форма**: отчёт, этикетка, карта раскроя, упаковочный лист. "
+"Всё, что команду можно попросить записать для объекта, является типом "
+"отрисовки."
+
+#: ../../source/plugins/output.rst:27
+msgid ""
+"**The other half of an** :doc:`importer </plugins/importers>`. Reading a "
+"format and writing it are one piece of knowledge, so the package that "
+"declares the reader declares the writer beside it, and ``pc convert`` then "
+"moves objects between the two."
+msgstr ""
+"**Вторая половина** :doc:`импортёра </plugins/importers>`. Чтение формата и "
+"его запись -- это одно знание, поэтому тот пакет, который объявляет "
+"читателя, объявляет рядом и писателя, и тогда ``pc convert`` перемещает "
+"объекты между двумя форматами."
+
+#: ../../source/plugins/output.rst:31
+msgid ""
+"**A dialect of a format PartCAD already writes**, where a particular "
+"downstream tool wants something specific."
+msgstr ""
+"**Диалект формата, который PartCAD уже пишет**, когда конкретному "
+"инструменту дальше по цепочке нужно что-то особенное."
+
+#: ../../source/plugins/output.rst:35
+msgid "Using one"
+msgstr "Как им пользоваться"
+
+#: ../../source/plugins/output.rst:37
+msgid ""
+"Import the package and name the type, with that package's name in front of "
+"it:"
+msgstr "Импортируйте пакет и назовите тип, поставив имя этого пакета впереди:"
+
+#: ../../source/plugins/output.rst:44
+msgid ""
+"A type can also be declared for an object so that it is produced whenever "
+"the object is, with its own parameters -- which is the usual way to use one:"
+msgstr ""
+"Тип можно также объявить для объекта, чтобы он создавался всякий раз, когда "
+"создаётся объект, со своими собственными параметрами, -- и это обычный "
+"способ им пользоваться:"
+
+#: ../../source/plugins/output.rst:56
+msgid "Writing one"
+msgstr "Как написать свой"
+
+#: ../../source/plugins/output.rst:73
+msgid ""
+"**Which section to declare it in is a promise, not a detail.** An "
+"``export:`` type promises geometry another tool can go on working with; a "
+"``render:`` type promises an output file and nothing more. A drawing, a "
+"picture or a report is the latter -- declare it under ``render:``, where it "
+"stays reachable from both commands, rather than under ``export:``, where it "
+"would promise a part it cannot deliver."
+msgstr ""
+"**То, в каком разделе его объявить, -- это обещание, а не деталь.** Тип "
+"``export:`` обещает геометрию, с которой другой инструмент может продолжать "
+"работать; тип ``render:`` обещает выходной файл и больше ничего. Чертёж, "
+"картинка или отчёт -- это второе: объявляйте их в ``render:``, где они "
+"остаются доступными из обеих команд, а не в ``export:``, где они обещали бы "
+"деталь, которую не могут выдать."
+
+#: ../../source/plugins/output.rst:80
+msgid "Two fields are worth dwelling on:"
+msgstr "На двух полях стоит остановиться:"
+
+#: ../../source/plugins/output.rst:82
+msgid "``reproducible``"
+msgstr "``reproducible``"
+
+#: ../../source/plugins/output.rst:83
+msgid ""
+"Whether the same object has to produce the same bytes every time. It is "
+"``false`` by default because the reproducible path is often the slower one; "
+"every drawing checked in under ``examples/`` sets it, because a checked-in "
+"file that changes on every run is a diff rather than a baseline. See "
+"``output.REPRODUCIBLE_KEY``."
+msgstr ""
+"Должен ли один и тот же объект каждый раз давать одни и те же байты. По "
+"умолчанию ``false``, потому что воспроизводимый путь часто медленнее; каждый"
+" чертёж, закоммиченный в ``examples/``, его задаёт, потому что закоммиченный"
+" файл, который меняется при каждом запуске, -- это дифф, а не базовая линия."
+" См. ``output.REPRODUCIBLE_KEY``."
+
+#: ../../source/plugins/output.rst:89
+msgid "``exclude``"
+msgstr "``exclude``"
+
+#: ../../source/plugins/output.rst:90
+msgid ""
+"The object kinds this type is not written for. A sketch has no business "
+"being exported as an STL, and saying so once here is better than failing per"
+" object."
+msgstr ""
+"Те виды объектов, для которых этот тип не записывается. Эскизу нечего делать"
+" в экспорте в STL, и сказать об этом один раз здесь лучше, чем падать на "
+"каждом объекте."
+
+#: ../../source/plugins/output.rst:94
+msgid "An example"
+msgstr "Пример"
+
+#: ../../source/plugins/output.rst:96
+msgid ""
+"`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ and "
+"`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ are "
+"the pair to read. Each declares, for one format, all four of the plugins "
+"that format needs: the :doc:`importer </plugins/importers>` that reads it, "
+"the output type that writes it, the :doc:`application entry "
+"</plugins/applications>` that opens it, and the :doc:`simulation plugin "
+"</plugins/simulations>` that runs it."
+msgstr ""
+"`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ и "
+"`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ -- та "
+"пара, которую стоит прочитать. Каждый объявляет для одного формата все "
+"четыре плагина, которые этому формату нужны: :doc:`импортёр "
+"</plugins/importers>`, который его читает, выходной тип, который его "
+"записывает, :doc:`запись приложения </plugins/applications>`, которая его "
+"открывает, и :doc:`плагин симуляции </plugins/simulations>`, который его "
+"выполняет."
+
+#: ../../source/plugins/output.rst:103
+msgid ""
+"That is the point of the example rather than an accident of packaging. The "
+"export is what the simulator is handed its scene through, so the two cannot "
+"disagree about the format; and because the exporter for a simulation "
+"plugin's ``format:`` is looked up in the plugin's own package as well as in "
+"the scene's, a plugin **implements the format it reads**:"
+msgstr ""
+"В этом и состоит смысл примера, а не в случайности упаковки. Экспорт -- это "
+"то, через что симулятору передают его сцену, поэтому эти двое не могут "
+"разойтись о формате; а поскольку экспортёр для ``format:`` плагина симуляции"
+" ищется и в собственном пакете плагина, и в пакете сцены, плагин **реализует"
+" тот формат, который он читает**:"
+
+#: ../../source/plugins/output.rst:115
+msgid ""
+"A package that re-tunes that export for its own scenes still wins over the "
+"plugin's own declaration, which is what ``formatOptions:`` on the simulation"
+" declaration is for: a physics run wants every body free to move, the "
+"opposite of what a scene means on its own."
+msgstr ""
+"Пакет, который донастраивает этот экспорт для собственных сцен, всё равно "
+"побеждает собственное объявление плагина, и именно для этого существует "
+"``formatOptions:`` в объявлении симуляции: физическому запуску нужно, чтобы "
+"каждое тело было свободно двигаться, то есть обратное тому, что сцена "
+"означает сама по себе."

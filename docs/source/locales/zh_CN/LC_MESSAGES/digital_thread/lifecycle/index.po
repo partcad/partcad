@@ -1,0 +1,209 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/index.rst:5
+msgid "Product Lifecycle"
+msgstr "产品生命周期"
+
+#: ../../source/digital_thread/lifecycle/index.rst:19
+msgid ""
+"A product's life is a sequence of questions, and PartCAD keeps the answer to"
+" every one of them in the same place: the declaration of the object the "
+"question is about. This chapter takes the phases one at a time."
+msgstr ""
+"一个产品的生命就是一连串问题，而 PartCAD 把每一个问题的答案都放在同一个地方：也就是该问题所针对那个对象的声明里。本章逐个阶段地讲。"
+
+#: ../../source/digital_thread/lifecycle/index.rst:23
+msgid ""
+"The phases are an order of **questions** rather than an order of work. "
+"Nothing has to be finished before the next thing starts, and no phase is "
+"ever closed: each is asked of the same object, and asked again whenever "
+"anything it depends on changes. A part whose script changed is a part whose "
+"mass, whose analyses, whose bill of materials line and whose checks are all "
+"out of date at once, and PartCAD's answer to that is not a notification -- "
+"it is that none of those answers was stored to begin with."
+msgstr ""
+"这些阶段是 **问题** "
+"的顺序，而不是工作的顺序。没有什么必须先做完才能开始下一件事，也没有哪个阶段会被关闭：每一个阶段都是针对同一个对象提出的，而只要它所依赖的任何东西发生变化，就会被再问一遍。一个脚本改过的零件，它的质量、它的各项分析、它在物料清单上的那一条、以及它的各项检查，全都同时过期了；而"
+" PartCAD 对此的回答不是发一条通知 -- 而是这些答案一开始就没有被存下来。"
+
+#: ../../source/digital_thread/lifecycle/index.rst:35
+msgid "Phase"
+msgstr "阶段"
+
+#: ../../source/digital_thread/lifecycle/index.rst:36
+msgid "The question it asks"
+msgstr "它所提出的问题"
+
+#: ../../source/digital_thread/lifecycle/index.rst:37
+msgid "Where it is answered"
+msgstr "它在哪里被回答"
+
+#: ../../source/digital_thread/lifecycle/index.rst:38
+msgid ":doc:`Requirements </digital_thread/lifecycle/requirements>`"
+msgstr ":doc:`Requirements </digital_thread/lifecycle/requirements>`"
+
+#: ../../source/digital_thread/lifecycle/index.rst:39
+msgid ""
+"What does this have to be and do, in the words of whoever asked for it?"
+msgstr "用提出要求那一方的话来说，这东西必须是什么、必须做什么？"
+
+#: ../../source/digital_thread/lifecycle/index.rst:40
+msgid "``requirements:`` on the object, written before the design"
+msgstr "对象上的 ``requirements:`` ，写在设计之前"
+
+#: ../../source/digital_thread/lifecycle/index.rst:41
+msgid ":doc:`Design </digital_thread/lifecycle/design>`"
+msgstr ":doc:`Design </digital_thread/lifecycle/design>`"
+
+#: ../../source/digital_thread/lifecycle/index.rst:42
+msgid "What *is* it: its geometry, its parameters, how it connects?"
+msgstr "它 *是* 什么：它的几何、它的参数、它如何连接？"
+
+#: ../../source/digital_thread/lifecycle/index.rst:43
+msgid "the part's script or file, an assembly's links, sketches, scenes"
+msgstr "零件的脚本或文件、装配体的各条链接、草图、场景"
+
+#: ../../source/digital_thread/lifecycle/index.rst:44
+msgid ":doc:`Analysis </digital_thread/lifecycle/analysis>`"
+msgstr ":doc:`Analysis </digital_thread/lifecycle/analysis>`"
+
+#: ../../source/digital_thread/lifecycle/index.rst:45
+msgid "What does engineering say about it?"
+msgstr "工程对它有什么论断？"
+
+#: ../../source/digital_thread/lifecycle/index.rst:46
+msgid ""
+"``physics:``, materials, ``fea:``, ``dynamic:``, ``thermal:``, ``cfd:``"
+msgstr "``physics:``、材料、``fea:``、``dynamic:``、``thermal:``、``cfd:``"
+
+#: ../../source/digital_thread/lifecycle/index.rst:47
+msgid ":doc:`Manufacturing </digital_thread/lifecycle/manufacturing>`"
+msgstr ":doc:`Manufacturing </digital_thread/lifecycle/manufacturing>`"
+
+#: ../../source/digital_thread/lifecycle/index.rst:48
+msgid ""
+"How does it come to exist -- what is bought, what is built, in what order?"
+msgstr "它如何变成现实 -- 什么是采购的、什么是自制的、按什么顺序？"
+
+#: ../../source/digital_thread/lifecycle/index.rst:49
+msgid "``manufacturing:``, ``vendor:``/``sku:``, materials, instructions"
+msgstr "``manufacturing:``、``vendor:``/``sku:``、材料、装配说明"
+
+#: ../../source/digital_thread/lifecycle/index.rst:50
+msgid ":doc:`Validation </digital_thread/lifecycle/validation>`"
+msgstr ":doc:`Validation </digital_thread/lifecycle/validation>`"
+
+#: ../../source/digital_thread/lifecycle/index.rst:51
+msgid "Is it what it claims to be, and does it do what it is supposed to?"
+msgstr "它是否就是它自称的样子，以及它是否做到了它应该做的事？"
+
+#: ../../source/digital_thread/lifecycle/index.rst:52
+msgid ""
+"every claim above, checked by ``pc test``, ``pc sim`` and ``simulate:``"
+msgstr "上面的每一条断言，由 ``pc test``、``pc sim`` 和 ``simulate:`` 来检查"
+
+#: ../../source/digital_thread/lifecycle/index.rst:53
+msgid ":doc:`Operations </digital_thread/lifecycle/operations>`"
+msgstr ":doc:`Operations </digital_thread/lifecycle/operations>`"
+
+#: ../../source/digital_thread/lifecycle/index.rst:54
+msgid "How is the thing that was made actually doing?"
+msgstr "已经做出来的那个东西，实际表现如何？"
+
+#: ../../source/digital_thread/lifecycle/index.rst:55
+msgid "nothing yet; the phase is reserved"
+msgstr "目前还没有内容；这个阶段是预留的"
+
+#: ../../source/digital_thread/lifecycle/index.rst:57
+msgid ""
+"The order is the order of *dependency*, which is why it reads the way it "
+"does: a design is judged against requirements, an analysis is run on a "
+"design, what is manufactured is what was designed and analysed, and "
+"validation is the question whether the whole chain holds. Read backwards it "
+"is the more useful statement: nothing downstream of a change survives it."
+msgstr ""
+"这个顺序是 *依赖* "
+"的顺序，这也是它读起来是这个样子的原因：设计要对照需求来评判，分析是在设计之上运行的，被制造出来的就是被设计和被分析过的那个东西，而校验问的是整条链是否成立。反过来读，它是一句更有用的话：一次改动的下游，没有任何东西能在它之后幸存。"
+
+#: ../../source/digital_thread/lifecycle/index.rst:65
+msgid "Three ways into every phase"
+msgstr "进入每一个阶段的三条路"
+
+#: ../../source/digital_thread/lifecycle/index.rst:67
+msgid ""
+"Each phase can be worked on three ways, and every chapter below says what "
+"they are for that phase:"
+msgstr "每一个阶段都可以用三种方式来开展工作，而下面每一章都会说明这三种方式在那个阶段分别是什么："
+
+#: ../../source/digital_thread/lifecycle/index.rst:70
+msgid ""
+"**The Digital Thread panel.** The panel of the :ref:`PartCAD IDE <partcad-"
+"ide>` and of the :ref:`Visual Studio Code extension <vscode-extension>` is "
+"this list of phases, as a strip of tabs over whichever object is selected. "
+"Five of them are always there -- **Design**, **Analysis**, "
+"**Manufacturing**, **Validation** and **Operations** -- and **Requirements**"
+" appears in front of them for an object that declares any. Most of the five "
+"open a **second strip** of their own underneath, and every tab of it has a "
+"chapter here, under the phase it belongs to: the object three ways under "
+"Design, the four analyses under Analysis, the five steps from a decision to "
+"an instruction book under Manufacturing, and the two ways of checking under "
+"Validation. **Operations** is shown disabled, because there is nothing in it"
+" yet."
+msgstr ""
+"**Digital Thread 面板。** :ref:`PartCAD IDE <partcad-ide>` 和 :ref:`Visual "
+"Studio Code 扩展 <vscode-extension>` "
+"中的那个面板，就是这份阶段清单，以覆盖在所选对象之上的一条标签条的形式呈现。其中五个始终都在 -- "
+"**Design**、**Analysis**、**Manufacturing**、**Validation** 和 **Operations** --"
+" 而 **Requirements** 会在声明了任何需求的对象上出现在它们之前。这五个当中的大多数会在下面再打开一条属于它们自己的 "
+"**第二条标签条**，而那上面的每一个标签页在这里都有一章，归在它所属的那个阶段之下：Design 之下是对象的三种看法，Analysis "
+"之下是四项分析，Manufacturing 之下是从一项决定到一本说明书的五个步骤，而 Validation "
+"之下是两种检查方式。**Operations** 显示为禁用，因为它里面还什么都没有。"
+
+#: ../../source/digital_thread/lifecycle/index.rst:82
+msgid ""
+"Each of those chapters is written the same way -- what the tab shows (**In "
+"the UI**), what the same answer is called from a terminal (**On the command "
+"line**), and which **agent skills** work in it -- because those are the "
+"three ways in, and they are three ways to the same answer rather than three "
+"features."
+msgstr ""
+"那些章节的写法都一样 -- 该标签页显示什么（**在界面中**）、同一个答案从终端怎么叫出来（**在命令行中**），以及有哪些 **智能体技能** "
+"在其中工作 -- 因为那就是三条进路，而它们是通往同一个答案的三条路，而不是三项功能。"
+
+#: ../../source/digital_thread/lifecycle/index.rst:87
+msgid ""
+"**The command line.** Every tab is a ``pc`` command with a window around it,"
+" and the command is the one to reach for in a script, in CI, or when the "
+"answer matters more than the picture. :doc:`/cli` is the full reference."
+msgstr ""
+"**命令行。** 每一个标签页都是一条 ``pc`` 命令外面套了一个窗口，而在脚本里、在 CI "
+"里，或者在答案比图片更要紧的时候，该伸手去取的就是那条命令。:doc:`/cli` 是完整的参考资料。"
+
+#: ../../source/digital_thread/lifecycle/index.rst:91
+msgid ""
+"**Agent skills.** A :doc:`skill </ai_agents/skills>` is a procedure an AI "
+"coding agent follows, and the skills PartCAD ships are grouped by the phase "
+"they serve. A skill runs the same commands, so nothing it produces depends "
+"on the agent that ran it."
+msgstr ""
+"**智能体技能。** :doc:`技能 </ai_agents/skills>` 就是 AI 编码智能体所遵循的一套流程，而 PartCAD "
+"所附带的那些技能是按它们所服务的阶段分组的。技能运行的是同样的命令，所以它产出的任何东西都不取决于是哪个智能体运行了它。"

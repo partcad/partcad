@@ -252,6 +252,8 @@ const sceneLoaded: Promise<Scene | undefined> = import(/* webpackMode: "eager" *
     (module) => {
         scene = module;
         scene.setShowMetadata(metadataCheckbox?.checked ?? true);
+        // What the box says, should it have been changed while this loaded.
+        scene.setAutoFit(view3d.autoFitting);
         if (module.software) {
             // Drawn without a GPU, the model does not turn on its own: a frame
             // every 16 ms is what the software renderer cannot afford. The box
@@ -444,7 +446,7 @@ if (metadataCheckbox) {
 /*
  * The view panel down the right of every tab that shows the object: how it is
  * looked at - the gizmo, the axis buttons, the viewpoint - what it is cut to,
- * and, on the 3D tab, Animate and Opacity (see 'viewPanel.ts').
+ * and, on the 3D tab, Animate, Auto-fit and Opacity (see 'viewPanel.ts').
  *
  * One per tab, because each tab looks at the object its own way: the 3D view
  * turns a camera, the 2D tab asks PartCAD for a picture from where the panel
@@ -466,16 +468,26 @@ const view3d = new ViewPanel(
             holdStill();
             scene?.setViewpoint(viewpoint);
         },
-        onResetView: () => scene?.fitView(),
+        onResetView: () => scene?.resetView(),
+        // Gradually, and from where it is looking: Animate goes on turning it.
+        onFit: () => scene?.fit(),
         onSection: (section) => onSectionChanged(section),
         onAnimate: (animate) => scene?.setAutoRotate(animate),
+        onAutoFit: (autoFit) => scene?.setAutoFit(autoFit),
         onOpacity: (opacity) => scene?.setOpacity(opacity),
     },
-    // The ids the screenshot script drives these two by.
+    // The ids the screenshot script drives these by.
     {
         target: true,
         animate: true,
-        ids: { animate: 'animate-checkbox', opacity: 'opacity-slider', opacityValue: 'opacity-value' },
+        autoFit: true,
+        ids: {
+            animate: 'animate-checkbox',
+            autoFit: 'autofit-checkbox',
+            opacity: 'opacity-slider',
+            opacityValue: 'opacity-value',
+            reset: 'view-reset-button',
+        },
     },
 );
 viewPanels['3d'] = view3d;

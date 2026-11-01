@@ -6,99 +6,569 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: PartCAD \n"
+"Project-Id-Version: PartCAD\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: es\n"
 "Language-Team: es <LL@li.org>\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Language: es\n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=utf-8\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/intro.rst:2
 msgid "Introduction"
 msgstr "Introducción"
 
 #: ../../source/intro.rst:6
-msgid "Background"
-msgstr "Antecedentes"
-
-#: ../../source/intro.rst:8
-msgid ""
-"PartCAD was initially just an internal library in the `OpenVMP project "
-"<https://github.com/openvmp/openvmp>`_ to maintain the blueprints of "
-"OpenVMP robots in a way that allows reconfiguring the blueprints based on"
-" the specific needs (parameters), and allows to maintain the bill of "
-"materials and all the necessary data to purchase the required parts."
-msgstr ""
-"PartCAD fue inicialmente solo una biblioteca interna del `proyecto OpenVMP"
-" <https://github.com/openvmp/openvmp>`_ para mantener los planos de los "
-"robots OpenVMP de una manera que permitiera reconfigurar los planos según "
-"las necesidades específicas (parámetros), y que permitiera mantener la "
-"lista de materiales y todos los datos necesarios para comprar las piezas "
-"requeridas."
-
-#: ../../source/intro.rst:14
-msgid ""
-"The OpenVMP project has surfaced the need for an open source Product "
-"Lifecycle Management (PLM) system that would use Git for collaboration on"
-" the designs themselves, the supplementary documentation and supplier "
-"information (and integration). To address that need PartCAD was published"
-" as a standalone framework to be used by any project."
-msgstr ""
-"El proyecto OpenVMP puso de manifiesto la necesidad de un sistema de "
-"gestión del ciclo de vida del producto (PLM) de código abierto que "
-"utilizara Git para la colaboración en los propios diseños, la "
-"documentación complementaria y la información (e integración) de "
-"proveedores. Para atender esa necesidad, PartCAD se publicó como un marco "
-"de trabajo independiente que puede usar cualquier proyecto."
-
-#: ../../source/intro.rst:23
 msgid "Overview"
 msgstr "Resumen general"
 
-#: ../../source/intro.rst:25
-msgid "PartCAD can be perceived as consisting of four parts:"
-msgstr "PartCAD puede entenderse como compuesto de cuatro partes:"
-
-#: ../../source/intro.rst:27
-msgid "PartCAD standards and conventions on how to maintain product information"
+#: ../../source/intro.rst:8
+msgid "**PartCAD is the programming language for manufacturable things.**"
 msgstr ""
-"Los estándares y convenciones de PartCAD sobre cómo mantener la "
-"información del producto"
+"**PartCAD es el lenguaje de programación para las cosas fabricables.**"
 
-#: ../../source/intro.rst:29
+#: ../../source/intro.rst:10
 msgid ""
-"The public repository of products created and maintained by the community"
-" based on the PartCAD standards and conventions"
+"A PartCAD package is a Git repository with a ``partcad.yaml`` in it. That "
+"file declares the things the product is made of -- parts, as CAD scripts or "
+"CAD files; assemblies and scenes that place them; the interfaces they mate "
+"through; the materials they are made of; the requirements they have to meet."
+" PartCAD renders, tests, simulates, analyses and documents what is declared "
+"there, and produces the bill of materials, the sourcing and the assembly "
+"instructions from that same source."
 msgstr ""
-"El repositorio público de productos creados y mantenidos por la comunidad"
-" con base en los estándares y convenciones de PartCAD"
+"Un paquete de PartCAD es un repositorio Git con un ``partcad.yaml`` dentro. "
+"Ese archivo declara las cosas de las que está hecho el producto -- piezas, "
+"como scripts CAD o archivos CAD; ensamblajes y escenas que las colocan; las "
+"interfaces a través de las cuales se emparejan; los materiales de los que "
+"están hechas; los requisitos que tienen que cumplir. PartCAD renderiza, "
+"prueba, simula, analiza y documenta lo que allí se declara, y produce la "
+"lista de materiales, el abastecimiento y las instrucciones de ensamblaje a "
+"partir de esa misma fuente."
+
+#: ../../source/intro.rst:16
+msgid ""
+"Everything is text. So a product is versioned, reviewed, branched and merged"
+" the way software is, by people and by AI agents alike -- and nothing in the"
+" chain from a requirement to a purchase order is a binary nobody can diff."
+msgstr ""
+"Todo es texto. Así que un producto se versiona, se revisa, se ramifica y se "
+"fusiona igual que el software, tanto por personas como por agentes de IA -- "
+"y nada en la cadena que va de un requisito a una orden de compra es un "
+"binario del que nadie puede obtener un diff."
+
+#: ../../source/intro.rst:21
+msgid "What PartCAD works with"
+msgstr "Con qué trabaja PartCAD"
+
+#: ../../source/intro.rst:23
+msgid ""
+"**Parts** written as code (`CadQuery "
+"<https://github.com/CadQuery/cadquery>`_, `build123d "
+"<https://github.com/gumyr/build123d>`_, `OpenSCAD <https://openscad.org/>`_,"
+" `Chili3D <https://github.com/xiangechen/chili3d>`_, `SDF "
+"<https://github.com/fogleman/sdf>`_) or read from a file (STEP, BREP, STL, "
+"3MF, OBJ, glTF, KiCad PCBs, FreeCAD documents), plus whatever format a "
+"plugin package adds."
+msgstr ""
+"**Piezas** escritas como código (`CadQuery "
+"<https://github.com/CadQuery/cadquery>`_, `build123d "
+"<https://github.com/gumyr/build123d>`_, `OpenSCAD <https://openscad.org/>`_,"
+" `Chili3D <https://github.com/xiangechen/chili3d>`_, `SDF "
+"<https://github.com/fogleman/sdf>`_) o leídas de un archivo (STEP, BREP, "
+"STL, 3MF, OBJ, glTF, PCB de KiCad, documentos de FreeCAD), más cualquier "
+"formato que añada un paquete de plugin."
+
+#: ../../source/intro.rst:28
+msgid ""
+"**Assemblies and scenes** in Assembly YAML, URDF or a STEP file, with "
+"interfaces and mating as objects of their own rather than coordinates "
+"written out by hand."
+msgstr ""
+"**Ensamblajes y escenas** en Assembly YAML, URDF o un archivo STEP, con las "
+"interfaces y el emparejamiento como objetos propios en lugar de coordenadas "
+"escritas a mano."
+
+#: ../../source/intro.rst:30
+msgid ""
+"**Outputs**: the CAD formats above, Gazebo and MuJoCo worlds, 2D "
+"projections, dimensioned drawings, Markdown documentation, and PDF or HTML "
+"instruction books."
+msgstr ""
+"**Salidas**: los formatos CAD anteriores, mundos de Gazebo y MuJoCo, "
+"proyecciones 2D, planos acotados, documentación en Markdown y manuales de "
+"instrucciones en PDF o HTML."
 
 #: ../../source/intro.rst:32
 msgid ""
-"Tools that operate with public and private repositories for as long as "
-"they are maintained following the PartCAD standards and conventions"
+"**Engineering**: finite element, modal, thermal and fluid analysis (``pc "
+"cae``), simulation in MuJoCo or Gazebo (``pc sim``), 2.5D toolpaths (``pc "
+"cam``), and materials and manufacturing methods that carry through into the "
+"bill of materials."
 msgstr ""
-"Herramientas que operan con repositorios públicos y privados siempre que "
-"se mantengan siguiendo los estándares y convenciones de PartCAD"
+"**Ingeniería**: análisis por elementos finitos, modal, térmico y de fluidos "
+"(``pc cae``), simulación en MuJoCo o Gazebo (``pc sim``), trayectorias de "
+"herramienta 2.5D (``pc cam``), y materiales y métodos de fabricación que se "
+"arrastran hasta la lista de materiales."
 
 #: ../../source/intro.rst:35
 msgid ""
-"Libraries and frameworks to programmatically interact with product "
-"information in public and private PartCAD repositories"
+"**Supply chain**: a build-or-buy decision per line item, stock-based "
+"procurement for the parts that are made rather than bought, and ordering "
+"from the command line."
 msgstr ""
-"Bibliotecas y marcos de trabajo para interactuar programáticamente con la"
-" información de productos en repositorios de PartCAD públicos y privados"
+"**Cadena de suministro**: una decisión de fabricar o comprar por cada línea,"
+" abastecimiento basado en material en bruto para las piezas que se fabrican "
+"en lugar de comprarse, y pedidos desde la línea de comandos."
 
-#: ../../source/intro.rst:38
+#: ../../source/intro.rst:37
 msgid ""
-"Detailed documentation on all of the above can be found in the 'Design' "
-"section."
+"**AI agents**: Agent Skills for Claude Code and Cursor, an MCP server (``pc "
+"mcp``), and plain-text ``--no-ansi`` output on every command so that an "
+"agent parses text rather than progress bars."
 msgstr ""
-"La documentación detallada de todo lo anterior se puede encontrar en la "
-"sección 'Diseño'."
+"**Agentes de IA**: Agent Skills para Claude Code y Cursor, un servidor MCP "
+"(``pc mcp``) y salida de texto plano con ``--no-ansi`` en todos los "
+"comandos, para que un agente analice texto y no barras de progreso."
+
+#: ../../source/intro.rst:39
+msgid ""
+"**Caching** in memory, on disk, on a memcached server and in an S3 bucket, "
+"so that a team or a CI fleet renders each model once."
+msgstr ""
+"**Caché** en memoria, en disco, en un servidor memcached y en un bucket de "
+"S3, para que un equipo o una flota de CI renderice cada modelo una sola vez."
+
+#: ../../source/intro.rst:42
+msgid ""
+":doc:`/supported` has the full list, including what is accepted but not yet "
+"delivered."
+msgstr ""
+":doc:`/supported` tiene la lista completa, incluido lo que se acepta pero "
+"aún no está implementado."
+
+#: ../../source/intro.rst:45
+msgid "What PartCAD is not"
+msgstr "Qué no es PartCAD"
+
+#: ../../source/intro.rst:47
+msgid ""
+"It is not a drawing tool, and it does not want to be. It is the layer "
+"*underneath* the drawing tools: the specification of a manufacturable "
+"product, in a form a human, a CI job and an AI model can each read, change "
+"and check. Which drawing tool produced a part is the part's business; "
+"PartCAD's business is that the product made of it can be built, sourced and "
+"audited."
+msgstr ""
+"No es una herramienta de dibujo, y no pretende serlo. Es la capa que está "
+"*debajo* de las herramientas de dibujo: la especificación de un producto "
+"fabricable, en una forma que una persona, un trabajo de CI y un modelo de IA"
+" pueden leer, cambiar y comprobar. Qué herramienta de dibujo produjo una "
+"pieza es asunto de la pieza; lo que le concierne a PartCAD es que el "
+"producto hecho con ella se pueda construir, abastecer y auditar."
+
+#: ../../source/intro.rst:52
+msgid ""
+"Keeping that specification on your own machines, in Git, and portable "
+"between CAD tools and manufacturers is the point of the whole exercise. "
+":doc:`/digital_thread/use_cases` has the shapes this takes in practice."
+msgstr ""
+"Mantener esa especificación en sus propias máquinas, en Git, y portable "
+"entre herramientas CAD y fabricantes es el objetivo de todo el ejercicio. "
+":doc:`/digital_thread/use_cases` muestra las formas que esto toma en la "
+"práctica."
+
+#: ../../source/intro.rst:57
+msgid "What a package holds"
+msgstr "Qué contiene un paquete"
+
+#: ../../source/intro.rst:59
+msgid "PartCAD includes tools to package product information:"
+msgstr ""
+"PartCAD incluye herramientas para empaquetar la información del producto:"
+
+#: ../../source/intro.rst:61
+msgid ""
+"Optional (but highly recommended) **high-level requirements** (texts and "
+"drawings)"
+msgstr ""
+"**Requisitos de alto nivel** opcionales (pero muy recomendables) (textos y "
+"planos)"
+
+#: ../../source/intro.rst:62
+msgid ""
+"Optional **detailed design** (mechanical outline, PCB schematics, software "
+"architecture)"
+msgstr ""
+"**Diseño detallado** opcional (contorno mecánico, esquemas de PCB, "
+"arquitectura de software)"
+
+#: ../../source/intro.rst:63
+msgid ""
+"Implementation (**mechanical CAD files, PCB layout, software artifacts**)"
+msgstr ""
+"Implementación (**archivos CAD mecánicos, diseño de PCB, artefactos de "
+"software**)"
+
+#: ../../source/intro.rst:64
+msgid ""
+"Optionally, the following data can be provided to augment or complement the "
+"output:"
+msgstr ""
+"Opcionalmente, se pueden aportar los siguientes datos para ampliar o "
+"complementar la salida:"
+
+#: ../../source/intro.rst:66
+msgid "Additional manufacturing process requirements and instructions"
+msgstr "Requisitos e instrucciones adicionales del proceso de fabricación"
+
+#: ../../source/intro.rst:67
+msgid "Additional product validation instructions"
+msgstr "Instrucciones adicionales de validación del producto"
+
+#: ../../source/intro.rst:68
+msgid "**Maintenance instructions**"
+msgstr "**Instrucciones de mantenimiento**"
+
+#: ../../source/intro.rst:70
+msgid "Or any other product related metadata"
+msgstr "O cualquier otro metadato relacionado con el producto"
+
+#: ../../source/intro.rst:72
+msgid ""
+"Such packages are **modular and reusable**, allowing one to build not only "
+"on top of the CAD files of previous products, but to **build on top of their"
+" manufacturing processes** as well."
+msgstr ""
+"Tales paquetes son **modulares y reutilizables**, lo que permite construir "
+"no solo sobre los archivos CAD de productos anteriores, sino también **sobre"
+" sus procesos de fabricación**."
+
+#: ../../source/intro.rst:77
+msgid "What PartCAD produces"
+msgstr "Qué produce PartCAD"
+
+#: ../../source/intro.rst:79
+msgid ""
+"As a result of maintaining the product information using PartCAD, the "
+"following outputs can be generated and, if necessary, collected and managed "
+"using PartCAD tools:"
+msgstr ""
+"Como resultado de mantener la información del producto con PartCAD, se "
+"pueden generar las siguientes salidas y, si es necesario, recopilarlas y "
+"gestionarlas con las herramientas de PartCAD:"
+
+#: ../../source/intro.rst:82
+msgid "**Product documentation** (markdown, html or PDF)"
+msgstr "**Documentación del producto** (markdown, html o PDF)"
+
+#: ../../source/intro.rst:83
+msgid "Design validation results"
+msgstr "Resultados de la validación del diseño"
+
+#: ../../source/intro.rst:84
+msgid "Product **bill of materials** (mechanical, electronics, software)"
+msgstr ""
+"**Lista de materiales** del producto (mecánica, electrónica, software)"
+
+#: ../../source/intro.rst:85
+msgid "Sourcing information **for all components**"
+msgstr "Información de abastecimiento **de todos los componentes**"
+
+#: ../../source/intro.rst:86
+msgid ""
+"Manufacturing **process specification** (including required equipment if "
+"any)"
+msgstr ""
+"**Especificación del proceso** de fabricación (incluido el equipamiento "
+"necesario, si lo hay)"
+
+#: ../../source/intro.rst:87
+msgid ""
+"Manufacturing **instructions** (sufficiently documented to be reproduced by "
+"anyone without inquiring any additional information)"
+msgstr ""
+"**Instrucciones** de fabricación (documentadas lo suficiente para que "
+"cualquiera las reproduzca sin tener que pedir información adicional)"
+
+#: ../../source/intro.rst:89
+msgid "Product **validation** instructions"
+msgstr "Instrucciones de **validación** del producto"
+
+#: ../../source/intro.rst:90
+msgid ""
+"Product validation **results** (given access to an experimental product and "
+"the required tools)"
+msgstr ""
+"**Resultados** de la validación del producto (dado acceso a un producto "
+"experimental y a las herramientas necesarias)"
+
+#: ../../source/intro.rst:91
+msgid ""
+"Input data for software components to visualize the product on your website,"
+" with a 3D viewer, a configurator, manufacturing/assembly instructions and "
+"more"
+msgstr ""
+"Datos de entrada para que componentes de software visualicen el producto en "
+"su sitio web, con un visor 3D, un configurador, instrucciones de fabricación"
+" y ensamblaje y más"
+
+#: ../../source/intro.rst:94
+msgid ""
+"The full list of formats read and written, and of the analyses, simulations "
+"and manufacturing steps PartCAD runs, is in :doc:`/supported`."
+msgstr ""
+"La lista completa de formatos que se leen y escriben, y de los análisis, "
+"simulaciones y pasos de fabricación que ejecuta PartCAD, está en "
+":doc:`/supported`."
+
+#: ../../source/intro.rst:99
+msgid "Product development and testing"
+msgstr "Desarrollo y pruebas del producto"
+
+#: ../../source/intro.rst:101
+msgid ""
+"Once product information is packaged, it can be versioned and used for "
+"iterative improvements or to produce PartCAD outputs either by human or AI "
+"actors. To achieve that, PartCAD integrates with third-party tools. Below "
+"are just some examples of what third-party integrations can be used for:"
+msgstr ""
+"Una vez empaquetada la información del producto, se puede versionar y usar "
+"para mejoras iterativas o para producir salidas de PartCAD, ya sea por parte"
+" de personas o de agentes de IA. Para lograrlo, PartCAD se integra con "
+"herramientas de terceros. A continuación se muestran solo algunos ejemplos "
+"de para qué se pueden usar las integraciones con terceros:"
+
+#: ../../source/intro.rst:105
+msgid ""
+"AI tools can be used to **update the mechanical design and implementation "
+"automatically** based on the current state of the requirements"
+msgstr ""
+"Las herramientas de IA se pueden usar para **actualizar automáticamente el "
+"diseño y la implementación mecánicos** según el estado actual de los "
+"requisitos"
+
+#: ../../source/intro.rst:107
+msgid "A legacy CAD tool can be used manually to update the implementation"
+msgstr ""
+"Se puede usar manualmente una herramienta CAD heredada para actualizar la "
+"implementación"
+
+#: ../../source/intro.rst:108
+msgid ""
+"AI tools can be used to validate the design and implementation to identify "
+"product requirement or best practices (e.g. to reduce manufacturing "
+"complexity) violations"
+msgstr ""
+"Las herramientas de IA se pueden usar para validar el diseño y la "
+"implementación e identificar incumplimientos de los requisitos del producto "
+"o de las buenas prácticas (p. ej. para reducir la complejidad de "
+"fabricación)"
+
+#: ../../source/intro.rst:110
+msgid ""
+"**A web interface of an online store or an API of an additive manufacturer**"
+" can be used to source and manufacture parts"
+msgstr ""
+"**La interfaz web de una tienda en línea o la API de un fabricante aditivo**"
+" se pueden usar para abastecer y fabricar piezas"
+
+#: ../../source/intro.rst:112
+msgid ""
+"Simulation tools (potentially in conjunction with AI tools) can be used to "
+"validate that the product design matches the product requirements"
+msgstr ""
+"Las herramientas de simulación (potencialmente junto con herramientas de IA)"
+" se pueden usar para validar que el diseño del producto se ajusta a los "
+"requisitos del producto"
+
+#: ../../source/intro.rst:114
+msgid ""
+"AI tools can be used to review the product implementation for correctness, "
+"safety or compliance"
+msgstr ""
+"Las herramientas de IA se pueden usar para revisar la implementación del "
+"producto en cuanto a corrección, seguridad o cumplimiento normativo"
+
+#: ../../source/intro.rst:115
+msgid ""
+"Manufacturing processes are **verified for completeness** (e.g. tools "
+"requirements are specified for all operations)"
+msgstr ""
+"Los procesos de fabricación se **verifican en cuanto a su integridad** (p. "
+"ej. los requisitos de herramientas están especificados para todas las "
+"operaciones)"
+
+#: ../../source/intro.rst:117
+msgid ""
+"Manufacturing instructions are **verified for correctness** (e.g. the "
+"provided manufacturing steps can actually be successfully and safely "
+"performed, and fit within the capabilities of the selected manufacturing "
+"tools)"
+msgstr ""
+"Las instrucciones de fabricación se **verifican en cuanto a su corrección** "
+"(p. ej. los pasos de fabricación proporcionados se pueden llevar a cabo "
+"realmente de forma satisfactoria y segura, y caben dentro de las capacidades"
+" de las herramientas de fabricación seleccionadas)"
+
+#: ../../source/intro.rst:121
+msgid ""
+"Some of the iterative improvements or tests can be achieved using PartCAD "
+"built-in features. However, the use of third-party tools is **recommended "
+"for unlocking cutting edge innovations and features**."
+msgstr ""
+"Algunas de las mejoras iterativas o pruebas se pueden lograr con las "
+"funcionalidades integradas de PartCAD. Sin embargo, el uso de herramientas "
+"de terceros es **recomendable para desbloquear innovaciones y "
+"funcionalidades de vanguardia**."
+
+#: ../../source/intro.rst:126
+msgid "Supply chains based on PartCAD"
+msgstr "Cadenas de suministro basadas en PartCAD"
+
+#: ../../source/intro.rst:128
+msgid ""
+"By letting the user easily switch between third-party engineering tools or "
+"manufacturers without having to migrate product data, PartCAD creates a "
+"competitive environment for service providers to **drive the costs down**."
+msgstr ""
+"Al permitir que el usuario cambie fácilmente entre herramientas de "
+"ingeniería de terceros o fabricantes sin tener que migrar los datos del "
+"producto, PartCAD crea un entorno competitivo entre los proveedores de "
+"servicios que **hace bajar los costes**."
+
+#: ../../source/intro.rst:132
+msgid ""
+"Whenever you select third-party tools (if any) to use in your workflows, you"
+" ultimately decide (and make it transparent or auditable) **how secure your "
+"supply chain is and how exposed your product information is**. If you opt "
+"for on-prem tools only, all your product information remains on-prem too. It"
+" makes PartCAD an ultimate solution for achieving data sovereignty for those"
+" willing to keep their product data private. **In the age of cloud data "
+"harvesting (especially for AI training), it makes PartCAD a better "
+"alternative to any cloud-based PDM, PLM or BOM solution**."
+msgstr ""
+"Cada vez que selecciona las herramientas de terceros (si las hay) que usará "
+"en sus flujos de trabajo, usted decide en última instancia (y lo hace "
+"transparente o auditable) **cuán segura es su cadena de suministro y cuán "
+"expuesta está la información de su producto**. Si opta únicamente por "
+"herramientas locales, toda la información de su producto también permanece "
+"en sus instalaciones. Eso convierte a PartCAD en la solución definitiva para"
+" lograr la soberanía de los datos de quienes quieren mantener privados los "
+"datos de su producto. **En la era de la recolección de datos en la nube "
+"(especialmente para el entrenamiento de IA), eso convierte a PartCAD en una "
+"alternativa mejor que cualquier solución PDM, PLM o BOM basada en la nube**."
+
+#: ../../source/intro.rst:141
+msgid "Operations using PartCAD (planned)"
+msgstr "Operaciones con PartCAD (planificado)"
+
+#: ../../source/intro.rst:143
+msgid ""
+"PartCAD also works on the following supplementary products, to enable "
+"operations without any use of third-party tools. Neither is part of this "
+"repository yet."
+msgstr ""
+"PartCAD también trabaja en los siguientes productos complementarios, para "
+"posibilitar las operaciones sin usar herramientas de terceros. Ninguno de "
+"los dos forma parte todavía de este repositorio."
+
+#: ../../source/intro.rst:146
+msgid ""
+"A CRM for part manufacturing and assembly shops for businesses of any size "
+"(from skilled individuals working in their garage to the biggest factories) "
+"to **immediately start taking orders** for manufacturable products "
+"maintained using PartCAD"
+msgstr ""
+"Un CRM para talleres de fabricación y ensamblaje de piezas, para empresas de"
+" cualquier tamaño (desde personas cualificadas que trabajan en su garaje "
+"hasta las fábricas más grandes), con el que **empezar a aceptar pedidos de "
+"inmediato** de productos fabricables mantenidos con PartCAD"
+
+#: ../../source/intro.rst:149
+msgid ""
+"An inventory tool to manage the list of parts and final products in stock, "
+"as well as to track and manage all in-progress or completed orders, to "
+"**immediately bring supply chains up and to scale them up while keeping all "
+"data private on-prem** and not incurring any costs (for cloud services and "
+"alike)"
+msgstr ""
+"Una herramienta de inventario para gestionar la lista de piezas y productos "
+"finales en existencias, así como para seguir y gestionar todos los pedidos "
+"en curso o completados, con la que **poner en marcha cadenas de suministro "
+"de inmediato y escalarlas manteniendo todos los datos privados en las "
+"propias instalaciones** y sin incurrir en ningún coste (por servicios en la "
+"nube y similares)"
+
+#: ../../source/intro.rst:155
+msgid "History"
+msgstr "Historia"
+
+#: ../../source/intro.rst:157
+msgid ""
+"PartCAD was initially just an internal library in the `OpenVMP project "
+"<https://github.com/openvmp/openvmp>`_ to maintain the blueprints of OpenVMP"
+" robots in a way that allows reconfiguring the blueprints based on the "
+"specific needs (parameters), and allows to maintain the bill of materials "
+"and all the necessary data to purchase the required parts."
+msgstr ""
+"PartCAD fue inicialmente solo una biblioteca interna del `proyecto OpenVMP "
+"<https://github.com/openvmp/openvmp>`_ para mantener los planos de los "
+"robots OpenVMP de una manera que permitiera reconfigurar los planos según "
+"las necesidades específicas (parámetros), y que permitiera mantener la lista"
+" de materiales y todos los datos necesarios para comprar las piezas "
+"requeridas."
+
+#: ../../source/intro.rst:163
+msgid ""
+"The OpenVMP project has surfaced the need for an open source Product "
+"Lifecycle Management (PLM) system that would use Git for collaboration on "
+"the designs themselves, the supplementary documentation and supplier "
+"information (and integration). To address that need PartCAD was published as"
+" a standalone framework to be used by any project."
+msgstr ""
+"El proyecto OpenVMP puso de manifiesto la necesidad de un sistema de gestión"
+" del ciclo de vida del producto (PLM) de código abierto que utilizara Git "
+"para la colaboración en los propios diseños, la documentación complementaria"
+" y la información (e integración) de proveedores. Para atender esa "
+"necesidad, PartCAD se publicó como un marco de trabajo independiente que "
+"puede usar cualquier proyecto."
+
+#~ msgid "Background"
+#~ msgstr "Antecedentes"
+
+#~ msgid "PartCAD can be perceived as consisting of four parts:"
+#~ msgstr "PartCAD puede entenderse como compuesto de cuatro partes:"
+
+#~ msgid ""
+#~ "The public repository of products created and maintained by the community "
+#~ "based on the PartCAD standards and conventions"
+#~ msgstr ""
+#~ "El repositorio público de productos creados y mantenidos por la comunidad "
+#~ "con base en los estándares y convenciones de PartCAD"
+
+#~ msgid ""
+#~ "Tools that operate with public and private repositories for as long as they "
+#~ "are maintained following the PartCAD standards and conventions"
+#~ msgstr ""
+#~ "Herramientas que operan con repositorios públicos y privados siempre que se "
+#~ "mantengan siguiendo los estándares y convenciones de PartCAD"
+
+#~ msgid ""
+#~ "Libraries and frameworks to programmatically interact with product "
+#~ "information in public and private PartCAD repositories"
+#~ msgstr ""
+#~ "Bibliotecas y marcos de trabajo para interactuar programáticamente con la "
+#~ "información de productos en repositorios de PartCAD públicos y privados"
+
+#~ msgid ""
+#~ "Detailed documentation on all of the above can be found in the 'Design' "
+#~ "section."
+#~ msgstr ""
+#~ "La documentación detallada de todo lo anterior se puede encontrar en la "
+#~ "sección 'Diseño'."

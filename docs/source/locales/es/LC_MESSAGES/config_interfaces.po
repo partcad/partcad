@@ -1,0 +1,1322 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/config_interfaces.rst:5
+msgid "Interfaces"
+msgstr "Interfaces"
+
+#: ../../source/config_interfaces.rst:8
+msgid ""
+"PartCAD uses interfaces to define how parts and assemblies connect to each "
+"other."
+msgstr ""
+"PartCAD usa interfaces para definir cómo se conectan las piezas y los "
+"ensamblajes entre sí."
+
+#: ../../source/config_interfaces.rst:10
+msgid ""
+"Each part may implement one or more interfaces, one or more instance of "
+"each. Interfaces may hierarchically inherit ports and other properties from "
+"each other. The information about compatibility between interfaces (mating) "
+"is optionally maintained as well."
+msgstr ""
+"Cada pieza puede implementar una o más interfaces, con una o más instancias "
+"de cada una. Las interfaces pueden heredar jerárquicamente puertos y otras "
+"propiedades entre sí. La información sobre la compatibilidad entre "
+"interfaces (acoplamiento) también se mantiene de forma opcional."
+
+#: ../../source/config_interfaces.rst:15
+msgid ""
+"Whenever possible, PartCAD will be able to place parts and assemblies "
+"together with no coordinates provided by the user, based on the defined "
+"ports, interfaces and mating."
+msgstr ""
+"Siempre que sea posible, PartCAD podrá colocar piezas y ensamblajes juntos "
+"sin que el usuario proporcione coordenadas, basándose en los puertos, "
+"interfaces y acoplamientos definidos."
+
+#: ../../source/config_interfaces.rst:20
+msgid ""
+"Interfaces are declared in ``partcad.yaml`` using the following syntax:"
+msgstr ""
+"Las interfaces se declaran en ``partcad.yaml`` usando la siguiente sintaxis:"
+
+#: ../../source/config_interfaces.rst:103
+msgid "Joints"
+msgstr "Articulaciones"
+
+#: ../../source/config_interfaces.rst:105
+msgid ""
+"A connection between two interfaces is a composition of rigid transforms: "
+"the target's port, a half turn that makes the two ports face each other, "
+"then every freedom-of-movement parameter the connection gives a value to "
+"(``toParams``, ``withParams``; see `Interface parameters`_). What none of "
+"that says is which of those parameters **stay free** once the parts are "
+"joined. A slotted hole's ``moveX`` is an *adjustment*: the screw is "
+"tightened and it is fixed. A bearing's ``turnZ`` is a *degree of freedom*: "
+"it turns while the machine runs. A connection that keeps any degree of "
+"freedom is a **joint**, and ``motion:`` is where they are declared."
+msgstr ""
+"Una conexión entre dos interfaces es una composición de transformaciones "
+"rígidas: el puerto del destino, media vuelta que hace que los dos puertos "
+"queden enfrentados, y después cada parámetro de libertad de movimiento al "
+"que la conexión da un valor (``toParams``, ``withParams``; véase `Parámetros"
+" de interfaz`_). Lo que nada de eso dice es cuáles de esos parámetros "
+"**siguen libres** una vez unidas las piezas. El ``moveX`` de un agujero "
+"ranurado es un *ajuste*: se aprieta el tornillo y queda fijo. El ``turnZ`` "
+"de un rodamiento es un *grado de libertad*: gira mientras la máquina "
+"funciona. Una conexión que conserva algún grado de libertad es una "
+"**articulación**, y ``motion:`` es donde se declaran."
+
+#: ../../source/config_interfaces.rst:116
+msgid "Declaring degrees of freedom"
+msgstr "Declarar grados de libertad"
+
+#: ../../source/config_interfaces.rst:118
+msgid ""
+"**Explicitly**, by naming the parameters that stay free. The parameter "
+"already says its kind, its direction and its range, so nothing is restated:"
+msgstr ""
+"**Explícitamente**, nombrando los parámetros que siguen libres. El parámetro"
+" ya dice su clase, su dirección y su rango, así que no se repite nada:"
+
+#: ../../source/config_interfaces.rst:135
+msgid ""
+"A predefined name (``moveX`` ... ``turnZ``) need not be declared under "
+"``parameters:`` to be named here: the name says its kind and its axis, and a"
+" degree of freedom with no declared range is unlimited. Any other name has "
+"to be a freedom-of-movement parameter of the interface."
+msgstr ""
+"Un nombre predefinido (``moveX`` ... ``turnZ``) no necesita estar declarado "
+"bajo ``parameters:`` para nombrarse aquí: el nombre dice su clase y su eje, "
+"y un grado de libertad sin rango declarado es ilimitado. Cualquier otro "
+"nombre tiene que ser un parámetro de libertad de movimiento de la interfaz."
+
+#: ../../source/config_interfaces.rst:140
+msgid ""
+"**Implicitly**, by naming a kind of joint. Every degree of freedom it "
+"implies is declared - about the port's Z axis unless ``axis:`` says "
+"otherwise, between ``limits:`` where those apply:"
+msgstr ""
+"**Implícitamente**, nombrando una clase de articulación. Cada grado de "
+"libertad que implica queda declarado - en torno al eje Z del puerto salvo "
+"que ``axis:`` diga otra cosa, entre los ``limits:`` donde se apliquen:"
+
+#: ../../source/config_interfaces.rst:145
+msgid "``type``"
+msgstr "``type``"
+
+#: ../../source/config_interfaces.rst:145
+#: ../../source/config_interfaces.rst:299
+msgid "Degrees of freedom"
+msgstr "Grados de libertad"
+
+#: ../../source/config_interfaces.rst:147
+msgid "``fixed``"
+msgstr "``fixed``"
+
+#: ../../source/config_interfaces.rst:147
+msgid "none"
+msgstr "ninguno"
+
+#: ../../source/config_interfaces.rst:148
+#: ../../source/config_interfaces.rst:301
+#: ../../source/config_interfaces.rst:322
+msgid "``revolute``"
+msgstr "``revolute``"
+
+#: ../../source/config_interfaces.rst:148
+msgid "one turn about ``axis``, bounded on either side or on neither"
+msgstr ""
+"un giro en torno a ``axis``, acotado por uno u otro lado o por ninguno"
+
+#: ../../source/config_interfaces.rst:149
+#: ../../source/config_interfaces.rst:302
+#: ../../source/config_interfaces.rst:325
+msgid "``prismatic``"
+msgstr "``prismatic``"
+
+#: ../../source/config_interfaces.rst:149
+msgid "one move along ``axis``, likewise"
+msgstr "un desplazamiento a lo largo de ``axis``, igualmente"
+
+#: ../../source/config_interfaces.rst:150
+#: ../../source/config_interfaces.rst:303
+#: ../../source/config_interfaces.rst:326
+msgid "``cylindrical``"
+msgstr "``cylindrical``"
+
+#: ../../source/config_interfaces.rst:150
+msgid "one turn and one move, about and along ``axis``"
+msgstr "un giro y un desplazamiento, en torno a ``axis`` y a lo largo de él"
+
+#: ../../source/config_interfaces.rst:151
+#: ../../source/config_interfaces.rst:304
+#: ../../source/config_interfaces.rst:327
+msgid "``screw``"
+msgstr "``screw``"
+
+#: ../../source/config_interfaces.rst:151
+msgid "the same two, the move following the turn by the ``threadStep``"
+msgstr ""
+"los mismos dos, con el desplazamiento siguiendo al giro según el "
+"``threadStep``"
+
+#: ../../source/config_interfaces.rst:152
+#: ../../source/config_interfaces.rst:305
+#: ../../source/config_interfaces.rst:329
+msgid "``universal``"
+msgstr "``universal``"
+
+#: ../../source/config_interfaces.rst:152
+msgid ""
+"two turns, about ``axis`` and about the port's X axis (its Y, when ``axis`` "
+"is X)"
+msgstr ""
+"dos giros, en torno a ``axis`` y en torno al eje X del puerto (su Y, cuando "
+"``axis`` es X)"
+
+#: ../../source/config_interfaces.rst:154
+#: ../../source/config_interfaces.rst:306
+#: ../../source/config_interfaces.rst:330
+msgid "``ball``"
+msgstr "``ball``"
+
+#: ../../source/config_interfaces.rst:154
+msgid "three turns about the port's origin, bounded by one angle"
+msgstr ""
+"tres giros en torno al origen del puerto, acotados por un único ángulo"
+
+#: ../../source/config_interfaces.rst:155
+#: ../../source/config_interfaces.rst:307
+#: ../../source/config_interfaces.rst:331
+msgid "``planar``"
+msgstr "``planar``"
+
+#: ../../source/config_interfaces.rst:155
+msgid "two moves across the plane normal to ``axis``, and one turn about it"
+msgstr ""
+"dos desplazamientos por el plano normal a ``axis``, y un giro en torno a él"
+
+#: ../../source/config_interfaces.rst:156
+#: ../../source/config_interfaces.rst:308
+#: ../../source/config_interfaces.rst:332
+msgid "``floating``"
+msgstr "``floating``"
+
+#: ../../source/config_interfaces.rst:156
+msgid "all six: the connected object is a body of its own, nothing holds it"
+msgstr "los seis: el objeto conectado es un cuerpo propio, nada lo sujeta"
+
+#: ../../source/config_interfaces.rst:159
+msgid ""
+"There is one ``type`` per physical joint. ``continuous`` still reads, as a "
+"``revolute`` open on both sides, and ``pc lint`` says it is deprecated: an "
+"unbounded hinge is a hinge, and a bound on either side is a property of it "
+"rather than a second kind of joint."
+msgstr ""
+"Hay un ``type`` por articulación física. ``continuous`` todavía se lee, como"
+" un ``revolute`` abierto por ambos lados, y ``pc lint`` dice que está "
+"obsoleto: una bisagra sin acotar es una bisagra, y una cota por uno u otro "
+"lado es una propiedad de ella y no una segunda clase de articulación."
+
+#: ../../source/config_interfaces.rst:164
+msgid ""
+"``motion: revolute`` is the short form of ``motion: {type: revolute}``. "
+"``limits`` bound the one freedom of a ``revolute`` or ``prismatic`` motion "
+"and the turn of a ``screw`` (whose move follows it), and they are the range "
+"of the parameter the type implies -- the same travel said in the short form:"
+msgstr ""
+"``motion: revolute`` es la forma breve de ``motion: {type: revolute}``. "
+"``limits`` acota la única libertad de un movimiento ``revolute`` o "
+"``prismatic`` y el giro de un ``screw`` (cuyo desplazamiento lo sigue), y es"
+" el rango del parámetro que implica el tipo -- el mismo recorrido dicho en "
+"la forma breve:"
+
+#: ../../source/config_interfaces.rst:169
+msgid "a side ``limits`` does not state is the parameter's own;"
+msgstr "un lado que ``limits`` no indica es el propio del parámetro;"
+
+#: ../../source/config_interfaces.rst:170
+msgid ""
+"a side the parameter states as well has to say the same, or ``pc test`` "
+"fails the assembly's ``connect`` check (and the parameter's range is used);"
+msgstr ""
+"un lado que el parámetro indica también tiene que decir lo mismo, o ``pc "
+"test`` da por fallada la comprobación ``connect`` del ensamblaje (y se usa "
+"el rango del parámetro);"
+
+#: ../../source/config_interfaces.rst:172
+msgid ""
+"YAML's own infinity states a side open whatever the parameter's range says: "
+"``limits: {lower: -.inf, upper: .inf}`` is how a parameter declared with a "
+"range for placing things is made a hinge that turns for ever. An open side "
+"is otherwise stated by stating nothing: a parameter with no range is "
+"unlimited."
+msgstr ""
+"El propio infinito de YAML indica un lado abierto, diga lo que diga el rango"
+" del parámetro: ``limits: {lower: -.inf, upper: .inf}`` es la forma de "
+"convertir en una bisagra que gira indefinidamente un parámetro declarado con"
+" un rango para colocar cosas. Por lo demás, un lado abierto se indica no "
+"indicando nada: un parámetro sin rango es ilimitado."
+
+#: ../../source/config_interfaces.rst:177
+msgid ""
+"A ``ball`` is bounded by **one angle**, how far it turns from its zero -- "
+"``limits: {upper: 30}`` -- because that is all a ball can be bounded by "
+"without a gimbal in it, and it is how MuJoCo bounds one. A range on any one "
+"of a ball's turns is an error: to bound each turn on its own, name the three"
+" turns in ``dof`` without ``type: ball``, which makes a *composite* (below) "
+"rather than a ball. Any other kind with more than one degree of freedom "
+"states the range of each on its parameter and names them in ``dof``."
+msgstr ""
+"Un ``ball`` se acota con **un único ángulo**, cuánto gira desde su cero -- "
+"``limits: {upper: 30}`` --, porque es lo único con lo que se puede acotar "
+"una rótula sin un cardán dentro, y es como la acota MuJoCo. Un rango en "
+"cualquiera de los giros de una rótula es un error: para acotar cada giro por"
+" separado, nombre los tres giros en ``dof`` sin ``type: ball``, lo que "
+"produce un *compuesto* (más abajo) y no una rótula. Cualquier otra clase con"
+" más de un grado de libertad indica el rango de cada uno en su parámetro y "
+"los nombra en ``dof``."
+
+#: ../../source/config_interfaces.rst:185
+msgid ""
+"An implied degree of freedom is the interface's parameter of the same kind "
+"along the same axis when there is one - which is what makes it addressable "
+"from ``toParams`` - and otherwise one it brings along: ``turnZ``, ``moveX`` "
+"and their siblings along a principal axis, ``angle`` and ``offset`` along "
+"any other (the names ``pc convert assembly -t assy`` writes). Either way a "
+"connection can give it a value. ``dof`` is the declaration and ``type`` its "
+"short form, so a ``motion:`` that states both is asserting that they say the"
+" same thing: where they do not, ``pc test`` fails the ``connect`` check (the"
+" joint is built from the ``dof``); where they do, the ``type``'s ``limits`` "
+"bound the parameters ``dof`` names, as above."
+msgstr ""
+"Un grado de libertad implícito es el parámetro de la interfaz de la misma "
+"clase a lo largo del mismo eje cuando hay uno - que es lo que lo hace "
+"direccionable desde ``toParams`` - y, si no, uno que trae consigo: "
+"``turnZ``, ``moveX`` y sus hermanos a lo largo de un eje principal, "
+"``angle`` y ``offset`` a lo largo de cualquier otro (los nombres que escribe"
+" ``pc convert assembly -t assy``). En cualquier caso, una conexión puede "
+"darle un valor. ``dof`` es la declaración y ``type`` su forma breve, así que"
+" un ``motion:`` que indica ambos está afirmando que dicen lo mismo: donde no"
+" lo hacen, ``pc test`` da por fallada la comprobación ``connect`` (la "
+"articulación se construye a partir del ``dof``); donde sí, los ``limits`` "
+"del ``type`` acotan los parámetros que nombra ``dof``, como arriba."
+
+#: ../../source/config_interfaces.rst:197
+msgid "Where it is declared"
+msgstr "Dónde se declara"
+
+#: ../../source/config_interfaces.rst:199
+msgid ""
+"In three places, most specific first - the precedence a mating's ``how`` "
+"already has:"
+msgstr ""
+"En tres lugares, el más específico primero - la precedencia que ya tiene el "
+"``how`` de un emparejamiento:"
+
+#: ../../source/config_interfaces.rst:202
+msgid ""
+"the connection's own ``motion:`` in the ASSY file (``connect: {motion: "
+"fixed}`` locks a joint, for one test or one variant; see :ref:`assy-"
+"joints`);"
+msgstr ""
+"el ``motion:`` propio de la conexión en el archivo ASSY (``connect: {motion:"
+" fixed}`` bloquea una articulación, para una prueba o una variante; véase "
+":ref:`assy-joints`);"
+
+#: ../../source/config_interfaces.rst:204
+msgid ""
+"the mating's ``motion:`` - what this *pair* does, whatever each would do "
+"with another partner: a 6 mm pin turns in a clearance bore and is fixed in a"
+" press-fit one."
+msgstr ""
+"el ``motion:`` del emparejamiento - lo que hace esta *pareja*, al margen de "
+"lo que haría cada uno con otro compañero: un pasador de 6 mm gira en un "
+"taladro con holgura y queda fijo en uno de ajuste a presión."
+
+#: ../../source/config_interfaces.rst:218
+msgid "the two interfaces' own ``motion:``, combined."
+msgstr "el ``motion:`` propio de las dos interfaces, combinado."
+
+#: ../../source/config_interfaces.rst:220
+msgid ""
+"An interface that inherits exactly one other one, once (``inherits: bore``),"
+" or is an ``alias:`` of it, is that interface under another name and moves "
+"as it does unless it says otherwise. One assembled out of several - a bolt "
+"pattern of four pins - inherits no ``motion``: four pins in four holes do "
+"not turn."
+msgstr ""
+"Una interfaz que hereda exactamente otra, una vez (``inherits: bore``), o "
+"que es un ``alias:`` de ella, es esa interfaz con otro nombre y se mueve "
+"como ella salvo que diga otra cosa. Una formada a partir de varias - un "
+"patrón de pernos de cuatro pasadores - no hereda ningún ``motion``: cuatro "
+"pasadores en cuatro agujeros no giran."
+
+#: ../../source/config_interfaces.rst:225
+msgid ""
+"The axis of a mating's ``motion`` is in the frame of the port of the "
+"interface that declares the mating; a connection's is in the contact frame "
+"(below). A name in a mating's or a connection's ``dof`` means that parameter"
+" on either interface."
+msgstr ""
+"El eje del ``motion`` de un emparejamiento está en el marco del puerto de la"
+" interfaz que declara el emparejamiento; el de una conexión está en el marco"
+" de contacto (más abajo). Un nombre en el ``dof`` de un emparejamiento o de "
+"una conexión se refiere a ese parámetro en cualquiera de las dos interfaces."
+
+#: ../../source/config_interfaces.rst:230
+msgid "How two interfaces combine"
+msgstr "Cómo se combinan dos interfaces"
+
+#: ../../source/config_interfaces.rst:232
+msgid ""
+"The two sides' freedoms are in series - which is how the placement composes "
+"them too, the target's parameters and then the connected object's - so they "
+"**add**:"
+msgstr ""
+"Las libertades de los dos lados están en serie - que es también como las "
+"compone la colocación, los parámetros del destino y después los del objeto "
+"conectado -, así que se **suman**:"
+
+#: ../../source/config_interfaces.rst:235
+msgid "the degrees of freedom are the union of both sides';"
+msgstr "los grados de libertad son la unión de los de ambos lados;"
+
+#: ../../source/config_interfaces.rst:236
+msgid ""
+"two that lie on the same axis are one, whose range is the sum of the two "
+"ranges and whose value is the sum of the two values, and which is unlimited "
+"if either is."
+msgstr ""
+"dos que están en el mismo eje son uno, cuyo rango es la suma de los dos "
+"rangos y cuyo valor es la suma de los dos valores, y que es ilimitado si "
+"cualquiera de los dos lo es."
+
+#: ../../source/config_interfaces.rst:240
+msgid ""
+"\"On the same axis\" means the same kind (two turns, or two moves) on the "
+"same line in the contact frame, with every degree of freedom at zero and "
+"every adjustment at its value; two moves need only point the same way. "
+"Opposite directions match, with the sign of one of them flipped. Two swivels"
+" in series, each declaring ``turnZ: [-90, 90]``, are one revolute joint over"
+" -180 to 180 degrees; a slotted plate on a slotted bracket is one prismatic "
+"joint over the sum of the two slots. Two freedoms are left apart when "
+"something that moves lies between them in a way that would turn one relative"
+" to the other - a slide between two parallel turns moves one turn off the "
+"other's axis as soon as it slides."
+msgstr ""
+"\"En el mismo eje\" significa de la misma clase (dos giros, o dos "
+"desplazamientos) en la misma recta del marco de contacto, con todos los "
+"grados de libertad a cero y todos los ajustes en su valor; dos "
+"desplazamientos solo tienen que apuntar en el mismo sentido. Las direcciones"
+" opuestas coinciden, invirtiendo el signo de una de ellas. Dos pivotes en "
+"serie, cada uno declarando ``turnZ: [-90, 90]``, son una sola articulación "
+"de revolución de -180 a 180 grados; una placa ranurada sobre un soporte "
+"ranurado es una sola articulación prismática sobre la suma de las dos "
+"ranuras. Dos libertades se dejan separadas cuando algo que se mueve se "
+"interpone entre ellas de una manera que giraría una respecto a la otra - una"
+" guía deslizante entre dos giros paralelos aparta un giro del eje del otro "
+"en cuanto desliza."
+
+#: ../../source/config_interfaces.rst:250
+msgid ""
+"The rule has one trap, and it is documented rather than special-cased: a "
+"symmetric hinge whose two leaves *both* declare ``turnZ: [0, 90]`` comes out"
+" with 180 degrees of travel. A freedom is declared on the side that provides"
+" it."
+msgstr ""
+"La regla tiene una trampa, y está documentada en lugar de tratada como caso "
+"especial: una bisagra simétrica cuyas dos hojas declaran *ambas* ``turnZ: "
+"[0, 90]`` sale con 180 grados de recorrido. Una libertad se declara en el "
+"lado que la proporciona."
+
+#: ../../source/config_interfaces.rst:254
+msgid ""
+"**Both sides read their parameters in the contact frame**, which is where "
+"the two ports meet: the connected object's port, and the target's port "
+"turned round to face it. That is how a connection has always been placed, "
+"and it has one consequence a joint makes visible: a target interface's "
+"``turnZ`` turns the child about the contact frame's Z, which is the target "
+"port's own Z *reversed* - so a target's +30 degrees turns the child -30 "
+"degrees about the target port's Z, and a target's ``limits`` written about "
+"its own port's Z come out the other way round on ``turnZ``. A ``motion:`` on"
+" an interface states its ``axis`` in its own port's frame, as written; "
+"PartCAD maps it."
+msgstr ""
+"**Los dos lados leen sus parámetros en el marco de contacto**, que es donde "
+"se encuentran los dos puertos: el puerto del objeto conectado, y el puerto "
+"del destino girado para quedar enfrentado a él. Así se ha colocado siempre "
+"una conexión, y tiene una consecuencia que una articulación hace visible: el"
+" ``turnZ`` de una interfaz de destino gira el hijo en torno a la Z del marco"
+" de contacto, que es la propia Z del puerto de destino *invertida* - así que"
+" los +30 grados de un destino giran el hijo -30 grados en torno a la Z del "
+"puerto de destino, y los ``limits`` de un destino escritos en torno a la Z "
+"de su propio puerto salen al revés en ``turnZ``. Un ``motion:`` en una "
+"interfaz indica su ``axis`` en el marco de su propio puerto, tal como está "
+"escrito; PartCAD lo traduce."
+
+#: ../../source/config_interfaces.rst:265
+msgid "What it costs"
+msgstr "Lo que cuesta"
+
+#: ../../source/config_interfaces.rst:267
+msgid ""
+"``physics:`` on an interface, a mating or a connection, with the precedence "
+"of ``motion:``. Where both interfaces state physics they are taken together,"
+" and a value they both state has to agree, or the mating has to state its "
+"own: two dampers in series do not add, so there is no sum to take. ``pc "
+"test`` reports a disagreement."
+msgstr ""
+"``physics:`` en una interfaz, un emparejamiento o una conexión, con la "
+"precedencia de ``motion:``. Donde las dos interfaces indican física, se "
+"toman en conjunto, y un valor que ambas indican tiene que coincidir, o el "
+"emparejamiento tiene que indicar el suyo: dos amortiguadores en serie no se "
+"suman, así que no hay suma que hacer. ``pc test`` informa de una "
+"discrepancia."
+
+#: ../../source/config_interfaces.rst:273
+msgid ""
+"Damping and a joint's friction are SI per unit of the joint's motion - "
+"N*m*s/rad and N*m for a turn, N*s/m and N for a move - because that is what "
+"every engine takes and what a URDF's ``<dynamics>`` states. It is the one "
+"place an angle is not in degrees."
+msgstr ""
+"La amortiguación y la fricción de una articulación están en unidades SI por "
+"unidad de movimiento de la articulación - N*m*s/rad y N*m para un giro, "
+"N*s/m y N para un desplazamiento - porque es lo que toma cada motor y lo que"
+" indica el ``<dynamics>`` de un URDF. Es el único lugar donde un ángulo no "
+"va en grados."
+
+#: ../../source/config_interfaces.rst:278
+msgid ""
+"Every other property has a PartCAD name and a PartCAD unit too, and the set "
+"of them is closed: angles are degrees and lengths millimetres, as everywhere"
+" else in PartCAD, and the rest is SI. Nothing is stored under the name of "
+"the format it came from. A format that states something PartCAD has no "
+"property for fails the import rather than tucking the value away, and a "
+"property PartCAD holds that a target format cannot state is reported when it"
+" is exported - so the gap is always visible in one direction or the other."
+msgstr ""
+"Todas las demás propiedades tienen también un nombre de PartCAD y una unidad"
+" de PartCAD, y el conjunto de ellas es cerrado: los ángulos son grados y las"
+" longitudes milímetros, como en todo lo demás en PartCAD, y el resto es SI. "
+"Nada se almacena con el nombre del formato del que vino. Un formato que "
+"indica algo para lo que PartCAD no tiene propiedad hace fallar la "
+"importación en lugar de guardar el valor en un rincón, y una propiedad que "
+"PartCAD mantiene y que un formato de destino no puede indicar se informa al "
+"exportarla - así que la brecha siempre es visible en una dirección o en la "
+"otra."
+
+#: ../../source/config_interfaces.rst:286
+msgid ""
+"``pc convert assembly -t assy`` fills both sections in from a URDF's joints "
+"- see :ref:`sim-urdf-joints` for the mapping - and what it writes is an "
+"explicit declaration of the joint it was. ``pc info <assembly>`` lists an "
+"assembly's joints, each with the ``type`` it is, and :ref:`assy-joints` how "
+"a connection names, locks and starts one."
+msgstr ""
+"``pc convert assembly -t assy`` rellena ambas secciones a partir de las "
+"articulaciones de un URDF - véase :ref:`sim-urdf-joints` para la "
+"correspondencia - y lo que escribe es una declaración explícita de la "
+"articulación que era. ``pc info <assembly>`` enumera las articulaciones de "
+"un ensamblaje, cada una con el ``type`` que es, y :ref:`assy-joints` cómo "
+"una conexión nombra, bloquea y arranca una."
+
+#: ../../source/config_interfaces.rst:293
+msgid "What a joint is"
+msgstr "Qué es una articulación"
+
+#: ../../source/config_interfaces.rst:295
+msgid ""
+"Whatever declared them, the degrees of freedom a connection keeps are "
+"**one** of these, and that type is what every exporter writes (``pc info`` "
+"shows it):"
+msgstr ""
+"Sea lo que los haya declarado, los grados de libertad que conserva una "
+"conexión son **uno** de estos, y ese tipo es lo que escribe cada exportador "
+"(``pc info`` lo muestra):"
+
+#: ../../source/config_interfaces.rst:299
+#: ../../source/config_interfaces.rst:320
+msgid "Type"
+msgstr "Tipo"
+
+#: ../../source/config_interfaces.rst:301
+msgid "one turn, bounded on either side or on neither"
+msgstr "un giro, acotado por uno u otro lado o por ninguno"
+
+#: ../../source/config_interfaces.rst:302
+msgid "one move, likewise"
+msgstr "un desplazamiento, igualmente"
+
+#: ../../source/config_interfaces.rst:303
+msgid "a turn and a move on one line, in either order"
+msgstr "un giro y un desplazamiento en una misma recta, en cualquier orden"
+
+#: ../../source/config_interfaces.rst:304
+msgid "the same, the move following the turn"
+msgstr "lo mismo, con el desplazamiento siguiendo al giro"
+
+#: ../../source/config_interfaces.rst:305
+msgid "two turns whose lines cross"
+msgstr "dos giros cuyas rectas se cruzan"
+
+#: ../../source/config_interfaces.rst:306
+msgid "three turns through one point, in any order, none bounded on its own"
+msgstr ""
+"tres giros a través de un mismo punto, en cualquier orden, ninguno acotado "
+"por separado"
+
+#: ../../source/config_interfaces.rst:307
+msgid ""
+"two moves and the turn about their normal, the moves first or the turn first"
+msgstr ""
+"dos desplazamientos y el giro en torno a su normal, primero los "
+"desplazamientos o primero el giro"
+
+#: ../../source/config_interfaces.rst:308
+msgid "three moves and three turns: a body of its own"
+msgstr "tres desplazamientos y tres giros: un cuerpo propio"
+
+#: ../../source/config_interfaces.rst:309
+#: ../../source/config_interfaces.rst:333
+msgid "``composite``"
+msgstr "``composite``"
+
+#: ../../source/config_interfaces.rst:309
+msgid ""
+"anything else: two moves of an XY stage, a turn about one line and a move "
+"across it, three turns each bounded on its own"
+msgstr ""
+"cualquier otra cosa: dos desplazamientos de una mesa XY, un giro en torno a "
+"una recta y un desplazamiento transversal a ella, tres giros acotados cada "
+"uno por separado"
+
+#: ../../source/config_interfaces.rst:313
+msgid ""
+"A *composite* is not a ``type`` one can write in ``motion:``; it is what a "
+"``dof`` list is when no physical joint has those freedoms, and physically it"
+" is a chain of bodies the declaration leaves out -- the carriage of an XY "
+"stage, the cross of a two-axis joint. Each format writes a type in its own "
+"terms, and refuses what it has no construct for rather than inventing a body"
+" to make one:"
+msgstr ""
+"Un *compuesto* no es un ``type`` que se pueda escribir en ``motion:``; es lo"
+" que es una lista ``dof`` cuando ninguna articulación física tiene esas "
+"libertades, y físicamente es una cadena de cuerpos que la declaración omite "
+"-- el carro de una mesa XY, la cruceta de una articulación de dos ejes. Cada"
+" formato escribe un tipo en sus propios términos, y rechaza aquello para lo "
+"que no tiene ninguna construcción en lugar de inventarse un cuerpo para "
+"fabricarla:"
+
+#: ../../source/config_interfaces.rst:320
+msgid "MuJoCo (MJCF)"
+msgstr "MuJoCo (MJCF)"
+
+#: ../../source/config_interfaces.rst:320
+msgid "Gazebo (SDFormat)"
+msgstr "Gazebo (SDFormat)"
+
+#: ../../source/config_interfaces.rst:320
+msgid "URDF"
+msgstr "URDF"
+
+#: ../../source/config_interfaces.rst:322
+msgid "``hinge``"
+msgstr "``hinge``"
+
+#: ../../source/config_interfaces.rst:322
+msgid "``revolute``, or ``continuous`` open on both sides"
+msgstr "``revolute``, o ``continuous`` abierto por ambos lados"
+
+#: ../../source/config_interfaces.rst:325
+msgid "``slide``"
+msgstr "``slide``"
+
+#: ../../source/config_interfaces.rst:326
+msgid "a hinge and a slide"
+msgstr "una bisagra y una guía deslizante"
+
+#: ../../source/config_interfaces.rst:326
+#: ../../source/config_interfaces.rst:327
+#: ../../source/config_interfaces.rst:329
+#: ../../source/config_interfaces.rst:330
+#: ../../source/config_interfaces.rst:331
+#: ../../source/config_interfaces.rst:333
+msgid "refused"
+msgstr "rechazado"
+
+#: ../../source/config_interfaces.rst:327
+msgid "a hinge and a slide, coupled"
+msgstr "una bisagra y una guía deslizante, acopladas"
+
+#: ../../source/config_interfaces.rst:329
+msgid "two hinges"
+msgstr "dos bisagras"
+
+#: ../../source/config_interfaces.rst:331
+msgid "two slides and a hinge"
+msgstr "dos guías deslizantes y una bisagra"
+
+#: ../../source/config_interfaces.rst:332
+msgid "a free body"
+msgstr "un cuerpo libre"
+
+#: ../../source/config_interfaces.rst:332
+msgid "a model of its own"
+msgstr "un modelo propio"
+
+#: ../../source/config_interfaces.rst:333
+msgid "its hinges and slides"
+msgstr "sus bisagras y guías deslizantes"
+
+#: ../../source/config_interfaces.rst:336
+msgid ""
+"A refusal names the joint and its type, and the ways on: simulate the "
+"mechanism in MuJoCo, which writes every type; or model the body the joint "
+"stands for -- for a cylindrical pair a sleeve and its carriage, for a "
+"universal joint its cross -- and join it by native joints. A URDF that is "
+"read only for its kinematics can ask for what URDF has no type for with "
+"``composites: massless``: see :ref:`sim-urdf-export`. The engine plugins' "
+"half of this is being built (see the simulation `design record "
+"<https://github.com/partcad/partcad/blob/devel/docs/design/simulation.md>`__,"
+" section 8.13)."
+msgstr ""
+"Un rechazo nombra la articulación y su tipo, y las vías para seguir: simule "
+"el mecanismo en MuJoCo, que escribe todos los tipos; o modele el cuerpo que "
+"la articulación representa -- para un par cilíndrico un manguito y su carro,"
+" para una junta universal su cruceta -- y únalo mediante articulaciones "
+"nativas. Un URDF que se lee solo por su cinemática puede pedir aquello para "
+"lo que URDF no tiene tipo con ``composites: massless``: véase :ref:`sim-"
+"urdf-export`. La mitad de esto que corresponde a los plugins de motor está "
+"en construcción (véase el `design record "
+"<https://github.com/partcad/partcad/blob/devel/docs/design/simulation.md>`__"
+" de la simulación, apartado 8.13)."
+
+#: ../../source/config_interfaces.rst:345
+msgid "Abstract interfaces"
+msgstr "Interfaces abstractas"
+
+#: ../../source/config_interfaces.rst:347
+msgid ""
+"Abstract interfaces can't be implemented by parts directly. They also can't "
+"be used for mating with other interfaces. They are a convenience feature so "
+"that a property can be implemented once but inherited multiple times by all "
+"child interfaces."
+msgstr ""
+"Las interfaces abstractas no pueden ser implementadas directamente por las "
+"piezas. Tampoco se pueden usar para acoplar con otras interfaces. Son una "
+"funcionalidad de conveniencia para que una propiedad pueda implementarse una"
+" vez pero heredarse varias veces por todas las interfaces hijas."
+
+#: ../../source/config_interfaces.rst:353
+msgid "Port visualization"
+msgstr "Visualización de puertos"
+
+#: ../../source/config_interfaces.rst:355
+msgid ""
+"When a part or an assembly is rendered (in a GUI or when exported to a "
+"file), the ports can be visualized. When ports are visualized, each port "
+"looks like a coordinate system (3D location, direction and rotation) and, "
+"optionally, as a 2D image of an alleged \"boundary\" (or \"silhouette\") of "
+"the port."
+msgstr ""
+"Cuando se renderiza una pieza o un ensamblaje (en una interfaz gráfica o al "
+"exportar a un archivo), los puertos se pueden visualizar. Cuando se "
+"visualizan los puertos, cada puerto se muestra como un sistema de "
+"coordenadas (ubicación 3D, dirección y rotación) y, opcionalmente, como una "
+"imagen 2D de un supuesto \"límite\" (o \"silueta\") del puerto."
+
+#: ../../source/config_interfaces.rst:360
+msgid ""
+"It is recommended to define the port boundary at all times. Here is an "
+"example how to define the port boundary using a primitive sketch:"
+msgstr ""
+"Se recomienda definir siempre el límite del puerto. Aquí hay un ejemplo de "
+"cómo definir el límite del puerto usando un boceto primitivo:"
+
+#: ../../source/config_interfaces.rst:375
+msgid "Here is how it will get visualized:"
+msgstr "Así es como se visualizará:"
+
+#: ../../source/config_interfaces.rst:381
+msgid ""
+"The same two things are drawn on a rendered projection by ``pc render "
+"--with-ports`` and ``--with-interfaces`` (``--with-all`` for both): a marker"
+" and a name at each port, and each interface instance named once with a line"
+" out to every port that belongs to it, over the port boundaries above. An "
+"assembly or a :ref:`scene <scenes>` is taken at its word -- what is drawn is"
+" what it says its ports are (see :ref:`assembly-ports`) -- and ``--with-"
+"internals`` draws what is inside one anyway, each child's ports placed where"
+" the assembly put the child, which is how a connection that did not come out"
+" as intended is found. See :doc:`/cli`, and :ref:`drawing-ports` for asking "
+"a package to keep such a drawing checked in."
+msgstr ""
+"Las mismas dos cosas las dibujan en una proyección renderizada ``pc render "
+"--with-ports`` y ``--with-interfaces`` (``--with-all`` para ambas): un "
+"marcador y un nombre en cada puerto, y cada instancia de interfaz nombrada "
+"una vez con una línea que sale hacia cada puerto que le pertenece, sobre los"
+" contornos de puerto de más arriba. A un ensamblaje o una :ref:`escena "
+"<scenes>` se le toma la palabra -- lo que se dibuja es lo que dice que son "
+"sus puertos (véase :ref:`assembly-ports`) -- y ``--with-internals`` dibuja "
+"de todas formas lo que hay dentro de uno, con los puertos de cada hijo "
+"colocados donde el ensamblaje colocó al hijo, que es cómo se descubre una "
+"conexión que no salió como se pretendía. Véase :doc:`/cli`, y :ref:`drawing-"
+"ports` para pedir a un paquete que mantenga un dibujo así registrado en el "
+"repositorio."
+
+#: ../../source/config_interfaces.rst:393
+msgid "Port matching"
+msgstr "Coincidencia de puertos"
+
+#: ../../source/config_interfaces.rst:395
+msgid ""
+"Each port has the coordinates of the logical center of the port and the "
+"direction (orientation) of the port. Whenever two ports are meant to connect"
+" without any offset or angle (e.g. male and female connectors), their "
+"coordinates should match and their directions should be opposite (rotated "
+"180 degrees around [1, 1, 0]). The suggested convention is to use the Z-axis"
+" (blue) as the main direction. Male ports should have the Z-axis pointing "
+"outwards, while female ports should have the Z-axis pointing inwards."
+msgstr ""
+"Cada puerto tiene las coordenadas del centro lógico del puerto y la "
+"dirección (orientación) del puerto. Cuando dos puertos deben conectarse sin "
+"ningún desplazamiento o ángulo (por ejemplo, conectores macho y hembra), sus"
+" coordenadas deben coincidir y sus direcciones deben ser opuestas (rotadas "
+"180 grados alrededor de [1, 1, 0]). La convención sugerida es usar el eje Z "
+"(azul) como dirección principal. Los puertos macho deben tener el eje Z "
+"apuntando hacia afuera, mientras que los puertos hembra deben tener el eje Z"
+" apuntando hacia adentro."
+
+#: ../../source/config_interfaces.rst:405
+msgid "Matching multiple ports"
+msgstr "Coincidencia de múltiples puertos"
+
+#: ../../source/config_interfaces.rst:407
+msgid ""
+"Sometimes there are multiple interchangeable ports within one interface. For"
+" example, take a look at the NEMA-17 mounting ports:"
+msgstr ""
+"A veces hay múltiples puertos intercambiables dentro de una interfaz. Por "
+"ejemplo, observe los puertos de montaje NEMA-17:"
+
+#: ../../source/config_interfaces.rst:414
+msgid ""
+"It is desired that any mounting port of the motor can be connected to any "
+"mounting port of the bracket. That can be achieved by orienting the ports in"
+" a circular direction. See how the X-axis (red) is pointing to the next port"
+" clockwise (right-hand rule). If any pair of ports is aligned then all three"
+" other port pairs are aligned too."
+msgstr ""
+"Se desea que cualquier puerto de montaje del motor pueda conectarse a "
+"cualquier puerto de montaje del soporte. Eso se puede lograr orientando los "
+"puertos en una dirección circular. Observe cómo el eje X (rojo) apunta hacia"
+" el siguiente puerto en sentido horario (regla de la mano derecha). Si un "
+"par de puertos está alineado, entonces los otros tres pares de puertos "
+"también lo están."
+
+#: ../../source/config_interfaces.rst:427
+msgid "Interface parameters"
+msgstr "Parámetros de interfaz"
+
+#: ../../source/config_interfaces.rst:429
+msgid ""
+"Each interface may declare parameters to allow parametrized mating (e.g. a "
+"slotted hole allows for a mating at an offset within the size of the slot). "
+"There is a list of predefined parameters that are easy to use:"
+msgstr ""
+"Cada interfaz puede declarar parámetros para permitir el acoplamiento "
+"parametrizado (por ejemplo, un orificio ranurado permite un acoplamiento con"
+" un desplazamiento dentro del tamaño de la ranura). Hay una lista de "
+"parámetros predefinidos que son fáciles de usar:"
+
+#: ../../source/config_interfaces.rst:433
+msgid "moveX, moveY, moveZ: offset along X, Y, and Z axes"
+msgstr "moveX, moveY, moveZ: desplazamiento a lo largo de los ejes X, Y y Z"
+
+#: ../../source/config_interfaces.rst:434
+msgid "turnX, turnY, turnZ: rotation around X, Y, and Z axes"
+msgstr "turnX, turnY, turnZ: rotación alrededor de los ejes X, Y y Z"
+
+#: ../../source/config_interfaces.rst:446
+msgid ""
+"However custom parameters can be defined to use an arbitrary direction "
+"vector and an arbitrary offset or rotation."
+msgstr ""
+"Sin embargo, se pueden definir parámetros personalizados para usar un vector"
+" de dirección arbitrario y un desplazamiento o rotación arbitrarios."
+
+#: ../../source/config_interfaces.rst:461
+msgid ""
+"When the interface is inherited or used to connect parts, the parameter "
+"values get resolved and applied as inheritance or connection coordinate "
+"offsets."
+msgstr ""
+"Cuando la interfaz se hereda o se usa para conectar piezas, los valores de "
+"los parámetros se resuelven y se aplican como desplazamientos de coordenadas"
+" de herencia o conexión."
+
+#: ../../source/config_interfaces.rst:494
+msgid ""
+"A connection reads both interfaces' parameters in the **contact frame**: the"
+" frame where the two ports meet, which is the connected part's port and the "
+"target part's port turned round to face it. A move is in millimetres and a "
+"turn in degrees, about the frame's origin, in the order the connection names"
+" them. So the target's ``turnZ`` turns the connected part about the target "
+"port's own Z axis *reversed*. A parameter is an adjustment, fixed at the "
+"value it is given, unless the interface's ``motion:`` declares it a degree "
+"of freedom - then the value is where the joint starts (see `Joints`_)."
+msgstr ""
+"Una conexión lee los parámetros de las dos interfaces en el **marco de "
+"contacto**: el marco donde se encuentran los dos puertos, que es el puerto "
+"de la pieza conectada y el puerto de la pieza de destino girado para quedar "
+"enfrentado a él. Un desplazamiento va en milímetros y un giro en grados, en "
+"torno al origen del marco, en el orden en que la conexión los nombra. Así "
+"que el ``turnZ`` del destino gira la pieza conectada en torno al propio eje "
+"Z del puerto de destino *invertido*. Un parámetro es un ajuste, fijado en el"
+" valor que se le da, salvo que el ``motion:`` de la interfaz lo declare un "
+"grado de libertad - entonces el valor es donde arranca la articulación "
+"(véase `Articulaciones`_)."
+
+#: ../../source/config_interfaces.rst:506
+msgid "Parametric interfaces"
+msgstr "Interfaces paramétricas"
+
+#: ../../source/config_interfaces.rst:508
+msgid ""
+"An interface can be declared once and asked for with values, exactly as a "
+"part or a sketch is: the values go in ``parameters:``, and a reference names"
+" them with the same ``;<name>=<value>`` suffix ``pc ide view cube;width=20``"
+" uses."
+msgstr ""
+"Una interfaz se puede declarar una vez y pedirse con valores, exactamente "
+"igual que una pieza o un boceto: los valores van en ``parameters:``, y una "
+"referencia los nombra con el mismo sufijo ``;<name>=<value>`` que usa ``pc "
+"ide view cube;width=20``."
+
+#: ../../source/config_interfaces.rst:531
+msgid ""
+"Every set of values is one interface, whatever order they are written in and"
+" however the numbers are spelled: ``m-thru;size=4,depth=2``, "
+"``m-thru;depth=2,size=4`` and ``m-thru;depth=2.0,size=4.00`` are one object "
+"with one name. That matters beyond tidiness -- an interface's name is what a"
+" mating is registered under, so two objects for one set of values would be "
+"two halves of a connection that never find each other."
+msgstr ""
+"Cada conjunto de valores es una interfaz, en el orden en que se escriban y "
+"como se escriban los números: ``m-thru;size=4,depth=2``, "
+"``m-thru;depth=2,size=4`` y ``m-thru;depth=2.0,size=4.00`` son un mismo "
+"objeto con un mismo nombre. Eso importa más allá del orden: el nombre de una"
+" interfaz es aquello bajo lo que se registra un emparejamiento, así que dos "
+"objetos para un conjunto de valores serían dos mitades de una conexión que "
+"nunca se encuentran."
+
+#: ../../source/config_interfaces.rst:539
+msgid "One section, two kinds of parameter"
+msgstr "Una sección, dos tipos de parámetro"
+
+#: ../../source/config_interfaces.rst:541
+msgid ""
+"``parameters:`` on an interface has meant `Interface parameters`_ -- the "
+"freedom of movement a *made* connection keeps -- since interfaces existed. "
+"It now holds both kinds, because \"the same way as for a part\" is the point"
+" and a second section would be a second thing to learn. They are told apart "
+"by what each declares rather than by where it is written, and the two "
+"vocabularies do not overlap: a freedom-of-movement parameter states a range "
+"and an axis, a construction parameter states a value type and a default."
+msgstr ""
+"``parameters:`` en una interfaz ha significado `Interface parameters`_ -- la"
+" libertad de movimiento que conserva una conexión ya *hecha* -- desde que "
+"existen las interfaces. Ahora contiene ambos tipos, porque \"igual que para "
+"una pieza\" es la idea y una segunda sección sería una segunda cosa que "
+"aprender. Se distinguen por lo que declara cada una y no por dónde está "
+"escrita, y los dos vocabularios no se solapan: un parámetro de libertad de "
+"movimiento indica un rango y un eje, un parámetro de construcción indica un "
+"tipo de valor y un valor predeterminado."
+
+#: ../../source/config_interfaces.rst:561
+msgid ""
+"An entry is a **freedom-of-movement** parameter when any of the following is"
+" true, and a **construction** parameter otherwise:"
+msgstr ""
+"Una entrada es un parámetro de **libertad de movimiento** cuando se cumple "
+"cualquiera de las siguientes condiciones, y un parámetro de **construcción**"
+" en caso contrario:"
+
+#: ../../source/config_interfaces.rst:564
+msgid ""
+"it is one of the six predefined names -- ``moveX``, ``moveY``, ``moveZ``, "
+"``turnX``, ``turnY``, ``turnZ`` (or the hyphenated spellings a ``mates:`` "
+"section uses);"
+msgstr ""
+"es uno de los seis nombres predefinidos -- ``moveX``, ``moveY``, ``moveZ``, "
+"``turnX``, ``turnY``, ``turnZ`` (o las grafías con guion que usa una sección"
+" ``mates:``);"
+
+#: ../../source/config_interfaces.rst:567
+msgid "it is written in the short list form ``[min, max, default]``;"
+msgstr "está escrita en la forma corta de lista ``[min, max, default]``;"
+
+#: ../../source/config_interfaces.rst:568
+msgid ""
+"it states ``min``, ``max`` or ``dir``, or ``type: move`` / ``type: turn``."
+msgstr "indica ``min``, ``max`` o ``dir``, o ``type: move`` / ``type: turn``."
+
+#: ../../source/config_interfaces.rst:570
+msgid ""
+"Every freedom-of-movement parameter PartCAD has ever accepted is caught by "
+"the first or the third of those -- a custom name is *required* to state its "
+"``dir`` -- so a declaration written before this existed keeps the meaning it"
+" had."
+msgstr ""
+"Todos los parámetros de libertad de movimiento que PartCAD haya aceptado "
+"alguna vez quedan recogidos por la primera o la tercera de esas condiciones "
+"-- un nombre propio está *obligado* a indicar su ``dir`` --, de modo que una"
+" declaración escrita antes de que esto existiera conserva el significado que"
+" tenía."
+
+#: ../../source/config_interfaces.rst:574
+msgid ""
+"A part's or an assembly's ``parameters:`` is not split: for a shape that "
+"section has only ever meant the values it is built from."
+msgstr ""
+"El ``parameters:`` de una pieza o de un ensamblaje no se divide: para una "
+"forma, esa sección nunca ha significado otra cosa que los valores a partir "
+"de los cuales se construye."
+
+#: ../../source/config_interfaces.rst:577
+msgid ""
+"An interface's own freedom of movement takes precedence over the one it "
+"inherits, so an interface narrows -- or widens -- what its parent allowed by"
+" naming the same parameter again. ``m-screw`` above says how far *this* "
+"screw may be driven in; ``m``, which it inherits, says only that a screw may"
+" move along its axis at all."
+msgstr ""
+"La libertad de movimiento propia de una interfaz tiene prioridad sobre la "
+"que hereda, así que una interfaz estrecha -- o amplía -- lo que permitía su "
+"padre volviendo a nombrar el mismo parámetro. ``m-screw``, más arriba, dice "
+"hasta dónde se puede enroscar *este* tornillo; ``m``, del que hereda, solo "
+"dice que un tornillo puede moverse a lo largo de su eje."
+
+#: ../../source/config_interfaces.rst:585
+msgid ""
+"Before this, the inherited declaration won and a child's was discarded, so "
+"an interface could not say anything about the freedom it was given. Packages"
+" that already declare one therefore start behaving as they read: "
+"``//pub/std/metric/m`` has always said a screw may be driven in ``length - "
+"2``, and now it is. A range that runs *backwards* -- which that same "
+"expression produces for the 1mm screws in its own list -- is reported and "
+"read as no movement, rather than handed to a solver as an interval with "
+"nothing in it."
+msgstr ""
+"Antes de esto ganaba la declaración heredada y la del hijo se descartaba, "
+"así que una interfaz no podía decir nada sobre la libertad que se le daba. "
+"Por eso los paquetes que ya declaran una empiezan a comportarse tal como se "
+"leen: ``//pub/std/metric/m`` siempre ha dicho que un tornillo se puede "
+"enroscar ``length - 2``, y ahora así es. Un rango que va *hacia atrás* -- "
+"que es lo que produce esa misma expresión para los tornillos de 1 mm de su "
+"propia lista -- se informa y se lee como ausencia de movimiento, en lugar de"
+" entregarse a un solver como un intervalo vacío."
+
+#: ../../source/config_interfaces.rst:596
+msgid "Expressions"
+msgstr "Expresiones"
+
+#: ../../source/config_interfaces.rst:598
+msgid ""
+"Wherever a declaration says something about the connection -- ``desc``, "
+"``ports``, ``inherits``, ``implements``, ``mates``, ``alias``, "
+"``parameters`` (its freedom-of-movement half), ``leadPort``, ``threadStep``,"
+" ``selfScrew``, ``multiConnect`` and ``motion`` -- a value may be written as"
+" an expression over the interface's own values, between percent signs:"
+msgstr ""
+"Dondequiera que una declaración diga algo sobre la conexión -- ``desc``, "
+"``ports``, ``inherits``, ``implements``, ``mates``, ``alias``, "
+"``parameters`` (su mitad de libertad de movimiento), ``leadPort``, "
+"``threadStep``, ``selfScrew``, ``multiConnect`` y ``motion`` --, un valor se"
+" puede escribir como una expresión sobre los valores de la propia interfaz, "
+"entre signos de porcentaje:"
+
+#: ../../source/config_interfaces.rst:620
+msgid ""
+"A value that is *nothing but* an expression evaluates to the value itself, "
+"which is what lets a coordinate be written as one; a value that merely "
+"contains an expression gets it formatted in, which is what builds a name or "
+"a description. Inside the delimiters is an ordinary arithmetic expression "
+"over the object's parameters, with the usual functions available (``sqrt``, "
+"``sin``, ``cos``, ``floor``, ``min``, ``max``, ``round`` ...) and the same "
+"constants a template has (``PI``, ``SQRT_2``, ``INCH`` ...; see "
+":ref:`templates`). A constant is a number like any other, so ``%PI * size / "
+"4%`` is an expression; a parameter of the same name takes its place. "
+"Arithmetic, comparisons, a conditional, indexing and the plain methods of a "
+"string or a number (``index``, ``split``, ``replace``, ``startswith`` ...) "
+"are all of it: a declaration is read whenever a package is loaded -- long "
+"before anything is built and any CAD script runs -- so an expression may not"
+" call anything else, reach into an object, or define one. An expression that"
+" cannot be evaluated is reported by name and left standing as the text it "
+"was written as, so a misspelling costs that one value rather than the "
+"package."
+msgstr ""
+"Un valor que *no es más que* una expresión se evalúa al valor mismo, que es "
+"lo que permite escribir una coordenada como tal; un valor que meramente "
+"contiene una expresión la recibe formateada dentro, que es lo que construye "
+"un nombre o una descripción. Dentro de los delimitadores hay una expresión "
+"aritmética ordinaria sobre los parámetros del objeto, con las funciones "
+"habituales disponibles (``sqrt``, ``sin``, ``cos``, ``floor``, ``min``, "
+"``max``, ``round`` ...) y las mismas constantes que tiene una plantilla "
+"(``PI``, ``SQRT_2``, ``INCH`` ...; consulte :ref:`templates`). Una constante"
+" es un número como cualquier otro, así que ``%PI * size / 4%`` es una "
+"expresión; un parámetro con ese mismo nombre ocupa su lugar. La aritmética, "
+"las comparaciones, un condicional, la indexación y los métodos simples de "
+"una cadena o de un número (``index``, ``split``, ``replace``, ``startswith``"
+" ...) son todo lo que hay: una declaración se lee cada vez que se carga un "
+"paquete -- mucho antes de que se construya nada y de que se ejecute ningún "
+"script CAD --, así que una expresión no puede llamar a ninguna otra cosa, "
+"meterse dentro de un objeto ni definir uno. De una expresión que no se puede"
+" evaluar se informa por su nombre y se deja tal cual como el texto con el "
+"que se escribió, de modo que una errata cuesta ese valor y no el paquete."
+
+#: ../../source/config_interfaces.rst:639
+msgid ""
+"Expressions used to have ``pi`` and ``e`` in lower case, and no longer do: "
+"constants are upper case, as they are in a template. Write ``PI``, which "
+"every PartCAD that evaluates expressions has had, and ``E``. An expression "
+"that still says ``pi`` or ``e`` is reported with that advice, unless the "
+"object has a parameter by that name."
+msgstr ""
+"Las expresiones solían tener ``pi`` y ``e`` en minúsculas, y ya no: las "
+"constantes van en mayúsculas, como en una plantilla. Escriba ``PI``, que ha "
+"tenido todo PartCAD capaz de evaluar expresiones, y ``E``. De una expresión "
+"que siga diciendo ``pi`` o ``e`` se informa con ese consejo, a menos que el "
+"objeto tenga un parámetro con ese nombre."
+
+#: ../../source/config_interfaces.rst:647
+msgid ""
+"``%...%`` rather than Jinja2's ``{{ ... }}``, and it is not an alternative "
+"to it. ``partcad.yaml`` is rendered as a Jinja2 template *before* it is "
+"parsed (see :ref:`templates`), which is one step too early for a value that "
+"depends on which instance of an object is being asked for: at that point "
+"there are no instances yet. The two do not collide -- Jinja2 never sees "
+"``%...%``, and ``%...%`` is resolved long after Jinja2 has finished. The "
+"spelling is not new either: the names in an ``inherits:`` section have been "
+"written ``%moveX:value*2%`` since interfaces existed, and that form still "
+"means what it meant. Writing just ``%moveX%``, with no colon, is the part "
+"that is new -- the old resolver required the colon and failed without it."
+msgstr ""
+"``%...%`` en lugar del ``{{ ... }}`` de Jinja2, y no es una alternativa a "
+"él. ``partcad.yaml`` se renderiza como plantilla Jinja2 *antes* de "
+"analizarse (consulte :ref:`templates`), lo que es un paso demasiado temprano"
+" para un valor que depende de por qué instancia de un objeto se está "
+"preguntando: en ese momento todavía no hay instancias. Los dos no chocan -- "
+"Jinja2 nunca ve ``%...%``, y ``%...%`` se resuelve mucho después de que "
+"Jinja2 haya terminado. La grafía tampoco es nueva: los nombres de una "
+"sección ``inherits:`` se han escrito ``%moveX:value*2%`` desde que existen "
+"las interfaces, y esa forma sigue significando lo que significaba. Escribir "
+"solo ``%moveX%``, sin dos puntos, es la parte nueva -- el resolutor antiguo "
+"exigía los dos puntos y fallaba sin ellos."
+
+#: ../../source/config_interfaces.rst:659
+msgid "Parametrized sketches on ports"
+msgstr "Bocetos parametrizados en los puertos"
+
+#: ../../source/config_interfaces.rst:661
+msgid ""
+"A port's sketch takes parameter values too, either in ``params:`` beside it "
+"or spelled into its name (``sketch: \"m;size=%size%\"``) -- they are the "
+"same thing. So one sketch draws the boundary of every size the interface "
+"family has, instead of one pre-generated sketch per size:"
+msgstr ""
+"El boceto de un puerto también admite valores de parámetros, bien en "
+"``params:`` junto a él, bien escritos dentro de su nombre (``sketch: "
+"\"m;size=%size%\"``) -- son lo mismo. Así, un solo boceto dibuja el contorno"
+" de todos los tamaños que tiene la familia de interfaces, en lugar de un "
+"boceto pregenerado por tamaño:"
+
+#: ../../source/config_interfaces.rst:675
+msgid ""
+"A ``basic`` sketch has no script to hand its parameters to, so an expression"
+" is how it reads them; a ``cadquery`` or ``build123d`` sketch gets them as "
+"build parameters as usual."
+msgstr ""
+"Un boceto ``basic`` no tiene ningún script al que entregar sus parámetros, "
+"así que una expresión es la forma en que los lee; un boceto ``cadquery`` o "
+"``build123d`` los recibe como parámetros de construcción, como de costumbre."
+
+#: ../../source/config_interfaces.rst:680
+msgid "Parametric ports on a part"
+msgstr "Puertos paramétricos en una pieza"
+
+#: ../../source/config_interfaces.rst:682
+msgid ""
+"The same applies to the ``ports:`` and ``implements:`` sections of a part or"
+" an assembly, over that shape's own ``parameters:``. A plate that is asked "
+"for by thickness implements the through-hole of that thickness:"
+msgstr ""
+"Lo mismo se aplica a las secciones ``ports:`` e ``implements:`` de una pieza"
+" o de un ensamblaje, sobre los ``parameters:`` propios de esa forma. Una "
+"placa que se pide por grosor implementa el agujero pasante de ese grosor:"
+
+#: ../../source/config_interfaces.rst:696
+msgid ""
+"Nothing else in a shape's declaration is touched: ``desc`` is prose and "
+"``fileUrl`` is a URL that may be percent-encoded, and neither is an "
+"expression."
+msgstr ""
+"Nada más de la declaración de una forma se ve afectado: ``desc`` es prosa y "
+"``fileUrl`` es una URL que puede estar codificada con porcentajes, y ninguna"
+" de las dos es una expresión."
+
+#: ../../source/config_interfaces.rst:699
+msgid ""
+"An ``enrich`` (or an ``alias``) declares no ``parameters:`` -- it asks for "
+"an instance of what it points at -- so its expressions read the values in "
+"its ``with:`` instead, part or assembly alike. A leg cut to length from a "
+"post has its top end wherever that length says, for the leg as declared and "
+"for ``leg;length=20`` alike:"
+msgstr ""
+"Un ``enrich`` (o un ``alias``) no declara ningún ``parameters:`` -- pide una"
+" instancia de aquello a lo que apunta -- así que sus expresiones leen en su "
+"lugar los valores de su ``with:``, tanto si es una pieza como un ensamblaje."
+" Una pata cortada a medida de un poste tiene su extremo superior donde diga "
+"esa longitud, tanto para la pata tal como se declara como para "
+"``leg;length=20``:"
+
+#: ../../source/config_interfaces.rst:718
+msgid ""
+"A value that reaches it from a parametrized name is the text it was written "
+"as and is read as the number it spells; the types are declared by what the "
+"reference points at, which need not be loaded yet."
+msgstr ""
+"Un valor que le llega desde un nombre parametrizado es el texto con el que "
+"se escribió y se lee como el número que representa; los tipos los declara "
+"aquello a lo que apunta la referencia, que no tiene por qué estar cargado "
+"todavía."
+
+#: ../../source/config_interfaces.rst:725
+msgid "The same opening, drawn differently"
+msgstr "La misma abertura, dibujada de otra manera"
+
+#: ../../source/config_interfaces.rst:727
+msgid ""
+"An inherited instance may restate the boundary its ports are drawn with. A "
+"slotted hole *is* a through hole -- it inherits one, mates as one, and keeps"
+" its port where the plain hole would have been -- and what tells them apart "
+"is the outline and the freedom of movement:"
+msgstr ""
+"Una instancia heredada puede volver a indicar el contorno con el que se "
+"dibujan sus puertos. Un agujero rasgado *es* un agujero pasante -- hereda "
+"uno, empareja como uno, y mantiene su puerto donde habría estado el agujero "
+"simple -- y lo que los distingue es el contorno y la libertad de movimiento:"
+
+#: ../../source/config_interfaces.rst:746
+msgid ""
+"``sketch:`` is a reference like any other, so the values go in the name. It "
+"replaces the boundary of every port that instance brings in; an instance "
+"that says nothing about it keeps the boundary the inherited interface draws "
+"with."
+msgstr ""
+"``sketch:`` es una referencia como cualquier otra, así que los valores van "
+"en el nombre. Reemplaza el contorno de todos los puertos que aporta esa "
+"instancia; una instancia que no dice nada al respecto conserva el contorno "
+"con el que dibuja la interfaz heredada."
+
+#: ../../source/config_interfaces.rst:750
+msgid ""
+"Only an interface restates a boundary. A part or an assembly draws the ports"
+" of what it implements the way that interface draws them, and ``sketch:`` on"
+" an ``implements:`` instance is an error: the outline is part of what the "
+"interface is, declared beside the freedom of movement that goes with it, and"
+" a part that restated it could draw a slot on a through hole that has no "
+"room to slide. A part with a slotted hole implements ``m-thru-slotted``. A "
+"part whose outline depends on its own parameters implements an interface "
+"parametrized by them -- here, a nail whose head is drawn the size the nail "
+"is asked for:"
+msgstr ""
+"Solo una interfaz vuelve a declarar un contorno. Una pieza o un ensamblaje "
+"dibuja los puertos de lo que implementa tal como los dibuja esa interfaz, y "
+"``sketch:`` en una instancia de ``implements:`` es un error: el contorno "
+"forma parte de lo que la interfaz es, declarado junto a la libertad de "
+"movimiento que lo acompaña, y una pieza que lo volviera a declarar podría "
+"dibujar una ranura sobre un agujero pasante que no tiene espacio para "
+"deslizar. Una pieza con un agujero ranurado implementa ``m-thru-slotted``. "
+"Una pieza cuyo contorno depende de sus propios parámetros implementa una "
+"interfaz parametrizada por ellos -- aquí, un clavo cuya cabeza se dibuja del"
+" tamaño con el que se pide el clavo:"
+
+#: ../../source/config_interfaces.rst:780
+msgid "Interface aliases"
+msgstr "Alias de interfaz"
+
+#: ../../source/config_interfaces.rst:782
+msgid ""
+"``alias:`` declares that an interface *is* another one, under a different "
+"name. A bare string is the short form of the same thing, the way it is for a"
+" sketch or a part:"
+msgstr ""
+"``alias:`` declara que una interfaz *es* otra, bajo un nombre distinto. Una "
+"cadena a secas es la forma corta de lo mismo, igual que ocurre con un boceto"
+" o una pieza:"
+
+#: ../../source/config_interfaces.rst:793
+msgid ""
+"The alias has the target's ports, under the target's port names -- not "
+"prefixed, the way an ``inherits:`` instance name would prefix them -- it is "
+"a drop-in for the target, so it mates with whatever the target mates with, "
+"and what it does not declare for itself (its description, ``leadPort``, "
+"``abstract``, ``motion``, ``physics``, ``threadStep`` ...) it takes from the"
+" target."
+msgstr ""
+"El alias tiene los puertos del destino, bajo los nombres de puerto del "
+"destino -- sin prefijo, a diferencia de cómo los prefijaría el nombre de una"
+" instancia ``inherits:`` --; es un sustituto directo del destino, así que "
+"empareja con todo aquello con lo que empareja el destino, y lo que no "
+"declara por sí mismo (su descripción, ``leadPort``, ``abstract``, "
+"``motion``, ``physics``, ``threadStep`` ...) lo toma del destino."
+
+#: ../../source/config_interfaces.rst:799
+msgid ""
+"That is what lets a package make a family parametric without withdrawing the"
+" names it has published. A package that spelled out ``m3-thru-3``, "
+"``m3-thru-4``, ``m4-thru-3`` and several thousand more can declare the "
+"family once and keep every one of those names as a one-line alias: a part "
+"that says ``implements: m3-thru-3`` goes on working, with the same ports "
+"under the same names, and a part written today can say "
+"``m-thru;size=3,depth=3`` instead. See the ``//pub/std/metric/m`` package, "
+"which is exactly this."
+msgstr ""
+"Eso es lo que permite que un paquete haga paramétrica una familia sin "
+"retirar los nombres que ha publicado. Un paquete que escribía uno por uno "
+"``m3-thru-3``, ``m3-thru-4``, ``m4-thru-3`` y varios miles más puede "
+"declarar la familia una vez y conservar cada uno de esos nombres como un "
+"alias de una línea: una pieza que dice ``implements: m3-thru-3`` sigue "
+"funcionando, con los mismos puertos bajo los mismos nombres, y una pieza "
+"escrita hoy puede decir ``m-thru;size=3,depth=3`` en su lugar. Consulte el "
+"paquete ``//pub/std/metric/m``, que es exactamente esto."
+
+#: ../../source/config_interfaces.rst:808
+msgid "Interface examples"
+msgstr "Ejemplos de interfaz"
+
+#: ../../source/config_interfaces.rst:810
+msgid "See the `feature_interfaces` example for more information."
+msgstr "Consulte el ejemplo `feature_interfaces` para más información."

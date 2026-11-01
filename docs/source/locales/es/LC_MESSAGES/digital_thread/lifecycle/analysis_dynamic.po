@@ -1,0 +1,195 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:5
+msgid "Dynamic FEA"
+msgstr "Dynamic FEA"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:7
+msgid ""
+"**Dynamic FEA** is the question at which frequencies a part rings, held as "
+"it is held: a modal analysis of the solid, reporting its natural frequencies"
+" and the shape it moves in at each one. It is what says whether a bracket "
+"will be shaken by the motor bolted to it."
+msgstr ""
+"**Dynamic FEA** es la pregunta de a qué frecuencias vibra una pieza, "
+"sujetada como está sujetada: un análisis modal del sólido, que informa de "
+"sus frecuencias naturales y de la forma en la que se mueve en cada una. Es "
+"lo que dice si un soporte será sacudido por el motor atornillado a él."
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:12
+msgid ""
+"The question is asked by a ``dynamic:`` section on the part, a map of named "
+"scenarios, and answered by a solver a package supplies. "
+":doc:`/digital_thread/lifecycle/analysis` explains what every analysis has "
+"in common."
+msgstr ""
+"La pregunta la plantea una sección ``dynamic:`` en la pieza, un mapa de "
+"escenarios con nombre, y la responde un solver que proporciona un paquete. "
+":doc:`/digital_thread/lifecycle/analysis` explica lo que todos los análisis "
+"tienen en común."
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:18
+msgid "What the scenario says"
+msgstr "Qué dice el escenario"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:20
+msgid "One condition:"
+msgstr "Una condición:"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:22
+msgid "``fix:``"
+msgstr "``fix:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:23
+msgid ""
+"a list of interface types held still, or a map from a type to the instances "
+"of it meant. The natural frequencies of everything else are what is found."
+msgstr ""
+"una lista de tipos de interfaz que se mantienen inmóviles, o un mapa de un "
+"tipo a las instancias de él a las que se refiere. Lo que se halla son las "
+"frecuencias naturales de todo lo demás."
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:26
+msgid ""
+"There is no load. A modal analysis asks what the part does when nothing "
+"drives it, so ``load:`` is refused here rather than ignored -- it would read"
+" as a boundary condition and not be one. How many modes are reported is the "
+"implementation's parameter (``modes``), stated in the package's ``cae:`` "
+"section or per scenario in ``params:``."
+msgstr ""
+"No hay carga. Un análisis modal pregunta qué hace la pieza cuando nada la "
+"impulsa, así que ``load:`` se rechaza aquí en lugar de ignorarse -- se "
+"leería como una condición de contorno sin serlo. Cuántos modos se informan "
+"es un parámetro de la implementación (``modes``), declarado en la sección "
+"``cae:`` del paquete o por escenario en ``params:``."
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:45
+msgid "In the UI"
+msgstr "En la interfaz"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:47
+msgid ""
+"The scenarios are listed down the left with the first selected, each marked "
+"with how its last run went, and selecting one runs it. What is shown is the "
+"model the implementation produced -- the mode shapes, drawn as geometry to "
+"turn and zoom -- with the frequencies and any findings under it."
+msgstr ""
+"Los escenarios se enumeran a la izquierda con el primero seleccionado, cada "
+"uno marcado con cómo fue su última ejecución, y seleccionar uno lo ejecuta. "
+"Lo que se muestra es el modelo que produjo la implementación -- las formas "
+"de los modos, dibujadas como geometría que se puede girar y ampliar -- con "
+"las frecuencias y los hallazgos que haya debajo."
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:52
+msgid ""
+"**Analysed by** names the solver and takes another; **Analyse** runs the "
+"scenario again. Both work exactly as they do on the :doc:`FEA tab "
+"</digital_thread/lifecycle/analysis_fea>`."
+msgstr ""
+"**Analysed by** nombra el solver y acepta otro; **Analyse** vuelve a "
+"ejecutar el escenario. Ambos funcionan exactamente como en la :doc:`pestaña "
+"FEA </digital_thread/lifecycle/analysis_fea>`."
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:56
+msgid ""
+"The Analysis group's Dynamic FEA tab: the scenario list and the mode shape"
+msgstr ""
+"La pestaña Dynamic FEA del grupo Analysis: la lista de escenarios y la forma"
+" del modo"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:61
+msgid ""
+"The tab is enabled for a part that declares ``dynamic:``, and disabled -- "
+"with the reason on hover -- for everything else."
+msgstr ""
+"La pestaña está activada para una pieza que declara ``dynamic:``, y "
+"desactivada -- con el motivo al pasar el puntero -- para todo lo demás."
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:65
+msgid "On the command line"
+msgstr "En la línea de comandos"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:75
+msgid "Who runs it"
+msgstr "Quién lo ejecuta"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:77
+msgid ""
+"The default is `partcad-cae-elmer <https://github.com/partcad/partcad-cae-"
+"elmer>`_, which runs `Elmer <https://www.elmerfem.org/>`_; "
+"``caeDynamicImplementation`` names another. `Code_Aster <https://www.code-"
+"aster.org/>`_ and `MOOSE <https://mooseframework.inl.gov/>`_ do this "
+"analysis too."
+msgstr ""
+"El valor predeterminado es `partcad-cae-elmer "
+"<https://github.com/partcad/partcad-cae-elmer>`_, que ejecuta `Elmer "
+"<https://www.elmerfem.org/>`_; ``caeDynamicImplementation`` nombra otro. "
+"`Code_Aster <https://www.code-aster.org/>`_ y `MOOSE "
+"<https://mooseframework.inl.gov/>`_ también hacen este análisis."
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:84
+msgid "An example"
+msgstr "Un ejemplo"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:86
+msgid ""
+"`examples/feature_cae "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cae>`_ "
+"declares ``cantilever``'s ``clamped`` scenario: the same steel bar, clamped "
+"at the root and left to ring. Its first natural frequency is a closed form, "
+"and the package's ``README.md`` compares what the solver reported with it. "
+"The scenario asks for six modes, which is enough to see the first bending "
+"pair, the first torsion mode and the second bending pair."
+msgstr ""
+"`examples/feature_cae "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cae>`_ "
+"declara el escenario ``clamped`` de ``cantilever``: la misma barra de acero,"
+" empotrada en la raíz y dejada vibrar. Su primera frecuencia natural tiene "
+"una forma cerrada, y el ``README.md`` del paquete compara con ella lo que "
+"informó el solver. El escenario pide seis modos, que bastan para ver el "
+"primer par de flexión, el primer modo de torsión y el segundo par de "
+"flexión."
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:94
+msgid "Agent skills"
+msgstr "Skills de agente"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:96
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:97
+msgid ""
+"Runs every scenario as part of giving each requirement a verdict, and "
+"reports one that names a ``feature:`` as evidence for that feature."
+msgstr ""
+"Ejecuta todos los escenarios como parte de dar un veredicto a cada "
+"requisito, e informa de uno que nombra una ``feature:`` como evidencia de "
+"esa característica."
+
+#: ../../source/digital_thread/lifecycle/analysis_dynamic.rst:100
+msgid ""
+"As with FEA, nothing writes a ``dynamic:`` section from a description: what "
+"holds the part is a judgement about the real assembly."
+msgstr ""
+"Como con FEA, nada escribe una sección ``dynamic:`` a partir de una "
+"descripción: lo que sujeta la pieza es un juicio sobre el ensamblaje real."

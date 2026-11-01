@@ -1,0 +1,315 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:2
+msgid "Manufacturing"
+msgstr "Fabricación"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:15
+msgid ""
+"Manufacturing is how the object comes to exist: which of its parts are "
+"bought and which are made, how each made part is made and from what, what "
+"the machines that make it are told, and in what order it all goes together. "
+"PartCAD keeps that in the same declaration as the design, so the part that "
+"is ordered is the part that was analysed, and the instructions are written "
+"from the assembly they put together."
+msgstr ""
+"La fabricación es cómo llega a existir el objeto: cuáles de sus piezas se "
+"compran y cuáles se fabrican, cómo se fabrica cada pieza fabricada y a "
+"partir de qué, qué se les dice a las máquinas que la fabrican, y en qué "
+"orden se monta todo. PartCAD mantiene eso en la misma declaración que el "
+"diseño, así que la pieza que se pide es la pieza que se analizó, y las "
+"instrucciones se escriben a partir del ensamblaje que montan."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:23
+msgid "What PartCAD captures"
+msgstr "Qué captura PartCAD"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:26
+msgid "Whether it is made at all"
+msgstr "Si se fabrica en absoluto"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:28
+msgid ""
+"``manufacturable:`` says whether an object is something anybody is going to "
+"make or buy -- on the object, or for a whole package. A model of something "
+"somebody else makes, an import kept as it arrived, a scene: these are "
+"records, and say ``manufacturable: false``. Everything else is held to what "
+"follows."
+msgstr ""
+"``manufacturable:`` dice si un objeto es algo que alguien vaya a fabricar o "
+"a comprar -- en el objeto, o para todo un paquete. Un modelo de algo que "
+"fabrica otro, una importación conservada tal como llegó, una escena: son "
+"registros, y dicen ``manufacturable: false``. A todo lo demás se le exige lo"
+" que sigue."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:34
+msgid "Bought"
+msgstr "Comprado"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:36
+msgid ""
+"A part or an assembly that is bought names who sells it, by ``vendor:`` and "
+"``sku:``, and suppliers that carry it are found and asked for quotes by ``pc"
+" supply``. An assembly that is sold assembled is ordered as one item, and "
+"nothing inside it is looked at. See :ref:`procurement`."
+msgstr ""
+"Una pieza o un ensamblaje que se compra nombra quién lo vende, con "
+"``vendor:`` y ``sku:``, y ``pc supply`` encuentra los proveedores que lo "
+"tienen y les pide presupuesto. Un ensamblaje que se vende montado se pide "
+"como un solo artículo, y no se mira nada de su interior. Véase "
+":ref:`procurement`."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:42
+msgid "Made"
+msgstr "Fabricado"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:44
+msgid ""
+"A part that is made says how, in a ``manufacturing:`` section: the method "
+"(``additive``, ``subtractive``, ``forming``, ``sheet_metal``), the stock it "
+"is made from (``source:``), the machines it is cut on (``cnc:``, ``laser:``,"
+" ``drill:``, ``cut:``) and what they are told, and the tolerance it is made "
+"to. See :ref:`made-from-stock`, :ref:`subtractive` and :ref:`sheet-metal`. "
+"What it is made of is its :ref:`material <materials>`; the firmware a board "
+"is flashed with is its :ref:`software <software>`."
+msgstr ""
+"Una pieza que se fabrica dice cómo, en una sección ``manufacturing:``: el "
+"método (``additive``, ``subtractive``, ``forming``, ``sheet_metal``), el "
+"material del que se fabrica (``source:``), las máquinas en las que se corta "
+"(``cnc:``, ``laser:``, ``drill:``, ``cut:``) y qué se les dice, y la "
+"tolerancia con la que se fabrica. Véanse :ref:`made-from-stock`, "
+":ref:`subtractive` y :ref:`sheet-metal`. De qué está hecha es su "
+":ref:`material <materials>`; el firmware con el que se graba una placa es su"
+" :ref:`software <software>`."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:53
+msgid "Put together"
+msgstr "Montado"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:55
+msgid ""
+"An assembly is put together by following its own Assembly YAML file: each "
+"link says what it is joined to and how -- pushed, snapped or screwed in -- "
+"so the steps can be written out for a person to follow (see :ref:`how an "
+"assembly is manufactured <assembly-manufacturing>` and :doc:`/assy`)."
+msgstr ""
+"Un ensamblaje se monta siguiendo su propio archivo Assembly YAML: cada "
+"enlace dice a qué está unido y cómo -- metido a presión, encajado o "
+"atornillado -- de modo que los pasos se pueden escribir para que los siga "
+"una persona (véanse :ref:`cómo se fabrica un ensamblaje <assembly-"
+"manufacturing>` y :doc:`/assy`)."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:61
+msgid "In the UI"
+msgstr "En la interfaz"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:63
+msgid ""
+"**Manufacturing** has five tabs, for a part or an assembly; for a scene, a "
+"sketch or an interface the whole group is disabled. They are in the order "
+"they are decided, and the first decides the rest. Each has a chapter of its "
+"own:"
+msgstr ""
+"**Manufacturing** tiene cinco pestañas, para una pieza o un ensamblaje; para"
+" una escena, un boceto o una interfaz todo el grupo está desactivado. Están "
+"en el orden en que se deciden, y la primera decide las demás. Cada una tiene"
+" un capítulo propio:"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:67
+msgid ":doc:`Build vs Buy </digital_thread/lifecycle/manufacturing_bvb>`"
+msgstr ":doc:`Build vs Buy </digital_thread/lifecycle/manufacturing_bvb>`"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:68
+msgid ""
+"Everything the object is made of, and on each a switch: build it, or buy it."
+" The one decision in the Digital Thread that is kept on the machine of "
+"whoever made it rather than in the package -- and the one that decides the "
+"other four tabs."
+msgstr ""
+"Todo aquello de lo que está hecho el objeto, y sobre cada cosa un "
+"interruptor: fabricarlo o comprarlo. La única decisión del Digital Thread "
+"que se guarda en la máquina de quien la tomó y no en el paquete -- y la que "
+"decide las otras cuatro pestañas."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:73
+msgid ":doc:`Build </digital_thread/lifecycle/manufacturing_build>`"
+msgstr ":doc:`Build </digital_thread/lifecycle/manufacturing_build>`"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:74
+msgid ""
+"What is built, in the order it is built in, each step a page of the "
+"instructions -- with the machine route drawn where a part declares one."
+msgstr ""
+"Lo que se fabrica, en el orden en que se fabrica, cada paso una página de "
+"las instrucciones -- con la trayectoria de máquina dibujada allí donde una "
+"pieza declara una."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:77
+msgid ":doc:`Buy </digital_thread/lifecycle/manufacturing_buy>`"
+msgstr ":doc:`Buy </digital_thread/lifecycle/manufacturing_buy>`"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:78
+msgid ""
+"What is bought: where each line can be obtained, and a quote per supplier."
+msgstr ""
+"Lo que se compra: dónde se puede conseguir cada línea, y un presupuesto por "
+"proveedor."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:80
+msgid ":doc:`Bill of Materials </digital_thread/lifecycle/manufacturing_bom>`"
+msgstr ""
+":doc:`Bill of Materials </digital_thread/lifecycle/manufacturing_bom>`"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:81
+msgid ""
+"What has to be procured in order to have it, counted -- a made part as the "
+"stock it is cut from."
+msgstr ""
+"Lo que hay que abastecer para tenerlo, contado -- una pieza fabricada como "
+"el material del que se corta."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:84
+msgid ":doc:`Assembly </digital_thread/lifecycle/manufacturing_assembly>`"
+msgstr ":doc:`Assembly </digital_thread/lifecycle/manufacturing_assembly>`"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:85
+msgid "The assembly instruction book, page by page, to read or save."
+msgstr ""
+"El manual de instrucciones de ensamblaje, página a página, para leer o "
+"guardar."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:87
+msgid "The Manufacturing group: its five tabs, open on Build vs Buy"
+msgstr "El grupo Manufacturing: sus cinco pestañas, abierto en Build vs Buy"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:94
+msgid "On the command line"
+msgstr "En la línea de comandos"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:96
+msgid "``pc bom`` lists everything the object takes, with how many of each."
+msgstr ""
+"``pc bom`` enumera todo lo que lleva el objeto, con cuántas unidades de cada"
+" cosa."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:97
+msgid ""
+"``pc supply find``, ``quote`` and ``order`` find suppliers, ask them for "
+"prices and order from them -- see :ref:`providers and suppliers <supply-"
+"chain>`."
+msgstr ""
+"``pc supply find``, ``quote`` y ``order`` encuentran proveedores, les piden "
+"precios y les hacen pedidos -- véase :ref:`proveedores y suministradores "
+"<supply-chain>`."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:99
+msgid ""
+"``pc instructions`` writes the assembly instructions: a page per step, each "
+"drawn. It reads the **Build vs Buy** choices made on this machine, which is "
+"what makes it write the steps for what *you* are building rather than for "
+"everything the package could build."
+msgstr ""
+"``pc instructions`` escribe las instrucciones de ensamblaje: una página por "
+"paso, cada una dibujada. Lee las decisiones **Build vs Buy** tomadas en esta"
+" máquina, que es lo que hace que escriba los pasos de lo que *usted* está "
+"construyendo y no de todo lo que el paquete podría construir."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:103
+msgid ""
+"``pc cam`` writes the programs the machines cut a part with -- see "
+":ref:`machine routes <cam-routes>` for what it produces and what it cannot, "
+"and :ref:`pc cam <cam>` for the command."
+msgstr ""
+"``pc cam`` escribe los programas con los que las máquinas cortan una pieza "
+"-- véase :ref:`trayectorias de máquina <cam-routes>` para lo que produce y "
+"lo que no puede, y :ref:`pc cam <cam>` para el comando."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:106
+msgid ""
+"``pc info`` reports the material, the stock and the tolerances an object "
+"resolved to, which is where a surprising bill of materials line is "
+"explained."
+msgstr ""
+"``pc info`` informa del material, del material en bruto y de las tolerancias"
+" a las que resolvió un objeto, que es donde se explica una línea "
+"sorprendente de la lista de materiales."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:110
+msgid "How manufacturing is checked"
+msgstr "Cómo se comprueba la fabricación"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:112
+msgid ""
+"``pc test`` asks of every manufacturable object what ``pc supply`` would "
+"order and what ``pc instructions`` would tell somebody to do: the "
+"``manufacturability`` check, and one for each method -- additive, "
+"subtractive, forming, sheet metal, and the laser, drill and cut machines -- "
+"plus ``cam``, whether the route a machine is to cut it with can be produced."
+" See :doc:`/digital_thread/lifecycle/testing`."
+msgstr ""
+"``pc test`` pregunta a cada objeto fabricable qué pediría ``pc supply`` y "
+"qué le diría ``pc instructions`` a alguien que hiciera: la comprobación "
+"``manufacturability``, y una por cada método -- aditivo, sustractivo, "
+"conformado, chapa metálica, y las máquinas de láser, taladro y corte -- más "
+"``cam``, si se puede producir la trayectoria con la que una máquina va a "
+"cortarlo. Véase :doc:`/digital_thread/lifecycle/testing`."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:120
+msgid "Agent skills"
+msgstr "Agent skills"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:121
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:122
+msgid ""
+"Reads the bill of materials and the assembly instructions as part of giving "
+"a requirement its verdict, which is the one skill that exercises this phase "
+"end to end."
+msgstr ""
+"Lee la lista de materiales y las instrucciones de ensamblaje como parte de "
+"dar su veredicto a un requisito, que es la única skill que ejercita esta "
+"fase de principio a fin."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:126
+msgid "``/pc:export`` and ``/pc:convert``"
+msgstr "``/pc:export`` y ``/pc:convert``"
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:127
+msgid ""
+"Write the file a supplier or a machine is given, in the format it asks for."
+msgstr ""
+"Escriben el archivo que se entrega a un proveedor o a una máquina, en el "
+"formato que pide."
+
+#: ../../source/digital_thread/lifecycle/manufacturing.rst:129
+msgid ""
+"Choosing what to build and what to buy is deliberately not something a skill"
+" does: it is a decision about who has which machines, it is kept on the "
+"machine of whoever made it rather than in the package, and it is the one "
+"input to this phase that is nobody else's to guess."
+msgstr ""
+"Elegir qué fabricar y qué comprar no es algo que haga una skill, y es "
+"deliberado: es una decisión sobre quién tiene qué máquinas, se guarda en la "
+"máquina de quien la tomó y no en el paquete, y es la única entrada a esta "
+"fase que nadie más puede adivinar."

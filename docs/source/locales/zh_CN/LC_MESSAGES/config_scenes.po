@@ -1,0 +1,222 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/config_scenes.rst:3
+msgid "Scenes"
+msgstr "场景"
+
+#: ../../source/config_scenes.rst:8
+msgid "What a scene is"
+msgstr "场景是什么"
+
+#: ../../source/config_scenes.rst:11
+msgid ""
+"A scene is a placed arrangement of objects - a workcell, a table with parts "
+"laid out on it, a simulation world. It is built out of the same files as an "
+"assembly, and differs in intent: an assembly is a product that was put "
+"together, and a scene states only where things are. A scene can also say "
+"what its world is like, the gravity in it and the fluid it is filled with, "
+"and it is what a simulation places an object in. A Gazebo world or a MuJoCo "
+"model is read as a scene, and a scene is written out as either, through the "
+"engine's plugin package. See :ref:`scenes` and "
+":doc:`/digital_thread/lifecycle/simulation`."
+msgstr ""
+"场景是各对象摆放好的一种组合 - "
+"一个工作单元、一张上面摊着零件的桌子、一个仿真世界。它与装配体由同样那些文件构建出来，区别在于意图：装配体是一件被装起来的产品，而场景只陈述各物体所处的位置。场景还可以说明它的世界是什么样的、其中的重力以及它注满的流体，而它也正是仿真把一个对象放进去的那个东西。一个"
+" Gazebo 世界或一个 MuJoCo 模型会被当作场景读入，而场景也可以通过引擎的插件包写出成这两者之一。参见 :ref:`scenes` 和 "
+":doc:`/digital_thread/lifecycle/simulation` 。"
+
+#: ../../source/config_scenes.rst:21
+msgid ""
+"A **scene** is a placed arrangement of objects: a workcell, a table with the"
+" parts laid out on it, a simulation world. It is built the way an assembly "
+"is, out of the very same files, and everything that works on an assembly "
+"works on a scene -- it renders, it exports, it has a bill of materials, ``pc"
+" ide view`` shows it."
+msgstr ""
+"**场景** "
+"是对象的摆放布置：一个工作单元、一张摆着零件的工作台、一个仿真世界。它的构建方式与装配体相同，用的也是完全一样的文件；凡是对装配体有效的东西，对场景同样有效——它可以渲染、可以导出、有物料清单，"
+" ``pc ide view`` 也能显示它。"
+
+#: ../../source/config_scenes.rst:27
+msgid ""
+"What separates the two is intent, and one rule follows from it. An assembly "
+"is a *product*: it says what it is made of and, through the ``how:`` section"
+" of each ``connect:``, how it is put together, which is what the assembly "
+"instruction book (``pc render -t pdf``) is generated from. A scene states "
+"only an end state. Nothing in it was assembled, so there is nothing to say "
+"about the assembling, and ``how:`` is rejected rather than ignored (see "
+":doc:`/assy`)."
+msgstr ""
+"把两者分开的是意图，而有一条规则由此而来。装配体是一件 *产品* ：它说明自己由什么构成，并通过每个 ``connect:`` 的 ``how:`` "
+"小节说明自己是如何装起来的，而装配说明书（ ``pc render -t pdf`` "
+"）正是据此生成的。而场景只陈述一个最终状态。其中没有任何东西是被装配出来的，因此也就无从谈起装配过程，于是 ``how:`` "
+"会被拒绝，而不是被忽略（参见 :doc:`/assy` ）。"
+
+#: ../../source/config_scenes.rst:36
+msgid "Declare scenes"
+msgstr "声明场景"
+
+#: ../../source/config_scenes.rst:67
+msgid ""
+"The declaration points at the file that holds the scene and nothing else: "
+"there is no assembly object in between. An ``.assy`` file in an "
+"``assemblies:`` section is an assembly, and the very same file in a "
+"``scenes:`` section is a scene."
+msgstr ""
+"声明只指向存放该场景的文件，别无其他：中间不存在任何装配体对象。位于 ``assemblies:`` 小节中的 ``.assy`` "
+"文件是一个装配体，而完全相同的文件位于 ``scenes:`` 小节中则是一个场景。"
+
+#: ../../source/config_scenes.rst:83
+msgid "Scenes take parameters, aliases and enriches exactly as assemblies do:"
+msgstr "场景接受参数、别名和 enrich 的方式与装配体完全相同："
+
+#: ../../source/config_scenes.rst:94
+msgid ""
+"A scene's ASSY file may place another scene (``scene:``) and weld what a "
+"link places to the world (``fixed: true``), and neither is allowed in an "
+"assembly: in a scene every element is a rigid body of its own, and in an "
+"assembly everything is attached to it. See :ref:`assy-scenes` for the keys "
+"and :ref:`sim-bodies` for the rule."
+msgstr ""
+"场景的 ASSY 文件可以放置另一个场景（ ``scene:`` ），并把某条链接所放置的东西焊接到世界上（ ``fixed: true`` "
+"），而这两者在装配体中都是不允许的：在场景中，每一个元素各自是一个刚体；而在装配体中，一切都固连在它身上。相关键见 :ref:`assy-scenes`"
+" ，而规则见 :ref:`sim-bodies` 。"
+
+#: ../../source/config_scenes.rst:101
+msgid "Gravity, and the fluid a scene is filled with"
+msgstr "重力，以及场景中注满的流体"
+
+#: ../../source/config_scenes.rst:102
+msgid ""
+"A scene is a world as well as an arrangement, and may say two things about "
+"that world which an assembly cannot: the gravity in it, and the fluid it is "
+"filled with."
+msgstr "场景既是一种摆放，也是一个世界，而它可以就那个世界说出两件装配体说不了的事：其中的重力，以及它所注满的流体。"
+
+#: ../../source/config_scenes.rst:114
+msgid ""
+"``gravity:`` is a vector in **m/s^2**, in the scene's own frame: ``[0, 0, "
+"-9.81]`` is Earth with Z up, ``[0, 0, -1.62]`` the Moon, ``[0, 0, 0]`` free "
+"fall. It is SI because every physical quantity PartCAD states is SI -- only "
+"lengths and angles are millimetres and degrees (see the note under "
+":ref:`materials`). A scene that states none leaves it to the engine, whose "
+"own default is Earth's along -Z. Anything but three numbers is an error, and"
+" a gravity above 1000 m/s^2 -- a vector written in mm/s^2 by mistake is a "
+"thousand g -- is reported as one that is probably in the wrong unit."
+msgstr ""
+"``gravity:`` 是一个以 **m/s^2** 为单位的矢量，位于场景自身的坐标系中：``[0, 0, -9.81]`` 是 Z "
+"轴朝上的地球，``[0, 0, -1.62]`` 是月球，``[0, 0, 0]`` 是自由落体。它采用 SI 单位，因为 PartCAD "
+"所表述的每一个物理量都采用 SI 单位 -- 只有长度和角度用毫米和度（参见 :ref:`materials` "
+"下的提示）。没有写明它的场景会把这件事交给引擎，而引擎自己的默认值是沿 -Z 方向的地球重力。不是三个数字的取值都是错误；而大于 1000 m/s^2 "
+"的重力 -- 一个误以 mm/s^2 写出的矢量就是一千个 g -- 会被报告为很可能用错了单位。"
+
+#: ../../source/config_scenes.rst:123
+msgid ""
+"``medium:`` names a :ref:`material <materials>`, resolved the way a part's "
+"material is (``:brine`` is the ``brine`` this package catalogues), and its "
+"``density`` (kg/m^3) and ``viscosity`` (Pa*s) are what a simulation drags "
+"and buoys what moves through the scene with. "
+"``//pub/std/manufacturing/material/fluid`` catalogues ``air``, ``water`` and"
+" ``seawater``. A scene that names none is a vacuum, which is what every "
+"engine assumes. A medium naming a material nothing answers to is an error "
+"rather than a vacuum, and one whose material states neither a density nor a "
+"viscosity is reported."
+msgstr ""
+"``medium:`` 指名一种 :ref:`材料 <materials>` ，解析方式与零件的材料相同（ ``:brine`` "
+"指的就是本包所收录的那个 ``brine`` ），而它的 ``density`` （kg/m^3）和 ``viscosity`` "
+"（Pa*s）就是仿真用来对穿过该场景运动之物施加阻力和浮力的依据。``//pub/std/manufacturing/material/fluid`` "
+"收录了 ``air`` 、 ``water`` 和 ``seawater`` "
+"。没有指名任何介质的场景就是真空，而这也是每个引擎所假定的情况。一个介质指名了没有任何东西与之对应的材料，这是一个错误，而不是真空；而一个材料既没有写明密度也没有写明黏度的介质会被报告出来。"
+
+#: ../../source/config_scenes.rst:133
+msgid ""
+"``pc info`` reports the world a scene resolved to. What each engine makes of"
+" either key, and what it does not model, is in :ref:`sim-scenes` and "
+":ref:`sim-engines`."
+msgstr ""
+"``pc info`` 会报告某个场景所解析到的那个世界。每个引擎如何理解这两个键、以及它没有建模什么，见 :ref:`sim-scenes` 和 "
+":ref:`sim-engines` 。"
+
+#: ../../source/config_scenes.rst:138
+msgid "Scene types a plugin adds"
+msgstr "插件添加的场景类型"
+
+#: ../../source/config_scenes.rst:139
+msgid ""
+"Beside ``assy``, a scene may be declared in a format an :doc:`import plugin "
+"</plugins/importers>` reads, and PartCAD itself ships none of them:"
+msgstr ""
+"除了 ``assy`` 之外，场景还可以用某个 :doc:`导入插件 </plugins/importers>` 所读取的格式来声明，而 PartCAD"
+" 自己一个都不附带："
+
+#: ../../source/config_scenes.rst:142
+msgid "``sim-gazebo:world``"
+msgstr "``sim-gazebo:world``"
+
+#: ../../source/config_scenes.rst:143
+msgid ""
+"An `SDFormat <http://sdformat.org/>`_ ``.world`` file, read as a scene "
+"directly. Declared by `partcad-sim-gazebo "
+"<https://github.com/partcad/partcad-sim-gazebo>`_."
+msgstr ""
+"一个 `SDFormat <http://sdformat.org/>`_ ``.world`` 文件，直接作为场景读入。由 `partcad-sim-"
+"gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ 声明。"
+
+#: ../../source/config_scenes.rst:147
+msgid "``sim-mujoco:mjcf``"
+msgstr "``sim-mujoco:mjcf``"
+
+#: ../../source/config_scenes.rst:148
+msgid ""
+"A `MuJoCo <https://mujoco.org/>`_ model, which is the one format that is "
+"both a scene type and an assembly type -- the section that declares it is "
+"what decides which. Declared by `partcad-sim-mujoco "
+"<https://github.com/partcad/partcad-sim-mujoco>`_."
+msgstr ""
+"一个 `MuJoCo <https://mujoco.org/>`_ 模型，它是唯一一种既是场景类型又是装配体类型的格式 -- "
+"声明它的那个小节决定它是哪一种。由 `partcad-sim-mujoco <https://github.com/partcad/partcad-"
+"sim-mujoco>`_ 声明。"
+
+#: ../../source/config_scenes.rst:153
+msgid ""
+"Both are read, written and opened by the same package that simulates the "
+"format. :doc:`/plugins/importers` describes each in full, with the commands "
+"that import, export and convert between them."
+msgstr ""
+"两者的读取、写出和打开都由仿真该格式的同一个包来完成。:doc:`/plugins/importers` "
+"对它们各自作了完整描述，并给出了导入、导出以及在两者之间转换的那些命令。"
+
+#: ../../source/config_scenes.rst:158
+msgid "Simulating a scene"
+msgstr "对一个场景做仿真"
+
+#: ../../source/config_scenes.rst:159
+msgid ""
+"A scene can be the thing a claim is about, not only the world another object"
+" is tested in: a stack of blocks that stands, a pile that does not slide. It"
+" declares ``simulate:`` exactly as a part or an assembly does, and ``pc "
+"sim`` and ``pc test`` hold it to it. See :ref:`Simulating a scene "
+"<validating-a-scene>` in the Validation phase."
+msgstr ""
+"场景可以是断言所针对的那样东西，而不只是另一个对象被测试所处的那个世界：一摞立得住的方块、一堆不滑动的东西。它声明 ``simulate:`` "
+"的方式与零件或装配体完全相同，而 ``pc sim`` 和 ``pc test`` 会以它来约束它。参见校验阶段中的 :ref:`对一个场景做仿真 "
+"<validating-a-scene>` 。"

@@ -1,0 +1,118 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:5
+msgid "Assembly"
+msgstr "装配体"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:7
+msgid ""
+"**Assembly** is the assembly instruction book: a page per step, drawn, to "
+"read here or save. It is for an assembly, and it is what :doc:`Build "
+"</digital_thread/lifecycle/manufacturing_build>` lists the steps of -- the "
+"same steps, in the same order, as a document."
+msgstr ""
+"**Assembly** 就是那本装配说明书：每个步骤一页，都画出来，可以在这里阅读，也可以保存下来。它针对装配体，而它正是 :doc:`Build "
+"</digital_thread/lifecycle/manufacturing_build>` 所列出步骤的那个东西 -- "
+"同样的步骤、同样的顺序，只是作为一份文档。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:12
+msgid ""
+"The book is written from the assembly itself. Each link of the ASSY file "
+"says what it is joined to and how -- pushed, snapped or screwed in -- so the"
+" step that adds it can be written out for a person to follow, with the two "
+"parts drawn pulled apart by the ``exploded:`` gap of the connection. Nothing"
+" about the book is declared separately from the assembly, which is why it "
+"cannot fall out of step with it."
+msgstr ""
+"这本说明书是从装配体自身写出来的。ASSY 文件的每一条链接都说明它与什么接合以及如何接合 -- 压入、卡入还是拧入 -- "
+"所以添加它的那一步就能写出来供人照着做，其中那两个零件按该连接的 ``exploded:`` "
+"间隙拉开来绘制。关于这本说明书的任何内容都不是与装配体分开声明的，这也正是它不可能与装配体步调不一致的原因。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:20
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:22
+msgid ""
+"The document, as **PDF** or **HTML**, with **Recursive** and **Build parts**"
+" -- which are ``pc instructions -r -b`` -- and **Save…**."
+msgstr ""
+"那份文档，形式为 **PDF** 或 **HTML**，并带有 **Recursive** 和 **Build parts** -- 也就是 ``pc "
+"instructions -r -b`` -- 以及 **Save…** 。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:25
+msgid ""
+"The Manufacturing group's Assembly tab: the assembly instruction book, page "
+"by page"
+msgstr "Manufacturing 组的 Assembly 标签页：装配说明书，一页一页地看"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:30
+msgid ""
+"Manufacturing is for a part or an assembly; for a scene, a sketch or an "
+"interface the whole group is disabled, and this tab is for an assembly "
+"alone."
+msgstr "Manufacturing 针对零件或装配体；而对场景、草图或接口，整个这一组都是禁用的，至于这个标签页则只针对装配体。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:34
+msgid "On the command line"
+msgstr "在命令行中"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:43
+msgid ""
+"``-r`` puts in the steps of every sub-assembly that is built, each just "
+"before the step that adds it, and ``-b`` how to make every part that is "
+"built, each just before the step that first needs it. Both read the "
+":doc:`Build vs Buy </digital_thread/lifecycle/manufacturing_bvb>` choices "
+"made on this machine."
+msgstr ""
+"``-r`` 会把每一个自制子装配体的步骤都插进来，各自紧排在添加它的那一步之前；而 ``-b`` "
+"会插入每一个自制零件的制造方法，各自紧排在第一个需要它的步骤之前。两者都会读取本机上所做的 :doc:`Build vs Buy "
+"</digital_thread/lifecycle/manufacturing_bvb>` 选择。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:50
+msgid "How the steps are decided"
+msgstr "这些步骤是如何决定的"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:52
+msgid ""
+"See :ref:`how an assembly is manufactured <assembly-manufacturing>` and "
+":doc:`/assy` for what each ``connect:`` says about the joining -- the "
+"mating, the ``how:``, the torque and the thread -- and "
+":doc:`/digital_thread/lifecycle/testing` for the ``connect`` check, which is"
+" what reports a step the declaration says nothing about."
+msgstr ""
+"每个 ``connect:`` 关于接合所说的内容 -- 那个配合、那个 ``how:`` 、扭矩和螺纹 -- 参见 :ref:`装配体是如何制造出来的"
+" <assembly-manufacturing>` 和 :doc:`/assy` ；而 ``connect`` 检查参见 "
+":doc:`/digital_thread/lifecycle/testing` ，它正是报告某一步在声明中什么都没说的那项检查。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:59
+msgid "Agent skills"
+msgstr "智能体技能"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:61
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:62
+msgid ""
+"Reads the assembly instructions as part of giving a requirement its verdict."
+msgstr "在给某项需求下结论的过程中读取那份装配说明。"

@@ -1,0 +1,125 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/public_repository.rst:2
+msgid "Public Repository"
+msgstr "Repositorio público"
+
+#: ../../source/public_repository.rst:4
+msgid ""
+"The public PartCAD repository is created and maintained by the community "
+"based on the PartCAD standards and conventions. It is hosted on `GitHub "
+"<https://github.com/partcad/partcad-index>`_."
+msgstr ""
+"El repositorio público de PartCAD es creado y mantenido por la comunidad con"
+" base en los estándares y convenciones de PartCAD. Está alojado en `GitHub "
+"<https://github.com/partcad/partcad-index>`_."
+
+#: ../../source/public_repository.rst:10
+msgid "Nothing to install"
+msgstr "Nada que instalar"
+
+#: ../../source/public_repository.rst:12
+msgid ""
+"PartCAD retrieves the contents of this repository, and of every other "
+"repository and package a package imports, as it needs them. No manual action"
+" is needed to \"install\" it: a package created by ``pc init`` declares the "
+"public index as a dependency, and the first command that needs something "
+"from it fetches it."
+msgstr ""
+"PartCAD recupera el contenido de este repositorio, y de cualquier otro "
+"repositorio y paquete que importe un paquete, a medida que los necesita. No "
+"hace falta ninguna acción manual para \"instalarlo\": un paquete creado por "
+"``pc init`` declara el índice público como dependencia, y el primer comando "
+"que necesita algo de él lo descarga."
+
+#: ../../source/public_repository.rst:16
+msgid ""
+"If you suspect something is wrong with the locally cached copy, ``pc system "
+"status`` says where the cached files are, and ``pc system reset`` clears "
+"them."
+msgstr ""
+"Si sospecha que algo va mal con la copia guardada en caché localmente, ``pc "
+"system status`` dice dónde están los archivos en caché, y ``pc system "
+"reset`` los borra."
+
+#: ../../source/public_repository.rst:21
+msgid "Who maintains what"
+msgstr "Quién mantiene qué"
+
+#: ../../source/public_repository.rst:23
+msgid ""
+"The top levels of the package hierarchy are expected to be maintained by the"
+" PartCAD community. Lower levels of the hierarchy are expected to be "
+"maintained by vendors and other communities. PartCAD community does not aim "
+"to achieve the uniqueness of parts and assemblies. Moreover, everyone is "
+"invited to provide their alternative models as long as they provide a "
+"different level of model quality or different level of package quality "
+"management processes, and as long the package data properly reflects the "
+"quality that the maintainer provides and commits to maintain. This way "
+"PartCAD users have a choice of which model to use based on their specific "
+"needs."
+msgstr ""
+"Se espera que los niveles superiores de la jerarquía de paquetes sean "
+"mantenidos por la comunidad de PartCAD. Se espera que los niveles inferiores"
+" de la jerarquía sean mantenidos por proveedores y otras comunidades. La "
+"comunidad de PartCAD no pretende lograr la unicidad de piezas y ensamblajes."
+" Es más, se invita a todos a proporcionar sus modelos alternativos siempre "
+"que ofrezcan un nivel diferente de calidad de modelo o un nivel diferente de"
+" procesos de gestión de calidad del paquete, y siempre que los datos del "
+"paquete reflejen adecuadamente la calidad que el mantenedor proporciona y se"
+" compromete a mantener. De esta manera, los usuarios de PartCAD tienen la "
+"posibilidad de elegir qué modelo usar según sus necesidades específicas."
+
+#: ../../source/public_repository.rst:36
+msgid "How it keeps working"
+msgstr "Cómo sigue funcionando"
+
+#: ../../source/public_repository.rst:38
+msgid ""
+"Every package in it is pinned to an exact commit, declares the oldest "
+"PartCAD it works with, and keeps the branch the repository tracks working "
+"for everybody who already uses it; a breaking change goes to a new branch "
+"instead. Changes are merged to its ``devel`` branch, and ``main`` -- what "
+"packages created by ``pc init`` track -- only moves by fast-forward from it."
+" `CONTRIBUTING.md <https://github.com/partcad/partcad-"
+"index/blob/devel/CONTRIBUTING.md>`_ in the repository has the details, and "
+":doc:`/digital_thread/change_management` gives the same advice for a library"
+" of packages of your own."
+msgstr ""
+"Cada paquete que contiene está fijado a un commit exacto, declara el PartCAD"
+" más antiguo con el que funciona y mantiene la rama que sigue el repositorio"
+" funcionando para todos los que ya la usan; un cambio incompatible va a una "
+"rama nueva en su lugar. Los cambios se fusionan en su rama ``devel``, y "
+"``main`` -- lo que siguen los paquetes creados por ``pc init`` -- solo se "
+"mueve por fast-forward desde ella. `CONTRIBUTING.md "
+"<https://github.com/partcad/partcad-index/blob/devel/CONTRIBUTING.md>`_ en "
+"el repositorio tiene los detalles, y "
+":doc:`/digital_thread/change_management` da el mismo consejo para una "
+"biblioteca de paquetes propia."
+
+#: ../../source/public_repository.rst:47
+msgid ""
+"Contributing a part, an assembly or an interface to it is covered in "
+":doc:`/contributing`."
+msgstr ""
+"Aportar una pieza, un ensamblaje o una interfaz a él se trata en "
+":doc:`/contributing`."

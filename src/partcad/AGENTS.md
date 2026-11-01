@@ -318,7 +318,7 @@ at all).
   collecting for that check and that object (`test._report`). A check says whether it applies in
   `inapplicable()` -- from what the object is and declares, without building it or reading the cache -- and its
   `test()` asks the same method, so the two cannot disagree. The catalog is the text of every check, read by
-  the IDE's Test tab and generated into `docs/source/digital_thread/testing.rst`
+  the IDE's Test tab and generated into `docs/source/digital_thread/lifecycle/testing.rst`
   (`python -m partcad.test.catalog --write`); a test fails when a check has no entry or the page is stale. The
   interference check leaves an assembly behind for each pair it reports (`test/interference_artifact.py`): the
   two parts where the assembly places them and a sub-assembly `interference` of what they share, as `brep`
@@ -475,10 +475,12 @@ at all).
     the shading worked out at the corners of each triangle and blended across it. That is only close to a
     GPU's per-pixel light because large triangles are split first (`refine`, `MAX_EDGE`): a flat face OCCT
     meshes as two triangles showed the diagonal between them as a crease. The camera looks from the 3D
-    view's direction, but is framed differently: on the sphere around the object's box, at `margin` (7.5% of
-    the picture on each side, `render_raster.DEFAULT_MARGIN`) on the narrower side (`frame_distance`), so no
-    turn -- no frame of a video -- leaves the picture; the 3D view fits half the largest dimension, which a
-    cube's corners leave. A drawing of lines gets the same margin, as padding all round. A change to what
+    view's direction and is framed as it is, on the sphere around the object's box (`frame_distance` is
+    `fitDistance` in `ide/vscode/src/webview/cameraView.ts`, `Scene.sphere` its `enclosingRadius`), so no
+    turn -- no frame of a video -- leaves the picture; a picture then leaves `margin` (7.5% on each side of
+    its narrower side, `render_raster.DEFAULT_MARGIN`) beyond that sphere, which the 3D view does not. A
+    change to either fit is a change to the other, and a test reads the IDE's to say so. A drawing of lines
+    gets the same margin, as padding all round. A change to what
     the 3D view draws -- its lights, its background -- is a change to this module too. It meshes a copy of the shape: a PNG shares its decoding with the SVG beside it
     (`TESSELLATION`), and a mesh left on, or found on, that decoding would make either depend on the other.
   * **GStreamer is a program, run as `gst-launch-1.0`** (`video_encode.py`), with the frames on its standard

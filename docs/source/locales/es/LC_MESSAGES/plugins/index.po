@@ -1,0 +1,269 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/plugins/index.rst:5
+msgid "Plugins"
+msgstr "Plugins"
+
+#: ../../source/plugins/index.rst:20
+msgid ""
+"Most of what PartCAD can do, PartCAD does not hard-code. A **plugin** is a "
+"declaration in somebody's ``partcad.yaml`` saying which script does a job, "
+"what its sandbox needs, and what it produces -- and a package that imports "
+"it can then use that job as if PartCAD had always had it."
+msgstr ""
+"La mayor parte de lo que PartCAD puede hacer, PartCAD no lo lleva escrito a "
+"fuego. Un **plugin** es una declaración en el ``partcad.yaml`` de alguien "
+"que dice qué script hace un trabajo, qué necesita su sandbox y qué produce "
+"-- y un paquete que lo importa puede entonces usar ese trabajo como si "
+"PartCAD lo hubiera tenido siempre."
+
+#: ../../source/plugins/index.rst:24
+msgid ""
+"That is why the list of formats PartCAD reads, the applications it opens a "
+"file in, the solvers it asks and the simulators it runs are not fixed: each "
+"is a section a package writes, and the wheel ships few of them. A plugin is "
+"an ordinary package, versioned and imported like any other, so **adding a "
+"capability to PartCAD is publishing a package rather than changing "
+"PartCAD**."
+msgstr ""
+"Por eso la lista de formatos que PartCAD lee, las aplicaciones en las que "
+"abre un archivo, los solvers a los que pregunta y los simuladores que "
+"ejecuta no son fijos: cada uno es una sección que escribe un paquete, y el "
+"wheel trae pocos de ellos. Un plugin es un paquete corriente, versionado e "
+"importado como cualquier otro, de modo que **añadir una capacidad a PartCAD "
+"es publicar un paquete, no cambiar PartCAD**."
+
+#: ../../source/plugins/index.rst:29
+msgid ""
+"A plugin's script runs in a :doc:`sandbox </maintenance/sandboxes>`, which "
+"is what lets it bring its own dependencies -- a mesh library, a solver, a "
+"vendor's SDK -- without those reaching your package or PartCAD itself. What "
+"it produces is cached under the environment that produced it, the way "
+"everything else is."
+msgstr ""
+"El script de un plugin se ejecuta en un :doc:`sandbox "
+"</maintenance/sandboxes>`, que es lo que le permite traer sus propias "
+"dependencias -- una biblioteca de mallas, un solver, el SDK de un fabricante"
+" -- sin que lleguen a su paquete ni a PartCAD mismo. Lo que produce se "
+"guarda en caché bajo el entorno que lo produjo, igual que todo lo demás."
+
+#: ../../source/plugins/index.rst:34
+msgid "The seven kinds"
+msgstr "Los siete tipos"
+
+#: ../../source/plugins/index.rst:36
+msgid ""
+"Each kind of plugin is a differently named section, and each answers a "
+"different question. Every one of them has a chapter below."
+msgstr ""
+"Cada tipo de plugin es una sección con un nombre distinto, y cada una "
+"responde a una pregunta distinta. Todas ellas tienen un capítulo más abajo."
+
+#: ../../source/plugins/index.rst:43
+msgid "Section"
+msgstr "Sección"
+
+#: ../../source/plugins/index.rst:44
+msgid "What it teaches PartCAD"
+msgstr "Qué le enseña a PartCAD"
+
+#: ../../source/plugins/index.rst:45
+msgid "Chapter"
+msgstr "Capítulo"
+
+#: ../../source/plugins/index.rst:46
+msgid "``import:``"
+msgstr "``import:``"
+
+#: ../../source/plugins/index.rst:47
+msgid "how to read a file format into objects"
+msgstr "cómo leer un formato de archivo y convertirlo en objetos"
+
+#: ../../source/plugins/index.rst:48
+msgid ":doc:`/plugins/importers`"
+msgstr ":doc:`/plugins/importers`"
+
+#: ../../source/plugins/index.rst:49
+msgid "``partTypes:``"
+msgstr "``partTypes:``"
+
+#: ../../source/plugins/index.rst:50
+msgid "how to build a part of a type the package defines"
+msgstr "cómo construir una pieza de un tipo que define el paquete"
+
+#: ../../source/plugins/index.rst:51
+msgid ":doc:`/plugins/part_types`"
+msgstr ":doc:`/plugins/part_types`"
+
+#: ../../source/plugins/index.rst:52
+msgid "``render:`` / ``export:``"
+msgstr "``render:`` / ``export:``"
+
+#: ../../source/plugins/index.rst:53
+msgid "how to write an output file type"
+msgstr "cómo escribir un tipo de archivo de salida"
+
+#: ../../source/plugins/index.rst:54
+msgid ":doc:`/plugins/output`"
+msgstr ":doc:`/plugins/output`"
+
+#: ../../source/plugins/index.rst:55
+msgid "``cae:`` / ``cam:``"
+msgstr "``cae:`` / ``cam:``"
+
+#: ../../source/plugins/index.rst:56
+msgid "which analysis or toolpath implementation runs"
+msgstr ""
+"qué implementación de análisis o de trayectoria de herramienta se ejecuta"
+
+#: ../../source/plugins/index.rst:57
+msgid ":doc:`/plugins/analyses`"
+msgstr ":doc:`/plugins/analyses`"
+
+#: ../../source/plugins/index.rst:58
+msgid "``simulation:``"
+msgstr "``simulation:``"
+
+#: ../../source/plugins/index.rst:59
+msgid "which simulator runs a scene"
+msgstr "qué simulador ejecuta una escena"
+
+#: ../../source/plugins/index.rst:60
+msgid ":doc:`/plugins/simulations`"
+msgstr ":doc:`/plugins/simulations`"
+
+#: ../../source/plugins/index.rst:61
+msgid "``open:``"
+msgstr "``open:``"
+
+#: ../../source/plugins/index.rst:62
+msgid "which application opens a file, and how"
+msgstr "qué aplicación abre un archivo, y cómo"
+
+#: ../../source/plugins/index.rst:63
+msgid ":doc:`/plugins/applications`"
+msgstr ":doc:`/plugins/applications`"
+
+#: ../../source/plugins/index.rst:64
+msgid "``repositories:``"
+msgstr "``repositories:``"
+
+#: ../../source/plugins/index.rst:65
+msgid "where a package's objects come from, when not a file"
+msgstr "de dónde vienen los objetos de un paquete, cuando no son un archivo"
+
+#: ../../source/plugins/index.rst:66
+msgid ":doc:`/plugins/repositories`"
+msgstr ":doc:`/plugins/repositories`"
+
+#: ../../source/plugins/index.rst:68
+msgid ""
+"They are not seven unrelated mechanisms. Five of them -- ``render:``, "
+"``export:``, ``cae:``, ``cam:`` and ``simulation:`` -- are **the same "
+"declaration with a different name**: a ``path`` to a script, the sandbox "
+"that script needs, and the parameters it is handed. ``partTypes:`` and "
+"``import:`` are that declaration again, pointed at building a shape and at "
+"reading a file. So learning one is most of learning the rest, and the "
+"chapters say where each differs rather than repeating the shape."
+msgstr ""
+"No son siete mecanismos sin relación entre sí. Cinco de ellos -- "
+"``render:``, ``export:``, ``cae:``, ``cam:`` y ``simulation:`` -- son **la "
+"misma declaración con un nombre distinto**: una ``path`` a un script, el "
+"sandbox que ese script necesita y los parámetros que se le entregan. "
+"``partTypes:`` e ``import:`` son esa misma declaración otra vez, apuntada a "
+"construir una forma y a leer un archivo. Así que aprender uno es casi todo "
+"lo que hace falta para aprender los demás, y los capítulos dicen en qué se "
+"diferencia cada uno en lugar de repetir la forma común."
+
+#: ../../source/plugins/index.rst:75
+msgid "What they have in common"
+msgstr "Qué tienen en común"
+
+#: ../../source/plugins/index.rst:77
+msgid ""
+"**A plugin is depended on, not installed.** There is no plugin directory, no"
+" registry to publish to and nothing to put on a machine. You import the "
+"package that declares one, and the type, format, solver or application it "
+"added is then spelled with that package's name in front of it:"
+msgstr ""
+"**De un plugin se depende, no se instala.** No hay directorio de plugins, ni"
+" registro en el que publicar, ni nada que poner en una máquina. Usted "
+"importa el paquete que declara uno, y el tipo, formato, solver o aplicación "
+"que añadió se escribe entonces con el nombre de ese paquete delante:"
+
+#: ../../source/plugins/index.rst:93
+msgid ""
+"A bare ``type: mjcf`` resolves to nothing, and PartCAD says which package to"
+" name. That is deliberate: two packages may each implement a format called "
+"``mjcf``, and which one a declaration meant has to be in the declaration."
+msgstr ""
+"Un ``type: mjcf`` a secas no resuelve a nada, y PartCAD dice qué paquete hay"
+" que nombrar. Es deliberado: dos paquetes pueden implementar cada uno un "
+"formato llamado ``mjcf``, y a cuál de ellos se refería una declaración tiene"
+" que estar en la declaración."
+
+#: ../../source/plugins/index.rst:97
+msgid ""
+"**A relative name is resolved from where it is written.** ``calculix:fea`` "
+"inside a package means the package *that* package imported under the name "
+"``calculix``, however deep in a tree it sits. A name you type on the command"
+" line is resolved from where you are standing instead. The difference "
+"matters under ``pc test -P //...``, which runs with the tree's root current "
+"while every object in it sits packages below."
+msgstr ""
+"**Un nombre relativo se resuelve desde donde está escrito.** "
+"``calculix:fea`` dentro de un paquete significa el paquete que *ese* paquete"
+" importó con el nombre ``calculix``, por muy profundo que se encuentre en un"
+" árbol. Un nombre que usted escribe en la línea de comandos se resuelve, en "
+"cambio, desde donde usted está situado. La diferencia importa con ``pc test "
+"-P //...``, que se ejecuta con la raíz del árbol como paquete actual "
+"mientras cada objeto en él se encuentra varios paquetes más abajo."
+
+#: ../../source/plugins/index.rst:102
+msgid ""
+"**A plugin brings its own environment.** ``pythonVersion`` and "
+"``pythonRequirements`` on the declaration describe the sandbox its script "
+"runs in, and they are read from the package that ships the script and from "
+"nowhere else -- so a plugin's dependencies are the plugin's problem. A "
+"plugin needing something ``pip`` cannot install names a ``dockerImage`` or a"
+" ``container:`` instead, and is handed ``request[\"cache_dir\"]`` to keep "
+"what it downloads on first use in."
+msgstr ""
+"**Un plugin trae su propio entorno.** ``pythonVersion`` y "
+"``pythonRequirements`` en la declaración describen el sandbox en el que se "
+"ejecuta su script, y se leen del paquete que trae el script y de ningún otro"
+" sitio -- así que las dependencias de un plugin son el problema del plugin. "
+"Un plugin que necesita algo que ``pip`` no puede instalar nombra en su lugar"
+" un ``dockerImage`` o un ``container:``, y recibe ``request[\"cache_dir\"]``"
+" para guardar en él lo que descargue en el primer uso."
+
+#: ../../source/plugins/index.rst:108
+msgid ""
+"**What a plugin produces is cached like everything else**, keyed on the "
+"object's configuration and on the environment that produced it. A script "
+"whose behaviour changes says so with a module-level ``CACHE_VERSION``, read "
+"without running the script."
+msgstr ""
+"**Lo que produce un plugin se guarda en caché como todo lo demás**, con "
+"clave en la configuración del objeto y en el entorno que lo produjo. Un "
+"script cuyo comportamiento cambia lo declara con un ``CACHE_VERSION`` a "
+"nivel de módulo, que se lee sin ejecutar el script."

@@ -1,0 +1,204 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:5
+msgid "3D"
+msgstr "3D"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:7
+msgid ""
+"**3D** is the shape itself, drawn in the panel and turned with the mouse. It"
+" is the one tab that is always there: it arrives over the viewer protocol "
+"from whichever ``partcad`` was asked to show the object, so even a shape "
+"shown from a script -- something that belongs to no package at all -- has "
+"this tab and nothing else."
+msgstr ""
+"**3D** es la forma en sí, dibujada en el panel y girada con el ratón. Es la "
+"única pestaña que está siempre: llega por el protocolo del visor desde el "
+"``partcad`` al que se le pidió mostrar el objeto, así que incluso una forma "
+"mostrada desde un script -- algo que no pertenece a ningún paquete -- tiene "
+"esta pestaña y ninguna más."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:13
+msgid ""
+"Everything else in the Digital Thread is a question about a named object. "
+"This is the object."
+msgstr ""
+"Todo lo demás en el Digital Thread es una pregunta sobre un objeto con "
+"nombre. Esto es el objeto."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:17
+msgid "In the UI"
+msgstr "En la interfaz"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:19
+msgid ""
+"Down the left is **what is on screen**, with a checkbox on every line. The "
+"list is the object itself: a part or a sketch is one line, an assembly or a "
+"scene a line per thing it holds -- named as the ASSY file names it, as "
+"deeply as the file nests them -- and an interface a line per port it is "
+"drawn with. Unticking a line hides it and everything under it; ticking it "
+"again brings back exactly what was showing before, and a tick drawn grey "
+"rather than solid says that something underneath it is hidden."
+msgstr ""
+"A la izquierda está **lo que hay en pantalla**, con una casilla en cada "
+"línea. La lista es el objeto en sí: una pieza o un boceto es una línea, un "
+"ensamblaje o una escena una línea por cada cosa que contiene -- nombrada "
+"como la nombra el archivo ASSY, con toda la profundidad con la que el "
+"archivo las anida -- y una interfaz una línea por cada puerto con el que se "
+"dibuja. Desmarcar una línea la oculta y oculta todo lo que hay por debajo; "
+"volver a marcarla devuelve exactamente lo que se mostraba antes, y una marca"
+" dibujada en gris en lugar de sólida dice que algo por debajo de ella está "
+"oculto."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:27
+msgid ""
+"Under each line is what that object says about connections: a line per "
+"**interface** instance with its ports under it, and a ``ports`` line for the"
+" ports belonging to no interface. Every port is drawn as a coordinate frame "
+"-- the same frames ``pc render --with-ports`` draws on a projection -- and a"
+" port whose interface gives it a sketch shows that too, half see-through, in"
+" the blue of its ``+Z``: the shape the connection happens across, which is "
+"what makes an opening readable as one. The ``<ports>`` and ``<interfaces>`` "
+"lines start folded up, because an assembly of forty parts has a frame at "
+"every hole of every one of them and all of it at once shows nothing; an "
+"object's own ports start out drawn, the ports of everything inside it do "
+"not."
+msgstr ""
+"Bajo cada línea está lo que ese objeto dice sobre las conexiones: una línea "
+"por cada instancia de **interfaz** con sus puertos debajo, y una línea "
+"``ports`` para los puertos que no pertenecen a ninguna interfaz. Cada puerto"
+" se dibuja como un sistema de coordenadas -- los mismos sistemas que ``pc "
+"render --with-ports`` dibuja sobre una proyección -- y un puerto cuya "
+"interfaz le da un boceto lo muestra también, medio transparente, en el azul "
+"de su ``+Z``: la forma a través de la cual se produce la conexión, que es lo"
+" que hace que una abertura se lea como tal. Las líneas ``<ports>`` y "
+"``<interfaces>`` empiezan plegadas, porque un ensamblaje de cuarenta piezas "
+"tiene un sistema de coordenadas en cada agujero de cada una de ellas y todo "
+"ello a la vez no muestra nada; los puertos propios de un objeto empiezan "
+"dibujados, los puertos de todo lo que hay dentro de él no."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:38
+msgid ""
+"Pointing at a part or a sub-assembly makes it **flicker** in the view, which"
+" is how to tell which of the shapes on screen a line is without moving the "
+"camera."
+msgstr ""
+"Señalar una pieza o un subensamblaje hace que **parpadee** en la vista, que "
+"es la forma de saber a cuál de las formas de la pantalla corresponde una "
+"línea sin mover la cámara."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:41
+msgid ""
+"Down the right is the **view panel**, folded away until the side bar button "
+"at the top of that edge brings it out -- and then out on every tab at once. "
+"From the top: an **orientation gizmo** to drag the view round, or click an "
+"axis to look along it; a button per axis (**X**, **-X**, **Y**, **-Y**, "
+"**Z**, **-Z**), which are the views ``pc render --view`` names; a two-ended "
+"**section** slider per axis, starting at the faces of the bounding box, "
+"which cuts the exact geometry before it is drawn rather than clipping the "
+"picture; the **viewpoint** as ``viewport_origin``, ``viewport_up`` and a "
+"target, ready to be copied into a ``render:`` section or onto ``pc render "
+"--viewport-origin``; and **Animate** and **Opacity**, which turn the model "
+"on its own and make it see-through."
+msgstr ""
+"A la derecha está el **panel de vista**, plegado hasta que el botón de la "
+"barra lateral en la parte superior de ese borde lo despliega -- y entonces "
+"desplegado en todas las pestañas a la vez. De arriba abajo: un **gizmo de "
+"orientación** para arrastrar la vista y girarla, o hacer clic en un eje para"
+" mirar a lo largo de él; un botón por eje (**X**, **-X**, **Y**, **-Y**, "
+"**Z**, **-Z**), que son las vistas que nombra ``pc render --view``; un "
+"deslizador de **sección** de dos extremos por eje, que empieza en las caras "
+"de la caja envolvente y que corta la geometría exacta antes de dibujarla en "
+"lugar de recortar la imagen; el **punto de vista** como ``viewport_origin``,"
+" ``viewport_up`` y un objetivo, listo para copiarse en una sección "
+"``render:`` o en ``pc render --viewport-origin``; y **Animate** y "
+"**Opacity**, que giran el modelo por sí solo y lo hacen transparente."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:52
+msgid ""
+"The Design group's 3D tab: the tree of what is on screen, the shape, and the"
+" view panel"
+msgstr ""
+"La pestaña 3D del grupo Design: el árbol de lo que hay en pantalla, la forma"
+" y el panel de vista"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:57
+msgid ""
+"The view uses the graphics card where the window can (WebGL, else WebGPU). "
+"In a window that cannot -- a virtual machine, a remote desktop, a driver the"
+" editor could not use -- it draws without one: flat-shaded and slower, and a"
+" big model drawn as boxes while it is being turned. A note in the corner "
+"says so. A `3Dconnexion <https://3dconnexion.com/>`_ **SpaceMouse** moves "
+"the model here too; see :doc:`/tools_vscode`."
+msgstr ""
+"La vista usa la tarjeta gráfica cuando la ventana puede (WebGL, si no "
+"WebGPU). En una ventana que no puede -- una máquina virtual, un escritorio "
+"remoto, un controlador que el editor no pudo usar -- dibuja sin ella: con "
+"sombreado plano y más despacio, y un modelo grande dibujado como cajas "
+"mientras se gira. Una nota en la esquina lo indica. Un **SpaceMouse** de "
+"`3Dconnexion <https://3dconnexion.com/>`_ también mueve el modelo aquí; "
+"véase :doc:`/tools_vscode`."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:65
+msgid "On the command line"
+msgstr "En la línea de comandos"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:74
+msgid ""
+"``pc ide view`` shows an object in the Digital Thread from a terminal, and "
+"``pc ide state`` reports what the panel is showing -- including the boxes "
+"ticked in this tree and a screenshot of the tab on screen, which is what an "
+"agent working beside you reads."
+msgstr ""
+"``pc ide view`` muestra un objeto en el Digital Thread desde un terminal, y "
+"``pc ide state`` informa de lo que está mostrando el panel -- incluidas las "
+"casillas marcadas en este árbol y una captura de pantalla de la pestaña en "
+"pantalla, que es lo que lee un agente que trabaja a su lado."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:80
+msgid "Agent skills"
+msgstr "Skills de agente"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:82
+msgid "``/pc:gen-part``, ``/pc:gen-assembly``, ``/pc:gen-sketch``"
+msgstr "``/pc:gen-part``, ``/pc:gen-assembly``, ``/pc:gen-sketch``"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:83
+msgid ""
+"Model from a description, and check what they wrote by rendering it from "
+"several angles rather than by looking at one."
+msgstr ""
+"Modelan a partir de una descripción, y comprueban lo que escribieron "
+"renderizándolo desde varios ángulos en lugar de mirando uno solo."
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:86
+msgid "``/pc:add-interfaces``"
+msgstr "``/pc:add-interfaces``"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:87
+msgid ""
+"Works the ports out of the geometry and proves them twice -- drawn on the "
+"part, and mated in a throwaway assembly -- which is what this tab shows."
+msgstr ""
+"Deduce los puertos de la geometría y los demuestra dos veces -- dibujados en"
+" la pieza y emparejados en un ensamblaje desechable -- que es lo que muestra"
+" esta pestaña."

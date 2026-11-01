@@ -26,6 +26,6 @@ parts together, and are added the same way.
 
 ### Documentation
 
-* [Parts, and every type of them](https://partcad.readthedocs.io/en/latest/configuration.html)
+* [Parts, and every type of them](https://partcad.readthedocs.io/en/latest/config_parts.html)
 * [Tutorial: add a part](https://partcad.readthedocs.io/en/latest/tutorial.html)
-* [Parameters and interfaces](https://partcad.readthedocs.io/en/latest/configuration.html)
+* [Parameters and interfaces](https://partcad.readthedocs.io/en/latest/config_interfaces.html)

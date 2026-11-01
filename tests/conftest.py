@@ -18,10 +18,14 @@ They differ in when they have to act. The first is enough where the reference is
 built as the test runs; the second is for a module that builds it as it is
 imported, which has to be imported again rather than adjusted in place.
 
-The last, 'partcad_warnings', is here because what it captures is said by every
-package: a 'threadsMax' below the minimum is found by 'partcad_utils' on the
-client, by the daemon in a configuration a request carries, and by the CLI's own
+'partcad_warnings' is here because what it captures is said by every package: a
+'threadsMax' below the minimum is found by 'partcad_utils' on the client, by the
+daemon in a configuration a request carries, and by the CLI's own
 '--threads-max'.
+
+The last, 'close_container_connections', is here because the servers it answers
+for are started by the tests of three packages -- the container service, the
+remote Docker service, and PartCAD's sandboxes speaking to both.
 """
 
 import collections
@@ -34,7 +38,7 @@ from unittest import mock
 
 import pytest
 
-from partcad_utils import container_image
+from partcad_utils import container_image, json_rpc_client
 from partcad_utils import logging as pc_logging
 from partcad_utils.logging_ansi_terminal import action_key
 
@@ -224,3 +228,19 @@ def partcad_warnings(monkeypatch):
     logger.addHandler(handler)
     yield messages
     logger.removeHandler(handler)
+
+
+@pytest.fixture(autouse=True)
+def close_container_connections():
+    """Close the connections this test kept open to a container service, once it ends.
+
+    'json_rpc_client' keeps them open between requests, for as long as the
+    thread does. A test's in-process server stops listening when it is torn
+    down, but a thread of it goes on answering each connection still open to
+    it -- with that test's token, and its store -- and the port is the
+    kernel's to give out again, to the next test's server or to a container
+    Docker publishes. Which is how a container came to refuse its own client's
+    token: the request went down a connection to a server two tests back.
+    """
+    yield
+    json_rpc_client.close_sessions()

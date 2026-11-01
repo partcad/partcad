@@ -1,0 +1,268 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/plugins/index.rst:5
+msgid "Plugins"
+msgstr "Плагины"
+
+#: ../../source/plugins/index.rst:20
+msgid ""
+"Most of what PartCAD can do, PartCAD does not hard-code. A **plugin** is a "
+"declaration in somebody's ``partcad.yaml`` saying which script does a job, "
+"what its sandbox needs, and what it produces -- and a package that imports "
+"it can then use that job as if PartCAD had always had it."
+msgstr ""
+"Большую часть того, что умеет PartCAD, PartCAD не прописывает жёстко. "
+"**Плагин** -- это объявление в чьём-то ``partcad.yaml``, которое говорит, "
+"какой скрипт выполняет работу, что нужно его песочнице и что он создаёт, -- "
+"и пакет, который его импортирует, может затем пользоваться этой работой так,"
+" как если бы она была у PartCAD всегда."
+
+#: ../../source/plugins/index.rst:24
+msgid ""
+"That is why the list of formats PartCAD reads, the applications it opens a "
+"file in, the solvers it asks and the simulators it runs are not fixed: each "
+"is a section a package writes, and the wheel ships few of them. A plugin is "
+"an ordinary package, versioned and imported like any other, so **adding a "
+"capability to PartCAD is publishing a package rather than changing "
+"PartCAD**."
+msgstr ""
+"Именно поэтому список форматов, которые читает PartCAD, приложений, в "
+"которых он открывает файл, решателей, которых он спрашивает, и симуляторов, "
+"которые он запускает, не фиксирован: каждый из них -- это раздел, который "
+"пишет пакет, а в wheel их поставляется немного. Плагин -- это обычный пакет,"
+" версионируемый и импортируемый как любой другой, поэтому **добавление "
+"возможности в PartCAD -- это публикация пакета, а не изменение PartCAD**."
+
+#: ../../source/plugins/index.rst:29
+msgid ""
+"A plugin's script runs in a :doc:`sandbox </maintenance/sandboxes>`, which "
+"is what lets it bring its own dependencies -- a mesh library, a solver, a "
+"vendor's SDK -- without those reaching your package or PartCAD itself. What "
+"it produces is cached under the environment that produced it, the way "
+"everything else is."
+msgstr ""
+"Скрипт плагина выполняется в :doc:`песочнице </maintenance/sandboxes>`, и "
+"именно это позволяет ему приносить собственные зависимости -- библиотеку "
+"работы с сетками, решатель, SDK поставщика -- так, чтобы они не дошли ни до "
+"вашего пакета, ни до самого PartCAD. То, что он создаёт, кэшируется под тем "
+"окружением, которое это создало, как и всё остальное."
+
+#: ../../source/plugins/index.rst:34
+msgid "The seven kinds"
+msgstr "Семь видов"
+
+#: ../../source/plugins/index.rst:36
+msgid ""
+"Each kind of plugin is a differently named section, and each answers a "
+"different question. Every one of them has a chapter below."
+msgstr ""
+"Каждый вид плагина -- это раздел с собственным именем, и каждый отвечает на "
+"свой вопрос. У каждого из них есть глава ниже."
+
+#: ../../source/plugins/index.rst:43
+msgid "Section"
+msgstr "Раздел"
+
+#: ../../source/plugins/index.rst:44
+msgid "What it teaches PartCAD"
+msgstr "Чему он учит PartCAD"
+
+#: ../../source/plugins/index.rst:45
+msgid "Chapter"
+msgstr "Глава"
+
+#: ../../source/plugins/index.rst:46
+msgid "``import:``"
+msgstr "``import:``"
+
+#: ../../source/plugins/index.rst:47
+msgid "how to read a file format into objects"
+msgstr "как читать формат файлов в объекты"
+
+#: ../../source/plugins/index.rst:48
+msgid ":doc:`/plugins/importers`"
+msgstr ":doc:`/plugins/importers`"
+
+#: ../../source/plugins/index.rst:49
+msgid "``partTypes:``"
+msgstr "``partTypes:``"
+
+#: ../../source/plugins/index.rst:50
+msgid "how to build a part of a type the package defines"
+msgstr "как построить деталь того типа, который определяет пакет"
+
+#: ../../source/plugins/index.rst:51
+msgid ":doc:`/plugins/part_types`"
+msgstr ":doc:`/plugins/part_types`"
+
+#: ../../source/plugins/index.rst:52
+msgid "``render:`` / ``export:``"
+msgstr "``render:`` / ``export:``"
+
+#: ../../source/plugins/index.rst:53
+msgid "how to write an output file type"
+msgstr "как записать выходной тип файла"
+
+#: ../../source/plugins/index.rst:54
+msgid ":doc:`/plugins/output`"
+msgstr ":doc:`/plugins/output`"
+
+#: ../../source/plugins/index.rst:55
+msgid "``cae:`` / ``cam:``"
+msgstr "``cae:`` / ``cam:``"
+
+#: ../../source/plugins/index.rst:56
+msgid "which analysis or toolpath implementation runs"
+msgstr "какая реализация расчёта или траектории выполняется"
+
+#: ../../source/plugins/index.rst:57
+msgid ":doc:`/plugins/analyses`"
+msgstr ":doc:`/plugins/analyses`"
+
+#: ../../source/plugins/index.rst:58
+msgid "``simulation:``"
+msgstr "``simulation:``"
+
+#: ../../source/plugins/index.rst:59
+msgid "which simulator runs a scene"
+msgstr "какой симулятор выполняет сцену"
+
+#: ../../source/plugins/index.rst:60
+msgid ":doc:`/plugins/simulations`"
+msgstr ":doc:`/plugins/simulations`"
+
+#: ../../source/plugins/index.rst:61
+msgid "``open:``"
+msgstr "``open:``"
+
+#: ../../source/plugins/index.rst:62
+msgid "which application opens a file, and how"
+msgstr "какое приложение открывает файл и как"
+
+#: ../../source/plugins/index.rst:63
+msgid ":doc:`/plugins/applications`"
+msgstr ":doc:`/plugins/applications`"
+
+#: ../../source/plugins/index.rst:64
+msgid "``repositories:``"
+msgstr "``repositories:``"
+
+#: ../../source/plugins/index.rst:65
+msgid "where a package's objects come from, when not a file"
+msgstr "откуда берутся объекты пакета, когда это не файл"
+
+#: ../../source/plugins/index.rst:66
+msgid ":doc:`/plugins/repositories`"
+msgstr ":doc:`/plugins/repositories`"
+
+#: ../../source/plugins/index.rst:68
+msgid ""
+"They are not seven unrelated mechanisms. Five of them -- ``render:``, "
+"``export:``, ``cae:``, ``cam:`` and ``simulation:`` -- are **the same "
+"declaration with a different name**: a ``path`` to a script, the sandbox "
+"that script needs, and the parameters it is handed. ``partTypes:`` and "
+"``import:`` are that declaration again, pointed at building a shape and at "
+"reading a file. So learning one is most of learning the rest, and the "
+"chapters say where each differs rather than repeating the shape."
+msgstr ""
+"Это не семь несвязанных механизмов. Пять из них -- ``render:``, ``export:``,"
+" ``cae:``, ``cam:`` и ``simulation:`` -- это **одно и то же объявление под "
+"разными именами**: ``path`` к скрипту, песочница, которая этому скрипту "
+"нужна, и параметры, которые ему передаются. ``partTypes:`` и ``import:`` -- "
+"это то же объявление, направленное на построение формы и на чтение файла. "
+"Поэтому изучить один -- значит изучить большую часть остальных, и главы "
+"говорят, чем каждый отличается, а не повторяют эту форму."
+
+#: ../../source/plugins/index.rst:75
+msgid "What they have in common"
+msgstr "Что у них общего"
+
+#: ../../source/plugins/index.rst:77
+msgid ""
+"**A plugin is depended on, not installed.** There is no plugin directory, no"
+" registry to publish to and nothing to put on a machine. You import the "
+"package that declares one, and the type, format, solver or application it "
+"added is then spelled with that package's name in front of it:"
+msgstr ""
+"**От плагина зависят, его не устанавливают.** Нет ни каталога плагинов, ни "
+"реестра, куда публиковать, ни чего-либо, что надо положить на машину. Вы "
+"импортируете тот пакет, который его объявляет, и тогда добавленный им тип, "
+"формат, решатель или приложение записывается с именем этого пакета впереди:"
+
+#: ../../source/plugins/index.rst:93
+msgid ""
+"A bare ``type: mjcf`` resolves to nothing, and PartCAD says which package to"
+" name. That is deliberate: two packages may each implement a format called "
+"``mjcf``, and which one a declaration meant has to be in the declaration."
+msgstr ""
+"Просто ``type: mjcf`` ни во что не разрешается, и PartCAD говорит, какой "
+"пакет надо назвать. Это намеренно: два пакета могут каждый реализовать "
+"формат под названием ``mjcf``, и то, какой из них имело в виду объявление, "
+"должно быть в самом объявлении."
+
+#: ../../source/plugins/index.rst:97
+msgid ""
+"**A relative name is resolved from where it is written.** ``calculix:fea`` "
+"inside a package means the package *that* package imported under the name "
+"``calculix``, however deep in a tree it sits. A name you type on the command"
+" line is resolved from where you are standing instead. The difference "
+"matters under ``pc test -P //...``, which runs with the tree's root current "
+"while every object in it sits packages below."
+msgstr ""
+"**Относительное имя разрешается от того места, где оно написано.** "
+"``calculix:fea`` внутри пакета означает тот пакет, который импортировал "
+"*этот* пакет под именем ``calculix``, как бы глубоко в дереве он ни "
+"находился. А имя, которое вы набираете в командной строке, разрешается от "
+"того места, где вы стоите. Эта разница важна при ``pc test -P //...``, "
+"который работает с корнем дерева как текущим, тогда как каждый объект в нём "
+"находится на пакеты ниже."
+
+#: ../../source/plugins/index.rst:102
+msgid ""
+"**A plugin brings its own environment.** ``pythonVersion`` and "
+"``pythonRequirements`` on the declaration describe the sandbox its script "
+"runs in, and they are read from the package that ships the script and from "
+"nowhere else -- so a plugin's dependencies are the plugin's problem. A "
+"plugin needing something ``pip`` cannot install names a ``dockerImage`` or a"
+" ``container:`` instead, and is handed ``request[\"cache_dir\"]`` to keep "
+"what it downloads on first use in."
+msgstr ""
+"**Плагин приносит собственное окружение.** ``pythonVersion`` и "
+"``pythonRequirements`` в объявлении описывают ту песочницу, в которой "
+"работает его скрипт, и читаются они из того пакета, который поставляет "
+"скрипт, и больше ниоткуда -- поэтому зависимости плагина являются проблемой "
+"плагина. Плагин, которому нужно то, что ``pip`` установить не может, "
+"называет вместо этого ``dockerImage`` или ``container:``, и ему передаётся "
+"``request[\"cache_dir\"]``, чтобы держать там то, что он загружает при "
+"первом использовании."
+
+#: ../../source/plugins/index.rst:108
+msgid ""
+"**What a plugin produces is cached like everything else**, keyed on the "
+"object's configuration and on the environment that produced it. A script "
+"whose behaviour changes says so with a module-level ``CACHE_VERSION``, read "
+"without running the script."
+msgstr ""
+"**То, что создаёт плагин, кэшируется как и всё остальное**, по ключу из "
+"конфигурации объекта и того окружения, которое это создало. Скрипт, "
+"поведение которого меняется, говорит об этом через ``CACHE_VERSION`` на "
+"уровне модуля, читаемый без выполнения скрипта."

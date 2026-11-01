@@ -1,0 +1,190 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:5
+msgid "Heat Transfer"
+msgstr "Теплопередача"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:7
+msgid ""
+"**Heat Transfer** is the question how hot a part gets, heated and cooled as "
+"it is: a steady-state thermal analysis of the solid, reporting the "
+"temperature through it. It is what says whether a heatsink is big enough."
+msgstr ""
+"**Heat Transfer** -- это вопрос о том, насколько нагревается деталь при том "
+"нагреве и охлаждении, которые у неё есть: стационарный тепловой расчёт тела "
+"с сообщением температуры по нему. Именно он говорит, достаточно ли велик "
+"радиатор."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:11
+msgid ""
+"The question is asked by a ``thermal:`` section on the part, a map of named "
+"scenarios, and answered by a solver a package supplies. "
+":doc:`/digital_thread/lifecycle/analysis` explains what every analysis has "
+"in common."
+msgstr ""
+"Вопрос задаётся разделом ``thermal:`` на детали -- набором именованных "
+"сценариев, -- а отвечает на него решатель, который поставляет пакет. "
+":doc:`/digital_thread/lifecycle/analysis` объясняет, что общего у всех "
+"расчётов."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:17
+msgid "What the scenario says"
+msgstr "Что говорит сценарий"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:19
+msgid "Three conditions, each naming interfaces the part implements:"
+msgstr ""
+"Три условия, каждое из которых называет интерфейсы, реализуемые деталью:"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:21
+msgid "``temperature:``"
+msgstr "``temperature:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:22
+msgid ""
+"a temperature per interface type or named instance, in Celsius (``40 C``) --"
+" the surface is held there."
+msgstr ""
+"температура на каждый тип интерфейса или названный экземпляр, в градусах "
+"Цельсия (``40 C``) -- поверхность поддерживается при ней."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:25
+msgid "``heat:``"
+msgstr "``heat:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:26
+msgid "a power put in through the port's surface, in watts (``2 W``)."
+msgstr "мощность, подводимая через поверхность порта, в ваттах (``2 W``)."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:28
+msgid "``convection:``"
+msgstr "``convection:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:29
+msgid ""
+"a film coefficient in W/(m²·K) -- that surface is cooled against the "
+"ambient."
+msgstr ""
+"коэффициент теплоотдачи в Вт/(м²·К) -- эта поверхность охлаждается "
+"относительно окружающей среды."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:31
+msgid ""
+"**Every other surface is insulated.** A part that states only where heat "
+"goes in is a part with nowhere for it to go, so each scenario has to say how"
+" it leaves: held at a temperature, or cooled by a film."
+msgstr ""
+"**Все остальные поверхности теплоизолированы.** Деталь, которая указывает "
+"только то, куда тепло входит, -- это деталь, которой некуда его девать, "
+"поэтому каждый сценарий обязан сказать, как оно уходит: поддерживается при "
+"температуре либо охлаждается теплоотдачей."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:52
+msgid "In the UI"
+msgstr "В интерфейсе"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:54
+msgid ""
+"The scenarios are listed down the left with the first selected, each marked "
+"with how its last run went, and selecting one runs it. What is shown is the "
+"temperature field over the model the implementation produced, with the "
+"findings under it; **Analysed by** chooses the solver and **Analyse** runs "
+"it again."
+msgstr ""
+"Сценарии перечислены слева, первый выбран, каждый помечен тем, как прошёл "
+"его последний запуск, и выбор сценария его выполняет. Показывается "
+"температурное поле на той модели, которую создала реализация, а под ней "
+"находки; **Analysed by** выбирает решатель, а **Analyse** выполняет расчёт "
+"заново."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:59
+msgid ""
+"The Analysis group's Heat Transfer tab: the scenario list and the "
+"temperature field"
+msgstr ""
+"Вкладка Heat Transfer группы Analysis: список сценариев и температурное поле"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:64
+msgid ""
+"The tab is enabled for a part that declares ``thermal:`` and disabled for "
+"everything else."
+msgstr ""
+"Вкладка включена для детали, которая объявляет ``thermal:``, и отключена для"
+" всего остального."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:68
+msgid "On the command line"
+msgstr "В командной строке"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:78
+msgid "Who runs it"
+msgstr "Кто его выполняет"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:80
+msgid ""
+"The default is `partcad-cae-elmer <https://github.com/partcad/partcad-cae-"
+"elmer>`_, which runs `Elmer <https://www.elmerfem.org/>`_; "
+"``caeThermalImplementation`` names another. `Code_Aster <https://www.code-"
+"aster.org/>`_ and `MOOSE <https://mooseframework.inl.gov/>`_ do this "
+"analysis too."
+msgstr ""
+"По умолчанию это `partcad-cae-elmer <https://github.com/partcad/partcad-cae-"
+"elmer>`_, который выполняет `Elmer <https://www.elmerfem.org/>`_; "
+"``caeThermalImplementation`` называет другую реализацию. `Code_Aster "
+"<https://www.code-aster.org/>`_ и `MOOSE <https://mooseframework.inl.gov/>`_"
+" тоже выполняют этот расчёт."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:87
+msgid "An example"
+msgstr "Пример"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:89
+msgid ""
+"`examples/feature_cae "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cae>`_ "
+"declares ``cantilever``'s ``tip-heated`` scenario: the root held at 20 °C "
+"and 1 W put in at the tip. The temperature the tip reaches is ``P·L/(k·A)``,"
+" and the package's ``README.md`` prints what the solver measured beside it."
+msgstr ""
+"`examples/feature_cae "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cae>`_ "
+"объявляет сценарий ``tip-heated`` для ``cantilever``: корень поддерживается "
+"при 20 °C, а на конец подводится 1 Вт. Температура, до которой доходит "
+"конец, равна ``P·L/(k·A)``, и ``README.md`` пакета печатает рядом то, что "
+"измерил решатель."
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:95
+msgid "Agent skills"
+msgstr "Навыки агентов"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:97
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/analysis_thermal.rst:98
+msgid ""
+"Runs every scenario as part of giving each requirement a verdict, and "
+"reports one that names a ``feature:`` as evidence for that feature."
+msgstr ""
+"Выполняет каждый сценарий в рамках вынесения вердикта по каждому требованию "
+"и сообщает тот сценарий, который называет ``feature:``, как доказательство "
+"для этой функции."

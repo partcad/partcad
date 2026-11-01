@@ -1,0 +1,217 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:5
+msgid "Build"
+msgstr "自制"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:7
+msgid ""
+"**Build** is what is made, in the order it is made in. Where :doc:`Build vs "
+"Buy </digital_thread/lifecycle/manufacturing_bvb>` is the decision, this is "
+"the plan that follows from it: a list of steps, and for the one selected, "
+"its page of the instructions -- how to make a part, or how to add a link to "
+"the assembly."
+msgstr ""
+"**Build** 讲的是哪些东西是自制的，并按它们被制造的顺序排列。:doc:`Build vs Buy "
+"</digital_thread/lifecycle/manufacturing_bvb>` "
+"是那项决定，而这里是由它导出的计划：一张步骤清单，以及对所选中的那一步，它那一页说明 -- 怎么做一个零件，或者怎么把一条链接装到装配体上。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:14
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:16
+msgid ""
+"The order is the order of making: a part's **stock** first and the part "
+"itself last; an assembly's links in the order the ASSY file gives them, with"
+" each built part preceded by the step that makes it, and -- with "
+"**Recursively** -- each built sub-assembly before the step that adds it."
+msgstr ""
+"这个顺序就是制造的顺序：零件的 **坯料** 在最前，零件本身在最后；装配体的各条链接按 ASSY "
+"文件给出的顺序排列，而每一个自制零件之前都插着制造它的那一步，再加上 -- 在 **Recursively** 之下 -- "
+"每一个自制子装配体都排在添加它的那一步之前。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:21
+msgid ""
+"Selecting a step shows its page: the manufacturing instructions for a part, "
+"with its **route** drawn where the part declares one, or the step that joins"
+" a link to what is already there."
+msgstr ""
+"选中某一步会显示它那一页：对零件来说是它的制造说明，并在该零件声明了 **加工路径** 时把路径画出来；对链接来说则是把它接到已有部分上的那一步。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:25
+msgid ""
+"The Manufacturing group's Build tab: the order to make it in, with the "
+"selected step's page"
+msgstr "Manufacturing 组的 Build 标签页：制造它的顺序，以及所选步骤的那一页"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:30
+msgid ""
+"The steps and their order are the very ones ``pc instructions`` writes, so a"
+" step selected here and a page of that file are the same step."
+msgstr "这些步骤及其顺序，正是 ``pc instructions`` 所写出的那些，所以在这里选中的某一步，与那个文件里的某一页是同一步。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:34
+msgid "On the command line"
+msgstr "在命令行中"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:46
+msgid "Machine routes: ``pc cam``"
+msgstr "机床加工路径：``pc cam``"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:48
+msgid ""
+"An object can say what is cut out of it and how, and ``pc cam`` writes the "
+"program a machine does it with. The job lives on the object, in its "
+"``manufacturing:`` section, because it is a property of the object rather "
+"than of whoever cuts it -- a panel is 18 mm thick and has to be cut through "
+"whichever router is asked:"
+msgstr ""
+"对象可以说明要从它身上切掉什么、以及怎么切，而 ``pc cam`` 会写出机床据以执行的程序。这项加工任务写在对象上，放在它的 "
+"``manufacturing:`` 小节里，因为它是对象的属性，而不是加工者的属性——面板厚 18 mm，无论问哪台雕刻机都得把它切穿："
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:72
+msgid ""
+"Saying something about being cut is the object's **opt-in**, and the whole "
+"of it. ``pc cam`` with nothing named produces a route for every sketch and "
+"part of the package that declares one and passes over every object that does"
+" not, silently -- most objects are never cut, and a package where three "
+"parts of forty are is the ordinary case rather than thirty-seven warnings. "
+"Naming an object that declares nothing is an error, because naming one is "
+"asking about it."
+msgstr ""
+"只要说了关于切削的事，就算是对象的 **选择加入** ，而且仅此而已。不指定任何名称运行 ``pc cam`` "
+"，会为包中每一个声明了该小节的草图和零件生成刀路，并静默跳过所有没有声明的对象——大多数对象从来不需要切削，四十个零件里有三个要切的包是常态，而不是三十七条警告。指名一个什么都没声明的对象则是错误，因为指名它就是在问它。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:79
+msgid ""
+"Unlike a solver, PartCAD **ships an implementation**: ``//builtin/cam`` "
+"writes G-code, and ``camImplementation`` names it by default. A route is "
+"arithmetic on the object's own outline rather than somebody else's program "
+"with a release cycle of its own, which is the test ``export:`` and "
+"``render:`` already pass and ``cae:`` does not -- so it ships here for the "
+"same reason DXF does. A controller that wants a dialect of its own is a "
+"package declaring a file type in its own ``cam:`` section (see :ref:`cam-"
+"section`), named by that option, by the object's own ``implementation:``, or"
+" by ``-i`` for one run."
+msgstr ""
+"与求解器不同，PartCAD **自带一个实现** ： ``//builtin/cam`` 会写出 G 代码，而 "
+"``camImplementation`` 默认就指向它。刀路是在对象自身轮廓上做的算术，而不是别人那套有自己发布周期的程序——这正是 "
+"``export:`` 和 ``render:`` 已经通过、而 ``cae:`` 没有通过的那项检验，所以它随 PartCAD 一起提供，理由和 "
+"DXF 一样。想要自有方言的控制器，就是一个在自己的 ``cam:`` 小节中声明文件类型的包（参见 :ref:`cam-section` "
+"），可以由上面那个选项来指定，也可以由对象自己的 ``implementation:`` 指定，或者用 ``-i`` 为单次运行指定。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:88
+msgid ""
+"Every key of the object's section is also a parameter of that file type, "
+"which makes the two of them three layers of one namespace: the built-in "
+"package underneath, the package's own ``cam:`` section, then the object's "
+"``manufacturing:``. A package cutting twenty parts from one sheet sets the "
+"tool once; the one part that needs a smaller cutter says so for itself. "
+"Lengths, feeds and speeds may each carry a unit and are converted at every "
+"layer, so a ``mm/min`` written by the package is understood as surely as one"
+" written on the object."
+msgstr ""
+"对象小节中的每一个键同时也是该文件类型的一个参数，于是两者构成了同一个命名空间的三层：最底下是内置包，然后是包自己的 ``cam:`` "
+"小节，再然后是对象的 ``manufacturing:`` "
+"。一个要从同一张板材上切出二十个零件的包只需设置一次刀具；唯独那个需要更小刀具的零件自己说明一下即可。长度、进给和转速都可以各自带上单位，并在每一层都会做换算，因此包里写的"
+" ``mm/min`` 和写在对象上的一样能被准确理解。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:97
+msgid ""
+"What comes back is a file beside the package -- ``panel.nc`` -- and what it "
+"counted: how many passes, how deep, how far the tool travels in the cut. The"
+" route is the object's outline **sectioned at the bottom of the cut**, "
+"offset by the radius of the cutter, and that is both what makes it right for"
+" a prismatic object and the limit worth knowing about every other one: where"
+" the cross-section changes over the cut, no single outline is right, and the"
+" route follows the bottom and says so as a warning naming how much the two "
+"ends differ by. A route produced from an outline nobody expected is the one "
+"failure that looks like a success all the way to the machine."
+msgstr ""
+"返回的是一个放在包旁边的文件—— ``panel.nc`` ——以及它统计出来的数据：走了多少刀、每刀多深、刀具在切削中走了多远。刀路是对象轮廓 "
+"**在切削底面处的剖面** "
+"，再按刀具半径做偏置，这既是它对棱柱形对象正确的原因，也是对其他所有对象都值得了解的局限：当横截面在切削深度范围内发生变化时，没有任何单一轮廓是正确的，刀路会沿着底面走，并以一条警告说明两端相差多少。由一条谁也没料到的轮廓生成的刀路，是那种一路到了机床跟前都还看着像成功的失败。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:107
+msgid ""
+"``pc test`` runs the same thing as its ``cam`` check -- it produces the "
+"route and passes the object only if one came back -- and applies it to an "
+"object that declares the section and to nothing else, so a package of bolts "
+"pays nothing for it. Unlike the analyses it does not keep what it produced: "
+"a route a check wrote would be indistinguishable from the one ``pc cam`` "
+"writes, so it routes into a temporary directory and deletes it."
+msgstr ""
+"``pc test`` 的 ``cam`` "
+"检查运行的正是同一套流程——生成刀路，只有确实生成出来了才让该对象通过——并且只作用于声明了该小节的对象，别的一概不管，因此一个装满螺栓的包不会为此付出任何代价。与各项分析不同，它不会保留生成的结果：检查写出的刀路与"
+" ``pc cam`` 写出的无从分辨，所以它把刀路生成到一个临时目录里，然后删掉。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:114
+msgid ""
+"The check that used to be called ``cam`` is ``manufacturability``. It asks "
+"whether an object can be made or bought *at all* -- whether its geometry "
+"suits the method it declares, whether what it is made from is reproducible, "
+"whether a supplier could be found -- which is a different question from "
+"whether a post-processor can produce a program for it. One word answered "
+"both until ``pc cam`` existed. ``-f`` filters by name prefix, so ``-f "
+"manufacturability`` selects that check and its seven method-specific "
+"siblings and ``-f cam`` selects the route check alone."
+msgstr ""
+"过去叫做 ``cam`` 的那项检查现在叫 ``manufacturability`` 。它问的是某个对象 *究竟* 能不能被制造或采购 -- "
+"它的几何是否适合它所声明的那种方式、它所用的东西是否可复现、是否找得到供应商 -- 而这与“某个后处理器能不能为它生成一个程序”是不同的问题。在 "
+"``pc cam`` 出现之前，一个词同时回答了这两个问题。``-f`` 是按名称前缀过滤的，所以 ``-f manufacturability`` "
+"会选中该检查及其七个针对具体工艺方法的同族检查，而 ``-f cam`` 只会选中加工路径这一项检查。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:123
+msgid ""
+"`examples/feature_cam "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cam>`_ is the"
+" three operations on three objects, and a fourth that declares no section "
+"and is passed over. See :ref:`pc cam <cam>` for the command and the units it"
+" accepts."
+msgstr ""
+"`examples/feature_cam "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cam>`_ "
+"就是三个对象上的三道工序，再加上第四个什么小节都不声明、因而被跳过的对象。该命令以及它所接受的各种单位参见 :ref:`pc cam <cam>` 。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:129
+msgid "Agent skills"
+msgstr "智能体技能"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:131
+msgid "``/pc:export`` and ``/pc:convert``"
+msgstr "``/pc:export`` 和 ``/pc:convert``"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:132
+msgid ""
+"Write the file a machine or a shop is given, in the format it asks for."
+msgstr "按机床或车间所要求的格式，写出要交给它的那个文件。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:134
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_build.rst:135
+msgid ""
+"Reads the assembly instructions these steps become, as part of giving a "
+"requirement its verdict."
+msgstr "在给某项需求下结论的过程中，读取这些步骤最终形成的那份装配说明。"

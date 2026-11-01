@@ -1,0 +1,80 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/maintenance/proxy.rst:5
+msgid "Using Proxy"
+msgstr "Использование прокси"
+
+#: ../../source/maintenance/proxy.rst:8
+msgid ""
+"On many networks a proxy is not a preference but the only route out. PartCAD"
+" reads the usual environment variables, and everything it downloads goes "
+"through them: packages imported from a git repository, packages imported "
+"from a tarball, and the individual files an object pulls with ``fileFrom: "
+"url``."
+msgstr ""
+"Во многих сетях прокси — не предпочтение, а единственный путь наружу. "
+"PartCAD читает привычные переменные окружения, и всё, что он загружает, идёт"
+" через них: пакеты, импортированные из git-репозитория, пакеты, "
+"импортированные из tar-архива, и отдельные файлы, которые объект подтягивает"
+" через ``fileFrom: url``."
+
+#: ../../source/maintenance/proxy.rst:20
+msgid ""
+"``HTTPS_PROXY`` covers ``https://`` remotes and ``HTTP_PROXY`` covers "
+"``http://`` ones; the lowercase spellings work equally. ``NO_PROXY`` exempts"
+" the hosts it names, which is what an internal git server reachable only "
+"*without* the proxy needs. A proxy that wants credentials takes them in the "
+"URL (``http://user:password@proxy.example.com:3128``)."
+msgstr ""
+"``HTTPS_PROXY`` охватывает удалённые ресурсы ``https://``, а ``HTTP_PROXY`` "
+"— ресурсы ``http://``; написания строчными буквами работают точно так же. "
+"``NO_PROXY`` освобождает названные в нём хосты, а это именно то, что нужно "
+"внутреннему git-серверу, доступному только *без* прокси. Прокси, которому "
+"нужны учётные данные, принимает их в URL "
+"(``http://user:password@proxy.example.com:3128``)."
+
+#: ../../source/maintenance/proxy.rst:26
+msgid ""
+"Nothing has to be configured in PartCAD for any of this. A proxy that should"
+" apply to git imports alone -- rather than to everything this shell runs -- "
+"can be set as a git configuration option instead, and it takes precedence "
+"over the environment:"
+msgstr ""
+"Настраивать что-либо в PartCAD для всего этого не нужно. Прокси, который "
+"должен действовать только для импортов из git, а не для всего, что запускает"
+" эта оболочка, можно задать вместо этого параметром конфигурации git, и он "
+"имеет приоритет над окружением:"
+
+#: ../../source/maintenance/proxy.rst:38
+msgid ""
+"Note that a proxy re-terminating TLS presents its own certificate, which has"
+" to be trusted or every fetch fails to verify it. That is a property of the "
+"machine rather than of PartCAD: point ``SSL_CERT_FILE`` (and "
+"``REQUESTS_CA_BUNDLE``) at the proxy's CA bundle, or install it into the "
+"system trust store."
+msgstr ""
+"Обратите внимание, что прокси, заново терминирующий TLS, предъявляет "
+"собственный сертификат, который должен быть доверенным, иначе любая загрузка"
+" не сможет его проверить. Это свойство машины, а не PartCAD: укажите в "
+"``SSL_CERT_FILE`` (и ``REQUESTS_CA_BUNDLE``) набор сертификатов "
+"удостоверяющего центра прокси или установите его в системное хранилище "
+"доверия."

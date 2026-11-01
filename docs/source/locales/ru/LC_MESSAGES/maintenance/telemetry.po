@@ -1,0 +1,200 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/maintenance/telemetry.rst:3
+msgid "Telemetry"
+msgstr "Телеметрия"
+
+#: ../../source/maintenance/telemetry.rst:7
+msgid "Public Repositories"
+msgstr "Публичные репозитории"
+
+#: ../../source/maintenance/telemetry.rst:9
+msgid ""
+"By default PartCAD collects telemetry data to improve the user experience "
+"and to help understand how the tool is being used. The data collected "
+"includes the following:"
+msgstr ""
+"По умолчанию PartCAD собирает данные телеметрии, чтобы улучшить опыт "
+"использования и помочь понять, как используется инструмент. Собираемые "
+"данные включают следующее:"
+
+#: ../../source/maintenance/telemetry.rst:13
+msgid "What commands are being run?"
+msgstr "Какие команды выполняются?"
+
+#: ../../source/maintenance/telemetry.rst:14
+msgid "How much time is consumed by each step?"
+msgstr "Сколько времени занимает каждый шаг?"
+
+#: ../../source/maintenance/telemetry.rst:15
+msgid "What errors and exceptions are being raised?"
+msgstr "Какие ошибки и исключения возникают?"
+
+#: ../../source/maintenance/telemetry.rst:17
+msgid ""
+"PartCAD uses `OpenTelemetry <https://opentelemetry.io/>`_ to collect "
+"telemetry data. You can disable telemetry by setting the following "
+"configuration:"
+msgstr ""
+"PartCAD использует `OpenTelemetry <https://opentelemetry.io/>`_ для сбора "
+"данных телеметрии. Вы можете отключить телеметрию, задав следующую "
+"конфигурацию:"
+
+#: ../../source/maintenance/telemetry.rst:26
+msgid ""
+"Alternatively, you can disable telemetry by setting the following "
+"environment variable:"
+msgstr ""
+"Кроме того, вы можете отключить телеметрию, задав следующую переменную "
+"окружения:"
+
+#: ../../source/maintenance/telemetry.rst:32
+msgid "You can also change telemetry settings using CLI:"
+msgstr "Вы также можете изменить настройки телеметрии с помощью CLI:"
+
+#: ../../source/maintenance/telemetry.rst:42
+msgid ""
+"How deep the traces go is a separate setting. By default PartCAD reports the "
+"operations it names for itself -- the process a command is, and the action "
+"each object it works on is -- and nothing below them:"
+msgstr ""
+"Насколько глубоко идут трассировки — отдельная настройка. По умолчанию "
+"PartCAD сообщает те операции, которые он называет сам, — процесс, которым "
+"является команда, и действие, которым является каждый объект, с которым она "
+"работает, — и ничего ниже них:"
+
+#: ../../source/maintenance/telemetry.rst:51
+msgid ""
+"``methods`` adds a span for every instrumented method underneath those, "
+"which is what a trace needs to answer \"where inside this did the time go\". "
+"It is expensive in a way that is easy to miss: creating one part passes "
+"through a dozen instrumented methods, so a package of eight thousand of them "
+"costs a quarter of a million spans to list. Turn it on while you are looking "
+"at something, not for good."
+msgstr ""
+"``methods`` добавляет интервал для каждого инструментированного метода под "
+"ними, а именно это нужно трассировке, чтобы ответить на вопрос «куда внутри "
+"этого ушло время». Это дорого так, что легко не заметить: создание одной "
+"детали проходит через дюжину инструментированных методов, поэтому "
+"перечисление пакета из восьми тысяч деталей стоит четверти миллиона "
+"интервалов. Включайте это, пока вы что-то изучаете, а не насовсем."
+
+#: ../../source/maintenance/telemetry.rst:58
+msgid "``pc system telemetry info`` reports both settings."
+msgstr "``pc system telemetry info`` сообщает обе настройки."
+
+#: ../../source/maintenance/telemetry.rst:61
+msgid "Private Repositories"
+msgstr "Приватные репозитории"
+
+#: ../../source/maintenance/telemetry.rst:63
+msgid ""
+"If you are systemically using PartCAD in your organization then it makes "
+"sense to collect your own telemetry data to understand how the tool is being "
+"used in your organization, and to learn how to improve your organization "
+"performance."
+msgstr ""
+"Если вы систематически используете PartCAD в своей организации, то имеет "
+"смысл собирать собственные данные телеметрии, чтобы понимать, как инструмент "
+"используется в вашей организации, и узнать, как повысить её "
+"производительность."
+
+#: ../../source/maintenance/telemetry.rst:67
+msgid ""
+"The only OpenTelemetry backend provider currently supported is `Sentry "
+"<https://sentry.io/>`_. Create an organization account on Sentry and obtain "
+"a DSN key."
+msgstr ""
+"Единственный поддерживаемый в настоящее время backend-провайдер "
+"OpenTelemetry — это `Sentry <https://sentry.io/>`_. Создайте учётную запись "
+"организации в Sentry и получите ключ DSN."
+
+#: ../../source/maintenance/telemetry.rst:77
+msgid "Other OpenTelemetry backend providers can be supported on request."
+msgstr ""
+"Другие backend-провайдеры OpenTelemetry могут быть поддержаны по запросу."
+
+#: ../../source/maintenance/telemetry.rst:81
+msgid "Personally Identifiable Information"
+msgstr "Персональные данные"
+
+#: ../../source/maintenance/telemetry.rst:84
+msgid ""
+"The user section in ``~/.partcad/config.yaml`` defines the default personal "
+"and contact details used throughout the system. These details include the "
+"user's name, email, phone number, company, and address information."
+msgstr ""
+"Раздел user в ``~/.partcad/config.yaml`` задаёт персональные и контактные "
+"данные по умолчанию, используемые во всей системе. Эти данные включают имя "
+"пользователя, адрес электронной почты, номер телефона, компанию и адресную "
+"информацию."
+
+#: ../../source/maintenance/telemetry.rst:105
+msgid "Address Configuration"
+msgstr "Настройка адреса"
+
+#: ../../source/maintenance/telemetry.rst:107
+msgid ""
+"Users can override any details from the user section by specifying "
+"shippingAddress and billingAddress separately."
+msgstr ""
+"Пользователи могут переопределить любые данные из раздела user, указав "
+"shippingAddress и billingAddress отдельно."
+
+#: ../../source/maintenance/telemetry.rst:139
+msgid "**Override Behavior**"
+msgstr "**Поведение переопределения**"
+
+#: ../../source/maintenance/telemetry.rst:141
+msgid ""
+"If shippingAddress is not specified, the system will use the user details "
+"for shipping."
+msgstr ""
+"Если shippingAddress не указан, система будет использовать данные "
+"пользователя для доставки."
+
+#: ../../source/maintenance/telemetry.rst:142
+msgid ""
+"If billingAddress is not specified, the system will use the user details for "
+"billing."
+msgstr ""
+"Если billingAddress не указан, система будет использовать данные "
+"пользователя для выставления счетов."
+
+#: ../../source/maintenance/telemetry.rst:143
+msgid ""
+"If shippingAddress or billingAddress is provided, it completely replaces the "
+"corresponding fields from user."
+msgstr ""
+"Если указан shippingAddress или billingAddress, он полностью заменяет "
+"соответствующие поля из user."
+
+#: ../../source/maintenance/telemetry.rst:145
+msgid ""
+"This setup allows full customization of shipping and billing details, "
+"supporting scenarios where items need to be sent to different recipients or "
+"addresses."
+msgstr ""
+"Такая настройка позволяет полностью настроить данные доставки и выставления "
+"счетов, поддерживая сценарии, когда товары нужно отправлять разным "
+"получателям или по разным адресам."

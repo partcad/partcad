@@ -1,0 +1,148 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:2
+msgid "Operations"
+msgstr "Эксплуатация"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:4
+msgid ""
+"Operations is the phase after the product exists: how the thing that was "
+"made is actually doing. It is the phase that turns a digital thread into a "
+"*digital twin* -- a record kept true to one physical object, with its serial"
+" number, for as long as that object lasts."
+msgstr ""
+"Эксплуатация -- это фаза после того, как продукт уже существует: как на "
+"самом деле идут дела у того, что было изготовлено. Это та фаза, которая "
+"превращает цифровую нить в *цифрового двойника* -- запись, поддерживаемую в "
+"соответствии с одним физическим объектом, с его серийным номером, столько "
+"времени, сколько этот объект живёт."
+
+#: ../../source/digital_thread/lifecycle/operations.rst:9
+msgid ""
+"**Nothing is collected yet.** This page is here because the phase is part of"
+" the lifecycle and because the Digital Thread reserves its place, not "
+"because there is a feature to describe."
+msgstr ""
+"**Пока ничего не собирается.** Эта страница существует потому, что фаза "
+"является частью жизненного цикла и потому, что Digital Thread оставляет для "
+"неё место, а не потому, что есть возможность, которую можно описать."
+
+#: ../../source/digital_thread/lifecycle/operations.rst:14
+msgid "In the UI"
+msgstr "В интерфейсе"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:16
+msgid ""
+"**Operations** is the last of the five groups in the Digital Thread's tab "
+"strip, and it is the one group that is always shown **disabled** -- for "
+"every object, whatever it declares. It has no strip of its own, so this "
+"phase has no sub-tabs and there is nothing to picture: every screenshot of "
+"the panel on these pages shows it, greyed, at the end of the row. Hovering "
+"over it says why."
+msgstr ""
+"**Operations** -- последняя из пяти групп в полосе вкладок Digital Thread, и"
+" это единственная группа, которая всегда показывается **отключённой** -- для"
+" каждого объекта, что бы он ни объявлял. Собственной полосы у неё нет, "
+"поэтому у этой фазы нет подвкладок и изображать нечего: каждый снимок панели"
+" на этих страницах показывает её, серой, в конце ряда. При наведении она "
+"говорит почему."
+
+#: ../../source/digital_thread/lifecycle/operations.rst:22
+msgid ""
+"**Process Emulation**, the third tab of :doc:`Validation "
+"</digital_thread/lifecycle/validation>`, is reserved in the same way and for"
+" the related question of how making it would go. It holds nothing yet "
+"either."
+msgstr ""
+"**Process Emulation**, третья вкладка :doc:`Validation "
+"</digital_thread/lifecycle/validation>`, зарезервирована таким же образом и "
+"для связанного вопроса о том, как прошло бы изготовление. В ней тоже пока "
+"ничего нет."
+
+#: ../../source/digital_thread/lifecycle/operations.rst:27
+msgid "On the command line"
+msgstr "В командной строке"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:29
+msgid ""
+"Nothing. No section of a ``partcad.yaml`` records anything about an "
+"individual made item, and no ``pc`` command reads or writes one: a package "
+"describes a *type* of thing -- what to make, and how -- and says nothing "
+"about the instances that were made from it. ``pc ide view`` has a flag for "
+"every tab of the other four groups and none for this one."
+msgstr ""
+"Ничего. Ни один раздел ``partcad.yaml`` не записывает ничего об отдельном "
+"изготовленном изделии, и ни одна команда ``pc`` ничего такого не читает и не"
+" пишет: пакет описывает *тип* вещи -- что изготовить и как -- и ничего не "
+"говорит о тех экземплярах, которые из него изготовлены. У ``pc ide view`` "
+"есть флаг на каждую вкладку остальных четырёх групп и нет флага на эту."
+
+#: ../../source/digital_thread/lifecycle/operations.rst:36
+msgid "Agent skills"
+msgstr "Навыки агентов"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:38
+msgid ""
+"None. A skill is a procedure for working on a package, and this phase has "
+"nothing in a package to work on. ``/pc:validate`` is the nearest thing: it "
+"judges whether what was designed meets what was asked for, which is the "
+"question this phase would ask again of the thing that was actually made."
+msgstr ""
+"Ни одного. Навык -- это процедура работы над пакетом, а в этой фазе в пакете"
+" нет ничего, над чем работать. Ближайшее к этому -- ``/pc:validate``: он "
+"судит, удовлетворяет ли спроектированное тому, что было запрошено, а это тот"
+" вопрос, который эта фаза задала бы заново о том, что было фактически "
+"изготовлено."
+
+#: ../../source/digital_thread/lifecycle/operations.rst:44
+msgid "What is already in place"
+msgstr "Что уже есть"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:46
+msgid ""
+"What the other phases already give this one is the part that is hard: one "
+"record per object, every answer computed from it rather than stored beside "
+"it, and a pin on every dependency, so that the design a made item was made "
+"from can be checked out again exactly as it was (see "
+":doc:`/digital_thread/change_management`). A twin needs that before it needs"
+" telemetry."
+msgstr ""
+"То, что остальные фазы уже дают этой, -- это самая трудная часть: одна "
+"запись на объект, каждый ответ вычисляется из неё, а не хранится рядом с "
+"ней, и закрепление на каждой зависимости, так что тот проект, из которого "
+"было изготовлено изделие, можно выгрузить снова в точности таким, каким он "
+"был (см. :doc:`/digital_thread/change_management`). Двойнику это нужно "
+"прежде, чем ему понадобится телеметрия."
+
+#: ../../source/digital_thread/lifecycle/operations.rst:52
+msgid ""
+"Until there is something here, the way to keep track of what was made is "
+":doc:`Manufacturing </digital_thread/lifecycle/manufacturing>` -- the bill "
+"of materials, what was ordered and from whom, and the instructions somebody "
+"followed -- together with git: the commit a build was made from is the "
+"record of what was built."
+msgstr ""
+"Пока здесь ничего нет, способом отслеживать то, что было изготовлено, "
+"является :doc:`Manufacturing </digital_thread/lifecycle/manufacturing>` -- "
+"спецификация материалов, то, что было заказано и у кого, и те инструкции, "
+"которым кто-то следовал, -- вместе с git: тот коммит, из которого была "
+"сделана сборка, и является записью о том, что было собрано."

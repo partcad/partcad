@@ -1,0 +1,490 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/use_cases.rst:2
+msgid "Use Cases"
+msgstr "Casos de uso"
+
+#: ../../source/digital_thread/use_cases.rst:4
+msgid ""
+"PartCAD provides a public repository of parts and assemblies, and various "
+"tools and frameworks to operate with those parts and assemblies. Depending "
+"on particular goals, different ways of interacting with PartCAD tools and "
+"data may be desired. Below is a list of some common use cases."
+msgstr ""
+"PartCAD proporciona un repositorio público de piezas y ensamblajes, y "
+"diversas herramientas y marcos de trabajo para operar con esas piezas y "
+"ensamblajes. Según los objetivos particulares, pueden ser deseables "
+"diferentes formas de interactuar con las herramientas y los datos de "
+"PartCAD. A continuación se muestra una lista de algunos casos de uso "
+"comunes."
+
+#: ../../source/digital_thread/use_cases.rst:15
+msgid "Develop CAD models faster"
+msgstr "Desarrollar modelos CAD más rápido"
+
+#: ../../source/digital_thread/use_cases.rst:17
+msgid ""
+"PartCAD VSCode Extension is a powerful tool to develop code-CAD (OpenSCAD, "
+"CadQuery, build123d and sdf) models faster. It provides a rich set of "
+"features to help you develop models:"
+msgstr ""
+"La extensión de PartCAD para VSCode es una herramienta poderosa para "
+"desarrollar modelos code-CAD (OpenSCAD, CadQuery, build123d y sdf) más "
+"rápido. Proporciona un amplio conjunto de funcionalidades para ayudarle a "
+"desarrollar modelos:"
+
+#: ../../source/digital_thread/use_cases.rst:20
+msgid ""
+":ref:`caching` of intermediate and final results of all model compilations"
+msgstr ""
+":ref:`caching` de los resultados intermedios y finales de todas las "
+"compilaciones de modelos"
+
+#: ../../source/digital_thread/use_cases.rst:21
+msgid "Render-on-save (including for OpenSCAD)"
+msgstr "Renderizado al guardar (incluso para OpenSCAD)"
+
+#: ../../source/digital_thread/use_cases.rst:25
+msgid "Browse available models"
+msgstr "Explorar los modelos disponibles"
+
+#: ../../source/digital_thread/use_cases.rst:28
+msgid "Online"
+msgstr "En línea"
+
+#: ../../source/digital_thread/use_cases.rst:30
+msgid ""
+"The web UI to browse the public PartCAD repository is available at "
+"`partcad.org <https://partcad.org/>`_."
+msgstr ""
+"La interfaz web para explorar el repositorio público de PartCAD está "
+"disponible en `partcad.org <https://partcad.org/>`_."
+
+#: ../../source/digital_thread/use_cases.rst:34
+msgid "Visual Studio Code extension"
+msgstr "Extensión de Visual Studio Code"
+
+#: ../../source/digital_thread/use_cases.rst:36
+msgid ""
+"The PartCAD extension is `available "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
+"official>`_ in VS Code extension marketplace."
+msgstr ""
+"La extensión de PartCAD está `disponible "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
+"official>`_ en el mercado de extensiones de VS Code."
+
+#: ../../source/digital_thread/use_cases.rst:41
+msgid "Command line tools"
+msgstr "Herramientas de línea de comandos"
+
+#: ../../source/digital_thread/use_cases.rst:43
+msgid ""
+"Whether you consider publishing new CAD models or consuming already existing"
+" ones, it makes sense to browse what's already available."
+msgstr ""
+"Ya sea que esté considerando publicar nuevos modelos CAD o consumir modelos "
+"ya existentes, tiene sentido explorar lo que ya está disponible."
+
+#: ../../source/digital_thread/use_cases.rst:46
+msgid "The command line tools are the easiest way to browse parts:"
+msgstr ""
+"Las herramientas de línea de comandos son la forma más sencilla de explorar "
+"piezas:"
+
+#: ../../source/digital_thread/use_cases.rst:83
+msgid ""
+"The last command displays the chosen part in ``Digital Thread`` view in "
+"Visual Studio Code. There is currently no support for ``cq-server``. Please,"
+" let `support@partcad.org <mailto:support@partcad.org>`_ know if there is "
+"any other tool we should support."
+msgstr ""
+"El último comando muestra la pieza elegida en la vista ``Digital Thread`` de"
+" Visual Studio Code. Actualmente no hay soporte para ``cq-server``. Por "
+"favor, informe a `support@partcad.org <mailto:support@partcad.org>`_ si hay "
+"alguna otra herramienta que deberíamos admitir."
+
+#: ../../source/digital_thread/use_cases.rst:91
+msgid "Render projections"
+msgstr "Renderizar proyecciones"
+
+#: ../../source/digital_thread/use_cases.rst:93
+msgid ""
+"The result of 2D projection of individual parts, assemblies and scenes onto "
+"a plane (3D to 2D) can be rendered to an image in any of the following "
+"formats:"
+msgstr ""
+"El resultado de la proyección 2D de piezas, ensamblajes y escenas "
+"individuales sobre un plano (de 3D a 2D) se puede renderizar como una imagen"
+" en cualquiera de los siguientes formatos:"
+
+#: ../../source/digital_thread/use_cases.rst:96
+msgid "Vector images"
+msgstr "Imágenes vectoriales"
+
+#: ../../source/digital_thread/use_cases.rst:98
+msgid "SVG"
+msgstr "SVG"
+
+#: ../../source/digital_thread/use_cases.rst:100
+msgid "Raster images"
+msgstr "Imágenes ráster"
+
+#: ../../source/digital_thread/use_cases.rst:102
+msgid "PNG"
+msgstr "PNG"
+
+#: ../../source/digital_thread/use_cases.rst:103
+msgid "JPEG"
+msgstr "JPEG"
+
+#: ../../source/digital_thread/use_cases.rst:105
+msgid ""
+"Both raster formats accept ``width`` and ``height`` (in pixels, ``512`` by "
+"default); the projection is scaled to fit inside them while keeping its "
+"aspect ratio. JPEG accepts a few more options, since it is a lossy format "
+"without an alpha channel:"
+msgstr ""
+"Ambos formatos de mapa de bits admiten ``width`` y ``height`` (en píxeles, "
+"``512`` de forma predeterminada); la proyección se escala para caber dentro "
+"de ellos manteniendo su relación de aspecto. JPEG admite algunas opciones "
+"más, al ser un formato con pérdidas y sin canal alfa:"
+
+#: ../../source/digital_thread/use_cases.rst:123
+msgid ""
+"The default ``4:4:4`` subsampling keeps the full chroma resolution. A "
+"projection is line art, and the coarser modes smear color across its one-"
+"pixel-wide edges; switch to ``4:2:0`` when a smaller file matters more than "
+"the edges."
+msgstr ""
+"El submuestreo ``4:4:4`` predeterminado conserva la resolución de croma "
+"completa. Una proyección es arte lineal, y los modos más gruesos emborronan "
+"el color a lo largo de sus bordes de un píxel de ancho; cambie a ``4:2:0`` "
+"cuando un archivo más pequeño importe más que los bordes."
+
+#: ../../source/digital_thread/use_cases.rst:127
+msgid ""
+"The rendered file is named after the object with the format's own extension,"
+" so ``jpeg`` produces ``<name>.jpg``."
+msgstr ""
+"El archivo renderizado lleva el nombre del objeto con la extensión propia "
+"del formato, así que ``jpeg`` produce ``<name>.jpg``."
+
+#: ../../source/digital_thread/use_cases.rst:130
+msgid ""
+"Which direction the object is looked at from is ``viewport_origin``, and "
+"which way is up in the resulting picture is ``viewport_up``. Both are "
+"accepted by every projection above (and by ``dxf``), on the package or on a "
+"single object:"
+msgstr ""
+"Desde qué dirección se mira el objeto es ``viewport_origin``, y qué "
+"dirección es hacia arriba en la imagen resultante es ``viewport_up``. Ambos "
+"los admiten todas las proyecciones anteriores (y ``dxf``), en el paquete o "
+"en un objeto concreto:"
+
+#: ../../source/digital_thread/use_cases.rst:149
+msgid ""
+"Left unset, a part is drawn from the front-right-top corner (which is what "
+"makes it read as 3D) and a sketch head-on. PartCAD is Z-up with ``+Y`` "
+"pointing away from the front view, which is what puts ``+X`` on the right of"
+" it. The distance does not matter — the pair names a direction, so ``[0, "
+"-100, 0]`` is the front of any object wherever it sits, and the projection "
+"is scaled to fit whatever it is written into."
+msgstr ""
+"Si no se establece, una pieza se dibuja desde la esquina frontal-derecha-"
+"superior (que es lo que hace que se lea como 3D) y un boceto de frente. "
+"PartCAD tiene Z hacia arriba con ``+Y`` apuntando en sentido contrario a la "
+"vista frontal, que es lo que pone ``+X`` a su derecha. La distancia no "
+"importa — el par nombra una dirección, así que ``[0, -100, 0]`` es el frente"
+" de cualquier objeto esté donde esté, y la proyección se escala para "
+"ajustarse a aquello en lo que se escribe."
+
+#: ../../source/digital_thread/use_cases.rst:156
+msgid ""
+"``pc render`` takes the same two as ``--viewport-origin``/``--viewport-up``,"
+" and names the common directions with ``--view`` (``front``, ``back``, "
+"``left``, ``right``, ``top``, ``bottom``, ``iso``), for a view that belongs "
+"to one command rather than to the package:"
+msgstr ""
+"``pc render`` admite los mismos dos como ``--viewport-origin``/``--viewport-"
+"up``, y nombra las direcciones comunes con ``--view`` (``front``, ``back``, "
+"``left``, ``right``, ``top``, ``bottom``, ``iso``), para una vista que "
+"pertenece a un comando y no al paquete:"
+
+#: ../../source/digital_thread/use_cases.rst:166
+msgid ""
+"A file that is not in a package at all is rendered by ``pc adhoc render``, "
+"which takes the same three options. They are the only way to aim one, there "
+"being no ``partcad.yaml`` to configure a viewport in; left off, the "
+"projection comes out the way the renderer draws one by default:"
+msgstr ""
+"Un archivo que no está en ningún paquete lo renderiza ``pc adhoc render``, "
+"que admite las mismas tres opciones. Son la única forma de apuntar una, al "
+"no haber ningún ``partcad.yaml`` en el que configurar un viewport; si se "
+"omiten, la proyección sale tal como la dibuja el renderizador de forma "
+"predeterminada:"
+
+#: ../../source/digital_thread/use_cases.rst:179
+msgid "Export models"
+msgstr "Exportar modelos"
+
+#: ../../source/digital_thread/use_cases.rst:181
+msgid ""
+"Individual parts, assemblies and scenes can also be exported into 3D model "
+"file formats, including:"
+msgstr ""
+"Las piezas, ensamblajes y escenas individuales también se pueden exportar a "
+"formatos de archivo de modelo 3D, entre ellos:"
+
+#: ../../source/digital_thread/use_cases.rst:184
+msgid "`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_"
+msgstr "`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_"
+
+#: ../../source/digital_thread/use_cases.rst:185
+msgid "`BREP <https://en.wikipedia.org/wiki/Boundary_representation>`_"
+msgstr "`BREP <https://en.wikipedia.org/wiki/Boundary_representation>`_"
+
+#: ../../source/digital_thread/use_cases.rst:186
+msgid "`STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_"
+msgstr "`STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_"
+
+#: ../../source/digital_thread/use_cases.rst:187
+msgid "`3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_"
+msgstr "`3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_"
+
+#: ../../source/digital_thread/use_cases.rst:188
+msgid "`ThreeJS <https://en.wikipedia.org/wiki/Three.js>`_"
+msgstr "`ThreeJS <https://en.wikipedia.org/wiki/Three.js>`_"
+
+#: ../../source/digital_thread/use_cases.rst:189
+msgid "`OBJ <https://en.wikipedia.org/wiki/Wavefront_.obj_file>`_"
+msgstr "`OBJ <https://en.wikipedia.org/wiki/Wavefront_.obj_file>`_"
+
+#: ../../source/digital_thread/use_cases.rst:190
+msgid "`GLTF <https://en.wikipedia.org/wiki/GlTF>`_"
+msgstr "`GLTF <https://en.wikipedia.org/wiki/GlTF>`_"
+
+#: ../../source/digital_thread/use_cases.rst:191
+msgid "`IGES <https://en.wikipedia.org/wiki/IGES>`_"
+msgstr "`IGES <https://en.wikipedia.org/wiki/IGES>`_"
+
+#: ../../source/digital_thread/use_cases.rst:193
+msgid ""
+"Expect more output formats to be added to the list of supported export "
+"formats in the future."
+msgstr ""
+"Se espera que en el futuro se agreguen más formatos de salida a la lista de "
+"formatos de exportación admitidos."
+
+#: ../../source/digital_thread/use_cases.rst:204
+msgid "Consume models"
+msgstr "Consumir modelos"
+
+#: ../../source/digital_thread/use_cases.rst:207
+msgid "CAD Design GUIs"
+msgstr "Interfaces gráficas de diseño CAD"
+
+#: ../../source/digital_thread/use_cases.rst:209
+msgid ""
+"You can use models from the public PartCAD repository in a CAD Design GUI, "
+"such as FreeCAD or its paid alternatives."
+msgstr ""
+"Puede usar modelos del repositorio público de PartCAD en una interfaz "
+"gráfica de diseño CAD, como FreeCAD o sus alternativas de pago."
+
+#: ../../source/digital_thread/use_cases.rst:212
+msgid ""
+"FreeCAD has a PartCAD add-on. The ``PartCAD`` workbench lists the packages, "
+"parts and assemblies PartCAD can reach as a hierarchy, generates a dialog "
+"from the parameters of the part or assembly you pick, and imports the result"
+" into the open document as a STEP file. It drives the standalone PartCAD "
+"service, so FreeCAD needs no Python environment of its own. See "
+":ref:`FreeCAD add-on <freecad-addon>` for how to install it."
+msgstr ""
+"FreeCAD tiene un complemento de PartCAD. El workbench ``PartCAD`` enumera "
+"como una jerarquía los paquetes, piezas y ensamblajes que PartCAD puede "
+"alcanzar, genera un diálogo a partir de los parámetros de la pieza o del "
+"ensamblaje que elija, e importa el resultado al documento abierto como un "
+"archivo STEP. Controla el servicio independiente de PartCAD, así que FreeCAD"
+" no necesita un entorno Python propio. Consulte :ref:`Complemento para "
+"FreeCAD <freecad-addon>` para saber cómo instalarlo."
+
+#: ../../source/digital_thread/use_cases.rst:219
+msgid ""
+"For the other apps, no add-on is available yet. Export the models to STEP or"
+" 3MF files and import those files into the CAD Design GUI of your choice."
+msgstr ""
+"Para las demás aplicaciones todavía no hay ningún complemento disponible. "
+"Exporte los modelos a archivos STEP o 3MF e impórtelos en la interfaz "
+"gráfica de diseño CAD que prefiera."
+
+#: ../../source/digital_thread/use_cases.rst:229
+msgid "Python: CadQuery"
+msgstr "Python: CadQuery"
+
+#: ../../source/digital_thread/use_cases.rst:231
+msgid ""
+"Here are some examples of how to fetch PartCAD models from within a "
+"``CadQuery`` script:"
+msgstr ""
+"Aquí hay algunos ejemplos de cómo obtener modelos de PartCAD desde dentro de"
+" un script de ``CadQuery``:"
+
+#: ../../source/digital_thread/use_cases.rst:257
+msgid "Python: build123d"
+msgstr "Python: build123d"
+
+#: ../../source/digital_thread/use_cases.rst:259
+msgid ""
+"Here are some examples of how to fetch PartCAD models from within a "
+"``build123d`` script:"
+msgstr ""
+"Aquí hay algunos ejemplos de cómo obtener modelos de PartCAD desde dentro de"
+" un script de ``build123d``:"
+
+#: ../../source/digital_thread/use_cases.rst:285
+msgid "Python: any format"
+msgstr "Python: cualquier formato"
+
+#: ../../source/digital_thread/use_cases.rst:287
+msgid ""
+"``pc.get_part_cadquery()`` and ``pc.get_part_build123d()`` above are thin "
+"aliases for the general conversion API, which returns the result in memory "
+"for any supported format instead of writing an output file:"
+msgstr ""
+"``pc.get_part_cadquery()`` y ``pc.get_part_build123d()`` mencionados arriba "
+"son alias ligeros de la API de conversión general, la cual devuelve el "
+"resultado en memoria para cualquier formato admitido en lugar de escribir un"
+" archivo de salida:"
+
+#: ../../source/digital_thread/use_cases.rst:303
+msgid ""
+"The supported part types are ``build123d`` and ``cadquery``, which return "
+"the CAD library's own object, plus the serialized formats ``3mf``, ``brep``,"
+" ``dxf``, ``gltf``, ``iges``, ``obj``, ``step``, ``stl``, ``svg`` and "
+"``threejs``. Formats that are textual by definition (``step``, ``iges``, "
+"``brep``, ``obj``, ``threejs``, ``svg``, ``dxf``) are returned as ``str``; "
+"formats that are or can be binary (``stl``, ``3mf``, ``gltf``) are returned "
+"as ``bytes``. The return type depends only on the requested part type, never"
+" on the export options."
+msgstr ""
+"Los tipos de pieza admitidos son ``build123d`` y ``cadquery``, que devuelven"
+" el objeto propio de la biblioteca CAD, además de los formatos serializados "
+"``3mf``, ``brep``, ``dxf``, ``gltf``, ``iges``, ``obj``, ``step``, ``stl``, "
+"``svg`` y ``threejs``. Los formatos que son textuales por definición "
+"(``step``, ``iges``, ``brep``, ``obj``, ``threejs``, ``svg``, ``dxf``) se "
+"devuelven como ``str``; los formatos que son o pueden ser binarios (``stl``,"
+" ``3mf``, ``gltf``) se devuelven como ``bytes``. El tipo de retorno depende "
+"únicamente del tipo de pieza solicitado, nunca de las opciones de "
+"exportación."
+
+#: ../../source/digital_thread/use_cases.rst:312
+msgid ""
+"``pc.convert_assembly()`` and ``pc.convert_sketch()`` do the same for "
+"assemblies and sketches, and ``Shape.convert()`` is available directly on "
+"any part, sketch or assembly object."
+msgstr ""
+"``pc.convert_assembly()`` y ``pc.convert_sketch()`` hacen lo mismo para "
+"ensamblajes y bocetos, y ``Shape.convert()`` está disponible directamente en"
+" cualquier objeto de pieza, boceto o ensamblaje."
+
+#: ../../source/digital_thread/use_cases.rst:317
+msgid "Python"
+msgstr "Python"
+
+#: ../../source/digital_thread/use_cases.rst:342
+msgid "shell"
+msgstr "shell"
+
+#: ../../source/digital_thread/use_cases.rst:360
+msgid "Produce models"
+msgstr "Producir modelos"
+
+#: ../../source/digital_thread/use_cases.rst:363
+msgid "Part: Files"
+msgstr "Pieza: archivos"
+
+#: ../../source/digital_thread/use_cases.rst:365
+msgid ""
+"One way to define parts in PartCAD is by providing a file in any of the "
+"currently supported formats: STEP, BREP, STL, 3MF, OBJ. There is no "
+"intention to limit the list of file formats supported. Contribute support of"
+" your favorite file format (ideally, implicitly, by adding the corresponding"
+" support to build123d)."
+msgstr ""
+"Una forma de definir piezas en PartCAD es proporcionando un archivo en "
+"cualquiera de los formatos actualmente admitidos: STEP, BREP, STL, 3MF, OBJ."
+" No hay intención de limitar la lista de formatos de archivo admitidos. "
+"Contribuya con soporte para su formato de archivo favorito (idealmente, de "
+"forma implícita, agregando el soporte correspondiente a build123d)."
+
+#: ../../source/digital_thread/use_cases.rst:386
+msgid "Part: CAD scripts"
+msgstr "Pieza: scripts CAD"
+
+#: ../../source/digital_thread/use_cases.rst:388
+msgid ""
+"Another way to define parts is by using CAD scripting technologies such as "
+"OpenSCAD. This is the only CAD scripting language supported at the moment. "
+"The fundamental difference from CAD files listed above is the availability "
+"of parameters. However OpenSCAD parameters are not yet supported."
+msgstr ""
+"Otra forma de definir piezas es usando tecnologías de scripting CAD como "
+"OpenSCAD. Este es el único lenguaje de scripting CAD admitido por el "
+"momento. La diferencia fundamental con los archivos CAD mencionados arriba "
+"es la disponibilidad de parámetros. Sin embargo, los parámetros de OpenSCAD "
+"aún no son compatibles."
+
+#: ../../source/digital_thread/use_cases.rst:402
+msgid "Part: Python scripts"
+msgstr "Pieza: scripts de Python"
+
+#: ../../source/digital_thread/use_cases.rst:404
+msgid ""
+"The most powerful way to define parts is by using modeling frameworks such "
+"as CadQuery and build123d. PartCAD uses CQGI to load models (in other words:"
+" intercepts `show_object()` calls)."
+msgstr ""
+"La forma más potente de definir piezas es usando marcos de trabajo de "
+"modelado como CadQuery y build123d. PartCAD usa CQGI para cargar modelos (en"
+" otras palabras: intercepta las llamadas a `show_object()`)."
+
+#: ../../source/digital_thread/use_cases.rst:418
+msgid "Assembly"
+msgstr "Ensamblaje"
+
+#: ../../source/digital_thread/use_cases.rst:447
+msgid "Publish packages"
+msgstr "Publicar paquetes"
+
+#: ../../source/digital_thread/use_cases.rst:449
+msgid ""
+"It's very simple to publish your package to the public PartCAD repository. "
+"First, publish your package as a repo on GitHub. Then create a pull request "
+"in `the public PartCAD repo <https://github.com/partcad/partcad-index>`_ to "
+"add a reference to your package."
+msgstr ""
+"Es muy sencillo publicar su paquete en el repositorio público de PartCAD. "
+"Primero, publique su paquete como un repositorio en GitHub. Luego cree una "
+"pull request en `el repositorio público de PartCAD "
+"<https://github.com/partcad/partcad-index>`_ para agregar una referencia a "
+"su paquete."

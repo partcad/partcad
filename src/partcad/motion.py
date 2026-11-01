@@ -445,7 +445,7 @@ class Motion:
     def implied(self) -> list:
         """The freedoms 'type' implies, in the declaration's own frame; empty without a type.
 
-        See the table in docs/source/config_geometry.rst ('Joints').
+        See the table in docs/source/config_interfaces.rst ('Joints').
         """
         if self.type is None or self.type == FIXED:
             return []

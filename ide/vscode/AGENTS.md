@@ -282,14 +282,22 @@ mesh per node rather than an `InstancedMesh`.
 
 **Every tab that shows the object has the view panel down its right** (`viewPanel.ts`; "The view panel" in
 [docs/partcad-viewer.md](./docs/partcad-viewer.md)): the orientation gizmo, the axis views, a section slider per
-axis, the viewpoint as `viewport_origin`/`viewport_up`/target, and Animate and Opacity, which used to be at the
-bottom of the 3D view's tree. One widget for every tab; what a tab cannot do with it is disabled and says why
+axis, the viewpoint as `viewport_origin`/`viewport_up`/target with Fit (the 3D tab only) and Reset beside it, and
+Animate, Auto-fit (the 3D tab only) and Opacity, which used to be at the bottom of the 3D view's tree. One widget for every tab; what a tab cannot do with it is disabled and says why
 (`capabilitiesOf`), and only `cameraView.ts` crosses between PartCAD's frame and a stage's. A section is never a
 clipping plane here: PartCAD cuts the exact geometry (`partcad/shape_section.py`), the 3D view by asking the daemon
 to show the object again (`partcad.showSection` -> `inspect.object` with `section`) and the render tabs by sending
 it with `render.inline`, and the show says what it was cut to (`KEY_SECTION`, absent from a PartCAD that cannot
-cut). The panel starts folded, and the screenshot script drives Animate and Opacity by the ids the 3D tab's panel
-keeps (`animate-checkbox`, `opacity-slider`) without unfolding it - which is why it sets them rather than clicking.
+cut). The panel starts folded, and the screenshot script drives Animate, Opacity and Reset by the ids the 3D tab's
+panel keeps (`animate-checkbox`, `opacity-slider`, `view-reset-button`) without unfolding it - which is why it sets
+them, or clicks from inside the page, rather than clicking through Playwright.
+
+**A show after the first never moves the 3D camera at once.** It keeps the angle (which Animate has been turning)
+and runs Fit, which brings the distance and the target to where every angle of the model fits (the sphere holding
+it, no margin on top), over one second (`fit`/`stepFit` in `scene.ts`, the arithmetic in `cameraView.ts`) - another
+object always, the same one again while the Auto-fit box after Animate is ticked (the default), and a cut never. Only
+the first show of a panel, and Reset, place the camera at the opening view outright. See
+"The first show places the camera" in [docs/partcad-viewer.md](./docs/partcad-viewer.md).
 
 None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote`, `cae.analyze` and
 `simulate.run` (with `cae.list` and `simulate.list`, which read what they would run) are the CLI's own operations (`pc bom`, the book `pc render -t html` writes, the cart

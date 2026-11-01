@@ -719,6 +719,29 @@ def test_a_margin_of_nought_frames_the_sphere_edge_to_edge(tmp_path):
         render_raster.margin_of({"margin": 0.5})
 
 
+def test_with_no_margin_a_picture_is_framed_as_the_3d_view_frames_it():
+    """'frame_distance' is the IDE's 'fitDistance', on its 'enclosingRadius': read off its source, as its twin."""
+    camera_view = os.path.join(
+        os.path.dirname(os.path.dirname(pc.__file__)), "..", "ide", "vscode", "src", "webview", "cameraView.ts"
+    )
+    if not os.path.isfile(camera_view):
+        pytest.skip("the IDE's sources are not beside this PartCAD")
+    with open(camera_view, encoding="utf-8") as f:
+        source = f.read()
+    # The sphere around the box, and the distance its outline fills the
+    # narrower field at.
+    assert "box.getSize(new THREE.Vector3()).length() / 2" in source
+    assert "Math.atan(Math.tan(vertical) * aspect)" in source
+    assert "radius / Math.sin(Math.min(vertical, horizontal))" in source
+    scene = raster_scene.Scene([("#DAA520", _box(30, 40, 120))], 100)
+    assert scene.sphere == pytest.approx(math.sqrt(30**2 + 40**2 + 120**2) / 2)
+    for aspect in (0.5625, 1.0, 16 / 9):
+        vertical = math.radians(raster_scene.FOV) / 2
+        horizontal = math.atan(math.tan(vertical) * aspect)
+        expected = scene.sphere / math.sin(min(vertical, horizontal))
+        assert raster_scene.frame_distance(scene.sphere, aspect, margin=0.0) == pytest.approx(expected)
+
+
 def test_a_picture_style_that_is_not_one_is_refused(tmp_path):
     result = render_png.process(str(tmp_path / "box.png"), {"wrapped": _box(), "style": "painted"})
     assert not result["success"] and "'style' is one of lines, shaded" in result["exception"]

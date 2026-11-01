@@ -1,0 +1,166 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:5
+msgid "3D"
+msgstr "3D"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:7
+msgid ""
+"**3D** is the shape itself, drawn in the panel and turned with the mouse. It"
+" is the one tab that is always there: it arrives over the viewer protocol "
+"from whichever ``partcad`` was asked to show the object, so even a shape "
+"shown from a script -- something that belongs to no package at all -- has "
+"this tab and nothing else."
+msgstr ""
+"**3D** 就是那个形状本身，画在面板里，用鼠标转动。它是唯一一个始终存在的标签页：它是通过查看器协议从被要求显示该对象的那个 ``partcad``"
+" 送过来的，所以即使是从脚本显示出来的形状 -- 一个完全不属于任何包的东西 -- 也有这个标签页，而且只有这一个。"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:13
+msgid ""
+"Everything else in the Digital Thread is a question about a named object. "
+"This is the object."
+msgstr "Digital Thread 中的其他一切，都是关于某个具名对象的一个提问。而这里就是那个对象本身。"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:17
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:19
+msgid ""
+"Down the left is **what is on screen**, with a checkbox on every line. The "
+"list is the object itself: a part or a sketch is one line, an assembly or a "
+"scene a line per thing it holds -- named as the ASSY file names it, as "
+"deeply as the file nests them -- and an interface a line per port it is "
+"drawn with. Unticking a line hides it and everything under it; ticking it "
+"again brings back exactly what was showing before, and a tick drawn grey "
+"rather than solid says that something underneath it is hidden."
+msgstr ""
+"左侧是 **屏幕上有什么**，每一行都有一个复选框。这张列表就是该对象本身：零件或草图是一行，装配体或场景则是它所装的每样东西各一行 -- 名称与 "
+"ASSY 文件所给的名称相同，并按该文件的嵌套深度逐层展开 -- "
+"而接口则是它所绘制的每个端口各一行。取消勾选某一行会隐藏它及它下面的一切；再次勾选则会把之前显示的内容原样恢复回来，而一个画成灰色而不是实心的勾表示它下面有东西被隐藏了。"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:27
+msgid ""
+"Under each line is what that object says about connections: a line per "
+"**interface** instance with its ports under it, and a ``ports`` line for the"
+" ports belonging to no interface. Every port is drawn as a coordinate frame "
+"-- the same frames ``pc render --with-ports`` draws on a projection -- and a"
+" port whose interface gives it a sketch shows that too, half see-through, in"
+" the blue of its ``+Z``: the shape the connection happens across, which is "
+"what makes an opening readable as one. The ``<ports>`` and ``<interfaces>`` "
+"lines start folded up, because an assembly of forty parts has a frame at "
+"every hole of every one of them and all of it at once shows nothing; an "
+"object's own ports start out drawn, the ports of everything inside it do "
+"not."
+msgstr ""
+"每一行下面是那个对象关于连接所说的内容：每个 **接口** 实例一行，它下面是它的各个端口，再加上一条 ``ports`` "
+"行，用于不属于任何接口的端口。每个端口都画成一个坐标系 -- 与 ``pc render --with-ports`` 画在投影上的那些坐标系相同 --"
+" 而接口给了它草图的端口还会把那张草图也显示出来，半透明，用它 ``+Z`` "
+"的那个蓝色：也就是连接发生所跨越的那个形状，而正是这一点让一个开口能被读懂。``<ports>`` 和 ``<interfaces>`` "
+"两行一开始是折叠的，因为一个由四十个零件组成的装配体，在每个零件的每个孔上都有一个坐标系，全部一起显示就等于什么都没显示；对象自己的端口一开始就是画出来的，而它内部一切东西的端口则不是。"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:38
+msgid ""
+"Pointing at a part or a sub-assembly makes it **flicker** in the view, which"
+" is how to tell which of the shapes on screen a line is without moving the "
+"camera."
+msgstr "把鼠标指向某个零件或子装配体会让它在视图中 **闪动**，这就是在不移动相机的情况下分辨某一行对应屏幕上哪个形状的办法。"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:41
+msgid ""
+"Down the right is the **view panel**, folded away until the side bar button "
+"at the top of that edge brings it out -- and then out on every tab at once. "
+"From the top: an **orientation gizmo** to drag the view round, or click an "
+"axis to look along it; a button per axis (**X**, **-X**, **Y**, **-Y**, "
+"**Z**, **-Z**), which are the views ``pc render --view`` names; a two-ended "
+"**section** slider per axis, starting at the faces of the bounding box, "
+"which cuts the exact geometry before it is drawn rather than clipping the "
+"picture; the **viewpoint** as ``viewport_origin``, ``viewport_up`` and a "
+"target, ready to be copied into a ``render:`` section or onto ``pc render "
+"--viewport-origin``; and **Animate** and **Opacity**, which turn the model "
+"on its own and make it see-through."
+msgstr ""
+"右侧是 **视图面板**，它默认收起，直到那一侧顶端的侧边栏按钮把它展开 -- 而一展开，所有标签页就同时展开。从上往下：一个 "
+"**方位小控件**，可以拖动它来转动视图，或者点击某个轴以沿该轴观察；每个轴一个按钮（ "
+"**X**、**-X**、**Y**、**-Y**、**Z**、**-Z** ），它们就是 ``pc render --view`` "
+"所指名的那些视图；每个轴一个两端的 **剖切** 滑块，起始位置是包围盒的各个面，它是在绘制之前对精确几何作剖切，而不是对图片作裁剪；以 "
+"``viewport_origin`` 、 ``viewport_up`` 和一个目标点给出的 **视角**，随时可以复制到某个 ``render:``"
+" 小节里，或者复制到 ``pc render --viewport-origin`` 上；还有 **Animate** 和 "
+"**Opacity**，前者让模型自行转动，后者让它变成半透明。"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:52
+msgid ""
+"The Design group's 3D tab: the tree of what is on screen, the shape, and the"
+" view panel"
+msgstr "Design 组的 3D 标签页：屏幕上内容的那棵树、那个形状，以及视图面板"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:57
+msgid ""
+"The view uses the graphics card where the window can (WebGL, else WebGPU). "
+"In a window that cannot -- a virtual machine, a remote desktop, a driver the"
+" editor could not use -- it draws without one: flat-shaded and slower, and a"
+" big model drawn as boxes while it is being turned. A note in the corner "
+"says so. A `3Dconnexion <https://3dconnexion.com/>`_ **SpaceMouse** moves "
+"the model here too; see :doc:`/tools_vscode`."
+msgstr ""
+"在窗口条件允许时，视图会使用显卡（WebGL，否则 WebGPU）。在条件不允许的窗口里 -- 虚拟机、远程桌面、编辑器无法使用的驱动 -- "
+"它会不借助显卡来绘制：采用平面着色，速度更慢，而大模型在被转动时会画成一堆方盒子。角落里的一条提示会说明这一点。一个 `3Dconnexion "
+"<https://3dconnexion.com/>`_ **SpaceMouse** 在这里同样可以移动模型；参见 "
+":doc:`/tools_vscode` 。"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:65
+msgid "On the command line"
+msgstr "在命令行中"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:74
+msgid ""
+"``pc ide view`` shows an object in the Digital Thread from a terminal, and "
+"``pc ide state`` reports what the panel is showing -- including the boxes "
+"ticked in this tree and a screenshot of the tab on screen, which is what an "
+"agent working beside you reads."
+msgstr ""
+"``pc ide view`` 从终端把一个对象显示到 Digital Thread 中，而 ``pc ide state`` "
+"会报告这个面板当前在显示什么 -- 包括这棵树里勾选了哪些框，以及屏幕上那个标签页的一张截图，而这正是在你旁边工作的智能体所读取的内容。"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:80
+msgid "Agent skills"
+msgstr "智能体技能"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:82
+msgid "``/pc:gen-part``, ``/pc:gen-assembly``, ``/pc:gen-sketch``"
+msgstr "``/pc:gen-part``、``/pc:gen-assembly``、``/pc:gen-sketch``"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:83
+msgid ""
+"Model from a description, and check what they wrote by rendering it from "
+"several angles rather than by looking at one."
+msgstr "根据一段描述建模，并通过从多个角度渲染来检查它们所写出的东西，而不是只看一个角度。"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:86
+msgid "``/pc:add-interfaces``"
+msgstr "``/pc:add-interfaces``"
+
+#: ../../source/digital_thread/lifecycle/design_3d.rst:87
+msgid ""
+"Works the ports out of the geometry and proves them twice -- drawn on the "
+"part, and mated in a throwaway assembly -- which is what this tab shows."
+msgstr "从几何中算出那些端口，并两次验证它们 -- 画在零件上，以及在一个用完即弃的装配体里配合起来 -- 而这正是这个标签页所显示的内容。"

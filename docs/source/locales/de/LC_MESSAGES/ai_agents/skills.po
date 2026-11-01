@@ -1,0 +1,525 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/ai_agents/skills.rst:3
+msgid "Skills"
+msgstr "Skills"
+
+#: ../../source/ai_agents/skills.rst:5
+msgid ""
+"PartCAD ships a library of `Agent Skills "
+"<https://code.claude.com/docs/en/skills>`_ -- a directory of ``SKILL.md`` "
+"files, each one a procedure an AI coding agent follows to do a job with "
+"PartCAD. They are vendor-neutral: anything that reads ``SKILL.md`` can use "
+"them."
+msgstr ""
+"PartCAD liefert eine Bibliothek von `Agent Skills "
+"<https://code.claude.com/docs/en/skills>`_ mit -- ein Verzeichnis von "
+"``SKILL.md``-Dateien, jede eine Vorgehensweise, der ein KI-Coding-Agent "
+"folgt, um eine Aufgabe mit PartCAD zu erledigen. Sie sind herstellerneutral:"
+" alles, was ``SKILL.md`` liest, kann sie verwenden."
+
+#: ../../source/ai_agents/skills.rst:9
+msgid ""
+"They are not a different PartCAD. Each skill runs the same commands "
+"documented in :doc:`/cli`, so nothing a skill produces depends on the agent "
+"that produced it, and anything a skill does you can do by hand."
+msgstr ""
+"Sie sind kein anderes PartCAD. Jeder Skill führt dieselben Befehle aus, die "
+"in :doc:`/cli` dokumentiert sind, nichts, was ein Skill erzeugt, hängt also "
+"von dem Agenten ab, der es erzeugt hat, und alles, was ein Skill tut, können"
+" Sie von Hand tun."
+
+#: ../../source/ai_agents/skills.rst:14
+msgid "Getting them"
+msgstr "Sie bekommen"
+
+#: ../../source/ai_agents/skills.rst:16
+msgid ""
+"The skills ship inside the ``partcad`` wheel, so if you have PartCAD you "
+"have them:"
+msgstr ""
+"Die Skills werden im ``partcad``-Wheel mitgeliefert, wenn Sie also PartCAD "
+"haben, haben Sie sie:"
+
+#: ../../source/ai_agents/skills.rst:24
+msgid ""
+"``pc init`` writes the Claude Code plugin into the repository and "
+"``pc-``-prefixed copies into ``.cursor/skills``, so an agent opening that "
+"repository finds them with nothing to install. :doc:`/ai_agents/plugins` "
+"covers the other way in -- installing the published plugin into the agent "
+"instead of into the repository."
+msgstr ""
+"``pc init`` schreibt das Claude-Code-Plugin in das Repository und "
+"``pc-``-präfixierte Kopien nach ``.cursor/skills``, ein Agent, der dieses "
+"Repository öffnet, findet sie also, ohne etwas installieren zu müssen. "
+":doc:`/ai_agents/plugins` behandelt den anderen Weg hinein -- das "
+"veröffentlichte Plugin in den Agenten statt in das Repository zu "
+"installieren."
+
+#: ../../source/ai_agents/skills.rst:28
+msgid ""
+"Re-running ``pc init`` updates the installed copies and **removes the skills"
+" PartCAD has stopped shipping**. A retired skill left behind goes on "
+"describing a command line that has moved, and an agent follows it anyway. "
+"Under ``.cursor/skills`` only copies PartCAD stamped are removed, since the "
+"``pc-`` prefix is not proof of authorship."
+msgstr ""
+"``pc init`` erneut auszuführen aktualisiert die installierten Kopien und "
+"**entfernt die Skills, die PartCAD nicht mehr mitliefert**. Ein "
+"zurückgelassener ausgemusterter Skill beschreibt weiterhin eine "
+"Befehlszeile, die sich verschoben hat, und ein Agent folgt ihm trotzdem. "
+"Unter ``.cursor/skills`` werden nur Kopien entfernt, die PartCAD gestempelt "
+"hat, denn das ``pc-``-Präfix ist kein Nachweis der Urheberschaft."
+
+#: ../../source/ai_agents/skills.rst:33
+msgid ""
+"``pc healthcheck`` reports installed skills that came from an older PartCAD "
+"than the one now installed: ``pc upgrade`` replaces PartCAD and leaves the "
+"skills where they are, so something has to notice."
+msgstr ""
+"``pc healthcheck`` berichtet installierte Skills, die aus einem älteren "
+"PartCAD stammen als dem, das jetzt installiert ist: ``pc upgrade`` ersetzt "
+"PartCAD und lässt die Skills, wo sie sind, irgendetwas muss es also "
+"bemerken."
+
+#: ../../source/ai_agents/skills.rst:39
+msgid "The skills PartCAD ships"
+msgstr "Die Skills, die PartCAD mitliefert"
+
+#: ../../source/ai_agents/skills.rst:41
+msgid ""
+"Fourteen of them. The name in each heading is what you type in Claude Code; "
+"under Cursor the same skill is ``pc-<name>``, and an agent that chooses "
+"skills by their description will reach for the right one without being told."
+msgstr ""
+"Vierzehn davon. Der Name in jeder Überschrift ist das, was Sie in Claude "
+"Code eintippen; unter Cursor ist derselbe Skill ``pc-<name>``, und ein "
+"Agent, der Skills über ihre Beschreibung auswählt, greift nach dem "
+"richtigen, ohne dass man es ihm sagt."
+
+#: ../../source/ai_agents/skills.rst:47
+msgid "Setting up"
+msgstr "Einrichten"
+
+#: ../../source/ai_agents/skills.rst:49
+msgid "``/pc:setup``"
+msgstr "``/pc:setup``"
+
+#: ../../source/ai_agents/skills.rst:50
+msgid ""
+"Puts ``pc`` on this machine so the other skills have something to run, and "
+"does nothing if a working one is already there -- the first thing it does is"
+" check, because the common case is that PartCAD is installed and the agent "
+"should get on with the job."
+msgstr ""
+"Bringt ``pc`` auf diesen Rechner, damit die anderen Skills etwas zum "
+"Ausführen haben, und tut nichts, wenn schon ein funktionierendes da ist -- "
+"das Erste, was er tut, ist nachzusehen, denn der übliche Fall ist, dass "
+"PartCAD installiert ist und der Agent mit der Aufgabe weitermachen soll."
+
+#: ../../source/ai_agents/skills.rst:55
+msgid ""
+"It installs one of two ways and asks which if it matters: the **standalone "
+"build** from the GitHub releases, which carries its own Python and needs "
+"none on the machine, or the **wheel** into the Python environment that is "
+"currently active, which is the one to pick if anything is going to ``import "
+"partcad``. When the agent is running inside Visual Studio Code or VSCodium "
+"it also installs the PartCAD extension into that editor -- and works out "
+"which editor it is in rather than guessing, stopping early when there is "
+"nothing to do."
+msgstr ""
+"Er installiert auf eine von zwei Weisen und fragt, welche, wenn es darauf "
+"ankommt: den **Standalone-Build** aus den GitHub-Releases, der sein eigenes "
+"Python mitbringt und keines auf dem Rechner braucht, oder das **Wheel** in "
+"die derzeit aktive Python-Umgebung, und das ist das, was zu wählen ist, wenn"
+" irgendetwas ``import partcad`` machen wird. Wenn der Agent innerhalb von "
+"Visual Studio Code oder VSCodium läuft, installiert er außerdem die PartCAD-"
+"Erweiterung in diesen Editor -- und ermittelt, in welchem Editor er ist, "
+"statt zu raten, und bricht früh ab, wenn es nichts zu tun gibt."
+
+#: ../../source/ai_agents/skills.rst:63
+msgid "``/pc:init``"
+msgstr "``/pc:init``"
+
+#: ../../source/ai_agents/skills.rst:64
+msgid ""
+"Creates a package in the current directory by running ``pc init``, which "
+"writes a ``partcad.yaml`` and installs the skills into the repository. It "
+"locates the command first and falls back to ``/pc:setup`` when there is "
+"nothing installed."
+msgstr ""
+"Erzeugt ein Paket im aktuellen Verzeichnis, indem er ``pc init`` ausführt, "
+"was eine ``partcad.yaml`` schreibt und die Skills in das Repository "
+"installiert. Er lokalisiert zuerst den Befehl und fällt auf ``/pc:setup`` "
+"zurück, wenn nichts installiert ist."
+
+#: ../../source/ai_agents/skills.rst:70
+msgid "Generating geometry"
+msgstr "Geometrie erzeugen"
+
+#: ../../source/ai_agents/skills.rst:72
+msgid "``/pc:gen``"
+msgstr "``/pc:gen``"
+
+#: ../../source/ai_agents/skills.rst:73
+msgid ""
+"The one to use when it does not matter which kind of object the request is. "
+"It decides whether what was asked for is a single part, a multi-part "
+"assembly or a 2D sketch, and then follows the matching skill below. \"Model "
+"me a shelf bracket\" is a part; \"model me a gearbox\" is an assembly; "
+"\"draw me the profile\" is a sketch."
+msgstr ""
+"Der, den man verwendet, wenn es nicht darauf ankommt, welche Art von Objekt "
+"die Anfrage ist. Er entscheidet, ob das Verlangte ein einzelnes Teil, eine "
+"mehrteilige Baugruppe oder eine 2D-Skizze ist, und folgt dann dem passenden "
+"Skill unten. \"Modelliere mir eine Regalkonsole\" ist ein Teil; \"modelliere"
+" mir ein Getriebe\" ist eine Baugruppe; \"zeichne mir das Profil\" ist eine "
+"Skizze."
+
+#: ../../source/ai_agents/skills.rst:79
+msgid "``/pc:gen-part``"
+msgstr "``/pc:gen-part``"
+
+#: ../../source/ai_agents/skills.rst:80
+msgid ""
+"Models one part from a description, and the order it works in is the point:"
+msgstr ""
+"Modelliert ein Teil aus einer Beschreibung, und die Reihenfolge, in der er "
+"arbeitet, ist der Punkt:"
+
+#: ../../source/ai_agents/skills.rst:82
+msgid ""
+"It reads the request, and chooses a representation -- build123d, CadQuery, "
+"OpenSCAD, or a primitive -- rather than defaulting to one."
+msgstr ""
+"Er liest die Anfrage und wählt eine Darstellung -- build123d, CadQuery, "
+"OpenSCAD oder ein Primitiv -- statt auf eine zurückzufallen."
+
+#: ../../source/ai_agents/skills.rst:84
+msgid ""
+"**It writes down what the part is required to be before it writes any "
+"geometry**, as the ``requirements:`` section, in the terms of the request "
+"(\"four M3 holes on a 40 mm square\") rather than in terms of the model it "
+"is about to build. Requirements written afterwards describe the design, and "
+"then everything meets them."
+msgstr ""
+"**Er schreibt auf, was das Teil sein muss, bevor er irgendeine Geometrie "
+"schreibt**, als ``requirements:``-Abschnitt, in den Begriffen der Anfrage "
+"(\"vier M3-Löcher auf einem 40-mm-Quadrat\") und nicht in den Begriffen des "
+"Modells, das er gerade bauen will. Anforderungen, die danach geschrieben "
+"werden, beschreiben das Design, und dann erfüllt alles sie."
+
+#: ../../source/ai_agents/skills.rst:89
+msgid ""
+"It authors and registers the script, then validates it with ``pc test``."
+msgstr ""
+"Er schreibt das Skript und registriert es, dann validiert er es mit ``pc "
+"test``."
+
+#: ../../source/ai_agents/skills.rst:90
+msgid ""
+"It renders the part **from several angles and compares each view against the"
+" description**, because a single projection hides whatever is behind it -- "
+"then iterates on what the comparison found."
+msgstr ""
+"Er rendert das Teil **aus mehreren Winkeln und vergleicht jede Ansicht mit "
+"der Beschreibung**, denn eine einzelne Projektion verbirgt alles, was "
+"dahinter liegt -- dann iteriert er über das, was der Vergleich gefunden hat."
+
+#: ../../source/ai_agents/skills.rst:94
+msgid "``/pc:gen-assembly``"
+msgstr "``/pc:gen-assembly``"
+
+#: ../../source/ai_agents/skills.rst:95
+msgid ""
+"Models an assembly, and is the longest of the skills because putting things "
+"together is where the hard-won rules live. It decomposes the request, takes "
+"an inventory of parts that already exist and generates only what is missing,"
+" authors the ``.assy``, and groups whatever repeats into sub-assemblies."
+msgstr ""
+"Modelliert eine Baugruppe und ist der längste der Skills, denn Dinge "
+"zusammenzusetzen ist der Ort, an dem die hart erkämpften Regeln wohnen. Er "
+"zerlegt die Anfrage, nimmt eine Bestandsaufnahme der Teile, die es schon "
+"gibt, und erzeugt nur, was fehlt, schreibt die ``.assy`` und gruppiert "
+"alles, was sich wiederholt, in Unterbaugruppen."
+
+#: ../../source/ai_agents/skills.rst:100
+msgid ""
+"Its last step is the valuable one: it **replaces the coordinates it started "
+"with by connections**, so the assembly ends up saying what holds each item "
+"rather than where each item happens to sit. That is what makes the assembly "
+"survive a change to one of its parts. The rules it follows there are the "
+"ones that are easy to get wrong -- find the pairs by where the ports "
+"actually are; grow the order outwards from what is already placed rather "
+"than following the order the thing is built in; the first item needs no "
+"location at all; a turn is a *difference* between two ports, not an "
+"orientation; let sub-assemblies join each other; and, above all, **do not "
+"predict a mate -- try it**, and look at the result."
+msgstr ""
+"Sein letzter Schritt ist der wertvolle: er **ersetzt die Koordinaten, mit "
+"denen er angefangen hat, durch Verbindungen**, sodass die Baugruppe am Ende "
+"sagt, was jedes Element hält, und nicht, wo jedes Element zufällig sitzt. "
+"Das ist es, was die Baugruppe eine Änderung an einem ihrer Teile überleben "
+"lässt. Die Regeln, denen er dabei folgt, sind die, die man leicht falsch "
+"macht -- finde die Paare danach, wo die Ports tatsächlich sind; lass die "
+"Reihenfolge von dem nach außen wachsen, was schon platziert ist, statt der "
+"Reihenfolge zu folgen, in der das Ding gebaut wird; das erste Element "
+"braucht überhaupt keine Lage; eine Drehung ist eine *Differenz* zwischen "
+"zwei Ports und keine Orientierung; lass Unterbaugruppen einander fügen; und,"
+" vor allem, **sag eine Paarung nicht voraus -- probiere sie aus**, und sieh "
+"dir das Ergebnis an."
+
+#: ../../source/ai_agents/skills.rst:111
+msgid "``/pc:gen-sketch``"
+msgstr "``/pc:gen-sketch``"
+
+#: ../../source/ai_agents/skills.rst:112
+msgid ""
+"Authors a 2D sketch -- build123d, CadQuery, DXF, SVG or a basic outline -- "
+"and validates it by rendering it to SVG and comparing that against the "
+"description. Sketches are what parts are extruded and swept from, and what a"
+" port's boundary is drawn with."
+msgstr ""
+"Schreibt eine 2D-Skizze -- build123d, CadQuery, DXF, SVG oder ein einfacher "
+"Umriss -- und validiert sie, indem er sie nach SVG rendert und das mit der "
+"Beschreibung vergleicht. Skizzen sind das, woraus Teile extrudiert und "
+"gesweept werden, und das, womit die Begrenzung eines Ports gezeichnet wird."
+
+#: ../../source/ai_agents/skills.rst:117
+msgid "``/pc:add-interfaces``"
+msgstr "``/pc:add-interfaces``"
+
+#: ../../source/ai_agents/skills.rst:118
+msgid ""
+"Adds ``interfaces``, ports and ``implements:`` to a part that has none, so "
+"that PartCAD can mate it by connection instead of by hand-written "
+"coordinates."
+msgstr ""
+"Fügt einem Teil, das keine hat, ``interfaces``, Ports und ``implements:`` "
+"hinzu, sodass PartCAD es über eine Verbindung paaren kann statt über von "
+"Hand geschriebene Koordinaten."
+
+#: ../../source/ai_agents/skills.rst:121
+msgid ""
+"It works the port positions out of the geometry -- by rendering the part and"
+" by reading its source -- and then **proves them twice**: by drawing the "
+"ports on the part and looking at them, and by mating two instances of the "
+"part in a throwaway assembly and looking at that. A port that is in the "
+"wrong place or facing the wrong way is invisible in the declaration and "
+"obvious in either picture."
+msgstr ""
+"Er rechnet die Portpositionen aus der Geometrie aus -- indem er das Teil "
+"rendert und seinen Quelltext liest -- und **belegt sie dann zweifach**: "
+"indem er die Ports auf das Teil zeichnet und sie ansieht, und indem er zwei "
+"Instanzen des Teils in einer Wegwerf-Baugruppe paart und sich das ansieht. "
+"Ein Port, der an der falschen Stelle ist oder in die falsche Richtung zeigt,"
+" ist in der Deklaration unsichtbar und in jedem der beiden Bilder "
+"offensichtlich."
+
+#: ../../source/ai_agents/skills.rst:130
+msgid "Finding and describing"
+msgstr "Finden und beschreiben"
+
+#: ../../source/ai_agents/skills.rst:132
+msgid "``/pc:search``"
+msgstr "``/pc:search``"
+
+#: ../../source/ai_agents/skills.rst:133
+msgid ""
+"Finds parts and assemblies in the catalog whose name, description or source "
+"matches a natural-language query, by running ``pc search``; then presents "
+"the matches and, if you pick one, inspects or renders it. The reason to "
+"reach for it first is that the public repository already has the fastener, "
+"the bearing or the motor, and a part that is reused is a part nobody has to "
+"validate."
+msgstr ""
+"Findet Teile und Baugruppen im Katalog, deren Name, Beschreibung oder "
+"Quelltext zu einer natürlichsprachigen Anfrage passt, indem er ``pc search``"
+" ausführt; dann stellt er die Treffer vor und inspiziert oder rendert einen,"
+" wenn Sie einen auswählen. Der Grund, zuerst danach zu greifen, ist, dass "
+"das öffentliche Repository das Verbindungselement, das Lager oder den Motor "
+"schon hat, und ein Teil, das wiederverwendet wird, ist ein Teil, das niemand"
+" validieren muss."
+
+#: ../../source/ai_agents/skills.rst:139
+msgid "``/pc:describe``"
+msgstr "``/pc:describe``"
+
+#: ../../source/ai_agents/skills.rst:140
+msgid ""
+"Writes a narratable, accessibility-oriented description of an existing "
+"object and stores it in the object's ``summary:``, where ``pc ide view`` and"
+" the Explorer show it. It does not guess from the name: it measures the "
+"bounding box and the volume, renders three views, renders a dimensioned "
+"drawing where one is available, and writes the description from those."
+msgstr ""
+"Schreibt eine erzählbare, auf Barrierefreiheit ausgerichtete Beschreibung "
+"eines vorhandenen Objekts und legt sie im ``summary:`` des Objekts ab, wo "
+"``pc ide view`` und der Explorer sie zeigen. Er rät nicht aus dem Namen: er "
+"misst den Begrenzungskasten und das Volumen, rendert drei Ansichten, rendert"
+" eine bemaßte Zeichnung, wo eine verfügbar ist, und schreibt die "
+"Beschreibung daraus."
+
+#: ../../source/ai_agents/skills.rst:148
+msgid "Producing files"
+msgstr "Dateien erzeugen"
+
+#: ../../source/ai_agents/skills.rst:150
+msgid "``/pc:render``"
+msgstr "``/pc:render``"
+
+#: ../../source/ai_agents/skills.rst:151
+msgid ""
+"Draws an object as a PNG, JPEG, SVG or DXF. It handles both cases -- ``pc "
+"render`` for an object a package declares, ``pc adhoc render`` for a file "
+"that belongs to no package -- and that distinction is the first thing it "
+"works out."
+msgstr ""
+"Zeichnet ein Objekt als PNG, JPEG, SVG oder DXF. Er behandelt beide Fälle --"
+" ``pc render`` für ein Objekt, das ein Paket deklariert, ``pc adhoc render``"
+" für eine Datei, die zu keinem Paket gehört -- und diese Unterscheidung ist "
+"das Erste, was er ermittelt."
+
+#: ../../source/ai_agents/skills.rst:155
+msgid ""
+"What it adds over the bare command is the judgement: which angle answers the"
+" question (front, top, iso, or an arbitrary direction), rendering several "
+"angles at once when one will not do, drawing the ports and interfaces on top"
+" when the question is about how something connects, and rendering part of an"
+" assembly when the whole of it would be unreadable."
+msgstr ""
+"Was er über den nackten Befehl hinaus beiträgt, ist das Urteil: welcher "
+"Winkel die Frage beantwortet (vorne, oben, iso oder eine beliebige "
+"Richtung), mehrere Winkel auf einmal zu rendern, wenn einer nicht genügt, "
+"die Ports und Interfaces darauf zu zeichnen, wenn die Frage davon handelt, "
+"wie sich etwas verbindet, und einen Teil einer Baugruppe zu rendern, wenn "
+"das Ganze unlesbar wäre."
+
+#: ../../source/ai_agents/skills.rst:161
+msgid "``/pc:export``"
+msgstr "``/pc:export``"
+
+#: ../../source/ai_agents/skills.rst:162
+msgid ""
+"Writes a CAD file out of an object a package declares -- STEP, BREP, STL, "
+"3MF, OBJ, IGES, glTF, three.js, URDF, or a file type the package implements "
+"itself -- and **changes nothing in** ``partcad.yaml``. It can export part of"
+" an assembly rather than all of it. Use it to hand something to somebody "
+"else."
+msgstr ""
+"Schreibt eine CAD-Datei aus einem Objekt heraus, das ein Paket deklariert --"
+" STEP, BREP, STL, 3MF, OBJ, IGES, glTF, three.js, URDF oder ein Dateityp, "
+"den das Paket selbst implementiert -- und **ändert nichts in** "
+"``partcad.yaml``. Er kann einen Teil einer Baugruppe exportieren statt der "
+"ganzen. Verwenden Sie ihn, um jemand anderem etwas zu übergeben."
+
+#: ../../source/ai_agents/skills.rst:167
+msgid "``/pc:convert``"
+msgstr "``/pc:convert``"
+
+#: ../../source/ai_agents/skills.rst:168
+msgid ""
+"Changes what something *is*, which is the difference from exporting. For an "
+"object in a package it rewrites the declaration to point at the new file, so"
+" the package now says the object is a STEP where it used to say it was a "
+"script. For a bare file it converts the file and touches no package."
+msgstr ""
+"Ändert, was etwas *ist*, und das ist der Unterschied zum Exportieren. Für "
+"ein Objekt in einem Paket schreibt er die Deklaration so um, dass sie auf "
+"die neue Datei zeigt, das Paket sagt also jetzt, das Objekt sei ein STEP, wo"
+" es vorher sagte, es sei ein Skript. Für eine bloße Datei konvertiert er die"
+" Datei und rührt kein Paket an."
+
+#: ../../source/ai_agents/skills.rst:175
+msgid "Checking and analysing"
+msgstr "Prüfen und analysieren"
+
+#: ../../source/ai_agents/skills.rst:177
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/ai_agents/skills.rst:178
+msgid ""
+"The skill for the :doc:`Validation phase "
+"</digital_thread/lifecycle/validation>`, and the only one that judges a "
+"requirement no program can measure."
+msgstr ""
+"Der Skill für die :doc:`Validierungsphase "
+"</digital_thread/lifecycle/validation>` und der einzige, der eine "
+"Anforderung beurteilt, die kein Programm messen kann."
+
+#: ../../source/ai_agents/skills.rst:181
+msgid ""
+"It reads what the object's ``requirements:`` section asks for, runs ``pc "
+"test`` for the ports, interfaces and physical properties PartCAD measures, "
+"runs every simulation and every engineering analysis scenario, renders the "
+"object from every angle that matters with its ports and interfaces drawn, "
+"and -- for an assembly -- reads the bill of materials and the assembly "
+"instructions. Then it gives every requirement a verdict: **met, not met, or "
+"\"cannot tell\"**, with the evidence named for each. The third verdict is "
+"what keeps it honest; a feature it has no evidence for is reported as "
+"unjudged rather than passed."
+msgstr ""
+"Er liest, was der ``requirements:``-Abschnitt des Objekts verlangt, führt "
+"``pc test`` für die Ports, Interfaces und physikalischen Eigenschaften aus, "
+"die PartCAD messen kann, führt jede Simulation und jedes Szenario der "
+"technischen Analysen aus, rendert das Objekt aus jedem Winkel, auf den es "
+"ankommt, mit eingezeichneten Ports und Interfaces, und liest -- bei einer "
+"Baugruppe -- die Stückliste und die Montageanweisungen. Dann gibt er jeder "
+"Anforderung ein Urteil: **erfüllt, nicht erfüllt oder \"nicht "
+"feststellbar\"**, jeweils mit dem genannten Nachweis. Das dritte Urteil ist "
+"das, was ihn ehrlich hält; ein Feature, für das er keinen Nachweis hat, wird"
+" als unbeurteilt und nicht als bestanden berichtet."
+
+#: ../../source/ai_agents/skills.rst:190
+msgid "``/pc:sim-assembly-fea``"
+msgstr "``/pc:sim-assembly-fea``"
+
+#: ../../source/ai_agents/skills.rst:191
+msgid ""
+"Turns what a simulation measured into a stress analysis of one part, which "
+"is a thing neither tool does on its own."
+msgstr ""
+"Verwandelt das, was eine Simulation gemessen hat, in eine Festigkeitsanalyse"
+" eines Teils, und das ist etwas, das keines der beiden Werkzeuge von sich "
+"aus tut."
+
+#: ../../source/ai_agents/skills.rst:194
+msgid ""
+"It runs the assembly's ``simulate:`` entry, reads the forces and moments "
+"acting at the end of the run on the body the part is welded into, works out "
+"which of them actually load that part and where they land, and writes a new "
+"named scenario into the part's ``fea:`` section beside any already there. "
+"Then it runs ``pc cae fea`` on it and shows the result where there is "
+"somewhere to show it. The step that matters is the third: a force on a "
+"welded body is not a force on the part until somebody decides which of it "
+"the part carries."
+msgstr ""
+"Er führt den ``simulate:``-Eintrag der Baugruppe aus, liest die Kräfte und "
+"Momente, die am Ende des Laufs auf den Körper wirken, in den das Teil "
+"eingeschweißt ist, rechnet aus, welche davon dieses Teil tatsächlich "
+"belasten und wo sie landen, und schreibt ein neues benanntes Szenario in den"
+" ``fea:``-Abschnitt des Teils, neben alle, die schon da sind. Dann führt er "
+"``pc cae fea`` darauf aus und zeigt das Ergebnis, wo es einen Ort gibt, es "
+"zu zeigen. Der Schritt, auf den es ankommt, ist der dritte: eine Kraft auf "
+"einen verschweißten Körper ist keine Kraft auf das Teil, bis jemand "
+"entscheidet, welchen Anteil davon das Teil trägt."

@@ -6,17 +6,17 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: PartCAD \n"
+"Project-Id-Version: PartCAD\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-06 16:15+0000\n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: de\n"
 "Language-Team: de <LL@li.org>\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Language: de\n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=utf-8\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "Generated-By: Babel 2.18.0\n"
 
 #: ../../source/tutorial.rst:2
@@ -27,389 +27,424 @@ msgstr "Tutorial"
 msgid "Command Line"
 msgstr "Befehlszeile"
 
-#: ../../source/tutorial.rst:9 ../../source/tutorial.rst:296
+#: ../../source/tutorial.rst:9 ../../source/tutorial.rst:311
 msgid "Create a package"
 msgstr "Ein Paket erstellen"
 
 #: ../../source/tutorial.rst:11
-msgid "First, the current directory needs to be initialized as a PartCAD package."
+msgid ""
+"First, the current directory needs to be initialized as a PartCAD package."
 msgstr ""
 "Zunächst muss das aktuelle Verzeichnis als PartCAD-Paket initialisiert "
 "werden."
 
 #: ../../source/tutorial.rst:18
 msgid ""
-"If there is no ``-p`` flag passed to ``pc init`` then the dependency on "
-"the public PartCAD repository is added automatically."
+"If there is no ``-p`` flag passed to ``pc init`` then the dependency on the "
+"public PartCAD repository is added automatically. It tracks the repository's"
+" released branch, ``main``, and is pinned to the commit ``main`` is at as "
+"the package is created: ``pc init`` writes that commit into a ``revision:`` "
+"line under ``track: main``, and from then on the package is built against "
+"that commit, wherever ``main`` goes, until you run ``pc update`` (see "
+":ref:`pinning-dependencies`). Offline, or when the repository cannot be "
+"reached, the package is created all the same, with no ``revision:`` yet, and"
+" a warning says to run ``pc update`` to pin it."
 msgstr ""
-"Wird ``pc init`` ohne die Option ``-p`` aufgerufen, wird die Abhängigkeit"
-" vom öffentlichen PartCAD-Repository automatisch hinzugefügt."
-
-#: ../../source/tutorial.rst:21
-msgid ""
-"``pc init`` also adds a **Render** command to ``.vscode/launch.json``, at"
-" the root of the git repository it is run in (next to the package, when "
-"there is no repository). It shows up in the \"Run and Debug\" view of the"
-" :ref:`PartCAD IDE <partcad-ide>` and of Visual Studio Code, and running "
-"it renders the package the same way ``pc render`` does from a terminal. "
-"An existing ``launch.json``, with commands and comments of your own in "
-"it, is added to rather than replaced."
-msgstr ""
-"``pc init`` fügt außerdem einen **Render**-Befehl zu "
-"``.vscode/launch.json`` hinzu, und zwar an der Wurzel des git-"
-"Repositorys, in dem es ausgeführt wird (neben dem Paket, wenn es kein "
-"Repository gibt). Er taucht in der Ansicht „Run and Debug“ der "
-":ref:`PartCAD IDE <partcad-ide>` und von Visual Studio Code auf, und ihn "
-"auszuführen rendert das Paket genauso, wie ``pc render`` es aus einem "
-"Terminal tut. Eine vorhandene ``launch.json`` mit eigenen Befehlen und "
-"Kommentaren darin wird ergänzt statt ersetzt."
+"Wenn ``pc init`` kein ``-p``-Flag übergeben wird, wird die Abhängigkeit vom "
+"öffentlichen PartCAD-Repository automatisch hinzugefügt. Sie verfolgt den "
+"veröffentlichten Branch des Repositorys, ``main``, und ist auf den Commit "
+"festgeschrieben, bei dem ``main`` steht, während das Paket erzeugt wird: "
+"``pc init`` schreibt diesen Commit in eine ``revision:``-Zeile unter "
+"``track: main``, und von da an wird das Paket gegen diesen Commit gebaut, "
+"wohin ``main`` auch geht, bis Sie ``pc update`` ausführen (siehe "
+":ref:`pinning-dependencies`). Offline, oder wenn das Repository nicht "
+"erreichbar ist, wird das Paket dennoch erzeugt, noch ohne ``revision:``, und"
+" eine Warnung sagt, dass ``pc update`` auszuführen ist, um sie "
+"festzuschreiben."
 
 #: ../../source/tutorial.rst:27
 msgid ""
-"Into the same directory it installs the **AI agent skills** -- what "
-"teaches a coding agent to drive PartCAD rather than guess at it. Claude "
-"Code gets the ``pc`` plugin, in ``.claude/skills/``, so the skills are "
-"``/pc:gen-part``, ``/pc:render`` and the rest; Cursor, which has no "
-"plugin to namespace them, gets the same skills in ``.cursor/skills/`` "
-"named ``pc-gen-part``, ``pc-render`` and so on. They come from the "
-"PartCAD you have installed, so they always match it. Pass ``--no-skills``"
-" if you would rather not have them, and ``pc init --skills-only`` to "
-"install them into a package you created before this version -- that "
-"touches nothing else."
+"``pc init`` also adds a **Render** command to ``.vscode/launch.json``, at "
+"the root of the git repository it is run in (next to the package, when there"
+" is no repository). It shows up in the \"Run and Debug\" view of the "
+":ref:`PartCAD IDE <partcad-ide>` and of Visual Studio Code, and running it "
+"renders the package the same way ``pc render`` does from a terminal. An "
+"existing ``launch.json``, with commands and comments of your own in it, is "
+"added to rather than replaced."
 msgstr ""
-"In dasselbe Verzeichnis installiert es die **KI-Agenten-Skills** -- also "
-"das, was einem Coding-Agenten beibringt, PartCAD zu bedienen, statt es zu"
-" erraten. Claude Code bekommt das ``pc``-Plugin in ``.claude/skills/``, "
-"sodass die Skills ``/pc:gen-part``, ``/pc:render`` und der Rest heißen; "
-"Cursor, das kein Plugin hat, um sie in einem Namensraum zu halten, "
-"bekommt dieselben Skills in ``.cursor/skills/``, benannt ``pc-gen-part``,"
-" ``pc-render`` und so weiter. Sie stammen aus dem PartCAD, das Sie "
-"installiert haben, und passen daher immer dazu. Übergeben Sie ``--no-"
-"skills``, wenn Sie sie lieber nicht haben möchten, und ``pc init "
-"--skills-only``, um sie in ein Paket zu installieren, das Sie vor dieser "
-"Version erstellt haben -- das rührt sonst nichts an."
+"``pc init`` fügt außerdem einen **Render**-Befehl zu ``.vscode/launch.json``"
+" hinzu, und zwar an der Wurzel des git-Repositorys, in dem es ausgeführt "
+"wird (neben dem Paket, wenn es kein Repository gibt). Er taucht in der "
+"Ansicht „Run and Debug“ der :ref:`PartCAD IDE <partcad-ide>` und von Visual "
+"Studio Code auf, und ihn auszuführen rendert das Paket genauso, wie ``pc "
+"render`` es aus einem Terminal tut. Eine vorhandene ``launch.json`` mit "
+"eigenen Befehlen und Kommentaren darin wird ergänzt statt ersetzt."
 
-#: ../../source/tutorial.rst:35
+#: ../../source/tutorial.rst:33
 msgid ""
-"Alternatively, manually create ``partcad.yaml`` with the following "
-"content:"
-msgstr "Alternativ erstellen Sie ``partcad.yaml`` manuell mit folgendem Inhalt:"
+"Into the same directory it installs the **AI agent skills** -- what teaches "
+"a coding agent to drive PartCAD rather than guess at it. Claude Code gets "
+"the ``pc`` plugin, in ``.claude/skills/``, so the skills are ``/pc:gen-"
+"part``, ``/pc:render`` and the rest; Cursor, which has no plugin to "
+"namespace them, gets the same skills in ``.cursor/skills/`` named ``pc-gen-"
+"part``, ``pc-render`` and so on. They come from the PartCAD you have "
+"installed, so they always match it. Pass ``--no-skills`` if you would rather"
+" not have them, and ``pc init --skills-only`` to install them into a package"
+" you created before this version -- that touches nothing else. Each agent "
+"also gets PartCAD's :doc:`MCP server </ai_agents/mcp>` in its ``.mcp.json`` "
+"or ``.cursor/mcp.json``, unless you pass ``--no-mcp``."
+msgstr ""
+"In dasselbe Verzeichnis installiert es die **KI-Agent-Skills** -- das, was "
+"einem Coding-Agenten beibringt, PartCAD zu steuern, statt daran "
+"herumzuraten. Claude Code erhält das ``pc``-Plugin, in ``.claude/skills/``, "
+"die Skills heißen dort also ``/pc:gen-part``, ``/pc:render`` und so weiter; "
+"Cursor, das kein Plugin hat, um sie zu einem Namensraum zu bündeln, erhält "
+"dieselben Skills in ``.cursor/skills/`` unter den Namen ``pc-gen-part``, "
+"``pc-render`` und so fort. Sie kommen aus dem PartCAD, das Sie installiert "
+"haben, sie passen also immer dazu. Übergeben Sie ``--no-skills``, wenn Sie "
+"sie lieber nicht hätten, und ``pc init --skills-only``, um sie in ein Paket "
+"zu installieren, das Sie vor dieser Version erzeugt haben -- das rührt "
+"nichts anderes an. Jeder Agent erhält außerdem PartCADs :doc:`MCP-Server "
+"</ai_agents/mcp>` in seiner ``.mcp.json`` oder ``.cursor/mcp.json``, sofern "
+"Sie nicht ``--no-mcp`` übergeben."
 
-#: ../../source/tutorial.rst:47
+#: ../../source/tutorial.rst:42
 msgid ""
-"Now launch ``pc list`` to see the list of packages currently available in"
-" the public PartCAD repository."
+"Alternatively, manually create ``partcad.yaml`` with the following content:"
+msgstr ""
+"Alternativ erstellen Sie ``partcad.yaml`` manuell mit folgendem Inhalt:"
+
+#: ../../source/tutorial.rst:54
+msgid ""
+"Then pin it to the commit ``main`` is at now, the way ``pc init`` would "
+"have. ``pc update`` writes that commit into a ``revision:`` line under "
+"``track: main``, and moves it again each time you run it:"
+msgstr ""
+"Schreiben Sie es dann auf den Commit fest, bei dem ``main`` jetzt steht, so,"
+" wie ``pc init`` es getan hätte. ``pc update`` schreibt diesen Commit in "
+"eine ``revision:``-Zeile unter ``track: main`` und bewegt ihn bei jedem Lauf"
+" erneut:"
+
+#: ../../source/tutorial.rst:62
+msgid ""
+"Now launch ``pc list`` to see the list of packages currently available in "
+"the public PartCAD repository."
 msgstr ""
 "Führen Sie nun ``pc list`` aus, um die Liste der derzeit im öffentlichen "
 "PartCAD-Repository verfügbaren Pakete zu sehen."
 
-#: ../../source/tutorial.rst:56
+#: ../../source/tutorial.rst:71
 msgid "Manage dependencies"
 msgstr "Abhängigkeiten verwalten"
 
-#: ../../source/tutorial.rst:58
+#: ../../source/tutorial.rst:73
 msgid ""
-"PartCAD has to be provided with a configuration file which may declare "
-"parts and assemblies, but also declares all repositories that PartCAD is "
-"allowed to query."
+"PartCAD has to be provided with a configuration file which may declare parts"
+" and assemblies, but also declares all repositories that PartCAD is allowed "
+"to query."
 msgstr ""
 "PartCAD benötigt eine Konfigurationsdatei, die Teile und Baugruppen "
 "deklarieren kann, aber auch alle Repositories deklariert, die PartCAD "
 "abfragen darf."
 
-#: ../../source/tutorial.rst:61
+#: ../../source/tutorial.rst:76
 msgid ""
-"PartCAD has no implicit dependencies built-in, so a dependency on the "
-"public PartCAD repository needs to be added if PartCAD is supposed to "
-"query it."
+"PartCAD has no implicit dependencies built-in, so a dependency on the public"
+" PartCAD repository needs to be added if PartCAD is supposed to query it."
 msgstr ""
-"PartCAD hat keine impliziten integrierten Abhängigkeiten, daher muss eine"
-" Abhängigkeit vom öffentlichen PartCAD-Repository hinzugefügt werden, "
-"falls PartCAD dieses abfragen soll."
+"PartCAD hat keine impliziten integrierten Abhängigkeiten, daher muss eine "
+"Abhängigkeit vom öffentlichen PartCAD-Repository hinzugefügt werden, falls "
+"PartCAD dieses abfragen soll."
 
-#: ../../source/tutorial.rst:65
+#: ../../source/tutorial.rst:80
 msgid ""
-"In the newly created package, comment out the \"pub\" dependency (prepend"
-" ``#``) and see how the output of ``pc list`` changes."
+"In the newly created package, comment out the \"pub\" dependency (prepend "
+"``#``) and see how the output of ``pc list`` changes."
 msgstr ""
-"Kommentieren Sie im neu erstellten Paket die Abhängigkeit „pub“ aus "
-"(stellen Sie ``#`` voran) und sehen Sie, wie sich die Ausgabe von ``pc "
-"list`` ändert."
+"Kommentieren Sie im neu erstellten Paket die Abhängigkeit „pub“ aus (stellen"
+" Sie ``#`` voran) und sehen Sie, wie sich die Ausgabe von ``pc list`` "
+"ändert."
 
-#: ../../source/tutorial.rst:69
+#: ../../source/tutorial.rst:84
 msgid "Add a part"
 msgstr "Ein Teil hinzufügen"
 
-#: ../../source/tutorial.rst:71
+#: ../../source/tutorial.rst:86
 msgid "Let's add a part defined using an OpenSCAD script."
-msgstr "Fügen wir ein Teil hinzu, das mit einem OpenSCAD-Skript definiert wird."
+msgstr ""
+"Fügen wir ein Teil hinzu, das mit einem OpenSCAD-Skript definiert wird."
 
-#: ../../source/tutorial.rst:73
+#: ../../source/tutorial.rst:88
 msgid "First, create the OpenSCAD script which defines a cube of size 10mm."
 msgstr ""
 "Erstellen Sie zunächst das OpenSCAD-Skript, das einen Würfel mit 10 mm "
 "Kantenlänge definiert."
 
-#: ../../source/tutorial.rst:80
+#: ../../source/tutorial.rst:95
 msgid "Now let's add a declaration of this part to ``partcad.yaml``."
-msgstr "Fügen wir nun eine Deklaration dieses Teils zu ``partcad.yaml`` hinzu."
+msgstr ""
+"Fügen wir nun eine Deklaration dieses Teils zu ``partcad.yaml`` hinzu."
 
-#: ../../source/tutorial.rst:87
+#: ../../source/tutorial.rst:102
 msgid "Import an existing part"
 msgstr "Ein vorhandenes Teil importieren"
 
-#: ../../source/tutorial.rst:89
+#: ../../source/tutorial.rst:104
 msgid ""
-"The `pc import part` command allows you to import an existing part into a"
-" PartCAD project. You can also specify a target format to convert the "
-"part upon import."
+"The `pc import part` command allows you to import an existing part into a "
+"PartCAD project. You can also specify a target format to convert the part "
+"upon import."
 msgstr ""
 "Mit dem Befehl `pc import part` können Sie ein vorhandenes Teil in ein "
-"PartCAD-Projekt importieren. Sie können auch ein Zielformat angeben, um "
-"das Teil beim Import zu konvertieren."
+"PartCAD-Projekt importieren. Sie können auch ein Zielformat angeben, um das "
+"Teil beim Import zu konvertieren."
 
-#: ../../source/tutorial.rst:92
+#: ../../source/tutorial.rst:107
 msgid "Basic import:"
 msgstr "Einfacher Import:"
 
-#: ../../source/tutorial.rst:99
+#: ../../source/tutorial.rst:114
 msgid "Import and convert to STL:"
 msgstr "Importieren und in STL konvertieren:"
 
-#: ../../source/tutorial.rst:106
+#: ../../source/tutorial.rst:121
 msgid "Provide an optional description:"
 msgstr "Eine optionale Beschreibung angeben:"
 
-#: ../../source/tutorial.rst:112
+#: ../../source/tutorial.rst:127
 msgid "Example log output:"
 msgstr "Beispiel-Protokollausgabe:"
 
-#: ../../source/tutorial.rst:123
+#: ../../source/tutorial.rst:138
 msgid "The imported part is added to the project directory."
 msgstr "Das importierte Teil wird dem Projektverzeichnis hinzugefügt."
 
-#: ../../source/tutorial.rst:124
+#: ../../source/tutorial.rst:139
 msgid "If a target format is specified, the part is converted automatically."
-msgstr "Wenn ein Zielformat angegeben ist, wird das Teil automatisch konvertiert."
+msgstr ""
+"Wenn ein Zielformat angegeben ist, wird das Teil automatisch konvertiert."
 
-#: ../../source/tutorial.rst:128 ../../source/tutorial.rst:323
+#: ../../source/tutorial.rst:143 ../../source/tutorial.rst:338
 msgid "Inspect the part"
 msgstr "Das Teil inspizieren"
 
-#: ../../source/tutorial.rst:130
+#: ../../source/tutorial.rst:145
 msgid "Once a part is created, it can be inspected in ``Digital Thread``."
 msgstr ""
 "Sobald ein Teil erstellt ist, kann es im ``Digital Thread`` inspiziert "
 "werden."
 
-#: ../../source/tutorial.rst:137
+#: ../../source/tutorial.rst:152
 msgid "Export the part"
 msgstr "Das Teil exportieren"
 
-#: ../../source/tutorial.rst:139
+#: ../../source/tutorial.rst:154
 msgid "Now the part can be exported:"
 msgstr "Nun kann das Teil exportiert werden:"
 
-#: ../../source/tutorial.rst:147
+#: ../../source/tutorial.rst:162
 msgid "Convert a Part"
 msgstr "Ein Teil konvertieren"
 
-#: ../../source/tutorial.rst:149
+#: ../../source/tutorial.rst:164
 msgid ""
-"The `pc convert part` command converts a part or assembly within a "
-"package into another format. It updates the type of the part if the "
-"format changes."
+"The `pc convert part` command converts a part or assembly within a package "
+"into another format. It updates the type of the part if the format changes."
 msgstr ""
 "Der Befehl `pc convert part` konvertiert ein Teil oder eine Baugruppe "
-"innerhalb eines Pakets in ein anderes Format. Er aktualisiert den Typ des"
-" Teils, falls sich das Format ändert."
+"innerhalb eines Pakets in ein anderes Format. Er aktualisiert den Typ des "
+"Teils, falls sich das Format ändert."
 
-#: ../../source/tutorial.rst:153 ../../source/tutorial.rst:211
+#: ../../source/tutorial.rst:168 ../../source/tutorial.rst:226
 msgid "Usage:"
 msgstr "Verwendung:"
 
-#: ../../source/tutorial.rst:170 ../../source/tutorial.rst:228
+#: ../../source/tutorial.rst:185 ../../source/tutorial.rst:243
 msgid "Options:"
 msgstr "Optionen:"
 
-#: ../../source/tutorial.rst:172
-msgid "``-t``, ``--target-format``: Output format (e.g., step, stl, obj, etc.)"
-msgstr "``-t``, ``--target-format``: Ausgabeformat (z. B. step, stl, obj usw.)"
+#: ../../source/tutorial.rst:187
+msgid ""
+"``-t``, ``--target-format``: Output format (e.g., step, stl, obj, etc.)"
+msgstr ""
+"``-t``, ``--target-format``: Ausgabeformat (z. B. step, stl, obj usw.)"
 
-#: ../../source/tutorial.rst:173 ../../source/tutorial.rst:231
+#: ../../source/tutorial.rst:188 ../../source/tutorial.rst:246
 msgid "``-P``, ``--package``: Package name (default is current directory)"
-msgstr "``-P``, ``--package``: Paketname (Standard ist das aktuelle Verzeichnis)"
+msgstr ""
+"``-P``, ``--package``: Paketname (Standard ist das aktuelle Verzeichnis)"
 
-#: ../../source/tutorial.rst:174
+#: ../../source/tutorial.rst:189
 msgid "``-O``, ``--output-dir``: Directory to save output files"
-msgstr "``-O``, ``--output-dir``: Verzeichnis zum Speichern der Ausgabedateien"
+msgstr ""
+"``-O``, ``--output-dir``: Verzeichnis zum Speichern der Ausgabedateien"
 
-#: ../../source/tutorial.rst:175
-msgid "``--dry-run``: Simulate the conversion process without modifying any files"
+#: ../../source/tutorial.rst:190
+msgid ""
+"``--dry-run``: Simulate the conversion process without modifying any files"
 msgstr ""
 "``--dry-run``: Simuliert den Konvertierungsvorgang, ohne Dateien zu "
 "verändern"
 
-#: ../../source/tutorial.rst:178 ../../source/tutorial.rst:236
+#: ../../source/tutorial.rst:193 ../../source/tutorial.rst:251
 msgid "Supported formats:"
 msgstr "Unterstützte Formate:"
 
-#: ../../source/tutorial.rst:179
+#: ../../source/tutorial.rst:194
 msgid "STEP"
 msgstr "STEP"
 
-#: ../../source/tutorial.rst:180
+#: ../../source/tutorial.rst:195
 msgid "BREP"
 msgstr "BREP"
 
-#: ../../source/tutorial.rst:181
+#: ../../source/tutorial.rst:196
 msgid "STL"
 msgstr "STL"
 
-#: ../../source/tutorial.rst:182
+#: ../../source/tutorial.rst:197
 msgid "3MF"
 msgstr "3MF"
 
-#: ../../source/tutorial.rst:183
+#: ../../source/tutorial.rst:198
 msgid "ThreeJS (JSON)"
 msgstr "ThreeJS (JSON)"
 
-#: ../../source/tutorial.rst:184
+#: ../../source/tutorial.rst:199
 msgid "OBJ"
 msgstr "OBJ"
 
-#: ../../source/tutorial.rst:185
+#: ../../source/tutorial.rst:200
 msgid "glTF (JSON)"
 msgstr "glTF (JSON)"
 
-#: ../../source/tutorial.rst:186
+#: ../../source/tutorial.rst:201
 msgid "IGES"
 msgstr "IGES"
 
-#: ../../source/tutorial.rst:189 ../../source/tutorial.rst:241
+#: ../../source/tutorial.rst:204 ../../source/tutorial.rst:256
 msgid "Special behavior:"
 msgstr "Besonderes Verhalten:"
 
-#: ../../source/tutorial.rst:191
+#: ../../source/tutorial.rst:206
 msgid ""
 "If the part is of type **`enrich`** or **`alias`**, the `-t` option is "
 "optional. In this case, the system automatically resolves the original "
 "format and converts to it:"
 msgstr ""
-"Wenn das Teil vom Typ **`enrich`** oder **`alias`** ist, ist die Option "
-"`-t` optional. In diesem Fall löst das System automatisch das "
-"ursprüngliche Format auf und konvertiert dorthin:"
+"Wenn das Teil vom Typ **`enrich`** oder **`alias`** ist, ist die Option `-t`"
+" optional. In diesem Fall löst das System automatisch das ursprüngliche "
+"Format auf und konvertiert dorthin:"
 
-#: ../../source/tutorial.rst:200
+#: ../../source/tutorial.rst:215
 msgid ""
-"The part must be declared in the `partcad.yaml` file. If the output "
-"format is not supported or missing for non-`enrich`/`alias`, the command "
-"will fail."
+"The part must be declared in the `partcad.yaml` file. If the output format "
+"is not supported or missing for non-`enrich`/`alias`, the command will fail."
 msgstr ""
 "Das Teil muss in der Datei `partcad.yaml` deklariert sein. Wenn das "
-"Ausgabeformat für nicht-`enrich`/`alias`-Teile nicht unterstützt wird "
-"oder fehlt, schlägt der Befehl fehl."
+"Ausgabeformat für nicht-`enrich`/`alias`-Teile nicht unterstützt wird oder "
+"fehlt, schlägt der Befehl fehl."
 
-#: ../../source/tutorial.rst:205
+#: ../../source/tutorial.rst:220
 msgid "Convert a Sketch"
 msgstr "Eine Skizze konvertieren"
 
-#: ../../source/tutorial.rst:207
+#: ../../source/tutorial.rst:222
 msgid ""
 "The `pc convert sketch` command converts a sketch (e.g., SVG or DXF) to "
 "another supported format. This command updates the sketch type in the "
 "project if applicable."
 msgstr ""
-"Der Befehl `pc convert sketch` konvertiert eine Skizze (z. B. SVG oder "
-"DXF) in ein anderes unterstütztes Format. Dieser Befehl aktualisiert "
+"Der Befehl `pc convert sketch` konvertiert eine Skizze (z. B. SVG oder DXF) "
+"in ein anderes unterstütztes Format. Dieser Befehl aktualisiert "
 "gegebenenfalls den Skizzentyp im Projekt."
 
-#: ../../source/tutorial.rst:230
+#: ../../source/tutorial.rst:245
 msgid "``-t``, ``--target-format``: Output format (`svg` or `dxf`)"
 msgstr "``-t``, ``--target-format``: Ausgabeformat (`svg` oder `dxf`)"
 
-#: ../../source/tutorial.rst:232
+#: ../../source/tutorial.rst:247
 msgid "``-O``, ``--output-dir``: Output folder for the converted sketch"
 msgstr "``-O``, ``--output-dir``: Ausgabeordner für die konvertierte Skizze"
 
-#: ../../source/tutorial.rst:233
+#: ../../source/tutorial.rst:248
 msgid "``--dry-run``: Perform a dry-run (no files are created or modified)"
 msgstr ""
-"``--dry-run``: Führt einen Testlauf durch (es werden keine Dateien "
-"erstellt oder verändert)"
+"``--dry-run``: Führt einen Testlauf durch (es werden keine Dateien erstellt "
+"oder verändert)"
 
-#: ../../source/tutorial.rst:237
+#: ../../source/tutorial.rst:252
 msgid "SVG"
 msgstr "SVG"
 
-#: ../../source/tutorial.rst:238
+#: ../../source/tutorial.rst:253
 msgid "DXF"
 msgstr "DXF"
 
-#: ../../source/tutorial.rst:243
+#: ../../source/tutorial.rst:258
 msgid ""
-"If the sketch is of type **`enrich`** or **`alias`**, the `-t` argument "
-"is optional. The system will convert it to the original underlying format"
-" automatically:"
+"If the sketch is of type **`enrich`** or **`alias`**, the `-t` argument is "
+"optional. The system will convert it to the original underlying format "
+"automatically:"
 msgstr ""
-"Wenn die Skizze vom Typ **`enrich`** oder **`alias`** ist, ist das "
-"Argument `-t` optional. Das System konvertiert sie automatisch in das "
-"ursprüngliche zugrunde liegende Format:"
+"Wenn die Skizze vom Typ **`enrich`** oder **`alias`** ist, ist das Argument "
+"`-t` optional. Das System konvertiert sie automatisch in das ursprüngliche "
+"zugrunde liegende Format:"
 
-#: ../../source/tutorial.rst:252
+#: ../../source/tutorial.rst:267
 msgid ""
-"The sketch must be listed in `partcad.yaml` and marked as a sketch. If "
-"the format is not supported or the resolution fails, the command will "
-"return an error."
+"The sketch must be listed in `partcad.yaml` and marked as a sketch. If the "
+"format is not supported or the resolution fails, the command will return an "
+"error."
 msgstr ""
-"Die Skizze muss in `partcad.yaml` aufgeführt und als Skizze markiert "
-"sein. Wenn das Format nicht unterstützt wird oder die Auflösung "
-"fehlschlägt, gibt der Befehl einen Fehler zurück."
+"Die Skizze muss in `partcad.yaml` aufgeführt und als Skizze markiert sein. "
+"Wenn das Format nicht unterstützt wird oder die Auflösung fehlschlägt, gibt "
+"der Befehl einen Fehler zurück."
 
-#: ../../source/tutorial.rst:256
+#: ../../source/tutorial.rst:271
 msgid "Reset partcad"
 msgstr "PartCAD zurücksetzen"
 
-#: ../../source/tutorial.rst:258
+#: ../../source/tutorial.rst:273
 msgid ""
 "PartCAD maintains an internal state to keep track of dependencies of a "
 "project. This state can be reset using the command below."
 msgstr ""
-"PartCAD führt einen internen Zustand, um die Abhängigkeiten eines "
-"Projekts nachzuverfolgen. Dieser Zustand kann mit dem folgenden Befehl "
-"zurückgesetzt werden."
+"PartCAD führt einen internen Zustand, um die Abhängigkeiten eines Projekts "
+"nachzuverfolgen. Dieser Zustand kann mit dem folgenden Befehl zurückgesetzt "
+"werden."
 
-#: ../../source/tutorial.rst:266
+#: ../../source/tutorial.rst:281
 msgid "VS Code Extension"
 msgstr "VS-Code-Erweiterung"
 
-#: ../../source/tutorial.rst:269
+#: ../../source/tutorial.rst:284
 msgid "Start new workspace"
 msgstr "Neuen Arbeitsbereich starten"
 
-#: ../../source/tutorial.rst:271
+#: ../../source/tutorial.rst:286
 msgid "Open Visual Studio Code and create a new empty workspace."
 msgstr ""
 "Öffnen Sie Visual Studio Code und erstellen Sie einen neuen, leeren "
 "Arbeitsbereich."
 
-#: ../../source/tutorial.rst:274
+#: ../../source/tutorial.rst:289
 msgid "Activate Python"
 msgstr "Python aktivieren"
 
-#: ../../source/tutorial.rst:276
+#: ../../source/tutorial.rst:291
 msgid ""
-"If necessary, install the Python extension. Activate a Python environment"
-" (3.10 or above)."
+"If necessary, install the Python extension. Activate a Python environment "
+"(3.10 or above)."
 msgstr ""
 "Installieren Sie bei Bedarf die Python-Erweiterung. Aktivieren Sie eine "
 "Python-Umgebung (3.10 oder höher)."
 
-#: ../../source/tutorial.rst:280
+#: ../../source/tutorial.rst:295
 msgid "Install the extension"
 msgstr "Die Erweiterung installieren"
 
-#: ../../source/tutorial.rst:282
+#: ../../source/tutorial.rst:297
 msgid ""
 "Install the `PartCAD "
 "<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
@@ -419,360 +454,355 @@ msgstr ""
 "<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
 "official>`_ aus dem VS-Code-Marketplace."
 
-#: ../../source/tutorial.rst:287
+#: ../../source/tutorial.rst:302
 msgid "Install PartCAD"
 msgstr "PartCAD installieren"
 
-#: ../../source/tutorial.rst:289
+#: ../../source/tutorial.rst:304
 msgid ""
-"Switch to the PartCAD workbench (look for the PartCAD logo at the left "
-"edge of the screen). There is the PartCAD Explorer view on the left. "
-"Click ``Install PartCAD`` in the Explorer view if this button is shown to"
-" install PartCAD in the activated Python environment."
+"Switch to the PartCAD workbench (look for the PartCAD logo at the left edge "
+"of the screen). There is the PartCAD Explorer view on the left. Click "
+"``Install PartCAD`` in the Explorer view if this button is shown to install "
+"PartCAD in the activated Python environment."
 msgstr ""
-"Wechseln Sie zur PartCAD-Werkbank (halten Sie Ausschau nach dem PartCAD-"
-"Logo am linken Bildschirmrand). Dort befindet sich links die PartCAD-"
-"Explorer-Ansicht. Klicken Sie in der Explorer-Ansicht auf ``Install "
-"PartCAD``, falls diese Schaltfläche angezeigt wird, um PartCAD in der "
-"aktivierten Python-Umgebung zu installieren."
+"Wechseln Sie zur PartCAD-Werkbank (halten Sie Ausschau nach dem PartCAD-Logo"
+" am linken Bildschirmrand). Dort befindet sich links die PartCAD-Explorer-"
+"Ansicht. Klicken Sie in der Explorer-Ansicht auf ``Install PartCAD``, falls "
+"diese Schaltfläche angezeigt wird, um PartCAD in der aktivierten Python-"
+"Umgebung zu installieren."
 
-#: ../../source/tutorial.rst:298
+#: ../../source/tutorial.rst:313
 msgid ""
 "Once PartCAD is initialized, it won't detect any PartCAD package in the "
 "empty workspace. Click ``Initialize Package`` to create ``partcad.yaml``."
 msgstr ""
-"Sobald PartCAD initialisiert ist, erkennt es im leeren Arbeitsbereich "
-"kein PartCAD-Paket. Klicken Sie auf ``Initialize Package``, um "
-"``partcad.yaml`` zu erstellen."
+"Sobald PartCAD initialisiert ist, erkennt es im leeren Arbeitsbereich kein "
+"PartCAD-Paket. Klicken Sie auf ``Initialize Package``, um ``partcad.yaml`` "
+"zu erstellen."
 
-#: ../../source/tutorial.rst:303
+#: ../../source/tutorial.rst:318
 msgid "Browse"
 msgstr "Durchsuchen"
 
-#: ../../source/tutorial.rst:305
+#: ../../source/tutorial.rst:320
 msgid ""
-"Browse the imported packages in the Explorer view. Click on the parts and"
-" assemblies to see them in the ``Digital Thread`` view that will appear "
-"on the right."
+"Browse the imported packages in the Explorer view. Click on the parts and "
+"assemblies to see them in the ``Digital Thread`` view that will appear on "
+"the right."
 msgstr ""
-"Durchsuchen Sie die importierten Pakete in der Explorer-Ansicht. Klicken "
-"Sie auf die Teile und Baugruppen, um sie in der Ansicht ``Digital "
-"Thread`` zu sehen, die rechts erscheint."
+"Durchsuchen Sie die importierten Pakete in der Explorer-Ansicht. Klicken Sie"
+" auf die Teile und Baugruppen, um sie in der Ansicht ``Digital Thread`` zu "
+"sehen, die rechts erscheint."
 
-#: ../../source/tutorial.rst:309
+#: ../../source/tutorial.rst:324
 msgid ""
-"For example, navigate to ``//pub/std/metric/cqwarehouse`` and click on "
-"some part (e.g. ``fastener/hexhead-din931``). The PartCAD Inspector view "
-"displays the part parameters. The parameter values can be changed and the"
-" part gets redrawn on ``Update``."
+"For example, navigate to ``//pub/std/metric/cqwarehouse`` and click on some "
+"part (e.g. ``fastener/hexhead-din931``). The PartCAD Inspector view displays"
+" the part parameters. The parameter values can be changed and the part gets "
+"redrawn on ``Update``."
 msgstr ""
-"Navigieren Sie zum Beispiel zu ``//pub/std/metric/cqwarehouse`` und "
-"klicken Sie auf ein Teil (z. B. ``fastener/hexhead-din931``). Die "
-"PartCAD-Inspector-Ansicht zeigt die Parameter des Teils an. Die "
-"Parameterwerte können geändert werden, und das Teil wird bei ``Update`` "
-"neu gezeichnet."
+"Navigieren Sie zum Beispiel zu ``//pub/std/metric/cqwarehouse`` und klicken "
+"Sie auf ein Teil (z. B. ``fastener/hexhead-din931``). Die PartCAD-Inspector-"
+"Ansicht zeigt die Parameter des Teils an. Die Parameterwerte können geändert"
+" werden, und das Teil wird bei ``Update`` neu gezeichnet."
 
-#: ../../source/tutorial.rst:315
+#: ../../source/tutorial.rst:330
 msgid "Create a part"
 msgstr "Ein Teil erstellen"
 
-#: ../../source/tutorial.rst:317
+#: ../../source/tutorial.rst:332
 msgid ""
 "Click ``Add a CAD script`` in the Explorer view toolbar. Select "
-"``build123d`` from the dropdown list. Then select ``Example 3: Bead`` as "
-"the template to use. An editor view with the newly created script will be"
-" shown."
+"``build123d`` from the dropdown list. Then select ``Example 3: Bead`` as the"
+" template to use. An editor view with the newly created script will be "
+"shown."
 msgstr ""
 "Klicken Sie in der Symbolleiste der Explorer-Ansicht auf ``Add a CAD "
-"script``. Wählen Sie ``build123d`` aus der Dropdown-Liste. Wählen Sie "
-"dann ``Example 3: Bead`` als zu verwendende Vorlage. Es wird eine Editor-"
-"Ansicht mit dem neu erstellten Skript angezeigt."
+"script``. Wählen Sie ``build123d`` aus der Dropdown-Liste. Wählen Sie dann "
+"``Example 3: Bead`` als zu verwendende Vorlage. Es wird eine Editor-Ansicht "
+"mit dem neu erstellten Skript angezeigt."
 
-#: ../../source/tutorial.rst:325
+#: ../../source/tutorial.rst:340
 msgid ""
-"When you edit Python or OpenSCAD files that are used in the current "
-"PartCAD package, saving the file makes it displayed automatically. Press "
-"``Save`` (Ctrl-S or Cmd-S) to save the script and trigger an automatic "
-"inspection of the part. The ``Digital Thread`` view will appear on the "
-"right."
+"When you edit Python or OpenSCAD files that are used in the current PartCAD "
+"package, saving the file makes it displayed automatically. Press ``Save`` "
+"(Ctrl-S or Cmd-S) to save the script and trigger an automatic inspection of "
+"the part. The ``Digital Thread`` view will appear on the right."
 msgstr ""
-"Wenn Sie Python- oder OpenSCAD-Dateien bearbeiten, die im aktuellen "
-"PartCAD-Paket verwendet werden, wird die Datei beim Speichern automatisch"
-" angezeigt. Drücken Sie ``Save`` (Strg-S oder Cmd-S), um das Skript zu "
-"speichern und eine automatische Inspektion des Teils auszulösen. Die "
-"Ansicht ``Digital Thread`` erscheint rechts."
+"Wenn Sie Python- oder OpenSCAD-Dateien bearbeiten, die im aktuellen PartCAD-"
+"Paket verwendet werden, wird die Datei beim Speichern automatisch angezeigt."
+" Drücken Sie ``Save`` (Strg-S oder Cmd-S), um das Skript zu speichern und "
+"eine automatische Inspektion des Teils auszulösen. Die Ansicht ``Digital "
+"Thread`` erscheint rechts."
 
-#: ../../source/tutorial.rst:331
+#: ../../source/tutorial.rst:346
 msgid "Import parts"
 msgstr "Teile importieren"
 
-#: ../../source/tutorial.rst:333
+#: ../../source/tutorial.rst:348
 msgid ""
-"In case you want to use existing PartCAD parts in the design of your "
-"part, then follow the following steps."
+"In case you want to use existing PartCAD parts in the design of your part, "
+"then follow the following steps."
 msgstr ""
-"Falls Sie vorhandene PartCAD-Teile im Entwurf Ihres Teils verwenden "
-"möchten, folgen Sie den nachstehenden Schritten."
+"Falls Sie vorhandene PartCAD-Teile im Entwurf Ihres Teils verwenden möchten,"
+" folgen Sie den nachstehenden Schritten."
 
-#: ../../source/tutorial.rst:336
+#: ../../source/tutorial.rst:351
 msgid ""
-"First, select the part you want to use in the PartCAD Explorer view. "
-"Then, add the following to the ``build123d`` script created during the "
-"previous steps of this tutorial:"
+"First, select the part you want to use in the PartCAD Explorer view. Then, "
+"add the following to the ``build123d`` script created during the previous "
+"steps of this tutorial:"
 msgstr ""
-"Wählen Sie zunächst das gewünschte Teil in der PartCAD-Explorer-Ansicht "
-"aus. Fügen Sie dann Folgendes zu dem ``build123d``-Skript hinzu, das in "
-"den vorherigen Schritten dieses Tutorials erstellt wurde:"
-
-#: ../../source/tutorial.rst:346
-msgid ""
-"Please, note, that after ``pc.get_`` a code completion suggestion "
-"appears. Use the suggested code completion option to insert the code that"
-" adds the selected part to this ``build123d`` script."
-msgstr ""
-"Bitte beachten Sie, dass nach ``pc.get_`` ein Codevervollständigungs-Vorschlag erscheint. Verwenden Sie den vorgeschlagenen Codevervollständigungs-Eintrag, um den Code einzufügen, der das ausgewählte Teil zu diesem ``build123d``-Skript hinzufügt."
-
-#: ../../source/tutorial.rst:350
-msgid "Here is an example of how to use the newly added solid:"
-msgstr ""
-"Hier ist ein Beispiel, wie das neu hinzugefügte Solid verwendet werden "
-"kann:"
+"Wählen Sie zunächst das gewünschte Teil in der PartCAD-Explorer-Ansicht aus."
+" Fügen Sie dann Folgendes zu dem ``build123d``-Skript hinzu, das in den "
+"vorherigen Schritten dieses Tutorials erstellt wurde:"
 
 #: ../../source/tutorial.rst:361
+msgid ""
+"Please, note, that after ``pc.get_`` a code completion suggestion appears. "
+"Use the suggested code completion option to insert the code that adds the "
+"selected part to this ``build123d`` script."
+msgstr ""
+"Bitte beachten Sie, dass nach ``pc.get_`` ein Codevervollständigungs-"
+"Vorschlag erscheint. Verwenden Sie den vorgeschlagenen "
+"Codevervollständigungs-Eintrag, um den Code einzufügen, der das ausgewählte "
+"Teil zu diesem ``build123d``-Skript hinzufügt."
+
+#: ../../source/tutorial.rst:365
+msgid "Here is an example of how to use the newly added solid:"
+msgstr ""
+"Hier ist ein Beispiel, wie das neu hinzugefügte Solid verwendet werden kann:"
+
+#: ../../source/tutorial.rst:376
 msgid "Import an Assembly"
 msgstr "Eine Baugruppe importieren"
 
-#: ../../source/tutorial.rst:363
+#: ../../source/tutorial.rst:378
 msgid ""
-"The ``pc import assembly`` command allows you to import an assembly from "
-"a STEP or URDF file. The format is taken from the file's extension."
+"The ``pc import assembly`` command allows you to import an assembly from a "
+"STEP or URDF file. The format is taken from the file's extension."
 msgstr ""
-"Mit dem Befehl ``pc import assembly`` können Sie eine Baugruppe aus einer"
-" STEP- oder URDF-Datei importieren. Das Format wird aus der Dateiendung "
+"Mit dem Befehl ``pc import assembly`` können Sie eine Baugruppe aus einer "
+"STEP- oder URDF-Datei importieren. Das Format wird aus der Dateiendung "
 "abgeleitet."
 
-#: ../../source/tutorial.rst:366
+#: ../../source/tutorial.rst:381
 msgid ""
-"From a STEP file it extracts the individual parts and creates an assembly"
-" YAML file that records each part along with its placement. From a URDF "
-"it creates an ``stl`` part per link carrying the physical properties the "
-"URDF stated, a pair of interfaces per joint, and an assembly that "
-"connects the parts through them rather than placing them by coordinates -"
-" see :doc:`configuration`."
+"From a STEP file it extracts the individual parts and creates an assembly "
+"YAML file that records each part along with its placement. From a URDF it "
+"creates an ``stl`` part per link carrying the physical properties the URDF "
+"stated, a pair of interfaces per joint, and an assembly that connects the "
+"parts through them rather than placing them by coordinates - see "
+":doc:`/config_interfaces`."
 msgstr ""
-"Aus einer STEP-Datei extrahiert es die einzelnen Teile und erstellt eine "
-"Assembly-YAML-Datei, die jedes Teil samt seiner Platzierung festhält. Aus"
-" einer URDF erstellt es je ein ``stl``-Teil pro Link, das die von der "
-"URDF angegebenen physikalischen Eigenschaften trägt, ein Interface-Paar "
-"pro Gelenk und eine Baugruppe, die die Teile darüber verbindet, statt sie"
-" über Koordinaten zu platzieren - siehe :doc:`configuration`."
+"Aus einer STEP-Datei extrahiert es die einzelnen Teile und erzeugt eine "
+"Assembly-YAML-Datei, die jedes Teil mit seiner Platzierung festhält. Aus "
+"einem URDF erzeugt es je Link ein ``stl``-Teil, das die physikalischen "
+"Eigenschaften trägt, die das URDF angegeben hat, je Gelenk ein Paar von "
+"Interfaces und eine Baugruppe, die die Teile darüber verbindet, statt sie "
+"über Koordinaten zu platzieren - siehe :doc:`/config_interfaces`."
 
-#: ../../source/tutorial.rst:372
+#: ../../source/tutorial.rst:387
 msgid ""
-"An import leaves the package holding PartCAD's own objects - parts it can"
-" render on their own and an assembly that places them - rather than a "
-"declaration that points back at the foreign file. Use ``pc add assembly``"
-" when you want the latter: it declares a file where it lies, and the URDF"
-" stays a URDF."
+"An import leaves the package holding PartCAD's own objects - parts it can "
+"render on their own and an assembly that places them - rather than a "
+"declaration that points back at the foreign file. Use ``pc add assembly`` "
+"when you want the latter: it declares a file where it lies, and the URDF "
+"stays a URDF."
 msgstr ""
-"Ein Import hinterlässt das Paket mit PartCADs eigenen Objekten - Teilen, "
-"die es für sich allein rendern kann, und einer Baugruppe, die sie "
-"platziert - statt mit einer Deklaration, die auf die fremde Datei "
-"zurückzeigt. Verwenden Sie ``pc add assembly``, wenn Sie Letzteres "
-"möchten: es deklariert eine Datei dort, wo sie liegt, und die URDF bleibt"
-" eine URDF."
+"Ein Import hinterlässt das Paket mit PartCADs eigenen Objekten - Teilen, die"
+" es für sich allein rendern kann, und einer Baugruppe, die sie platziert - "
+"statt mit einer Deklaration, die auf die fremde Datei zurückzeigt. Verwenden"
+" Sie ``pc add assembly``, wenn Sie Letzteres möchten: es deklariert eine "
+"Datei dort, wo sie liegt, und die URDF bleibt eine URDF."
 
-#: ../../source/tutorial.rst:378
+#: ../../source/tutorial.rst:393
 msgid "Usage"
 msgstr "Verwendung"
 
-#: ../../source/tutorial.rst:392
+#: ../../source/tutorial.rst:407
 msgid "Functionality"
 msgstr "Funktionsweise"
 
-#: ../../source/tutorial.rst:394
+#: ../../source/tutorial.rst:409
 msgid ""
-"**File Parsing:** For a STEP file, the command first attempts to parse it"
-" using an XDE-based approach. If no parts are found via XDE, it falls "
-"back to a classic STEP parsing method. A URDF is parsed with ROS's own "
+"**File Parsing:** For a STEP file, the command first attempts to parse it "
+"using an XDE-based approach. If no parts are found via XDE, it falls back to"
+" a classic STEP parsing method. A URDF is parsed with ROS's own "
 "``urdf_parser_py``."
 msgstr ""
-"**Datei-Parsing:** Bei einer STEP-Datei versucht der Befehl zunächst, sie"
-" mit einem XDE-basierten Ansatz zu parsen. Werden über XDE keine Teile "
+"**Datei-Parsing:** Bei einer STEP-Datei versucht der Befehl zunächst, sie "
+"mit einem XDE-basierten Ansatz zu parsen. Werden über XDE keine Teile "
 "gefunden, wird auf eine klassische STEP-Parsing-Methode zurückgegriffen. "
 "Eine URDF wird mit ROS’ eigenem ``urdf_parser_py`` geparst."
 
-#: ../../source/tutorial.rst:399
+#: ../../source/tutorial.rst:414
 msgid ""
 "**Duplicate Filtering:** Unique parts are identified by comparing the "
-"geometric data and applied transformations. Duplicate entries are "
-"discarded based on a composite key of shape identifier and "
-"transformation."
+"geometric data and applied transformations. Duplicate entries are discarded "
+"based on a composite key of shape identifier and transformation."
 msgstr ""
 "**Duplikatfilterung:** Eindeutige Teile werden durch Vergleich der "
 "geometrischen Daten und der angewendeten Transformationen ermittelt. "
 "Doppelte Einträge werden anhand eines zusammengesetzten Schlüssels aus "
 "Formkennung und Transformation verworfen."
 
-#: ../../source/tutorial.rst:403
+#: ../../source/tutorial.rst:418
 msgid ""
-"**Part Extraction:** Each unique SOLID is saved as a separate STEP file "
-"in a dedicated subfolder. The transformation (translation and rotation) "
-"of each part is recorded and later used in the assembly."
+"**Part Extraction:** Each unique SOLID is saved as a separate STEP file in a"
+" dedicated subfolder. The transformation (translation and rotation) of each "
+"part is recorded and later used in the assembly."
 msgstr ""
-"**Teileextraktion:** Jedes eindeutige SOLID wird als separate STEP-Datei "
-"in einem eigenen Unterordner gespeichert. Die Transformation "
-"(Verschiebung und Rotation) jedes Teils wird festgehalten und später in "
-"der Baugruppe verwendet."
+"**Teileextraktion:** Jedes eindeutige SOLID wird als separate STEP-Datei in "
+"einem eigenen Unterordner gespeichert. Die Transformation (Verschiebung und "
+"Rotation) jedes Teils wird festgehalten und später in der Baugruppe "
+"verwendet."
 
-#: ../../source/tutorial.rst:407
+#: ../../source/tutorial.rst:422
 msgid ""
-"**Assembly Creation:** An assembly YAML file is generated, linking the "
-"parts (by file name) with their transformation data. This YAML file is "
-"then added to the project, finalizing the assembly import."
+"**Assembly Creation:** An assembly YAML file is generated, linking the parts"
+" (by file name) with their transformation data. This YAML file is then added"
+" to the project, finalizing the assembly import."
 msgstr ""
-"**Baugruppenerstellung:** Es wird eine Assembly-YAML-Datei erzeugt, die "
-"die Teile (nach Dateiname) mit ihren Transformationsdaten verknüpft. "
-"Diese YAML-Datei wird anschließend dem Projekt hinzugefügt, womit der "
-"Import der Baugruppe abgeschlossen wird."
+"**Baugruppenerstellung:** Es wird eine Assembly-YAML-Datei erzeugt, die die "
+"Teile (nach Dateiname) mit ihren Transformationsdaten verknüpft. Diese YAML-"
+"Datei wird anschließend dem Projekt hinzugefügt, womit der Import der "
+"Baugruppe abgeschlossen wird."
 
-#: ../../source/tutorial.rst:412
+#: ../../source/tutorial.rst:427
 msgid "Example Log Output"
 msgstr "Beispiel-Protokollausgabe"
 
-#: ../../source/tutorial.rst:423
+#: ../../source/tutorial.rst:438
 msgid "Notes"
 msgstr "Hinweise"
 
-#: ../../source/tutorial.rst:425
+#: ../../source/tutorial.rst:440
 msgid ""
-"The STEP file must contain more than one SOLID to be considered an "
-"assembly."
+"The STEP file must contain more than one SOLID to be considered an assembly."
 msgstr ""
 "Die STEP-Datei muss mehr als ein SOLID enthalten, um als Baugruppe zu "
 "gelten."
 
-#: ../../source/tutorial.rst:426
+#: ../../source/tutorial.rst:441
 msgid ""
 "If the file does not represent an assembly (i.e. only a single SOLID is "
 "found), the command will raise an error."
 msgstr ""
-"Wenn die Datei keine Baugruppe darstellt (d. h. es wird nur ein einzelnes"
-" SOLID gefunden), gibt der Befehl einen Fehler aus."
+"Wenn die Datei keine Baugruppe darstellt (d. h. es wird nur ein einzelnes "
+"SOLID gefunden), gibt der Befehl einen Fehler aus."
 
-#: ../../source/tutorial.rst:427
+#: ../../source/tutorial.rst:442
 msgid ""
 "The transformation data is recorded as a combination of translation and "
-"rotation (axis and angle), enabling precise placement of each part within"
-" the assembly."
+"rotation (axis and angle), enabling precise placement of each part within "
+"the assembly."
 msgstr ""
 "Die Transformationsdaten werden als Kombination aus Verschiebung und "
-"Rotation (Achse und Winkel) festgehalten, was eine präzise Platzierung "
-"jedes Teils innerhalb der Baugruppe ermöglicht."
+"Rotation (Achse und Winkel) festgehalten, was eine präzise Platzierung jedes"
+" Teils innerhalb der Baugruppe ermöglicht."
 
-#: ../../source/tutorial.rst:429
+#: ../../source/tutorial.rst:444
 msgid ""
 "Importing a URDF produces one ``stl`` part per link, carrying the mass, "
-"inertia, friction and colour the URDF stated, and one pair of interfaces "
-"per joint - so the generated assembly connects its parts through the "
-"joints rather than placing them by coordinates. See :doc:`simulation` for"
-" what survives the conversion and what does not."
+"inertia, friction and colour the URDF stated, and one pair of interfaces per"
+" joint - so the generated assembly connects its parts through the joints "
+"rather than placing them by coordinates. See :ref:`sim-urdf-round-trip` for "
+"what survives the conversion and what does not."
 msgstr ""
-"Der Import einer URDF erzeugt je ein ``stl``-Teil pro Link, das die von "
-"der URDF angegebene Masse, Trägheit, Reibung und Farbe trägt, sowie ein "
-"Interface-Paar pro Gelenk - sodass die erzeugte Baugruppe ihre Teile über"
-" die Gelenke verbindet, statt sie über Koordinaten zu platzieren. Siehe "
-":doc:`simulation` dazu, was die Konvertierung überlebt und was nicht."
+"Ein URDF zu importieren erzeugt je Link ein ``stl``-Teil, das die Masse, die"
+" Trägheit, die Reibung und die Farbe trägt, die das URDF angegeben hat, und "
+"je Gelenk ein Paar von Interfaces - die erzeugte Baugruppe verbindet ihre "
+"Teile also über die Gelenke, statt sie über Koordinaten zu platzieren. Siehe"
+" :ref:`sim-urdf-round-trip` dazu, was die Konvertierung übersteht und was "
+"nicht."
 
-#: ../../source/tutorial.rst:436
+#: ../../source/tutorial.rst:451
 msgid "Create an assembly"
 msgstr "Eine Baugruppe erstellen"
 
-#: ../../source/tutorial.rst:438
+#: ../../source/tutorial.rst:453
 msgid ""
-"This is what PartCAD (or, at least, its VS Code Extension) is actually "
-"for."
+"This is what PartCAD (or, at least, its VS Code Extension) is actually for."
 msgstr ""
 "Genau dafür ist PartCAD (oder zumindest dessen VS-Code-Erweiterung) "
 "eigentlich gedacht."
 
-#: ../../source/tutorial.rst:440
+#: ../../source/tutorial.rst:455
 msgid ""
 "Click ``Add an assembly file to the current package`` in the PartCAD "
 "Explorer view. After that select an existing assembly file (`*.assy`) or "
 "enter a filename for the new file to be created."
 msgstr ""
-"Klicken Sie in der PartCAD-Explorer-Ansicht auf ``Add an assembly file to"
-" the current package``. Wählen Sie danach eine vorhandene Assembly-Datei "
-"(`*.assy`) aus, oder geben Sie einen Dateinamen für die neu zu "
-"erstellende Datei ein."
+"Klicken Sie in der PartCAD-Explorer-Ansicht auf ``Add an assembly file to "
+"the current package``. Wählen Sie danach eine vorhandene Assembly-Datei "
+"(`*.assy`) aus, oder geben Sie einen Dateinamen für die neu zu erstellende "
+"Datei ein."
 
-#: ../../source/tutorial.rst:444
+#: ../../source/tutorial.rst:459
 msgid ""
-"ASSY (Assembly YAML) files use the YAML syntax. The list of parts has to "
-"be added as children under the ``links`` node. Here is how an empty "
-"assembly file looks like:"
+"ASSY (Assembly YAML) files use the YAML syntax. The list of parts has to be "
+"added as children under the ``links`` node. Here is how an empty assembly "
+"file looks like:"
 msgstr ""
-"ASSY-Dateien (Assembly-YAML) verwenden die YAML-Syntax. Die Liste der "
-"Teile muss als Kindelemente unter dem Knoten ``links`` hinzugefügt "
-"werden. So sieht eine leere Assembly-Datei aus:"
+"ASSY-Dateien (Assembly-YAML) verwenden die YAML-Syntax. Die Liste der Teile "
+"muss als Kindelemente unter dem Knoten ``links`` hinzugefügt werden. So "
+"sieht eine leere Assembly-Datei aus:"
 
-#: ../../source/tutorial.rst:453
+#: ../../source/tutorial.rst:468
 msgid "Add a part to the assembly"
 msgstr "Ein Teil zur Baugruppe hinzufügen"
 
-#: ../../source/tutorial.rst:455
+#: ../../source/tutorial.rst:470
 msgid ""
-"Select the desired part or assembly in PartCAD Explorer. After that "
-"navigate to the next line under \"``links:``\" and type \"- pa\" (which "
-"is what you do when you want to add a child item with the name \"part\") "
-"and, then, select the code completion suggestion from PartCAD."
+"Select the desired part or assembly in PartCAD Explorer. After that navigate"
+" to the next line under \"``links:``\" and type \"- pa\" (which is what you "
+"do when you want to add a child item with the name \"part\") and, then, "
+"select the code completion suggestion from PartCAD."
 msgstr ""
 "Wählen Sie das gewünschte Teil oder die gewünschte Baugruppe im PartCAD-"
-"Explorer aus. Navigieren Sie danach zur nächsten Zeile unter „``links:``“"
-" und geben Sie „- pa“ ein (das tun Sie, wenn Sie ein Kindelement mit dem "
-"Namen „part“ hinzufügen möchten), und wählen Sie dann den "
-"Codevervollständigungs-Vorschlag von PartCAD aus."
+"Explorer aus. Navigieren Sie danach zur nächsten Zeile unter ``links:`` und "
+"geben Sie „- pa“ ein (das tun Sie, wenn Sie ein Kindelement mit dem Namen "
+"„part“ hinzufügen möchten), und wählen Sie dann den Codevervollständigungs-"
+"Vorschlag von PartCAD aus."
 
-#: ../../source/tutorial.rst:463
+#: ../../source/tutorial.rst:478
 msgid "This will add the selected part or assembly to the assembly file."
 msgstr ""
 "Dadurch wird das ausgewählte Teil oder die ausgewählte Baugruppe zur "
 "Assembly-Datei hinzugefügt."
 
-#: ../../source/tutorial.rst:469
+#: ../../source/tutorial.rst:484
 msgid "Inspect the assembly"
 msgstr "Die Baugruppe inspizieren"
 
-#: ../../source/tutorial.rst:471
+#: ../../source/tutorial.rst:486
 msgid ""
 "When you edit ASSY files in the current PartCAD package, the assembly is "
-"displayed automatically on save. Press ``Save`` (Ctrl-S or Cmd-S) to save"
-" the assembly file and trigger an automatic inspection of the assembly. "
-"The ``Digital Thread`` view will appear on the right if it's not open "
-"yet."
+"displayed automatically on save. Press ``Save`` (Ctrl-S or Cmd-S) to save "
+"the assembly file and trigger an automatic inspection of the assembly. The "
+"``Digital Thread`` view will appear on the right if it's not open yet."
 msgstr ""
 "Wenn Sie ASSY-Dateien im aktuellen PartCAD-Paket bearbeiten, wird die "
-"Baugruppe beim Speichern automatisch angezeigt. Drücken Sie ``Save`` "
-"(Strg-S oder Cmd-S), um die Baugruppendatei zu speichern und eine "
-"automatische Inspektion der Baugruppe auszulösen. Die Ansicht ``Digital "
-"Thread`` erscheint rechts, falls sie noch nicht geöffnet ist."
+"Baugruppe beim Speichern automatisch angezeigt. Drücken Sie ``Save`` (Strg-S"
+" oder Cmd-S), um die Baugruppendatei zu speichern und eine automatische "
+"Inspektion der Baugruppe auszulösen. Die Ansicht ``Digital Thread`` "
+"erscheint rechts, falls sie noch nicht geöffnet ist."
 
 #~ msgid ""
-#~ "The ``pc import assembly`` command "
-#~ "allows you to import an assembly "
-#~ "from a STEP file. This command "
-#~ "automatically parses the STEP file, "
-#~ "extracts individual parts, and creates "
-#~ "an assembly YAML file that records "
-#~ "each part along with its transformation"
-#~ " data."
+#~ "The ``pc import assembly`` command allows you to import an assembly from a "
+#~ "STEP file. This command automatically parses the STEP file, extracts "
+#~ "individual parts, and creates an assembly YAML file that records each part "
+#~ "along with its transformation data."
 #~ msgstr ""
-#~ "Mit dem Befehl ``pc import assembly``"
-#~ " können Sie eine Baugruppe aus einer"
-#~ " STEP-Datei importieren. Dieser Befehl "
-#~ "parst die STEP-Datei automatisch, "
-#~ "extrahiert einzelne Teile und erstellt "
-#~ "eine Assembly-YAML-Datei, die jedes "
-#~ "Teil zusammen mit seinen Transformationsdaten"
-#~ " festhält."
+#~ "Mit dem Befehl ``pc import assembly`` können Sie eine Baugruppe aus einer "
+#~ "STEP-Datei importieren. Dieser Befehl parst die STEP-Datei automatisch, "
+#~ "extrahiert einzelne Teile und erstellt eine Assembly-YAML-Datei, die jedes "
+#~ "Teil zusammen mit seinen Transformationsdaten festhält."
+
+#~ msgid ""
+#~ "If there is no ``-p`` flag passed to ``pc init`` then the dependency on the "
+#~ "public PartCAD repository is added automatically."
+#~ msgstr ""
+#~ "Wird ``pc init`` ohne die Option ``-p`` aufgerufen, wird die Abhängigkeit "
+#~ "vom öffentlichen PartCAD-Repository automatisch hinzugefügt."

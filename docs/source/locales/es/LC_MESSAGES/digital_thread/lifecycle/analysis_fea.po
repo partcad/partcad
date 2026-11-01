@@ -1,0 +1,273 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:5
+msgid "FEA"
+msgstr "FEA"
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:7
+msgid ""
+"**FEA** is the question whether a part holds up under what it carries: a "
+"finite element analysis of the solid, held where it is held and pulled on "
+"where it is loaded, reporting the stress in it and how far it moves."
+msgstr ""
+"El **FEA** es la pregunta de si una pieza resiste lo que soporta: un "
+"análisis por elementos finitos del sólido, sujeto donde está sujeto y "
+"traccionado donde está cargado, que informa de la tensión que hay en él y de"
+" cuánto se desplaza."
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:11
+msgid ""
+"The question is asked by an ``fea:`` section on the part -- a map of named "
+"**scenarios**, one per load case the part is asked about -- and answered by "
+"a solver a package supplies. :doc:`/digital_thread/lifecycle/analysis` "
+"explains what every analysis has in common; this page is what is particular "
+"to this one."
+msgstr ""
+"La pregunta la plantea una sección ``fea:`` en la pieza -- una "
+"correspondencia de **escenarios** con nombre, uno por caso de carga sobre el"
+" que se pregunta a la pieza -- y la responde un solver que aporta un "
+"paquete. :doc:`/digital_thread/lifecycle/analysis` explica lo que todos los "
+"análisis tienen en común; esta página es lo que es particular de este."
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:17
+msgid "What the scenario says"
+msgstr "Qué dice el escenario"
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:19
+msgid ""
+"Two conditions, each naming :ref:`interfaces <interfaces>` the part "
+"implements, so the declaration that says where the part connects is the one "
+"that says where it is held and loaded:"
+msgstr ""
+"Dos condiciones, cada una de las cuales nombra :ref:`interfaces "
+"<interfaces>` que la pieza implementa, de modo que la declaración que dice "
+"dónde se conecta la pieza es la que dice dónde está sujeta y dónde está "
+"cargada:"
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:23
+msgid "``fix:``"
+msgstr "``fix:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:24
+msgid ""
+"a list of interface types held still, or a map from a type to the instances "
+"of it meant."
+msgstr ""
+"una lista de tipos de interfaz mantenidos inmóviles, o una correspondencia "
+"de un tipo a las instancias de él a las que se refiere."
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:27
+msgid "``load:``"
+msgstr "``load:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:28
+msgid ""
+"a force per interface type, or per named instance. A number with a unit "
+"(``100 N``, ``5 kg``) or a bare number, which is a mass in kilograms weighed"
+" at 9.8 N/kg; or three of them, ``[x, y, z]`` in the part's own frame, which"
+" is a force *with a direction* -- what a simulation measures acting on a "
+"part."
+msgstr ""
+"una fuerza por tipo de interfaz, o por instancia con nombre. Un número con "
+"una unidad (``100 N``, ``5 kg``) o un número a secas, que es una masa en "
+"kilogramos pesada a 9,8 N/kg; o tres de ellos, ``[x, y, z]`` en el marco "
+"propio de la pieza, que es una fuerza *con una dirección* -- lo que mide una"
+" simulación actuando sobre una pieza."
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:33
+msgid ""
+"An ``fea:`` scenario also takes ``gravity:``, the acceleration of free fall "
+"it is analysed in, in m/s² and the part's own frame. That is for a part a "
+"simulation found upside down or accelerating, whose weight is its mass times"
+" ``g - a``; without it the implementation weighs the part under its own "
+"gravity."
+msgstr ""
+"Un escenario ``fea:`` toma además ``gravity:``, la aceleración de caída "
+"libre en la que se analiza, en m/s² y en el marco propio de la pieza. Eso es"
+" para una pieza que una simulación encontró boca abajo o acelerando, cuyo "
+"peso es su masa por ``g - a``; sin ello la implementación pesa la pieza bajo"
+" su propia gravedad."
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:59
+msgid "In the UI"
+msgstr "En la interfaz"
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:61
+msgid ""
+"The scenarios are listed down the left, in the order they are declared, with"
+" the first selected and a mark before each name saying how its last run "
+"went: a green tick found nothing, a red cross found something, a red "
+"exclamation could not run. Selecting one **runs** it -- this is the "
+"exception to \"every other tab is a question\" -- and shows the stress field"
+" over the model it produced, to turn and zoom like any other geometry, with "
+"what the analysis found listed under it."
+msgstr ""
+"Los escenarios se enumeran a la izquierda, en el orden en que están "
+"declarados, con el primero seleccionado y una marca antes de cada nombre que"
+" dice cómo fue su última ejecución: una marca verde no encontró nada, una "
+"cruz roja encontró algo, una exclamación roja no pudo ejecutarse. "
+"Seleccionar uno lo **ejecuta** -- esta es la excepción a \"todas las demás "
+"pestañas son una pregunta\" -- y muestra el campo de tensiones sobre el "
+"modelo que produjo, para girarlo y ampliarlo como cualquier otra geometría, "
+"con lo que encontró el análisis enumerado debajo."
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:69
+msgid ""
+"Over the model, **Analysed by** names the solver: filled in with the "
+"scenario's own ``implementation:`` or the configured default, offering the "
+"others ``//pub/feature/cae`` registers for this analysis, and taking any "
+"other name typed into it -- so a machine whose solver is elsewhere is one "
+"choice away from an answer rather than stuck on an error. **Analyse** runs "
+"it again."
+msgstr ""
+"Sobre el modelo, **Analysed by** nombra el solver: rellenado con la "
+"``implementation:`` propia del escenario o con el valor predeterminado "
+"configurado, ofreciendo los demás que ``//pub/feature/cae`` registra para "
+"este análisis, y aceptando cualquier otro nombre que se escriba en él -- así"
+" que una máquina cuyo solver está en otro sitio está a una elección de "
+"distancia de una respuesta en lugar de atascada en un error. **Analyse** lo "
+"vuelve a ejecutar."
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:75
+msgid ""
+"The Analysis group's FEA tab: the scenario list, the stress field, and "
+"\"Analysed by\""
+msgstr ""
+"La pestaña FEA del grupo Analysis: la lista de escenarios, el campo de "
+"tensiones y \"Analysed by\""
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:80
+msgid ""
+"The tab is enabled for a part that declares ``fea:`` and disabled for "
+"everything else, which it says when the mouse is over it."
+msgstr ""
+"La pestaña está habilitada para una pieza que declara ``fea:`` y "
+"deshabilitada para todo lo demás, lo que indica cuando el ratón está sobre "
+"ella."
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:84
+msgid "On the command line"
+msgstr "En la línea de comandos"
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:94
+msgid ""
+"What comes back is the model -- ``bracket.fea.loaded.glb``, in whichever "
+"format the implementation chose -- and the **findings**, which ``pc test`` "
+"reports as its ``fea`` check: a part any of whose scenarios found something "
+"fails."
+msgstr ""
+"Lo que vuelve es el modelo -- ``bracket.fea.loaded.glb``, en el formato que "
+"haya elegido la implementación -- y los **hallazgos**, que ``pc test`` "
+"informa como su comprobación ``fea``: una pieza en cualquiera de cuyos "
+"escenarios se encontró algo falla."
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:99
+msgid "Who runs it"
+msgstr "Quién lo ejecuta"
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:101
+msgid ""
+"The default is `partcad-cae-calculix <https://github.com/partcad/partcad-"
+"cae-calculix>`_, which runs `CalculiX <https://www.calculix.de/>`_; "
+"``caeFeaImplementation`` names another. `Elmer "
+"<https://www.elmerfem.org/>`_, `Code_Aster <https://www.code-aster.org/>`_ "
+"and `MOOSE <https://mooseframework.inl.gov/>`_ do this analysis too -- see "
+"the table in :doc:`/digital_thread/lifecycle/analysis`."
+msgstr ""
+"El valor predeterminado es `partcad-cae-calculix "
+"<https://github.com/partcad/partcad-cae-calculix>`_, que ejecuta `CalculiX "
+"<https://www.calculix.de/>`_; ``caeFeaImplementation`` nombra otro. `Elmer "
+"<https://www.elmerfem.org/>`_, `Code_Aster <https://www.code-aster.org/>`_ y"
+" `MOOSE <https://mooseframework.inl.gov/>`_ hacen también este análisis -- "
+"véase la tabla en :doc:`/digital_thread/lifecycle/analysis`."
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:110
+msgid "An example"
+msgstr "Un ejemplo"
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:112
+msgid ""
+"`examples/feature_cae "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cae>`_ "
+"declares ``cantilever``: a 100 × 10 × 10 mm steel bar, clamped at one end "
+"and pulled down by 100 N at the other, in a scenario named ``tip-load``. Its"
+" tip deflection and its peak bending stress are both closed forms, and that "
+"package's ``README.md`` prints what each solver measured beside the textbook"
+" answer -- which is how an implementation is checked rather than believed."
+msgstr ""
+"`examples/feature_cae "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cae>`_ "
+"declara ``cantilever``: una barra de acero de 100 × 10 × 10 mm, empotrada en"
+" un extremo y traccionada hacia abajo con 100 N en el otro, en un escenario "
+"llamado ``tip-load``. Tanto la flecha de su punta como su tensión máxima de "
+"flexión tienen forma cerrada, y el ``README.md`` de ese paquete imprime lo "
+"que midió cada solver junto a la respuesta de libro de texto -- que es la "
+"manera de comprobar una implementación en lugar de creerla."
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:120
+msgid "Agent skills"
+msgstr "Skills de agente"
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:122
+msgid "``/pc:sim-assembly-fea``"
+msgstr "``/pc:sim-assembly-fea``"
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:123
+msgid ""
+"Writes an ``fea:`` scenario from what a simulation of the assembly measured:"
+" it reads the forces and moments acting on the body the part is welded into,"
+" works out which of them load the part and where, and adds a scenario named "
+"after the simulation and the reading they came from. It is the one skill "
+"that produces a load case, and it produces it from a measurement rather than"
+" from a description."
+msgstr ""
+"Escribe un escenario ``fea:`` a partir de lo que midió una simulación del "
+"ensamblaje: lee las fuerzas y los momentos que actúan sobre el cuerpo al que"
+" está soldada la pieza, determina cuáles de ellos cargan la pieza y dónde, y"
+" añade un escenario con el nombre de la simulación y de la lectura de la que"
+" provienen. Es la única skill que produce un caso de carga, y lo produce a "
+"partir de una medición en lugar de a partir de una descripción."
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:130
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:131
+msgid ""
+"Runs every scenario as part of giving each requirement a verdict, and "
+"reports one that names a ``feature:`` as evidence for that feature."
+msgstr ""
+"Ejecuta todos los escenarios como parte de dar un veredicto a cada "
+"requisito, e informa de uno que nombre una ``feature:`` como evidencia de "
+"esa característica."
+
+#: ../../source/digital_thread/lifecycle/analysis_fea.rst:134
+msgid ""
+"There is deliberately no skill that writes an ``fea:`` section from prose. "
+"How a part is really held and loaded is an engineering judgement, and a "
+"plausible-looking guess at it produces a plausible-looking number that is "
+"wrong."
+msgstr ""
+"Deliberadamente no hay ninguna skill que escriba una sección ``fea:`` a "
+"partir de prosa. Cómo se sujeta y se carga realmente una pieza es un juicio "
+"de ingeniería, y una conjetura de aspecto plausible al respecto produce un "
+"número de aspecto plausible que es incorrecto."

@@ -1,0 +1,134 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:5
+msgid "Assembly"
+msgstr "Ensamblaje"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:7
+msgid ""
+"**Assembly** is the assembly instruction book: a page per step, drawn, to "
+"read here or save. It is for an assembly, and it is what :doc:`Build "
+"</digital_thread/lifecycle/manufacturing_build>` lists the steps of -- the "
+"same steps, in the same order, as a document."
+msgstr ""
+"**Assembly** es el manual de instrucciones de montaje: una página por paso, "
+"dibujada, para leer aquí o guardar. Es para un ensamblaje, y es aquello "
+"cuyos pasos enumera :doc:`Build "
+"</digital_thread/lifecycle/manufacturing_build>` -- los mismos pasos, en el "
+"mismo orden, como documento."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:12
+msgid ""
+"The book is written from the assembly itself. Each link of the ASSY file "
+"says what it is joined to and how -- pushed, snapped or screwed in -- so the"
+" step that adds it can be written out for a person to follow, with the two "
+"parts drawn pulled apart by the ``exploded:`` gap of the connection. Nothing"
+" about the book is declared separately from the assembly, which is why it "
+"cannot fall out of step with it."
+msgstr ""
+"El manual se escribe a partir del propio ensamblaje. Cada enlace del archivo"
+" ASSY dice a qué está unido y cómo -- a presión, a clic o atornillado -- así"
+" que el paso que lo añade se puede redactar para que lo siga una persona, "
+"con las dos piezas dibujadas separadas por la distancia ``exploded:`` de la "
+"conexión. Nada del manual se declara por separado del ensamblaje, que es por"
+" lo que no puede desincronizarse con él."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:20
+msgid "In the UI"
+msgstr "En la interfaz"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:22
+msgid ""
+"The document, as **PDF** or **HTML**, with **Recursive** and **Build parts**"
+" -- which are ``pc instructions -r -b`` -- and **Save…**."
+msgstr ""
+"El documento, como **PDF** o **HTML**, con **Recursive** y **Build parts** "
+"-- que son ``pc instructions -r -b`` -- y **Save…**."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:25
+msgid ""
+"The Manufacturing group's Assembly tab: the assembly instruction book, page "
+"by page"
+msgstr ""
+"La pestaña Assembly del grupo Manufacturing: el manual de instrucciones de "
+"montaje, página a página"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:30
+msgid ""
+"Manufacturing is for a part or an assembly; for a scene, a sketch or an "
+"interface the whole group is disabled, and this tab is for an assembly "
+"alone."
+msgstr ""
+"Manufacturing es para una pieza o un ensamblaje; para una escena, un boceto "
+"o una interfaz todo el grupo está desactivado, y esta pestaña es solo para "
+"un ensamblaje."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:34
+msgid "On the command line"
+msgstr "En la línea de comandos"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:43
+msgid ""
+"``-r`` puts in the steps of every sub-assembly that is built, each just "
+"before the step that adds it, and ``-b`` how to make every part that is "
+"built, each just before the step that first needs it. Both read the "
+":doc:`Build vs Buy </digital_thread/lifecycle/manufacturing_bvb>` choices "
+"made on this machine."
+msgstr ""
+"``-r`` incluye los pasos de cada subensamblaje que se fabrica, cada uno "
+"justo antes del paso que lo añade, y ``-b`` cómo fabricar cada pieza que se "
+"fabrica, cada una justo antes del paso que la necesita por primera vez. "
+"Ambos leen las elecciones de :doc:`Build vs Buy "
+"</digital_thread/lifecycle/manufacturing_bvb>` hechas en esta máquina."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:50
+msgid "How the steps are decided"
+msgstr "Cómo se deciden los pasos"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:52
+msgid ""
+"See :ref:`how an assembly is manufactured <assembly-manufacturing>` and "
+":doc:`/assy` for what each ``connect:`` says about the joining -- the "
+"mating, the ``how:``, the torque and the thread -- and "
+":doc:`/digital_thread/lifecycle/testing` for the ``connect`` check, which is"
+" what reports a step the declaration says nothing about."
+msgstr ""
+"Véanse :ref:`cómo se fabrica un ensamblaje <assembly-manufacturing>` y "
+":doc:`/assy` para saber qué dice cada ``connect:`` sobre la unión -- el "
+"emparejamiento, el ``how:``, el par y la rosca -- y "
+":doc:`/digital_thread/lifecycle/testing` para la comprobación ``connect``, "
+"que es la que informa de un paso sobre el que la declaración no dice nada."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:59
+msgid "Agent skills"
+msgstr "Skills de agente"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:61
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:62
+msgid ""
+"Reads the assembly instructions as part of giving a requirement its verdict."
+msgstr ""
+"Lee las instrucciones de montaje como parte de dar su veredicto a un "
+"requisito."

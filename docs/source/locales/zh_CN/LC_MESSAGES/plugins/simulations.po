@@ -1,0 +1,306 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/plugins/simulations.rst:5
+msgid "Simulations"
+msgstr "仿真"
+
+#: ../../source/plugins/simulations.rst:7
+msgid ""
+"A **simulation plugin** teaches PartCAD to run a physics simulator. It is "
+"the third kind of implementation declared in the same form as :doc:`an "
+"output type </plugins/output>` -- a ``path`` to a script, the sandbox that "
+"script needs, and the parameters it is handed -- and it is what turns an "
+"object's claim about its *behaviour* into something that can be checked."
+msgstr ""
+"**仿真插件** 教 PartCAD 去运行一个物理仿真器。它是第三种以与 :doc:`输出类型 </plugins/output>` "
+"相同形式声明的实现 -- 一个指向脚本的 ``path`` 、那个脚本所需要的沙箱，以及交给它的参数 -- 而正是它把一个对象关于自身 *行为* "
+"的断言变成可以被检查的东西。"
+
+#: ../../source/plugins/simulations.rst:13
+msgid ""
+"A part says what it **is**. ``simulate:`` is where a part, an assembly or a "
+"scene says what it is supposed to **do** once it is placed in a world and "
+"the world is switched on -- or, more often, what it is supposed *not* to do:"
+" not fall over, not slide off, not come apart. ``pc sim`` runs those, and "
+"``pc test`` holds the object to them every time it runs, as its ``sim`` "
+"check."
+msgstr ""
+"零件说明自己 **是** 什么。而 ``simulate:`` 是零件、装配体或场景说明自己在被放进一个世界、而这个世界被开启之后应该 **做** "
+"什么的地方 -- 或者更常见的是，说明它应该 *不* 做什么：不倾倒、不滑落、不散开。``pc sim`` 运行这些断言，而 ``pc test`` "
+"每次运行时都以它们来约束该对象，作为它的 ``sim`` 检查项。"
+
+#: ../../source/plugins/simulations.rst:19
+msgid ""
+"**PartCAD ships no simulator.** It ships the concept -- this section, the "
+"sandbox a plugin runs in, and the export a scene reaches the simulator "
+"through -- and a package supplies the physics."
+msgstr ""
+"**PartCAD 不附带任何仿真器。** 它附带的是概念 -- 这个小节、插件所运行的那个沙箱，以及场景借以到达仿真器的那个导出 -- "
+"而由某个包来提供物理。"
+
+#: ../../source/plugins/simulations.rst:24
+msgid "What a simulation plugin is for"
+msgstr "仿真插件的用途"
+
+#: ../../source/plugins/simulations.rst:26
+msgid ""
+"**Proving a behavioural requirement.** A ``simulate:`` entry that names a "
+"``feature:`` of the object's ``requirements:`` becomes the evidence for that"
+" feature, which is otherwise a sentence no program can measure."
+msgstr ""
+"**证明一项关于行为的需求。** 一个指名了该对象 ``requirements:`` 中某个 ``feature:`` 的 ``simulate:``"
+" 条目，会成为该特性的证据；否则那就只是一句任何程序都无法测量的话。"
+
+#: ../../source/plugins/simulations.rst:29
+msgid ""
+"**Catching what geometry cannot show.** A stack that stands, a gripper that "
+"holds, a robot that does not tip on a slope: nothing about the shapes says "
+"any of it."
+msgstr "**抓住几何无法显示的问题。** 一摞东西立得住、一个夹爪夹得牢、一台机器人在斜坡上不倾倒：这些形状本身对其中任何一点都没有说明。"
+
+#: ../../source/plugins/simulations.rst:32
+msgid ""
+"**Regression-testing motion.** The simulations run in ``pc test``, through "
+"the cache, so a change that makes a mechanism bind is a failed check rather "
+"than a discovery."
+msgstr ""
+"**对运动做回归测试。** 这些仿真会在 ``pc test`` 中运行，并走缓存，所以一个让机构卡死的改动会表现为一项检查失败，而不是某人偶然发现。"
+
+#: ../../source/plugins/simulations.rst:35
+msgid ""
+"**Wrapping one engine once.** A plugin brings the engine, the scene format "
+"it reads and the vocabulary it reports in, so every package using it writes "
+"the same kind of ``validation:``."
+msgstr ""
+"**把一个引擎只封装一次。** 插件带来引擎、它所读取的那种场景格式，以及它用来报告的那套词汇，于是每一个使用它的包写出来的 "
+"``validation:`` 都是同一类。"
+
+#: ../../source/plugins/simulations.rst:40
+msgid "Using one"
+msgstr "使用一个仿真插件"
+
+#: ../../source/plugins/simulations.rst:42
+msgid "Declare the simulation on the object, naming the plugin by full path:"
+msgstr "在对象上声明这个仿真，并用完整路径指名那个插件："
+
+#: ../../source/plugins/simulations.rst:57
+msgid ""
+"What each key means is in :ref:`sim-declaring`, the scene an object is "
+"placed in and how to write one in :ref:`sim-scenes`, and what a "
+"``validation:`` is evaluated over in :ref:`sim-validation`."
+msgstr ""
+"每个键是什么意思见 :ref:`sim-declaring` ，对象被放进的那个场景以及如何编写一个场景见 :ref:`sim-scenes` ，而 "
+"``validation:`` 是在什么之上求值的见 :ref:`sim-validation` 。"
+
+#: ../../source/plugins/simulations.rst:61
+msgid ""
+"Every run is also asked for a picture of the scene before and after, taken "
+"from where the scene is rendered from: the ``viewport_origin`` and "
+"``viewport_up`` of its ``render: png:``, or of its package's when the scene "
+"states none; see :doc:`/digital_thread/lifecycle/simulation`."
+msgstr ""
+"每次运行还会被要求提供场景在运行前后各一张图片，取自渲染该场景时所用的位置：也就是它 ``render: png:`` 中的 "
+"``viewport_origin`` 和 ``viewport_up`` ，或者在场景什么都没写时取它所在包的那一组；参见 "
+":doc:`/digital_thread/lifecycle/simulation` 。"
+
+#: ../../source/plugins/simulations.rst:66
+msgid "Then:"
+msgstr "然后："
+
+#: ../../source/plugins/simulations.rst:75
+msgid ""
+"Every run is also asked for a picture of the scene before and after, taken "
+"from where the scene is rendered from: the ``viewport_origin`` and "
+"``viewport_up`` of its ``render: png:``, or of its package's when the scene "
+"states none."
+msgstr ""
+"每次运行还会被要求提供场景在运行前后各一张图片，取自渲染该场景时所用的位置：也就是它 ``render: png:`` 中的 "
+"``viewport_origin`` 和 ``viewport_up`` ，或者在场景什么都没写时取它所在包的那一组。"
+
+#: ../../source/plugins/simulations.rst:80
+msgid "Writing one"
+msgstr "编写一个仿真插件"
+
+#: ../../source/plugins/simulations.rst:82
+msgid ""
+"A simulation plugin is the third kind of implementation a package can "
+"declare, beside the export and render ones of :ref:`output-files`, and it is"
+" declared in exactly the same form -- a ``path`` to a script, the sandbox "
+"that script needs, and the parameters it is handed:"
+msgstr ""
+"仿真插件是包可以声明的第三类实现，另外两类是 :ref:`output-files` 中的导出实现和渲染实现；它的声明形式与那两类完全相同——指向脚本的"
+" ``path``、该脚本所需的沙箱，以及交给它的参数："
+
+#: ../../source/plugins/simulations.rst:100
+msgid ""
+"The contract is narrow on purpose: **a scene with the subject in it goes in,"
+" as a file in the format** ``format:`` **names, and JSON carrying** "
+"``before`` **and** ``after`` **comes out.** The scene arrives as a file "
+"because a simulator reads its own model format and PartCAD already knows how"
+" to write several -- which is also what keeps a plugin free of any CAD "
+"dependency."
+msgstr ""
+"这份约定是有意定得很窄的：**进去的是一个装有被测对象的场景，以** ``format:`` **所指明格式的文件形式进入；出来的是带有** "
+"``before`` **和** ``after`` **的 JSON。** 场景以文件形式送达，是因为仿真器读的是它自己的模型格式，而 PartCAD"
+" 已经知道如何写出好几种——这也正是插件得以不依赖任何 CAD 的原因。"
+
+#: ../../source/plugins/simulations.rst:106
+msgid ""
+"The exporter for ``format:`` is looked up in the plugin's own package as "
+"well as in the scene's, beneath it, which is how a plugin implements the "
+"format it reads: an engine's scene format belongs to that engine's plugin, "
+"so each plugin declares the ``export:`` that writes it beside the "
+"``simulation:`` that runs it, and a package that re-tunes that export for "
+"its own scenes still wins. ``formatOptions:`` is how the plugin asks for the"
+" export -- a physics run wants every body free to move, the opposite of what"
+" a scene means on its own."
+msgstr ""
+"``format:`` "
+"所对应的导出器既会在该插件自己的包里查找，也会在场景所在包及其下方查找，而插件正是靠这一点来实现它所读取的那种格式：一个引擎的场景格式属于那个引擎的插件，所以每个插件都把写出该格式的"
+" ``export:`` 与运行它的 ``simulation:`` "
+"声明在一起；而一个为自己的场景重新调整了那个导出的包，仍然会胜出。``formatOptions:`` 则是插件向导出提出要求的方式 -- "
+"一次物理运行希望每个刚体都能自由运动，这与场景本身所表达的恰好相反。"
+
+#: ../../source/plugins/simulations.rst:114
+msgid ""
+"The script runs in a PartCAD sandbox with two globals. ``request`` holds the"
+" plugin's declared parameters, overridden by the ``params:`` of the "
+"declaration being run, and then ``scene_file`` (the absolute path of the "
+"exported scene), ``scene_format``, ``scene_name``, ``subject`` (the full "
+"path of the object being simulated), ``subject_kind`` and ``simulation`` "
+"(the declaration's name). ``path`` is a directory the run may write anything"
+" into -- a trajectory, a log -- which is kept and cached with the result. "
+"The script sets ``output``, or defines ``process(path, request)`` returning "
+"it:"
+msgstr ""
+"脚本在一个 PartCAD 沙箱中运行，带有两个全局变量。``request`` 装着插件所声明的参数，并被正在运行的那条声明的 ``params:``"
+" 覆盖，然后还有 ``scene_file`` "
+"（导出的场景的绝对路径）、``scene_format``、``scene_name``、``subject`` "
+"（被仿真对象的完整路径）、``subject_kind`` 以及 ``simulation`` （该声明的名称）。``path`` "
+"是一个目录，本次运行可以往里写任何东西 -- 一条轨迹、一份日志 -- 它会被保留并与结果一起缓存。脚本可以设置 ``output`` "
+"，或者定义一个返回它的 ``process(path, request)`` ："
+
+#: ../../source/plugins/simulations.rst:128
+msgid ""
+"A success without ``before`` and ``after``, each an object, is refused. What"
+" is inside them, and anything else beside them, is the plugin's own "
+"vocabulary: PartCAD carries it to the ``validation:`` expression and reads "
+"none of it. The two plugins PartCAD maintains share one vocabulary, "
+"described in :ref:`sim-validation`, and a plugin that reports the same is "
+"one whose validations read the same."
+msgstr ""
+"一个成功的结果如果没有 ``before`` 和 ``after`` "
+"（各自都是一个对象），就会被拒绝。它们内部装的东西、以及它们旁边的其他任何东西，都属于插件自己的词汇：PartCAD 只是把它带给 "
+"``validation:`` 表达式，一点都不去读。PartCAD 维护的那两个插件共用同一套词汇，在 :ref:`sim-validation` "
+"中有描述；而一个报告同样内容的插件，写出来的校验条件读起来也一样。"
+
+#: ../../source/plugins/simulations.rst:136
+msgid "An example"
+msgstr "一个例子"
+
+#: ../../source/plugins/simulations.rst:138
+msgid ""
+"**PartCAD ships none of these.** A simulator is somebody's program with a "
+"release cycle of its own, so PartCAD ships the concept -- this section, the "
+"sandbox a plugin runs in, and the export a scene reaches it through -- and a"
+" package supplies the physics. :ref:`sim-engines` lists the two there are."
+msgstr ""
+"**这些 PartCAD 一个都不附带。** 仿真器是某个人的程序，有它自己的发布周期，所以 PartCAD 附带的是概念 -- "
+"这个小节、插件所运行的那个沙箱，以及场景借以到达它的那个导出 -- 而由某个包来提供物理。:ref:`sim-engines` 列出了现有的那两个。"
+
+#: ../../source/plugins/simulations.rst:143
+msgid ""
+"Each of the two is one package carrying everything its format needs -- the "
+":doc:`importer </plugins/importers>` that reads it, the :doc:`export type "
+"</plugins/output>` that writes it, the :doc:`application entry "
+"</plugins/applications>` that opens it, and the simulation plugin that runs "
+"it:"
+msgstr ""
+"这两个当中的每一个都是一个包，带着它那种格式所需要的一切 -- 读取它的 :doc:`导入器 </plugins/importers>` 、写出它的 "
+":doc:`导出类型 </plugins/output>` 、打开它的 :doc:`应用程序条目 </plugins/applications>` "
+"，以及运行它的那个仿真插件："
+
+#: ../../source/plugins/simulations.rst:152
+msgid "package"
+msgstr "包"
+
+#: ../../source/plugins/simulations.rst:153
+msgid "engine"
+msgstr "引擎"
+
+#: ../../source/plugins/simulations.rst:154
+msgid "the type to name"
+msgstr "要指名的类型"
+
+#: ../../source/plugins/simulations.rst:155
+msgid "`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_"
+msgstr "`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_"
+
+#: ../../source/plugins/simulations.rst:156
+msgid "`MuJoCo <https://mujoco.org/>`_"
+msgstr "`MuJoCo <https://mujoco.org/>`_"
+
+#: ../../source/plugins/simulations.rst:157
+msgid "``sim-mujoco:mujoco``"
+msgstr "``sim-mujoco:mujoco``"
+
+#: ../../source/plugins/simulations.rst:158
+msgid "`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_"
+msgstr "`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_"
+
+#: ../../source/plugins/simulations.rst:159
+msgid "`Gazebo <https://gazebosim.org/>`_"
+msgstr "`Gazebo <https://gazebosim.org/>`_"
+
+#: ../../source/plugins/simulations.rst:160
+msgid "``sim-gazebo:gazebo``"
+msgstr "``sim-gazebo:gazebo``"
+
+#: ../../source/plugins/simulations.rst:162
+msgid ""
+"``examples/feature_simulate`` is the worked example. Its scenes are "
+"arrangements of blocks that each declare a ``simulate:`` entry with a "
+"``validation:`` over how far anything moved: ``stable`` is supposed to "
+"stand, ``unstable``, ``slippery`` and ``tilted`` are supposed not to, and "
+"``tank`` is filled with water so that buoyancy and drag are exercised too."
+msgstr ""
+"``examples/feature_simulate`` 就是那个完整的例子。它的各个场景都是方块的摆放，每一个都声明了一条带 "
+"``validation:`` 的 ``simulate:`` 条目，用来判定有东西移动了多远：``stable`` 应该立得住，而 "
+"``unstable``、``slippery`` 和 ``tilted`` 应该立不住，至于 ``tank`` "
+"则注满了水，这样浮力和阻力也一并得到检验。"
+
+#: ../../source/plugins/simulations.rst:175
+msgid ""
+":ref:`sim-engines` says what each engine models and what it does not, and "
+":ref:`sim-validation` the vocabulary the two PartCAD maintains report in -- "
+"a plugin that reports the same is one whose validations read the same."
+msgstr ""
+":ref:`sim-engines` 说明每个引擎建模了什么、没有建模什么，而 :ref:`sim-validation` 说明 PartCAD "
+"维护的那两个插件所用来报告的词汇 -- 一个报告同样内容的插件，写出来的校验条件读起来也一样。"
+
+#: ../../source/plugins/simulations.rst:179
+msgid ""
+"See :doc:`/digital_thread/lifecycle/simulation` for the whole chapter on "
+"simulating, and :ref:`sim-declaring` for every key of the declaration."
+msgstr ""
+"关于仿真的完整一章见 :doc:`/digital_thread/lifecycle/simulation` ，而该声明的每一个键见 "
+":ref:`sim-declaring` 。"

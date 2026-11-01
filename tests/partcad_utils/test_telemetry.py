@@ -17,6 +17,8 @@ import subprocess
 import sys
 import types
 
+import pytest
+
 from partcad_utils import telemetry
 
 
@@ -158,3 +160,52 @@ def test_the_logging_functions_hand_sentry_what_they_always_did(monkeypatch):
     pc_logging.critical("process_start: x")
 
     assert calls == [("message", "('broken',){}", "error"), ("message", "('process_start: x',){}", "debug")]
+
+
+# An error logged as the interpreter finalizes -- by its last garbage collection,
+# after the exit handlers have run -- reached Sentry's transport, which starts a
+# thread for it, and starting a thread then never returns before Python 3.12:
+# the process hung for good. See 'telemetry_sentry._close_at_exit'.
+
+_LOGS_AS_IT_FINALIZES = """
+import gc
+import logging
+
+from partcad_utils import telemetry_sentry
+
+telemetry_sentry.init_sentry("0")
+
+
+class LogsWhenCollected:
+    def __del__(self):
+        logging.getLogger("subject").error("logged as the interpreter finalizes")
+
+
+# In a cycle, with nothing to collect it before the interpreter's own last
+# collection: that one runs once the interpreter is finalizing, which is where
+# a pending asyncio task is found and logged about.
+gc.set_threshold(10**9)
+cycle = LogsWhenCollected()
+cycle.self = cycle
+del cycle
+"""
+
+
+def test_an_error_logged_as_the_interpreter_finalizes_does_not_hold_up_its_exit(tmp_path):
+    env = dict(
+        os.environ,
+        PYTHONPATH=os.pathsep.join(sys.path),
+        HOME=str(tmp_path),  # where 'init_sentry' writes the telemetry id
+        PC_TELEMETRY_SENTRY_DSN="http://key@127.0.0.1:9/1",  # a port nothing answers on
+    )
+    try:
+        # Seconds, normally; the bound only has to tell that from never.
+        result = subprocess.run(
+            [sys.executable, "-c", _LOGS_AS_IT_FINALIZES], capture_output=True, text=True, env=env, timeout=120
+        )
+    except subprocess.TimeoutExpired as hung:
+        stderr = (hung.stderr or b"").decode(errors="replace")  # bytes, whatever 'text' says
+        pytest.fail("the process was still exiting after %ss: %s" % (hung.timeout, stderr))
+    assert result.returncode == 0, result.stderr
+    # And the error was logged, so the process did reach the case under test.
+    assert "logged as the interpreter finalizes" in result.stderr

@@ -1,0 +1,128 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:5
+msgid "Build vs Buy"
+msgstr "Build vs Buy"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:7
+msgid ""
+"**Build vs Buy** is the first of the Manufacturing tabs, and the one the "
+"other four follow from: for every part, piece of stock and sub-assembly the "
+"object is made of, a switch saying whether *you* are going to make it or buy"
+" it."
+msgstr ""
+"**Build vs Buy** 是 Manufacturing "
+"各标签页中的第一个，也是其余四个由之导出的那一个：对于该对象所由之构成的每一个零件、每一块坯料和每一个子装配体，都有一个开关说明 *你* "
+"打算自己做它还是去买它。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:11
+msgid ""
+"It is the one decision in the whole Digital Thread that is **not** in the "
+"package. The package says what can be bought and how what can be made is "
+"made; which of the two a particular person chooses is a fact about who has "
+"which machines, so it is kept on the machine of whoever made it. A checkout "
+"does not carry it, and two people can build the same product differently "
+"without the product differing."
+msgstr ""
+"它是整个 Digital Thread 中唯一 **不在** "
+"包里的决定。包说明的是什么可以采购，以及可以自制的东西是怎么做的；而某个特定的人在两者之间选哪一个，是一件关于谁手上有哪些机床的事实，所以它保存在做出它的那个人的机器上。一次检出并不会带着它，而两个人可以用不同的方式构建同一个产品，而产品本身并无不同。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:19
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:21
+msgid ""
+"Every line is one thing the object is made of, with a picture of it, how "
+"many are needed, its size, its weight and its material, and a **Build** / "
+"**Buy** switch."
+msgstr ""
+"每一行都是该对象所由之构成的一样东西，带有它的一张图片、需要几个、它的尺寸、它的重量和它的材料，以及一个 **Build** / **Buy** 开关。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:25
+msgid ""
+"A line that can only be bought, or only be built, has its switch fixed and "
+"says why -- a part with a ``vendor:`` and no ``manufacturing:`` cannot be "
+"made here, and one with a ``manufacturing:`` and no supplier cannot be "
+"bought."
+msgstr ""
+"只能采购、或者只能自制的条目，它的开关是固定的，并会说明原因 -- 一个有 ``vendor:`` 而没有 ``manufacturing:`` "
+"的零件在这里做不出来，而一个有 ``manufacturing:`` 而没有供应商的零件买不到。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:29
+msgid ""
+"A line that can be neither is marked **Incomplete**. That is the useful "
+"failure of this tab: it is where a part nobody can obtain shows itself, "
+"before anybody orders anything."
+msgstr ""
+"两者都做不到的条目会被标记为 **Incomplete** "
+"。那正是这个标签页有用的那种失败：它是一个谁都拿不到的零件显露出来的地方，而且是在任何人下单之前。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:32
+msgid ""
+"Building a line brings in what *it* is made of -- its stock, its own parts "
+"-- and buying it hides them, because what is bought is bought whole."
+msgstr ""
+"把某个条目设为自制，会把 *它* 所由之构成的东西带进来 -- 它的坯料、它自己的那些零件 -- "
+"而设为采购则会把它们隐藏起来，因为买来的东西是整个买来的。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:35
+msgid ""
+"The Manufacturing group's Build vs Buy tab: a line per item, each with a "
+"picture and a Build/Buy switch"
+msgstr "Manufacturing 组的 Build vs Buy 标签页：每个条目一行，各带一张图片和一个 Build/Buy 开关"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:40
+msgid ""
+"The choices are written under ``~/.partcad/garage/default/bvb/``, one file "
+"per object, and ``pc instructions`` reads the same files -- which is what "
+"makes it write the steps for what you are building rather than for "
+"everything the package could build. Where nothing has been chosen, a line "
+"that can be either is **bought**, which is what the bill of materials "
+"assumes."
+msgstr ""
+"这些选择写在 ``~/.partcad/garage/default/bvb/`` 下，每个对象一个文件，而 ``pc instructions`` "
+"读取的正是同样这些文件 -- "
+"这也正是让它写出你所要构建之物的那些步骤、而不是写出这个包所能构建的一切的原因。在什么都还没选过的地方，一个两者皆可的条目算作 "
+"**采购**，而这也是物料清单所假定的情况。"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:47
+msgid "On the command line"
+msgstr "在命令行中"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:49
+msgid ""
+"There is no ``pc`` command that makes these choices, and that is deliberate:"
+" they are the one input to this phase that is nobody else's to guess. What "
+"reads them is:"
+msgstr "没有任何 ``pc`` 命令会做出这些选择，而这是有意的：它们是这个阶段唯一一项不该由别人去猜的输入。读取它们的是："
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:60
+msgid "Agent skills"
+msgstr "智能体技能"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bvb.rst:62
+msgid ""
+"No skill chooses. ``/pc:validate`` reads the bill of materials and the "
+"assembly instructions that follow from whatever was chosen, as part of "
+"giving a requirement its verdict."
+msgstr "没有任何技能会做这个选择。``/pc:validate`` 会在给某项需求下结论的过程中，读取由所选内容导出的物料清单和装配说明。"

@@ -8,7 +8,7 @@
 Written once, here, and read in two places that must not disagree: the IDE's
 Test tab, which shows the entry of the check selected beside its verdict (see
 'partcad.test.report'), and the documentation, whose list of checks
-('docs/source/digital_thread/testing.rst') is generated from this module. A
+('docs/source/digital_thread/lifecycle/testing.rst') is generated from this module. A
 test keeps the two in step ('tests/partcad/unit/test_test_catalog.py'): every
 check in 'partcad.test.all' has an entry and nothing else does, and the page
 says what 'rst()' writes.
@@ -846,7 +846,7 @@ def page(text: str) -> str:
     return text[:start] + "\n\n" + rst(registered()) + "\n" + text[end:]
 
 
-PAGE = "docs/source/digital_thread/testing.rst"
+PAGE = "docs/source/digital_thread/lifecycle/testing.rst"
 
 
 def main(argv: list) -> int:

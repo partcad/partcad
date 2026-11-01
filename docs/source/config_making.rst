@@ -630,7 +630,7 @@ prints and the one MuJoCo is handed. A part is rarely made of a fluid; a
   everything else -- a density (``kg/m^3``), a viscosity (``Pa*s``), a mass
   (``kg``), an inertia (``kg*m^2``), a force (``N``), the gravity of a scene
   (``m/s^2``) -- is in the SI unit for it, with no prefix. That is the rule the
-  ``how:`` section of an assembly already follows (see :doc:`assy`), and it is
+  ``how:`` section of an assembly already follows (see :doc:`/assy`), and it is
   what lets a value go into a simulation format as it was written.
 
 ``tags`` is free-form on purpose. There is no controlled vocabulary of material

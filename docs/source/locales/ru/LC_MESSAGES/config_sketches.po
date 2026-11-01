@@ -1,0 +1,447 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/config_sketches.rst:5
+msgid "Sketches"
+msgstr "Эскизы"
+
+#: ../../source/config_sketches.rst:8
+msgid ""
+"PartCAD uses 2D sketches to create 3D models (e.g. via `extrude` or `sweep`)"
+" and to maintain various metadata (such as the geometry of interfaces "
+"between parts, arbitrary part metadata like camera view angles and so on)."
+msgstr ""
+"PartCAD использует 2D-эскизы для создания 3D-моделей (например, с помощью "
+"`extrude` или `sweep`) и для хранения различных метаданных (таких как "
+"геометрия интерфейсов между деталями, произвольные метаданные детали, "
+"например углы обзора камеры, и так далее)."
+
+#: ../../source/config_sketches.rst:12
+msgid "Basic shapes"
+msgstr "Базовые фигуры"
+
+#: ../../source/config_sketches.rst:14
+msgid "Outer shape: `circle`, `rectangle`, `square`, `slot`"
+msgstr "Внешняя фигура: `circle`, `rectangle`, `square`, `slot`"
+
+#: ../../source/config_sketches.rst:15
+msgid "Optional inner shape: `circle`, `rectangle`, `square`, `slot`"
+msgstr ""
+"Необязательная внутренняя фигура: `circle`, `rectangle`, `square`, `slot`"
+
+#: ../../source/config_sketches.rst:17
+msgid "Files"
+msgstr "Файлы"
+
+#: ../../source/config_sketches.rst:19 ../../source/config_sketches.rst:115
+msgid "DXF"
+msgstr "DXF"
+
+#: ../../source/config_sketches.rst:20 ../../source/config_sketches.rst:306
+msgid "SVG"
+msgstr "SVG"
+
+#: ../../source/config_sketches.rst:22
+msgid "Scripts"
+msgstr "Скрипты"
+
+#: ../../source/config_sketches.rst:24
+msgid "`build123d <https://github.com/gumyr/build123d>`_"
+msgstr "`build123d <https://github.com/gumyr/build123d>`_"
+
+#: ../../source/config_sketches.rst:25
+msgid "`CadQuery <https://github.com/CadQuery/cadquery>`_"
+msgstr "`CadQuery <https://github.com/CadQuery/cadquery>`_"
+
+#: ../../source/config_sketches.rst:28
+msgid "Sketches are declared in ``partcad.yaml`` using the following syntax:"
+msgstr ""
+"Эскизы объявляются в ``partcad.yaml`` с помощью следующего синтаксиса:"
+
+#: ../../source/config_sketches.rst:42
+msgid "Basic"
+msgstr "Базовые"
+
+#: ../../source/config_sketches.rst:44
+msgid "The basic sketches are defined using the following syntax:"
+msgstr "Базовые эскизы определяются с помощью следующего синтаксиса:"
+
+#: ../../source/config_sketches.rst:89
+msgid ""
+"There must be only one field ``circle``, ``square``, ``rectangle`` or "
+"``slot`` at the top level of the sketch. Inside ``inner`` each shape may be "
+"given once by its own name, and several at a time in the plural list beside "
+"it."
+msgstr ""
+"На верхнем уровне эскиза должно быть только одно поле: ``circle``, "
+"``square``, ``rectangle`` или ``slot``. Внутри ``inner`` каждая фигура может"
+" быть задана один раз под собственным именем, а несколько сразу — в соседнем"
+" списке во множественном числе."
+
+#: ../../source/config_sketches.rst:92
+msgid ""
+"A **slot** is a rectangle with semicircular ends -- two arcs and two lines "
+"-- which is what a slotted hole is. ``length`` is measured over those ends, "
+"the way a drawing dimensions it, so a slot as long as it is wide is a circle"
+" rather than an error."
+msgstr ""
+"**Паз** (``slot``) — это прямоугольник с полукруглыми торцами, две дуги и "
+"две линии, то есть именно то, чем является продолговатое отверстие. "
+"``length`` измеряется по этим торцам, как размер проставляют на чертеже, "
+"поэтому паз, длина которого равна ширине, — это окружность, а не ошибка."
+
+#: ../../source/config_sketches.rst:97
+msgid ""
+"Unlike the other shapes, a slot is placed by the centre of its **first** "
+"rounded end rather than by its middle, and ``angle`` turns it about that "
+"point. That is where a slot comes from: it is a hole that may also sit "
+"somewhere else, so it starts where the plain hole would have been and runs "
+"``length - width`` from there. A port keeps its coordinates when the opening"
+" it marks is slotted, and the freedom of movement that goes with it runs "
+"from zero rather than from half a slot back. It is also the only one of "
+"these shapes whose direction is part of what it is."
+msgstr ""
+"В отличие от остальных фигур, паз размещается по центру своего **первого** "
+"скруглённого торца, а не по середине, и ``angle`` поворачивает его вокруг "
+"этой точки. Отсюда паз и берётся: это отверстие, которое может оказаться и в"
+" другом месте, поэтому он начинается там, где было бы обычное отверстие, и "
+"уходит от этой точки на ``length - width``. Порт сохраняет свои координаты, "
+"когда помечаемое им отверстие становится продолговатым, и связанная с ним "
+"свобода перемещения отсчитывается от нуля, а не от половины паза назад. Это "
+"также единственная из этих фигур, у которой направление является частью её "
+"самой."
+
+#: ../../source/config_sketches.rst:117
+msgid ""
+"A sketch can be defined using a `DXF "
+"<https://en.wikipedia.org/wiki/AutoCAD_DXF>`_ file. Such sketches are "
+"declared using the following syntax:"
+msgstr ""
+"Эскиз можно определить с помощью файла `DXF "
+"<https://en.wikipedia.org/wiki/AutoCAD_DXF>`_. Такие эскизы объявляются с "
+"помощью следующего синтаксиса:"
+
+#: ../../source/config_sketches.rst:132
+msgid ""
+"The sketch is **every face** the selected layers draw. Each layer's lines, "
+"arcs, circles, ellipses, splines and polylines are joined end to end into "
+"outlines; each closed outline becomes a face, with the outlines inside it as"
+" its holes. A drawing of several outlines -- side by side, or one on each of"
+" several layers -- is a sketch of several faces. A line that does not close "
+"bounds nothing, and is kept as the **wire** it is, beside the faces: an "
+"outline and the bend lines across it are a sketch of one face and two lines."
+" Text, dimensions and hatches are not geometry and are left out of it."
+msgstr ""
+"Эскизом является **каждая грань**, которую рисуют выбранные слои. Линии, "
+"дуги, окружности, эллипсы, сплайны и полилинии каждого слоя соединяются "
+"конец в конец в контуры; каждый замкнутый контур становится гранью, а "
+"контуры внутри него -- её отверстиями. Чертёж из нескольких контуров -- "
+"расположенных рядом или по одному на каждом из нескольких слоёв -- это эскиз"
+" из нескольких граней. Линия, которая не замыкается, ничего не ограничивает "
+"и сохраняется как та **проволока**, которой она и является, рядом с гранями:"
+" контур и линии гиба поперёк него -- это эскиз из одной грани и двух линий. "
+"Текст, размеры и штриховки геометрией не являются и в него не попадают."
+
+#: ../../source/config_sketches.rst:141
+msgid ""
+"**Block references** (``INSERT``, and the grids ``MINSERT`` places) draw "
+"what the block draws, where the reference puts it: moved, turned, scaled and"
+" mirrored as placed, with blocks inside blocks followed all the way down. An"
+" entity a block keeps on layer ``0`` is on the reference's layer, which is "
+"what layer ``0`` in a block means; an entity on any other layer stays on "
+"that layer wherever the block is placed, and the layer filters below select "
+"it there."
+msgstr ""
+"**Вставки блоков** (``INSERT``, а также те сетки, которые размещает "
+"``MINSERT``) рисуют то, что рисует блок, там, где его размещает вставка: "
+"смещённым, повёрнутым, масштабированным и отражённым так, как размещено, "
+"причём блоки внутри блоков отслеживаются на всю глубину. Объект, который "
+"блок держит на слое ``0``, оказывается на слое вставки, и именно это "
+"означает слой ``0`` внутри блока; объект на любом другом слое остаётся на "
+"этом слое, где бы блок ни размещался, и фильтры слоёв ниже выбирают его там."
+
+#: ../../source/config_sketches.rst:148
+msgid ""
+"A **mirrored** arc, circle or polyline -- what ``MIRROR`` writes, and what a"
+" block reference with a negative scale places -- is read where it was "
+"mirrored to."
+msgstr ""
+"**Отражённая** дуга, окружность или полилиния -- то, что пишет ``MIRROR``, и"
+" то, что размещает вставка блока с отрицательным масштабом -- читается там, "
+"куда она была отражена."
+
+#: ../../source/config_sketches.rst:152
+msgid ""
+"The sketch is in **millimetres**, whatever the drawing is drawn in: its "
+"numbers are scaled by what ``$INSUNITS`` says they are, so a one-inch "
+"profile drawn in inches is a 25.4 mm sketch. A drawing that says it is "
+"unitless is taken as millimetres. ``units:`` says what the numbers are where"
+" the drawing does not, or says wrong -- ezdxf, for one, saves a drawing as "
+"metres unless it is told otherwise -- and ``unitless`` takes them as "
+"millimetres as they are. ``pc info`` reports both what the drawing says and "
+"how much the sketch was scaled by (see :ref:`sketch-annotations`). PartCAD's"
+" own DXF output says it is in millimetres."
+msgstr ""
+"Эскиз задан в **миллиметрах**, в чём бы ни был начерчен чертёж: его числа "
+"масштабируются по тому, чем их считает ``$INSUNITS``, поэтому профиль "
+"размером в один дюйм, начерченный в дюймах, становится эскизом 25,4 мм. "
+"Чертёж, который говорит, что он безразмерный, принимается за миллиметры. "
+"``units:`` говорит, чем являются числа там, где чертёж этого не говорит или "
+"говорит неверно -- ezdxf, например, сохраняет чертёж как метры, если ему не "
+"сказать иное, -- а ``unitless`` принимает их за миллиметры как есть. ``pc "
+"info`` сообщает и то, что говорит чертёж, и то, насколько был "
+"отмасштабирован эскиз (см. :ref:`sketch-annotations`). Собственный вывод DXF"
+" у PartCAD говорит, что он в миллиметрах."
+
+#: ../../source/config_sketches.rst:164
+msgid "Layers, and reading one drawing several ways"
+msgstr "Слои и чтение одного чертежа несколькими способами"
+
+#: ../../source/config_sketches.rst:166
+msgid ""
+"``include`` and ``exclude`` are **object-type parameters**: the ``dxf`` type"
+" contributes them rather than the author of the sketch inventing them, in "
+"the same way ``material``, ``color`` and ``tolerance`` are contributed to a "
+"part (see :ref:`parameters`). Two things follow from that, and both are the "
+"point of it."
+msgstr ""
+"``include`` и ``exclude`` — это **параметры типа объекта**: их добавляет тип"
+" ``dxf``, а не выдумывает автор эскиза, — так же как к детали добавляются "
+"``material``, ``color`` и ``tolerance`` (см. :ref:`parameters`). Из этого "
+"следуют две вещи, и в них весь смысл."
+
+#: ../../source/config_sketches.rst:171
+msgid ""
+"First, they exist whether or not the declaration mentions them, so whoever "
+"*refers* to the sketch can set them -- and a reference is the natural place "
+"for this to be decided, because which layers are wanted depends on what the "
+"sketch is being used for:"
+msgstr ""
+"Во-первых, они существуют независимо от того, упоминает ли их объявление, "
+"поэтому задать их может тот, кто *ссылается* на эскиз, — а ссылка и есть "
+"естественное место для такого решения, потому что нужные слои зависят от "
+"того, для чего используется эскиз:"
+
+#: ../../source/config_sketches.rst:201
+msgid ""
+"A list is written with commas in it, as above. Nothing has to be declared in"
+" advance for either reference to work, and each of them is its own sketch --"
+" with its own cache entry -- so the two do not have to be rendered twice or "
+"kept in step by hand."
+msgstr ""
+"Список записывается через запятую, как показано выше. Чтобы любая из этих "
+"ссылок заработала, заранее ничего объявлять не нужно, и каждая из них — это "
+"отдельный эскиз со своей записью в кэше, так что отрисовывать их дважды или "
+"вручную держать в согласии не требуется."
+
+#: ../../source/config_sketches.rst:206
+msgid ""
+"Layer names are matched **case-insensitively**, and only one of ``include`` "
+"and ``exclude`` may be given -- both are the DXF importer's own rules. A "
+"reference setting either of them is deciding how the drawing is read, so it "
+"replaces what the declaration said rather than being added to it: a sketch "
+"declaring ``include: [OUTLINE]`` and referred to as ``panel;exclude=NOTES`` "
+"is read by that exclusion alone. A reference that sets *both* is refused, "
+"the way a declaration writing both is."
+msgstr ""
+"Имена слоёв сопоставляются **без учёта регистра**, и задать можно только "
+"один из ``include`` и ``exclude`` — это собственные правила импортёра DXF. "
+"Ссылка, задающая любой из них, решает, как читается чертёж, поэтому она "
+"заменяет то, что было сказано в объявлении, а не добавляется к нему: эскиз, "
+"объявляющий ``include: [OUTLINE]`` и указанный как ``panel;exclude=NOTES``, "
+"читается только по этому исключению. Ссылка, задающая *оба*, отвергается — "
+"так же как и объявление, в котором записаны оба."
+
+#: ../../source/config_sketches.rst:214
+msgid ""
+"What the selected layers draw that does not close is imported as the "
+"**wires** it is, beside the faces the rest bound. That is what a drawing of "
+"bend lines is: two parallel lines across a blank are where it is folded, and"
+" a line is open by nature. PartCAD says so when it happens, because the "
+"other way to arrive there is an outline with a gap in it, which is a mistake"
+" rather than a drawing of lines."
+msgstr ""
+"То, что рисуют выбранные слои и что не замыкается, импортируется как те "
+"**проволоки**, которыми оно и является, рядом с теми гранями, которые "
+"ограничивает остальное. Именно таков чертёж линий гиба: две параллельные "
+"линии поперёк заготовки -- это то, по чему её сгибают, а линия по своей "
+"природе открыта. PartCAD говорит об этом, когда это происходит, потому что "
+"другой способ попасть в ту же точку -- контур с разрывом, а это ошибка, а не"
+" чертёж линий."
+
+#: ../../source/config_sketches.rst:221
+msgid ""
+"Second, the fields above are the **default** the reference overrides. They "
+"go on meaning exactly what they always meant, and a sketch that carries "
+"neither reads every layer. The long form is available too, for a sketch that"
+" wants to describe its own default:"
+msgstr ""
+"Во-вторых, поля выше — это **значения по умолчанию**, которые ссылка "
+"переопределяет. Они по-прежнему означают ровно то, что всегда означали, а "
+"эскиз, в котором нет ни того ни другого, читает все слои. Доступна и длинная"
+" форма — для эскиза, который хочет описать собственные значения по "
+"умолчанию:"
+
+#: ../../source/config_sketches.rst:237
+msgid ""
+"Every other sketch type rejects the two names, the way a part type rejects "
+"an object-type parameter it cannot honour: a layer is something a DXF has, "
+"and accepting the parameter silently on an SVG would leave a package "
+"believing it was filtering something."
+msgstr ""
+"Все остальные типы эскизов эти два имени отвергают — так же как тип детали "
+"отвергает параметр типа объекта, который он не может соблюсти: слои есть у "
+"DXF, и молчаливое принятие такого параметра для SVG оставило бы пакет в "
+"уверенности, что он что-то фильтрует."
+
+#: ../../source/config_sketches.rst:245
+msgid "Annotations"
+msgstr "Аннотации"
+
+#: ../../source/config_sketches.rst:247
+msgid ""
+"A DXF entity may carry **extended data** -- XDATA -- which is what an "
+"application wrote against that entity, in the file, beside the geometry. It "
+"is where a drawing states what the geometry cannot: two identical lines are "
+"a bend up through 90 degrees and a bend down through 30, and nothing about "
+"the lines says which."
+msgstr ""
+"Элемент DXF может нести **расширенные данные** — XDATA, — то есть то, что "
+"приложение записало против этого элемента в файле, рядом с геометрией. "
+"Именно там чертёж сообщает то, чего не может сказать геометрия: две "
+"одинаковые линии — это гиб вверх на 90 градусов и гиб вниз на 30, и сами "
+"линии ничего об этом не говорят."
+
+#: ../../source/config_sketches.rst:253
+msgid ""
+"PartCAD reads it as the file is imported and carries it beside the geometry "
+"from then on, so it is a property of the **sketch** rather than of the file "
+"it came from. That is what lets :ref:`sheet metal instructions <sheet-"
+"metal>` be a sketch: the check reads what the sketch reports, and a sketch "
+"type that learns to state the same thing needs no change anywhere else. "
+"Today ``dxf`` is the only type that states anything, so sheet metal "
+"instructions have to be read from a DXF in practice -- but not by anything's"
+" design."
+msgstr ""
+"PartCAD читает их при импорте файла и с этого момента несёт их рядом с "
+"геометрией, так что это свойство **эскиза**, а не файла, из которого он "
+"получен. Именно это позволяет :ref:`инструкциям для листового металла "
+"<sheet-metal>` быть эскизом: проверка читает то, что сообщает эскиз, а типу "
+"эскиза, который научится сообщать то же самое, больше нигде ничего менять не"
+" нужно. Сегодня ``dxf`` — единственный тип, который вообще что-либо "
+"сообщает, поэтому на практике инструкции для листового металла приходится "
+"читать из DXF, но не по чьему-либо замыслу."
+
+#: ../../source/config_sketches.rst:261
+msgid "Both of the usual spellings are read, and either may be used:"
+msgstr "Читаются оба обычных написания, и использовать можно любое:"
+
+#: ../../source/config_sketches.rst:274
+msgid ""
+"Keys are read case-insensitively -- ``ANGLE`` and ``angle`` are one key -- "
+"and values are kept exactly as the file states them. What is carried per "
+"element is its DXF type, its layer, its handle, where it is, and those "
+"key/value pairs; an element with no extended data is still carried, with "
+"nothing against it, because \"this drawing annotates nothing\" and \"this "
+"line was left un-annotated\" are different answers. The layer filters above "
+"apply, so the annotations describe what is in the sketch and not what was "
+"filtered out of it."
+msgstr ""
+"Ключи читаются без учёта регистра — ``ANGLE`` и ``angle`` являются одним "
+"ключом, — а значения сохраняются ровно такими, какими их указывает файл. На "
+"каждый элемент сохраняются его тип DXF, его слой, его дескриптор, его "
+"положение и эти пары ключ/значение; элемент без расширенных данных всё равно"
+" сохраняется, но без пар, потому что «этот чертёж ничего не аннотирует» и "
+"«эта линия осталась без аннотации» — разные ответы. Описанные выше фильтры "
+"слоёв применяются, поэтому аннотации описывают то, что есть в эскизе, а не "
+"то, что из него отфильтровано."
+
+#: ../../source/config_sketches.rst:282
+msgid ""
+"They describe a block's **contents**, where the references put them, rather "
+"than the references: a bend line drawn once in a block and placed twice is "
+"two annotated lines. Each is named by the handle of its entity in the block "
+"definition -- the one a person opening the file finds -- and lists the "
+"handles of the references that placed it, outermost first. What a reference "
+"says, its contents say too, unless they say otherwise: a reference annotated"
+" ``angle=90`` says it of every line its block draws."
+msgstr ""
+"Они описывают **содержимое** блока там, куда его помещают вставки, а не сами"
+" вставки: линия гиба, нарисованная в блоке один раз и размещённая дважды, --"
+" это две аннотированные линии. Каждая называется по дескриптору своего "
+"объекта в определении блока -- по тому, который находит человек, открывший "
+"файл, -- и перечисляет дескрипторы тех вставок, которые её разместили, от "
+"самой внешней. То, что говорит вставка, говорит и её содержимое, если оно не"
+" говорит иного: вставка, аннотированная как ``angle=90``, говорит это о "
+"каждой линии, которую рисует её блок."
+
+#: ../../source/config_sketches.rst:290
+msgid ""
+"``pc info`` on the sketch prints them, under ``Annotations``, beside what "
+"the drawing says about *itself*: which DXF it is, what ``$INSUNITS`` says "
+"its numbers are in and how much the sketch was scaled by (``mm per unit``), "
+"and -- under ``Layers`` -- **every** layer the file has, with how many "
+"elements of which types are on each and whether this sketch reads it. That "
+"last is not the question the annotations answer, and it is why the drawing "
+"is described as well as read: a layer filter that matched nothing and a "
+"layer that is not in the file both produce a sketch with nothing in it."
+msgstr ""
+"``pc info`` на эскизе их печатает, в разделе ``Annotations``, рядом с тем, "
+"что чертёж говорит о *себе самом*: какой это DXF, в чём, по словам "
+"``$INSUNITS``, заданы его числа и насколько был отмасштабирован эскиз (``mm "
+"per unit``), а также -- в разделе ``Layers`` -- **каждый** слой, какой есть "
+"в файле, с тем, сколько элементов каких типов находится на каждом и читает "
+"ли его этот эскиз. Последнее -- не тот вопрос, на который отвечают "
+"аннотации, и именно поэтому чертёж не только читается, но и описывается: и "
+"фильтр слоёв, который ничего не нашёл, и слой, которого в файле нет, дают "
+"эскиз, в котором ничего нет."
+
+#: ../../source/config_sketches.rst:299
+msgid ""
+"A STEP file states the same kind of thing in its own vocabulary -- a "
+"``PROPERTY_DEFINITION`` hung on a product or on one named feature of one, "
+"and ``PRESENTATION_LAYER_ASSIGNMENT`` for its layers -- and ``pc info`` on a"
+" ``step`` part or assembly reports those under ``Properties`` and "
+"``Layers``, with the keys lower-cased the same way."
+msgstr ""
+"Файл STEP сообщает то же самое в собственном словаре — "
+"``PROPERTY_DEFINITION``, привязанное к изделию или к одному его именованному"
+" элементу, и ``PRESENTATION_LAYER_ASSIGNMENT`` для его слоёв, — и ``pc "
+"info`` для детали или сборки типа ``step`` выводит это в разделах "
+"``Properties`` и ``Layers``, приводя ключи к нижнему регистру тем же "
+"способом."
+
+#: ../../source/config_sketches.rst:308
+msgid ""
+"A sketch can be defined using an `SVG <https://en.wikipedia.org/wiki/SVG>`_ "
+"file. Such sketches are declared using the following syntax:"
+msgstr ""
+"Эскиз можно определить с помощью файла `SVG "
+"<https://en.wikipedia.org/wiki/SVG>`_. Такие эскизы объявляются с помощью "
+"следующего синтаксиса:"
+
+#: ../../source/config_sketches.rst:324
+msgid "CAD Scripts"
+msgstr "CAD-скрипты"
+
+#: ../../source/config_sketches.rst:326
+msgid "See the \"CAD Scripts\" section in the \"Parts\" chapter below."
+msgstr "См. секцию «CAD-скрипты» в главе «Детали» ниже."

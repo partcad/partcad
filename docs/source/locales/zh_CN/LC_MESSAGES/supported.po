@@ -1,0 +1,669 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/supported.rst:3
+msgid "Supported formats and features"
+msgstr "受支持的格式与功能"
+
+#: ../../source/supported.rst:5
+msgid ""
+"What PartCAD reads, writes and does, in one place. An item marked *(in "
+"progress)* is accepted by the schema or planned, and not yet delivered. The "
+":doc:`/config_package` chapter and those beside it say what each kind of "
+"object is, and :doc:`/config_package` and the chapters beside it how it is "
+"declared."
+msgstr ""
+"PartCAD 读什么、写什么、做什么，都集中在这里。标注了 *(in progress)* 的条目是 schema "
+"已经接受或者已在计划中，但尚未交付。:doc:`/config_package` 一章及其相邻各章说明每一种对象是什么，而 "
+":doc:`/config_package` 及其相邻各章说明它是如何声明的。"
+
+#: ../../source/supported.rst:11
+msgid "Operating systems"
+msgstr "操作系统"
+
+#: ../../source/supported.rst:13
+msgid "Windows"
+msgstr "Windows"
+
+#: ../../source/supported.rst:14
+msgid "Linux"
+msgstr "Linux"
+
+#: ../../source/supported.rst:15
+msgid "macOS"
+msgstr "macOS"
+
+#: ../../source/supported.rst:19
+msgid "Caching"
+msgstr "缓存"
+
+#: ../../source/supported.rst:21
+msgid ""
+"Rendered models (OpenSCAD, CadQuery, build123d and Chili3D included) are "
+"cached:"
+msgstr "渲染出来的模型（包括 OpenSCAD、CadQuery、build123d 和 Chili3D）会被缓存："
+
+#: ../../source/supported.rst:23
+msgid "In memory"
+msgstr "在内存中"
+
+#: ../../source/supported.rst:24
+msgid "On disk"
+msgstr "在磁盘上"
+
+#: ../../source/supported.rst:25
+msgid "In a memcached server shared by a team or a CI fleet (``cacheRemote``)"
+msgstr "在由团队或 CI 集群共享的 memcached 服务器中（ ``cacheRemote`` ）"
+
+#: ../../source/supported.rst:26
+msgid "In an S3 bucket that outlives both (``cacheS3``)"
+msgstr "在比两者都长寿的 S3 存储桶中（ ``cacheS3`` ）"
+
+#: ../../source/supported.rst:28
+msgid "See :ref:`caching`."
+msgstr "参见 :ref:`caching` 。"
+
+#: ../../source/supported.rst:32
+msgid "Collaboration"
+msgstr "协作"
+
+#: ../../source/supported.rst:34
+msgid "Versioning of CAD designs using Git"
+msgstr "使用 Git 对 CAD 设计做版本管理"
+
+#: ../../source/supported.rst:36
+msgid "Mechanical"
+msgstr "机械"
+
+#: ../../source/supported.rst:37
+msgid "Electronics"
+msgstr "电子"
+
+#: ../../source/supported.rst:38
+msgid ""
+"Software: firmware images, binaries and disk images shipped as objects of a "
+"package, reproducible by vendor and SKU, by file, or by ``fileHash``"
+msgstr "软件：固件镜像、二进制文件和磁盘镜像，作为包的对象发布，可按供应商和 SKU、按文件，或者按 ``fileHash`` 复现"
+
+#: ../../source/supported.rst:41
+msgid "Automated generation of Markdown documentation"
+msgstr "自动生成 Markdown 文档"
+
+#: ../../source/supported.rst:42
+msgid "Parametric (hardware and software) bill of materials"
+msgstr "参数化的（硬件与软件）物料清单"
+
+#: ../../source/supported.rst:43
+msgid "Publish models online on PartCAD.org"
+msgstr "在 PartCAD.org 上在线发布模型"
+
+#: ../../source/supported.rst:44
+msgid "Publish models online on your website *(in progress)*"
+msgstr "在你自己的网站上在线发布模型 *(in progress)*"
+
+#: ../../source/supported.rst:45
+msgid "Publish configurable parts and assemblies online *(in progress)*"
+msgstr "在线发布可配置的零件和装配体 *(in progress)*"
+
+#: ../../source/supported.rst:46
+msgid ""
+"Purchase of assemblies and parts online, both marketplace and SaaS *(in "
+"progress)*"
+msgstr "在线采购装配体和零件，既支持市场也支持 SaaS *(in progress)*"
+
+#: ../../source/supported.rst:47
+msgid "Automated purchase of parts via the command line"
+msgstr "通过命令行自动采购零件"
+
+#: ../../source/supported.rst:51
+msgid "Part models (3D)"
+msgstr "零件模型（3D）"
+
+#: ../../source/supported.rst:53 ../../source/supported.rst:85
+msgid "Using scripting languages:"
+msgstr "使用脚本语言："
+
+#: ../../source/supported.rst:55 ../../source/supported.rst:87
+msgid "`CadQuery`_"
+msgstr "`CadQuery`_"
+
+#: ../../source/supported.rst:56 ../../source/supported.rst:88
+msgid "`build123d`_"
+msgstr "`build123d`_"
+
+#: ../../source/supported.rst:57
+msgid "`Chili3D`_"
+msgstr "`Chili3D`_"
+
+#: ../../source/supported.rst:58
+msgid "`OpenSCAD`_"
+msgstr "`OpenSCAD`_"
+
+#: ../../source/supported.rst:59
+msgid "`SDF`_"
+msgstr "`SDF`_"
+
+#: ../../source/supported.rst:61
+msgid "Using CAD files:"
+msgstr "使用 CAD 文件："
+
+#: ../../source/supported.rst:63 ../../source/supported.rst:248
+msgid "STEP"
+msgstr "STEP"
+
+#: ../../source/supported.rst:64 ../../source/supported.rst:249
+msgid "BREP"
+msgstr "BREP"
+
+#: ../../source/supported.rst:65 ../../source/supported.rst:250
+msgid "STL"
+msgstr "STL"
+
+#: ../../source/supported.rst:66 ../../source/supported.rst:251
+msgid "3MF"
+msgstr "3MF"
+
+#: ../../source/supported.rst:67 ../../source/supported.rst:253
+msgid "OBJ"
+msgstr "OBJ"
+
+#: ../../source/supported.rst:68
+msgid "glTF (``.gltf`` with its buffers, or ``.glb``)"
+msgstr "glTF（ ``.gltf`` 及其缓冲区文件，或者 ``.glb`` ）"
+
+#: ../../source/supported.rst:70
+msgid "Using file formats of third-party tools:"
+msgstr "使用第三方工具的文件格式："
+
+#: ../../source/supported.rst:72
+msgid "`KiCad EDA`_ (PCB)"
+msgstr "`KiCad EDA`_ （PCB）"
+
+#: ../../source/supported.rst:73
+msgid ""
+"FreeCAD documents (``.FCStd``), without FreeCAD: read with `cadmpeg`_, "
+"downloaded on first use"
+msgstr "FreeCAD 文档（ ``.FCStd`` ），无需 FreeCAD：用 `cadmpeg`_ 读取，首次使用时下载"
+
+#: ../../source/supported.rst:75
+msgid ""
+"Using a part type the package defines itself (``partTypes``), including one "
+"that reads a file format of its own:"
+msgstr "使用包自行定义的零件类型（ ``partTypes`` ），包括自行读取某种文件格式的零件类型："
+
+#: ../../source/supported.rst:78
+msgid ""
+"`SolidCraft`_ designs (``.solidcraft``), Rhino (``.3dm``) and IGES, from the"
+" SolidCraft plugin package (`partcad-solidcraft`_), which downloads "
+"SolidCraft on first use or runs in its own container image"
+msgstr ""
+"`SolidCraft`_ 设计（ ``.solidcraft`` ）、Rhino（ ``.3dm`` ）和 IGES，来自 SolidCraft "
+"插件包（ `partcad-solidcraft`_ ），它会在首次使用时下载 SolidCraft，或者在它自己的容器镜像中运行"
+
+#: ../../source/supported.rst:83
+msgid "Part and interface blueprints (2D)"
+msgstr "零件与接口蓝图（2D）"
+
+#: ../../source/supported.rst:90
+msgid "Using file formats:"
+msgstr "使用文件格式："
+
+#: ../../source/supported.rst:92 ../../source/supported.rst:239
+msgid "DXF"
+msgstr "DXF"
+
+#: ../../source/supported.rst:93 ../../source/supported.rst:236
+msgid "SVG"
+msgstr "SVG"
+
+#: ../../source/supported.rst:97
+msgid "Assembly models (3D)"
+msgstr "装配体模型（3D）"
+
+#: ../../source/supported.rst:99
+msgid "Using the ``Assembly YAML`` format (see :doc:`/assy`)"
+msgstr "使用 ``Assembly YAML`` 格式（参见 :doc:`/assy` ）"
+
+#: ../../source/supported.rst:101
+msgid "Automatically maintaining the bill of materials"
+msgstr "自动维护物料清单"
+
+#: ../../source/supported.rst:102
+msgid ""
+"Generating user-friendly visual assembly instructions (PDF and HTML "
+"instruction books)"
+msgstr "生成便于使用的可视化装配说明（PDF 和 HTML 说明书）"
+
+#: ../../source/supported.rst:104
+msgid "Using URDF, with links, joints and physics"
+msgstr "使用 URDF，带有 link、关节和物理属性"
+
+#: ../../source/supported.rst:105
+msgid "Using a STEP file that stays the source"
+msgstr "使用一个始终作为源头的 STEP 文件"
+
+#: ../../source/supported.rst:106
+msgid ""
+"``pc filter`` declares a second assembly made of some of the links of an "
+"existing one: a sub-assembly carved out of a big one without editing it by "
+"hand"
+msgstr "``pc filter`` 声明出第二个装配体，它由某个已有装配体的部分链接构成：无需手工编辑就能从一个大装配体中切出一个子装配体"
+
+#: ../../source/supported.rst:111
+msgid "Scenes (3D)"
+msgstr "场景（3D）"
+
+#: ../../source/supported.rst:113
+msgid ""
+"Placed arrangements of objects: a workcell, a table, a simulation world."
+msgstr "各对象摆放好的组合：一个工作单元、一张桌子、一个仿真世界。"
+
+#: ../../source/supported.rst:115
+msgid "Stating where things are, rather than how they got there"
+msgstr "说明东西在哪里，而不是它们如何到了那里"
+
+#: ../../source/supported.rst:116
+msgid ""
+"Reading and writing an engine's own scene format through the package that "
+"implements it: `partcad-sim-gazebo`_ for a Gazebo world (SDFormat), "
+"`partcad-sim-mujoco`_ for MJCF, each also declaring the reader, the exporter"
+" and the ``pc ide open`` entry for its engine"
+msgstr ""
+"通过实现它的那个包来读写某个引擎自有的场景格式：`partcad-sim-gazebo`_ 用于 Gazebo "
+"世界（SDFormat），`partcad-sim-mujoco`_ 用于 MJCF，每一个还会为它的引擎声明读取器、导出器和 ``pc ide "
+"open`` 条目"
+
+#: ../../source/supported.rst:122
+msgid "Simulation"
+msgstr "仿真"
+
+#: ../../source/supported.rst:124
+msgid ""
+"What an object is supposed to do once the world is switched on. See "
+":doc:`/digital_thread/lifecycle/simulation`."
+msgstr "世界被打开之后对象应该做什么。参见 :doc:`/digital_thread/lifecycle/simulation` 。"
+
+#: ../../source/supported.rst:126
+msgid ""
+"``simulate:`` on a part, an assembly or a scene: a scene, where in it the "
+"object goes, and the condition that says whether it went as it should"
+msgstr "零件、装配体或场景上的 ``simulate:`` ：一个场景、对象在其中的位置，以及判定它是否按应有方式运行的那个条件"
+
+#: ../../source/supported.rst:128
+msgid ""
+"What becomes a rigid body: every element of a scene, recursively, and "
+"everything inside an assembly attached to it, its connections that keep a "
+"degree of freedom joints; a scene element may be ``fixed: true`` to the "
+"world, and a scene may place a scene"
+msgstr ""
+"什么会成为刚体：场景的每一个元素，并递归适用；装配体内部与它固连在一起的一切；它那些保留了自由度的连接则成为关节；场景元素可以对世界 ``fixed: "
+"true`` ，而场景也可以放置场景"
+
+#: ../../source/supported.rst:131
+msgid "``pc sim``, which runs it and validates the result"
+msgstr "``pc sim`` ，它运行仿真并校验结果"
+
+#: ../../source/supported.rst:132
+msgid ""
+"``pc test`` holds every object to it, as its ``sim`` check: write the claim "
+"first, then make it pass"
+msgstr "``pc test`` 以此约束每一个对象，作为它的 ``sim`` 检查项：先写下断言，再让它通过"
+
+#: ../../source/supported.rst:133
+msgid ""
+"Simulation plugins, declared the way export and render implementations are: "
+"a scene goes in, ``before`` and ``after`` come out. The simulator is a "
+"package, not part of the ``partcad`` wheel: `partcad-sim-mujoco`_ runs one "
+"in MuJoCo and `partcad-sim-gazebo`_ one in Gazebo"
+msgstr ""
+"仿真插件，声明方式与导出和渲染实现相同：输入一个场景，输出 ``before`` 和 ``after``。仿真器是一个包，不属于 ``partcad``"
+" wheel：`partcad-sim-mujoco`_ 在 MuJoCo 中运行仿真，`partcad-sim-gazebo`_ 在 Gazebo "
+"中运行仿真"
+
+#: ../../source/supported.rst:136
+msgid ""
+"``mu`` on a material, so that what a part is made of decides whether it "
+"stands up: written out as SDFormat's ``<mu>``, URDF's ``<mu1>`` and MJCF's "
+"``friction``"
+msgstr ""
+"材料上的 ``mu`` ，使得零件由什么做成决定了它能否立住：它会被写成 SDFormat 的 ``<mu>``、URDF 的 ``<mu1>`` 和 "
+"MJCF 的 ``friction``"
+
+#: ../../source/supported.rst:141
+msgid "Engineering analysis"
+msgstr "工程分析"
+
+#: ../../source/supported.rst:143
+msgid "What the part does before anything is cut."
+msgstr "在任何东西被切削之前，这个零件的表现如何。"
+
+#: ../../source/supported.rst:145
+msgid ""
+"``pc cae fea``, finite element analysis: the part says what holds it "
+"(``fix:``) and what pulls on it (``load:``) in terms of its own interfaces, "
+"so the boundary conditions survive a change of geometry"
+msgstr ""
+"``pc cae fea`` ，有限元分析：零件用它自己的接口来说明什么固定住它（ ``fix:`` ）以及什么对它施力（ ``load:`` "
+"），这样边界条件在几何形状改变之后依然有效"
+
+#: ../../source/supported.rst:147
+msgid ""
+"``pc cae dynamic``, modal analysis: the natural frequencies of a part, held "
+"as it is"
+msgstr "``pc cae dynamic`` ，模态分析：按零件当前的固定方式求出它的固有频率"
+
+#: ../../source/supported.rst:148
+msgid ""
+"``pc cae thermal``, heat transfer: what is held at a temperature, heated and"
+" cooled"
+msgstr "``pc cae thermal`` ，传热：什么被维持在某个温度、被加热以及被冷却"
+
+#: ../../source/supported.rst:149
+msgid ""
+"``pc cae cfd``, computational fluid dynamics: where the flow goes in and "
+"out, the rest a wall"
+msgstr "``pc cae cfd`` ，计算流体动力学：流动从哪里进、从哪里出，其余部分都是壁面"
+
+#: ../../source/supported.rst:150
+msgid ""
+"Each a map of named scenarios, as ``simulate:`` is of simulations: ``pc cae "
+"fea`` runs them all, ``-f`` one, and ``pc test`` holds the part to every one"
+msgstr ""
+"每一项都是具名场景的映射，就像 ``simulate:`` 是各个仿真的映射那样：``pc cae fea`` 运行全部场景，``-f`` "
+"运行其中一个，而 ``pc test`` 以每一个场景来约束该零件"
+
+#: ../../source/supported.rst:152
+msgid ""
+"The **FEA**, **Dynamic FEA**, **Heat Transfer** and **CFD** tabs of the "
+"Digital Thread list the scenarios of the object on screen, and run the one "
+"selected"
+msgstr ""
+"Digital Thread 的 **FEA**、**Dynamic FEA**、**Heat Transfer** 和 **CFD** "
+"标签页会列出屏幕上那个对象的各个场景，并运行所选中的那一个"
+
+#: ../../source/supported.rst:157
+msgid "Materials"
+msgstr "材料"
+
+#: ../../source/supported.rst:159
+msgid "What a part is made of, as an object of a package."
+msgstr "零件由什么做成，作为包的一个对象来表述。"
+
+#: ../../source/supported.rst:161
+msgid ""
+"A ``materials:`` section, and standard catalogues to inherit from rather "
+"than restate: ``//pub/std/manufacturing/material/plastic`` and "
+"``.../metal``, named by designation and temper (``al-6061-t6``, ``ss-316l``,"
+" ``ti-6al-4v``, ``petg``, ``peek``)"
+msgstr ""
+"一个 ``materials:`` "
+"小节，以及可供继承而不必重述的标准目录：``//pub/std/manufacturing/material/plastic`` 和 "
+"``.../metal``，按牌号和热处理状态命名（ "
+"``al-6061-t6``、``ss-316l``、``ti-6al-4v``、``petg``、``peek`` ）"
+
+#: ../../source/supported.rst:164
+msgid ""
+"Reported by ``pc info``, carried into the bill of materials, and used by "
+"simulation (``mu``) and by analysis"
+msgstr "由 ``pc info`` 报告，带入物料清单，并由仿真（ ``mu`` ）和分析使用"
+
+#: ../../source/supported.rst:169
+msgid "Manufacturing"
+msgstr "制造"
+
+#: ../../source/supported.rst:171
+msgid "How it gets made, and the program that makes it."
+msgstr "它是如何被制造出来的，以及制造它的那个程序。"
+
+#: ../../source/supported.rst:173
+msgid ""
+"Manufacturing methods: ``additive``, ``subtractive``, ``sheet_metal`` and "
+"``forming``"
+msgstr "制造方式：``additive``、``subtractive``、``sheet_metal`` 和 ``forming``"
+
+#: ../../source/supported.rst:174
+msgid ""
+"``pcbBasic`` *(in progress: the schema accepts it; the manufacturability "
+"test is not implemented yet)*"
+msgstr ""
+"``pcbBasic`` *(in progress: the schema accepts it; the manufacturability "
+"test is not implemented yet)*"
+
+#: ../../source/supported.rst:175
+msgid ""
+"``pc cam`` produces the route files: the object's outline offset by the "
+"cutter radius and cut at a series of depths, the 2.5D program a CNC router "
+"or a mill runs"
+msgstr ""
+"``pc cam`` 生成加工路径文件：对象的轮廓按刀具半径偏置，并在一系列深度上切削，也就是 CNC 雕刻机或铣床所运行的 2.5D 程序"
+
+#: ../../source/supported.rst:177
+msgid ""
+"A made part is procured as the **stock it is made from**, so the bill of "
+"materials orders sheet and bar rather than a part nobody sells"
+msgstr "自制的零件是按 **它所用的坯料** 来采购的，所以物料清单订的是板材和棒料，而不是一个没人卖的零件"
+
+#: ../../source/supported.rst:179
+msgid ""
+"**Build vs Buy**: a switch per line item deciding whether it is made or "
+"bought, with the lines that can be neither marked ``Incomplete``; the choice"
+" is what the bill of materials and the instructions below are then written "
+"against"
+msgstr ""
+"**Build vs Buy**：每一个清单条目上都有一个开关，决定它是自制还是采购，而两者都做不到的条目会被标记为 ``Incomplete`` "
+"；物料清单以及下面的装配说明随后就是按这个选择写出的"
+
+#: ../../source/supported.rst:182
+msgid ""
+"``pc instructions`` writes the assembly instructions as PDF or HTML: this "
+"assembly's own steps, or with ``-r``/``-b`` the steps of every sub-assembly "
+"built and how to make every part built, each put in just before the step "
+"that first needs it"
+msgstr ""
+"``pc instructions`` 把装配说明写成 PDF 或 HTML：只写本装配体自己的步骤，或者加上 ``-r``/``-b`` "
+"写出每一个需要构建的子装配体的步骤以及每一个需要制造的零件的制造方法，各自插在第一个需要它的步骤之前"
+
+#: ../../source/supported.rst:188
+msgid "AI agents"
+msgstr "AI 智能体"
+
+#: ../../source/supported.rst:190
+msgid ""
+"Tooling for AI agents doing mechanical design. See :doc:`/ai_agents/mcp`."
+msgstr "为做机械设计的 AI 智能体准备的工具链。参见 :doc:`/ai_agents/mcp` 。"
+
+#: ../../source/supported.rst:192
+msgid ""
+"Agent Skills any ``SKILL.md``-aware coding agent can load (``ai-agents/`` in"
+" the repository), installed by ``pc init``, and distributed as the ``pc`` "
+"plugin for Claude Code (see :ref:`claude-plugin`)"
+msgstr ""
+"任何能识别 ``SKILL.md`` 的编码智能体都可以加载的 Agent Skills（仓库中的 ``ai-agents/`` ），由 ``pc "
+"init`` 安装，并作为 Claude Code 的 ``pc`` 插件分发（参见 :ref:`claude-plugin` ）"
+
+#: ../../source/supported.rst:195
+msgid ""
+"Generate a part, an assembly or a 2D sketch (``/pc:gen``, ``/pc:gen-part``, "
+"``/pc:gen-assembly``, ``/pc:gen-sketch``): the agent authors the CAD script "
+"and validates it by rendering"
+msgstr ""
+"生成零件、装配体或 2D 草图（ ``/pc:gen``、``/pc:gen-part``、``/pc:gen-"
+"assembly``、``/pc:gen-sketch`` ）：智能体编写 CAD 脚本，并通过渲染来校验它"
+
+#: ../../source/supported.rst:197
+msgid ""
+"Describe an existing object (``/pc:describe``), search the catalog "
+"(``/pc:search``), add interfaces (``/pc:add-interfaces``)"
+msgstr ""
+"描述一个已有对象（ ``/pc:describe`` ）、搜索目录（ ``/pc:search`` ）、添加接口（ ``/pc:add-"
+"interfaces`` ）"
+
+#: ../../source/supported.rst:199
+msgid ""
+"Validate an object against its ``requirements:`` (``/pc:validate``): ``pc "
+"test`` for the ports, interfaces and physics it measures, and the agent's "
+"judgement of every feature from simulations, renders, the bill of materials "
+"and the assembly instructions"
+msgstr ""
+"对照对象的 ``requirements:`` 校验它（ ``/pc:validate`` ）：用 ``pc test`` "
+"检查它所测量的端口、接口和物理属性，再由智能体依据仿真、渲染图、物料清单和装配说明对每一项特性作出判断"
+
+#: ../../source/supported.rst:202
+msgid "Set a project up (``/pc:init``, ``/pc:setup``)"
+msgstr "搭建一个项目（ ``/pc:init``、``/pc:setup`` ）"
+
+#: ../../source/supported.rst:204
+msgid ""
+"An MCP server (``pc mcp``) any MCP client can drive PartCAD through: list, "
+"inspect, render (as an image), test and export objects, and every other "
+"daemon method behind one ``execute`` tool. It is in the MCP Registry, in the"
+" ``pc`` plugin, registered by the VS Code extension and written into new "
+"packages by ``pc init``"
+msgstr ""
+"一个 MCP 服务器（ ``pc mcp`` ），任何 MCP 客户端都可以通过它驱动 "
+"PartCAD：列出、检视、渲染（以图片形式）、测试和导出对象，而其他每一个守护进程方法都藏在一个 ``execute`` 工具之后。它已进入 MCP "
+"Registry，包含在 ``pc`` 插件中，由 VS Code 扩展注册，并由 ``pc init`` 写入新建的包"
+
+#: ../../source/supported.rst:208
+msgid ""
+"``--no-ansi`` output on every command, so an agent parses plain text rather "
+"than progress bars"
+msgstr "每条命令都支持 ``--no-ansi`` 输出，这样智能体解析的是纯文本而不是进度条"
+
+#: ../../source/supported.rst:209
+msgid ""
+"Free-form ``comment:`` context in ``Assembly YAML``, written for whoever "
+"reads the assembly next"
+msgstr "``Assembly YAML`` 中自由格式的 ``comment:`` 上下文，写给下一个阅读这个装配体的人"
+
+#: ../../source/supported.rst:213
+msgid "The Digital Thread"
+msgstr "Digital Thread"
+
+#: ../../source/supported.rst:215
+msgid ""
+"Object-Oriented Programming approach to maintaining part interfaces and "
+"mating information"
+msgstr "以面向对象编程的方式来维护零件接口和配合信息"
+
+#: ../../source/supported.rst:216
+msgid ""
+"Live preview of 3D models while working in Visual Studio Code, with the "
+"requirements an object declares and whether ``pc test`` finds them met, 2D "
+"renders, dimensioned drawings, engineering analysis, the build-or-buy "
+"decision, the bill of materials, the assembly instructions and supplier "
+"quotes on tabs beside the 3D view, and a software fallback that still draws "
+"the model in a window with no WebGL, such as a virtual machine or a remote "
+"desktop (see :doc:`/tools_vscode`)"
+msgstr ""
+"在 Visual Studio Code 中工作时实时预览 3D 模型，并在 3D 视图旁边的各个标签页上显示对象所声明的需求以及 ``pc "
+"test`` 是否认为它们已被满足、2D "
+"渲染图、带尺寸的图纸、工程分析、自制还是采购的决定、物料清单、装配说明和供应商报价；还有一套软件回退方案，即使在没有 WebGL "
+"的环境里（比如虚拟机或远程桌面）也仍然能在窗口中绘制模型（参见 :doc:`/tools_vscode` ）"
+
+#: ../../source/supported.rst:221
+msgid ""
+"Open an object in the application that made it (``pc ide open``): FreeCAD, "
+"Blender, KiCad, and Gazebo or MuJoCo from the plugin package for that "
+"engine, SolidCraft from its plugin package. Installed locally, or run in a "
+"container when it is not; an object the application cannot read is converted"
+" on the way, and what is edited there is brought back into the object's own "
+"file when it closes"
+msgstr ""
+"在制造该对象的应用程序中打开它（ ``pc ide open`` ）：FreeCAD、Blender、KiCad，以及来自相应引擎插件包的 Gazebo"
+" 或 MuJoCo，还有来自其插件包的 "
+"SolidCraft。本地装有就用本地的，没有就在容器中运行；应用程序读不了的对象会在交付途中被转换，而在那里所做的编辑会在它关闭时被带回对象自己的文件里"
+
+#: ../../source/supported.rst:225
+msgid ""
+"Ask the IDE what it is showing (``pc ide state``): the Explorer's selection,"
+" the Inspector's parameters, and the Digital Thread's tab, filters and a "
+"screenshot, for an AI agent working beside you to look at what you see"
+msgstr ""
+"询问 IDE 当前在显示什么（ ``pc ide state`` ）：Explorer 的选中项、Inspector 的参数，以及 Digital "
+"Thread 的标签页、过滤条件和一张截图，供在你旁边工作的 AI 智能体看到你所看到的东西"
+
+#: ../../source/supported.rst:231
+msgid "Outputs"
+msgstr "输出"
+
+#: ../../source/supported.rst:233
+msgid ""
+"2D projections, from any viewing angle (``--view``, or an arbitrary one), "
+"with the connection ports and interfaces drawn on top if asked:"
+msgstr "2D 投影，可从任意观察角度（ ``--view`` ，或者任意指定的角度）生成，并可按要求在上面画出连接端口和接口："
+
+#: ../../source/supported.rst:237
+msgid "PNG"
+msgstr "PNG"
+
+#: ../../source/supported.rst:238
+msgid "JPEG"
+msgstr "JPEG"
+
+#: ../../source/supported.rst:241
+msgid "Documents:"
+msgstr "文档："
+
+#: ../../source/supported.rst:243
+msgid "Markdown package and assembly documents"
+msgstr "Markdown 格式的包文档和装配体文档"
+
+#: ../../source/supported.rst:244
+msgid "PDF and HTML assembly instruction books"
+msgstr "PDF 和 HTML 格式的装配说明书"
+
+#: ../../source/supported.rst:246
+msgid "3D models exported to CAD files:"
+msgstr "导出为 CAD 文件的 3D 模型："
+
+#: ../../source/supported.rst:252
+msgid "ThreeJS"
+msgstr "ThreeJS"
+
+#: ../../source/supported.rst:254
+msgid "IGES"
+msgstr "IGES"
+
+#: ../../source/supported.rst:255
+msgid "glTF"
+msgstr "glTF"
+
+#: ../../source/supported.rst:256
+msgid "URDF"
+msgstr "URDF"
+
+#: ../../source/supported.rst:257
+msgid ""
+"Gazebo world (SDFormat) and MJCF (MuJoCo), from the plugin package for that "
+"engine"
+msgstr "Gazebo 世界（SDFormat）和 MJCF（MuJoCo），来自相应引擎的插件包"
+
+#: ../../source/supported.rst:258
+msgid ""
+"`SolidCraft`_ designs (``.solidcraft``), from the SolidCraft plugin package"
+msgstr "`SolidCraft`_ 设计（ ``.solidcraft`` ），来自 SolidCraft 插件包"
+
+#: ../../source/supported.rst:260
+msgid ""
+"Output types a package implements itself, for both ``render:`` and "
+"``export:``. See :doc:`/config_output`."
+msgstr "包自行实现的输出类型，``render:`` 和 ``export:`` 都适用。参见 :doc:`/config_output` 。"

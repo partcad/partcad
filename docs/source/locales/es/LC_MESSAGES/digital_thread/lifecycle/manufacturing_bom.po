@@ -1,0 +1,99 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:5
+msgid "Bill of Materials"
+msgstr "Bill of Materials"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:7
+msgid ""
+"**Bill of Materials** is what has to be procured in order to have the "
+"object: every line item, counted. It is :doc:`/config_bom` as a tab, and the"
+" same answer ``pc bom`` prints."
+msgstr ""
+"**Bill of Materials** es lo que hay que abastecer para tener el objeto: cada"
+" partida, contada. Es :doc:`/config_bom` como pestaña, y la misma respuesta "
+"que imprime ``pc bom``."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:11
+msgid ""
+"What it is *not* is a list of parts. A part that is made is its **stock** --"
+" you buy the sheet, not the panel cut out of it -- and a sub-assembly that "
+"declares a ``vendor:`` and an ``sku:`` is one item ordered whole, with "
+"nothing inside it looked at. What is built and what is bought comes from "
+":doc:`Build vs Buy </digital_thread/lifecycle/manufacturing_bvb>`; where "
+"nothing was chosen, a line that can be either is bought."
+msgstr ""
+"Lo que *no* es, es una lista de piezas. Una pieza que se fabrica es su "
+"**stock** -- se compra la plancha, no el panel que se corta de ella -- y un "
+"subensamblaje que declara un ``vendor:`` y un ``sku:`` es un solo artículo "
+"que se pide entero, sin mirar nada de lo que hay dentro. Qué se fabrica y "
+"qué se compra viene de :doc:`Build vs Buy "
+"</digital_thread/lifecycle/manufacturing_bvb>`; donde no se eligió nada, una"
+" línea que puede ser cualquiera de las dos cosas se compra."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:19
+msgid "In the UI"
+msgstr "En la interfaz"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:21
+msgid ""
+"One row per line item, with how many of each. For a part or an assembly."
+msgstr ""
+"Una fila por partida, con cuántas de cada una. Para una pieza o un "
+"ensamblaje."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:23
+msgid ""
+"The Manufacturing group's Bill of Materials tab: every line item, counted"
+msgstr ""
+"La pestaña Bill of Materials del grupo Manufacturing: cada partida, contada"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:29
+msgid "On the command line"
+msgstr "En la línea de comandos"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:37
+msgid ""
+":doc:`/config_bom` explains how interfaces, ``alias`` and ``enrich`` make a "
+"line item interchangeable -- an abstract position in the bill of materials "
+"that a concrete part fills."
+msgstr ""
+":doc:`/config_bom` explica cómo las interfaces, ``alias`` y ``enrich`` hacen"
+" intercambiable una partida -- una posición abstracta de la lista de "
+"materiales que llena una pieza concreta."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:42
+msgid "Agent skills"
+msgstr "Skills de agente"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:44
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_bom.rst:45
+msgid ""
+"Reads the bill of materials as part of giving a requirement its verdict: a "
+"line of it is evidence for a feature that no measurement can judge."
+msgstr ""
+"Lee la lista de materiales como parte de dar su veredicto a un requisito: "
+"una línea de ella es evidencia de una característica que ninguna medición "
+"puede juzgar."

@@ -1,0 +1,189 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/plugins/part_types.rst:3
+msgid "Part types"
+msgstr "零件类型"
+
+#: ../../source/plugins/part_types.rst:5
+msgid ""
+"A **part type plugin** teaches PartCAD how to build a part. The types "
+"PartCAD implements itself -- ``build123d``, ``cadquery``, ``openscad``, "
+"``step``, ``stl``, and the rest of :ref:`the list <part-types>` -- are what "
+"a part's ``type:`` normally names. A ``partTypes:`` section declares one "
+"more, belonging to the package that writes it, and parts then name that "
+"instead."
+msgstr ""
+"**零件类型插件** 教 PartCAD 怎么构建一个零件。PartCAD 自己实现的那些类型 -- ``build123d`` 、 "
+"``cadquery`` 、 ``openscad`` 、 ``step`` 、 ``stl`` ，以及 :ref:`那份清单 <part-"
+"types>` 中的其余各项 -- 就是零件的 ``type:`` 通常所指名的东西。而一个 ``partTypes:`` "
+"小节会再声明一种，它属于写下它的那个包，于是各个零件就改为指名那一种。"
+
+#: ../../source/plugins/part_types.rst:11
+msgid ""
+"It is worth doing when **a family of parts is produced the same way every "
+"time** and the difference between them is a handful of parameters rather "
+"than a script each: parts generated from a table, fetched from a catalogue, "
+"or built by a modelling helper the package already has. Twenty bolts become "
+"twenty parameter sets and one script, not twenty scripts."
+msgstr ""
+"当 "
+"**一族零件每次都以同样的方式产出**、而它们之间的差别只是少数几个参数而不是各自一个脚本时，这件事就值得做：从一张表格生成出来的零件、从某个目录册取来的零件，或者由该包本来就有的某个建模辅助工具构建出来的零件。二十个螺栓于是变成二十组参数加一个脚本，而不是二十个脚本。"
+
+#: ../../source/plugins/part_types.rst:18
+msgid "What a part type is for"
+msgstr "零件类型的用途"
+
+#: ../../source/plugins/part_types.rst:20
+msgid ""
+"**A parametric family.** One script, a ``parameters:`` block per part. The "
+"script is the only place the geometry is written down, so a fix to it fixes "
+"every part of the family at once."
+msgstr ""
+"**一个参数化族。** 一个脚本，每个零件一个 ``parameters:`` "
+"块。脚本是几何被写下来的唯一地方，所以对它的一次修正就一次性修正了这一族的每一个零件。"
+
+#: ../../source/plugins/part_types.rst:23
+msgid ""
+"**A catalogue.** A type that reads a vendor's table or API and returns the "
+"shape for a given part number, so the package's parts are the part numbers."
+msgstr "**一份目录册。** 一种会读取某个厂商的表格或 API、并针对给定零件号返回其形状的类型，于是该包的各个零件就是那些零件号。"
+
+#: ../../source/plugins/part_types.rst:25
+msgid ""
+"**A house modelling convention** -- a profile system, a sheet-metal "
+"enclosure, a connector family -- published once as a package other packages "
+"import."
+msgstr "**一套内部建模约定** -- 一个型材系统、一种钣金外壳、一族连接器 -- 发布一次，作为一个包供其他包导入。"
+
+#: ../../source/plugins/part_types.rst:28
+msgid ""
+"**A kernel or a helper PartCAD does not know about.** The script runs in its"
+" own sandbox and can import whatever it needs."
+msgstr "**一个 PartCAD 不认识的内核或辅助工具。** 脚本运行在它自己的沙箱中，可以导入它所需要的任何东西。"
+
+#: ../../source/plugins/part_types.rst:32
+msgid "Using one"
+msgstr "使用一种零件类型"
+
+#: ../../source/plugins/part_types.rst:34
+msgid ""
+"A ``type:`` beginning with ``:`` names a part type of the part's own package"
+" and is expanded to ``<package path>:<name>`` when the package loads. Write "
+"the package path out to use another package's:"
+msgstr ""
+"以 ``:`` 开头的 ``type:`` 指名的是该零件自己所在包里的一种零件类型，在包加载时会被展开成 ``<package "
+"path>:<name>`` 。要使用另一个包的零件类型，就把包路径完整写出来："
+
+#: ../../source/plugins/part_types.rst:52
+msgid ""
+"A part built this way is an ordinary part in every other respect: it "
+"renders, exports, tests, goes into assemblies and into a bill of materials. "
+"A part type is listed like any other object but **is never a shape in its "
+"own right** -- it is how parts are made, not one of them."
+msgstr ""
+"以这种方式构建出来的零件，在其他每一方面都是普通的零件：它能渲染、能导出、能测试、能进装配体、能进物料清单。零件类型会像其他任何对象一样被列出，但 "
+"**它本身绝不是一个形状** -- 它是零件被制造出来的方式，而不是其中的一个。"
+
+#: ../../source/plugins/part_types.rst:58
+msgid "Writing one"
+msgstr "编写一种零件类型"
+
+#: ../../source/plugins/part_types.rst:77
+msgid ""
+"The script is run in the sandbox once per part, with the part's ``request`` "
+"in its globals -- the resolved ``parameters`` among them -- and leaves the "
+"geometry in a global ``output``:"
+msgstr ""
+"脚本在沙箱中按每个零件运行一次，该零件的 ``request`` 放在它的全局变量里 -- 其中包括已解析好的 ``parameters`` -- "
+"而它把几何留在一个全局的 ``output`` 中："
+
+#: ../../source/plugins/part_types.rst:89
+msgid ""
+"Because the script runs in a sandbox it may import OCP, build123d or "
+"CadQuery. This is the same mechanism as an :doc:`output implementation "
+"</plugins/output>`, pointed at building a shape rather than at writing a "
+"file."
+msgstr ""
+"由于脚本运行在沙箱中，它可以导入 OCP、build123d 或 CadQuery。这与 :doc:`输出实现 </plugins/output>` "
+"是同一套机制，只是指向构建一个形状，而不是指向写出一个文件。"
+
+#: ../../source/plugins/part_types.rst:93
+msgid "Two things to get right:"
+msgstr "有两件事要做对："
+
+#: ../../source/plugins/part_types.rst:95
+msgid "``CACHE_VERSION``"
+msgstr "``CACHE_VERSION``"
+
+#: ../../source/plugins/part_types.rst:96
+msgid ""
+"A part built by a part type is cached like any other, keyed on the version "
+"the script reports as well as on the part's own configuration -- a module-"
+"level ``CACHE_VERSION = <int>``, read **without running the script**. Raise "
+"it whenever a change to the script changes the parts it builds; an edit that"
+" does not -- a comment, a refactoring -- then costs nobody a rebuild. "
+"Forgetting to raise it is the one failure mode here, and it shows up as a "
+"stale shape."
+msgstr ""
+"由零件类型构建出来的零件会像其他零件一样被缓存，而它的缓存键既取决于零件自身的配置，也取决于脚本所报告的版本 -- 也就是一个模块级的 "
+"``CACHE_VERSION = <int>`` ，它是在 **不运行脚本** "
+"的情况下被读取的。只要对脚本的改动会改变它构建出来的零件，就把它提高；而不会改变零件的修改 -- 一条注释、一次重构 -- "
+"就不会让任何人付出重新构建的代价。忘了提高它是这里唯一的失效方式，而它表现出来就是一个过期的形状。"
+
+#: ../../source/plugins/part_types.rst:103
+msgid "``pythonRequirements`` belongs to the plugin"
+msgstr "``pythonRequirements`` 属于插件"
+
+#: ../../source/plugins/part_types.rst:104
+msgid ""
+"It is read from the package that ships the script and from nowhere else, so "
+"a part type's dependencies never reach the package using it."
+msgstr "它只从附带该脚本的那个包读取，别处一概不读，所以零件类型的依赖绝不会波及到使用它的那个包。"
+
+#: ../../source/plugins/part_types.rst:108
+msgid "An example"
+msgstr "一个例子"
+
+#: ../../source/plugins/part_types.rst:110
+msgid ""
+"``examples/produce_part_wrapper`` is the whole thing in two files. The "
+"package declares one part type and one part built with it:"
+msgstr ""
+"``examples/produce_part_wrapper`` 用两个文件讲完了整件事。该包声明了一种零件类型，以及一个用它构建出来的零件："
+
+#: ../../source/plugins/part_types.rst:129
+msgid "``box_wrapper.py`` is the script above. From that directory:"
+msgstr "``box_wrapper.py`` 就是上面那个脚本。在该目录下："
+
+#: ../../source/plugins/part_types.rst:139
+msgid "The part built by the box partType, shown in the Digital Thread"
+msgstr "由 box partType 构建出来的那个零件，显示在 Digital Thread 中"
+
+#: ../../source/plugins/part_types.rst:144
+msgid ""
+"``box`` is absent from ``pc list parts``, because it is a ``partType`` and "
+"not a part -- PartCAD counts the two as different kinds of object "
+"(``partType`` is one of the ten in ``Project.OBJECT_KINDS``), and only one "
+"of them is a shape."
+msgstr ""
+"``box`` 不会出现在 ``pc list parts`` 里，因为它是一个 ``partType`` 而不是一个零件 -- PartCAD "
+"把这两者算作不同种类的对象（ ``partType`` 是 ``Project.OBJECT_KINDS`` 中那十种之一），而其中只有一种是形状。"

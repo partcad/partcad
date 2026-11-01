@@ -19,5 +19,5 @@ workspace. `pc init` put it there when it created the package.
 ### Documentation
 
 * [`pc render`, `pc export` and their options](https://partcad.readthedocs.io/en/latest/cli.html)
-* [What a package declares to render](https://partcad.readthedocs.io/en/latest/configuration.html)
+* [What a package declares to render](https://partcad.readthedocs.io/en/latest/config_output.html)
 * [Tutorial: export the part](https://partcad.readthedocs.io/en/latest/tutorial.html)

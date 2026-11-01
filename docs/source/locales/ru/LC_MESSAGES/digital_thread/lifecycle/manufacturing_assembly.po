@@ -1,0 +1,133 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:5
+msgid "Assembly"
+msgstr "Сборка"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:7
+msgid ""
+"**Assembly** is the assembly instruction book: a page per step, drawn, to "
+"read here or save. It is for an assembly, and it is what :doc:`Build "
+"</digital_thread/lifecycle/manufacturing_build>` lists the steps of -- the "
+"same steps, in the same order, as a document."
+msgstr ""
+"**Assembly** -- это книга инструкций по сборке: по странице на шаг, с "
+"рисунками, для чтения здесь или сохранения. Она предназначена для сборки, и "
+"это то, шаги чего перечисляет :doc:`Build "
+"</digital_thread/lifecycle/manufacturing_build>` -- те же шаги, в том же "
+"порядке, но в виде документа."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:12
+msgid ""
+"The book is written from the assembly itself. Each link of the ASSY file "
+"says what it is joined to and how -- pushed, snapped or screwed in -- so the"
+" step that adds it can be written out for a person to follow, with the two "
+"parts drawn pulled apart by the ``exploded:`` gap of the connection. Nothing"
+" about the book is declared separately from the assembly, which is why it "
+"cannot fall out of step with it."
+msgstr ""
+"Книга пишется из самой сборки. Каждое звено файла ASSY говорит, с чем и как "
+"оно соединяется -- вдавлено, защёлкнуто или ввинчено, -- поэтому тот шаг, "
+"который его добавляет, можно выписать так, чтобы человек мог ему следовать, "
+"причём две детали нарисованы разведёнными на тот зазор ``exploded:``, "
+"который указан у соединения. Ничто в книге не объявляется отдельно от "
+"сборки, и именно поэтому она не может с ней рассогласоваться."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:20
+msgid "In the UI"
+msgstr "В интерфейсе"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:22
+msgid ""
+"The document, as **PDF** or **HTML**, with **Recursive** and **Build parts**"
+" -- which are ``pc instructions -r -b`` -- and **Save…**."
+msgstr ""
+"Документ, в виде **PDF** или **HTML**, с флажками **Recursive** и **Build "
+"parts** -- это ``pc instructions -r -b`` -- и кнопкой **Save…**."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:25
+msgid ""
+"The Manufacturing group's Assembly tab: the assembly instruction book, page "
+"by page"
+msgstr ""
+"Вкладка Assembly группы Manufacturing: книга инструкций по сборке, страница "
+"за страницей"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:30
+msgid ""
+"Manufacturing is for a part or an assembly; for a scene, a sketch or an "
+"interface the whole group is disabled, and this tab is for an assembly "
+"alone."
+msgstr ""
+"Manufacturing предназначена для детали или сборки; для сцены, эскиза или "
+"интерфейса вся группа отключена, а эта вкладка предназначена только для "
+"сборки."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:34
+msgid "On the command line"
+msgstr "В командной строке"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:43
+msgid ""
+"``-r`` puts in the steps of every sub-assembly that is built, each just "
+"before the step that adds it, and ``-b`` how to make every part that is "
+"built, each just before the step that first needs it. Both read the "
+":doc:`Build vs Buy </digital_thread/lifecycle/manufacturing_bvb>` choices "
+"made on this machine."
+msgstr ""
+"``-r`` вставляет шаги каждой собираемой подсборки, каждые прямо перед тем "
+"шагом, который её добавляет, а ``-b`` -- то, как изготовить каждую "
+"изготавливаемую деталь, каждое прямо перед тем шагом, которому она впервые "
+"нужна. И то и другое читает выборы :doc:`Build vs Buy "
+"</digital_thread/lifecycle/manufacturing_bvb>`, сделанные на этой машине."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:50
+msgid "How the steps are decided"
+msgstr "Как определяются шаги"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:52
+msgid ""
+"See :ref:`how an assembly is manufactured <assembly-manufacturing>` and "
+":doc:`/assy` for what each ``connect:`` says about the joining -- the "
+"mating, the ``how:``, the torque and the thread -- and "
+":doc:`/digital_thread/lifecycle/testing` for the ``connect`` check, which is"
+" what reports a step the declaration says nothing about."
+msgstr ""
+"О том, что каждый ``connect:`` говорит о соединении -- о сопряжении, о "
+"``how:``, о моменте затяжки и о резьбе, -- см. :ref:`как изготавливается "
+"сборка <assembly-manufacturing>` и :doc:`/assy`, а о проверке ``connect``, "
+"которая сообщает о шаге, о котором объявление ничего не говорит, -- "
+":doc:`/digital_thread/lifecycle/testing`."
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:59
+msgid "Agent skills"
+msgstr "Навыки агентов"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:61
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/manufacturing_assembly.rst:62
+msgid ""
+"Reads the assembly instructions as part of giving a requirement its verdict."
+msgstr ""
+"Читает инструкции по сборке в рамках вынесения вердикта по требованию."

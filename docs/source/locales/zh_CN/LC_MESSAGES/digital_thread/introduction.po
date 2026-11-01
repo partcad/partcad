@@ -1,0 +1,244 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/introduction.rst:5
+msgid "Introduction"
+msgstr "简介"
+
+#: ../../source/digital_thread/introduction.rst:7
+msgid ""
+"A *digital thread* is the one record of a product that every phase of its "
+"life reads from and adds to: what it was asked to be, how it was designed, "
+"what analysing it said, how it is made or bought, whether what was made is "
+"what was asked for -- and, once it exists, how it is doing. A *digital twin*"
+" is that record kept true to one physical thing for as long as the thing "
+"lasts. The thread is what the twin is made of."
+msgstr ""
+"*数字主线*\\ （digital "
+"thread）是关于一个产品的那一份记录，它生命的每一个阶段都从中读取、也往其中添加：它被要求成为什么、它是如何被设计出来的、对它的分析说了什么、它是怎么被制造或采购的、做出来的东西是否就是当初所要求的"
+" -- 以及在它存在之后，它表现如何。*数字孪生*\\ （digital "
+"twin）则是这份记录，并在那个实物存在的整个期间都与它保持一致。主线就是孪生的构成材料。"
+
+#: ../../source/digital_thread/introduction.rst:14
+msgid ""
+"PartCAD is designed to be that record for manufacturable physical products, "
+"from the first sentence about an idea to the order for the parts. This "
+"chapter explains how; :doc:`/digital_thread/lifecycle/index` takes the "
+"phases one at a time, and :doc:`/digital_thread/workflows` the work that "
+"runs through them."
+msgstr ""
+"PartCAD "
+"的设计目标，就是成为可制造实物产品的这份记录，从关于一个想法的第一句话，一直到零件的订单。本章讲的是它是如何做到的；:doc:`/digital_thread/lifecycle/index`"
+" 逐个阶段地讲，而 :doc:`/digital_thread/workflows` 讲的是贯穿各阶段的那些工作。"
+
+#: ../../source/digital_thread/introduction.rst:21
+msgid "Everything is a declaration in a package"
+msgstr "一切都是包里的一段声明"
+
+#: ../../source/digital_thread/introduction.rst:23
+msgid ""
+"There is no database and no export step between the phases. A product is a "
+":ref:`package <packages>` -- a ``partcad.yaml`` and the files beside it, "
+"kept in git like source code -- and each phase of its life is a section of "
+"the declaration of the same object:"
+msgstr ""
+"各阶段之间没有数据库，也没有导出这一步。产品就是一个 :ref:`包 <packages>` -- 一个 ``partcad.yaml`` "
+"以及它旁边的那些文件，像源代码一样保存在 git 里 -- 而它生命的每一个阶段，都是同一个对象声明中的一个小节："
+
+#: ../../source/digital_thread/introduction.rst:32
+msgid "Phase"
+msgstr "阶段"
+
+#: ../../source/digital_thread/introduction.rst:33
+msgid "What the object declares"
+msgstr "对象声明了什么"
+
+#: ../../source/digital_thread/introduction.rst:34
+msgid "What answers questions about it"
+msgstr "由什么来回答关于它的问题"
+
+#: ../../source/digital_thread/introduction.rst:35
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/introduction.rst:36
+msgid ":doc:`Requirements </digital_thread/lifecycle/requirements>`"
+msgstr ":doc:`Requirements </digital_thread/lifecycle/requirements>`"
+
+#: ../../source/digital_thread/introduction.rst:37
+msgid "``requirements:`` -- features, ports, interfaces, physical properties"
+msgstr "``requirements:`` -- 特性、端口、接口、物理属性"
+
+#: ../../source/digital_thread/introduction.rst:38
+msgid "``pc test``, ``/pc:validate``"
+msgstr "``pc test``、``/pc:validate``"
+
+#: ../../source/digital_thread/introduction.rst:39
+msgid "**Requirements**"
+msgstr "**Requirements**"
+
+#: ../../source/digital_thread/introduction.rst:40
+msgid ":doc:`Design </digital_thread/lifecycle/design>`"
+msgstr ":doc:`Design </digital_thread/lifecycle/design>`"
+
+#: ../../source/digital_thread/introduction.rst:41
+msgid ""
+"the part's script or file, its parameters, ports and interfaces; an "
+"assembly's links and connections; sketches, scenes"
+msgstr "零件的脚本或文件、它的参数、端口和接口；装配体的各条链接和各个连接；草图、场景"
+
+#: ../../source/digital_thread/introduction.rst:43
+msgid "``pc info``, ``pc render``, ``pc export``"
+msgstr "``pc info``、``pc render``、``pc export``"
+
+#: ../../source/digital_thread/introduction.rst:44
+msgid "**Design**"
+msgstr "**Design**"
+
+#: ../../source/digital_thread/introduction.rst:45
+msgid ":doc:`Analysis </digital_thread/lifecycle/analysis>`"
+msgstr ":doc:`Analysis </digital_thread/lifecycle/analysis>`"
+
+#: ../../source/digital_thread/introduction.rst:46
+msgid ""
+"``physics:``, materials, ``fea:``, ``dynamic:``, ``thermal:``, ``cfd:``, "
+"``simulate:``"
+msgstr ""
+"``physics:``、材料、``fea:``、``dynamic:``、``thermal:``、``cfd:``、``simulate:``"
+
+#: ../../source/digital_thread/introduction.rst:48
+msgid "``pc info``, ``pc cae``, ``pc sim``"
+msgstr "``pc info``、``pc cae``、``pc sim``"
+
+#: ../../source/digital_thread/introduction.rst:49
+msgid "**Analysis**"
+msgstr "**Analysis**"
+
+#: ../../source/digital_thread/introduction.rst:50
+msgid ":doc:`Manufacturing </digital_thread/lifecycle/manufacturing>`"
+msgstr ":doc:`Manufacturing </digital_thread/lifecycle/manufacturing>`"
+
+#: ../../source/digital_thread/introduction.rst:51
+msgid ""
+"``manufacturing:``, ``vendor:`` and ``sku:``, materials, tolerances, "
+"software, an assembly's instructions"
+msgstr "``manufacturing:``、``vendor:`` 和 ``sku:``、材料、公差、软件、装配体的装配说明"
+
+#: ../../source/digital_thread/introduction.rst:53
+msgid "``pc bom``, ``pc supply``, ``pc instructions``, ``pc cam``"
+msgstr "``pc bom``、``pc supply``、``pc instructions``、``pc cam``"
+
+#: ../../source/digital_thread/introduction.rst:54
+msgid "**Manufacturing**"
+msgstr "**Manufacturing**"
+
+#: ../../source/digital_thread/introduction.rst:55
+msgid ":doc:`Validation </digital_thread/lifecycle/validation>`"
+msgstr ":doc:`Validation </digital_thread/lifecycle/validation>`"
+
+#: ../../source/digital_thread/introduction.rst:56
+msgid "the claims all of the above make, checked"
+msgstr "上述一切所作的那些断言，经过检查"
+
+#: ../../source/digital_thread/introduction.rst:57
+msgid "``pc test``, ``pc sim``, ``/pc:validate``"
+msgstr "``pc test``、``pc sim``、``/pc:validate``"
+
+#: ../../source/digital_thread/introduction.rst:58
+msgid "**Validation**"
+msgstr "**Validation**"
+
+#: ../../source/digital_thread/introduction.rst:60
+msgid ""
+"Because every phase is written into one declaration, nothing is copied from "
+"one phase to the next, and nothing can fall out of step: the mass a "
+"requirement is checked against is the mass ``pc info`` reports, worked out "
+"from the same solid and the same material the bill of materials orders; the "
+"bracket the instructions tell somebody to bolt on is the bracket that was "
+"analysed. Changing the design is changing the one record, and every answer "
+"that depended on it is asked again."
+msgstr ""
+"由于每一个阶段都写进同一份声明，所以没有任何东西要从一个阶段复制到下一个阶段，也没有任何东西会步调不一致：某项需求所对照的那个质量，就是 ``pc "
+"info`` "
+"报告的那个质量，它是由物料清单所订购的同一个实体和同一种材料算出来的；装配说明叫人用螺栓装上去的那个支架，就是被分析过的那个支架。改设计就是在改那一份记录，而每一个曾依赖它的答案都会被重新问一遍。"
+
+#: ../../source/digital_thread/introduction.rst:67
+msgid ""
+"One thing is deliberately left out of the package: which of the things that "
+"can be either built or bought a particular person chooses to build (**Build "
+"vs Buy**). The package says what can be bought and how what can be made is "
+"made; the choice between them is a decision about who has which machines, "
+"and is kept on the machine of whoever made it. A checkout does not carry it,"
+" so the build plan and the order that follow from it can differ from one "
+"person to the next while the product they describe does not."
+msgstr ""
+"有一样东西被有意地留在包之外：在那些既可以自制也可以采购的东西当中，某个特定的人选择自制哪些（**Build vs "
+"Buy**）。包说明的是什么可以采购，以及可以自制的东西是怎么做的；而在两者之间作出选择，是一项关于谁手上有哪些机床的决定，它保存在做出它的那个人的机器上。一次检出并不会带着它，所以由它导出的构建计划和订单可以因人而异，而它们所描述的那个产品却不会。"
+
+#: ../../source/digital_thread/introduction.rst:76
+msgid "Every answer is computed, not stored"
+msgstr "每一个答案都是算出来的，而不是存下来的"
+
+#: ../../source/digital_thread/introduction.rst:78
+msgid ""
+"What PartCAD says about an object -- a picture, a mass, a bill of materials,"
+" a verdict -- is worked out from the declaration when it is asked for, and "
+"cached under a key made of everything the answer depends on (see "
+":ref:`caching`). A cached answer is never stale: change what it depends on "
+"and the key changes with it. That is what lets one record serve every phase "
+"without anybody having to remember to regenerate anything."
+msgstr ""
+"PartCAD 关于某个对象所说的东西 -- 一张图片、一个质量、一份物料清单、一个结论 -- "
+"都是在被问到时从声明里算出来的，并按一个由该答案所依赖的一切内容构成的键来缓存（参见 :ref:`caching` "
+"）。缓存下来的答案绝不会过期：改变它所依赖的东西，键也随之改变。正是这一点让同一份记录可以服务于每一个阶段，而不需要任何人记着去重新生成什么。"
+
+#: ../../source/digital_thread/introduction.rst:86
+msgid "Every claim can be checked"
+msgstr "每一条断言都可以被检查"
+
+#: ../../source/digital_thread/introduction.rst:88
+msgid ""
+"A declaration states claims: this part is made by laser cutting, this "
+"assembly's parts do not overlap, this mass is under 50 grams, this robot "
+"does not tip over. ``pc test`` checks every claim that can be measured, ``pc"
+" sim`` every claim about behaviour that a simulation can show, and the "
+"``/pc:validate`` agent skill judges the rest from evidence it gathers and "
+"names. See :doc:`/digital_thread/lifecycle/validation`."
+msgstr ""
+"声明会陈述各种断言：这个零件是用激光切割做出来的、这个装配体的零件之间不重叠、这个质量在 50 克以下、这台机器人不会倾倒。``pc test`` "
+"检查每一条可测量的断言，``pc sim`` 检查每一条仿真能够显示的关于行为的断言，而 ``/pc:validate`` "
+"智能体技能则依据它所收集并指明的证据来判定其余部分。参见 :doc:`/digital_thread/lifecycle/validation` 。"
+
+#: ../../source/digital_thread/introduction.rst:95
+msgid "Packages build on packages"
+msgstr "包建立在包之上"
+
+#: ../../source/digital_thread/introduction.rst:97
+msgid ""
+"A package imports others -- standard fasteners, a supplier's catalogue, a "
+"colleague's sub-assembly -- and uses their objects by name "
+"(``//pub/std/...``). The thread of a product runs through every package it "
+"is made of: the screw's interface is the screw package's, its supplier is "
+"the supplier's, and both are read where they are declared rather than copied"
+" in."
+msgstr ""
+"一个包会导入其他包 -- 标准紧固件、某个供应商的目录册、某位同事的子装配体 -- 并按名称使用它们的对象（ ``//pub/std/...`` "
+"）。一个产品的主线贯穿它所由之构成的每一个包：螺钉的接口属于螺钉那个包，它的供应商属于供应商那个包，而两者都是在它们被声明的地方读取的，而不是被复制进来的。"

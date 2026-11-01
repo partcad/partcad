@@ -1,0 +1,158 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/ai_agents/plugins.rst:3
+msgid "Plugins"
+msgstr "Plugins"
+
+#: ../../source/ai_agents/plugins.rst:5
+msgid ""
+"A plugin is the other way to get the :doc:`/ai_agents/skills` into an agent:"
+" installed into the agent itself, rather than into the repository you are "
+"working in. Which one you want depends on who the skills are for -- a plugin"
+" is yours, on this machine, for every package you open; the copies ``pc "
+"init`` writes belong to the repository, so everybody who clones it gets "
+"them."
+msgstr ""
+"Ein Plugin ist der andere Weg, die :doc:`/ai_agents/skills` in einen Agenten"
+" zu bekommen: in den Agenten selbst installiert statt in das Repository, in "
+"dem Sie arbeiten. Welchen Sie wollen, hängt davon ab, für wen die Skills "
+"sind -- ein Plugin ist Ihres, auf diesem Rechner, für jedes Paket, das Sie "
+"öffnen; die Kopien, die ``pc init`` schreibt, gehören dem Repository, jeder,"
+" der es klont, bekommt sie also."
+
+#: ../../source/ai_agents/plugins.rst:10
+msgid "Both end up running the same commands from :doc:`/cli`."
+msgstr "Beide führen am Ende dieselben Befehle aus :doc:`/cli` aus."
+
+#: ../../source/ai_agents/plugins.rst:14
+msgid "Claude Code"
+msgstr "Claude Code"
+
+#: ../../source/ai_agents/plugins.rst:21
+msgid ""
+"Then ``/pc:setup`` puts ``pc`` on this machine -- and, when it is run from a"
+" Visual Studio Code or VSCodium terminal, :ref:`the extension <vscode-"
+"extension>` into that editor -- ``/pc:init`` starts a package, and ``/pc:gen"
+" a mounting bracket with four M4 holes`` writes the CAD script, renders "
+"several views of what came out and checks them against what was asked."
+msgstr ""
+"Dann bringt ``/pc:setup`` ``pc`` auf diesen Rechner -- und, wenn es aus "
+"einem Terminal von Visual Studio Code oder VSCodium ausgeführt wird, "
+":ref:`die Erweiterung <vscode-extension>` in diesen Editor --, ``/pc:init`` "
+"startet ein Paket, und ``/pc:gen a mounting bracket with four M4 holes`` "
+"schreibt das CAD-Skript, rendert mehrere Ansichten des Ergebnisses und prüft"
+" sie gegen das Verlangte."
+
+#: ../../source/ai_agents/plugins.rst:28
+msgid ""
+"The PartCAD repository is the marketplace -- there is no hosted catalog to "
+"search PartCAD for. The ``plugin-dist`` branch is republished by every "
+"release and contains no symlinks, which is what makes it install identically"
+" on Windows."
+msgstr ""
+"Das PartCAD-Repository ist der Marktplatz -- es gibt keinen gehosteten "
+"Katalog, in dem man nach PartCAD suchen könnte. Der ``plugin-dist``-Branch "
+"wird von jedem Release neu veröffentlicht und enthält keine Symlinks, und "
+"das ist es, was ihn unter Windows identisch installieren lässt."
+
+#: ../../source/ai_agents/plugins.rst:32
+msgid "Two other ways to install the same plugin:"
+msgstr "Zwei weitere Wege, dasselbe Plugin zu installieren:"
+
+#: ../../source/ai_agents/plugins.rst:34
+msgid ""
+"``/plugin marketplace add partcad/partcad`` reads the catalog out of the "
+"source tree. That copy shares its skills with the vendor-neutral library "
+"through a symlink, so it needs a checkout where git created one -- on "
+"Windows, ``git config core.symlinks true`` before cloning."
+msgstr ""
+"``/plugin marketplace add partcad/partcad`` liest den Katalog aus dem "
+"Quellbaum. Diese Kopie teilt sich ihre Skills über einen Symlink mit der "
+"herstellerneutralen Bibliothek, braucht also einen Checkout, in dem git "
+"einen solchen angelegt hat -- unter Windows ``git config core.symlinks "
+"true`` vor dem Klonen."
+
+#: ../../source/ai_agents/plugins.rst:37
+msgid ""
+"Every `release <https://github.com/partcad/partcad/releases>`_ carries a "
+"``pc-<version>.zip``, and ``claude --plugin-url <url>`` loads one for a "
+"single session. That is how to try a version without installing it."
+msgstr ""
+"Jedes `Release <https://github.com/partcad/partcad/releases>`_ enthält eine "
+"``pc-<version>.zip``, und ``claude --plugin-url <url>`` lädt eine davon für "
+"eine einzelne Sitzung. So probiert man eine Version aus, ohne sie zu "
+"installieren."
+
+#: ../../source/ai_agents/plugins.rst:41
+msgid ""
+"The plugin is versioned with everything else in the release that publishes "
+"it, so the plugin and the ``pc`` command line tool state the same version "
+"when they came from the same release."
+msgstr ""
+"Das Plugin wird zusammen mit allem anderen in dem Release versioniert, das "
+"es veröffentlicht, sodass das Plugin und das Befehlszeilenwerkzeug ``pc`` "
+"dieselbe Version melden, wenn sie aus demselben Release stammen."
+
+#: ../../source/ai_agents/plugins.rst:46
+msgid "Cursor"
+msgstr "Cursor"
+
+#: ../../source/ai_agents/plugins.rst:48
+msgid ""
+"Cursor reads skills from ``.cursor/skills`` in the repository, which is "
+"where ``pc init`` puts ``pc``-prefixed copies of the same library. There is "
+"nothing else to install:"
+msgstr ""
+"Cursor liest Skills aus ``.cursor/skills`` im Repository, und dorthin legt "
+"``pc init`` ``pc``-präfixierte Kopien derselben Bibliothek. Es gibt nichts "
+"weiter zu installieren:"
+
+#: ../../source/ai_agents/plugins.rst:55
+msgid ""
+"See :doc:`/ai_agents/skills` for what gets written, and for how re-running "
+"it retires what PartCAD no longer ships."
+msgstr ""
+"Siehe :doc:`/ai_agents/skills` dazu, was geschrieben wird, und dazu, wie ein"
+" erneuter Lauf das ausmustert, was PartCAD nicht mehr mitliefert."
+
+#: ../../source/ai_agents/plugins.rst:59
+msgid "Other agents"
+msgstr "Andere Agenten"
+
+#: ../../source/ai_agents/plugins.rst:61
+msgid ""
+"The skills are plain ``SKILL.md`` directories, so any agent that reads them "
+"can use the library directly from ``ai-agents/common/skills`` in the PartCAD"
+" repository, or from the copies ``pc init`` installs."
+msgstr ""
+"Die Skills sind einfache ``SKILL.md``-Verzeichnisse, jeder Agent, der sie "
+"liest, kann die Bibliothek also direkt aus ``ai-agents/common/skills`` im "
+"PartCAD-Repository verwenden, oder aus den Kopien, die ``pc init`` "
+"installiert."
+
+#: ../../source/ai_agents/plugins.rst:64
+msgid ""
+"For an agent that speaks the Model Context Protocol instead of reading "
+"skills, PartCAD serves MCP on stdio -- see :doc:`/ai_agents/mcp`."
+msgstr ""
+"Für einen Agenten, der das Model Context Protocol spricht statt Skills zu "
+"lesen, bedient PartCAD MCP auf stdio -- siehe :doc:`/ai_agents/mcp`."

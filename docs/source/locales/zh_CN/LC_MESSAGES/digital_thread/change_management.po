@@ -1,0 +1,440 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/change_management.rst:2
+msgid "Change Management"
+msgstr "变更管理"
+
+#: ../../source/digital_thread/change_management.rst:4
+msgid ""
+"A product of any size soon depends on packages of its own: a library of the "
+"company's standard parts, the interfaces its products share, the assemblies "
+"one team builds and another uses. Those packages change, and a change to one"
+" is a change to everything built from it. This page is about making those "
+"changes on purpose."
+msgstr ""
+"任何规模的产品很快都会依赖上自己的那些包：公司标准件的库、各产品共用的接口、一个团队构建而另一个团队使用的装配体。那些包会变化，而对其中一个的改动就是对由它构建出来的一切的改动。本页讲的是如何有意识地做这些改动。"
+
+#: ../../source/digital_thread/change_management.rst:8
+msgid ""
+"None of it is new. It is how the public index, `partcad-index "
+"<https://github.com/partcad/partcad-index>`_, is run -- a package of "
+"packages that every package ``pc init`` creates depends on -- and the rules "
+"that keep it working are the rules that keep a library of your own working. "
+"They are repeated here for that library, and the index's `CONTRIBUTING.md "
+"<https://github.com/partcad/partcad-index/blob/devel/CONTRIBUTING.md>`_ is "
+"the same advice as the public index applies it."
+msgstr ""
+"这里面没有一条是新东西。公共索引 `partcad-index <https://github.com/partcad/partcad-index>`_"
+" 就是这样运作的 -- 它是一个由包组成的包，``pc init`` 创建的每一个包都依赖它 -- "
+"而让它保持可用的那些规则，也正是让你自己的库保持可用的那些规则。这里为你自己的库把它们重述一遍，而索引的 `CONTRIBUTING.md "
+"<https://github.com/partcad/partcad-index/blob/devel/CONTRIBUTING.md>`_ "
+"就是同样的建议在公共索引上的落实。"
+
+#: ../../source/digital_thread/change_management.rst:18
+msgid "The rules"
+msgstr "各条规则"
+
+#: ../../source/digital_thread/change_management.rst:20
+msgid ""
+"**Pin every dependency to a particular revision**, with or without "
+"``track:``."
+msgstr "**把每一个依赖都固定到某个特定的修订版本**，无论带不带 ``track:`` 。"
+
+#: ../../source/digital_thread/change_management.rst:21
+msgid "**Say which PartCAD every package needs**, with ``partcad:``."
+msgstr "**说明每个包需要哪个 PartCAD**，用 ``partcad:`` 。"
+
+#: ../../source/digital_thread/change_management.rst:22
+msgid "**Merge every change to** ``devel``. Nothing merges to ``main``."
+msgstr "**把每一次改动都合并到** ``devel`` 。任何东西都不合并到 ``main`` 。"
+
+#: ../../source/digital_thread/change_management.rst:23
+msgid ""
+"**Move** ``main`` **only by fast-forward from** ``devel``. That is the "
+"release."
+msgstr "``main`` **只通过从** ``devel`` **快进来移动**。那就是发布。"
+
+#: ../../source/digital_thread/change_management.rst:24
+msgid ""
+"**Treat a branch somebody tracks as a promise.** It keeps working for "
+"everybody it worked for when they started tracking it; a breaking change "
+"goes to a new branch."
+msgstr "**把别人跟踪的分支当作一项承诺。** 它对每一个在开始跟踪它时它就能用的使用者都要继续可用；破坏性改动要去一个新分支。"
+
+#: ../../source/digital_thread/change_management.rst:26
+msgid "**Have a library's index pin an exact commit of every package in it.**"
+msgstr "**让库的索引固定其中每一个包的确切提交。**"
+
+#: ../../source/digital_thread/change_management.rst:28
+msgid "The sections below say what each one is for."
+msgstr "下面各节说明每一条规则的用处。"
+
+#: ../../source/digital_thread/change_management.rst:32
+msgid "Pin every dependency"
+msgstr "固定每一个依赖"
+
+#: ../../source/digital_thread/change_management.rst:34
+msgid ""
+"A ``git`` dependency says which branch it follows with ``track:`` and which "
+"commit of it the package is built against with ``revision:`` (see "
+":ref:`pinning-dependencies`):"
+msgstr ""
+"``git`` 依赖用 ``track:`` 说明它跟随哪个分支，用 ``revision:`` 说明包是针对它的哪一个提交构建的（参见 "
+":ref:`pinning-dependencies` ）："
+
+#: ../../source/digital_thread/change_management.rst:46
+msgid ""
+"``pc add dep`` and ``pc init`` write it that way, and loading a package "
+"never moves it. (``pc init`` pins only when it can ask the repository where "
+"the branch is: offline, or when the repository cannot be reached, it leaves "
+"``revision:`` out and warns, and ``pc update`` writes it later.) ``pc "
+"update`` moves it when you ask: it moves every ``revision:`` to the tip of "
+"its ``track:`` and leaves the change in ``partcad.yaml`` for you to review "
+"and commit. So:"
+msgstr ""
+"``pc add dep`` 和 ``pc init`` 就是这样写的，而加载包时从不移动它。（ ``pc init`` "
+"只在能够向仓库问出分支位于何处时才固定：离线时，或者仓库无法访问时，它会省掉 ``revision:`` 并给出警告，而 ``pc update`` "
+"稍后会把它写上。）``pc update`` 会在你要求时移动它：它把每一个 ``revision:`` 移到它 ``track:`` "
+"分支的末端，并把这个改动留在 ``partcad.yaml`` 里，供你审阅和提交。于是："
+
+#: ../../source/digital_thread/change_management.rst:52
+msgid ""
+"every checkout of a commit builds against the same commits of everything it "
+"depends on, today and in a year;"
+msgstr "对某个提交的每一次检出，都会针对它所依赖的一切的同样那些提交来构建，今天如此，一年后也如此；"
+
+#: ../../source/digital_thread/change_management.rst:53
+msgid ""
+"what changed between two builds is in the history of your own repository, as"
+" a diff of ``revision:`` lines;"
+msgstr "两次构建之间变了什么，就在你自己仓库的历史里，表现为 ``revision:`` 各行的 diff；"
+
+#: ../../source/digital_thread/change_management.rst:54
+msgid ""
+"taking a dependency's new commits is a change you make, in a commit of its "
+"own, and can revert."
+msgstr "采纳某个依赖的新提交是你自己做的一次改动，位于它自己的提交中，而且可以回退。"
+
+#: ../../source/digital_thread/change_management.rst:56
+msgid ""
+"Run ``pc update`` as a change of its own and review what moved, the way a "
+"dependency bot's pull request is reviewed -- on a schedule, if you want one."
+" Do not use ``forceUpdate`` (``--force-update``) to keep up to date: it "
+"follows ``track:`` past the pin without writing anything down, which is "
+"right for trying out what a dependency is about to release and wrong for "
+"anything you will need to reproduce."
+msgstr ""
+"把 ``pc update`` 当作一次独立的改动来运行，并审阅都移动了什么，就像审阅依赖机器人的 pull request 那样 -- "
+"如果你愿意，也可以定期做。不要用 ``forceUpdate`` （ ``--force-update`` ）来保持最新：它会越过固定值去跟随 "
+"``track:`` ，却什么都不写下来，这对于试用某个依赖即将发布的内容是合适的，而对于任何你以后需要复现的东西都是错的。"
+
+#: ../../source/digital_thread/change_management.rst:61
+msgid ""
+"A dependency of the ``local`` type, and every sub-directory of a package "
+"that holds a ``partcad.yaml``, needs no pin: it is in the same repository, "
+"so the commit you check out *is* its pin. Packages that always change "
+"together belong in one repository for that reason -- a change and every "
+"package it affects then land in one commit, and there is nothing to "
+"coordinate."
+msgstr ""
+"``local`` 类型的依赖，以及包中每一个含有 ``partcad.yaml`` 的子目录，都不需要固定：它们在同一个仓库里，所以你检出的那个提交 "
+"*就是* 它的固定值。正因如此，总是一起变化的那些包就应该放在同一个仓库里 -- "
+"这样一次改动和它所影响的每一个包都落在同一个提交里，也就没有什么需要协调的了。"
+
+#: ../../source/digital_thread/change_management.rst:68
+msgid "Say which PartCAD a package needs"
+msgstr "说明一个包需要哪个 PartCAD"
+
+#: ../../source/digital_thread/change_management.rst:70
+msgid ""
+"``partcad:`` in a package's ``partcad.yaml`` is the oldest PartCAD it works "
+"with:"
+msgstr "包的 ``partcad.yaml`` 中的 ``partcad:`` 就是它所能配合的最老的 PartCAD："
+
+#: ../../source/digital_thread/change_management.rst:76
+msgid ""
+"A PartCAD older than that refuses the package with ``Incompatible PartCAD "
+"version!`` rather than loading it and getting it wrong. That matters more "
+"than it sounds: PartCAD gives a field a new meaning from time to time, and "
+"an older PartCAD reading a package written for the newer meaning does not "
+"fail -- it computes something else. The public index's fluids are an "
+"example: their densities are in kg/m³, and the PartCAD before the one they "
+"require would have read the same numbers in g/mm³ and made water a million "
+"times too dense."
+msgstr ""
+"比它更老的 PartCAD 会以 ``Incompatible PartCAD version!`` "
+"拒绝这个包，而不是把它加载进来然后弄错。这件事比听起来更要紧：PartCAD 时不时会给某个字段一个新含义，而更老的 PartCAD "
+"读到一个按新含义编写的包时并不会失败 -- 它会算出别的东西。公共索引里的那些流体就是一个例子：它们的密度以 kg/m³ "
+"为单位，而在它们所要求的那个版本之前的 PartCAD 会把同样的数字按 g/mm³ 来读，于是把水弄成了密度的一百万倍。"
+
+#: ../../source/digital_thread/change_management.rst:82
+msgid ""
+"``pc init`` writes the version that ran it, which is correct and usually "
+"higher than it needs to be. Keep it as low as is true: every release you "
+"exclude is a user you make upgrade. Raise it when the package starts using "
+"something a newer PartCAD added -- or use the new form only where it is "
+"available, and keep the old one for the rest (see :ref:`serving-two-"
+"partcads`)."
+msgstr ""
+"``pc init`` "
+"写进去的是运行它的那个版本，这是正确的，但通常比实际需要的更高。把它保持在真实情况允许的最低值：你排除掉的每一个发布版本，都意味着一个被你迫使升级的用户。当包开始用到某个较新"
+" PartCAD 新增的东西时再把它提高 -- 或者只在新写法可用的地方用新写法，其余情况保留旧写法（参见 :ref:`serving-two-"
+"partcads` ）。"
+
+#: ../../source/digital_thread/change_management.rst:87
+msgid ""
+"Pin the PartCAD your CI runs as well, the way you pin anything else it "
+"installs, and upgrade it in a change of its own. Upgrade PartCAD first and "
+"raise ``partcad:`` after, never the other way round."
+msgstr ""
+"也要像固定你的 CI 所安装的其他任何东西那样，把它运行的 PartCAD 固定住，并在一次独立的改动中升级它。先升级 PartCAD，再提高 "
+"``partcad:`` ，顺序绝不能颠倒。"
+
+#: ../../source/digital_thread/change_management.rst:92
+msgid "Branches: devel and main"
+msgstr "分支：devel 与 main"
+
+#: ../../source/digital_thread/change_management.rst:94
+msgid "Give every package repository two long-lived branches:"
+msgstr "给每一个包仓库两个长期分支："
+
+#: ../../source/digital_thread/change_management.rst:96
+msgid "``devel``"
+msgstr "``devel``"
+
+#: ../../source/digital_thread/change_management.rst:97
+msgid ""
+"What every change is merged to, after review and CI. It is the newest state,"
+" and it may be ahead of what anybody depends on."
+msgstr "每一次改动在评审和 CI 之后合并到的地方。它是最新的状态，而且可能领先于任何人所依赖的内容。"
+
+#: ../../source/digital_thread/change_management.rst:100
+msgid "``main``"
+msgstr "``main``"
+
+#: ../../source/digital_thread/change_management.rst:101
+msgid ""
+"What other packages track. It moves only by fast-forward to a commit of "
+"``devel`` that has been tested -- never by a merge of its own, and never by "
+"a commit made on it:"
+msgstr ""
+"其他包所跟踪的分支。它只通过快进到 ``devel`` 上某个已经测试过的提交来移动 -- 绝不通过它自己的合并，也绝不通过在它上面所做的提交："
+
+#: ../../source/digital_thread/change_management.rst:109
+msgid ""
+"So ``main`` is always a commit that ``devel`` has had, and a consumer's ``pc"
+" update`` takes a release, never work in progress. Make ``devel`` the "
+"default branch and protect ``main`` so that nothing merges to it."
+msgstr ""
+"于是 ``main`` 永远是 ``devel`` 曾经处在过的某个提交，而使用方的 ``pc update`` "
+"取到的是一个发布版，绝不会是正在进行中的工作。把 ``devel`` 设为默认分支，并保护 ``main``，使任何东西都无法合并到它。"
+
+#: ../../source/digital_thread/change_management.rst:112
+msgid ""
+"PartCAD and the public index are both run this way. To try your packages "
+"against what the index is about to release, ``--devel-index`` "
+"(``PC_DEVEL_INDEX=true``) makes any command use the index's ``devel`` "
+"instead of its ``main``."
+msgstr ""
+"PartCAD 和公共索引都是这样运作的。要拿你的包去试索引即将发布的内容，``--devel-index`` （ "
+"``PC_DEVEL_INDEX=true`` ）会让任何命令使用索引的 ``devel`` 而不是它的 ``main``。"
+
+#: ../../source/digital_thread/change_management.rst:118
+msgid "A tracked branch is a promise"
+msgstr "被跟踪的分支是一项承诺"
+
+#: ../../source/digital_thread/change_management.rst:120
+msgid ""
+"Once another package tracks a branch of yours, every commit you push to it "
+"reaches that package at its next ``pc update``. The branch therefore has to "
+"keep working for everybody it worked for when they started tracking it:"
+msgstr ""
+"一旦另一个包跟踪了你的某个分支，你推送到它上面的每一个提交都会在那个包的下一次 ``pc update`` "
+"时到达它。因此这个分支必须对每一个在开始跟踪它时它就能用的使用者继续可用："
+
+#: ../../source/digital_thread/change_management.rst:124
+msgid ""
+"with every PartCAD release it supported then -- a commit to it must not "
+"raise ``partcad:``;"
+msgstr "对它当时所支持的每一个 PartCAD 发布版都继续可用 -- 推到它上面的提交不得提高 ``partcad:`` ；"
+
+#: ../../source/digital_thread/change_management.rst:125
+msgid ""
+"with every package that uses it: every part, assembly, sketch, interface, "
+"port, parameter and sub-package stays, under the same name, with the same "
+"units, defaults and placement."
+msgstr "对使用它的每一个包都继续可用：每一个零件、装配体、草图、接口、端口、参数和子包都保留下来，名称相同、单位相同、默认值相同、放置位置相同。"
+
+#: ../../source/digital_thread/change_management.rst:128
+msgid ""
+"Anything new goes beside what is there. Mark what is being replaced as "
+"deprecated in its ``desc:``, and remove it on a new branch, later."
+msgstr "任何新东西都放在已有内容旁边。把正在被替代的东西在它的 ``desc:`` 中标记为已废弃，并在以后、在一个新分支上把它移除。"
+
+#: ../../source/digital_thread/change_management.rst:131
+msgid ""
+"The public index states this exactly: a branch it tracks keeps supporting "
+"every PartCAD release since the one the package's own ``partcad:`` required "
+"when the index started tracking that branch. Hold the packages of a library "
+"of your own to the same."
+msgstr ""
+"公共索引对此有明确规定：它所跟踪的分支，会继续支持自索引开始跟踪该分支时该包自身 ``partcad:`` 所要求的那个版本以来的每一个 PartCAD"
+" 发布版。请用同样的标准来要求你自己库里的那些包。"
+
+#: ../../source/digital_thread/change_management.rst:137
+msgid "Making a breaking change"
+msgstr "做一次破坏性改动"
+
+#: ../../source/digital_thread/change_management.rst:139
+msgid ""
+"A breaking change is one after which something that used the package stops "
+"working or comes out different: removing or renaming an object, a port or a "
+"parameter; changing a parameter's meaning, units or default; moving a port, "
+"so that what is mated to it moves; requiring a newer PartCAD."
+msgstr ""
+"破坏性改动是指在它之后，原先使用这个包的某些东西不能用了、或者结果变得不一样了：移除或重命名某个对象、某个端口或某个参数；改变某个参数的含义、单位或默认值；移动某个端口，从而让与它配合的东西也跟着移动；要求一个更新的"
+" PartCAD。"
+
+#: ../../source/digital_thread/change_management.rst:143
+msgid ""
+"**Avoid it if you can.** Add the new beside the old, and nothing breaks."
+msgstr "**如果能避免就避免。** 把新的放在旧的旁边，什么都不会被破坏。"
+
+#: ../../source/digital_thread/change_management.rst:144
+msgid ""
+"**Make it on a new branch** -- ``v2``, or ``partcad-0.8.210`` after the "
+"PartCAD it needs -- and declare that PartCAD in ``partcad:``."
+msgstr ""
+"**在一个新分支上做它** -- 比如 ``v2``，或者按它所需的那个 PartCAD 命名的 ``partcad-0.8.210`` -- 并在 "
+"``partcad:`` 中声明那个 PartCAD。"
+
+#: ../../source/digital_thread/change_management.rst:146
+msgid ""
+"**Leave the old branch as it is.** Never force-push, rebase or delete a "
+"branch that is or was tracked: the commits other packages pinned have to "
+"stay fetchable, for as long as anyone may check out a commit that names "
+"them."
+msgstr ""
+"**让旧分支保持原样。** "
+"对于正被跟踪或曾被跟踪的分支，绝不要强推、变基或删除：其他包所固定的那些提交必须一直可以抓取到，只要还有人可能检出一个指名它们的提交。"
+
+#: ../../source/digital_thread/change_management.rst:149
+msgid ""
+"**Move each consumer deliberately**, in a change of its own: switch its "
+"``track:`` to the new branch, run ``pc update``, and fix what the new branch"
+" broke, in the same commit."
+msgstr ""
+"**有意识地逐个迁移每一个使用方**，各自作为一次独立的改动：把它的 ``track:`` 切到新分支、运行 ``pc "
+"update``，并在同一个提交里修好新分支所破坏的东西。"
+
+#: ../../source/digital_thread/change_management.rst:151
+msgid ""
+"**Release in order.** A package may require a PartCAD only once that PartCAD"
+" is released, and a consumer may move to a package only once the package's "
+"new branch is ready. When a change spans several of your packages, release "
+"the one depended on first, then the ones that depend on it."
+msgstr ""
+"**按顺序发布。** 只有当某个 PartCAD "
+"已经发布，包才可以要求它；只有当被依赖包的新分支已经就绪，使用方才可以迁到它。当一次改动横跨你多个包时，先发布被依赖的那个，再发布依赖它的那些。"
+
+#: ../../source/digital_thread/change_management.rst:155
+msgid ""
+"When the same change has to reach many consumers, make it in three releases "
+"rather than one -- the way PartCAD changes what a package may say (see "
+":ref:`release-process`): first add the new form beside the old one and "
+"release that; then move every consumer to the new form, each at its own "
+"pace; then remove the old form, on a new branch, once nothing pinned uses "
+"it."
+msgstr ""
+"当同一次改动必须触及许多使用方时，把它分成三次发布而不是一次 -- 就像 PartCAD 改变一个包可以写什么的做法那样（参见 "
+":ref:`release-process` "
+"）：先把新写法加在旧写法旁边并发布；然后让每一个使用方按自己的节奏迁到新写法；最后在再没有任何被固定的提交使用旧写法之后，在一个新分支上把旧写法移除。"
+
+#: ../../source/digital_thread/change_management.rst:162
+msgid "An internal index for a package library"
+msgstr "为包库建一个内部索引"
+
+#: ../../source/digital_thread/change_management.rst:164
+msgid ""
+"A library of more than a few packages is easiest to consume the way the "
+"public index is consumed: one repository whose ``partcad.yaml`` files are a "
+"tree of dependencies on the library's packages, each one pinned. A product "
+"then depends on the library once:"
+msgstr ""
+"包数量多于几个的库，最省事的使用方式就是像使用公共索引那样：用一个仓库，它的那些 ``partcad.yaml`` "
+"文件构成一棵对库中各个包的依赖树，每一个都固定住。于是产品只需依赖这个库一次："
+
+#: ../../source/digital_thread/change_management.rst:177
+msgid ""
+"and refers to everything in it by path, ``//lib/fasteners/m3:screw``, "
+"however the library's repositories are split up or moved."
+msgstr "并按路径引用其中的一切，比如 ``//lib/fasteners/m3:screw``，无论库的各个仓库怎么拆分或迁移。"
+
+#: ../../source/digital_thread/change_management.rst:180
+msgid "Run that repository as the public index is run:"
+msgstr "像运作公共索引那样运作那个仓库："
+
+#: ../../source/digital_thread/change_management.rst:182
+msgid ""
+"**Every** ``git`` **dependency in it pins an exact commit**, under the "
+"``track:`` of the branch it follows. What a product gets from the library "
+"changes only when a change to the index changes a ``revision:``."
+msgstr ""
+"**其中每一个** ``git`` **依赖都固定一个确切的提交**，写在它所跟随分支的 ``track:`` "
+"之下。产品从这个库拿到的东西，只有当一次对索引的改动改变了某个 ``revision:`` 时才会变化。"
+
+#: ../../source/digital_thread/change_management.rst:184
+msgid "**Every package in it declares** ``partcad:``."
+msgstr "**其中每一个包都声明** ``partcad:`` 。"
+
+#: ../../source/digital_thread/change_management.rst:185
+msgid ""
+"**Changes merge to its** ``devel``, **and its** ``main`` **moves only by "
+"fast-forward** from ``devel``, once ``devel`` has been tested with the "
+"products that use it."
+msgstr ""
+"**各项改动合并到它的** ``devel`` ，**而它的** ``main`` **只通过从** ``devel`` 快进来移动，前提是 "
+"``devel`` 已经与使用它的那些产品一起测试过。"
+
+#: ../../source/digital_thread/change_management.rst:187
+msgid ""
+"**Pins move in reviewed changes.** ``pc update`` in a checkout of the index "
+"moves every tracked dependency to the tip of its branch at once; the diff is"
+" the list of packages that changed, to review before it is merged."
+msgstr ""
+"**固定值在经过评审的改动中移动。** 在索引的检出中运行 ``pc update`` 会把每一个被跟踪的依赖一次性移到它所在分支的末端；而那个 "
+"diff 就是发生变化的包的清单，供合并之前审阅。"
+
+#: ../../source/digital_thread/change_management.rst:189
+msgid ""
+"**A package's breaking change switches its** ``track:`` **to a new branch**,"
+" in a change to the index that also fixes every package of the library that "
+"used what broke."
+msgstr ""
+"**某个包的破坏性改动会把它的** ``track:`` "
+"**切到一个新分支**，这是一次对索引的改动，而这次改动同时还要修好库中每一个用到了被破坏之物的包。"
+
+#: ../../source/digital_thread/change_management.rst:192
+msgid ""
+"Products ``pc update`` to take a release of the library, and every product "
+"can be on a different one."
+msgstr "产品通过 ``pc update`` 来取用这个库的某个发布版，而每一个产品都可以处在不同的版本上。"

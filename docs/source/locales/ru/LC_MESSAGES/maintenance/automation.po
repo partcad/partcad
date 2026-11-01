@@ -1,0 +1,146 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/maintenance/automation.rst:3
+msgid "Automation"
+msgstr "Автоматизация"
+
+#: ../../source/maintenance/automation.rst:6
+msgid ""
+"PartCAD allows you to set CLI options and override user configurations "
+"specified in ``~/.partcad/config.yaml`` using environment variables. This "
+"can be particularly useful for setting configurations dynamically or in "
+"environments where modifying configuration files is not feasible."
+msgstr ""
+"PartCAD позволяет задавать параметры CLI и переопределять пользовательские "
+"настройки, указанные в ``~/.partcad/config.yaml``, с помощью переменных "
+"окружения. Это может быть особенно полезно для динамической установки "
+"конфигураций или в окружениях, где изменение конфигурационных файлов "
+"невозможно."
+
+#: ../../source/maintenance/automation.rst:11
+msgid ""
+"Generally, all of PartCAD's environment variables are prefixed with ``PC``."
+msgstr "Как правило, все переменные окружения PartCAD имеют префикс ``PC``."
+
+#: ../../source/maintenance/automation.rst:13
+msgid ""
+"For CLI options, the environment variable prefix depends on the command "
+"being used. You can use the `--help` option to determine the corresponding "
+"environment variable for each CLI option."
+msgstr ""
+"Для параметров CLI префикс переменной окружения зависит от используемой "
+"команды. Вы можете использовать параметр `--help`, чтобы определить "
+"соответствующую переменную окружения для каждого параметра CLI."
+
+#: ../../source/maintenance/automation.rst:17
+msgid "Here are some examples:"
+msgstr "Вот несколько примеров:"
+
+#: ../../source/maintenance/automation.rst:24
+msgid ""
+"Note that, these environment variables will be overridden if the CLI option "
+"is specified."
+msgstr ""
+"Обратите внимание, что эти переменные окружения будут переопределены, если "
+"указан параметр CLI."
+
+#: ../../source/maintenance/automation.rst:26
+msgid ""
+"For user configurations, the environment variables are of the format ``PC_``"
+" followed by the configuration option name in upper snake case (camelCase "
+"word boundaries become underscores). For example, to override the "
+"``pythonSandbox`` configuration, you would set the environment variable "
+"``PC_PYTHON_SANDBOX``."
+msgstr ""
+"Для пользовательских настроек переменные окружения имеют формат ``PC_``, за "
+"которым следует имя параметра конфигурации в верхнем регистре с "
+"подчёркиваниями (границы слов в camelCase превращаются в подчёркивания). "
+"Например, чтобы переопределить настройку ``pythonSandbox``, нужно задать "
+"переменную окружения ``PC_PYTHON_SANDBOX``."
+
+#: ../../source/maintenance/automation.rst:31
+msgid ""
+"Note that environment variable names are case-sensitive. Always use "
+"uppercase letters for the ``PC`` prefix and the rest of the variable name, "
+"as shown in the examples above."
+msgstr ""
+"Обратите внимание, что имена переменных окружения чувствительны к регистру. "
+"Всегда используйте заглавные буквы для префикса ``PC`` и остальной части "
+"имени переменной, как показано в примерах выше."
+
+#: ../../source/maintenance/automation.rst:34
+msgid ""
+"In this case, these environment variables will take precedence over the "
+"values specified in ``~/.partcad/config.yaml``."
+msgstr ""
+"В этом случае эти переменные окружения будут иметь приоритет над значениями,"
+" указанными в ``~/.partcad/config.yaml``."
+
+#: ../../source/maintenance/automation.rst:39
+msgid "Parameter Configuration"
+msgstr "Настройка параметров"
+
+#: ../../source/maintenance/automation.rst:42
+msgid ""
+"The configuration file (``~/.partcad/config.yaml``) allows users to define "
+"reusable parameters, which can be accessed dynamically within the provider "
+"configurations."
+msgstr ""
+"Конфигурационный файл (``~/.partcad/config.yaml``) позволяет пользователям "
+"определять многократно используемые параметры, к которым можно динамически "
+"обращаться в конфигурациях поставщиков."
+
+#: ../../source/maintenance/automation.rst:45
+msgid ""
+"In ``~/.partcad/config.yaml``, parameters are stored under a parameters "
+"section."
+msgstr "В ``~/.partcad/config.yaml`` параметры хранятся в разделе parameters."
+
+#: ../../source/maintenance/automation.rst:47
+#: ../../source/maintenance/automation.rst:70
+msgid "Example:"
+msgstr "Пример:"
+
+#: ../../source/maintenance/automation.rst:57
+msgid ""
+"Object IDs are used to reference different types of objects within a "
+"package, such as sketches, parts, assemblies, scenes, interfaces, and "
+"providers."
+msgstr ""
+"Идентификаторы объектов используются для ссылки на разные типы объектов "
+"внутри пакета, такие как эскизы, детали, сборки, сцены, интерфейсы и "
+"поставщики."
+
+#: ../../source/maintenance/automation.rst:63
+msgid "Accessing Parameters in Providers"
+msgstr "Доступ к параметрам в поставщиках"
+
+#: ../../source/maintenance/automation.rst:65
+msgid ""
+"In the providers section, parameters can be referenced dynamically using a "
+"function ``get_from_config()``, ensuring that sensitive or reusable values "
+"(e.g., API keys, URLs) do not need to be hardcoded multiple times."
+msgstr ""
+"В разделе providers на параметры можно ссылаться динамически с помощью "
+"функции ``get_from_config()``, благодаря чему конфиденциальные или "
+"многократно используемые значения (например, ключи API, URL) не нужно "
+"многократно прописывать в коде."

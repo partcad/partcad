@@ -1,0 +1,185 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/config_bom.rst:3
+msgid "Interchangeable BOM"
+msgstr "Austauschbare Stückliste"
+
+#: ../../source/config_bom.rst:5
+msgid ""
+"A bill of materials is usually a flat list of exact things to buy. PartCAD "
+"lets it be something more useful: a list of what each position has to *be*, "
+"which a package can then satisfy with a particular product. The same "
+"assembly can be quoted from two different suppliers, or built from what is "
+"in the drawer, without the assembly changing."
+msgstr ""
+"Eine Stückliste ist meist eine flache Liste genauer Dinge, die zu kaufen "
+"sind. PartCAD lässt sie etwas Nützlicheres sein: eine Liste dessen, was jede"
+" Position *sein* muss, was ein Paket dann mit einem bestimmten Produkt "
+"erfüllen kann. Dieselbe Baugruppe kann von zwei verschiedenen Lieferanten "
+"angeboten oder aus dem gebaut werden, was in der Schublade liegt, ohne dass "
+"sich die Baugruppe ändert."
+
+#: ../../source/config_bom.rst:10
+msgid ""
+"This is the object-oriented part of PartCAD, and it is built out of three "
+"things that are documented elsewhere in this section: :doc:`interfaces "
+"</config_interfaces>`, which say how a part connects; ``alias``, which gives"
+" an existing part another name; and ``enrich``, which makes an opinionated "
+"version of an existing part by fixing some of its parameters. Put together, "
+"they let a part be refined by steps, from \"something that bolts on here\" "
+"to \"this exact item from this exact vendor\"."
+msgstr ""
+"Das ist der objektorientierte Teil von PartCAD, und er ist aus drei Dingen "
+"gebaut, die anderswo in diesem Abschnitt dokumentiert sind: :doc:`Interfaces"
+" </config_interfaces>`, die sagen, wie ein Teil sich verbindet; ``alias``, "
+"das einem bestehenden Teil einen anderen Namen gibt; und ``enrich``, das aus"
+" einem bestehenden Teil eine festgelegte Variante macht, indem es einige "
+"seiner Parameter festlegt. Zusammengenommen erlauben sie, ein Teil "
+"schrittweise zu verfeinern, von \"etwas, das hier angeschraubt wird\" bis zu"
+" \"genau dieser Artikel von genau diesem Hersteller\"."
+
+#: ../../source/config_bom.rst:18
+msgid "Abstract and concrete parts"
+msgstr "Abstrakte und konkrete Teile"
+
+#: ../../source/config_bom.rst:20
+msgid ""
+"A part declaration does not have to say where the part comes from. What "
+"makes a part usable in an assembly is its geometry and its interfaces -- "
+"where it sits, and what it mates with. A part that has those and no "
+"``vendor``/``sku`` is **abstract**: the assembly knows how it fits, and not "
+"yet which product it is."
+msgstr ""
+"Eine Teiledeklaration muss nicht sagen, woher das Teil kommt. Was ein Teil "
+"in einer Baugruppe verwendbar macht, sind seine Geometrie und seine "
+"Interfaces -- wo es sitzt und womit es sich paart. Ein Teil, das die hat und"
+" kein ``vendor``/``sku``, ist **abstrakt**: die Baugruppe weiß, wie es "
+"passt, und noch nicht, welches Produkt es ist."
+
+#: ../../source/config_bom.rst:24
+msgid ""
+"A part that does name a ``vendor`` and an ``sku`` is **concrete**. It is a "
+"thing somebody sells, and ``pc supply`` can quote and order it (see "
+":ref:`procurement`)."
+msgstr ""
+"Ein Teil, das doch ein ``vendor`` und ein ``sku`` nennt, ist **konkret**. Es"
+" ist ein Ding, das jemand verkauft, und ``pc supply`` kann es anbieten und "
+"bestellen (siehe :ref:`procurement`)."
+
+#: ../../source/config_bom.rst:27
+msgid "Between the two there is a chain, and each link narrows the choice:"
+msgstr ""
+"Zwischen den beiden liegt eine Kette, und jedes Glied engt die Wahl ein:"
+
+#: ../../source/config_bom.rst:58
+msgid ""
+"Each of those is a part in its own right, and each can be used in an "
+"assembly. ``alias`` does the same without changing anything -- a local name "
+"for a part that lives somewhere else, so an assembly refers to ``:bolt`` and"
+" the package decides what that is."
+msgstr ""
+"Jedes davon ist ein Teil für sich, und jedes kann in einer Baugruppe "
+"verwendet werden. ``alias`` tut dasselbe, ohne etwas zu ändern -- ein "
+"lokaler Name für ein Teil, das irgendwo anders liegt, sodass eine Baugruppe "
+"sich auf ``:bolt`` bezieht und das Paket entscheidet, was das ist."
+
+#: ../../source/config_bom.rst:64
+msgid "Why the interface is what matters"
+msgstr "Warum es auf das Interface ankommt"
+
+#: ../../source/config_bom.rst:66
+msgid ""
+"An assembly that mates by :ref:`interfaces <interfaces>` rather than by "
+"coordinates does not name positions; it names connections. So replacing one "
+"bolt with another bolt that implements the same interface does not move "
+"anything: the mate is recomputed from the new part's ports. That is what "
+"makes a position in the bill of materials interchangeable rather than merely"
+" editable."
+msgstr ""
+"Eine Baugruppe, die über :ref:`Interfaces <interfaces>` paart und nicht über"
+" Koordinaten, benennt keine Positionen; sie benennt Verbindungen. Eine "
+"Schraube durch eine andere Schraube zu ersetzen, die dasselbe Interface "
+"implementiert, verschiebt daher nichts: die Paarung wird aus den Ports des "
+"neuen Teils neu berechnet. Das ist es, was eine Position in der Stückliste "
+"austauschbar macht und nicht bloß bearbeitbar."
+
+#: ../../source/config_bom.rst:71
+msgid ""
+"It is also what makes the refinement chain above safe. An ``enrich`` of a "
+"part keeps the source's interfaces, so a part narrowed three times still "
+"mates the way the abstract one did -- and ``pc test`` checks that it does, "
+"since the connection test is run against whatever the assembly actually "
+"resolves to."
+msgstr ""
+"Es ist auch das, was die Verfeinerungskette oben sicher macht. Ein "
+"``enrich`` eines Teils behält die Interfaces der Quelle, ein dreifach "
+"verfeinertes Teil paart sich also weiterhin so, wie das abstrakte es tat -- "
+"und ``pc test`` prüft, dass es das tut, denn der Verbindungstest wird gegen "
+"das ausgeführt, worauf die Baugruppe tatsächlich auflöst."
+
+#: ../../source/config_bom.rst:77
+msgid "Assemblies can be either, and so can you"
+msgstr "Baugruppen können beides sein, und Sie auch"
+
+#: ../../source/config_bom.rst:79
+msgid ""
+"An assembly may name concrete parts, in which case its bill of materials is "
+"a list of products and ``pc supply`` can price it as it stands. Or it may "
+"name abstract ones, in which case it is a design that somebody -- you, a "
+"downstream package, a customer -- completes by choosing products for its "
+"positions. A package of your own that imports such an assembly and declares "
+"``enrich``\\ es for its abstract parts is how that choice is written down, "
+"versioned and reviewed like everything else."
+msgstr ""
+"Eine Baugruppe darf konkrete Teile nennen, dann ist ihre Stückliste eine "
+"Liste von Produkten und ``pc supply`` kann sie so, wie sie ist, bepreisen. "
+"Oder sie darf abstrakte nennen, dann ist sie ein Design, das jemand -- Sie, "
+"ein nachgelagertes Paket, ein Kunde -- vervollständigt, indem er Produkte "
+"für ihre Positionen wählt. Ein eigenes Paket, das eine solche Baugruppe "
+"importiert und ``enrich``\\ es für ihre abstrakten Teile deklariert, ist die"
+" Art, wie diese Wahl aufgeschrieben, versioniert und geprüft wird wie alles "
+"andere."
+
+#: ../../source/config_bom.rst:87
+msgid ""
+"Making an assembly that still contains abstract parts *manufacturable* -- "
+"having PartCAD choose products for the open positions, or order against the "
+"interface rather than against an SKU -- is not implemented yet. Today an "
+"assembly is procured from the parts it actually resolves to, so the "
+"positions have to be concrete by the time you ask ``pc supply`` or ``pc "
+"bom`` for an answer."
+msgstr ""
+"Eine Baugruppe, die noch abstrakte Teile enthält, *fertigbar* zu machen -- "
+"PartCAD Produkte für die offenen Positionen wählen zu lassen oder gegen das "
+"Interface statt gegen eine SKU zu bestellen --, ist noch nicht "
+"implementiert. Heute wird eine Baugruppe aus den Teilen beschafft, auf die "
+"sie tatsächlich auflöst, die Positionen müssen also konkret sein, wenn Sie "
+"``pc supply`` oder ``pc bom`` um eine Antwort bitten."
+
+#: ../../source/config_bom.rst:92
+msgid ""
+"See :doc:`/config_making` for how a concrete part is bought or made, and "
+":doc:`/cli` for ``pc bom``, which prints the list the assembly resolves to."
+msgstr ""
+"Siehe :doc:`/config_making` dazu, wie ein konkretes Teil gekauft oder "
+"hergestellt wird, und :doc:`/cli` für ``pc bom``, das die Liste ausgibt, auf"
+" die die Baugruppe auflöst."

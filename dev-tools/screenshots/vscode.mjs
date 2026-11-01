@@ -422,22 +422,114 @@ export async function shown(page, name, timeout = 600000) {
 }
 
 /**
- * Show the Explorer row 'text' in the Digital Thread, from where a show puts the
- * camera, and still.
+ * Show the Explorer row 'text' in the Digital Thread, from where the first show
+ * puts the camera, and still.
  *
  * The 3D view turns on its own until its "Animate" box is cleared, and that box
- * is not there until something has been shown. So: show it, clear the box, show
- * something else ('other', a row at the same level) and show it again - a show
- * of a new object puts the camera back where every show starts.
+ * is not there until something has been shown. And a show after the first keeps
+ * whatever angle the turn had reached and fits the camera to the object over a
+ * second. So: show it, clear the box, and press the view panel's Reset, which
+ * puts the camera at the opening view, fitted, at once - the same framing on
+ * every run, whatever was shown before.
  */
-export async function showStill(page, text, level, other) {
+export async function showStill(page, text, level) {
     await select(page, text, level);
     await shown(page, text);
     await stopTurning(page);
-    await select(page, other, level);
-    await shown(page, other);
-    await select(page, text, level);
-    await shown(page, text);
+    await resetView(page);
+}
+
+/**
+ * Put the 3D view's camera at the opening view, as its view panel's Reset does.
+ *
+ * Clicked from inside the page rather than by Playwright, for the reason the
+ * Animate box is set ('stopTurning'): the panel starts folded away.
+ */
+export async function resetView(page) {
+    await (await viewer(page)).locator('#view-reset-button').evaluate((button) => button.click());
+    await sleep(500);
+}
+
+/**
+ * Open tabs of the Digital Thread, by the ids their buttons carry.
+ *
+ * The strip is `button.tab[data-tab=<id>]` (`Tabs.setTabs` in
+ * `ide/vscode/src/webview/tabs.ts`), and there are two levels of it: the panel's
+ * own strip of five groups, and the strip a group opens underneath itself. So a
+ * group and then a tab of that group are two arguments -- `tab(page, 'analysis',
+ * 'fea')`.
+ *
+ * A strip holding one tab is hidden, since one tab is not a choice, so a group
+ * with a single applicable tab is opened by naming the group alone. A disabled
+ * tab -- `Operations`, `Process Emulation` -- refuses the click rather than
+ * taking it, so asking for one throws here instead of quietly photographing
+ * whatever stayed open.
+ *
+ * `settle` is how long to wait after the last one: a tab that runs something
+ * when it is opened (`Validation`, which runs the checks) needs longer than one
+ * that only draws.
+ */
+export async function tab(page, ...ids) {
+    let settle = 4000;
+    if (typeof ids[ids.length - 1] === 'number') {
+        settle = ids.pop();
+    }
+    const frame = await viewer(page);
+    for (const id of ids) {
+        const button = frame.locator(`button.tab[data-tab="${id}"]`);
+        await button.waitFor({ state: 'visible', timeout: 120000 });
+        if ((await button.getAttribute('aria-disabled')) === 'true') {
+            throw new Error(`the '${id}' tab is disabled, so there is nothing to show in it`);
+        }
+        await button.click();
+        await sleep(2000);
+    }
+    await sleep(settle);
+}
+
+/**
+ * Bring the view panel out, or fold it away.
+ *
+ * It is the panel down the right of every tab that shows the object - the
+ * orientation gizmo, the axis views, the sections and the viewpoint - and it
+ * starts folded, which is how a reader first meets it and how every other
+ * picture shows it ('SidePanel' in 'ide/vscode/src/webview/sidePanel.ts').
+ *
+ * Every pane that can show the object has one of these, so the page holds eight
+ * identical buttons and only the pane on screen has a visible one. Folded or
+ * not is one answer for the whole side rather than one per tab ('setExpanded'),
+ * so clicking the visible one answers for all of them.
+ */
+export async function viewPanel(page, out = true) {
+    const frame = await viewer(page);
+    const button = frame.locator('.side-panel-right > button.side-panel-toggle:visible').first();
+    await button.waitFor({ state: 'visible', timeout: 120000 });
+    if (((await button.getAttribute('aria-expanded')) === 'true') !== out) {
+        await button.click();
+        await sleep(2500);
+    }
+}
+
+/**
+ * Wait until something other than a spinner is in the tab that is open.
+ *
+ * A tab that asks the daemon for something -- the checks, an analysis -- draws a
+ * placeholder first, and a picture taken then is a picture of the placeholder.
+ *
+ * Every pane of the panel is in the page at once and all but one is hidden, so
+ * a class a pane shares with another ('table.grid' is the bill of materials and
+ * also the Build vs Buy table) matches something that is never going to be
+ * visible. Each alternative is therefore asked for visibly, and the first one
+ * that is on screen is what this waits for.
+ */
+export async function filled(page, selector, timeout = 900000) {
+    const frame = await viewer(page);
+    const visible = selector
+        .split(',')
+        .map((one) => `${one.trim()}:visible`)
+        .join(', ');
+    await frame.locator(visible).first().waitFor({ state: 'visible', timeout });
+    await sleep(2000);
 }
 
 /** Where the 3D view is drawn, on the page. */

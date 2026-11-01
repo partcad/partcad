@@ -426,7 +426,7 @@ RESTATED_IDS = [
 
 @pytest.mark.parametrize("instances", RESTATED, ids=RESTATED_IDS)
 def test_schema_an_inherited_instance_may_restate_its_boundary(instances):
-    """A slotted hole is a through hole drawn as a slot (config_geometry.rst)."""
+    """A slotted hole is a through hole drawn as a slot (config_interfaces.rst)."""
     validate(INSTANCES["inherits"](instances))
 
 

@@ -1,0 +1,185 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:5
+msgid "CFD"
+msgstr "CFD"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:7
+msgid ""
+"**CFD** is the question how a fluid flows through a part: a computational "
+"fluid dynamics analysis, reporting the flow and the pressure in it. It is "
+"the one analysis where the part **is the fluid**: the solid handed to the "
+"solver is the volume the fluid occupies -- a bore, a duct, a plenum -- not "
+"the wall around it."
+msgstr ""
+"**CFD** 问的是流体如何从一个零件内部流过：一次计算流体动力学分析，报告其中的流动和压力。它是唯一一项零件 **就是流体** "
+"的分析：交给求解器的那个实体，是流体所占据的那个体积 -- 一个孔、一条风道、一个气室 -- 而不是它周围的那层壁。"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:12
+msgid ""
+"The question is asked by a ``cfd:`` section on the part, a map of named "
+"scenarios, and answered by a solver a package supplies. "
+":doc:`/digital_thread/lifecycle/analysis` explains what every analysis has "
+"in common."
+msgstr ""
+"这个问题由零件上的一个 ``cfd:`` "
+"小节提出，它是一个具名场景的映射，而由某个包所提供的求解器来回答。:doc:`/digital_thread/lifecycle/analysis` "
+"讲的是每一项分析的共同之处。"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:18
+msgid "What the scenario says"
+msgstr "场景说明什么"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:20
+msgid "``load:``"
+msgstr "``load:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:21
+msgid ""
+"where the flow is driven in, as a force on the inlet's surface -- so the "
+"pressure driving it is that force over exactly the port's area."
+msgstr "流动从哪里被驱入，以作用在入口表面上的一个力给出 -- 于是驱动它的压力就是那个力除以恰好等于该端口的面积。"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:24
+msgid "``outlet:``"
+msgstr "``outlet:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:25
+msgid "where it leaves, at the reference pressure."
+msgstr "它从哪里离开，离开处取参考压力。"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:27
+msgid "``fix:``"
+msgstr "``fix:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:28
+msgid "walls, where one has to be named."
+msgstr "壁面，用于必须指名壁面的场合。"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:30
+msgid ""
+"**Every surface that is neither an inlet nor an outlet is a wall**, held no-"
+"slip, so a bore's lateral surface is a wall without being named -- and could"
+" not be named by a sketch anyway, a sketch being flat where that surface is "
+"a cylinder."
+msgstr ""
+"**既不是入口也不是出口的每一个表面都是壁面**，并取无滑移条件，所以一个孔的侧面不必被指名就是壁面 -- "
+"反正它也无法用草图来指名，因为草图是平的，而那个面是一个圆柱面。"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:49
+msgid ""
+"A condition lands on the surface its port stands for, and for an inlet that "
+"matters more than anywhere else: a port is a coordinate frame, and a frame "
+"cannot say how wide an inlet is. An interface that draws its port with a "
+"sketch -- a ``basic`` ``circle:`` for the end of a bore -- has that sketch "
+"imprinted on the part before the solver runs, and the force is spread over "
+"exactly the area it covers."
+msgstr ""
+"条件落在它的端口所代表的那个表面上，而对入口来说，这一点比在任何别处都更要紧：端口是一个坐标系，而坐标系说不出入口有多宽。用草图绘制其端口的接口 -- "
+"比如用一个 ``basic`` 的 ``circle:`` 表示孔的端面 -- "
+"它那张草图会在求解器运行之前被印到零件上，而那个力正好分摊在它所覆盖的面积上。"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:57
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:59
+msgid ""
+"The scenarios are listed down the left with the first selected, each marked "
+"with how its last run went, and selecting one runs it. What is shown is the "
+"flow field the implementation produced -- drawn as the format it chose, so a"
+" 3D result is turned and zoomed and a 2D one is panned and zoomed as a "
+"picture -- with the findings under it. **Analysed by** chooses the solver, "
+"**Analyse** runs it again."
+msgstr ""
+"各个场景列在左侧，默认选中第一个，每一个都带着它上一次运行结果的标记，而选中某一个就会运行它。显示出来的是实现方所产出的流场 -- "
+"按它所选的格式绘制，所以 3D 结果可以转动和缩放，而 2D 结果像一张图片那样平移和缩放 -- 各项发现列在它下面。**Analysed by** "
+"用来选择求解器，**Analyse** 会再运行一次。"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:66
+msgid "The Analysis group's CFD tab: the scenario list and the flow field"
+msgstr "Analysis 组的 CFD 标签页：场景列表和流场"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:71
+msgid ""
+"The tab is enabled for a part that declares ``cfd:`` and disabled for "
+"everything else."
+msgstr "这个标签页对声明了 ``cfd:`` 的零件启用，而对其他一切都禁用。"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:75
+msgid "On the command line"
+msgstr "在命令行中"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:86
+msgid "Who runs it"
+msgstr "由谁来运行它"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:88
+msgid ""
+"The default is `partcad-cae-openfoam <https://github.com/partcad/partcad-"
+"cae-openfoam>`_, which runs `OpenFOAM <https://www.openfoam.com/>`_; "
+"``caeCfdImplementation`` names another. `Elmer "
+"<https://www.elmerfem.org/>`_, `MOOSE <https://mooseframework.inl.gov/>`_ "
+"and `code_saturne <https://www.code-saturne.org/>`_ do this analysis too."
+msgstr ""
+"默认是 `partcad-cae-openfoam <https://github.com/partcad/partcad-cae-"
+"openfoam>`_ ，它运行 `OpenFOAM <https://www.openfoam.com/>`_ "
+"；``caeCfdImplementation`` 可以指名另一个。`Elmer <https://www.elmerfem.org/>`_ 、 "
+"`MOOSE <https://mooseframework.inl.gov/>`_ 和 `code_saturne "
+"<https://www.code-saturne.org/>`_ 也能做这项分析。"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:95
+msgid "An example"
+msgstr "一个例子"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:97
+msgid ""
+"`examples/feature_cae "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cae>`_ "
+"declares ``pipe``: the bore of a 10 × 100 mm pipe, driven by 5 mN at the "
+"inlet and leaving at the outlet, every other surface a no-slip wall. Fully "
+"developed laminar flow has a closed form -- Hagen-Poiseuille -- and the "
+"package's ``README.md`` prints the flow rate each solver measured beside it."
+" Both of its ports are drawn with the bore's circle, which is what makes the"
+" driving pressure exactly the inlet force over the bore's area, and the "
+"part's own ``render:`` section draws that boundary so it can be looked at."
+msgstr ""
+"`examples/feature_cae "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cae>`_ 声明了 "
+"``pipe`` ：一根 10 × 100 mm 管子的内孔，入口处以 5 mN "
+"驱动，并从出口离开，其他每一个表面都是无滑移壁面。充分发展的层流有解析解 -- 哈根-泊肃叶 -- 而该包的 ``README.md`` "
+"会把每个求解器所测得的流量与它并列打印出来。它的两个端口都是用孔的圆来绘制的，正是这一点让驱动压力恰好等于入口的力除以孔的面积，而该零件自己的 "
+"``render:`` 小节会把那条边界画出来，以便查看。"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:107
+msgid "Agent skills"
+msgstr "智能体技能"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:109
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:110
+msgid ""
+"Runs every scenario as part of giving each requirement a verdict, and "
+"reports one that names a ``feature:`` as evidence for that feature."
+msgstr "在给每一项需求下结论的过程中运行每一个场景，并把指名了某个 ``feature:`` 的场景作为该特性的证据来报告。"

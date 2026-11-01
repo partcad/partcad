@@ -21,9 +21,19 @@ connection per command was a TCP handshake and a server thread per command. A
 because a session's connection pool is safe to share and the rest of it --
 cookies, adapters being mounted -- is not documented to be, and commands are
 sent from every thread of the executor at once.
+
+And one per server, which an address does not name: a session's pool hands
+out connections by host and port, and a port can be published again for
+another container while a connection to the last one is still open. A
+connection that still reaches the old server -- which the in-process ones in
+the tests do, after their listener has closed -- then carries this server's
+request to that one, and its token is refused. Every container PartCAD starts
+has a token of its own, so a session per URL *and* token is a session per
+container.
 """
 
 import asyncio
+import collections
 import json
 import os
 import threading
@@ -36,19 +46,45 @@ from . import container_files, container_service
 from . import logging as pc_logging
 
 _SESSIONS = threading.local()
+# The sessions a thread keeps, least recently used first out. More than one
+# process needs at once -- a sandbox per interpreter, KiCad, a plugin or two --
+# and few enough that a long-running daemon, which goes on starting containers,
+# does not keep a connection to each one it ever started.
+MAX_SESSIONS = 8
 
 
-def _session() -> requests.Session:
-    """This thread's session -- and a new one in a process forked from the one that made it.
+def _session(url: str, token: Optional[str]) -> requests.Session:
+    """This thread's session for the server at ``url`` holding ``token``.
 
-    A forked child inherits its parent's sockets, and two processes writing
-    requests into one connection is two garbled conversations.
+    And new ones in a process forked from the one that made them: a forked
+    child inherits its parent's sockets, and two processes writing requests
+    into one connection is two garbled conversations.
     """
     held = getattr(_SESSIONS, "held", None)
     if held is None or held[0] != os.getpid():
-        held = (os.getpid(), requests.Session())
+        held = (os.getpid(), collections.OrderedDict())
         _SESSIONS.held = held
-    return held[1]
+    sessions = held[1]
+    key = (url, token)
+    session = sessions.pop(key, None) or requests.Session()
+    sessions[key] = session
+    while len(sessions) > MAX_SESSIONS:
+        sessions.popitem(last=False)[1].close()
+    return session
+
+
+def close_sessions() -> None:
+    """Close this thread's sessions, and with them every connection they keep open.
+
+    For a test, whose servers are gone once it ends: a connection left open to
+    one of them keeps the thread serving it alive, for whatever the process
+    runs next to find (see `tests/conftest.py`).
+    """
+    held = getattr(_SESSIONS, "held", None)
+    _SESSIONS.held = None
+    if held is not None and held[0] == os.getpid():
+        for session in held[1].values():
+            session.close()
 
 
 # The protocol each service answered with, by URL: asked once per process.
@@ -168,7 +204,7 @@ class RuntimeJsonRpcClient:
             if self.url in _PROTOCOLS:
                 return _PROTOCOLS[self.url]
         try:
-            response = _session().get(self.url + "/", timeout=timeout)
+            response = _session(self.url, self.token).get(self.url + "/", timeout=timeout)
         except requests.exceptions.RequestException:
             return None
         found = 1
@@ -190,7 +226,7 @@ class RuntimeJsonRpcClient:
         """POST a frame; ``(status, content type, body)``. The one place a frame meets the network."""
         headers = dict(self._headers())
         headers["Content-Type"] = container_service.FRAME_TYPE
-        response = _session().post(
+        response = _session(self.url, self.token).post(
             self.url + "/jsonrpc", data=_Body(parts), headers=headers, timeout=timeout, stream=True
         )
         # In one read rather than through `response.content`, which reads in
@@ -262,7 +298,9 @@ class RuntimeJsonRpcClient:
         }
         pc_logging.debug("JSON-RPC %s: %s" % (self.url, _summary(command, params)))
         try:
-            response = _session().post(self.url + "/jsonrpc", json=request, headers=self._headers(), timeout=timeout)
+            response = _session(self.url, self.token).post(
+                self.url + "/jsonrpc", json=request, headers=self._headers(), timeout=timeout
+            )
             if response.status_code == 401:
                 return {"error": {"code": -32001, "message": "The container refused this client's token"}}
             return json.loads(response.content)
@@ -274,7 +312,9 @@ class RuntimeJsonRpcClient:
         """Where each of ``names`` resolves in the container, or None for each that does not."""
         request = {"jsonrpc": "2.0", "method": "which", "params": {"names": list(names)}, "id": self.get_request_id()}
         try:
-            response = _session().post(self.url + "/jsonrpc", json=request, headers=self._headers(), timeout=timeout)
+            response = _session(self.url, self.token).post(
+                self.url + "/jsonrpc", json=request, headers=self._headers(), timeout=timeout
+            )
             answer = json.loads(response.content)
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
             pc_logging.error("Error during RPC call to %s: %s" % (self.url, e))

@@ -1,0 +1,404 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/ai_agents/mcp.rst:3
+msgid "MCP server"
+msgstr "MCP 服务器"
+
+#: ../../source/ai_agents/mcp.rst:5
+msgid ""
+"``pc mcp`` serves the `Model Context Protocol "
+"<https://modelcontextprotocol.io>`_ (MCP) on stdio. It is how an AI agent "
+"drives PartCAD without a shell: any MCP client -- Claude Code, Claude "
+"Desktop, Cursor, Visual Studio Code and the rest -- starts it as a "
+"subprocess and calls its tools to see what a package holds, read an object's"
+" declaration, look at it, test it and write it out, and to reach everything "
+"else PartCAD's daemon can do."
+msgstr ""
+"``pc mcp`` 在 stdio 上提供 `Model Context Protocol "
+"<https://modelcontextprotocol.io>`_ （MCP）服务。AI 智能体正是靠它在没有 shell 的情况下驱动 "
+"PartCAD：任何 MCP 客户端 -- Claude Code、Claude Desktop、Cursor、Visual Studio Code "
+"等等 -- 都把它作为子进程启动，并调用它的各个工具来查看一个包里有什么、读取某个对象的声明、看一看它、测试它、把它写出来，以及触及 PartCAD "
+"守护进程所能做的其他一切。"
+
+#: ../../source/ai_agents/mcp.rst:11
+msgid ""
+"The server is a client of the workspace's daemon, exactly like the other "
+"``pc`` commands: it starts the daemon if none is running, and the daemon "
+"loads the packages, runs the CAD scripts in their sandboxes and renders. So "
+"an agent needs nothing installed but PartCAD, and the agent's renders, tests"
+" and exports come from the same warm context as the ones you run in a "
+"terminal."
+msgstr ""
+"这个服务器和其他 ``pc`` 命令一样，是本工作区守护进程的客户端：没有守护进程在运行时它会启动一个，而由守护进程来加载各个包、在各自的沙箱中运行 "
+"CAD 脚本并进行渲染。所以智能体除了 PartCAD 之外什么都不需要安装，而智能体的渲染、测试和导出，与你在终端里运行的那些来自同一个热上下文。"
+
+#: ../../source/ai_agents/mcp.rst:16
+msgid ""
+"The agent still writes and edits ``partcad.yaml`` and the CAD scripts with "
+"its own file tools; the daemon reloads what changed. The MCP server is for "
+"everything after that -- looking at the result and checking it."
+msgstr ""
+"智能体仍然用它自己的文件工具来编写和修改 ``partcad.yaml`` 和各个 CAD 脚本；守护进程会重新加载变动过的部分。MCP "
+"服务器负责的是在那之后的一切 -- 看结果，并检查它。"
+
+#: ../../source/ai_agents/mcp.rst:21
+msgid "Starting"
+msgstr "启动"
+
+#: ../../source/ai_agents/mcp.rst:30
+msgid ""
+"Nothing is started until the first tool call that needs the daemon, so a "
+"server started in a directory that is not a package yet still starts, and "
+"says so when it is asked to do something. Its log goes to stderr, which MCP "
+"clients show in their server logs; stdout is the protocol."
+msgstr ""
+"在第一次需要守护进程的工具调用之前，什么都不会被启动，所以在一个还不是包的目录里启动的服务器照样能启动起来，并在被要求做事时如实说明情况。它的日志写到 "
+"stderr，MCP 客户端会在它们的服务器日志里显示；而 stdout 是协议本身。"
+
+#: ../../source/ai_agents/mcp.rst:36
+msgid "Setting up a client"
+msgstr "配置一个客户端"
+
+#: ../../source/ai_agents/mcp.rst:39
+msgid "Claude Code"
+msgstr "Claude Code"
+
+#: ../../source/ai_agents/mcp.rst:41
+msgid ""
+"The ``pc`` plugin (see :ref:`claude-plugin`) brings the server along with "
+"the skills, and ``pc init`` adds it to the ``.mcp.json`` of the repository "
+"it sets up. Anywhere else:"
+msgstr ""
+"``pc`` 插件（参见 :ref:`claude-plugin` ）会把这个服务器连同各项技能一起带来，而 ``pc init`` "
+"会把它加进它所搭建那个仓库的 ``.mcp.json`` 里。在其他任何地方："
+
+#: ../../source/ai_agents/mcp.rst:51
+msgid "Cursor"
+msgstr "Cursor"
+
+#: ../../source/ai_agents/mcp.rst:53
+msgid "``pc init`` adds it to ``.cursor/mcp.json``. By hand:"
+msgstr "``pc init`` 会把它加进 ``.cursor/mcp.json`` 。手工配置："
+
+#: ../../source/ai_agents/mcp.rst:64
+msgid "Visual Studio Code"
+msgstr "Visual Studio Code"
+
+#: ../../source/ai_agents/mcp.rst:66
+msgid ""
+"The PartCAD extension registers one server for every workspace folder that "
+"holds a ``partcad.yaml``, using the ``pc`` it found or downloaded -- there "
+"is nothing to configure. Without the extension, in ``.vscode/mcp.json``:"
+msgstr ""
+"PartCAD 扩展会为每一个含有 ``partcad.yaml`` 的工作区文件夹注册一个服务器，使用它所找到或下载的那个 ``pc`` -- "
+"什么都不需要配置。没有该扩展时，在 ``.vscode/mcp.json`` 中："
+
+#: ../../source/ai_agents/mcp.rst:78
+msgid "Claude Desktop"
+msgstr "Claude Desktop"
+
+#: ../../source/ai_agents/mcp.rst:80
+msgid ""
+"Claude Desktop starts servers from no particular directory, so name the "
+"package with an absolute path, in ``claude_desktop_config.json``:"
+msgstr ""
+"Claude Desktop 启动服务器时并不处在某个特定目录下，所以请在 ``claude_desktop_config.json`` "
+"中用绝对路径指名那个包："
+
+#: ../../source/ai_agents/mcp.rst:92
+msgid "The MCP Registry"
+msgstr "MCP Registry"
+
+#: ../../source/ai_agents/mcp.rst:94
+msgid ""
+"The server is listed in the `MCP Registry "
+"<https://registry.modelcontextprotocol.io>`_ as "
+"``io.github.partcad/partcad``, which is what clients that install servers "
+"from the registry find. Such a client runs it as ``uvx partcad mcp``, and "
+"offers ``PC_PATH`` for the package to serve."
+msgstr ""
+"该服务器以 ``io.github.partcad/partcad`` 的名义列在 `MCP Registry "
+"<https://registry.modelcontextprotocol.io>`_ "
+"中，那些从注册表安装服务器的客户端找到的就是它。这样的客户端会以 ``uvx partcad mcp`` 来运行它，并提供 ``PC_PATH`` "
+"用于指定要服务的那个包。"
+
+#: ../../source/ai_agents/mcp.rst:100
+msgid "Tools"
+msgstr "工具"
+
+#: ../../source/ai_agents/mcp.rst:102
+msgid ""
+"Each tool is one daemon method, with the parameters the ``pc`` command it "
+"mirrors sends. The ones that name an object -- ``info``, ``render``, "
+"``export``, ``test``, ``bom`` and ``instructions`` -- take ``params``, the "
+"values of the object's own parameters by name, which is ``-p "
+"<name>=<value>`` on the command line (see :ref:`parameter-values`)."
+msgstr ""
+"每个工具都是一个守护进程方法，带着它所对应的那条 ``pc`` 命令会发送的参数。那些需要指名对象的工具 -- "
+"``info``、``render``、``export``、``test``、``bom`` 和 ``instructions`` -- 都接受 "
+"``params`` ，也就是按名称给出的该对象自身参数的取值，这在命令行上对应 ``-p <name>=<value>`` （参见 "
+":ref:`parameter-values` ）。"
+
+#: ../../source/ai_agents/mcp.rst:111
+msgid "Tool"
+msgstr "工具"
+
+#: ../../source/ai_agents/mcp.rst:112
+msgid "Mirrors"
+msgstr "对应命令"
+
+#: ../../source/ai_agents/mcp.rst:113
+msgid "What it does"
+msgstr "它做什么"
+
+#: ../../source/ai_agents/mcp.rst:114
+msgid "``list_objects``"
+msgstr "``list_objects``"
+
+#: ../../source/ai_agents/mcp.rst:115
+msgid "``pc list``"
+msgstr "``pc list``"
+
+#: ../../source/ai_agents/mcp.rst:116
+msgid ""
+"The packages, parts, sketches, assemblies, scenes, interfaces, materials or "
+"software of a package."
+msgstr "一个包里的各个包、零件、草图、装配体、场景、接口、材料或软件。"
+
+#: ../../source/ai_agents/mcp.rst:117
+msgid "``info``"
+msgstr "``info``"
+
+#: ../../source/ai_agents/mcp.rst:118
+msgid "``pc info``"
+msgstr "``pc info``"
+
+#: ../../source/ai_agents/mcp.rst:119
+msgid ""
+"An object's configuration, parameters and properties, or the package's."
+msgstr "某个对象的配置、参数和属性，或者包本身的这些内容。"
+
+#: ../../source/ai_agents/mcp.rst:120
+msgid "``render``"
+msgstr "``render``"
+
+#: ../../source/ai_agents/mcp.rst:121
+msgid "``pc render``"
+msgstr "``pc render``"
+
+#: ../../source/ai_agents/mcp.rst:122
+msgid ""
+"Renders one object and returns the picture: PNG (the default) or JPEG as an "
+"image, SVG as text."
+msgstr "渲染一个对象并返回图片：PNG（默认）或 JPEG 作为图片返回，SVG 作为文本返回。"
+
+#: ../../source/ai_agents/mcp.rst:123
+msgid "``export``"
+msgstr "``export``"
+
+#: ../../source/ai_agents/mcp.rst:124
+msgid "``pc export``"
+msgstr "``pc export``"
+
+#: ../../source/ai_agents/mcp.rst:125
+msgid ""
+"Writes one object to a file in the workspace: STEP, STL, 3MF, OBJ, glTF, "
+"BREP, PNG, SVG, ..."
+msgstr "把一个对象写入工作区中的文件：STEP、STL、3MF、OBJ、glTF、BREP、PNG、SVG ……"
+
+#: ../../source/ai_agents/mcp.rst:126
+msgid "``test``"
+msgstr "``test``"
+
+#: ../../source/ai_agents/mcp.rst:127
+msgid "``pc test``"
+msgstr "``pc test``"
+
+#: ../../source/ai_agents/mcp.rst:128
+msgid "Checks objects against the requirements and tests they declare."
+msgstr "对照各个对象所声明的需求和测试来检查它们。"
+
+#: ../../source/ai_agents/mcp.rst:129
+msgid "``lint``"
+msgstr "``lint``"
+
+#: ../../source/ai_agents/mcp.rst:130
+msgid "``pc lint``"
+msgstr "``pc lint``"
+
+#: ../../source/ai_agents/mcp.rst:131
+msgid "Checks a package's ``partcad.yaml``, ASSY files and scripts."
+msgstr "检查一个包的 ``partcad.yaml`` 、ASSY 文件和脚本。"
+
+#: ../../source/ai_agents/mcp.rst:132
+msgid "``bom``"
+msgstr "``bom``"
+
+#: ../../source/ai_agents/mcp.rst:133
+msgid "``pc bom``"
+msgstr "``pc bom``"
+
+#: ../../source/ai_agents/mcp.rst:134
+msgid "What has to be bought or made to build an object."
+msgstr "构建一个对象需要采购或制造什么。"
+
+#: ../../source/ai_agents/mcp.rst:135
+msgid "``search``"
+msgstr "``search``"
+
+#: ../../source/ai_agents/mcp.rst:136
+msgid "``pc search``"
+msgstr "``pc search``"
+
+#: ../../source/ai_agents/mcp.rst:137
+msgid ""
+"Finds objects or packages by keyword or by the interface they implement."
+msgstr "按关键词或按所实现的接口查找对象或包。"
+
+#: ../../source/ai_agents/mcp.rst:138
+msgid "``instructions``"
+msgstr "``instructions``"
+
+#: ../../source/ai_agents/mcp.rst:139
+msgid "``pc instructions``"
+msgstr "``pc instructions``"
+
+#: ../../source/ai_agents/mcp.rst:140
+msgid ""
+"The step-by-step build of an assembly, with this machine's Build vs Buy "
+"choices applied."
+msgstr "某个装配体的逐步构建过程，并应用本机的 Build vs Buy 选择。"
+
+#: ../../source/ai_agents/mcp.rst:141
+msgid "``version``"
+msgstr "``version``"
+
+#: ../../source/ai_agents/mcp.rst:142
+msgid "``pc version``"
+msgstr "``pc version``"
+
+#: ../../source/ai_agents/mcp.rst:143
+msgid "The version of the server and of the daemon serving the workspace."
+msgstr "该服务器的版本，以及为本工作区提供服务的那个守护进程的版本。"
+
+#: ../../source/ai_agents/mcp.rst:144
+msgid "``list_methods``"
+msgstr "``list_methods``"
+
+#: ../../source/ai_agents/mcp.rst:146
+msgid "Every daemon method, with a one-line summary."
+msgstr "每一个守护进程方法，各带一行摘要。"
+
+#: ../../source/ai_agents/mcp.rst:147
+msgid "``execute``"
+msgstr "``execute``"
+
+#: ../../source/ai_agents/mcp.rst:149
+msgid ""
+"Runs any daemon method: CAE, CAM, simulations, ``add``, ``import``, "
+"``convert``, ``install`` and the rest."
+msgstr ""
+"运行任意守护进程方法：CAE、CAM、各类仿真、``add``、``import``、``convert``、``install`` 等等。"
+
+#: ../../source/ai_agents/mcp.rst:151
+msgid ""
+"``execute`` takes a method name and its parameters as ``pc`` sends them; the"
+" workspace's context is added for it. It refuses the few methods that act on"
+" something that is not the agent's: resetting, stopping or reconfiguring the"
+" daemon every client of the workspace shares, and changing the user's own "
+"settings (``list_methods`` marks them). A healthcheck that fixes the host is"
+" refused too."
+msgstr ""
+"``execute`` 接受一个方法名及其参数，形式与 ``pc`` "
+"发送它们时相同；工作区的上下文会替它补上。它会拒绝少数几个作用于不属于该智能体之物的方法：重置、停止或重新配置本工作区每个客户端共用的那个守护进程，以及修改用户自己的设置（"
+" ``list_methods`` 会把它们标出来）。会去修整主机的那种健康检查同样会被拒绝。"
+
+#: ../../source/ai_agents/mcp.rst:156
+msgid ""
+"Two resources are served as well: ``partcad://workspace`` (where the "
+"workspace is, which files the agent may use, and its package tree) and "
+"``partcad://methods`` (what ``list_methods`` returns)."
+msgstr ""
+"另外还提供两个资源：``partcad://workspace`` （工作区在哪里、智能体可以使用哪些文件，以及它的包树）和 "
+"``partcad://methods`` （也就是 ``list_methods`` 所返回的内容）。"
+
+#: ../../source/ai_agents/mcp.rst:161
+msgid "Results and errors"
+msgstr "结果与错误"
+
+#: ../../source/ai_agents/mcp.rst:163
+msgid ""
+"Every tool returns one JSON text block: ``ok``; the daemon's ``result`` when"
+" there is one; ``errors``, the error lines the daemon logged; and ``log``, "
+"everything else it logged while it worked. Most of PartCAD answers by "
+"logging -- ``pc list`` prints a table -- so for ``list_objects``, ``info``, "
+"``test`` and ``search`` the log *is* the answer. A render's picture follows "
+"the text block as an image."
+msgstr ""
+"每个工具都返回一个 JSON 文本块：``ok`` ；守护进程的 ``result`` ，如果有的话；``errors`` "
+"，也就是守护进程记录下来的错误行；以及 ``log`` ，它在工作期间记录的其他一切。PartCAD 的大部分回应都是通过记日志给出的 -- 比如 "
+"``pc list`` 打印出一张表 -- 所以对 ``list_objects``、``info``、``test`` 和 ``search`` "
+"而言，日志 *就是* 答案。渲染的图片会跟在那个文本块之后作为一张图片返回。"
+
+#: ../../source/ai_agents/mcp.rst:168
+msgid ""
+"A failure is a result with ``ok`` false and the error in it, never a "
+"protocol error: an object that does not build, a test that fails, a daemon "
+"that cannot be reached, a path outside the workspace. Only a malformed tool "
+"call is refused by the protocol. When the connection to the daemon is lost "
+"in the middle of a call, the result says the call may or may not have "
+"finished -- the server never sends it again on its own -- and the next call "
+"reconnects."
+msgstr ""
+"失败是一个 ``ok`` 为 false "
+"并把错误装在里面的结果，绝不是协议错误：构建不出来的对象、不通过的测试、联系不上的守护进程、位于工作区之外的路径，都是如此。只有格式不正确的工具调用才会被协议拒绝。当与守护进程的连接在某次调用中途断开时，结果会说明这次调用可能完成了也可能没完成"
+" -- 服务器绝不会自行重发它 -- 而下一次调用会重新连上。"
+
+#: ../../source/ai_agents/mcp.rst:174
+msgid ""
+"The first render or test of an object builds it in its sandbox, which can "
+"take minutes; clients that ask for progress are told what the daemon is "
+"working on."
+msgstr "某个对象的第一次渲染或测试会在它的沙箱中构建它，这可能要花几分钟；那些会询问进度的客户端会被告知守护进程正在做什么。"
+
+#: ../../source/ai_agents/mcp.rst:179
+msgid "Which files it may touch"
+msgstr "它可以碰哪些文件"
+
+#: ../../source/ai_agents/mcp.rst:181
+msgid ""
+"A path an agent names -- where ``export`` writes, and every path parameter "
+"``execute`` passes on -- has to be inside the workspace, and not inside a "
+"hidden directory there (``.git``, ``.env``, an editor's settings). A "
+"relative path is relative to the workspace, never to wherever the client "
+"started the server. Symbolic links are followed before the check, so a link "
+"out of the workspace is outside it."
+msgstr ""
+"智能体所指名的路径 -- ``export`` 写入的位置，以及 ``execute`` 转交的每一个路径参数 -- "
+"都必须位于工作区内部，而且不得位于其中的隐藏目录里（ ``.git`` 、 ``.env`` "
+"、某个编辑器的设置目录）。相对路径是相对于工作区的，绝不是相对于客户端启动该服务器时所在的位置。符号链接会在检查之前被解析，所以指向工作区之外的链接就算在工作区之外。"
+
+#: ../../source/ai_agents/mcp.rst:191
+msgid ""
+"This is a limit on what the agent names, not a jail for PartCAD: the daemon "
+"still reads whatever a package's own configuration points at."
+msgstr "这是对智能体所能指名之物的限制，而不是给 PartCAD 的牢笼：守护进程仍然会读取某个包自己的配置所指向的任何东西。"

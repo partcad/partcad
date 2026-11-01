@@ -1,0 +1,231 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/plugins/output.rst:3
+msgid "Output file types"
+msgstr "Tipos de archivo de salida"
+
+#: ../../source/plugins/output.rst:5
+msgid ""
+"An **output plugin** teaches PartCAD to write a file. ``pc export`` writes "
+"3D and CAD files, ``pc render`` writes 2D projections, and which file types "
+"either of them knows is an ``export:`` or a ``render:`` section -- one "
+"subsection per file type, each naming the script that writes it and the "
+"sandbox that script needs."
+msgstr ""
+"Un **plugin de salida** enseña a PartCAD a escribir un archivo. ``pc "
+"export`` escribe archivos 3D y CAD, ``pc render`` escribe proyecciones 2D, y"
+" los tipos de archivo que cada uno de ellos conoce son una sección "
+"``export:`` o ``render:`` -- una subsección por tipo de archivo, cada una "
+"nombrando el script que lo escribe y el sandbox que ese script necesita."
+
+#: ../../source/plugins/output.rst:11
+msgid ""
+"PartCAD ships implementations for the formats everybody uses (STEP, BREP, "
+"STL, 3MF, OBJ, IGES, glTF, three.js, PNG, SVG, DXF, ...), so a package "
+"usually writes these sections only to **configure** a built-in type -- where"
+" its files go, at what resolution, from which viewpoint. Declaring a "
+"``path`` is what turns the same section into a plugin."
+msgstr ""
+"PartCAD incluye implementaciones para los formatos que todo el mundo usa "
+"(STEP, BREP, STL, 3MF, OBJ, IGES, glTF, three.js, PNG, SVG, DXF, ...), así "
+"que un paquete normalmente escribe estas secciones solo para **configurar** "
+"un tipo integrado -- dónde van sus archivos, a qué resolución, desde qué "
+"punto de vista. Declarar un ``path`` es lo que convierte esa misma sección "
+"en un plugin."
+
+#: ../../source/plugins/output.rst:17
+msgid ""
+":ref:`output-files` is the reference for every field and for how the two "
+"sections fall back on each other. This chapter is about the plugin case."
+msgstr ""
+":ref:`output-files` es la referencia de todos los campos y de cómo cada una "
+"de las dos secciones recurre a la otra. Este capítulo trata del caso del "
+"plugin."
+
+#: ../../source/plugins/output.rst:21
+msgid "What an output type is for"
+msgstr "Para qué sirve un tipo de salida"
+
+#: ../../source/plugins/output.rst:23
+msgid ""
+"**A format PartCAD does not write** -- a vendor's exchange format, a "
+"simulator's scene file, a format with a license PartCAD cannot carry."
+msgstr ""
+"**Un formato que PartCAD no escribe** -- el formato de intercambio de un "
+"proveedor, el archivo de escena de un simulador, un formato con una licencia"
+" que PartCAD no puede llevar."
+
+#: ../../source/plugins/output.rst:25
+msgid ""
+"**A document rather than a shape**: a report, a label, a cut list, a packing"
+" slip. Anything a command can be asked to write for an object is a render "
+"type."
+msgstr ""
+"**Un documento en lugar de una forma**: un informe, una etiqueta, una lista "
+"de cortes, un albarán. Cualquier cosa que se pueda pedir a un comando que "
+"escriba para un objeto es un tipo de renderizado."
+
+#: ../../source/plugins/output.rst:27
+msgid ""
+"**The other half of an** :doc:`importer </plugins/importers>`. Reading a "
+"format and writing it are one piece of knowledge, so the package that "
+"declares the reader declares the writer beside it, and ``pc convert`` then "
+"moves objects between the two."
+msgstr ""
+"**La otra mitad de un** :doc:`importador </plugins/importers>`. Leer un "
+"formato y escribirlo son un mismo conocimiento, así que el paquete que "
+"declara el lector declara el escritor a su lado, y ``pc convert`` mueve "
+"entonces objetos entre los dos."
+
+#: ../../source/plugins/output.rst:31
+msgid ""
+"**A dialect of a format PartCAD already writes**, where a particular "
+"downstream tool wants something specific."
+msgstr ""
+"**Un dialecto de un formato que PartCAD ya escribe**, cuando una herramienta"
+" concreta más adelante en la cadena quiere algo específico."
+
+#: ../../source/plugins/output.rst:35
+msgid "Using one"
+msgstr "Usar uno"
+
+#: ../../source/plugins/output.rst:37
+msgid ""
+"Import the package and name the type, with that package's name in front of "
+"it:"
+msgstr ""
+"Importe el paquete y nombre el tipo, con el nombre de ese paquete delante:"
+
+#: ../../source/plugins/output.rst:44
+msgid ""
+"A type can also be declared for an object so that it is produced whenever "
+"the object is, with its own parameters -- which is the usual way to use one:"
+msgstr ""
+"Un tipo también se puede declarar para un objeto, de modo que se produzca "
+"siempre que se produzca el objeto, con sus propios parámetros -- que es la "
+"forma habitual de usar uno:"
+
+#: ../../source/plugins/output.rst:56
+msgid "Writing one"
+msgstr "Escribir uno"
+
+#: ../../source/plugins/output.rst:73
+msgid ""
+"**Which section to declare it in is a promise, not a detail.** An "
+"``export:`` type promises geometry another tool can go on working with; a "
+"``render:`` type promises an output file and nothing more. A drawing, a "
+"picture or a report is the latter -- declare it under ``render:``, where it "
+"stays reachable from both commands, rather than under ``export:``, where it "
+"would promise a part it cannot deliver."
+msgstr ""
+"**En qué sección se declara es una promesa, no un detalle.** Un tipo "
+"``export:`` promete geometría con la que otra herramienta puede seguir "
+"trabajando; un tipo ``render:`` promete un archivo de salida y nada más. Un "
+"plano, una imagen o un informe es lo segundo -- declárelo bajo ``render:``, "
+"donde sigue siendo accesible desde ambos comandos, en lugar de bajo "
+"``export:``, donde prometería una pieza que no puede entregar."
+
+#: ../../source/plugins/output.rst:80
+msgid "Two fields are worth dwelling on:"
+msgstr "Vale la pena detenerse en dos campos:"
+
+#: ../../source/plugins/output.rst:82
+msgid "``reproducible``"
+msgstr "``reproducible``"
+
+#: ../../source/plugins/output.rst:83
+msgid ""
+"Whether the same object has to produce the same bytes every time. It is "
+"``false`` by default because the reproducible path is often the slower one; "
+"every drawing checked in under ``examples/`` sets it, because a checked-in "
+"file that changes on every run is a diff rather than a baseline. See "
+"``output.REPRODUCIBLE_KEY``."
+msgstr ""
+"Si el mismo objeto tiene que producir los mismos bytes cada vez. Es "
+"``false`` de forma predeterminada porque la vía reproducible suele ser la "
+"más lenta; todos los planos registrados bajo ``examples/`` lo establecen, "
+"porque un archivo registrado que cambia en cada ejecución es un diff y no "
+"una línea base. Véase ``output.REPRODUCIBLE_KEY``."
+
+#: ../../source/plugins/output.rst:89
+msgid "``exclude``"
+msgstr "``exclude``"
+
+#: ../../source/plugins/output.rst:90
+msgid ""
+"The object kinds this type is not written for. A sketch has no business "
+"being exported as an STL, and saying so once here is better than failing per"
+" object."
+msgstr ""
+"Los tipos de objeto para los que no se escribe este tipo. Un boceto no tiene"
+" nada que hacer exportado como STL, y decirlo una vez aquí es mejor que "
+"fallar objeto por objeto."
+
+#: ../../source/plugins/output.rst:94
+msgid "An example"
+msgstr "Un ejemplo"
+
+#: ../../source/plugins/output.rst:96
+msgid ""
+"`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ and "
+"`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ are "
+"the pair to read. Each declares, for one format, all four of the plugins "
+"that format needs: the :doc:`importer </plugins/importers>` that reads it, "
+"the output type that writes it, the :doc:`application entry "
+"</plugins/applications>` that opens it, and the :doc:`simulation plugin "
+"</plugins/simulations>` that runs it."
+msgstr ""
+"`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ y "
+"`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ son la"
+" pareja que conviene leer. Cada uno declara, para un formato, los cuatro "
+"plugins que ese formato necesita: el :doc:`importador </plugins/importers>` "
+"que lo lee, el tipo de salida que lo escribe, la :doc:`entrada de aplicación"
+" </plugins/applications>` que lo abre y el :doc:`plugin de simulación "
+"</plugins/simulations>` que lo ejecuta."
+
+#: ../../source/plugins/output.rst:103
+msgid ""
+"That is the point of the example rather than an accident of packaging. The "
+"export is what the simulator is handed its scene through, so the two cannot "
+"disagree about the format; and because the exporter for a simulation "
+"plugin's ``format:`` is looked up in the plugin's own package as well as in "
+"the scene's, a plugin **implements the format it reads**:"
+msgstr ""
+"Eso es el objetivo del ejemplo y no un accidente del empaquetado. La "
+"exportación es el medio por el que se le entrega al simulador su escena, así"
+" que las dos no pueden discrepar sobre el formato; y como el exportador para"
+" el ``format:`` de un plugin de simulación se busca tanto en el propio "
+"paquete del plugin como en el de la escena, un plugin **implementa el "
+"formato que lee**:"
+
+#: ../../source/plugins/output.rst:115
+msgid ""
+"A package that re-tunes that export for its own scenes still wins over the "
+"plugin's own declaration, which is what ``formatOptions:`` on the simulation"
+" declaration is for: a physics run wants every body free to move, the "
+"opposite of what a scene means on its own."
+msgstr ""
+"Un paquete que reajusta esa exportación para sus propias escenas sigue "
+"teniendo prioridad sobre la declaración del propio plugin, que es para lo "
+"que está ``formatOptions:`` en la declaración de la simulación: una "
+"ejecución de física quiere que todos los cuerpos puedan moverse libremente, "
+"lo contrario de lo que significa una escena por sí sola."

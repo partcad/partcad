@@ -1,0 +1,183 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/config_bom.rst:3
+msgid "Interchangeable BOM"
+msgstr "Взаимозаменяемая спецификация"
+
+#: ../../source/config_bom.rst:5
+msgid ""
+"A bill of materials is usually a flat list of exact things to buy. PartCAD "
+"lets it be something more useful: a list of what each position has to *be*, "
+"which a package can then satisfy with a particular product. The same "
+"assembly can be quoted from two different suppliers, or built from what is "
+"in the drawer, without the assembly changing."
+msgstr ""
+"Спецификация материалов обычно является плоским списком конкретных вещей, "
+"которые надо купить. PartCAD позволяет ей быть чем-то более полезным: "
+"списком того, чем каждая позиция должна *быть*, а пакет затем может "
+"удовлетворить это конкретным продуктом. Одну и ту же сборку можно оценить у "
+"двух разных поставщиков или собрать из того, что лежит в ящике, и при этом "
+"сама сборка не меняется."
+
+#: ../../source/config_bom.rst:10
+msgid ""
+"This is the object-oriented part of PartCAD, and it is built out of three "
+"things that are documented elsewhere in this section: :doc:`interfaces "
+"</config_interfaces>`, which say how a part connects; ``alias``, which gives"
+" an existing part another name; and ``enrich``, which makes an opinionated "
+"version of an existing part by fixing some of its parameters. Put together, "
+"they let a part be refined by steps, from \"something that bolts on here\" "
+"to \"this exact item from this exact vendor\"."
+msgstr ""
+"Это объектно-ориентированная часть PartCAD, и строится она из трёх вещей, "
+"которые документированы в других местах этого раздела: :doc:`интерфейсов "
+"</config_interfaces>`, которые говорят, как деталь соединяется; ``alias``, "
+"который даёт существующей детали другое имя; и ``enrich``, который делает "
+"специализированную версию существующей детали, фиксируя некоторые её "
+"параметры. Вместе они позволяют уточнять деталь по шагам: от \"чего-то, что "
+"прикручивается здесь\" до \"вот этого конкретного товара вот этого "
+"конкретного поставщика\"."
+
+#: ../../source/config_bom.rst:18
+msgid "Abstract and concrete parts"
+msgstr "Абстрактные и конкретные детали"
+
+#: ../../source/config_bom.rst:20
+msgid ""
+"A part declaration does not have to say where the part comes from. What "
+"makes a part usable in an assembly is its geometry and its interfaces -- "
+"where it sits, and what it mates with. A part that has those and no "
+"``vendor``/``sku`` is **abstract**: the assembly knows how it fits, and not "
+"yet which product it is."
+msgstr ""
+"Объявление детали не обязано говорить, откуда деталь берётся. Деталь делает "
+"пригодной для использования в сборке её геометрия и её интерфейсы: то, где "
+"она сидит, и то, с чем она сопрягается. Деталь, у которой это есть, но нет "
+"``vendor``/``sku``, является **абстрактной**: сборка знает, как она "
+"подходит, и пока не знает, какой это товар."
+
+#: ../../source/config_bom.rst:24
+msgid ""
+"A part that does name a ``vendor`` and an ``sku`` is **concrete**. It is a "
+"thing somebody sells, and ``pc supply`` can quote and order it (see "
+":ref:`procurement`)."
+msgstr ""
+"Деталь, которая всё же называет ``vendor`` и ``sku``, является "
+"**конкретной**. Это вещь, которую кто-то продаёт, и ``pc supply`` может "
+"запросить её цену и заказать её (см. :ref:`procurement`)."
+
+#: ../../source/config_bom.rst:27
+msgid "Between the two there is a chain, and each link narrows the choice:"
+msgstr "Между этими двумя есть цепочка, и каждое её звено сужает выбор:"
+
+#: ../../source/config_bom.rst:58
+msgid ""
+"Each of those is a part in its own right, and each can be used in an "
+"assembly. ``alias`` does the same without changing anything -- a local name "
+"for a part that lives somewhere else, so an assembly refers to ``:bolt`` and"
+" the package decides what that is."
+msgstr ""
+"Каждая из них является полноправной деталью, и каждую можно использовать в "
+"сборке. ``alias`` делает то же самое, ничего не меняя: это локальное имя для"
+" детали, которая живёт где-то в другом месте, так что сборка ссылается на "
+"``:bolt``, а пакет решает, что это такое."
+
+#: ../../source/config_bom.rst:64
+msgid "Why the interface is what matters"
+msgstr "Почему важен именно интерфейс"
+
+#: ../../source/config_bom.rst:66
+msgid ""
+"An assembly that mates by :ref:`interfaces <interfaces>` rather than by "
+"coordinates does not name positions; it names connections. So replacing one "
+"bolt with another bolt that implements the same interface does not move "
+"anything: the mate is recomputed from the new part's ports. That is what "
+"makes a position in the bill of materials interchangeable rather than merely"
+" editable."
+msgstr ""
+"Сборка, которая сопрягается по :ref:`интерфейсам <interfaces>`, а не по "
+"координатам, не называет положений; она называет соединения. Поэтому замена "
+"одного болта другим болтом, который реализует тот же интерфейс, ничего не "
+"смещает: сопряжение пересчитывается по портам новой детали. Именно это "
+"делает позицию в спецификации материалов взаимозаменяемой, а не просто "
+"редактируемой."
+
+#: ../../source/config_bom.rst:71
+msgid ""
+"It is also what makes the refinement chain above safe. An ``enrich`` of a "
+"part keeps the source's interfaces, so a part narrowed three times still "
+"mates the way the abstract one did -- and ``pc test`` checks that it does, "
+"since the connection test is run against whatever the assembly actually "
+"resolves to."
+msgstr ""
+"Это же делает безопасной и цепочку уточнений выше. ``enrich`` детали "
+"сохраняет интерфейсы источника, поэтому деталь, уточнённая три раза, по-"
+"прежнему сопрягается так, как сопрягалась абстрактная, -- и ``pc test`` "
+"проверяет, что это так, поскольку проверка соединений выполняется против "
+"того, во что сборка действительно разрешается."
+
+#: ../../source/config_bom.rst:77
+msgid "Assemblies can be either, and so can you"
+msgstr "Сборки могут быть и такими, и такими -- как и вы"
+
+#: ../../source/config_bom.rst:79
+msgid ""
+"An assembly may name concrete parts, in which case its bill of materials is "
+"a list of products and ``pc supply`` can price it as it stands. Or it may "
+"name abstract ones, in which case it is a design that somebody -- you, a "
+"downstream package, a customer -- completes by choosing products for its "
+"positions. A package of your own that imports such an assembly and declares "
+"``enrich``\\ es for its abstract parts is how that choice is written down, "
+"versioned and reviewed like everything else."
+msgstr ""
+"Сборка может называть конкретные детали, и тогда её спецификация материалов "
+"является списком товаров, а ``pc supply`` может оценить её как есть. Либо "
+"она может называть абстрактные детали, и тогда это проект, который кто-то --"
+" вы, пакет дальше по цепочке, заказчик -- завершает, выбирая товары для её "
+"позиций. Собственный пакет, который импортирует такую сборку и объявляет "
+"``enrich`` для её абстрактных деталей, -- это и есть то, как такой выбор "
+"записывается, версионируется и просматривается, как и всё остальное."
+
+#: ../../source/config_bom.rst:87
+msgid ""
+"Making an assembly that still contains abstract parts *manufacturable* -- "
+"having PartCAD choose products for the open positions, or order against the "
+"interface rather than against an SKU -- is not implemented yet. Today an "
+"assembly is procured from the parts it actually resolves to, so the "
+"positions have to be concrete by the time you ask ``pc supply`` or ``pc "
+"bom`` for an answer."
+msgstr ""
+"Сделать *изготавливаемой* сборку, которая всё ещё содержит абстрактные "
+"детали -- так, чтобы PartCAD сам выбирал товары для открытых позиций или "
+"заказывал по интерфейсу, а не по SKU, -- пока не реализовано. Сегодня сборка"
+" закупается из тех деталей, в которые она фактически разрешается, поэтому к "
+"моменту, когда вы просите ответа у ``pc supply`` или ``pc bom``, позиции "
+"должны быть конкретными."
+
+#: ../../source/config_bom.rst:92
+msgid ""
+"See :doc:`/config_making` for how a concrete part is bought or made, and "
+":doc:`/cli` for ``pc bom``, which prints the list the assembly resolves to."
+msgstr ""
+"О том, как конкретная деталь покупается или изготавливается, см. "
+":doc:`/config_making`, а о ``pc bom``, который печатает тот список, в "
+"который разрешается сборка, -- :doc:`/cli`."

@@ -1,0 +1,150 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/workflows.rst:3
+msgid "Workflows"
+msgstr "Рабочие процессы"
+
+#: ../../source/digital_thread/workflows.rst:5
+msgid ""
+"A workflow is a path through the phases of "
+":doc:`/digital_thread/lifecycle/index`, which that chapter takes one at a "
+"time. These are the shapes the path takes in practice -- each one crossing "
+"several phases, in the order somebody actually works in rather than the "
+"order the phases are listed in."
+msgstr ""
+"Рабочий процесс -- это путь через фазы из "
+":doc:`/digital_thread/lifecycle/index`, которые та глава разбирает по одной."
+" Здесь -- те формы, которые этот путь принимает на практике: каждая из них "
+"пересекает несколько фаз, в том порядке, в котором человек действительно "
+"работает, а не в том, в котором фазы перечислены."
+
+#: ../../source/digital_thread/workflows.rst:13
+msgid "From an idea to a part"
+msgstr "От идеи до детали"
+
+#: ../../source/digital_thread/workflows.rst:15
+msgid ""
+"Describe the part to an agent: ``/pc:gen-part`` (or ``/pc:gen-assembly``) "
+"writes the ``requirements:`` down from the description first, in its own "
+"terms, and only then models it (see :ref:`claude-plugin`)."
+msgstr ""
+"Опишите деталь агенту: ``/pc:gen-part`` (или ``/pc:gen-assembly``) сначала "
+"записывает ``requirements:`` по описанию, в его собственных терминах, и "
+"только затем её моделирует (см. :ref:`claude-plugin`)."
+
+#: ../../source/digital_thread/workflows.rst:18
+msgid ""
+"``pc test`` proves it builds, can be made, and has the ports, interfaces and"
+" physical properties it is required to have."
+msgstr ""
+"``pc test`` доказывает, что она собирается, что её можно изготовить и что у "
+"неё есть те порты, интерфейсы и физические свойства, которые от неё "
+"требуются."
+
+#: ../../source/digital_thread/workflows.rst:20
+msgid ""
+"``/pc:validate`` runs everything, looks at the part from every angle that "
+"matters, and gives each requirement a verdict -- met, not met, or \"cannot "
+"tell\", with the evidence named."
+msgstr ""
+"``/pc:validate`` выполняет всё, смотрит на деталь со всех важных углов и "
+"выносит вердикт по каждому требованию -- выполнено, не выполнено или "
+"\"определить нельзя\", с указанием доказательств."
+
+#: ../../source/digital_thread/workflows.rst:25
+msgid "Changing a design without breaking it"
+msgstr "Как изменить проект, не сломав его"
+
+#: ../../source/digital_thread/workflows.rst:27
+msgid ""
+"Edit the script or the declaration; the Digital Thread shows the object "
+"again as soon as it is saved."
+msgstr ""
+"Отредактируйте скрипт или объявление; Digital Thread показывает объект "
+"заново, как только он сохранён."
+
+#: ../../source/digital_thread/workflows.rst:29
+msgid ""
+"Open **Validation**: every check runs again, through the cache, so what did "
+"not change is not asked again. A failure says what it found; an interference"
+" leaves an assembly of the two parts and what they share to look at."
+msgstr ""
+"Откройте **Validation**: каждая проверка выполняется заново, через кэш, "
+"поэтому то, что не изменилось, заново не спрашивается. Сбой говорит, что он "
+"нашёл; пересечение оставляет сборку из двух деталей и того, что у них общее,"
+" на которую можно посмотреть."
+
+#: ../../source/digital_thread/workflows.rst:32
+msgid ""
+"``pc test`` and ``pc sim`` in CI hold every change to the same checks, and "
+"rendered pictures checked in beside the package make a change in how "
+"anything looks a diff somebody reviews."
+msgstr ""
+"``pc test`` и ``pc sim`` в CI подчиняют тем же проверкам каждое изменение, а"
+" отрисованные картинки, закоммиченные рядом с пакетом, делают изменение "
+"внешнего вида чего угодно тем диффом, который кто-то просматривает."
+
+#: ../../source/digital_thread/workflows.rst:37
+msgid "From a design to an order"
+msgstr "От проекта до заказа"
+
+#: ../../source/digital_thread/workflows.rst:39
+msgid ""
+"**Manufacturing → Build vs Buy** decides, per part and sub-assembly, what is"
+" made and what is ordered; the choice is kept on the machine of whoever made"
+" it."
+msgstr ""
+"**Manufacturing → Build vs Buy** решает для каждой детали и подсборки, что "
+"изготавливается и что заказывается; этот выбор хранится на машине того, кто "
+"его сделал."
+
+#: ../../source/digital_thread/workflows.rst:42
+msgid ""
+"``pc bom`` lists what that takes, ``pc supply quote`` asks suppliers for it,"
+" and ``pc supply order`` orders it."
+msgstr ""
+"``pc bom`` перечисляет, что для этого нужно, ``pc supply quote`` запрашивает"
+" это у поставщиков, а ``pc supply order`` это заказывает."
+
+#: ../../source/digital_thread/workflows.rst:44
+msgid ""
+"``pc instructions`` writes the book that puts it together, step by step, and"
+" ``pc cam`` the programs the machines cut its parts with."
+msgstr ""
+"``pc instructions`` записывает ту книгу, по которой это собирают, шаг за "
+"шагом, а ``pc cam`` -- те программы, по которым станки режут её детали."
+
+#: ../../source/digital_thread/workflows.rst:48
+msgid "Reviewing somebody else's product"
+msgstr "Как просмотреть чужой продукт"
+
+#: ../../source/digital_thread/workflows.rst:50
+msgid ""
+"``pc test -P <package>...`` checks every object of a package and everything "
+"below it. In the Digital Thread, each object shows its requirements, its "
+"design, its analyses, how it is made, and its checks with what each one "
+"found -- the whole thread of one object on one screen."
+msgstr ""
+"``pc test -P <package>...`` проверяет каждый объект пакета и всё, что под "
+"ним. В Digital Thread каждый объект показывает свои требования, свой проект,"
+" свои расчёты, то, как он изготавливается, и свои проверки с тем, что нашла "
+"каждая, -- всю нить одного объекта на одном экране."

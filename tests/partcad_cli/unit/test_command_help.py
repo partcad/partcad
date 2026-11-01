@@ -187,88 +187,57 @@ def test_no_command_spells_one_option_two_ways():
 
 # --- The copy of this list that lives in the documentation --------------------
 #
-# `docs/source/installation.rst` pastes a `pc --help` transcript by hand, as
-# orientation on the page someone reads before they have the command. It is the
-# one place in the tree that restates the command list in prose, and it has gone
-# stale twice: the August review found it missing `upgrade`, `daemon`, `open` and
-# `bom`, and the review five weeks later found it missing `sim`, `filter`, `cae`
-# and `cam`. Nothing connected it to the code it describes.
+# Every command has an entry in `docs/source/cli.rst`, which is the command
+# reference, and nothing connected that page to the code it describes. A list
+# restated in prose goes stale: `installation.rst` used to paste a `pc --help`
+# transcript as well, and three consecutive reviews found it missing commands --
+# `upgrade`, `daemon`, `open`, `bom`, then `sim`, `filter`, `cae`, `cam`, then
+# `instructions`. That transcript is gone (the reference is the one place the
+# list belongs), and this is the gate that keeps the reference honest.
 #
 # Generating it at build time was considered and rejected: `sphinx-click` has to
 # import the application, and `.readthedocs.yaml` installs `docs/requirements.txt`
 # alone -- so the published documentation would start depending on PartCAD's whole
 # install closure, and a broken runtime dependency would take the docs down with
-# it. It also renders in its own style, which matches neither this plain
-# transcript nor the box-drawn panels rich-click actually prints.
+# it.
 #
-# So the transcript stays checked in, the way `examples/` keeps its rendered
-# output checked in, and this is the gate: a command added to `command_groups`
-# and not to the page fails here, with the panel and the name to add.
+# So the reference stays hand-written, the way `examples/` keeps its rendered
+# output checked in, and a command added to `command_groups` and not to the page
+# fails here with the name to add.
 
-DOCS_HELP_PAGE = "docs/source/installation.rst"
+DOCS_CLI_PAGE = "docs/source/cli.rst"
 
 
-def _transcript_panels():
-    """The command names per panel, read out of the pasted transcript."""
+def _documented_commands():
+    """Top-level commands that `cli.rst` gives an entry of its own."""
     import pathlib
     import re
 
-    path = pathlib.Path(__file__).resolve().parents[3] / DOCS_HELP_PAGE
+    path = pathlib.Path(__file__).resolve().parents[3] / DOCS_CLI_PAGE
     text = path.read_text(encoding="utf-8")
-
-    start = text.index("  Host commands:")
-    end = text.index("\nCommon options apply", start)
-    panels, panel = {}, None
-    for line in text[start:end].split("\n"):
-        # A panel is a two-space-indented line ending in a colon, named as
-        # command_groups names it: "Host commands", "Interacting with IDE".
-        heading = re.fullmatch(r"  ([A-Z][A-Za-z ]+):", line)
-        if heading:
-            panel = heading.group(1)
-            panels[panel] = []
-            continue
-        # '    name         description'. One space is enough: the description
-        # column is as wide as the longest name, so `instructions` leaves a
-        # single space where `render` leaves seven. A wrapped continuation line
-        # is indented to that column, so it has no name in the first position
-        # and cannot match.
-        entry = re.fullmatch(r"    ([a-z][a-z-]*) +\S.*", line)
-        if entry and panel:
-            panels[panel].append(entry.group(1))
-    return panels
+    # An entry is a definition term at the start of a line: ``pc <name>``, or
+    # ``pc <name> <subcommand>`` -- a group like `pc ide` is documented by its
+    # subcommands and a section of its own rather than by an entry of its own.
+    return {m.group(1) for m in re.finditer(r"^``pc ([a-z][a-z-]*)[ `]", text, re.M)}
 
 
-def test_the_documented_help_transcript_lists_every_command():
-    documented = _transcript_panels()
-    assert documented, "found no command panels in %s" % DOCS_HELP_PAGE
+def test_the_command_reference_documents_every_command():
+    documented = _documented_commands()
+    assert documented, "found no ``pc <command>`` entries in %s" % DOCS_CLI_PAGE
 
-    expected = {group["name"]: list(group["commands"]) for group in command_groups}
+    expected = {name for group in command_groups for name in group["commands"]}
 
-    assert set(documented) == set(expected), "panels differ: documented %s, code %s" % (
-        sorted(documented),
-        sorted(expected),
-    )
+    missing = sorted(expected - documented)
+    assert not missing, "%s has no entry for: %s" % (DOCS_CLI_PAGE, ", ".join(missing))
 
-    for panel, names in sorted(expected.items()):
-        missing = [n for n in names if n not in documented[panel]]
-        extra = [n for n in documented[panel] if n not in names]
-        assert not missing, "%s is missing from '%s' in %s" % (", ".join(missing), panel, DOCS_HELP_PAGE)
-        assert not extra, "%s is in '%s' in %s but not in command_groups" % (", ".join(extra), panel, DOCS_HELP_PAGE)
-        assert documented[panel] == names, "'%s' in %s is in a different order than command_groups:\n  %s\n  %s" % (
-            panel,
-            DOCS_HELP_PAGE,
-            documented[panel],
-            names,
-        )
-
-
-@pytest.mark.parametrize("old, new", [("open", ["ide", "open"]), ("inspect", ["ide", "view"])])
-def test_an_old_name_is_the_new_command_hidden(old, new):
-    """`pc open` and `pc inspect` still run -- as `pc ide open` and `pc ide view` -- and help omits them."""
+    # The page may document more than `command_groups` names -- `pc ide view` and
+    # the other subcommands have entries of their own -- so an extra is not a
+    # failure. A name that is no longer a command is: it would send a reader to
+    # something that does not run.
     ctx = root.context_class(root, info_name="pc")
-    alias = root.get_command(ctx, old)
-    group = root.get_command(ctx, new[0])
-    target = group.get_command(group.context_class(group, info_name=new[0], parent=ctx), new[1])
-
-    assert alias.hidden and not target.hidden
-    assert [p.name for p in alias.params] == [p.name for p in target.params]
+    actual = set(root.list_commands(ctx))
+    stale = sorted(n for n in documented if n not in actual)
+    assert not stale, "%s documents commands that no longer exist: %s" % (
+        DOCS_CLI_PAGE,
+        ", ".join(stale),
+    )

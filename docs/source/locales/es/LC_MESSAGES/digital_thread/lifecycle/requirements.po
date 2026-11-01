@@ -1,0 +1,263 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:2
+msgid "Requirements"
+msgstr "Requisitos"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:4
+msgid ""
+"A requirement is what the object was asked to be, written from the point of "
+"view of whoever asked for it and before anybody designs anything. It is the "
+"first link of the thread and the one everything else is held to: the design "
+"is judged against it, the analyses and simulations are evidence for it, and "
+"validation is the question whether it is met."
+msgstr ""
+"Un requisito es lo que se pidió que fuera el objeto, escrito desde el punto "
+"de vista de quien lo pidió y antes de que nadie diseñe nada. Es el primer "
+"enlace del hilo y aquel al que se somete todo lo demás: el diseño se juzga "
+"contra él, los análisis y las simulaciones son la evidencia a su favor, y la"
+" validación es la pregunta de si se cumple."
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:11
+msgid "What PartCAD captures"
+msgstr "Qué recoge PartCAD"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:13
+msgid ""
+"A part, an assembly, a scene or a sketch may declare a ``requirements:`` "
+"section. :ref:`requirements` describes it in full; in short, it has two "
+"halves, which are checked two ways:"
+msgstr ""
+"Una pieza, un ensamblaje, una escena o un boceto puede declarar una sección "
+"``requirements:``. :ref:`requirements` la describe por completo; en resumen,"
+" tiene dos mitades, que se comprueban de dos maneras:"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:36
+msgid "``features``"
+msgstr "``features``"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:37
+msgid ""
+"What the object has to have or do, in the words of whoever asked. A feature "
+"is a sentence, not a number, and no program can measure it: it is judged "
+"from evidence -- a simulation that names it, a view in which it can be seen,"
+" a line of the bill of materials -- by a person or by the ``/pc:validate`` "
+"agent skill."
+msgstr ""
+"Lo que el objeto tiene que tener o hacer, en las palabras de quien lo pidió."
+" Una característica es una frase, no un número, y ningún programa puede "
+"medirla: se juzga a partir de la evidencia -- una simulación que la nombra, "
+"una vista en la que se puede ver, una línea de la lista de materiales -- por"
+" una persona o por la skill de agente ``/pc:validate``."
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:42
+msgid "``ports``, ``interfaces`` and ``physics``"
+msgstr "``ports``, ``interfaces`` y ``physics``"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:43
+msgid ""
+"What PartCAD can measure: a port that has to be there and face a given way, "
+"an interface that has to be implemented and where, a physical property that "
+"has to have a value. Any part of each may be ``null`` -- no requirement -- "
+"and a value may be a constant, a comparison (``>0``, ``<=1``, ``!0``) or "
+"several of them. ``pc test`` checks every one of them, every time."
+msgstr ""
+"Lo que PartCAD sí puede medir: un puerto que tiene que estar ahí y mirar en "
+"una dirección dada, una interfaz que tiene que estar implementada y dónde, "
+"una propiedad física que tiene que tener un valor. Cualquier parte de cada "
+"uno puede ser ``null`` -- ningún requisito -- y un valor puede ser una "
+"constante, una comparación (``>0``, ``<=1``, ``!0``) o varias de ellas. ``pc"
+" test`` comprueba todos y cada uno de ellos, cada vez."
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:49
+msgid ""
+"A ``simulate:`` entry names the feature it demonstrates with ``feature:``, "
+"which is how a simulation becomes evidence for a requirement rather than a "
+"test that happens to exist."
+msgstr ""
+"Una entrada ``simulate:`` nombra la característica que demuestra con "
+"``feature:``, que es la forma en que una simulación se convierte en "
+"evidencia de un requisito en lugar de en una prueba que resulta existir."
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:54
+msgid "Writing requirements first"
+msgstr "Escribir los requisitos primero"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:56
+msgid ""
+"Requirements written after the design describe the design, and then "
+"everything meets them. They are worth having when they are written first, "
+"from the description, in its own terms -- \"four M3 holes on a 40 mm "
+"square\" rather than \"the holes in sketch 3\". The ``/pc:gen-part`` and "
+"``/pc:gen-assembly`` agent skills do exactly that before they model "
+"anything; written by hand, the same order holds."
+msgstr ""
+"Unos requisitos escritos después del diseño describen el diseño, y entonces "
+"todo los cumple. Vale la pena tenerlos cuando se escriben primero, a partir "
+"de la descripción, en sus propios términos -- \"cuatro agujeros M3 en un "
+"cuadrado de 40 mm\" en lugar de \"los agujeros del boceto 3\". Las skills de"
+" agente ``/pc:gen-part`` y ``/pc:gen-assembly`` hacen exactamente eso antes "
+"de modelar nada; escritos a mano, vale el mismo orden."
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:63
+msgid ""
+"Keep to what was asked for. A requirement the design imposes on itself -- a "
+"stock size, a tool -- belongs to manufacturing, not here."
+msgstr ""
+"Limítese a lo que se pidió. Un requisito que el diseño se impone a sí mismo "
+"-- un tamaño de material, una herramienta -- pertenece a la fabricación, no "
+"a aquí."
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:67
+msgid "In the UI"
+msgstr "En la interfaz"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:69
+msgid ""
+"An object that declares requirements gets a **Requirements** tab in front of"
+" all the others. It is the one tab with no strip of its own -- there is "
+"nothing to divide it into, because a requirement is one thing either met or "
+"not."
+msgstr ""
+"Un objeto que declara requisitos obtiene una pestaña **Requirements** "
+"delante de todas las demás. Es la única pestaña sin una tira propia -- no "
+"hay nada en lo que dividirla, porque un requisito es una sola cosa, cumplida"
+" o no."
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:73
+msgid ""
+"It lists every port, interface and physical property required, each with a "
+"green or a red mark from the same check ``pc test`` runs, and then a table "
+"of the features. Each feature carries its description and a banner per thing"
+" that validates it: one for every simulation that names it with "
+"``feature:``, one for every analysis scenario that does (**FEA: loaded**), "
+"and an **LLM** banner -- \"Validate using /pc-validate\" -- since a sentence"
+" is for an agent or a person to judge and for no program to measure."
+msgstr ""
+"Enumera cada puerto, interfaz y propiedad física exigidos, cada uno con una "
+"marca verde o roja de la misma comprobación que ejecuta ``pc test``, y "
+"después una tabla de las características. Cada característica lleva su "
+"descripción y un banner por cada cosa que la valida: uno por cada simulación"
+" que la nombra con ``feature:``, uno por cada escenario de análisis que lo "
+"hace (**FEA: loaded**), y un banner **LLM** -- \"Validate using /pc-"
+"validate\" -- ya que una frase le corresponde juzgarla a un agente o a una "
+"persona y a ningún programa medirla."
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:81
+msgid ""
+"The Requirements tab: the measured requirements with their marks, and the "
+"features with what validates each"
+msgstr ""
+"La pestaña Requirements: los requisitos medidos con sus marcas, y las "
+"características con lo que valida a cada una"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:86
+msgid ""
+"``pc ide view`` has a flag per tab of the five groups and none for this one:"
+" the tab is there for an object that declares ``requirements:`` and absent "
+"for every other object, so there is nothing to ask for."
+msgstr ""
+"``pc ide view`` tiene una opción por cada pestaña de los cinco grupos y "
+"ninguna para esta: la pestaña está ahí para un objeto que declara "
+"``requirements:`` y ausente para todos los demás objetos, así que no hay "
+"nada que pedir."
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:91
+msgid "On the command line"
+msgstr "En la línea de comandos"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:93
+msgid ""
+"``pc test`` runs the ``requirements`` check (see :ref:`test-requirements`): "
+"every measured requirement, with what was found instead of each one not met."
+" A value PartCAD cannot find out -- a mass with no density to work it out "
+"from -- fails as \"not known\" rather than passing."
+msgstr ""
+"``pc test`` ejecuta la comprobación ``requirements`` (véase :ref:`test-"
+"requirements`): cada requisito medido, con lo que se encontró en lugar de "
+"cada uno de los que no se cumplen. Un valor que PartCAD no puede averiguar "
+"-- una masa sin densidad a partir de la cual calcularla -- falla como \"no "
+"conocido\" en lugar de pasar."
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:97
+msgid "``pc sim`` runs every simulation, including those that name a feature."
+msgstr ""
+"``pc sim`` ejecuta todas las simulaciones, incluidas las que nombran una "
+"característica."
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:98
+msgid ""
+"``/pc:validate`` gathers the rest of the evidence -- renders from every "
+"angle that matters, the bill of materials and the assembly instructions -- "
+"and gives each requirement a verdict. See "
+":doc:`/digital_thread/lifecycle/validation`."
+msgstr ""
+"``/pc:validate`` reúne el resto de la evidencia -- renderizados desde todos "
+"los ángulos que importan, la lista de materiales y las instrucciones de "
+"montaje -- y da a cada requisito un veredicto. Véase "
+":doc:`/digital_thread/lifecycle/validation`."
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:102
+msgid ""
+"``pc info`` prints the section as it is read, which is how to see what a "
+"template or an :ref:`enrich <part-types>` left behind. ``pc lint`` reports a"
+" ``requirements:`` that is malformed before anything is built."
+msgstr ""
+"``pc info`` imprime la sección tal como se lee, que es la forma de ver qué "
+"dejó una plantilla o un :ref:`enrich <part-types>`. ``pc lint`` informa de "
+"un ``requirements:`` mal formado antes de que se construya nada."
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:107
+msgid "Agent skills"
+msgstr "Skills de agente"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:109
+msgid "``/pc:gen-part`` and ``/pc:gen-assembly``"
+msgstr "``/pc:gen-part`` y ``/pc:gen-assembly``"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:110
+msgid ""
+"Write the ``requirements:`` down first, from the description and in its own "
+"terms, and only then model anything. This is the order that makes "
+"requirements worth having, and it is the reason to generate from a "
+"description rather than to describe what was generated."
+msgstr ""
+"Escriben primero los ``requirements:``, a partir de la descripción y en sus "
+"propios términos, y solo después modelan algo. Este es el orden que hace que"
+" valga la pena tener requisitos, y es la razón para generar a partir de una "
+"descripción en lugar de describir lo que se generó."
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:115
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/requirements.rst:116
+msgid ""
+"Gives every requirement a verdict -- met, not met, or \"cannot tell\" -- and"
+" names the evidence for each. It is the only one of the skills that judges "
+"the ``features:`` half, because a sentence is what an agent or a person can "
+"read and a program cannot measure."
+msgstr ""
+"Da a cada requisito un veredicto -- cumplido, no cumplido o \"no se puede "
+"determinar\" -- y nombra la evidencia de cada uno. Es la única de las skills"
+" que juzga la mitad ``features:``, porque una frase es lo que un agente o "
+"una persona pueden leer y un programa no puede medir."

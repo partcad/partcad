@@ -1,0 +1,215 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:5
+msgid "CFD"
+msgstr "CFD"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:7
+msgid ""
+"**CFD** is the question how a fluid flows through a part: a computational "
+"fluid dynamics analysis, reporting the flow and the pressure in it. It is "
+"the one analysis where the part **is the fluid**: the solid handed to the "
+"solver is the volume the fluid occupies -- a bore, a duct, a plenum -- not "
+"the wall around it."
+msgstr ""
+"**CFD** es la pregunta de cómo fluye un fluido a través de una pieza: un "
+"análisis de dinámica de fluidos computacional, que informa del flujo y de la"
+" presión en él. Es el único análisis en el que la pieza **es el fluido**: el"
+" sólido que se entrega al solver es el volumen que ocupa el fluido -- un "
+"taladro, un conducto, una cámara -- y no la pared que lo rodea."
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:12
+msgid ""
+"The question is asked by a ``cfd:`` section on the part, a map of named "
+"scenarios, and answered by a solver a package supplies. "
+":doc:`/digital_thread/lifecycle/analysis` explains what every analysis has "
+"in common."
+msgstr ""
+"La pregunta la plantea una sección ``cfd:`` en la pieza, un mapa de "
+"escenarios con nombre, y la responde un solver que proporciona un paquete. "
+":doc:`/digital_thread/lifecycle/analysis` explica lo que todos los análisis "
+"tienen en común."
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:18
+msgid "What the scenario says"
+msgstr "Qué dice el escenario"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:20
+msgid "``load:``"
+msgstr "``load:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:21
+msgid ""
+"where the flow is driven in, as a force on the inlet's surface -- so the "
+"pressure driving it is that force over exactly the port's area."
+msgstr ""
+"por dónde se impulsa el flujo hacia dentro, como una fuerza sobre la "
+"superficie de la entrada -- así que la presión que lo impulsa es esa fuerza "
+"repartida exactamente sobre el área del puerto."
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:24
+msgid "``outlet:``"
+msgstr "``outlet:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:25
+msgid "where it leaves, at the reference pressure."
+msgstr "por dónde sale, a la presión de referencia."
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:27
+msgid "``fix:``"
+msgstr "``fix:``"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:28
+msgid "walls, where one has to be named."
+msgstr "paredes, cuando hay que nombrar alguna."
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:30
+msgid ""
+"**Every surface that is neither an inlet nor an outlet is a wall**, held no-"
+"slip, so a bore's lateral surface is a wall without being named -- and could"
+" not be named by a sketch anyway, a sketch being flat where that surface is "
+"a cylinder."
+msgstr ""
+"**Toda superficie que no es ni una entrada ni una salida es una pared**, con"
+" condición de no deslizamiento, así que la superficie lateral de un taladro "
+"es una pared sin necesidad de nombrarla -- y de todos modos no podría "
+"nombrarla un boceto, siendo un boceto plano allí donde esa superficie es un "
+"cilindro."
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:49
+msgid ""
+"A condition lands on the surface its port stands for, and for an inlet that "
+"matters more than anywhere else: a port is a coordinate frame, and a frame "
+"cannot say how wide an inlet is. An interface that draws its port with a "
+"sketch -- a ``basic`` ``circle:`` for the end of a bore -- has that sketch "
+"imprinted on the part before the solver runs, and the force is spread over "
+"exactly the area it covers."
+msgstr ""
+"Una condición recae sobre la superficie que representa su puerto, y para una"
+" entrada eso importa más que en ningún otro sitio: un puerto es un sistema "
+"de coordenadas, y un sistema de coordenadas no puede decir lo ancha que es "
+"una entrada. Una interfaz que dibuja su puerto con un boceto -- un "
+"``circle:`` ``basic`` para el extremo de un taladro -- tiene ese boceto "
+"impreso en la pieza antes de que se ejecute el solver, y la fuerza se "
+"reparte exactamente sobre el área que cubre."
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:57
+msgid "In the UI"
+msgstr "En la interfaz"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:59
+msgid ""
+"The scenarios are listed down the left with the first selected, each marked "
+"with how its last run went, and selecting one runs it. What is shown is the "
+"flow field the implementation produced -- drawn as the format it chose, so a"
+" 3D result is turned and zoomed and a 2D one is panned and zoomed as a "
+"picture -- with the findings under it. **Analysed by** chooses the solver, "
+"**Analyse** runs it again."
+msgstr ""
+"Los escenarios se enumeran a la izquierda con el primero seleccionado, cada "
+"uno marcado con cómo fue su última ejecución, y seleccionar uno lo ejecuta. "
+"Lo que se muestra es el campo de flujo que produjo la implementación -- "
+"dibujado en el formato que esta eligió, así que un resultado 3D se gira y se"
+" amplía y uno 2D se desplaza y se amplía como una imagen -- con los "
+"hallazgos debajo. **Analysed by** elige el solver, **Analyse** lo vuelve a "
+"ejecutar."
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:66
+msgid "The Analysis group's CFD tab: the scenario list and the flow field"
+msgstr ""
+"La pestaña CFD del grupo Analysis: la lista de escenarios y el campo de "
+"flujo"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:71
+msgid ""
+"The tab is enabled for a part that declares ``cfd:`` and disabled for "
+"everything else."
+msgstr ""
+"La pestaña está activada para una pieza que declara ``cfd:`` y desactivada "
+"para todo lo demás."
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:75
+msgid "On the command line"
+msgstr "En la línea de comandos"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:86
+msgid "Who runs it"
+msgstr "Quién lo ejecuta"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:88
+msgid ""
+"The default is `partcad-cae-openfoam <https://github.com/partcad/partcad-"
+"cae-openfoam>`_, which runs `OpenFOAM <https://www.openfoam.com/>`_; "
+"``caeCfdImplementation`` names another. `Elmer "
+"<https://www.elmerfem.org/>`_, `MOOSE <https://mooseframework.inl.gov/>`_ "
+"and `code_saturne <https://www.code-saturne.org/>`_ do this analysis too."
+msgstr ""
+"El valor predeterminado es `partcad-cae-openfoam "
+"<https://github.com/partcad/partcad-cae-openfoam>`_, que ejecuta `OpenFOAM "
+"<https://www.openfoam.com/>`_; ``caeCfdImplementation`` nombra otro. `Elmer "
+"<https://www.elmerfem.org/>`_, `MOOSE <https://mooseframework.inl.gov/>`_ y "
+"`code_saturne <https://www.code-saturne.org/>`_ también hacen este análisis."
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:95
+msgid "An example"
+msgstr "Un ejemplo"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:97
+msgid ""
+"`examples/feature_cae "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cae>`_ "
+"declares ``pipe``: the bore of a 10 × 100 mm pipe, driven by 5 mN at the "
+"inlet and leaving at the outlet, every other surface a no-slip wall. Fully "
+"developed laminar flow has a closed form -- Hagen-Poiseuille -- and the "
+"package's ``README.md`` prints the flow rate each solver measured beside it."
+" Both of its ports are drawn with the bore's circle, which is what makes the"
+" driving pressure exactly the inlet force over the bore's area, and the "
+"part's own ``render:`` section draws that boundary so it can be looked at."
+msgstr ""
+"`examples/feature_cae "
+"<https://github.com/partcad/partcad/tree/main/examples/feature_cae>`_ "
+"declara ``pipe``: el taladro de un tubo de 10 × 100 mm, impulsado por 5 mN "
+"en la entrada y saliendo por la salida, con todas las demás superficies como"
+" pared de no deslizamiento. El flujo laminar completamente desarrollado "
+"tiene una forma cerrada -- Hagen-Poiseuille -- y el ``README.md`` del "
+"paquete imprime el caudal que midió cada solver junto a ella. Ambos puertos "
+"se dibujan con el círculo del taladro, que es lo que hace que la presión "
+"impulsora sea exactamente la fuerza de entrada repartida sobre el área del "
+"taladro, y la propia sección ``render:`` de la pieza dibuja ese contorno "
+"para que se pueda mirar."
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:107
+msgid "Agent skills"
+msgstr "Skills de agente"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:109
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/analysis_cfd.rst:110
+msgid ""
+"Runs every scenario as part of giving each requirement a verdict, and "
+"reports one that names a ``feature:`` as evidence for that feature."
+msgstr ""
+"Ejecuta todos los escenarios como parte de dar un veredicto a cada "
+"requisito, e informa de uno que nombra una ``feature:`` como evidencia de "
+"esa característica."

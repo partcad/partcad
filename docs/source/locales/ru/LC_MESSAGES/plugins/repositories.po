@@ -1,0 +1,307 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: ru <LL@li.org>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/plugins/repositories.rst:3
+msgid "Repositories"
+msgstr "Репозитории"
+
+#: ../../source/plugins/repositories.rst:5
+msgid ""
+"A **repository plugin** serves the contents of a package: its objects, its "
+"child packages and its metadata. It is what backs an ``external`` dependency"
+" -- a package that is not a directory, not a git clone and not a tarball, "
+"but a script PartCAD asks."
+msgstr ""
+"**Плагин репозитория** обслуживает содержимое пакета: его объекты, его "
+"дочерние пакеты и его метаданные. Именно он стоит за зависимостью типа "
+"``external`` -- пакетом, который не является ни каталогом, ни клоном git, ни"
+" архивом, а является скриптом, которому PartCAD задаёт вопросы."
+
+#: ../../source/plugins/repositories.rst:10
+msgid ""
+"It is the most unusual of the plugin kinds, because it does not add a "
+"capability to a package you write: it **replaces the package**. Everything "
+"else in PartCAD reads a ``partcad.yaml`` and the files beside it; a plugin-"
+"backed package has no source tree at all, and answers questions about itself"
+" instead."
+msgstr ""
+"Это самый необычный из видов плагинов, потому что он не добавляет "
+"возможность пакету, который вы пишете: он **заменяет пакет**. Всё остальное "
+"в PartCAD читает ``partcad.yaml`` и файлы рядом с ним; у пакета, за которым "
+"стоит плагин, дерева исходного кода нет вовсе, и вместо этого он отвечает на"
+" вопросы о себе."
+
+#: ../../source/plugins/repositories.rst:15
+msgid ""
+":ref:`repositories` is the reference for the declaration and for every key "
+"the protocol defines."
+msgstr ""
+":ref:`repositories` -- справочник по объявлению и по каждому ключу, который "
+"определяет протокол."
+
+#: ../../source/plugins/repositories.rst:19
+msgid "What a repository is for"
+msgstr "Для чего нужен репозиторий"
+
+#: ../../source/plugins/repositories.rst:21
+msgid ""
+"**A catalogue nobody wants to check in.** A supplier's whole range is tens "
+"of thousands of parts; a plugin turns the supplier's own data into PartCAD "
+"objects on demand, and nothing is copied."
+msgstr ""
+"**Каталог, который никто не хочет держать в репозитории.** Весь ассортимент "
+"поставщика -- это десятки тысяч деталей; плагин превращает собственные "
+"данные поставщика в объекты PartCAD по требованию, и ничего не копируется."
+
+#: ../../source/plugins/repositories.rst:24
+msgid ""
+"**A live source.** An ERP system, a PLM database, an internal part register "
+"-- the authority is the system, and the package is a view of it that is "
+"never out of date."
+msgstr ""
+"**Живой источник.** Система ERP, база данных PLM, внутренний реестр деталей:"
+" авторитетом является сама система, а пакет -- это её представление, которое"
+" никогда не устаревает."
+
+#: ../../source/plugins/repositories.rst:27
+msgid ""
+"**A generated family too large to enumerate.** Every size of a fastener, "
+"every length of a profile: the plugin answers for the one that was asked "
+"for."
+msgstr ""
+"**Генерируемое семейство, слишком большое, чтобы его перечислить.** Каждый "
+"размер крепежа, каждая длина профиля: плагин отвечает за тот, который был "
+"запрошен."
+
+#: ../../source/plugins/repositories.rst:29
+msgid ""
+"**A format that is already a table.** A CSV, a spreadsheet, a JSON dump: one"
+" short script turns it into a package."
+msgstr ""
+"**Формат, который уже является таблицей.** CSV, электронная таблица, дамп "
+"JSON: один короткий скрипт превращает это в пакет."
+
+#: ../../source/plugins/repositories.rst:33
+msgid "Using one"
+msgstr "Как им пользоваться"
+
+#: ../../source/plugins/repositories.rst:35
+msgid "A dependency of ``type: external`` names the plugin that serves it:"
+msgstr ""
+"Зависимость типа ``type: external`` называет тот плагин, который её "
+"обслуживает:"
+
+#: ../../source/plugins/repositories.rst:44
+msgid ""
+"Everything below that is ordinary. The objects the plugin serves are listed,"
+" inspected, rendered, tested and put into assemblies like any others:"
+msgstr ""
+"Всё, что ниже этого, обычно. Объекты, которые обслуживает плагин, "
+"перечисляются, просматриваются, отрисовываются, тестируются и помещаются в "
+"сборки как любые другие:"
+
+#: ../../source/plugins/repositories.rst:55
+msgid "Writing one"
+msgstr "Как написать свой"
+
+#: ../../source/plugins/repositories.rst:73
+msgid ""
+"``basic`` repositories are Python scripts, run the way a provider script is "
+"-- with the input in the global ``request`` and the output in the global "
+"``output``. ``enrich`` repositories are references to another repository "
+"with some parameters fixed, which is how one script serves several packages."
+msgstr ""
+"Репозитории ``basic`` -- это скрипты на Python, выполняемые так же, как "
+"скрипт поставщика: с входными данными в глобальном ``request`` и выходными в"
+" глобальном ``output``. Репозитории ``enrich`` -- это ссылки на другой "
+"репозиторий с некоторыми фиксированными параметрами, и именно так один "
+"скрипт обслуживает несколько пакетов."
+
+#: ../../source/plugins/repositories.rst:78
+msgid ""
+"**A repository script answers one generic key/value request.** There is no "
+"method per kind of object:"
+msgstr ""
+"**Скрипт репозитория отвечает на один обобщённый запрос ключ/значение.** "
+"Отдельного метода на каждый вид объекта нет:"
+
+#: ../../source/plugins/repositories.rst:81
+msgid "``request[\"api\"] == \"get\"``, ``request[\"key\"]`` is the key being asked for"
+msgstr "``request[\"api\"] == \"get\"``, ``request[\"key\"]`` -- запрашиваемый ключ"
+
+#: ../../source/plugins/repositories.rst:82
+msgid "``output[\"result\"]`` is the value, or ``null`` when the key is unknown"
+msgstr ""
+"``output[\"result\"]`` -- это значение либо ``null``, когда ключ неизвестен"
+
+#: ../../source/plugins/repositories.rst:84
+msgid ""
+"The keys address every kind of data uniformly, which is why serving a new "
+"kind of object or a new piece of metadata needs no new API:"
+msgstr ""
+"Ключи адресуют все виды данных одинаково, и именно поэтому обслуживание "
+"нового вида объектов или нового фрагмента метаданных не требует нового API:"
+
+#: ../../source/plugins/repositories.rst:87
+msgid "``objects/<kind>``"
+msgstr "``objects/<kind>``"
+
+#: ../../source/plugins/repositories.rst:88
+msgid ""
+"Every object of a kind, as ``{name: config, ...}``. The kinds are the ten in"
+" ``Project.OBJECT_KINDS``: ``material``, ``interface``, ``sketch``, "
+"``part``, ``assembly``, ``scene``, ``provider``, ``repository``, "
+"``software``, ``partType``."
+msgstr ""
+"Все объекты одного вида, как ``{name: config, ...}``. Виды -- это те десять,"
+" которые перечислены в ``Project.OBJECT_KINDS``: ``material``, "
+"``interface``, ``sketch``, ``part``, ``assembly``, ``scene``, ``provider``, "
+"``repository``, ``software``, ``partType``."
+
+#: ../../source/plugins/repositories.rst:93
+msgid "``objects/<kind>/<name>``"
+msgstr "``objects/<kind>/<name>``"
+
+#: ../../source/plugins/repositories.rst:94
+msgid ""
+"One object's config, fetched without listing the whole repository. Answer "
+"this one and a package of ten thousand parts costs one request per part "
+"used."
+msgstr ""
+"Конфигурация одного объекта, получаемая без перечисления всего репозитория. "
+"Ответьте на этот ключ, и пакет из десяти тысяч деталей будет стоить один "
+"запрос на каждую использованную деталь."
+
+#: ../../source/plugins/repositories.rst:97
+msgid "``deps``"
+msgstr "``deps``"
+
+#: ../../source/plugins/repositories.rst:98
+msgid "The names of the child packages."
+msgstr "Имена дочерних пакетов."
+
+#: ../../source/plugins/repositories.rst:100
+msgid "``meta``"
+msgstr "``meta``"
+
+#: ../../source/plugins/repositories.rst:101
+msgid ""
+"Package-level properties -- ``desc``, ``render``, ``manufacturable``, "
+"``suppliers`` -- and ``objectKinds``."
+msgstr ""
+"Свойства уровня пакета -- ``desc``, ``render``, ``manufacturable``, "
+"``suppliers`` -- и ``objectKinds``."
+
+#: ../../source/plugins/repositories.rst:104
+msgid "``files/<path>``"
+msgstr "``files/<path>``"
+
+#: ../../source/plugins/repositories.rst:105
+msgid ""
+"The base64-encoded content of a file an object references by ``path``. A "
+"plugin-backed package has no source tree, so a file-backed object's file is "
+"fetched from the plugin and materialized into the package's cache directory "
+"when the object is built."
+msgstr ""
+"Содержимое файла, закодированное в base64, на который объект ссылается через"
+" ``path``. У пакета, за которым стоит плагин, дерева исходного кода нет, "
+"поэтому файл объекта, основанного на файле, получается от плагина и "
+"материализуется в каталог кэша пакета при сборке объекта."
+
+#: ../../source/plugins/repositories.rst:110
+msgid ""
+"For a hierarchy, a child package's requests are **prefixed with its "
+"subfolder**: a child in ``motors`` asks for ``motors/objects/part``, "
+"``motors/deps`` and so on, all served by the same script."
+msgstr ""
+"Для иерархии запросы дочернего пакета **снабжаются префиксом его подпапки**:"
+" дочерний пакет в ``motors`` запрашивает ``motors/objects/part``, "
+"``motors/deps`` и так далее, и всё это обслуживает тот же скрипт."
+
+#: ../../source/plugins/repositories.rst:115
+msgid "Examples"
+msgstr "Примеры"
+
+#: ../../source/plugins/repositories.rst:117
+msgid "Three example packages, in increasing order of realism."
+msgstr "Три примера пакетов, в порядке возрастания реалистичности."
+
+#: ../../source/plugins/repositories.rst:119
+msgid "``examples/plugin_repository_basic``"
+msgstr "``examples/plugin_repository_basic``"
+
+#: ../../source/plugins/repositories.rst:120
+msgid ""
+"A flat package of parts read from a CSV file. The whole plugin is one short "
+"script, ``csv.py``, and the data is ``example.csv`` beside it. It declares "
+"the repository twice -- a ``basic`` one taking a ``filename`` parameter, and"
+" an ``enrich`` of it with the filename fixed -- which is the pattern to "
+"copy."
+msgstr ""
+"Плоский пакет деталей, прочитанных из файла CSV. Весь плагин -- это один "
+"короткий скрипт, ``csv.py``, а данные -- ``example.csv`` рядом с ним. Он "
+"объявляет репозиторий дважды -- ``basic``, принимающий параметр "
+"``filename``, и ``enrich`` от него с зафиксированным именем файла, -- и это "
+"тот шаблон, который стоит копировать."
+
+#: ../../source/plugins/repositories.rst:131
+msgid ""
+"The part it serves is an ordinary part in the Digital Thread -- the package "
+"it belongs to simply has no source tree:"
+msgstr ""
+"Деталь, которую он обслуживает, -- это обычная деталь в Digital Thread; "
+"просто у того пакета, которому она принадлежит, нет дерева исходного кода:"
+
+#: ../../source/plugins/repositories.rst:134
+msgid ""
+"A part served by the CSV repository plugin, shown in the Digital Thread"
+msgstr ""
+"Деталь, обслуживаемая плагином репозитория CSV, показанная в Digital Thread"
+
+#: ../../source/plugins/repositories.rst:142
+msgid "``examples/plugin_repository_tree``"
+msgstr "``examples/plugin_repository_tree``"
+
+#: ../../source/plugins/repositories.rst:143
+msgid ""
+"The same idea with a hierarchy, which is where the subfolder prefix is "
+"exercised:"
+msgstr ""
+"Та же идея с иерархией, и именно здесь задействуется префикс подпапки:"
+
+#: ../../source/plugins/repositories.rst:153
+msgid "``examples/plugin_repository_full``"
+msgstr "``examples/plugin_repository_full``"
+
+#: ../../source/plugins/repositories.rst:154
+msgid ""
+"The realistic one: the data is served by an HTTP endpoint (``server.py``) "
+"that the plugin (``remote.py``) calls, rather than hardcoded in the script. "
+"This is the shape an ERP or a PLM integration has. The endpoint has pytests "
+"of its own, independent of PartCAD, which is the other half of the lesson --"
+" a plugin that talks to a service is two things to test, not one."
+msgstr ""
+"Реалистичный вариант: данные обслуживаются конечной точкой HTTP "
+"(``server.py``), к которой обращается плагин (``remote.py``), а не "
+"захардкожены в скрипте. Такую форму имеет интеграция с ERP или PLM. У "
+"конечной точки есть собственные тесты pytest, независимые от PartCAD, и это "
+"вторая половина урока: плагин, который разговаривает с сервисом, -- это две "
+"вещи для тестирования, а не одна."

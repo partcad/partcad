@@ -134,7 +134,7 @@ A parameter can also be given for one command instead of written down. The two
 that aim a 2D projection -- ``viewport_origin``, which is the direction the shape
 is looked at from, and ``viewport_up``, which way is up in the picture -- are
 ``pc render --viewport-origin``/``--viewport-up``, with ``--view`` naming the
-common directions (see :doc:`cli`). ``turn`` -- ``[x, y, z]`` degrees, or one
+common directions (see :doc:`/cli`). ``turn`` -- ``[x, y, z]`` degrees, or one
 number about Z, that the object is turned by in front of that camera, through
 its middle and about its own axes, the way the 3D view's *Animate* turns it -- is
 ``--turn``, and goes with any view: ``--view front --turn 0,0,45`` is the front
@@ -665,7 +665,7 @@ lands, and still re-tunes any parameter it wants to.
 ``readme``, ``pdf`` and ``html`` are the outputs ``render:`` accepts that no
 implementation writes: PartCAD assembles them itself out of what the package
 declares and the images the other file types leave behind (see ``pc render`` in
-:doc:`cli`).
+:doc:`/cli`).
 
 That holds for as long as nobody writes them. A ``pdf:`` or ``html:`` that names
 a ``path`` is a package saying that this file is one of its own -- a drawing, a
@@ -949,7 +949,7 @@ the file type asks:
 
 ``pc render --with-ports``, ``--with-interfaces``, ``--with-all`` and
 ``--with-internals`` ask for the same things for one invocation (see
-:doc:`cli`); declaring them on a file type asks for them permanently, which is
+:doc:`/cli`); declaring them on a file type asks for them permanently, which is
 how a package keeps a drawing of its connections checked in beside the plain
 one. The two add up rather than override: a file type declared with
 ``with_ports: true`` draws them whether or not the option was given.
@@ -1024,8 +1024,8 @@ The rest is a shaded picture's alone:
 
 ``zoom``
   Closer than ``margin`` frames the object (above 1), or further (below). The
-  3D view itself fits a frame to half the object's largest dimension, which
-  the nearest corner of a cube leaves; a picture is framed on the whole of it.
+  3D view frames the same sphere with no margin beyond it, so ``margin: 0`` is
+  the object exactly as the 3D view frames it.
 
 ``viewport_origin``, ``viewport_up``
   Unset, the 3D view's: from the front right, a little above, whatever kind of

@@ -1,0 +1,128 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:2
+msgid "Operations"
+msgstr "运营"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:4
+msgid ""
+"Operations is the phase after the product exists: how the thing that was "
+"made is actually doing. It is the phase that turns a digital thread into a "
+"*digital twin* -- a record kept true to one physical object, with its serial"
+" number, for as long as that object lasts."
+msgstr ""
+"运营是产品已经存在之后的那个阶段：做出来的那个东西实际表现如何。正是这个阶段把数字主线变成一个 *数字孪生* -- "
+"一份与某一个实物对象保持一致的记录，带着它的序列号，并在那个对象存在的整个期间都保持一致。"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:9
+msgid ""
+"**Nothing is collected yet.** This page is here because the phase is part of"
+" the lifecycle and because the Digital Thread reserves its place, not "
+"because there is a feature to describe."
+msgstr ""
+"**目前还什么都没有采集。** 本页之所以在这里，是因为这个阶段属于生命周期的一部分、而且 Digital Thread "
+"为它预留了位置，而不是因为有什么功能可以描述。"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:14
+msgid "In the UI"
+msgstr "在界面中"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:16
+msgid ""
+"**Operations** is the last of the five groups in the Digital Thread's tab "
+"strip, and it is the one group that is always shown **disabled** -- for "
+"every object, whatever it declares. It has no strip of its own, so this "
+"phase has no sub-tabs and there is nothing to picture: every screenshot of "
+"the panel on these pages shows it, greyed, at the end of the row. Hovering "
+"over it says why."
+msgstr ""
+"**Operations** 是 Digital Thread 标签条中五个组里的最后一个，也是唯一一个始终显示为 **禁用** 的组 -- "
+"对每一个对象都是如此，无论它声明了什么。它没有自己那条标签条，所以这个阶段没有子标签页，也没有什么可以画出来：本节各页中每一张面板的截图，都能在那一行的末尾看到它，灰着。把鼠标悬停在上面会说明原因。"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:22
+msgid ""
+"**Process Emulation**, the third tab of :doc:`Validation "
+"</digital_thread/lifecycle/validation>`, is reserved in the same way and for"
+" the related question of how making it would go. It holds nothing yet "
+"either."
+msgstr ""
+"**Process Emulation** ，也就是 :doc:`Validation "
+"</digital_thread/lifecycle/validation>` "
+"的第三个标签页，以同样的方式为一个相关的问题预留着：制造它的过程会怎么走。它目前里面同样什么都没有。"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:27
+msgid "On the command line"
+msgstr "在命令行中"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:29
+msgid ""
+"Nothing. No section of a ``partcad.yaml`` records anything about an "
+"individual made item, and no ``pc`` command reads or writes one: a package "
+"describes a *type* of thing -- what to make, and how -- and says nothing "
+"about the instances that were made from it. ``pc ide view`` has a flag for "
+"every tab of the other four groups and none for this one."
+msgstr ""
+"什么都没有。``partcad.yaml`` 的任何小节都不会记录关于某一个具体制成品的任何信息，也没有任何 ``pc`` "
+"命令读写这样的信息：包描述的是一 *类* 东西 -- 做什么，以及怎么做 -- 而对由它做出来的那些实例什么都不说。``pc ide view`` "
+"对其他四个组的每一个标签页都有一个标志，而对这一个没有。"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:36
+msgid "Agent skills"
+msgstr "智能体技能"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:38
+msgid ""
+"None. A skill is a procedure for working on a package, and this phase has "
+"nothing in a package to work on. ``/pc:validate`` is the nearest thing: it "
+"judges whether what was designed meets what was asked for, which is the "
+"question this phase would ask again of the thing that was actually made."
+msgstr ""
+"没有。技能是在某个包上开展工作的流程，而这个阶段在包里没有什么可供开展工作的东西。``/pc:validate`` "
+"是最接近的那一个：它判定设计出来的东西是否满足当初所要求的，而这正是这个阶段将会再向实际做出来的那个东西提一遍的问题。"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:44
+msgid "What is already in place"
+msgstr "已经就位的东西"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:46
+msgid ""
+"What the other phases already give this one is the part that is hard: one "
+"record per object, every answer computed from it rather than stored beside "
+"it, and a pin on every dependency, so that the design a made item was made "
+"from can be checked out again exactly as it was (see "
+":doc:`/digital_thread/change_management`). A twin needs that before it needs"
+" telemetry."
+msgstr ""
+"其他各阶段已经给这个阶段提供的，正是最难的那一部分：每个对象一份记录、每一个答案都是从它算出来而不是存在它旁边，以及每一个依赖上都有一个固定值，这样某个制成品所依据的那份设计就能被完全按原样重新检出（参见"
+" :doc:`/digital_thread/change_management` ）。孪生需要这些，优先于需要遥测数据。"
+
+#: ../../source/digital_thread/lifecycle/operations.rst:52
+msgid ""
+"Until there is something here, the way to keep track of what was made is "
+":doc:`Manufacturing </digital_thread/lifecycle/manufacturing>` -- the bill "
+"of materials, what was ordered and from whom, and the instructions somebody "
+"followed -- together with git: the commit a build was made from is the "
+"record of what was built."
+msgstr ""
+"在这里还没有东西之前，跟踪做出了什么的办法是 :doc:`Manufacturing "
+"</digital_thread/lifecycle/manufacturing>` -- "
+"物料清单、订购了什么以及从谁那里订的、以及某人所遵循的那份说明 -- 再加上 git：某次构建所依据的那个提交，就是构建了什么的记录。"

@@ -1,0 +1,1075 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/tools_vscode.rst:3
+msgid "VS Code / IDE"
+msgstr "VS Code / IDE"
+
+#: ../../source/tools_vscode.rst:5
+msgid ""
+"The PartCAD extension is the primary graphical interface to PartCAD. It adds"
+" a PartCAD workbench with an Explorer view for browsing packages, an "
+"Inspector for viewing objects and editing their parameters, and the "
+"**Digital Thread** panel over whichever object is selected."
+msgstr ""
+"PartCAD 扩展是 PartCAD 的主要图形界面。它添加了一个 PartCAD 工作台，其中有一个用于浏览包的 Explorer "
+"视图、一个用于查看对象并编辑其参数的 Inspector，以及覆盖在所选对象之上的 **Digital Thread** 面板。"
+
+#: ../../source/tools_vscode.rst:9
+msgid ""
+"One extension, three editors: Visual Studio Code, :doc:`VSCodium "
+"</tools_vscodium>`, and the :ref:`PartCAD IDE <partcad-ide>`, which is a "
+"VSCodium build that ships it. This chapter is about all three -- what "
+"differs between them is only how the extension gets there, which is the next"
+" section."
+msgstr ""
+"一个扩展，三种编辑器：Visual Studio Code、:doc:`VSCodium </tools_vscodium>` ，以及 "
+":ref:`PartCAD IDE <partcad-ide>` （它是一个自带该扩展的 VSCodium 构建版）。本章讲的是这三者 -- "
+"它们之间的差别仅在于扩展是怎么装到那里的，这就是下一节的内容。"
+
+#: ../../source/tools_vscode.rst:13
+msgid ""
+"It carries no PartCAD of its own. Like the :ref:`Desktop Application "
+"<partcad-ide>` and the :ref:`CAD add-ons <cad-addons>`, it is a client of "
+"the ``partcad-json-rpc`` service, so it sees the same packages and the same "
+"cache as ``pc`` does on the same machine -- and anything it can do, "
+":doc:`/cli` can do too."
+msgstr ""
+"它自身不带任何 PartCAD。与 :ref:`Desktop Application <partcad-ide>` 和 :ref:`CAD 附加组件 "
+"<cad-addons>` 一样，它是 ``partcad-json-rpc`` 服务的客户端，所以它看到的包和缓存与同一台机器上的 ``pc`` "
+"完全相同 -- 而它能做的任何事，:doc:`/cli` 也都能做。"
+
+#: ../../source/tools_vscode.rst:20
+msgid "Installing"
+msgstr "安装"
+
+#: ../../source/tools_vscode.rst:26
+msgid ""
+"Or search for **PartCAD** in the Extensions view, or use the `marketplace "
+"page <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
+"official>`_. If you already have ``pc``, ``pc ide install`` does it for you "
+"-- and works the same for :doc:`VSCodium </tools_vscodium>` and for the "
+"Desktop Application."
+msgstr ""
+"也可以在 Extensions 视图中搜索 **PartCAD**，或者使用 `marketplace page "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
+"official>`_ 。如果你已经有了 ``pc``，那么 ``pc ide install`` 会帮你装好 -- 对 :doc:`VSCodium "
+"</tools_vscodium>` 和 Desktop Application 也是同样的做法。"
+
+#: ../../source/tools_vscode.rst:31
+msgid ""
+"Every `release <https://github.com/partcad/partcad/releases>`_ also carries "
+"the packaged extension as ``partcad-<version>.vsix``, to pin a version or to"
+" install where the marketplace is not reachable: ``code --install-extension "
+"partcad-<version>.vsix``."
+msgstr ""
+"每一个 `release <https://github.com/partcad/partcad/releases>`_ 也都带有打包好的扩展，文件名为"
+" ``partcad-<version>.vsix``，可用于固定某个版本，或者在无法访问应用市场的环境中安装：``code --install-"
+"extension partcad-<version>.vsix``。"
+
+#: ../../source/tools_vscode.rst:35
+msgid ""
+"Make sure Python is configured and a `conda <https://docs.conda.io/>`_ "
+"environment is set up in the editor before using PartCAD, or install the "
+":ref:`Desktop Application <partcad-ide>`, which brings its own."
+msgstr ""
+"在使用 PartCAD 之前，请确保编辑器中已配置好 Python 并建立了 `conda <https://docs.conda.io/>`_ "
+"环境；或者安装 :ref:`Desktop Application <partcad-ide>` ，它自带这些东西。"
+
+#: ../../source/tools_vscode.rst:40
+msgid ""
+"The extension used to be published as ``OpenVMP.partcad``. That entry is now"
+" a shim that depends on ``PartCAD.partcad-official``, so an existing "
+"installation updates into the new one by itself and there is nothing to do "
+"by hand."
+msgstr ""
+"该扩展过去发布为 ``OpenVMP.partcad``。那个条目现在是一个依赖 ``PartCAD.partcad-official`` "
+"的过渡壳，所以已有的安装会自行更新到新的那一个，不需要手工做任何事。"
+
+#: ../../source/tools_vscode.rst:46
+msgid "What it does"
+msgstr "它能做什么"
+
+#: ../../source/tools_vscode.rst:49
+msgid ""
+"The PartCAD extension for Visual Studio Code is the primary graphical "
+"interface to PartCAD. It adds a PartCAD workbench with an Explorer view for "
+"browsing packages and an Inspector view for viewing objects and editing "
+"their parameters. Install it from the `VS Code marketplace "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
+"official>`_. See the :doc:`tutorial </tutorial>` for a step-by-step "
+"walkthrough."
+msgstr ""
+"用于 Visual Studio Code 的 PartCAD 扩展是 PartCAD 的主要图形界面。它添加了一个 PartCAD "
+"工作台，其中有一个用于浏览包的 Explorer 视图，以及一个用于查看对象并编辑其参数的 Inspector 视图。可以从 `VS Code "
+"marketplace "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-"
+"official>`_ 安装它。逐步演示请参见 :doc:`教程 </tutorial>` 。"
+
+#: ../../source/tools_vscode.rst:55
+msgid ""
+"Opening a package runs the code its parts are written in, so in a folder "
+"Visual Studio Code has not been told to trust (Restricted Mode) the "
+"extension starts nothing: it asks for trust, the Explorer says why it is "
+"empty, and every PartCAD command offers **Manage Workspace Trust** instead "
+"of running. PartCAD starts as soon as the folder is trusted, without "
+"reopening the window. The :ref:`PartCAD IDE <partcad-ide>` does not ask -- "
+"it exists to run PartCAD, and trusts every folder."
+msgstr ""
+"打开一个包会运行其零件所使用的代码，因此在一个尚未被 Visual Studio Code "
+"信任的文件夹中（受限模式），该扩展什么都不会启动：它会请求信任，Explorer 会说明它为什么是空的，而每个 PartCAD 命令都改为提供 "
+"**管理工作区信任** 而不是直接运行。一旦该文件夹被信任，PartCAD 就会立即启动，无需重新打开窗口。 :ref:`PartCAD IDE "
+"<partcad-ide>` 不会询问——它的存在就是为了运行 PartCAD，因此信任每一个文件夹。"
+
+#: ../../source/tools_vscode.rst:61
+msgid ""
+"The extension exposes the following actions from the Explorer view and the "
+"command palette:"
+msgstr "该扩展从 Explorer 视图和命令面板中提供了以下操作："
+
+#: ../../source/tools_vscode.rst:64
+msgid "Packages"
+msgstr "包"
+
+#: ../../source/tools_vscode.rst:66
+msgid ""
+"**Initialize new package** — Create a ``partcad.yaml`` package in the "
+"current workspace (a custom-path variant is also available)."
+msgstr "**初始化新包** — 在当前工作区中创建一个 ``partcad.yaml`` 包（也提供了一个自定义路径的变体）。"
+
+#: ../../source/tools_vscode.rst:68
+msgid "**Open package** — Open an existing package."
+msgstr "**打开包** — 打开一个已有的包。"
+
+#: ../../source/tools_vscode.rst:69
+msgid ""
+"**Reload the package** and **Restart PartCAD** — Refresh the view or restart"
+" the PartCAD backend after a change."
+msgstr "**重新加载包** 和 **重启 PartCAD** — 在发生更改后刷新视图或重启 PartCAD 后端。"
+
+#: ../../source/tools_vscode.rst:71
+msgid ""
+"**Update PartCAD** — Update the PartCAD installation used by the extension."
+msgstr "**更新 PartCAD** — 更新该扩展所使用的 PartCAD 安装。"
+
+#: ../../source/tools_vscode.rst:72
+msgid ""
+"**Show Terminal** — Open the ``PartCAD`` terminal again after it was closed "
+"(see :ref:`partcad-terminal`)."
+msgstr "**显示终端** — 在 ``PartCAD`` 终端被关闭之后重新打开它（参见 :ref:`partcad-terminal` ）。"
+
+#: ../../source/tools_vscode.rst:75
+msgid "Objects"
+msgstr "对象"
+
+#: ../../source/tools_vscode.rst:77
+msgid "**Add** a part, assembly, scene, sketch, or interface."
+msgstr "**添加** 一个零件、装配体、场景、草图或接口。"
+
+#: ../../source/tools_vscode.rst:78
+msgid "**Import** a part, assembly, scene, or sketch from an existing file."
+msgstr "从已有文件 **导入** 一个零件、装配体、场景或草图。"
+
+#: ../../source/tools_vscode.rst:79
+msgid ""
+"**Display** (inspect) a part, assembly, scene, sketch, or interface in the "
+"``Digital Thread``; parts can also be opened for display and editing "
+"together, or their source edited directly."
+msgstr ""
+"在 ``Digital Thread`` 中 **显示** "
+"（查看）零件、装配体、场景、草图或接口；此外，零件还可以打开以同时进行显示和编辑，或者直接编辑其源代码。"
+
+#: ../../source/tools_vscode.rst:81
+msgid "**Test** a part, assembly, or scene."
+msgstr "**测试** 一个零件、装配体或场景。"
+
+#: ../../source/tools_vscode.rst:82
+msgid ""
+"**Open in >** — Open the object's own source file in the application that "
+"made it: **FreeCAD** or **Blender** for a part or an assembly, **KiCad** for"
+" a part of type ``kicad``, and **Gazebo** or **MuJoCo** for a scene held in "
+"that engine's own format (``sim-gazebo:world``, ``sim-mujoco:mjcf``) when "
+"the workspace imports the package that declares the engine. This runs on "
+"your machine rather than on the daemon: the extension runs ``pc ide open`` "
+"(see :doc:`/cli`), which starts an application installed here, or runs one "
+"in a container when there is none and ``partcad.open.useDocker`` is on, "
+"which it is by default. An object in a format the application does not open "
+"is converted on the way -- a script to STEP for FreeCAD, a solid to STL for "
+"Blender. The editor then waits, behind a banner saying so and with every "
+"PartCAD command paused, until the application is closed; what was saved in "
+"it is brought back into the object's own file, converted back when it had "
+"been converted."
+msgstr ""
+"**Open in >** — 在制造该对象的应用程序中打开对象自己的源文件：零件或装配体用 **FreeCAD** 或 **Blender**，类型为"
+" ``kicad`` 的零件用 **KiCad**，而当工作区导入了声明某个引擎的那个包时，以该引擎自有格式保存的场景（ ``sim-"
+"gazebo:world``、``sim-mujoco:mjcf`` ）则用 **Gazebo** 或 "
+"**MuJoCo**。这件事发生在你的机器上，而不是在守护进程上：扩展运行的是 ``pc ide open`` （参见 :doc:`/cli` "
+"），它启动本机已安装的应用程序，或者在本机没有安装、而 ``partcad.open.useDocker`` "
+"处于开启状态（默认就是开启）时在容器中运行一个。应用程序打不开的格式的对象会在交付途中被转换 -- 脚本转成 STEP 给 FreeCAD，实体转成 "
+"STL 给 Blender。随后编辑器会等待，显示一条说明此事的横幅，并暂停所有 PartCAD "
+"命令，直到该应用程序被关闭；在它里面保存的内容会被带回对象自己的文件，先前做过转换的则再转换回去。"
+
+#: ../../source/tools_vscode.rst:93
+msgid ""
+"The Explorer also lists the ``software`` a package ships. Selecting one "
+"shows its path and its ``fileHash`` in the Inspector and leaves the "
+"``Digital Thread`` as it is: software is a file, not geometry, so there is "
+"nothing to render."
+msgstr ""
+"Explorer 还会列出包所附带的 ``software`` 。选中其中一项，Inspector 中会显示它的路径和 ``fileHash`` ，而 "
+"``Digital Thread`` 保持原样：软件是文件而不是几何体，没有什么可渲染的。"
+
+#: ../../source/tools_vscode.rst:98
+msgid "Digital Thread"
+msgstr "Digital Thread"
+
+#: ../../source/tools_vscode.rst:100
+msgid ""
+"Displaying an object opens the ``Digital Thread``, which is a strip of tabs "
+"over that one object rather than a bare canvas: groups of tabs, each with "
+"tabs of its own -- **Design**, **Analysis**, **Manufacturing** and "
+"**Validation**, followed by **Operations**, which has nothing in it yet and "
+"is always disabled. Design is always the first (see "
+":doc:`/digital_thread/introduction` for what each group is for):"
+msgstr ""
+"显示一个对象会打开 ``Digital Thread`` ，它不是一块空白画布，而是覆盖在那一个对象之上的一条标签条：若干标签组，每组各有自己的标签页 "
+"-- **Design**、**Analysis**、**Manufacturing** 和 **Validation**，后面跟着 "
+"**Operations**，它目前里面什么都没有，因此始终处于禁用状态。Design 永远是第一个（每个组的用途参见 "
+":doc:`/digital_thread/introduction` ）："
+
+#: ../../source/tools_vscode.rst:105
+msgid "**Design** — the object itself, three ways, in tabs of its own:"
+msgstr "**设计** — 对象本身的三种呈现方式，各有自己的标签："
+
+#: ../../source/tools_vscode.rst:107
+msgid ""
+"**3D** — the shape, tessellated by PartCAD and drawn here, to turn and zoom."
+" Always present."
+msgstr "**3D** — 形状本身，由 PartCAD 完成网格化后绘制在这里，可以旋转和缩放。始终存在。"
+
+#: ../../source/tools_vscode.rst:108
+msgid ""
+"**2D** — the object rendered to a picture, as ``pc render`` renders it: PNG,"
+" JPEG or SVG, chosen from a list. For a part, an assembly, a scene or a "
+"sketch."
+msgstr ""
+"**2D** — 渲染成图片的对象，渲染方式与 ``pc render`` 相同：PNG、JPEG 或 "
+"SVG，从一个列表中选择。适用于零件、装配体、场景或草图。"
+
+#: ../../source/tools_vscode.rst:110
+msgid ""
+"**Draft** — a dimensioned technical drawing of a part or an assembly, made "
+"by a drawing package the way ``pc render -e`` uses one. **Drawn by** names "
+"it: ``//pub/feature/render/draftwright`` unless you choose or type another, "
+"and the formats are whatever it declares (PDF, SVG and DXF). The first "
+"drawing takes a few minutes while PartCAD installs draftwright."
+msgstr ""
+"**Draft** — 零件或装配体的带尺寸技术图纸，由某个制图包按 ``pc render -e`` 使用它的方式绘制。**Drawn by** "
+"指出用的是哪一个：除非你另选或手工输入，否则就是 ``//pub/feature/render/draftwright`` "
+"，而可用格式就是它所声明的那些（PDF、SVG 和 DXF）。第一张图会花几分钟，因为 PartCAD 要先安装 draftwright。"
+
+#: ../../source/tools_vscode.rst:115
+msgid ""
+"2D and Draft each have a **Save…** button that saves the file on screen "
+"wherever you choose. A picture is shown on the tab, and can be zoomed with "
+"the mouse wheel, dragged, and put back with a double-click; a PDF or a DXF "
+"cannot be shown there, and is saved and opened in another program instead."
+msgstr ""
+"2D 和工程图这两个标签各有一个 **保存…** "
+"按钮，可以把屏幕上的文件保存到你指定的任何位置。图片会直接显示在标签上，可以用鼠标滚轮缩放、拖动，双击即可还原；PDF 或 DXF "
+"无法在这里显示，而是会被保存下来并用其他程序打开。"
+
+#: ../../source/tools_vscode.rst:118
+msgid "**Analysis** — what engineering analysis says about the object:"
+msgstr "**分析** — 工程分析对该对象的结论："
+
+#: ../../source/tools_vscode.rst:120
+msgid ""
+"**FEA**, **Dynamic FEA**, **Heat Transfer** and **CFD** — for a part that "
+"declares scenarios of that analysis: the scenarios, and for the one selected"
+" what :ref:`pc cae <cae>` produced and what it found."
+msgstr ""
+"**FEA**、**Dynamic FEA**、**Heat Transfer** 和 **CFD** — "
+"适用于声明了该项分析场景的零件：列出各个场景，并对所选中的那个显示 :ref:`pc cae <cae>` 产出了什么以及发现了什么。"
+
+#: ../../source/tools_vscode.rst:122
+msgid "**Manufacturing** — what making it takes:"
+msgstr "**制造** — 把它做出来需要什么："
+
+#: ../../source/tools_vscode.rst:124
+msgid ""
+"**Build vs Buy** — for a part or an assembly: every part, piece of stock and"
+" sub-assembly it is made of, with a picture, a count, its size, weight and "
+"material, and a switch saying whether it is built or bought. A line that can"
+" be only one of the two has its switch fixed, and one that can be neither is"
+" marked **Incomplete**. The choices are kept on your machine, and ``pc "
+"instructions`` reads them too."
+msgstr ""
+"**自制还是采购** — "
+"针对零件或装配体：列出构成它的每一个零件、每一块原材料和每一个子装配体，附带图片、数量、尺寸、重量和材料，以及一个表示它是自制还是采购的开关。只能二选一的条目，其开关是固定的；两者都做不到的条目会被标记为"
+" **不完整** 。这些选择保存在你自己的机器上， ``pc instructions`` 也会读取它们。"
+
+#: ../../source/tools_vscode.rst:128
+msgid ""
+"**Build** — for whatever is built: the order to make it in, with the "
+"instructions for the selected step."
+msgstr "**自制** — 针对所有自制的部分：制造它们的先后顺序，以及所选步骤的说明。"
+
+#: ../../source/tools_vscode.rst:129
+msgid ""
+"**Buy** — for whatever is bought: what it can be bought from, and a quote "
+"per supplier."
+msgstr "**采购** — 针对所有采购的部分：可以从哪里买到，以及每个供应商的报价。"
+
+#: ../../source/tools_vscode.rst:130
+msgid ""
+"**Bill of Materials** — for a part or an assembly: what has to be procured "
+"to have it, as ``pc bom`` lists it. A made part is the stock it is made "
+"from, and a sub-assembly that declares a vendor and an SKU is one item "
+"ordered whole."
+msgstr ""
+"**物料清单** — 针对零件或装配体：要得到它需要采购些什么，与 ``pc bom`` 列出的内容一致。自制零件对应的是它所用的原材料，而声明了 "
+"vendor 和 SKU 的子装配体则是整体订购的一个条目。"
+
+#: ../../source/tools_vscode.rst:133
+msgid ""
+"**Assembly** — for an assembly: the assembly instructions, as PDF or HTML, "
+"to read and save (``pc instructions``)."
+msgstr "**装配** — 针对装配体：装配说明，以 PDF 或 HTML 形式呈现，可阅读也可保存（ ``pc instructions`` ）。"
+
+#: ../../source/tools_vscode.rst:136
+msgid ""
+"Manufacturing is for a part or an assembly; for a scene, a sketch or an "
+"interface it is disabled."
+msgstr "制造组只适用于零件或装配体；对于场景、草图或接口，它处于禁用状态。"
+
+#: ../../source/tools_vscode.rst:137
+msgid ""
+"**Validation** — whether the object is what it claims to be, and does what "
+"it is supposed to:"
+msgstr "**Validation** — 对象是否就是它自称的样子，以及是否做到它应该做的事："
+
+#: ../../source/tools_vscode.rst:139
+msgid ""
+"**Test** — every check ``pc test`` runs, with how each came out on this "
+"object: passed, failed, warned, skipped, or not applicable and why. The "
+"check selected shows what it found and what it is, when it applies and what "
+"to do when it fails (:doc:`/digital_thread/lifecycle/testing`). An "
+"interference leaves an assembly of the two parts and what they share, to "
+"open in 3D. Always the first tab, and always enabled; an object that belongs"
+" to no package has nothing to ask PartCAD about, and the tab says so."
+msgstr ""
+"**Test** — ``pc test`` "
+"运行的每一项检查，以及每一项在这个对象上的结果：通过、失败、警告、跳过，或者不适用及其原因。所选中的那项检查会显示它发现了什么、它本身是什么、它何时适用，以及失败时该怎么做（"
+" :doc:`/digital_thread/lifecycle/testing` ）。干涉会留下一个由那两个零件及它们共有部分组成的装配体，可以在 "
+"3D 中打开。它永远是第一个标签页，并且永远启用；不属于任何包的对象没有什么可以向 PartCAD 询问的，标签页会如实说明。"
+
+#: ../../source/tools_vscode.rst:144
+msgid ""
+"**Simulation** — for a part, an assembly or a scene that declares a "
+"``simulate:`` section (see :doc:`/digital_thread/lifecycle/simulation`): the"
+" simulations it declares, listed on the left with the first one selected. "
+"Selecting one runs it, as ``pc sim -f <name>`` does, and shows whether its "
+"``validation:`` held, and plays the video of the run the simulation plugin "
+"recorded (see :ref:`sim-video`), in a player with the usual controls -- play"
+" and pause, replay, a step back and forward, a position to drag, the speed, "
+"and full screen. Until it is played, the player shows two pictures of the "
+"scene the plugin took -- before anything moved on the left, and when the run"
+" was over on the right, an arrow between them -- and a run with no video "
+"shows those two side by side. All of it is from where the scene is looked at"
+" when it is rendered. A plugin that takes no pictures has not failed: a line"
+" says so where they would be."
+msgstr ""
+"**Simulation** — 适用于声明了 ``simulate:`` 小节的零件、装配体或场景（参见 "
+":doc:`/digital_thread/lifecycle/simulation` "
+"）：它所声明的各个仿真列在左侧，默认选中第一个。选中其中一个就会运行它，效果与 ``pc sim -f <name>`` 相同，并显示它的 "
+"``validation:`` 是否成立，还会播放仿真插件所录制的该次运行的视频（参见 :ref:`sim-video` ），播放器带有常规控件 -- "
+"播放与暂停、重播、后退一步和前进一步、可拖动的进度、速度，以及全屏。在播放之前，播放器显示插件拍下的两张场景图片 -- "
+"左边是任何东西开始运动之前，右边是运行结束时，中间有一个箭头 -- "
+"而没有视频的运行则把这两张并排显示。所有这些都取自渲染该场景时的观察位置。不拍图片的插件并不算失败：本该放图片的位置会有一行文字说明。"
+
+#: ../../source/tools_vscode.rst:154
+msgid ""
+"Whether each run held is a green or red mark before its name in the list. "
+"Above the pictures, as on the Draft tab, **Simulated by** names the plugin "
+"that runs it -- filled in with the one it names, offering the ones PartCAD "
+"knows of, and taking any other name typed into it; another runs it with that"
+" one, like ``pc sim --plugin`` -- and **Simulate** runs it afresh. Under the"
+" pictures, **Criteria**, **Before** and **After** open on a click: the "
+"``validation:`` expression, and the ``before`` and ``after`` the plugin "
+"reported, which are what that expression is evaluated over."
+msgstr ""
+"每一次运行是否成立，体现为列表中名称前面的一个绿色或红色标记。图片上方，与 Draft 标签页一样，**Simulated by** "
+"指出运行它的那个插件 -- 其中预填的是它所指名的插件，下拉给出 PartCAD 已知的插件，也接受手工输入的任何其他名称；换一个就用那一个来运行，就像"
+" ``pc sim --plugin`` 那样 -- 而 **Simulate** "
+"会重新运行一次。图片下方，**Criteria**、**Before** 和 **After** 点击即可展开：分别是 ``validation:`` "
+"表达式，以及插件报告的 ``before`` 和 ``after``，而那个表达式正是在它们之上求值的。"
+
+#: ../../source/tools_vscode.rst:160
+msgid "**Process Emulation** — nothing yet; always disabled."
+msgstr "**过程模拟** — 暂无内容；始终处于禁用状态。"
+
+#: ../../source/tools_vscode.rst:162
+msgid ""
+"Validation is always enabled, for its Test tab; Simulation is disabled for "
+"anything that declares no simulation."
+msgstr "Validation 始终启用，因为它有 Test 标签页；而 Simulation 对于没有声明任何仿真的对象是禁用的。"
+
+#: ../../source/tools_vscode.rst:165
+msgid ""
+"Every group always shows all of its tabs and disables the ones that do not "
+"apply, and a group none of whose tabs apply is disabled itself, and says why"
+" when the mouse is over it. Design and its 3D tab are always enabled, and "
+"are what the Digital Thread shows before anything has been selected. A group"
+" opens on the tab you last had open in it, if that one applies to the "
+"object, and on the first one that does otherwise."
+msgstr ""
+"每个组始终显示它的全部标签，并把其中不适用的那些禁用掉；如果一个组的标签全都不适用，这个组本身就会被禁用，鼠标悬停在上面时会说明原因。设计组及其 3D "
+"标签始终可用，也是在尚未选中任何对象时 Digital Thread "
+"所显示的内容。打开一个组时，会回到你上次在该组中打开的那个标签——前提是它适用于当前对象，否则就定位到第一个适用的标签。"
+
+#: ../../source/tools_vscode.rst:170
+msgid ""
+"The 3D view arrives over the viewer protocol from whichever ``partcad`` "
+"asked for the shape to be shown; the other tabs are questions put to the "
+"PartCAD daemon, fetched the first time the tab is looked at and cached until"
+" the next object is shown. An object that belongs to no package gets the 3D "
+"view alone."
+msgstr ""
+"3D 视图由请求显示该形状的那个 ``partcad`` 通过查看器协议送来；其余标签则是向 PartCAD "
+"守护进程提出的问询，在该标签第一次被查看时获取，并一直缓存到下一个对象被显示为止。不属于任何包的对象只有 3D 视图。"
+
+#: ../../source/tools_vscode.rst:174
+msgid ""
+"The 3D view and the analysis models use the graphics card where the window "
+"can (WebGL, else WebGPU). In a window that cannot -- a virtual machine, a "
+"remote desktop, a graphics driver the editor could not use -- they draw the "
+"model without it instead: flat-shaded and slower, and a big model is drawn "
+"as boxes while it is being turned. A note in the corner of the view says so,"
+" and hovering over it says how to have the graphics card back."
+msgstr ""
+"3D 视图和分析模型在窗口条件允许时会使用显卡（WebGL，否则 WebGPU）。在条件不允许的窗口里 -- 虚拟机、远程桌面、编辑器无法使用的显卡驱动"
+" -- "
+"它们改为不借助显卡来绘制模型：采用平面着色，速度更慢，而大模型在被转动时会画成一堆方盒子。视图角落里的一条提示会说明这一点，把鼠标悬停在上面会告诉你怎样把显卡用回来。"
+
+#: ../../source/tools_vscode.rst:179
+msgid ""
+"Down the left of the 3D view is a list of **what is on screen**, with a "
+"checkbox on every line: unticking one hides that line and everything under "
+"it, and ticking it again brings back exactly what was showing before."
+msgstr ""
+"3D 视图左侧是一张 **屏幕上有什么** "
+"的列表，每一行都有一个复选框：取消勾选某一行会隐藏那一行及它下面的一切，再次勾选则会把之前显示的内容原样恢复回来。"
+
+#: ../../source/tools_vscode.rst:184
+msgid ""
+"Down the right of every tab that shows the object -- 3D, 2D and Draft, each "
+"analysis, and Simulation -- is the **view panel**, folded away until the "
+"button at the top of that edge (the editor's own \"side bar\" icon) brings "
+"it out; it stays out, or folded, on every tab at once. From the top:"
+msgstr ""
+"在每一个显示该对象的标签页右侧 -- 3D、2D 和 Draft、每一项分析，以及 Simulation -- 是 "
+"**视图面板**，它默认收起，直到那一侧顶端的按钮（编辑器自带的“side "
+"bar”图标）把它展开；一旦展开或收起，所有标签页会同时保持这个状态。从上往下："
+
+#: ../../source/tools_vscode.rst:188
+msgid ""
+"an **orientation gizmo**, the object's X, Y and Z as they lie from where it "
+"is looked at. Drag it to turn the view, or click an axis to look along it; "
+"with the gizmo focused, the arrow keys turn the view a step at a time;"
+msgstr ""
+"一个 **方位小控件**，显示从当前观察位置看去对象的 X、Y、Z "
+"轴的朝向。拖动它可以转动视图，点击某个轴可以沿该轴观察；当这个小控件获得焦点时，方向键可以让视图一步一步地转动；"
+
+#: ../../source/tools_vscode.rst:190
+msgid ""
+"a button per axis, **X**, **-X**, **Y**, **-Y**, **Z** and **-Z**, each "
+"looking along that axis from that end. They are the views ``pc render "
+"--view`` names -- X is ``right``, -Y is ``front``, Z is ``top`` with +Y up "
+"-- so the 2D tab's picture after one of them is the picture that command "
+"draws;"
+msgstr ""
+"每个轴一个按钮，**X**、**-X**、**Y**、**-Y**、**Z** 和 **-Z**，各自从该轴的那一端沿轴观察。它们就是 ``pc "
+"render --view`` 所指名的那些视图 -- X 是 ``right`` ，-Y 是 ``front`` ，Z 是 ``top`` 且 +Y "
+"朝上 -- 所以点过其中之一后，2D 标签页上的图就是那条命令画出来的图；"
+
+#: ../../source/tools_vscode.rst:193
+msgid ""
+"a **section** slider per axis, each with two ends, which start at the two "
+"faces of the object's bounding box: moving an end inwards cuts that much off"
+" from that side, and the three together keep a box. The cut is made by "
+"PartCAD, on the exact geometry, before it is drawn -- the 3D view is shown "
+"again cut, and the 2D and Draft tabs draw the cut object -- so it is a "
+"section of the solid and not a clipping of the picture. It is one section "
+"for the 3D, 2D and Draft tabs, kept for as long as the object is on screen;"
+msgstr ""
+"每个轴一个 **剖切** 滑块，各有两端，起始位置是对象包围盒的两个面：把某一端往里移动就从那一侧切掉相应的量，三个滑块合起来保留一个方盒子。剖切由 "
+"PartCAD 在精确几何上完成，发生在绘制之前 -- 3D 视图会以剖切后的样子重新显示，而 2D 和 Draft 标签页画的也是剖切后的对象 -- "
+"所以它是实体的剖面，而不是对图片的裁剪。3D、2D 和 Draft 标签页共用同一个剖切，并在该对象停留在屏幕上期间一直保留；"
+
+#: ../../source/tools_vscode.rst:198
+msgid ""
+"the **viewpoint**: where the view is looked at from (**Origin**), which way "
+"is up (**Up**) and, in a 3D view, the point it looks at (**Target**), in "
+"millimetres in the object's frame. They are the ``viewport_origin`` and "
+"``viewport_up`` a ``render:`` section takes, so they can be copied out into "
+"one, or onto ``pc render --viewport-origin``, and typed or pasted in -- ``1,"
+" 2, 3``, ``[1, 2, 3]`` and ``1 2 3`` all read. **Reset** goes back to the "
+"view the tab starts out with;"
+msgstr ""
+"**视角**：视图是从哪里观察的（ **Origin** ）、哪个方向朝上（ **Up** ），以及在 3D 视图中它所注视的那个点（ "
+"**Target** ），都以毫米为单位、在对象的坐标系中给出。它们就是 ``render:`` 小节所接受的 ``viewport_origin`` "
+"和 ``viewport_up``，所以可以把它们复制进那个小节，或者复制到 ``pc render --viewport-origin`` "
+"上；也可以手工输入或粘贴进去 -- ``1, 2, 3``、``[1, 2, 3]`` 和 ``1 2 3`` 都能识别。**Reset** "
+"会回到该标签页最初的视图；"
+
+#: ../../source/tools_vscode.rst:203
+msgid ""
+"**Animate** and **Opacity**, which turn the 3D view's model on its own and "
+"make it see-through."
+msgstr "**Animate** 和 **Opacity**，前者让 3D 视图中的模型自行转动，后者让它变成半透明。"
+
+#: ../../source/tools_vscode.rst:205
+msgid ""
+"What does not apply on a tab is disabled, and says why: a drawing package "
+"lays its views out itself, an analysis's result is the solver's mesh rather "
+"than geometry PartCAD cuts, and a picture does not animate. On the "
+"Simulation tab the viewpoint is where the plugin takes its pictures from, so"
+" choosing one runs the simulation again with its pictures taken from there."
+msgstr ""
+"在某个标签页上不适用的功能会被禁用，并说明原因：制图包自己安排它的各个视图、分析结果是求解器的网格而不是 PartCAD "
+"所剖切的几何，而一张图片是不会转动的。在 Simulation 标签页上，视角就是插件拍照所用的位置，所以选择一个视角会重新运行仿真，并从那里拍照。"
+
+#: ../../source/tools_vscode.rst:210
+msgid ""
+"The list is the object itself. Every object PartCAD can show is a tree, and "
+"the pane is that tree:"
+msgstr "这份清单就是对象本身。PartCAD 能够显示的每一个对象都是一棵树，而这个面板就是那棵树："
+
+#: ../../source/tools_vscode.rst:212
+msgid "a **part** or a **sketch** is one line — itself;"
+msgstr "一个 **零件** 或一个 **草图** 只有一行——它自己；"
+
+#: ../../source/tools_vscode.rst:213
+msgid ""
+"an **assembly** or a **scene** is a line per thing it holds, named as the "
+"``.assy`` file names it, as deeply as the file nests them;"
+msgstr ""
+"一个 **装配体** 或一个 **场景** ，它所包含的每一样东西各占一行，名称取自 ``.assy`` 文件中的命名，嵌套层级也与该文件中的一致；"
+
+#: ../../source/tools_vscode.rst:215
+msgid ""
+"an **interface** is a line per port it is drawn with, with a line per "
+"interface it inherits holding the whole of that one (see :doc:`/assy`)."
+msgstr ""
+"**接口** 对应的是它所绘制的每个端口各一行，再加上它所继承的每个接口各一行，其中整条包含那个接口的全部内容（参见 :doc:`/assy` ）。"
+
+#: ../../source/tools_vscode.rst:218
+msgid ""
+"Under each of those lines is what that object says about connections: a line"
+" per **interface** instance with the ports it is made of underneath it, and "
+"a ``ports`` line for the ports that belong to no interface. Every port is "
+"listed once and drawn as a coordinate frame — the same frames ``pc render "
+"--with-ports`` draws on a projection (see :doc:`/cli`). An assembly's own "
+"ports are the ones it declares and the ones its ``map:`` externalizes, so "
+"they are listed on the assembly's own line rather than on the things inside "
+"it."
+msgstr ""
+"上述每一行下面都是那个对象关于连接所说的内容：每个 **接口** 实例一行，它下面是组成它的那些端口，再加上一条 ``ports`` "
+"行，用于不属于任何接口的端口。每个端口只列一次，并画成一个坐标系 — 与 ``pc render --with-ports`` "
+"画在投影上的那些坐标系相同（参见 :doc:`/cli` ）。装配体自己的端口就是它所声明的端口以及它的 ``map:`` "
+"对外暴露的端口，所以它们列在装配体自己那一行上，而不是列在它内部的东西上。"
+
+#: ../../source/tools_vscode.rst:224
+msgid ""
+"A port that is drawn with a sketch — the circle of a hole, the profile of a "
+"rail — shows that too, in the blue of the ``+Z`` line of its own frame: the "
+"shape the connection happens across, which is what makes an opening readable"
+" as one. It is half see-through, so the opening it covers still reads as "
+"one, and the **Opacity** slider leaves it alone — that slider is about the "
+"shape rather than about what is drawn on top of it. It is part of the port, "
+"so the port's checkbox draws or hides both."
+msgstr ""
+"如果一个端口带有草图——孔的圆形、导轨的轮廓——那么草图也会一并画出来，用的是该端口自身坐标系中 ``+Z`` "
+"轴的那种蓝色：它表示连接所跨越的那个形状，正是它让一个开口一看就是开口。草图是半透明的，因此它所覆盖的开口依然能被看成开口；而 **不透明度** "
+"滑块不会影响它——那个滑块针对的是形状本身，而不是画在形状之上的东西。草图是端口的一部分，所以端口的复选框会同时绘制或隐藏两者。"
+
+#: ../../source/tools_vscode.rst:230
+msgid ""
+"The ``<ports>`` and ``<interfaces>`` lines start folded up — for an assembly"
+" they run to hundreds of rows, and unfolded they bury the hierarchy they "
+"hang off — and so does every part, since those two lines are all a part has "
+"under it. They are written in italics, so that where they sit beside the "
+"parts of an assembly they do not read as two more of them. Pointing at a "
+"part or a sub-assembly makes it **flicker** in the 3D view, which is how to "
+"tell which of the shapes on screen a line is without moving the camera."
+msgstr ""
+"``<ports>`` 和 ``<interfaces>`` 两行一开始是折叠的 — "
+"对装配体而言它们会有好几百行，展开之后会把它们所挂靠的那个层次结构埋掉 — "
+"每个零件也一样是折叠的，因为这两行就是零件下面的全部内容。它们用斜体书写，这样当它们与装配体的各个零件并列出现时，不会被读成又多了两个零件。把鼠标指向某个零件或子装配体会让它在"
+" 3D 视图中 **闪动**，这就是在不移动相机的情况下分辨某一行对应屏幕上哪个形状的办法。"
+
+#: ../../source/tools_vscode.rst:236
+msgid ""
+"The 3D view, and the model of an FEA or CFD result, can also be navigated "
+"with a `3Dconnexion <https://3dconnexion.com/>`_ **SpaceMouse**: the cap "
+"moves the model the way it is pushed and twisted, and the device's **Fit** "
+"button (the right-hand one on a two-button model) frames the object again. "
+"On Windows and macOS the viewer reads the device itself -- move the cap once"
+" with the viewer open for the editor to notice it. On Linux it reads it "
+"through `spacenavd <https://spacenav.sourceforge.net/>`_, which has to be "
+"installed and running (``sudo apt install spacenavd``, for instance); in a "
+"remote window -- a container, an SSH host -- its socket has to be forwarded "
+"to where the workspace is, as the extension's README describes. Only the "
+"viewer in the focused window moves, and only the tab on screen, so a "
+"SpaceMouse and two open windows do not fight. "
+"``partcad.spaceMouse.sensitivity`` sets the speed, "
+"``partcad.spaceMouse.invert`` reverses individual axes, and "
+"``partcad.spaceMouse.enabled`` turns it off."
+msgstr ""
+"3D 视图以及 FEA 或 CFD 结果的模型，也可以用 `3Dconnexion <https://3dconnexion.com/>`_ 的 "
+"**SpaceMouse** 来操控：推动和扭转手柄，模型就按同样的方式移动；设备上的 **Fit** "
+"按钮（双按钮型号上右边的那个）会把对象重新框入视野。在 Windows 和 macOS "
+"上，查看器会直接读取设备——打开查看器后先动一下手柄，编辑器才会注意到它。在 Linux 上则通过 `spacenavd "
+"<https://spacenav.sourceforge.net/>`_ 读取，需要先安装并运行它（例如 ``sudo apt install "
+"spacenavd`` ）；在远程窗口中——容器或 SSH 主机——需要把它的套接字转发到工作区所在的机器上，具体做法见扩展的 "
+"README。只有处于焦点窗口中、并且正显示在屏幕上的那个标签页会随之移动，因此一个 SpaceMouse 配两个打开的窗口不会互相打架。 "
+"``partcad.spaceMouse.sensitivity`` 设置速度， ``partcad.spaceMouse.invert`` "
+"反转个别坐标轴， ``partcad.spaceMouse.enabled`` 则可以把它关掉。"
+
+#: ../../source/tools_vscode.rst:247
+msgid ""
+"What the Digital Thread is showing can be asked of it from outside: ``pc ide"
+" state`` (see :doc:`/cli`) reports the tab and sub-tab on screen, the filter"
+" and the selections of each sub-tab, and a screenshot of the one on screen "
+"-- together with the Explorer's selection and the Inspector's parameters. It"
+" is what an AI agent working beside you reads to see what you are looking "
+"at."
+msgstr ""
+"Digital Thread 当前显示的内容可以从外部问出来：``pc ide state`` （参见 :doc:`/cli` "
+"）会报告屏幕上的标签页和子标签页、每个子标签页的过滤条件和选中项，以及当前屏幕上那一个的截图 -- 连同 Explorer 的选中项和 "
+"Inspector 的参数。在你旁边工作的 AI 智能体正是读取这些来看到你所看到的东西。"
+
+#: ../../source/tools_vscode.rst:252
+msgid ""
+"An object's own ports start out drawn. The ports of everything inside it do "
+"not: an assembly of forty parts has a frame at every hole of every one of "
+"them, and all of it at once shows nothing. A line whose tick is grey rather "
+"than solid is one that is showing while something under it is hidden — which"
+" is how a folded-up line says so."
+msgstr ""
+"对象自身的端口默认是画出来的，它内部各个对象的端口则不是：一个由四十个零件组成的装配体，每个零件的每个孔上都有一个坐标系，全部一起画出来等于什么也看不见。某一行的勾选标记是灰色而不是实心的，说明它本身在显示，但它下面有东西被隐藏了——折叠起来的行就是这样告诉你的。"
+
+#: ../../source/tools_vscode.rst:257
+msgid ""
+"The analysis tabs are the exception to \"questions\": looking at one *runs* "
+"the analysis. Each is enabled for a part that declares scenarios of that "
+"analysis, and lists them on the left the way the Simulation tab lists "
+"simulations, in the order they are declared and with a mark for how each "
+"one's run went; the first is selected when the tab opens, and selecting one "
+"runs it -- ``pc cae fea -f <scenario>`` -- the first time it is looked at, "
+"and shows its answer from then on. Over the model is the Simulation tab's "
+"toolbar: **Analysed by** is filled in with the solver the scenario names -- "
+"or the configured default -- offers the others ``//pub/feature/cae`` "
+"registers for the analysis, and takes any other name typed into it; another "
+"runs the scenario with it, so a machine whose solver is elsewhere is one "
+"choice away from an answer rather than stuck on an error; **Analyse** runs "
+"it afresh. The model is drawn according to the format the implementation "
+"chose: a 3D result is turned and zoomed, a 2D one is panned and zoomed as a "
+"picture. Any findings are listed under it; a scenario with nothing to report"
+" gets the whole pane."
+msgstr ""
+"各个分析标签页是“提问”这一说法的例外：查看其中一个就会 *运行* 该项分析。每一个标签页对声明了该项分析场景的零件启用，并像 Simulation "
+"标签页列出各个仿真那样把它们列在左侧，按声明顺序，并各带一个标记说明它上一次运行的结果；标签页打开时默认选中第一个，而选中某一个会在它第一次被查看时运行它"
+" -- ``pc cae fea -f <scenario>`` -- 此后就显示它的答案。模型上方是与 Simulation "
+"标签页相同的工具栏：**Analysed by** 预填的是该场景所指名的求解器 -- 或者所配置的默认值 -- 下拉给出 "
+"``//pub/feature/cae`` "
+"为该项分析注册的其他求解器，也接受手工输入的任何其他名称；换一个就用它来运行这个场景，这样一台求解器装在别处的机器只需选一下就能得到答案，而不是卡在一个错误上；**Analyse**"
+" 会重新运行一次。模型按实现方所选的格式来绘制：3D 结果可以转动和缩放，2D "
+"结果则像一张图片那样平移和缩放。任何发现都列在它下面；而一个没有任何可报告内容的场景会占满整个面板。"
+
+#: ../../source/tools_vscode.rst:272
+msgid "Terminal"
+msgstr "终端"
+
+#: ../../source/tools_vscode.rst:274
+msgid ""
+"What PartCAD is busy with -- its log and the progress of a long operation --"
+" appears in the ``PartCAD`` terminal. It opens the first time there is "
+"something to show, to the right of a shell named ``Shell``: a terminal "
+"running your default shell, with the PartCAD command line tools on its "
+"``PATH``, for starting a coding agent side by side with what PartCAD is "
+"doing."
+msgstr ""
+"PartCAD 正在忙的事情——它的日志以及长时间操作的进度——会显示在 ``PartCAD`` 终端中。第一次有内容要显示时，它会在一个名为 "
+"``Shell`` 的 shell 右侧打开：这是一个运行你的默认 shell 的终端，其 ``PATH`` 中带有 PartCAD "
+"命令行工具，可以在其中启动编码代理，与 PartCAD 正在做的事情并排进行。"
+
+#: ../../source/tools_vscode.rst:279
+msgid ""
+"Close it whenever you like. It stays closed until you run **PartCAD: Show "
+"Terminal** or pick **PartCAD** from the terminal panel's **+** menu, and "
+"then it opens with everything it missed. Set ``partcad.reopenTerminal`` to "
+"``true`` to have new output reopen it instead, and ``partcad.popupTerminal``"
+" to bring it to the front on every new line. If PartCAD stops working in the"
+" window -- no PartCAD service, or one that will not start or keeps stopping "
+"-- it opens on its own and says why, with a popup as well if it was closed."
+msgstr ""
+"你可以随时关闭它。它会一直保持关闭，直到你运行 **PartCAD: Show Terminal** ，或者从终端面板的 **+** 菜单中选择 "
+"**PartCAD** ，然后它会带着错过的全部内容打开。把 ``partcad.reopenTerminal`` 设为 ``true`` "
+"，新的输出就会改为重新打开它；设置 ``partcad.popupTerminal`` ，则每出现一行新输出都会把它提到前台。如果 PartCAD "
+"在该窗口中停止工作——没有 PartCAD 服务，或者服务无法启动、不断停止——它会自行打开并说明原因；如果它原先是关闭的，还会弹出提示。"
+
+#: ../../source/tools_vscode.rst:288
+msgid "Edit"
+msgstr "编辑"
+
+#: ../../source/tools_vscode.rst:290
+msgid ""
+"PartCAD is Code-CAD: every object is a file, and the file is the thing to "
+"change. So the Explorer does more than list objects -- it puts you in the "
+"right file, and the modelling loop runs between an editor on the left and "
+"the ``Digital Thread`` on the right."
+msgstr ""
+"PartCAD 是 Code-CAD：每一个对象都是一个文件，而要改的就是那个文件。所以 Explorer 做的不止是列出对象 -- "
+"它会把你带到正确的文件里，而建模的循环就在左边的编辑器和右边的 ``Digital Thread`` 之间进行。"
+
+#: ../../source/tools_vscode.rst:295
+msgid ""
+"**Edit**, on an object in the Explorer, opens the file that object *is*:"
+msgstr "在 Explorer 中对某个对象使用 **Edit**，会打开那个对象所 *就是* 的那个文件："
+
+#: ../../source/tools_vscode.rst:297
+msgid ""
+"a **part** written as a script -- CadQuery, build123d, chili3d or OpenSCAD "
+"-- opens that script;"
+msgstr "写成脚本的 **零件** -- CadQuery、build123d、chili3d 或 OpenSCAD -- 会打开那个脚本；"
+
+#: ../../source/tools_vscode.rst:299
+msgid "an **assembly** of type ``assy`` or ``urdf`` opens that file;"
+msgstr "类型为 ``assy`` 或 ``urdf`` 的 **装配体** 会打开那个文件；"
+
+#: ../../source/tools_vscode.rst:300
+msgid ""
+"a **scene** of type ``assy``, or one that is an engine's own world or model "
+"(``sim-gazebo:world``, ``sim-mujoco:mjcf``), opens that file;"
+msgstr ""
+"类型为 ``assy`` 的 **场景**，或者本身就是某个引擎自有世界或模型的场景（ ``sim-gazebo:world``、``sim-"
+"mujoco:mjcf`` ），会打开那个文件；"
+
+#: ../../source/tools_vscode.rst:302
+msgid ""
+"a **package** in the tree opens its ``partcad.yaml``, and the button at the "
+"top of the Explorer, **Top level config**, opens the workspace's own."
+msgstr ""
+"树中的 **包** 会打开它的 ``partcad.yaml`` ，而 Explorer 顶端的按钮 **Top level config** "
+"会打开工作区自己的那一个。"
+
+#: ../../source/tools_vscode.rst:305
+msgid ""
+"An object with no source of its own -- an ``alias``, an ``enrich``, a part "
+"read from a STEP or an STL file -- does not get the entry. What *declares* "
+"it is its package's ``partcad.yaml``, which is one click further up the "
+"tree. A sketch read from a DXF or an SVG has a file of its own and is not "
+"offered the entry either, today; open it from the editor's own Explorer, or "
+"hand it to a drafting application with **Open in > CADCraft** below."
+msgstr ""
+"没有自己源文件的对象 -- 一个 ``alias`` 、一个 ``enrich`` 、一个从 STEP 或 STL 文件读入的零件 -- "
+"不会得到这个菜单项。*声明* 它的是它所属包的 ``partcad.yaml`` ，在树里往上一级点一下就是。从 DXF 或 SVG "
+"读入的草图确实有自己的文件，但目前也同样不提供这个菜单项；可以从编辑器自带的 Explorer 打开它，或者用下面的 **Open in > "
+"CADCraft** 把它交给某个制图应用程序。"
+
+#: ../../source/tools_vscode.rst:312
+msgid ""
+"``partcad.yaml`` and ``.assy`` are languages of their own here, with their "
+"own syntax highlighting and their own icon, which is why an ASSY file does "
+"not read as plain YAML."
+msgstr ""
+"``partcad.yaml`` 和 ``.assy`` 在这里是各自独立的语言，有自己的语法高亮和自己的图标，这也是 ASSY 文件不被当作普通 "
+"YAML 来读的原因。"
+
+#: ../../source/tools_vscode.rst:316
+msgid ""
+"**What a save costs is only what changed.** The PartCAD daemon keeps a warm "
+"context between commands, and at every request it stats the ``partcad.yaml``"
+" of the packages that request is about: one whose configuration has changed "
+"is dropped and read again from disk, together with the packages under it, "
+"while everything beside it -- the other packages, the sandboxes, whatever "
+"they have already built -- stays as it is. So a declaration edited here is "
+"the declaration the next thing you do sees, with nothing to reload by hand "
+"and nothing to restart. A *script* needs not even that: a built object is "
+"cached under a digest of the files it was built from, so an edited script is"
+" a different question with a different answer, and everything built out of "
+"that part -- every assembly that places it, its bill of materials, its "
+"checks -- is asked again while the rest of the package is read back from the"
+" cache (see :ref:`caching`)."
+msgstr ""
+"**一次保存的代价只是真正变动的那部分。** PartCAD 守护进程在各条命令之间保持一个热上下文，并在每一次请求时对该请求所涉及各个包的 "
+"``partcad.yaml`` 做一次 stat：配置发生了变化的包会被丢弃并从磁盘重新读取，连同它下面的那些包；而它旁边的一切 -- "
+"其他的包、各个沙箱、它们已经构建好的东西 -- "
+"都保持原样。所以在这里编辑过的声明，就是你接下来做的事所看到的那个声明，不需要手工重新加载任何东西，也不需要重启任何东西。*脚本* "
+"连这一步都不需要：构建出来的对象是按它所由之构建的那些文件的摘要来缓存的，所以改过的脚本就是一个不同的问题，答案也不同，而由那个零件构建出来的一切 --"
+" 放置它的每一个装配体、它的物料清单、它的各项检查 -- 都会被重新提问，而包的其余部分则从缓存读回（参见 :ref:`caching` ）。"
+
+#: ../../source/tools_vscode.rst:329
+msgid ""
+"What a save does **not** do is redraw the panel on its own. Showing the "
+"object again is the other half of the loop: **Display** in the Explorer, or "
+"``pc ide view`` typed in the ``PartCAD`` terminal beside it. **Reload the "
+"package** and **Restart PartCAD** are there for what a stat cannot see -- a "
+"dependency fetched by hand, a file outside the packages a request names -- "
+"rather than for ordinary editing."
+msgstr ""
+"一次保存 **不会** 做的事，是自行重绘那个面板。把对象重新显示出来是这个循环的另一半：Explorer 中的 **Display**，或者在它旁边的"
+" ``PartCAD`` 终端里敲 ``pc ide view`` 。**Reload the package** 和 **Restart "
+"PartCAD** 的用处在于 stat 看不到的东西 -- 手工抓取的依赖、位于请求所指名各包之外的文件 -- 而不是用于日常编辑。"
+
+#: ../../source/tools_vscode.rst:336
+msgid "Two things help while you type, and neither waits for a build:"
+msgstr "有两样东西在你打字时提供帮助，而且都不必等待构建："
+
+#: ../../source/tools_vscode.rst:338
+msgid ""
+"**Linting.** A ``partcad.yaml`` or an ASSY file is checked *as it renders* "
+"-- the templates expanded, the schema applied, the names resolved -- on "
+"every keystroke and again on every save, and what is wrong is underlined "
+"where it is written. It is the same check ``pc lint`` runs, so the editor "
+"and CI cannot disagree."
+msgstr ""
+"**代码检查（Linting）。** ``partcad.yaml`` 或 ASSY 文件会 *按它渲染出来的样子* 被检查 -- 模板展开、应用 "
+"schema、解析名称 -- 每敲一个键都检查，每次保存再检查一次，而有问题的地方会在它被写下的位置画上下划线。这与 ``pc lint`` "
+"运行的是同一项检查，所以编辑器和 CI 不可能给出不一致的结果。"
+
+#: ../../source/tools_vscode.rst:343
+msgid ""
+"**Completion from the selection.** Whatever is selected in the Explorer can "
+"be written into the file you are editing. In an ASSY file or a "
+"``partcad.yaml``, the ``partcad: <current PartCAD item>`` completion inserts"
+" the selected part or assembly as a link -- its ``package:``, its ``name:``,"
+" a ``location:`` to adjust and whatever parameter values the Inspector is "
+"showing. In a CadQuery or build123d script, the matching completion inserts "
+"the ``pc.get_part_cadquery`` or ``pc.get_part_build123d`` call that fetches "
+"it, with the same package, name and parameters. Find the object in the tree,"
+" and let the completion spell it. See the :doc:`tutorial </tutorial>`."
+msgstr ""
+"**从选中项补全。** Explorer 中选中的任何东西都可以写进你正在编辑的文件里。在 ASSY 文件或 ``partcad.yaml`` "
+"中，``partcad: <current PartCAD item>`` 补全会把选中的零件或装配体作为一条链接插入 -- 包括它的 "
+"``package:`` 、它的 ``name:`` 、一个可供调整的 ``location:`` ，以及 Inspector "
+"当前显示的那些参数取值。在 CadQuery 或 build123d 脚本中，对应的补全会插入取得它的那个 "
+"``pc.get_part_cadquery`` 或 ``pc.get_part_build123d`` "
+"调用，使用同样的包、名称和参数。在树里找到那个对象，然后让补全把它拼出来。参见 :doc:`教程 </tutorial>` 。"
+
+#: ../../source/tools_vscode.rst:353
+msgid ""
+"For a change that is easier made by drawing than by typing, the next section"
+" is the way out of the editor and back."
+msgstr "对于那些画出来比敲出来更省事的改动，下一节讲的就是离开编辑器再回来的路。"
+
+#: ../../source/tools_vscode.rst:359
+msgid "Open"
+msgstr "打开"
+
+#: ../../source/tools_vscode.rst:361
+msgid ""
+"**Open in >**, on an object in the Explorer, opens the object's own source "
+"file in the application that made it -- a design application that draws, "
+"next to an editor that does not. It is one command, ``pc ide open``, run "
+"**on your machine**: nothing about it goes near the PartCAD daemon, which "
+"may be somewhere else entirely, and there is no RPC method for opening a "
+"window."
+msgstr ""
+"在 Explorer 中对某个对象使用 **Open in >**，会在制造该对象的应用程序中打开对象自己的源文件 -- "
+"也就是在一个不画图的编辑器旁边，摆上一个会画图的设计应用程序。它就是一条命令，``pc ide open`` ，**在你的机器上** "
+"运行：它完全不会去碰 PartCAD 守护进程（守护进程可能根本在别的地方），而且也不存在用于打开窗口的 RPC 方法。"
+
+#: ../../source/tools_vscode.rst:367
+msgid "Seven applications, each offered for the objects it can actually open:"
+msgstr "共七个应用程序，每一个只在它确实打得开的对象上提供："
+
+#: ../../source/tools_vscode.rst:369
+msgid "**FreeCAD**"
+msgstr "**FreeCAD**"
+
+#: ../../source/tools_vscode.rst:370
+msgid ""
+"A part or an assembly. A ``.FCStd`` document is opened as it is, and "
+"anything else is converted to STEP on the way."
+msgstr "零件或装配体。``.FCStd`` 文档原样打开，其他任何东西都会在交付途中被转换成 STEP。"
+
+#: ../../source/tools_vscode.rst:373
+msgid "**Blender**"
+msgstr "**Blender**"
+
+#: ../../source/tools_vscode.rst:374
+msgid ""
+"A part or an assembly. Blender reads meshes and nothing else, so an STL, an "
+"OBJ or a glTF goes as it is and everything else -- a STEP file, a CadQuery "
+"script -- is converted to STL first."
+msgstr ""
+"零件或装配体。Blender 只读网格，别的都不读，所以 STL、OBJ 或 glTF 原样交过去，而其他一切 -- STEP 文件、CadQuery "
+"脚本 -- 都先被转换成 STL。"
+
+#: ../../source/tools_vscode.rst:378
+msgid "**SolidCraft**"
+msgstr "**SolidCraft**"
+
+#: ../../source/tools_vscode.rst:379
+msgid ""
+"A part or an assembly, in a workspace that imports `partcad-solidcraft "
+"<https://github.com/partcad/partcad-solidcraft>`_, which is what declares "
+"it. A SolidCraft design opens as it is, with its history; STEP, IGES and "
+"meshes as they are; anything else is converted to STEP."
+msgstr ""
+"零件或装配体，前提是工作区导入了 `partcad-solidcraft <https://github.com/partcad/partcad-"
+"solidcraft>`_ ，正是它声明了这个应用程序。SolidCraft 设计原样打开，并带着它的历史记录；STEP、IGES "
+"和网格也原样打开；其他任何东西都被转换成 STEP。"
+
+#: ../../source/tools_vscode.rst:384
+msgid "**CADCraft**"
+msgstr "**CADCraft**"
+
+#: ../../source/tools_vscode.rst:385
+msgid ""
+"A drawing: any sketch PartCAD reads from a file, and a part or an assembly "
+"read from a DWG or a DXF -- in a workspace that imports `partcad-cadcraft "
+"<https://github.com/partcad/partcad-cadcraft>`_. A DXF or a DWG opens as it "
+"is; an SVG sketch, or one written as a CadQuery or build123d script, is "
+"drawn as a DXF first."
+msgstr ""
+"图纸：PartCAD 从文件读入的任何草图，以及从 DWG 或 DXF 读入的零件或装配体 -- 前提是工作区导入了 `partcad-cadcraft"
+" <https://github.com/partcad/partcad-cadcraft>`_ 。DXF 或 DWG 原样打开；SVG 草图，或者写成"
+" CadQuery 或 build123d 脚本的草图，会先被画成 DXF。"
+
+#: ../../source/tools_vscode.rst:391
+msgid "**Gazebo**"
+msgstr "**Gazebo**"
+
+#: ../../source/tools_vscode.rst:392
+msgid ""
+"A scene that *is* a Gazebo world -- one of type ``sim-gazebo:world``, which "
+"is also what ``pc export -S -t sim-gazebo:world`` writes out of any scene. "
+"This is how a simulation is looked at rather than only run: the world the "
+":ref:`Simulation tab <sim-in-the-ui>` hands the engine, open in the engine's"
+" own window. Declared by `partcad-sim-gazebo "
+"<https://github.com/partcad/partcad-sim-gazebo>`_."
+msgstr ""
+"本身 *就是* 一个 Gazebo 世界的场景 -- 也就是类型为 ``sim-gazebo:world`` 的那种，而 ``pc export -S "
+"-t sim-gazebo:world`` 也能把任何场景写成这种格式。这就是把仿真看一看而不只是跑一跑的办法：:ref:`Simulation 标签页"
+" <sim-in-the-ui>` 交给引擎的那个世界，在引擎自己的窗口里打开。由 `partcad-sim-gazebo "
+"<https://github.com/partcad/partcad-sim-gazebo>`_ 声明。"
+
+#: ../../source/tools_vscode.rst:399
+msgid "**MuJoCo**"
+msgstr "**MuJoCo**"
+
+#: ../../source/tools_vscode.rst:400
+msgid ""
+"A scene that *is* an MJCF model -- ``sim-mujoco:mjcf``, which ``pc export -S"
+" -t sim-mujoco:mjcf`` writes out of any scene. MuJoCo reads MJCF and no "
+"other model format, and nothing converts a world into it on the way. "
+"Declared by `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-"
+"mujoco>`_."
+msgstr ""
+"本身 *就是* 一个 MJCF 模型的场景 -- ``sim-mujoco:mjcf`` ，而 ``pc export -S -t sim-"
+"mujoco:mjcf`` 能把任何场景写成这种格式。MuJoCo 只读 "
+"MJCF，不读任何其他模型格式，而且没有任何东西会在交付途中把一个世界转换成它。由 `partcad-sim-mujoco "
+"<https://github.com/partcad/partcad-sim-mujoco>`_ 声明。"
+
+#: ../../source/tools_vscode.rst:406
+msgid "**KiCad**"
+msgstr "**KiCad**"
+
+#: ../../source/tools_vscode.rst:407
+msgid ""
+"A part of type ``kicad``. What opens is the board beside the STEP file the "
+"part is, because that is the file KiCad has anything to say about."
+msgstr "类型为 ``kicad`` 的零件。打开的是该零件所对应 STEP 文件旁边的那块电路板，因为那才是 KiCad 有话可说的文件。"
+
+#: ../../source/tools_vscode.rst:410
+msgid ""
+"SolidCraft, CADCraft, Gazebo and MuJoCo are not PartCAD's own: each one's "
+"``open:`` entry is declared by the plugin package for it (see "
+":doc:`/plugins/applications`), and ``pc ide open`` finds it only in a "
+"workspace that imports that package. The menu entry is there regardless, and"
+" picking it where the package is not imported shows what ``pc ide open`` "
+"does know rather than guessing."
+msgstr ""
+"SolidCraft、CADCraft、Gazebo 和 MuJoCo 都不是 PartCAD 自己的：每一个的 ``open:`` "
+"条目都由相应的插件包声明（参见 :doc:`/plugins/applications` ），而 ``pc ide open`` "
+"只有在导入了那个包的工作区里才找得到它。菜单项无论如何都在，而在没有导入该包的情况下点选它，会显示 ``pc ide open`` "
+"确实知道的那些应用程序，而不是去猜。"
+
+#: ../../source/tools_vscode.rst:417
+msgid ""
+"An application installed here is started here. Where there is none and "
+"``partcad.open.useDocker`` is on -- it is, by default -- PartCAD runs it in "
+"a container instead: one container per application, created from the "
+"application's image (or ``partcad.open.dockerImage``) the first time and "
+"reused afterwards, with the file mounted at the path it has here or, under "
+"``useDockerRemote``, sent across and back. Its windows come out on your X "
+"display: on Linux the one you are already using, and on macOS or Windows an "
+"X server you install (XQuartz, VcXsrv), which PartCAD asks for rather than "
+"starting a container whose windows go nowhere. ``pc system prune`` removes "
+"these containers like every other one PartCAD starts, and a machine with "
+"neither the application nor Docker is told so rather than left with a menu "
+"entry that quietly does nothing."
+msgstr ""
+"本机装有的应用程序就在本机启动。本机没有、而 ``partcad.open.useDocker`` 处于开启状态时 -- 默认就是开启 -- "
+"PartCAD 改为在容器中运行它：每个应用程序一个容器，首次用该应用程序的镜像（或者 ``partcad.open.dockerImage`` "
+"）创建，之后复用，并把文件挂载到它在本机所处的那个路径上，或者在 ``useDockerRemote`` 之下把它发过去再送回来。它的窗口会出现在你的 "
+"X 显示上：在 Linux 上就是你正在用的那个，而在 macOS 或 Windows 上是你自己安装的 X "
+"服务器（XQuartz、VcXsrv），PartCAD 会要求它，而不是去启动一个窗口无处可去的容器。``pc system prune`` 会像清理 "
+"PartCAD 启动的其他每一个容器那样清理这些容器；而既没有该应用程序也没有 Docker "
+"的机器会被明确告知，而不是留下一个点了却默默什么都不做的菜单项。"
+
+#: ../../source/tools_vscode.rst:429
+msgid ""
+"**While it is open, the editor waits.** A banner fills the editor saying "
+"what is being edited and where, and every PartCAD command is paused, so that"
+" nothing is built from a version that is about to be replaced. Make the "
+"change, save it and close the application: what you saved is brought back "
+"into the object's own file -- converted back into its own format where it "
+"had to be converted to be opened, and kept beside the file where it cannot "
+"be (a drawing made from a script). What PartCAD then has is a changed file, "
+"which is the same thing as a change typed in the editor."
+msgstr ""
+"**在它打开期间，编辑器会等待。** 一条横幅会占满编辑器，说明正在编辑什么、在哪里编辑，而所有 PartCAD "
+"命令都会暂停，以免有东西从一个即将被替换的版本构建出来。做好改动、保存，然后关闭该应用程序：你保存的内容会被带回对象自己的文件 -- "
+"为了打开而不得不做过转换的，会再转换回它自己的格式；而无法转换回去的（比如由脚本生成的图纸），则保存在该文件旁边。此后 PartCAD "
+"手上拿到的是一个变动过的文件，这与在编辑器里敲出来的改动是同一回事。"
+
+#: ../../source/tools_vscode.rst:439
+msgid "Export"
+msgstr "导出"
+
+#: ../../source/tools_vscode.rst:441
+msgid ""
+"Objects can be exported directly from the extension to any of the following "
+"formats: **SVG**, **PNG**, **JPEG**, **STEP**, **STL**, **3MF**, "
+"**ThreeJS**, **OBJ**, **IGES**, and **glTF**. An engine's own scene format —"
+" a **Gazebo world** (SDFormat), a **MuJoCo model** (MJCF) — is written by "
+"the plugin package that implements it, so it is named through that package "
+"and exported from the command line: ``pc export -t sim-gazebo:world``."
+msgstr ""
+"对象可以直接从扩展导出为下列任意格式：**SVG**、**PNG**、**JPEG**、**STEP**、**STL**、**3MF**、**ThreeJS**、**OBJ**、**IGES**"
+" 和 **glTF**。而某个引擎自有的场景格式 — 一个 **Gazebo world** （SDFormat）、一个 **MuJoCo "
+"model** （MJCF）— 是由实现它的那个插件包写出的，所以要通过那个包来指名它，并从命令行导出：``pc export -t sim-"
+"gazebo:world``。"

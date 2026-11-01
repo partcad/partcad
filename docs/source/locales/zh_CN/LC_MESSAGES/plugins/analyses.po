@@ -1,0 +1,312 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/plugins/analyses.rst:3
+msgid "Analyses and toolpaths"
+msgstr "分析与刀路"
+
+#: ../../source/plugins/analyses.rst:5
+msgid ""
+"``cae:`` and ``cam:`` are two more sections of the same shape as :doc:`an "
+"output type </plugins/output>` -- a ``path`` to a script, the sandbox it "
+"needs, and the parameters it is handed -- and they are where **an "
+"engineering analysis** and **a machine route** are implemented."
+msgstr ""
+"``cae:`` 和 ``cam:`` 是另外两个与 :doc:`输出类型 </plugins/output>` 形状相同的小节 -- 一个指向脚本的 "
+"``path`` 、它需要的沙箱，以及交给它的参数 -- 而 **工程分析** 和 **机床加工路径** 就是在那里实现的。"
+
+#: ../../source/plugins/analyses.rst:10
+msgid ""
+"They are the two kinds of plugin where the *question* lives on the object "
+"and only the *answer* lives in the plugin. A part says what holds it, what "
+"it carries and how it is heated, in an ``fea:``, ``dynamic:``, ``thermal:`` "
+"or ``cfd:`` section; it says what is cut out of it in its ``manufacturing:``"
+" section. Those are properties of the part rather than of whoever is asked "
+"about it -- a bracket is bolted down at the same holes whichever solver "
+"runs, and a panel is 18 mm thick whichever router cuts it -- so the plugin "
+"supplies the solver and never the conditions."
+msgstr ""
+"它们是这样两类插件：*问题* 写在对象上，而只有 *答案* 在插件里。零件在 ``fea:`` 、 ``dynamic:`` 、 "
+"``thermal:`` 或 ``cfd:`` 小节中说明什么固定住它、它承载什么以及它是如何被加热的；它在自己的 ``manufacturing:``"
+" 小节中说明从它身上切掉什么。这些都是零件的属性，而不是被问到它的那一方的属性 -- "
+"不管跑的是哪个求解器，支架都在同样那几个孔处被螺栓固定；不管哪台雕刻机来切，面板都是 18 mm 厚 -- 所以插件只提供求解器，从不提供条件。"
+
+#: ../../source/plugins/analyses.rst:20
+msgid "What they are for"
+msgstr "它们的用途"
+
+#: ../../source/plugins/analyses.rst:22
+msgid "``cae:`` -- analyses"
+msgstr "``cae:`` -- 各项分析"
+
+#: ../../source/plugins/analyses.rst:23
+msgid ""
+"Structural analysis (``fea``), the frequencies a part rings at "
+"(``dynamic``), heat transfer (``thermal``) and fluid flow (``cfd``). A "
+"plugin wraps a solver and a mesher and reports **findings**: what it has to "
+"say about the part."
+msgstr ""
+"结构分析（ ``fea`` ）、零件共振的频率（ ``dynamic`` ）、传热（ ``thermal`` ）和流体流动（ ``cfd`` "
+"）。插件封装一个求解器和一个网格器，并报告 **各项发现**：也就是它对这个零件有什么要说的。"
+
+#: ../../source/plugins/analyses.rst:27
+msgid "``cam:`` -- toolpaths"
+msgstr "``cam:`` -- 刀路"
+
+#: ../../source/plugins/analyses.rst:28
+msgid ""
+"The program a machine cuts the part with. A plugin wraps a post-processor "
+"for a controller that wants a dialect of its own."
+msgstr "机床用来切削该零件的那个程序。插件封装一个后处理器，用于某个要求自有方言的控制器。"
+
+#: ../../source/plugins/analyses.rst:31
+msgid ""
+"The reason both are plugins is the same: a solver is somebody's program with"
+" a release cycle, a licence and an install procedure of its own, and a "
+"controller dialect is somebody's firmware. PartCAD ships the concept -- the "
+"sections, the sandbox, the scenarios, the caching, the checks -- and a "
+"package supplies the program."
+msgstr ""
+"两者之所以都是插件，理由是同一个：求解器是某个人的程序，有它自己的发布周期、许可证和安装流程，而控制器方言是某个人的固件。PartCAD 提供的是概念 "
+"-- 那些小节、沙箱、各个场景、缓存、各项检查 -- 而由某个包来提供那个程序。"
+
+#: ../../source/plugins/analyses.rst:38
+msgid "Using one"
+msgstr "使用一个插件"
+
+#: ../../source/plugins/analyses.rst:40
+msgid ""
+"**For an analysis**, PartCAD ships no implementation, so one has to be "
+"named. The user configuration option for each analysis says which package "
+"and file type runs it by default -- ``caeFeaImplementation``, "
+"``caeDynamicImplementation``, ``caeThermalImplementation``, "
+"``caeCfdImplementation``:"
+msgstr ""
+"**对于分析**，PartCAD 不附带任何实现，所以必须指名一个。每一项分析都有一个用户配置选项，说明默认由哪个包和哪种文件类型来运行它 -- "
+"``caeFeaImplementation`` 、 ``caeDynamicImplementation`` 、 "
+"``caeThermalImplementation`` 、 ``caeCfdImplementation`` ："
+
+#: ../../source/plugins/analyses.rst:51
+msgid ""
+"A scenario may also name its own with ``implementation:``, which is how a "
+"package ships an analysis that works for whoever opens it. The order is: "
+"``-i`` on the command line, then the scenario, then the user configuration."
+msgstr ""
+"场景也可以用 ``implementation:`` "
+"指名它自己的实现，而一个包正是靠这一点来发布一项对任何打开它的人都能用的分析。优先顺序是：命令行上的 ``-i`` ，然后是场景，再然后是用户配置。"
+
+#: ../../source/plugins/analyses.rst:55
+msgid ""
+"**For a route**, PartCAD *does* ship one -- ``//builtin/cam`` writes G-code,"
+" and ``camImplementation`` names it by default:"
+msgstr ""
+"**对于加工路径**，PartCAD *确实* 附带了一个 -- ``//builtin/cam`` 会写出 G 代码，而 "
+"``camImplementation`` 默认就指名它："
+
+#: ../../source/plugins/analyses.rst:64
+msgid ""
+":doc:`/digital_thread/lifecycle/analysis` and :ref:`machine routes <cam-"
+"routes>` are the chapters on using these; the list of solver packages there "
+"is the list of plugins that exist."
+msgstr ""
+":doc:`/digital_thread/lifecycle/analysis` 和 :ref:`机床加工路径 <cam-routes>` "
+"是讲如何使用它们的那两章；那里列出的求解器包清单，就是现有插件的清单。"
+
+#: ../../source/plugins/analyses.rst:69
+msgid "Writing one"
+msgstr "编写一个插件"
+
+#: ../../source/plugins/analyses.rst:81
+msgid ""
+"Three things differ from an output type, and all three follow from an "
+"analysis not being a file type of the object:"
+msgstr "有三点与输出类型不同，而这三点都源自一件事：分析不是该对象的一种文件类型。"
+
+#: ../../source/plugins/analyses.rst:84
+msgid ""
+"**There is no built-in package to fall back on.** An export implementation "
+"cannot stand in for an analysis, and an ``fea`` declared under ``export:`` "
+"is an export format that happens to be called ``fea``."
+msgstr ""
+"**没有可供退回的内置包。** 导出实现不能替代一项分析，而在 ``export:`` 下声明的 ``fea`` 只是一种恰好叫做 ``fea`` "
+"的导出格式。"
+
+#: ../../source/plugins/analyses.rst:88
+msgid ""
+"**``extension`` is required.** Which model format an analysis writes -- a 3D"
+" field, a 2D plot -- is the implementation's decision, and guessing on its "
+"behalf would put a name on a file whose contents are something else."
+msgstr ""
+"**``extension`` 是必填的。** 分析写出哪种模型格式——3D 场、2D "
+"图——是实现的决定，替它猜测只会给一个内容完全是别的东西的文件安上名字。"
+
+#: ../../source/plugins/analyses.rst:92
+msgid ""
+"**The implementation reports findings.** Beside ``success`` it returns "
+"``findings``, a JSON array of what it has to say about the part. An empty "
+"one is a pass, and is what the analysis checks of ``pc test`` require."
+msgstr ""
+"**实现要报告各项发现。** 除了 ``success`` 之外，它还返回 ``findings`` ，这是一个 JSON "
+"数组，内容是它对这个零件有什么要说的。空数组表示通过，而这正是 ``pc test`` 的各项分析检查所要求的。"
+
+#: ../../source/plugins/analyses.rst:96
+msgid ""
+"A plugin that needs a solver ``pip`` cannot install names a ``dockerImage`` "
+"carrying it, which is the one case where a check that could not run is "
+"excused rather than failed -- and only on a machine with no container "
+"runtime at all. :doc:`/digital_thread/lifecycle/analysis` sets out that "
+"policy in full, because it decides what a shared package costs everybody who"
+" opens it."
+msgstr ""
+"需要某个 ``pip`` 装不上的求解器的插件，会指名一个装着它的 ``dockerImage`` "
+"，而这正是唯一一种“没能运行的检查被免责而不是判失败”的情形 -- "
+"并且仅限于完全没有容器运行时的机器。:doc:`/digital_thread/lifecycle/analysis` "
+"完整地阐述了这条策略，因为它决定了一个共享的包会让每一个打开它的人付出多少代价。"
+
+#: ../../source/plugins/analyses.rst:103
+msgid "An example"
+msgstr "一个例子"
+
+#: ../../source/plugins/analyses.rst:105
+msgid "Six solver packages exist, each wrapping one program:"
+msgstr "现有六个求解器包，每一个封装一个程序："
+
+#: ../../source/plugins/analyses.rst:110
+msgid "package"
+msgstr "包"
+
+#: ../../source/plugins/analyses.rst:111
+msgid "solver"
+msgstr "求解器"
+
+#: ../../source/plugins/analyses.rst:112
+msgid "analyses"
+msgstr "各项分析"
+
+#: ../../source/plugins/analyses.rst:113
+msgid ""
+"`partcad-cae-calculix <https://github.com/partcad/partcad-cae-calculix>`_"
+msgstr ""
+"`partcad-cae-calculix <https://github.com/partcad/partcad-cae-calculix>`_"
+
+#: ../../source/plugins/analyses.rst:114
+msgid "`CalculiX <https://www.calculix.de/>`_"
+msgstr "`CalculiX <https://www.calculix.de/>`_"
+
+#: ../../source/plugins/analyses.rst:115
+msgid "``fea`` (the default)"
+msgstr "``fea`` （默认）"
+
+#: ../../source/plugins/analyses.rst:116
+msgid "`partcad-cae-elmer <https://github.com/partcad/partcad-cae-elmer>`_"
+msgstr "`partcad-cae-elmer <https://github.com/partcad/partcad-cae-elmer>`_"
+
+#: ../../source/plugins/analyses.rst:117
+msgid "`Elmer <https://www.elmerfem.org/>`_"
+msgstr "`Elmer <https://www.elmerfem.org/>`_"
+
+#: ../../source/plugins/analyses.rst:118
+msgid "``fea``, ``dynamic`` (the default), ``thermal`` (the default), ``cfd``"
+msgstr "``fea``、``dynamic`` （默认）、``thermal`` （默认）、``cfd``"
+
+#: ../../source/plugins/analyses.rst:119
+msgid ""
+"`partcad-cae-openfoam <https://github.com/partcad/partcad-cae-openfoam>`_"
+msgstr ""
+"`partcad-cae-openfoam <https://github.com/partcad/partcad-cae-openfoam>`_"
+
+#: ../../source/plugins/analyses.rst:120
+msgid "`OpenFOAM <https://www.openfoam.com/>`_"
+msgstr "`OpenFOAM <https://www.openfoam.com/>`_"
+
+#: ../../source/plugins/analyses.rst:121
+msgid "``cfd`` (the default)"
+msgstr "``cfd`` （默认）"
+
+#: ../../source/plugins/analyses.rst:122
+msgid ""
+"`partcad-cae-code-aster <https://github.com/partcad/partcad-cae-code-"
+"aster>`_"
+msgstr ""
+"`partcad-cae-code-aster <https://github.com/partcad/partcad-cae-code-"
+"aster>`_"
+
+#: ../../source/plugins/analyses.rst:123
+msgid "`Code_Aster <https://www.code-aster.org/>`_"
+msgstr "`Code_Aster <https://www.code-aster.org/>`_"
+
+#: ../../source/plugins/analyses.rst:124
+msgid "``fea``, ``dynamic``, ``thermal``"
+msgstr "``fea``、``dynamic``、``thermal``"
+
+#: ../../source/plugins/analyses.rst:125
+msgid "`partcad-cae-moose <https://github.com/partcad/partcad-cae-moose>`_"
+msgstr "`partcad-cae-moose <https://github.com/partcad/partcad-cae-moose>`_"
+
+#: ../../source/plugins/analyses.rst:126
+msgid "`MOOSE <https://mooseframework.inl.gov/>`_"
+msgstr "`MOOSE <https://mooseframework.inl.gov/>`_"
+
+#: ../../source/plugins/analyses.rst:127
+msgid "``fea``, ``dynamic``, ``thermal``, ``cfd``"
+msgstr "``fea``、``dynamic``、``thermal``、``cfd``"
+
+#: ../../source/plugins/analyses.rst:128
+msgid ""
+"`partcad-cae-code-saturne <https://github.com/partcad/partcad-cae-code-"
+"saturne>`_"
+msgstr ""
+"`partcad-cae-code-saturne <https://github.com/partcad/partcad-cae-code-"
+"saturne>`_"
+
+#: ../../source/plugins/analyses.rst:129
+msgid "`code_saturne <https://www.code-saturne.org/>`_"
+msgstr "`code_saturne <https://www.code-saturne.org/>`_"
+
+#: ../../source/plugins/analyses.rst:130
+msgid "``cfd``"
+msgstr "``cfd``"
+
+#: ../../source/plugins/analyses.rst:132
+msgid ""
+"Each names a ``dockerImage`` carrying its solver and mesher, so a container "
+"runtime is all it asks of a host that has neither installed -- and each also"
+" runs a solver installed on the host, when there is no container runtime or "
+"it is turned off. Each package's README says what every parameter means."
+msgstr ""
+"每一个都指名了一个带有它的求解器和网格器的 ``dockerImage`` ，所以对于两者都没有装的主机，它只要求一个容器运行时 -- "
+"而当没有容器运行时、或者它被关掉时，每一个也都能运行装在主机上的求解器。每个包的 README 都说明了每个参数是什么意思。"
+
+#: ../../source/plugins/analyses.rst:137
+msgid ""
+"``examples/feature_cae`` is the set of cases to check an implementation "
+"against -- a cantilever analysed for stress, for its natural frequencies and"
+" for heat, and a pipe for flow, one scenario each, **each with a closed-form"
+" answer to compare the solver with**. That is what makes it a conformance "
+"suite rather than a demonstration, and its ``README.md`` has what each "
+"implementation measured. ``examples/feature_cam`` is the same idea for "
+"routes: three operations on three objects, and a fourth that declares "
+"nothing and is passed over."
+msgstr ""
+"``examples/feature_cae`` 是用来对照检验某个实现的那套案例 -- "
+"一根悬臂梁，分别就应力、固有频率和热作分析，再加一根管子作流动分析，每项各一个场景，**每一个都有解析解可以与求解器作对比**。正是这一点让它成为一套一致性测试套件，而不只是一个演示，而它的"
+" ``README.md`` 里记录了每个实现所测得的结果。``examples/feature_cam`` "
+"对加工路径是同样的思路：三个对象上的三道工序，再加上第四个什么都不声明、因而被跳过的对象。"

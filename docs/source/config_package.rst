@@ -2,6 +2,128 @@
 Packages and dependencies
 #########################
 
+=================
+What a package is
+=================
+
+
+All data in PartCAD is bundled into 'packages'.
+
+Packages are organized in a hierarchical structure where some packages may
+define "dependencies" that become "child" packages.
+The top-level package is called "//". If a package called "//package" has a
+dependency called "sub-package" then such a sub-package will be called
+"//package/sub-package".
+
+Each package is described using the configuration file ``partcad.yaml`` placed
+in the package folder.
+
+=========
+Monorepos
+=========
+
+
+When PartCAD is initialized, the current folder and its ``partcad.yaml`` become
+the `current` package, but not the `root` package. The root package is
+discovered by traversing the parent directories for as long as there is another
+``partcad.yaml`` found there.
+
+This allows to run PartCAD tools from any sub-directory in a monorepo project
+while maintaining the same meaning of relative and absolute paths.
+
+=====
+Paths
+=====
+
+
+PartCAD uses package paths to identify packages and parts declared in them.
+
+The current package has the path ``""`` or ``"."``.
+The root package has the path ``"//"``.
+For any package ``"<package-path>"``, each sub-directory containing
+``partcad.yaml`` and each ``import``-ed dependency becomes
+``"<package-path>/<sub-package>"``.
+
+Absolute vs relative
+--------------------
+
+The absolute package path is the path from the root package to the package.
+If the path starts with ``"//"`` then it is an absolute path.
+
+The relative package path is the path from the current package to the package.
+If the path does not start with ``"//"`` then it is a relative path.
+Sometimes it might help to disambiguate the relative path by prepending ``"./"``.
+
+Multiple packages
+-----------------
+
+Some PartCAD commands and interfaces allow referencing multiple packages at once.
+``"<package-path>/\*"`` is a reference to all sub-packages in ``"<package-path>"``.
+
+``"<package-path>/..."`` is a reference to ``"<package-path>"`` and to all of its
+sub-packages.
+
+==========
+Object IDs
+==========
+
+
+PartCAD packages contain objects of different types: *sketches*, *parts*,
+*assemblies*, *scenes*, *interfaces*, *mates*, *materials*, *providers*,
+*software* and *partTypes*.
+All of them need to get referenced.
+
+Single object
+-------------
+
+Each object has a unique name within the package (across all object types).
+The object can be globally identified using ``"<package-path>:<object-name>"``.
+
+An attempt to reference an object using the object-name alone is considered
+a reference to the object in the current package.
+
+Multiple objects
+----------------
+
+Some PartCAD commands and interfaces allow referencing multiple objects at once.
+``"<single-or-multiple-package-path>/:\*"`` is a reference to all objects in
+``"<single-or-multiple-package-path>"``.
+
+
+Parametrized objects
+--------------------
+
+Some objects (such as *sketches*, *parts*, *assemblies*, *interfaces* and *providers*)
+may have parameters specified within the object ID to identify an instantiation
+of the object with the given parameters:
+``"<package-path>:<object-name>;param1=value1,param2=value2"``.
+
+  .. code-block:: shell
+
+    # Instead of:
+    pc ide view \
+        -p length=30 \
+        -p size=M4-0.7 \
+        //pub/std/metric/cqwarehouse:fastener/hexhead-din931
+
+    # Use this:
+    pc ide view //pub/std/metric/cqwarehouse:fastener/hexhead-din931;length=30,size=M4-0.7
+
+Objects in a cart
+-----------------
+
+Whenever an object (a *part* or an *assembly*) is used for manufacturing or
+ordering from a store, the object ID may optionally contain the quantity:
+``"<package-path>:<object-name>;param1=value1,param2=value2#<quantity>"``.
+
+  .. code-block:: shell
+
+    # Quote for parts needed to assemble 10 gearboxes
+    pc supply quote \
+      --provider //pub/svc/commerce/gobilda:gobilda \
+      //pub/robotics/multimodal/openvmp/robots/don1:assembly-wormgear#10
+
+
 .. _packages:
 
 ========
@@ -192,7 +314,7 @@ and reports each finding at the template line and column it came from. A part
 marked ``manufacturable: true`` (on itself, on the package, or on a package
 above) that is neither an ``alias`` nor an ``enrich`` has to say how it is had:
 a ``manufacturing:`` section, or both a ``vendor:`` and an ``sku:``. It is the
-same checker :doc:`ASSY files <assy>` go through, and the `PartCAD
+same checker :doc:`ASSY files </assy>` go through, and the `PartCAD
 extension for VS Code
 <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ runs it
 on the open document -- so a mistyped section is underlined as it is typed,
@@ -313,7 +435,7 @@ package up to date: what it builds against is then a matter of when you happened
 package records which commits those were. ``pc update`` is.
 
 How to run a library of packages that other packages pin -- branches, releases, and making a breaking change -- is
-in :doc:`large_projects`.
+in :doc:`/digital_thread/change_management`.
 
 External packages
 -----------------

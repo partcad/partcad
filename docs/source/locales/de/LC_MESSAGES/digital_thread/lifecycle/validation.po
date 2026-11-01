@@ -1,0 +1,330 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 03:22+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: de <LL@li.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:2
+msgid "Validation"
+msgstr "Validierung"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:12
+msgid ""
+"Validation is the question whether the object is what it was asked to be, "
+"and whether every claim its declaration makes holds: that it builds, that it"
+" can be made, that its parts do not overlap, that it weighs what it has to, "
+"that it does what its simulations say. It is asked last and asked again "
+"whenever anything changes, which is what makes the rest of the thread "
+"trustworthy."
+msgstr ""
+"Validierung ist die Frage, ob das Objekt das ist, was es sein sollte, und ob"
+" jede Behauptung gilt, die seine Deklaration aufstellt: dass es baut, dass "
+"es hergestellt werden kann, dass seine Teile sich nicht überlappen, dass es "
+"wiegt, was es wiegen muss, dass es tut, was seine Simulationen sagen. Sie "
+"wird zuletzt gestellt und erneut gestellt, sobald sich etwas ändert, und das"
+" ist es, was den Rest des Threads vertrauenswürdig macht."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:19
+msgid "Three ways of asking"
+msgstr "Drei Arten zu fragen"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:21
+msgid "``pc test``"
+msgstr "``pc test``"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:22
+msgid ""
+"Every claim that can be measured, by a list of checks that each ask one "
+"thing -- whether it builds, whether it can be made or bought, whether its "
+"parts overlap, whether its ports and physical properties are the ones "
+"required. Each check applies only to the objects it has something to ask of,"
+" and says what it found when it fails. "
+":doc:`/digital_thread/lifecycle/testing` lists them all."
+msgstr ""
+"Jede Behauptung, die messbar ist, über eine Liste von Prüfungen, von denen "
+"jede eine Sache fragt -- ob es baut, ob es hergestellt oder gekauft werden "
+"kann, ob sich seine Teile überlappen, ob seine Ports und physikalischen "
+"Eigenschaften die geforderten sind. Jede Prüfung gilt nur für die Objekte, "
+"bei denen sie etwas zu fragen hat, und sagt bei einem Fehlschlag, was sie "
+"gefunden hat. :doc:`/digital_thread/lifecycle/testing` listet sie alle auf."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:28
+msgid "``pc sim``"
+msgstr "``pc sim``"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:29
+msgid ""
+"Every claim about behaviour: each simulation an object declares is run, and "
+"its ``validation:`` condition has to hold. ``pc test`` runs the same "
+"simulations as its ``sim`` check; ``pc sim --json`` also prints everything "
+"the simulator reported, which is how a validation that passed for the wrong "
+"reason is found."
+msgstr ""
+"Jede Behauptung über Verhalten: jede Simulation, die ein Objekt deklariert, "
+"wird ausgeführt, und ihre ``validation:``-Bedingung muss gelten. ``pc test``"
+" führt dieselben Simulationen als seine ``sim``-Prüfung aus; ``pc sim "
+"--json`` gibt außerdem alles aus, was der Simulator berichtet hat, und so "
+"findet man eine Validierung, die aus dem falschen Grund bestanden hat."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:35
+#: ../../source/digital_thread/lifecycle/validation.rst:142
+msgid "``/pc:validate``"
+msgstr "``/pc:validate``"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:36
+msgid ""
+"Everything else. The agent skill runs ``pc test`` and ``pc sim``, renders "
+"the object from every angle that matters with its ports and interfaces "
+"drawn, reads the bill of materials and the assembly instructions of an "
+"assembly, and gives every requirement a verdict -- met, not met, or \"cannot"
+" tell\" -- with the evidence named. The features of the requirements, being "
+"prose, are judged here and only here."
+msgstr ""
+"Alles andere. Der Agent-Skill führt ``pc test`` und ``pc sim`` aus, rendert "
+"das Objekt aus jedem Winkel, auf den es ankommt, mit eingezeichneten Ports "
+"und Interfaces, liest die Stückliste und die Montageanweisungen einer "
+"Baugruppe und gibt jeder Anforderung ein Urteil -- erfüllt, nicht erfüllt "
+"oder \"nicht feststellbar\" -- mit dem genannten Nachweis. Die Features der "
+"Anforderungen, die Prosa sind, werden hier und nur hier beurteilt."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:44
+msgid "In the UI"
+msgstr "In der Benutzeroberfläche"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:46
+msgid ""
+"**Validation** is always there, since every object has checks. It holds "
+"three tabs, two of which have anything in them today, and each of those has "
+"a chapter of its own:"
+msgstr ""
+"**Validation** ist immer da, denn jedes Objekt hat Prüfungen. Sie enthält "
+"drei Tabs, von denen zwei heute etwas enthalten, und jeder davon hat ein "
+"eigenes Kapitel:"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:50
+msgid ":doc:`Test </digital_thread/lifecycle/testing>`"
+msgstr ":doc:`Test </digital_thread/lifecycle/testing>`"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:51
+msgid ""
+"Every check ``pc test`` runs, in the order it runs them, each with its "
+"verdict -- and, for the one selected, what it asks, what it found this time,"
+" and what to do about it. The first tab, and always enabled."
+msgstr ""
+"Jede Prüfung, die ``pc test`` ausführt, in der Reihenfolge, in der es sie "
+"ausführt, jede mit ihrem Urteil -- und, für die ausgewählte, was sie fragt, "
+"was sie dieses Mal gefunden hat und was dagegen zu tun ist. Der erste Tab, "
+"und immer aktiviert."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:55
+msgid ":ref:`Simulation <sim-in-the-ui>`"
+msgstr ":ref:`Simulation <sim-in-the-ui>`"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:56
+msgid ""
+"Every simulation the object declares, run and played back: whether its "
+"``validation:`` held, the video of the run, and the ``before`` and ``after``"
+" the expression was evaluated over. For a part, an assembly or a scene that "
+"declares ``simulate:``."
+msgstr ""
+"Jede Simulation, die das Objekt deklariert, ausgeführt und abgespielt: ob "
+"ihr ``validation:`` gehalten hat, das Video des Laufs und das ``before`` und"
+" ``after``, über denen der Ausdruck ausgewertet wurde. Für ein Teil, eine "
+"Baugruppe oder eine Szene, die ``simulate:`` deklariert."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:61
+msgid "**Process Emulation**"
+msgstr "**Process Emulation**"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:62
+msgid ""
+"The question of how *making* it would go. Reserved, always disabled, and "
+"holding nothing yet (see :doc:`/digital_thread/lifecycle/operations`)."
+msgstr ""
+"Die Frage, wie das *Herstellen* ausgehen würde. Reserviert, immer "
+"deaktiviert und bisher ohne Inhalt (siehe "
+":doc:`/digital_thread/lifecycle/operations`)."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:65
+msgid ""
+"The Validation group: its three tabs, every check pc test runs, and the "
+"verdicts"
+msgstr ""
+"Die Gruppe Validation: ihre drei Tabs, jede Prüfung, die pc test ausführt, "
+"und die Urteile"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:70
+msgid ""
+"Both working tabs **run** what they show, the first time they are looked at "
+"-- the checks as ``pc test <object>`` runs them, a simulation as ``pc sim -f"
+" <name>`` runs it -- and through the same cache, so the panel and the "
+"command line give the same answer and **Run again** is how to ask afresh. An"
+" object that belongs to no package, such as a shape shown from a script, has"
+" nothing to ask PartCAD about, and the Test tab says so."
+msgstr ""
+"Beide funktionierenden Tabs **führen aus**, was sie zeigen, beim ersten "
+"Ansehen -- die Prüfungen so, wie ``pc test <object>`` sie ausführt, eine "
+"Simulation so, wie ``pc sim -f <name>`` sie ausführt -- und über denselben "
+"Cache, sodass das Panel und die Befehlszeile dieselbe Antwort geben und "
+"**Run again** die Art ist, erneut zu fragen. Ein Objekt, das zu keinem Paket"
+" gehört, etwa eine aus einem Skript gezeigte Form, hat PartCAD nichts zu "
+"fragen, und der Test-Tab sagt das."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:79
+msgid "On the command line"
+msgstr "Auf der Befehlszeile"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:81
+msgid ""
+"``pc test`` is the whole of this phase in one command. It takes an object, "
+"or ``-P <package>`` for every object of a package and everything below it, "
+"and runs every check that has something to ask of each one:"
+msgstr ""
+"``pc test`` ist diese ganze Phase in einem Befehl. Es nimmt ein Objekt an, "
+"oder ``-P <package>`` für jedes Objekt eines Pakets und alles darunter, und "
+"führt jede Prüfung aus, die an jedem einzelnen etwas zu fragen hat:"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:92
+msgid ""
+"``pc sim`` runs the simulations alone -- ``-f <name>`` for one of them, and "
+"``--json`` to print everything the simulator reported rather than only the "
+"verdict. ``pc cae fea`` and its siblings run the engineering analyses, whose"
+" findings ``pc test`` reports as checks of their own (see "
+":doc:`/digital_thread/lifecycle/analysis`)."
+msgstr ""
+"``pc sim`` führt die Simulationen allein aus -- ``-f <name>`` für eine "
+"davon, und ``--json``, um alles auszugeben, was der Simulator berichtet hat,"
+" und nicht nur das Urteil. ``pc cae fea`` und seine Geschwister führen die "
+"technischen Analysen aus, deren Befunde ``pc test`` als eigene Prüfungen "
+"berichtet (siehe :doc:`/digital_thread/lifecycle/analysis`)."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:98
+msgid ""
+"Every verdict is cached under everything it depends on, so the command line,"
+" the panel and CI give the same answer and an unchanged object costs a "
+"lookup."
+msgstr ""
+"Jedes Urteil liegt unter allem im Cache, wovon es abhängt, die Befehlszeile,"
+" das Panel und die CI geben daher dieselbe Antwort, und ein unverändertes "
+"Objekt kostet eine Nachfrage."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:104
+msgid "Simulating a scene"
+msgstr "Eine Szene simulieren"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:106
+msgid ""
+"A scene can be the thing a claim is about, not only the world it is tested "
+"in: a stack of blocks that stands, a pile that does not slide. It declares "
+"``simulate:`` exactly as a part or an assembly does (see :ref:`sim-"
+"declaring`), and is simulated as the subject of a world -- the built-in one,"
+" or a scene of the package's own -- whose link places it with ``scene:``, "
+"since PartCAD hands that world ``subject_kind: scene``:"
+msgstr ""
+"Eine Szene kann das sein, worum es in einer Behauptung geht, und nicht nur "
+"die Welt, in der sie geprüft wird: ein Stapel von Blöcken, der steht, ein "
+"Haufen, der nicht rutscht. Sie deklariert ``simulate:`` genau so wie ein "
+"Teil oder eine Baugruppe (siehe :ref:`sim-declaring`) und wird als Subjekt "
+"einer Welt simuliert -- der eingebauten oder einer Szene des Pakets selbst "
+"--, deren Link sie mit ``scene:`` platziert, denn PartCAD übergibt dieser "
+"Welt ``subject_kind: scene``:"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:125
+msgid ""
+"``pc sim stable`` runs it, and ``pc test`` holds the scene to it as its "
+"``sim`` check like any other object. ``examples/feature_simulate`` declares "
+"its three stacks this way."
+msgstr ""
+"``pc sim stable`` führt sie aus, und ``pc test`` hält die Szene wie jedes "
+"andere Objekt als seine ``sim``-Prüfung daran fest. "
+"``examples/feature_simulate`` deklariert seine drei Stapel auf diese Weise."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:130
+msgid "Validating continuously"
+msgstr "Fortlaufend validieren"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:132
+msgid ""
+"A check that runs only when somebody remembers to run it is a check that "
+"stops being run. ``pc test -P <package>...`` in CI holds every change to "
+"every check of every object; ``--fast-only`` leaves out the objects that say"
+" they are slow (see :ref:`fast-only`). Verdicts are cached under everything "
+"they depend on, so an unchanged object costs a lookup, and ``pc --cache-"
+"bypass test`` asks again regardless."
+msgstr ""
+"Eine Prüfung, die nur läuft, wenn jemand daran denkt, sie auszuführen, ist "
+"eine Prüfung, die aufhört, ausgeführt zu werden. ``pc test -P <package>...``"
+" in der CI hält jede Änderung an jeder Prüfung jedes Objekts fest; ``--fast-"
+"only`` lässt die Objekte aus, die angeben, dass sie langsam sind (siehe "
+":ref:`fast-only`). Urteile liegen unter allem im Cache, wovon sie abhängen, "
+"ein unverändertes Objekt kostet also eine Nachfrage, und ``pc --cache-bypass"
+" test`` fragt ungeachtet dessen erneut."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:140
+msgid "Agent skills"
+msgstr "Agent-Skills"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:143
+msgid ""
+"The skill for this phase. It runs ``pc test`` and ``pc sim``, renders the "
+"object from every angle that matters with its ports and interfaces drawn, "
+"reads the bill of materials and the assembly instructions of an assembly, "
+"and gives every requirement a verdict with the evidence named. The "
+"``features:`` half of the requirements -- prose, which no program can "
+"measure -- is judged here and nowhere else."
+msgstr ""
+"Der Skill für diese Phase. Er führt ``pc test`` und ``pc sim`` aus, rendert "
+"das Objekt aus jedem Winkel, auf den es ankommt, mit eingezeichneten Ports "
+"und Interfaces, liest die Stückliste und die Montageanweisungen einer "
+"Baugruppe und gibt jeder Anforderung ein Urteil mit dem genannten Nachweis. "
+"Die ``features:``-Hälfte der Anforderungen -- Prosa, die kein Programm "
+"messen kann -- wird hier und nirgends sonst beurteilt."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:150
+msgid "``/pc:sim-assembly-fea``"
+msgstr "``/pc:sim-assembly-fea``"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:151
+msgid ""
+"Turns the forces a simulation measured into an FEA scenario on one part, "
+"which is then checked like any other (see "
+":doc:`/digital_thread/lifecycle/analysis`)."
+msgstr ""
+"Verwandelt die Kräfte, die eine Simulation gemessen hat, in ein FEA-Szenario"
+" an einem Teil, das dann wie jedes andere geprüft wird (siehe "
+":doc:`/digital_thread/lifecycle/analysis`)."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:155
+msgid "``/pc:render``"
+msgstr "``/pc:render``"
+
+#: ../../source/digital_thread/lifecycle/validation.rst:156
+msgid ""
+"Produces the views that are the evidence for a feature nothing can measure."
+msgstr ""
+"Erzeugt die Ansichten, die der Nachweis für ein Feature sind, das nichts "
+"messen kann."
+
+#: ../../source/digital_thread/lifecycle/validation.rst:158
+msgid ""
+"A skill runs the same commands, through the same cache, so a verdict an "
+"agent reports is a verdict you can reproduce by hand."
+msgstr ""
+"Ein Skill führt dieselben Befehle über denselben Cache aus; ein Urteil, das "
+"ein Agent berichtet, ist daher ein Urteil, das Sie von Hand reproduzieren "
+"können."
