@@ -1366,6 +1366,14 @@ class Shape(ShapeConfiguration):
                         recorded, lambda point: [factor * axis for axis in point]
                     )
 
+            # The CMF the part declares (docs/design/cmf.md) completes, or
+            # replaces, what its source stated - in the payload's CMF section,
+            # after any transform above, which rebuilds the payload.
+            if shape is not None and self.kind == "part":
+                from . import cmf as pc_cmf
+
+                shape, recorded = pc_cmf.apply_declared(ctx, self, shape, recorded)
+
             # Whatever produced the envelope - a factory, a wrapper, a
             # transform - the outer layer around it is this shape's own. It
             # is stamped here rather than left to whoever built the payload,
@@ -4514,6 +4522,15 @@ class Shape(ShapeConfiguration):
         sections = shape_envelope.metadata_section(metadata, shape_envelope.METADATA_SECTIONS)
         if sections:
             info.update(sections)
+
+        # What its CMF section comes to (docs/design/cmf.md, section 9): the
+        # summary recorded with the geometry, with each reference marked where
+        # it is display-only.
+        summary = metadata.get(shape_envelope.METADATA_CMF)
+        if isinstance(summary, dict):
+            from . import cmf as pc_cmf
+
+            info["CMF"] = pc_cmf.info_of(ctx, summary, self.project_name)
 
         # The per-element records are deliberately *not* reported from here.
         # They are carried for 'get_annotations_async()', whose caller is a

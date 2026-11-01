@@ -546,6 +546,38 @@ def test_an_assembly_to_be_made_may_not_place_anything_by_coordinates():
     assert not _run(ConnectivityTest(), asm)
 
 
+class _BoughtAssembly(_Assembly):
+    """An assembly its vendor sells whole: its own 'vendor' and 'sku'."""
+
+    def is_declared_purchasable(self):
+        return True
+
+
+def test_an_assembly_bought_whole_may_place_what_it_holds_by_coordinates():
+    """Its vendor put it together; the coordinates in its file only draw it (docs/design/cmf.md, section 8)."""
+    asm = _BoughtAssembly(
+        children=[
+            _Child("rim", _thing()),
+            _Child("tyre", _thing(), located=True),
+        ],
+        is_manufacturable=True,
+    )
+    assert _run(ConnectivityTest(), asm)
+
+
+def test_an_assembly_bought_whole_is_not_looked_inside():
+    """Placed and connected as one item: what is inside it is its vendor's."""
+    wheel = _BoughtAssembly(children=[_Child("rim", _thing()), _Child("tyre", _thing(), located=True)])
+    asm = _Assembly(
+        children=[
+            _Child("frame", _thing()),
+            _Child("wheel", wheel, connection={"target": "frame"}),
+        ],
+        is_manufacturable=True,
+    )
+    assert _run(ConnectivityTest(), asm)
+
+
 def test_the_item_everything_hangs_from_is_placed_by_being_first():
     """It has nothing to connect to, so it says nothing at all: no 'location:',
     which is what the rule is about."""

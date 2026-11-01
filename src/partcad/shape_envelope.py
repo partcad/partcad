@@ -66,11 +66,18 @@ try:
     # The incremental decompressor rather than the one-shot 'decompress()': only
     # it takes a bound on how much it will produce. See 'brep_plain()'.
     from compression.zstd import ZstdDecompressor as _ZstdDecompressor
+    from compression.zstd import compress as _zstd_compress
 except ImportError:  # pragma: no cover - exercised on the other interpreter
     try:
         from backports.zstd import ZstdDecompressor as _ZstdDecompressor
+        from backports.zstd import compress as _zstd_compress
     except ImportError:
         _ZstdDecompressor = None
+        _zstd_compress = None
+
+# The level a payload is compressed at, on either side of the pipe: zstd's own
+# default, as 'ocp_serialize.ZSTD_LEVEL' explains.
+ZSTD_LEVEL = 3
 
 # The three object shapes are told apart by which of these keys is present.
 KEY_BREP = "brep"
@@ -254,6 +261,12 @@ KEY_METADATA = "metadata"
 METADATA_MEASUREMENTS = "measurements"
 METADATA_ANNOTATIONS = "annotations"
 METADATA_SECTIONS = "sections"
+# What the shape's CMF comes to (docs/design/cmf.md): the sets of colour,
+# material and finish it is in, with how many faces and solids each covers, and
+# what is unspecified. A summary of the CMF section the payload carries after its
+# BREP, recorded beside the geometry by whatever wrote that section, so that the
+# core - which never parses a BREP - can answer "is this specified?" and show it.
+METADATA_CMF = "cmf"
 
 # What a part is asked to go through on its way out of the wrapper that builds
 # it, and what that wrapper says it did. A part leaves its factory validated
@@ -478,6 +491,19 @@ def brep_plain(value) -> bytes:
             "compressed size of %d); refusing to read it" % (limit, MAX_BREP_EXPANSION, len(data))
         )
     return plain
+
+
+def brep_payload(plain: bytes) -> bytes:
+    """'brep_plain()' the other way: plain payload bytes, as a node carries them.
+
+    For the one thing the core writes into a payload rather than moving it
+    around unopened: the CMF section after the BREP (see 'partcad.cmf'). The same
+    frame format and level 'ocp_serialize' writes, so either end reads it; plain
+    bytes where zstd is not to be had, which 'brep_plain()' reads too.
+    """
+    if _zstd_compress is None:
+        return bytes(plain)
+    return _zstd_compress(bytes(plain), ZSTD_LEVEL)
 
 
 def payload_digest(value) -> str:

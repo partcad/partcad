@@ -408,3 +408,223 @@ def source_cmf_drops(value) -> typing.Optional[tuple]:
     if isinstance(value, (list, tuple)) and all(item in KINDS for item in value):
         return tuple(kind for kind in KINDS if kind in value)
     return None
+
+
+# --------------------------------------------------------------------------- #
+# A part's own CMF, and what it does to its payload                           #
+# --------------------------------------------------------------------------- #
+
+
+def _parameter_value(config, name: str):
+    """The value an object states for the parameter 'name', or None.
+
+    Its declaration's default - which is where the values a reference names it
+    with land - or, for an 'enrich' or an 'alias', the value the instance it
+    resolves to is named with ('source_resolved'): what such an object fixes
+    is in that name, and nowhere in a 'parameters:' of its own.
+    """
+    if not isinstance(config, dict):
+        return None
+    parameters = config.get("parameters")
+    if isinstance(parameters, dict) and name in parameters:
+        declared = parameters[name]
+        return declared.get("default") if isinstance(declared, dict) else declared
+    resolved = config.get("source_resolved")
+    if isinstance(resolved, str) and ";" in resolved:
+        _, values = parse_parameterized_name(resolved)
+        return values.get(name)
+    return None
+
+
+def own_parameters(shape) -> dict:
+    """{kind: canonical reference} of the colour, material and finish an object states itself.
+
+    Read off its declaration's parameters - which is also where the values a
+    reference names it with land - and canonicalised against its own package,
+    which is where a default written as ':red' was written.
+    """
+    config = getattr(shape, "config", None)
+    ctx = getattr(getattr(shape, "project", None), "ctx", None)
+    result = {}
+    for kind in KINDS:
+        value = _parameter_value(config, kind)
+        if isinstance(value, str) and value.strip():
+            result[kind] = canonical(ctx, kind, value, getattr(shape, "project_name", ""))
+    return result
+
+
+def declared_set(ctx, shape):
+    """'(set, drops)': the CMF an object states itself as one 'cmf_section.CmfSet', and what 'sourceCmf' drops.
+
+    'set' is None when it states no colour, material or finish. The colour's
+    display comes from its declaration, or from the reference itself for a
+    display-only 'rgba'; a part that states a material and no colour takes the
+    colour its material claims. 'drops' is a tuple of components.
+    """
+    import cmf_section
+
+    references = own_parameters(shape)
+    raw_drops = _parameter_value(getattr(shape, "config", None), SOURCE_CMF)
+    drops = source_cmf_drops(raw_drops)
+    if drops is None:
+        pc_logging.error(
+            "%s:%s: 'sourceCmf' is 'keep', 'drop' or a list of %s, not %r; keeping the source's CMF"
+            % (shape.project_name, shape.name, ", ".join(KINDS), raw_drops)
+        )
+        drops = ()
+    if not references:
+        return None, drops
+    package = shape.project_name
+    color_ref = references.get("color")
+    origin = "declared"
+    if color_ref is None and references.get("material"):
+        material = lookup(ctx, "material", references["material"], package, quiet=True)
+        claim = getattr(material, "color_claim", None)
+        if claim:
+            color_ref = canonical(ctx, "color", claim, material.project_name)
+    rgba = rgba_of_reference(color_ref) if color_ref else None
+    if color_ref and rgba is None:
+        rgba = display(ctx, lookup(ctx, "color", color_ref, package, quiet=True))
+    roughness = metallic = None
+    if references.get("finish"):
+        finish = lookup(ctx, "finish", references["finish"], package, quiet=True)
+        roughness = getattr(finish, "roughness", None)
+        metallic = getattr(finish, "metallic", None)
+    return (
+        cmf_section.CmfSet(
+            color=color_ref,
+            material=references.get("material"),
+            finish=references.get("finish"),
+            origin=origin,
+            rgba=rgba,
+            roughness=roughness,
+            metallic=metallic,
+        ),
+        drops,
+    )
+
+
+def apply_declared(ctx, shape, envelope, recorded: dict):
+    """'(envelope, recorded)' with the part's own CMF applied to its payloads' CMF sections.
+
+    What the part's source stated is kept, completed by what the part declares,
+    or - as 'sourceCmf' says - replaced (docs/design/cmf.md, "Where an item's CMF
+    comes from"). Done here, in the core and without a CAD kernel: the section
+    follows the BREP in the payload and is read and written as bytes, so every
+    part type gets it the same way, whatever built it. Nothing changes for a part
+    that states no CMF.
+
+    A part's envelope is one node or a tree of them (a script's several
+    components), and every payload in it is given the part's own set. A payload
+    several nodes carry - the compound a script's components are pieces of (see
+    'shape_envelope.KEY_CHILD') - is one payload, given one section and counted
+    once: the part's own set holds for every face of it, whichever piece a face
+    is in. The tree is copied on the way, never changed in place.
+
+    'recorded' is the metadata the shape is cached with, and takes the summary
+    of what the sections come to (see 'cmf_section.merge_summaries').
+    """
+    from . import shape_envelope
+
+    declared, drops = declared_set(ctx, shape)
+    if declared is None and not drops:
+        return envelope, recorded
+    if not shape_envelope.is_node(envelope):
+        return envelope, recorded
+    import cmf_section
+
+    done = {}
+    summaries = []
+
+    def applied(payload):
+        key = shape_envelope.brep_bytes(payload)
+        if key not in done:
+            # Opened with the core's own bounded reader: the payload may come
+            # out of a shared cache (see 'shape_envelope.brep_plain').
+            brep, section = cmf_section.split(shape_envelope.brep_plain(key))
+            section = (section or cmf_section.Section()).without(drops)
+            if declared is not None:
+                section = section.completed(declared)
+            done[key] = shape_envelope.brep_payload(cmf_section.join(brep, section))
+            summaries.append(section.summary())
+        return done[key]
+
+    def walk(node):
+        if not isinstance(node, dict):
+            return node
+        node = dict(node)
+        if shape_envelope.KEY_BREP in node:
+            node[shape_envelope.KEY_BREP] = applied(node[shape_envelope.KEY_BREP])
+        children = node.get(shape_envelope.KEY_ASSEMBLY)
+        if isinstance(children, list):
+            node[shape_envelope.KEY_ASSEMBLY] = [walk(child) for child in children]
+        return node
+
+    envelope = walk(envelope)
+    if not summaries:
+        pc_logging.debug("%s:%s: no payload of its own to carry CMF in" % (shape.project_name, shape.name))
+        return envelope, recorded
+    recorded = dict(recorded or {})
+    recorded[shape_envelope.METADATA_CMF] = cmf_section.merge_summaries(summaries)
+    return envelope, recorded
+
+
+def info_of(ctx, summary: dict, relative_to: str) -> dict:
+    """A CMF summary as 'pc info' says it: each set's colour, material and finish, in that order.
+
+    Each set says which of its components are display-only ('displayOnly'):
+    an 'rgba' colour, or a declaration saying 'manufacturable: false'. What is
+    unspecified is said only where something is.
+    """
+    sets = []
+    for entry in summary.get("sets") or []:
+        if not isinstance(entry, dict):
+            continue
+        row = {}
+        display_only = []
+        for kind in KINDS:
+            reference = entry.get(kind)
+            if reference is None:
+                continue
+            row[kind] = reference
+            declaration = (
+                None if rgba_of_reference(reference) else lookup(ctx, kind, reference, relative_to, quiet=True)
+            )
+            if rgba_of_reference(reference) is not None or (declaration is not None and not declaration.manufacturable):
+                display_only.append(kind)
+        if display_only:
+            row["displayOnly"] = display_only
+        for key in ("display", "roughness", "metallic", "origin", "faces", "solids"):
+            if key in entry:
+                row[key] = entry[key]
+        sets.append(row)
+    result = {"sets": sets}
+    if summary.get("unspecified"):
+        result["unspecified"] = dict(summary["unspecified"])
+    return result
+
+
+def summary_of(shape):
+    """The CMF summary recorded with an object's geometry (see 'apply_declared'), or None."""
+    from . import shape_envelope
+
+    metadata = getattr(shape, "_metadata", None)
+    return metadata.get(shape_envelope.METADATA_CMF) if isinstance(metadata, dict) else None
+
+
+def assembly_cmf_setters(assembly) -> list:
+    """How an assembly sets CMF itself, in words: [] when it does not.
+
+    Its own CMF parameters, a link's CMF 'params:', and a 'properties: color:'
+    on it - each a finer-grained way of drawing what it holds, which costs it its
+    manufacturability unless it is bought whole (docs/design/cmf.md, section 8).
+    """
+    setters = ["its own '%s'" % kind for kind in own_parameters(assembly)]
+    properties = assembly.config.get("properties") if isinstance(assembly.config, dict) else None
+    if isinstance(properties, dict) and properties.get("color"):
+        setters.append("its 'properties: color:'")
+    children = assembly.connected_children() if hasattr(assembly, "connected_children") else assembly.children
+    for child in children:
+        for kind in getattr(child, "cmf_parameters", None) or ():
+            setters.append("the link '%s' sets '%s'" % (child.name, kind))
+    return setters

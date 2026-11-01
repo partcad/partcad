@@ -162,12 +162,16 @@ class ConnectivityTest(Test):
         An ASSY file's top level 'links:' becomes a child assembly of the object
         the file defines, and so does every nested one, so the groups are the
         assembly's own children and then those of every assembly among them.
+
+        A sub-assembly that is bought whole is not descended into: how its
+        vendor put it together is not this assembly's to say, and it is placed
+        and connected as one item (docs/design/cmf.md, section 8).
         """
         children = list(getattr(assembly, "children", []) or [])
         yield children
         for child in children:
             item = child.item
-            if isinstance(item, Assembly):
+            if isinstance(item, Assembly) and not _bought_whole(item):
                 yield from self._containers(item)
 
     def _unanchored(self, shape, config):
@@ -186,7 +190,9 @@ class ConnectivityTest(Test):
         """
         if not config.get("requireAnchored", True):
             return
-        if getattr(shape, "is_manufacturable", False):
+        # An assembly that is bought whole is made by its vendor, however its
+        # file places what it holds: the coordinates there draw it.
+        if getattr(shape, "is_manufacturable", False) and not _bought_whole(shape):
             for children in self._containers(shape):
                 for index, child in enumerate(children):
                     if getattr(child, "located", False):
@@ -216,6 +222,12 @@ class ConnectivityTest(Test):
                         "'%s' is placed by coordinates among items that connect, "
                         "so nothing holds it where it is" % child.name
                     )
+
+
+def _bought_whole(assembly) -> bool:
+    """Whether 'assembly' is bought as it is (its own 'vendor' and 'sku'; see 'Assembly.is_declared_purchasable')."""
+    declared = getattr(assembly, "is_declared_purchasable", None)
+    return bool(declared()) if callable(declared) else False
 
 
 def _packed(location):

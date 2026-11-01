@@ -116,7 +116,9 @@ warning.
 
 ## 5. Where an item's CMF comes from
 
-**Built:** the parameters on every type, a part's declared colour drawn, canonical references. **Decided:** the rest.
+**Built:** the parameters on every type, a part's declared colour drawn, canonical references, the parameters written
+into the payload, propagation through ASSY links. **Decided:** sources and converters
+([section 7](#7-conventions-and-converters)), STEP instance overrides.
 
 Every part type and every assembly type accepts five object-type parameters: `color`, `material` and `finish` (each a
 reference to a declaration of its kind), `sourceCmf` and `cmfConvention`. `tolerance` stays with the types that build
@@ -136,8 +138,11 @@ parameters are ordinary build inputs - keyed, and handed to a script that assign
 built and cached as an item of its own. That is accepted rather than optimised for: parts of one geometry share one
 CMF far more often than not.
 
-An **assembly's CMF parameters propagate** to its links as parameter values, for those the link's own `params:` do not
-set, recursively; an imported STEP assembly writes an instance's overridden CMF as `params:` on that link. Either way a
+An **assembly's CMF parameters propagate** to its links as parameter values - colour, material and finish, each for a
+link whose own `params:` do not set it and whose item does not state it already - recursively; an imported STEP
+assembly writes an instance's overridden CMF as `params:` on that link. An item's own CMF is its own: a variant an
+`enrich` fixes stays that variant wherever it is linked, and an assembly only fills in what is left, as a part's
+parameters fill in what its source leaves. Either way a
 link names the variant its parameters name. But CMF set by an assembly - its own parameters, a link's `params:`, or a
 legacy `properties: color:` on it - is a finer-grained way of *drawing* the assembly, not a specification of the items
 in it, and it costs the assembly its manufacturability ([section 8](#8-manufacturability)). A colour variant that is
@@ -145,7 +150,7 @@ to be made or bought as such is declared as a part - an `enrich` that fixes `col
 
 ## 6. Storage: inside the BREP
 
-**Decided.**
+**Built.**
 
 A shape's payload is its BREP followed by a binary **CMF section** and a footer. OCCT's readers read a BREP followed by
 anything as the same geometry (verified for `BinTools` and `BRepTools`), so the payload stays a BREP to every reader:
@@ -172,9 +177,17 @@ reuses a shell's faces. A producer hands `ocp_serialize` a mapping keyed by sub-
 computed at encode time. An operation that rebuilds faces (sewing, unifying, a boolean) carries CMF through OCCT's
 history, or drops it with a warning - never silently.
 
-The wrapper also records a **summary** in the node's `metadata` - the sets with their face and solid counts, and what
+A part's own CMF - its parameters - is written into the section by the **core**, not by each wrapper: after the part is
+built and after any `offset`/`scale` (which rebuilds the payload), the core opens the payload with its bounded reader,
+completes or replaces the section as `sourceCmf` says, and compresses it again (`partcad.cmf.apply_declared`). It needs
+no kernel - the section is bytes after the BREP - so every part type gets it the same way, whatever built it, and it is
+cached with the result. A payload several nodes carry - the compound a script's components are pieces of - is given one
+section, and those components are drawn in the part's own set: their faces are the compound's to address.
+
+Whoever writes a section also records a **summary** in the node's `metadata` - the sets with their face and solid counts, and what
 is unspecified - cached with the geometry, for consumers that do not load the CAD kernel: `pc test`, the BOM views, the
-IDE's CMF tab.
+IDE's CMF tab. A drawing reads it too, to open a payload's section only where it addresses faces one by one: nearly
+nothing does, and a drawing costs what it cost before.
 
 *Rejected:* a separate table on the node (it pays off only when one geometry carries many CMFs, the case not optimised
 for, and splits one fact across two places every reader joins); OCCT's XBF document (deterministic, but a different
@@ -233,7 +246,8 @@ overriding style into `params:` with `sourceCmf: [color]`); and real identifiers
 
 ## 8. Manufacturability
 
-**Decided.**
+**Built:** the `cmf` check, as a warning, and `cmf: {require: true}` on an object or a package to make it fail; the
+connectivity exemption. **Decided:** making it an error by default.
 
 `pc test` gains a `cmf` check. It is a warning first, an error for packages that opt in next, and an error by default
 once the public index passes it - the path `tolerance` took.
@@ -253,7 +267,8 @@ once the public index passes it - the path `tolerance` took.
 
 ## 9. Presentation
 
-**Built:** `pc list colors|materials|finishes`. **Decided:** the rest.
+**Built:** `pc list colors|materials|finishes`, `pc info`'s CMF section, drawings per face, a glTF material per colour.
+**Decided:** the rest.
 
 CMF is always shown as its three components in the order colour, material, finish: each by its declaration's name, with
 a swatch of its display where the medium allows, marked when it is display-only or unspecified, and with its origin
@@ -269,6 +284,8 @@ where there is room.
   primitive's own material and uses a finish's roughness and metallic.
 - **Drawings:** SVG, PNG and JPEG draw each face in its display colour, still as one hidden-line drawing; an edge
   between two colours is drawn once per colour, the later on top.
+- **glTF:** the faces of one colour are one mesh with that colour's material, so a part of one colour is still one
+  primitive; the IDE keeps those materials once it draws a primitive's own (above).
 - **Exports:** STEP through XCAF - product structure and names, sRGB colours on faces, solids and products, materials
   with density on products and, where a part has several, per solid as user-defined attributes on shape aspects
   (the CAx-IF practice), finishes and PartCAD's references as user-defined attributes. glTF: a material per set. 3MF:
@@ -352,6 +369,7 @@ part and assembly type; `tolerance` only by the homogeneous ones.
 do not set, recursively.
 - *Scenario:* a wall linked with `params: {color: ":stone"}` holds bricks linked with none → every brick is
   `brick;color=<stone, canonical>`; one link inside saying `color: ":red"` is red.
+- *Scenario:* the same wall holds `red-brick`, an `enrich` of `brick` fixing `color: ":red"` → it stays `red-brick`.
 
 **Requirement: STEP instance overrides.** An imported STEP assembly SHALL write an instance's overridden CMF as that
 link's `params:`, inventing no part name.
@@ -404,7 +422,8 @@ counts), each a declaration with `manufacturable: true`; a stated finish SHALL b
 **Requirement: a purchasable assembly.** An assembly declaring `vendor` and `sku` SHALL be judged by its own CMF, and
 neither the CMF check nor the connectivity rule against `location:` SHALL descend into it.
 
-**Requirement: in stages.** The check SHALL be a warning first.
+**Requirement: in stages.** The check SHALL be a warning first, and an error for an object or a package declaring
+`cmf: {require: true}`.
 
 ### 11.6 Presentation
 
@@ -442,8 +461,8 @@ Thread with the Design tab only, selected and not shown, and only its sub-tabs.
 | Step | Status |
 | --- | --- |
 | Declarations, CSS display, names and escaping, canonical references, CMF parameters on every type, a part's declared colour drawn, `pc list colors\|finishes` | built |
-| The CMF section inside the BREP, its summary, application of the parameters in the wrappers, drawings and glTF per face | decided |
-| Assembly propagation, the visualization-only rule, the `cmf` check | decided |
+| The CMF section inside the BREP, its summary, the parameters written into it by the core, drawings and glTF per face, `pc info` | built |
+| Assembly propagation, the visualization-only rule, the `cmf` check (as a warning) | built |
 | STEP via XCAF; scripts and OpenSCAD as sources; converters | decided |
 | IDE: explorer, CMF tab, BOM columns, per-primitive materials | decided |
 | Exports: STEP via XCAF, glTF, 3MF, URDF/MJCF | decided |

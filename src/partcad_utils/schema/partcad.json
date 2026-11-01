@@ -1470,6 +1470,18 @@
       },
       "additionalProperties": false
     },
+    "check-cmf": {
+      "description": "What 'partcad.test.cmf' does with this object, or with every object of this package.",
+      "type": "object",
+      "properties": {
+        "require": {
+          "description": "Whether colour, material and finish not specified fails 'pc test' rather than warns. An object or its package saying true is enough.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
     "mating": {
       "description": "How one particular pair of interfaces goes together. Stated once for the pair and applied to every connection that joins them, alongside the freedom of movement that connection is left with.",
       "oneOf": [
@@ -1760,6 +1772,7 @@
       "type": "boolean",
       "default": false
     },
+    "cmf": { "$ref": "#/definitions/check-cmf" },
     "unless": { "$ref": "#/definitions/unless" },
     "docs": {
       "type": ["object", "null"],
@@ -2072,6 +2085,7 @@
                 "implements": { "$ref": "#/definitions/implements" },
                 "ports": { "$ref": "#/definitions/ports-section" },
                 "manufacturable": { "type": "boolean" },
+                "cmf": { "$ref": "#/definitions/check-cmf" },
                 "tolerance": {
                   "type": "number",
                   "minimum": 0,
@@ -2199,6 +2213,7 @@
                 "simulate": { "$ref": "#/definitions/simulate" },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "manufacturable": { "type": "boolean" },
+                "cmf": { "$ref": "#/definitions/check-cmf" },
                 "timeout": {
                   "type": "integer",
                   "minimum": 1,
@@ -2242,6 +2257,7 @@
                 "simulate": { "$ref": "#/definitions/simulate" },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "manufacturable": { "type": "boolean" },
+                "cmf": { "$ref": "#/definitions/check-cmf" },
                 "timeout": {
                   "type": "integer",
                   "minimum": 1,

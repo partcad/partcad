@@ -46,13 +46,22 @@ What manufacturing asks of it
 A part that is to be made has to have every solid in a material and every face in a colour, each a declaration that
 claims it can be had. A display-only colour does not; neither does a face nothing coloured.
 
-An assembly may set CMF for what it holds -- its own CMF parameters are passed on to its links, and a link's
-``params:`` choose a variant -- but that draws the assembly; it does not specify the items in it. An assembly that sets
-CMF is manufacturable only if it is bought whole, declaring a ``vendor`` and an ``sku`` of its own. A variant that is to
-be made or bought as such is declared as a part, and the assembly links it by name.
+An assembly may set CMF for what it holds -- its own CMF parameters are passed on to the links whose items state none,
+and a link's ``params:`` choose a variant -- but that draws the assembly; it does not specify the items in it. An
+assembly that sets CMF is manufacturable only if it is bought whole, declaring a ``vendor`` and an ``sku`` of its own. A
+variant that is to be made or bought as such is declared as a part, and the assembly links it by name. An assembly
+bought whole is judged by its own CMF: how its vendor put it together, and what the parts inside it are made of, are its
+vendor's to say.
+
+``pc test`` asks all of this of everything to be made, in its ``cmf`` check (see :ref:`cmf-check`). It warns for now,
+and fails what says ``cmf: require: true``.
 
 Seeing it
 =========
 
 ``pc list colors``, ``pc list materials`` and ``pc list finishes`` list a package's declarations alike: name, display,
-whether it is only a picture, and what it is.
+whether it is only a picture, and what it is. ``pc info`` of a part says what its CMF comes to.
+
+A part's CMF travels with its geometry, inside its BREP, so whatever draws the part draws it in its colours: the SVG,
+PNG and JPEG drawings colour each face as its CMF says, and the glTF a part is shown with carries a material per
+colour.
