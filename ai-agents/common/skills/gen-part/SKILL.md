@@ -279,10 +279,11 @@ pc --no-ansi ide view <name>                # every time after: stays on whateve
 ```
 
 The 3D view turns the model on its own (its Animate box is on by default
-wherever there is a graphics card), and each object shown in it starts at the
-angle the last one had turned to. So each version replaces the previous one while the turn carries on,
-and the person watching sees the part take shape instead of a series of
-restarts. Showing the same name again keeps the camera exactly where it is.
+wherever there is a graphics card). A show after the first keeps the angle the
+turn had reached, whatever the name, and then brings the camera in or out over
+a second until the new version fits however it turns. So each version replaces
+the previous one while the turn carries on, and the person watching sees the
+part take shape, never cut off by the frame or lost in the middle of it.
 
 Show only what passed. A version that does not build or render stays off the
 screen, so the view always holds the last version that worked. The show is for

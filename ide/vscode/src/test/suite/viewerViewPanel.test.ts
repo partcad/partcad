@@ -20,7 +20,7 @@
 import * as assert from 'assert';
 import * as THREE from 'three';
 
-import { turnedLike } from '../../webview/cameraView';
+import { FIT_MARGIN, enclosingRadius, fitDistance, fitProgress } from '../../webview/cameraView';
 import { ShowNode } from '../../webview/messages';
 import {
     boundsOf,
@@ -224,19 +224,56 @@ suite('The view panel: where a view is looked at from', () => {
         near(orbit(axisView('-y'), 0, 0, Z_POLE).origin, axisView('-y').origin);
     });
 
-    test('a new object comes in at the angle the turn had reached, at the height and distance a fit gives it', () => {
-        // The 3D view's opening direction, and the camera a quarter turn further
-        // round (about Y, from +Z towards +X, as the orbit controls turn), lower
-        // and further out than a fit would have put it.
-        const fitted = new THREE.Vector3(0.6, 0.5, 0.8);
-        const turned = turnedLike(fitted, new THREE.Vector3(0.8, 0.1, -0.6).multiplyScalar(7));
-        near(turned.toArray() as Vec3, [0.8, 0.5, -0.6]);
-        // Behind it, the long way round.
-        near(turnedLike(fitted, new THREE.Vector3(-0.6, 0.3, -0.8)).toArray() as Vec3, [-0.6, 0.5, -0.8]);
-        // The direction it was given is the next show's too, and stays as it was.
-        near(fitted.toArray() as Vec3, [0.6, 0.5, 0.8]);
-        // Straight down the pole there is no angle to take.
-        near(turnedLike(fitted, new THREE.Vector3(0, 5, 0)).toArray() as Vec3, [0.6, 0.5, 0.8]);
+    test('a fit keeps every side of the model in the narrower field, with 15% to spare, however it turns', () => {
+        // A bar three times as long as it is wide and six times as long as it
+        // is deep: end-on it is a sixth of its length across, and it comes round.
+        const box = new THREE.Box3(new THREE.Vector3(-30, -10, -5), new THREE.Vector3(30, 10, 5));
+        const radius = enclosingRadius(box);
+        assert.ok(Math.abs(radius - Math.sqrt(60 * 60 + 20 * 20 + 10 * 10) / 2) < 1e-9);
+        assert.strictEqual(enclosingRadius(new THREE.Box3()), 0);
+
+        for (const aspect of [0.5, 1, 2]) {
+            const fov = 50;
+            const vertical = (fov * Math.PI) / 360;
+            const half = Math.min(vertical, Math.atan(Math.tan(vertical) * aspect));
+            const distance = fitDistance(radius, fov, aspect);
+            // The sphere 15% larger than the one holding the model just touches
+            // the edges of the narrower field.
+            assert.ok(Math.abs(Math.asin((radius * FIT_MARGIN) / distance) - half) < 1e-9, `aspect ${aspect}`);
+            // And every corner of the model, however the model is turned about
+            // the turntable's axis or tumbled over, is inside it.
+            const corners = [-1, 1].flatMap((x) =>
+                [-1, 1].flatMap((y) => [-1, 1].map((z) => new THREE.Vector3(30 * x, 10 * y, 5 * z))),
+            );
+            let widest = 0;
+            for (let turn = 0; turn < 360; turn += 5) {
+                for (let tumble = 0; tumble < 180; tumble += 15) {
+                    const rotation = new THREE.Euler((tumble * Math.PI) / 180, (turn * Math.PI) / 180, 0);
+                    for (const corner of corners) {
+                        // The camera on +Z, looking at the middle.
+                        const at = corner.clone().applyEuler(rotation);
+                        widest = Math.max(widest, Math.atan2(Math.hypot(at.x, at.y), distance - at.z));
+                    }
+                }
+            }
+            assert.ok(widest < half, `aspect ${aspect}: ${widest} is outside ${half}`);
+        }
+        // Only the narrower field decides: a wide canvas is fitted by its height,
+        // a narrow one by its width.
+        assert.strictEqual(fitDistance(radius, 50, 2), fitDistance(radius, 50, 1));
+        assert.ok(fitDistance(radius, 50, 0.5) > fitDistance(radius, 50, 1));
+    });
+
+    test('a fit takes a second, and starts and ends gently', () => {
+        assert.strictEqual(fitProgress(-10), 0);
+        assert.strictEqual(fitProgress(0), 0);
+        assert.strictEqual(fitProgress(500), 0.5);
+        assert.strictEqual(fitProgress(1000), 1);
+        assert.strictEqual(fitProgress(5000), 1);
+        assert.ok(fitProgress(100) < 0.1 && fitProgress(900) > 0.9);
+        for (let elapsed = 0; elapsed < 1000; elapsed += 50) {
+            assert.ok(fitProgress(elapsed + 50) > fitProgress(elapsed));
+        }
     });
 
     test("the gizmo's axes lie as they are seen: from the front, X right, Z up, -Y towards the reader", () => {
@@ -333,6 +370,7 @@ suite('The view panel: the widget', () => {
             viewpoints: [] as [Viewpoint, boolean][],
             sections: [] as unknown[],
             resets: 0,
+            fits: 0,
             animate: [] as boolean[],
             opacity: [] as number[],
         };
@@ -340,6 +378,7 @@ suite('The view panel: the widget', () => {
             {
                 onViewpoint: (viewpoint, final) => asked.viewpoints.push([viewpoint, final]),
                 onResetView: () => (asked.resets += 1),
+                onFit: () => (asked.fits += 1),
                 onSection: (section) => asked.sections.push(section),
                 onAnimate: (animate) => asked.animate.push(animate),
                 onOpacity: (opacity) => asked.opacity.push(opacity),
@@ -440,6 +479,27 @@ suite('The view panel: the widget', () => {
         const [reset] = byClass(root, 'view-reset');
         reset.fire('click');
         assert.deepStrictEqual(asked.sections[asked.sections.length - 1], null);
+    });
+
+    test('Fit is there where the view has a camera to move, and asks for a fit', () => {
+        const { view, root, asked } = panel();
+        const [fit] = byClass(root, 'view-fit');
+        assert.strictEqual(fit.hidden, false);
+        assert.strictEqual(fit.textContent, 'Fit');
+        fit.fire('click');
+        assert.deepStrictEqual([asked.fits, asked.resets], [1, 0]);
+        view.setCapabilities({ ...EVERYTHING, viewpoint: 'Nothing is shown' });
+        assert.strictEqual(fit.disabled, true);
+        view.setCapabilities(EVERYTHING);
+        assert.strictEqual(fit.disabled, false);
+
+        // A picture has no camera to bring in: no Fit at all, rather than one
+        // that does nothing.
+        const picture = new ViewPanel(
+            { onViewpoint: () => {}, onResetView: () => {}, onSection: () => {} },
+            { target: false },
+        );
+        assert.strictEqual(byClass(picture.element as unknown as FakeElement, 'view-fit')[0].hidden, true);
     });
 
     test('what a tab cannot do is disabled, and says why', () => {

@@ -68,8 +68,9 @@ for **X**, **-X**, **Y**, **-Y**, **Z** and **-Z**, the views `pc render --view`
 slider per axis, starting at the faces of the object's bounding box, which PartCAD cuts the exact geometry to
 before it is drawn - the 3D view is shown again cut, and the 2D and Draft tabs draw the cut object; the
 **viewpoint** as editable `viewport_origin`, `viewport_up` and target fields, ready to copy into a `render:` section
-or onto `pc render --viewport-origin`; and the 3D view's **Animate** and **Opacity**. What does not apply on a tab is
-disabled and says why. On the Simulation tab the viewpoint is where the plugin takes its pictures from, so choosing
+or onto `pc render --viewport-origin`, with the 3D view's **Fit** beside it - which brings the camera in or out, over
+a second, until the whole model fits however it turns, and is what every show after the first does too; and the 3D
+view's **Animate** and **Opacity**. What does not apply on a tab is disabled and says why. On the Simulation tab the viewpoint is where the plugin takes its pictures from, so choosing
 one runs the simulation again.
 
 ### 3Dconnexion SpaceMouse

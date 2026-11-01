@@ -568,8 +568,9 @@ pc --no-ansi ide view <name>
 Add `--design-3d` to the first show of the run, if no part was shown before it,
 to bring the 3D tab forward; after that, leave the viewer on whatever tab the
 person has chosen. The 3D view turns the model on its own (its Animate box is
-on by default wherever there is a graphics card), and each object shown in it
-starts at the angle the last one had turned to. So the person watching sees each generated part take
+on by default wherever there is a graphics card), keeps the angle the turn had
+reached from one object to the next, and brings the camera in or out over a
+second until each fits. So the person watching sees each generated part take
 shape, then the assembly come together and settle, on one continuous turn.
 
 Show only what passed. A version that does not build or render stays off the

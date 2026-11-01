@@ -46,12 +46,17 @@ which are the views ``pc render --view`` names; a two-ended **section** slider
 per axis, starting at the faces of the bounding box, which cuts the exact
 geometry before it is drawn rather than clipping the picture; the **viewpoint**
 as ``viewport_origin``, ``viewport_up`` and a target, ready to be copied into a
-``render:`` section or onto ``pc render --viewport-origin``; and **Animate** and
-**Opacity**, which turn the model on its own and make it see-through. Animate
-is on from the start (but see below for a window with no graphics card). While
-it is on, a different object shown in the view
-starts at the angle the last one had turned to, so a model that changes as an
-agent works on it keeps turning rather than jumping back to the front.
+``render:`` section or onto ``pc render --viewport-origin``, with **Fit** and
+**Reset** beside it; and **Animate** and **Opacity**, which turn the model on
+its own and make it see-through. Animate is on from the start (but see below for
+a window with no graphics card).
+
+**Fit** brings the camera in or out, over a second and from where it is looking,
+until the whole model fits with room to spare however it turns; **Reset** goes
+back to the view the tab starts with, at once. Every object shown after the
+first -- another one, or the same one again after an edit -- keeps the angle the
+view was at and is then fitted the way **Fit** fits it, so a model that changes
+as an agent works on it goes on turning and stays in view rather than jumping.
 
 .. image:: /images/dt-design-3d.png
   :width: 100%

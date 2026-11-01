@@ -193,7 +193,7 @@ const SHOTS = {
             await openViewer(page);
             await layout(page, { sidebar: 330, editor: 520, panel: 250 });
             await paneHeight(page, 'Inspector', 200);
-            await showStill(page, 'examples/wormgear', 5, 'examples/worm_drive');
+            await showStill(page, 'examples/wormgear', 5);
             await tidy(page);
             await shot(page, out('vscode1'));
         });
@@ -209,7 +209,7 @@ const SHOTS = {
             await openViewer(page);
             await layout(page, { sidebar: 330, editor: 520, panel: 250 });
             await paneHeight(page, 'Inspector', 260);
-            await showStill(page, 'connect-mates', 2, 'connect-ports');
+            await showStill(page, 'connect-mates', 2);
             await zoom(page, 1.5);
             await tidy(page);
             await shot(page, out('vscode2'));
@@ -224,7 +224,7 @@ const SHOTS = {
             await expand(page, FEATURE_INTERFACE);
             await openViewer(page);
             await layout(page, { editor: 300 });
-            await showStill(page, 'm3', 2, 'm3-hole-4.5');
+            await showStill(page, 'm3', 2);
             await tidy(page);
             await shot(page, out('interface-m3'), await trimmed(page, await canvas(page)));
         });
@@ -240,7 +240,7 @@ const SHOTS = {
             await expand(page, FEATURE_INTERFACE);
             await openViewer(page);
             await layout(page, { editor: 300 });
-            await showStill(page, 'example-motor', 2, 'example-bracket');
+            await showStill(page, 'example-motor', 2);
             await orbit(page, { left: 36.87, up: 70 });
             // Seen end on, the motor is a small square in a view framed for
             // all 60 mm of its length.
@@ -317,7 +317,7 @@ const SHOTS = {
             await expand(page, FEATURE_INTERFACE);
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
-            await showStill(page, 'connect-mates', 2, 'connect-ports');
+            await showStill(page, 'connect-mates', 2);
             await zoom(page, 1.5);
             await tidy(page);
             await shot(page, out('dt-design'), await panel(page));
@@ -332,7 +332,7 @@ const SHOTS = {
             await expand(page, FEATURE_INTERFACE);
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 700 });
-            await showStill(page, 'connect-mates', 2, 'connect-ports');
+            await showStill(page, 'connect-mates', 2);
             await viewPanel(page, true);
             await tidy(page);
             await shot(page, out('dt-design-3d'), await panel(page));
@@ -346,7 +346,7 @@ const SHOTS = {
             await expand(page, FEATURE_INTERFACE);
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
-            await showStill(page, 'connect-mates', 2, 'connect-ports');
+            await showStill(page, 'connect-mates', 2);
             await tab(page, 'design', '2d');
             await filled(page, '.render-body img, .render-body canvas, .image-view');
             await tidy(page);
@@ -363,7 +363,7 @@ const SHOTS = {
             await expand(page, FEATURE_INTERFACE);
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
-            await showStill(page, 'example-bracket', 2, 'example-motor');
+            await showStill(page, 'example-bracket', 2);
             await tab(page, 'design', 'draft');
             await filled(page, '.render-body img, .render-body canvas, .image-view');
             await tidy(page);
@@ -379,7 +379,7 @@ const SHOTS = {
             await expand(page, ['feature_cae']);
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
-            await showStill(page, 'cantilever', 2, 'pipe');
+            await showStill(page, 'cantilever', 2);
             await tab(page, 'analysis', 'fea');
             await tidy(page);
             await shot(page, out('dt-analysis'), await panel(page));
@@ -401,7 +401,7 @@ const SHOTS = {
                     await expand(page, ['feature_cae']);
                     await openViewer(page);
                     await layout(page, { sidebar: 300, editor: 820 });
-                    await showStill(page, object, 2, object === 'pipe' ? 'cantilever' : 'pipe');
+                    await showStill(page, object, 2);
                     await tab(page, 'analysis', id);
                     await filled(page, '.cae-model canvas, .cae-model img, .cae-findings-heading');
                     await tidy(page);
@@ -418,7 +418,7 @@ const SHOTS = {
             await expand(page, ['provider_manufacturer']);
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
-            await showStill(page, 'assembly', 2, 'cylinder');
+            await showStill(page, 'assembly', 2);
             await tab(page, 'manufacturing', 'bvb');
             await filled(page, '.bvb .thumbnail');
             await tidy(page);
@@ -434,7 +434,7 @@ const SHOTS = {
             await expand(page, FEATURE_INTERFACE);
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
-            await showStill(page, 'example-bracket', 2, 'example-motor');
+            await showStill(page, 'example-bracket', 2);
             await tab(page, 'validation', 'test', 8000);
             await filled(page, '.test-verdict');
             await tidy(page);
@@ -454,7 +454,7 @@ const SHOTS = {
             await expand(page, ['provider_manufacturer']);
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
-            await showStill(page, 'assembly', 2, 'cylinder');
+            await showStill(page, 'assembly', 2);
             await tab(page, 'manufacturing', 'build');
             await filled(page, '.build-tree .build-node');
             await tidy(page);
@@ -476,7 +476,7 @@ const SHOTS = {
             await sleep(10000);
             await openViewer(page);
             await layout(page, { sidebar: 330, editor: 820 });
-            await showStill(page, 'nut', 2, 'bracket');
+            await showStill(page, 'nut', 2);
             await tab(page, 'manufacturing', 'supply');
             await filled(page, 'table.grid, .option, .placeholder');
             await tidy(page);
@@ -493,7 +493,7 @@ const SHOTS = {
             await expand(page, FEATURE_INTERFACE);
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
-            await showStill(page, 'connect-mates', 2, 'connect-ports');
+            await showStill(page, 'connect-mates', 2);
             await tab(page, 'manufacturing', 'bom');
             await filled(page, 'table.grid');
             await tidy(page);
@@ -509,7 +509,7 @@ const SHOTS = {
             await expand(page, FEATURE_INTERFACE);
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
-            await showStill(page, 'connect-mates', 2, 'connect-ports');
+            await showStill(page, 'connect-mates', 2);
             await tab(page, 'manufacturing', 'assembly');
             await filled(page, '.document-pages canvas, .document-pages img');
             await tidy(page);
@@ -526,7 +526,7 @@ const SHOTS = {
             await expand(page, ['feature_simulate']);
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
-            await showStill(page, 'stable', 2, 'unstable');
+            await showStill(page, 'stable', 2);
             await tab(page, 'validation', 'simulation', 8000);
             await filled(page, '.simulation-figure, .simulation-video-media, .simulation-pictures');
             await tidy(page);
@@ -616,7 +616,7 @@ const SHOTS = {
             await expand(page, ['feature_simulate_joints']);
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
-            await showStill(page, 'pendulum', 2, 'nudged');
+            await showStill(page, 'pendulum', 2);
             await tab(page, 'validation', 'simulation', 8000);
             await filled(page, '.simulation-figure, .simulation-video-media, .simulation-pictures');
             await tidy(page);
@@ -631,7 +631,7 @@ const SHOTS = {
             await expand(page, ['feature_simulate_fea']);
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
-            await showStill(page, 'arm', 2, 'knee-gear');
+            await showStill(page, 'arm', 2);
             await tab(page, 'validation', 'simulation', 8000);
             await filled(page, '.simulation-figure, .simulation-video-media, .simulation-pictures');
             await tidy(page);
@@ -645,18 +645,11 @@ const SHOTS = {
     async 'plugin-part-type'() {
         await inVSCode(EXAMPLES, async (page) => {
             await partcadView(page, ['Explorer']);
-            // Two packages, because 'produce_part_wrapper' holds one object and
-            // framing a show the same way every time needs a second one to show
-            // in between. 'produce_part_sweep' is that second one because it is
-            // the package immediately above this one: 'row()' finds a row by
-            // scrolling to it, so two packages far apart in the tree is two
-            // searches of a long tree and one of them runs out of time.
-            await expand(page, ['produce_part_sweep']);
             await expand(page, ['produce_part_wrapper']);
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
             // No zoom: a show already frames this one, and a box fills the frame.
-            await showStill(page, 'demo', 2, 'pipe');
+            await showStill(page, 'demo', 2);
             await tidy(page);
             await shot(page, out('plugin-part-type'), await panel(page));
         });
@@ -671,7 +664,7 @@ const SHOTS = {
             await expand(page, ['plugin_repository_basic', 'example']);
             await openViewer(page);
             await layout(page, { sidebar: 330, editor: 820 });
-            await showStill(page, 'bolt', 3, 'cube');
+            await showStill(page, 'bolt', 3);
             await zoom(page, 1.5);
             await tidy(page);
             await shot(page, out('plugin-repository'), await panel(page));

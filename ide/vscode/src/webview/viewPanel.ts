@@ -16,7 +16,10 @@
 //     that much off from that side. PartCAD does the cutting (see 'section.ts');
 //   * where the view is looked at from, as the three vectors a 'render:' section
 //     says it with - Origin, Up and, where the view has one to move, Target -
-//     each a field that can be typed into, copied out of and pasted into;
+//     each a field that can be typed into, copied out of and pasted into; with
+//     Reset, back to the view the tab starts with, and - on a view with a camera
+//     of its own to move, which says so with 'onFit' - Fit, which brings the
+//     whole model into view from where it is looked at now;
 //   * Animate and Opacity, which used to be at the bottom of the 3D view's tree.
 //
 // One widget for every tab, and the tabs differ in what each part of it can do
@@ -81,6 +84,12 @@ export interface ViewPanelCallbacks {
     onViewpoint: (viewpoint: Viewpoint, final: boolean) => void;
     /** "Reset": back to the view the tab starts out with. */
     onResetView: () => void;
+    /**
+     * "Fit": the whole model into view, from where it is looked at now. Only a
+     * view with a camera of its own to move says what it does; on any other the
+     * button is not there.
+     */
+    onFit?: () => void;
     /** The section was changed - a slider let go - or reset (null). */
     onSection: (section: Section | null) => void;
     onAnimate?: (animate: boolean) => void;
@@ -94,10 +103,11 @@ export interface ViewPanelOptions {
     /** Whether the model starts out turning on its own, which the Animate box then says. */
     animate?: boolean;
     /**
-     * Ids for the Animate box and the Opacity slider, for the one panel that is
-     * driven from outside the webview (the 3D tab's, by the screenshot script).
+     * Ids for the Animate box, the Opacity slider and the viewpoint's Reset, for
+     * the one panel that is driven from outside the webview (the 3D tab's, by
+     * the screenshot script).
      */
-    ids?: { animate?: string; opacity?: string; opacityValue?: string };
+    ids?: { animate?: string; opacity?: string; opacityValue?: string; reset?: string };
 }
 
 /** The ends of one section slider, and what they say. */
@@ -119,6 +129,7 @@ export class ViewPanel {
     private readonly sectionReset = el('button', 'view-reset', 'Reset');
     private readonly sectionNote = el('div', 'view-note');
     private readonly viewReset = el('button', 'view-reset', 'Reset');
+    private readonly viewFit = el('button', 'view-reset view-fit', 'Fit');
     private readonly viewNote = el('div', 'view-note');
     private readonly fields: { origin: HTMLInputElement; up: HTMLInputElement; target: HTMLInputElement };
     private readonly targetRow: HTMLElement;
@@ -195,9 +206,15 @@ export class ViewPanel {
 
         // Where the view is looked at from.
         const view = el('div', 'view-group view-viewpoint');
-        view.appendChild(this.heading('Viewpoint', this.viewReset));
+        view.appendChild(this.heading('Viewpoint', this.viewFit, this.viewReset));
         this.viewReset.type = 'button';
+        if (options.ids?.reset) {
+            this.viewReset.id = options.ids.reset;
+        }
         this.viewReset.addEventListener('click', () => this.callbacks.onResetView());
+        this.viewFit.type = 'button';
+        this.viewFit.hidden = callbacks.onFit === undefined;
+        this.viewFit.addEventListener('click', () => this.callbacks.onFit?.());
         const origin = this.field(
             'Origin',
             'viewport_origin: where the view is looked at from, as seen from the target',
@@ -328,9 +345,11 @@ export class ViewPanel {
         return parseInt(this.opacity.value, 10) / 100;
     }
 
-    private heading(text: string, button: HTMLElement): HTMLElement {
+    private heading(text: string, ...buttons: HTMLElement[]): HTMLElement {
         const heading = el('div', 'view-heading');
-        heading.append(el('span', 'view-title', text), button);
+        const end = el('span', 'view-buttons');
+        end.append(...buttons);
+        heading.append(el('span', 'view-title', text), end);
         return heading;
     }
 
@@ -563,6 +582,10 @@ export class ViewPanel {
         }
         this.viewReset.disabled = !viewing;
         this.viewReset.title = viewing ? 'Back to the view this tab starts out with' : '';
+        this.viewFit.disabled = !viewing;
+        this.viewFit.title = viewing
+            ? 'Bring the whole model into view from where it is looked at now, so that it fits however it turns'
+            : '';
         this.groups.viewpoint.classList.toggle('disabled', !viewing);
 
         const cutting = section === true && this.bounds !== undefined;

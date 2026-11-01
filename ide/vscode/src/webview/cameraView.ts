@@ -80,28 +80,48 @@ export function vectorFromStage(vector: Vec3, frame: SceneFrame): Vec3 {
 /** How far off the pole a view straight down it is put, in radians: well clear of the controls' own limit. */
 const OFF_POLE = 1e-4;
 
-/** The stage's up, which every stage's camera turns about (see the header). */
-const STAGE_UP = new THREE.Vector3(0, 1, 0);
+/** How much room a fit leaves round the model: it fits the model's enclosing sphere made 15% larger. */
+export const FIT_MARGIN = 1.15;
+
+/** How long "Fit" takes to get the camera there, in milliseconds: long enough to see where it went. */
+export const FIT_MILLISECONDS = 1000;
 
 /**
- * 'direction' turned about the stage's up to where 'heading' points round it,
- * its height above the turntable kept: how the 3D view frames a new object
- * while Animate is turning the camera, so that the new object comes in at the
- * angle the last one had reached and the turn carries on, rather than every
- * show starting again from the same side.
- *
- * Only the azimuth is taken from 'heading', and not its elevation or its
- * length, which are what framing decides. A 'heading' straight up or down the
- * pole has no azimuth to take, and 'direction' comes back as it was. The angle
- * is the orbit controls' own, measured about Y from +Z towards +X.
+ * The radius of the sphere about the middle of 'box' that holds all of it: half
+ * its diagonal, which is what a fit has to keep in view while the model turns.
+ * The box's largest side would do for the one angle the camera happens to be
+ * at, and a model that turns shows every angle - a long part seen end-on is
+ * short, and comes round to its full length a quarter turn later.
  */
-export function turnedLike(direction: THREE.Vector3, heading: THREE.Vector3): THREE.Vector3 {
-    const turned = direction.clone();
-    if (Math.hypot(heading.x, heading.z) < 1e-9 || Math.hypot(direction.x, direction.z) < 1e-9) {
-        return turned;
-    }
-    const by = Math.atan2(heading.x, heading.z) - Math.atan2(direction.x, direction.z);
-    return turned.applyAxisAngle(STAGE_UP, by);
+export function enclosingRadius(box: THREE.Box3): number {
+    return box.isEmpty() ? 0 : box.getSize(new THREE.Vector3()).length() / 2;
+}
+
+/**
+ * How far from what it looks at a perspective camera has to be for a sphere of
+ * 'radius', made 'FIT_MARGIN' larger, to fit the narrower of its two fields of
+ * view - so the model fits from whichever side it is seen, whatever the turn.
+ *
+ * 'fov' is three's: the vertical field, in degrees, and 'aspect' the canvas's
+ * width over its height. A canvas taller than it is wide sees less across than
+ * up, so the horizontal field is the one that decides there. The sphere fits
+ * where the lines from the camera that touch it lie along the field's edges,
+ * which is at 'radius / sin(half the field)'.
+ */
+export function fitDistance(radius: number, fov: number, aspect: number): number {
+    const vertical = (fov * Math.PI) / 360;
+    const horizontal = Math.atan(Math.tan(vertical) * aspect);
+    return (radius * FIT_MARGIN) / Math.sin(Math.min(vertical, horizontal));
+}
+
+/**
+ * How far through a fit 'elapsed' milliseconds into it are: 0 at the start, 1
+ * once 'FIT_MILLISECONDS' have gone by, and starting and finishing gently in
+ * between (a smoothstep) so that the camera does not lurch either way.
+ */
+export function fitProgress(elapsed: number): number {
+    const t = Math.min(1, Math.max(0, elapsed / FIT_MILLISECONDS));
+    return t * t * (3 - 2 * t);
 }
 
 /** Where 'camera' is looking from, at 'target', in PartCAD's frame. */

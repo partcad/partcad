@@ -422,22 +422,32 @@ export async function shown(page, name, timeout = 600000) {
 }
 
 /**
- * Show the Explorer row 'text' in the Digital Thread, from where a show puts the
- * camera, and still.
+ * Show the Explorer row 'text' in the Digital Thread, from where the first show
+ * puts the camera, and still.
  *
  * The 3D view turns on its own until its "Animate" box is cleared, and that box
- * is not there until something has been shown. So: show it, clear the box, show
- * something else ('other', a row at the same level) and show it again - a show
- * of a new object puts the camera back where every show starts.
+ * is not there until something has been shown. And a show after the first keeps
+ * whatever angle the turn had reached and fits the camera to the object over a
+ * second. So: show it, clear the box, and press the view panel's Reset, which
+ * puts the camera at the opening view, fitted, at once - the same framing on
+ * every run, whatever was shown before.
  */
-export async function showStill(page, text, level, other) {
+export async function showStill(page, text, level) {
     await select(page, text, level);
     await shown(page, text);
     await stopTurning(page);
-    await select(page, other, level);
-    await shown(page, other);
-    await select(page, text, level);
-    await shown(page, text);
+    await resetView(page);
+}
+
+/**
+ * Put the 3D view's camera at the opening view, as its view panel's Reset does.
+ *
+ * Clicked from inside the page rather than by Playwright, for the reason the
+ * Animate box is set ('stopTurning'): the panel starts folded away.
+ */
+export async function resetView(page) {
+    await (await viewer(page)).locator('#view-reset-button').evaluate((button) => button.click());
+    await sleep(500);
 }
 
 /**

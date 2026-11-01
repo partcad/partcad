@@ -466,16 +466,23 @@ const view3d = new ViewPanel(
             holdStill();
             scene?.setViewpoint(viewpoint);
         },
-        onResetView: () => scene?.fitView(),
+        onResetView: () => scene?.resetView(),
+        // Gradually, and from where it is looking: Animate goes on turning it.
+        onFit: () => scene?.fit(),
         onSection: (section) => onSectionChanged(section),
         onAnimate: (animate) => scene?.setAutoRotate(animate),
         onOpacity: (opacity) => scene?.setOpacity(opacity),
     },
-    // The ids the screenshot script drives these two by.
+    // The ids the screenshot script drives these by.
     {
         target: true,
         animate: true,
-        ids: { animate: 'animate-checkbox', opacity: 'opacity-slider', opacityValue: 'opacity-value' },
+        ids: {
+            animate: 'animate-checkbox',
+            opacity: 'opacity-slider',
+            opacityValue: 'opacity-value',
+            reset: 'view-reset-button',
+        },
     },
 );
 viewPanels['3d'] = view3d;
