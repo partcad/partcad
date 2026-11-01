@@ -76,11 +76,12 @@ the separators first and decode each component afterwards, and formatting a name
 - **THEN** it is declared and referenced as `PA12%2C glass filled`, and is displayed as `PA12, glass filled`
 
 ### Requirement: The standard catalogue uses industrial names
-`//pub/std/color` SHALL declare colours under the names of industrial CMF specifications, starting with RAL
-Classic by its designation (`RAL 3020`), with the specification's own name in `desc` and its id in `ids`. It
-SHALL declare the parametric display-only `rgba` colour with `manufacturable: false`. It SHALL NOT declare
-colours whose specification's licence does not allow publishing them (Pantone). A vendor package SHALL be free to
-declare its own colours under its own names.
+`//pub/std/color` SHALL declare colours under the names of industrial CMF specifications, starting with RAL Classic
+by its designation (`RAL 3020`), with the specification's own name in `desc` and its id in `ids`. It SHALL ship
+their display values only where the specification's terms allow publishing them. It SHALL declare the parametric
+display-only `rgba` colour with `manufacturable: false`. It SHALL NOT declare colours whose specification's licence
+does not allow publishing them (Pantone). A vendor package SHALL be free to declare its own colours under its own
+names.
 
 #### Scenario: Listing the standard colours
 - **WHEN** a user runs `pc list colors //pub/std/color`

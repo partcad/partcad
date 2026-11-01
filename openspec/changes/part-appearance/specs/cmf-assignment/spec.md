@@ -6,8 +6,9 @@ A part's CMF SHALL come from:
   type's `cmfConvention` converter; and
 - the CMF type parameters `color`, `material` and `finish`.
 
-By default the parameters SHALL fill only the components the source leaves unset. With `sourceCmf: drop` they
-SHALL replace everything the source states. An ASSY link SHALL be able to affect CMF only through its
+By default (`sourceCmf: keep`) the parameters SHALL fill only the components the source leaves unset. With
+`sourceCmf: drop` they SHALL replace everything the source states. With a list of components
+(`sourceCmf: [color]`) they SHALL replace only those. An ASSY link SHALL be able to affect CMF only through its
 `params:`.
 
 #### Scenario: A STEP file with one uncoloured solid
@@ -17,6 +18,10 @@ SHALL replace everything the source states. An ASSY link SHALL be able to affect
 #### Scenario: Overriding everything the file says
 - **WHEN** the same part declares `sourceCmf: drop` and `color`, `material` and `finish`
 - **THEN** every solid and face takes the declared CMF, and nothing the file stated remains
+
+#### Scenario: Replacing only the colour
+- **WHEN** a STEP part whose file states colours and materials declares `sourceCmf: [color]` and `color`
+- **THEN** every face takes the declared colour, and every solid keeps the file's material
 
 #### Scenario: A link that states a colour outside params
 - **WHEN** an ASSY link carries a `color` key

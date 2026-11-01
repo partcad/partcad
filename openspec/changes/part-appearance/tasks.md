@@ -32,8 +32,9 @@ it. The order puts what everything else reads first: declarations, then the payl
       Drafting); a CMF configuration reference for the three sections; `config_parts.rst` MCFTT section
       rewritten as CMF parameters
 - [ ] 1.8 partcad-index: `//pub/std/color`:
-      - RAL Classic by designation (`RAL 3020`), with `desc`, `ids.ral`, and published sRGB approximations as
-        `display`;
+      - RAL Classic by designation (`RAL 3020`), with `desc` and `ids.ral`. Its `display` values ship only once
+        RAL's terms are confirmed to allow publishing them (see the design's Risks); until then the
+        declarations ship without `display`;
       - `rgba` as a parametric, `manufacturable: false` declaration.
 
       Also `//pub/std/finish` (an initial set: as-produced, SPI mould grades, VDI 3400 references, anodise
@@ -64,8 +65,8 @@ it. The order puts what everything else reads first: declarations, then the payl
 
 ## 3. CMF type parameters on every part and assembly type
 
-- [ ] 3.1 `color`, `material`, `finish`, `sourceCmf`, `cmfConvention` accepted by every part type and every
-      assembly type (a mixin replacing CMF's place in `PartFactoryHomogen`, which keeps `tolerance`). The
+- [ ] 3.1 `color`, `material`, `finish`, `sourceCmf` (`keep`, `drop`, or a list of components), `cmfConvention`
+      accepted by every part type and every assembly type (a mixin replacing CMF's place in `PartFactoryHomogen`, which keeps `tolerance`). The
       parameters are ordinary inputs: keyed, and handed to scripts that assign them.
 - [ ] 3.2 Canonicalisation: CMF parameter values are resolved (aliases followed, relative references made
       absolute against the package that wrote them) before they enter an item's name or key
@@ -106,9 +107,17 @@ it. The order puts what everything else reads first: declarations, then the payl
 - [ ] 6.1 `//builtin/cmf` and the `cmfConventions:` section (declared as `render:`/`export:` file types are):
       the converter interface (source facts in, CMF references and display values out), and `partcad`
       (identity)
-- [ ] 6.2 `step` (CAx-IF recommended practices), `3mf`, `gltf`, `css`, `openscad`, `build123d`, `cadquery`
-- [ ] 6.3 CAD tools: `solidworks`, `onshape`, `fusion`, `creo`, `nx`, `catia` (their material and appearance
-      names and the attributes they write into STEP)
+- [ ] 6.2 Built-in converters:
+      - `step`: the CAx-IF styling and UDA practices; an assembly node's overriding style becomes link
+        `params:` with `sourceCmf: [color]`;
+      - `3mf`: base material name as the claim, `displaycolor` as display;
+      - `gltf`: linear factors to sRGB;
+      - `css`, `openscad`, `cadquery`;
+      - `build123d`: the 0.11 string and the 0.13 `FinishedMaterial`.
+- [ ] 6.3 CAD tools: `solidworks`, `onshape`, `fusion`, `inventor`, `creo`, `nx`, `catia`. Map their material and
+      appearance names (`.sldmat`, Onshape CSV libraries, `PTC_MASTER_MATERIAL`/`PTC_ASSIGNED_MATERIAL`, …) and
+      the attributes they write into STEP, each with the case folding its tool uses. Build them against fixture
+      files each tool wrote.
 - [ ] 6.4 Lookup scope: declarations' `ids` in the part's own package and the catalogues listed by the
       converter's `catalogs` parameter
 - [ ] 6.5 Tests per converter with fixtures each tool wrote
@@ -135,8 +144,10 @@ it. The order puts what everything else reads first: declarations, then the payl
 ## 9. Exports
 
 - [ ] 9.1 `export_step.py`:
-      - build an XCAF document from the tree (products, instances, names, colours per face/solid/product,
-        materials with density, CMF references as user-defined attributes);
+      - build an XCAF document from the tree: products, instances, names, sRGB colours per face/solid/product;
+      - materials with density on products, and per solid as UDAs on shape aspects where a part has several;
+      - finishes as UDAs (`surface_condition` where a texture states Ra);
+      - CMF references as UDAs;
       - write it with `STEPCAFControl_Writer`;
       - round-trip test with section 4.
 - [ ] 9.2 `export_gltf.py` (shared with 2.6), `export_3mf.py` (base materials and display properties per

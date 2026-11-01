@@ -8,7 +8,9 @@ On a shape, CMF SHALL be a palette of CMF sets. Each set SHALL hold:
 - their origin.
 
 Each solid SHALL have one material; each face SHALL have one colour and one finish, defaulting to its solid's.
-Every reader of CMF in PartCAD SHALL read this convention and no other.
+Display colours SHALL be sRGB with alpha. A reader or writer of a linear format (glTF factors, OCCT's
+`Quantity_Color`) SHALL convert at the edge. Every reader of CMF in PartCAD SHALL read this convention and no
+other.
 
 #### Scenario: A material on a face
 - **WHEN** a source states a material on a single face
@@ -50,6 +52,21 @@ Each SHALL be reported once per part, naming the source value.
 - **WHEN** a SOLIDWORKS STEP file names a solid's material `6061-T6 (SS)`, and a declaration in scope lists
   `ids: {solidworks: "6061-T6 (SS)"}`
 - **THEN** the solid's material is that declaration
+
+### Requirement: A source's own precedence is stated, not inherited
+PartCAD's precedence SHALL be one rule: inside a part, the more specific sub-shape wins; across levels, what an
+item's own parameters set wins over what is propagated to it. A converter whose source uses another rule SHALL
+state the source's intent in that rule's terms. Matching names SHALL follow the source tool's own case folding
+and separators, while PartCAD names stay case-sensitive.
+
+#### Scenario: A STEP assembly node's overriding style
+- **WHEN** a STEP assembly styles one component node red, overriding the colours its part states
+- **THEN** the imported link carries `params: {color: <red>, sourceCmf: [color]}`, and the part's materials are
+  kept
+
+#### Scenario: An LDraw colour name in another case
+- **WHEN** a source names `light_bluish_grey`, and a declaration lists `ids: {ldraw: Light_Bluish_Grey}`
+- **THEN** the `ldraw` converter matches them, as LDraw folds case
 
 ### Requirement: LDraw codes are converted as CMF triples
 The `ldraw` converter SHALL map an LDraw colour code to a colour, a material and a finish:

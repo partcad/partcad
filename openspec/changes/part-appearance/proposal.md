@@ -54,8 +54,9 @@ from a blue one. This change replaces it.
   - Inside PartCAD, a CMF component is always a reference to a declaration, `<package>:<name>[;<parameters>]`,
     canonicalised (aliases followed, relative references made absolute).
   - A new type parameter, `cmfConvention`, chooses a converter that maps another tool's CMF into that
-    convention: STEP as the CAx-IF practices write it, SOLIDWORKS, Onshape, Fusion, Creo, NX, CATIA, 3MF,
-    glTF, OpenSCAD, build123d, CadQuery, LDraw.
+    convention: STEP as the CAx-IF practices write it, SOLIDWORKS, Onshape, Fusion, Inventor, Creo, NX,
+    CATIA, 3MF, glTF, OpenSCAD, build123d, CadQuery, LDraw, CSS. They were chosen after a survey of how those
+    tools and formats name, structure and export CMF, which is recorded in the design.
   - Converters are implementations in a `//builtin/cmf` package, so a package can supply its own, as with file
     types.
 - **CMF is stored inside the BREP.** A part's payload is its BREP followed by a CMF section:
@@ -70,7 +71,8 @@ from a blue one. This change replaces it.
   - Sources: the file, or the script or OpenSCAD model, converted by `cmfConvention`.
   - Every part type and every assembly type accepts the CMF type parameters `color`, `material` and `finish`.
     By default they fill in what the source leaves unset. `sourceCmf: drop` makes them replace everything the
-    source states; it is meant for STEP, and honoured by every type whose source states CMF.
+    source states, and `sourceCmf: [color]` only the listed components. It is meant for STEP, and honoured by
+    every type whose source states CMF.
   - An assembly's CMF parameters propagate to its links as parameter values, and a link's own `params:` win.
     So a colour variant is an item of its own, with its own name, BOM line and order.
   - Nothing in an ASSY file states CMF other than through `params:`.

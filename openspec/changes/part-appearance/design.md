@@ -95,8 +95,8 @@ lives.
   displayed "as RAL 3001" without claiming to be RAL 3001.
 - `//pub/std/color:rgba;color=<RRGGBBAA>` is the parametric display-only declaration
   (`manufacturable: false`): what anybody uses to colour a picture without claiming anything.
-- `//pub/std/color` itself is named after industrial specifications: RAL Classic by designation (`RAL 3020`).
-  Vendors declare their own colours as they like.
+- `//pub/std/color` itself is named after industrial specifications: RAL Classic by designation (`RAL 3020`),
+  subject to the licensing check in "Risks". Vendors declare their own colours as they like.
 
 *Why:* a supplier is asked for RAL 3020, not for `#C1121C`. Several specifications draw alike, and one
 specification draws differently on different screens. A string that is both a picture and a specification
@@ -148,7 +148,8 @@ Percent-encoding is the established convention (RFC 3986) and leaves splitting a
 On a shape, CMF is a palette of **CMF sets**. Each set holds:
 
 - a colour reference, a material reference and a finish reference, each canonical and each optional;
-- the display values resolved for them (sRGB with alpha; roughness and metallic from the finish);
+- the display values resolved for them: sRGB with alpha, as CSS, STEP and 3MF write it (glTF's linear factors
+  and OCCT's linear `Quantity_Color` are converted at the edge); roughness and metallic from the finish;
 - their origin: the source and the convention it was converted from, declared, propagated, or a material's
   colour claim.
 
@@ -201,8 +202,13 @@ When a part is built, in its sandbox, each sub-shape's CMF is:
 
 1. what the **source** states (the file, the script, the OpenSCAD model), converted by the type's
    `cmfConvention`;
-2. completed by the **CMF type parameters** `color`, `material` and `finish` for the components still unset,
-   or, with `sourceCmf: drop`, replaced by them entirely;
+2. completed by the **CMF type parameters** `color`, `material` and `finish` for the components still unset.
+   `sourceCmf` decides what the source keeps:
+   - `keep` (the default) keeps it all;
+   - `drop` discards all of it, so the parameters replace it entirely;
+   - a list of components (`[color]`, `[color, finish]`) discards just those. This is how a converter states
+     an "outer wins" rule of its source, such as a STEP assembly node's overriding style (see "Conventions
+     surveyed").
 3. for colour, completed by the **material's colour claim**;
 4. otherwise **unspecified**, drawn in the display default (OCCT goldenrod) and failing the CMF check of a part
    to be made.
@@ -238,13 +244,17 @@ a part without changing what the part is, which is the confusion this change rem
 A script or a `.scad` model is as much a definition as a STEP file, so it may state CMF:
 
 - **build123d:** the wrapper keeps `.color` (a display-only colour, unless `set_cmf` names a declaration),
-  `.material` (a material reference) and `.label` of every returned shape and sub-shape.
+  `.material` and `.label` of every returned shape and sub-shape. The pinned 0.11.1 types `.material` as a
+  string, a material reference. 0.13 types it as a `bd_materials.FinishedMaterial` (grade, finish, colour,
+  process), which the `build123d` converter splits into the three components.
 - **CadQuery:** the same, plus `cq.Assembly` child colours and `show_object(…, options={"color": …})`.
 - **`set_cmf(shape, color=…, material=…, finish=…)`** is handed to scripts as `show_object` is, and attaches
   canonical references by sub-shape identity.
 - **OpenSCAD:** parts are exported as 3MF where the OpenSCAD in use writes colours, with per-triangle colours
-  read through lib3mf and converted by `openscad`. An OpenSCAD that writes no colours still exports `binstl`
-  and states no CMF.
+  read through lib3mf and converted by `openscad`. Snapshots with the Manifold backend (its default since
+  August 2025) do, with `color-mode` and `material-type` options; the stable 2021.01 uses colour for preview
+  only. The bundles carry a snapshot. An OpenSCAD that writes no colours still exports `binstl` and states no
+  CMF.
 
 *Why the earlier restriction is dropped:* it judged CMF by the *format*, when what matters to manufacturing is
 whether the CMF is *complete and claimed* (D11). The restriction would push a user to STEP for nothing, and
@@ -264,7 +274,55 @@ A source states CMF in its tool's convention. `cmfConvention` names the converte
 - A fact it cannot match becomes, for a colour, the display-only `rgba` of the stated value. For a material or
   a finish it is left unset, to be completed by the parameters (D7). A warning names it either way.
 
-<!-- SURVEY -->
+#### Conventions surveyed
+
+What the tools and formats a converter has to read actually do. This was surveyed from vendor and standards
+documentation; items marked *unverified* could not be confirmed from a primary source.
+
+| Source | Colour / appearance | Material | Finish | Occurrence overrides | Variants |
+| --- | --- | --- | --- | --- | --- |
+| STEP AP214/AP242 (CAx-IF *Model Styling and Organization* v1.10) | `STYLED_ITEM` chains ending in `COLOUR_RGB` (0-1, sRGB as OCCT writes it) or one of 8 pre-defined colours; a face is an `OVER_RIDING_STYLED_ITEM` over its solid; **an assembly node's style overrides its parts'** | material and density as `PROPERTY_DEFINITION`s; OCCT writes them on the **product only**, never `MATERIAL_DESIGNATION` | a user-defined attribute (the CAx-IF UDA practice's own example is "surface finish"); AP242 `surface_texture_representation` under a `surface_condition` property | `CONTEXT_DEPENDENT_OVER_RIDING_STYLED_ITEM`, "to emphasize certain parts in a given context": display data | none |
+| OCCT XCAF | `ColorGen` / `ColorSurf` / `ColorCurv` down to faces and edges; `VisMaterial` (PBR) for visualisation | `XCAFDoc_Material`: name, description, density | none | SHUO instance colours | none |
+| SOLIDWORKS | appearance at face > feature > body > part, a component's above all; display states | per part or per body (body wins), from `.sldmat` (e.g. `6061-T6 (SS)`) | custom properties | display states | configurations |
+| Onshape | part, face, feature; RGB/hex and transparency | per part, from CSV libraries (Category, Name, Density) | none | none | configurations |
+| Fusion / Inventor | appearance overrides material's look, face > body; an occurrence appearance "affects only that occurrence" | physical material per body; iProperty `Material` | Inventor 2024 Finish feature, per face (type, process, appearance, thickness) | design view representations: display data | iPart members with their own part numbers |
+| Creo / Windchill | `.dmt` appearances | `PTC_MASTER_MATERIAL` (part), `PTC_ASSIGNED_MATERIAL` (body), `PTC_MASS_DENSITY` | none | appearance states | family tables; Windchill Options & Variants (PTC's example option is "Color") |
+| NX / Teamcenter | studio materials separate from physical (*unverified*) | per body from a library | Teamcenter rules cover colour, texture, gloss | none | **Color BOM Management: an uncoloured "less-finish" part, exploded into colour-variant items** |
+| CATIA / 3DEXPERIENCE | covering material (e.g. blue powder coat on aluminium); override order is the reverse of SOLIDWORKS' | core material (physical) | covering material | none | none |
+| FlexPLM, Infor and other fashion/consumer PLM | colour library records: code, name, family, ERP code, alternatives | material-colour palettes per supplier | none | none | **a colourway is a SKU** |
+| 3MF Materials & Properties | `basematerials`: a required `name` "to convey design intent", and a `displaycolor` (sRGB) "for rendering purposes only" | the base material | display properties (`pbmetallic…`, `pbspecular…`) kept apart from the material | forbidden: objects with components may not carry `pid` | none |
+| glTF 2.0 | material per primitive; PBR factors are linear | none | `KHR_materials_*` | per-instance colour needs another mesh | `KHR_materials_variants`, "each variant may correspond to a distinct SKU" |
+| OpenSCAD | `color()` (name, hex, vector); the outer call wins; 2021.01 uses it for preview only, snapshots with Manifold write it to 3MF | none | none | none | none |
+| build123d | `Shape.color`, `.label`, `.material`; innermost wins. 0.13 types `material` as a `FinishedMaterial` (grade, finish, colour, process); the pinned 0.11.1 has a string | as previous | as previous | none | none |
+| CadQuery 2.7 | `Assembly.add(color=…)`, `addSubshape(color=…)` | `Material` (wraps `XCAFDoc_Material`) | none | none | `toCAF` makes a product per (colour, shape), i.e. variants as items |
+| LDraw | a code per triangle; `16` is "the colour that places me" | implied by the code (`RUBBER`) | implied by the code (`CHROME`, `PEARLESCENT`, `METAL`…) | none | none |
+
+**What this decides:**
+
+- **Colour and physical material are separate everywhere.** A material may lend a default look, which an
+  appearance overrides. That is D5's split, and D7's material colour claim.
+- **Material at part or body level, appearance down to faces, finish per face.** That is D5's granularity.
+- **Occurrence overrides are display data in every CAD tool, and released colour variants become items in
+  PLM.** Teamcenter explodes an uncoloured part into colour-variant parts, a FlexPLM colourway is a SKU, and
+  Windchill's example option is "Color". That is D8: variants are items, chosen by parameters.
+- **Precedence conflicts.** Outer wins in STEP's assembly styles, OpenSCAD and SOLIDWORKS components; inner
+  wins in build123d, CadQuery, and face over body everywhere. PartCAD keeps one rule (D7: the more specific
+  wins inside a part, and what is set wins over what is propagated). A converter whose source says otherwise
+  states it explicitly:
+  - the `step` converter turns an assembly node's overriding style into `params:` that set the colour *and*
+    drop the source's colour (`sourceCmf: [color]`, D7);
+  - OpenSCAD has already resolved its own order before it exports.
+- **Colour spaces differ.** PartCAD's display values are sRGB, as CSS, STEP and 3MF write them. The glTF
+  writer and any reader of OCCT's linear `Quantity_Color` convert at the edge.
+- **Names.** Real identifiers contain spaces, `( )`, `+`, `<` `>`, `@`, `°`, `µ`, non-ASCII letters and, now and
+  then, `,` `:` `#` `[ ]`. No identifier surveyed contained `;` or `=`. D4's character set admits the first
+  group and escapes the second. Case folding is a matching rule of the source tool (LDraw, OpenSCAD and
+  bd_materials fold case, and bd_materials reads space and `-` as `_`), so it belongs to each converter's
+  matching, not to PartCAD names, which stay case-sensitive.
+
+**Converters, then:** `partcad`, `step`, `solidworks`, `onshape`, `fusion`, `inventor`, `creo`, `nx`, `catia`,
+`3mf`, `gltf`, `openscad`, `build123d` (both the 0.11 string and the 0.13 `FinishedMaterial`), `cadquery`, `ldraw`,
+`css`.
 
 ### D11. Manufacturability counts claims
 
@@ -300,8 +358,12 @@ The same presentation is used by:
 - **CLI:** `pc list colors|materials|finishes` with identical columns, and a CMF section in `pc info`.
 - **Drawings:** faces in their display colours. **3D view:** finish roughness and metallic.
 - **Exports:**
-  - STEP through XCAF: structure, names, colours on faces, solids and products, materials with density, and
-    PartCAD's references as user-defined attributes so that a PartCAD-to-PartCAD round trip keeps the claims;
+  - STEP through XCAF: structure, names, sRGB colours on faces, solids and products, and materials with
+    density. OCCT's writer attaches a material to a product only, so a part with one material gets it there,
+    and a part with materials per solid also gets each solid's as a user-defined attribute on the solid's
+    shape aspect, per the CAx-IF UDA practice. Finishes go the same way, as the practice's own "surface finish"
+    example does, with AP242's `surface_condition` where a texture states Ra. PartCAD's references go as
+    user-defined attributes too, so that a PartCAD-to-PartCAD round trip keeps the claims;
   - glTF and 3MF materials;
   - URDF and MJCF visuals per CMF set;
   - STL warns.
@@ -375,7 +437,16 @@ The same presentation is used by:
   shapes' names are unchanged.
 - **Checked-in renders change** wherever parts gain CMF. Each PR re-renders what it changes, and the
   `Examples (PartCAD)` job holds it to that.
-- **Licensing of colour systems.** Only what may be published is shipped (see "Conventions surveyed").
+- **Licensing of colour systems.**
+  - "RAL" is a trademark, and a secondary source reports that using RAL's digital colour values needs a RAL
+    user agreement. Declaring `RAL 3020` by designation, as a reference to the standard, is the purpose of
+    `//pub/std/color`. Shipping sRGB display values for it must be checked against RAL's own terms before task
+    1.8 lands. Until then those declarations may ship without `display`, drawn in the display default, and a
+    user may give one by alias.
+  - Pantone is licensed and is not shipped. NCS is a trade name and is left to its own catalogue later.
+- **Sources not confirmed.** The survey could not read the CAx-IF *Material Identification and Density*
+  practice (its PDF is gone). The `step` converter is built against what OCCT reads and writes, and against
+  fixture files from the tools, rather than against that text.
 
 ## Migration Plan
 
@@ -409,3 +480,5 @@ request.
    the index's STEP files come from, found by their `FILE_NAME` originating system.
 4. **A propagated CMF parameter a link's item cannot use** (an assembly passing `finish` to a purchased part sold
    in one finish): ignore it with a warning (proposed), or fail the build?
+5. **RAL display values**: ship them once RAL's terms are confirmed to allow it, or never, leaving display to
+   users' aliases? See "Risks".

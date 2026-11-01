@@ -38,9 +38,13 @@ metallic) where it has them.
 - **THEN** its faces are drawn in the two display colours, and it is still one hidden-line drawing
 
 ### Requirement: Exports carry CMF where the format can
-- The STEP export SHALL write, through XCAF: product structure and names; face, solid and product colours; solid
-  materials with density; and the PartCAD CMF references as user-defined attributes, following the CAx-IF
-  recommended practice.
+- The STEP export SHALL write, through XCAF and the CAx-IF practices:
+  - product structure and names;
+  - sRGB face, solid and product colours;
+  - materials with density on products, and per solid as user-defined attributes on shape aspects where a part
+    has several;
+  - finishes as user-defined attributes;
+  - the PartCAD CMF references as user-defined attributes.
 - glTF SHALL write a material per CMF set.
 - 3MF SHALL write base materials with display colours, assigned per triangle.
 - URDF and MJCF SHALL write one visual or geom per CMF set.
