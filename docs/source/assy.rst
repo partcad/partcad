@@ -101,6 +101,7 @@ The following syntax is used to create a node that places a part in the assembly
     part: <name of a part from this package or a global path "{/package}:{part}">
     name: <(optional) name to use for this part in this assembly>
     description: <(optional) free form text, see "Description" below>
+    color: <(optional) "#RRGGBB" or "#RRGGBBAA", see "Colour" below>
     location: <(optional) OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
     connectPorts: # alternative to "location", used to connect by ports
       with: <(optional) name of the port in this part, if more than one exists>
@@ -338,6 +339,48 @@ item it holds (see `pc render` in :doc:`/cli`) is shown at that step, once
 however many fasteners say the same thing. Write it for whoever builds the
 thing: which faces meet, what is flush, how far in, which way up.
 Nothing else in PartCAD parses it or acts upon it.
+
+.. _assy-color:
+
+Colour
+------
+
+The `color` field of a node is the colour what it places is drawn in -- this
+placement of it, and no other -- as ``"#RRGGBB"`` or ``"#RRGGBBAA"``. Quote it:
+an unquoted ``#`` starts a YAML comment, which leaves the field empty.
+
+  .. code-block:: yaml
+
+    links:
+      - part: brick-1x2
+        name: wall-0
+        color: "#C91A09"
+      - part: brick-1x2
+        name: wall-1
+        color: "#0055BF"
+        location: [[0, 0, 9.6], [0, 0, 1], 0]
+      - assembly: wheel
+        color: "#A0A5A9"
+        location: [[40, 0, 0], [0, 0, 1], 0]
+
+It is what the node is drawn in by everything that draws an assembly (see
+``color`` under :ref:`properties`): it becomes the ``color`` of what the node
+reports about itself, in place of any the object states, since the link says
+which one this is and the declaration only what it is wherever it goes. An
+assembly placed in a colour colours everything inside it that states none, and a
+part inside it that states its own keeps it -- so the wheel above is drawn with
+its rim grey and its tyre in whatever colour the wheel's own file gives it. A
+container node (``links:``) takes one the same way.
+
+Nothing is built again for it. Which colour a part is drawn in is not one of the
+things its shape is cached by, so the two bricks above are one brick built once
+and drawn twice; changing a colour changes this assembly's file, which is what
+rebuilds this assembly and nothing it is made of.
+
+The root node of a file is the assembly itself rather than something placed in
+it, and has no link to be coloured by: its colour is the ``color`` of the
+``properties:`` its package declares it with, or the ``color`` of a link that
+places it. A ``color`` on the root node is reported and ignored.
 
 Comment
 -------

@@ -10,6 +10,7 @@
 import asyncio
 import fnmatch
 import os
+import re
 from typing import Optional
 
 import yaml
@@ -25,6 +26,10 @@ from .assembly_factory_file import AssemblyFactoryFile
 from .geom import Location
 from .interface import port_location
 from .shape_ports import prepare_async as prepare_ports_async
+
+# What a link's 'color:' may be: the pattern 'assy.json' holds it to, and the one
+# a part's 'properties: color:' is held to in 'partcad.json'.
+_COLOR = re.compile(r"^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$")
 
 
 @telemetry.instrument()
@@ -398,7 +403,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             # holding "logo:links" holding everything - which is a level nobody
             # declared, nobody can name in a 'connect:', and every reader of the
             # tree had to know to ignore.
-            assy = self.without_root_fixed(assy)
+            assy = self.without_root_color(self.without_root_fixed(assy))
             if "links" in assy and assy["links"] is not None:
                 await self.handle_node_list(assembly, assy["links"])
                 self.apply_root_placement(assembly, assy)
@@ -473,6 +478,27 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             "say 'fixed: true' on the link that places it, or on the links inside it; ignoring it" % self.name
         )
         return {key: value for key, value in node.items() if key != "fixed"}
+
+    def without_root_color(self, node):
+        """The file's root node with any 'color:' reported and taken off it.
+
+        A link's colour is the colour of the node it places, and the root node
+        places nothing: it is the assembly itself, whose colour is the 'color'
+        of the 'properties:' the package declares it with, or the 'color:' of
+        the link that places it in another assembly. Honoured here as well, it
+        would be a second answer to that question, and one a cache hit never
+        reads - the tree's own properties are stamped from the declaration
+        every time it is materialized (see 'Assembly.get_cache_metadata'),
+        while this file is read only when the assembly is built.
+        """
+        if not isinstance(node, dict) or "color" not in node:
+            return node
+        pc_logging.error(
+            "%s: the root node of an ASSY file is the assembly itself, and has no link to be coloured by; "
+            "state its colour in the 'properties:' of its declaration, or say 'color:' on the link that places "
+            "it, or on the links inside it; ignoring it" % self.name
+        )
+        return {key: value for key, value in node.items() if key != "color"}
 
     def apply_root_placement(self, assembly, node) -> None:
         """Move what the file holds by where its root node says it is.
@@ -823,6 +849,38 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 "ignoring it" % (self.name, where)
             )
             return False
+        return value
+
+    def node_color(self, node, name) -> Optional[str]:
+        """The colour a link says what it places is drawn in, or None.
+
+        "#RRGGBB" or "#RRGGBBAA", as written: it becomes the 'color' of the
+        placed node's properties (see 'Assembly._place'), and every reader of
+        the tree reads it the same way as one a part states about itself.
+
+        Anything else is reported and dropped, the way a bad 'exploded' is: the
+        schema an editor checks the file against says the same thing, but the
+        build does not check the file against it, and a colour decides how a
+        picture looks - no reason to refuse to build the assembly. An empty one
+        gets a sentence of its own, because it is nearly always the same
+        mistake: '#' unquoted starts a YAML comment, so 'color: #C91A09' reads
+        as 'color:' and nothing after it.
+        """
+        if not isinstance(node, dict) or "color" not in node:
+            return None
+        value = node.get("color")
+        where = name or node.get("part") or node.get("assembly") or node.get("scene") or "<unnamed>"
+        if value is None:
+            pc_logging.error(
+                "%s: '%s': 'color' is empty; a '#' that is not quoted starts a YAML comment, so write it as "
+                'color: "#RRGGBB"; ignoring it' % (self.name, where)
+            )
+            return None
+        if not isinstance(value, str) or not _COLOR.match(value):
+            pc_logging.error(
+                "%s: '%s': 'color' must be \"#RRGGBB\" or \"#RRGGBBAA\", ignoring: %r" % (self.name, where, value)
+            )
+            return None
         return value
 
     def connect_how(self, node, connect, name):
@@ -1603,6 +1661,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 fixed=fixed,
                 attached=attached,
                 also=self.node_also(node),
+                color=self.node_color(node, name),
             )
             if joint is not None:
                 # One list, so that what is found about the joint after this -

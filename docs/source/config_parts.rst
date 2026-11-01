@@ -897,6 +897,9 @@ change to something the assembly does hash, is what picks them up.
 ``jpeg`` (see :doc:`/config_output`) and by the IDE's Digital Thread, in every
 pane that draws the shape in 3D. An assembly that states one colours everything
 inside it that states none, and a part inside it that states its own keeps it.
+The link of an ASSY file that places a shape may give that placement a colour
+of its own (see :ref:`assy-color`), which wins over the one the shape states:
+the same part can be red in one place and blue in the next, and is built once.
 A shape that states no colour -- most of them -- is drawn in goldenrod,
 ``#DAA520``, which is the colour OCCT draws a shape nobody coloured. A
 ``material`` says nothing about how a part looks, so a part made of one and

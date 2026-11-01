@@ -16,7 +16,7 @@ this process and handed the shape as the export wrapper hands it - the geometry
 and the tree it came from - that a drawing of several colours is still one
 hidden-line drawing: a red part in front of a goldenrod one hides it. And end to
 end, through a package and the sandbox, that 'pc render' draws an assembly's
-parts in the colours they state.
+parts in the colours they state, and in the colour a link places one in.
 """
 
 import importlib.util
@@ -42,6 +42,7 @@ import wrapper_export  # noqa: E402
 
 GOLDENROD = "rgb(218,165,32)"
 RED = "rgb(255,0,0)"
+BLUE = "rgb(0,0,255)"
 
 # --------------------------------------------------------------------------- #
 # The rules                                                                   #
@@ -377,6 +378,10 @@ links:
   - part: plain
   - part: red
     location: [[20, 0, 0], [0, 0, 1], 0]
+  # The same red part, placed blue: the link's colour wins over the part's.
+  - part: red
+    color: "#0000FF"
+    location: [[40, 0, 0], [0, 0, 1], 0]
 """
 
 
@@ -404,11 +409,13 @@ def test_pc_render_draws_each_part_in_its_colour(context, tmp_path, file_type):
         assert {layer: stroke for layer, (stroke, _lines) in layers.items()} == {
             "Visible": GOLDENROD,
             "Visible-FF0000": RED,
+            "Visible-0000FF": BLUE,
         }
         return
     from PIL import Image
 
     colors = {color for _count, color in Image.open(path).convert("RGB").getcolors(1 << 24)}
-    # Anti-aliased, so not only the two colours themselves; but both of them.
+    # Anti-aliased, so not only the three colours themselves; but all of them.
     assert (218, 165, 32) in colors
     assert (255, 0, 0) in colors
+    assert (0, 0, 255) in colors

@@ -217,6 +217,11 @@
           "description": "Whether what this link places is welded to the world - a table, a tank's walls, a robot bolted to the floor - rather than free to fall, which is the default. A scene's to say: an assembly placed in a scene is fixed or free as a whole, by the link that places it, and fixing a scene fixes every element in it.",
           "type": "boolean"
         },
+        "color": {
+          "description": "The colour of what this link places, as #RRGGBB or #RRGGBBAA: this placement of it, and no other. It wins over the colour the object states about itself, and an assembly placed in a colour colours everything inside it that states none. Nothing is built again for it: one part placed in four colours is one part.",
+          "type": "string",
+          "pattern": "^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"
+        },
         "package": { "type": "string", "minLength": 1 },
         "location": { "$ref": "#/definitions/OCCTLocation" },
         "connect": { "$ref": "#/definitions/connect" },

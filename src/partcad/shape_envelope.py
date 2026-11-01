@@ -188,6 +188,11 @@ KEY_CHILD = "child"
 # small and everything that identifies an object travels beside its name. Like
 # the placement, it is data the core carries opaquely and never interprets.
 KEY_PROPERTIES = "properties"
+# The property a node is drawn in, "#RRGGBB" or "#RRGGBBAA". Named here because
+# the core writes it as well as carrying it: a link that places an object in a
+# colour stamps it on the node it places (see 'Assembly._place'). The sandbox's
+# twin is 'COLOR_KEY' in the 'appearance' wrapper, which is what reads it.
+PROPERTY_COLOR = "color"
 # Optional on a node placed by connecting it to a sibling that it then moves
 # against: the joint, as plain data - its name, the two links by their labels,
 # the ordered steps the placement is the product of (fixed ones, and free ones

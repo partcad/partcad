@@ -117,6 +117,7 @@ def _recast(child: AssemblyChild, item, name=None) -> AssemblyChild:
         joint_problems=child.joint_problems,
         fixed=child.fixed,
         attached=child.attached,
+        color=child.color,
     )
 
 

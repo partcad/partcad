@@ -682,7 +682,8 @@ says. See :ref:`sim-urdf` for what it writes.
 
 ``svg``, ``png`` and ``jpeg`` read one thing off ``shape_tree``: what colour each
 part is drawn in. A part is drawn in the ``color`` it states (see
-:ref:`properties`), a part inside an assembly that states one in the assembly's,
+:ref:`properties`) or the one the link placing it gives it (see
+:ref:`assy-color`), a part inside an assembly that states one in the assembly's,
 and anything that states none in goldenrod, ``#DAA520`` -- the colour OCCT draws
 a shape nobody coloured, and the colour the IDE's Digital Thread draws it in as
 well. A drawing of several colours is still one hidden-line drawing: a red part

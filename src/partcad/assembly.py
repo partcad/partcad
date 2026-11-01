@@ -65,6 +65,12 @@ class AssemblyChild:
     they belong to and where they meet. None of them places anything: they are
     stated so that they are checked, and so that the step that makes them can
     say so (see 'AssemblyFactoryAssy.resolve_also').
+
+    'color' is the colour the link says this placement of the item is drawn in,
+    "#RRGGBB" or "#RRGGBBAA", and None where it says none. It is this
+    assembly's account of the child, like the name, so it is stamped on the
+    child's node rather than on the item: the same brick is red in one place
+    and blue in the next, and is built once for both (see 'Assembly._place').
     """
 
     def __init__(
@@ -83,6 +89,7 @@ class AssemblyChild:
         fixed=False,
         attached=None,
         also=None,
+        color=None,
     ):
         self.item = item
         self.name = name
@@ -112,6 +119,7 @@ class AssemblyChild:
         # placed and it can be resolved into 'also'.
         self.also_declared = list(also or [])
         self.also = []
+        self.color = color
 
     def connect_info(self):
         """What the ASSY file says about connecting this child, or None.
@@ -377,6 +385,7 @@ class Assembly(Shape):
                 kind=getattr(child.item, "kind", None),
                 fixed=child.fixed,
                 attached=child.attached if child.joint is None else None,
+                color=child.color,
             )
 
         if len(self.children) == 0:
@@ -508,7 +517,7 @@ class Assembly(Shape):
         name = ("%s:%s" % (project, item_name)) if project and item_name else item_name
         return name, self.link_name(index)
 
-    def _place(self, child_env, placement, name, label, joint=None, kind=None, fixed=False, attached=None):
+    def _place(self, child_env, placement, name, label, joint=None, kind=None, fixed=False, attached=None, color=None):
         """The child's node re-stamped for this assembly.
 
         'shape_envelope.placed()' is the composition, and is shared with
@@ -534,8 +543,21 @@ class Assembly(Shape):
         A child connected rigidly to a sibling says which (KEY_ATTACHED): it is
         welded to that sibling's body, which is its container's unless the
         sibling moves. Only an assembly says it; a scene attaches nothing.
+
+        And a child the link gives a colour ('AssemblyChild.color') is drawn in
+        it: it becomes the 'color' of the node's properties, in place of any the
+        object states about itself, since the link is the more particular of the
+        two - the declaration says what the object is wherever it goes, and the
+        link which one this is. What is inside a sub-assembly so placed keeps
+        its own colour where it states one, by the rule every reader of the tree
+        colours it by (see 'appearance' among the wrappers). The properties are
+        a copy: the envelope is the child's, and shared by every placement of it.
         """
         node = shape_envelope.placed(child_env, placement, name=name, label=label)
+        if color is not None:
+            properties = dict(node.get(shape_envelope.KEY_PROPERTIES) or {})
+            properties[shape_envelope.PROPERTY_COLOR] = color
+            node[shape_envelope.KEY_PROPERTIES] = properties
         if kind is not None:
             node[shape_envelope.KEY_KIND] = kind
         if fixed:
