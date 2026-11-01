@@ -210,7 +210,10 @@ The plugin folder is named `claude`, but the command namespace comes from
   geometry instantiates, and one projection hides whatever is behind it.
   Supersedes the legacy `pc add part --ai` pipeline (the agent is the model; no
   provider/API key). It names the material the part is made of and checks the
-  mass `pc info` derives from it, so the part is ready to simulate.
+  mass `pc info` derives from it, so the part is ready to simulate. When an IDE
+  is running beside it (`pc ide state` answers), it shows every version that
+  builds and renders in the Digital Thread's 3D view (`pc ide view`), so the
+  part can be watched taking shape on one continuous turn.
 - **`/pc:gen-assembly <description>`** — generates an assembly: reuses or
   generates the component parts, authors the `.assy` (explicit placement or
   interface mates), and validates the same four ways — a component offset along
@@ -218,7 +221,9 @@ The plugin folder is named `claude`, but the command namespace comes from
   capability — PartCAD had no AI assembly path. Where the description makes a
   physical claim (it stands, it floats, it holds a load) it also declares that
   claim as a `simulate:`, in a scene with the right gravity and medium, and
-  checks it with `pc sim`.
+  checks it with `pc sim`. Beside an IDE it shows its progress the way
+  `/pc:gen-part` does: each part as it takes shape, then each version of the
+  assembly that builds and renders.
 - **`/pc:gen-sketch <description>`** — generates a 2D sketch: the agent picks a
   representation (build123d / cadquery / dxf / svg), authors the sketch, and
   validates by rendering to SVG.

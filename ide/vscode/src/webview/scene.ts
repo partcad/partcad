@@ -63,7 +63,15 @@ import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRe
 
 import { Appearance, DEFAULT_APPEARANCE, appearanceKey, appearanceOf, edgeColor } from './appearance';
 import { calloutsOf } from './callouts';
-import { SceneFrame, fromStage, placeCamera as aimCamera, readViewpoint } from './cameraView';
+import {
+    SceneFrame,
+    enclosingRadius,
+    fitDistance,
+    fitProgress,
+    fromStage,
+    placeCamera as aimCamera,
+    readViewpoint,
+} from './cameraView';
 import { el } from './dom';
 import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
 import { GeometryCache, geometryCache } from './geometryCache';
@@ -195,6 +203,24 @@ controls.enableDamping = true;
 // which the software renderer cannot afford: off there until it is asked for.
 controls.autoRotate = !software;
 controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
+
+/**
+ * What the Animate box says: on from the start, except where the canvas painter
+ * draws (see above). A SpaceMouse being moved pauses the turn without unticking
+ * it ('animate'). A show does not touch it, and after the first one does not
+ * turn the camera either, so the turn carries on from one object to the next.
+ */
+let autoRotate = controls.autoRotate;
+
+/**
+ * What the Auto-fit box says, beside Animate: whether a show of the same object
+ * again - an edit saved, an agent's next version of it - is fitted too, as a
+ * show of another object always is. On from the start, so that a model which
+ * grows or shrinks stays in view; off for somebody zoomed in on one corner of
+ * a part they are editing, whose view a save must not take away.
+ */
+let autoFit = true;
+
 // Any movement of the camera - a drag, the damping after it, a turn of the
 // model on its own - is a new picture, and a new viewpoint for the view panel.
 controls.addEventListener('change', invalidate);
@@ -284,8 +310,29 @@ let shownCut = false;
 /** What 'content' was built from, whose materials go when it does (see 'Geometry.disposeMaterials'). */
 let shownGeometry: Geometry | undefined;
 
-/** Half the largest dimension of what the current show was framed on (see 'frame'). */
+/**
+ * The radius of the sphere holding what the current show was framed on, however
+ * it is turned ('enclosingRadius'), and where its middle is on the stage: what a
+ * fit fits (see 'frame').
+ */
 let framedRadius = 1;
+const framedCentre = new THREE.Vector3();
+
+/**
+ * A "Fit" on its way: where the camera started from, and when.
+ *
+ * Only where it started from is kept, and not where it is going: the camera
+ * goes on turning while it moves - Animate, the damping of a drag - and the
+ * canvas can change shape, so where it is going is worked out on every frame
+ * ('stepFit').
+ */
+interface Fitting {
+    since: number;
+    target: THREE.Vector3;
+    distance: number;
+}
+
+let fitting: Fitting | undefined;
 
 /**
  * The radius the camera was last fitted to, while it is still where that fit put
@@ -297,12 +344,51 @@ let framedRadius = 1;
  * - a drag, the wheel, a SpaceMouse - ends that, and the camera stays put.
  *
  * The radius of that fit and not the current show's: a show that keeps the camera
- * ('keepCamera', an edit re-rendered) keeps the view it had, and a resize after it
- * changes that view by what the canvas did and not by what the edit did.
+ * (a cut, or the same object again with Auto-fit off) keeps the view it had, and a
+ * resize after it changes that view by what the canvas did and not by what the
+ * show did.
+ *
+ * Undefined, too, while a "Fit" is on its way ('fitting'), which follows the
+ * canvas itself, and set once it has arrived.
  */
 let fittedTo: number | undefined;
+
+/**
+ * Whether somebody has hold of the view right now, by hand - a drag or a turn of
+ * the wheel, between the orbit controls' own 'start' and 'end' - and by
+ * SpaceMouse, between the 'start' and 'end' it relays through the same controls
+ * ('navigable.moving').
+ *
+ * A fit is stopped when somebody takes hold of the view, and that alone is not
+ * enough: a fit can also start while they are holding it - a show arriving in
+ * the middle of a drag, a push - and 'start' has been and gone. So a fit does
+ * not take a step while the view is held ('stepFit').
+ *
+ * Two flags rather than one, because a push that comes and goes in the middle of
+ * a drag must not let go of the drag; and not a count of 'start's and 'end's,
+ * because the controls do not pair them - a touch sends a 'start' for each
+ * finger and one 'end' for all of them, and a button they ignore sends an 'end'
+ * with no 'start' - so a count drifts, and one stuck above nought would stop
+ * every fit for good.
+ */
+let dragging = false;
+let pushing = false;
+
+/** Set while the SpaceMouse relays its 'start' or 'end', so that the listeners below do not take it for a drag's. */
+let relaying = false;
+
 controls.addEventListener('start', () => {
     fittedTo = undefined;
+    if (!relaying) {
+        dragging = true;
+    }
+    // Two hands on one wheel: whoever takes hold of the view has it.
+    fitting = undefined;
+});
+controls.addEventListener('end', () => {
+    if (!relaying) {
+        dragging = false;
+    }
 });
 
 /** Which way the camera looks at the model from: Stage's default, slightly above. */
@@ -562,6 +648,7 @@ export function clearGeometry(): void {
     shownGeometry?.disposeMaterials();
     shownGeometry = undefined;
     shownCut = false;
+    fitting = undefined;
     drawnBy.clear();
     visibleItems = undefined;
     flickering = undefined;
@@ -574,15 +661,18 @@ export function clearGeometry(): void {
 }
 
 /**
- * Center 'box' at the origin, moving the model with it, and frame the camera on
- * it, as <Stage adjustCamera> does, and scale the light rig to it.
+ * Center 'box' at the origin, moving the model with it, and scale the light rig
+ * and the clipping planes to it, as <Stage adjustCamera> does - and, with
+ * 'place', put the camera on it at the opening view, as a first show does.
+ * Every other show leaves the camera where it is and asks for a "Fit"
+ * ('showGeometry'), so that it gets there over a second rather than jumping.
  *
  * 'centred' is where the last show put the model instead, for a show that cuts
  * it or takes a cut away: the cut is a part of the same object, and centred on
  * itself it would jump on the stage every time a slider is let go, with the
  * camera kept where it was. So the object stays where it was put.
  */
-function frame(group: THREE.Group, box: THREE.Box3, keepCamera: boolean, centred?: THREE.Vector3): void {
+function frame(group: THREE.Group, box: THREE.Box3, place: boolean, centred?: THREE.Vector3): void {
     if (box.isEmpty()) {
         return;
     }
@@ -590,7 +680,7 @@ function frame(group: THREE.Group, box: THREE.Box3, keepCamera: boolean, centred
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     const radius = Math.max(size.x, size.y, size.z) / 2 || 1;
-    framedRadius = radius;
+    framedRadius = enclosingRadius(box) || radius;
 
     // Stage centers the model rather than moving the camera to it, so that
     // orbiting turns the model about itself.
@@ -599,70 +689,143 @@ function frame(group: THREE.Group, box: THREE.Box3, keepCamera: boolean, centred
     } else {
         group.position.sub(center);
     }
+    // Where the middle of the box is now: the stage's origin, or where a cut
+    // keeps it. The group was at the origin when the box was measured.
+    framedCentre.copy(center).add(group.position);
 
     spotLight.position.set(radius * 2, radius * 4, radius * 2);
     stagePointLight.position.set(-radius * 2, radius, -radius * 2);
     // Part.js leaves this one at the scene origin, i.e. inside the model.
     partPointLight.position.set(0, 0, 0);
 
-    camera.near = radius / 100;
-    camera.far = radius * 100;
-    camera.updateProjectionMatrix();
-
-    if (!keepCamera) {
-        placeCamera(radius);
+    if (place) {
+        placeCamera(framedRadius);
     }
+    clip(camera.position.distanceTo(controls.target));
     controls.update();
 }
 
 /**
- * Far enough back that the bounding sphere fits the field of view, with the same
- * slight elevation Stage's default camera has.
+ * Near and far enough for the model at 'distance': a hundredth of its size in
+ * front, and behind it a hundred times its size or twice as far as it is,
+ * whichever is further - a fit from the last object's distance starts wherever
+ * that was, and a far plane drawn for the new one alone would hide it until the
+ * camera had come in.
+ */
+function clip(distance: number): void {
+    camera.near = framedRadius / 100;
+    camera.far = Math.max(framedRadius * 100, (distance + framedRadius) * 2);
+    camera.updateProjectionMatrix();
+}
+
+/**
+ * From 'VIEW_DIRECTION', at Stage's slight elevation, as far back as a fit puts
+ * it ('fitDistance' in 'cameraView.ts': every angle of the model in the
+ * narrower field), looking at the middle of the model.
  *
- * Whichever of the two fields is the narrower: 'fov' is the vertical one, and a
- * canvas taller than it is wide - a narrow panel, with the control pane beside
- * it - sees less across than up, so a model fitted to the height alone runs off
- * both sides. The canvas is measured first, because a show can arrive before
- * anything has told the camera what shape the canvas has now.
+ * The canvas is measured first, because a show can arrive before anything has
+ * told the camera what shape the canvas has now.
  */
 function placeCamera(radius: number): void {
     resizeCanvas();
-    camera.position.copy(VIEW_DIRECTION).multiplyScalar(fitDistance(radius));
-    controls.target.set(0, 0, 0);
+    const direction = VIEW_DIRECTION.clone().normalize();
+    controls.target.copy(framedCentre);
+    camera.position.copy(framedCentre).addScaledVector(direction, fitDistance(radius, camera.fov, camera.aspect));
     fittedTo = radius;
 }
 
-/** How far along 'VIEW_DIRECTION' the camera fits a model of 'radius' into the canvas as it is now. */
-function fitDistance(radius: number): number {
-    const halfHeight = Math.tan((camera.fov * Math.PI) / 360);
-    return (radius * 1.6) / (halfHeight * Math.min(1, camera.aspect));
-}
-
 /**
- * Put the camera back where a show puts it, on the model as it is already placed.
+ * Put the camera back at the opening view, on the model as it is already
+ * placed, at once: the view panel's "Reset".
  *
- * What a SpaceMouse's "Fit" button does, and the view panel's "Reset". Not
- * 'frame()': that centres the model as well, which a show does once and which a
- * second time would do nothing but accumulate rounding.
+ * Not 'frame()': that centres the model as well, which a show does once and
+ * which a second time would do nothing but accumulate rounding.
  */
-export function fitView(): void {
+export function resetView(): void {
     if (content === undefined) {
         return;
     }
+    fitting = undefined;
     placeCamera(framedRadius);
+    clip(camera.position.distanceTo(controls.target));
     controls.update();
+}
+
+/**
+ * "Fit": bring the camera, over 'FIT_MILLISECONDS', to where the whole model
+ * fits in the view however it is turned (see 'fitDistance'), looking at its
+ * middle, and from the same side it is looking from now.
+ *
+ * The view panel's Fit button, a SpaceMouse's Fit key, and what a show of the
+ * whole object after the first one ends with - always for another object, and
+ * for the same one again while Auto-fit is on ('showGeometry'). Gradual,
+ * because a view that jumps to another size is a view somebody has to find the
+ * model in again; and the angle is not touched, so a model turning on its own
+ * goes on turning through it. Taking hold of the view - a drag, the wheel, a
+ * SpaceMouse, a viewpoint chosen in the panel - stops it where it is.
+ */
+export function fit(): void {
+    if (content === undefined) {
+        return;
+    }
+    fitting = {
+        since: performance.now(),
+        target: controls.target.clone(),
+        distance: camera.position.distanceTo(controls.target),
+    };
+    // Not fitted until it is there: a resize meanwhile is the fit's to follow.
+    fittedTo = undefined;
+    invalidate();
+}
+
+/** Move a "Fit" on to where it is at 'now', before the controls take their turn; a frame of it is a new picture. */
+function stepFit(now: number): void {
+    if (fitting === undefined) {
+        return;
+    }
+    if (dragging || pushing) {
+        // Started while somebody was moving the view: theirs, as one they
+        // took hold of is (see 'dragging').
+        fitting = undefined;
+        return;
+    }
+    const along = fitProgress(now - fitting.since);
+    const goal = fitDistance(framedRadius, camera.fov, camera.aspect);
+    const distance = fitting.distance + (goal - fitting.distance) * along;
+    const direction = camera.position.clone().sub(controls.target);
+    if (direction.lengthSq() === 0) {
+        direction.copy(VIEW_DIRECTION);
+    }
+    direction.normalize();
+    controls.target.lerpVectors(fitting.target, framedCentre, along);
+    camera.position.copy(controls.target).addScaledVector(direction, distance);
+    clip(distance);
+    invalidate();
+    if (along >= 1) {
+        fitting = undefined;
+        fittedTo = framedRadius;
+    }
 }
 
 /**
  * The 3D view, as the SpaceMouse moves it: only while its tab is the one on
  * screen, and a push is a drag as far as the controls' listeners are concerned.
+ * Its Fit key is the view panel's Fit button.
  */
 const navigable: Navigable = {
     camera,
     target: controls.target,
     shown: () => onScreen(container),
-    fit: fitView,
-    moving: (moving) => controls.dispatchEvent({ type: moving ? 'start' : 'end' }),
+    fit,
+    moving: (moving) => {
+        pushing = moving;
+        relaying = true;
+        try {
+            controls.dispatchEvent({ type: moving ? 'start' : 'end' });
+        } finally {
+            relaying = false;
+        }
+    },
 };
 spaceMouse.attach(navigable);
 
@@ -1263,6 +1426,10 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     const cut = Boolean(message.section);
     const centred =
         message.keepCamera && (cut || shownCut) && content !== undefined ? content.position.clone() : undefined;
+    // Nothing on the stage yet: the camera starts at the opening view. Anything
+    // after that keeps the camera where it is - its angle above all, which
+    // Animate has been turning - and fits it to what arrived, gradually.
+    const first = content === undefined;
     if (content !== undefined) {
         scene.remove(content);
         disposeTree(content);
@@ -1282,12 +1449,28 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // and the ports of everything inside an assembly start out unticked, which
     // is a model centred on something nobody can see. An interface has no shape
     // but its ports, and is framed on those.
-    frame(
-        group,
-        geometryBox.isEmpty() ? new THREE.Box3().setFromObject(group) : geometryBox,
-        message.keepCamera,
-        centred,
-    );
+    frame(group, geometryBox.isEmpty() ? new THREE.Box3().setFromObject(group) : geometryBox, first, centred);
+    // Every show of another object after the first is fitted, over a second,
+    // from where the camera is ('fit'); and so is the same one again - an edit
+    // saved, an agent's next version of it, which may have grown or shrunk -
+    // while Auto-fit is on. With it off, the same object again keeps the camera
+    // where it was put, as it did before there was a fit at all - and a fit still
+    // on its way from showing another object, less than a second ago, carries on
+    // to the new version of it: nobody has put the camera anywhere on that object
+    // yet (taking hold of the view would have stopped the fit), and stopping it
+    // there would leave a view between the two objects' that nobody chose.
+    //
+    // Not a cut or the show that takes one away, which keeps the camera still
+    // for the reason it keeps the model where it was: the slider is moving
+    // through the object, and the view moving under it is two things moving.
+    // That includes a fit still on its way from the show before: 'frame' has
+    // just pointed it at the cut, so it stops where it is, as it does when
+    // somebody takes hold of the view.
+    if (centred !== undefined) {
+        fitting = undefined;
+    } else if (!first && (!message.keepCamera || autoFit)) {
+        fit();
+    }
     viewListeners.forEach((listener) => listener());
     buildProxies(group);
     invalidate();
@@ -1466,8 +1649,9 @@ export function resizeCanvas(): void {
     if (fittedTo !== undefined) {
         // Fitted again at the angle the turntable has it at now, along the line
         // it looks down: nearer or further, but not turned.
-        const length = fitDistance(fittedTo) * VIEW_DIRECTION.length();
+        const length = fitDistance(fittedTo, camera.fov, camera.aspect);
         camera.position.sub(controls.target).setLength(length).add(controls.target);
+        clip(length);
     }
     invalidate();
 }
@@ -1491,9 +1675,10 @@ export function setViewpoint(viewpoint: Viewpoint): void {
     if (content === undefined) {
         return;
     }
+    // Put there on purpose, like a drag: a fit on its way stops, and a resize
+    // leaves it where it is rather than fitting it again (see 'fittedTo').
+    fitting = undefined;
     aimCamera(camera, controls.target, viewpoint, stageFrame());
-    // Put there on purpose, like a drag: a resize leaves it where it is rather
-    // than fitting it again (see 'fittedTo').
     fittedTo = undefined;
     // The orbit controls take it from here; their 'change' tells the panel.
     controls.update();
@@ -1523,13 +1708,15 @@ export function modelBounds(): Bounds | undefined {
     };
 }
 
-/** What the Animate box says; a SpaceMouse being moved pauses it without unticking it. */
-let autoRotate = controls.autoRotate;
-
 export function setAutoRotate(enabled: boolean): void {
     autoRotate = enabled;
     controls.autoRotate = enabled;
     invalidate();
+}
+
+/** Whether a show of the same object again is fitted, as the Auto-fit box says (see 'autoFit'). */
+export function setAutoFit(enabled: boolean): void {
+    autoFit = enabled;
 }
 
 /**
@@ -1583,6 +1770,7 @@ function animate(): void {
     if (moved) {
         invalidate();
     }
+    stepFit(now);
     controls.update();
     if (flickering !== undefined) {
         // A flicker is a change on every frame it lasts.

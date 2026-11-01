@@ -2135,6 +2135,12 @@ input.switch:focus-visible {
     justify-content: space-between;
 }
 
+/* The buttons at the end of a heading: Fit and Reset beside the viewpoint. */
+.view-buttons {
+    display: flex;
+    gap: 0.3rem;
+}
+
 .view-title {
     font-size: 11px;
     font-weight: 700;

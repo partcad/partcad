@@ -123,10 +123,37 @@ The camera is framed on every shape the show carries, checked or not: a model th
 checkbox would be unusable. On the shapes, and not on the triads and boundaries drawn at their ports: a triad
 reaches a quarter of the model out along its port's positive axes only, so counting them leans the frame toward
 every port — including the ports of everything inside an assembly, which start out unticked. An interface, which
-has no shape but its ports, is framed on those. It is fitted to the narrower of the canvas's two fields of view,
-so a model in a narrow panel is not cut off at both sides, and fitted again whenever the canvas changes shape — a
-show fitted while the 3D tab was hidden was fitted to a shape the canvas no longer has — until the camera is moved
-by hand, after which it stays where the user put it.
+has no shape but its ports, is framed on those.
+
+**A fit keeps every angle of the model in view.** What is fitted is the sphere about the middle of that box which
+holds all of it (`enclosingRadius` in `cameraView.ts`: half the box's diagonal), into the narrower of the canvas's two
+fields of view (`fitDistance`) — so a model in a narrow panel is not cut off at both sides, and a model that turns is
+not cut off by the angle it turns to next: a long part seen end-on is short, and comes round to its full length a
+quarter turn later. There is no margin on top of the sphere, because the sphere is the margin: at any one angle the
+model's outline sits inside it, and only a corner turned to exactly where the sphere touches the edge of the field
+reaches that edge. A fit keeps the camera where it is looking
+from and only moves it nearer or further, and the point it looks at back to the middle of the model.
+
+**The first show places the camera; a later one fits it, over a second.** With nothing on the stage, a show puts the
+camera at `VIEW_DIRECTION`, already fitted. Every show of another object after that, and of the same one again
+(`keepCamera`: an edit saved, an agent's next version) while the view panel's **Auto-fit** box is ticked — it is by
+default — leaves the camera where it is, its angle above all, which Animate has been turning, and runs **Fit** (`fit`
+in `scene.ts`). Auto-fit unticked, the same object again keeps the whole camera, zoom included, which is what somebody
+zoomed in on one corner of a part they are editing needs from a save; another object is fitted regardless, since the
+view on the last one says nothing about it. The box sits right after Animate, works where Animate works, and is only
+on the 3D tab's panel (`onAutoFit`). A fit runs over `FIT_MILLISECONDS` (one
+second), eased in and out (`fitProgress`), the distance and the target move to the fit, worked out again on every
+frame because the camera goes on turning and the canvas can change shape (`stepFit`). So an agent showing each step
+of its work (`/pc:gen-part`, `/pc:gen-assembly`) reads as one model changing while it turns, never cut off and never
+jumping. A cut, and the show that takes one away, keep the camera still instead, for the reason the model is kept
+where it was: the slider is moving through the object. Taking hold of the view — a drag, the wheel, a SpaceMouse, a
+viewpoint chosen in the view panel — stops a fit where it is. The clipping planes follow the distance, so a fit that
+starts far out from the last object's framing does not have the new one behind the far plane.
+
+Once fitted, the camera is fitted again whenever the canvas changes shape — a show fitted while the 3D tab was hidden
+was fitted to a shape the canvas no longer has — until the camera is moved by hand, after which it stays where the
+user put it (`fittedTo`). The view panel's **Fit** button runs the same fit; its **Reset** puts the camera back at
+`VIEW_DIRECTION`, fitted, at once.
 
 **Placements are not baked into the geometry.** A node's `gltf` is its own shape in its own coordinate system
 and its `location` says where the node sits, exactly as the BREP form carries it, so the renderer composes the
@@ -139,7 +166,8 @@ switches off has to be its own buffer to be hideable.
 A 3Dconnexion SpaceMouse moves the camera of the 3D tab, and of the model an FEA or CFD analysis returned, in
 3Dconnexion's **object mode**, the one its own driver defaults to: the cap is the model. Push it left and the
 model goes left, push it in and the model goes away, twist or tilt it and the model turns about what the camera
-is looking at. The second button — the right one of two, or the key labelled **Fit** — frames the model again.
+is looking at. The second button — the right one of two, or the key labelled **Fit** — fits the model again, as the
+view panel's **Fit** does on the 3D tab.
 Moving the cap pauses the Animate rotation without unticking it. `partcad.spaceMouse.enabled`,
 `partcad.spaceMouse.sensitivity` and `partcad.spaceMouse.invert` (a list of the axes to reverse: `tx`, `ty`,
 `tz`, `rx`, `ry`, `rz`) tune it.
@@ -192,7 +220,9 @@ sight (`rz`) is dropped, and a tilt stops at the poles.
 
 Down the right of every tab that shows the object — 3D, 2D and Draft, each analysis, and Simulation — is one
 widget, `viewPanel.ts`: the orientation gizmo (`gizmo.ts`), a button per axis view, a two-ended section slider per
-axis, the viewpoint as three editable vectors, and Animate and Opacity. It is a `SidePanel` (`sidePanel.ts`):
+axis, the viewpoint as three editable vectors with **Fit** (where the view has a camera of its own to bring in, which
+it says by giving `onFit`; only the 3D tab does) and **Reset** beside them, and Animate, Auto-fit (the 3D tab only) and Opacity. It is a
+`SidePanel` (`sidePanel.ts`):
 folded into a strip with the editor's side bar button at the top of it, and brought out by that button. Out or
 folded is one answer per side for the whole panel, not per tab, and the right side starts folded.
 

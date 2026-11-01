@@ -104,11 +104,13 @@ The point is that a retake differs from the last take only in what changed in Pa
   1064 window at twice the pixels (the size of the screenshots these replaced, which came from a Retina display),
   and a terminal running `bash` with a prompt of only the directory name - not the prompt of whoever took the
   picture, with their branch and their git status in it.
-* **A still 3D view.** The Digital Thread turns the model on its own until its "Animate" box is cleared. So each
-  object is shown, the box cleared, another object shown, and the object shown again: a show of a new object puts
-  the camera back where every show starts it, which makes the framing the same on every run. The box is in the view
-  panel, which starts folded away and stays so in every picture, so the script sets it (`stopTurning`) rather than
-  clicking it: Playwright clicks nothing that is not on screen.
+* **A still 3D view.** The Digital Thread turns the model on its own until its "Animate" box is cleared, and a show
+  after the first keeps the angle the turn had reached and fits the camera to the object over a second. So each
+  object is shown, the box cleared, and the view panel's **Reset** pressed (`showStill`), which puts the camera at
+  the opening view, fitted, at once: the same framing on every run, whatever was shown before. Both are in the view
+  panel, which starts folded away and stays so in every picture, so the script sets the box (`stopTurning`) and
+  clicks Reset from inside the page (`resetView`, by its id `view-reset-button`) rather than through Playwright,
+  which clicks nothing that is not on screen.
 * **Waiting for the right thing.** A show is finished when the Digital Thread's tree names the object and the
   loading overlay is gone; the terminal is finished when behave's summary line is in it.
 * **Tidy before the shutter**: notifications cleared, the pointer moved where it hovers nothing.
@@ -135,9 +137,7 @@ undone as unnecessary:
 * `expand()` walks a *path*, one row per level -- it is not a list of siblings, so expanding two top-level
   packages is two calls. And `row()` finds a row by *scrolling to it*, so two packages far apart in a long
   tree are two searches of that tree, and one of them runs out of its 240-second deadline. Where a shot needs
-  a second package -- `showStill()` needs a row to show in between, and `produce_part_wrapper` holds one
-  object -- pick the package **next to** the subject's: `plugin-part-type` uses `produce_part_sweep`, which
-  sorts immediately above it.
+  a second package, pick the package **next to** the subject's.
 * The Inspector loses what it shows when its pane is resized, so the layout is set before the object is selected.
 * Requests to the daemon while it is still loading `//pub` can fail with "dictionary changed size during
   iteration", which shows up as an error notification; the script waits for loading to settle before it asks for
