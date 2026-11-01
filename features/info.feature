@@ -210,6 +210,40 @@ Feature: `pc info` command
     And STDOUT should contain "Solids: 1"
 
   @success @pc-info
+  Scenario: `pc info` measures a basic part, which no sandbox builds
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+        block:
+          type: basic
+          cuboid:
+            side-x: 10
+            side-y: 20
+            side-z: 30
+        rod:
+          type: basic
+          parameters:
+            length:
+              type: float
+              default: 20
+          cylinder:
+            radius: 2
+            height: "%length%"
+      """
+    When I run "pc info block"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "'size': [10.0, 20.0, 30.0]"
+    And STDOUT should contain "Volume: 6000.0"
+    And STDOUT should contain "Solids: 1"
+    And STDOUT should contain "primitive"
+    When I run command
+      """
+      pc info "rod;length=10"
+      """
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "'size': [4.0, 4.0, 10.0]"
+
+  @success @pc-info
   Scenario: `pc info -i` on a parametrized interface
     Given a file named "partcad.yaml" with content:
       """

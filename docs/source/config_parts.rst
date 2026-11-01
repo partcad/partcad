@@ -9,6 +9,10 @@ What a part is
 
 PartCAD has an ever-growing list of ways to define the part model:
 
+- Basic shapes
+
+  - ``cuboid``, ``cylinder``
+
 - Files
 
   - `STEP <https://en.wikipedia.org/wiki/ISO_10303>`_
@@ -37,7 +41,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <scad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|gltf|fcstd|extrude|sweep
+      type: <basic|scad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|gltf|fcstd|extrude|sweep
              |kicad|compound|alias|enrich|:<partType declared by this package>
              |<package>:<partType declared by that package>>
       desc: <(optional) textual description>
@@ -149,6 +153,65 @@ to ``parameters``, which say what is asked of the type that produces it. See
 :ref:`properties` below.
 
 See :ref:`location` for more information on the OCCT Location object.
+
+.. _basic_parts:
+
+Basic shapes
+------------
+
+A part that is one primitive solid is declared by its dimensions alone, with
+nothing to read and no script to run:
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      type: basic
+      desc: <(optional) textual description>
+      # The below are mutually exclusive options
+      cuboid: <(optional) edge size of a cube>
+      cuboid:  # alternative syntax
+        side-x: <size along X>
+        side-y: <size along Y>
+        side-z: <size along Z>
+        x: <(optional) x of its centre>
+        y: <(optional) y of its centre>
+        z: <(optional) z of its centre>
+      cylinder: <(optional)>
+        radius: <radius>
+        height: <height, along Z>
+        x: <(optional) x of its centre>
+        y: <(optional) y of its centre>
+        z: <(optional) z of its centre>
+
+There must be exactly one field ``cuboid`` or ``cylinder``. Both solids are
+placed by their **centre**, the way build123d's ``Box`` and ``Cylinder`` and
+CadQuery's ``box`` and ``cylinder`` are: a cylinder of height 10 runs from
+``z - 5`` to ``z + 5``. ``offset`` and ``scale`` move and scale it like any other
+part, and so do ``implements:`` and ``ports:``. Every dimension may be an
+expression over the part's ``parameters`` (see :ref:`parameters`), which is how a
+basic part is made parametric:
+
+.. code-block:: yaml
+
+  parts:
+    spacer:
+      type: basic
+      parameters:
+        length:
+          type: float
+          default: 10
+      cylinder:
+        radius: 4
+        height: "%length%"
+
+A basic part is a homogeneous body, so it takes the ``material``, ``color`` and
+``tolerance`` parameters.
+
+Neither a basic part nor a basic sketch (see :ref:`sketches`) is built with a CAD
+kernel: PartCAD writes its BREP itself, in milliseconds and without starting a
+CAD sandbox. It is still the solid OCCT would have built from the same numbers,
+and it renders, exports, measures and takes part in a boolean like one.
 
 CAD Scripts
 -----------

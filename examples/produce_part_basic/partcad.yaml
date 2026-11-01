@@ -1,0 +1,60 @@
+desc: >
+  This example demonstrates parts that are one primitive solid, declared by
+  their dimensions alone. PartCAD writes their geometry itself, without a CAD
+  kernel or a sandbox.
+
+docs:
+  usage: |
+    ```shell
+    pc ide view cube_01
+    pc ide view cuboid_01
+    pc ide view cylinder_01
+    pc ide view cylinder_02
+    pc ide view "spacer;length=25"
+    ```
+
+parts:
+  cube_01:
+    type: basic
+    desc: The shortest way to create a cube in PartCAD
+    cuboid: 10
+  cuboid_01:
+    type: basic
+    desc: A cuboid sized along each axis, standing on the XY plane
+    cuboid:
+      side-x: 20
+      side-y: 10
+      side-z: 5
+      z: 2.5
+  cylinder_01:
+    type: basic
+    desc: A cylinder, standing along Z and centred on the origin
+    cylinder:
+      radius: 5
+      height: 20
+  cylinder_02:
+    type: basic
+    desc: A cylinder lying along X, turned there by its offset
+    cylinder:
+      radius: 3
+      height: 30
+    offset: [[0, 0, 3], [0, 1, 0], 90]
+  spacer:
+    type: basic
+    desc: A parametric spacer, 'spacer;length=25' being one 25 mm long
+    parameters:
+      length:
+        type: float
+        default: 10
+    cylinder:
+      radius: 4
+      height: "%length%"
+
+render:
+  readme:
+  svg:
+    # This drawing is checked in, so it has to be the same file every time it
+    # is rendered. See 'reproducible' in '//builtin/render', and the note at
+    # the top of 'examples/partcad.yaml' for what that settles and what it
+    # cannot.
+    reproducible: true

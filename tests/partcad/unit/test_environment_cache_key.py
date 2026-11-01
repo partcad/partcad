@@ -356,14 +356,25 @@ def test_a_sketch_keys_on_what_its_package_asks_for(tmp_path, config):
     assert "seaborn==0.13.2" in sketch.environment_cache_key
 
 
-def test_a_basic_sketch_keys_on_its_environment(tmp_path, config):
-    """Even the one built from parameters alone - it is built in a sandbox."""
-    (tmp_path / "partcad.yaml").write_text(
-        "sketches:\n  thing:\n    type: basic\n    circle: 5\n",
-    )
-    ctx = pc.Context(str(tmp_path), user_config=config)
+@pytest.mark.parametrize(
+    "partcad_yaml, kind",
+    [
+        ("sketches:\n  thing:\n    type: basic\n    circle: 5\n", "sketch"),
+        ("parts:\n  thing:\n    type: basic\n    cuboid: 5\n", "part"),
+    ],
+)
+def test_a_basic_shape_has_no_environment(tmp_path, config, partcad_yaml, kind):
+    """The ones built from parameters alone are built in no sandbox, so there is none to key on.
 
-    assert ctx.get_sketch("thing").environment_cache_key.startswith("python==")
+    What they key on instead is the code that writes their geometry (see
+    'basic_shapes.CACHE_VERSION'), so the same declaration is the same entry
+    whatever Python its package asks for.
+    """
+    (tmp_path / "partcad.yaml").write_text(partcad_yaml)
+    ctx = pc.Context(str(tmp_path), user_config=config)
+    shape = ctx.get_sketch("thing") if kind == "sketch" else ctx.get_part("thing")
+
+    assert shape.environment_cache_key is None
 
 
 def test_an_assembly_has_no_environment_of_its_own(tmp_path, config):

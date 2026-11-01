@@ -63,6 +63,13 @@ Pick the script kind that best fits the part — you decide:
 | `scad` (OpenSCAD) | simple constructive geometry, no Python |
 | `sdf` | organic / implicit shapes |
 
+A part that is nothing but one box or one cylinder needs no script at all:
+declare it as `type: basic` with a `cuboid:` (`side-x`, `side-y`, `side-z`) or a
+`cylinder:` (`radius`, `height`), each centred on its optional `x`, `y`, `z`.
+PartCAD writes its geometry itself, without a sandbox. There is no file to write
+and nothing for `pc add part`; put the declaration in `partcad.yaml` as §5 shows
+and go on from there.
+
 ## 4. (Optional) Plan the geometry
 
 For anything non-trivial, sketch the constructive-solid-geometry plan first —
