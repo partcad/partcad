@@ -402,6 +402,35 @@ def test_the_command_line_prints_the_report(measure, tmp_path, capsys):
     assert "C1  diameter 5.0000" in text
 
 
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["svg", "{file}", "--tolerance", "0"],
+        ["svg", "{file}", "--tolerance", "-1"],
+        ["compare", "{file}", "{file}", "--agreement", "-0.1"],
+        ["image", "{file}", "--threshold", "0"],
+        ["image", "{file}", "--threshold", "256"],
+    ],
+)
+def test_a_value_nothing_can_be_measured_with_is_a_usage_error(measure, tmp_path, capsys, arguments):
+    """A tolerance of 0 is divided by, and a threshold of 0 makes every pixel ink: refused, not a traceback."""
+    path = tmp_path / "drawing.svg"
+    path.write_text(render(PLATE))
+
+    with pytest.raises(SystemExit) as excinfo:
+        measure.main([argument.format(file=path) for argument in arguments])
+
+    assert excinfo.value.code == 2
+    assert "expected" in capsys.readouterr().err
+
+
+def test_an_agreement_of_zero_asks_for_the_same_numbers(measure, tmp_path, capsys):
+    path = tmp_path / "drawing.svg"
+    path.write_text(render(PLATE))
+
+    assert measure.main(["compare", str(path), str(path), "--agreement", "0"]) == 0
+
+
 # --- raster pictures --------------------------------------------------------
 
 

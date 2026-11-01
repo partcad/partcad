@@ -1918,6 +1918,30 @@ def _colour(text):
     return values
 
 
+def _above_zero(text):
+    """A length that something is divided by or compared within: more than zero."""
+    value = float(text)
+    if not value > 0:
+        raise argparse.ArgumentTypeError("expected a number above 0, not %r" % text)
+    return value
+
+
+def _not_negative(text):
+    """A difference two readings may have: zero means they must agree exactly."""
+    value = float(text)
+    if not value >= 0:
+        raise argparse.ArgumentTypeError("expected a number of 0 or more, not %r" % text)
+    return value
+
+
+def _ink_threshold(text):
+    """How far from the background a pixel is to be ink: at 0 every pixel is, and a run weighs nothing."""
+    value = int(text)
+    if not 1 <= value <= 255:
+        raise argparse.ArgumentTypeError("expected a whole number from 1 to 255, not %r" % text)
+    return value
+
+
 def _box(text):
     values = [float(v) for v in text.split(",")]
     if len(values) != 4:
@@ -1933,7 +1957,7 @@ def main(argv=None):
     svg.add_argument("file")
     svg.add_argument("--layer", action="append", help="Read only this layer (an id of a <g>); repeat for several")
     svg.add_argument("--all-layers", action="store_true", help="Read the overlays too, not only the Visible* layers")
-    svg.add_argument("--tolerance", type=float, help="When two numbers are the same (default 1e-5 of the extent)")
+    svg.add_argument("--tolerance", type=_above_zero, help="When two numbers are the same (default 1e-5 of the extent)")
     svg.add_argument("--digits", type=int, default=4, help="Decimal places to print (default 4)")
     svg.add_argument("--limit", type=int, default=40, help="Other straight edges to print (default 40)")
     svg.add_argument("--json", action="store_true")
@@ -1942,7 +1966,9 @@ def main(argv=None):
     both.add_argument("first")
     both.add_argument("second")
     both.add_argument("--layer", action="append", help="Read only this layer (an id of a <g>); repeat for several")
-    both.add_argument("--agreement", type=float, help="How far two readings may differ (default 5e-4 of the size)")
+    both.add_argument(
+        "--agreement", type=_not_negative, help="How far two readings may differ (default 5e-4 of the size)"
+    )
     both.add_argument("--digits", type=int, default=4, help="Decimal places to print (default 4)")
     both.add_argument("--json", action="store_true")
 
@@ -1952,7 +1978,9 @@ def main(argv=None):
     image.add_argument("--column", type=float, action="append", default=[], help="Scan along this pixel column")
     image.add_argument("--no-bbox", action="store_true", help="Skip the bounding box of the ink")
     image.add_argument("--crop", type=_box, help="Look only inside X0,Y0,X1,Y1 (pixels, inclusive)")
-    image.add_argument("--threshold", type=int, default=64, help="How far from the background ink is (0-255)")
+    image.add_argument(
+        "--threshold", type=_ink_threshold, default=64, help="How far from the background ink is (1-255)"
+    )
     image.add_argument("--background", type=_colour, help="R,G,B of the background (default: the commonest colour)")
     scale = image.add_mutually_exclusive_group()
     scale.add_argument("--px-per-mm", type=float, help="The picture's scale, to report millimetres too")

@@ -454,22 +454,32 @@ geometry moved — so walk the tree yourself:
 ```python
 import asyncio, json, sys
 import partcad as pc
+from partcad.geom import Location
 
 ctx = pc.init(".")
 assembly = ctx.get_assembly("//<package>:<name>")
 asyncio.run(assembly.do_instantiate())
 
+def placed(location):
+    """A child's placement as a Location, whichever way it is written."""
+    return location if isinstance(location, Location) else Location(location)
+
 out = []
-def walk(node):
+def walk(node, where):
     for child in node.children:
         item = child.item
-        asyncio.run(item.do_instantiate())          # a sub-assembly is lazy
-        if getattr(item, "children", None):
-            walk(item)                              # compose the transform here
+        here = where * placed(child.location)       # where the child is in the world
+        if hasattr(item, "do_instantiate"):         # a sub-assembly, which is lazy
+            asyncio.run(item.do_instantiate())
+            walk(item, here)
         else:
-            out.append([item.name, child.location])
-json.dump(out, open(sys.argv[1], "w"), default=str)
+            out.append([item.name, repr(here)])
+walk(assembly, Location([[0, 0, 0], [0, 0, 1], 0]))
+json.dump(out, open(sys.argv[1], "w"), indent=1)
 ```
+
+`a * b` is `b` placed inside `a`, so each part comes out where it is in the
+world, however deep it sits.
 
 Run it against the tree before the change and after it, and diff the two.
 
@@ -482,9 +492,10 @@ Two cautions from doing this badly:
 
 * **Compare in world coordinates once a frame has moved.** Dropping the first
   node's location moves the assembly's own frame, so every part inside it
-  "differs" while the product is untouched. Compose the transforms down through
-  the tree — rotations included — and compare where each part ends up in the
-  end.
+  "differs" while the product is untouched. The walk composes the transforms
+  down through the tree — rotations included — so compare where each part ends
+  up in the end, and never a child's own `location`, which is relative to its
+  parent.
 * **Compare as a multiset, not pairwise.** Sorted lists of *(part, position)*
   shift wholesale when one entry changes, so a single misplaced part reads as
   dozens of differences and buries what actually moved.
@@ -537,9 +548,9 @@ views the layout covered as SVG and measure them with `measure.py`, in the
 `/pc:gen-sketch` skill's directory:
 
 ```sh
-for view in top front; do
+for view in top front; do                          # the polygonal projection: a whole assembly is cheap in it
   mkdir -p /tmp/pc-render/svg/$view
-  pc --no-ansi render -t svg --view $view -O /tmp/pc-render/svg/$view <name>
+  pc --no-ansi render -t svg --view $view --no-reproducible -O /tmp/pc-render/svg/$view <name>
   python3 <the /pc:gen-sketch skill's directory>/measure.py svg /tmp/pc-render/svg/$view/<name>.svg
 done
 ```
@@ -560,8 +571,8 @@ pc --no-ansi render -t svg --view top --reproducible -O $D/exact --filter '[<a>,
 python3 <the /pc:gen-sketch skill's directory>/measure.py compare $D/exact/<name>.svg $D/polygonal/<name>.svg
 ```
 
-The walk above gives each part's position exactly; compare those with the
-layout's origin positions as well. The projection is what measures a *gap*,
+The walk above gives each part's place in the world, composed down the tree;
+compare those with the layout's origin positions as well. The projection is what measures a *gap*,
 which depends on the parts' shapes as much as on where they are.
 
 Every row of the layout's table has to be within its tolerance on the

@@ -17,7 +17,6 @@ built cannot mean one thing for a conversion and another for a projection.
 
 import asyncio
 import json
-import os
 import re
 import shutil
 import tempfile
@@ -213,6 +212,33 @@ def default_output_name(input_path, parameters: dict = None, extension: str = ""
     return Path(input_path).stem + output.values_in_file_name(parameters) + extension
 
 
+def deliver(staging: Path, destination: Path, object_name: str, input_path, parameters: dict = None):
+    """Move what an output wrote into 'staging' to 'destination', and return the path of the file it was for.
+
+    That file is the one named after the object at the top of 'staging' -- which
+    is what an implementation writes when it is handed a directory -- and it is
+    renamed after the input (see 'default_output_name'). Anything written beside
+    it -- the meshes a URDF refers to, the pictures a document shows -- moves
+    too, under the name and the relative path it was written with, since that
+    is what the file refers to it by. Returns None when nothing was written.
+    """
+    written = sorted(path for path in staging.rglob("*") if path.is_file())
+    if not written:
+        return None
+    named = [path for path in written if path.parent == staging and path.name.startswith(object_name + ".")]
+    primary = max(named or written, key=lambda path: path.stat().st_mtime)
+    if primary.name.startswith(object_name + "."):
+        extension = primary.name[len(object_name) :]
+    else:
+        extension = primary.suffix
+    target = destination / default_output_name(input_path, parameters, extension)
+    for path in written:
+        moved = target if path == primary else destination / path.relative_to(staging)
+        moved.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(path), str(moved))
+    return str(target)
+
+
 def write_output_file(
     input_filename: str,
     input_type: str,
@@ -301,6 +327,10 @@ def write_output_file(
             str(destination),
             str(input_path.parent),
         ]
+        # A package directory named with '-e' is read the same way: its
+        # implementation script runs in the sandbox, wherever the user keeps it.
+        if dependency is not None and dependency[1].get("type") == "local":
+            ctx.sandbox_paths.append(dependency[1]["path"])
         with pc_logging.Process(verb, "adhoc" if kind == "part" else "adhoc-" + kind):
             project = ctx.get_project("//")
             # Before the input is built, which can take minutes: whether the file
@@ -365,14 +395,10 @@ def write_output_file(
             )
             if staging is None:
                 return str(Path(output_filename))
-            written = [Path(root) / name for root, _, names in os.walk(staging) for name in names]
-            if not written:
+            delivered = deliver(staging, destination, object_name, input_path, parameters)
+            if delivered is None:
                 raise RuntimeError("no %s file was written; the log says why" % output_type)
-            produced = max(written, key=lambda path: path.stat().st_mtime)
-            extension = produced.name[len(object_name) :] if produced.name.startswith(object_name) else produced.suffix
-            target = destination / default_output_name(input_path, parameters, extension)
-            shutil.move(str(produced), str(target))
-            return str(target)
+            return delivered
 
     except AdhocUsageError:
         raise

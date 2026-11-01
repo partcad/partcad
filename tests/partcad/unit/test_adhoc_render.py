@@ -215,3 +215,40 @@ def test_the_values_are_written_into_a_name_as_pc_render_writes_them():
     assert output.name_to_segments("bolt;length=10,size=M4") == ["bolt" + output.values_in_file_name(values)]
     assert output.values_in_file_name({}) == ""
     assert output.values_in_file_name(values) == "_length_10_size_M4"
+
+
+def _write(path, text="x"):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def test_the_file_an_output_was_for_is_named_after_the_input(tmp_path):
+    staging, destination = tmp_path / "staging", tmp_path / "out"
+    destination.mkdir()
+    _write(staging / "input_part.thin.svg", "<svg/>")
+
+    delivered = adhoc.deliver(staging, destination, "input_part", tmp_path / "bracket.py", {"depth": "12"})
+
+    assert delivered == str(destination / "bracket_depth_12.thin.svg")
+    assert (destination / "bracket_depth_12.thin.svg").read_text(encoding="utf-8") == "<svg/>"
+
+
+def test_what_an_output_wrote_beside_its_file_goes_with_it(tmp_path):
+    """A URDF and the meshes it names: the meshes keep the names and the paths it names them by."""
+    staging, destination = tmp_path / "staging", tmp_path / "out"
+    destination.mkdir()
+    _write(staging / "input_part.urdf", "<robot/>")
+    _write(staging / "meshes" / "link_0.stl")
+    _write(staging / "input_part_link_1.stl")
+
+    delivered = adhoc.deliver(staging, destination, "input_part", tmp_path / "arm.step")
+
+    assert delivered == str(destination / "arm.urdf")
+    assert sorted(str(path.relative_to(destination)) for path in destination.rglob("*") if path.is_file()) == sorted(
+        ["arm.urdf", str(Path("meshes") / "link_0.stl"), "input_part_link_1.stl"]
+    )
+
+
+def test_nothing_written_is_nothing_delivered(tmp_path):
+    (tmp_path / "staging").mkdir()
+    assert adhoc.deliver(tmp_path / "staging", tmp_path, "input_part", tmp_path / "bracket.py") is None

@@ -304,10 +304,13 @@ polygon it could not fit. It exits 1 when they disagree. Read what it reports:
   diameter is measured anyway.
 
 The exact projection costs more and can fail on a large model (that is why it
-is not the default). A sketch or one part is never large; an assembly is
-measured a pair of components at a time (`/pc:gen-assembly` §6). Where the exact
-projection is not to be had, measure on the polygonal one alone and widen every
-tolerance by its error.
+is not the default). What makes a model large is how many edges it has, not
+what kind of object it is: a sketch or a simple part is quick, but a detailed
+part — an imported STEP with hundreds of faces, a mesh — can take minutes and
+gigabytes as surely as an assembly can. Measure a large part a view at a time,
+and an assembly a pair of components at a time (`/pc:gen-assembly` §6). Where
+the exact projection is not to be had, measure on the polygonal one alone and
+widen every tolerance by its error.
 
 Both are had **without changing anything's declaration**: `--reproducible` and
 `--no-reproducible` choose the algorithm for one run of `pc render` or `pc adhoc
