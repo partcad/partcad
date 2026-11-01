@@ -1395,7 +1395,12 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // ('fit'). Not a cut or the show that takes one away, which keeps the camera
     // still for the reason it keeps the model where it was: the slider is moving
     // through the object, and the view moving under it is two things moving.
-    if (!first && centred === undefined) {
+    // That includes a fit still on its way from the show before: 'frame' has
+    // just pointed it at the cut, so it stops where it is, as it does when
+    // somebody takes hold of the view.
+    if (centred !== undefined) {
+        fitting = undefined;
+    } else if (!first) {
         fit();
     }
     viewListeners.forEach((listener) => listener());
