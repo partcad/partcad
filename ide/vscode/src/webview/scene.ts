@@ -354,24 +354,41 @@ let fitting: Fitting | undefined;
 let fittedTo: number | undefined;
 
 /**
- * Whether somebody has hold of the view right now: between the controls' 'start'
- * and 'end' - a drag, a turn of the wheel, a SpaceMouse push, which says so
- * through the same two events ('navigable.moving').
+ * Whether somebody has hold of the view right now, by hand - a drag or a turn of
+ * the wheel, between the orbit controls' own 'start' and 'end' - and by
+ * SpaceMouse, between the 'start' and 'end' it relays through the same controls
+ * ('navigable.moving').
  *
  * A fit is stopped when somebody takes hold of the view, and that alone is not
  * enough: a fit can also start while they are holding it - a show arriving in
  * the middle of a drag, a push - and 'start' has been and gone. So a fit does
  * not take a step while the view is held ('stepFit').
+ *
+ * Two flags rather than one, because a push that comes and goes in the middle of
+ * a drag must not let go of the drag; and not a count of 'start's and 'end's,
+ * because the controls do not pair them - a touch sends a 'start' for each
+ * finger and one 'end' for all of them, and a button they ignore sends an 'end'
+ * with no 'start' - so a count drifts, and one stuck above nought would stop
+ * every fit for good.
  */
-let held = false;
+let dragging = false;
+let pushing = false;
+
+/** Set while the SpaceMouse relays its 'start' or 'end', so that the listeners below do not take it for a drag's. */
+let relaying = false;
+
 controls.addEventListener('start', () => {
     fittedTo = undefined;
-    held = true;
+    if (!relaying) {
+        dragging = true;
+    }
     // Two hands on one wheel: whoever takes hold of the view has it.
     fitting = undefined;
 });
 controls.addEventListener('end', () => {
-    held = false;
+    if (!relaying) {
+        dragging = false;
+    }
 });
 
 /** Which way the camera looks at the model from: Stage's default, slightly above. */
@@ -766,9 +783,9 @@ function stepFit(now: number): void {
     if (fitting === undefined) {
         return;
     }
-    if (held) {
+    if (dragging || pushing) {
         // Started while somebody was moving the view: theirs, as one they
-        // took hold of is (see 'held').
+        // took hold of is (see 'dragging').
         fitting = undefined;
         return;
     }
@@ -800,7 +817,15 @@ const navigable: Navigable = {
     target: controls.target,
     shown: () => onScreen(container),
     fit,
-    moving: (moving) => controls.dispatchEvent({ type: moving ? 'start' : 'end' }),
+    moving: (moving) => {
+        pushing = moving;
+        relaying = true;
+        try {
+            controls.dispatchEvent({ type: moving ? 'start' : 'end' });
+        } finally {
+            relaying = false;
+        }
+    },
 };
 spaceMouse.attach(navigable);
 
