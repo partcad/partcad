@@ -255,10 +255,10 @@ def test_a_missing_file_is_named(tmp_path):
         render_video.media_path("nowhere.mp3", {"package_dir": str(tmp_path)}, "audio")
 
 
-def test_a_sandbox_that_cannot_see_the_package_says_so(tmp_path):
-    """A 'remote' sandbox is sent what its command names; the package is not, and its path is the client's."""
+def test_a_package_the_sandbox_was_not_sent_names_no_file(tmp_path):
+    """A 'remote' sandbox is sent the package when a field names a file in it; not sent, there was no such file."""
     elsewhere = str(tmp_path / "on-the-client")
-    with pytest.raises(render_video.OptionError, match="cannot see the package's files"):
+    with pytest.raises(render_video.OptionError, match="'music.mp3', which is not a file of the package"):
         render_video.media_path("music.mp3", {"package_dir": elsewhere}, "audio")
     # An absolute path is not read from the package, and is found wherever it is.
     music = tmp_path / "music.mp3"
@@ -563,7 +563,7 @@ def test_a_box_is_drawn_in_goldenrod_on_the_background():
     scene = raster_scene.Scene([("#DAA520", _box())], 200)
     # Two triangles a face, each split until no edge is longer than 'MAX_EDGE'.
     assert scene.triangle_count > 12
-    camera = raster_scene.Camera(distance=raster_scene.fit_distance(scene.radius, 1.0))
+    camera = raster_scene.Camera(distance=raster_scene.frame_distance(scene.sphere, 1.0))
     frame = raster_scene.Painter(scene, camera, 120, 120, (0x1F, 0x1F, 0x1F), supersample=2).draw(np.eye(3))
     assert frame.shape == (120, 120, 3) and frame.dtype == np.uint8
     assert tuple(frame[0, 0]) == (0x1F, 0x1F, 0x1F)
@@ -602,7 +602,7 @@ def test_a_sketch_of_lines_is_drawn_as_lines():
     lines = b3d.Compound([b3d.Line((0, 0), (30, 0)), b3d.Line((30, 0), (30, 20))]).wrapped
     scene = raster_scene.Scene([("#DAA520", lines)], 100)
     assert scene.triangle_count == 0 and len(scene.segments) >= 2
-    camera = raster_scene.Camera(distance=raster_scene.fit_distance(scene.radius, 1.0))
+    camera = raster_scene.Camera(distance=raster_scene.frame_distance(scene.sphere, 1.0))
     frame = raster_scene.Painter(scene, camera, 100, 100, (0, 0, 0), line_width=2).draw(np.eye(3))
     assert (frame.reshape(-1, 3) == raster_scene.DEFAULT_EDGE_COLOR).all(axis=1).any()
 
@@ -668,6 +668,55 @@ def test_a_shaded_png_is_a_lit_picture(tmp_path):
     assert middle[0] > middle[2] + 40
     # Where it was looked at from: the 3D view's direction, as a projection says it.
     assert result["viewport"]["viewport_origin"] == pytest.approx(list(raster_scene.VIEW_DIRECTION))
+
+
+def _margins(path):
+    """How many pixels of the picture are left empty on each side: (left, right, top, bottom), and its size."""
+    pixels = _pixels(path).astype(int)
+    background = pixels[0, 0]
+    ink = (np.abs(pixels - background) > 6).any(axis=2)
+    ys, xs = np.nonzero(ink)
+    height, width = ink.shape
+    return (xs.min(), width - 1 - xs.max(), ys.min(), height - 1 - ys.max()), (width, height)
+
+
+def test_a_drawing_of_lines_is_padded_alike_on_every_side():
+    """7.5% of the picture's larger side, so the drawing spans 85% of it, as a product picture is held to."""
+    import types
+
+    tall = types.SimpleNamespace(width=50.0, height=100.0)
+    scale, pad = render_raster.scale_for(tall, {"size": "512x512"}, render_raster.DEFAULT_MARGIN)
+    assert pad == pytest.approx(render_raster.DEFAULT_MARGIN * 512)
+    assert tall.height * scale == pytest.approx((1 - 2 * render_raster.DEFAULT_MARGIN) * 512)
+    # The narrower side is padded as much, and is narrower for it.
+    assert tall.width * scale + 2 * pad == pytest.approx(256 * 0.85 + 2 * pad)
+    # No margin is the drawing edge to edge, as it was.
+    assert render_raster.scale_for(tall, {"size": "512x512"}) == (5.12, 0.0)
+
+
+@pytest.mark.parametrize("turn", [(0, 0, 0), (0, 0, 45), (30, 60, 90)])
+def test_a_shaded_picture_keeps_the_object_inside_its_margin_at_any_turn(tmp_path, turn):
+    """Framed on the sphere about the object, so that no turn of it - no frame of a video - leaves the picture."""
+    path = str(tmp_path / "cube.png")
+    request = {"wrapped": _box(20, 20, 20), "style": "shaded", "size": "160x90", "antialias": 1, "turn": list(turn)}
+    result = render_png.process(path, request)
+    assert result["success"], result.get("exception")
+    margins, (width, height) = _margins(path)
+    # The narrower side is the bound: its margins at least the default's.
+    assert min(margins[2], margins[3]) >= render_raster.DEFAULT_MARGIN * height - 1
+    assert min(margins[0], margins[1]) > 0
+
+
+def test_a_margin_of_nought_frames_the_sphere_edge_to_edge(tmp_path):
+    """Without perspective, a sphere framed with no margin spans the narrower side exactly."""
+    camera_height = raster_scene.frame_height(10.0, 2.0, margin=0.0)
+    assert camera_height == pytest.approx(10.0)
+    assert raster_scene.frame_height(10.0, 0.5, margin=0.25) == pytest.approx(40.0)
+    # In perspective, the sphere's outline is the cone what is left of the side subtends.
+    distance = raster_scene.frame_distance(10.0, 1.0, fov=90.0, margin=0.0)
+    assert distance == pytest.approx(10.0 / math.sin(math.radians(45.0)))
+    with pytest.raises(render_raster.OptionError):
+        render_raster.margin_of({"margin": 0.5})
 
 
 def test_a_picture_style_that_is_not_one_is_refused(tmp_path):

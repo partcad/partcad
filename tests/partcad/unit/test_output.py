@@ -146,7 +146,8 @@ class _Drawing:
 )
 def test_the_raster_scale_is_bounded_by_the_dimensions_that_were_given(request_obj, expected):
     scale = _builtin_function(output.RENDER, "render_raster.py", "scale_for")
-    assert scale(_Drawing(), request_obj) == expected
+    # And no padding, asked for no margin.
+    assert scale(_Drawing(), request_obj) == (expected, 0.0)
 
 
 @pytest.mark.parametrize(
@@ -1306,3 +1307,22 @@ def test_the_dxf_renderer_writes_fixed_metadata_only_when_asked():
         node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "convert_svg_to_dxf"
     )
     assert ast.literal_eval(convert.args.defaults[-1]) is False
+
+
+def test_a_request_names_a_file_of_its_package_only_where_there_is_one(tmp_path):
+    """What decides whether a sandbox that exchanges files is sent the package of the object."""
+    (tmp_path / "media").mkdir()
+    (tmp_path / "media" / "theme.mp3").write_bytes(b"")
+    (tmp_path / "logo.png").write_bytes(b"")
+    package = str(tmp_path)
+
+    assert output.names_a_package_file({"audio": "media/theme.mp3"}, package)
+    assert output.names_a_package_file({"logo": {"path": "logo.png", "width": 0.2}}, package)
+    assert output.names_a_package_file({"text": [{"text": "hi"}, "logo.png"]}, package)
+    # A field naming nothing there, an absolute path, and what is not the file
+    # type's own field send nothing.
+    assert not output.names_a_package_file({"audio": "missing.mp3", "size": "reels"}, package)
+    assert not output.names_a_package_file({"logo": str(tmp_path / "logo.png")}, package)
+    assert not output.names_a_package_file({"cache_dir": "logo.png", "shape_tree": {"x": "logo.png"}}, package)
+    assert not output.names_a_package_file({"logo": "logo.png"}, str(tmp_path / "elsewhere"))
+    assert not output.names_a_package_file({"logo": "logo.png"}, None)

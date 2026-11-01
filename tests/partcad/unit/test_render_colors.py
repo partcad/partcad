@@ -396,7 +396,11 @@ def test_pc_render_draws_each_part_in_its_colour(context, tmp_path, file_type):
     assert assembly is not None
     path = str(tmp_path / ("pair." + file_type))
 
-    assembly.render(context, file_type, filepath=path, reproducible=True, **resolve_viewport("front"))
+    # No margin, for the PNG: drawn edge to edge, its lines are a pixel wide and
+    # some pixels of each are its colour itself, which is what is looked for.
+    # Padded, they are 85% of one and every pixel of them is blended.
+    margin = {"margin": 0} if file_type == "png" else {}
+    assembly.render(context, file_type, filepath=path, reproducible=True, **resolve_viewport("front"), **margin)
 
     if file_type == "svg":
         with open(path, encoding="utf-8") as f:

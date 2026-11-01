@@ -110,6 +110,12 @@ render:
     # 'height' each override a side of it. A drawing of lines is fitted into it
     # and keeps its own proportions; a shaded picture is exactly this size.
     size: 512x512
+    # How much of the picture is left empty on each side of the object: 7.5%,
+    # so that it spans 85% of it - what Google Merchant Center (75% to 90%) and
+    # Amazon (85% or more) hold a picture of a product to. Around the drawing of
+    # lines, alike on every side; around the sphere about a shaded object, on the
+    # picture's narrower side, so that no turn of it leaves the picture.
+    margin: 0.075
     # The fields only a shaded picture reads, and their defaults - every frame of
     # a video is a shaded picture drawn with the same fields:
     #
@@ -117,7 +123,7 @@ render:
     #                 drawn on it too).
     #   perspective   the vertical field of view, in degrees: the 3D view's 50.
     #                 0 (or false) draws without perspective, framed the same.
-    #   zoom          closer than the 3D view frames the object (above 1), or
+    #   zoom          closer than 'margin' frames the object (above 1), or
     #                 further (below).
     #   antialias     samples each way that a pixel is the mean of: 2. 1 is
     #                 about four times as fast to draw.
@@ -149,6 +155,7 @@ render:
     style: lines
     line_weight: 1.0
     size: 512x512
+    margin: 0.075
     # See 'svg' above.
     port_marker_size: 0.1
     port_label_size: 0.035
@@ -215,9 +222,9 @@ render:
   # The fields every video file type takes. The ones declared below are the
   # ones a package most often changes; every other one has the default
   # 'render_video.py' gives it, which is what it says here. A frame is a shaded
-  # picture, so 'perspective', 'zoom', 'antialias', 'line_weight' and the
-  # viewport are a picture's (see 'png' above); 'background' is the editor's,
-  # '#1F1F1F', rather than a picture's white.
+  # picture, so 'margin', 'perspective', 'zoom', 'antialias', 'line_weight' and
+  # the viewport are a picture's (see 'png' above); 'background' is the
+  # editor's, '#1F1F1F', rather than a picture's white.
   #
   #   size          where the video is going: 'reels' (1080x1920, the default:
   #                 also 'shorts', 'tiktok', 'story', 'vertical', '9:16'),
@@ -279,7 +286,9 @@ render:
   #   title         the title the container says the video has.
   #
   # A relative path in 'logo' and 'audio' is read from the package of the object
-  # being rendered. A video that reads a file - one of those, or the video it is
+  # being rendered - which a sandbox that exchanges files ('remote', 'docker'
+  # with 'useDockerRemote') is sent along with the render when a field names a
+  # file in it. A video that reads a file - one of those, or the video it is
   # appended to - is not cached, since what the file holds is not in the
   # question the cache keys on.
   #

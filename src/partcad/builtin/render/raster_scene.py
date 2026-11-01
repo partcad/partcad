@@ -13,10 +13,9 @@ sandbox has no browser to run, so this module draws the same picture again with
 numpy:
 
   * the camera - a perspective one, 50 degrees from top to bottom, looking at
-    the middle of the object from 'VIEW_DIRECTION' and backed off until the
-    object fits the frame ('fit_distance' is 'scene.ts''s 'fitDistance'). A
-    field of view of nought is a camera with no perspective at all, framed the
-    same way, which is what a drawing measured off the picture wants;
+    the middle of the object from 'VIEW_DIRECTION'. A field of view of nought
+    is a camera with no perspective at all, framed the same way, which is what a
+    drawing measured off the picture wants;
   * the material - three's MeshPhongMaterial with its defaults, both sides
     drawn, in the colour each part states and goldenrod where it states none
     (see 'appearance.py', which every drawing PartCAD makes shares);
@@ -40,6 +39,16 @@ vertical, a matter of handing 'draw' another rotation - the 'turn' every
 render takes ('viewpoint.py'), which a video grows frame by frame.
 
 What is drawn differently, and why:
+
+  * The framing. The 3D view fits a frame to half the object's largest
+    dimension, which the nearest corner of a cube leaves; and a frame that is
+    to hold whatever turn the object is drawn at - every frame of a video - has
+    to hold the whole object at any of them. So the camera is framed on the
+    sphere around the object's box ('frame_distance'), at the 'margin' the
+    picture leaves on each side of its narrower side: nothing leaves the
+    picture, whichever way the object is turned. The camera keeps the 3D
+    view's direction, and its light keeps the 3D view's places, which are
+    measured off the object's largest dimension as there.
 
   * The shading is worked out at the corners of each triangle and blended across
     it, where the GPU works it out at every pixel. Nearly all of the light here is
@@ -77,10 +86,6 @@ FOV = 50.0
 # ('VIEW_DIRECTION' in 'scene.ts'). That one is written in glTF's frame, which is
 # Y up; PartCAD's is Z up, and glTF's (x, y, z) is PartCAD's (x, -z, y).
 VIEW_DIRECTION = (0.6, -0.8, 0.5)
-
-# How far back the camera stands, in radii of the object, before the field of view
-# is taken into account ('fitDistance' in 'scene.ts').
-FIT = 1.6
 
 # Which way is up on the screen: PartCAD's Z, which is glTF's Y.
 UP = (0.0, 0.0, 1.0)
@@ -521,8 +526,12 @@ class Scene:
         high = np.max([box[1] for box in boxes], axis=0)
         size = high - low
         self.center = (low + high) / 2.0
-        # Half the largest dimension, as 'frame()' frames the camera on.
+        # Half the largest dimension: what 'frame()' in 'scene.ts' places its
+        # lights from, and so what they are placed from here.
         self.radius = float(np.max(size)) / 2.0 or 1.0
+        # The sphere around the box: what the camera is framed on, so that no
+        # turn of the object leaves the picture ('frame_distance').
+        self.sphere = float(np.linalg.norm(size)) / 2.0 or 1.0
         tolerance = tolerance_for(float(np.linalg.norm(size)), pixels)
 
         points, normals, corners, colors, opacity = [], [], [], [], []
@@ -583,30 +592,31 @@ def rotation(degrees):
     return np.array(viewpoint.rotation(degrees))
 
 
-# How much further than 'fitDistance' the 3D view's camera stands: 'scene.ts'
-# puts it at 'VIEW_DIRECTION' times that distance, and its 'VIEW_DIRECTION' is
-# not of unit length - and keeps it that far along whichever way it is turned.
-VIEW_LENGTH = math.sqrt(sum(component * component for component in VIEW_DIRECTION))
+def _half_angle(aspect, fov, margin):
+    """The half angle, from the middle of the picture, of what is left of its narrower side inside the margin."""
+    narrow = math.tan(math.radians(fov) / 2.0) * min(1.0, aspect)
+    return math.atan((1.0 - 2.0 * margin) * narrow)
 
 
-def fit_distance(radius, aspect, fov=FOV):
-    """How far the camera stands from the middle of an object of 'radius', as the 3D view fits it.
+def frame_distance(sphere, aspect, fov=FOV, margin=0.0):
+    """How far from the middle of the object the camera stands, for it to be framed.
 
-    'fitDistance' in 'scene.ts', times 'VIEW_LENGTH'. Whichever of the two fields
-    is the narrower: 'fov' is the vertical one, and a frame taller than it is
-    wide - a phone's - sees less across than up.
+    So that a sphere of radius 'sphere' around the middle - the one around the
+    object's box - fills all of the picture's narrower side but the 'margin' at
+    either end of it: the sphere's outline, seen from that far, is the cone the
+    rest of that side subtends. 'fov' is the vertical field of view, and a
+    picture taller than it is wide - a phone's - sees less across than up.
     """
-    half_height = math.tan(math.radians(fov) / 2.0)
-    return radius * FIT * VIEW_LENGTH / (half_height * min(1.0, aspect))
+    return sphere / math.sin(_half_angle(aspect, fov, margin))
 
 
-def half_height(radius, aspect):
-    """How far above the middle the top of the picture is, in the object's units, when the object fits it.
+def frame_height(sphere, aspect, margin=0.0):
+    """How far above the middle the top of a picture without perspective is, for the object to be framed.
 
-    What 'fit_distance' frames a perspective camera to at the object's middle,
-    so that a camera without perspective frames the object the same size.
+    The same framing as 'frame_distance', for a camera that has none: the sphere
+    spans the narrower side of the picture but the margins.
     """
-    return radius * FIT * VIEW_LENGTH / min(1.0, aspect)
+    return sphere / ((1.0 - 2.0 * margin) * min(1.0, aspect))
 
 
 class Camera:

@@ -498,6 +498,53 @@ FILES_KEY = "files"
 # FILES_KEY), since what that file holds is in no key.
 PACKAGE_DIR_KEY = "package_dir"
 
+# How that directory reaches a sandbox that exchanges files rather than sharing
+# them, where a path on this machine is a path to nothing: as an argument of the
+# export wrapper, '--package-dir <index> <directory>' after every file's triple,
+# which the sandbox is sent and rewrites as it does every directory an argument
+# names. Only for a request that names a file of its package
+# ('names_a_package_file'), since it sends the package whole. The twin of
+# 'wrapper_export.PACKAGE_DIR_ARGUMENT', which says the rest.
+PACKAGE_DIR_ARGUMENT = "--package-dir"
+
+# What is not looked through for a file of the package: the object itself, the
+# tree it was decoded from, and the rest of what PartCAD hands every
+# implementation beside the file type's own fields.
+_NOT_PARAMETERS = frozenset(
+    {"wrapped", "shape_tree", "properties", "world", "ports", "boundary", "annotations", "cache_dir", PACKAGE_DIR_KEY}
+)
+
+
+def names_a_package_file(request, package_dir) -> bool:
+    """Whether a field of 'request' is a relative path to a file in 'package_dir': a logo, a soundtrack.
+
+    Looked for among the file type's own fields - a string, or one in a map or a
+    list of them, as 'logo: {path: ...}' is - and only a path that is there is
+    one: a field that names nothing names nothing to send.
+    """
+    if not package_dir or not os.path.isdir(package_dir):
+        return False
+
+    def names(value, depth):
+        if isinstance(value, str):
+            text = value.strip()
+            return (
+                0 < len(text) <= 1024
+                and "\n" not in text
+                and not os.path.isabs(os.path.expanduser(text))
+                and os.path.isfile(os.path.join(package_dir, text))
+            )
+        if depth >= 3:
+            return False
+        if isinstance(value, dict):
+            return any(names(item, depth + 1) for item in value.values())
+        if isinstance(value, (list, tuple)):
+            return any(names(item, depth + 1) for item in value)
+        return False
+
+    return any(names(value, 0) for key, value in request.items() if key not in _NOT_PARAMETERS)
+
+
 # What 'wrapper_export.py' is handed when one call writes several files of one
 # object, and what it answers each of them with (see 'Shape._run_together_locked'
 # and the wrapper's docstring): the requests under BATCH_OUTPUTS_KEY, each under

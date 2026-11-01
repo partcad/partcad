@@ -2318,6 +2318,18 @@ class Shape(ShapeConfiguration):
             command = [script_path]
             for output_, config_dir in zip(outputs, config_dirs):
                 command += [output_.path, config_dir, os.path.abspath(output_.script)]
+            # The package of the object, for a file whose request names a file
+            # in it, where the sandbox would otherwise not see it: one that
+            # exchanges files is sent what the arguments name and nothing else,
+            # and rewrites those arguments - never the request, which is where
+            # 'package_dir' is. See 'output.PACKAGE_DIR_ARGUMENT'.
+            if container or getattr(runtime, "EXCHANGES_FILES", False):
+                for index, output_ in enumerate(outputs):
+                    package_dir = output_.request.get(output.PACKAGE_DIR_KEY)
+                    if output.names_a_package_file(output_.request, package_dir):
+                        command += [output.PACKAGE_DIR_ARGUMENT, str(index), package_dir]
+                        if container:
+                            input_dirs.append(package_dir)
             if container:
                 # The interpreter is named rather than pathed: the container's
                 # allowlist maps the name to the executable, which is what keeps

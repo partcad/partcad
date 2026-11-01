@@ -1002,7 +1002,20 @@ picks and ``pc render --style`` picks for one run:
 takes too (``square``, ``reels``, ``1080p``, ...); ``width`` and ``height`` each
 override a side of it. A drawing of lines is fitted into it and keeps its own
 proportions; a shaded picture is exactly that size. ``background`` is white for
-both. The rest is a shaded picture's alone:
+both.
+
+``margin`` is how much of the picture is left empty on each side of the object:
+``0.075`` -- 7.5% on each side, so that the object spans 85% of the picture. That
+is what places that publish pictures of products hold them to: `Google Merchant
+Center <https://support.google.com/merchants/answer/6183479>`_ recommends that
+the product take up 75% to 90% of the image, and Amazon asks for its main image
+to fill 85% or more of the frame. A drawing of lines is padded alike on every
+side. A shaded picture is framed on the sphere around the object's box, on the
+picture's narrower side -- the framing 3D viewers use for a thumbnail, because
+the distance it gives does not depend on how the object is turned -- so no turn
+of it, and no frame of a video, leaves the picture.
+
+The rest is a shaded picture's alone:
 
 ``perspective``
   The vertical field of view, in degrees: the 3D view's 50 by default. ``0``,
@@ -1010,10 +1023,9 @@ both. The rest is a shaded picture's alone:
   measured off, or compared with a drawing, wants.
 
 ``zoom``
-  Closer than the 3D view frames the object (above 1), or further (below). The
-  3D view fits a frame to half the object's largest dimension, so the nearest
-  corner of a cube can touch the edge of a square picture there and here
-  alike; ``zoom: 0.9`` leaves it a margin.
+  Closer than ``margin`` frames the object (above 1), or further (below). The
+  3D view itself fits a frame to half the object's largest dimension, which
+  the nearest corner of a cube leaves; a picture is framed on the whole of it.
 
 ``viewport_origin``, ``viewport_up``
   Unset, the 3D view's: from the front right, a little above, whatever kind of
@@ -1098,8 +1110,8 @@ Every option is a field of the file type, so a package says it once:
 ``append``, ``preset`` and ``quality`` for one run (``--size``, ``--fps``, ...),
 on top of the package's and the object's, as ``--view`` and ``--turn`` do for
 where the object is looked at from -- which a video takes too, and starts its
-turn from. The fields of the picture each frame is -- ``perspective``, ``zoom``,
-``antialias``, ``line_weight`` -- are a picture's. The full list, with what each
+turn from. The fields of the picture each frame is -- ``margin``,
+``perspective``, ``zoom``, ``antialias``, ``line_weight`` -- are a picture's. The full list, with what each
 defaults to, is the comment above the video file types in ``//builtin/render``'s
 ``partcad.yaml``.
 
@@ -1158,9 +1170,10 @@ and the filters.
   in, cut to the length of the video, faded and set to a ``volume``, and
   ``loop``-ed to fill a video longer than what is left of it. ``filters`` are
   GStreamer video filters the frames go through (``videobalance
-  saturation=1.3``). A relative path is read from the package of the object,
-  which a sandbox has to be able to see: a ``remote`` one, or ``docker`` with
-  ``useDockerRemote``, is sent only what its command names, and says so.
+  saturation=1.3``). A relative path is read from the package of the object.
+  A sandbox that exchanges files rather than sharing them -- ``remote``, or
+  ``docker`` with ``useDockerRemote`` -- is sent that package along with the
+  render whenever a field names a file in it, and nothing else of it.
 
 Where GStreamer comes from
 ^^^^^^^^^^^^^^^^^^^^^^^^^^

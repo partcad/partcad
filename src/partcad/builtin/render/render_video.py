@@ -179,15 +179,12 @@ def media_path(value, request, key):
         package = request.get("package_dir")
         if package and not os.path.isdir(package):
             # A sandbox that exchanges files rather than sharing them -
-            # 'remote', or 'docker' with 'useDockerRemote' - is sent the
-            # directories its command names and nothing else, and this is not
-            # one of them. Only a relative path is read from it: an absolute
-            # one is wherever it says, and is a file there or is not.
-            raise OptionError(
-                "'%s' names a file of the package, and this sandbox cannot see the package's files: it is "
-                "sent only what its command names. Render with a sandbox that shares them - 'venv', 'conda', "
-                "or 'docker' without 'useDockerRemote'" % key
-            )
+            # 'remote', or 'docker' with 'useDockerRemote' - is sent the package
+            # when a field names a file that is in it ('output.PACKAGE_DIR_ARGUMENT'),
+            # and handed where it put it. This one was not: there was no such
+            # file there. Only a relative path is read from the package: an
+            # absolute one is wherever it says, and is a file there or is not.
+            raise OptionError("'%s' names %r, which is not a file of the package" % (key, value))
         path = os.path.join(package or os.getcwd(), path)
     if not os.path.isfile(path):
         raise OptionError("'%s' names '%s', which is not a file" % (key, path))

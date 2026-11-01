@@ -474,10 +474,12 @@ at all).
     and the colours of `ide/vscode/src/webview/scene.ts` are written out again, constant for constant, with
     the shading worked out at the corners of each triangle and blended across it. That is only close to a
     GPU's per-pixel light because large triangles are split first (`refine`, `MAX_EDGE`): a flat face OCCT
-    meshes as two triangles showed the diagonal between them as a crease. The camera stands where the 3D
-    view's does, `fitDistance` times the length of its (unnormalized) `VIEW_DIRECTION` (`VIEW_LENGTH`). A
-    change to what the 3D view draws -- its lights, its camera, its background -- is a change to this module
-    too. It meshes a copy of the shape: a PNG shares its decoding with the SVG beside it
+    meshes as two triangles showed the diagonal between them as a crease. The camera looks from the 3D
+    view's direction, but is framed differently: on the sphere around the object's box, at `margin` (7.5% of
+    the picture on each side, `render_raster.DEFAULT_MARGIN`) on the narrower side (`frame_distance`), so no
+    turn -- no frame of a video -- leaves the picture; the 3D view fits half the largest dimension, which a
+    cube's corners leave. A drawing of lines gets the same margin, as padding all round. A change to what
+    the 3D view draws -- its lights, its background -- is a change to this module too. It meshes a copy of the shape: a PNG shares its decoding with the SVG beside it
     (`TESSELLATION`), and a mesh left on, or found on, that decoding would make either depend on the other.
   * **GStreamer is a program, run as `gst-launch-1.0`** (`video_encode.py`), with the frames on its standard
     input. pip cannot install it, so each video file type names PartCAD's GStreamer image as its
@@ -501,7 +503,13 @@ at all).
     it interleaves audio and libav's writes broken timestamps. A video that reads a file -- the one it is
     appended to, a soundtrack, a logo -- reports no `files`, so it is not cached; the file's path is
     `request["package_dir"]` (`output.PACKAGE_DIR_KEY`), which is added after the request is keyed on, as
-    `cache_dir` is.
+    `cache_dir` is. A sandbox that exchanges files (`EXCHANGES_FILES`: `remote`, `docker` with
+    `useDockerRemote`) cannot read that path, and is never sent what the request says, only what the
+    command names: so a request whose field names a file of its package (`output.names_a_package_file`)
+    gets `--package-dir <index> <directory>` after the triples (`output.PACKAGE_DIR_ARGUMENT`), which
+    sends the package and is rewritten to where it landed, and `wrapper_export` takes the group off and
+    puts that directory in the request. Do not resolve such a path in the core instead: what a field
+    means is the implementation's to say.
 
 - **Engineering analysis** (`./src/partcad/cae.py`, `Shape.analyze_async()`, `./src/partcad/test/cae.py`):
   `pc cae fea`/`dynamic`/`thermal`/`cfd` are a third output section, `cae:`, resolved by the very code that resolves

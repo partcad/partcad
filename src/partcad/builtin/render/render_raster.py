@@ -131,6 +131,17 @@ MAX_SIDE = 7680
 # some color has to be chosen; white matches what PNG has always produced.
 DEFAULT_BACKGROUND = 0xFFFFFF
 
+# How much of a picture is left empty on each side of the object, as a fraction
+# of the picture: 7.5% on each side, so that the object spans 85% of it. What a
+# picture of a product is held to where pictures of products are published:
+# Google Merchant Center asks for the product to take up 75% to 90% of the
+# image, and Amazon for its main image to fill 85% or more of the frame. A
+# picture of lines leaves it around the drawing, all round; a shaded one around
+# the sphere about the object, on its narrower side - which is what keeps every
+# turn of it, every frame of a video, inside the picture. 'margin' sets it.
+DEFAULT_MARGIN = 0.075
+MAX_MARGIN = 0.45
+
 # How many samples each way a shaded pixel is the mean of: what smooths its
 # edges, at the square of it in time and memory.
 DEFAULT_ANTIALIAS = 2
@@ -237,13 +248,20 @@ def rgb_of(request, key="background"):
     return ((value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF)
 
 
-def scale_for(drawing, request):
-    """How much to scale the projection by to fit the requested pixel size.
+def margin_of(request):
+    """'margin': the fraction of the picture left empty on each side of the object (see 'DEFAULT_MARGIN')."""
+    return number(request, "margin", DEFAULT_MARGIN, low=0, high=MAX_MARGIN)
 
-    Both dimensions bound the result, so the smaller ratio wins. A request with
-    no 'size' needs only one of 'width' and 'height': the other is then whatever
-    keeps the aspect ratio, rather than the default silently bounding the
-    dimension that was asked for.
+
+def scale_for(drawing, request, margin=0.0):
+    """How much to scale the projection by to fit the requested pixel size, and the padding around it.
+
+    '(scale, padding)', the padding in pixels on every side: 'margin' of the
+    picture's larger side, so that the drawing spans '1 - 2 * margin' of it and
+    is as far from every edge. Both dimensions bound the result, so the smaller
+    ratio wins. A request with no 'size' needs only one of 'width' and
+    'height': the other is then whatever keeps the aspect ratio, rather than the
+    default silently bounding the dimension that was asked for.
     """
     if request.get("size") is not None:
         width, height = size_of(request)
@@ -264,12 +282,15 @@ def scale_for(drawing, request):
                 "The '%s' of a raster projection has to be a positive finite number, not %s" % (name, value)
             )
 
+    # The padding, in the drawing's own units: so many of its larger side.
+    pad = margin / (1.0 - 2.0 * margin) * max(float(drawing.width), float(drawing.height))
     ratios = []
     if width is not None:
-        ratios.append(float(width) / float(drawing.width))
+        ratios.append(float(width) / (float(drawing.width) + 2.0 * pad))
     if height is not None:
-        ratios.append(float(height) / float(drawing.height))
-    return min(ratios)
+        ratios.append(float(height) / (float(drawing.height) + 2.0 * pad))
+    scale = min(ratios)
+    return scale, pad * scale
 
 
 class Shaded:
@@ -277,7 +298,8 @@ class Shaded:
 
     Everything it is drawn with is a field of the request, which is what makes a
     frame of a video a picture 'pc render' draws: the size ('size', 'width',
-    'height'), 'background', 'antialias' (samples each way per pixel), 'zoom',
+    'height'), 'background', 'antialias' (samples each way per pixel),
+    'margin' (see 'DEFAULT_MARGIN'), 'zoom',
     'perspective' (the vertical field of view in degrees - the 3D view's 50 by
     default - or nought, or false, for none), 'line_weight' (see
     'LINE_WEIGHT_SIDE'), 'viewport_origin' and 'viewport_up' (the 3D view's own
@@ -303,6 +325,7 @@ class Shaded:
         self.background = rgb_of(request)
         self.antialias = number(request, "antialias", DEFAULT_ANTIALIAS, low=1, high=MAX_ANTIALIAS, integer=True)
         self.zoom = number(request, "zoom", 1.0, low=0.01, high=100)
+        self.margin = margin_of(request)
         self.perspective = perspective_of(request, raster_scene.FOV)
         self.line_weight = number(request, "line_weight", 1.0, low=0.01, high=100)
         self.origin = tuple(float(c) for c in (request.get("viewport_origin") or raster_scene.VIEW_DIRECTION))
@@ -320,11 +343,11 @@ class Shaded:
         _whole, groups = render_svg._by_color(self.request, warnings)
         self.scene = raster_scene.Scene(groups, max(self.width, self.height), warnings)
         aspect = self.width / float(self.height)
-        radius = self.scene.radius
+        sphere = self.scene.sphere
         # The light is seen from where a perspective camera would stand, and a
         # camera with perspective comes nearer to zoom in; one without makes the
         # object larger on the picture instead, from where it stands.
-        distance = raster_scene.fit_distance(radius, aspect, self.perspective or raster_scene.FOV)
+        distance = raster_scene.frame_distance(sphere, aspect, self.perspective or raster_scene.FOV, self.margin)
         if self.perspective:
             distance /= self.zoom
         self.camera = raster_scene.Camera(
@@ -332,7 +355,7 @@ class Shaded:
             up=self.up,
             distance=distance,
             fov=self.perspective,
-            height=raster_scene.half_height(radius, aspect) / self.zoom,
+            height=raster_scene.frame_height(sphere, aspect, self.margin) / self.zoom,
         )
         return self
 
@@ -365,6 +388,7 @@ class Shaded:
             "background": "#%02X%02X%02X" % self.background,
             "antialias": self.antialias,
             "zoom": self.zoom,
+            "margin": self.margin,
             "perspective": self.perspective,
             "line_weight": self.line_weight,
             "viewport_origin": list(self.origin),
@@ -456,10 +480,12 @@ def _lines(path, request, fmt, config_pil):
             "exception": "Failed to convert to RLG. Aborting.",
         }
 
-    scale = scale_for(drawing, request)
+    scale, pad = scale_for(drawing, request, margin_of(request))
     drawing.scale(scale, scale)
-    drawing.width *= scale
-    drawing.height *= scale
+    # Moved in by the padding, in the drawing's units now that it is scaled.
+    drawing.translate(pad / scale, pad / scale)
+    drawing.width = drawing.width * scale + 2.0 * pad
+    drawing.height = drawing.height * scale + 2.0 * pad
     renderPM.drawToFile(
         drawing,
         path,
