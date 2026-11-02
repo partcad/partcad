@@ -186,6 +186,18 @@ Feature: `pc render` command
     Given a file named "partcad.yaml" does not exist
     Then STDERR should contain "DONE: Render: //pub/examples/partcad/feature_render:"
 
+  # `--reproducible` and `--no-reproducible` pick the hidden-line algorithm for
+  # one run, over what the file type declares. `feature_render` declares the
+  # exact one, as every example does, and draws the cylinder end on -- the one
+  # shape whose drawing says which algorithm drew it: a circle from the exact
+  # one, segments from the polygonal one.
+  @type-image
+  Scenario: `pc render --no-reproducible` overrides the file type's own setting
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package //feature_render -t svg --no-reproducible -O ./ :cylinder"
+    Then the command should exit with a status code of "0"
+    Then a file named "cylinder.svg" should not contain "<circle"
+    Given a file named "partcad.yaml" does not exist
+
   # A request that cannot be aimed is refused before anything is rendered,
   # rather than producing a picture of something else.
   Scenario Outline: `pc render` refuses a viewport it cannot make sense of
