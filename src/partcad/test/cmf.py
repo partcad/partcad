@@ -30,8 +30,10 @@ from .test import Test
 CONFIG_KEY = "cmf"
 
 
-def _required(shape) -> bool:
-    for config in (getattr(shape, "config", None), getattr(getattr(shape, "project", None), "config_obj", None)):
+def _required(ctx, shape) -> bool:
+    """Whether 'cmf: {require: true}' is set on the object or on its package."""
+    project = ctx.get_project(shape.project_name) if ctx is not None else None
+    for config in (getattr(shape, "config", None), getattr(project, "config_obj", None)):
         section = config.get(CONFIG_KEY) if isinstance(config, dict) else None
         if isinstance(section, dict) and section.get("require") is True:
             return True
@@ -92,10 +94,10 @@ def assembly_findings(ctx, shape) -> list:
     """What CMF an assembly sets itself, if it is not bought whole; [] otherwise."""
     if _purchasable(shape):
         findings = []
-        for kind, reference in pc_cmf.own_parameters(shape).items():
+        for kind, reference in pc_cmf.own_parameters(shape, ctx).items():
             findings.extend(claim_problems(ctx, kind, reference, shape.project_name))
         return findings
-    setters = pc_cmf.assembly_cmf_setters(shape)
+    setters = pc_cmf.assembly_cmf_setters(shape, ctx)
     if not setters:
         return []
     return [
@@ -131,7 +133,16 @@ class CmfTest(Test):
         if reason is not None:
             return self.not_applicable(shape, reason)
         if isinstance(shape, Assembly):
-            await shape.do_instantiate()
+            # One bought whole is judged by its own CMF alone, and needs none
+            # of its children; any other is judged by its links too.
+            if not _purchasable(shape):
+                try:
+                    await shape.do_instantiate()
+                except Exception as e:
+                    # Not a pass, as in 'connectivity': a check that fell over
+                    # has nothing to say. 'cad' fails an assembly that will not
+                    # instantiate in its own right.
+                    return self.failed(shape, "the CMF check could not be run: %s" % e)
             findings = assembly_findings(ctx, shape)
         else:
             if await shape.get_wrapped(ctx) is None:
@@ -140,6 +151,6 @@ class CmfTest(Test):
         if not findings:
             return self.passed(shape)
         message = "CMF not specified: " + "; ".join(findings)
-        if _required(shape):
+        if _required(ctx, shape):
             return self.failed(shape, message)
         return self.warned(shape, message + " (a warning until 'cmf: {require: true}')")

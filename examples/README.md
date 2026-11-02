@@ -16,6 +16,10 @@ There are many ways to produce a PartCAD model that can be consumed by others.
   - [Subtractive: parts cut out of stock, on a router, a laser and a drill](./produce_part_subtractive/)
   - [Sheet metal: one blank, and the drawing that says where each part is bent](./produce_part_sheet_metal/)
 
+- Declare parts by their dimensions alone:
+
+  - [Cuboids and cylinders](./produce_part_basic/)
+
 - Import parts defined using Python CAD frameworks:
 
   - [Primitive shapes using CadQuery](./produce_part_cadquery_primitive/)

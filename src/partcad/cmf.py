@@ -36,10 +36,11 @@ that alias one vendor colour differently name the same item.
 
 import copy
 import os
+import re
 import sys
 import typing
 
-from partcad_utils.utils import escape_name, format_parameterized_name, parse_parameterized_name
+from partcad_utils.utils import RESERVED_IN_NAMES, escape_name, format_parameterized_name, parse_parameterized_name
 
 from . import logging as pc_logging
 from .utils import resolve_resource_path
@@ -76,14 +77,26 @@ class Declaration:
 
     kind: str = "cmf"
 
-    def __init__(self, name: str, project_name: str, config: typing.Optional[dict] = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        project_name: str,
+        config: typing.Optional[dict] = None,
+        base_name: typing.Optional[str] = None,
+        parameter_values: typing.Optional[dict] = None,
+    ) -> None:
         config = config if config is not None else {}
         self.name = name
         self.project_name = project_name
         self.config = config
         # What it was declared as, and with which values, when it is an
-        # instance of a parametric declaration ('rgba;color=C91A09FF').
-        self.base_name, self.parameter_values = parse_parameterized_name(name)
+        # instance of a parametric declaration ('rgba;color=C91A09FF'). Given
+        # by whoever declares it where it can be: a declaration's own name may
+        # hold a character a reference reserves ('a;b'), and parsing the name
+        # back would read that as values.
+        if base_name is None:
+            base_name, parameter_values = parse_parameterized_name(name)
+        self.base_name, self.parameter_values = base_name, dict(parameter_values or {})
         desc = config.get("desc", "")
         self.desc = desc.strip() if isinstance(desc, str) else desc
         self.errors: list = []
@@ -251,6 +264,38 @@ def normalize(kind: str, config) -> dict:
     return config
 
 
+def instance_key(name: str, values: typing.Optional[dict]) -> str:
+    """The key a declaration's instance is kept under in its package: 'name' itself, or with the values.
+
+    The name escaped before the values are added, so that a name holding a
+    character a reference reserves ('a;b') is not read back as values: the key
+    is the reference's own spelling of the instance (see 'Declaration.reference').
+    """
+    if not values:
+        return name
+    return escape_name(name) + format_parameterized_name("", values)
+
+
+# An escape of a character a reference reserves ('%25', '%3B'), which PartCAD's
+# expression syntax ('%color%') would otherwise read the '%' of: '%25%' in an
+# escaped alias source is no expression.
+_RESERVED_ESCAPE = re.compile("%(" + "|".join("%02X" % ord(c) for c in RESERVED_IN_NAMES) + ")", re.IGNORECASE)
+_MASK = "\x00"
+
+
+def _masked(value, mask: bool):
+    """'value' with every reserved escape in its strings hidden from the expression syntax, or shown again."""
+    if isinstance(value, str):
+        if mask:
+            return _RESERVED_ESCAPE.sub(lambda match: _MASK + match.group(1) + _MASK, value)
+        return re.sub(_MASK + "([0-9A-Fa-f]{2})" + _MASK, lambda match: "%" + match.group(1), value)
+    if isinstance(value, list):
+        return [_masked(item, mask) for item in value]
+    if isinstance(value, dict):
+        return {_masked(key, mask): _masked(item, mask) for key, item in value.items()}
+    return value
+
+
 def with_parameters(config: dict, values: dict, object_name: str) -> dict:
     """The declaration of the instance 'values' name: its parameters set, its fields rendered.
 
@@ -268,7 +313,7 @@ def with_parameters(config: dict, values: dict, object_name: str) -> dict:
     context = {name: declared.get("default") for name, declared in parameters.items() if isinstance(declared, dict)}
     for key, value in list(instance.items()):
         if key != "parameters":
-            instance[key] = expr.resolve(value, context, object_name)
+            instance[key] = _masked(expr.resolve(_masked(value, True), context, object_name), False)
     return instance
 
 
@@ -288,6 +333,10 @@ def lookup(ctx, kind: str, ref: str, relative_to: str = "", quiet: bool = False,
     declaration that says what the thing is. An alias that leads back to itself
     is reported and resolves to nothing.
     """
+    if not isinstance(ref, str) or not ref:
+        if not quiet:
+            pc_logging.error("The %s reference %r names nothing" % (kind, ref))
+        return None
     seen = set()
     current_ref, current_package = ref, relative_to
     while True:
@@ -331,6 +380,12 @@ def canonical(ctx, kind: str, value, relative_to: str = "", quiet: bool = True) 
     value = value.strip()
     if not value:
         return None
+    # A display-only colour states itself in full: it is its own canonical
+    # reference, and the standard catalogue need not be at hand to say so.
+    if kind == "color":
+        rgba = rgba_of_reference(value)
+        if rgba is not None:
+            return rgba_reference(rgba)
     if ctx is not None:
         found = lookup(ctx, kind, value, relative_to, quiet=True)
         if found is not None:
@@ -451,15 +506,49 @@ def _parameter_value(config, name: str):
     return None
 
 
-def own_parameters(shape) -> dict:
+def payload_section(envelope):
+    """The CMF section a shape node's payload carries, or None."""
+    from . import shape_envelope
+
+    if not shape_envelope.is_shape_object(envelope):
+        return None
+    import cmf_section
+
+    _brep, section = cmf_section.split(shape_envelope.brep_plain(envelope[shape_envelope.KEY_BREP]))
+    return section
+
+
+def with_payload_section(envelope, section):
+    """'envelope' with 'section' after its BREP again, unless its payload carries a section of its own.
+
+    For a payload rebuilt by something that knows nothing of CMF - an 'offset'
+    or a 'scale' moves the faces and keeps them, in their order - which would
+    otherwise lose what the source stated about each of them.
+    """
+    from . import shape_envelope
+
+    if section is None or not shape_envelope.is_shape_object(envelope):
+        return envelope
+    import cmf_section
+
+    brep, own = cmf_section.split(shape_envelope.brep_plain(envelope[shape_envelope.KEY_BREP]))
+    if own is not None:
+        return envelope
+    envelope = dict(envelope)
+    envelope[shape_envelope.KEY_BREP] = shape_envelope.brep_compressed(cmf_section.join(brep, section))
+    return envelope
+
+
+def own_parameters(shape, ctx=None) -> dict:
     """{kind: canonical reference} of the colour, material and finish an object states itself.
 
     Read off its declaration's parameters - which is also where the values a
     reference names it with land - and canonicalised against its own package,
-    which is where a default written as ':red' was written.
+    which is where a default written as ':red' was written. 'ctx' is what
+    resolves an alias to the declaration it names; without one, a reference is
+    only made absolute.
     """
     config = getattr(shape, "config", None)
-    ctx = getattr(getattr(shape, "project", None), "ctx", None)
     result = {}
     for kind in KINDS:
         value = _parameter_value(config, kind)
@@ -484,17 +573,25 @@ def key_of(ctx, shape) -> dict:
     version of what the core does with them. An item that states no CMF adds
     nothing, so the keys of assemblies with none are what they were.
     """
-    references = own_parameters(shape)
+    references = own_parameters(shape, ctx)
     if not references:
         return {}
     described = {"version": KEY_VERSION}
     for kind, reference in sorted(references.items()):
-        declaration = lookup(ctx, kind, reference, quiet=True) if ctx is not None else None
-        rgba = display(ctx, declaration) if declaration is not None else rgba_of_reference(reference)
+        # A display-only colour is read off the reference itself, and is no claim.
+        rgba = rgba_of_reference(reference) if kind == "color" else None
+        declaration = None
+        if rgba is None and ctx is not None:
+            declaration = lookup(ctx, kind, reference, quiet=True)
+            rgba = display(ctx, declaration) if declaration is not None else None
+        if declaration is not None:
+            manufacturable = declaration.manufacturable
+        else:
+            manufacturable = False if rgba is not None else None
         described[kind] = {
             "reference": reference,
             "display": list(rgba) if rgba is not None else None,
-            "manufacturable": declaration.manufacturable if declaration is not None else None,
+            "manufacturable": manufacturable,
         }
     return described
 
@@ -509,7 +606,7 @@ def declared_set(ctx, shape):
     """
     import cmf_section
 
-    references = own_parameters(shape)
+    references = own_parameters(shape, ctx)
     raw_drops = _parameter_value(getattr(shape, "config", None), SOURCE_CMF)
     drops = source_cmf_drops(raw_drops)
     if drops is None:
@@ -600,7 +697,7 @@ def apply_declared(ctx, shape, envelope, recorded: dict):
             section = (section or cmf_section.Section()).without(drops)
             if declared is not None:
                 section = section.completed(declared)
-            done[key] = shape_envelope.brep_payload(cmf_section.join(brep, section))
+            done[key] = shape_envelope.brep_compressed(cmf_section.join(brep, section))
             summaries.append(section.summary())
         return done[key]
 
@@ -667,14 +764,14 @@ def summary_of(shape):
     return metadata.get(shape_envelope.METADATA_CMF) if isinstance(metadata, dict) else None
 
 
-def assembly_cmf_setters(assembly) -> list:
+def assembly_cmf_setters(assembly, ctx=None) -> list:
     """How an assembly sets CMF itself, in words: [] when it does not.
 
     Its own CMF parameters, a link's CMF 'params:', and a 'properties: color:'
     on it - each a finer-grained way of drawing what it holds, which costs it its
     manufacturability unless it is bought whole (docs/design/cmf.md, section 8).
     """
-    setters = ["its own '%s'" % kind for kind in own_parameters(assembly)]
+    setters = ["its own '%s'" % kind for kind in own_parameters(assembly, ctx)]
     properties = assembly.config.get("properties") if isinstance(assembly.config, dict) else None
     if isinstance(properties, dict) and properties.get("color"):
         setters.append("its 'properties: color:'")

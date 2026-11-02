@@ -94,6 +94,38 @@ def final_config(obj) -> dict:
         return obj.config
 
 
+# The fields that move and scale what a shape's type built, once it has built it.
+TRANSFORM_KEYS = ("offset", "scale")
+
+
+def transform_of(config: dict, key: str, where: str = ""):
+    """A declaration's 'offset' or 'scale' as it applies: its '%...%' expressions worked out.
+
+    Over the parameters of the declaration that carries it, so that
+    'offset: [[0, 0, "%length / 2%"], [0, 0, 1], 0]' stands a part of any
+    length on the XY plane, and each instance of a parametrized object is moved
+    by its own values. None where the field is not declared.
+
+    Read here, as it is applied, and never written back: a parametrized
+    instance is a copy of the declaration (see 'Project.get_object'), but
+    the object of the bare name holds the declaration itself, and resolving into
+    it would hand every later instance this one's numbers in place of the
+    expression. The cache key needs neither - it covers the declaration as
+    written and the parameter values it is resolved with (see 'Shape.__init__').
+
+    The schema has always allowed an expression in a location; until this,
+    nothing worked one out, and an 'offset' holding one failed in the sandbox
+    that moved the part, as "Expected floats".
+    """
+    if not isinstance(config, dict) or config.get(key) is None:
+        return None
+    # Late: 'config' reads the user configuration, which is not this module's to load.
+    from . import config as pc_config
+    from . import expr
+
+    return expr.resolve(config[key], pc_config.parameter_values(config.get("parameters")), where)
+
+
 def object_type_parameter(config: dict, accepted: dict, name: str, kind: str = "object", object_name: str = ""):
     """The value of one object-type parameter, with the type's default applied.
 
@@ -221,6 +253,10 @@ class ShapeConfiguration:
     def get_final_config(self) -> dict:
         """Return the final configuration (once all "alias" and "enrich" directives are resolved)."""
         return self.config
+
+    def transform(self, key: str):
+        """This shape's 'offset' or 'scale', with its expressions worked out (see 'transform_of')."""
+        return transform_of(self.config, key, "%s:%s" % (getattr(self, "project_name", None) or "", self.name))
 
     def get_store_data(self) -> ShapeConfigStore:
         final_config = self.get_final_config()

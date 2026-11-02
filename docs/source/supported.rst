@@ -193,7 +193,8 @@ Tooling for AI agents doing mechanical design. See :doc:`/ai_agents/mcp`.
   ``pc init``, and distributed as the ``pc`` plugin for Claude Code (see :ref:`claude-plugin`)
 
   - Generate a part, an assembly or a 2D sketch (``/pc:gen``, ``/pc:gen-part``, ``/pc:gen-assembly``,
-    ``/pc:gen-sketch``): the agent authors the CAD script and validates it by rendering
+    ``/pc:gen-sketch``): the agent settles every dimension on a sketch it measures and iterates, authors the CAD
+    script from those numbers, and validates it by rendering it and measuring its projections
   - Describe an existing object (``/pc:describe``), search the catalog (``/pc:search``), add interfaces
     (``/pc:add-interfaces``)
   - Validate an object against its ``requirements:`` (``/pc:validate``): ``pc test`` for the ports,

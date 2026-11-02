@@ -1154,6 +1154,35 @@
         { "$ref": "#/definitions/expression" }
       ]
     },
+    "part-cuboid": {
+      "description": "The solid of a 'basic' part that is a cuboid, centred on the origin with its sides along X, Y and Z: a number is a cube of that side, and a list is its sizes along X, Y and Z. The part's 'offset' places it.",
+      "oneOf": [
+        { "$ref": "#/definitions/part-dimension" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/definitions/part-dimension" },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      ]
+    },
+    "part-cylinder": {
+      "description": "The solid of a 'basic' part that is a cylinder, standing along Z and centred on the origin: it runs from 'z = -height / 2' to 'z = height / 2'. The part's 'offset' places it.",
+      "type": "object",
+      "properties": {
+        "radius": { "$ref": "#/definitions/part-dimension" },
+        "height": { "$ref": "#/definitions/part-dimension" }
+      },
+      "required": ["radius", "height"],
+      "additionalProperties": false
+    },
+    "part-dimension": {
+      "description": "A length of a 'basic' part: a number greater than zero, or an expression over the part's parameters that evaluates to one.",
+      "oneOf": [
+        { "type": "number", "exclusiveMinimum": 0 },
+        { "$ref": "#/definitions/expression" }
+      ]
+    },
     "sketch-coordinate": {
       "description": "A position within a 'basic' sketch: a number, or an expression over the sketch's parameters that evaluates to one.",
       "$ref": "#/definitions/number-or-expression"
@@ -1953,7 +1982,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "cadquery", "build123d", "chili3d", "sdf", "svg", "dxf", "extrude",
+                    "basic", "cadquery", "build123d", "chili3d", "sdf", "svg", "dxf", "extrude",
                     "sweep", "stl", "step", "scad", "3mf", "enrich", "alias", "brep",
                     "obj", "gltf", "kicad", "compound", "fcstd"
                   ]
@@ -1979,6 +2008,8 @@
                 },
                 "sketch": { "type": "string", "minLength": 1 },
                 "depth": { "type": "number" },
+                "cuboid": { "$ref": "#/definitions/part-cuboid" },
+                "cylinder": { "$ref": "#/definitions/part-cylinder" },
                 "url": { "$ref": "#/definitions/url" },
                 "axis": {
                   "type": "array",

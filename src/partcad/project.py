@@ -86,6 +86,7 @@ from .part import Part
 from .render import render_cfg_merge
 from .shape_config import NO_DEFAULT
 from .utils import (
+    escape_name,
     format_parameterized_name,
     normalize_resource_path,
     parse_parameterized_name,
@@ -235,7 +236,7 @@ def _has_running_loop() -> bool:
 # segment of a URL, and two copies of these would name one file two ways.
 SECTION_EXTENSIONS = {
     "sketches": {"cadquery": "py", "build123d": "py", "basic": None},
-    "parts": {"cadquery": "py", "build123d": "py", "chili3d": "chili", "sdf": "py"},
+    "parts": {"cadquery": "py", "build123d": "py", "chili3d": "chili", "sdf": "py", "basic": None},
     "assemblies": {},
 }
 
@@ -1298,16 +1299,20 @@ class Project(project_config.Configuration):
         if kind == "material":
             return self.init_material_by_config(config, name, parameter_values=parameter_values)
         object_name = "%s:%s" % (self.name, name)
-        config = Configuration.normalize(name, copy.deepcopy(cmf.normalize(kind, config)), object_name)
-        instance_name = name
+        # With the caller's configuration, as a material is: a daemon builds
+        # each context from its caller's, and the parameter overrides are there.
+        config = Configuration.normalize(
+            name, copy.deepcopy(cmf.normalize(kind, config)), object_name, self.ctx.user_config
+        )
         # A parametric declaration named without values is its defaults: its
         # fields rendered with them, as a reference that gives some renders the
         # rest ('//pub/std/color:rgba' is drawn in its default colour).
         if parameter_values or config.get("parameters"):
             config = cmf.with_parameters(config, parameter_values or {}, object_name)
-        if parameter_values:
-            instance_name = format_parameterized_name(name, parameter_values)
-        declaration = (cmf.Color if kind == "color" else cmf.Finish)(instance_name, self.name, config)
+        instance_name = cmf.instance_key(name, parameter_values)
+        declaration = (cmf.Color if kind == "color" else cmf.Finish)(
+            instance_name, self.name, config, base_name=name, parameter_values=parameter_values
+        )
         self.register_object(kind, instance_name, declaration)
         return declaration
 
@@ -1328,13 +1333,13 @@ class Project(project_config.Configuration):
         config = material_config.MaterialConfiguration.normalize(
             material_name, copy.deepcopy(config), "%s:%s" % (self.name, material_name), self.ctx.user_config
         )
-        instance_name = material_name
         # Its defaults where it is named without values (see 'init_cmf_by_config').
         if parameter_values or config.get("parameters"):
             config = cmf.with_parameters(config, parameter_values or {}, "%s:%s" % (self.name, material_name))
-        if parameter_values:
-            instance_name = format_parameterized_name(material_name, parameter_values)
-        found = material.Material(instance_name, source_project.name, config)
+        instance_name = cmf.instance_key(material_name, parameter_values)
+        found = material.Material(
+            instance_name, source_project.name, config, base_name=material_name, parameter_values=parameter_values
+        )
         self.register_object("material", instance_name, found)
         return found
 
@@ -1347,7 +1352,7 @@ class Project(project_config.Configuration):
         declaration's 'aliases' is that declaration.
         """
         base, values = parse_parameterized_name(name)
-        instance_name = format_parameterized_name(base, values) if values else base
+        instance_name = cmf.instance_key(base, values)
         objects = self.objects(kind)
         with self.lock:
             existing = objects.get(instance_name)
@@ -1361,8 +1366,10 @@ class Project(project_config.Configuration):
             if config is None:
                 owner = self._cmf_alias_owner(kind, base)
                 if owner is not None:
-                    found = self.get_cmf(kind, format_parameterized_name(owner, values), quiet=quiet)
-                    return found
+                    # Asked for by reference, which spells a reserved character escaped.
+                    return self.get_cmf(
+                        kind, cmf.instance_key(owner, values) if values else escape_name(owner), quiet=quiet
+                    )
                 if not quiet:
                     pc_logging.error("The %s '%s' is not found in '%s'" % (kind, base, self.name))
                 return None
