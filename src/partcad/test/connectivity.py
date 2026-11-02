@@ -56,11 +56,37 @@ class ConnectivityTest(Test):
         # Every setting that decides the verdict. Without them a cached pass is
         # read back after the setting that produced it has been turned off.
         config = (shape.config or {}).get("connectivity") or {}
-        return ",allowDuplicates=%s,requireAnchored=%s,manufacturable=%s" % (
+        return ",allowDuplicates=%s,requireAnchored=%s,manufacturable=%s,boughtWhole=%s" % (
             bool(config.get("allowDuplicates", False)),
             bool(config.get("requireAnchored", True)),
             bool(getattr(shape, "is_manufacturable", False)),
+            await self._bought_whole_key(shape),
         )
+
+    async def _bought_whole_key(self, shape) -> str:
+        """Which of the assemblies the verdict turns on are bought whole.
+
+        The assembly itself, which is then not held to being anchored, and every
+        assembly it places, which is then not looked inside. Bought whole is its
+        'vendor' and 'sku', and neither is in shape.hash: without this a verdict
+        reached before either was declared is read back after.
+        """
+        own = "1" if _bought_whole(shape) else "0"
+        instantiate = getattr(shape, "do_instantiate", None)
+        if instantiate is None:
+            return own
+        try:
+            await instantiate()
+        except Exception:  # pylint: disable=broad-except
+            # 'test()' meets the same failure, says so, and keeps no verdict.
+            return own
+        placed = [
+            "%d.%d" % (group, index)
+            for group, children in enumerate(self._containers(shape))
+            for index, child in enumerate(children)
+            if isinstance(child.item, Assembly) and _bought_whole(child.item)
+        ]
+        return own + ("" if not placed else ":" + "|".join(placed))
 
     def inapplicable(self, shape):
         if not isinstance(shape, Assembly):

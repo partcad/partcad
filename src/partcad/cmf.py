@@ -102,6 +102,10 @@ class Declaration:
         self.errors: list = []
 
     def error(self, msg: str) -> None:
+        # Said once: 'display()' is asked again on every read of a part that
+        # uses this declaration, cached reads included, and one fault is one.
+        if msg in self.errors:
+            return
         self.errors.append(msg)
         pc_logging.error("%s: %s: %s" % (self.project_name, self.name, msg))
 
