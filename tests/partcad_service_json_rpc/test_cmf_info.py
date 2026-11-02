@@ -29,7 +29,7 @@ from partcad_service_json_rpc.rpc.methods import build_registry
 def session(tmp_path, monkeypatch):
     config = {
         "name": "//cmf",
-        "colors": {"red": {"display": "#C91A09"}},
+        "colors": {"red": {"display": "#C91A09"}, "a;b": {"display": "#123456"}},
         "materials": {"alu": {"density": 2700}},
         "finishes": {"satin": {"display": {"roughness": 0.6}}},
         "parts": {
@@ -90,6 +90,13 @@ def test_a_declaration_that_is_not_there_is_refused_by_name(session):
         operations.cmf_info(session, {"package": "//cmf", "object": "blue", "kind": "color"})
 
     assert "//cmf:blue" in str(refused.value)
+
+
+def test_a_declaration_named_with_a_reserved_character_is_found_as_the_explorer_lists_it(session):
+    """The explorer sends a key as it is written: 'a;b' is that colour, not 'a' with a parameter 'b'."""
+    for name in ("a;b", "a%3Bb"):
+        answer = operations.cmf_info(session, {"package": "//cmf", "object": name, "kind": "color"})
+        assert answer["declaration"]["display"].startswith("#123456")
 
 
 def test_a_sketch_is_made_of_nothing_and_is_refused(session):

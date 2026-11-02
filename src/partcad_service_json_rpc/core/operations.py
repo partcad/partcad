@@ -2909,7 +2909,14 @@ def cmf_info(session, params):
     path = _qualified(package, name)
 
     if said in cmf.KINDS:
+        from partcad_utils.utils import escape_name
+
         project = ctx.get_project(package)
+        if project is not None and name in project.object_names(said):
+            # Asked for as the explorer lists it, by its key as written: a ';'
+            # in a key is part of the name, not where its parameters start. A
+            # reference that names parameters ('rgba;color=...') is no key.
+            name = escape_name(name)
         declaration = project.get_cmf(said, name, quiet=True) if project is not None else None
         if declaration is None:
             raise JsonRpcError(USAGE_ERROR, "The %s %s is not found" % (said, path))

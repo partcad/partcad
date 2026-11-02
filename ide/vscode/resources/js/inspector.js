@@ -33,7 +33,9 @@
     const message = event.data; // The json data that the extension sent
     let config = {};
     if (message.type === 'package' || message.type === 'sketch' || message.type === 'interface' || message.type === 'part' || message.type === 'assembly' || message.type === 'scene' || message.type === 'software' || message.type === 'cmf') {
-      config = message.obj['config'];
+      // What the explorer sends has one; what the Digital Thread asks to show
+      // by name ('PartcadViewer.showObject') has none, and is shown all the same.
+      config = message.obj['config'] || {};
     }
     switch (message.type) {
       // 'pc ide state' asking what is on screen: the table's rows as text, and
