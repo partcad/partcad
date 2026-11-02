@@ -47,9 +47,15 @@ using existing parts.
   `design record <https://github.com/partcad/partcad/blob/devel/docs/design/simulation.md>`__
   says what closing the gap would take.
 
-For an assembly defined by a file another tool produced - the STEP and the URDF
-above - nothing is copied into the package, so the file stays the source of
-truth.
+- Native CAD documents
+
+  An Autodesk Fusion design (``.f3d``) or a Creo View package (``.pvz``) used
+  as an assembly directly, read without the application that wrote it: each body
+  it shows becomes a part, placed where its component puts it.
+
+For an assembly defined by a file another tool produced - the STEP, the URDF and
+the native documents above - nothing is copied into the package, so the file
+stays the source of truth.
 
 
 Declare assemblies
@@ -61,8 +67,9 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
 
   assemblies:
     <assembly name>:
-      type: <assy|step|urdf>  # Assembly YAML, a STEP file with an assembly structure,
-                              # or a URDF robot description. A format a plugin package
+      type: <assy|step|urdf|f3d|pvz>  # Assembly YAML, a STEP file with an assembly
+                              # structure, a URDF robot description, or a Fusion design
+                              # or a Creo View package. A format a plugin package
                               # implements is named through it: "sim-mujoco:mjcf".
       path: <(optional) the source file path>
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
@@ -110,7 +117,8 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
 The ``assy`` type is used to define assemblies in `Assembly YAML` format, and
 the ``step`` type reads the structure out of a STEP file (see :ref:`assembly_step`).
 The ``urdf`` type reads a robot description as an assembly directly
-(see :ref:`assembly-urdf`). A format an engine's plugin package implements is named
+(see :ref:`assembly-urdf`), and ``f3d`` and ``pvz`` a native CAD document (see
+:ref:`assembly-cadmpeg`). A format an engine's plugin package implements is named
 through that package -- ``sim-mujoco:mjcf`` for a MuJoCo model, which is also a
 :ref:`scene <scenes>` type, the section that declares it being what decides which
 it is.
@@ -485,6 +493,44 @@ Here is an example of an assembly defined using `Assembly YAML`:
 The example above shows an assembly created using ``Assembly YAML``.
 Other methods to define assemblies are coming soon (e.g. using ``CadQuery`` or ``build123d``).
 The assembly file syntax is described in the ``Assembly YAML`` section of this documentation.
+
+.. _assembly-cadmpeg:
+
+Native CAD documents
+====================
+
+The ``f3d`` and ``pvz`` types read an Autodesk Fusion design or a Creo View
+package as an assembly, with `cadmpeg <https://github.com/cadmpeg/cadmpeg>`_ --
+the converter the native :ref:`part types <parts>` read with, downloaded on first
+use or taken from the sandbox image:
+
+.. code-block:: yaml
+
+  assemblies:
+    enclosure:
+      type: f3d            # reads enclosure.f3d
+    gearbox:
+      type: pvz
+      path: vendor/gearbox.pvz
+
+cadmpeg converts the document to STEP, product structure and all, and the tree is
+read out of that STEP file the way a :ref:`STEP assembly <assembly_step>`'s is:
+a part per distinct body, named after what the document called it where it called
+it anything, and a node per placement of it. What the document does not show is
+not read -- a body its author hid, the sketches and points beside the bodies --
+and every part the reader registers **requires a solid**, as the part types do: a
+body cadmpeg could not read whole fails to build, by name, rather than leaving the
+assembly quietly a body short.
+
+The document's history does not survive, and neither do its joints, which STEP
+has no place for: the assembly is the mechanism at rest, as the document last
+placed it. Two limits of cadmpeg 0.6.7 are worth knowing. It does not yet place a
+Fusion component nested inside another component reliably, so a design with a
+deep component tree can come out misplaced -- declare it as an ``f3d`` *part* to
+keep its geometry as one shape. And the other assembly formats cadmpeg opens are
+not here on purpose: an Inventor assembly (``.iam``) names the files its parts
+are in, which cadmpeg deliberately does not open, and cadmpeg 0.6.7 does not read
+a SolidWorks assembly's (``.sldasm``) component tree.
 
 .. _assembly_step:
 

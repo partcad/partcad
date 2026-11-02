@@ -1,0 +1,29 @@
+desc: |
+  Parts and an assembly read from native CAD files through cadmpeg, by the
+  built-in part and assembly types of '//builtin/import'.
+
+  'controller.f3d' is '1WireRGBWController.f3d' of the cadmpeg corpus
+  (https://github.com/cadmpeg/cadmpeg, corpus/), an enclosure for a 1-Wire RGBW
+  LED controller by Alastair D'Silva, authored in Autodesk Fusion 360 and
+  dedicated to the public domain under CC0-1.0 (sha256 89d9366b...ed4a2). It
+  holds four solid bodies, one of them hidden, and 131 sketch curves.
+
+  'plate.igs' is a 30 x 20 x 10 mm plate with an 8 mm hole through it, written
+  by OpenCASCADE 7.9's IGES writer in its default mode: the seven faces as
+  trimmed surfaces, with nothing to say they bound a solid.
+
+parts:
+  # The three bodies Fusion shows, as one part.
+  controller:
+    type: f3d
+  # cadmpeg 0.6.7 reads the six planar faces as six unconnected sheets and
+  # drops the cylindrical one: a part that is not a solid, which its type fails.
+  plate:
+    type: iges
+    path: plate.igs
+
+assemblies:
+  # The same design, each body a part, placed where its component has it.
+  controller_assembly:
+    type: f3d
+    path: controller.f3d

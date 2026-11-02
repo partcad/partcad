@@ -1080,6 +1080,16 @@ at all).
   the reason above: judged, reported, not converted. Do not give a factory or a plugin a path around this step,
   and do not add a type to that set for any reason other than the file being the authority on the part.
 
+  **The one exception is declared, never inferred** (`Shape.solid_required`, `Shape._accepted_as_solid`,
+  `output.REQUIRE_SOLID_KEY`): a `partType`, or an `import:` reader for the parts it registers, that says
+  `requireSolid: true` builds bodies by definition, so a part of it that `solid_problems` finds anything wrong
+  with -- or that nothing could check -- is one it read wrongly, and fails (`part.error`, a `None` shape, never
+  cached) instead of being warned about. That is how the native CAD types of `//builtin/import` catch a body
+  cadmpeg could not read whole: by the same definition every part is held to, made binding, and not by a check
+  of their own. Their scripts hand over every body with faces, open shells and loose faces included, precisely
+  so that one that did not come through whole is judged rather than dropped. Do not give a reader its own
+  notion of "broken"; declare `requireSolid` and let this step decide.
+
   **The step is taken where the shape is live, and the core does what is left** (`Shape.finish_request`,
   `wrappers/wrapper_common.finished`, `shape_envelope.KEY_FINISH`/`METADATA_FINISHED`). Asked of the core, the
   validation was a sandbox of its own and each of `offset` and `scale` another, every one of them an interpreter

@@ -142,6 +142,26 @@ COPY _common/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY _common/pc-container-json-rpc.py ./
 
+# cadmpeg, the converter PartCAD reads native CAD files with -- the `fcstd`,
+# `f3d`, `sldprt`, `iges` ... part types and the `f3d` and `pvz` assemblies. It
+# is a native program, so a sandbox cannot pip-install it, and without it every
+# container that reads such a file downloads it into its cache first: once per
+# container, and not at all in one with no network.
+#
+# Installed by the very file that pins it, so the release, the checksum it is
+# verified against and the download are PartCAD's own rather than a second
+# spelling of them here. `_common/cadmpeg_tool.py` is a byte-for-byte copy of
+# `src/partcad/builtin/import/cadmpeg_tool.py`, because a build cannot reach
+# outside this context, and a test fails when the two differ -- which is also
+# what makes a new pin a change under `tools/containers/`, and so an image
+# rebuilt with it. PartCAD uses the copy on `PATH` only when it is the release it
+# pins, so an image of another release falls back to the download rather than
+# reading files into other geometry under the same cache key.
+#
+# Linked against glibc 2.35, which both Debian releases this matrix spans have.
+COPY _common/cadmpeg_tool.py ./
+RUN python3 cadmpeg_tool.py /usr/local/bin && rm cadmpeg_tool.py && cadmpeg --version
+
 # What a caller may run. The whole of the RPC service's isolation, and per-image
 # on purpose: a caller names a command and the image decides whether it exists.
 # A derived image adding a native tool of its own adds it here.

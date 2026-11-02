@@ -9,6 +9,7 @@ from pathlib import Path
 
 import rich_click as click
 
+from partcad_client import object_types
 from partcad_utils.utils import looks_like_url
 
 from ...service import run
@@ -25,6 +26,9 @@ PART_KINDS = [
     "stl",
     "3mf",
     "obj",
+    # The native CAD formats PartCAD ships as declarations (see
+    # `partcad_client.object_types`), 'iges' among them.
+    *object_types.BUILTIN_PART_TYPE_EXTENSION,
 ]
 
 
