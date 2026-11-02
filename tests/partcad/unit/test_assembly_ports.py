@@ -384,6 +384,13 @@ def test_an_enriched_assembly_maps_what_its_source_externalizes():
     assert _at(mount, "shifted-thru-m3") == pytest.approx((-10.0, 10.0, 25.0))
 
 
+def test_an_enriched_assembly_with_no_map_of_its_own_has_its_source_s_ports():
+    """An assembly in a colour of its own - a LEGO wheel - is joined by exactly the ports its source is."""
+    _, mount = _assembly("mount-again")
+    assert _at(mount, "hold") == pytest.approx((0.0, 0.0, 5.0))
+    assert _at(mount, "top-thru-m3") == pytest.approx((-10.0, 10.0, 20.0))
+
+
 def test_a_node_s_port_may_be_externalized_beside_where_it_is():
     _, mount = _assembly("mount-offset")
     assert _at(mount, "beside") == pytest.approx((3.0, 0.0, 5.0))

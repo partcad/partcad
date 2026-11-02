@@ -72,6 +72,16 @@ class AssemblyFactoryEnrich(afa.AssemblyFactoryAlias):
         if source is None:
             raise Exception(f"Failed to find the assembly to enrich: {self.source}")
         adopt_source_config(assembly, source, self.source)
+        # And the ports it is joined by are its source's. An assembly's own
+        # come from its 'map:', worked out from where its children are, and the
+        # instance this enriches is where those children are: an assembly in a
+        # colour of its own - a LEGO wheel, a battery box - is joined by exactly
+        # the ports the one it is a variant of is.
+        from . import shape_ports
+
+        await shape_ports.prepare_async(source, self.ctx)
+        if getattr(source, "with_ports", None) is not None:
+            assembly.with_ports = source.with_ports
 
     def instantiate(self, assembly):
         with pc_logging.Action("Enrich", assembly.project_name, f"{assembly.name}:{self.source_assembly_name}"):
