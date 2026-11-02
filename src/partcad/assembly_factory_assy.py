@@ -279,7 +279,13 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         for name, item in linked:
             if not await assembly.add_cache_key_of(item):
                 unkeyed.append(name)
-            elif interfaces is not None:
+                continue
+            # And what the item's CMF comes to, which its own key leaves out
+            # (see 'cmf.key_of'): this assembly's tree holds the item as read.
+            described = cmf.key_of(self.ctx, item)
+            if described:
+                assembly.hash.add_dict({"cmf": described})
+            if interfaces is not None:
                 declared = interfaces.get(id(item))
                 if declared is None:
                     unkeyed.append(name)
