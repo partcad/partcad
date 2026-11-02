@@ -421,6 +421,29 @@ def test_a_cadquery_colour_option_is_noted():
     cmf_capture.reset()
 
 
+def test_a_cadquery_assembly_s_colour_is_every_value_of_its_workplane():
+    """'cq.Assembly.toCompound' holds every value of a child's 'Workplane': the colour is said of each."""
+    pytest.importorskip("build123d")
+    import types
+
+    import build123d as bd
+    import cmf_capture
+    import ocp_serialize
+
+    first, second = bd.Box(1, 1, 1), bd.Pos(5, 0, 0) * bd.Box(1, 1, 1)
+    # What CadQuery's own objects answer, without CadQuery: 'val()' is the first.
+    workplane = types.SimpleNamespace(vals=lambda: [first, second], val=lambda: first)
+    child = types.SimpleNamespace(obj=workplane, color=(255, 0, 0), children=[])
+    assembly = types.SimpleNamespace(obj=None, color=None, children=[child])
+
+    cmf_capture.reset()
+    cmf_capture.note_cadquery(assembly)
+    section = cmf_capture.section_for(ocp_serialize.compound_of([first.wrapped, second.wrapped]))
+    cmf_capture.reset()
+
+    assert [section.solid_set(i).color for i in range(2)] == ["#FF0000", "#FF0000"]
+
+
 def _colored_3mf(path, boxes):
     """A 3MF of an object per box, each with a base material's display colour, as OpenSCAD's colour-writing releases write one."""
     import build123d as bd
@@ -679,6 +702,29 @@ def test_a_part_type_says_what_its_faces_are_in(tmp_path):
     # Nothing claims '999': drawn as the part type said, and only a picture.
     assert "//pub/std/color:rgba;color=010203FF" in by_color
     assert summary["unspecified"]["color"] == 3
+
+
+def test_a_part_type_s_rgba_is_read_as_numbers_whatever_it_is_written_as(tmp_path):
+    """Channels written as floats or strings are the bytes they round to; the part builds, and draws in them."""
+    pytest.importorskip("build123d")
+    root = _package(
+        tmp_path / "pkg",
+        parts={"brick": {"type": ":coloured"}},
+        partTypes={"coloured": {"kind": "wrapper", "path": "coloured.py"}},
+    )
+    (root / "coloured.py").write_text(
+        PART_TYPE.replace('"rgba": [1, 2, 3, 1.0]', '"rgba": ["1", 2.4, 2.6, 1]').replace(
+            '"rgba": [201, 26, 9, 1.0]', '"rgba": [201, 26, 9, 7]'
+        )
+    )
+    ctx = pc.Context(str(root))
+    part = ctx.get_part("//src:brick")
+    asyncio.run(part.get_wrapped(ctx))
+
+    colors = {entry.get("color") for entry in cmf.summary_of(part)["sets"]}
+    assert "//pub/std/color:rgba;color=010203FF" in colors
+    # An alpha past 1 is opaque, not a byte past 255.
+    assert "//pub/std/color:rgba;color=C91A09FF" in colors
 
 
 def test_a_system_with_several_ids_for_a_colour_lists_them(tmp_path):

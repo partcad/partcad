@@ -59,6 +59,20 @@ import wrapper_common
 CACHE_VERSION = 2
 
 
+def _rgba(value):
+    """'(red, green, blue, alpha)' of a script's 'rgba' - channels 0 to 255, alpha 0 to 1 - or None if it is not one."""
+    if not isinstance(value, (list, tuple)) or len(value) != 4:
+        return None
+    try:
+        red, green, blue = (max(0, min(255, int(round(float(channel))))) for channel in value[:3])
+        alpha = max(0.0, min(1.0, float(value[3])))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if alpha != alpha:  # NaN, which every comparison above let through
+        return None
+    return red, green, blue, alpha
+
+
 def _section(stated, shape):
     """The CMF section 'stated' (a script's 'output["cmf"]') gives 'shape', or None.
 
@@ -93,13 +107,15 @@ def _section(stated, shape):
             if not isinstance(entry, dict):
                 result.append(cmf_section.NONE)
                 continue
-            rgba = entry.get("rgba")
+            rgba = _rgba(entry.get("rgba"))
+            if rgba is None and entry.get("rgba") is not None:
+                sys.stderr.write("The part type's rgba %r is not four numbers: it is dropped\n" % (entry.get("rgba"),))
             cmf_set = cmf_section.CmfSet(
                 color=entry.get("color"),
                 material=entry.get("material"),
                 finish=entry.get("finish"),
                 origin=origin,
-                rgba=tuple(rgba) if isinstance(rgba, (list, tuple)) and len(rgba) == 4 else None,
+                rgba=rgba,
             )
             result.append(
                 palette.index_of(cmf_set) if any(cmf_set.has(c) for c in cmf_section.COMPONENTS) else cmf_section.NONE
