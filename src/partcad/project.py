@@ -34,6 +34,7 @@ from . import (
 from . import assembly_factory_alias as afa
 from . import (
     assembly_guide,
+    cmf,
 )
 from . import config as pc_config
 from . import document as pc_document
@@ -76,6 +77,7 @@ from . import tags as pc_tags
 from . import (
     telemetry,
 )
+from .config import Configuration
 from .dependency_pin import plain_reads_back
 from .document_pdf import render_pdf_async
 from .enrich import enriched_source_name
@@ -84,6 +86,7 @@ from .part import Part
 from .render import render_cfg_merge
 from .shape_config import NO_DEFAULT
 from .utils import (
+    escape_name,
     format_parameterized_name,
     normalize_resource_path,
     parse_parameterized_name,
@@ -100,6 +103,8 @@ if TYPE_CHECKING:
 # new kind of object does not require touching the per-kind accessor plumbing.
 OBJECT_KINDS = (
     "material",
+    "color",
+    "finish",
     "interface",
     "sketch",
     "part",
@@ -114,6 +119,10 @@ OBJECT_KIND_SECTIONS = {
     # What a part is made of, rather than a part: a 'Material' is not a shape
     # and nothing constructs it, so it has neither a factory nor a 'type'.
     "material": "materials",
+    # The other two kinds of CMF declaration (see 'partcad.cmf'): data like a
+    # material, each in a namespace of its own.
+    "color": "colors",
+    "finish": "finishes",
     "interface": "interfaces",
     "sketch": "sketches",
     "part": "parts",
@@ -305,11 +314,18 @@ class Project(project_config.Configuration):
     software: dict[str, pc_software.Software]
 
     class MaterialLock(object):
-        def __init__(self, prj, material_name: str):
+        """The lock of one CMF declaration ('partcad.cmf'): materials, colours and finishes alike.
+
+        Keyed by kind and name, since the three kinds have namespaces of their
+        own and a colour may well share its name with a material.
+        """
+
+        def __init__(self, prj, material_name: str, kind: str = "material"):
             prj.material_locks_lock.acquire()
-            if material_name not in prj.material_locks:
-                prj.material_locks[material_name] = threading.Lock()
-            self.lock = prj.material_locks[material_name]
+            key = (kind, material_name)
+            if key not in prj.material_locks:
+                prj.material_locks[key] = threading.Lock()
+            self.lock = prj.material_locks[key]
             prj.material_locks_lock.release()
 
         def __enter__(self, *_args):
@@ -513,6 +529,8 @@ class Project(project_config.Configuration):
         self.materials = {}
         self.material_locks = {}
         self.material_locks_lock = threading.Lock()
+        self.colors = {}
+        self.finishes = {}
 
         self.interfaces = {}
         self.interface_locks = {}
@@ -1265,16 +1283,40 @@ class Project(project_config.Configuration):
         return self.object_config("interface", interface_name)
 
     def init_materials(self):
-        for material_name in self.object_names("material"):
-            # Per object, exactly as 'init_objects' does it and for the same
-            # reason: an unreadable declaration costs the user that one
-            # material rather than every material declared after it.
-            try:
-                self.init_material_by_config(self.get_material_config(material_name), material_name)
-            except Exception as e:
-                self.record_broken_object("material", material_name, e)
+        """Build every CMF declaration of this package: its colours, materials and finishes."""
+        for kind in cmf.KINDS:
+            for name in self.object_names(kind):
+                # Per object, exactly as 'init_objects' does it and for the same
+                # reason: an unreadable declaration costs the user that one
+                # declaration rather than every one declared after it.
+                try:
+                    self.init_cmf_by_config(kind, self.object_config(kind, name), name)
+                except Exception as e:
+                    self.record_broken_object(kind, name, e)
 
-    def init_material_by_config(self, config, material_name=None, source_project=None):
+    def init_cmf_by_config(self, kind: str, config, name: str, parameter_values=None):
+        """Build one CMF declaration - or an instance of a parametric one - and put it in this package."""
+        if kind == "material":
+            return self.init_material_by_config(config, name, parameter_values=parameter_values)
+        object_name = "%s:%s" % (self.name, name)
+        # With the caller's configuration, as a material is: a daemon builds
+        # each context from its caller's, and the parameter overrides are there.
+        config = Configuration.normalize(
+            name, copy.deepcopy(cmf.normalize(kind, config)), object_name, self.ctx.user_config
+        )
+        # A parametric declaration named without values is its defaults: its
+        # fields rendered with them, as a reference that gives some renders the
+        # rest ('//pub/std/color:rgba' is drawn in its default colour).
+        if parameter_values or config.get("parameters"):
+            config = cmf.with_parameters(config, parameter_values or {}, object_name)
+        instance_name = cmf.instance_key(name, parameter_values)
+        declaration = (cmf.Color if kind == "color" else cmf.Finish)(
+            instance_name, self.name, config, base_name=name, parameter_values=parameter_values
+        )
+        self.register_object(kind, instance_name, declaration)
+        return declaration
+
+    def init_material_by_config(self, config, material_name=None, source_project=None, parameter_values=None):
         """Build one material and put it in this package.
 
         Built here rather than through 'init_object_by_config' because that
@@ -1289,13 +1331,71 @@ class Project(project_config.Configuration):
         if material_name is None:
             material_name = config["name"]
         config = material_config.MaterialConfiguration.normalize(
-            material_name, config, "%s:%s" % (self.name, material_name), self.ctx.user_config
+            material_name, copy.deepcopy(config), "%s:%s" % (self.name, material_name), self.ctx.user_config
         )
-        self.register_object(
-            "material",
-            material_name,
-            material.Material(material_name, source_project.name, config),
+        # Its defaults where it is named without values (see 'init_cmf_by_config').
+        if parameter_values or config.get("parameters"):
+            config = cmf.with_parameters(config, parameter_values or {}, "%s:%s" % (self.name, material_name))
+        instance_name = cmf.instance_key(material_name, parameter_values)
+        found = material.Material(
+            instance_name, source_project.name, config, base_name=material_name, parameter_values=parameter_values
         )
+        self.register_object("material", instance_name, found)
+        return found
+
+    def get_cmf(self, kind: str, name: str, quiet: bool = False):
+        """The colour, material or finish of this package called 'name', or None.
+
+        'name' may give parameter values ('rgba;color=C91A09FF'), which makes an
+        instance of a parametric declaration, kept under that name like every
+        parametrized object. A name the package declares as one of a
+        declaration's 'aliases' is that declaration.
+        """
+        base, values = parse_parameterized_name(name)
+        instance_name = cmf.instance_key(base, values)
+        objects = self.objects(kind)
+        with self.lock:
+            existing = objects.get(instance_name)
+        if existing is not None:
+            return existing
+
+        with Project.MaterialLock(self, instance_name, kind):
+            if objects.get(instance_name) is not None:
+                return objects[instance_name]
+            config = self.object_config(kind, base)
+            if config is None:
+                owner = self._cmf_alias_owner(kind, base)
+                if owner is not None:
+                    # Asked for by reference, which spells a reserved character escaped.
+                    return self.get_cmf(
+                        kind, cmf.instance_key(owner, values) if values else escape_name(owner), quiet=quiet
+                    )
+                if not quiet:
+                    pc_logging.error("The %s '%s' is not found in '%s'" % (kind, base, self.name))
+                return None
+            try:
+                return self.init_cmf_by_config(kind, config, base, parameter_values=values or None)
+            except Exception as e:
+                if not quiet:
+                    pc_logging.error("%s: %s '%s': %s" % (self.name, kind, instance_name, e))
+                return None
+
+    def _cmf_alias_owner(self, kind: str, name: str):
+        """The declaration of 'kind' that lists 'name' among its 'aliases', or None."""
+        for candidate in self.object_names(kind):
+            config = self.object_config(kind, candidate)
+            aliases = config.get("aliases") if isinstance(config, dict) else None
+            if isinstance(aliases, str):
+                aliases = [aliases]
+            if isinstance(aliases, list) and name in [str(alias) for alias in aliases]:
+                return candidate
+        return None
+
+    def get_color(self, name: str, quiet: bool = False):
+        return self.get_cmf("color", name, quiet=quiet)
+
+    def get_finish(self, name: str, quiet: bool = False):
+        return self.get_cmf("finish", name, quiet=quiet)
 
     def get_material(self, material_name, quiet=False) -> Optional[material.Material]:
         """The material of this package called 'material_name', or None.

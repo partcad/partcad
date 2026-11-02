@@ -359,9 +359,9 @@
     },
     "materials": {
       "type": ["object", "null"],
-      "description": "What the parts of this package can be made of. A material is not a shape - there is nothing to render, export or measure - it is a set of facts about a substance that the things with geometry refer to by name",
+      "description": "What the parts of this package can be made of. A material is not a shape - there is nothing to render, export or measure - it is a set of facts about a substance that the things with geometry refer to by name. One of the three kinds of CMF declaration (docs/design/cmf.md)",
       "patternProperties": {
-        "^[a-zA-Z0-9_/./-]+$": {
+        "^\\S(?:.*\\S)?$": {
           "oneOf": [
             {
               "type": "string",
@@ -376,6 +376,14 @@
                 "full": { "type": "string", "minLength": 1, "description": "The full name of the substance, e.g. 'Polylactic Acid'" },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "url": { "$ref": "#/definitions/url" },
+                "ids": { "$ref": "#/definitions/cmf-ids" },
+                "manufacturable": { "$ref": "#/definitions/cmf-manufacturable" },
+                "parameters": { "$ref": "#/definitions/shape-parameter" },
+                "aliases": { "$ref": "#/definitions/cmf-aliases" },
+                "type": { "type": "string", "enum": ["alias"], "description": "'alias' makes this declaration another name for the one 'source' names" },
+                "source": { "type": "string", "minLength": 1, "description": "What an alias names: '<package>:<name>', ':<name>' or '<name>', with parameter values if it is parametric" },
+                "display": { "type": "string", "minLength": 1, "description": "How the substance looks as it comes, for drawing a part made of it that states no colour: any CSS colour, or a colour declaration whose display it takes. A hint, not a claim" },
+                "color": { "type": "string", "minLength": 1, "description": "The colour declaration this material claims for its natural surface. A part made of it that states no colour of its own is that colour, and counts as specified" },
                 "density": {
                   "type": "number",
                   "exclusiveMinimum": 0,
@@ -405,6 +413,86 @@
         }
       },
       "additionalProperties": false
+    },
+    "colors": {
+      "type": ["object", "null"],
+      "description": "The colours parts of this package can be made in: CMF colour declarations (docs/design/cmf.md). Each is a claim that the colour can be sourced or made, unless it says 'manufacturable: false', with a display colour to draw it in",
+      "patternProperties": {
+        "^\\S(?:.*\\S)?$": {
+          "oneOf": [
+            { "type": "string", "minLength": 1, "description": "The short form: the display colour, in any CSS notation" },
+            { "type": "null" },
+            {
+              "type": "object",
+              "properties": {
+                "desc": { "type": "string", "maxLength": 1000 },
+                "url": { "$ref": "#/definitions/url" },
+                "ids": { "$ref": "#/definitions/cmf-ids" },
+                "manufacturable": { "$ref": "#/definitions/cmf-manufacturable" },
+                "parameters": { "$ref": "#/definitions/shape-parameter" },
+                "aliases": { "$ref": "#/definitions/cmf-aliases" },
+                "type": { "type": "string", "enum": ["alias"], "description": "'alias' makes this declaration another name for the one 'source' names" },
+                "source": { "type": "string", "minLength": 1, "description": "What an alias names: '<package>:<name>', ':<name>' or '<name>', with parameter values if it is parametric" },
+                "display": { "type": "string", "minLength": 1, "description": "What the colour is drawn in: any CSS colour ('#C91A09', 'rgb(201 26 9)', 'oklch(52% 0.19 33)', 'firebrick'), or a colour declaration whose display it takes. A hint, not a claim" }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "finishes": {
+      "type": ["object", "null"],
+      "description": "The finishes surfaces of this package's parts can be given: CMF finish declarations (docs/design/cmf.md) - a process, a gloss, a surface specification named in 'ids'. A part that states none is as produced",
+      "patternProperties": {
+        "^\\S(?:.*\\S)?$": {
+          "oneOf": [
+            { "type": "string", "minLength": 1, "description": "The short form: what the finish is, in words" },
+            { "type": "null" },
+            {
+              "type": "object",
+              "properties": {
+                "desc": { "type": "string", "maxLength": 1000 },
+                "url": { "$ref": "#/definitions/url" },
+                "ids": { "$ref": "#/definitions/cmf-ids" },
+                "manufacturable": { "$ref": "#/definitions/cmf-manufacturable" },
+                "parameters": { "$ref": "#/definitions/shape-parameter" },
+                "aliases": { "$ref": "#/definitions/cmf-aliases" },
+                "type": { "type": "string", "enum": ["alias"], "description": "'alias' makes this declaration another name for the one 'source' names" },
+                "source": { "type": "string", "minLength": 1, "description": "What an alias names: '<package>:<name>', ':<name>' or '<name>', with parameter values if it is parametric" },
+                "display": {
+                  "type": "object",
+                  "description": "How the finish looks in a 3D view. A hint, not a claim",
+                  "properties": {
+                    "roughness": { "type": "number", "minimum": 0, "maximum": 1, "description": "0 is a mirror, 1 is matte" },
+                    "metallic": { "type": "number", "minimum": 0, "maximum": 1 }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "cmf-ids": {
+      "type": "object",
+      "description": "What other systems call this declaration, as '{system: identifier}': a vendor's own number, a colour standard's code, another CAD tool's library name. What a converter ('cmfConvention') matches another tool's names against",
+      "additionalProperties": { "type": ["string", "number"] }
+    },
+    "cmf-manufacturable": {
+      "type": "boolean",
+      "description": "Whether this declaration is a claim that it can be sourced or made as declared. True unless stated; a colour that is only a picture says false, and a part using it is not manufacturable"
+    },
+    "cmf-aliases": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      ],
+      "description": "Other names of this declaration in this package, the way other systems spell it"
     },
     "simulation-section": {
       "type": ["object", "null"],
@@ -1777,7 +1865,9 @@
     "simulation": { "$ref": "#/definitions/simulation-section" },
     "import": { "$ref": "#/definitions/import-section" },
     "open": { "$ref": "#/definitions/open-section" },
+    "colors": { "$ref": "#/definitions/colors" },
     "materials": { "$ref": "#/definitions/materials" },
+    "finishes": { "$ref": "#/definitions/finishes" },
     "mates": {
       "description": "Matings declared apart from the interfaces they apply to, so that a package can mate interfaces it does not own: each source interface, then each interface it mates with.",
       "type": ["object", "null"],

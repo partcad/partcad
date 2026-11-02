@@ -8,6 +8,7 @@ Design
    design_3d.rst
    design_2d.rst
    design_draft.rst
+   design_cmf.rst
 
 
 Design is what the object *is*: its geometry, the numbers it is built from, and
@@ -48,9 +49,10 @@ Objects
 Properties
 ----------
 
-What an object is made of (:ref:`materials`), what it is called by whoever sells
-it, its colour, and any other :ref:`properties <properties>` -- read by the
-phases after this one rather than by the geometry.
+What an object is made of and in -- its colour, material and finish, see
+:doc:`design_cmf` -- what it is called by whoever sells it, and any other
+:ref:`properties <properties>` -- read by the phases after this one rather than
+by the geometry.
 
 Reuse
 -----

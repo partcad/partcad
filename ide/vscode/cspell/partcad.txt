@@ -43,6 +43,7 @@ cnc
 collide
 collision
 color
+colors
 comment
 companions
 compound
@@ -120,6 +121,7 @@ feed
 feedback
 file
 filter
+finishes
 fix
 fixed
 flatpak
@@ -150,6 +152,7 @@ hm
 hold
 how
 id
+ids
 iges
 ignore
 image
@@ -211,6 +214,7 @@ max
 medium
 mesh
 metal
+metallic
 method
 mf
 mi
@@ -301,6 +305,7 @@ restitution
 revision
 revolute
 root
+roughness
 safe
 scad
 scene

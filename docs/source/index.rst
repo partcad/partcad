@@ -45,6 +45,7 @@ product development process.**
    config_sketches.rst
    config_interfaces.rst
    config_parts.rst
+   config_cmf.rst
    config_assemblies.rst
    config_scenes.rst
    config_making.rst
