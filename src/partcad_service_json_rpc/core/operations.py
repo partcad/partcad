@@ -1426,9 +1426,21 @@ def adhoc_render(session, params):
     comes from the part/sketch mappings as it does for a conversion; the *output*
     type comes from the projections instead, which is the whole difference.
 
-    ``view``, ``viewport_origin`` and ``viewport_up`` aim the projection, exactly
-    as they do for ``render.objects`` -- with no ``partcad.yaml`` to configure a
-    viewport in, this is the only way to ask for one.
+    It takes what ``render.objects`` takes wherever that means something for a
+    file outside any package:
+
+    * ``view``, ``viewport_origin`` and ``viewport_up`` aim the projection, and
+      ``reproducible`` picks the hidden-line algorithm, for this one render --
+      with no ``partcad.yaml`` to configure them in, this is the only way to say
+      either;
+    * ``params`` are parameter values of the input, which the throwaway package
+      declares on it, so that a script reads them;
+    * ``options_package`` is a package to read the file type from -- one in the
+      public index, or a package directory -- which the throwaway package
+      imports; the file type may then be one it declares;
+    * ``output_dir`` is where the file goes when ``output_filename`` is not
+      given, under the input's name with its values (by default the input's
+      own directory).
     """
     from pathlib import Path
 
@@ -1453,6 +1465,11 @@ def adhoc_render(session, params):
     input_path = Path(params["input_filename"])
     output_filename = params.get("output_filename")
     output_path = Path(output_filename) if output_filename else None
+    output_dir = params.get("output_dir")
+    if output_path is not None and output_dir:
+        raise JsonRpcError(USAGE_ERROR, "Name the output file or give an output directory, not both")
+    options_package = params.get("options_package")
+    values = _assigned(params)
 
     input_ext_to_type = {".%s" % v: k for k, v in input_mapping.items()}
     # '.jpeg' alongside the '.jpg' the mapping declares: the mapping says what
@@ -1473,38 +1490,44 @@ def adhoc_render(session, params):
     if not output_type:
         pc.logging.error("Cannot infer the projection to render. Please specify --output explicitly.")
         return None
-    if output_type not in RENDER_EXTENSION_MAPPING:
-        # Checked before the extension lookup below, which would otherwise
-        # raise KeyError for a type nobody projects to and turn a bad request
-        # into an internal error.
+    if output_type not in RENDER_EXTENSION_MAPPING and not options_package:
+        # A file type a package implements is checked once that package is
+        # read, which is the ad-hoc render's to do; with none named, there is
+        # nothing but the built-in projections it could be.
         raise JsonRpcError(
             USAGE_ERROR,
             "Cannot render to '%s'. Supported projections: %s"
             % (output_type, ", ".join(sorted(RENDER_EXTENSION_MAPPING))),
         )
+
+    options = _render_options(pc, params)
+    if values:
+        options["parameters"] = values
+    if options_package:
+        options["options_package"] = options_package
     if output_path is None:
-        output_path = input_path.with_suffix(".%s" % RENDER_EXTENSION_MAPPING[output_type])
+        # Named by the render, which knows the extension of whatever wrote it
+        # (see 'partcad.adhoc.write_output_file').
+        options["output_dir"] = str(Path(output_dir) if output_dir else input_path.parent)
 
-    from partcad.render import resolve_viewport
-
+    target = output_path if output_path is not None else "%s (%s)" % (options["output_dir"], output_type)
     try:
-        render_opts = resolve_viewport(
-            params.get("view"),
-            params.get("viewport_origin"),
-            params.get("viewport_up"),
+        pc.logging.info("Rendering %s (%s) to %s..." % (input_path, input_type, target))
+        written = render_fn(
+            str(input_path),
+            input_type,
+            str(output_path) if output_path is not None else None,
+            output_type,
+            **options,
         )
-    except ValueError as e:
-        raise JsonRpcError(USAGE_ERROR, str(e)) from e
-
-    try:
-        pc.logging.info("Rendering %s (%s) to %s (%s)..." % (input_path, input_type, output_path, output_type))
-        render_fn(str(input_path), input_type, str(output_path), output_type, **render_opts)
-        pc.logging.info("Render complete: %s" % output_path)
+        pc.logging.info("Render complete: %s" % (written or output_path))
     except ValueError as e:
         # A format that only means anything inside a package ('.urdf', '.assy')
         # is inferable from the filename, so it reaches here even though the
-        # CLI's choices exclude it. Nothing was attempted and nothing could have
-        # been: a usage error, not a failed render.
+        # CLI's choices exclude it -- and so does a package to read file types
+        # from that an ad-hoc render cannot reach, or a type it does not
+        # declare. Nothing was attempted and nothing could have been: a usage
+        # error, not a failed render.
         raise JsonRpcError(USAGE_ERROR, str(e))
     except Exception as e:  # pylint: disable=broad-except
         pc.logging.error("Failed to render: %s" % e)
@@ -2548,7 +2571,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.273"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.8.274"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -2807,16 +2830,28 @@ def _cmf_rows(ctx, project, kind: str) -> dict:
     a picture says so before anything else.
     """
     from partcad import cmf
+    from partcad_utils.utils import escape_name
 
     rows = {}
     for name in project.object_names(kind):
-        declaration = project.get_cmf(kind, name, quiet=True)
+        # The key as written; asked for as a reference, which spells a reserved
+        # character escaped.
+        declaration = project.get_cmf(kind, escape_name(name), quiet=True)
         if declaration is None:
             rows[name] = "<broken>"
             continue
-        if declaration.is_alias:
-            rows[name] = "alias of %s" % declaration.source
+        alias = ""
+        if declaration.is_alias and declaration.source is None:
+            rows[name] = "<broken> (an alias naming nothing)"
             continue
+        if declaration.is_alias:
+            # Shown as what it names, with that declaration's look, so that a
+            # display-only colour is marked so under every name it has.
+            alias = " (alias of %s)" % declaration.source
+            declaration = cmf.lookup(ctx, kind, declaration.source, declaration.project_name, quiet=True)
+            if declaration is None:
+                rows[name] = "<broken>%s" % alias
+                continue
         if declaration.config.get("parameters"):
             look = "parametric"
         elif kind == "finish":
@@ -2825,7 +2860,7 @@ def _cmf_rows(ctx, project, kind: str) -> dict:
             rgba = cmf.display(ctx, declaration)
             look = cmf.css_color.to_hex(rgba) if rgba is not None else "-"
         made = "" if declaration.manufacturable else " (display only)"
-        rows[name] = "%-11s%s%s" % (look, " " + declaration.desc if declaration.desc else "", made)
+        rows[name] = "%-11s%s%s%s" % (look, " " + declaration.desc if declaration.desc else "", made, alias)
     return rows
 
 
@@ -4458,19 +4493,10 @@ def render_objects(session, params):
         if ctx.get_project(options_package) is None:
             raise JsonRpcError(USAGE_ERROR, "Options package %s is not found" % options_package)
 
-    from partcad.render import resolve_viewport
-
-    try:
-        render_opts = resolve_viewport(
-            params.get("view"),
-            params.get("viewport_origin"),
-            params.get("viewport_up"),
-        )
-    except ValueError as e:
-        # A view nobody offers, or a vector that is not one: the request cannot
-        # be made sense of, so nothing is rendered rather than something aimed
-        # somewhere else.
-        raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    # A view nobody offers, or a vector that is not one: the request cannot be
+    # made sense of, so nothing is rendered rather than something aimed
+    # somewhere else.
+    render_opts = _render_options(pc, params)
 
     from partcad.exception import AssemblyDocumentError
 
@@ -4634,7 +4660,7 @@ def render_inline(session, params):
             "Only an assembly or a scene has links to filter; '%s' has none" % kind,
         )
     section = _section(params)
-    render_opts = _viewport(params)
+    render_opts = _render_options(pc, params)
 
     if kind in ("assembly", "scene"):
         # Phase one of an assembly build, as for every other request that ends
@@ -4698,6 +4724,25 @@ def _section(params):
         return shape_section.normalize(params.get("section"))
     except ValueError as e:
         raise JsonRpcError(USAGE_ERROR, str(e)) from e
+
+
+def _render_options(pc, params):
+    """What a request overrides of a projection for one run, as export parameters.
+
+    The viewport (see '_viewport') and 'reproducible', the hidden-line algorithm
+    the projection is drawn through: an explicit argument, so it lands on top of
+    what the file type declares (see 'Shape._run_together_locked'). Absent, it
+    is not sent, and the declaration stands. Read with 'output.as_flag', the one
+    reader of that field, so that the text "false" from a JSON-RPC client is
+    false here too.
+    """
+    options = _viewport(params)
+    if params.get("reproducible") is not None:
+        try:
+            options[pc.output.REPRODUCIBLE_KEY] = pc.output.as_flag(params["reproducible"])
+        except ValueError as e:
+            raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    return options
 
 
 def _viewport(params):

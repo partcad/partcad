@@ -737,9 +737,10 @@ visualization, simulation calculations and, if applicable, manufacturing
   ``<package>:<name>`` (see :ref:`cmf`). Some materials are declared in
   ``//pub/std/manufacturing/material``. They are accepted by every part type, and
   fill in what the part's source leaves unset (see :ref:`cmf-parameters`). A
-  part in another colour is another item. When a request is made to a
-  manufacturing API, the provider is handed the declarations themselves, and
-  matches them by what other systems call them.
+  part in another colour is another item. A request to a manufacturing API does
+  not carry the declarations yet: each part in it is sent as its format and its
+  file (see :ref:`providers`). Handing a provider the declarations, to match by
+  what other systems call them (``ids``), is planned.
 
 - ``texture``
 

@@ -36,10 +36,11 @@ that alias one vendor colour differently name the same item.
 
 import copy
 import os
+import re
 import sys
 import typing
 
-from partcad_utils.utils import escape_name, format_parameterized_name, parse_parameterized_name
+from partcad_utils.utils import RESERVED_IN_NAMES, escape_name, format_parameterized_name, parse_parameterized_name
 
 from . import logging as pc_logging
 from .utils import resolve_resource_path
@@ -76,14 +77,26 @@ class Declaration:
 
     kind: str = "cmf"
 
-    def __init__(self, name: str, project_name: str, config: typing.Optional[dict] = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        project_name: str,
+        config: typing.Optional[dict] = None,
+        base_name: typing.Optional[str] = None,
+        parameter_values: typing.Optional[dict] = None,
+    ) -> None:
         config = config if config is not None else {}
         self.name = name
         self.project_name = project_name
         self.config = config
         # What it was declared as, and with which values, when it is an
-        # instance of a parametric declaration ('rgba;color=C91A09FF').
-        self.base_name, self.parameter_values = parse_parameterized_name(name)
+        # instance of a parametric declaration ('rgba;color=C91A09FF'). Given
+        # by whoever declares it where it can be: a declaration's own name may
+        # hold a character a reference reserves ('a;b'), and parsing the name
+        # back would read that as values.
+        if base_name is None:
+            base_name, parameter_values = parse_parameterized_name(name)
+        self.base_name, self.parameter_values = base_name, dict(parameter_values or {})
         desc = config.get("desc", "")
         self.desc = desc.strip() if isinstance(desc, str) else desc
         self.errors: list = []
@@ -236,6 +249,38 @@ def normalize(kind: str, config) -> dict:
     return config
 
 
+def instance_key(name: str, values: typing.Optional[dict]) -> str:
+    """The key a declaration's instance is kept under in its package: 'name' itself, or with the values.
+
+    The name escaped before the values are added, so that a name holding a
+    character a reference reserves ('a;b') is not read back as values: the key
+    is the reference's own spelling of the instance (see 'Declaration.reference').
+    """
+    if not values:
+        return name
+    return escape_name(name) + format_parameterized_name("", values)
+
+
+# An escape of a character a reference reserves ('%25', '%3B'), which PartCAD's
+# expression syntax ('%color%') would otherwise read the '%' of: '%25%' in an
+# escaped alias source is no expression.
+_RESERVED_ESCAPE = re.compile("%(" + "|".join("%02X" % ord(c) for c in RESERVED_IN_NAMES) + ")", re.IGNORECASE)
+_MASK = "\x00"
+
+
+def _masked(value, mask: bool):
+    """'value' with every reserved escape in its strings hidden from the expression syntax, or shown again."""
+    if isinstance(value, str):
+        if mask:
+            return _RESERVED_ESCAPE.sub(lambda match: _MASK + match.group(1) + _MASK, value)
+        return re.sub(_MASK + "([0-9A-Fa-f]{2})" + _MASK, lambda match: "%" + match.group(1), value)
+    if isinstance(value, list):
+        return [_masked(item, mask) for item in value]
+    if isinstance(value, dict):
+        return {_masked(key, mask): _masked(item, mask) for key, item in value.items()}
+    return value
+
+
 def with_parameters(config: dict, values: dict, object_name: str) -> dict:
     """The declaration of the instance 'values' name: its parameters set, its fields rendered.
 
@@ -253,7 +298,7 @@ def with_parameters(config: dict, values: dict, object_name: str) -> dict:
     context = {name: declared.get("default") for name, declared in parameters.items() if isinstance(declared, dict)}
     for key, value in list(instance.items()):
         if key != "parameters":
-            instance[key] = expr.resolve(value, context, object_name)
+            instance[key] = _masked(expr.resolve(_masked(value, True), context, object_name), False)
     return instance
 
 
@@ -273,6 +318,10 @@ def lookup(ctx, kind: str, ref: str, relative_to: str = "", quiet: bool = False,
     declaration that says what the thing is. An alias that leads back to itself
     is reported and resolves to nothing.
     """
+    if not isinstance(ref, str) or not ref:
+        if not quiet:
+            pc_logging.error("The %s reference %r names nothing" % (kind, ref))
+        return None
     seen = set()
     current_ref, current_package = ref, relative_to
     while True:
