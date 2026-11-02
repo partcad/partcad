@@ -421,6 +421,27 @@ def test_preparing_an_enriched_assembly_does_not_walk_its_source(monkeypatch):
     assert _at(mount, "hold") == pytest.approx((0.0, 0.0, 5.0))
 
 
+def test_an_enriched_assembly_s_ports_do_not_wait_for_its_preparation(monkeypatch):
+    """Its source is asked for directly: a preparation under way on another thread is not waited for.
+
+    Such a preparation can be stopped behind a lock another thread holds while
+    it waits for something this one has, and waiting on it failed the F1
+    example's front wheels after a minute.
+    """
+    from partcad.shape import PreparationInFlight
+
+    ctx = pc.init(PACKAGE)
+    mount = ctx._get_assembly(":mount-again")
+
+    async def in_flight(*args, **kwargs):
+        raise PreparationInFlight("being prepared elsewhere")
+
+    monkeypatch.setattr(mount, "prepare_async", in_flight)
+    asyncio.run(shape_ports.prepare_async(mount, ctx))
+    assert _at(mount, "hold") == pytest.approx((0.0, 0.0, 5.0))
+    assert _at(mount, "top-thru-m3") == pytest.approx((-10.0, 10.0, 20.0))
+
+
 def test_a_node_s_port_may_be_externalized_beside_where_it_is():
     _, mount = _assembly("mount-offset")
     assert _at(mount, "beside") == pytest.approx((3.0, 0.0, 5.0))

@@ -58,6 +58,28 @@ class AssemblyFactoryEnrich(afa.AssemblyFactoryAlias):
             config.pop("project", None)
             super().__init__(ctx, source_project, target_project, config)
 
+            # Joined by its source's ports, unless it maps its own (see
+            # 'prepare_async' below): asked for here, they need no preparation
+            # of this object to be waited for.
+            if not self.enrich_declaration.get("map"):
+                self.assembly.find_ports_source = self.find_ports_source
+
+    def find_ports_source(self):
+        """The assembly whose ports this one is joined by: the instance it enriches, or None if not found.
+
+        What 'shape_ports.prepare_async' asks, rather than waiting for this
+        object to be prepared - which is to wait for whatever else that
+        preparation waits for, on whichever thread it is under way. The answer
+        is the instance the preparation resolves to as well, short of a
+        parameter override of the user's arriving in between, which the
+        preparation then settles (see 'resolve_source_again').
+        """
+        source = self.get_source_object(self.source)
+        if source is not None and getattr(source, "with_ports", None) is not None:
+            self.assembly.with_ports = source.with_ports
+            self.assembly.ports_source = source
+        return source
+
     async def prepare_async(self, assembly) -> None:
         # Before anything is resolved: the user's own parameter overrides may
         # have arrived after this package was loaded, and they say which
