@@ -421,3 +421,28 @@ def test_two_packages_sharing_a_part_s_geometry_each_get_their_own_cmf(tmp_path)
         seen.append(_section_of(envelope).own().color)
 
     assert seen == ["//one:brand", "//two:brand"]
+
+
+def test_what_a_drawing_is_keyed_on_covers_each_node_s_cmf():
+    """A part given another colour is drawn again, not served the old drawing from the cache.
+
+    A drawing or an export of a tree is keyed on the shape's key and the tree's
+    description, and the shape's key does not cover CMF: it is applied as the
+    shape is read. So the description keeps each node's CMF summary, and a node
+    with none describes as it always did.
+    """
+
+    def tree(color):
+        child = {"name": "panel", "brep": b"geometry", "metadata": {"measurements": {"volume": 1.0}}}
+        if color is not None:
+            child["metadata"]["cmf"] = {"sets": [{"color": color, "display": "#B40000FF", "faces": "all"}]}
+        return {"name": "sidepod", "assembly": [child]}
+
+    plain = shape_envelope.description(tree(None))
+    assert plain == {"name": "sidepod", "assembly": [{"name": "panel"}]}
+
+    red = shape_envelope.description(tree("//pub/universe/lego:Bright Red"))
+    black = shape_envelope.description(tree("//pub/universe/lego:Black"))
+    assert red["assembly"][0]["cmf"]["sets"][0]["color"] == "//pub/universe/lego:Bright Red"
+    assert red != black
+    assert "measurements" not in str(red)
