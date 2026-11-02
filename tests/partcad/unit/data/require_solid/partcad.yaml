@@ -15,10 +15,15 @@ partTypes:
     path: box.py
     requireSolid: true
 
+# Never from the cache: what is tested is the judgement made as a part is built,
+# and a part served from an earlier run's cache is not built at all.
 parts:
   lenient:
     type: ":skin"
+    cache: false
   strict:
     type: ":strict_skin"
+    cache: false
   whole:
     type: ":strict_box"
+    cache: false
