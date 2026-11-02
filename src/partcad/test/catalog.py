@@ -344,8 +344,10 @@ be placed by coordinates, and every item after the first has to connect to
 something.
 
 An assembly bought whole (one declaring `vendor` and `sku`) is its vendor's to
-put together: the coordinates in its file draw it, and nothing inside it is
-held to this.
+put together: the coordinates in its file draw it, so nothing in it has to
+connect to anything, and an assembly holding it does not look inside it for
+that. The same part twice in one place, and two items on one port, are still
+reported.
 
 ### When it does not apply
 
