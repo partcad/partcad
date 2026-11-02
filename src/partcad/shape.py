@@ -1331,13 +1331,20 @@ class Shape(ShapeConfiguration):
             # never live in a wrapper of its own: a reference to another part,
             # which moves the source's geometry.
             if shape is not None and ("offset" in self.config or "scale" in self.config):
+                from . import cmf as pc_cmf
                 from . import transform
                 from .geom import Location
 
+                # What the source stated about each face, which a transform
+                # knows nothing of and rebuilds the payload without; it moves
+                # the faces and keeps them in their order, so the section is
+                # laid back after the new BREP below.
+                source_section = pc_cmf.payload_section(shape)
                 if "offset" in self.config and "offset" not in finished:
                     shape = await transform.offset(ctx, shape, self.config["offset"])
                 if "scale" in self.config and "scale" not in finished:
                     shape = await transform.scale(ctx, shape, self.config["scale"])
+                shape = pc_cmf.with_payload_section(shape, source_section)
 
                 # The transform rebuilt the geometry, so the encoder on the far
                 # side measured what came out and the numbers on the way back

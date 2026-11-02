@@ -264,7 +264,10 @@ def split_by_color(tree, whole, warnings=None):
                 shape = placed(piece, node.get(ocp_serialize.KEY_LOCATION))
                 for packed in reversed(above):
                     shape = shape.Moved(ocp_serialize.toploc_from_packed(packed))
-                leaves[face_color].append(shape)
+                # 'setdefault': a section written for other geometry is ignored
+                # for the faces (see 'faces_by_color'), and the node's own
+                # colour is then one 'colors_of' may not have met.
+                leaves.setdefault(face_color, []).append(shape)
         elif ocp_serialize.is_assembly_object(node):
             location = node.get(ocp_serialize.KEY_LOCATION)
             inner = above + [location] if location is not None else above
@@ -272,7 +275,7 @@ def split_by_color(tree, whole, warnings=None):
                 walk(child, color, inner)
 
     walk(tree, DEFAULT_COLOR, [])
-    return [(color, ocp_serialize.compound_of(leaves[color])) for color in colors]
+    return [(color, ocp_serialize.compound_of(shapes)) for color, shapes in leaves.items() if shapes]
 
 
 def _pieces(node, color, memo):

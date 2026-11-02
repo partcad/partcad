@@ -485,15 +485,49 @@ def _parameter_value(config, name: str):
     return None
 
 
-def own_parameters(shape) -> dict:
+def payload_section(envelope):
+    """The CMF section a shape node's payload carries, or None."""
+    from . import shape_envelope
+
+    if not shape_envelope.is_shape_object(envelope):
+        return None
+    import cmf_section
+
+    _brep, section = cmf_section.split(shape_envelope.brep_plain(envelope[shape_envelope.KEY_BREP]))
+    return section
+
+
+def with_payload_section(envelope, section):
+    """'envelope' with 'section' after its BREP again, unless its payload carries a section of its own.
+
+    For a payload rebuilt by something that knows nothing of CMF - an 'offset'
+    or a 'scale' moves the faces and keeps them, in their order - which would
+    otherwise lose what the source stated about each of them.
+    """
+    from . import shape_envelope
+
+    if section is None or not shape_envelope.is_shape_object(envelope):
+        return envelope
+    import cmf_section
+
+    brep, own = cmf_section.split(shape_envelope.brep_plain(envelope[shape_envelope.KEY_BREP]))
+    if own is not None:
+        return envelope
+    envelope = dict(envelope)
+    envelope[shape_envelope.KEY_BREP] = shape_envelope.brep_payload(cmf_section.join(brep, section))
+    return envelope
+
+
+def own_parameters(shape, ctx=None) -> dict:
     """{kind: canonical reference} of the colour, material and finish an object states itself.
 
     Read off its declaration's parameters - which is also where the values a
     reference names it with land - and canonicalised against its own package,
-    which is where a default written as ':red' was written.
+    which is where a default written as ':red' was written. 'ctx' is what
+    resolves an alias to the declaration it names; without one, a reference is
+    only made absolute.
     """
     config = getattr(shape, "config", None)
-    ctx = getattr(getattr(shape, "project", None), "ctx", None)
     result = {}
     for kind in KINDS:
         value = _parameter_value(config, kind)
@@ -518,7 +552,7 @@ def key_of(ctx, shape) -> dict:
     version of what the core does with them. An item that states no CMF adds
     nothing, so the keys of assemblies with none are what they were.
     """
-    references = own_parameters(shape)
+    references = own_parameters(shape, ctx)
     if not references:
         return {}
     described = {"version": KEY_VERSION}
@@ -543,7 +577,7 @@ def declared_set(ctx, shape):
     """
     import cmf_section
 
-    references = own_parameters(shape)
+    references = own_parameters(shape, ctx)
     raw_drops = _parameter_value(getattr(shape, "config", None), SOURCE_CMF)
     drops = source_cmf_drops(raw_drops)
     if drops is None:
@@ -694,14 +728,14 @@ def summary_of(shape):
     return metadata.get(shape_envelope.METADATA_CMF) if isinstance(metadata, dict) else None
 
 
-def assembly_cmf_setters(assembly) -> list:
+def assembly_cmf_setters(assembly, ctx=None) -> list:
     """How an assembly sets CMF itself, in words: [] when it does not.
 
     Its own CMF parameters, a link's CMF 'params:', and a 'properties: color:'
     on it - each a finer-grained way of drawing what it holds, which costs it its
     manufacturability unless it is bought whole (docs/design/cmf.md, section 8).
     """
-    setters = ["its own '%s'" % kind for kind in own_parameters(assembly)]
+    setters = ["its own '%s'" % kind for kind in own_parameters(assembly, ctx)]
     properties = assembly.config.get("properties") if isinstance(assembly.config, dict) else None
     if isinstance(properties, dict) and properties.get("color"):
         setters.append("its 'properties: color:'")

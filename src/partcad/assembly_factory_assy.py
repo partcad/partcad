@@ -168,10 +168,10 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         named with the values too. 'params' itself is returned when nothing is
         added, so that a caller can tell.
         """
-        inherited = cmf.own_parameters(self.assembly)
+        inherited = cmf.own_parameters(self.assembly, self.ctx)
         if not inherited or item is None:
             return params
-        stated = cmf.own_parameters(item)
+        stated = cmf.own_parameters(item, self.ctx)
         added = {kind: value for kind, value in inherited.items() if kind not in params and kind not in stated}
         return {**params, **added} if added else params
 
