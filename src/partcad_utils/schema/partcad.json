@@ -1062,33 +1062,23 @@
       ]
     },
     "part-cuboid": {
-      "description": "The solid of a 'basic' part that is a cuboid, centred on ('x', 'y', 'z') with its sides along X, Y and Z: a number is a cube of that side, and the long form gives each side. 'offset' and 'scale' move and scale it like any other part.",
+      "description": "The solid of a 'basic' part that is a cuboid, centred on the origin with its sides along X, Y and Z: a number is a cube of that side, and a list is its sizes along X, Y and Z. The part's 'offset' places it.",
       "oneOf": [
         { "$ref": "#/definitions/part-dimension" },
         {
-          "type": "object",
-          "properties": {
-            "side-x": { "$ref": "#/definitions/part-dimension" },
-            "side-y": { "$ref": "#/definitions/part-dimension" },
-            "side-z": { "$ref": "#/definitions/part-dimension" },
-            "x": { "$ref": "#/definitions/number-or-expression" },
-            "y": { "$ref": "#/definitions/number-or-expression" },
-            "z": { "$ref": "#/definitions/number-or-expression" }
-          },
-          "required": ["side-x", "side-y", "side-z"],
-          "additionalProperties": false
+          "type": "array",
+          "items": { "$ref": "#/definitions/part-dimension" },
+          "minItems": 3,
+          "maxItems": 3
         }
       ]
     },
     "part-cylinder": {
-      "description": "The solid of a 'basic' part that is a cylinder, standing along Z and centred on ('x', 'y', 'z'): it runs from 'z - height / 2' to 'z + height / 2'. 'offset' and 'scale' move and scale it like any other part.",
+      "description": "The solid of a 'basic' part that is a cylinder, standing along Z and centred on the origin: it runs from 'z = -height / 2' to 'z = height / 2'. The part's 'offset' places it.",
       "type": "object",
       "properties": {
         "radius": { "$ref": "#/definitions/part-dimension" },
-        "height": { "$ref": "#/definitions/part-dimension" },
-        "x": { "$ref": "#/definitions/number-or-expression" },
-        "y": { "$ref": "#/definitions/number-or-expression" },
-        "z": { "$ref": "#/definitions/number-or-expression" }
+        "height": { "$ref": "#/definitions/part-dimension" }
       },
       "required": ["radius", "height"],
       "additionalProperties": false

@@ -120,15 +120,13 @@ def _reference_part(config, finish):
 
     if "cuboid" in config:
         cuboid = config["cuboid"]
-        if not isinstance(cuboid, dict):
-            cuboid = {"side-x": cuboid, "side-y": cuboid, "side-z": cuboid}
-        sx, sy, sz = cuboid["side-x"], cuboid["side-y"], cuboid["side-z"]
-        x, y, z = cuboid.get("x", 0.0), cuboid.get("y", 0.0), cuboid.get("z", 0.0)
+        sx, sy, sz = cuboid if isinstance(cuboid, list) else [cuboid] * 3
+        x = y = z = 0.0
         shape = BRepPrimAPI_MakeBox(gp_Pnt(x - sx / 2.0, y - sy / 2.0, z - sz / 2.0), sx, sy, sz).Shape()
     else:
         cylinder = config["cylinder"]
         radius, height = cylinder["radius"], cylinder["height"]
-        x, y, z = cylinder.get("x", 0.0), cylinder.get("y", 0.0), cylinder.get("z", 0.0)
+        x = y = z = 0.0
         axis = gp_Ax2(gp_Pnt(x, y, z - height / 2.0), gp_Dir(0.0, 0.0, 1.0))
         shape = BRepPrimAPI_MakeCylinder(axis, radius, height).Shape()
     if "offset" in finish:
@@ -308,11 +306,11 @@ def test_a_hole_that_encloses_nothing_is_left_out():
 
 PARTS = [
     ({"cuboid": 10}, {}),
-    ({"cuboid": {"side-x": 2, "side-y": 4, "side-z": 6, "x": 1, "y": -2, "z": 3}}, {}),
-    ({"cuboid": {"side-x": 2, "side-y": 4, "side-z": 6, "x": 1}}, {"offset": [[5, 6, 7], [1, 2, 3], 37]}),
-    ({"cuboid": {"side-x": 2, "side-y": 4, "side-z": 6}}, {"offset": [[5, 6, 7], [0, 0, 1], 90], "scale": 2.5}),
+    ({"cuboid": [2, 4, 6]}, {"offset": [[1, -2, 3], [0, 0, 1], 0]}),
+    ({"cuboid": [2, 4, 6]}, {"offset": [[5, 6, 7], [1, 2, 3], 37]}),
+    ({"cuboid": [2, 4, 6]}, {"offset": [[5, 6, 7], [0, 0, 1], 90], "scale": 2.5}),
     ({"cylinder": {"radius": 2, "height": 5}}, {}),
-    ({"cylinder": {"radius": 3, "height": 7, "x": 1, "y": 2, "z": -4}}, {"offset": [[1, 0, 0], [1, 1, 0], 45]}),
+    ({"cylinder": {"radius": 3, "height": 7}}, {"offset": [[1, 0, 0], [1, 1, 0], 45]}),
     ({"cylinder": {"radius": 3, "height": 7}}, {"offset": [[1, 2, 3], [0.2, -0.7, 0.3], 123], "scale": 0.3}),
     ({"cylinder": {"radius": 3, "height": 7}}, {"scale": 4}),
 ]
@@ -382,10 +380,13 @@ def test_what_a_part_cannot_apply_itself_is_left_to_the_core(finish, claimed, de
     [
         ({}, "names neither"),
         ({"cuboid": 1, "cylinder": {"radius": 1, "height": 1}}, "names cuboid and cylinder"),
-        ({"cuboid": 0}, "side greater than zero"),
-        ({"cuboid": {"side-x": 1, "side-y": 1}}, "needs its 'side-z'"),
+        ({"cuboid": 0}, "'cuboid' has to be greater than zero"),
+        ({"cuboid": [1, 2]}, "three sizes along X, Y and Z"),
+        ({"cuboid": [1, 0, 2]}, r"'cuboid\[1\]' has to be greater than zero"),
+        ({"cuboid": {"side-x": 1, "side-y": 1, "side-z": 1}}, "placed by the part's 'offset'"),
         ({"cylinder": {"radius": 1}}, "needs its 'height'"),
-        ({"cylinder": {"radius": -1, "height": 1}}, "'radius' greater than zero"),
+        ({"cylinder": {"radius": -1, "height": 1}}, "'cylinder.radius' has to be greater than zero"),
+        ({"cylinder": {"radius": 1, "height": 1, "z": 2}}, "not 'z'; it is placed by the part's 'offset'"),
         ({"cylinder": 3}, "'radius' and 'height'"),
         ({"cuboid": True}, "has to be a number"),
     ],
@@ -447,10 +448,7 @@ parts:
   block:
     type: basic
     cache: false
-    cuboid:
-      side-x: 10
-      side-y: 20
-      side-z: 5
+    cuboid: [10, 20, 5]
     offset: [[1, 2, 3], [0, 0, 1], 30]
   rod:
     type: basic
@@ -463,6 +461,17 @@ parts:
       radius: 2
       height: "%length%"
     scale: 2
+  spacer:
+    type: basic
+    cache: false
+    parameters:
+      length:
+        type: float
+        default: 10
+    cylinder:
+      radius: 4
+      height: "%length%"
+    offset: [[0, 0, "%length / 2%"], [0, 0, 1], 0]
   both:
     type: basic
     cache: false
@@ -527,6 +536,17 @@ def test_a_basic_part_is_parametric(package):
     assert rod.info()["primitive"] == {"cylinder": {"radius": 2, "height": 8}}
 
 
+def test_a_basic_part_is_placed_by_an_offset_written_in_its_parameters(package):
+    """Standing on the XY plane whatever its length: the offset is resolved for each instance."""
+    ctx = package
+    for name, length in (("spacer", 10.0), ("spacer;length=25", 25.0)):
+        part = ctx.get_part(name)
+        measured = _built(ctx, part)[shape_envelope.KEY_METADATA][shape_envelope.METADATA_MEASUREMENTS]
+        assert measured["bbox"] == pytest.approx([-4.0, -4.0, 0.0, 4.0, 4.0, length])
+    # The declaration keeps the expression for the next instance to resolve.
+    assert ctx.get_part("spacer").config["offset"][0][2] == "%length / 2%"
+
+
 def test_two_sizes_of_a_basic_part_are_two_cache_entries(tmp_path):
     (tmp_path / "partcad.yaml").write_text(
         "parts:\n  spacer:\n    type: basic\n    parameters:\n      length:\n        type: float\n"
@@ -567,7 +587,7 @@ def _validate(part):
     "part",
     [
         {"type": "basic", "cuboid": 10},
-        {"type": "basic", "cuboid": {"side-x": 1, "side-y": 2, "side-z": 3, "x": 1, "y": 2, "z": "%z%"}},
+        {"type": "basic", "cuboid": [1, 2, "%z%"]},
         {"type": "basic", "cylinder": {"radius": 1, "height": "%length%"}},
         {"type": "basic", "cylinder": {"radius": 1, "height": 2}, "offset": [[0, 0, 0], [0, 1, 0], 90]},
     ],
@@ -580,7 +600,10 @@ def test_the_schema_takes_a_basic_part(part):
     "part",
     [
         {"type": "basic", "cuboid": 0},
-        {"type": "basic", "cuboid": {"side-x": 1, "side-y": 2}},
+        {"type": "basic", "cuboid": [1, 2]},
+        {"type": "basic", "cuboid": [1, 2, 0]},
+        {"type": "basic", "cuboid": {"side-x": 1, "side-y": 2, "side-z": 3}},
+        {"type": "basic", "cylinder": {"radius": 1, "height": 2, "z": 1}},
         {"type": "basic", "cylinder": {"radius": 1}},
         {"type": "basic", "cylinder": {"radius": 1, "height": 2, "depth": 3}},
         {"type": "basic", "cylinder": 4},

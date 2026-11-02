@@ -362,6 +362,14 @@ at all).
   construction**, every face pointing out, so it claims the validation of `Shape.finish_request()` with no problems,
   and applies its `offset` and `scale` into its own coordinates the way `wrapper_transform` does -- declining, for the
   core to hand to a sandbox, only an offset that is not the packed form or a scale that is not a number above zero.
+  It is built centred on the origin and placed by its `offset` alone: one solid needs one placement, where a sketch,
+  which holds several outlines, places each by its own `x` and `y`.
+
+  **A part's `offset` and `scale` are read through `ShapeConfiguration.transform()`** (`shape_config.transform_of`),
+  which works out the `%...%` expressions in them over the parameters of the declaration carrying them -- for the
+  wrapper's `finish_request()`, for the `transform.py` fallback, for the annotations moved with the part and for a
+  reference's placement of its source's ports. It is resolved as it is read and never written back: the object of a
+  bare name holds the declaration itself, which every parametrized instance is then copied from.
 
   Neither runs a wrapper, so neither has an environment to key on (`PYTHON_SANDBOX_VERSION = None`); what keys their
   output instead is `basic_shapes.CACHE_VERSION`, through `ShapeFactory.CODE_VERSIONS`. Raise it with any change to

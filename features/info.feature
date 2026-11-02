@@ -216,10 +216,7 @@ Feature: `pc info` command
       parts:
         block:
           type: basic
-          cuboid:
-            side-x: 10
-            side-y: 20
-            side-z: 30
+          cuboid: [10, 20, 30]
         rod:
           type: basic
           parameters:
@@ -229,6 +226,7 @@ Feature: `pc info` command
           cylinder:
             radius: 2
             height: "%length%"
+          offset: [[0, 0, "%length / 2%"], [0, 0, 1], 0]
       """
     When I run "pc info block"
     Then the command should exit with a status code of "0"
@@ -242,6 +240,7 @@ Feature: `pc info` command
       """
     Then the command should exit with a status code of "0"
     And STDOUT should contain "'size': [4.0, 4.0, 10.0]"
+    And STDOUT should contain "'min': [-2.0, -2.0, 0.0]"
 
   @success @pc-info
   Scenario: `pc info -i` on a parametrized interface

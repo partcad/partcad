@@ -50,7 +50,8 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
       fileUrl: <(fileFrom=url only) the URL to download the source file from>
       # ... type-specific options ...
-      offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
+      offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]";
+               any number in it may be an expression over the part's parameters, e.g. "%length / 2%">
 
       # The below syntax is similar to the one used for interfaces,
       # with the only exception being the word "implements" instead of "inherits".
@@ -170,27 +171,20 @@ nothing to read and no script to run:
       desc: <(optional) textual description>
       # The below are mutually exclusive options
       cuboid: <(optional) edge size of a cube>
-      cuboid:  # alternative syntax
-        side-x: <size along X>
-        side-y: <size along Y>
-        side-z: <size along Z>
-        x: <(optional) x of its centre>
-        y: <(optional) y of its centre>
-        z: <(optional) z of its centre>
+      cuboid: [<size along X>, <size along Y>, <size along Z>]  # alternative syntax
       cylinder: <(optional)>
         radius: <radius>
         height: <height, along Z>
-        x: <(optional) x of its centre>
-        y: <(optional) y of its centre>
-        z: <(optional) z of its centre>
+      offset: <(optional) where to put it, as for any other part>
 
 There must be exactly one field ``cuboid`` or ``cylinder``. Both solids are
-placed by their **centre**, the way build123d's ``Box`` and ``Cylinder`` and
+built **centred on the origin**, the way build123d's ``Box`` and ``Cylinder`` and
 CadQuery's ``box`` and ``cylinder`` are: a cylinder of height 10 runs from
-``z - 5`` to ``z + 5``. ``offset`` and ``scale`` move and scale it like any other
-part, and so do ``implements:`` and ``ports:``. Every dimension may be an
-expression over the part's ``parameters`` (see :ref:`parameters`), which is how a
-basic part is made parametric:
+``z = -5`` to ``z = 5``. A part is one solid, so it is placed the way any other
+part is, by its ``offset`` (see :ref:`location`), which also turns it. Every
+dimension, and every number in the ``offset``, may be an expression over the
+part's ``parameters`` (see :ref:`parameters`), which is how a basic part is made
+parametric:
 
 .. code-block:: yaml
 
@@ -204,6 +198,8 @@ basic part is made parametric:
       cylinder:
         radius: 4
         height: "%length%"
+      # Standing on the XY plane, whatever its length.
+      offset: [[0, 0, "%length / 2%"], [0, 0, 1], 0]
 
 A basic part is a homogeneous body, so it takes the ``material``, ``color`` and
 ``tolerance`` parameters.

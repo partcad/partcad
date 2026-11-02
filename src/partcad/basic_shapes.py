@@ -31,10 +31,14 @@ from it and checked in. A sketch is built the way the OCCT wrapper this replaced
 
 A part is a closed shell of outward-facing faces, the shell a solid, so it is
 the body every part has to be (see "A part is a body, not a skin" in
-'AGENTS.md') by construction rather than after a sandbox has looked at it. Its
-'offset' and 'scale' are applied as it is built, into its coordinates, the way
-'wrapper_transform' applies them, and claimed in the envelope as a wrapper
-claims what it did (see 'Shape.finish_request').
+'AGENTS.md') by construction rather than after a sandbox has looked at it. It
+is built centred on the origin and is placed by its 'offset' alone: a part is
+one solid, so one placement is all it needs, and 'offset' is the one every part
+type already has - where a sketch, which holds several outlines, places each
+of them by its own 'x' and 'y'. The 'offset' and the 'scale' are applied as the
+part is built, into its coordinates, the way 'wrapper_transform' applies them,
+and claimed in the envelope as a wrapper claims what it did (see
+'Shape.finish_request').
 
 And what it measures - the box, the volume, the centroid and the inertia every
 shape's envelope carries - is arithmetic on the same numbers, exact where OCCT
@@ -493,13 +497,17 @@ def _finish(request):
     return placement, claim
 
 
+def _length(value, what) -> float:
+    value = _number(value, what)
+    if not value > 0.0:
+        raise ValueError("'%s' has to be greater than zero, not %g" % (what, value))
+    return value
+
+
 def _dimension(config, key, what) -> float:
     if key not in config:
         raise ValueError("A %s needs its '%s'" % (what, key))
-    value = _field(config, key, what)
-    if not value > 0.0:
-        raise ValueError("A %s needs a '%s' greater than zero, not %g" % (what, key, value))
-    return value
+    return _length(config[key], "%s.%s" % (what, key))
 
 
 def _turned(tensor, axes):
@@ -518,17 +526,20 @@ def _edge_key(axis, signs):
 
 
 def _cuboid(config, placement):
-    if isinstance(config, dict):
-        sides = [_dimension(config, key, "cuboid") for key in ("side-x", "side-y", "side-z")]
-        centre = tuple(_field(config, key, "cuboid") for key in ("x", "y", "z"))
+    """A cuboid centred on the origin: 'cuboid: 10' is a cube, 'cuboid: [20, 10, 5]' its sizes along X, Y and Z."""
+    if isinstance(config, (list, tuple)):
+        if len(config) != 3:
+            raise ValueError("A cuboid is given as its three sizes along X, Y and Z, not as %r" % (config,))
+        sides = [_length(value, "cuboid[%d]" % index) for index, value in enumerate(config)]
+    elif isinstance(config, dict):
+        raise ValueError(
+            "A cuboid is a number (a cube) or a list of its sizes along X, Y and Z, not %r; "
+            "it is placed by the part's 'offset'" % (config,)
+        )
     else:
-        side = _number(config, "cuboid")
-        if not side > 0.0:
-            raise ValueError("A cuboid needs a side greater than zero, not %g" % side)
-        sides = [side] * 3
-        centre = (0.0, 0.0, 0.0)
+        sides = [_length(config, "cuboid")] * 3
 
-    origin = placement.point(centre)
+    origin = placement.point((0.0, 0.0, 0.0))
     axes = placement.axes()
     half = [placement.length(side / 2.0) for side in sides]
 
@@ -603,14 +614,24 @@ def _cuboid(config, placement):
     return solid, origin, extent, volume, _turned(inertia, axes)
 
 
+# What a cylinder is given as, and all it is given as.
+CYLINDER_KEYS = ("radius", "height")
+
+
 def _cylinder(config, placement):
+    """A cylinder standing along Z, centred on the origin: from 'z = -height / 2' to 'z = height / 2'."""
     if not isinstance(config, dict):
         raise ValueError("A cylinder is given as its 'radius' and 'height', not as %r" % (config,))
+    unknown = sorted(str(key) for key in config if key not in CYLINDER_KEYS)
+    if unknown:
+        raise ValueError(
+            "A cylinder is given as its 'radius' and 'height' alone, not %s; it is placed by the part's 'offset'"
+            % ", ".join("'%s'" % key for key in unknown)
+        )
     radius = _dimension(config, "radius", "cylinder")
     height = _dimension(config, "height", "cylinder")
-    centre = tuple(_field(config, key, "cylinder") for key in ("x", "y", "z"))
 
-    origin = placement.point(centre)
+    origin = placement.point((0.0, 0.0, 0.0))
     xdir, ydir, axis = placement.axes()
     radius = placement.length(radius)
     height = placement.length(height)

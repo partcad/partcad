@@ -64,9 +64,10 @@ Pick the script kind that best fits the part — you decide:
 | `sdf` | organic / implicit shapes |
 
 A part that is nothing but one box or one cylinder needs no script at all:
-declare it as `type: basic` with a `cuboid:` (`side-x`, `side-y`, `side-z`) or a
-`cylinder:` (`radius`, `height`), each centred on its optional `x`, `y`, `z`.
-PartCAD writes its geometry itself, without a sandbox. There is no file to write
+declare it as `type: basic` with a `cuboid:` (a number for a cube, or
+`[x, y, z]` sizes) or a `cylinder:` (`radius`, `height`, standing along Z).
+Both are centred on the origin; move them with `offset:`. PartCAD writes the
+geometry itself, without a sandbox. There is no file to write
 and nothing for `pc add part`; put the declaration in `partcad.yaml` as §5 shows
 and go on from there.
 

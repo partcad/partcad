@@ -23,7 +23,7 @@ pc ide view "spacer;length=25"
 ### cuboid_01
 <table><tr>
 <td valign=top><img src="././cuboid_01.svg" alt="cuboid_01" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></td>
-<td valign=top>A cuboid sized along each axis, standing on the XY plane</td>
+<td valign=top>A cuboid sized along X, Y and Z, standing on the XY plane</td>
 </tr></table>
 
 ### cylinder_01
@@ -41,7 +41,7 @@ pc ide view "spacer;length=25"
 ### spacer
 <table><tr>
 <td valign=top><img src="././spacer.svg" alt="spacer" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></td>
-<td valign=top>A parametric spacer, 'spacer;length=25' being one 25 mm long</td>
+<td valign=top>A parametric spacer standing on the XY plane, 'spacer;length=25' being one 25 mm long</td>
 <td valign=top>Parameters:<br/><ul>
 <li>length: 10</li>
 </ul>
