@@ -569,14 +569,19 @@ def key_of(ctx, shape) -> dict:
     read, from declarations the key does not cover (see 'Shape._with_cmf'). An
     assembly's cached tree holds its parts as they were read, CMF and all, so
     the assembly's key covers what that CMF came from: the references the item
-    names, what each declaration draws it in and whether it is a claim, and the
-    version of what the core does with them. An item that states no CMF adds
-    nothing, so the keys of assemblies with none are what they were.
+    names, what each declaration draws it in and whether it is a claim, the
+    declarations what its source states is converted by ('conversion_scope'),
+    and the version of what the core does with them. An item that states no
+    CMF, in packages that declare none, adds nothing, so the keys of assemblies
+    with none are what they were.
     """
     references = own_parameters(shape, ctx)
-    if not references:
+    scope = conversion_scope(ctx, shape)
+    if not references and not scope:
         return {}
     described = {"version": KEY_VERSION}
+    if scope:
+        described["scope"] = scope
     for kind, reference in sorted(references.items()):
         # A display-only colour is read off the reference itself, and is no claim.
         rgba = rgba_of_reference(reference) if kind == "color" else None
@@ -598,6 +603,73 @@ def key_of(ctx, shape) -> dict:
             described[kind]["roughness"] = declaration.roughness
             described[kind]["metallic"] = declaration.metallic
     return described
+
+
+# What a source's own CMF is converted by, read off a package's declaration.
+SCOPE_SECTIONS = ("colors", "materials", "finishes", "cmfConventions")
+
+
+def conversion_scope(ctx, shape) -> dict:
+    """{package: digest} of the CMF declarations what 'shape's source states may be converted by; {} for none.
+
+    A source's colours and materials are converted as the part is read, by the
+    'ids' of the declarations in scope (see 'partcad.cmf_conventions'): the
+    part's own package's, those of the package a qualified 'cmfConvention' or
+    its part type names, and the catalogs the conventions declared there name.
+    None of that is in the part's key, and an assembly's cached tree holds its
+    parts converted - so the assembly is keyed on it, a digest per package that
+    declares any CMF. A LEGO package whose colour table changes changes no part
+    file, and would otherwise leave every assembly of its bricks in the old
+    colours.
+    """
+    if ctx is None:
+        return {}
+    own = getattr(shape, "project_name", None) or ""
+    config = getattr(shape, "config", None) or {}
+    named = {own}
+    for value in (config.get("cmfConvention"), config.get("type")):
+        if isinstance(value, str) and ":" in value:
+            owner = value.rpartition(":")[0]
+            named.add(owner or own)
+    packages = set()
+    for name in named:
+        packages.add(name)
+        for convention in (_project_section(ctx, name, "cmfConventions") or {}).values():
+            if isinstance(convention, dict):
+                packages.update(c for c in convention.get("catalogs") or () if isinstance(c, str))
+    scope = {}
+    for name in sorted(p for p in packages if p):
+        digest = _declarations_digest(ctx, name)
+        if digest:
+            scope[name] = digest
+    return scope
+
+
+def _project_section(ctx, name: str, section: str):
+    try:
+        project = ctx.get_project(name)
+    except Exception:
+        return None
+    return getattr(project, "config_obj", {}).get(section) if project is not None else None
+
+
+def _declarations_digest(ctx, name: str) -> typing.Optional[str]:
+    """A digest of the CMF a package declares, worked out once per package; None if it declares none."""
+    try:
+        project = ctx.get_project(name)
+    except Exception:
+        return None
+    if project is None:
+        return None
+    if not hasattr(project, "_cmf_declarations_digest"):
+        import hashlib
+        import json
+
+        declared = {key: project.config_obj.get(key) for key in SCOPE_SECTIONS if project.config_obj.get(key)}
+        project._cmf_declarations_digest = (
+            hashlib.sha256(json.dumps(declared, sort_keys=True, default=str).encode()).hexdigest() if declared else None
+        )
+    return project._cmf_declarations_digest
 
 
 def declared_set(ctx, shape):

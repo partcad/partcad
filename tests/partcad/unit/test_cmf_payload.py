@@ -507,8 +507,9 @@ def test_an_assembly_is_keyed_on_what_its_items_cmf_comes_to(tmp_path):
     assert red is not None and darker is not None
     assert red != darker
 
-    # An item that states nothing adds nothing to the key.
-    assert pc_cmf.key_of(ctx, ctx.get_part("//cmf:brick")) == {}
+    # An item that states nothing adds only what its source's CMF would be
+    # converted by: its package declares colours.
+    assert set(pc_cmf.key_of(ctx, ctx.get_part("//cmf:brick"))) == {"version", "scope"}
     described = pc_cmf.key_of(ctx, ctx.get_part("//cmf:red_brick"))
     assert described["color"]["reference"] == "//cmf:red"
     assert described["color"]["manufacturable"] is True

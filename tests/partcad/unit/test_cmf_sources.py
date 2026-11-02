@@ -181,6 +181,38 @@ def test_a_convention_looks_in_its_catalogs(tmp_path):
     assert own.color == "//src/vendor:brand"
 
 
+def test_an_assembly_is_keyed_on_what_its_items_source_cmf_is_converted_by(tmp_path):
+    """A colour table that changes changes no part file: the assembly's key is what notices."""
+
+    def described(ids):
+        root = _package(tmp_path / ids.lstrip("#"), colors={"signal-red": {"display": "#C91A09", "ids": {"step": ids}}})
+        ctx = pc.Context(str(root))
+        return cmf.key_of(ctx, ctx.get_part("//src:box"))
+
+    assert described("#C91A09") != described("#C91A0A")
+    # A package that declares no CMF adds nothing to the key.
+    plain = pc.Context(str(_package(tmp_path / "plain")))
+    assert cmf.key_of(plain, plain.get_part("//src:box")) == {}
+
+
+def test_what_converts_takes_in_the_package_a_convention_names_and_its_catalogs(tmp_path):
+    _package(tmp_path / "pkg" / "vendor", name="//src/vendor", colors={"brand": {"ids": {"acme": "B-1"}}})
+    _package(
+        tmp_path / "pkg" / "acme",
+        name="//src/acme",
+        cmfConventions={"acme": {"extends": "step", "catalogs": ["//src/vendor"]}},
+    )
+    root = _package(
+        tmp_path / "pkg",
+        parts={"box": {"type": "stl", "path": "box.stl", "cmfConvention": "//src/acme:acme"}},
+        **{"import": {"vendor": {"path": "vendor"}, "acme": {"path": "acme"}}},
+    )
+    ctx = pc.Context(str(root))
+
+    # '//src' declares nothing; the convention's package and its catalog do.
+    assert set(cmf.conversion_scope(ctx, ctx.get_part("//src:box"))) == {"//src/acme", "//src/vendor"}
+
+
 def test_an_unknown_convention_is_reported_and_the_source_s_own_used(tmp_path, caplog):
     ctx = _ctx(tmp_path)
     pc.logging.reset_errors()
