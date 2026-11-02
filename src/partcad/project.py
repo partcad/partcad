@@ -236,7 +236,7 @@ def _has_running_loop() -> bool:
 # segment of a URL, and two copies of these would name one file two ways.
 SECTION_EXTENSIONS = {
     "sketches": {"cadquery": "py", "build123d": "py", "basic": None},
-    "parts": {"cadquery": "py", "build123d": "py", "chili3d": "chili", "sdf": "py"},
+    "parts": {"cadquery": "py", "build123d": "py", "chili3d": "chili", "sdf": "py", "basic": None},
     "assemblies": {},
 }
 

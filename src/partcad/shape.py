@@ -35,7 +35,7 @@ from . import runtime as pc_runtime
 from . import sandbox_versions, scene_world, shape_ports, shape_section, source_key, sync_threads, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
-from .shape_config import ShapeConfiguration
+from .shape_config import TRANSFORM_KEYS, ShapeConfiguration
 from .utils import resolve_resource_path, total_size
 
 if TYPE_CHECKING:
@@ -1156,7 +1156,7 @@ class Shape(ShapeConfiguration):
             self.cacheable = False
             return
 
-        transform = {key: self.config[key] for key in ("offset", "scale") if key in self.config}
+        transform = {key: self.transform(key) for key in TRANSFORM_KEYS if key in self.config}
         if not transform:
             self.hash = source.hash
             self.owns_cache_entry = False
@@ -1341,9 +1341,9 @@ class Shape(ShapeConfiguration):
                 # laid back after the new BREP below.
                 source_section = pc_cmf.payload_section(shape)
                 if "offset" in self.config and "offset" not in finished:
-                    shape = await transform.offset(ctx, shape, self.config["offset"])
+                    shape = await transform.offset(ctx, shape, self.transform("offset"))
                 if "scale" in self.config and "scale" not in finished:
-                    shape = await transform.scale(ctx, shape, self.config["scale"])
+                    shape = await transform.scale(ctx, shape, self.transform("scale"))
                 shape = pc_cmf.with_payload_section(shape, source_section)
 
                 # The transform rebuilt the geometry, so the encoder on the far
@@ -1371,10 +1371,10 @@ class Shape(ShapeConfiguration):
                 # order - or a bend line's angle would go on being pinned to
                 # the place the line was drawn rather than the place it is.
                 if "offset" in self.config:
-                    offset = Location(self.config["offset"])
+                    offset = Location(self.transform("offset"))
                     recorded = shape_envelope.moved_annotations(recorded, offset.transform_point)
                 if "scale" in self.config:
-                    factor = float(self.config["scale"])
+                    factor = float(self.transform("scale"))
                     recorded = shape_envelope.moved_annotations(
                         recorded, lambda point: [factor * axis for axis in point]
                     )
@@ -4259,9 +4259,9 @@ class Shape(ShapeConfiguration):
         if self.kind != "part":
             return None
         request = {"validate": {"solidify": self._solidifies()}}
-        for key in ("offset", "scale"):
+        for key in TRANSFORM_KEYS:
             if key in self.config:
-                request[key] = self.config[key]
+                request[key] = self.transform(key)
         return request
 
     def _finished_by_wrapper(self, claim) -> dict:

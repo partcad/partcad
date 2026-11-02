@@ -514,7 +514,7 @@ def with_payload_section(envelope, section):
     if own is not None:
         return envelope
     envelope = dict(envelope)
-    envelope[shape_envelope.KEY_BREP] = shape_envelope.brep_payload(cmf_section.join(brep, section))
+    envelope[shape_envelope.KEY_BREP] = shape_envelope.brep_compressed(cmf_section.join(brep, section))
     return envelope
 
 
@@ -661,7 +661,7 @@ def apply_declared(ctx, shape, envelope, recorded: dict):
             section = (section or cmf_section.Section()).without(drops)
             if declared is not None:
                 section = section.completed(declared)
-            done[key] = shape_envelope.brep_payload(cmf_section.join(brep, section))
+            done[key] = shape_envelope.brep_compressed(cmf_section.join(brep, section))
             summaries.append(section.summary())
         return done[key]
 
