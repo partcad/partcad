@@ -446,3 +446,36 @@ def test_what_a_drawing_is_keyed_on_covers_each_node_s_cmf():
     assert red["assembly"][0]["cmf"]["sets"][0]["color"] == "//pub/universe/lego:Bright Red"
     assert red != black
     assert "measurements" not in str(red)
+
+
+def test_an_assembly_is_keyed_on_what_its_items_cmf_comes_to(tmp_path):
+    """Its cached tree holds its parts as they were read, CMF and all, so a colour drawn otherwise is a new key.
+
+    A part's own key does not cover CMF (see the test above): it would serve
+    the old colours inside the assembly's tree. An assembly whose items state
+    none keeps the key it had.
+    """
+    from partcad import cmf as pc_cmf
+
+    def key(display):
+        root = tmp_path / display.lstrip("#")
+        root.mkdir()
+        ctx = _package(
+            root,
+            {"brick": _stl(), "red_brick": {"type": "enrich", "source": "brick", "with": {"color": ":red"}}},
+            {"wall": {"type": "assy", "path": "wall.assy"}},
+            files={"box.stl": "", "brick.stl": "", "wall.assy": WALL},
+            colors=dict(COLORS, red={"display": display}),
+        )
+        return asyncio.run(ctx.get_assembly("//cmf:wall").get_cache_key_async()), ctx
+
+    red, ctx = key("#C91A09")
+    darker, _ = key("#7A0E06")
+    assert red is not None and darker is not None
+    assert red != darker
+
+    # An item that states nothing adds nothing to the key.
+    assert pc_cmf.key_of(ctx, ctx.get_part("//cmf:brick")) == {}
+    described = pc_cmf.key_of(ctx, ctx.get_part("//cmf:red_brick"))
+    assert described["color"]["reference"] == "//cmf:red"
+    assert described["color"]["manufacturable"] is True

@@ -184,7 +184,11 @@ no kernel - the section is bytes after the BREP - so every part type gets it the
 applied each time the part is read, from a build or from the cache, and is **not** cached: what it comes to turns on
 declarations the shape's cache key does not cover (what a colour's declaration says to draw it in, and later which
 declaration claims a name a source uses), and an entry written with one package's answer would be served to another
-package sharing the geometry. A part that states no CMF pays one dictionary lookup for it. A payload several nodes carry - the compound a script's components are pieces of - is given one
+package sharing the geometry. A part that states no CMF pays one dictionary lookup for it. What *is* cached with its
+parts is an assembly's tree, and a file made from a tree: so an assembly's key covers what each of its items' CMF comes
+to - the references, what their declarations draw them in and whether they are claims, and a version of the rule
+(`cmf.key_of`) - and a drawing's or an export's key covers each node's summary (`shape_envelope.description`). Neither
+adds anything where nothing states CMF, so those keys are what they were. A payload several nodes carry - the compound a script's components are pieces of - is given one
 section, and those components are drawn in the part's own set: their faces are the compound's to address.
 
 Whoever writes a section also records a **summary** in the node's `metadata` - the sets with their face and solid counts, and what

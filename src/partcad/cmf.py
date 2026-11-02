@@ -453,6 +453,37 @@ def own_parameters(shape) -> dict:
     return result
 
 
+# Raised whenever what the core makes of an item's CMF changes, so that what
+# was built with the earlier answer is not served as this one (see 'key_of').
+KEY_VERSION = 1
+
+
+def key_of(ctx, shape) -> dict:
+    """What an assembly is keyed on of one item's CMF: {} for an item that states none.
+
+    A part's own key does not cover its CMF: that is applied as the part is
+    read, from declarations the key does not cover (see 'Shape._with_cmf'). An
+    assembly's cached tree holds its parts as they were read, CMF and all, so
+    the assembly's key covers what that CMF came from: the references the item
+    names, what each declaration draws it in and whether it is a claim, and the
+    version of what the core does with them. An item that states no CMF adds
+    nothing, so the keys of assemblies with none are what they were.
+    """
+    references = own_parameters(shape)
+    if not references:
+        return {}
+    described = {"version": KEY_VERSION}
+    for kind, reference in sorted(references.items()):
+        declaration = lookup(ctx, kind, reference, quiet=True) if ctx is not None else None
+        rgba = display(ctx, declaration) if declaration is not None else rgba_of_reference(reference)
+        described[kind] = {
+            "reference": reference,
+            "display": list(rgba) if rgba is not None else None,
+            "manufacturable": declaration.manufacturable if declaration is not None else None,
+        }
+    return described
+
+
 def declared_set(ctx, shape):
     """'(set, drops)': the CMF an object states itself as one 'cmf_section.CmfSet', and what 'sourceCmf' drops.
 
