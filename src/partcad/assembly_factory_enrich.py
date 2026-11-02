@@ -122,5 +122,11 @@ class AssemblyFactoryEnrich(afa.AssemblyFactoryAlias):
 
 
 def _joined_by_source_ports(declaration) -> bool:
-    """Whether an enriched assembly is joined by its source's ports: when it declares none of its own."""
-    return not any(declaration.get(key) for key in ("map", "ports", "implements"))
+    """Whether an enriched assembly is joined by its source's ports: when it declares none of its own.
+
+    Nor when it moves the geometry they sit on ('offset', 'scale'): its source's
+    ports are where the source is, as a part's are (see
+    'assembly_ports.keeps_source_ports'), and one that moves says where its
+    own are with a 'map:' or 'ports:'.
+    """
+    return not any(declaration.get(key) for key in ("map", "ports", "implements", "offset", "scale"))
