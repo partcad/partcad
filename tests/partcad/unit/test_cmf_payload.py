@@ -18,6 +18,7 @@ Pinned here:
 """
 
 import asyncio
+import logging
 import os
 import sys
 
@@ -185,8 +186,13 @@ def test_summaries_of_several_payloads_add_up():
     one = Section([CmfSet(color="//c:a", rgba=(1, 2, 3, 1.0))], NONE, faces=[0, NONE]).summary()
     other = Section().summary()
     merged = cmf_section.merge_summaries([one, other])
-    assert merged["unspecified"] == {"color": "some", "material": "some"}
+    # Some faces have a colour; neither payload has a material anywhere.
+    assert merged["unspecified"] == {"color": "some", "material": "all"}
     assert cmf_section.merge_summaries([one]) is one
+    assert cmf_section.merge_summaries([one, Section([CmfSet(material="//m:x")], 0).summary()])["unspecified"] == {
+        "color": "some",
+        "material": "some",
+    }
 
 
 # -------------------------------------------------------------- assemblies
@@ -300,6 +306,33 @@ def test_a_specified_part_passes(tmp_path):
     specified = Section([CmfSet(color="//cmf:red", material="//cmf:alu", finish="//cmf:satin")], 0).summary()
 
     assert cmf_check.part_findings(ctx, _Built(specified)) == []
+
+
+def test_a_part_an_assembly_is_made_of_is_held_to_its_cmf_whatever_it_says_of_itself(tmp_path, caplog):
+    """The manufacturability walk over a manufacturable assembly's parts forces them to be made."""
+    ctx = _package(tmp_path)
+
+    class _NotMade(_Built):
+        name = "box"
+        config = {}
+        is_manufacturable = False
+
+        async def get_wrapped(self, ctx):
+            return {}
+
+    part = _NotMade(None)
+    check = cmf_check.CmfTest()
+
+    assert check.inapplicable(part) is not None
+    assert check.inapplicable(part, forced=True) is None
+
+    with caplog.at_level(logging.WARNING):
+        asyncio.run(check.test([check], ctx, part, {}))
+    assert "CMF not specified" not in caplog.text
+
+    with caplog.at_level(logging.WARNING):
+        asyncio.run(check.test([check], ctx, part, {cmf_check.CmfTest.FORCE_MANUFACTURING: True}))
+    assert "CMF not specified: it states no colour and no material" in caplog.text
 
 
 def test_the_check_is_registered_and_catalogued():
@@ -479,6 +512,25 @@ def test_an_assembly_is_keyed_on_what_its_items_cmf_comes_to(tmp_path):
     described = pc_cmf.key_of(ctx, ctx.get_part("//cmf:red_brick"))
     assert described["color"]["reference"] == "//cmf:red"
     assert described["color"]["manufacturable"] is True
+
+
+def test_an_assembly_is_keyed_on_how_its_items_finishes_are_drawn(tmp_path):
+    """A finish's roughness and metallic are in the payload as much as a colour's display is."""
+
+    def described(roughness):
+        root = tmp_path / str(roughness)
+        root.mkdir()
+        ctx = _package(
+            root,
+            {"box": _stl(finish=":satin")},
+            files={"box.stl": ""},
+            finishes={"satin": {"display": {"roughness": roughness, "metallic": 0}}},
+        )
+        return cmf.key_of(ctx, ctx.get_part("//cmf:box"))
+
+    satin = described(0.6)
+    assert satin["finish"]["roughness"] == 0.6 and satin["finish"]["metallic"] == 0
+    assert described(0.2) != satin
 
 
 def test_a_package_may_require_its_parts_cmf(tmp_path):

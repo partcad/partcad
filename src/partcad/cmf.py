@@ -593,6 +593,10 @@ def key_of(ctx, shape) -> dict:
             "display": list(rgba) if rgba is not None else None,
             "manufacturable": manufacturable,
         }
+        if kind == "finish" and declaration is not None:
+            # What a 3D view draws a finish as, which the payload carries too.
+            described[kind]["roughness"] = declaration.roughness
+            described[kind]["metallic"] = declaration.metallic
     return described
 
 

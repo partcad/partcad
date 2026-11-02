@@ -174,6 +174,10 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         "cache",
         "cache_dependencies_ignore",
         "category",
+        # What the 'cmf' check holds the object to ('require'), not what it is:
+        # whether a finding fails or warns. Hashed, turning it on rebuilt the
+        # part and every assembly holding it, to the same geometry.
+        "cmf",
         # How the thing is packaged for sale, not what it is. The third of the
         # (vendor, SKU, pack size) record, and the only one of the three that
         # was missing here - so the same geometry sold in bags of 25 keyed

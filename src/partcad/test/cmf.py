@@ -113,10 +113,16 @@ class CmfTest(Test):
     def __init__(self) -> None:
         super().__init__("cmf")
 
-    def inapplicable(self, shape):
+    def inapplicable(self, shape, forced=False):
+        """Why this check has nothing to say of 'shape', or None.
+
+        'forced' is a manufacturability check testing what another object is
+        made of (see 'Test.FORCE_MANUFACTURING'): that object is to be made
+        whatever its own 'manufacturable:' says, and so is held to its CMF.
+        """
         if isinstance(shape, Sketch):
             return "a sketch is not made of anything"
-        if not getattr(shape, "is_manufacturable", True):
+        if not forced and not getattr(shape, "is_manufacturable", True):
             return "it is not to be made (manufacturable: false)"
         if not isinstance(shape, Assembly) and _purchasable(shape):
             return "it is bought, in whatever its vendor sells it in"
@@ -129,7 +135,7 @@ class CmfTest(Test):
         # it reads is the summary recorded with the build, which is cached
         # already. A warning remembered as a pass would also go unsaid.
         test_ctx[self.NOT_CACHEABLE] = True
-        reason = self.inapplicable(shape)
+        reason = self.inapplicable(shape, forced=bool(test_ctx.get(self.FORCE_MANUFACTURING)))
         if reason is not None:
             return self.not_applicable(shape, reason)
         if isinstance(shape, Assembly):
