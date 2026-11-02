@@ -90,6 +90,7 @@ import { CaeResult } from './cae';
 import { CmfView } from './cmf';
 import { el, empty, placeholder } from './dom';
 import { geometryCache } from './geometryCache';
+import { LabelBoxes, Labels, renderOptions } from './labels';
 import {
     fetchDetails,
     fetchFormats,
@@ -123,6 +124,7 @@ import {
     GuideData,
     HostMessage,
     PlanData,
+    PricesData,
     RENDER_TABS,
     RenderData,
     RenderFormat,
@@ -150,7 +152,7 @@ import { SimulationView } from './simulation';
 import { createVideoPlayer } from './videoPlayer';
 import { spaceMouse } from './spacemouse';
 import { controlValues, snapshot } from './state';
-import { SupplyView } from './supply';
+import { SupplyView, formatPrice } from './supply';
 import { TabSpec, Tabs } from './tabs';
 import { TestView } from './test';
 import { LinkFilter, OverlayRequest, Selection, Tree, filterIsEmpty } from './tree';
@@ -266,6 +268,9 @@ const sceneLoaded: Promise<Scene | undefined> = import(/* webpackMode: "eager" *
     (module) => {
         scene = module;
         scene.setShowMetadata(metadataCheckbox?.checked ?? true);
+        // And the callout boxes, and any prices that arrived before it did.
+        scene.setLabels(labels.current);
+        scene.setComponentPrices(prices?.texts ?? {});
         // What the box says, should it have been changed while this loaded.
         scene.setAutoFit(view3d.autoFitting);
         if (module.software) {
@@ -307,6 +312,16 @@ let sceneFailed = false;
  */
 const selection = new Selection();
 
+/**
+ * What the callout boxes at the bottom of the 3D and 2D tabs' control panes say:
+ * which of component names, component prices, port names and interface names
+ * are written on the object (see 'labels.ts').
+ *
+ * One answer for both tabs, as 'selection' is, and kept from one object to the
+ * next: it is how somebody wants the object annotated, not anything about it.
+ */
+const labels = new Labels();
+
 /** The file types the 2D tab offers: PartCAD's own pictures. */
 const PICTURES: Choice[] = [
     { value: 'png', label: 'PNG' },
@@ -321,6 +336,7 @@ const renderViews: Partial<Record<TabId, RenderView>> = {
     // eslint-disable-next-line @typescript-eslint/naming-convention
     '2d': new RenderView(panes['2d'], {
         formats: PICTURES,
+        labels,
         onChange: () => renderTab('2d'),
         onSave: () => saveRendered('2d'),
     }),
@@ -455,6 +471,81 @@ if (metadataCheckbox) {
     metadataCheckbox.addEventListener('change', (event) => {
         scene?.setShowMetadata((event.target as HTMLInputElement).checked);
     });
+}
+
+// The callout boxes, under the tree: on the 3D view they are written by the scene
+// over what the tree draws, and the prices are asked for here when that box is
+// ticked; on the 2D tab they are sent with the render.
+const labelBoxes3d = new LabelBoxes(byId('labels-3d'), labels);
+
+labels.onChange((key) => {
+    scene?.setLabels(labels.current);
+    if (key === 'componentPrices') {
+        askPrices();
+    }
+    // No longer the picture the boxes describe: forgotten, and asked for again
+    // if it is the one on screen, once the boxes have settled - as a box of the
+    // tree does. Draft writes none of them, and is left alone.
+    requested.delete('2d');
+    awaiting.delete('2d');
+    if (tabs.current === 'design' && designTabs.current === '2d') {
+        settleRender('2d');
+    }
+});
+
+/** The kinds of object anybody sells, and so the ones whose components have prices. */
+const PRICED_KINDS = ['part', 'assembly', 'scene'];
+
+/**
+ * What each component of the object on screen costs, as its callout writes it,
+ * once the daemon has said: by the object it is ('<package>:<name>'), for the
+ * show it was asked for ('identify').
+ */
+let prices: { object: string; texts: Record<string, string> } | undefined;
+
+/**
+ * Ask what each component of the object on screen costs, if the Component
+ * prices box is ticked: 'supply.prices', the Buy tab's quote shared out over the
+ * components.
+ *
+ * Asked again on every show while the box is ticked, the same object's included:
+ * an edit saved may have added a part. What was known about the same object is
+ * kept on screen meanwhile; another object's is not.
+ */
+function askPrices(): void {
+    if (!labels.get('componentPrices') || shown === undefined) {
+        labelBoxes3d.setNote(undefined);
+        return;
+    }
+    if (!shown.package || !PRICED_KINDS.includes(shown.kind ?? '')) {
+        labelBoxes3d.setNote('Only a part, an assembly or a scene is bought, so nothing here has a price.');
+        return;
+    }
+    if (prices !== undefined && prices.object !== identify(shown)) {
+        prices = undefined;
+        scene?.setComponentPrices({});
+    }
+    labelBoxes3d.setNote('Asking the suppliers what each component costs…');
+    request('design');
+}
+
+/** What the components cost has arrived, or why it has not. */
+function onPrices(data: PricesData | undefined, error: string | undefined): void {
+    if (error !== undefined || data === undefined || data === null) {
+        labelBoxes3d.setNote(`No prices: ${error ?? 'PartCAD said nothing about them.'}`);
+        return;
+    }
+    const texts: Record<string, string> = {};
+    for (const [name, quoted] of Object.entries(data.prices ?? {})) {
+        texts[name] = formatPrice(quoted.price, quoted.currency);
+    }
+    prices = { object: identify(shown), texts };
+    scene?.setComponentPrices(texts);
+    labelBoxes3d.setNote(
+        Object.keys(texts).length === 0
+            ? 'No supplier quoted a price for any of these. Declare a supplier in partcad.yaml to see prices.'
+            : undefined,
+    );
 }
 
 /*
@@ -1331,6 +1422,7 @@ async function show(message: ShowMessage): Promise<void> {
     }
     offerMetadata(message.object);
     offerControls(true);
+    askPrices();
 
     // Without a 3D view the geometry has nowhere to go, but the object still has
     // every other tab.
@@ -1449,6 +1541,9 @@ function clear(): void {
     }
     offerMetadata(undefined);
     offerControls(false);
+    prices = undefined;
+    scene?.setComponentPrices({});
+    labelBoxes3d.setNote(undefined);
     for (const tab of DATA_TABS) {
         reset(tab);
     }
@@ -1743,6 +1838,8 @@ function renderTab(tab: TabId): void {
         // no others. Left out when the panel lists none - the Draft tab - so
         // that nothing narrows an overlay a file type asked for itself.
         ports: overlay !== undefined && overlay.select.length > 0 ? overlay.select : undefined,
+        // The callout boxes under the tree, on the tab that has them.
+        ...(tab === '2d' ? renderOptions(labels.current) : {}),
     });
 }
 
@@ -2006,6 +2103,10 @@ function onTabData(tab: TabId, token: number, data: unknown, error: string | und
     }
     if (tab === 'analysis') {
         onAnalyses(data as CaeListData | undefined, error);
+        return;
+    }
+    if (tab === 'design') {
+        onPrices(data as PricesData | undefined, error);
         return;
     }
     if (tab === 'build') {

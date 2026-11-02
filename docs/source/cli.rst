@@ -1070,6 +1070,24 @@ Object commands
   frames that should have met and did not. On its own it asks for nothing; it says how deep the three options
   above reach.
 
+  ``--with-component-names`` and ``--with-component-prices`` put a callout on every *component* -- every part,
+  wherever the object places it -- joined by a line to the middle of it and laid out around the object with the
+  port and interface names. The name is what the assembly calls that link (the row the VS Code viewer lists it
+  as), and the price is the component's share of what the object costs to buy: the cheapest quote of each thing
+  to order, as ``pc supply quote`` and the viewer's Buy tab find it, divided over the components it is for -- a
+  box of a hundred bolts for an assembly of eight is an eighth of a box each, and a part cut from stock costs
+  its piece of the stock. Asking for both writes the name over the price in one callout. A component nobody
+  quoted has no price rather than a price of nought, and the log lists every price drawn. Asking for prices is
+  asking every supplier for a quote, so it takes as long as ``pc supply quote`` does.
+
+  .. code-block:: shell
+
+    pc render -t png --with-component-names --with-component-prices -O ./ logo
+
+  ``--without-port-names`` and ``--without-interface-names`` draw the ports and the interfaces without their
+  names, for a picture that has too many of them to read; the names are written by default. With ``--filter``,
+  every callout is on what the filter keeps and nothing else.
+
   The options apply to whichever format is being written — the projection is the same one underneath ``svg``,
   ``png``, ``jpeg`` and ``dxf`` — and a package can ask for the same thing permanently, by declaring
   ``with_ports:``, ``with_interfaces:`` or ``with_internals:`` on a file type of its own (see

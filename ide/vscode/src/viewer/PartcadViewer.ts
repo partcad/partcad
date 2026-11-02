@@ -72,6 +72,10 @@ const TAB_COMMANDS: Record<string, string> = {
     // for all four tabs, under the id of the group they are in, because which
     // of them apply is what decides whether the group does.
     analysis: 'partcad.caeList',
+    // What each component of the object costs, for the 3D view's "Component
+    // prices" callouts: asked under the Design group's id for the same reason,
+    // since it is a question about the object the group shows rather than a tab.
+    design: 'partcad.componentPrices',
     // Running one scenario of one analysis. Every analysis is the one
     // operation; which of them is asked for travels as an argument, exactly as
     // every 'pc cae <analysis>' is one operation with the analysis in the
@@ -475,6 +479,12 @@ export class PartcadViewer implements vscode.Disposable {
                 args.withInterfaces = render?.withInterfaces;
                 args.withInternals = render?.withInternals;
                 args.ports = render?.ports;
+                // And the callout boxes under it, on the 2D tab: each sent only
+                // when it says something a render would not do anyway.
+                args.withComponentNames = render?.withComponentNames;
+                args.withComponentPrices = render?.withComponentPrices;
+                args.withPortNames = render?.withPortNames;
+                args.withInterfaceNames = render?.withInterfaceNames;
                 // What the view panel beside it says: where the picture is looked
                 // at from, and what the object is cut to first.
                 args.viewportOrigin = message.viewportOrigin;
@@ -495,6 +505,11 @@ export class PartcadViewer implements vscode.Disposable {
                 // the viewer was shown under, is what the choices are kept by.
                 const object = data?.object ?? `${target.package}:${target.name}`;
                 post({ data: data ? { ...data, choices: readChoices(object) } : data });
+                return;
+            }
+            if (tab === 'design') {
+                args.kind = target.kind ?? 'part';
+                post({ data: await vscode.commands.executeCommand(command, args) });
                 return;
             }
             if (tab === 'cmf') {
@@ -1153,6 +1168,7 @@ export class PartcadViewer implements vscode.Disposable {
 						<div id="pane-3d" class="pane pane-3d">
 							<div class="controls" hidden>
 								<div id="tree" class="tree" role="tree"></div>
+								<div id="labels-3d"></div>
 								<div class="viewer-controls" id="metadata-control" hidden>
 									<label class="control-label"><input type="checkbox" id="metadata-checkbox" checked> Metadata</label>
 								</div>
@@ -1246,6 +1262,15 @@ interface RenderRequest {
     withInternals?: boolean;
     /** Which ports to draw, by the name PartCAD reports each under. */
     ports?: string[];
+    /**
+     * The 2D tab's callout boxes: '--with-component-names',
+     * '--with-component-prices', and '--without-port-names'/
+     * '--without-interface-names' as a false. Absent says nothing.
+     */
+    withComponentNames?: boolean;
+    withComponentPrices?: boolean;
+    withPortNames?: boolean;
+    withInterfaceNames?: boolean;
 }
 
 /** What 'render.inline' answers with; see 'RenderData' in 'webview/messages.ts'. */

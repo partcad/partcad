@@ -239,6 +239,19 @@ render (`Tree.filter()` -- the mask `pc render --filter` takes, read by `partcad
 the 2D tab, to which port overlays to draw (`Tree.overlay()` -- `--with-ports`/`--with-interfaces`/
 `--with-internals`). Do not add a second tree widget for that: a row's meaning would then have two definitions.
 
+**Under the tree of the 3D and 2D tabs are four callout boxes** (`labels.ts`): Component names, Component prices,
+Port names and Interface names, the last two ticked from the start. They say *what* is written; the tree says *on
+what*, which is why every 3D callout is a child of the thing it is about (a component's of its shape, a port's of
+its triad) and is hidden with it by three's own visibility, and why an interface's name shows only while the tree
+draws one of its ports. One answer for both tabs (`Labels`, beside `Selection`), kept across objects. The 2D tab
+sends them as `pc render` options (`renderOptions`), each only when it differs from what a render does anyway, so a
+default picture is asked for in the words it always was. A component's name has one rule on both sides
+(`componentName`, and `component_name` in `render_svg.py`); a price is *never* worked out here -- PartCAD declares
+none, and the share of the Buy tab's quote each component costs is `partcad/component_prices.py`, asked for by the
+3D view as `supply.prices` under the Design group's id (`design`, the way `analysis` asks `cae.list`) and by a
+render through the overlay's price source. Metadata no longer hides the whole callout layer: each kind of callout
+has its own switch, on the callout.
+
 **The three tabs share one answer** (`Selection`). What somebody wants to look at is a property of the object,
 not of the tab it is being looked at on, so the state lives outside the widgets and each of them reads and
 writes it: switching tabs shows the same selection, and a box cleared on one is cleared on the others. That the

@@ -15,7 +15,7 @@
 
 import * as assert from 'assert';
 
-import { calloutsOf, hasCallouts } from '../../webview/callouts';
+import { calloutsOf, componentName, componentRows, hasCallouts, isComponent } from '../../webview/callouts';
 import { ShowNode } from '../../webview/messages';
 
 /** The node the sheet metal example's drawing arrives as, as far as this reads it. */
@@ -131,5 +131,35 @@ suite('The callouts a node pins to its elements', () => {
     test('an assembly offers it when any part it holds has something to pin', () => {
         const assembly: ShowNode = { name: 'bracket-assembly', assembly: [{ name: 'bolt' }, bends()] };
         assert.strictEqual(hasCallouts(assembly), true);
+    });
+});
+
+// What the "Component names" and "Component prices" boxes put on a component:
+// one callout, its name over its price. The name is the 2D tab's too - see
+// 'component_name' in 'render_svg.py', whose test pins the same two cases.
+suite('What a component callout says', () => {
+    test('a component is named by its link, and otherwise by its object without the package', () => {
+        assert.strictEqual(componentName({ name: '//pkg:cube', label: 'left' }), 'left');
+        assert.strictEqual(componentName({ name: '//pub/robotics:bolt', label: null }), 'bolt');
+        assert.strictEqual(componentName({ name: 'bare' }), 'bare');
+    });
+
+    test('a component is a node that holds no other', () => {
+        assert.strictEqual(isComponent({ name: '//pkg:bolt' }), true);
+        assert.strictEqual(isComponent({ name: '//pkg:top', assembly: [{ name: '//pkg:bolt' }] }), false);
+    });
+
+    test('the name is over the price, each where its box is ticked', () => {
+        const both = { componentNames: true, componentPrices: true };
+        assert.deepStrictEqual(componentRows('bolt', '$0.25', both), ['bolt', '$0.25']);
+        assert.deepStrictEqual(componentRows('bolt', '$0.25', { ...both, componentPrices: false }), ['bolt']);
+        assert.deepStrictEqual(componentRows('bolt', '$0.25', { ...both, componentNames: false }), ['$0.25']);
+    });
+
+    test('a component nobody quoted has no price row, and with only prices asked no callout', () => {
+        assert.deepStrictEqual(componentRows('bolt', undefined, { componentNames: true, componentPrices: true }), [
+            'bolt',
+        ]);
+        assert.deepStrictEqual(componentRows('bolt', undefined, { componentNames: false, componentPrices: true }), []);
     });
 });

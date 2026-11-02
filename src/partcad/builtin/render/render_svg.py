@@ -32,6 +32,7 @@ sys.path.append(os.path.dirname(__file__))
 import appearance
 import label_layout
 import ocp_serialize
+import shape_measure
 import stroke_text
 import viewpoint
 import wrapper_common
@@ -88,8 +89,25 @@ VISIBLE_LAYER = "Visible"
 PORTS_COLOR = (32, 96, 224)
 INTERFACES_COLOR = (176, 48, 192)
 
+# The request keys of the callouts, as 'partcad.render_overlay' names them; a
+# copy, because this runs in a sandbox that has no PartCAD to import, and a test
+# holds the two together.
+COMPONENT_NAMES_KEY = "component_names"
+COMPONENT_PRICES_KEY = "component_prices"
+PORT_NAMES_KEY = "port_names"
+INTERFACE_NAMES_KEY = "interface_names"
+
 # The colour an annotation is drawn in, dashed.
 ANNOTATIONS_COLOR = (192, 64, 64)
+
+# The colour the callouts on the components - their names, their prices - are
+# drawn in: the near-black of a drawing's own callouts, which reads against the
+# goldenrod of the geometry and is neither of the two overlays' colours.
+COMPONENTS_COLOR = (48, 48, 48)
+
+# How far apart two rows of one callout are - a component's name above its
+# price - in text heights, from the bottom of one to the bottom of the next.
+ROW_PITCH = 1.5
 
 # How big the port markers and their labels are, as a fraction of the
 # projection's largest dimension - so that they are the same size on the picture
@@ -337,6 +355,80 @@ def _interface_label(port):
     return label
 
 
+def component_name(node):
+    """What a component is called in its callout.
+
+    Its label, which is what the assembly holding it calls it and what the IDE's
+    tree lists it as; and where it has none - the object rendered on its own -
+    the name of the object it is, without the package: the package is the same
+    for every callout of a picture and would only make each one longer. The
+    twin of 'componentName' in the extension's 'callouts.ts', so that the 2D
+    tab's picture and the 3D view beside it call one part one thing.
+    """
+    label = node.get("label")
+    if label:
+        return str(label)
+    name = str(node.get("name") or "")
+    return name.rsplit(":", 1)[-1] or name
+
+
+def _components(request):
+    """Every component the callouts are on, as '(rows, centre)' pairs.
+
+    A component is a node of 'shape_tree' that holds no other node - a part,
+    wherever the tree places it - and its callout is pinned to the middle of
+    its box, where it is in 'wrapped'. The rows are its name and its price, as
+    the request asks for them: 'COMPONENT_NAMES_KEY', and the text of each price
+    under 'COMPONENT_PRICES_KEY', by the full name of the object - so a part
+    nobody quoted is called by its name alone, and with no name asked for gets
+    no callout at all.
+
+    A component with nothing left to measure - a cut that missed it - has no
+    middle to pin anything to, and is passed over.
+    """
+    with_names = bool(request.get(COMPONENT_NAMES_KEY))
+    prices = request.get(COMPONENT_PRICES_KEY)
+    prices = prices if isinstance(prices, dict) else {}
+    tree = request.get("shape_tree")
+    if tree is None or not (with_names or prices):
+        return []
+
+    found = []
+
+    def walk(node, above):
+        if ocp_serialize.is_shape_object(node):
+            rows = []
+            if with_names:
+                rows.append(component_name(node))
+            price = prices.get(node.get("name"))
+            if price:
+                rows.append(str(price))
+            if not rows:
+                return
+            shape = node[ocp_serialize.KEY_SHAPE]
+            packed = node.get(ocp_serialize.KEY_LOCATION)
+            if packed is not None:
+                shape = shape.Located(ocp_serialize.toploc_from_packed(packed))
+            for location in reversed(above):
+                shape = shape.Moved(ocp_serialize.toploc_from_packed(location))
+            try:
+                box = shape_measure.bbox(shape)
+            except Exception as e:
+                sys.stderr.write("Skipping the callout on %s: %s\n" % (rows[0], e))
+                return
+            if box is None:
+                return
+            found.append((rows, tuple((box[axis] + box[axis + 3]) / 2 for axis in range(3))))
+        elif ocp_serialize.is_assembly_object(node):
+            location = node.get(ocp_serialize.KEY_LOCATION)
+            inner = above + [location] if location is not None else above
+            for child in node[ocp_serialize.KEY_ASSEMBLY]:
+                walk(child, inner)
+
+    walk(tree, [])
+    return found
+
+
 def _picture_offset(origin, up, look_at, right, upward, reproducible):
     """What 'project' adds to a point's coordinates in the plane of the picture.
 
@@ -352,7 +444,7 @@ def _picture_offset(origin, up, look_at, right, upward, reproducible):
 
 
 def _overlay_edges(request, max_dimension, right, up, keep_out):
-    """The two overlays "pc render" can be asked to draw, as (layer, edges) pairs.
+    """What "pc render" can be asked to draw on top, as (layer, colour, edges) triples.
 
     'request["ports"]' is what 'partcad.render_overlay' worked out: every port of
     the object - and, for an assembly, of everything inside it - with the name a
@@ -363,24 +455,40 @@ def _overlay_edges(request, max_dimension, right, up, keep_out):
     and one name per port. "Which ports make up this interface" is one name per
     *instance* of an interface, with a line out to each of the ports that belong
     to it - a bolt pattern of four holes is one thing a part connects through,
-    and writing its name four times would say less, not more.
+    and writing its name four times would say less, not more. Either name is
+    left off where the request switches it off ('PORT_NAMES_KEY',
+    'INTERFACE_NAMES_KEY'), and what it names is drawn all the same.
 
-    Every name, of either overlay, is written around the object rather than on
+    The components' callouts are a third question - "which part is this, and
+    what does it cost" - answered by one box per component, its name over its
+    price, with a leader to the middle of it (see '_components').
+
+    Every name, of any of them, is written around the object rather than on
     it, and joined to what it names by a leader: see 'label_layout'. They are
     laid out together, so that an interface name does not land on a port name
-    either. 'keep_out' is the object, as a box in the plane of the picture.
+    or a component's callout either. 'keep_out' is the object, as a box in the
+    plane of the picture.
     """
     ports = request.get("ports") or []
     marker_size = float(request.get("port_marker_size", DEFAULT_MARKER_SIZE)) * max_dimension
     label_size = float(request.get("port_label_size", DEFAULT_LABEL_SIZE)) * max_dimension
     with_ports = bool(request.get("with_ports"))
     with_interfaces = bool(request.get("with_interfaces"))
+    port_names = request.get(PORT_NAMES_KEY) is not False
+    interface_names = request.get(INTERFACE_NAMES_KEY) is not False
 
     def flat(point):
         """'point' in the plane of the picture: how far right, how far up."""
         return (_dot(point, right), _dot(point, up))
 
-    edges = {"Ports": [], "Interfaces": []}
+    edges = {"Ports": [], "Interfaces": [], "Components": []}
+    layers = [
+        ("Ports", PORTS_COLOR),
+        ("Interfaces", INTERFACES_COLOR),
+        ("Components", COMPONENTS_COLOR),
+    ]
+    # One entry per name to write: its layer, its rows (top first), the points
+    # its leaders go to, and the point that decides its side of the object.
     names = []
     instances = {}
     # The markers are not geometry of the object, but a name written over one
@@ -397,9 +505,9 @@ def _overlay_edges(request, max_dimension, right, up, keep_out):
         if with_ports:
             edges["Ports"].extend(_marker_edges(location, marker_size))
             marked.extend((flat(origin), flat(tip)))
-            if port.get("port"):
-                names.append(("Ports", port["port"], [tip], None))
-        if with_interfaces and port.get("interface_label"):
+            if port_names and port.get("port"):
+                names.append(("Ports", [port["port"]], [tip], None))
+        if with_interfaces and interface_names and port.get("interface_label"):
             instances.setdefault(_interface_label(port), []).append((origin, tip))
     for label, placed in instances.items():
         # One name, and a line out to each of the ports that belong to it. A
@@ -407,9 +515,11 @@ def _overlay_edges(request, max_dimension, right, up, keep_out):
         # are joined up, and a name with nothing joining it to anything names
         # nothing in particular.
         centre = tuple(sum(tip[axis] for _origin, tip in placed) / len(placed) for axis in range(3))
-        names.append(("Interfaces", label, [origin for origin, _tip in placed], centre))
+        names.append(("Interfaces", [label], [origin for origin, _tip in placed], centre))
+    for rows, centre in _components(request):
+        names.append(("Components", rows, [centre], None))
     if not names:
-        return [("Ports", PORTS_COLOR, edges["Ports"]), ("Interfaces", INTERFACES_COLOR, edges["Interfaces"])]
+        return [(layer, color, edges[layer]) for layer, color in layers]
 
     if marked:
         keep_out = (
@@ -420,12 +530,12 @@ def _overlay_edges(request, max_dimension, right, up, keep_out):
         )
     labels = [
         label_layout.Label(
-            stroke_text.width(text) * label_size,
-            label_size,
+            max(stroke_text.width(row) for row in rows) * label_size,
+            label_size * (1 + ROW_PITCH * (len(rows) - 1)),
             [flat(target) for target in targets],
             None if anchor is None else flat(anchor),
         )
-        for _layer, text, targets, anchor in names
+        for _layer, rows, targets, anchor in names
     ]
     label_layout.layout(labels, keep_out)
 
@@ -433,22 +543,23 @@ def _overlay_edges(request, max_dimension, right, up, keep_out):
     # so how far along the line of sight a name is put changes nothing about
     # where it is drawn; it is put level with what it names.
     normal = _cross(right, up)
-    for (layer, text, targets, _anchor), label in zip(names, labels):
+    for (layer, rows, targets, _anchor), label in zip(names, labels):
         depth = _dot(targets[0], normal)
 
         def lift(point, depth=depth):
             """A point of the picture's plane, back in 3D at 'depth'."""
             return tuple(point[0] * right[axis] + point[1] * up[axis] + depth * normal[axis] for axis in range(3))
 
-        edges[layer].extend(_label_edges(text, lift(label.position), label_size, right, up))
+        # The first row on top: each row is written from its own baseline, the
+        # last of them on the bottom of the box.
+        for index, row in enumerate(rows):
+            baseline = (label.position[0], label.position[1] + label_size * ROW_PITCH * (len(rows) - 1 - index))
+            edges[layer].extend(_label_edges(row, lift(baseline), label_size, right, up))
         attach = lift(label.attach)
         for target in targets:
             edges[layer].extend(_polyline_edges([attach, target]))
 
-    return [
-        ("Ports", PORTS_COLOR, edges["Ports"]),
-        ("Interfaces", INTERFACES_COLOR, edges["Interfaces"]),
-    ]
+    return [(layer, color, edges[layer]) for layer, color in layers]
 
 
 def _interface_shapes(request):
@@ -997,10 +1108,15 @@ def process(path, request):
             )
             _add_projected(exporter, "Annotations", edges, origin, up, look_at, reproducible)
 
-        # The ports and the interfaces, when they were asked for. Drawing them
-        # cannot cost the picture: an overlay that fails is reported and the
-        # projection is still written.
-        if request.get("with_ports") or request.get("with_interfaces"):
+        # The ports and the interfaces, and the callouts on the components,
+        # when they were asked for. Drawing them cannot cost the picture: an
+        # overlay that fails is reported and the projection is still written.
+        if (
+            request.get("with_ports")
+            or request.get("with_interfaces")
+            or request.get(COMPONENT_NAMES_KEY)
+            or request.get(COMPONENT_PRICES_KEY)
+        ):
             try:
                 right, upward = _camera_axes(origin, up, look_at)
                 # The object, as a box in the plane of the picture, which is

@@ -147,6 +147,39 @@ from ..viewport import viewport_options, viewport_params
     is_flag=True,
     show_envvar=True,
 )
+# Callouts: one box on every component (a part, wherever it is placed) with its
+# name and its price, and whether the two overlays above write their names.
+# What the IDE's 3D and 2D tabs offer as boxes under the tree.
+@click.option(
+    "--with-component-names",
+    help="Put a callout on every component with its name",
+    is_flag=True,
+    show_envvar=True,
+)
+@click.option(
+    "--with-component-prices",
+    help=(
+        "Put a callout on every component with its price: its share of what the object costs, from the "
+        "cheapest quote of each thing to order ('pc supply quote'). With --with-component-names, "
+        "the price is the second row of the same callout"
+    ),
+    is_flag=True,
+    show_envvar=True,
+)
+@click.option(
+    "--with-port-names/--without-port-names",
+    "port_names",
+    default=True,
+    help="Write the name of every port --with-ports draws (the default), or draw the ports alone",
+    show_envvar=True,
+)
+@click.option(
+    "--with-interface-names/--without-interface-names",
+    "interface_names",
+    default=True,
+    help="Write the name of every interface --with-interfaces draws (the default), or draw the boundaries alone",
+    show_envvar=True,
+)
 @video_options
 @exclude_option
 @filter_option
@@ -175,6 +208,10 @@ def cli(
     with_interfaces,
     with_all,
     with_internals,
+    with_component_names,
+    with_component_prices,
+    port_names,
+    interface_names,
     style,
     size,
     background,
@@ -217,6 +254,12 @@ def cli(
             # Empty is "every port the overlay found", which is what the three
             # options above meant on their own before this existed.
             "ports": list(ports) or None,
+            "with_component_names": with_component_names,
+            "with_component_prices": with_component_prices,
+            # Sent only when switched off, so that a daemon from before the two
+            # existed is asked exactly what it always was.
+            **({} if port_names else {"with_port_names": False}),
+            **({} if interface_names else {"with_interface_names": False}),
             "object": object,
             **param_params(params),
             **exclude_params(exclude),

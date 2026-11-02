@@ -2581,6 +2581,73 @@ def test_supply_reports_an_object_that_cannot_be_ordered(monkeypatch):
     assert "Nothing to supply for //:missing" in str(caught.value)
 
 
+def _priced(monkeypatch, session, ctx, kind="assembly", name="top"):
+    """'supply.prices' over the supply session above, with the price rule stood in for.
+
+    The rule is 'partcad.component_prices', which has tests of its own; what is
+    under test here is that the daemon hands it this object's quote and parts.
+    """
+    shared = []
+
+    async def component_names_async(shape):
+        return ["//:bolt", "//:nut"] if kind != "part" else ["//:%s" % name]
+
+    async def prices_async(ctx, names, items):
+        shared.append((names, [item["name"] for item in items]))
+        return {"//:bolt": {"price": 1.5 / 4, "currency": "USD"}}
+
+    install_fake_partcad_modules(
+        monkeypatch,
+        {
+            "partcad.component_prices": {
+                "component_names_async": component_names_async,
+                "prices_async": prices_async,
+            },
+        },
+    )
+    shape = FakeObject(name, project_name="//")
+    shape.kind = kind
+    ctx.shapes[(kind, "//:%s" % name)] = shape
+    return shared
+
+
+def test_prices_are_the_objects_quote_shared_out_over_its_parts(monkeypatch):
+    session, ctx = make_supply_session(monkeypatch)
+    shared = _priced(monkeypatch, session, ctx)
+
+    result = operations.supply_prices(session, {"package": "//", "object": "top", "kind": "assembly"})
+
+    assert result == {"object": "//:top", "prices": {"//:bolt": {"price": 0.375, "currency": "USD"}}}
+    # The very quote the Buy tab shows, shared over what the assembly is made of.
+    assert shared == [(["//:bolt", "//:nut"], ["//:bolt", "//:nut"])]
+    assert ("Prices", "//") in session.partcad.logging.processes
+
+
+def test_prices_are_only_of_what_anybody_sells(monkeypatch):
+    session, ctx = make_supply_session(monkeypatch)
+    _priced(monkeypatch, session, ctx)
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.supply_prices(session, {"package": "//", "object": "outline", "kind": "sketch"})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "Only parts, assemblies and scenes are bought" in caught.value.message
+
+
+def test_a_render_asks_for_the_prices_of_the_shape_it_draws(monkeypatch):
+    """The price source an overlay carries is the same rule, for the shape being rendered."""
+    session, ctx = make_supply_session(monkeypatch)
+    _priced(monkeypatch, session, ctx)
+    shape = types.SimpleNamespace(kind="assembly", project_name="//", name="top")
+
+    prices = asyncio.run(operations._component_prices_async(session.partcad, ctx, shape))
+
+    assert prices == {"//:bolt": {"price": 0.375, "currency": "USD"}}
+    # A sketch has no components anybody sells, and is not asked about.
+    sketch = types.SimpleNamespace(kind="sketch", project_name="//", name="outline")
+    assert asyncio.run(operations._component_prices_async(session.partcad, ctx, sketch)) == {}
+
+
 def test_assembly_guide_returns_the_document_of_the_assembly(monkeypatch):
     install_fake_partcad_modules(monkeypatch, {"partcad.exception": {"AssemblyDocumentError": FakeDocumentError}})
     session, _ = make_session()
@@ -4730,24 +4797,47 @@ def test_the_overlay_reader_takes_the_flags_and_the_ports(monkeypatch):
             return "overlay" if any(kwargs[flag] for flag in ("ports", "interfaces", "all")) else None
 
     install_fake_partcad_modules(monkeypatch, {"partcad.render_overlay": {"Overlay": FakeOverlay}})
+    session, _ = make_session()
 
-    assert operations._overlay({}) is None
+    assert operations._overlay(session, {}) is None
+    prices = overlay_calls[-1].pop("prices")
     assert overlay_calls[-1] == {
         "ports": False,
         "interfaces": False,
         "all": False,
         "internals": False,
         "select": None,
+        "component_names": False,
+        "component_prices": False,
+        # The names are written unless a request says not to.
+        "port_names": True,
+        "interface_names": True,
     }
+    # Where the prices come from travels with every overlay, and is asked only
+    # by a picture that shows them.
+    assert callable(prices)
 
-    operations._overlay({"with_ports": True, "ports": ["a", "b"], "with_internals": True})
+    operations._overlay(session, {"with_ports": True, "ports": ["a", "b"], "with_internals": True})
     assert overlay_calls[-1]["select"] == ["a", "b"]
     assert overlay_calls[-1]["internals"] is True
 
     # One name is a name: a client that sends a string rather than a list of one
     # is asking for that port, not for each of its characters.
-    operations._overlay({"with_ports": True, "ports": "only"})
+    operations._overlay(session, {"with_ports": True, "ports": "only"})
     assert overlay_calls[-1]["select"] == ["only"]
+
+    operations._overlay(
+        session,
+        {
+            "with_component_names": True,
+            "with_component_prices": True,
+            "with_port_names": False,
+            "with_interface_names": False,
+        },
+    )
+    asked = overlay_calls[-1]
+    assert (asked["component_names"], asked["component_prices"]) == (True, True)
+    assert (asked["port_names"], asked["interface_names"]) == (False, False)
 
 
 # ---- simulate.list and the snapshots of simulate.run ------------------------

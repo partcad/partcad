@@ -245,6 +245,18 @@ A package can ask for this permanently instead, with `with_ports:` or
 covers reading these drawings when the ports themselves are what is being
 worked on.
 
+`--without-port-names` and `--without-interface-names` draw the overlays
+without their names, for a picture too crowded to read.
+`--with-component-names` puts a callout on every part of the object, joined to
+the middle of it, which is how to tell which part of an assembly is which on a
+picture; `--with-component-prices` adds each part's price as a second row (its
+share of the cheapest supplier quotes, the way `pc supply quote` finds them —
+which asks every supplier, so it is slow, and a part nobody quoted has none):
+
+```sh
+pc --no-ansi render -t png --view iso -O ./out/callouts --with-component-names robot-arm
+```
+
 ## 8. Rendering part of an assembly
 
 `--filter` keeps only some of the links of an assembly or a scene, so a picture

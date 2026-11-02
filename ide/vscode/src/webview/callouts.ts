@@ -118,3 +118,50 @@ export function hasCallouts(root: ShowNode | null | undefined): boolean {
     });
     return found;
 }
+
+/**
+ * What a component is called in its callout.
+ *
+ * Its label - what the assembly holding it calls that link, which is the row
+ * the tree lists it as - and, where it has none (the object shown on its own),
+ * the name of the object it is without the package: every callout of one model
+ * would carry the same package, and only be longer for it. The twin of
+ * 'component_name' in 'src/partcad/builtin/render/render_svg.py', so that the
+ * 2D tab's picture and the 3D view call one part one thing.
+ */
+export function componentName(node: ShowNode): string {
+    if (node.label) {
+        return node.label;
+    }
+    const name = node.name ?? '';
+    return name.split(':').pop() || name;
+}
+
+/**
+ * Whether a node is a component: one that holds no other node - a part,
+ * wherever it is placed. What the "Component names" and "Component prices"
+ * callouts are on, here and on the 2D tab's picture.
+ */
+export function isComponent(node: ShowNode): boolean {
+    return (node.assembly ?? []).length === 0;
+}
+
+/**
+ * The rows of one component's callout, top first: its name where names are
+ * asked for, and its price where prices are and it has one. No rows is no
+ * callout - a part nobody quoted, with only the prices asked for.
+ */
+export function componentRows(
+    name: string,
+    price: string | undefined,
+    choices: { componentNames: boolean; componentPrices: boolean },
+): string[] {
+    const rows: string[] = [];
+    if (choices.componentNames) {
+        rows.push(name);
+    }
+    if (choices.componentPrices && price !== undefined) {
+        rows.push(price);
+    }
+    return rows;
+}
