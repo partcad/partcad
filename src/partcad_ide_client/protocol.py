@@ -337,7 +337,7 @@ SCENARIO_TABS = ("fea", "dynamic", "thermal", "cfd", "simulation")
 # Emulation is not here: it holds nothing yet and is always disabled, so a flag
 # for it could never open it.
 VIEWER_TABS = {
-    "design": ("3d", "2d", "draft"),
+    "design": ("3d", "2d", "draft", "cmf"),
     "analysis": ("fea", "dynamic", "thermal", "cfd"),
     "manufacturing": ("bvb", "build", "supply", "bom", "assembly"),
     "validation": ("test", "simulation"),

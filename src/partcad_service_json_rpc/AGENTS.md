@@ -279,6 +279,14 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
   illustration a second time beside the copy inside it; `image_bytes` carries each picture of the model as its
   bytes and media type rather than as a data URI, which is how the IDE asks (and `manufacturing.plan` takes it
   too). An older daemon ignores both and sends what it always sent, which both clients still read.
+* `cmf.info`, behind the Digital Thread's CMF tab (see `partcad/cmf.py`, "What the IDE shows"): for a part, an
+  assembly or a scene, a row per item the `cmf` check judges -- the part itself, or every part an assembly holds and
+  every sub-assembly in it bought whole -- each with its CMF as `pc info` says it and the check's findings, the
+  incomplete ones first; for a colour, a material or a finish, what the declaration is. A declaration is found by
+  the `kind` the request says, since its name is no object's, and nothing is built for one; an object's items are
+  built, as `pc test` builds them, by the time the 3D view beside the tab has drawn them. The `colors`, `materials`
+  and `finishes` the explorer lists ride on the `items` notification, read off the declarations as `pc list colors`
+  reads them, and the `cmf` of each `bom` line and `manufacturing.tree` node is the item's own, building nothing.
 * `requirements.check`, behind the Digital Thread's Requirements tab: an object's `requirements:` as data -- the features,
   each with the `simulate:` entries that name it (`feature:`), and a line per required port, interface and
   physical property. Without `verify` nothing is built and every verdict is `null`, which is what lets the

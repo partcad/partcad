@@ -286,7 +286,9 @@ class FakeProject:
         self.software = {}
         # The kind a section holds one of, for 'object_descriptions()' below.
         self._sections = {
+            "color": "colors",
             "material": "materials",
+            "finish": "finishes",
             "sketch": "sketches",
             "part": "parts",
             "assembly": "assemblies",
@@ -295,6 +297,10 @@ class FakeProject:
             "software": "software",
         }
         self.materials = {}
+        # The colours and finishes it declares, by name: the declarations
+        # themselves, as 'get_cmf()' answers them.
+        self.colors = {}
+        self.finishes = {}
         self.providers = {}
         self.children = []
         # The providers this package buys through, as `get_suppliers()` reports
@@ -326,6 +332,14 @@ class FakeProject:
         the same fakes, so this reads their 'desc'.
         """
         return {name: getattr(obj, "desc", None) for name, obj in getattr(self, self._sections[kind]).items()}
+
+    def object_names(self, kind):
+        """The names a package declares objects of a kind under; these fakes are their own declarations."""
+        return list(getattr(self, self._sections[kind]))
+
+    def get_cmf(self, kind, name, quiet=False):
+        """A colour, material or finish of this package, as 'Project.get_cmf()' answers it."""
+        return getattr(self, self._sections[kind]).get(name)
 
     def get_child_project_names(self):
         return list(self.children)
@@ -2274,6 +2288,34 @@ def test_load_package_contents_lists_the_packages_software():
             "item_path": os.path.join(project.config_dir, "fw.bin"),
         }
     ]
+
+
+def test_load_package_contents_lists_the_packages_colours_materials_and_finishes():
+    from partcad import cmf, material
+
+    session, seen = make_session()
+    project = session.partcad_ctx.projects["//"]
+    project.colors = {
+        "red": cmf.Color("red", "//", {"display": "#C91A09", "desc": "Signal red"}),
+        "preview": cmf.Color("preview", "//", {"display": "#00FF00", "manufacturable": False}),
+        "stone": cmf.Color("stone", "//", {"type": "alias", "source": "//vendor:Medium Stone Grey"}),
+    }
+    project.materials = {"alu": material.Material("alu", "//", {"density": 2700, "color": ":natural"})}
+    project.finishes = {"satin": cmf.Finish("satin", "//", {"display": {"roughness": 0.6}})}
+
+    operations._load_package_contents(session, "//")
+
+    (items,) = [payload for event, payload in seen if event == events.ITEMS]
+    # Beside the objects, so the explorer can list them; what each says of
+    # itself and nothing it would have to look up in another package - an
+    # alias's target is in '//vendor', which listing this one must not load.
+    assert items["colors"] == [
+        {"name": "red", "type": "color", "desc": "Signal red", "display": "#C91A09", "manufacturable": True},
+        {"name": "preview", "type": "color", "display": "#00FF00", "manufacturable": False},
+        {"name": "stone", "type": "alias", "desc": "alias of //vendor:Medium Stone Grey", "manufacturable": True},
+    ]
+    assert items["materials"] == [{"name": "alu", "type": "material", "manufacturable": True}]
+    assert items["finishes"] == [{"name": "satin", "type": "finish", "manufacturable": True}]
 
 
 def test_load_package_contents_skips_a_child_package_it_cannot_read():

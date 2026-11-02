@@ -670,6 +670,13 @@
         "enablement": "!partcad.editingExternally"
       },
       {
+        "command": "partcad.inspectCmf",
+        "category": "PartCAD",
+        "title": "Display",
+        "icon": "$(eye)",
+        "enablement": "!partcad.editingExternally"
+      },
+      {
         "command": "partcad.test",
         "category": "PartCAD",
         "title": "Test",
@@ -917,6 +924,11 @@
           "command": "partcad.inspectInterface",
           "group": "navigation",
           "when": "view == partcadExplorer && (viewItem == interface || viewItem == interfaceWithCode)"
+        },
+        {
+          "command": "partcad.inspectCmf",
+          "group": "navigation",
+          "when": "view == partcadExplorer && viewItem == cmf"
         },
         {
           "command": "partcad.inspectPart",

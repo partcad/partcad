@@ -64,4 +64,24 @@ whether it is only a picture, and what it is. ``pc info`` of a part says what it
 
 A part's CMF travels with its geometry, inside its BREP, so whatever draws the part draws it in its colours: the SVG,
 PNG and JPEG drawings colour each face as its CMF says, and the glTF a part is shown with carries a material per
-colour.
+colour, which the Digital Thread's 3D view draws each face in.
+
+In the UI
+=========
+
+**The PartCAD Explorer** lists a package's colours, materials and finishes after its objects, each with the colour it is
+drawn in and a mark on one that is display-only. Opening one shows it in the Digital Thread on its own -- there is
+nothing of it to turn or render -- as a page saying what it is: its name and a swatch of its display (a material's
+colour claim; a finish's roughness and metallic), its description, whether it is a claim that it can be had or only a
+picture, the reference an item names it by, what other systems call it (``ids``), and its aliases.
+
+**The CMF tab**, under Design beside 3D, 2D and Draft, says what an object is in. A part is one item; an assembly or a
+scene is every part it holds and every sub-assembly in it that is bought whole, each once, with how many there are. Each
+item lists its sets -- colour, material and finish, each by name with a swatch, marked when display-only, and how many
+faces and solids are in it, and where it came from -- what is left unspecified, and what keeps it from being made, in
+the words of ``pc test``'s ``cmf`` check. The items the check finds incomplete come first. ``pc ide view --design-cmf``
+opens on it.
+
+**The Bill of Materials and Build vs Buy** tables have Color, Material and Finish columns, so a line is ordered in
+what it is in. A line says what its geometry carries once the item has been built -- showing it in 3D builds it -- and
+what it declares until then, which its tooltip says.

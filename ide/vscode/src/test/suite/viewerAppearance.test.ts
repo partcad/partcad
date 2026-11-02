@@ -26,7 +26,9 @@ import {
     appearanceKey,
     appearanceOf,
     edgeColor,
+    ownAppearance,
     parseColor,
+    primitiveAppearance,
 } from '../../webview/appearance';
 import { ShowNode } from '../../webview/messages';
 import { walk } from '../../webview/nodes';
@@ -125,6 +127,48 @@ suite('What colour a shape is drawn in', () => {
         assert.strictEqual(appearanceKey(DEFAULT_APPEARANCE), 'daa520ff');
         assert.notStrictEqual(appearanceKey(parseColor('#DAA52080')!), appearanceKey(DEFAULT_APPEARANCE));
         assert.notStrictEqual(appearanceKey(parseColor('#DAA521')!), appearanceKey(DEFAULT_APPEARANCE));
+    });
+
+    test('a primitive the glTF colours keeps its colour, read back from the linear factors it was written in', () => {
+        // What a part's glb carries for a face in '#C91A09' (see
+        // 'wrapper_gltf._colored'), as three's loader reads the factor: linear.
+        const material = new THREE.MeshStandardMaterial();
+        material.color.setRGB(
+            0.5840784311294556,
+            0.01032982300966978,
+            0.0027317428030073643,
+            THREE.LinearSRGBColorSpace,
+        );
+
+        const own = ownAppearance(material, true);
+        assert.deepStrictEqual(own, { color: 0xc91a09, opacity: 1 });
+        // Its own colour wins over the node's, which is the part's or an
+        // assembly's: a face is more specific than either.
+        assert.deepStrictEqual(primitiveAppearance(own, DEFAULT_APPEARANCE), own);
+        material.dispose();
+    });
+
+    test('a primitive with no material of its own keeps the colour of its node', () => {
+        // three hands such a primitive a white default material, which is not a
+        // colour anybody stated.
+        const fallback = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        assert.strictEqual(ownAppearance(fallback, false), undefined);
+        assert.strictEqual(ownAppearance(undefined, true), undefined);
+        assert.strictEqual(ownAppearance([fallback], true), undefined);
+
+        const red = parseColor('#C91A09')!;
+        assert.deepStrictEqual(primitiveAppearance(undefined, red), red);
+        fallback.dispose();
+    });
+
+    test("a see-through primitive is as see-through as its file blends it, and an opaque one's alpha means nothing", () => {
+        const blended = new THREE.MeshStandardMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
+        assert.deepStrictEqual(ownAppearance(blended, true), { color: 0x00ff00, opacity: 0.5 });
+
+        const opaque = new THREE.MeshStandardMaterial({ color: 0x00ff00, transparent: false, opacity: 0.5 });
+        assert.deepStrictEqual(ownAppearance(opaque, true), { color: 0x00ff00, opacity: 1 });
+        blended.dispose();
+        opaque.dispose();
     });
 
     test('a line across a shape is a deeper shade of it, and still a line on a dark one', () => {

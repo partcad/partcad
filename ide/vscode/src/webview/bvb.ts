@@ -37,8 +37,9 @@
 //
 
 import { ObjectUrls } from './blobs';
+import { CMF_COLUMNS, cmfColumns } from './cmf';
 import { el, empty, placeholder } from './dom';
-import { BvbData, Choices, ItemDetails, TreeNode } from './messages';
+import { BvbData, CmfInfo, Choices, ItemDetails, TreeNode } from './messages';
 
 export type Choice = 'build' | 'buy';
 
@@ -299,9 +300,19 @@ function round(value: number): string {
     return String(Number(value.toFixed(digits)));
 }
 
-/** A material reference, as a reader would say it: the name, not the package it is catalogued in. */
-export function materialName(reference: string): string {
-    return reference.split(':').pop() || reference;
+/**
+ * What a line is in, for its Color, Material and Finish columns.
+ *
+ * The node's own CMF where the daemon says it ('cmf', the same as a bill of
+ * materials line). A daemon too old to say still names the material a line's
+ * properties state, and that is what the Material column showed before there
+ * were three; it is shown as a material it names, and nothing else is guessed.
+ */
+export function lineCmf(node: TreeNode): CmfInfo | null {
+    if (node.cmf !== undefined) {
+        return node.cmf;
+    }
+    return node.material ? { sets: [{ material: node.material }] } : null;
 }
 
 /** The size the thumbnails are drawn at, and asked for at. */
@@ -427,7 +438,7 @@ export class BvbView {
             ['Count', 'numeric'],
             ['Dimensions', 'numeric'],
             ['Weight', 'numeric'],
-            ['Material', ''],
+            ...CMF_COLUMNS,
         ] as [string, string][]) {
             head.appendChild(el('th', className, column));
         }
@@ -476,7 +487,9 @@ export class BvbView {
         line.appendChild(el('td', 'numeric', details?.size ? formatSize(details.size) : ''));
         const mass = massOf(row, this.details);
         line.appendChild(el('td', 'numeric', mass === undefined ? '' : formatMass(mass)));
-        line.appendChild(el('td', undefined, row.node.material ? materialName(row.node.material) : ''));
+        for (const cell of cmfColumns(lineCmf(row.node))) {
+            line.appendChild(cell);
+        }
         return line;
     }
 

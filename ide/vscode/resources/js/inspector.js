@@ -32,7 +32,7 @@
   window.addEventListener('message', event => {
     const message = event.data; // The json data that the extension sent
     let config = {};
-    if (message.type === 'package' || message.type === 'sketch' || message.type === 'interface' || message.type === 'part' || message.type === 'assembly' || message.type === 'scene' || message.type === 'software') {
+    if (message.type === 'package' || message.type === 'sketch' || message.type === 'interface' || message.type === 'part' || message.type === 'assembly' || message.type === 'scene' || message.type === 'software' || message.type === 'cmf') {
       config = message.obj['config'];
     }
     switch (message.type) {
@@ -111,6 +111,35 @@
             // of the package is what identifies it and no hash is required.
             if (config['fileHash']) {
               html += `<tr><td>Hash:</td><td>${escapeHtml(config['fileHash'])}</td></tr>`;
+            }
+            html += `</table>`;
+            contents.innerHTML = html;
+          }
+          break;
+        }
+      case 'cmf':
+        {
+          // A colour, a material or a finish: what an object is made in. There
+          // is nothing to render and nothing to set, so this says what the
+          // explorer row says of it, and the Digital Thread's CMF tab the rest.
+          let contents = document.querySelector('.contents');
+          if (contents) {
+            const kinds = { color: 'Colour', material: 'Material', finish: 'Finish' };
+            let html = `<table class="inspector">`;
+            html += `<tr><td>Name:</td><td>${escapeHtml(message.obj['name'])}</td></tr>`;
+            html += `<tr><td>Package:</td><td>${escapeHtml(message.obj['pkg'])}</td></tr>`;
+            html += `<tr><td>Kind:</td><td>${escapeHtml(kinds[message.obj['kind']] || message.obj['kind'])}</td></tr>`;
+            if (config['type'] === 'alias') {
+              html += `<tr><td>Type:</td><td>alias</td></tr>`;
+            }
+            if (config['desc']) {
+              html += `<tr><td>Description:</td><td>${escapeHtml(config['desc'])}</td></tr>`;
+            }
+            if (config['display']) {
+              html += `<tr><td>Display:</td><td>${escapeHtml(config['display'])}</td></tr>`;
+            }
+            if (config['manufacturable'] !== undefined) {
+              html += `<tr><td>Manufacturable:</td><td>${config['manufacturable'] ? 'yes' : 'no (display only)'}</td></tr>`;
             }
             html += `</table>`;
             contents.innerHTML = html;

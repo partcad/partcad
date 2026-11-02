@@ -23,7 +23,8 @@ import type { SpaceMouseSettings } from './spacemouse';
  * 'manufacturing', what making it takes; 'validation', whether it is what it
  * claims to be and does what it is supposed to; and 'operations', which has
  * nothing in it yet and is shown disabled. Each group is a strip of its own:
- * the object as '3d' (first, always), '2d' and 'draft'; 'fea', 'dynamic',
+ * the object as '3d' (first, always), '2d', 'draft' and 'cmf' (what each of
+ * its items is in: colour, material, finish); 'fea', 'dynamic',
  * 'thermal' and 'cfd'; 'bvb' (Build vs Buy), 'build', 'supply' (labelled Buy),
  * 'bom' and 'assembly'; and 'test', what 'pc test' says of it check by check,
  * before 'simulation' and 'emulation' (Process Emulation), which has nothing in
@@ -31,6 +32,10 @@ import type { SpaceMouseSettings } from './spacemouse';
  *
  * In front of the five, and only for an object that declares any:
  * 'requirements', a tab of its own with no strip under it.
+ *
+ * A colour, a material or a finish opened from the explorer is not an object
+ * with a shape, and has none of that: Design alone, opened and not shown, with
+ * 'cmf' the one tab in it (see 'isDeclaration').
  */
 export type TabId =
     | 'requirements'
@@ -42,6 +47,7 @@ export type TabId =
     | '3d'
     | '2d'
     | 'draft'
+    | 'cmf'
     | 'bvb'
     | 'build'
     | 'bom'
@@ -64,7 +70,29 @@ export type TabId =
 export type AnalysisTabId = Extract<TabId, 'fea' | 'dynamic' | 'thermal' | 'cfd'>;
 
 /** The Design tab's own tabs. */
-export const DESIGN_TABS: TabId[] = ['3d', '2d', 'draft'];
+export const DESIGN_TABS: TabId[] = ['3d', '2d', 'draft', 'cmf'];
+
+/**
+ * The kinds of CMF declaration the explorer lists beside the objects: a
+ * package's 'colors:', 'materials:' and 'finishes:', in the order CMF names
+ * them (see docs/design/cmf.md).
+ */
+export const DECLARATION_KINDS = ['color', 'material', 'finish'];
+
+/**
+ * Whether what is shown is a CMF declaration rather than an object.
+ *
+ * A colour has no shape to turn, no drawing, nothing to analyse, make or test,
+ * so the panel shows it as an interface is shown in the design: the Design
+ * group alone, opened and not shown, and in it the CMF tab alone - one tab,
+ * which is no choice, so neither strip is drawn and the pane is the panel.
+ */
+export function isDeclaration(kind: string | null | undefined): boolean {
+    return DECLARATION_KINDS.includes(kind ?? '');
+}
+
+/** The kinds of object the CMF tab lists the items of: what is made in a colour, a material and a finish. */
+export const CMF_KINDS = ['part', 'assembly', 'scene'];
 
 /**
  * Every group of the panel's strip that holds tabs of its own, and those tabs in
@@ -752,6 +780,13 @@ export interface BomItem {
     sku?: string | null;
     // eslint-disable-next-line @typescript-eslint/naming-convention
     count_per_sku?: number | null;
+    /**
+     * The item's own colour, material and finish, for the Color, Material and
+     * Finish columns: what its geometry carries where it has been built, and
+     * what it declares otherwise ('declared'). Absent from a daemon too old to
+     * say, null for an item that states none.
+     */
+    cmf?: CmfInfo | null;
 }
 
 export interface BomData {
@@ -1017,6 +1052,8 @@ export interface TreeNode {
     sku?: string | null;
     /** The material reference, as written. */
     material?: string | null;
+    /** Its own colour, material and finish, as a bill of materials line says them (see 'BomItem.cmf'). */
+    cmf?: CmfInfo | null;
     /**
      * The file the object is made from - its script, STEP or ASSY file - as an
      * absolute path on the daemon's machine, or absent when it has none of its
@@ -1045,6 +1082,97 @@ export interface TreeNode {
     stock?: TreeNode;
     /** An assembly's links, in order. */
     children?: TreeNode[];
+}
+
+/** A component of CMF: what a set names, and what a column is for. */
+export type CmfComponent = 'color' | 'material' | 'finish';
+
+/**
+ * One set of a part's CMF, as 'pc info' says it ('partcad.cmf.info_of'): a
+ * colour, a material and a finish, each a canonical reference and each
+ * optional, with what is drawn for them and where they came from.
+ */
+export interface CmfSet {
+    color?: string;
+    material?: string;
+    finish?: string;
+    /** The components that are only a picture: an 'rgba' colour, or a declaration saying 'manufacturable: false'. */
+    displayOnly?: CmfComponent[];
+    /** What the colour is drawn in, '#RRGGBBAA'. */
+    display?: string;
+    /** The finish's look, from 0 to 1, for a 3D view. */
+    roughness?: number;
+    metallic?: number;
+    /** Where the set came from: 'declared', 'source:step', ... */
+    origin?: string;
+    /** How many faces and solids are in it, or 'all' when it is the part's own set and nothing is counted. */
+    faces?: number | 'all';
+    solids?: number | 'all';
+}
+
+/** What an item's CMF comes to: its sets, and what is left unspecified ('all', 'some', or a count). */
+export interface CmfInfo {
+    sets: CmfSet[];
+    unspecified?: Partial<Record<CmfComponent, number | 'all' | 'some'>>;
+    /** Read off what the object declares, before its source was read: what that source states is not known yet. */
+    declared?: boolean;
+}
+
+/** One row of the CMF tab of a part or an assembly: an item the 'cmf' check judges. */
+export interface CmfItem {
+    /** '//package:name'. */
+    name: string;
+    kind: 'part' | 'assembly';
+    /** How many of it the object holds. */
+    count: number;
+    desc?: string | null;
+    cmf: CmfInfo | null;
+    /** What keeps it from being specified, in the 'cmf' check's words; empty when nothing does. */
+    findings: string[];
+    /** Why the check does not ask it to be specified: it is bought, or not to be made. */
+    exempt?: string;
+    /** Why nothing could be said of it. */
+    error?: string;
+}
+
+/** A colour, a material or a finish, as 'cmf.info' answers about one ('partcad.cmf.declaration_data'). */
+export interface CmfDeclaration {
+    name: string;
+    kind: string;
+    package: string;
+    /** Its canonical reference: what an item that names it is named with. */
+    reference: string;
+    /** Whether it is a claim that it can be had as declared, or only a picture. */
+    manufacturable: boolean;
+    desc?: string;
+    url?: string;
+    /** What it is another name for, as written, when it is an alias. */
+    aliasOf?: string;
+    ids?: Record<string, string>;
+    aliases?: string[];
+    /** The names of its parameters, when it is parametric: shown with their defaults. */
+    parametric?: string[];
+    /** What it is drawn in, '#RRGGBB[AA]': a colour's display, a material's look or the colour it claims. */
+    display?: string;
+    /** The display as written, which may name another colour. */
+    displayText?: string;
+    /** A material's claim to a colour for its natural surface, canonical. */
+    colorClaim?: string;
+    roughness?: number;
+    metallic?: number;
+    /** The rest of what 'pc info' says of it: a material's density, its full name. */
+    facts?: Record<string, unknown>;
+    errors?: string[];
+}
+
+/** What 'cmf.info' answers: a declaration, or the items of an object. */
+export interface CmfData {
+    object: string;
+    kind: string;
+    declaration?: CmfDeclaration;
+    items?: CmfItem[];
+    /** For an assembly: the CMF it sets itself, which draws what it holds rather than specifying it. */
+    own?: { cmf: CmfInfo | null; findings: string[] };
 }
 
 /** The 'bvb' tab's data: the tree, and what this user chose for it last time. */
