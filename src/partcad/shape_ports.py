@@ -264,13 +264,19 @@ async def prepare_async(shape, ctx) -> None:
         await shape.with_ports.resolve_async()
 
     config = getattr(shape, "config", None) or {}
-    if not config.get(assembly_ports.MAP) and config.get("type") == "enrich" and hasattr(shape, "prepare_async"):
+    if config.get("type") == "enrich" and hasattr(shape, "prepare_async"):
         # An enrich reports its source's declaration, 'map:' included, once it
         # is prepared (see 'enrich.adopt_source_config') - and an assembly in a
         # colour of its own is an enrich of one, joined by the ports its
         # source's 'map:' gives it. Asked before it has been prepared, it would
         # have none.
         await shape.prepare_async(wait=True)
+        # Its ports are its source's, and resolved there: once for the source
+        # and every variant of it (see 'AssemblyFactoryEnrich.prepare_async').
+        source = getattr(shape, "ports_source", None)
+        if source is not None and source is not shape:
+            await prepare_async(source, ctx)
+            return
         config = getattr(shape, "config", None) or {}
     if not config.get(assembly_ports.MAP):
         return

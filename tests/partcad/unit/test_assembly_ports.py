@@ -391,6 +391,36 @@ def test_an_enriched_assembly_with_no_map_of_its_own_has_its_source_s_ports():
     assert _at(mount, "top-thru-m3") == pytest.approx((-10.0, 10.0, 20.0))
 
 
+def test_preparing_an_enriched_assembly_does_not_walk_its_source(monkeypatch):
+    """Its ports are its source's, worked out when asked for and not while it is prepared.
+
+    A preparation is what every reader of the object's cache key waits for, and
+    walking the source builds it: a LEGO shortcut in a colour of its own kept
+    every other reader waiting past the minute they may, and they failed.
+    """
+    from partcad import assembly_ports
+
+    walked = []
+    resolve = assembly_ports.resolve_async
+
+    async def recording(shape, ctx):
+        walked.append(shape.name)
+        await resolve(shape, ctx)
+
+    monkeypatch.setattr(assembly_ports, "resolve_async", recording)
+
+    ctx = pc.init(PACKAGE)
+    mount = ctx._get_assembly(":mount-again")
+    asyncio.run(mount.prepare_async(wait=True))
+    assert walked == []
+    assert mount.ports_source is not None
+    assert mount.with_ports is mount.ports_source.with_ports
+
+    asyncio.run(shape_ports.prepare_async(mount, ctx))
+    assert mount.with_ports.map_resolved()
+    assert _at(mount, "hold") == pytest.approx((0.0, 0.0, 5.0))
+
+
 def test_a_node_s_port_may_be_externalized_beside_where_it_is():
     _, mount = _assembly("mount-offset")
     assert _at(mount, "beside") == pytest.approx((3.0, 0.0, 5.0))

@@ -77,11 +77,18 @@ class AssemblyFactoryEnrich(afa.AssemblyFactoryAlias):
         # instance this enriches is where those children are: an assembly in a
         # colour of its own - a LEGO wheel, a battery box - is joined by exactly
         # the ports the one it is a variant of is.
-        from . import shape_ports
-
-        await shape_ports.prepare_async(source, self.ctx)
-        if getattr(source, "with_ports", None) is not None:
+        #
+        # Only pointed at here, not worked out: that walks the source, which
+        # builds it, and a preparation is something every reader of this
+        # object's cache key waits for - a minute of building inside it is a
+        # minute they wait, and longer than they may. 'shape_ports.prepare_async'
+        # resolves them, on the source, for whoever asks for the ports.
+        #
+        # One that declares a 'map:' of its own is joined by what that names,
+        # which is worked out on this object like any other assembly's.
+        if not self.enrich_declaration.get("map") and getattr(source, "with_ports", None) is not None:
             assembly.with_ports = source.with_ports
+            assembly.ports_source = source
 
     def instantiate(self, assembly):
         with pc_logging.Action("Enrich", assembly.project_name, f"{assembly.name}:{self.source_assembly_name}"):
