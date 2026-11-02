@@ -39,6 +39,7 @@ circle
 circles
 climb
 cm
+cmf
 cnc
 collide
 collision
