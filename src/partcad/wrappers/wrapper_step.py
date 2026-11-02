@@ -37,8 +37,9 @@ import wrapper_common
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again. 2: the colours and materials the file states are
-# read (see 'step_cmf'); the geometry is the same, byte for byte.
-CACHE_VERSION = 2
+# read (see 'step_cmf'); the geometry is the same, byte for byte. 3: a colour
+# is the sRGB the file states rather than OCCT's linear value of it.
+CACHE_VERSION = 3
 
 
 def _plain(readable_path):
