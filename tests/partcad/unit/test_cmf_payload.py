@@ -531,3 +531,40 @@ def test_a_section_written_for_other_geometry_is_drawn_in_the_node_s_colour():
     groups = appearance.split_by_color(tree, whole)
 
     assert [color for color, _shape in groups] == [appearance.DEFAULT_COLOR]
+
+
+def test_a_display_only_colour_is_its_own_reference_and_no_claim(tmp_path, monkeypatch):
+    """'//pub/std/color:rgba;color=…' states itself in full: no package is asked, and it claims nothing."""
+    ctx = _package(tmp_path, {"box": _stl(color="//pub/std/color:rgba;color=c91a09ff")}, files={"box.stl": ""})
+    asked = []
+    real = cmf.lookup
+
+    def recording(ctx, kind, ref, *args, **kwargs):
+        asked.append(ref)
+        return real(ctx, kind, ref, *args, **kwargs)
+
+    monkeypatch.setattr(cmf, "lookup", recording)
+    reference = cmf.canonical(ctx, "color", "//pub/std/color:rgba;color=c91a09ff")
+    assert reference == "//pub/std/color:rgba;color=C91A09FF"
+    described = cmf.key_of(ctx, ctx.get_part("//cmf:box"))
+    assert described["color"] == {"reference": reference, "display": [201, 26, 9, 1.0], "manufacturable": False}
+    assert not [ref for ref in asked if ref.startswith("//pub/std/color:rgba")]
+
+
+def test_an_alias_of_a_parametric_instance_is_listed_by_its_look(tmp_path):
+    """An alias naming 'rgba;color=…' shows that colour, and keeps the description it gives itself."""
+    from partcad_service_json_rpc.core import operations
+
+    ctx = _package(
+        tmp_path,
+        files={"box.stl": ""},
+        colors=dict(
+            COLORS,
+            rgba={"parameters": {"color": {"type": "string", "default": "000000FF"}}, "display": "#%color%"},
+            signal={"type": "alias", "source": ":rgba;color=C91A09FF", "desc": "the signal red"},
+        ),
+    )
+    rows = operations._cmf_rows(ctx, ctx.get_project("//cmf"), "color")
+    assert rows["rgba"].startswith("parametric")
+    assert rows["signal"].startswith("#C91A09")
+    assert "the signal red" in rows["signal"]

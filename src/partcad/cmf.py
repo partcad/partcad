@@ -365,6 +365,12 @@ def canonical(ctx, kind: str, value, relative_to: str = "", quiet: bool = True) 
     value = value.strip()
     if not value:
         return None
+    # A display-only colour states itself in full: it is its own canonical
+    # reference, and the standard catalogue need not be at hand to say so.
+    if kind == "color":
+        rgba = rgba_of_reference(value)
+        if rgba is not None:
+            return rgba_reference(rgba)
     if ctx is not None:
         found = lookup(ctx, kind, value, relative_to, quiet=True)
         if found is not None:
@@ -557,12 +563,20 @@ def key_of(ctx, shape) -> dict:
         return {}
     described = {"version": KEY_VERSION}
     for kind, reference in sorted(references.items()):
-        declaration = lookup(ctx, kind, reference, quiet=True) if ctx is not None else None
-        rgba = display(ctx, declaration) if declaration is not None else rgba_of_reference(reference)
+        # A display-only colour is read off the reference itself, and is no claim.
+        rgba = rgba_of_reference(reference) if kind == "color" else None
+        declaration = None
+        if rgba is None and ctx is not None:
+            declaration = lookup(ctx, kind, reference, quiet=True)
+            rgba = display(ctx, declaration) if declaration is not None else None
+        if declaration is not None:
+            manufacturable = declaration.manufacturable
+        else:
+            manufacturable = False if rgba is not None else None
         described[kind] = {
             "reference": reference,
             "display": list(rgba) if rgba is not None else None,
-            "manufacturable": declaration.manufacturable if declaration is not None else None,
+            "manufacturable": manufacturable,
         }
     return described
 

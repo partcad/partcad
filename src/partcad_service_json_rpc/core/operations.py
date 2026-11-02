@@ -2841,6 +2841,7 @@ def _cmf_rows(ctx, project, kind: str) -> dict:
             rows[name] = "<broken>"
             continue
         alias = ""
+        desc = declaration.desc
         if declaration.is_alias and declaration.source is None:
             rows[name] = "<broken> (an alias naming nothing)"
             continue
@@ -2852,7 +2853,11 @@ def _cmf_rows(ctx, project, kind: str) -> dict:
             if declaration is None:
                 rows[name] = "<broken>%s" % alias
                 continue
-        if declaration.config.get("parameters"):
+            # The alias's own description where it gives one, else what it names.
+            desc = desc or declaration.desc
+        # Parametric is a declaration listed without values: an instance of
+        # one ('rgba;color=C91A09FF', which an alias may name) has a look.
+        if declaration.config.get("parameters") and not declaration.parameter_values:
             look = "parametric"
         elif kind == "finish":
             look = declaration.cmf_info().get("Display", "-")
@@ -2860,7 +2865,7 @@ def _cmf_rows(ctx, project, kind: str) -> dict:
             rgba = cmf.display(ctx, declaration)
             look = cmf.css_color.to_hex(rgba) if rgba is not None else "-"
         made = "" if declaration.manufacturable else " (display only)"
-        rows[name] = "%-11s%s%s%s" % (look, " " + declaration.desc if declaration.desc else "", made, alias)
+        rows[name] = "%-11s%s%s%s" % (look, " " + desc if desc else "", made, alias)
     return rows
 
 
