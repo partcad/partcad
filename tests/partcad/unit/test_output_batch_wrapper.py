@@ -620,7 +620,8 @@ def test_the_package_a_sandbox_was_sent_is_the_one_a_file_is_handed(
 
 def test_the_groups_come_off_the_arguments_and_leave_the_triples(wrapper_export):
     argv = ["export.py", "a", "dir", "s.py", "b", "dir", "s.py", "--package-dir", "1", "/x/pkg"]
-    assert wrapper_export.package_dirs(argv) == {1: "/x/pkg"}
+    # Normalized like the triples' paths, so "\\x\\pkg" on Windows.
+    assert wrapper_export.package_dirs(argv) == {1: os.path.normpath("/x/pkg")}
     assert wrapper_export.arguments(argv) == [("a", "dir", "s.py"), ("b", "dir", "s.py")]
     # A path that happens to be called that is a path.
     argv = ["export.py", "--package-dir", "dir", "s.py"]
