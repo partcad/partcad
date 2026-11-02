@@ -15,9 +15,12 @@ to) - so a STEP part is the same part it was, now with CMF.
 What the file states is written into the section as it stated it, in sets of
 origin 'raw:step' (see 'partcad.cmf_conventions'), for the core to convert: a
 colour as '#RRGGBB' of its value, a material by its name. A STEP colour's
-numbers are taken as sRGB, which is how every CAD tool that writes them means
-them; OCCT keeps them as it read them ('Quantity_TOC_RGB'), so they are read
-back unconverted here.
+numbers are sRGB, which is how every CAD tool that writes them means them and
+how OCCT treats them: its reader turns a 'COLOUR_RGB' into the linear values a
+'Quantity_Color' holds, and its writer turns them back. So a colour is read
+here as 'Values(Quantity_TOC_sRGB)' and written from 'Quantity_TOC_sRGB' - the
+numbers in the file - and never as 'Red()', which is the linear value and
+reads a file's #C91A09 as #950301.
 
 Inner wins, as in STEP itself: a face's own style over its shell's or its
 solid's, a solid's over its compound's.
@@ -39,11 +42,23 @@ def _color(style):
     """'(designation, rgba)' of a style's surface colour, or None."""
     if not style.IsSetColorSurf():
         return None
-    rgba = style.GetColorSurfRGBA()
-    color = rgba.GetRGB()
-    red, green, blue = _byte(color.Red()), _byte(color.Green()), _byte(color.Blue())
-    alpha = float(rgba.Alpha())
-    return "#%02X%02X%02X" % (red, green, blue), (red, green, blue, alpha)
+    return _designated(style.GetColorSurfRGBA())
+
+
+def _designated(rgba):
+    """'(designation, rgba)' of a 'Quantity_ColorRGBA': the sRGB numbers a file states, as '#RRGGBB' and bytes."""
+    from OCP.Quantity import Quantity_TOC_sRGB
+
+    red, green, blue = (_byte(value) for value in rgba.GetRGB().Values(Quantity_TOC_sRGB))
+    return "#%02X%02X%02X" % (red, green, blue), (red, green, blue, float(rgba.Alpha()))
+
+
+def _quantity(rgba):
+    """A 'Quantity_ColorRGBA' of an sRGB '(red, green, blue, alpha)', the bytes a section holds."""
+    from OCP.Quantity import Quantity_Color, Quantity_ColorRGBA, Quantity_TOC_sRGB
+
+    color = Quantity_Color(rgba[0] / 255.0, rgba[1] / 255.0, rgba[2] / 255.0, Quantity_TOC_sRGB)
+    return Quantity_ColorRGBA(color, float(rgba[3]))
 
 
 def _labels(shape_tool, root):
@@ -277,9 +292,7 @@ def instance_color(label):
     for kind in (XCAFDoc_ColorSurf, XCAFDoc_ColorGen):
         rgba = Quantity_ColorRGBA()
         if XCAFDoc_ColorTool.GetColor_s(label, kind, rgba):
-            color = rgba.GetRGB()
-            red, green, blue = _byte(color.Red()), _byte(color.Green()), _byte(color.Blue())
-            return "#%02X%02X%02X" % (red, green, blue), (red, green, blue, float(rgba.Alpha()))
+            return _designated(rgba)
     return None
 
 
@@ -292,7 +305,6 @@ def write(path, shape, section=None):
     material per product, which is where OCCT writes it).
     """
     from OCP.IFSelect import IFSelect_RetDone
-    from OCP.Quantity import Quantity_Color, Quantity_TOC_RGB
     from OCP.STEPCAFControl import STEPCAFControl_Writer
     from OCP.STEPControl import STEPControl_AsIs
     from OCP.TCollection import TCollection_ExtendedString, TCollection_HAsciiString
@@ -328,8 +340,7 @@ def write(path, shape, section=None):
                     continue
                 sub = shape_tool.AddSubShape(label, faces.FindKey(index + 1))
                 if not sub.IsNull():
-                    color = Quantity_Color(rgba[0] / 255.0, rgba[1] / 255.0, rgba[2] / 255.0, Quantity_TOC_RGB)
-                    color_tool.SetColor(sub, color, XCAFDoc_ColorSurf)
+                    color_tool.SetColor(sub, _quantity(rgba), XCAFDoc_ColorSurf)
         solids = TopTools_IndexedMapOfShape()
         TopExp.MapShapes_s(base, TopAbs_SOLID, solids)
         materials = {section.solid_set(index).material for index in range(solids.Extent())} or {

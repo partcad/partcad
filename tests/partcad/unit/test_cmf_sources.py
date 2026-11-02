@@ -28,6 +28,7 @@ import asyncio
 import locale
 import logging
 import os
+import re
 import sys
 import zipfile
 
@@ -391,8 +392,29 @@ def test_a_step_file_is_the_geometry_the_plain_reader_read(tmp_path):
     shape, section = step_cmf.read(path)
 
     assert ocp_serialize.shape_to_brep(shape) == ocp_serialize.shape_to_brep(plain)
-    # Its faces in the six colours the file paints them.
-    assert len({section.face_set(i).color for i in range(len(section.faces))}) == 6
+    # Its faces in the six colours the file paints them - the numbers its
+    # COLOUR_RGB entities state, not OCCT's linear values of them, which turn
+    # its #404040 body into #0D0D0D and its #008040 and #0080FF into #00370D
+    # and #0037FF.
+    colors = {section.face_set(i).color for i in range(len(section.faces))}
+    assert colors == {"#000000", "#008040", "#0080FF", "#404040", "#FF0000", "#FFFFFF"}
+
+
+def test_a_step_colour_is_the_srgb_the_file_states(tmp_path):
+    """OCCT turns a 'COLOUR_RGB' into linear values; the file's numbers are what goes in and comes out."""
+    step_cmf = _wrappers()
+    import build123d as bd
+
+    path = str(tmp_path / "red.step")
+    section = Section([CmfSet(color="#C91A09", rgba=(201, 26, 9, 1.0), origin="raw:step")], 0)
+    step_cmf.write(path, bd.Box(1, 1, 1).wrapped, section)
+
+    with open(path, encoding="latin-1") as stream:
+        text = "".join(stream.read().split())
+    # 201/255, 26/255 and 9/255: the bytes the section holds, as the file states them.
+    assert re.search(r"COLOUR_RGB\('',0\.7882\d*,0\.1019\d*,3\.5294\d*E-02\)", text), text
+    _shape, found = step_cmf.read(path)
+    assert found.face_set(0).color == "#C91A09"
 
 
 # ---------------------------------------------------------------- scripts and meshes
