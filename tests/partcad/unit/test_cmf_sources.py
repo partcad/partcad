@@ -25,6 +25,7 @@ Pinned here:
 """
 
 import asyncio
+import locale
 import logging
 import os
 import sys
@@ -41,6 +42,18 @@ import cmf_section  # noqa: E402
 from cmf_section import NONE, CmfSet, Section  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
+
+@pytest.fixture(autouse=True)
+def _locale_put_back():
+    """lib3mf, under build123d's Mesher, sets the process's locale to "C" and leaves it there.
+
+    Every later test in the worker would then write text files as ASCII: put
+    back what the test found (as test_output_batch_wrapper does).
+    """
+    found = locale.setlocale(locale.LC_ALL)
+    yield
+    locale.setlocale(locale.LC_ALL, found)
 
 
 def _declare(**values):
