@@ -531,3 +531,29 @@ def test_a_system_with_several_ids_for_a_colour_lists_them(tmp_path):
     assert ctx.get_project("//src").get_cmf("color", "White").ids == {"step": ["#FFFFFF", "#FEFEFE"]}
     for value in ["#FFFFFF", "#FEFEFE"]:
         assert cmf_conventions.reference_for(ctx, "//src", "color", value, (255, 255, 255, 1.0)) == "//src:White"
+
+
+def test_a_source_may_name_a_package_s_convention_and_with_it_that_package_s_declarations(tmp_path):
+    """A plugin's part type builds parts in packages below the one that declares its colours."""
+    root = _package(
+        tmp_path / "pkg",
+        colors={"Red": {"display": "#B40000", "ids": {"ldraw": "4"}}},
+        cmfConventions={"ldraw": {"extends": "ldraw"}},
+    )
+    _package(root / "category", name="//src/category")
+    ctx = pc.Context(str(root))
+    part = ctx.get_part("//src/category:box")
+    section = Section([CmfSet(color="4", rgba=(180, 0, 0, 1.0), origin="raw://src:ldraw")], 0)
+
+    own = cmf_conventions.convert(ctx, part, section, None).own()
+
+    assert (own.color, own.origin) == ("//src:Red", "source:ldraw")
+
+
+def test_a_part_type_takes_the_cmf_parameters_every_type_takes():
+    """'58121;color=...' names a plugin's part in a colour, as it does any other part."""
+    from partcad import factory
+
+    accepted = factory.accepted_object_type_parameters("part", "//pub/universe/lego:ldraw")
+    assert set(cmf.TYPE_PARAMETERS) <= set(accepted)
+    assert "tolerance" not in accepted
