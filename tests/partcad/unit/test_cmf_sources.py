@@ -322,6 +322,39 @@ def test_a_solid_s_own_style_wins_over_the_compound_around_it():
     assert {section.solid_set(i).color for i in range(2)} == {"#0000FF", None}
 
 
+def test_each_placed_instance_of_a_solid_is_in_its_own_colour():
+    """Two placements of one box, styled red and blue: read as the whole file, each is in its own."""
+    step_cmf = _wrappers()
+    import build123d as bd
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import TopTools_IndexedMapOfShape
+
+    box = bd.Box(10, 10, 10)
+    here, there = box.wrapped, box.moved(bd.Location((20, 0, 0))).wrapped
+    compound = bd.Compound([bd.Solid(here), bd.Solid(there)]).wrapped
+    solids = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(compound, TopAbs_SOLID, solids)
+    assert solids.Extent() == 2 and solids.FindKey(1).IsPartner(solids.FindKey(2))
+
+    class _Facts:
+        colors = [
+            (solids.FindKey(1), ("#FF0000", (255, 0, 0, 1.0))),
+            (solids.FindKey(2), ("#0000FF", (0, 0, 255, 1.0))),
+        ]
+        definition_colors = []
+        materials = [(here, "ABS")]
+
+        def __bool__(self):
+            return True
+
+    section = step_cmf.section_of(compound, _Facts())
+
+    assert [section.solid_set(i).color for i in range(2)] == ["#FF0000", "#0000FF"]
+    # A product's material is every instance of it, wherever it is placed.
+    assert [section.solid_set(i).material for i in range(2)] == ["ABS", "ABS"]
+
+
 def test_a_step_file_is_the_geometry_the_plain_reader_read(tmp_path):
     step_cmf = _wrappers()
     import ocp_serialize
@@ -428,6 +461,40 @@ def test_a_3mf_is_every_object_in_it_each_in_its_colour(tmp_path):
     assert shape.ShapeType().name == "TopAbs_COMPOUND"
     assert [section.solid_set(i).color for i in range(2)] == ["#FF0000", "#0000FF"]
     assert {cmf_set.origin for cmf_set in section.sets} == {"raw:openscad"}
+
+
+def test_a_3mf_that_cannot_be_read_in_colour_is_read_without_it(tmp_path, monkeypatch):
+    """The STL fallback is for an STL: a 3MF is read again as Mesher reads it, and never handed to 'import_stl'."""
+    pytest.importorskip("build123d")
+    import build123d as bd
+    import cmf_capture
+    import wrapper_common
+
+    path = tmp_path / "two.3mf"
+    _colored_3mf(path, [(bd.Box(10, 10, 10), "#FF0000FF"), (bd.Pos(20, 0, 0) * bd.Box(10, 10, 10), "#0000FFFF")])
+
+    def unreadable(*_args, **_kwargs):
+        raise ValueError("not in colour")
+
+    def not_an_stl(*_args, **_kwargs):
+        raise AssertionError("a 3MF was handed to the STL reader")
+
+    request = {"fallback_import_stl": True, "cmfConvention": "openscad"}
+    written = []
+    monkeypatch.setattr(wrapper_common, "handle_input", lambda *_args, **_kwargs: (str(path), request))
+    monkeypatch.setattr(wrapper_common, "handle_output", written.append)
+    monkeypatch.setattr(cmf_capture, "read_mesh", unreadable)
+    monkeypatch.setattr(bd, "import_stl", not_an_stl)
+    # The wrapper is a script: importing it runs the request it is handed.
+    sys.modules.pop("wrapper_import_mesh", None)
+    try:
+        import wrapper_import_mesh  # noqa: F401
+    finally:
+        sys.modules.pop("wrapper_import_mesh", None)
+
+    (said,) = written
+    assert said["success"], said["exception"]
+    assert len(bd.Compound(said["shape"]).solids()) == 2
 
 
 def test_an_openscad_that_writes_colours_is_told_by_its_version():
