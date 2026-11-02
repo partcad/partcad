@@ -12,6 +12,7 @@ it needs a CAD kernel: the assemblies are walked, not made.
 """
 
 import asyncio
+from unittest import mock
 
 import pytest
 
@@ -396,6 +397,37 @@ def test_an_enrich_of_an_enrich_has_the_ports_its_first_source_maps():
     _, again = _assembly("mount-again-again")
     assert _at(again, "hold") == pytest.approx((0.0, 0.0, 5.0))
     assert _at(again, "top-thru-m3") == pytest.approx((-10.0, 10.0, 20.0))
+
+
+def test_two_variants_asking_for_one_source_s_ports_at_once_resolve_its_map_once():
+    """Built side by side, two colours of one assembly ask for its 'map:' together: one resolves it, the other waits.
+
+    Two 'Map' actions open under one key is what 'tests/conftest.py' fails a
+    test for (see 'src/partcad/AGENTS.md'); the count says so here as well.
+    """
+    import os
+
+    # A context of its own: 'pc.init' hands back the one another test in this
+    # worker may have resolved the map in already.
+    ctx = pc.Context(os.path.dirname(PACKAGE), user_config=pc.UserConfig())
+    variants = [ctx._get_assembly(":mount-again"), ctx._get_assembly(":mount-again-again")]
+    opened = []
+    enter = pc.logging.Action.__enter__
+
+    def counting(self):
+        if self.op == "Map":
+            opened.append(self.item)
+        return enter(self)
+
+    async def both():
+        await asyncio.gather(*(shape_ports.prepare_async(variant, ctx) for variant in variants))
+
+    with mock.patch.object(pc.logging.Action, "__enter__", counting):
+        asyncio.run(both())
+
+    assert opened == ["mount"]
+    for variant in variants:
+        assert _at(variant, "hold") == pytest.approx((0.0, 0.0, 5.0))
 
 
 def test_an_enriched_assembly_with_ports_of_its_own_is_joined_by_those():

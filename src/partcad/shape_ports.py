@@ -286,7 +286,20 @@ async def prepare_async(shape, ctx) -> None:
     if with_ports is None or with_ports.map_resolved():
         return
 
-    await assembly_ports.resolve_async(shape, ctx)
+    locked = getattr(shape, "locked", None)
+    if locked is None:
+        await assembly_ports.resolve_async(shape, ctx)
+        return
+    # Held across the resolution, so that a caller arriving while it runs -
+    # two colours of one assembly, built side by side, both asking for its
+    # ports - waits for it and reads what it resolved, rather than resolving
+    # the same 'map:' beside it under the same action (see 'src/partcad/AGENTS.md',
+    # "No two actions open under one name"; 'Shape.get_bounding_box_async' is
+    # the same).
+    async with locked():
+        if shape.with_ports.map_resolved():
+            return
+        await assembly_ports.resolve_async(shape, ctx)
 
 
 def embeds(child) -> bool:
