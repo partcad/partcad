@@ -184,6 +184,12 @@ assemblies:
       not_a_tuple: lower
 
   # An assembly under a name of its own, renaming what its source externalizes.
+  # The mount as it is, under a name of its own - as an assembly in a colour of
+  # its own is: joined by the ports its source's 'map:' gives the source.
+  mount-again:
+    type: enrich
+    source: mount
+
   mount-renamed:
     type: enrich
     source: mount

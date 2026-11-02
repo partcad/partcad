@@ -115,11 +115,23 @@ class Declaration:
 
     @property
     def ids(self) -> dict:
-        """What other systems call this, as '{system: identifier}', every identifier a string."""
+        """What other systems call this, as '{system: identifier}', every identifier a string.
+
+        A system with several identifiers for it - LEGO's white is both 1 and
+        426 - has them as a list of strings.
+        """
         ids = self.config.get("ids")
         if not isinstance(ids, dict):
             return {}
-        return {str(system): str(identifier) for system, identifier in ids.items() if identifier is not None}
+        result = {}
+        for system, identifier in ids.items():
+            if isinstance(identifier, (list, tuple)):
+                listed = [str(each) for each in identifier if each is not None]
+                if listed:
+                    result[str(system)] = listed
+            elif identifier is not None:
+                result[str(system)] = str(identifier)
+        return result
 
     @property
     def manufacturable(self) -> bool:
@@ -154,7 +166,10 @@ class Declaration:
             info["Display"] = self.display_text
         info["Manufacturable"] = "yes" if self.manufacturable else "no (display only)"
         if self.ids:
-            info["Ids"] = ", ".join("%s: %s" % item for item in sorted(self.ids.items()))
+            info["Ids"] = ", ".join(
+                "%s: %s" % (system, " / ".join(ids) if isinstance(ids, list) else ids)
+                for system, ids in sorted(self.ids.items())
+            )
         if self.aliases:
             info["Aliases"] = ", ".join(self.aliases)
         if self.url:

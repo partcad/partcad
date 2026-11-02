@@ -231,6 +231,23 @@ they replace it instead):
 ``3mf`` and other meshes
   Each object of a 3MF in the display colour of its base material.
 
+A package's own part type (``partTypes:`` of kind ``wrapper``)
+  Its script may hand back, beside the shape, what each face (and solid) of it is in, as plain data in its own terms,
+  for the convention it names to convert:
+
+  .. code-block:: python
+
+    output = {
+        "shape": shape,
+        "cmf": {
+            "convention": "ldraw",
+            "faces": [{"color": "4", "material": "abs", "rgba": [201, 26, 9, 1.0]}, None, ...],
+        },
+    }
+
+  One entry per face, in the order OpenCASCADE's ``TopExp::MapShapes`` visits them; ``None`` for a face it says
+  nothing of. A list that does not match the shape's faces is dropped, and said to be.
+
 ``pc import`` of a STEP assembly keeps each part's colours and material in the part file it writes, and an instance's
 own colour - an overriding style on one occurrence - becomes its link's ``params: {color: ..., sourceCmf: color}``.
 

@@ -105,8 +105,23 @@ def _declared(ctx, package: str, name: str) -> typing.Optional[Convention]:
 
 
 def resolve(ctx, name: typing.Optional[str], package: str, default: str) -> Convention:
-    """The convention 'name' names as 'package' sees it; the builtin 'default' for None."""
+    """The convention 'name' names as 'package' sees it; 'default' for None.
+
+    'default' is what the source's reader stated: a builtin by name, or - for a
+    package's own part type - a convention that package declares, by reference
+    ('//pub/universe/lego:ldraw'), so that its declarations are in scope for the
+    parts its part type builds in packages below it.
+    """
     if not name:
+        if ":" in default:
+            owner, _, own = default.rpartition(":")
+            found = _declared(ctx, owner or package, own)
+            if found is not None:
+                return found
+            pc_logging.warning(
+                "The convention '%s' a part's source names is not declared; reading it as '%s'" % (default, own)
+            )
+            return BUILTIN.get(own) or BUILTIN["partcad"]
         return BUILTIN.get(default) or BUILTIN["partcad"]
     if ":" in name:
         owner, _, own = name.rpartition(":")
