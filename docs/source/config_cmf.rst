@@ -241,12 +241,15 @@ A package's own part type (``partTypes:`` of kind ``wrapper``)
         "shape": shape,
         "cmf": {
             "convention": "ldraw",
-            "faces": [{"color": "4", "material": "abs", "rgba": [201, 26, 9, 1.0]}, None, ...],
+            "faces": [{"color": "4", "rgba": [201, 26, 9, 1.0]}, None, ...],
+            "solids": [{"material": "abs"}, ...],
         },
     }
 
   One entry per face, in the order OpenCASCADE's ``TopExp::MapShapes`` visits them; ``None`` for a face it says
-  nothing of. A list that does not match the shape's faces is dropped, and said to be.
+  nothing of. ``solids`` is the same for the solids, and is where a material is said: a solid is what is made of
+  one, and a material said only of its faces leaves the solid's unspecified. A list that does not match the shape's
+  faces (or solids) is dropped, and said to be.
 
 ``pc import`` of a STEP assembly keeps each part's colours and material in the part file it writes, and an instance's
 own colour - an overriding style on one occurrence - becomes its link's ``params: {color: ..., sourceCmf: color}``.

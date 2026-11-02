@@ -50,6 +50,16 @@ def _wrapped(shape):
     return shape
 
 
+def _values(obj) -> list:
+    """Every shape a CadQuery object holds: each value of a 'Workplane', or the object itself."""
+    if hasattr(obj, "vals"):
+        try:
+            return list(obj.vals())
+        except Exception:  # pylint: disable=broad-except
+            pass
+    return [obj]
+
+
 def _note(shape, cmf_set, depth=0):
     import cmf_section  # noqa: F401 - the set is one of its
 
@@ -148,14 +158,19 @@ def note_cadquery(obj, options=None, depth=0):
             if "alpha" in options and len(values) == 3:
                 values = tuple(values) + (float(options["alpha"]),)
             designation, rgba = _rgba(values)
-            _note(_wrapped(obj), cmf_section.CmfSet(color=designation, rgba=rgba, origin="raw:cadquery"), depth)
-    # A cq.Assembly: each child's colour, of the child's own shapes.
+            cmf_set = cmf_section.CmfSet(color=designation, rgba=rgba, origin="raw:cadquery")
+            for value in _values(obj):
+                _note(_wrapped(value), cmf_set, depth)
+    # A cq.Assembly: each child's colour, of the child's own shapes - all of
+    # them, as its compound holds every value of a 'Workplane'.
     if hasattr(obj, "children") and hasattr(obj, "obj") and hasattr(obj, "color"):
         own = getattr(obj, "obj", None)
         values = _color_values(getattr(obj, "color", None))
         if own is not None and values is not None:
             designation, rgba = _rgba(values)
-            _note(_wrapped(own), cmf_section.CmfSet(color=designation, rgba=rgba, origin="raw:cadquery"), depth)
+            cmf_set = cmf_section.CmfSet(color=designation, rgba=rgba, origin="raw:cadquery")
+            for value in _values(own):
+                _note(_wrapped(value), cmf_set, depth)
         for child in obj.children:
             note_cadquery(child, None, depth + 1)
 

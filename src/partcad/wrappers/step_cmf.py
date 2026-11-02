@@ -170,7 +170,11 @@ def section_of(shape, facts, by_partner=False):
     faces = mapped(shape, TopAbs_FACE)
     solids = mapped(shape, TopAbs_SOLID)
     face_index = _Index(faces, by_partner)
-    solid_index = _Index(solids, True)
+    # A colour is matched the way the faces are: by placement for the whole
+    # file, where a style collected for one instance is that instance's alone.
+    solid_index = _Index(solids, by_partner)
+    # A product's material is every instance of it, wherever each is placed.
+    material_index = solid_index if by_partner else _Index(solids, True)
 
     face_colors, solid_colors = {}, {}
     for key, color in facts.definition_colors if by_partner else facts.colors:
@@ -191,12 +195,11 @@ def section_of(shape, facts, by_partner=False):
             for index in face_index.of(under.FindKey(i)):
                 face_colors[index] = color
 
-    # A product's material is every instance of it: matched by partner.
     solid_materials = {}
     for definition, material in facts.materials:
         under = mapped(definition, TopAbs_SOLID)
         for i in range(1, under.Extent() + 1):
-            for index in solid_index.of(under.FindKey(i)):
+            for index in material_index.of(under.FindKey(i)):
                 solid_materials.setdefault(index, material)
 
     if not face_colors and not solid_colors and not solid_materials:

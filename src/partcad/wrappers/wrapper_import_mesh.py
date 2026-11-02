@@ -33,6 +33,16 @@ import wrapper_common
 CACHE_VERSION = 2
 
 
+def _plain_mesh(path):
+    """The shape of every object Mesher reads at 'path', with nothing said of what they are in."""
+    import ocp_serialize
+
+    meshed = b3d.Mesher().read(path)
+    if len(meshed) == 1:
+        return meshed[0].wrapped
+    return ocp_serialize.compound_of([mesh.wrapped for mesh in meshed])
+
+
 def process(path, request):
     section = None
     try:
@@ -41,8 +51,13 @@ def process(path, request):
         except Exception:
             if not request.get("fallback_import_stl", False):
                 raise
-            # First, make sure it's not the known problem in Mesher
-            shape = b3d.import_stl(path).wrapped
+            if os.path.splitext(path)[1].lower() == ".3mf":
+                # Only an STL can be read the other way: a 3MF is read again as
+                # Mesher reads it, without its colours, or fails as Mesher does.
+                shape = _plain_mesh(path)
+            else:
+                # First, make sure it's not the known problem in Mesher
+                shape = b3d.import_stl(path).wrapped
 
     except Exception as e:
         wrapper_common.handle_exception(e)
