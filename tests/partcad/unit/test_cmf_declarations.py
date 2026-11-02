@@ -369,3 +369,72 @@ def test_a_parametric_declaration_named_without_values_is_its_defaults(ctx):
 
     assert found.reference() == "//vendor:rgba"
     assert cmf.display(ctx, found) == (0, 0, 0, 1.0)
+
+
+def test_the_listing_shows_each_declaration_by_how_it_looks(ctx):
+    """'pc list colors|finishes': the look first, the display-only mark, and an alias by what it names."""
+    from partcad_service_json_rpc.core import operations
+
+    project = ctx.get_project("//")
+    colors = operations._cmf_rows(ctx, project, "color")
+    assert colors["red"].startswith("#C91A09")
+    assert colors["stone"].startswith("#969696")
+    assert colors["stone"].endswith("(alias of //vendor:Medium Stone Grey)")
+    assert colors["loop-a"].startswith("<broken>")
+    vendor = operations._cmf_rows(ctx, ctx.get_project("//vendor"), "color")
+    assert vendor["rgba"].startswith("parametric")
+    assert vendor["rgba"].endswith("(display only)")
+
+    finishes = operations._cmf_rows(ctx, project, "finish")
+    assert "Satin, VDI 3400 Ref 27" in finishes["satin"]
+    assert "As it comes out of the mould" in finishes["as-molded"]
+
+
+def _package(tmp_path, colors):
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump({"colors": colors}))
+    return pc.Context(str(tmp_path))
+
+
+def test_a_declaration_named_with_a_reserved_character_is_that_name(tmp_path):
+    """'a;b' is a name, not 'a' with a value: its reference escapes it, and resolves back to it."""
+    ctx = _package(
+        tmp_path,
+        {
+            "a;b": {"display": "#123456"},
+            "p;q": {"parameters": {"color": {"type": "string", "default": "000000FF"}}, "display": "#%color%"},
+        },
+    )
+    project = ctx.get_project("//")
+
+    plain = project.get_cmf("color", escape_name("a;b"))
+    assert (plain.base_name, plain.parameter_values) == ("a;b", {})
+    assert plain.reference() == "//:a%3Bb"
+    assert cmf.lookup(ctx, "color", plain.reference()) is plain
+
+    tinted = project.get_cmf("color", escape_name("p;q") + ";color=FF0000FF")
+    assert (tinted.base_name, tinted.parameter_values) == ("p;q", {"color": "FF0000FF"})
+    assert cmf.display(ctx, tinted) == (255, 0, 0, 1.0)
+    assert cmf.lookup(ctx, "color", tinted.reference()) is tinted
+
+    from partcad_service_json_rpc.core import operations
+
+    rows = operations._cmf_rows(ctx, project, "color")
+    assert rows["a;b"].startswith("#123456")
+
+
+def test_an_escape_in_a_parametric_declaration_is_no_expression(tmp_path):
+    """'%25%' in an escaped reference is a '%' written escaped, not the expression '25'."""
+    ctx = _package(
+        tmp_path,
+        {
+            "foo%#bar": {"display": "#ABCDEF"},
+            "tinted": {
+                "type": "alias",
+                "source": ":foo%25%23bar",
+                "parameters": {"shade": {"type": "string", "default": "1"}},
+            },
+        },
+    )
+    alias = ctx.get_project("//").get_cmf("color", "tinted")
+    assert alias.source == ":foo%25%23bar"
+    assert cmf.display(ctx, cmf.lookup(ctx, "color", "//:tinted")) == (0xAB, 0xCD, 0xEF, 1.0)

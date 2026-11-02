@@ -2807,16 +2807,25 @@ def _cmf_rows(ctx, project, kind: str) -> dict:
     a picture says so before anything else.
     """
     from partcad import cmf
+    from partcad_utils.utils import escape_name
 
     rows = {}
     for name in project.object_names(kind):
-        declaration = project.get_cmf(kind, name, quiet=True)
+        # The key as written; asked for as a reference, which spells a reserved
+        # character escaped.
+        declaration = project.get_cmf(kind, escape_name(name), quiet=True)
         if declaration is None:
             rows[name] = "<broken>"
             continue
+        alias = ""
         if declaration.is_alias:
-            rows[name] = "alias of %s" % declaration.source
-            continue
+            # Shown as what it names, with that declaration's look, so that a
+            # display-only colour is marked so under every name it has.
+            alias = " (alias of %s)" % declaration.source
+            declaration = cmf.lookup(ctx, kind, declaration.source, declaration.project_name, quiet=True)
+            if declaration is None:
+                rows[name] = "<broken>%s" % alias
+                continue
         if declaration.config.get("parameters"):
             look = "parametric"
         elif kind == "finish":
@@ -2825,7 +2834,7 @@ def _cmf_rows(ctx, project, kind: str) -> dict:
             rgba = cmf.display(ctx, declaration)
             look = cmf.css_color.to_hex(rgba) if rgba is not None else "-"
         made = "" if declaration.manufacturable else " (display only)"
-        rows[name] = "%-11s%s%s" % (look, " " + declaration.desc if declaration.desc else "", made)
+        rows[name] = "%-11s%s%s%s" % (look, " " + declaration.desc if declaration.desc else "", made, alias)
     return rows
 
 
