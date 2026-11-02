@@ -866,20 +866,24 @@ def _srgb(linear: float) -> int:
 
 def legible(color):
     """'color' as a line on white is drawn in: itself, or darker where it is too light to see (MAX_LINE_LUMINANCE)."""
-    red, green, blue, alpha = appearance.parse(color) if isinstance(color, str) else (*color, 1.0)
+    if isinstance(color, str):
+        red, green, blue, alpha = appearance.parse(color)
+    else:
+        red, green, blue, alpha = (*color, 1.0) if len(color) == 3 else color
     linear = [_linear(channel) for channel in (red, green, blue)]
     luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
     if luminance <= MAX_LINE_LUMINANCE:
         return color
     factor = MAX_LINE_LUMINANCE / luminance
-    return tuple(_srgb(channel * factor) for channel in linear)
+    # Darker, and as see-through as it was.
+    return (*(_srgb(channel * factor) for channel in linear), alpha)
 
 
 def line_color(color):
     """A colour as 'ExportSVG' has to be handed it to write exactly that colour.
 
-    'color' is an '(red, green, blue)' of integers from 0 to 255, or a colour
-    string 'appearance.parse' reads.
+    'color' is an '(red, green, blue)' of integers from 0 to 255, optionally
+    followed by an alpha from 0 to 1, or a colour string 'appearance.parse' reads.
 
     'ExportSVG' turns each channel into a fraction of 255 and, writing the file,
     back into an integer by truncating it - and a fraction of 255 does not always
@@ -890,7 +894,7 @@ def line_color(color):
     if isinstance(color, str):
         red, green, blue, alpha = appearance.parse(color)
     else:
-        (red, green, blue), alpha = color, 1.0
+        red, green, blue, alpha = (*color, 1.0) if len(color) == 3 else color
     return b3d.Color(*(min(channel + 0.5, 255) / 255.0 for channel in (red, green, blue)), alpha)
 
 

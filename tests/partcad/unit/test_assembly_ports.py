@@ -391,6 +391,28 @@ def test_an_enriched_assembly_with_no_map_of_its_own_has_its_source_s_ports():
     assert _at(mount, "top-thru-m3") == pytest.approx((-10.0, 10.0, 20.0))
 
 
+def test_an_enriched_assembly_with_ports_of_its_own_is_joined_by_those():
+    _, mount = _assembly("mount-own-port")
+    assert _at(mount, "own") == pytest.approx((0.0, 0.0, 9.0))
+    assert "hold" not in _ports(mount)
+    assert getattr(mount, "ports_source", None) is None
+
+
+def test_an_enriched_assembly_s_ports_follow_an_override_that_arrived_after_loading():
+    """The user's override says which instance it is, whether its ports or its preparation is asked for first."""
+    import os
+
+    caller = pc.UserConfig()
+    ctx = pc.Context(os.path.dirname(PACKAGE), user_config=caller)
+    assembly = ctx._get_assembly(":parametric-again")
+    caller.parameter_config["//:parametric-again"] = {"which": "upper"}
+
+    asyncio.run(shape_ports.prepare_async(assembly, ctx))
+    assert assembly.ports_source.name.endswith("which=upper")
+    # The upper plate's 'handle': 5mm above a plate 20mm up.
+    assert _at(assembly, "chosen") == pytest.approx((0.0, 0.0, 25.0))
+
+
 def test_preparing_an_enriched_assembly_does_not_walk_its_source(monkeypatch):
     """Its ports are its source's, worked out when asked for and not while it is prepared.
 

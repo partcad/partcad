@@ -58,10 +58,10 @@ class AssemblyFactoryEnrich(afa.AssemblyFactoryAlias):
             config.pop("project", None)
             super().__init__(ctx, source_project, target_project, config)
 
-            # Joined by its source's ports, unless it maps its own (see
+            # Joined by its source's ports, unless it declares its own (see
             # 'prepare_async' below): asked for here, they need no preparation
             # of this object to be waited for.
-            if not self.enrich_declaration.get("map"):
+            if _joined_by_source_ports(self.enrich_declaration):
                 self.assembly.find_ports_source = self.find_ports_source
 
     def find_ports_source(self):
@@ -70,10 +70,12 @@ class AssemblyFactoryEnrich(afa.AssemblyFactoryAlias):
         What 'shape_ports.prepare_async' asks, rather than waiting for this
         object to be prepared - which is to wait for whatever else that
         preparation waits for, on whichever thread it is under way. The answer
-        is the instance the preparation resolves to as well, short of a
-        parameter override of the user's arriving in between, which the
-        preparation then settles (see 'resolve_source_again').
+        is the instance the preparation resolves to: the user's parameter
+        overrides are read again here as they are there (see
+        'resolve_source_again'), as they may have arrived since this package
+        was loaded.
         """
+        resolve_source_again(self, self.enrich_declaration, "source_assembly_name")
         source = self.get_source_object(self.source)
         if source is not None and getattr(source, "with_ports", None) is not None:
             self.assembly.with_ports = source.with_ports
@@ -106,12 +108,19 @@ class AssemblyFactoryEnrich(afa.AssemblyFactoryAlias):
         # minute they wait, and longer than they may. 'shape_ports.prepare_async'
         # resolves them, on the source, for whoever asks for the ports.
         #
-        # One that declares a 'map:' of its own is joined by what that names,
-        # which is worked out on this object like any other assembly's.
-        if not self.enrich_declaration.get("map") and getattr(source, "with_ports", None) is not None:
+        # One that declares ports of its own - a 'map:', 'ports:' or
+        # 'implements:' - is joined by those, worked out on this object like
+        # any other assembly's, as a part that does is (see
+        # 'assembly_ports.keeps_source_ports').
+        if _joined_by_source_ports(self.enrich_declaration) and getattr(source, "with_ports", None) is not None:
             assembly.with_ports = source.with_ports
             assembly.ports_source = source
 
     def instantiate(self, assembly):
         with pc_logging.Action("Enrich", assembly.project_name, f"{assembly.name}:{self.source_assembly_name}"):
             super().instantiate(assembly)
+
+
+def _joined_by_source_ports(declaration) -> bool:
+    """Whether an enriched assembly is joined by its source's ports: when it declares none of its own."""
+    return not any(declaration.get(key) for key in ("map", "ports", "implements"))

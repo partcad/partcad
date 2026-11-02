@@ -133,7 +133,9 @@ def resolve(ctx, name: typing.Optional[str], package: str, default: str) -> Conv
             "'cmfConvention: %s' names no convention: one of %s, or one a package declares under '%s:'; reading "
             "the source as '%s'" % (name, ", ".join(sorted(BUILTIN)), SECTION, default)
         )
-        return BUILTIN.get(default) or BUILTIN["partcad"]
+        # As though it named none: what the source's reader stated, which may
+        # be a package's convention as much as a builtin.
+        return resolve(ctx, None, package, default)
     return found
 
 
@@ -233,9 +235,13 @@ def convert(ctx, shape, section, convention_name: typing.Optional[str]):
                 )
         roughness, metallic = cmf_set.roughness, cmf_set.metallic
         if values["finish"] is not None:
+            # What the finish's declaration says to draw it as, and the
+            # source's own values for what it leaves unsaid.
             finish = pc_cmf.lookup(ctx, "finish", values["finish"], package, quiet=True)
-            roughness = getattr(finish, "roughness", roughness)
-            metallic = getattr(finish, "metallic", metallic)
+            declared = getattr(finish, "roughness", None)
+            roughness = declared if declared is not None else roughness
+            declared = getattr(finish, "metallic", None)
+            metallic = declared if declared is not None else metallic
         sets.append(
             cmf_section.CmfSet(
                 color=values["color"],

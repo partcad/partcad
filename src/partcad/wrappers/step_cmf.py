@@ -174,12 +174,19 @@ def section_of(shape, facts, by_partner=False):
 
     face_colors, solid_colors = {}, {}
     for key, color in facts.definition_colors if by_partner else facts.colors:
-        if key.ShapeType().name == "TopAbs_SOLID":
-            for index in solid_index.of(key):
-                solid_colors[index] = color
-            if solid_index.of(key):
-                continue
         under = mapped(key, TopAbs_FACE)
+        if key.ShapeType().name == "TopAbs_SOLID":
+            matched = solid_index.of(key)
+            for index in matched:
+                solid_colors[index] = color
+            if matched:
+                # More specific than the compound around it, whose style was
+                # written onto these faces before it: the solid's own wins, and
+                # a face's own - later in the order - still wins over that.
+                for i in range(1, under.Extent() + 1):
+                    for index in face_index.of(under.FindKey(i)):
+                        face_colors.pop(index, None)
+                continue
         for i in range(1, under.Extent() + 1):
             for index in face_index.of(under.FindKey(i)):
                 face_colors[index] = color

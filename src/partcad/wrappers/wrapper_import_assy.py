@@ -356,10 +356,12 @@ def flatten_assembly_tree(node, output_folder: str, precision: int):
 
 
 def _colors_of(section) -> tuple:
-    """What a part's section draws, as part of its signature."""
+    """What a part's section states, as part of its signature: two parts of one geometry in different colours or
+    materials are two parts."""
     if section is None:
         return ()
-    return tuple(cmf_set.color or "" for cmf_set in section.sets) + tuple(section.faces) + tuple(section.solids)
+    stated = tuple((s.color or "", s.material or "", s.finish or "") for s in section.sets)
+    return stated + tuple(section.faces) + tuple(section.solids)
 
 
 def process(request):
