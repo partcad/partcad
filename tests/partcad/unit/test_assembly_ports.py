@@ -391,9 +391,23 @@ def test_an_enriched_assembly_with_no_map_of_its_own_has_its_source_s_ports():
     assert _at(mount, "top-thru-m3") == pytest.approx((-10.0, 10.0, 20.0))
 
 
+def test_an_enrich_of_an_enrich_has_the_ports_its_first_source_maps():
+    """Whichever of the two is prepared first: the ports are worked out on the assembly with the 'map:'."""
+    _, again = _assembly("mount-again-again")
+    assert _at(again, "hold") == pytest.approx((0.0, 0.0, 5.0))
+    assert _at(again, "top-thru-m3") == pytest.approx((-10.0, 10.0, 20.0))
+
+
 def test_an_enriched_assembly_with_ports_of_its_own_is_joined_by_those():
     _, mount = _assembly("mount-own-port")
     assert _at(mount, "own") == pytest.approx((0.0, 0.0, 9.0))
+    assert "hold" not in _ports(mount)
+    assert getattr(mount, "ports_source", None) is None
+
+
+def test_an_enriched_assembly_that_moves_its_source_is_not_joined_by_the_source_s_ports():
+    """Its source's ports are where the source is; it is moved 30mm up, and would be connected 30mm off."""
+    _, mount = _assembly("mount-moved")
     assert "hold" not in _ports(mount)
     assert getattr(mount, "ports_source", None) is None
 

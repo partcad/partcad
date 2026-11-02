@@ -273,6 +273,10 @@ async def prepare_async(shape, ctx) -> None:
         source = find()
         if source is not None and source is not shape:
             await prepare_async(source, ctx)
+            # A source that is itself an enrich of another took that one's
+            # ports as it was prepared, after this one took the source's: take
+            # them again, as the source has them now.
+            find()
         return
 
     config = getattr(shape, "config", None) or {}

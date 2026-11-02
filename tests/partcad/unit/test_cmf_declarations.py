@@ -431,6 +431,17 @@ def test_a_declaration_named_with_a_reserved_character_is_that_name(tmp_path):
     assert warned == []
 
 
+def test_a_declaration_s_fault_is_reported_once_however_often_it_is_read(tmp_path, caplog):
+    """'display()' runs on every read of a part, cached reads included: a bad 'display' is one error, not one per read."""
+    ctx = _package(tmp_path, {"muddy": {"display": "not a colour"}})
+    muddy = ctx.get_project("//").get_cmf("color", "muddy")
+    with caplog.at_level(logging.ERROR):
+        for _ in range(3):
+            assert cmf.display(ctx, muddy) is None
+    assert len(muddy.errors) == 1
+    assert sum("neither a CSS colour" in record.getMessage() for record in caplog.records) == 1
+
+
 def test_an_escape_in_a_parametric_declaration_is_no_expression(tmp_path):
     """'%25%' in an escaped reference is a '%' written escaped, not the expression '25'."""
     ctx = _package(

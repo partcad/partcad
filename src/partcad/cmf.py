@@ -102,6 +102,10 @@ class Declaration:
         self.errors: list = []
 
     def error(self, msg: str) -> None:
+        # Said once: 'display()' is asked again on every read of a part that
+        # uses this declaration, cached reads included, and one fault is one.
+        if msg in self.errors:
+            return
         self.errors.append(msg)
         pc_logging.error("%s: %s: %s" % (self.project_name, self.name, msg))
 
@@ -627,7 +631,9 @@ def conversion_scope(ctx, shape) -> dict:
     own = getattr(shape, "project_name", None) or ""
     config = getattr(shape, "config", None) or {}
     named = {own}
-    for value in (config.get("cmfConvention"), config.get("type")):
+    # The convention as 'apply_declared' reads it: a parameter, or what the
+    # instance an enrich resolves to is named with.
+    for value in (_parameter_value(config, CONVENTION), config.get("type")):
         if isinstance(value, str) and ":" in value:
             owner = value.rpartition(":")[0]
             named.add(owner or own)

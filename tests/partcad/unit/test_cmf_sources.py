@@ -217,12 +217,19 @@ def test_what_converts_takes_in_the_package_a_convention_names_and_its_catalogs(
     )
     root = _package(
         tmp_path / "pkg",
-        parts={"box": {"type": "stl", "path": "box.stl", "cmfConvention": "//src/acme:acme"}},
+        parts={
+            "box": {
+                "type": "stl",
+                "path": "box.stl",
+                "parameters": {"cmfConvention": {"type": "string", "default": "//src/acme:acme"}},
+            }
+        },
         **{"import": {"vendor": {"path": "vendor"}, "acme": {"path": "acme"}}},
     )
     ctx = pc.Context(str(root))
 
-    # '//src' declares nothing; the convention's package and its catalog do.
+    # '//src' declares nothing; the convention's package and its catalog do. The
+    # convention is a parameter, which is where 'apply_declared' reads it.
     assert set(cmf.conversion_scope(ctx, ctx.get_part("//src:box"))) == {"//src/acme", "//src/vendor"}
 
 

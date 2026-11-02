@@ -592,6 +592,22 @@ def test_an_assembly_bought_whole_is_not_looked_inside():
     assert _run(ConnectivityTest(), asm)
 
 
+def test_whether_an_assembly_is_bought_whole_is_in_its_cache_key():
+    """'vendor' and 'sku' are not in shape.hash: the verdict's key says what they decide, here and a level down."""
+    conn = ConnectivityTest()
+
+    def key(asm):
+        return asyncio.run(conn.cache_key_suffix(None, asm))
+
+    assert key(_Assembly()) != key(_BoughtAssembly())
+    frame = _Child("frame", _thing())
+    made = _Assembly(children=[_Child("rim", _thing())])
+    bought = _BoughtAssembly(children=[_Child("rim", _thing())])
+    assert key(_Assembly(children=[frame, _Child("wheel", made)])) != key(
+        _Assembly(children=[frame, _Child("wheel", bought)])
+    )
+
+
 def test_the_item_everything_hangs_from_is_placed_by_being_first():
     """It has nothing to connect to, so it says nothing at all: no 'location:',
     which is what the rule is about."""
