@@ -2937,10 +2937,13 @@ def _cmf_items(session, project, kind: str) -> list:
     is in a package that may not have loaded yet, and listing a package must
     not load its neighbours. The CMF tab says the rest, once one is opened.
     """
+    from partcad_utils.utils import escape_name
+
     described = []
     for name in project.object_names(kind):
         try:
-            declaration = project.get_cmf(kind, name, quiet=True)
+            # Asked for by reference, which spells a reserved character escaped.
+            declaration = project.get_cmf(kind, escape_name(name), quiet=True)
             if declaration is None:
                 raise Exception("the declaration cannot be read")
             row = {"name": name, "type": "alias" if declaration.is_alias else kind}

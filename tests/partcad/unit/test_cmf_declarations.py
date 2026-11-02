@@ -17,6 +17,7 @@ import logging
 import os
 import sys
 import textwrap
+import types
 
 import jsonschema
 import pytest
@@ -420,6 +421,14 @@ def test_a_declaration_named_with_a_reserved_character_is_that_name(tmp_path):
 
     rows = operations._cmf_rows(ctx, project, "color")
     assert rows["a;b"].startswith("#123456")
+
+    # And the explorer lists it under its own name, as it lists any other.
+    warned = []
+    session = types.SimpleNamespace(emitter=types.SimpleNamespace(warning=warned.append))
+    items = {item["name"]: item for item in operations._cmf_items(session, project, "color")}
+    assert items["a;b"]["display"] == "#123456"
+    assert items["p;q"]["display"] == "#000000FF"
+    assert warned == []
 
 
 def test_an_escape_in_a_parametric_declaration_is_no_expression(tmp_path):
