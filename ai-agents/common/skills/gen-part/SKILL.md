@@ -141,7 +141,8 @@ Write the script file **first** from `$ARGUMENTS` (plain type — never `ai-*`),
 taking every dimension from the table §4 validated — the same constants under
 the same names, placed from the same datums — then register it; `pc add part`
 requires the file to already exist (an `extrude` or `sweep` part has no file, and
-is declared by hand as §4 shows):
+is declared by hand as §4 shows; nor has a `basic` part, which is declared by
+hand as shown below and skips the script and `pc add part` altogether):
 
 ```sh
 pc --no-ansi add part --desc "<the description>" <kind> <name>.<ext>   # e.g. build123d bracket.py
@@ -163,6 +164,20 @@ parts:
   <name>:
     type: <kind>
     path: <name>.<ext>
+    desc: <the description>
+    manufacturable: false
+```
+
+A `basic` part has its solid where a script part has its `path:`, and is placed
+by its `offset:` (it is built centred on the origin):
+
+```yaml
+parts:
+  <name>:
+    type: basic
+    cuboid: [<size x>, <size y>, <size z>]   # or a number for a cube, or
+    # cylinder: {radius: <r>, height: <h>}   # standing along Z
+    offset: [[<x>, <y>, <z>], [0, 0, 1], 0]  # optional
     desc: <the description>
     manufacturable: false
 ```
