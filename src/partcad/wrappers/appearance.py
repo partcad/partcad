@@ -310,4 +310,15 @@ def faces_by_color(shape, colors, color):
     groups = {}
     for index in range(faces.Extent()):
         groups.setdefault(colors[index] or color, []).append(faces.FindKey(index + 1))
+    # An edge that bounds no face - a wire beside the solid - has no face to
+    # take a colour from, and would otherwise be left out of every group and so
+    # out of the drawing: it is drawn in the node's own colour.
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
+
+    edge_faces = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndAncestors_s(shape, TopAbs_EDGE, TopAbs_FACE, edge_faces)
+    for index in range(1, edge_faces.Extent() + 1):
+        if edge_faces.FindFromIndex(index).Extent() == 0:
+            groups.setdefault(color, []).append(edge_faces.FindKey(index))
     return [(face_color, ocp_serialize.compound_of(members)) for face_color, members in groups.items()]

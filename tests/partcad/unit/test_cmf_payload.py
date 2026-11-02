@@ -568,3 +568,42 @@ def test_an_alias_of_a_parametric_instance_is_listed_by_its_look(tmp_path):
     assert rows["rgba"].startswith("parametric")
     assert rows["signal"].startswith("#C91A09")
     assert "the signal red" in rows["signal"]
+
+
+def test_an_edge_that_bounds_no_face_is_drawn_in_the_node_s_colour():
+    """Splitting a shape by its faces' colours keeps a free edge, in the node's own colour."""
+    pytest.importorskip("build123d")
+    import appearance
+    import build123d as bd
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import TopTools_IndexedMapOfShape
+
+    free = bd.Edge.make_line((50, 0, 0), (60, 0, 0)).wrapped
+    shape = bd.Compound([bd.Box(10, 20, 30), bd.Edge(free)]).wrapped
+    groups = dict(appearance.faces_by_color(shape, ["#FF0000"] * 2 + [None] * 4, "#808080"))
+
+    def edges(group):
+        found = TopTools_IndexedMapOfShape()
+        TopExp.MapShapes_s(group, TopAbs_EDGE, found)
+        return found
+
+    assert set(groups) == {"#FF0000", "#808080"}
+    assert edges(groups["#808080"]).Contains(free)
+    assert not edges(groups["#FF0000"]).Contains(free)
+
+
+def test_an_assembly_that_will_not_instantiate_fails_the_check_rather_than_the_run(tmp_path, monkeypatch):
+    """A broken link fails the 'cmf' check for that assembly; it does not stop 'pc test'."""
+    ctx = _walls(tmp_path)
+    assembly = ctx.get_assembly("//cmf:wall")
+
+    async def broken():
+        raise RuntimeError("a link names nothing")
+
+    monkeypatch.setattr(assembly, "do_instantiate", broken)
+    check = cmf_check.CmfTest()
+    failed = []
+    monkeypatch.setattr(check, "failed", lambda shape, message: failed.append(message) or False)
+    assert asyncio.run(check.test([], ctx, assembly, {})) is False
+    assert "a link names nothing" in failed[0]

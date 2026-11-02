@@ -133,7 +133,16 @@ class CmfTest(Test):
         if reason is not None:
             return self.not_applicable(shape, reason)
         if isinstance(shape, Assembly):
-            await shape.do_instantiate()
+            # One bought whole is judged by its own CMF alone, and needs none
+            # of its children; any other is judged by its links too.
+            if not _purchasable(shape):
+                try:
+                    await shape.do_instantiate()
+                except Exception as e:
+                    # Not a pass, as in 'connectivity': a check that fell over
+                    # has nothing to say. 'cad' fails an assembly that will not
+                    # instantiate in its own right.
+                    return self.failed(shape, "the CMF check could not be run: %s" % e)
             findings = assembly_findings(ctx, shape)
         else:
             if await shape.get_wrapped(ctx) is None:
