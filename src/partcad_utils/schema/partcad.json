@@ -480,8 +480,13 @@
     },
     "cmf-ids": {
       "type": "object",
-      "description": "What other systems call this declaration, as '{system: identifier}': a vendor's own number, a colour standard's code, another CAD tool's library name. What a converter ('cmfConvention') matches another tool's names against",
-      "additionalProperties": { "type": ["string", "number"] }
+      "description": "What other systems call this declaration, as '{system: identifier}': a vendor's own number, a colour standard's code, another CAD tool's library name. What a converter ('cmfConvention') matches another tool's names against. A system that has several identifiers for it lists them",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": ["string", "number"] },
+          { "type": "array", "items": { "type": ["string", "number"] }, "minItems": 1 }
+        ]
+      }
     },
     "cmf-manufacturable": {
       "type": "boolean",

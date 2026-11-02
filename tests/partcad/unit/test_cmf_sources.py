@@ -521,3 +521,13 @@ def test_a_part_type_says_what_its_faces_are_in(tmp_path):
     # Nothing claims '999': drawn as the part type said, and only a picture.
     assert "//pub/std/color:rgba;color=010203FF" in by_color
     assert summary["unspecified"]["color"] == 3
+
+
+def test_a_system_with_several_ids_for_a_colour_lists_them(tmp_path):
+    """LEGO's white is both 1 and 426: either names it."""
+    root = _package(tmp_path / "pkg", colors={"White": {"display": "#FFFFFF", "ids": {"step": ["#FFFFFF", "#FEFEFE"]}}})
+    ctx = pc.Context(str(root))
+
+    assert ctx.get_project("//src").get_cmf("color", "White").ids == {"step": ["#FFFFFF", "#FEFEFE"]}
+    for value in ["#FFFFFF", "#FEFEFE"]:
+        assert cmf_conventions.reference_for(ctx, "//src", "color", value, (255, 255, 255, 1.0)) == "//src:White"
