@@ -2841,6 +2841,9 @@ def _cmf_rows(ctx, project, kind: str) -> dict:
             rows[name] = "<broken>"
             continue
         alias = ""
+        if declaration.is_alias and declaration.source is None:
+            rows[name] = "<broken> (an alias naming nothing)"
+            continue
         if declaration.is_alias:
             # Shown as what it names, with that declaration's look, so that a
             # display-only colour is marked so under every name it has.

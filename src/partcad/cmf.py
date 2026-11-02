@@ -318,6 +318,10 @@ def lookup(ctx, kind: str, ref: str, relative_to: str = "", quiet: bool = False,
     declaration that says what the thing is. An alias that leads back to itself
     is reported and resolves to nothing.
     """
+    if not isinstance(ref, str) or not ref:
+        if not quiet:
+            pc_logging.error("The %s reference %r names nothing" % (kind, ref))
+        return None
     seen = set()
     current_ref, current_package = ref, relative_to
     while True:

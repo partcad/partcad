@@ -438,3 +438,14 @@ def test_an_escape_in_a_parametric_declaration_is_no_expression(tmp_path):
     alias = ctx.get_project("//").get_cmf("color", "tinted")
     assert alias.source == ":foo%25%23bar"
     assert cmf.display(ctx, cmf.lookup(ctx, "color", "//:tinted")) == (0xAB, 0xCD, 0xEF, 1.0)
+
+
+def test_an_alias_naming_nothing_is_listed_as_broken(tmp_path):
+    """An alias with no 'source:' is a broken row, not a listing that stops."""
+    from partcad_service_json_rpc.core import operations
+
+    ctx = _package(tmp_path, {"orphan": {"type": "alias"}, "red": "#C91A09"})
+    rows = operations._cmf_rows(ctx, ctx.get_project("//"), "color")
+    assert rows["orphan"].startswith("<broken>")
+    assert rows["red"].startswith("#C91A09")
+    assert cmf.lookup(ctx, "color", None, quiet=True) is None
