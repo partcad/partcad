@@ -1,0 +1,292 @@
+#
+# PartCAD, 2026
+#
+# Licensed under Apache License, Version 2.0.
+#
+"""The native CAD formats PartCAD reads through cadmpeg, as parts and as assemblies.
+
+What is declared is checked without a sandbox: which formats are built-in part
+and assembly types, that every one of them requires a solid, and that the
+scripts' cache versions move with the cadmpeg they run. What they read is
+checked by reading real files, and is held against cadmpeg's own account of
+those files ('cadmpeg_oracle'): 'cadmpeg measure' of the native file says which
+bodies it holds, which of them the document shows and how big each is; 'cadmpeg
+diff' of two files PartCAD wrote says whether they are the same geometry.
+"""
+
+import asyncio
+import importlib.util
+import os
+import sys
+
+import cadmpeg_oracle
+import pytest
+import yaml
+from OCP.BRepGProp import BRepGProp
+from OCP.GProp import GProp_GProps
+from OCP.TopAbs import TopAbs_SOLID
+from OCP.TopExp import TopExp_Explorer
+
+import partcad as pc
+from partcad import code_version
+
+sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
+import ocp_serialize  # noqa: E402
+
+PACKAGE = "tests/partcad/unit/data/import_cadmpeg/partcad.yaml"
+DATA = os.path.dirname(PACKAGE)
+BUILTIN_IMPORT = cadmpeg_oracle.BUILTIN_IMPORT
+
+# The formats cadmpeg reads into connected solids -- its level L3 and above --
+# and the extension each one's parts are stored in, spelled as its own
+# application spells it.
+NATIVE_PART_TYPES = {
+    "fcstd": "FCStd",
+    "iges": "iges",
+    "f3d": "f3d",
+    "sldprt": "SLDPRT",
+    "ipt": "ipt",
+    "catpart": "CATPart",
+    "sat": "sat",
+    "pvz": "pvz",
+}
+
+# The cadmpeg each script that runs one was last keyed for, and the cache version
+# it was keyed with. A new cadmpeg reads a format further, so what these scripts
+# produce changes with it: a pin moved without raising them would go on serving
+# the parts the last release read.
+CADMPEG_KEYED_FOR = "0.6.7"
+KEYED_FOR = {"part_fcstd.py": 2, "part_cadmpeg.py": 1, "import_cadmpeg.py": 1}
+
+
+def _module(script):
+    spec = importlib.util.spec_from_file_location("%s_under_test" % script[:-3], os.path.join(BUILTIN_IMPORT, script))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture(scope="module")
+def builtin():
+    with open(os.path.join(BUILTIN_IMPORT, "partcad.yaml")) as f:
+        return yaml.safe_load(f)
+
+
+# ---------------------------------------------------------------------------
+# What is declared
+# ---------------------------------------------------------------------------
+
+
+def test_every_format_cadmpeg_reads_into_solids_is_a_builtin_part_type(builtin):
+    declared = {name: config["extension"] for name, config in builtin["partTypes"].items()}
+    assert declared == NATIVE_PART_TYPES
+
+
+def test_every_one_of_them_fails_a_part_that_is_not_a_solid(builtin):
+    """How a broken read is caught: by the check every part goes through, made binding."""
+    for name, config in builtin["partTypes"].items():
+        assert config.get("requireSolid") is True, name
+        assert config["path"] == ("part_fcstd.py" if name == "fcstd" else "part_cadmpeg.py"), name
+
+
+def test_the_assembly_types_are_the_formats_cadmpeg_reads_the_components_of(builtin):
+    readers = {name: config for name, config in builtin["import"].items() if config["path"] == "import_cadmpeg.py"}
+    assert set(readers) == {"f3d", "pvz"}
+    for name, config in readers.items():
+        assert config["kinds"] == ["assembly"], name
+        assert config["binary"] is True, name
+        assert config["requireSolid"] is True, name
+        assert config["extension"] == name, name
+    # Left out on purpose: cadmpeg leaves the files an Inventor assembly's
+    # components are in unopened, and does not read a SolidWorks one's tree yet.
+    assert not {"iam", "sldasm"} & (set(builtin["import"]) | set(builtin["partTypes"]))
+
+
+def test_the_scripts_are_keyed_for_the_cadmpeg_they_run():
+    tool = _module("cadmpeg_tool.py")
+    assert tool.VERSION == CADMPEG_KEYED_FOR, (
+        "cadmpeg_tool.py pins cadmpeg %s, and the scripts that run it were keyed for %s. Raise CACHE_VERSION in "
+        "each of %s, then update CADMPEG_KEYED_FOR and KEYED_FOR here."
+        % (tool.VERSION, CADMPEG_KEYED_FOR, ", ".join(sorted(KEYED_FOR)))
+    )
+    assert {script: code_version.declared(os.path.join(BUILTIN_IMPORT, script)) for script in KEYED_FOR} == KEYED_FOR
+
+
+def test_a_node_is_named_after_what_the_file_calls_it():
+    reader = _module("import_cadmpeg.py")
+    assert reader.node_name("Lid", "x") == "Lid"
+    assert reader.node_name("Lid (2):1", "x") == "Lid_2_1"
+    # What OpenCASCADE calls a label nobody named is no name.
+    assert reader.node_name("=>[0:1:1:2]", "x") == "x"
+    assert reader.node_name("=>[0:1:1:2]_solid3", "x") == "solid3"
+    assert reader.node_name("COMPOUND", "x") == "x"
+    assert reader.node_name(None, "x") == "x"
+
+
+def test_a_node_nobody_named_is_named_after_its_place():
+    reader = _module("import_cadmpeg.py")
+    tree = {
+        "type": "assembly",
+        "name": "cadmpeg_model",
+        "children": [
+            {"type": "assembly", "name": "=>[0:1:1:2]", "children": [{"type": "part", "name": "Base"}]},
+            {"type": "part", "name": "=>[0:1:1:3]"},
+        ],
+    }
+    named = reader.named(tree, "controller")
+    assert named["name"] == "controller"
+    assert [child["name"] for child in named["children"]] == ["controller_component1", "controller_part2"]
+    assert named["children"][0]["children"][0]["name"] == "Base"
+
+
+def test_a_part_is_named_after_the_file_it_is_read_from():
+    """Two placements of one body are one part; two bodies called alike are two."""
+    reader = _module("import_cadmpeg.py")
+    tree = {
+        "type": "assembly",
+        "name": "m",
+        "links": [
+            {"type": "part", "name": "Bolt", "part_file": "/g/Bolt.step", "location": [[0, 0, 0], [1, 0, 0], 0]},
+            {"type": "part", "name": "Bolt", "part_file": "/g/Bolt_1.step", "location": [[5, 0, 0], [1, 0, 0], 0]},
+        ],
+    }
+    links = reader.with_part_types(tree)["links"]
+    assert [(link["name"], link["part_type"]) for link in links] == [("Bolt", "step"), ("Bolt_1", "step")]
+
+
+def test_an_assembly_s_closed_shell_is_its_solid_and_an_open_one_is_left_to_be_judged():
+    """As a part type's are: its parts are STEP files, which PartCAD never converts once they are written."""
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_SHELL
+    from OCP.TopoDS import TopoDS_Compound
+
+    reader = _module("import_cadmpeg.py")
+    box = BRepPrimAPI_MakeBox(10.0, 20.0, 30.0).Shape()
+    shell = TopExp_Explorer(box, TopAbs_SHELL).Current()
+    face = TopExp_Explorer(box, TopAbs_FACE).Current()
+    both = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(both)
+    builder.Add(both, shell)
+    builder.Add(both, face)
+
+    found = reader.bodies(both)
+
+    assert [body.ShapeType() for body in found] == [TopAbs_SOLID, TopAbs_FACE]
+
+
+# ---------------------------------------------------------------------------
+# What is read, held against cadmpeg's own account of the files
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def ctx():
+    return pc.Context(PACKAGE)
+
+
+@pytest.fixture(scope="module")
+def cadmpeg(ctx):
+    return cadmpeg_oracle.executable(ctx)
+
+
+def _built(ctx, shape):
+    envelope = asyncio.run(shape.get_wrapped(ctx))
+    assert envelope is not None, shape.errors
+    return envelope
+
+
+def _solid_volumes(envelope):
+    """What OpenCASCADE measures each solid of a built part at."""
+    volumes = []
+    explorer = TopExp_Explorer(ocp_serialize.decode_shape(envelope), TopAbs_SOLID)
+    while explorer.More():
+        props = GProp_GProps()
+        BRepGProp.VolumeProperties_s(explorer.Current(), props)
+        volumes.append(props.Mass())
+        explorer.Next()
+    return volumes
+
+
+def _matches(expected, volume):
+    """Whether OpenCASCADE's 'volume' is the one cadmpeg measured, within what cadmpeg says it may be off by."""
+    return cadmpeg_oracle.same_volume(expected, {"value": volume})
+
+
+def _exported(ctx, shape, path):
+    asyncio.run(shape.render_async(ctx, "step", filepath=str(path)))
+    assert os.path.isfile(path)
+    return path
+
+
+def _leaves(assembly):
+    for child in assembly.children:
+        if getattr(child.item, "children", None):
+            yield from _leaves(child.item)
+        else:
+            yield child.item
+
+
+@pytest.mark.slow
+def test_a_fusion_design_is_the_bodies_it_shows(ctx, cadmpeg):
+    """cadmpeg measures the design itself; OpenCASCADE measures the part PartCAD read out of it."""
+    read = _solid_volumes(_built(ctx, ctx.get_part(":controller")))
+
+    native = cadmpeg_oracle.measure(cadmpeg, os.path.join(DATA, "controller.f3d"))
+    solids = [body for body in native if body["kind"] == "solid"]
+    shown = [body for body in solids if body.get("visible") is not False]
+    hidden = [body for body in solids if body.get("visible") is False]
+    assert hidden, "the fixture holds a hidden body, which is what is left out here"
+    assert len(native) > len(solids), "and sketch curves, which are left out too"
+    assert len(read) == len(shown)
+
+    matched = 0
+    for body in shown:
+        expected = cadmpeg_oracle.volume(body)
+        if expected is None:
+            continue  # cadmpeg could not measure it: data, not a verdict
+        assert any(_matches(expected, volume) for volume in read), (expected, read)
+        matched += 1
+    assert matched, "cadmpeg measured none of the bodies, so nothing was compared"
+    for body in hidden:
+        expected = cadmpeg_oracle.volume(body)
+        assert expected is not None
+        assert not any(_matches(expected, volume) for volume in read), "a hidden body was read"
+
+
+@pytest.mark.slow
+def test_a_fusion_design_as_an_assembly_places_each_body_where_the_part_has_it(ctx, cadmpeg, tmp_path):
+    assembly = ctx.get_assembly(":controller_assembly")
+    # Its tree, which a shape served from the cache does not build.
+    asyncio.run(assembly.do_instantiate())
+    parts = list(_leaves(assembly))
+    assert len(parts) == 3
+    # The parts it registers are held to a solid, as the part type's are.
+    assert all(part.solid_required for part in parts)
+
+    status, comparison = cadmpeg_oracle.diff(
+        cadmpeg,
+        _exported(ctx, ctx.get_part(":controller"), tmp_path / "part.step"),
+        _exported(ctx, assembly, tmp_path / "assembly.step"),
+    )
+    assert cadmpeg_oracle.disagreements(comparison) == []
+    assert comparison["unmatched_a"] == comparison["unmatched_b"] == comparison["ambiguous"] == []
+    # The one thing it may leave undecided is a body it cannot measure at all,
+    # and then that body is one of the three on both sides.
+    if status != 0:
+        assert comparison["verdict"] == "inconclusive"
+        assert comparison["inconclusive_causes"] == ["compare.unmeasured-body"]
+    assert len(comparison["unmeasured_a"]) == len(comparison["unmeasured_b"])
+    assert len(comparison["pairs"]) + len(comparison["unmeasured_a"]) == 3
+
+
+@pytest.mark.slow
+def test_an_iges_file_read_into_loose_faces_is_not_a_part(ctx, cadmpeg):
+    """A read that came back without its solid fails by the check every part goes through."""
+    # cadmpeg itself finds no solid in it: six sheets, the hole's face lost.
+    assert {body["kind"] for body in cadmpeg_oracle.measure(cadmpeg, os.path.join(DATA, "plate.igs"))} == {"sheet"}
+
+    part = ctx.get_part(":plate")
+    assert asyncio.run(part.get_wrapped(ctx)) is None
+    assert any("is not a solid: it holds no solid" in error for error in part.errors), part.errors

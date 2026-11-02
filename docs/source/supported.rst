@@ -70,7 +70,11 @@ Using CAD files:
 Using file formats of third-party tools:
 
 - `KiCad EDA`_ (PCB)
-- FreeCAD documents (``.FCStd``), without FreeCAD: read with `cadmpeg`_, downloaded on first use
+- Native CAD documents, without the application that wrote them, read with `cadmpeg`_ (downloaded on first
+  use, or carried by the sandbox image): FreeCAD (``.FCStd``), Autodesk Fusion (``.f3d``), SolidWorks parts
+  (``.SLDPRT``), Autodesk Inventor parts (``.ipt``), CATIA V5 parts (``.CATPart``), ACIS and ShapeManager
+  bodies (``.sat``, ``.sab``, ``.smt``, ``.smb``), Creo View packages (``.pvz``) and IGES -- each part a solid,
+  and one cadmpeg could not read whole an error rather than a part with a hole in it
 
 Using a part type the package defines itself (``partTypes``), including one that reads a file format of its
 own:
@@ -102,6 +106,8 @@ Assembly models (3D)
   - Generating user-friendly visual assembly instructions (PDF and HTML instruction books)
 
 - Using URDF, with links, joints and physics
+- Using a native CAD document: an Autodesk Fusion design (``.f3d``) or a Creo View package (``.pvz``), each
+  body a part, read with `cadmpeg`_
 - Using a STEP file that stays the source
 - ``pc filter`` declares a second assembly made of some of the links of an existing one: a sub-assembly
   carved out of a big one without editing it by hand

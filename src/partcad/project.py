@@ -2830,7 +2830,7 @@ class Project(project_config.Configuration):
         if kind in ext_by_kind:
             ext = ext_by_kind[kind]
         else:
-            ext = kind
+            ext = self._part_type_extension(section, kind) or kind
 
         if ext:
             # This is a file type.
@@ -2845,19 +2845,40 @@ class Project(project_config.Configuration):
             path = None
 
         obj = {"type": kind, **component_config}
-        if name == path:
+        # The path is left out only where it is the one the object would be
+        # found at without it, '<name>.<extension>' exactly: the extension is
+        # matched without regard to case above, and a file system that tells
+        # case apart finds no 'part.STEP' where it looks for 'part.step'.
+        if name == path or (path is not None and path != "%s.%s" % (name, ext)):
             obj["path"] = path
 
         return self.add_object_config(section, name, obj)
+
+    def _part_type_extension(self, section: str, kind: str):
+        """The extension a built-in 'partType' declares, for a part of one; None for anything else.
+
+        'fcstd' parts are stored in '.FCStd' files, not '.fcstd' ones: the type
+        is a declaration in '//builtin/import' rather than a factory, and the
+        declaration says what its files are called.
+        """
+        if section != "parts":
+            return None
+        from .output import builtin_part_type_extension
+
+        return builtin_part_type_extension(self.ctx, kind)
 
     def extension_for(self, section: str, kind: str):
         """The file extension objects of this kind are written to.
 
         'None' where the kind is not file-backed; the kind's own name where
         nothing says otherwise, which is the common case ('step' -> '.step').
+        A built-in 'partType' says otherwise in its declaration ('fcstd' ->
+        '.FCStd').
         """
         by_kind = SECTION_EXTENSIONS.get(section, {})
-        return by_kind[kind] if kind in by_kind else kind
+        if kind in by_kind:
+            return by_kind[kind]
+        return self._part_type_extension(section, kind) or kind
 
     def add_object_config(self, section: str, name: str, obj: dict) -> bool:
         """Write one object declaration into this package's 'partcad.yaml'.

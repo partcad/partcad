@@ -175,12 +175,29 @@ def shape_signature(shape: TopoDS_Shape) -> tuple:
     return tuple(round(v, 5) for v in (xmin, ymin, zmin, xmax, ymax, zmax, volume))
 
 
-def parse_label_recursive(label, shape_tool, parent_trsf: gp_Trsf, visited):
+def _solids(shape):
+    solids = []
+    explorer = TopExp_Explorer(shape, TopAbs_SOLID)
+    while explorer.More():
+        solids.append(explorer.Current())
+        explorer.Next()
+    return solids
+
+
+def parse_label_recursive(label, shape_tool, parent_trsf: gp_Trsf, visited, bodies=None):
     """
     Recursively traverses the XDE tree:
       - If it's an Assembly, processes child components.
       - If it's a simple shape or a compound with a single solid, creates a part.
       - If it's a compound with multiple solids, splits it into a sub-assembly.
+
+    'bodies', when given, is what a part can be made of in a shape -- a list of
+    them, empty when there is nothing -- and decides both of the last two in the
+    solids' place: a shape it finds nothing in is no part at all, and one it finds
+    several in is split into them. Without it a shape is split into its solids
+    alone, which leaves out whatever else a compound holds; a reader that has to
+    hand over a body that did not come through whole, so that it is judged rather
+    than lost, says what a body is.
     """
     if label in visited:
         return None
@@ -201,7 +218,7 @@ def parse_label_recursive(label, shape_tool, parent_trsf: gp_Trsf, visited):
 
         for i in range(child_labels.Length()):
             child_label = child_labels.Value(i + 1)
-            child_node = parse_label_recursive(child_label, shape_tool, combined_trsf, visited)
+            child_node = parse_label_recursive(child_label, shape_tool, combined_trsf, visited, bodies)
             if child_node:
                 node["children"].append(child_node)
 
@@ -209,16 +226,21 @@ def parse_label_recursive(label, shape_tool, parent_trsf: gp_Trsf, visited):
 
     # Handle Simple Shape
     shape = shape_tool.GetShape_s(label)
-    if shape_tool.IsSimpleShape_s(label) and not shape.IsNull():
+    # (A reader that says what a body is has every shape split by it, below.)
+    if shape_tool.IsSimpleShape_s(label) and not shape.IsNull() and bodies is None:
         return {"type": "part", "name": name, "shape": shape, "trsf": combined_trsf}
 
     # Handle Compound (multi-solid)
     if not shape.IsNull():
-        solids = []
-        explorer = TopExp_Explorer(shape, TopAbs_SOLID)
-        while explorer.More():
-            solids.append(explorer.Current())
-            explorer.Next()
+        solids = (bodies or _solids)(shape)
+        if bodies is not None and not solids:
+            return None
+
+        if bodies is not None and len(solids) == 1:
+            # The body alone, without the curves and points beside it.
+            solid = solids[0]
+            solid_trsf = combine_transformations(combined_trsf, solid.Location().Transformation(), tolerance=1e-7)
+            return {"type": "part", "name": name, "shape": solid, "trsf": solid_trsf}
 
         if len(solids) > 1:
             child_nodes = []
@@ -235,8 +257,11 @@ def parse_label_recursive(label, shape_tool, parent_trsf: gp_Trsf, visited):
     return None
 
 
-def parse_step_tree(step_file: str):
-    """Reads a STEP file and returns a hierarchical structure of its components."""
+def parse_step_tree(step_file: str, bodies=None):
+    """Reads a STEP file and returns a hierarchical structure of its components.
+
+    'bodies' is what a part can be made of in a shape (see 'parse_label_recursive').
+    """
     if not os.path.isfile(step_file):
         raise FileNotFoundError(step_file)
 
@@ -259,7 +284,7 @@ def parse_step_tree(step_file: str):
 
     for i in range(free_shapes.Length()):
         label = free_shapes.Value(i + 1)
-        root_nodes.append(parse_label_recursive(label, shape_tool, identity_trsf, set()))
+        root_nodes.append(parse_label_recursive(label, shape_tool, identity_trsf, set(), bodies))
 
     return root_nodes
 
@@ -327,15 +352,19 @@ def flatten_assembly_tree(node, output_folder: str, precision: int):
     }
 
 
+def flatten(node, output_folder: str, precision: int):
+    """'flatten_assembly_tree' for one whole tree: its files, and nothing remembered from another."""
+    _shape_cache.clear()
+    _used_files.clear()
+    return flatten_assembly_tree(node, output_folder, precision)
+
+
 def process(request):
     assembly_file = request["assembly_file"]
     file_type = request["file_type"]
     assembly_name = request["assembly_name"]
     output_folder = request["output_folder"]
     precision = request.get("precision", 5)
-
-    _shape_cache.clear()
-    _used_files.clear()
 
     root_nodes = parse_assembly_tree(assembly_file, file_type)
     if not root_nodes or all(node is None for node in root_nodes):
@@ -353,7 +382,7 @@ def process(request):
     else:
         final_structure = root_nodes[0]
 
-    return flatten_assembly_tree(final_structure, output_folder, precision)
+    return flatten(final_structure, output_folder, precision)
 
 
 if __name__ == "__main__":

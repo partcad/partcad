@@ -216,6 +216,17 @@ class PartFactoryWrapper(PartFactory):
                 part.error("Unsupported partType kind '%s' (only 'wrapper' is implemented)" % kind)
                 return None
 
+            # A type that builds solids and nothing else says so, and then what
+            # every part is judged by fails one of its parts instead of being
+            # reported beside it (see 'Shape._accepted_as_solid'). Read here,
+            # where the declaration is always resolved, and before the shape
+            # comes back to be judged.
+            try:
+                part.solid_required = output.as_flag(pt_config.get(output.REQUIRE_SOLID_KEY), output.REQUIRE_SOLID_KEY)
+            except ValueError as e:
+                part.error("partType '%s': %s" % (self.part_type_name, e))
+                return None
+
             if self.path:
                 try:
                     await self.download_file_async(part)

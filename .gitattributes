@@ -26,7 +26,9 @@
 # drawing that puts a CR inside a stream loses a byte on checkout, silently --
 # measured: re-render with one CRLF in it and `auto` alone hands back 60710
 # bytes where 60711 went in. `.3mf` is a zip container and the sniff does catch
-# it; named here too, so that neither rests on the heuristic.
+# it; named here too, so that neither rests on the heuristic. So are the two
+# native CAD documents the tests read through cadmpeg, FreeCAD's `.FCStd` and
+# Fusion's `.f3d`, which are zip archives as well.
 #
 # `.pdf` is also in LFS, below, and both lines are kept on purpose. Either one
 # alone stops the sniff -- `binary` and the `-text` on the LFS line each do it
@@ -107,6 +109,8 @@
 *.step binary
 *.stl binary
 *.3mf binary
+*.FCStd binary
+*.f3d binary
 *.pdf binary
 *.ico binary
 *.bmp binary

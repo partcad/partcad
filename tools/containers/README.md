@@ -79,6 +79,15 @@ its own scripts; removing `python` is not — it is the name the `remote` sandbo
 and the path it is pinned to is how the image says which interpreter is its own. An image with no `python3`
 cannot run the service, and serves no sandbox at all.
 
+The base image also carries **cadmpeg** at `/usr/local/bin/cadmpeg`: the native program PartCAD reads
+FreeCAD, Fusion 360, SolidWorks, Inventor, CATIA, ACIS, Creo View and IGES files with. It is not part of the
+contract — an image without it still serves every sandbox, and PartCAD downloads cadmpeg into its cache the
+first time a container needs it — but a container that has it reads those files without a download, and
+without a network. It is the release PartCAD pins and nothing else: it is installed by
+`_common/cadmpeg_tool.py`, a byte-for-byte copy of `src/partcad/builtin/import/cadmpeg_tool.py` that a test
+keeps one, and PartCAD uses a cadmpeg on `PATH` only when it reports that release. A derived image that
+installs another cadmpeg gets the download rather than its own copy.
+
 ## Why the wrappers are mounted and not baked in
 
 PartCAD hands the interpreter in your image its wrapper scripts by path, out of the installation mounted above.

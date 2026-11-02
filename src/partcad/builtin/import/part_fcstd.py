@@ -19,9 +19,12 @@ about the document decides what the part is:
 
 What that cannot read -- a document saved with binary shapes, or one whose
 result is nowhere in the archive -- is converted by cadmpeg to STEP instead, and
-read the way every STEP file is (see 'wrappers/step_repair.py' for what cadmpeg
-writes that OpenCASCADE would otherwise crash on). That STEP holds every shape
-the document stored, so it is the second choice and not the first.
+read the way every part type cadmpeg reads is ('cadmpeg_step'). That STEP holds
+every shape the document stored, so it is the second choice and not the first,
+and only its solids are kept from it.
+
+Either way the part type declares 'requireSolid': a solid that comes back open
+or invalid fails the part, by the definition every part is held to.
 
 The document's history (sketches, constraints, the parametric features) does
 not survive either way: what PartCAD gets is the geometry FreeCAD last
@@ -34,7 +37,6 @@ Run by 'wrappers/wrapper_part_type.py' with 'request["path"]' set to the
 import json
 import os
 import re
-import subprocess
 import sys
 import tempfile
 import zipfile
@@ -42,20 +44,13 @@ import zipfile
 # Siblings are imported by bare name, and the sandbox sets PYTHONSAFEPATH.
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Raise with any change to what this produces (see 'partcad.code_version').
-CACHE_VERSION = 1
+# Raise with any change to what this produces (see 'partcad.code_version'),
+# which includes every change of the cadmpeg 'cadmpeg_tool' pins.
+CACHE_VERSION = 2
 
 # A feature's 'Shape' output in cadmpeg's model names the archive entry holding
 # it: 'fcstd:model:body#Fillet:Shape:Fillet.Shape.brp:47'.
 SHAPE_ENTRY = re.compile(r"#[^:]*:Shape:(?P<entry>[^:]+\.brp)(?::|$)")
-
-
-def run(command):
-    """Run cadmpeg, raising with what it said when it fails."""
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
-    if result.returncode != 0:
-        detail = (result.stderr or result.stdout or "").strip().splitlines()
-        raise RuntimeError("%s failed: %s" % (" ".join(command[:2]), detail[-1] if detail else result.returncode))
 
 
 def result_entries(model):
@@ -77,15 +72,9 @@ def result_entries(model):
 
 def solids(shape):
     """The solids in 'shape'."""
-    from OCP.TopAbs import TopAbs_SOLID
-    from OCP.TopExp import TopExp_Explorer
+    import cadmpeg_step
 
-    found = []
-    explorer = TopExp_Explorer(shape, TopAbs_SOLID)
-    while explorer.More():
-        found.append(explorer.Current())
-        explorer.Next()
-    return found
+    return cadmpeg_step.solids(shape)
 
 
 def read_brep(path):
@@ -101,8 +90,10 @@ def read_brep(path):
 
 def from_archive(source, cadmpeg, tmp):
     """The solids of the shapes the document shows, read from the archive."""
+    import cadmpeg_step
+
     dump = os.path.join(tmp, "document.cadir.json")
-    run([cadmpeg, "dump", source, "-o", dump])
+    cadmpeg_step.run([cadmpeg, "dump", source, "-o", dump])
     with open(dump, encoding="utf-8") as f:
         model = json.load(f).get("model") or {}
     entries = result_entries(model)
@@ -121,27 +112,21 @@ def from_archive(source, cadmpeg, tmp):
 
 def from_step(source, cadmpeg, tmp):
     """The solids of everything cadmpeg converts the document to."""
-    import step_repair
-    from OCP.IFSelect import IFSelect_RetDone
-    from OCP.STEPControl import STEPControl_Reader
+    import cadmpeg_step
 
-    step = os.path.join(tmp, "document.step")
-    run([cadmpeg, "convert", source, "-o", step])
-    reader = STEPControl_Reader()
-    with step_repair.readable(step) as readable_path:
-        read = reader.ReadFile(readable_path)
-    if read != IFSelect_RetDone or reader.TransferRoots() == 0:
+    step = cadmpeg_step.to_step(source, None, tmp, cadmpeg=cadmpeg)
+    try:
+        shape = cadmpeg_step.read(step)
+    except RuntimeError:
         raise RuntimeError("cadmpeg converted %s to STEP, but OpenCASCADE could not read it" % os.path.basename(source))
-    return solids(reader.OneShape())
+    return solids(shape)
 
 
 def convert(source, cache_dir):
     """Read 'source', a '.FCStd' file, into one OCCT shape."""
-    import cadmpeg_tool
-    from OCP.BRep import BRep_Builder
-    from OCP.TopoDS import TopoDS_Compound
+    import cadmpeg_step
 
-    cadmpeg = cadmpeg_tool.executable(cache_dir)
+    cadmpeg = cadmpeg_step.executable(cache_dir)
     with tempfile.TemporaryDirectory(prefix="partcad-fcstd-") as tmp:
         try:
             found = from_archive(source, cadmpeg, tmp)
@@ -151,14 +136,7 @@ def convert(source, cache_dir):
             found = from_step(source, cadmpeg, tmp)
     if not found:
         raise RuntimeError("%s holds no solid" % os.path.basename(source))
-    if len(found) == 1:
-        return found[0]
-    builder = BRep_Builder()
-    compound = TopoDS_Compound()
-    builder.MakeCompound(compound)
-    for solid in found:
-        builder.Add(compound, solid)
-    return compound
+    return cadmpeg_step.compound(found)
 
 
 if __name__ == "__partcad_part__":

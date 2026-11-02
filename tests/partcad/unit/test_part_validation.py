@@ -165,3 +165,86 @@ def test_a_solidified_part_is_measured_again_and_keeps_what_its_source_said(monk
     assert metadata[shape_envelope.METADATA_MEASUREMENTS] == {"volume": 6000.0}
     assert metadata[shape_envelope.METADATA_ANNOTATIONS] == [{"kind": "bend"}]
     assert metadata[shape_envelope.METADATA_SECTIONS] == {"source": {"units": "mm"}}
+
+
+# ---------------------------------------------------------------------------
+# A part whose type builds solids and nothing else ('requireSolid')
+# ---------------------------------------------------------------------------
+
+
+def _strict(name):
+    part = _Part(name)
+    part.solid_required = True
+    return part
+
+
+def test_a_part_whose_type_builds_only_solids_fails_on_what_another_is_warned_of(monkeypatch, caplog):
+    """The same problems, from the same check: a warning for a part, the end of a strict one."""
+
+    async def ask(self, ctx, obj, solidify=False):
+        return {"success": True, "solidified": None, "problems": ["a solid in it is open"]}
+
+    monkeypatch.setattr(Shape, "_ask_solidity", ask)
+    with caplog.at_level(logging.WARNING):
+        assert asyncio.run(_Part("lenient").get_wrapped(object())) is not None
+    assert "is not a solid: a solid in it is open" in caplog.text
+
+    strict = _strict("strict")
+    assert asyncio.run(strict.get_wrapped(object())) is None
+    assert any("is not a solid: a solid in it is open" in error for error in strict.errors)
+
+
+def test_a_strict_part_that_is_a_solid_is_built_as_any_other(monkeypatch):
+    async def ask(self, ctx, obj, solidify=False):
+        return {"success": True, "solidified": None, "problems": []}
+
+    monkeypatch.setattr(Shape, "_ask_solidity", ask)
+    strict = _strict("fine")
+    envelope = asyncio.run(strict.get_wrapped(object()))
+    assert envelope[shape_envelope.KEY_BREP] == b"shell"
+    assert strict.errors == []
+
+
+def test_a_strict_part_nobody_could_check_is_not_a_part(monkeypatch):
+    """A lenient part goes on unchecked (see above); one that promised a solid cannot."""
+
+    async def fail(self, ctx, obj, solidify=False):
+        raise RuntimeError("no sandbox here")
+
+    monkeypatch.setattr(Shape, "_ask_solidity", fail)
+    strict = _strict("unchecked")
+    assert asyncio.run(strict.get_wrapped(object())) is None
+    assert any("could not be validated: no sandbox here" in error for error in strict.errors)
+
+
+class _JudgedPart(_Part):
+    """A part whose wrapper judged it itself, on the live shape, and says what it found."""
+
+    def __init__(self, name, problems):
+        super().__init__(name)
+        self.problems = problems
+
+    async def get_shape(self, ctx):
+        verdict = {shape_envelope.FINISHED_VALIDATED: {"solidify": True, "problems": self.problems}}
+        return {
+            "name": self.name,
+            "label": self.name,
+            "brep": b"shell",
+            shape_envelope.KEY_METADATA: {shape_envelope.METADATA_FINISHED: verdict},
+        }
+
+
+def test_the_verdict_a_wrapper_brings_fails_a_strict_part_too(monkeypatch):
+    """Where every partType is judged: in its wrapper, which hands the problems back with the part."""
+
+    async def ask(self, ctx, obj, solidify=False):
+        raise AssertionError("a part its wrapper had validated was validated again")
+
+    monkeypatch.setattr(Shape, "_ask_solidity", ask)
+    lenient = _JudgedPart("lenient", ["it holds no solid"])
+    assert asyncio.run(lenient.get_wrapped(object())) is not None
+
+    strict = _JudgedPart("strict", ["it holds no solid"])
+    strict.solid_required = True
+    assert asyncio.run(strict.get_wrapped(object())) is None
+    assert any("is not a solid: it holds no solid" in error for error in strict.errors)

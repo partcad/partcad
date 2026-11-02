@@ -16,6 +16,12 @@
 #   - `dropped`             -- how each counter of the reader's `dropped`
 #                              summary is worded when it is reported. The
 #                              reader counts; this names.
+#   - `binary`              -- the format's files are bytes, handed to the
+#                              reader as they are rather than rendered as a
+#                              template.
+#   - `requireSolid`        -- every part the reader registers is a solid, so
+#                              one that is not fails rather than being built
+#                              with a warning (see `partTypes` below).
 #   - anything else         -- a parameter, passed to the reader as part of its
 #                              `request`.
 #
@@ -49,6 +55,27 @@ desc: |
 #   - `path`       -- the script, run in the sandbox with `request["path"]` set
 #                     to that file and `request["cache_dir"]` to where whatever
 #                     it downloads is kept.
+#   - `requireSolid` -- every one of these reads bodies, so a part that comes
+#                     back with no solid, an open or invalid one, or faces
+#                     bounding nothing is one it read wrongly, and fails rather
+#                     than being built with a warning (see
+#                     'Shape._accepted_as_solid'). That is the whole of how a
+#                     broken read is caught: the definition every part is held
+#                     to, not a check of each converter's own.
+#
+# Every type below but `fcstd` is read the same way -- cadmpeg converts the file
+# to STEP and the part is what that file shows -- so they share one script,
+# 'part_cadmpeg.py', and differ only in the file they are stored in. Which
+# format a file is, cadmpeg decides from its content; the extension is what a
+# part's file is called when its declaration names none, written the way the
+# format's own application writes it.
+#
+# Only the formats cadmpeg reads into connected solids are here: its level L3
+# ("Model") and above, as `cadmpeg inspect <file>` reports and
+# https://github.com/cadmpeg/cadmpeg/blob/main/docs/format-support.md defines.
+# Rhino `.3dm` (L2) and Siemens NX and Creo Parametric `.prt` (L1) are not:
+# cadmpeg does not yet read their bodies into solids, so every part of theirs
+# would be one this declaration fails.
 partTypes:
   fcstd:
     desc: |
@@ -57,8 +84,99 @@ partTypes:
       survive -- what the part is is the geometry FreeCAD last computed.
     path: part_fcstd.py
     extension: FCStd
+    requireSolid: true
+  iges:
+    desc: |
+      An IGES file (`.iges`, `.igs`): its solids, read with cadmpeg. A surface
+      model -- trimmed surfaces that bound no solid -- is not a part of this
+      type; convert it to a solid first.
+    path: part_cadmpeg.py
+    extension: iges
+    requireSolid: true
+  f3d:
+    desc: |
+      An Autodesk Fusion design (`.f3d`): the bodies it shows, read with
+      cadmpeg, so Fusion is not needed. The timeline does not survive -- what the
+      part is is the geometry Fusion last computed.
+    path: part_cadmpeg.py
+    extension: f3d
+    requireSolid: true
+  sldprt:
+    desc: |
+      A SolidWorks part (`.SLDPRT`): the bodies it shows, read with cadmpeg, so
+      SolidWorks is not needed. The feature tree does not survive -- what the
+      part is is the geometry SolidWorks last computed.
+    path: part_cadmpeg.py
+    extension: SLDPRT
+    requireSolid: true
+  ipt:
+    desc: |
+      An Autodesk Inventor part (`.ipt`): the body it holds, read with cadmpeg,
+      so Inventor is not needed. The model's history does not survive.
+    path: part_cadmpeg.py
+    extension: ipt
+    requireSolid: true
+  catpart:
+    desc: |
+      A CATIA V5 part (`.CATPart`): the body it holds, read with cadmpeg, so
+      CATIA is not needed. The specification tree does not survive.
+    path: part_cadmpeg.py
+    extension: CATPart
+    requireSolid: true
+  sat:
+    desc: |
+      An ACIS or ShapeManager body (`.sat`, or binary `.sab`, `.smt`, `.smb`):
+      its solids, read with cadmpeg. Which of the four a file is, is read from
+      its content, so a part of any of them names its file with `path`.
+    path: part_cadmpeg.py
+    extension: sat
+    requireSolid: true
+  pvz:
+    desc: |
+      A Creo View package (`.pvz`): the bodies of every component it places,
+      read with cadmpeg, as one part. Declare it as an assembly to keep the
+      components apart.
+    path: part_cadmpeg.py
+    extension: pvz
+    requireSolid: true
 
 import:
+  # A native CAD document read as an assembly, through cadmpeg: every format
+  # below is converted to STEP, and its tree read the way a STEP assembly's is
+  # (see 'import_cadmpeg.py'). Only the formats cadmpeg reads into connected
+  # solids *and* reads the components of: Inventor's `.iam` and SolidWorks'
+  # `.sldasm` are not here, because cadmpeg either leaves the files their
+  # components are in unopened or does not read their component tree yet.
+  # Every part it registers is a solid or fails, for the reason the part types
+  # above say.
+  f3d:
+    desc: |
+      An Autodesk Fusion design (`.f3d`) as an assembly: the bodies it shows,
+      each a part, placed where its component puts it. Joints are not read --
+      the assembly is the design at rest. cadmpeg does not yet place a component
+      nested inside another component reliably, so a deep component tree can
+      come out misplaced; declare such a design as an `f3d` part to keep its
+      geometry as one shape.
+    path: import_cadmpeg.py
+    extension: f3d
+    kinds: [assembly]
+    binary: true
+    noun: design
+    requireSolid: true
+    pythonRequirements:
+      - cadquery-ocp-novtk==7.9.3.1.1
+  pvz:
+    desc: |
+      A Creo View package (`.pvz`) as an assembly: the bodies of each component
+      it places, each a part, placed as the package's occurrence tree places it.
+    path: import_cadmpeg.py
+    extension: pvz
+    kinds: [assembly]
+    binary: true
+    noun: package
+    requireSolid: true
+    pythonRequirements:
+      - cadquery-ocp-novtk==7.9.3.1.1
   urdf:
     desc: |
       Unified Robot Description Format: a robot as a tree of links joined by

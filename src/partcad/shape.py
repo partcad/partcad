@@ -661,6 +661,13 @@ class Shape(ShapeConfiguration):
         self.cache_dependencies_broken = False
         self.cache_dependencies_ignore = self.config.get("cache_dependencies_ignore", True)
 
+        # Whether this part is only a part when it is made of solids, so that
+        # whatever 'wrapper_common.solid_problems' finds in it fails it rather
+        # than being reported beside it (see '_accepted_as_solid'). Set by the
+        # factory that builds it, from what its type declares: a 'partType' that
+        # says 'requireSolid'.
+        self.solid_required = False
+
         # Memory cache
         self._wrapped = None
         self._bounding_box = None
@@ -1299,10 +1306,13 @@ class Shape(ShapeConfiguration):
             # the live shape and with the same two functions: then the part is
             # converted already, and all that is left is to say what is wrong
             # with it, in the same words.
+            # A part that is not one - see '_accepted_as_solid' - goes on from
+            # here as a factory that built nothing does.
             verdict = finished.get(shape_envelope.FINISHED_VALIDATED)
             if self.kind == "part" and shape_envelope.is_shape_object(shape):
                 if verdict is not None:
-                    self._not_a_solid(verdict.get("problems") or [])
+                    if not self._accepted_as_solid(verdict.get("problems") or []):
+                        shape = None
                 elif ctx is not None:
                     shape = await self._validated_part(ctx, shape)
             if self.components:
@@ -4274,10 +4284,31 @@ class Shape(ShapeConfiguration):
             )
         return accepted
 
-    def _not_a_solid(self, problems) -> None:
-        """Say what keeps this part from being a solid, if anything does - in the one wording, wherever it was judged."""
-        if problems:
-            pc_logging.warning("%s:%s is not a solid: %s" % (self.project_name, self.name, "; ".join(problems)))
+    def _accepted_as_solid(self, problems) -> bool:
+        """Say what keeps this part from being a solid, if anything does, and whether it is still a part.
+
+        In the one wording, wherever it was judged. For most parts the answer
+        is always yes and the problems are a warning: a surface model is a
+        legitimate thing to import and draw, and everything that needs a solid
+        asks the same question and declines to compute with one that is not.
+
+        Not for a part whose type builds solids and nothing else
+        ('solid_required', from a 'partType' that declares 'requireSolid'). A
+        converter that reads a native CAD format is that kind of type: what it
+        was asked for is a body, and a body that comes back open, invalid or
+        empty is one it read wrongly - a face it could not decode, a surface it
+        lost - which renders like the part and is not it. So the problems fail
+        the part, by the same definition every other part is held to, rather
+        than by a check of the converter's own.
+        """
+        if not problems:
+            return True
+        message = "%s:%s is not a solid: %s" % (self.project_name, self.name, "; ".join(problems))
+        if self.solid_required:
+            self.error(message + " (its type builds solids, so this is a part it could not read)")
+            return False
+        pc_logging.warning(message)
+        return True
 
     async def _validated_part(self, ctx, envelope):
         """A part's envelope as every part leaves its factory: solidified, and judged.
@@ -4298,10 +4329,14 @@ class Shape(ShapeConfiguration):
         says what is wrong when it is not a solid. A warning and not a failure:
         a surface model is a legitimate thing to import and draw. Everything
         that needs a solid asks the same question and declines to compute with
-        one that is not.
+        one that is not. Except for a part whose type builds solids and
+        nothing else, which the problems fail ('_accepted_as_solid'): then this
+        returns None, as a factory that built nothing does.
 
         A sandbox that cannot answer leaves the part as it was, with a warning;
-        validating geometry is not a reason to stop building it.
+        validating geometry is not a reason to stop building it. That too has
+        the one exception: a part that is only a part when it is a solid is not
+        one nobody could check.
 
         Asked in that sandbox only of a part nothing has validated yet. The
         wrapper that built the part does it itself wherever it can, on the live
@@ -4318,9 +4353,17 @@ class Shape(ShapeConfiguration):
                 ctx, {shape_envelope.KEY_BREP: envelope[shape_envelope.KEY_BREP]}, solidify
             )
         except Exception as e:
-            pc_logging.warning("%s:%s: could not be validated: %s" % (self.project_name, self.name, e))
+            message = "%s:%s: could not be validated: %s" % (self.project_name, self.name, e)
+            if self.solid_required:
+                self.error(message)
+                return None
+            pc_logging.warning(message)
             return envelope
         if result is None:
+            # '_ask_solidity' has said why already.
+            if self.solid_required:
+                self.error("%s:%s: could not be validated" % (self.project_name, self.name))
+                return None
             return envelope
         solidified = result.get("solidified")
         if isinstance(solidified, dict) and shape_envelope.KEY_BREP in solidified:
@@ -4341,7 +4384,8 @@ class Shape(ShapeConfiguration):
                 envelope[shape_envelope.KEY_METADATA] = metadata
             else:
                 envelope.pop(shape_envelope.KEY_METADATA, None)
-        self._not_a_solid(result.get("problems") or [])
+        if not self._accepted_as_solid(result.get("problems") or []):
+            return None
         return envelope
 
     async def get_bounding_box_async(self, ctx):
