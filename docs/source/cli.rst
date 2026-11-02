@@ -1494,8 +1494,10 @@ Other commands
   ``pc adhoc render`` takes what ``pc render`` takes wherever that means something for a file in no package —
   and with no ``partcad.yaml`` to configure anything in, these are the only way to say any of it:
 
-  - ``--view``, ``--viewport-origin`` and ``--viewport-up`` aim the projection, and ``--reproducible`` /
-    ``--no-reproducible`` pick the algorithm, exactly as for ``pc render``;
+  - ``--view``, ``--viewport-origin``, ``--viewport-up`` and ``--turn`` aim the projection, and
+    ``--reproducible`` / ``--no-reproducible`` pick the algorithm, exactly as for ``pc render``;
+  - ``--style``, ``--size``, ``--background`` and ``--quality`` say how a ``png`` or a ``jpeg`` is drawn, also as
+    for ``pc render``: ``--style shaded`` is the 3D view's picture of the file;
   - ``-t``/``--format`` is another spelling of ``--output``, and ``-O``/``--output-dir`` writes into a directory
     when no output file is named: the file is then named after the input;
   - ``-p``/``--param <name>=<value>`` sets a parameter of a script (a build123d or CadQuery script's parameters
@@ -1510,12 +1512,14 @@ Other commands
 
     pc adhoc render part --input build123d -t svg -O ./out -p depth=12 bracket.py   # ./out/bracket_depth_12.svg
     pc adhoc render part --reproducible --view top bracket.step bracket.svg
+    pc adhoc render part --style shaded --turn 30 --size square bracket.step bracket.png
     pc adhoc render part -e ./drawing-style -t svg-thin -O ./out bracket.step
 
   The rest of ``pc render``'s options have nothing to act on here: there is no package to walk (``-P``, ``-r``,
   ``--fast-only``, ``--exclude``), the subcommand says what the file holds (``-s``, ``-i``, ``-a``, ``-S``), a
   file in no package has no ports or interfaces (``--with-*``, ``--port``) and a part or a sketch no links
-  (``--filter``), and no instruction book is rendered ad hoc (``--ignore-manufacturability``).
+  (``--filter``), no instruction book is rendered ad hoc (``--ignore-manufacturability``), and no video either
+  (``--fps``, ``--duration``, ``--speed``, ``--append``, ``--preset``).
 
   Which of the two to use is which kind of file is wanted, and it is the same distinction as between
   ``pc export`` and ``pc render``: geometry another CAD tool can go on working with, or a picture. ``pc adhoc

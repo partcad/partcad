@@ -12,8 +12,9 @@ fields mean. Like '--view', each is handed to every file type a run renders, and
 means something to the ones that have a field of that name: '--style',
 '--size' and '--background' to a picture and a video alike, which draw their
 pictures the same way ('render_raster.py'), '--quality' to a video and a JPEG,
-whose 'quality' is the same 0 to 100, and the rest to a video. What each one
-accepts is the implementation's to say; what is checked here is only what can
+whose 'quality' is the same 0 to 100, and the rest to a video. 'pc adhoc
+render', which writes pictures and no video, takes the four a picture reads
+('picture_options'). What each one accepts is the implementation's to say; what is checked here is only what can
 be checked without it, so that a typo costs a message rather than a round trip
 to the daemon.
 
@@ -32,36 +33,36 @@ PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "sl
 # How a picture is drawn; the twin of 'STYLES' in '//builtin/render/render_raster.py'.
 STYLES = ["lines", "shaded"]
 
-_OPTIONS = (
-    click.option(
-        "--style",
-        help=(
-            "How a picture is drawn: lines (the projection's visible edges, what a PNG or a JPEG is by "
-            "default) or shaded (lit and in perspective, as the Digital Thread's 3D view draws it - and "
-            "as every frame of a video is drawn)"
-        ),
-        type=click.Choice(STYLES),
-        show_envvar=True,
+_STYLE = click.option(
+    "--style",
+    help=(
+        "How a picture is drawn: lines (the projection's visible edges, what a PNG or a JPEG is by "
+        "default) or shaded (lit and in perspective, as the Digital Thread's 3D view draws it - and "
+        "as every frame of a video is drawn)"
     ),
-    click.option(
-        "--size",
-        help=(
-            "The size of a picture or a video, by where it is going: reels (a video's default: also shorts, "
-            "tiktok, story, vertical), portrait, square, pinterest, landscape (also youtube), 720p, 1080p, "
-            "1440p, 4k, 4:3, 21:9 -- or WIDTHxHEIGHT (a picture's default is 512x512)"
-        ),
-        type=str,
-        show_envvar=True,
+    type=click.Choice(STYLES),
+    show_envvar=True,
+)
+_SIZE = click.option(
+    "--size",
+    help=(
+        "The size of a picture or a video, by where it is going: reels (a video's default: also shorts, "
+        "tiktok, story, vertical), portrait, square, pinterest, landscape (also youtube), 720p, 1080p, "
+        "1440p, 4k, 4:3, 21:9 -- or WIDTHxHEIGHT (a picture's default is 512x512)"
     ),
-    click.option(
-        "--background",
-        help=(
-            "What a picture or a video is drawn on, as '#RRGGBB': white for a PNG or a JPEG, the editor's "
-            "#1F1F1F for a video"
-        ),
-        type=str,
-        show_envvar=True,
+    type=str,
+    show_envvar=True,
+)
+_BACKGROUND = click.option(
+    "--background",
+    help=(
+        "What a picture or a video is drawn on, as '#RRGGBB': white for a PNG or a JPEG, the editor's "
+        "#1F1F1F for a video"
     ),
+    type=str,
+    show_envvar=True,
+)
+_VIDEO = (
     click.option(
         "--fps",
         help="Frames a second of a video (30 by default)",
@@ -100,16 +101,22 @@ _OPTIONS = (
         type=click.Choice(PRESETS),
         show_envvar=True,
     ),
-    click.option(
-        "--quality",
-        help=(
-            "How much of the picture survives a video's encoder, 0 to 100 (65 by default). Like the other "
-            "options here it is handed to every file type rendered, so it sets a JPEG's quality too"
-        ),
-        type=click.FloatRange(min=0, max=100),
-        show_envvar=True,
-    ),
 )
+_QUALITY = click.option(
+    "--quality",
+    help=(
+        "How much of the picture survives a video's encoder, 0 to 100 (65 by default). Like the other "
+        "options here it is handed to every file type rendered, so it sets a JPEG's quality too"
+    ),
+    type=click.FloatRange(min=0, max=100),
+    show_envvar=True,
+)
+
+_OPTIONS = (_STYLE, _SIZE, _BACKGROUND, *_VIDEO, _QUALITY)
+
+# The ones a picture reads, which is all 'pc adhoc render' writes: how it is
+# drawn, its size and background, and a JPEG's quality.
+_PICTURE_OPTIONS = (_STYLE, _SIZE, _BACKGROUND, _QUALITY)
 
 
 def video_options(command):
@@ -119,16 +126,25 @@ def video_options(command):
     return command
 
 
+def picture_options(command):
+    """Add the options a picture reads to a command that writes nothing else ('pc adhoc render')."""
+    for option in reversed(_PICTURE_OPTIONS):
+        command = option(command)
+    return command
+
+
+def picture_params(style, size, background, quality):
+    """The picture options as JSON-RPC params, under the names 'video_params' sends them by."""
+    return {"style": style, "size": size, "background": background, "quality": quality}
+
+
 def video_params(style, size, background, fps, duration, speed, append, preset, quality):
     """The picture and video options as JSON-RPC params, so every caller sends the same names."""
     return {
-        "style": style,
-        "size": size,
-        "background": background,
+        **picture_params(style, size, background, quality),
         "fps": fps,
         "duration": duration,
         "speed": speed,
         "append": append,
         "preset": preset,
-        "quality": quality,
     }

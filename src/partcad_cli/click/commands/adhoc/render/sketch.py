@@ -10,6 +10,7 @@ import rich_click as click
 
 from .... import render_options
 from ....service import run
+from ....video import picture_options, picture_params
 from ....viewport import viewport_options, viewport_params
 
 # PartCAD sketch types (partcad.shape.SKETCH_EXTENSION_MAPPING keys), inlined so
@@ -33,6 +34,7 @@ RENDER_TYPES = ["svg", "png", "jpeg", "dxf"]
 @render_options.output_option(RENDER_TYPES)
 @render_options.adhoc_options
 @viewport_options
+@picture_options
 @click.argument("input_filename", type=click.Path(exists=True))
 @click.argument("output_filename", type=click.Path(), required=False)
 @click.pass_obj
@@ -48,6 +50,10 @@ def cli(
     viewport_origin,
     viewport_up,
     turn,
+    style,
+    size,
+    background,
+    quality,
     input_filename,
     output_filename,
 ):
@@ -65,6 +71,7 @@ def cli(
                 output_type, RENDER_TYPES, output_dir, options_package, params, reproducible, output_filename
             ),
             **viewport_params(view, viewport_origin, viewport_up, turn),
+            **picture_params(style, size, background, quality),
         },
         needs_context=False,
     )

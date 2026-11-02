@@ -3285,6 +3285,20 @@ def test_adhoc_render_hands_reproducible_to_the_projection(monkeypatch, tmp_path
     assert part.calls[0][4] == {"reproducible": sent}
 
 
+def test_adhoc_render_hands_the_picture_options_to_the_projection(monkeypatch, tmp_path):
+    """'--style shaded' and the rest mean to a picture of a bare file what they mean to an object's."""
+    part, _ = install_fake_render(monkeypatch)
+    session = _with_output(make_session()[0])
+    picture = {"style": "shaded", "size": "square", "background": "#102030", "quality": 80}
+
+    operations.adhoc_render(
+        session,
+        adhoc_request(tmp_path, output_filename=str(tmp_path / "bracket.png"), **picture),
+    )
+
+    assert part.calls[0][4] == picture
+
+
 def test_adhoc_render_refuses_a_reproducible_that_is_not_a_flag(monkeypatch, tmp_path):
     part, _ = install_fake_render(monkeypatch)
     session = _with_output(make_session()[0])

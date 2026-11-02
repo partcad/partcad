@@ -1429,10 +1429,13 @@ def adhoc_render(session, params):
     It takes what ``render.objects`` takes wherever that means something for a
     file outside any package:
 
-    * ``view``, ``viewport_origin`` and ``viewport_up`` aim the projection, and
-      ``reproducible`` picks the hidden-line algorithm, for this one render --
-      with no ``partcad.yaml`` to configure them in, this is the only way to say
-      either;
+    * ``view``, ``viewport_origin``, ``viewport_up`` and ``turn`` aim the
+      projection, and ``reproducible`` picks the hidden-line algorithm, for this
+      one render -- with no ``partcad.yaml`` to configure them in, this is the
+      only way to say either;
+    * ``style``, ``size``, ``background`` and ``quality`` are a picture's, as for
+      ``render.objects`` (`VIDEO_OPTIONS`): a ``png`` or a ``jpeg`` drawn
+      ``shaded`` is the 3D view's picture of a bare file;
     * ``params`` are parameter values of the input, which the throwaway package
       declares on it, so that a script reads them;
     * ``options_package`` is a package to read the file type from -- one in the
@@ -1500,7 +1503,9 @@ def adhoc_render(session, params):
             % (output_type, ", ".join(sorted(RENDER_EXTENSION_MAPPING))),
         )
 
-    options = _render_options(pc, params)
+    # The picture options too: 'style', 'size', 'background' and a JPEG's
+    # 'quality' mean the same to a picture of a bare file as to an object's.
+    options = {**_render_options(pc, params), **_video(params)}
     if values:
         options["parameters"] = values
     if options_package:

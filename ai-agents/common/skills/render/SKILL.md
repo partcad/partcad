@@ -116,7 +116,9 @@ pc --no-ansi adhoc render part -e //pub/feature/render/draftwright -t pdf bracke
 - `-e` reads the file type from a package: one in the public index, or the
   directory of a package on this machine. The output may then be any type that
   package declares.
-- `--reproducible` / `--no-reproducible`: see §5.
+- `--reproducible` / `--no-reproducible`, and `--turn`: see §5.
+- `--style`, `--size`, `--background` and `--quality`: how a PNG or a JPEG is
+  drawn, as for `pc render` (see §5).
 
 The rest of `pc render`'s options have nothing to act on here: there is no
 package to walk, the subcommand says what the file holds, and a file in no
@@ -127,7 +129,7 @@ the file in one (`pc import assembly`) and render it with `pc render`.
 
 ## 5. Choosing the angle, and the algorithm
 
-Both commands take the same three options for the angle.
+Both commands take the same options for the angle.
 
 `--view` names a direction — `front`, `back`, `left`, `right`, `top`, `bottom`,
 `iso`. `--viewport-origin X,Y,Z` says which direction to look from — `0,-100,0`
@@ -144,6 +146,18 @@ pc --no-ansi adhoc render part --viewport-origin 120,-40,60 bracket.step bracket
 PartCAD is Z-up, with `+Y` pointing away from the front view — so `+X` is to the
 right of it and `+Z` is up. Left unset, a part is drawn from the front-right-top
 corner (`iso`), which is what makes it read as 3D, and a sketch head-on.
+
+`--turn X,Y,Z` turns the object instead of moving the camera — by those degrees
+about its own axes, through its middle, or by one number about Z — and goes with
+any of the above. `--style shaded` draws a PNG or a JPEG lit and in
+perspective, as the IDE's 3D view shows it, rather than as the projection's
+lines; `--size` (`512x512` by default, or a name such as `square`) and
+`--background` go with it. Both commands take all of these:
+
+```sh
+pc --no-ansi render -t png --style shaded --turn 30 -O ./out bracket
+pc --no-ansi adhoc render part --style shaded --size square bracket.step bracket.png
+```
 
 These are the same `viewport_origin` and `viewport_up` a `render:` file type is
 configured with in `partcad.yaml`, passed for one command instead of written
