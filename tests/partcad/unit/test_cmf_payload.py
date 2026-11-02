@@ -18,6 +18,7 @@ Pinned here:
 """
 
 import asyncio
+import logging
 import os
 import sys
 
@@ -185,8 +186,13 @@ def test_summaries_of_several_payloads_add_up():
     one = Section([CmfSet(color="//c:a", rgba=(1, 2, 3, 1.0))], NONE, faces=[0, NONE]).summary()
     other = Section().summary()
     merged = cmf_section.merge_summaries([one, other])
-    assert merged["unspecified"] == {"color": "some", "material": "some"}
+    # Some faces have a colour; neither payload has a material anywhere.
+    assert merged["unspecified"] == {"color": "some", "material": "all"}
     assert cmf_section.merge_summaries([one]) is one
+    assert cmf_section.merge_summaries([one, Section([CmfSet(material="//m:x")], 0).summary()])["unspecified"] == {
+        "color": "some",
+        "material": "some",
+    }
 
 
 # -------------------------------------------------------------- assemblies
@@ -300,6 +306,33 @@ def test_a_specified_part_passes(tmp_path):
     specified = Section([CmfSet(color="//cmf:red", material="//cmf:alu", finish="//cmf:satin")], 0).summary()
 
     assert cmf_check.part_findings(ctx, _Built(specified)) == []
+
+
+def test_a_part_an_assembly_is_made_of_is_held_to_its_cmf_whatever_it_says_of_itself(tmp_path, caplog):
+    """The manufacturability walk over a manufacturable assembly's parts forces them to be made."""
+    ctx = _package(tmp_path)
+
+    class _NotMade(_Built):
+        name = "box"
+        config = {}
+        is_manufacturable = False
+
+        async def get_wrapped(self, ctx):
+            return {}
+
+    part = _NotMade(None)
+    check = cmf_check.CmfTest()
+
+    assert check.inapplicable(part) is not None
+    assert check.inapplicable(part, forced=True) is None
+
+    with caplog.at_level(logging.WARNING):
+        asyncio.run(check.test([check], ctx, part, {}))
+    assert "CMF not specified" not in caplog.text
+
+    with caplog.at_level(logging.WARNING):
+        asyncio.run(check.test([check], ctx, part, {cmf_check.CmfTest.FORCE_MANUFACTURING: True}))
+    assert "CMF not specified: it states no colour and no material" in caplog.text
 
 
 def test_the_check_is_registered_and_catalogued():
@@ -474,8 +507,156 @@ def test_an_assembly_is_keyed_on_what_its_items_cmf_comes_to(tmp_path):
     assert red is not None and darker is not None
     assert red != darker
 
-    # An item that states nothing adds nothing to the key.
-    assert pc_cmf.key_of(ctx, ctx.get_part("//cmf:brick")) == {}
+    # An item that states nothing adds only what its source's CMF would be
+    # converted by: its package declares colours.
+    assert set(pc_cmf.key_of(ctx, ctx.get_part("//cmf:brick"))) == {"version", "scope"}
     described = pc_cmf.key_of(ctx, ctx.get_part("//cmf:red_brick"))
     assert described["color"]["reference"] == "//cmf:red"
     assert described["color"]["manufacturable"] is True
+
+
+def test_an_assembly_is_keyed_on_how_its_items_finishes_are_drawn(tmp_path):
+    """A finish's roughness and metallic are in the payload as much as a colour's display is."""
+
+    def described(roughness):
+        root = tmp_path / str(roughness)
+        root.mkdir()
+        ctx = _package(
+            root,
+            {"box": _stl(finish=":satin")},
+            files={"box.stl": ""},
+            finishes={"satin": {"display": {"roughness": roughness, "metallic": 0}}},
+        )
+        return cmf.key_of(ctx, ctx.get_part("//cmf:box"))
+
+    satin = described(0.6)
+    assert satin["finish"]["roughness"] == 0.6 and satin["finish"]["metallic"] == 0
+    assert described(0.2) != satin
+
+
+def test_a_package_may_require_its_parts_cmf(tmp_path):
+    """'cmf: {require: true}' on the package is read through the context: the object carries no package."""
+    (tmp_path / "strict").mkdir()
+    (tmp_path / "lenient").mkdir()
+    required = _package(tmp_path / "strict", {"plain": _stl()}, files={"box.stl": ""}, cmf={"require": True})
+    lenient = _package(tmp_path / "lenient", {"plain": _stl()}, files={"box.stl": ""})
+    assert cmf_check._required(required, required.get_part("//cmf:plain")) is True
+    assert cmf_check._required(lenient, lenient.get_part("//cmf:plain")) is False
+
+
+def test_own_parameters_resolve_an_alias_through_the_context(tmp_path):
+    """A part naming ':stone', an alias, states the declaration the alias names."""
+    ctx = _package(
+        tmp_path,
+        {"box": _stl(color=":stone")},
+        files={"box.stl": ""},
+        colors=dict(COLORS, stone={"type": "alias", "source": ":red"}),
+    )
+    part = ctx.get_part("//cmf:box")
+    assert cmf.own_parameters(part, ctx) == {"color": "//cmf:red"}
+
+
+def test_a_source_section_rides_through_a_transform():
+    """An 'offset' or a 'scale' rebuilds the payload with no section, and the source's is laid back."""
+    stated = _faces_red_and_bare()
+    with_section = _envelope(stated)
+    assert cmf.payload_section(with_section).faces == stated.faces
+
+    rebuilt = _envelope()
+    assert cmf.payload_section(rebuilt) is None
+    restored = cmf.with_payload_section(rebuilt, cmf.payload_section(with_section))
+    assert _section_of(restored).faces == stated.faces
+    # A payload that carries a section of its own keeps it.
+    assert cmf.with_payload_section(with_section, Section([], NONE)) is with_section
+
+
+def test_a_section_written_for_other_geometry_is_drawn_in_the_node_s_colour():
+    """A section addressing more faces than the shape has says nothing true of it, and is not a crash."""
+    pytest.importorskip("build123d")
+    import appearance
+    import ocp_serialize
+
+    red = CmfSet(color="//c:red", rgba=(255, 0, 0, 1.0))
+    grey = CmfSet(color="//c:grey", rgba=(128, 128, 128, 1.0))
+    envelope = _envelope(Section([red, grey], 1, faces=[0, 0] + [NONE] * 6))
+    whole, tree = ocp_serialize.decode_tree(envelope)
+
+    groups = appearance.split_by_color(tree, whole)
+
+    assert [color for color, _shape in groups] == [appearance.DEFAULT_COLOR]
+
+
+def test_a_display_only_colour_is_its_own_reference_and_no_claim(tmp_path, monkeypatch):
+    """'//pub/std/color:rgba;color=…' states itself in full: no package is asked, and it claims nothing."""
+    ctx = _package(tmp_path, {"box": _stl(color="//pub/std/color:rgba;color=c91a09ff")}, files={"box.stl": ""})
+    asked = []
+    real = cmf.lookup
+
+    def recording(ctx, kind, ref, *args, **kwargs):
+        asked.append(ref)
+        return real(ctx, kind, ref, *args, **kwargs)
+
+    monkeypatch.setattr(cmf, "lookup", recording)
+    reference = cmf.canonical(ctx, "color", "//pub/std/color:rgba;color=c91a09ff")
+    assert reference == "//pub/std/color:rgba;color=C91A09FF"
+    described = cmf.key_of(ctx, ctx.get_part("//cmf:box"))
+    assert described["color"] == {"reference": reference, "display": [201, 26, 9, 1.0], "manufacturable": False}
+    assert not [ref for ref in asked if ref.startswith("//pub/std/color:rgba")]
+
+
+def test_an_alias_of_a_parametric_instance_is_listed_by_its_look(tmp_path):
+    """An alias naming 'rgba;color=…' shows that colour, and keeps the description it gives itself."""
+    from partcad_service_json_rpc.core import operations
+
+    ctx = _package(
+        tmp_path,
+        files={"box.stl": ""},
+        colors=dict(
+            COLORS,
+            rgba={"parameters": {"color": {"type": "string", "default": "000000FF"}}, "display": "#%color%"},
+            signal={"type": "alias", "source": ":rgba;color=C91A09FF", "desc": "the signal red"},
+        ),
+    )
+    rows = operations._cmf_rows(ctx, ctx.get_project("//cmf"), "color")
+    assert rows["rgba"].startswith("parametric")
+    assert rows["signal"].startswith("#C91A09")
+    assert "the signal red" in rows["signal"]
+
+
+def test_an_edge_that_bounds_no_face_is_drawn_in_the_node_s_colour():
+    """Splitting a shape by its faces' colours keeps a free edge, in the node's own colour."""
+    pytest.importorskip("build123d")
+    import appearance
+    import build123d as bd
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import TopTools_IndexedMapOfShape
+
+    free = bd.Edge.make_line((50, 0, 0), (60, 0, 0)).wrapped
+    shape = bd.Compound([bd.Box(10, 20, 30), bd.Edge(free)]).wrapped
+    groups = dict(appearance.faces_by_color(shape, ["#FF0000"] * 2 + [None] * 4, "#808080"))
+
+    def edges(group):
+        found = TopTools_IndexedMapOfShape()
+        TopExp.MapShapes_s(group, TopAbs_EDGE, found)
+        return found
+
+    assert set(groups) == {"#FF0000", "#808080"}
+    assert edges(groups["#808080"]).Contains(free)
+    assert not edges(groups["#FF0000"]).Contains(free)
+
+
+def test_an_assembly_that_will_not_instantiate_fails_the_check_rather_than_the_run(tmp_path, monkeypatch):
+    """A broken link fails the 'cmf' check for that assembly; it does not stop 'pc test'."""
+    ctx = _walls(tmp_path)
+    assembly = ctx.get_assembly("//cmf:wall")
+
+    async def broken():
+        raise RuntimeError("a link names nothing")
+
+    monkeypatch.setattr(assembly, "do_instantiate", broken)
+    check = cmf_check.CmfTest()
+    failed = []
+    monkeypatch.setattr(check, "failed", lambda shape, message: failed.append(message) or False)
+    assert asyncio.run(check.test([], ctx, assembly, {})) is False
+    assert "a link names nothing" in failed[0]

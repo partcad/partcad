@@ -61,10 +61,12 @@ conventional
 conventions
 count
 cover
+cuboid
 currency
 cut
 cuts
 cwd
+cylinder
 cylindrical
 dam
 damper

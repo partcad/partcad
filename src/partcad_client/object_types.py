@@ -84,6 +84,8 @@ PART_TYPE_IS_MESH: Dict[str, bool] = {
     "chili3d": False,
     "sdf": False,
     "scad": False,
+    # A primitive solid PartCAD writes out of the numbers in its declaration.
+    "basic": False,
     # Shapes built by PartCAD out of something else in the package.
     "extrude": False,
     "sweep": False,

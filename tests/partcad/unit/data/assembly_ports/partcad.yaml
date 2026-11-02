@@ -190,6 +190,18 @@ assemblies:
     type: enrich
     source: mount
 
+  # One that declares a port of its own is joined by that, as a part is.
+  mount-own-port:
+    type: enrich
+    source: mount
+    ports:
+      own: [[0.0, 0.0, 9.0], [0.0, 0.0, 1.0], 0.0]
+
+  # The parametric one under a name of its own, for an override to say which.
+  parametric-again:
+    type: enrich
+    source: parametric
+
   mount-renamed:
     type: enrich
     source: mount

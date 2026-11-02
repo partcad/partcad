@@ -565,6 +565,20 @@ def test_an_assembly_bought_whole_may_place_what_it_holds_by_coordinates():
     assert _run(ConnectivityTest(), asm)
 
 
+def test_an_assembly_bought_whole_may_mix_coordinates_with_connections():
+    """Nor is it held to the rule for an assembly nobody makes: what holds its items is its vendor's, not its file's."""
+    for manufacturable in (True, False):
+        asm = _BoughtAssembly(
+            children=[
+                _Child("rim", _thing()),
+                _Child("hub", _thing(), connection={"target": "rim"}),
+                _Child("tyre", _thing(), located=True),
+            ],
+            is_manufacturable=manufacturable,
+        )
+        assert _run(ConnectivityTest(), asm)
+
+
 def test_an_assembly_bought_whole_is_not_looked_inside():
     """Placed and connected as one item: what is inside it is its vendor's."""
     wheel = _BoughtAssembly(children=[_Child("rim", _thing()), _Child("tyre", _thing(), located=True)])

@@ -293,9 +293,11 @@ def merge_summaries(summaries) -> dict:
                 for count in ("faces", "solids"):
                     merged[key][count] = _added(merged[key].get(count), entry.get(count))
         for component in ("color", "material"):
-            # A payload saying nothing about a component left none of it unspecified.
+            # A payload saying nothing about a component left none of it
+            # unspecified. Added up from nothing rather than from nought, so
+            # that payloads which all leave it unspecified leave all of it so.
             unspecified[component] = _added(
-                unspecified.get(component, 0), (summary.get("unspecified") or {}).get(component, 0)
+                unspecified.get(component), (summary.get("unspecified") or {}).get(component, 0)
             )
     return {
         "sets": list(merged.values()),

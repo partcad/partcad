@@ -43,8 +43,8 @@ def _check(ctx, param, value):
     return value
 
 
-def param_option(command):
-    """Add '-p'/'--param' to a command."""
+def param_option(command, help=HELP):
+    """Add '-p'/'--param' to a command; 'help' is for one that gives the values to something else."""
     return click.option(
         "-p",
         "--param",
@@ -53,7 +53,7 @@ def param_option(command):
         multiple=True,
         metavar="<name>=<value>",
         callback=_check,
-        help=HELP,
+        help=help,
         show_envvar=True,
     )(command)
 

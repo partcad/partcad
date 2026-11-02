@@ -416,10 +416,19 @@ def test_pc_render_draws_each_part_in_its_colour(context, tmp_path, file_type):
 
 def test_a_colour_too_light_to_see_on_white_is_drawn_darker(real_svg):
     """A white face - what a STEP file paints a part as often as not - is drawn in grey lines, not invisible ones."""
-    assert real_svg.legible("#FFFFFF") == (188, 188, 188)
+    assert real_svg.legible("#FFFFFF") == (188, 188, 188, 1.0)
     # Goldenrod, every default drawing, and anything darker are drawn exactly as they are.
     assert real_svg.legible("#DAA520") == "#DAA520"
     assert real_svg.legible("#0D0D0D") == "#0D0D0D"
     # A light colour keeps its hue: a pale blue is still bluer than it is red.
-    red, _green, blue = real_svg.legible("#C0D8FF")
+    red, _green, blue, _alpha = real_svg.legible("#C0D8FF")
     assert blue > red
+
+
+def test_a_light_colour_drawn_darker_is_as_see_through_as_it_was(real_svg):
+    """A translucent white face's lines are grey and still translucent, not opaque."""
+    darker = real_svg.legible("#FFFFFF80")
+    assert darker[:3] == (188, 188, 188)
+    assert darker[3] == pytest.approx(128 / 255, abs=0.01)
+    assert real_svg.legible((255, 255, 255, 0.5)) == (188, 188, 188, 0.5)
+    assert list(real_svg.line_color(darker))[3] == pytest.approx(darker[3])

@@ -9,6 +9,10 @@ What a part is
 
 PartCAD has an ever-growing list of ways to define the part model:
 
+- Basic shapes
+
+  - ``cuboid``, ``cylinder``
+
 - Files
 
   - `STEP <https://en.wikipedia.org/wiki/ISO_10303>`_
@@ -37,7 +41,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <scad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|gltf|fcstd|extrude|sweep
+      type: <basic|scad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|gltf|fcstd|extrude|sweep
              |kicad|compound|alias|enrich|:<partType declared by this package>
              |<package>:<partType declared by that package>>
       desc: <(optional) textual description>
@@ -46,7 +50,8 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
       fileUrl: <(fileFrom=url only) the URL to download the source file from>
       # ... type-specific options ...
-      offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
+      offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]";
+               any number in it may be an expression over the part's parameters, e.g. "%length / 2%">
 
       # The below syntax is similar to the one used for interfaces,
       # with the only exception being the word "implements" instead of "inherits".
@@ -149,6 +154,60 @@ to ``parameters``, which say what is asked of the type that produces it. See
 :ref:`properties` below.
 
 See :ref:`location` for more information on the OCCT Location object.
+
+.. _basic_parts:
+
+Basic shapes
+------------
+
+A part that is one primitive solid is declared by its dimensions alone, with
+nothing to read and no script to run:
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      type: basic
+      desc: <(optional) textual description>
+      # The below are mutually exclusive options
+      cuboid: <(optional) edge size of a cube>
+      cuboid: [<size along X>, <size along Y>, <size along Z>]  # alternative syntax
+      cylinder: <(optional)>
+        radius: <radius>
+        height: <height, along Z>
+      offset: <(optional) where to put it, as for any other part>
+
+There must be exactly one field ``cuboid`` or ``cylinder``. Both solids are
+built **centred on the origin**, the way build123d's ``Box`` and ``Cylinder`` and
+CadQuery's ``box`` and ``cylinder`` are: a cylinder of height 10 runs from
+``z = -5`` to ``z = 5``. A part is one solid, so it is placed the way any other
+part is, by its ``offset`` (see :ref:`location`), which also turns it. Every
+dimension, and every number in the ``offset``, may be an expression over the
+part's ``parameters`` (see :ref:`parameters`), which is how a basic part is made
+parametric:
+
+.. code-block:: yaml
+
+  parts:
+    spacer:
+      type: basic
+      parameters:
+        length:
+          type: float
+          default: 10
+      cylinder:
+        radius: 4
+        height: "%length%"
+      # Standing on the XY plane, whatever its length.
+      offset: [[0, 0, "%length / 2%"], [0, 0, 1], 0]
+
+A basic part is a homogeneous body, so it takes the ``material``, ``color`` and
+``tolerance`` parameters.
+
+Neither a basic part nor a basic sketch (see :ref:`sketches`) is built with a CAD
+kernel: PartCAD writes its BREP itself, in milliseconds and without starting a
+CAD sandbox. It is still the solid OCCT would have built from the same numbers,
+and it renders, exports, measures and takes part in a boolean like one.
 
 CAD Scripts
 -----------
@@ -737,9 +796,10 @@ visualization, simulation calculations and, if applicable, manufacturing
   ``<package>:<name>`` (see :ref:`cmf`). Some materials are declared in
   ``//pub/std/manufacturing/material``. They are accepted by every part type, and
   fill in what the part's source leaves unset (see :ref:`cmf-parameters`). A
-  part in another colour is another item. When a request is made to a
-  manufacturing API, the provider is handed the declarations themselves, and
-  matches them by what other systems call them.
+  part in another colour is another item. A request to a manufacturing API does
+  not carry the declarations yet: each part in it is sent as its format and its
+  file (see :ref:`providers`). Handing a provider the declarations, to match by
+  what other systems call them (``ids``), is planned.
 
 - ``texture``
 

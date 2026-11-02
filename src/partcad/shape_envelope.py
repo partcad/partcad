@@ -75,10 +75,6 @@ except ImportError:  # pragma: no cover - exercised on the other interpreter
         _ZstdDecompressor = None
         _zstd_compress = None
 
-# The level a payload is compressed at, on either side of the pipe: zstd's own
-# default, as 'ocp_serialize.ZSTD_LEVEL' explains.
-ZSTD_LEVEL = 3
-
 # The three object shapes are told apart by which of these keys is present.
 KEY_BREP = "brep"
 KEY_ASSEMBLY = "assembly"
@@ -322,6 +318,10 @@ METADATA_UNIT_INERTIA = "unitInertia"
 # constant on the geometry side is 'ocp_serialize.ZSTD_MAGIC'.
 ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
 
+# The level a payload is compressed at, the one 'ocp_serialize.ZSTD_LEVEL' names
+# for the sandbox's encoder (see there for why it is zstd's own default).
+ZSTD_LEVEL = 3
+
 # How far a BREP payload may expand before 'brep_plain()' refuses to finish
 # decompressing it, as a multiple of the compressed size and never less than the
 # floor. Both come from measurement rather than from taste: across the shapes
@@ -493,17 +493,20 @@ def brep_plain(value) -> bytes:
     return plain
 
 
-def brep_payload(plain: bytes) -> bytes:
-    """'brep_plain()' the other way: plain payload bytes, as a node carries them.
+def brep_compressed(plain: bytes) -> bytes:
+    """The payload of BREP bytes this process wrote itself: zstd-compressed, as every payload is carried.
 
-    For the one thing the core writes into a payload rather than moving it
-    around unopened: the CMF section after the BREP (see 'partcad.cmf'). The same
-    frame format and level 'ocp_serialize' writes, so either end reads it; plain
-    bytes where zstd is not to be had, which 'brep_plain()' reads too.
+    The inverse of 'brep_plain()', for the one producer of geometry the core
+    has, which is 'basic_shapes': everything else arrives compressed by the
+    sandbox that encoded it ('ocp_serialize.compressed_brep'). At the level that
+    encoder uses, so a shape is the same bytes whichever end compressed it; and
+    left as it is where there is no zstd, as there, since a reader tells the two
+    apart by the frame header.
     """
+    plain = bytes(plain)
     if _zstd_compress is None:
-        return bytes(plain)
-    return _zstd_compress(bytes(plain), ZSTD_LEVEL)
+        return plain
+    return _zstd_compress(plain, ZSTD_LEVEL)
 
 
 def payload_digest(value) -> str:

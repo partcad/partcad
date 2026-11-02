@@ -134,9 +134,12 @@ Agent skills
   matching skill below. The one to use when it does not matter which it is.
 
 ``/pc:gen-part``, ``/pc:gen-assembly``, ``/pc:gen-sketch``
-  Model from a description. Each validates what it wrote by rendering it -- from
-  several angles, because a single projection hides whatever is behind it -- and
-  comparing each view against the description it started from.
+  Model from a description. Each settles the dimensions first, on sketches
+  ``/pc:gen-sketch`` measures and iterates until they match what was stated or
+  shown, and validates what it wrote by rendering it -- from several angles,
+  because a single projection hides whatever is behind it -- comparing each
+  view against the description it started from, and measuring the same
+  dimensions on its projections.
 
 ``/pc:add-interfaces``
   Adds ``interfaces``, ports and ``implements:`` to a part that has none, so it

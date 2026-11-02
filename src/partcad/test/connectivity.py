@@ -191,8 +191,11 @@ class ConnectivityTest(Test):
         if not config.get("requireAnchored", True):
             return
         # An assembly that is bought whole is made by its vendor, however its
-        # file places what it holds: the coordinates there draw it.
-        if getattr(shape, "is_manufacturable", False) and not _bought_whole(shape):
+        # file places what it holds: the coordinates there draw it, and nothing
+        # here holds anything anywhere - so neither rule below is its to meet.
+        if _bought_whole(shape):
+            return
+        if getattr(shape, "is_manufacturable", False):
             for children in self._containers(shape):
                 for index, child in enumerate(children):
                     if getattr(child, "located", False):

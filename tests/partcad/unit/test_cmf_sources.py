@@ -113,6 +113,17 @@ def test_a_claimed_material_colours_what_states_no_colour(tmp_path):
     assert own.rgba == (168, 169, 173, 1.0)
 
 
+def test_a_finish_draws_as_declared_and_as_the_source_said_where_it_says_nothing(tmp_path):
+    finishes = {"gloss": {"display": {"roughness": 0.1}, "ids": {"step": "Gloss"}}}
+    root = _package(tmp_path / "pkg", colors=COLORS, materials=MATERIALS, finishes=finishes)
+    ctx = pc.Context(str(root))
+    own = _converted(ctx, section=_raw(finish="Gloss", roughness=0.7, metallic=0.4))
+
+    assert own.finish == "//src:gloss"
+    # Its declaration's roughness, and - as it says nothing of it - the source's metallic.
+    assert (own.roughness, own.metallic) == (0.1, 0.4)
+
+
 def test_partcad_s_own_convention_takes_references(tmp_path):
     ctx = _ctx(tmp_path)
     own = _converted(ctx, section=_raw("partcad", color=":red"))
@@ -168,6 +179,38 @@ def test_a_convention_looks_in_its_catalogs(tmp_path):
     own = _converted(ctx, section=_raw(color="B-1", rgba=(0, 85, 191, 1.0)), convention="acme")
 
     assert own.color == "//src/vendor:brand"
+
+
+def test_an_assembly_is_keyed_on_what_its_items_source_cmf_is_converted_by(tmp_path):
+    """A colour table that changes changes no part file: the assembly's key is what notices."""
+
+    def described(ids):
+        root = _package(tmp_path / ids.lstrip("#"), colors={"signal-red": {"display": "#C91A09", "ids": {"step": ids}}})
+        ctx = pc.Context(str(root))
+        return cmf.key_of(ctx, ctx.get_part("//src:box"))
+
+    assert described("#C91A09") != described("#C91A0A")
+    # A package that declares no CMF adds nothing to the key.
+    plain = pc.Context(str(_package(tmp_path / "plain")))
+    assert cmf.key_of(plain, plain.get_part("//src:box")) == {}
+
+
+def test_what_converts_takes_in_the_package_a_convention_names_and_its_catalogs(tmp_path):
+    _package(tmp_path / "pkg" / "vendor", name="//src/vendor", colors={"brand": {"ids": {"acme": "B-1"}}})
+    _package(
+        tmp_path / "pkg" / "acme",
+        name="//src/acme",
+        cmfConventions={"acme": {"extends": "step", "catalogs": ["//src/vendor"]}},
+    )
+    root = _package(
+        tmp_path / "pkg",
+        parts={"box": {"type": "stl", "path": "box.stl", "cmfConvention": "//src/acme:acme"}},
+        **{"import": {"vendor": {"path": "vendor"}, "acme": {"path": "acme"}}},
+    )
+    ctx = pc.Context(str(root))
+
+    # '//src' declares nothing; the convention's package and its catalog do.
+    assert set(cmf.conversion_scope(ctx, ctx.get_part("//src:box"))) == {"//src/acme", "//src/vendor"}
 
 
 def test_an_unknown_convention_is_reported_and_the_source_s_own_used(tmp_path, caplog):
@@ -242,6 +285,41 @@ def test_a_step_file_s_colours_and_material_round_trip(tmp_path):
     assert found.face_set(0).color == "#C91A09"
     assert found.face_set(1).color is None
     assert found.solid_set(0).material == "Aluminium 6061"
+
+
+def test_a_solid_s_own_style_wins_over_the_compound_around_it():
+    """A red compound holding a box styled blue: the box is blue, the other red."""
+    step_cmf = _wrappers()
+    import build123d as bd
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import TopTools_IndexedMapOfShape
+
+    red_box = bd.Box(10, 10, 10).wrapped
+    blue_box = bd.Pos(20, 0, 0) * bd.Box(10, 10, 10)
+    compound = bd.Compound([bd.Solid(red_box), blue_box]).wrapped
+    blue = [solid for solid in bd.Compound(compound).solids()][1].wrapped
+
+    class _Facts:
+        colors = [(compound, ("#FF0000", (255, 0, 0, 1.0))), (blue, ("#0000FF", (0, 0, 255, 1.0)))]
+        definition_colors = []
+        materials = []
+
+        def __bool__(self):
+            return True
+
+    section = step_cmf.section_of(compound, _Facts())
+
+    faces = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(compound, TopAbs_FACE, faces)
+    of_blue = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(blue, TopAbs_FACE, of_blue)
+    # The compound's red was written onto every face before the solid was
+    # styled; the solid's blue is what its faces are drawn in all the same.
+    for i in range(faces.Extent()):
+        expected = "#0000FF" if of_blue.Contains(faces.FindKey(i + 1)) else "#FF0000"
+        assert section.face_set(i).color == expected
+    assert {section.solid_set(i).color for i in range(2)} == {"#0000FF", None}
 
 
 def test_a_step_file_is_the_geometry_the_plain_reader_read(tmp_path):
@@ -446,6 +524,19 @@ def test_an_imported_assembly_keeps_its_parts_colours_and_its_instances_own(tmp_
     assert {section.face_set(i).color for i in range(6)} == {"#FF0000"}
 
 
+def test_two_parts_of_one_geometry_in_different_materials_are_two_parts():
+    pytest.importorskip("build123d")
+    import wrapper_import_assy
+
+    def signature(**values):
+        return wrapper_import_assy._colors_of(Section([CmfSet(**values)], 0))
+
+    assert signature(color="#FF0000", material="Steel") != signature(color="#FF0000", material="Aluminium")
+    assert signature(color="#FF0000", finish="Matte") != signature(color="#FF0000")
+    assert signature(color="#FF0000", material="Steel") == signature(color="#FF0000", material="Steel")
+    assert wrapper_import_assy._colors_of(None) == ()
+
+
 def test_an_instance_s_colour_becomes_its_link_s_params(tmp_path):
     from partcad.actions.assembly import import_assy
 
@@ -533,7 +624,7 @@ def test_a_system_with_several_ids_for_a_colour_lists_them(tmp_path):
         assert cmf_conventions.reference_for(ctx, "//src", "color", value, (255, 255, 255, 1.0)) == "//src:White"
 
 
-def test_a_source_may_name_a_package_s_convention_and_with_it_that_package_s_declarations(tmp_path):
+def test_a_source_may_name_a_package_s_convention_and_with_it_that_package_s_declarations(tmp_path, caplog):
     """A plugin's part type builds parts in packages below the one that declares its colours."""
     root = _package(
         tmp_path / "pkg",
@@ -548,6 +639,12 @@ def test_a_source_may_name_a_package_s_convention_and_with_it_that_package_s_dec
     own = cmf_conventions.convert(ctx, part, section, None).own()
 
     assert (own.color, own.origin) == ("//src:Red", "source:ldraw")
+
+    # A 'cmfConvention' naming nothing falls back to that convention, not to PartCAD's own.
+    with caplog.at_level(logging.ERROR):
+        fallback = cmf_conventions.convert(ctx, part, section, "no-such-convention").own()
+    assert "names no convention" in caplog.text
+    assert (fallback.color, fallback.origin) == ("//src:Red", "source:ldraw")
 
 
 def test_a_part_type_takes_the_cmf_parameters_every_type_takes():
