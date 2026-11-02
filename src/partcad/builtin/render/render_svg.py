@@ -33,6 +33,7 @@ import appearance
 import label_layout
 import ocp_serialize
 import stroke_text
+import viewpoint
 import wrapper_common
 
 # What this implementation reports for what it produces (see 'partcad.code_version'):
@@ -904,6 +905,9 @@ def process(path, request):
         # 'LOOK_AT' for why it is the direction asked for, as a position.
         origin = tuple(float(component) for component in viewport_origin(request))
         up = viewport_up(request)
+        # The object turned in front of that camera, which is drawn by the camera
+        # turned the other way about it (see 'viewpoint').
+        origin, up = viewpoint.turned(origin, up, viewpoint.turn_of(request))
         look_at = LOOK_AT
         # Whether this drawing has to come out the same every time it is drawn.
         # Always present in the request - PartCAD puts it there whether or not

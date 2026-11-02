@@ -397,6 +397,11 @@ jobs:
           # A run that built a tag of its own. Not the same question as PUSH,
           # which is also true for the version bump.
           OWN_TAG: ${{ needs.set-matrix.outputs.image-override != '' }}
+          # The interpreter the GStreamer flavour is built for:
+          # "sandbox_versions.DEFAULT_PYTHON_VERSION", which every file type of
+          # "//builtin/render" runs in. "tests/partcad/unit/test_render_video.py"
+          # holds the two to one value.
+          GSTREAMER_PYTHON: "3.11"
         run: |
           # arm64 goes through QEMU and costs minutes per version, so a pull
           # request builds amd64 alone and a deep run covers both. That is a real
@@ -437,6 +442,23 @@ jobs:
               PC_CACHE_FROM="${IMAGE}:py${PY}-${ARCH}" \
                 dev-tools/ci/build-sandbox-image.sh
               echo "::endgroup::"
+              # The GStreamer flavour the video file types of
+              # "//builtin/render" name as their "dockerImage": the same build
+              # one stage further, so the base's layers are this one's cache.
+              # Only for the interpreter "//builtin/render" runs in, which is
+              # the only one anything asks for it in.
+              if [ "${PY}" = "${GSTREAMER_PYTHON}" ]; then
+                echo "::group::python ${PY} (${ARCH}), GStreamer"
+                PC_IMAGE_REF="${IMAGE}:${IMAGE_TAG}-py${PY}-gstreamer-${ARCH}" \
+                PC_PYTHON_VERSION="${PY}" \
+                PC_PARTCAD_VERSION="${PC_VERSION}" \
+                PC_PLATFORM="linux/${ARCH}" \
+                PC_PUSH="${PUSH}" \
+                PC_TARGET=gstreamer \
+                PC_CACHE_FROM="${IMAGE}:py${PY}-gstreamer-${ARCH}" \
+                  dev-tools/ci/build-sandbox-image.sh
+                echo "::endgroup::"
+              fi
             done
           done
 
@@ -463,6 +485,8 @@ jobs:
           PYTHONS: ${{ env.PYTHONS }}
           IMAGE: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-python
           PC_VERSION: ${{ env.VERSION }}
+          # See "Build the Python sandbox images".
+          GSTREAMER_PYTHON: "3.11"
         run: |
           set -euo pipefail
           # Both architectures, always: what reaches "main" was published by a
@@ -476,6 +500,15 @@ jobs:
                 "${IMAGE}:${PC_VERSION}-py${PY}-${ARCH}"
               echo "::endgroup::"
             done
+          done
+          # And the GStreamer flavour's moving tag, which is what the next
+          # build of it takes its cache from. Only one interpreter has one.
+          for ARCH in amd64 arm64; do
+            echo "::group::python ${GSTREAMER_PYTHON} (${ARCH}), GStreamer: ${PC_VERSION} -> latest"
+            docker buildx imagetools create \
+              --tag "${IMAGE}:py${GSTREAMER_PYTHON}-gstreamer-${ARCH}" \
+              "${IMAGE}:${PC_VERSION}-py${GSTREAMER_PYTHON}-gstreamer-${ARCH}"
+            echo "::endgroup::"
           done
 
   # The one job that runs the "docker" sandbox rather than reasoning about it.
@@ -2271,6 +2304,9 @@ jobs:
           for py in $(echo "${PYTHONS}" | jq -r '.[]'); do
             for arch in amd64 arm64; do
               wanted="${wanted} ${IMAGE_TAG}-py${py}-${arch}"
+              # The GStreamer flavour, built for one interpreter; asking for
+              # it under the others costs nothing, for the reason above.
+              wanted="${wanted} ${IMAGE_TAG}-py${py}-gstreamer-${arch}"
             done
           done
           echo "looking for:${wanted}"
