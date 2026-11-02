@@ -577,6 +577,10 @@ can do applies to it. What it is, is a set of facts about a substance:
       mu: <(optional) coefficient of sliding friction, dimensionless>
       tags: <(optional) a list of free-form tags, or a single tag>
 
+A material is one of the three kinds of CMF declaration, and takes the fields they share -- ``display``,
+``manufacturable``, ``ids``, ``aliases``, ``parameters``, ``type: alias`` -- and a ``color`` it claims for its natural
+surface: see :ref:`cmf-declarations`.
+
 The short form gives the full name and nothing else:
 
 .. code-block:: yaml

@@ -16,6 +16,7 @@ import yaml
 
 from partcad_utils import assy_filter
 
+from . import cmf
 from . import joint as pc_joint
 from . import logging as pc_logging
 from . import telemetry
@@ -63,7 +64,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
     # view pulls apart (see 'Assembly.exploded'). Off unless declared, and the
     # default is never written into the declaration, so an assembly that does
     # not mention it keeps the cache key it had (see 'object_type_parameter').
-    ACCEPTED_OBJECT_TYPE_PARAMETERS = {"exploded": False}
+    ACCEPTED_OBJECT_TYPE_PARAMETERS = {**AssemblyFactoryFile.ACCEPTED_OBJECT_TYPE_PARAMETERS, "exploded": False}
 
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitASSY", source_project.name, config["name"]):
@@ -130,12 +131,18 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         return description.strip() or None
 
     def node_params(self, node) -> dict:
-        """The parameter overrides a link carries, if any."""
+        """The parameter overrides a link carries, if any.
+
+        A CMF parameter among them names a declaration as this file's package
+        sees it, and is handed on as the canonical reference it resolves to
+        (see 'partcad.cmf.canonical'): the item it names is the same item
+        whichever alias of the colour the file used.
+        """
         params = {}
         if "params" in node:
             for param_name in node["params"]:
                 params[param_name] = node["params"][param_name]
-        return params
+        return cmf.canonical_parameters(self.ctx, params, self.project.name)
 
     async def prepare_async(self, assembly) -> None:
         """Resolve every part and assembly this one links to, without building.

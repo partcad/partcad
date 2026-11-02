@@ -711,8 +711,7 @@ def test_a_type_that_accepts_a_material_records_what_it_was_asked_for(tmp_path):
         "  homogeneous:\n"
         "    type: stl\n    path: cube.stl\n"
         "    parameters:\n      material:\n        type: string\n        default: '//cat:pla'\n"
-        # 'step' is not: its file states a material per solid and says it better,
-        # so the property is the reader's to fill in, not a declaration's.
+        # A reader that found a material in the file recorded it already.
         "  from_a_reader:\n" "    type: step\n    path: cube.step\n" "    properties:\n      material: '//cat:abs'\n",
         encoding="utf-8",
     )
@@ -741,8 +740,12 @@ def test_a_material_already_recorded_outranks_what_was_asked_for(tmp_path):
     assert project.get_part("block")._shape_properties() == {"material": "//cat:abs"}
 
 
-def test_a_type_that_rejects_the_parameter_cannot_acquire_one_by_the_back_door(tmp_path):
-    """A 'step' part declaring a 'material' parameter is refused, as it always was."""
+def test_a_step_part_records_the_material_it_states_and_its_file_does_not(tmp_path):
+    """A 'step' part takes 'material' too, and records it where the file says nothing.
+
+    What a reader finds in the file outranks it, as for every type (see
+    'test_a_material_already_recorded_outranks_what_was_asked_for').
+    """
     root = tmp_path / "workspace"
     root.mkdir()
     (root / "cube.step").write_text("", encoding="utf-8")
@@ -756,4 +759,4 @@ def test_a_type_that_rejects_the_parameter_cannot_acquire_one_by_the_back_door(t
     )
     project = pc.Context(str(root)).get_project("//")
 
-    assert project.get_part("block", quiet=True) is None
+    assert project.get_part("block")._shape_properties() == {"material": "//cat:pla"}

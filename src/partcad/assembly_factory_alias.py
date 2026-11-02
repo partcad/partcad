@@ -11,6 +11,7 @@ import copy
 import typing
 
 from . import assembly_factory as pf
+from . import cmf
 from . import logging as pc_logging
 from . import reference, telemetry
 from .shape_config_store import resolve_store_properties
@@ -52,7 +53,10 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
             # object that declares them ('Project.get_object' puts them in
             # 'with' when it parametrizes a reference).
             if config.get("with"):
-                self.source_assembly_name = format_parameterized_name(self.source_assembly_name, config["with"])
+                self.source_assembly_name = format_parameterized_name(
+                    self.source_assembly_name,
+                    cmf.canonical_parameters(ctx, config["with"], getattr(source_project, "name", "")),
+                )
                 self.source = self.source_project_name + ":" + self.source_assembly_name
             config["source_resolved"] = self.source
 

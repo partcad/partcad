@@ -43,6 +43,7 @@ cnc
 collide
 collision
 color
+colors
 comment
 companions
 compound
@@ -56,10 +57,12 @@ convection
 conventional
 count
 cover
+cuboid
 currency
 cut
 cuts
 cwd
+cylinder
 cylindrical
 dam
 damper
@@ -118,6 +121,7 @@ feed
 feedback
 file
 filter
+finishes
 fix
 fixed
 flatpak
@@ -148,6 +152,7 @@ hm
 hold
 how
 id
+ids
 iges
 ignore
 image
@@ -209,6 +214,7 @@ max
 medium
 mesh
 metal
+metallic
 method
 mf
 mi
@@ -299,6 +305,7 @@ restitution
 revision
 revolute
 root
+roughness
 safe
 scad
 scene

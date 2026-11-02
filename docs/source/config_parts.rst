@@ -9,6 +9,10 @@ What a part is
 
 PartCAD has an ever-growing list of ways to define the part model:
 
+- Basic shapes
+
+  - ``cuboid``, ``cylinder``
+
 - Files
 
   - `STEP <https://en.wikipedia.org/wiki/ISO_10303>`_
@@ -37,7 +41,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <scad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|gltf|fcstd|extrude|sweep
+      type: <basic|scad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|gltf|fcstd|extrude|sweep
              |kicad|compound|alias|enrich|:<partType declared by this package>
              |<package>:<partType declared by that package>>
       desc: <(optional) textual description>
@@ -46,7 +50,8 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
       fileUrl: <(fileFrom=url only) the URL to download the source file from>
       # ... type-specific options ...
-      offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
+      offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]";
+               any number in it may be an expression over the part's parameters, e.g. "%length / 2%">
 
       # The below syntax is similar to the one used for interfaces,
       # with the only exception being the word "implements" instead of "inherits".
@@ -149,6 +154,60 @@ to ``parameters``, which say what is asked of the type that produces it. See
 :ref:`properties` below.
 
 See :ref:`location` for more information on the OCCT Location object.
+
+.. _basic_parts:
+
+Basic shapes
+------------
+
+A part that is one primitive solid is declared by its dimensions alone, with
+nothing to read and no script to run:
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      type: basic
+      desc: <(optional) textual description>
+      # The below are mutually exclusive options
+      cuboid: <(optional) edge size of a cube>
+      cuboid: [<size along X>, <size along Y>, <size along Z>]  # alternative syntax
+      cylinder: <(optional)>
+        radius: <radius>
+        height: <height, along Z>
+      offset: <(optional) where to put it, as for any other part>
+
+There must be exactly one field ``cuboid`` or ``cylinder``. Both solids are
+built **centred on the origin**, the way build123d's ``Box`` and ``Cylinder`` and
+CadQuery's ``box`` and ``cylinder`` are: a cylinder of height 10 runs from
+``z = -5`` to ``z = 5``. A part is one solid, so it is placed the way any other
+part is, by its ``offset`` (see :ref:`location`), which also turns it. Every
+dimension, and every number in the ``offset``, may be an expression over the
+part's ``parameters`` (see :ref:`parameters`), which is how a basic part is made
+parametric:
+
+.. code-block:: yaml
+
+  parts:
+    spacer:
+      type: basic
+      parameters:
+        length:
+          type: float
+          default: 10
+      cylinder:
+        radius: 4
+        height: "%length%"
+      # Standing on the XY plane, whatever its length.
+      offset: [[0, 0, "%length / 2%"], [0, 0, 1], 0]
+
+A basic part is a homogeneous body, so it takes the ``material``, ``color`` and
+``tolerance`` parameters.
+
+Neither a basic part nor a basic sketch (see :ref:`sketches`) is built with a CAD
+kernel: PartCAD writes its BREP itself, in milliseconds and without starting a
+CAD sandbox. It is still the solid OCCT would have built from the same numbers,
+and it renders, exports, measures and takes part in a boolean like one.
 
 CAD Scripts
 -----------
@@ -646,30 +705,24 @@ likes, and nothing outside that script knows what it means, so PartCAD lets a
 part declare any name it wants. A few are **object-type parameters** instead:
 contributed by the part *type* rather than declared out of nothing, with a
 meaning PartCAD itself acts on. They are therefore only available on the types
-that can honour them. Today there are three - ``material``, ``color`` and
-``tolerance``.
+that can honour them. There are two groups.
 
-What decides which types accept them is whether the part is a single
-homogeneous body - one solid, made of one thing - because that is what has to
-be true for one ``material:``, one ``color:`` or one ``tolerance:`` to be true
-of the whole part. A mesh is one body: an STL file is a surface with nothing
-inside it to vary, and the only way it has a material at all is for somebody to
-say so. So is a solid built by a script, and so is one extruded from a single
-sketch. ``stl``, ``cadquery``, ``build123d``, ``sdf``, ``scad`` and ``extrude``
-accept all three.
+The **CMF parameters** - ``color``, ``material``, ``finish``, ``sourceCmf`` and
+``cmfConvention`` - are accepted by every part type and every assembly type (see
+:ref:`cmf-parameters`). Whatever a part is built from, its source may state CMF
+of its own - a STEP file per solid and per face, a script per sub-shape - and
+these complete it, or with ``sourceCmf`` replace it.
 
-A STEP file is not one body. It can carry many solids, each already stating a
-material and a colour of its own, and naming one for the file would be a claim
-about a part the file itself describes better. ``step`` rejects them, and so
-does ``kicad``, which is a STEP file behind a footprint. What such a part is
-made of belongs under :ref:`properties`, where a shape says what it turned out
-to be rather than what was asked of it. How precisely it has to be made is a
-separate question and has an answer of its own, below: see
-:ref:`tolerance-field`.
-
-Every other part type rejects them too, but for a different reason: whether it
-should accept them has not been decided yet, and answering "no" until somebody
-decides leaves the question open rather than settling it by accident.
+``tolerance`` is accepted only by the types that build a single homogeneous
+body - one solid, made of one thing - because that is what has to be true for
+one tolerance to be true of the whole part. A mesh is one body: an STL file is a
+surface with nothing inside it to vary. So is a solid built by a script, and so
+is one extruded from a single sketch. ``stl``, ``cadquery``, ``build123d``,
+``sdf``, ``scad`` and ``extrude`` accept it. A STEP file is not one body, and
+``step`` rejects it, as does ``kicad``, which is a STEP file behind a footprint;
+how precisely such a part has to be made has an answer of its own, below: see
+:ref:`tolerance-field`. Every other part type rejects it too, but for a
+different reason: whether it should accept it has not been decided yet.
 
 Declaring one of these under ``parameters:`` of a type that does not accept it
 is an error, not a warning. It costs the package that one part - the rest of
@@ -681,7 +734,7 @@ shape of its declaration - any parameter may carry ``color:`` and ``material:``
 fields of its own describing what one of its values looks like, whatever the
 part type.
 
-``tolerance`` is the one of the three that has a default, ``0.0``: it reads
+``tolerance`` is the one of them that has a default, ``0.0``: it reads
 back as that on any type that accepts it, whether or not a part declares one.
 The default is applied when the value is read and is never written into the
 part's ``parameters:`` section, because that section is part of what the shape
@@ -737,35 +790,20 @@ There are several parameter names that are reserved for values used in
 visualization, simulation calculations and, if applicable, manufacturing
 (also referred to as **MCFTT parameters** using their first letters):
 
-- ``material``
+- ``material``, ``color`` and ``finish``
 
-  Must point at an object of type ``material``, as ``<package>:<name>``.
-  Some of them are defined in ``//pub/std/manufacturing/material``; see
-  :ref:`materials` for declaring your own.
-  This one is an object-type parameter, so it may only be declared on the part
-  types listed above.
-  When a request is made to a manufacturing API,
-  a close enough material is selected from the materials provided by the
-  manufacturer. The responsibility to select the right material is on the
-  implementation of the manufacturing API (the ``provider`` object in PartCAD).
-
-- ``color``
-
-  This one is an object-type parameter too, with the same restriction.
-
-  **Not implemented yet. Use color names for now.**
-
-- ``finish``
-
-  Optional. Can be omitted for no finish.
-
-  **Not implemented yet.**
+  The CMF parameters: each a reference to a declaration of its kind, as
+  ``<package>:<name>`` (see :ref:`cmf`). Some materials are declared in
+  ``//pub/std/manufacturing/material``. They are accepted by every part type, and
+  fill in what the part's source leaves unset (see :ref:`cmf-parameters`). A
+  part in another colour is another item. A request to a manufacturing API does
+  not carry the declarations yet: each part in it is sent as its format and its
+  file (see :ref:`providers`). Handing a provider the declarations, to match by
+  what other systems call them (``ids``), is planned.
 
 - ``texture``
 
-  Optional. Can be omitted for no texture.
-
-  **Not implemented yet.**
+  Reserved for a visual texture, in a later change. It means nothing today.
 
 - ``tolerance``
 
@@ -778,12 +816,10 @@ visualization, simulation calculations and, if applicable, manufacturing
   as a parameter, and their file may state it for them; see
   :ref:`tolerance-field`.
 
-If the part has variable MCFTT parameters depending on the surface,
-then either this part must be broken down into multiple parts,
-or the values must be derived from CAD files/scripts (not implemented yet).
-In the latter case the part will not be eligible for manufacturing features,
-unless a specific manufacturing service provider recognizes (vendor,SKU) values
-and have received corresponding manufacturing instructions out-of-band.
+A part whose colour or finish differs from face to face, or whose material
+differs from solid to solid, states that through its source: a STEP file, a
+script or an OpenSCAD model that colours what it builds (see :ref:`cmf`). The
+CMF parameters then complete what the source leaves unset.
 
 The MCFTT parameters are not required and have no impact on parts that have
 ``vendor`` and ``sku`` set and that are procured using providers of the type

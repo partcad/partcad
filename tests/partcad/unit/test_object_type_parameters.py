@@ -4,15 +4,19 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-"""'material', 'color' and 'tolerance' are contributed by the part type.
+"""The names a part's type contributes, and which types take them.
 
 Parameters are otherwise the object's own business: the schema takes any name
 matching its pattern, and nothing but the script behind the part knows what one
-means. These three are different - PartCAD itself acts on them, in the
-manufacturing and quoting path - so they only mean anything on a type that can
-honour them, and the types that can are the ones producing a single homogeneous
-body. Declaring one anywhere else is a per-object error: the package keeps
-loading, that one part does not.
+means. These are different - PartCAD itself acts on them, in the manufacturing
+and quoting path - so a type takes only the ones it can honour.
+
+'tolerance' is true of a single homogeneous body, so only the types producing
+one take it; declaring it anywhere else is a per-object error: the package keeps
+loading, that one part does not. The CMF parameters - 'color', 'material',
+'finish', 'sourceCmf' and 'cmfConvention' - are taken by every type, because
+what one states fills in, or replaces, whatever the part's source stated
+itself (docs/design/cmf.md).
 """
 
 import asyncio
@@ -22,11 +26,13 @@ import pytest
 import yaml
 
 import partcad as pc
-from partcad.part_factory import PartFactory
+from partcad import cmf
+from partcad.part_factory import NO_DEFAULT, PartFactory
 
 ACCEPTING_TYPES = ["stl", "cadquery", "build123d", "sdf", "extrude", "scad"]
 REJECTING_TYPES = ["step", "kicad"]
-POLICED = ["material", "color", "tolerance"]
+CMF = ["material", "color", "finish"]
+POLICED = [*CMF, "tolerance"]
 
 
 def _write_package(tmp_path, parts):
@@ -69,12 +75,13 @@ def _declare(name, value=None):
     return {name: {"type": kind, "default": value}}
 
 
-def test_the_policed_registry_is_the_three_names():
+def test_the_policed_registry_is_tolerance_and_the_cmf_names():
     """The registry is a set of names, not a mapping: policing is per name."""
-    assert PartFactory.POLICED_OBJECT_TYPE_PARAMETERS == frozenset(POLICED)
+    assert PartFactory.POLICED_OBJECT_TYPE_PARAMETERS == frozenset({"tolerance", *cmf.TYPE_PARAMETERS})
     assert isinstance(PartFactory.POLICED_OBJECT_TYPE_PARAMETERS, frozenset)
-    # Nothing is accepted by default; only what a factory opts into is.
-    assert PartFactory.ACCEPTED_OBJECT_TYPE_PARAMETERS == {}
+    # Every part type takes the CMF names, and none of them has a default:
+    # a part that states no colour has none, rather than an invented one.
+    assert PartFactory.ACCEPTED_OBJECT_TYPE_PARAMETERS == {name: NO_DEFAULT for name in cmf.TYPE_PARAMETERS}
 
 
 @pytest.mark.parametrize("part_type", ACCEPTING_TYPES)
@@ -92,13 +99,27 @@ def test_accepted_by_the_homogeneous_types(tmp_path, part_type, name):
 
 
 @pytest.mark.parametrize("part_type", REJECTING_TYPES)
-@pytest.mark.parametrize("name", POLICED)
-def test_rejected_by_the_types_that_can_carry_many(tmp_path, part_type, name):
-    """A STEP file may hold many solids, each already stating its own material.
+@pytest.mark.parametrize("name", CMF)
+def test_the_cmf_names_are_taken_by_the_types_that_can_carry_many(tmp_path, part_type, name):
+    """A STEP file may hold many solids, and what its part states fills in what they do not."""
+    pc.logging.reset_errors()
+    package = _write_package(tmp_path, {"body": _part(part_type, parameters=_declare(name))})
+
+    project = pc.Context(str(package)).get_project("//")
+
+    assert "body" in project.parts
+    assert project.get_broken_object_reason("part", "body") is None
+    assert pc.logging.had_errors is False
+
+
+@pytest.mark.parametrize("part_type", REJECTING_TYPES)
+def test_tolerance_is_rejected_by_the_types_that_can_carry_many(tmp_path, part_type):
+    """A STEP file may hold many solids, and one tolerance is not true of all of them.
 
     Per object, not per package: the sibling part is declared after the bad one
     and still has to load, and the command still has to report a failure.
     """
+    name = "tolerance"
     pc.logging.reset_errors()
     package = _write_package(
         tmp_path,
@@ -125,7 +146,7 @@ def test_rejected_by_the_types_that_can_carry_many(tmp_path, part_type, name):
 
 @pytest.mark.parametrize("part_type", REJECTING_TYPES)
 def test_asking_for_a_rejected_part_by_name_returns_none(tmp_path, part_type):
-    package = _write_package(tmp_path, {"body": _part(part_type, parameters=_declare("material"))})
+    package = _write_package(tmp_path, {"body": _part(part_type, parameters=_declare("tolerance"))})
     ctx = pc.Context(str(package))
 
     assert ctx.get_part("//:body") is None

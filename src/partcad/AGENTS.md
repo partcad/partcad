@@ -343,6 +343,39 @@ at all).
   ports and interfaces, which can live in other packages, the material -- is mostly not what a shape's cache key
   is made of.
 
+- **A basic shape is written, not built** (`basic_shapes.py`, `brep_ascii.py`, `sketch_factory_basic.py`,
+  `part_factory_basic.py`): a `basic` sketch -- a circle, square, rectangle or slot, with holes of the same -- and a
+  `basic` part -- a cuboid or a cylinder -- are nothing but the numbers in their declarations, and their geometry is
+  lines, circles, planes and one cylindrical surface. So the core writes their BREP itself, in OCCT's ASCII format
+  (version 1, which every OCCT reads), with no sandbox, no interpreter and no OCP: milliseconds, where the sandbox was
+  seconds per shape. This is the one place the core produces geometry, and it is what keeps that consistent with "the
+  core never touches a CAD library" -- `brep_ascii` knows the file format, not a kernel.
+
+  What is written is what OCCT built from the same numbers, and that is held rather than hoped for:
+  `tests/partcad/unit/test_basic_shapes.py` reads every shape back with OCP and compares it with the face the retired
+  `wrapper_sketch_basic` built (`BRepBuilderAPI_MakeFace` and `ShapeFix_Face`) and the solid `BRepPrimAPI` builds --
+  validity, area or volume, box, centroid and inertia, which way each face points. Two rules from there are easy to
+  break. **A sketch faces the way its outer outline runs**: +Z for a circle, -Z for a square, a rectangle or a slot,
+  which are drawn clockwise -- the plane `BRepLib_FindSurface` fitted to the wire -- and a hole running the same way is
+  reversed, last edge first, as `ShapeFix_Face` reversed it. A tool path or a sweep reads that orientation, and the
+  drawings under `examples/` came out byte for byte the same when the wrapper was retired. **A part is a solid by
+  construction**, every face pointing out, so it claims the validation of `Shape.finish_request()` with no problems,
+  and applies its `offset` and `scale` into its own coordinates the way `wrapper_transform` does -- declining, for the
+  core to hand to a sandbox, only an offset that is not the packed form or a scale that is not a number above zero.
+  It is built centred on the origin and placed by its `offset` alone: one solid needs one placement, where a sketch,
+  which holds several outlines, places each by its own `x` and `y`.
+
+  **A part's `offset` and `scale` are read through `ShapeConfiguration.transform()`** (`shape_config.transform_of`),
+  which works out the `%...%` expressions in them over the parameters of the declaration carrying them -- for the
+  wrapper's `finish_request()`, for the `transform.py` fallback, for the annotations moved with the part and for a
+  reference's placement of its source's ports. It is resolved as it is read and never written back: the object of a
+  bare name holds the declaration itself, which every parametrized instance is then copied from.
+
+  Neither runs a wrapper, so neither has an environment to key on (`PYTHON_SANDBOX_VERSION = None`); what keys their
+  output instead is `basic_shapes.CACHE_VERSION`, through `ShapeFactory.CODE_VERSIONS`. Raise it with any change to
+  what either writes. The measurements every envelope carries (`bbox`, `volume`, `centroid`, `unitInertia`) are
+  worked out from the dimensions, not integrated.
+
 - **Software is not a shape** (`software.py`, `software_factory*.py`): a package's `software:` section declares
   the files a product ships with -- firmware images, binaries -- and `Software` deliberately does not inherit
   `Shape`. There is no geometry, so nothing here renders, exports, tessellates or caches a shape; what it shares
@@ -1518,8 +1551,9 @@ at all).
   7.6 and later read) rather than left at OCCT's `CURRENT`, because a payload the core encodes in process, with
   whatever OCP its user installed, is read by the sandbox's, and one a plugin's container writes is read by PartCAD's
   own. Readers tell the formats apart by the header and read both: Chili3D's kernel has an ASCII writer only, a
-  package's `.brep` file is ASCII, and an earlier release wrote ASCII (the shape cache's `VERSION` keeps the releases'
-  entries apart). Without its mesh because a triangulation is not geometry, only what somebody meshed the faces to:
+  package's `.brep` file is ASCII, a `basic` sketch or part is ASCII because the core writes it without a kernel (see
+  "A basic shape is written, not built" above), and an earlier release wrote ASCII (the shape cache's `VERSION` keeps
+  the releases' entries apart). Without its mesh because a triangulation is not geometry, only what somebody meshed the faces to:
   everything that needs one -- a projection, an STL, a glTF, a CAE mesh -- meshes for itself at its own tolerance.
   Except a face with no surface, which *is* its triangles (an SDF part, an STL read as a mesh, an imported glTF): OCCT
   keeps those, and a shape holding one is written with all of its mesh so the edges bounding such a face keep theirs.
