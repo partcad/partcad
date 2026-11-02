@@ -27,6 +27,7 @@ from .file_factory_url import FileFactoryUrl
 from .part import Part
 from .part_factory_3mf import PartFactory3mf
 from .part_factory_alias import PartFactoryAlias
+from .part_factory_basic import PartFactoryBasic
 from .part_factory_brep import PartFactoryBrep
 from .part_factory_build123d import PartFactoryBuild123d
 from .part_factory_cadquery import PartFactoryCadquery
@@ -80,6 +81,8 @@ factory.register("sketch", "dxf", SketchFactoryDxf)
 factory.register("sketch", "svg", SketchFactorySvg)
 factory.register("sketch", "alias", SketchFactoryAlias)
 factory.register("sketch", "enrich", SketchFactoryEnrich)
+# Built in this process from a few numbers, with no sandbox: see 'basic_shapes'.
+factory.register("part", "basic", PartFactoryBasic)
 factory.register("part", "cadquery", PartFactoryCadquery)
 factory.register("part", "build123d", PartFactoryBuild123d)
 factory.register("part", "chili3d", PartFactoryChili3d)

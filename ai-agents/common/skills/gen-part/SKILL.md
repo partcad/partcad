@@ -67,6 +67,14 @@ Pick the script kind that best fits the part — you decide:
 | `sdf` | organic / implicit shapes |
 | `extrude` / `sweep` | a constant profile, straight or along a path: built from the sketch §4 validated, with no script at all |
 
+A part that is nothing but one box or one cylinder needs no script at all:
+declare it as `type: basic` with a `cuboid:` (a number for a cube, or
+`[x, y, z]` sizes) or a `cylinder:` (`radius`, `height`, standing along Z).
+Both are centred on the origin; move them with `offset:`. PartCAD writes the
+geometry itself, without a sandbox. There is no file to write
+and nothing for `pc add part`; put the declaration in `partcad.yaml` as §5 shows
+and go on from there.
+
 ## 4. Settle the dimensions on sketches, then plan the geometry
 
 A dimension is decided in 2D before it is spent in 3D. In 2D it is measured
@@ -133,7 +141,8 @@ Write the script file **first** from `$ARGUMENTS` (plain type — never `ai-*`),
 taking every dimension from the table §4 validated — the same constants under
 the same names, placed from the same datums — then register it; `pc add part`
 requires the file to already exist (an `extrude` or `sweep` part has no file, and
-is declared by hand as §4 shows):
+is declared by hand as §4 shows; nor has a `basic` part, which is declared by
+hand as shown below and skips the script and `pc add part` altogether):
 
 ```sh
 pc --no-ansi add part --desc "<the description>" <kind> <name>.<ext>   # e.g. build123d bracket.py
@@ -155,6 +164,20 @@ parts:
   <name>:
     type: <kind>
     path: <name>.<ext>
+    desc: <the description>
+    manufacturable: false
+```
+
+A `basic` part has its solid where a script part has its `path:`, and is placed
+by its `offset:` (it is built centred on the origin):
+
+```yaml
+parts:
+  <name>:
+    type: basic
+    cuboid: [<size x>, <size y>, <size z>]   # or a number for a cube, or
+    # cylinder: {radius: <r>, height: <h>}   # standing along Z
+    offset: [[<x>, <y>, <z>], [0, 0, 1], 0]  # optional
     desc: <the description>
     manufacturable: false
 ```
