@@ -20,6 +20,21 @@ and is expected to leave its result in a global 'output':
     output = {"shapes": [<TopoDS_Shape>, ...]}        # several, or
     output = {"exception": "<message>"}               # a failure
 
+A single shape may come with what it is in, as plain data the script makes
+without importing anything of PartCAD's (docs/design/cmf.md, section 7):
+
+    output["cmf"] = {
+        "convention": "ldraw",            # the terms the designations are in
+        "faces": [<set or None>, ...],    # one per face, in TopExp::MapShapes order
+        "solids": [<set or None>, ...],   # optional: one per solid, the same way
+    }
+
+where a set is '{"color": ..., "material": ..., "finish": ..., "rgba": [r, g,
+b, a]}', every key optional: the source's own designations, which the core
+converts by the convention's 'ids' (see 'partcad.cmf_conventions'), and the
+colour to draw a face in when nothing claims its designation ('rgba', 0-255
+and an alpha from 0 to 1).
+
 Both '__file__' and the run name '__partcad_part__' are set on the script, so it
 can gate its build logic (``if __name__ == "__partcad_part__":``) and remain
 importable for its own unit tests.
@@ -40,8 +55,61 @@ import wrapper_common
 
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
-# before is produced again.
-CACHE_VERSION = 1
+# before is produced again. 2: a script's 'output["cmf"]' is carried.
+CACHE_VERSION = 2
+
+
+def _section(stated, shape):
+    """The CMF section 'stated' (a script's 'output["cmf"]') gives 'shape', or None.
+
+    Read as forgivingly as a script can write it: an entry that is not a set
+    says nothing, and a list as long as the shape has none of is a list for
+    another shape, which is said rather than applied to the wrong faces.
+    """
+    if not isinstance(stated, dict) or shape is None:
+        return None
+    import cmf_section
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_SOLID
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import TopTools_IndexedMapOfShape
+
+    origin = "raw:" + str(stated.get("convention") or "partcad")
+    palette = cmf_section.Section()
+
+    def indices(key, kind):
+        entries = stated.get(key)
+        if not isinstance(entries, list):
+            return []
+        found = TopTools_IndexedMapOfShape()
+        TopExp.MapShapes_s(shape, kind, found)
+        if len(entries) != found.Extent():
+            sys.stderr.write(
+                "The part type says what %d %s are in, and its shape has %d: what it says is dropped\n"
+                % (len(entries), key, found.Extent())
+            )
+            return []
+        result = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                result.append(cmf_section.NONE)
+                continue
+            rgba = entry.get("rgba")
+            cmf_set = cmf_section.CmfSet(
+                color=entry.get("color"),
+                material=entry.get("material"),
+                finish=entry.get("finish"),
+                origin=origin,
+                rgba=tuple(rgba) if isinstance(rgba, (list, tuple)) and len(rgba) == 4 else None,
+            )
+            result.append(
+                palette.index_of(cmf_set) if any(cmf_set.has(c) for c in cmf_section.COMPONENTS) else cmf_section.NONE
+            )
+        return result
+
+    faces = indices("faces", TopAbs_FACE)
+    solids = indices("solids", TopAbs_SOLID)
+    section = cmf_section.Section(palette.sets, cmf_section.NONE, solids, faces).compacted()
+    return None if section.is_empty() else section
 
 
 def process(path, request):
@@ -73,14 +141,21 @@ def process(path, request):
     # one is stated as the solid it already bounds, here rather than in each
     # partType, so that a package-supplied script gets it right by default.
     # See wrapper_common.solidify.
+    stated = output.get("cmf") if len(shapes) == 1 else None
+    section = _section(stated, shapes[0]) if stated is not None else None
     shapes = [wrapper_common.solidify(shape) for shape in shapes]
 
     # And a part is one shape, validated and moved: the several a script may
     # hand back are compounded here, and the compound finished, while all of it
     # is still live - rather than each travelling to the core only to be sent
     # into a sandbox of its own to be compounded (see
-    # wrapper_common.finished_shapes).
-    shapes = wrapper_common.finished_shapes(shapes)
+    # wrapper_common.finished_shapes). One shape with what it is in is finished
+    # with it: the section is the shape's by index, which solidifying a shell
+    # keeps (see wrapper_common.carried_cmf).
+    if section is not None:
+        shapes = [wrapper_common.finished(shapes[0], cmf=section)]
+    else:
+        shapes = wrapper_common.finished_shapes(shapes)
 
     return {"success": True, "exception": None, "shapes": shapes}
 

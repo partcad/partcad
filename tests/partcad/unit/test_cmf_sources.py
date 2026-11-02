@@ -483,3 +483,41 @@ def test_an_end_to_end_step_part_is_drawn_in_what_its_package_claims(tmp_path):
     assert [entry["color"] for entry in summary["sets"]] == ["//src:signal-red"]
     assert summary["sets"][0]["material"] == "//src:al-6061"
     assert summary["unspecified"] == {}
+
+
+# ---------------------------------------------------------------- part types
+
+
+PART_TYPE = """
+from build123d import Box
+
+if __name__ == "__partcad_part__":
+    box = Box(10, 10, 10).wrapped
+    red = {"color": "4", "material": "abs", "rgba": [201, 26, 9, 1.0]}
+    unknown = {"color": "999", "rgba": [1, 2, 3, 1.0]}
+    output = {"shape": box, "cmf": {"convention": "ldraw", "faces": [red, red, unknown, None, None, None]}}
+"""
+
+
+def test_a_part_type_says_what_its_faces_are_in(tmp_path):
+    """A package's own part type hands back its CMF as plain data; the core converts it by the convention."""
+    pytest.importorskip("build123d")
+    root = _package(
+        tmp_path / "pkg",
+        parts={"brick": {"type": ":coloured"}},
+        partTypes={"coloured": {"kind": "wrapper", "path": "coloured.py"}},
+        colors={"Red": {"display": "#C91A09", "ids": {"ldraw": "4"}}},
+        materials={"ABS": {"density": 1040, "ids": {"ldraw": "abs"}}},
+    )
+    (root / "coloured.py").write_text(PART_TYPE)
+    ctx = pc.Context(str(root))
+    part = ctx.get_part("//src:brick")
+    asyncio.run(part.get_wrapped(ctx))
+
+    summary = cmf.summary_of(part)
+    by_color = {entry.get("color"): entry for entry in summary["sets"]}
+    assert by_color["//src:Red"]["faces"] == 2
+    assert by_color["//src:Red"]["material"] == "//src:ABS"
+    # Nothing claims '999': drawn as the part type said, and only a picture.
+    assert "//pub/std/color:rgba;color=010203FF" in by_color
+    assert summary["unspecified"]["color"] == 3
