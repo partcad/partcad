@@ -1115,6 +1115,19 @@ Object commands
   or ``reels``) and ``--background`` go with it. That is also how every frame of a video is drawn, so a frame is
   a picture of its own — see :ref:`shaded-pictures` and :ref:`videos`.
 
+  ``--reproducible`` and ``--no-reproducible`` are the file type's ``reproducible`` passed the same way: which
+  hidden-line algorithm draws the projection for this one run. The exact one works from the surfaces and draws a
+  curve as itself; the polygonal one -- the default, unless the package says otherwise -- works from a
+  triangulation and draws a curve as a run of short lines, in seconds on a model the exact one takes minutes over.
+  Left off, the file type decides. The two draw one geometry as different shapes and different numbers of them,
+  which is why a drawing that will be measured is drawn both ways and the two read against each other (the
+  ``gen-sketch`` skill's ``measure.py compare`` does that).
+
+  .. code-block:: shell
+
+    pc render -t svg --view top --reproducible -O ./exact bracket
+    pc render -t svg --view top --no-reproducible -O ./polygonal bracket
+
   A rendered file is named after the object, so several views of one object go into directories of their own
   rather than over each other:
 
@@ -1472,16 +1485,42 @@ Other commands
   - ``pc adhoc convert`` — write the file back out as another format
     (``pc adhoc convert part bracket.step bracket.stl``).
   - ``pc adhoc render`` — write a 2D projection of it: ``svg``, ``png``, ``jpeg`` or ``dxf``
-    (``pc adhoc render part --view top bracket.step bracket.png``).
+    (``pc adhoc render part --view top bracket.step bracket.png``), or a file type a package implements.
 
-  Both infer the types from the file names, and take ``--input``/``--output`` to say them outright. ``pc adhoc
-  render`` takes the same ``--view``, ``--viewport-origin`` and ``--viewport-up`` as ``pc render`` — and with no
-  ``partcad.yaml`` to configure a viewport in, they are the only way to aim one. The output file name may be
-  left off when ``--output`` names the type: the file is then named after the input.
+  Both infer the types from the file names, and take ``--input``/``--output`` to say them outright. A ``.py`` is
+  read as ``sdf`` unless told otherwise: a build123d or CadQuery script takes ``--input build123d`` or
+  ``--input cadquery``.
+
+  ``pc adhoc render`` takes what ``pc render`` takes wherever that means something for a file in no package —
+  and with no ``partcad.yaml`` to configure anything in, these are the only way to say any of it:
+
+  - ``--view``, ``--viewport-origin`` and ``--viewport-up`` aim the projection, and ``--reproducible`` /
+    ``--no-reproducible`` pick the algorithm, exactly as for ``pc render``;
+  - ``-t``/``--format`` is another spelling of ``--output``, and ``-O``/``--output-dir`` writes into a directory
+    when no output file is named: the file is then named after the input;
+  - ``-p``/``--param <name>=<value>`` sets a parameter of a script (a build123d or CadQuery script's parameters
+    are its top-level assignments). The value is declared with the type it is written in -- ``true``/``false``,
+    a whole number, a number, or text -- and goes into the name of a file named after the input, as ``pc
+    render`` writes an instance's (``bracket_depth_12.svg``);
+  - ``-e``/``--options-package`` reads the file type from a package: one in the public index (``//pub/...``),
+    which the throwaway package then imports, or the directory of a package on this machine. The output may then
+    be any type that package declares.
+
+  .. code-block:: shell
+
+    pc adhoc render part --input build123d -t svg -O ./out -p depth=12 bracket.py   # ./out/bracket_depth_12.svg
+    pc adhoc render part --reproducible --view top bracket.step bracket.svg
+    pc adhoc render part -e ./drawing-style -t svg-thin -O ./out bracket.step
+
+  The rest of ``pc render``'s options have nothing to act on here: there is no package to walk (``-P``, ``-r``,
+  ``--fast-only``, ``--exclude``), the subcommand says what the file holds (``-s``, ``-i``, ``-a``, ``-S``), a
+  file in no package has no ports or interfaces (``--with-*``, ``--port``) and a part or a sketch no links
+  (``--filter``), and no instruction book is rendered ad hoc (``--ignore-manufacturability``).
 
   Which of the two to use is which kind of file is wanted, and it is the same distinction as between
-  ``pc export`` and ``pc render``: geometry another CAD tool can go on working with, or a picture. A file type a
-  package implements itself is available to neither, since there is no package here to declare it in.
+  ``pc export`` and ``pc render``: geometry another CAD tool can go on working with, or a picture. ``pc adhoc
+  convert`` writes only the formats PartCAD itself does; a file type a package implements is ``pc adhoc render
+  -e``'s, or ``pc export``'s on a package that imports it.
 
   The assembly formats ``assy`` and ``urdf`` are refused by both: an ASSY file is a set of references to the
   parts of a package and a URDF becomes a part per link, so neither means anything without one. Declare it in a

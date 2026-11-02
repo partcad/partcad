@@ -91,17 +91,43 @@ pc --no-ansi adhoc render part --input step bracket.dat out.png
 pc --no-ansi adhoc render sketch outline.svg outline.png
 ```
 
-Both types are inferred from the file names; `--input` and `--output` say them
-outright. The input may be any type PartCAD reads — including the scripted ones
-it cannot write back out (`sdf`, `scad`, `chili3d`), since reading is all a
-picture needs. The output is one of the four projections.
+Both types are inferred from the file names; `--input` and `--output` (or `-t`,
+as `pc render` spells it) say them outright. The input may be any type PartCAD
+reads — including the scripted ones it cannot write back out (`sdf`, `scad`,
+`chili3d`), since reading is all a picture needs. A `.py` is read as `sdf`
+unless told otherwise, so a build123d or CadQuery script takes `--input
+build123d` or `--input cadquery`.
+
+It takes what `pc render` takes wherever that means something for a file in no
+package:
+
+```sh
+pc --no-ansi adhoc render part --input build123d -t svg -O ./out bracket.py      # ./out/bracket.svg
+pc --no-ansi adhoc render part --input build123d -t svg -p depth=12 bracket.py   # bracket_depth_12.svg
+pc --no-ansi adhoc render part --reproducible bracket.step bracket.svg            # the exact projection
+pc --no-ansi adhoc render part -e //pub/feature/render/draftwright -t pdf bracket.step
+```
+
+- `-O` writes into a directory, under the input's name, when no output file is
+  named; `-t` then says the file type.
+- `-p <name>=<value>` sets a parameter of a script — a build123d or CadQuery
+  script's parameters are its top-level assignments — and the value goes into
+  the name of the file, as `pc render` writes an instance's.
+- `-e` reads the file type from a package: one in the public index, or the
+  directory of a package on this machine. The output may then be any type that
+  package declares.
+- `--reproducible` / `--no-reproducible`: see §5.
+
+The rest of `pc render`'s options have nothing to act on here: there is no
+package to walk, the subcommand says what the file holds, and a file in no
+package has no ports, no interfaces and no links.
 
 `urdf` and `assy` are refused here: both only mean anything inside a package. Put
 the file in one (`pc import assembly`) and render it with `pc render`.
 
-## 5. Choosing the angle
+## 5. Choosing the angle, and the algorithm
 
-Both commands take the same three options.
+Both commands take the same three options for the angle.
 
 `--view` names a direction — `front`, `back`, `left`, `right`, `top`, `bottom`,
 `iso`. `--viewport-origin X,Y,Z` says which direction to look from — `0,-100,0`
@@ -121,7 +147,12 @@ corner (`iso`), which is what makes it read as 3D, and a sketch head-on.
 
 These are the same `viewport_origin` and `viewport_up` a `render:` file type is
 configured with in `partcad.yaml`, passed for one command instead of written
-down. If the user wants an object drawn that way *every* time, put it in the
+down. So is `--reproducible` / `--no-reproducible`, which both commands take
+too: the file type's `reproducible`, which chooses the hidden-line algorithm —
+the exact one, which draws a curve as itself, or the polygonal one (the default
+unless the package says otherwise), which draws it as a run of short lines. Pass
+one of them when the drawing will be measured: `/pc:gen-sketch` §5.2 says why
+both are measured, and how. If the user wants an object drawn that way *every* time, put it in the
 configuration instead — and note this is only possible for an object in a
 package, which is one more reason to prefer §3 over §4 when both would work:
 

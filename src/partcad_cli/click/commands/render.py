@@ -16,6 +16,7 @@ from .. import fast_only, object_kind
 from ..exclude import exclude_option, exclude_params
 from ..link_filter import filter_option, filter_params
 from ..parameters import param_option, param_params
+from ..render_options import reproducible_option, reproducible_params
 from ..service import run
 from ..video import video_options, video_params
 from ..viewport import viewport_options, viewport_params
@@ -52,6 +53,7 @@ from ..viewport import viewport_options, viewport_params
     show_envvar=True,
 )
 @viewport_options
+@reproducible_option
 @click.option(
     "-P",
     "--package",
@@ -160,6 +162,7 @@ def cli(
     viewport_origin,
     viewport_up,
     turn,
+    reproducible,
     package,
     options_package,
     recursive,
@@ -197,6 +200,7 @@ def cli(
             "format": format,
             "ignore_manufacturability": ignore_manufacturability,
             **viewport_params(view, viewport_origin, viewport_up, turn),
+            **reproducible_params(reproducible),
             **video_params(style, size, background, fps, duration, speed, append, preset, quality),
             "package": package,
             "options_package": options_package,

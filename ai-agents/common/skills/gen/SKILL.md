@@ -22,7 +22,8 @@ user your choice, then follow that flow — passing the same description through
 
 Heuristics:
 
-- "2D", "profile", "outline", "sketch", "cross-section", "blueprint" → **sketch**.
+- "2D", "profile", "outline", "sketch", "cross-section", "blueprint", "trace
+  this drawing" → **sketch**.
 - One noun, "a"/"single", one manufacturing process, one printed/machined piece
   → **part**.
 - Plurals, "with", "attached to", "... and a ...", moving joints, fasteners, or
@@ -42,6 +43,14 @@ ready to simulate and checks the claim with `pc sim`.
 - Part → follow **`/pc:gen-part`**.
 - Assembly → follow **`/pc:gen-assembly`** (which itself uses `/pc:gen-part` for
   any missing components).
+
+All three settle the dimensions before they model: `/pc:gen-sketch` measures
+the targets out of whatever the input is — a description, a drawing, a photo, a
+3D file — and iterates a sketch until it measures the same, and the part and
+assembly flows run it on temporary sketches first, then measure their own result
+against the same numbers. Pass every reference image, drawing or file the user
+gave through to the flow you pick: those are what the dimensions are measured
+from.
 
 The part and the assembly flows write down what the object is required to be
 as its `requirements:` before judging the result against them, and

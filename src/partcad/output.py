@@ -301,9 +301,20 @@ def name_to_segments(name: str, suffix: str = "") -> list:
     """
     base, values = parse_parameterized_name(name)
     *directories, stem = base.split("/")
-    if values:
-        stem += _UNSAFE_IN_FILE_NAME.sub("_", format_parameterized_name("", values))
-    return [*directories, stem + suffix]
+    return [*directories, stem + values_in_file_name(values) + suffix]
+
+
+def values_in_file_name(values) -> str:
+    """What an instance's parameter values add to the name of its file: '_length_10', or nothing.
+
+    The half of 'name_to_segments' that does not depend on where the name came
+    from, for a file that is named after something other than an object -- the
+    input of 'pc adhoc render', whose values are written into the name of what
+    it writes just as 'pc render' writes them into an object's.
+    """
+    if not values:
+        return ""
+    return _UNSAFE_IN_FILE_NAME.sub("_", format_parameterized_name("", values))
 
 
 def is_document_format(format_name: str, section_obj) -> bool:

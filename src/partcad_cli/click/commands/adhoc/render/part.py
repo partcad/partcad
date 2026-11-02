@@ -8,6 +8,7 @@ import os
 
 import rich_click as click
 
+from .... import render_options
 from ....service import run
 from ....viewport import viewport_options, viewport_params
 
@@ -33,8 +34,8 @@ PART_TYPES = [
 
 # The 2D projections '//builtin/render' implements (partcad.shape's
 # RENDER_EXTENSION_MAPPING, and partcad.adhoc.render's PART_RENDER_FORMATS).
-# A file type a package implements itself is not offered: it is declared in that
-# package, and an ad-hoc render has no package.
+# A file type a package implements itself is written by naming that package with
+# '-e'; which types it declares is the daemon's to check, once it has read it.
 RENDER_TYPES = ["svg", "png", "jpeg", "dxf"]
 
 
@@ -45,17 +46,27 @@ RENDER_TYPES = ["svg", "png", "jpeg", "dxf"]
     type=click.Choice(PART_TYPES),
     help="Input file type. Inferred from filename if not provided.",
 )
-@click.option(
-    "--output",
-    "output_type",
-    type=click.Choice(RENDER_TYPES),
-    help="The projection to write. Inferred from the output filename if not provided.",
-)
+@render_options.output_option(RENDER_TYPES)
+@render_options.adhoc_options
 @viewport_options
 @click.argument("input_filename", type=click.Path(exists=True))
 @click.argument("output_filename", type=click.Path(), required=False)
 @click.pass_obj
-def cli(cli_ctx, input_type, output_type, view, viewport_origin, viewport_up, turn, input_filename, output_filename):
+def cli(
+    cli_ctx,
+    input_type,
+    output_type,
+    output_dir,
+    options_package,
+    params,
+    reproducible,
+    view,
+    viewport_origin,
+    viewport_up,
+    turn,
+    input_filename,
+    output_filename,
+):
     """Render a CAD file to a 2D image without modifying project configuration."""
     run(
         cli_ctx,
@@ -63,10 +74,12 @@ def cli(cli_ctx, input_type, output_type, view, viewport_origin, viewport_up, tu
         {
             "kind": "part",
             "input_type": input_type,
-            "output_type": output_type,
             # Absolute so the daemon reads/writes in the user's cwd.
             "input_filename": os.path.abspath(input_filename),
             "output_filename": os.path.abspath(output_filename) if output_filename else None,
+            **render_options.adhoc_params(
+                output_type, RENDER_TYPES, output_dir, options_package, params, reproducible, output_filename
+            ),
             **viewport_params(view, viewport_origin, viewport_up, turn),
         },
         needs_context=False,
