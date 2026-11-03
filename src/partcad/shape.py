@@ -174,6 +174,10 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         "cache",
         "cache_dependencies_ignore",
         "category",
+        # What the 'cmf' check holds the object to ('require'), not what it is:
+        # whether a finding fails or warns. Hashed, turning it on rebuilt the
+        # part and every assembly holding it, to the same geometry.
+        "cmf",
         # How the thing is packaged for sale, not what it is. The third of the
         # (vendor, SKU, pack size) record, and the only one of the three that
         # was missing here - so the same geometry sold in bags of 25 keyed
@@ -1264,7 +1268,13 @@ class Shape(ShapeConfiguration):
                     # known yet" and is what sends 'get_metadata_async()' off to
                     # build the shape. A miss here has to leave it saying that.
                     if cached.get(self.kind) is not None:
-                        self._metadata = shape_envelope.metadata_of(cached[self.kind]) or {}
+                        # The entry holds the geometry as it was built; the
+                        # CMF it is drawn and checked with is applied on
+                        # every read (see '_with_cmf').
+                        cached[self.kind], recorded = self._with_cmf(
+                            ctx, cached[self.kind], shape_envelope.metadata_of(cached[self.kind])
+                        )
+                        self._metadata = recorded or {}
                     if to_cache_in_memory.get(self.kind, False):
                         self._wrapped = cached[self.kind]
                     if to_cache_in_memory.get("cmps", False):
@@ -1325,13 +1335,20 @@ class Shape(ShapeConfiguration):
             # never live in a wrapper of its own: a reference to another part,
             # which moves the source's geometry.
             if shape is not None and ("offset" in self.config or "scale" in self.config):
+                from . import cmf as pc_cmf
                 from . import transform
                 from .geom import Location
 
+                # What the source stated about each face, which a transform
+                # knows nothing of and rebuilds the payload without; it moves
+                # the faces and keeps them in their order, so the section is
+                # laid back after the new BREP below.
+                source_section = pc_cmf.payload_section(shape)
                 if "offset" in self.config and "offset" not in finished:
                     shape = await transform.offset(ctx, shape, self.transform("offset"))
                 if "scale" in self.config and "scale" not in finished:
                     shape = await transform.scale(ctx, shape, self.transform("scale"))
+                shape = pc_cmf.with_payload_section(shape, source_section)
 
                 # The transform rebuilt the geometry, so the encoder on the far
                 # side measured what came out and the numbers on the way back
@@ -1378,7 +1395,6 @@ class Shape(ShapeConfiguration):
             # its entry, and a run with every tier switched off all reach here
             # having built the shape and having nowhere to store what that
             # produced - and 'pc info' should still be able to say how big it is.
-            self._metadata = recorded or {}
             if recorded:
                 shape = dict(shape)
                 shape[shape_envelope.KEY_METADATA] = recorded
@@ -1408,12 +1424,40 @@ class Shape(ShapeConfiguration):
                     do_cache_in_memory = to_cache_in_memory.get(self.kind, False)
                 else:
                     do_cache_in_memory = True
-                if do_cache_in_memory:
-                    self._wrapped = shape
             else:
                 # Let the file cache tell us if we need to cache this in memory
+                do_cache_in_memory = True
+
+            # What is cached is the geometry as it was built; what is handed
+            # out is that with the CMF applied, as a hit applies it too.
+            shape, recorded = self._with_cmf(ctx, shape, recorded)
+            self._metadata = recorded or {}
+            if do_cache_in_memory:
                 self._wrapped = shape
             return shape
+
+    def _with_cmf(self, ctx, envelope, recorded):
+        """'(envelope, recorded)' with this part's CMF applied: what its source stated, converted and completed.
+
+        See 'partcad.cmf.apply_declared'. Not cached, and not something a cache
+        entry could hold: what it comes to turns on declarations the shape's key
+        does not cover - what a colour's declaration says to draw it in, which
+        declaration claims a name a STEP file uses - and an entry written with
+        one package's answer would be served to another sharing the geometry.
+        So it is applied as the shape is read, from a build or from the cache,
+        and costs a part with no CMF one look at a dictionary.
+        """
+        if envelope is None or self.kind != "part":
+            return envelope, recorded
+        from . import cmf as pc_cmf
+
+        applied, after = pc_cmf.apply_declared(ctx, self, envelope, recorded)
+        if applied is envelope:
+            return envelope, recorded
+        if after:
+            applied = dict(applied)
+            applied[shape_envelope.KEY_METADATA] = after
+        return applied, after
 
     def _shape_properties(self):
         """What this shape reports about itself, or None if it reports nothing.
@@ -4533,6 +4577,15 @@ class Shape(ShapeConfiguration):
         sections = shape_envelope.metadata_section(metadata, shape_envelope.METADATA_SECTIONS)
         if sections:
             info.update(sections)
+
+        # What its CMF section comes to (docs/design/cmf.md, section 9): the
+        # summary recorded with the geometry, with each reference marked where
+        # it is display-only.
+        summary = metadata.get(shape_envelope.METADATA_CMF)
+        if isinstance(summary, dict):
+            from . import cmf as pc_cmf
+
+            info["CMF"] = pc_cmf.info_of(ctx, summary, self.project_name)
 
         # The per-element records are deliberately *not* reported from here.
         # They are carried for 'get_annotations_async()', whose caller is a

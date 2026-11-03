@@ -257,6 +257,12 @@ KEY_METADATA = "metadata"
 METADATA_MEASUREMENTS = "measurements"
 METADATA_ANNOTATIONS = "annotations"
 METADATA_SECTIONS = "sections"
+# What the shape's CMF comes to (docs/design/cmf.md): the sets of colour,
+# material and finish it is in, with how many faces and solids each covers, and
+# what is unspecified. A summary of the CMF section the payload carries after its
+# BREP, recorded beside the geometry by whatever wrote that section, so that the
+# core - which never parses a BREP - can answer "is this specified?" and show it.
+METADATA_CMF = "cmf"
 
 # What a part is asked to go through on its way out of the wrapper that builds
 # it, and what that wrapper says it did. A part leaves its factory validated
@@ -806,6 +812,13 @@ def description(obj):
     table. Everything else a node holds is data under names its writer chose -
     a 'physics' property may well say 'geometry', a joint 'metadata' - and is
     kept whole.
+
+    Save for a node's CMF summary (METADATA_CMF), which is kept: it is what a
+    drawing paints the node's faces in and what an export writes on them, and
+    it is no part of the shape's key - CMF is applied as a shape is read, from
+    declarations the key does not cover (see 'Shape._with_cmf'). Left out with
+    the rest of KEY_METADATA, a part given another colour kept its drawing in
+    the old one, served from the cache. A node with no CMF describes as it did.
     """
     return _described_node(obj)
 
@@ -815,6 +828,9 @@ def _described_node(node):
         return _described_data(node)
     described = {}
     for key, value in node.items():
+        if key == KEY_METADATA and isinstance(value, dict) and value.get(METADATA_CMF):
+            described[METADATA_CMF] = _described_data(value[METADATA_CMF])
+            continue
         if key in _GEOMETRY_KEYS:
             continue
         if key == KEY_ASSEMBLY and isinstance(value, list):

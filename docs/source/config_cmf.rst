@@ -184,7 +184,27 @@ Every part type and every assembly type accepts five parameters, whether or not 
 A reference names a variant with them too -- ``:bracket;color=:signal-red`` -- and so does an ASSY link's ``params:``.
 A variant is an item of its own, with its own line in the bill of materials.
 
-An assembly's CMF parameters are passed on to its links, for those a link's own ``params:`` do not set. CMF an
-assembly sets -- its own parameters, a link's ``params:`` -- draws the assembly; it does not specify the items in it,
-and the assembly is then manufacturable only if it declares a ``vendor`` and an ``sku`` of its own. A variant that is
-to be made or bought as such is declared as a part, as ``bracket-red`` is above, and linked by name.
+An assembly's colour, material and finish are passed on to its links, each to a link whose ``params:`` do not set it
+and whose item does not state it already: ``bracket-red`` linked into a black assembly stays red. A sub-assembly passes
+them on in turn. CMF an assembly sets -- its own parameters, a link's ``params:`` -- draws the assembly; it does not
+specify the items in it, and the assembly is then manufacturable only if it declares a ``vendor`` and an ``sku`` of its
+own. A variant that is to be made or bought as such is declared as a part, as ``bracket-red`` is above, and linked by
+name.
+
+.. _cmf-check:
+
+Checking it
+===========
+
+``pc test`` runs the ``cmf`` check on what a package says is to be made (``manufacturable: true``): every solid of a
+part in a material and every face in a colour -- a material's colour claim counts -- each a declaration that claims it
+can be had, and a finish that is one too where one is stated. It also reports an assembly that sets CMF and is not
+bought whole. It warns, for now; an object or a package that says so fails instead:
+
+.. code-block:: yaml
+
+  cmf:
+    require: true
+
+``pc info`` of a part says what its CMF comes to: each set of colour, material and finish, how many faces and solids
+are in it, which of its components are display-only, and what is left unspecified.

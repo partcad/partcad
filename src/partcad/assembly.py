@@ -83,6 +83,7 @@ class AssemblyChild:
         fixed=False,
         attached=None,
         also=None,
+        cmf_parameters=None,
     ):
         self.item = item
         self.name = name
@@ -112,6 +113,11 @@ class AssemblyChild:
         # placed and it can be resolved into 'also'.
         self.also_declared = list(also or [])
         self.also = []
+        # The CMF components ('color', 'material', 'finish') the link's own
+        # 'params:' set: the assembly drawing the item its own way, which is
+        # what the 'cmf' check holds against an assembly not bought whole
+        # (docs/design/cmf.md, section 8).
+        self.cmf_parameters = tuple(cmf_parameters or ())
 
     def connect_info(self):
         """What the ASSY file says about connecting this child, or None.
