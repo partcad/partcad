@@ -17,6 +17,7 @@ import * as assert from 'assert';
 
 import { calloutsOf, componentName, componentRows, hasCallouts, isComponent } from '../../webview/callouts';
 import { ShowNode } from '../../webview/messages';
+import { formatPrice } from '../../webview/supply';
 
 /** The node the sheet metal example's drawing arrives as, as far as this reads it. */
 function bends(): ShowNode {
@@ -161,5 +162,20 @@ suite('What a component callout says', () => {
             'bolt',
         ]);
         assert.deepStrictEqual(componentRows('bolt', undefined, { componentNames: false, componentPrices: true }), []);
+    });
+});
+
+// What a price is written as on screen: a component's callout and the Buy tab
+// both write it through 'formatPrice', and the 2D tab's picture writes it the
+// same way ('price_label' in 'render_overlay.py').
+suite('How a price is written on screen', () => {
+    test('dollars are written as dollars, whatever the locale', () => {
+        assert.strictEqual(formatPrice(0.4, 'USD'), '$0.40');
+        assert.strictEqual(formatPrice(1234.5, 'usd'), '$1,234.50');
+    });
+
+    test('a price nobody said the currency of is a number', () => {
+        assert.strictEqual(formatPrice(2, null), '2.00');
+        assert.strictEqual(formatPrice(undefined, 'USD'), '');
     });
 });

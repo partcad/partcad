@@ -1076,9 +1076,11 @@ Object commands
   as), and the price is the component's share of what the object costs to buy: the cheapest quote of each thing
   to order, as ``pc supply quote`` and the viewer's Buy tab find it, divided over the components it is for -- a
   box of a hundred bolts for an assembly of eight is an eighth of a box each, and a part cut from stock costs
-  its piece of the stock. Asking for both writes the name over the price in one callout. A component nobody
-  quoted has no price rather than a price of nought, and the log lists every price drawn. Asking for prices is
-  asking every supplier for a quote, so it takes as long as ``pc supply quote`` does.
+  its piece of the stock. Asking for both writes the name over the price in one callout. A price in dollars is
+  written ``$12.50`` on the picture, as the VS Code viewer writes it, and any other currency by its code
+  (``12.50 EUR``). A component nobody quoted has no price rather than a price of nought, and the log lists every
+  price drawn, each with its currency's code. Asking for prices is asking every supplier for a quote, so it takes
+  as long as ``pc supply quote`` does.
 
   .. code-block:: shell
 

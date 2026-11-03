@@ -310,20 +310,33 @@ def report(shape, records: list, overlay: Overlay) -> None:
 
 
 def price_text(price, currency=None) -> str:
-    """A price as a callout writes it: two decimal places and the currency's code.
+    """A price as the log writes it: two decimal places and the currency's code.
 
-    The code rather than a symbol, because the picture is drawn in a font of
-    its own ('stroke_text') that has no '$' or '€', and a code is what a
-    supplier's configuration states anyway (see 'currency' in
-    'examples/provider_store'). The IDE's 3D view writes the same price the way
-    its Buy tab does, in the editor's locale.
+    The code, because a log is text somebody greps and a supplier's
+    configuration states the currency as one (see 'currency' in
+    'examples/provider_store'). What a picture writes is 'price_label'.
     """
     text = "%.2f" % float(price)
     return "%s %s" % (text, currency) if currency else text
 
 
+def price_label(price, currency=None) -> str:
+    """A price as a callout on a picture writes it.
+
+    In dollars it is written the way a reader expects to see dollars, '$1,234.50'
+    - which is also how the IDE's 3D view and its Buy tab write it (see
+    'formatPrice' in the extension's 'supply.ts'), so the 2D tab's picture and
+    the 3D view beside it show one price one way. Any other currency is written
+    as the log writes it, with its code: the picture's font ('stroke_text') has
+    a '$' and no other currency symbol.
+    """
+    if currency is not None and str(currency).upper() == "USD":
+        return "${:,.2f}".format(float(price))
+    return price_text(price, currency)
+
+
 async def component_prices_async(shape, ctx, overlay: Overlay) -> dict:
-    """The price of every component of 'shape' there is one for, as callout text.
+    """The price of every component of 'shape' there is one for, as callout text ('price_label').
 
     Keyed by the full name of each object ('<package>:<name>'), which is what
     every node of the tree a renderer is handed carries ('name'), so a part
@@ -343,16 +356,23 @@ async def component_prices_async(shape, ctx, overlay: Overlay) -> dict:
     except Exception as e:
         pc_logging.error("%s: failed to find what the components cost: %s" % (name, e))
         return {}
-    labels = {
-        object_name: price_text(entry["price"], entry.get("currency"))
+    priced = {
+        object_name: entry
         for object_name, entry in prices.items()
         if isinstance(entry, dict) and entry.get("price") is not None
     }
-    if not labels:
+    if not priced:
         pc_logging.warning("%s: no supplier quoted a price for any of its components" % name)
-    else:
-        pc_logging.info(
-            "%s: --with-component-prices: %d priced:\n%s"
-            % (name, len(labels), "\n".join("\t%s\t%s" % (key, labels[key]) for key in sorted(labels)))
+        return {}
+    pc_logging.info(
+        "%s: --with-component-prices: %d priced:\n%s"
+        % (
+            name,
+            len(priced),
+            "\n".join(
+                "\t%s\t%s" % (key, price_text(priced[key]["price"], priced[key].get("currency")))
+                for key in sorted(priced)
+            ),
         )
-    return labels
+    )
+    return {key: price_label(entry["price"], entry.get("currency")) for key, entry in priced.items()}

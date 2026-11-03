@@ -291,13 +291,22 @@ def test_the_callouts_are_this_runs_answer():
     assert effective(Overlay.of(component_names=True), _implementation(output.EXPORT, {})) is None
 
 
-def test_a_price_is_written_with_the_code_of_its_currency():
+def test_the_log_writes_a_price_with_the_code_of_its_currency():
     from partcad.render_overlay import price_text
 
     assert price_text(1.5, "USD") == "1.50 USD"
     assert price_text(12, None) == "12.00"
-    # Every character is one the picture's own font has: no currency symbols.
     assert price_text(0.125, "EUR") == "0.12 EUR"
+
+
+def test_a_picture_writes_dollars_as_dollars():
+    """'$X' on the picture, as the IDE's 3D view and Buy tab write it; any other currency by its code."""
+    from partcad.render_overlay import price_label
+
+    assert price_label(1.5, "USD") == "$1.50"
+    assert price_label(1234.5, "usd") == "$1,234.50"
+    assert price_label(0.125, "EUR") == "0.12 EUR"
+    assert price_label(12, None) == "12.00"
 
 
 class _Shape:
@@ -322,8 +331,9 @@ def test_the_prices_come_from_the_source_the_overlay_carries():
     labels = asyncio.run(component_prices_async(shape, None, Overlay(component_prices=True, prices=prices)))
 
     assert asked == [shape]
-    # A price of nothing is no price, rather than a price of nought.
-    assert labels == {"//pkg:bolt": "0.25 USD", "//pkg:plate": "3.00"}
+    # A price of nothing is no price, rather than a price of nought. What a
+    # picture writes; the log keeps the code ('0.25 USD').
+    assert labels == {"//pkg:bolt": "$0.25", "//pkg:plate": "3.00"}
 
 
 def test_no_prices_cost_nothing_but_the_prices():

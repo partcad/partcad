@@ -86,9 +86,9 @@ def test_the_price_is_the_second_row_of_the_same_callout(real_svg, tree):
     request = {
         "shape_tree": tree,
         real_svg.COMPONENT_NAMES_KEY: True,
-        real_svg.COMPONENT_PRICES_KEY: {"//pkg:cube": "1.50 USD"},
+        real_svg.COMPONENT_PRICES_KEY: {"//pkg:cube": "$1.50"},
     }
-    assert [rows for rows, _middle in real_svg._components(request)] == [["left", "1.50 USD"], ["right", "1.50 USD"]]
+    assert [rows for rows, _middle in real_svg._components(request)] == [["left", "$1.50"], ["right", "$1.50"]]
 
 
 def test_with_only_prices_asked_a_component_nobody_quoted_gets_no_callout(real_svg, tree):
