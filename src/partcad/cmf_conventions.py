@@ -16,7 +16,7 @@ parameters complete them ('partcad.cmf.apply_declared').
 Converting is looking up. A convention says which key of a declaration's 'ids'
 holds what its tool calls it, whether that tool's names are folded to one case,
 and which packages beside the part's own to look in ('catalogs'). A colour
-nothing claims becomes the display-only '//pub/std/color:rgba' of the value the
+nothing claims becomes the display-only '//builtin/color:rgba' of the value the
 source stated, so the part still looks as its source drew it and is not
 manufacturable on that face; a material or a finish nothing claims stays unset,
 for the part's parameters to complete. Each is reported once per part.

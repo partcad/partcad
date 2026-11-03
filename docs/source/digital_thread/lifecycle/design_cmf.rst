@@ -15,7 +15,7 @@ other systems call it, and how to draw it. Two things are kept apart:
 - **the claim** -- a declaration with ``manufacturable: true``, the default, says that what it declares can be sourced
   or made as declared;
 - **the display** -- a colour to draw it in, which says nothing about what can be had. A colour that is only a picture,
-  such as ``//pub/std/color:rgba;color=C91A09FF``, declares ``manufacturable: false``.
+  such as ``//builtin/color:rgba;color=C91A09FF``, declares ``manufacturable: false``.
 
 A finish names a process and a surface specification (a VDI 3400 reference, an SPI grade, an anodising type); a part
 that states none is as produced. A material may claim the colour of its natural surface, so an unpainted aluminium part
