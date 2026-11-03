@@ -275,16 +275,8 @@ def test_the_builtin_room_says_it_needs_a_sketch(context):
     assert "names none: give it a 'sketch', as 'room;sketch=//package:sketch'" in reason
 
 
-def test_the_builtin_wall_is_drawn_in_a_colour_it_declares_and_does_not_claim(package):
-    """Its grey is a CMF colour of '//builtin/building', display-only: a wall is never made.
-
-    In a context of its own. Asking for the wall itself, with no parameters,
-    records its grey in the declaration every instance of it is copied from, and
-    an instance named with another colour then keeps the grey (a CMF issue of
-    its own, reported on the pull request that brought this test); the module's
-    context goes on to paint rooms with such instances.
-    """
-    context = pc.Context(str(package))
+def test_the_builtin_wall_is_drawn_in_a_colour_it_declares_and_does_not_claim(context):
+    """Its grey is a CMF colour of '//builtin/building', display-only: a wall is never made."""
     wall = context.get_part("//builtin/building:wall")
     assert cmf.own_parameters(wall, context) == {"color": "//builtin/building:wall"}
     colors = context.get_project(output.BUILTIN_BUILDING_PACKAGE).config_obj["colors"]
@@ -293,7 +285,15 @@ def test_the_builtin_wall_is_drawn_in_a_colour_it_declares_and_does_not_claim(pa
 
 
 def test_a_painted_room_paints_every_wall(context):
-    """A room's own colour is every wall's, over the grey the wall it is built of states."""
+    """A room's own colour is every wall's, over the grey the wall it is built of states.
+
+    With the wall itself asked for first, in the same context: making it records
+    its grey in the declaration every wall of the room is copied from, and a
+    room used to come out grey once it had been (see
+    'Project._remember_declared_properties').
+    """
+    assert context.get_part("//builtin/building:wall")._shape_properties()["color"] == "#9C9284"
+
     walls = _walls(context, "painted")
 
     assert len(walls) == 4

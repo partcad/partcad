@@ -579,6 +579,10 @@ class Project(project_config.Configuration):
         self._implicit_aliases: dict[str, set] = {}
         # The declarations already normalized, per kind. See '_normalized'.
         self._normalized_configs: dict[str, set] = {}
+        # What each declaration states of the shape it produces, as the package
+        # states it, per kind: '{name: (declaration, properties)}'. See
+        # '_remember_declared_properties'.
+        self._declared_properties: dict[str, dict] = {}
 
         self.providers = {}
         self.provider_locks = {}
@@ -767,8 +771,60 @@ class Project(project_config.Configuration):
             # new dictionary rather than in place, and the package should hold
             # the one every reader is handed.
             configs[name] = normalized
+        self._remember_declared_properties(kind, name, normalized)
         done.add(name)
         return normalized
+
+    def _remember_declared_properties(self, kind: str, name: str, declaration) -> None:
+        """Keep what 'declaration' states under 'properties:' as the package states it, before anything is made.
+
+        The declaration is the config of the object made out of it, and making
+        one records more there: what a part was asked to be made of and drawn
+        in, from its 'material' and 'color' parameters
+        ('PartFactory.record_object_type_properties'). An instance named with
+        parameters is a copy of the declaration, so without this it started
+        from what making the object *without* them had recorded - and as what
+        is recorded already outranks a parameter (a reader that found the
+        material in the file knows better than the request), 'box;color=:red'
+        went on reporting the colour 'box' was drawn in, once 'box' had been
+        asked for. See '_restore_declared_properties'.
+
+        Taken once per declaration, the first time it is normalized - which is
+        before it is made into anything, since every object is made from the
+        normalized declaration - and again only for another declaration of the
+        name: a package that hands the same dictionary back keeps what it said
+        the first time, and one that hands a fresh one each time says it again.
+        """
+        if not isinstance(declaration, dict):
+            return
+        remembered = self._declared_properties.setdefault(kind, {})
+        known = remembered.get(name)
+        if known is not None and known[0] is declaration:
+            return
+        from . import shape_envelope
+
+        remembered[name] = (declaration, copy.deepcopy(declaration.get(shape_envelope.KEY_PROPERTIES)))
+
+    def _restore_declared_properties(self, kind: str, name: str, config: dict) -> None:
+        """Give 'config', a copy of the declaration 'name', back the 'properties:' the declaration states itself.
+
+        What an instance named with parameters is made from: everything the
+        declaration says, its own 'properties:' included, and nothing that
+        making another object out of it recorded since. The instance records
+        what its own parameters ask for as it is made, as the object without
+        them did. A declaration nothing remembered - a kind with no
+        normalization here - is left as it is.
+        """
+        known = self._declared_properties.get(kind, {}).get(name)
+        if known is None:
+            return
+        from . import shape_envelope
+
+        declared = known[1]
+        if declared is None:
+            config.pop(shape_envelope.KEY_PROPERTIES, None)
+        else:
+            config[shape_envelope.KEY_PROPERTIES] = copy.deepcopy(declared)
 
     def object_config(self, kind: str, name: str):
         """The config of a single object, fetched individually when possible.
@@ -2619,6 +2675,9 @@ class Project(project_config.Configuration):
 
             # Now we have the original assembly name and the complete set of parameters
             config = copy.deepcopy(config)
+            # As the package declares it, not as making the object without
+            # these parameters left it (see '_remember_declared_properties').
+            self._restore_declared_properties(factory_name, base_object_name, config)
             declare_object_type_parameters(factory_name, config, params)
             if ("parameters" not in config or config["parameters"] is None) and (
                 config["type"] not in PARAMETER_PASSING_TYPES
