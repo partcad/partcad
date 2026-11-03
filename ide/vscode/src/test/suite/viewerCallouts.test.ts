@@ -15,7 +15,14 @@
 
 import * as assert from 'assert';
 
-import { calloutsOf, componentName, componentRows, hasCallouts, isComponent } from '../../webview/callouts';
+import {
+    assemblyRows,
+    calloutsOf,
+    componentName,
+    componentRows,
+    hasCallouts,
+    isComponent,
+} from '../../webview/callouts';
 import { ShowNode } from '../../webview/messages';
 import { formatPrice } from '../../webview/supply';
 
@@ -162,6 +169,24 @@ suite('What a component callout says', () => {
             'bolt',
         ]);
         assert.deepStrictEqual(componentRows('bolt', undefined, { componentNames: false, componentPrices: true }), []);
+    });
+});
+
+// An assembly sold assembled is one thing to order: its price goes on a callout
+// of its own, and the parts inside it have none. Pinned on the 2D tab's picture
+// by '_components' in 'render_svg.py', which test_render_callouts.py holds to
+// the same rows.
+suite('What the callout of an assembly says', () => {
+    const both = { componentNames: true, componentPrices: true };
+
+    test('an assembly sold assembled is named over its price', () => {
+        assert.deepStrictEqual(assemblyRows('gearbox', '$120.00', both), ['gearbox', '$120.00']);
+        assert.deepStrictEqual(assemblyRows('gearbox', '$120.00', { ...both, componentNames: false }), ['$120.00']);
+    });
+
+    test('an assembly with no price of its own says nothing: its parts carry their names', () => {
+        assert.deepStrictEqual(assemblyRows('frame', undefined, both), []);
+        assert.deepStrictEqual(assemblyRows('gearbox', '$120.00', { ...both, componentPrices: false }), []);
     });
 });
 

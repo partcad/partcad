@@ -74,7 +74,7 @@ import {
     ownAppearance,
     primitiveAppearance,
 } from './appearance';
-import { calloutsOf, componentName, componentRows, isComponent } from './callouts';
+import { assemblyRows, calloutsOf, componentName, componentRows, isComponent } from './callouts';
 import {
     SceneFrame,
     enclosingRadius,
@@ -331,8 +331,18 @@ if (software) {
 interface Callouts {
     /** What a shape's metadata says about its elements: the Metadata box. */
     metadata: CSS2DObject[];
-    /** One per component, its rows written by 'refreshComponentCallouts'. */
-    components: { object: CSS2DObject; box: HTMLElement; name: string; objectName: string | undefined }[];
+    /**
+     * One per component, its rows written by 'refreshComponentCallouts' - and one
+     * per node that holds others ('holds'), which writes something only when it
+     * is priced as a whole (see 'assemblyRows').
+     */
+    components: {
+        object: CSS2DObject;
+        box: HTMLElement;
+        name: string;
+        objectName: string | undefined;
+        holds: boolean;
+    }[];
     /** One per port, at the tip of its +Z axis. */
     ports: CSS2DObject[];
     /** One per interface instance, in the middle of its ports, and the items it is drawn with. */
@@ -390,7 +400,7 @@ export function setComponentPrices(prices: Readonly<Record<string, string>>): vo
 function refreshComponentCallouts(made: Callouts = callouts): void {
     for (const callout of made.components) {
         const price = callout.objectName !== undefined ? priceTexts[callout.objectName] : undefined;
-        const rows = componentRows(callout.name, price, labelChoices);
+        const rows = (callout.holds ? assemblyRows : componentRows)(callout.name, price, labelChoices);
         empty(callout.box);
         rows.forEach((row) => callout.box.appendChild(el('div', 'callout-line', row)));
         callout.object.visible = rows.length > 0;
@@ -1146,8 +1156,7 @@ function addCallouts(parent: THREE.Group, node: ShowNode, path: number[], made: 
  * whole tree has had its placements composed before this is called, and the
  * box is taken back out of them.
  */
-function addComponentCallout(node: ShowNode, drawn: THREE.Object3D, made: Callouts): void {
-    const box = new THREE.Box3().setFromObject(drawn);
+function addComponentCallout(node: ShowNode, drawn: THREE.Object3D, box: THREE.Box3, made: Callouts): void {
     if (box.isEmpty()) {
         return;
     }
@@ -1160,6 +1169,35 @@ function addComponentCallout(node: ShowNode, drawn: THREE.Object3D, made: Callou
         box: callout.box,
         name: componentName(node),
         objectName: node.name ?? undefined,
+        holds: false,
+    });
+}
+
+/**
+ * The callout of a node that holds others: its price, in the middle of
+ * everything inside it, for an assembly sold assembled (see 'assemblyRows').
+ *
+ * It has no shape of its own to be a child of, so it hangs from a group of its
+ * own under the node, registered under the node's item: the box that hides the
+ * sub-assembly hides its price, and the callout's own 'visible' stays
+ * 'refreshComponentCallouts''s to set.
+ */
+function addAssemblyCallout(node: ShowNode, path: number[], into: THREE.Group, box: THREE.Box3, made: Callouts): void {
+    if (box.isEmpty()) {
+        return;
+    }
+    const holder = new THREE.Group();
+    into.add(holder);
+    const callout = calloutObject('callout-component', []);
+    callout.object.position.copy(into.worldToLocal(box.getCenter(new THREE.Vector3())));
+    holder.add(callout.object);
+    drawnByItem(nodeId(path), holder);
+    made.components.push({
+        object: callout.object,
+        box: callout.box,
+        name: componentName(node),
+        objectName: node.name ?? undefined,
+        holds: true,
     });
 }
 
@@ -1639,12 +1677,31 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // Every placement composed once, so that each component's box below is
     // measured where the tree puts it and taken back out of it consistently.
     group.updateMatrixWorld(true);
+    // The box of what each node holds, on the stage: its own shape's and its
+    // children's, measured before any port is added under it. 'built' lists the
+    // children before the node that holds them, so one pass does it.
+    const held = new Map<string, THREE.Box3>();
+    for (const { node, path, drawn } of loaded.built) {
+        const box = drawn !== undefined ? new THREE.Box3().setFromObject(drawn) : new THREE.Box3();
+        (node.assembly ?? []).forEach((_child, index) => {
+            const inner = held.get([...path, index].join('.'));
+            if (inner !== undefined) {
+                box.union(inner);
+            }
+        });
+        held.set(path.join('.'), box);
+    }
     const made = noCallouts();
     for (const { node, path, group: into, drawn } of loaded.built) {
+        const box = held.get(path.join('.')) ?? new THREE.Box3();
         addPorts(into, node, path, size, sketches, boundaryMaterial, boundaryLineMaterial, made);
         addCallouts(into, node, path, made);
-        if (drawn !== undefined && isComponent(node)) {
-            addComponentCallout(node, drawn, made);
+        if (isComponent(node)) {
+            if (drawn !== undefined) {
+                addComponentCallout(node, drawn, box, made);
+            }
+        } else {
+            addAssemblyCallout(node, path, into, box, made);
         }
     }
     refreshComponentCallouts(made);

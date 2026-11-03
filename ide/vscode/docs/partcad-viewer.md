@@ -90,7 +90,10 @@ screen has at least one callout (`hasCallouts`), and keeps its state from one ob
 names**, **Component prices**, **Port names** and **Interface names**, the last two ticked from the start. A
 *component* is a node that holds no other node — a part, wherever it is placed (`isComponent`) — and its callout is
 one box pinned to the middle of its shape, with its name (`componentName`: the link's label, else the object without
-its package) over its price, each where its box is ticked; a component with nothing to say has no callout. A port's
+its package) over its price, each where its box is ticked; a component with nothing to say has no callout. An
+assembly sold assembled is the one node holding others with a callout of its own: it is priced as one thing to order
+and the parts inside it are not priced at all, so its price is pinned to the middle of everything it holds
+(`assemblyRows`), and an assembly with no price of its own says nothing. A port's
 name is pinned to the tip of its `+Z` axis, and an interface instance's in the middle of the ports it is made of, as
 the 2D tab's picture writes them; the two are told apart from a metadata callout by a bar in the blue and the violet
 that picture draws them in. **A callout belongs to what it is pinned to**: a component's is a child of its shape and

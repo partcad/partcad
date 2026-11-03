@@ -143,3 +143,23 @@ def test_the_callouts_are_drawn_on_a_layer_of_their_own(real_svg, tree):
 def test_the_renderer_and_the_core_name_the_callout_switches_alike(real_svg):
     for name in ("COMPONENT_NAMES_KEY", "COMPONENT_PRICES_KEY", "PORT_NAMES_KEY", "INTERFACE_NAMES_KEY"):
         assert getattr(real_svg, name) == getattr(render_overlay, name)
+
+
+def test_an_assembly_sold_assembled_gets_its_price_on_a_callout_of_its_own(real_svg, tree):
+    """It is one thing to order, and the parts inside it have no price of their own to show."""
+    request = {"shape_tree": tree, real_svg.COMPONENT_PRICES_KEY: {"//pkg:top": "$120.00"}}
+
+    found = real_svg._components(request)
+
+    # In the middle of everything it holds: the two cubes, 0 and 100 mm along X.
+    assert [rows for rows, _middle in found] == [["$120.00"]]
+    assert found[0][1] == pytest.approx((50, 0, 0), abs=1e-6)
+
+    # With the names asked for too, it is named over its price, and its parts by their names.
+    request[real_svg.COMPONENT_NAMES_KEY] = True
+    assert [rows for rows, _middle in real_svg._components(request)] == [["left"], ["right"], ["top", "$120.00"]]
+
+
+def test_an_assembly_nobody_priced_gets_no_callout_of_its_own(real_svg, tree):
+    request = {"shape_tree": tree, real_svg.COMPONENT_NAMES_KEY: True}
+    assert [rows for rows, _middle in real_svg._components(request)] == [["left"], ["right"]]

@@ -165,3 +165,22 @@ export function componentRows(
     }
     return rows;
 }
+
+/**
+ * The rows of the callout of a node that holds others, top first: none unless
+ * prices are asked for and it has one - an assembly sold assembled, which is
+ * priced as one thing to order while the parts inside it are not priced at all
+ * - and then its name where names are asked for, over its price. Without a
+ * price it has nothing of its own to say: its parts carry their names. The
+ * twin of what '_components' in 'render_svg.py' writes on the 2D tab's picture.
+ */
+export function assemblyRows(
+    name: string,
+    price: string | undefined,
+    choices: { componentNames: boolean; componentPrices: boolean },
+): string[] {
+    if (!choices.componentPrices || price === undefined) {
+        return [];
+    }
+    return choices.componentNames ? [name, price] : [price];
+}

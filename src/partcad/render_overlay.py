@@ -30,7 +30,9 @@ Beside them, the callouts: what the IDE's 3D and 2D tabs call "Component names",
 --with-component-names", "--with-component-prices", "--without-port-names" and
 "--without-interface-names" ask for. A component is a node of the tree that
 holds no other node - a part, wherever it is placed - and its callout is one box
-with a row for its name and a row for its price, pinned to the middle of it.
+with a row for its name and a row for its price, pinned to the middle of it. An
+assembly sold assembled is priced as one thing to order, so it gets a callout of
+its own with its price, and the parts inside it get none.
 The names of the ports and the interfaces are on by default, because they are
 what the two overlays above have always written beside what they draw; the two
 switches take them off a picture that has too many of them to read. None of the

@@ -533,13 +533,15 @@ function askPrices(): void {
     if (tabs.current !== 'design' || designTabs.current !== '3d' || requested.has('design')) {
         return;
     }
-    if (!shown.package || !PRICED_KINDS.includes(shown.kind ?? '')) {
-        labelBoxes3d.setNote('Only a part, an assembly or a scene is bought, so nothing here has a price.');
-        return;
-    }
+    // Another object's prices go first, whether or not this one has any: they
+    // are keyed by object, and nothing of the last object may be priced here.
     if (prices !== undefined && prices.object !== identify(shown)) {
         prices = undefined;
         scene?.setComponentPrices({});
+    }
+    if (!shown.package || !PRICED_KINDS.includes(shown.kind ?? '')) {
+        labelBoxes3d.setNote('Only a part, an assembly or a scene is bought, so nothing here has a price.');
+        return;
     }
     requested.add('design');
     labelBoxes3d.setNote('Asking the suppliers what each component costs…');

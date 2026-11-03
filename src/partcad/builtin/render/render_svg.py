@@ -383,6 +383,12 @@ def _components(request):
     nobody quoted is called by its name alone, and with no name asked for gets
     no callout at all.
 
+    An assembly sold assembled is priced as one thing to order, and the parts
+    inside it are not priced at all (see 'partcad.component_prices'). So a node
+    that holds others gets a callout of its own when it has a price, pinned to
+    the middle of everything inside it: its name where names are asked for,
+    over its price. Without a price it gets none - its parts carry their own.
+
     A component with nothing left to measure - a cut that missed it - has no
     middle to pin anything to, and is passed over.
     """
@@ -395,16 +401,22 @@ def _components(request):
 
     found = []
 
+    def united(boxes):
+        """The box holding every one of 'boxes', or None for none."""
+        boxes = [box for box in boxes if box is not None]
+        if not boxes:
+            return None
+        return [min(box[axis] for box in boxes) for axis in range(3)] + [
+            max(box[axis] for box in boxes) for axis in range(3, 6)
+        ]
+
+    def middle(box):
+        return tuple((box[axis] + box[axis + 3]) / 2 for axis in range(3))
+
     def walk(node, above):
+        """Add the callouts at and under 'node', and answer the box of what it holds, placed."""
+        price = prices.get(node.get("name"))
         if ocp_serialize.is_shape_object(node):
-            rows = []
-            if with_names:
-                rows.append(component_name(node))
-            price = prices.get(node.get("name"))
-            if price:
-                rows.append(str(price))
-            if not rows:
-                return
             shape = node[ocp_serialize.KEY_SHAPE]
             packed = node.get(ocp_serialize.KEY_LOCATION)
             if packed is not None:
@@ -414,16 +426,20 @@ def _components(request):
             try:
                 box = shape_measure.bbox(shape)
             except Exception as e:
-                sys.stderr.write("Skipping the callout on %s: %s\n" % (rows[0], e))
-                return
-            if box is None:
-                return
-            found.append((rows, tuple((box[axis] + box[axis + 3]) / 2 for axis in range(3))))
-        elif ocp_serialize.is_assembly_object(node):
+                sys.stderr.write("Skipping the callout on %s: %s\n" % (component_name(node), e))
+                return None
+            rows = ([component_name(node)] if with_names else []) + ([str(price)] if price else [])
+            if rows and box is not None:
+                found.append((rows, middle(box)))
+            return box
+        if ocp_serialize.is_assembly_object(node):
             location = node.get(ocp_serialize.KEY_LOCATION)
             inner = above + [location] if location is not None else above
-            for child in node[ocp_serialize.KEY_ASSEMBLY]:
-                walk(child, inner)
+            box = united([walk(child, inner) for child in node[ocp_serialize.KEY_ASSEMBLY]])
+            if price and box is not None:
+                found.append((([component_name(node)] if with_names else []) + [str(price)], middle(box)))
+            return box
+        return None
 
     walk(tree, [])
     return found
