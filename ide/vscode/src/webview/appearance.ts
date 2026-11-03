@@ -25,6 +25,14 @@
 // material keeps the node's colour, which is every primitive of every part that
 // does not colour its faces.
 //
+// A shape may also say it is one-sided: 'properties: oneSided: true', which is
+// what a wall reports (see 'src/partcad/part_factory_wall.py'). It is then drawn
+// from the front of its faces only - the side their normals point to - and from
+// behind it is not there at all, which is how a room seen from outside is seen
+// into through its near walls. Inherited the way a colour is, and independently
+// of it: a wall that states no colour is still one-sided, and a scene that
+// colours its walls does not make them two-sided.
+//
 // A shape that nothing above it colours is the common case, and it is drawn in
 // goldenrod: the colour OCCT draws a shape nobody coloured in
 // ('Quantity_NOC_GOLDENROD'), which is what anybody who has looked at a solid in
@@ -53,6 +61,12 @@ export interface Appearance {
     readonly color: number;
     /** How opaque, from 1 for solid down to 0: the "AA" of "#RRGGBBAA", over 255. */
     readonly opacity: number;
+    /**
+     * Drawn from the front of its faces only, and see-through from behind: what a
+     * shape stating 'oneSided: true' is drawn as. Absent for every other shape,
+     * which is drawn from both sides as it always was.
+     */
+    readonly oneSided?: true;
 }
 
 /**
@@ -102,9 +116,20 @@ export function parseColor(text: unknown): Appearance | undefined {
     };
 }
 
-/** What this node itself says it looks like, or undefined if it says nothing usable. */
+/** What colour this node itself says it is, or undefined if it says nothing usable. */
 export function statedAppearance(node: ShowNode): Appearance | undefined {
     return parseColor(node.properties?.color);
+}
+
+/**
+ * Whether this node itself says it is one-sided, or undefined if it says nothing.
+ *
+ * A boolean or nothing: anything else a node's 'oneSided' holds is not a statement
+ * about how it is drawn, and it is drawn as if it had stated nothing.
+ */
+export function statedOneSided(node: ShowNode): boolean | undefined {
+    const value = node.properties?.oneSided;
+    return typeof value === 'boolean' ? value : undefined;
 }
 
 /**
@@ -113,10 +138,20 @@ export function statedAppearance(node: ShowNode): Appearance | undefined {
  *
  * The tree is walked from the root down, each node handing its own answer to its
  * children as 'inherited', so a colour stated by an assembly reaches every part in
- * it that does not state one of its own, however deep.
+ * it that does not state one of its own, however deep. Whether it is one-sided is
+ * inherited the same way and on its own: the colour of one node and the sides of
+ * another make the appearance of a node under both.
  */
 export function appearanceOf(node: ShowNode, inherited: Appearance = DEFAULT_APPEARANCE): Appearance {
-    return statedAppearance(node) ?? inherited;
+    const stated = statedAppearance(node);
+    const oneSided = statedOneSided(node) ?? inherited.oneSided === true;
+    const color = stated ?? inherited;
+    if (oneSided === (color.oneSided === true)) {
+        return color;
+    }
+    return oneSided
+        ? { color: color.color, opacity: color.opacity, oneSided: true }
+        : { color: color.color, opacity: color.opacity };
 }
 
 /**
@@ -150,9 +185,17 @@ export function ownAppearance(
     return { color: color.getHex(THREE.SRGBColorSpace), opacity: material.transparent ? material.opacity : 1 };
 }
 
-/** What a primitive is drawn as: its own colour where it brought one, else the colour of the node holding it. */
+/**
+ * What a primitive is drawn as: its own colour where it brought one, else the colour of the node holding it.
+ *
+ * Its own colour is only a colour: whether it is one-sided is still its node's, so
+ * a wall whose CMF colours one face differently is a wall all the same.
+ */
 export function primitiveAppearance(own: Appearance | undefined, node: Appearance): Appearance {
-    return own ?? node;
+    if (own === undefined) {
+        return node;
+    }
+    return node.oneSided ? { color: own.color, opacity: own.opacity, oneSided: true } : own;
 }
 
 /**
@@ -160,11 +203,13 @@ export function primitiveAppearance(own: Appearance | undefined, node: Appearanc
  *
  * "daa520ff" for the default. A part stating "#DAA520" is therefore the same key as
  * a part stating nothing, and is drawn with the same material - the two look the
- * same, so they should cost the same.
+ * same, so they should cost the same. A one-sided shape is drawn with a material of
+ * its own, which culls the backs of faces, so its key says so: "daa520ff/front".
  */
 export function appearanceKey(appearance: Appearance): string {
     const alpha = Math.round(Math.min(1, Math.max(0, appearance.opacity)) * 255);
-    return appearance.color.toString(16).padStart(6, '0') + alpha.toString(16).padStart(2, '0');
+    const key = appearance.color.toString(16).padStart(6, '0') + alpha.toString(16).padStart(2, '0');
+    return appearance.oneSided ? key + '/front' : key;
 }
 
 /**

@@ -125,6 +125,9 @@ aws = {file = ["requirements-aws.txt"]}
 "partcad.builtin.scene" = ["*.assy", "*.yaml"]
 # And the colour PartCAD writes references to: a declaration and nothing else.
 "partcad.builtin.color" = ["*.yaml"]
+# And the wall and the room a space is laid out with, declared over the types
+# PartCAD implements. Nothing but the declaration to ship.
+"partcad.builtin.building" = ["*.yaml"]
 "partcad.template" = ["*.yaml"]
 # The AI agent skills and the Claude plugin manifest `pc init` installs into a
 # repository (see `src/partcad/ai_agents/__init__.py`). They are data rather

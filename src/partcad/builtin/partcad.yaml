@@ -12,12 +12,15 @@
 #   - `//builtin/open` -- the applications `pc ide open` launches.
 #   - `//builtin/cam` -- the machine programs `pc cam` writes.
 #
-# And two that declare objects rather than ways of producing one:
+# And three that declare objects rather than ways of producing them:
 #
 #   - `//builtin/scene` -- the empty world a `simulate:` places its subject in
 #     when it names no scene of its own.
 #   - `//builtin/color` -- the display-only colour `rgba`, which PartCAD writes
 #     for a colour nothing declares (see `partcad.cmf.RGBA`).
+#   - `//builtin/building` -- what a space is laid out with: `wall`, a
+#     one-sided surface, and `room`, the walls standing on the outline of a
+#     sketch. Neither is manufacturable.
 #
 # There is deliberately no `//builtin/simulate`. A simulator is somebody's
 # program with a release cycle of its own, so PartCAD ships the concept -- the
@@ -39,9 +42,10 @@ desc: |
   files, declared in `//builtin/export`, `//builtin/render` and `//builtin/cam`,
   the formats it reads in `//builtin/import`, the applications it opens in
   `//builtin/open`, the scene a simulation places its subject in, in
-  `//builtin/scene`, and the display-only colour 'rgba', in `//builtin/color`.
+  `//builtin/scene`, the display-only colour 'rgba', in `//builtin/color`, and
+  the walls and rooms a space is laid out with, in `//builtin/building`.
 
-# Only three of the seven children are listed. Every `//builtin/*` package is
+# Only three of the eight children are listed. Every `//builtin/*` package is
 # reachable by path whatever this says -- `output.BUILTIN_PATHS` maps each one
 # to a directory inside the installation and `Context._get_builtin_project()`
 # loads it straight from there, so that they resolve in a context whose root

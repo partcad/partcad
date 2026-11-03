@@ -29,9 +29,15 @@ webview and cannot import Python, so it keeps a copy of DEFAULT_COLOR in
 'ide/vscode/src/webview/appearance.ts', and a test holds the two to the same
 colour.
 
-Everything here but 'split_by_color' is plain Python, and that one reaches OCP
-only through 'ocp_serialize' and only when it is called, so reading a colour
-does not load the kernel.
+A shape may also say it is one-sided (``properties: oneSided: true``, what a
+wall reports): drawn from the front of its faces only, and see-through from
+behind. Every drawing from a viewpoint takes the faces of such a shape that
+turn their backs on the camera out before it projects ('split_for_view'), which
+is how a room drawn from outside is drawn into through its near walls.
+
+Everything here but 'split_by_color' and 'split_for_view' is plain Python, and
+those reach OCP only when they are called - the first only through
+'ocp_serialize' - so reading a colour does not load the kernel.
 """
 
 import string
@@ -53,6 +59,17 @@ DEFAULT_COLOR = "#DAA520"
 # names the same key 'PROPERTIES_KEY' for the same reason).
 PROPERTIES_KEY = "properties"
 COLOR_KEY = "color"
+# A shape drawn from the front of its faces only, and see-through from behind:
+# what a wall reports (see 'partcad.part_factory_wall', which names the same key
+# 'ONE_SIDED_KEY', and the IDE's 'appearance.ts', which draws it the same way).
+# Inherited down the tree like a colour, and independently of one.
+ONE_SIDED_KEY = "oneSided"
+
+# How far a face of a one-sided shape may turn away from the camera and still be
+# drawn, as the cosine of the angle past edge-on: nought, give or take the
+# arithmetic. A face seen exactly edge-on - every wall of a room seen from
+# straight above - is kept, because that is what a floor plan is drawn with.
+EDGE_ON = 1e-9
 
 
 def parse(text):
@@ -216,6 +233,249 @@ def colors_of(tree, warnings=None, memo=None):
 
     walk(tree, DEFAULT_COLOR)
     return found
+
+
+def _stated_one_sided(node):
+    """Whether 'node' says it is one-sided: True, False, or None for a node that says nothing."""
+    if not isinstance(node, dict):
+        return None
+    properties = node.get(PROPERTIES_KEY)
+    if not isinstance(properties, dict):
+        return None
+    value = properties.get(ONE_SIDED_KEY)
+    return value if isinstance(value, bool) else None
+
+
+def has_one_sided(tree):
+    """Whether any shape in 'tree' is drawn one-sided, read off what the nodes say."""
+
+    def walk(node, inherited):
+        stated = _stated_one_sided(node)
+        one_sided = inherited if stated is None else stated
+        if ocp_serialize.is_shape_object(node):
+            return one_sided
+        if ocp_serialize.is_assembly_object(node):
+            return any(walk(child, one_sided) for child in node[ocp_serialize.KEY_ASSEMBLY])
+        return False
+
+    return walk(tree, False)
+
+
+def _placed_leaves(tree, memo):
+    """Every piece of 'tree' a drawing draws, as '(colour, one_sided, shape)', placed where it is in the whole.
+
+    A piece is a shape node's geometry, or - where its CMF section colours its
+    faces one by one - the faces of it in one colour ('_pieces'), exactly as
+    'split_by_color' gathers them. Each placed by its node's own location and
+    every location above it, innermost first - which is what placing the
+    compound of a node's children at the node's location does to each of them -
+    so the pieces are the very shapes the whole was built of, placed the same
+    way. Nothing is decoded again.
+    """
+    leaves = []
+
+    def placed(shape, packed):
+        if packed is None:
+            return shape
+        return shape.Located(ocp_serialize.toploc_from_packed(packed))
+
+    def walk(node, color, one_sided, above):
+        color = _own(node, None) or color
+        stated = _stated_one_sided(node)
+        one_sided = one_sided if stated is None else stated
+        if ocp_serialize.is_shape_object(node):
+            for face_color, piece in _pieces(node, color, memo):
+                shape = placed(piece, node.get(ocp_serialize.KEY_LOCATION))
+                for packed in reversed(above):
+                    shape = shape.Moved(ocp_serialize.toploc_from_packed(packed))
+                leaves.append((face_color, one_sided, shape))
+        elif ocp_serialize.is_assembly_object(node):
+            location = node.get(ocp_serialize.KEY_LOCATION)
+            inner = above + [location] if location is not None else above
+            for child in node[ocp_serialize.KEY_ASSEMBLY]:
+                walk(child, color, one_sided, inner)
+
+    walk(tree, DEFAULT_COLOR, False, [])
+    return leaves
+
+
+def _faces(shape):
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    found = []
+    explorer = TopExp_Explorer(shape, TopAbs_FACE)
+    while explorer.More():
+        found.append(TopoDS.Face_s(explorer.Current()))
+        explorer.Next()
+    return found
+
+
+def _facing(face, towards):
+    """How much 'face' faces the camera: its normal, the way the face is oriented, dotted with 'towards'.
+
+    'towards' points from what is drawn back at the camera. Taken at the middle
+    of the face's parameters, which may be in a hole of it and need not be: the
+    surface is there either way, and the faces this is asked of - a plane, or a
+    piece of a cylinder no wider than half of it (see '_silhouette_pieces') -
+    look one way all over.
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepTools import BRepTools
+    from OCP.gp import gp_Pnt, gp_Vec
+    from OCP.TopAbs import TopAbs_REVERSED
+
+    u_min, u_max, v_min, v_max = BRepTools.UVBounds_s(face)
+    point = gp_Pnt()
+    du = gp_Vec()
+    dv = gp_Vec()
+    BRepAdaptor_Surface(face).D1((u_min + u_max) / 2.0, (v_min + v_max) / 2.0, point, du, dv)
+    normal = du.Crossed(dv)
+    if normal.Magnitude() == 0.0:
+        return 0.0
+    normal.Normalize()
+    if face.Orientation() == TopAbs_REVERSED:
+        normal.Reverse()
+    return normal.Dot(towards)
+
+
+def _silhouette_pieces(face, towards):
+    """A cylindrical 'face' cut along the lines where the camera sees it edge-on, as a list of faces.
+
+    Those lines are where its normal is square to the line of sight: the two
+    generators the plane through the axis, square to the line of sight, cuts the
+    cylinder along. Each piece between them faces the camera all over or faces
+    away all over, so it is drawn whole or not at all - and a cut there adds no
+    line to the drawing, because the hidden-line algorithm draws the silhouette
+    exactly there anyway. A face that is not part of a cylinder, or one looked
+    at along its axis (every point of it edge-on), is its own one piece.
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Splitter
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.GeomAbs import GeomAbs_Cylinder
+    from OCP.gp import gp_Dir, gp_Pln, gp_Vec
+    from OCP.TopTools import TopTools_ListOfShape
+
+    surface = BRepAdaptor_Surface(face)
+    if surface.GetType() != GeomAbs_Cylinder:
+        return [face]
+    axis = surface.Cylinder().Axis()
+    along = gp_Vec(axis.Direction())
+    across = towards - along * towards.Dot(along)
+    if across.Magnitude() <= EDGE_ON:
+        return [face]
+    # Big enough to cut the face from one end to the other, whatever its size.
+    size = 10.0 * (surface.Cylinder().Radius() + abs(surface.LastVParameter() - surface.FirstVParameter()) + 1.0)
+    location = axis.Location().Translated(along * ((surface.FirstVParameter() + surface.LastVParameter()) / 2.0))
+    cutter = BRepBuilderAPI_MakeFace(gp_Pln(location, gp_Dir(across)), -size, size, -size, size).Face()
+    arguments = TopTools_ListOfShape()
+    arguments.Append(face)
+    tools = TopTools_ListOfShape()
+    tools.Append(cutter)
+    splitter = BRepAlgoAPI_Splitter()
+    splitter.SetArguments(arguments)
+    splitter.SetTools(tools)
+    splitter.Build()
+    if not splitter.IsDone():
+        return [face]
+    pieces = _faces(splitter.Shape())
+    return pieces or [face]
+
+
+def without_backs(shape, origin):
+    """'shape' with every face that turns its back on a camera looking from 'origin' taken out.
+
+    What drawing a one-sided shape from 'origin' means: the faces whose fronts
+    the camera sees, and those it sees edge-on - a wall seen from directly above
+    is its plan - are drawn, and the ones it sees from behind are not there at
+    all. The drawing is orthographic, so 'origin' is a direction (see
+    'render_svg.LOOK_AT') and every face is judged against the same one. A
+    curved face is cut where it turns away first (see '_silhouette_pieces'), so
+    the near half of a round wall goes and the far half stays.
+    """
+    from OCP.gp import gp_Vec
+
+    towards = gp_Vec(*[float(component) for component in origin])
+    if towards.Magnitude() == 0.0:
+        return shape
+    towards.Normalize()
+    kept = []
+    for face in _faces(shape):
+        for piece in _silhouette_pieces(face, towards):
+            if _facing(piece, towards) >= -EDGE_ON:
+                kept.append(piece)
+    return ocp_serialize.compound_of(kept)
+
+
+def split_for_view(tree, whole, origin, warnings=None):
+    """'(whole, groups)' to draw 'tree' from 'origin': 'split_by_color' with the backs of one-sided shapes taken out.
+
+    A tree with nothing one-sided in it - every tree but a room - is drawn
+    exactly as 'split_by_color' splits it, 'whole' and all, edge for edge. One
+    that has a one-sided shape is gathered a leaf at a time, each leaf placed as
+    it is in 'whole'; a one-sided leaf loses the faces the camera would see from
+    behind ('without_backs'), and 'whole' is made again of what is left, so that
+    what hides what is decided on what is drawn.
+
+    A drawing in which nothing is left - a lone wall looked at from behind - is
+    an error that says so, rather than an empty page or a complaint about having
+    nothing to export: what was asked for is a view from the side the shape is
+    not seen from.
+    """
+    if not has_one_sided(tree):
+        return whole, split_by_color(tree, whole, warnings)
+    memo = {}
+    colors = colors_of(tree, warnings, memo)
+    leaves = {color: [] for color in colors}
+    drawn = []
+    culled = False
+    for color, one_sided, shape in _placed_leaves(tree, memo):
+        if one_sided:
+            kept = without_backs(shape, origin)
+            culled = culled or len(_faces(kept)) < len(_faces(shape))
+            shape = kept
+        # 'setdefault', as in 'split_by_color': a section written for other
+        # geometry is ignored, and the node's own colour is then one
+        # 'colors_of' may not have met.
+        leaves.setdefault(color, []).append(shape)
+        drawn.append(shape)
+    if culled and not any(_has_geometry(shape) for shape in drawn):
+        raise ValueError(
+            "nothing faces the camera: everything in the drawing is one-sided and is seen from behind, where it "
+            "is see-through. Look at it from the other side - a wall faces -Y, which '--view front' looks along"
+        )
+    groups = [(color, ocp_serialize.compound_of(shapes)) for color, shapes in leaves.items() if shapes]
+    return ocp_serialize.compound_of(drawn), groups
+
+
+def split_by_sides(tree, whole, warnings=None):
+    """'[(colour, one_sided, shape), ...]': 'split_by_color' with whether each group is drawn one-sided.
+
+    For a drawing that decides what faces the camera itself, picture by
+    picture - the shaded picture, and every frame of a video, which turns the
+    object between frames - rather than once, as a projection does
+    ('split_for_view'). A tree with nothing one-sided in it is 'split_by_color'
+    exactly, each group two-sided; one that has is gathered a piece at a time,
+    by colour and by side.
+    """
+    if not has_one_sided(tree):
+        return [(color, False, shape) for color, shape in split_by_color(tree, whole, warnings)]
+    memo = {}
+    colors_of(tree, warnings, memo)
+    groups = {}
+    for color, one_sided, shape in _placed_leaves(tree, memo):
+        groups.setdefault((color, bool(one_sided)), []).append(shape)
+    return [(color, one_sided, ocp_serialize.compound_of(shapes)) for (color, one_sided), shapes in groups.items()]
+
+
+def _has_geometry(shape):
+    """Whether 'shape' holds anything a drawing could draw: a face, or an edge."""
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp_Explorer
+
+    return TopExp_Explorer(shape, TopAbs_EDGE).More()
 
 
 def split_by_color(tree, whole, warnings=None):

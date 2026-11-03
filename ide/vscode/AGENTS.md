@@ -497,6 +497,13 @@ Four things about it are load-bearing:
   and it is lit by a light probe of three's `RoomEnvironment` (`ROOM_LIGHT`) rather than by
   `scene.environment`, because three's WebGL renderer lights a Phong material with an environment and its
   WebGPU renderer only reflects it -- the same model was half as bright under WebGPU.
+- **A shape that states `oneSided: true` is drawn from the front of its faces only.** That is what a wall
+  reports (`src/partcad/surface.py`), and it is the whole of what a wall is for: from outside a room, its near
+  walls are looked through. `appearance.ts` reads it beside the colour and hands it down the tree the same
+  way and independently of it, and `Geometry.faceMaterial` gives such a shape a material of its own with
+  `side: FrontSide` whatever the show draws everything else with -- a key of its own too (`/front`), so a
+  wall never shares a material with a two-sided shape of its colour. Which side is the front is the
+  triangles' winding, and the glTF PartCAD sends winds every triangle the way its face's normal points.
 - **Nothing is escaped on its way into a pane.** What the tabs display is text out of a package's
   configuration -- a description, a part name, a supplier's answer, the name of a port -- so every pane builds
   its DOM node by node through `src/webview/dom.ts` rather than assigning `innerHTML`. `textContent` cannot be

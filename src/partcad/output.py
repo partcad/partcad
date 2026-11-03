@@ -206,6 +206,12 @@ BUILTIN_SCENE_PACKAGE = "//builtin/scene"
 # CSS colour, or of a source's colour nothing claims (see 'cmf.RGBA'). PartCAD
 # writes references to it, so it ships with PartCAD rather than in the index.
 BUILTIN_COLOR_PACKAGE = "//builtin/color"
+# And what a room is drawn with when a space is laid out rather than made -
+# 'wall', a one-sided surface, and 'room', the walls standing on the outline of
+# a sketch. Both are built by types PartCAD implements ('wall' and 'walls'), so
+# like the scene above they cost nothing to ship and depend on nothing but the
+# CAD kernel every sandbox has.
+BUILTIN_BUILDING_PACKAGE = "//builtin/building"
 BUILTIN_ROOT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin")
 BUILTIN_PATHS = {
     BUILTIN_ROOT_PACKAGE: BUILTIN_ROOT_PATH,
@@ -216,6 +222,7 @@ BUILTIN_PATHS = {
     BUILTIN_PACKAGES[CAM]: os.path.join(BUILTIN_ROOT_PATH, CAM),
     BUILTIN_SCENE_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "scene"),
     BUILTIN_COLOR_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "color"),
+    BUILTIN_BUILDING_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "building"),
 }
 
 # File types declared in a 'render:' section like any other, but which no

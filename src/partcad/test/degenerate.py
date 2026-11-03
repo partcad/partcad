@@ -4,6 +4,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from .. import surface as pc_surface
 from ..assembly import Assembly
 from ..sketch import Sketch
 from .test import Test
@@ -36,8 +37,10 @@ class DegenerateTest(Test):
     about itself, and a check an object can exclude itself from is a check that
     reports on the objects that did not need checking. A kind of object that is
     flat by nature is passed over here, on what it *is* rather than on what it
-    asks for: that is what the two clauses below do for a sketch and for an
-    assembly.
+    asks for: that is what the clauses below do for a sketch, for an assembly,
+    and for a part whose type builds a surface on purpose - a straight wall is
+    as flat as a sheet of paper, because that is what it is (see
+    'partcad.surface').
     """
 
     def __init__(self) -> None:
@@ -48,7 +51,9 @@ class DegenerateTest(Test):
             return "a sketch is flat by definition"
         if isinstance(shape, Assembly):
             return "an assembly is checked through its parts, each of which is tested in its own right"
-        return None
+        # A part that is a surface by its type - a wall - is one on purpose, and
+        # is passed over on what it is, the way a sketch is: see 'partcad.surface'.
+        return pc_surface.not_a_body(shape)
 
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         # A sketch is flat because that is what a sketch is. Measuring one
@@ -61,6 +66,10 @@ class DegenerateTest(Test):
         # An assembly is checked through its parts, each of which is tested in
         # its own right; an assembly's own box says nothing about them.
         if isinstance(shape, Assembly):
+            return self.not_applicable(shape, self.inapplicable(shape))
+
+        # A wall is a skin with no body to it, by its type: see 'partcad.surface'.
+        if pc_surface.is_surface(shape):
             return self.not_applicable(shape, self.inapplicable(shape))
 
         try:
