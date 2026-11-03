@@ -15,8 +15,16 @@
 
 import * as assert from 'assert';
 
-import { calloutsOf, hasCallouts } from '../../webview/callouts';
+import {
+    assemblyRows,
+    calloutsOf,
+    componentName,
+    componentRows,
+    hasCallouts,
+    isComponent,
+} from '../../webview/callouts';
 import { ShowNode } from '../../webview/messages';
+import { formatPrice } from '../../webview/supply';
 
 /** The node the sheet metal example's drawing arrives as, as far as this reads it. */
 function bends(): ShowNode {
@@ -131,5 +139,68 @@ suite('The callouts a node pins to its elements', () => {
     test('an assembly offers it when any part it holds has something to pin', () => {
         const assembly: ShowNode = { name: 'bracket-assembly', assembly: [{ name: 'bolt' }, bends()] };
         assert.strictEqual(hasCallouts(assembly), true);
+    });
+});
+
+// What the "Component names" and "Component prices" boxes put on a component:
+// one callout, its name over its price. The name is the 2D tab's too - see
+// 'component_name' in 'render_svg.py', whose test pins the same two cases.
+suite('What a component callout says', () => {
+    test('a component is named by its link, and otherwise by its object without the package', () => {
+        assert.strictEqual(componentName({ name: '//pkg:cube', label: 'left' }), 'left');
+        assert.strictEqual(componentName({ name: '//pub/robotics:bolt', label: null }), 'bolt');
+        assert.strictEqual(componentName({ name: 'bare' }), 'bare');
+    });
+
+    test('a component is a node that holds no other', () => {
+        assert.strictEqual(isComponent({ name: '//pkg:bolt' }), true);
+        assert.strictEqual(isComponent({ name: '//pkg:top', assembly: [{ name: '//pkg:bolt' }] }), false);
+    });
+
+    test('the name is over the price, each where its box is ticked', () => {
+        const both = { componentNames: true, componentPrices: true };
+        assert.deepStrictEqual(componentRows('bolt', '$0.25', both), ['bolt', '$0.25']);
+        assert.deepStrictEqual(componentRows('bolt', '$0.25', { ...both, componentPrices: false }), ['bolt']);
+        assert.deepStrictEqual(componentRows('bolt', '$0.25', { ...both, componentNames: false }), ['$0.25']);
+    });
+
+    test('a component nobody quoted has no price row, and with only prices asked no callout', () => {
+        assert.deepStrictEqual(componentRows('bolt', undefined, { componentNames: true, componentPrices: true }), [
+            'bolt',
+        ]);
+        assert.deepStrictEqual(componentRows('bolt', undefined, { componentNames: false, componentPrices: true }), []);
+    });
+});
+
+// An assembly sold assembled is one thing to order: its price goes on a callout
+// of its own, and the parts inside it have none. Pinned on the 2D tab's picture
+// by '_components' in 'render_svg.py', which test_render_callouts.py holds to
+// the same rows.
+suite('What the callout of an assembly says', () => {
+    const both = { componentNames: true, componentPrices: true };
+
+    test('an assembly sold assembled is named over its price', () => {
+        assert.deepStrictEqual(assemblyRows('gearbox', '$120.00', both), ['gearbox', '$120.00']);
+        assert.deepStrictEqual(assemblyRows('gearbox', '$120.00', { ...both, componentNames: false }), ['$120.00']);
+    });
+
+    test('an assembly with no price of its own says nothing: its parts carry their names', () => {
+        assert.deepStrictEqual(assemblyRows('frame', undefined, both), []);
+        assert.deepStrictEqual(assemblyRows('gearbox', '$120.00', { ...both, componentPrices: false }), []);
+    });
+});
+
+// What a price is written as on screen: a component's callout and the Buy tab
+// both write it through 'formatPrice', and the 2D tab's picture writes it the
+// same way ('price_label' in 'render_overlay.py').
+suite('How a price is written on screen', () => {
+    test('dollars are written as dollars, whatever the locale', () => {
+        assert.strictEqual(formatPrice(0.4, 'USD'), '$0.40');
+        assert.strictEqual(formatPrice(1234.5, 'usd'), '$1,234.50');
+    });
+
+    test('a price nobody said the currency of is a number', () => {
+        assert.strictEqual(formatPrice(2, null), '2.00');
+        assert.strictEqual(formatPrice(undefined, 'USD'), '');
     });
 });

@@ -74,7 +74,7 @@ import {
     ownAppearance,
     primitiveAppearance,
 } from './appearance';
-import { calloutsOf } from './callouts';
+import { assemblyRows, calloutsOf, componentName, componentRows, isComponent } from './callouts';
 import {
     SceneFrame,
     enclosingRadius,
@@ -84,12 +84,25 @@ import {
     placeCamera as aimCamera,
     readViewpoint,
 } from './cameraView';
-import { el } from './dom';
+import { el, empty } from './dom';
 import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
 import { GeometryCache, geometryCache } from './geometryCache';
 import { geometryMissing, reportError } from './host';
 import { ShowMessage, ShowNode } from './messages';
-import { ItemId, PORT_COLOR, PORT_OPACITY, flickerOn, nodeId, portId, totalSize } from './nodes';
+import { LABEL_DEFAULTS, LabelChoices } from './labels';
+import {
+    ItemId,
+    PORT_COLOR,
+    PORT_OPACITY,
+    flickerOn,
+    groupPorts,
+    interfaceId,
+    interfaceLabel,
+    nodeId,
+    portId,
+    portLabel,
+    totalSize,
+} from './nodes';
 import { Bounds } from './section';
 import { Navigable, onScreen, spaceMouse } from './spacemouse';
 import {
@@ -302,15 +315,136 @@ if (software) {
 }
 
 /**
+ * The callouts one show pinned to the model, by the box that switches them.
+ *
+ * Every one is a child of what it is about - a component's of its geometry, a
+ * port's of its triad, an element's of its node - so the tree's boxes, which
+ * switch those on and off, take the callout with them: three's 'CSS2DRenderer'
+ * hides a callout under anything hidden. What is left to these switches is a
+ * callout's own 'visible', which nothing else touches. An interface's is the
+ * exception, being on the node rather than on any one port: see
+ * 'refreshInterfaceCallouts'.
+ *
+ * Made per show and put in place only once the show is ('showGeometry'), so that
+ * a box changed while a show is still decoding applies to what is on screen.
+ */
+interface Callouts {
+    /** What a shape's metadata says about its elements: the Metadata box. */
+    metadata: CSS2DObject[];
+    /**
+     * One per component, its rows written by 'refreshComponentCallouts' - and one
+     * per node that holds others ('holds'), which writes something only when it
+     * is priced as a whole (see 'assemblyRows').
+     */
+    components: {
+        object: CSS2DObject;
+        box: HTMLElement;
+        name: string;
+        objectName: string | undefined;
+        holds: boolean;
+    }[];
+    /** One per port, at the tip of its +Z axis. */
+    ports: CSS2DObject[];
+    /** One per interface instance, in the middle of its ports, and the items it is drawn with. */
+    interfaces: { object: CSS2DObject; item: ItemId; ports: ItemId[] }[];
+}
+
+function noCallouts(): Callouts {
+    return { metadata: [], components: [], ports: [], interfaces: [] };
+}
+
+let callouts: Callouts = noCallouts();
+
+/** What the Metadata box says; kept across shows. */
+let showMetadata = true;
+
+/** What the callout boxes under the tree say ('labels.ts'); kept across shows. */
+let labelChoices: LabelChoices = { ...LABEL_DEFAULTS };
+
+/** The price of each component, as text, by the object it is ('<package>:<name>'). */
+let priceTexts: Readonly<Record<string, string>> = {};
+
+/**
  * Whether what a shape's metadata says about its elements is pinned to them.
  *
- * The "Show metadata" box. One switch over the whole layer rather than a flag per
- * callout, so that it holds for every show that follows without each of them
- * having to be told.
+ * The "Metadata" box. Held here rather than set on each callout once, so that it
+ * holds for every show that follows without each of them having to be told.
  */
 export function setShowMetadata(enabled: boolean): void {
-    labelRenderer.domElement.style.display = enabled ? '' : 'none';
+    showMetadata = enabled;
+    callouts.metadata.forEach((object) => (object.visible = enabled));
     invalidate();
+}
+
+/** What the callout boxes say: which of the four kinds of callout are written. */
+export function setLabels(choices: LabelChoices): void {
+    labelChoices = { ...choices };
+    refreshComponentCallouts();
+    callouts.ports.forEach((object) => (object.visible = labelChoices.portNames));
+    refreshInterfaceCallouts();
+    invalidate();
+}
+
+/**
+ * What each component costs, as the text its callout writes, by the object it
+ * is - or nothing, while it is being asked and when nobody quoted it. Kept for
+ * the shows that follow, which are told it as they are drawn.
+ */
+export function setComponentPrices(prices: Readonly<Record<string, string>>): void {
+    priceTexts = { ...prices };
+    refreshComponentCallouts();
+    invalidate();
+}
+
+/** Write every component's callout over, as the boxes and the prices now say; none where it has nothing to say. */
+function refreshComponentCallouts(made: Callouts = callouts): void {
+    for (const callout of made.components) {
+        const price = callout.objectName !== undefined ? priceTexts[callout.objectName] : undefined;
+        const rows = (callout.holds ? assemblyRows : componentRows)(callout.name, price, labelChoices);
+        empty(callout.box);
+        rows.forEach((row) => callout.box.appendChild(el('div', 'callout-line', row)));
+        callout.object.visible = rows.length > 0;
+    }
+}
+
+/** Whether the tree draws an item. */
+function itemShown(id: ItemId): boolean {
+    return visibleItems === undefined || visibleItems.has(id);
+}
+
+/**
+ * Show each interface's name where the tree draws that interface and at least
+ * one of its ports: the name is pinned in the middle of the ports, which are
+ * the only thing of it that is drawn, so with none of them drawn it would name
+ * nothing - which is also what the 2D tab's picture does, writing an interface's
+ * name only beside ports it draws.
+ */
+function refreshInterfaceCallouts(made: Callouts = callouts): void {
+    for (const callout of made.interfaces) {
+        callout.object.visible =
+            labelChoices.interfaceNames && itemShown(callout.item) && callout.ports.some(itemShown);
+    }
+}
+
+/**
+ * One callout: rows of text in a box, pinned by its bottom-left corner - where
+ * its leader line starts - so the text sits above and to the right of what it
+ * is about rather than over it. Built node by node through 'dom.ts': what it
+ * says is text out of a package, and must not become markup.
+ */
+function calloutObject(kind: string, rows: string[], title?: string): { object: CSS2DObject; box: HTMLElement } {
+    const box = el('div', 'callout-box');
+    if (title !== undefined) {
+        box.appendChild(el('div', 'callout-title', title));
+    }
+    for (const row of rows) {
+        box.appendChild(el('div', 'callout-line', row));
+    }
+    const element = el('div', `callout ${kind}`);
+    element.appendChild(box);
+    const object = new CSS2DObject(element);
+    object.center.set(0, 1);
+    return { object, box };
 }
 
 /** Everything the current show put on the stage; replaced wholesale by the next. */
@@ -496,6 +630,7 @@ export function showItems(visible: ReadonlySet<string>): void {
             object.visible = visible.has(id);
         }
     }
+    refreshInterfaceCallouts();
     invalidate();
 }
 
@@ -694,6 +829,7 @@ export function clearGeometry(): void {
     shownCut = false;
     fitting = undefined;
     drawnBy.clear();
+    callouts = noCallouts();
     visibleItems = undefined;
     flickering = undefined;
     dropProxies();
@@ -897,6 +1033,7 @@ function addPorts(
     sketches: Map<string, THREE.Group>,
     material: THREE.Material,
     lineMaterial: THREE.Material,
+    made: Callouts,
 ): void {
     const ports = node.ports ?? [];
     if (ports.length === 0) {
@@ -905,6 +1042,28 @@ function addPorts(
 
     const frame = transformed(TO_GLTF);
     parent.add(frame);
+
+    // Each interface instance's name, in the middle of the ports it is made of:
+    // one name for a bolt pattern of four holes, as the 2D tab's picture writes
+    // it, rather than the same name four times. On the node rather than on a
+    // port, so whether it shows is worked out from the rows of the instance and
+    // of its ports ('refreshInterfaceCallouts').
+    groupPorts(node).interfaces.forEach((entry, index) => {
+        if (entry.ports.length === 0) {
+            return;
+        }
+        const middle = [0, 1, 2].map(
+            (axis) => entry.ports.reduce((sum, port) => sum + ports[port].location[0][axis], 0) / entry.ports.length,
+        );
+        const { object } = calloutObject('callout-interface', [interfaceLabel(entry.interface)]);
+        object.position.set(middle[0], middle[1], middle[2]);
+        frame.add(object);
+        made.interfaces.push({
+            object,
+            item: interfaceId(path, index),
+            ports: entry.ports.map((port) => portId(path, port)),
+        });
+    });
 
     ports.forEach((port, index) => {
         const item = portId(path, index);
@@ -919,6 +1078,18 @@ function addPorts(
         axes.name = port.name ?? 'port';
         frame.add(axes);
         drawnByItem(item, axes);
+
+        // Its name, at the tip of the +Z axis - the end of the triad that says
+        // which way the port faces, and where the 2D tab's picture joins a
+        // port's name to it. A child of the triad, so the port's own box hides it.
+        const name = portLabel(port);
+        if (name) {
+            const { object } = calloutObject('callout-port', [name]);
+            object.position.set(0, 0, size);
+            object.visible = labelChoices.portNames;
+            axes.add(object);
+            made.ports.push(object);
+        }
 
         const sketch = port.sketch ? sketches.get(port.sketch) : undefined;
         if (sketch === undefined) {
@@ -956,31 +1127,78 @@ function addPorts(
  * Every element is built node by node through 'dom.ts': what a callout says is
  * text out of the drawing a package ships, and must not become markup.
  */
-function addCallouts(parent: THREE.Group, node: ShowNode, path: number[]): void {
-    const callouts = calloutsOf(node);
-    if (callouts.length === 0) {
+function addCallouts(parent: THREE.Group, node: ShowNode, path: number[], made: Callouts): void {
+    const said = calloutsOf(node);
+    if (said.length === 0) {
         return;
     }
     const frame = transformed(TO_GLTF);
-    for (const callout of callouts) {
-        const box = el('div', 'callout-box');
-        if (callout.title !== undefined) {
-            box.appendChild(el('div', 'callout-title', callout.title));
-        }
-        for (const line of callout.lines) {
-            box.appendChild(el('div', 'callout-line', line));
-        }
-        const element = el('div', 'callout');
-        element.appendChild(box);
-        const label = new CSS2DObject(element);
-        // Pinned by its bottom-left corner, where the leader line starts: the text
-        // sits above and to the right of the element rather than over it.
-        label.center.set(0, 1);
-        label.position.set(callout.position[0], callout.position[1], callout.position[2]);
-        frame.add(label);
+    for (const callout of said) {
+        const { object } = calloutObject('callout-metadata', callout.lines, callout.title);
+        object.position.set(callout.position[0], callout.position[1], callout.position[2]);
+        object.visible = showMetadata;
+        frame.add(object);
+        made.metadata.push(object);
     }
     parent.add(frame);
     drawnByItem(nodeId(path), frame);
+}
+
+/**
+ * One component's callout: its name and its price, in the middle of its shape.
+ *
+ * A child of the shape itself, so the box that hides the component - and the
+ * flicker that singles it out - takes its callout with it. Written by
+ * 'refreshComponentCallouts', which is what the boxes and the prices arriving
+ * call again; a component with nothing to say has its callout hidden.
+ *
+ * The middle is of the shape's box, measured in the shape's own frame: the
+ * whole tree has had its placements composed before this is called, and the
+ * box is taken back out of them.
+ */
+function addComponentCallout(node: ShowNode, drawn: THREE.Object3D, box: THREE.Box3, made: Callouts): void {
+    if (box.isEmpty()) {
+        return;
+    }
+    const middle = drawn.worldToLocal(box.getCenter(new THREE.Vector3()));
+    const callout = calloutObject('callout-component', []);
+    callout.object.position.copy(middle);
+    drawn.add(callout.object);
+    made.components.push({
+        object: callout.object,
+        box: callout.box,
+        name: componentName(node),
+        objectName: node.name ?? undefined,
+        holds: false,
+    });
+}
+
+/**
+ * The callout of a node that holds others: its price, in the middle of
+ * everything inside it, for an assembly sold assembled (see 'assemblyRows').
+ *
+ * It has no shape of its own to be a child of, so it hangs from a group of its
+ * own under the node, registered under the node's item: the box that hides the
+ * sub-assembly hides its price, and the callout's own 'visible' stays
+ * 'refreshComponentCallouts''s to set.
+ */
+function addAssemblyCallout(node: ShowNode, path: number[], into: THREE.Group, box: THREE.Box3, made: Callouts): void {
+    if (box.isEmpty()) {
+        return;
+    }
+    const holder = new THREE.Group();
+    into.add(holder);
+    const callout = calloutObject('callout-component', []);
+    callout.object.position.copy(into.worldToLocal(box.getCenter(new THREE.Vector3())));
+    holder.add(callout.object);
+    drawnByItem(nodeId(path), holder);
+    made.components.push({
+        object: callout.object,
+        box: callout.box,
+        name: componentName(node),
+        objectName: node.name ?? undefined,
+        holds: true,
+    });
 }
 
 /**
@@ -1277,7 +1495,7 @@ interface Loaded {
      * matching groups back to nodes by position is exactly the kind of agreement
      * that stops holding the day a node gains a child of another sort.
      */
-    built: { node: ShowNode; path: number[]; group: THREE.Group }[];
+    built: { node: ShowNode; path: number[]; group: THREE.Group; drawn?: THREE.Group }[];
 }
 
 /**
@@ -1353,7 +1571,7 @@ async function buildNode(
         group.add(child);
     }
 
-    loaded.built.push({ node, path, group });
+    loaded.built.push({ node, path, group, drawn });
     return group;
 }
 
@@ -1456,10 +1674,38 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // out to draw with is freed with the rest of the show's materials.
     geometry.own(boundaryMaterial);
     geometry.own(boundaryLineMaterial);
-    for (const { node, path, group: into } of loaded.built) {
-        addPorts(into, node, path, size, sketches, boundaryMaterial, boundaryLineMaterial);
-        addCallouts(into, node, path);
+    // Every placement composed once, so that each component's box below is
+    // measured where the tree puts it and taken back out of it consistently.
+    group.updateMatrixWorld(true);
+    // The box of what each node holds, on the stage: its own shape's and its
+    // children's, measured before any port is added under it. 'built' lists the
+    // children before the node that holds them, so one pass does it.
+    const held = new Map<string, THREE.Box3>();
+    for (const { node, path, drawn } of loaded.built) {
+        const box = drawn !== undefined ? new THREE.Box3().setFromObject(drawn) : new THREE.Box3();
+        (node.assembly ?? []).forEach((_child, index) => {
+            const inner = held.get([...path, index].join('.'));
+            if (inner !== undefined) {
+                box.union(inner);
+            }
+        });
+        held.set(path.join('.'), box);
     }
+    const made = noCallouts();
+    for (const { node, path, group: into, drawn } of loaded.built) {
+        const box = held.get(path.join('.')) ?? new THREE.Box3();
+        addPorts(into, node, path, size, sketches, boundaryMaterial, boundaryLineMaterial, made);
+        addCallouts(into, node, path, made);
+        if (isComponent(node)) {
+            if (drawn !== undefined) {
+                addComponentCallout(node, drawn, box, made);
+            }
+        } else {
+            addAssemblyCallout(node, path, into, box, made);
+        }
+    }
+    refreshComponentCallouts(made);
+    refreshInterfaceCallouts(made);
 
     if (superseded()) {
         disposeTree(group);
@@ -1486,6 +1732,7 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     shownGeometry?.disposeMaterials();
     shownGeometry = geometry;
     content = group;
+    callouts = made;
     shownCut = cut;
     scene.add(group);
     // Framed on every shape the show carries, whether or not it is switched on:

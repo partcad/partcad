@@ -2146,7 +2146,7 @@ class Shape(ShapeConfiguration):
         """
         return await output.materialize_script(ctx, impl)
 
-    async def _output_request(self, ctx, obj, impl, kwargs, overlay=None, ports=None):
+    async def _output_request(self, ctx, obj, impl, kwargs, overlay=None, ports=None, prices=None):
         """What the implementation is handed.
 
         The shape, every parameter the layered configuration ended up with, and
@@ -2159,6 +2159,13 @@ class Shape(ShapeConfiguration):
         'impl.parameters' rather than before, because the resolved overlay is
         what a file type declaring 'with_ports:' asked for plus what the command
         line asked for - the declaration has already been read.
+
+        'prices' is the text of the price of each component, by object name,
+        when the overlay asks for them (see 'render_overlay.component_prices_async').
+        The callout switches go in only when they say something other than what
+        a request without them means - no component callouts, every port name
+        written - so a picture that asks for none of them is handed the request
+        it always was, and keeps the cached answer it always had.
         """
         request = {
             "wrapped": obj,
@@ -2172,6 +2179,14 @@ class Shape(ShapeConfiguration):
             request["with_ports"] = overlay.ports
             request["with_interfaces"] = overlay.interfaces
             request["ports"] = ports or []
+            if overlay.component_names:
+                request[render_overlay.COMPONENT_NAMES_KEY] = True
+            if overlay.component_prices:
+                request[render_overlay.COMPONENT_PRICES_KEY] = dict(prices or {})
+            if not overlay.port_names:
+                request[render_overlay.PORT_NAMES_KEY] = False
+            if not overlay.interface_names:
+                request[render_overlay.INTERFACE_NAMES_KEY] = False
         # An explicit argument wins over the configuration, but only when it is
         # one: 'render_async(**kwargs)' is called with a fixed set of keyword
         # arguments defaulting to None by several callers.
@@ -2252,6 +2267,20 @@ class Shape(ShapeConfiguration):
         render_overlay.report(self, records, overlay)
         cache[overlay.key()] = records
         return records
+
+    async def _component_prices_async(self, ctx, overlay, cache):
+        """What each component of this shape costs, worked out at most once per render call.
+
+        Asking is a quote from every supplier of every line item, so three file
+        types of one object asking for their prices ask once - and are told
+        once, in the log, when there are none. Unlike the ports, every file
+        type asks the same question, so even "none" is the answer for all of
+        them.
+        """
+        key = ("component-prices",)
+        if key not in cache:
+            cache[key] = await render_overlay.component_prices_async(self, ctx, overlay)
+        return cache[key]
 
     async def _run_implementation_async(self, ctx, impl, script, request, final_filepath):
         """Run one output implementation in a sandbox and read back its verdict.
@@ -2843,15 +2872,27 @@ class Shape(ShapeConfiguration):
 
         effective_overlay = render_overlay.effective(overlay, impl)
         ports = None
+        prices = None
         if effective_overlay is not None:
-            ports = await subject._overlay_ports_async(
-                ctx,
-                effective_overlay,
-                subject_ports if subject is not self else (ports_cache if ports_cache is not None else {}),
-            )
+            if effective_overlay.ports or effective_overlay.interfaces:
+                ports = await subject._overlay_ports_async(
+                    ctx,
+                    effective_overlay,
+                    subject_ports if subject is not self else (ports_cache if ports_cache is not None else {}),
+                )
+            if effective_overlay.component_prices:
+                # Of this object rather than of the view a filter made of it:
+                # the view is no object of the package to ask the market about,
+                # and a component's price does not change with what else is
+                # drawn beside it.
+                prices = await self._component_prices_async(
+                    ctx, effective_overlay, ports_cache if ports_cache is not None else {}
+                )
 
         try:
-            request = await subject._output_request(ctx, obj, impl, kwargs, overlay=effective_overlay, ports=ports)
+            request = await subject._output_request(
+                ctx, obj, impl, kwargs, overlay=effective_overlay, ports=ports, prices=prices
+            )
         except scene_world.WorldError as e:
             # What a scene states about its world, stated wrongly: a gravity that
             # is not a vector, a medium nothing answers to. The declaration's

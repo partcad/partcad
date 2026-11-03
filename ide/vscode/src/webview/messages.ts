@@ -621,6 +621,17 @@ export interface FetchTabMessage {
      */
     ports?: string[];
     /**
+     * On the 2D tab: the callout boxes under the tree, as the 'pc render'
+     * options they are ('renderOptions' in 'labels.ts') -
+     * '--with-component-names', '--with-component-prices', and
+     * '--without-port-names'/'--without-interface-names' as a false. Each is
+     * sent only when it says something a render would not do anyway.
+     */
+    withComponentNames?: boolean;
+    withComponentPrices?: boolean;
+    withPortNames?: boolean;
+    withInterfaceNames?: boolean;
+    /**
      * On the Build and Assembly tabs: what the user chose to build and to buy
      * on the Build vs Buy tab. The renderer holds it and sends it with every
      * request rather than the host reading it back, so that what is asked is
@@ -738,6 +749,18 @@ export interface FetchFormatsMessage {
     type: 'fetchFormats';
     token: number;
     plugin: string;
+}
+
+/**
+ * Renderer to host: the 'fetchTab' last sent for this tab will not be read, so
+ * stop it rather than let the daemon - which serves one request at a time - run
+ * it to the end. What the 3D view sends when Component prices is cleared while
+ * a quote is out (see 'askPrices'). Its answer, if one still comes, is dropped
+ * by its token as any stale answer is.
+ */
+export interface CancelTabMessage {
+    type: 'cancelTab';
+    tab: TabId;
 }
 
 /**
@@ -1023,6 +1046,27 @@ export interface RenderData {
     viewport?: ViewportData | null;
     /** What it was cut to, as PartCAD read the section asked for, or null for the whole object. */
     section?: ViewSection | null;
+}
+
+/** What one component costs: its share of the object's quote ('partcad.component_prices'). */
+export interface ComponentPrice {
+    price: number;
+    currency?: string | null;
+}
+
+/**
+ * What each component of an object costs, as 'supply.prices' answers: what the
+ * 3D view's "Component prices" callouts write. By the object each component is
+ * ('<package>:<name>', a node's 'name'), so a part placed a hundred times is one
+ * entry; a component nobody quoted is absent rather than free.
+ *
+ * Asked under the Design group's own id ('design'), as the Analysis tabs' list is
+ * asked under theirs: it is a question about the object the group shows, not a
+ * tab of its own.
+ */
+export interface PricesData {
+    object: string;
+    prices: Record<string, ComponentPrice>;
 }
 
 /** What the user chose for each line that can be both built and bought, by its full name. */
