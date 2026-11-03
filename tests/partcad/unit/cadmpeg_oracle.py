@@ -38,9 +38,38 @@ def executable(ctx):
     return tool.executable(output.package_cache_dir(ctx, output.builtin_project(ctx, output.IMPORT)))
 
 
+def _run(command):
+    """Run cadmpeg, reading what it says as the UTF-8 it writes.
+
+    Not as the locale's encoding, which is what 'text=True' alone decodes with:
+    on Windows that is cp1252, which has no character for the bytes of the
+    units cadmpeg writes (a superscript in 'mm^5'), and the decode failing
+    leaves the output None rather than raising.
+    """
+    return subprocess.run(command, capture_output=True, encoding="utf-8", check=False)
+
+
+def decode_as_windows_does(monkeypatch):
+    """Have 'subprocess.run' decode text in cp1252 when the caller names no encoding.
+
+    Which is what Windows does: 'text=True' alone decodes in the locale's
+    encoding, and the runners' locale is cp1252. Wrapping the call rather than
+    patching how subprocess picks the encoding, because that is private and
+    differs between the Python versions PartCAD supports.
+    """
+    run = subprocess.run
+
+    def run_as_on_windows(*args, **kwargs):
+        if kwargs.get("encoding") is None and (kwargs.get("text") or kwargs.get("universal_newlines")):
+            kwargs["encoding"] = "cp1252"
+        return run(*args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", run_as_on_windows)
+
+
 def measure(cadmpeg, path):
     """The body rows 'cadmpeg measure' reports for the file at 'path'."""
-    result = subprocess.run([cadmpeg, "measure", str(path), "--json"], capture_output=True, text=True, check=False)
+    result = _run([cadmpeg, "measure", str(path), "--json"])
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)["measure"]["bodies"]
 
@@ -51,9 +80,7 @@ def diff(cadmpeg, a, b):
     The status is 0 when the two agree and 1 when they differ or the comparison
     cannot decide; the comparison says which.
     """
-    result = subprocess.run(
-        [cadmpeg, "diff", str(a), str(b), "--geometry", "--json"], capture_output=True, text=True, check=False
-    )
+    result = _run([cadmpeg, "diff", str(a), str(b), "--geometry", "--json"])
     report = json.loads(result.stdout)
     assert report["status"] == "ok", result.stderr
     return result.returncode, report["geometry"]["comparison"]

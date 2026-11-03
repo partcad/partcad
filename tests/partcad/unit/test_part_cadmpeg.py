@@ -120,6 +120,15 @@ def test_a_cadmpeg_that_never_returns_is_given_up_on(monkeypatch):
         step.run([sys.executable, "-c", "import time; time.sleep(60)"])
 
 
+def test_what_cadmpeg_says_is_read_as_utf8_whatever_the_locale(monkeypatch):
+    """A Windows locale's cp1252 cannot decode the units cadmpeg reports in, and the message was lost."""
+    step = _module("cadmpeg_step.py")
+    cadmpeg_oracle.decode_as_windows_does(monkeypatch)
+    says = "import sys; sys.stderr.buffer.write('off by 1e-14 mm\\u2075\\n'.encode()); sys.exit(1)"
+    with pytest.raises(RuntimeError, match="off by 1e-14 mm\u2075"):
+        step.run([sys.executable, "-c", says])
+
+
 def test_a_node_is_named_after_what_the_file_calls_it():
     reader = _module("import_cadmpeg.py")
     assert reader.node_name("Lid", "x") == "Lid"
