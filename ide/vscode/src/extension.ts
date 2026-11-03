@@ -36,6 +36,7 @@ import { PartcadViewerServer } from './viewer/PartcadViewerServer';
 import { ExplorerItemLike, collectIdeState } from './ideState';
 import * as PartcadItem from './PartcadItem';
 import { examples } from './examples';
+import { PART_TYPE_CHOICES, partTypeChoice, partTypeDescription, partTypeFilters } from './partTypes';
 import { PartcadTerminals, setTerminalWriter, TERMINAL_PROFILE_ID, writeTerminal } from './terminal';
 import * as utils from './utils';
 
@@ -754,50 +755,25 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
                 startUri = vscode.Uri.joinPath(wsUri, packagePath);
             }
 
-            const partTypeTypes: { [partType: string]: string } = {
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                STEP: 'step',
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                STL: 'stl',
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                '3MF': '3mf',
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                OpenSCAD: 'scad',
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                CadQuery: 'cadquery',
-                build123d: 'build123d',
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                Chili3D: 'chili3d',
-            };
-            const partType = await vscode.window.showQuickPick(
-                ['STEP', 'STL', '3MF', 'OpenSCAD', 'CadQuery', 'build123d', 'Chili3D'],
+            const picked = await vscode.window.showQuickPick(
+                PART_TYPE_CHOICES.map((choice) => ({
+                    label: choice.label,
+                    description: partTypeDescription(choice),
+                })),
                 {
                     canPickMany: false,
                     title: 'What type of part would you like to create?',
+                    matchOnDescription: true,
                 },
             );
-            if (!partType) {
+            const choice = picked ? partTypeChoice(picked.label) : undefined;
+            if (!choice) {
                 await vscode.window.showWarningMessage('Part type was not selected');
                 return;
             }
-            let hasTemplates = false;
-            let filters: { [name: string]: string[] } = {};
-            if (partType === 'STEP') {
-                filters[`${partType}`] = ['step'];
-            } else if (partType === 'STL') {
-                filters[`${partType}`] = ['stl'];
-            } else if (partType === '3MF') {
-                filters[`${partType}`] = ['3mf'];
-            } else if (partType === 'OpenSCAD') {
-                filters[`${partType}`] = ['scad'];
-                hasTemplates = true;
-            } else if (partType === 'Chili3D') {
-                filters[`${partType}`] = ['chili'];
-                hasTemplates = true;
-            } else {
-                filters[`${partType}`] = ['py'];
-                hasTemplates = true;
-            }
+            const partType = choice.label;
+            const hasTemplates = choice.template === true;
+            const filters = partTypeFilters(choice);
 
             let uri = undefined;
             if (hasTemplates) {
@@ -845,7 +821,7 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
             }
 
             await vscode.commands.executeCommand('partcad.addPartReal', {
-                kind: partTypeTypes[partType],
+                kind: choice.kind,
                 path: uri.fsPath,
                 packageName: packageName,
             });
