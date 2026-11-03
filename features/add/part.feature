@@ -279,15 +279,19 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "2"
     And STDERR should contain "'3dm' is not one of"
 
-  # What was added is what gets built: the Fusion design and the FreeCAD
-  # document in the tree both read into solids.
-  @native @f3d @fcstd
+  # What was added is what gets built: the Fusion design, the FreeCAD
+  # document and the IGES plate in the tree all read into solids. The plate
+  # is its seven faces sewn back into the solid they bound.
+  @native @f3d @fcstd @iges
   Scenario: A native part added from a file builds
     Given I copy file "tests/partcad/unit/data/import_cadmpeg/controller.f3d" to "controller.f3d" inside test workspace
     And I copy file "tests/partcad/unit/data/import_fcstd/design_history.FCStd" to "design_history.FCStd" inside test workspace
+    And I copy file "tests/partcad/unit/data/import_iges/plate.igs" to "plate.igs" inside test workspace
     When I run "partcad add part f3d controller.f3d"
     Then the command should exit with a status code of "0"
     When I run "partcad add part fcstd design_history.FCStd"
+    Then the command should exit with a status code of "0"
+    When I run "partcad add part iges plate.igs"
     Then the command should exit with a status code of "0"
     When I run "partcad --no-ansi export -t step :controller"
     Then the command should exit with a status code of "0"
@@ -295,29 +299,35 @@ Feature: `pc add part` command
     When I run "partcad --no-ansi export -t step :design_history"
     Then the command should exit with a status code of "0"
     And a file named "design_history.step" should exist
+    When I run "partcad --no-ansi export -t step :plate"
+    Then the command should exit with a status code of "0"
+    And a file named "plate.step" should exist
 
-  # As with STEP, adding a file does not read it -- so a file that holds no
-  # solid is added, and fails when it is built. Every one of these types
-  # requires a solid, so a read that comes back with loose faces fails too.
+  # As with STEP, adding a file does not read it -- so a file that is not what
+  # its type says is added, and fails when it is built: through cadmpeg for a
+  # Fusion design, through OpenCASCADE for IGES.
   @native @iges @f3d @error
-  Scenario: A native part that does not read into a solid fails to build
-    Given I copy file "tests/partcad/unit/data/import_cadmpeg/plate.igs" to "plate.igs" inside test workspace
-    And a file named "broken.f3d" with content:
+  Scenario: A native part whose file cannot be read fails to build
+    Given a file named "broken.f3d" with content:
       """
       not a Fusion design
       """
-    When I run "partcad add part iges plate.igs"
-    Then the command should exit with a status code of "0"
+    And a file named "broken_iges.igs" with content:
+      """
+      not an IGES file
+      """
     When I run "partcad add part f3d broken.f3d"
     Then the command should exit with a status code of "0"
-    When I run "partcad --no-ansi export -t step :plate"
-    Then the command should exit with a non-zero status code
-    And STDERR should contain "plate is not a solid"
-    And a file named "plate.step" should not exist
+    When I run "partcad add part iges broken_iges.igs"
+    Then the command should exit with a status code of "0"
     When I run "partcad --no-ansi export -t step :broken"
     Then the command should exit with a non-zero status code
     And STDERR should contain "unrecognized format"
     And a file named "broken.step" should not exist
+    When I run "partcad --no-ansi export -t step :broken_iges"
+    Then the command should exit with a non-zero status code
+    And STDERR should contain "OpenCASCADE could not read the geometry"
+    And a file named "broken_iges.step" should not exist
 
   @wip @cadquery @error
   Scenario: Reject invalid CadQuery script
