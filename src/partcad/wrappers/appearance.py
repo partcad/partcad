@@ -109,7 +109,7 @@ def stated(node):
     return properties.get(COLOR_KEY)
 
 
-def _own(node, warnings):
+def own_color(node, warnings=None):
     """The colour 'node' itself states, normalized, or None if it states none.
 
     One that states something that is not a colour states none, and says so in
@@ -204,7 +204,7 @@ def colors_of(tree, warnings=None, memo=None):
     memo = {} if memo is None else memo
 
     def walk(node, inherited):
-        color = _own(node, warnings) or inherited
+        color = own_color(node, warnings) or inherited
         if ocp_serialize.is_shape_object(node):
             for face_color in face_colors(node, memo) or [color]:
                 face_color = face_color or color
@@ -254,7 +254,7 @@ def split_by_color(tree, whole, warnings=None):
     def walk(node, inherited, above):
         # Asked of each node a second time, without the warnings: 'colors_of'
         # has said everything there is to say about them.
-        color = _own(node, None) or inherited
+        color = own_color(node, None) or inherited
         if ocp_serialize.is_shape_object(node):
             # Placed at its own location as 'decode_shape' places it, and then
             # by every location above it, innermost first - which is what

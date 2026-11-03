@@ -2209,6 +2209,15 @@ class Shape(ShapeConfiguration):
             world = self.world_facts(ctx)
             if world:
                 request[output.WORLD_KEY] = world
+        # What the CMF declarations the shapes name say about themselves - a
+        # material's density, a declaration's name - for a file type that
+        # states them, resolved here for the reason a shape's physics is: a
+        # reference is a name, and only the core can load the package that
+        # declares it. See 'output.CMF_KEY'.
+        if request.get(output.CMF_KEY) is True:
+            from . import cmf as pc_cmf
+
+            request[output.CMF_KEY] = pc_cmf.export_facts(ctx, obj, self.project_name)
         return request
 
     async def _overlay_ports_async(self, ctx, overlay, cache):

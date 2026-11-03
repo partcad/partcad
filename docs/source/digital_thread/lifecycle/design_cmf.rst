@@ -66,6 +66,10 @@ A part's CMF travels with its geometry, inside its BREP, so whatever draws the p
 PNG and JPEG drawings colour each face as its CMF says, and the glTF a part is shown with carries a material per
 colour, which the Digital Thread's 3D view draws each face in.
 
+And so does what it is exported into: a STEP file has its colours, its materials and PartCAD's references on every
+face and solid, and reads back as the part it was; a glTF has a material per set, a 3MF a base material per set, a
+URDF a visual per set. A format with no room for CMF, such as STL, says that it dropped it. See :ref:`cmf-exports`.
+
 In the UI
 =========
 

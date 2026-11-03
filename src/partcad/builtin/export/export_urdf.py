@@ -21,7 +21,9 @@ apart (docs/design/simulation.md, sections 7 and 8.8).
 **Links.** Every body is a link, named after the link that placed it, and every
 part welded into it is a ``<visual>`` and a ``<collision>`` of its own, at its
 place in the link: a link of several parts is a link of several shapes, which
-is how a URDF link of several shapes was read in. The body's mass, centre of
+is how a URDF link of several shapes was read in; a part whose faces are in
+several CMF sets is a ``<visual>`` per set, each in its display colour
+('visuals_of'), and still one ``<collision>``. The body's mass, centre of
 mass and inertia - its parts' combined, or what a measured link states about
 itself - are its ``<inertial>``. An assembly's root body takes the name of the
 one part it is made of when it is made of one (a robot's base link), and the
@@ -106,6 +108,7 @@ import pyexpat  # noqa: F401
 
 sys.path.append(os.path.dirname(__file__))
 import appearance  # noqa: E402
+import cmf_export  # noqa: E402
 import kinematics  # noqa: E402
 import mass_properties  # noqa: E402
 import naming  # noqa: E402
@@ -116,7 +119,8 @@ import urdf_common  # noqa: E402
 # raise it with any change that changes that, and everything it produced
 # before is produced again. 2: a link per body and a joint per pair (step 11).
 # 3: native joint types; no dummy links, a refusal or 'composites: massless'.
-CACHE_VERSION = 3
+# 4: a visual per CMF set of a part in several.
+CACHE_VERSION = 4
 
 # Metres per millimetre, for the mesh 'scale' attribute: the meshes are written
 # in millimetres and URDF reads mesh coordinates as metres after scaling.
@@ -832,6 +836,55 @@ def carried_material(properties, state):
     return built
 
 
+def set_material(cmf_set, state):
+    """The ``<material>`` a CMF set is drawn in: named after it, in its display; None for a set that says nothing.
+
+    URDF keeps materials by name for the whole robot, so a name another set
+    already took for another colour is made unique.
+    """
+    from urdf_parser_py.urdf import Color, LinkMaterial
+
+    if cmf_export.is_plain(cmf_set):
+        return None
+    name = sanitize_name(cmf_export.display_name(cmf_set), "material")
+    rgba = None
+    if cmf_set.rgba is not None:
+        red, green, blue, alpha = cmf_set.rgba
+        rgba = [round(channel / 255.0, 6) for channel in (red, green, blue)] + [round(float(alpha), 6)]
+    taken = state.setdefault("material_names", {})
+    unique, count = name, 1
+    while unique in taken and taken[unique] != rgba:
+        count += 1
+        unique = "%s_%d" % (name, count)
+    taken[unique] = rgba
+    built = LinkMaterial(name=unique)
+    if rgba is not None:
+        built.color = Color(rgba)
+    return built
+
+
+def visuals_of(part, shape, state):
+    """'[(piece, key, material or None), ...]': a part's visuals, one per CMF set of its faces.
+
+    A part whose faces are all in one set - nearly every part - is one visual
+    of the whole shape, drawn in what the part's properties state, as it always
+    was; a part in several is a visual per set, each the faces of that set and
+    drawn in its display, so that a two-colour moulding is drawn in two colours
+    (docs/design/cmf.md, section 9). 'key' names the mesh: a shape used twice
+    shares its meshes, set for set.
+    """
+    payload = part.node.get(ocp_serialize.KEY_BREP)
+    leaf = cmf_export.Leaf(part.node, None, [])
+    groups = cmf_export.groups(shape, cmf_export.face_sets(leaf, state["cmf_memo"], shape))
+    carried = carried_material(state["properties"].get(part.node.get("name")) or {}, state)
+    if len(groups) <= 1:
+        return [(shape, payload, carried or set_material(groups[0][0], state))]
+    return [
+        (piece, (payload, index), set_material(cmf_set, state) or carried)
+        for index, (cmf_set, piece) in enumerate(groups)
+    ]
+
+
 def color_rgba(text, state):
     """A PartCAD colour string as URDF's ``rgba``, or None if it is not one.
 
@@ -866,14 +919,15 @@ def gazebo_element(reference, physics, table=None):
     return element
 
 
-def mesh_reference(shape, node, link_name, state):
+def mesh_reference(shape, node, link_name, state, key=None):
     """Write 'shape' out as a mesh (or reuse one) and return the URDF reference.
 
     An identical shape used twice - the two bones of the PartCAD logo, a
     repeated fastener - shares one mesh file, the way a URDF written by hand
-    would.
+    would. 'key' is what the mesh is the same as another by: the node's
+    payload, unless the caller says otherwise (a piece of it in one CMF set).
     """
-    key = node.get(ocp_serialize.KEY_BREP)
+    key = node.get(ocp_serialize.KEY_BREP) if key is None else key
     mesh_file = state["meshes"].get(key)
     if mesh_file is None:
         mesh_name = state["mesh_names"].derive(node.get("label") or link_name, "mesh")
@@ -945,9 +999,20 @@ def build_link(plan, state):
         origin = None if urdf_common.is_identity(where) else pose(where)
         name = None if names is None else names.derive(str(part.label or part.name or "").rpartition("/")[2], "shape")
         # The appearance belongs to the shape, not to the link: a link built
-        # from several parts may well have a colour per part.
-        material = carried_material(state["properties"].get(part.node.get("name")) or {}, state)
-        link.add_aggregate("visual", Visual(geometry=geometry, origin=origin, material=material, name=name))
+        # from several parts may well have a colour per part, and a part a
+        # colour per CMF set of its faces - a visual each. It collides as the
+        # one shape it is.
+        visuals = visuals_of(part, shape, state)
+        for index, (piece, key, material) in enumerate(visuals):
+            if len(visuals) > 1:
+                piece_reference = mesh_reference(piece, part.node, plan.name, state, key)
+                piece_geometry = Mesh(filename=piece_reference, scale=[MESH_SCALE, MESH_SCALE, MESH_SCALE])
+                piece_name = "%s_%d" % (name or plan.name, index + 1)
+            else:
+                piece_geometry, piece_name = geometry, name
+            link.add_aggregate(
+                "visual", Visual(geometry=piece_geometry, origin=origin, material=material, name=piece_name)
+            )
         link.add_aggregate("collision", Collision(geometry=geometry, origin=origin, name=name))
         state["unsupported"].update(set(part.physics or {}) - URDF_STATED)
         placed += 1
@@ -1056,6 +1121,8 @@ def process(path, request):
         # "package://<pkg>/" so the meshes resolve through the ROS package path.
         "mesh_prefix": request.get("mesh_prefix") or "",
         "properties": properties,
+        # The CMF sections read, by payload (see 'cmf_export.section_of').
+        "cmf_memo": {},
         "gazebo": [],
         # PartCAD properties URDF has no spelling for, reported once at the end.
         "unsupported": set(planner.unsupported),

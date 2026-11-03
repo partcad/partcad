@@ -229,7 +229,8 @@ they replace it instead):
   the 3MF, and the part is all of them.
 
 ``3mf`` and other meshes
-  Each object of a 3MF in the display colour of its base material.
+  Each object of a 3MF in the display colour of its base material, and each triangle that names a base material of
+  its own in that one's.
 
 A package's own part type (``partTypes:`` of kind ``wrapper``)
   Its script may hand back, beside the shape, what each face (and solid) of it is in, as plain data in its own terms,
@@ -299,6 +300,41 @@ A package declares conventions of its own, each a variation on a builtin one:
       path: housing.step
       parameters:
         cmfConvention: {type: string, default: solidworks}
+
+.. _cmf-exports:
+
+What the exports write
+======================
+
+``pc export`` writes a part's CMF into every file type that has somewhere to put it, face by face:
+
+``step``
+  The product structure and names of what is exported -- a product per part and per assembly, a part placed twice
+  one product placed twice -- through OpenCASCADE's XCAF writer. Each face's display colour, as sRGB, on the product,
+  a solid or the face, whichever says it once; the material on the product where every solid of it is made of one,
+  named by its reference, with what its declaration says it is and its density; and PartCAD's own references for
+  every face and solid, as a user-defined attribute of the product (``partcad.cmf``). Read back as a ``step`` part,
+  that attribute is what the part's CMF is read from -- the same colours, materials and finishes on every face and
+  solid, by reference, whatever ``cmfConvention`` says -- for as long as the file still draws each face in the colour
+  the attribute says. A file another tool has edited since is read by value, saying so.
+
+``gltf``
+  A material per set: named after its colour, material and finish, its display as glTF's (linear) base colour, its
+  finish's roughness and metallic, and the references under the material's ``extras.partcad``.
+
+``3mf``
+  A base material per set, with its name and its display colour, named by the mesh object and by every triangle in
+  another one. PartCAD's own mesh reader reads it back, triangle by triangle.
+
+``urdf``
+  A ``<visual>`` per set of a part whose faces are in several, each in its display colour; a part in one is one
+  visual, as before.
+
+``stl``, ``obj``, ``threejs``, ``iges`` and ``brep`` carry no CMF, and exporting a part that states any says, once per
+file, that it is not in the file. ``mjcf`` is written by ``partcad/partcad-sim-mujoco``, which writes what it writes.
+
+A face nobody coloured is written uncoloured, so that the reading tool draws it in its own default, rather than in the
+goldenrod PartCAD draws it in.
 
 .. _cmf-check:
 

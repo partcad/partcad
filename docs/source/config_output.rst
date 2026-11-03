@@ -715,6 +715,11 @@ warning saying so. That holds as much for a file type of a package's own that
 names ``render_svg.py`` as its implementation, as ``examples/feature_interface``
 does. ``dxf`` carries no colour at all.
 
+The export file types write a part's colours, materials and finishes face by face where the format has room for them
+-- ``step`` with its product structure, its names and PartCAD's own references, ``gltf`` as a material per set,
+``3mf`` as base materials per triangle, ``urdf`` as a visual per set -- and the others say, once per file, that they
+dropped them. :ref:`cmf-exports` says what each one writes.
+
 .. _cae-section:
 
 Analyses
