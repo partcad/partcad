@@ -128,13 +128,6 @@ def bodies(shape):
     return solids(shape) + _found(shape, TopAbs_SHELL, TopAbs_SOLID) + _found(shape, TopAbs_FACE, TopAbs_SHELL)
 
 
-def has_faces(shape):
-    """Whether 'shape' has any face at all, which is whether it is anything a part can be made of."""
-    from OCP.TopAbs import TopAbs_FACE
-
-    return bool(_found(shape, TopAbs_FACE))
-
-
 def compound(shapes):
     """One shape of 'shapes': itself when there is one, a compound when there are more."""
     if len(shapes) == 1:

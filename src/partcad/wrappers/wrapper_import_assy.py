@@ -285,7 +285,7 @@ def parse_step_tree(step_file: str, bodies=None):
         read = reader.ReadFile(readable_path)
     if read != IFSelect_RetDone or reader.Transfer(doc) != 1:
         raise ValueError(f"Failed to read STEP file: {step_file}")
-    return parse_document(doc, bodies)
+    return parse_document(doc, bodies=bodies)
 
 
 def parse_document(doc, bodies=None):
@@ -407,8 +407,8 @@ def process(request):
     output_folder = request["output_folder"]
     precision = request.get("precision", 5)
 
-    # The two caches are 'flatten''s to clear, below; what the last file
-    # stated of its colours is not, and goes before this one is parsed.
+    # Nothing a previous file stated: 'parse_document' states this one's, and
+    # 'flatten' starts the files afresh.
     global _facts
     _facts = None
 
