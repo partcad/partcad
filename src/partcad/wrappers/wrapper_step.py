@@ -38,8 +38,10 @@ import wrapper_common
 # raise it with any change that changes that, and everything it produced
 # before is produced again. 2: the colours and materials the file states are
 # read (see 'step_cmf'); the geometry is the same, byte for byte. 3: a colour
-# is the sRGB the file states rather than OCCT's linear value of it.
-CACHE_VERSION = 3
+# is the sRGB the file states rather than OCCT's linear value of it. 4: a
+# material OCCT files under a product's first solid is read, and a file PartCAD
+# wrote keeps PartCAD's references.
+CACHE_VERSION = 4
 
 
 def _plain(readable_path):

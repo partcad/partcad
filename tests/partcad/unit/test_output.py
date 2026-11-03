@@ -310,8 +310,10 @@ def test_a_builtin_format_resolves_to_the_builtin_implementation(ctx):
     assert impl.script == "export_step.py"
     assert impl.config["package"] == output.BUILTIN_PACKAGES[output.EXPORT]
     # 'reproducible' is among them because '//builtin/export' declares it on
-    # every file type -- see 'test_every_builtin_file_type_declares_reproducible'.
-    assert impl.parameters == {"write_pcurves": True, "precision_mode": 0, "reproducible": False}
+    # every file type -- see 'test_every_builtin_file_type_declares_reproducible'
+    # -- and 'cmf' because a STEP file states what the core resolves of a
+    # material's declaration (see 'output.CMF_KEY').
+    assert impl.parameters == {"write_pcurves": True, "precision_mode": 0, "cmf": True, "reproducible": False}
 
 
 def test_a_package_field_becomes_an_export_parameter(ctx):

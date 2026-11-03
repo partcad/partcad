@@ -29,8 +29,9 @@ import wrapper_common
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again. 2: a 3MF of several objects is all of them, not the
-# first, and each object's colour is carried in the part's CMF section.
-CACHE_VERSION = 2
+# first, and each object's colour is carried in the part's CMF section. 3: a
+# triangle in a base material of its own is a face in it (see 'cmf_3mf').
+CACHE_VERSION = 3
 
 
 def _plain_mesh(path):

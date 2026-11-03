@@ -326,6 +326,7 @@ def test_a_solid_s_own_style_wins_over_the_compound_around_it():
         colors = [(compound, ("#FF0000", (255, 0, 0, 1.0))), (blue, ("#0000FF", (0, 0, 255, 1.0)))]
         definition_colors = []
         materials = []
+        tables = []
 
         def __bool__(self):
             return True
@@ -366,6 +367,7 @@ def test_each_placed_instance_of_a_solid_is_in_its_own_colour():
         ]
         definition_colors = []
         materials = [(here, "ABS")]
+        tables = []
 
         def __bool__(self):
             return True

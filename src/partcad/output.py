@@ -407,6 +407,17 @@ SCRIPT_KEY = "__script__"
 # sandbox and cannot import this.
 PROPERTIES_KEY = "properties"
 
+# The request key a file type sets to 'true' to be handed what the CMF
+# declarations its shapes name say about themselves - each material's
+# description and density, each declaration's name - which only the core can
+# read: a shape names a declaration by reference, and resolving one means
+# loading the package that declares it. The core replaces 'true' with that
+# table ('partcad.cmf.export_facts'), keyed by kind and reference, before the
+# request leaves for the sandbox; a file type that never asks is handed nothing
+# and costs nothing. Its twin is 'CMF_KEY' in 'builtin/export/export_step.py',
+# the one built-in file type that asks: a STEP file states a material's density.
+CMF_KEY = "cmf"
+
 # The request key a scene's world travels to an implementation under: the
 # gravity it states and the fluid it is filled with (see 'Scene.world_facts()').
 #
