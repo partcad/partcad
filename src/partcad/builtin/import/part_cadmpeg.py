@@ -38,19 +38,29 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 CACHE_VERSION = 1
 
 
-def convert(source, cache_dir):
-    """Read 'source', a native CAD file, into one OCCT shape."""
+def read(source, cache_dir):
+    """'(shape, cmf)' of 'source', a native CAD file: one OCCT shape, and what it is in (or None)."""
     import cadmpeg_step
 
     with tempfile.TemporaryDirectory(prefix="partcad-cadmpeg-") as tmp:
-        found = cadmpeg_step.bodies(cadmpeg_step.read(cadmpeg_step.to_step(source, cache_dir, tmp)))
+        shape, facts = cadmpeg_step.read(cadmpeg_step.to_step(source, cache_dir, tmp))
+    found = cadmpeg_step.bodies(shape)
     if not found:
         raise RuntimeError("%s holds no solid" % os.path.basename(source))
-    return cadmpeg_step.compound(found)
+    part = cadmpeg_step.compound(found)
+    return part, cadmpeg_step.stated_cmf(part, facts)
+
+
+def convert(source, cache_dir):
+    """Read 'source', a native CAD file, into one OCCT shape."""
+    return read(source, cache_dir)[0]
 
 
 if __name__ == "__partcad_part__":
     try:
-        output = {"shape": convert(request["path"], request["cache_dir"])}  # noqa: F821
+        shape, cmf = read(request["path"], request["cache_dir"])  # noqa: F821
+        output = {"shape": shape}
+        if cmf is not None:
+            output["cmf"] = cmf
     except Exception as e:
         output = {"exception": str(e)}

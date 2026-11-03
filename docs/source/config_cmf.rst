@@ -203,6 +203,13 @@ they replace it instead):
   The colours a STEP file puts on its faces, solids and products, and the materials on its products, read through
   OpenCASCADE's XCAF reader. The geometry is what it was before.
 
+The CAD applications' files and IGES (``fcstd``, ``f3d``, ``sldprt``, ``ipt``, ``catpart``, ``sat``, ``pvz``, ``iges``)
+  What the STEP file cadmpeg converts each one to states, read the same way: for these part types and for the ``f3d``
+  and ``pvz`` assemblies alike, in STEP's own terms, which the package's ``cmfConvention`` converts as it does a STEP
+  part's. A FreeCAD document is read from the shapes in its archive where it can be, and those carry no colours --
+  FreeCAD keeps them apart, in the document's view data, which is not read -- so only one read through its STEP file
+  has any (see :ref:`cad-files`).
+
 ``build123d`` and ``cadquery``
   build123d's ``.color`` and ``.material`` on what a script shows and on the children of a compound; CadQuery's
   ``cq.Assembly`` colours and the ``color`` (and ``alpha``) option of ``show_object``. Every part script is also handed
