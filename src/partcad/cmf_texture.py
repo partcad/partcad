@@ -29,6 +29,7 @@ package that names it, and no larger than MAX_IMAGE_BYTES - it travels inside th
 payload of every part drawn with it (see 'cmf_section', 'Texture').
 """
 
+import hashlib
 import io
 import os
 import sys
@@ -66,12 +67,18 @@ _lock = threading.Lock()
 
 
 class Image:
-    """One image file, read and checked: its bytes, its size in pixels and its mean colour."""
+    """One image file, read and checked: its bytes, their digest, its size in pixels and its mean colour.
 
-    __slots__ = ("data", "pixels", "mean")
+    The digest is worked out once, as the file is read: it names the image in
+    every texture made of it (see 'cmf_section.Texture'), and a key is asked of
+    a colour's image several times over.
+    """
+
+    __slots__ = ("data", "digest", "pixels", "mean")
 
     def __init__(self, data: bytes, pixels: tuple, mean: tuple) -> None:
         self.data = data
+        self.digest = hashlib.sha256(data).hexdigest()
         self.pixels = pixels
         self.mean = mean
 
@@ -153,7 +160,12 @@ def load(declaration):
     # Inside the package: an image is carried with every part drawn with it, to
     # sandboxes and caches that need not be this machine's, and a package names
     # what it ships rather than what happens to be beside it on one machine.
-    if os.path.commonpath([root, path]) != root:
+    try:
+        inside = os.path.commonpath([root, path]) == root
+    except ValueError:
+        # On another drive, on Windows: outside the package whatever else it is.
+        inside = False
+    if not inside:
         declaration.error("names the image '%s', which is outside its package" % written)
         return None
     try:
@@ -178,7 +190,7 @@ def load(declaration):
             declaration.error("has a 'display: color:' that is not a CSS colour: %r" % (stated,))
         else:
             rgba = parsed
-    return cmf_section.Texture(image.data, written, size[0], size[1]), rgba
+    return cmf_section.Texture(image.data, written, size[0], size[1], digest=image.digest), rgba
 
 
 def describe(declaration) -> typing.Optional[str]:
@@ -188,9 +200,16 @@ def describe(declaration) -> typing.Optional[str]:
         return None
     words = "image %s" % display["image"].strip()
     size = display.get("size")
-    if isinstance(size, (list, tuple)) and len(size) == 2:
+
+    def length(value) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+    # Said only where it is a size: a package's YAML is not held to the schema
+    # as it is read, and what is wrong with it is the declaration's to report
+    # ('load'), not this description's to fail on.
+    if isinstance(size, (list, tuple)) and len(size) == 2 and all(length(side) for side in size):
         words += ", %g x %g mm" % (size[0], size[1])
-    elif isinstance(size, (int, float)) and not isinstance(size, bool):
+    elif length(size):
         words += ", %g mm across" % size
     return words
 

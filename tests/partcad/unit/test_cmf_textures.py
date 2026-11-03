@@ -178,6 +178,46 @@ def test_an_image_too_large_to_carry_is_refused(ctx, monkeypatch):
     assert "more than the 10" in color.errors[0]
 
 
+def test_an_image_on_another_drive_is_outside_the_package(ctx, monkeypatch):
+    """Windows' 'commonpath' refuses paths on two drives; that is outside, said as such."""
+
+    def different_drives(paths):
+        raise ValueError("Paths don't have the same drive")
+
+    monkeypatch.setattr(cmf_texture.os.path, "commonpath", different_drives)
+    color = _color(ctx, ":wood")
+
+    assert cmf.texture_of(ctx, color) is None
+    assert "outside its package" in color.errors[0]
+
+
+def test_an_image_is_hashed_once_as_it_is_read(ctx, monkeypatch):
+    texture = cmf.texture_of(ctx, _color(ctx, ":wood"))
+    assert texture.digest == _texture().digest
+
+    sha256 = cmf_section.hashlib.sha256
+
+    def not_the_image_again(data=b"", *args, **kwargs):
+        assert bytes(data) != _png(), "the image was hashed again"
+        return sha256(data, *args, **kwargs)
+
+    # Read already: every texture made of it takes the digest it was read with.
+    # (The module is shared, and the package's declarations are hashed too.)
+    monkeypatch.setattr(cmf_section.hashlib, "sha256", not_the_image_again)
+    assert cmf.key_of(ctx, ctx.get_part(":box"))["color"]["texture"][0] == texture.digest
+
+
+def test_a_size_that_is_no_size_is_not_said(tmp_path):
+    (tmp_path / "wood.png").write_bytes(_png())
+    (tmp_path / "partcad.yaml").write_text("colors:\n  odd:\n    display: {image: wood.png, size: [a, b]}\n")
+    ctx = pc.Context(str(tmp_path))
+    odd = _color(ctx, ":odd")
+
+    assert odd.cmf_info()["Display"] == "image wood.png"
+    # And the image is still drawn, at the size it has when none is said.
+    assert cmf.texture_of(ctx, odd).width == cmf_texture.DEFAULT_SIZE
+
+
 def test_a_jpeg_is_one_too(tmp_path):
     (tmp_path / "grain.jpg").write_bytes(_png(fmt="JPEG"))
     (tmp_path / "partcad.yaml").write_text("colors:\n  grain:\n    display: {image: grain.jpg, size: 50}\n")

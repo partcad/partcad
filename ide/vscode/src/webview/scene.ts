@@ -763,12 +763,43 @@ async function parseTemplate(buffer: ArrayBuffer): Promise<THREE.Group> {
     return group;
 }
 
+/**
+ * Free the images the primitives of a parsed glTF are drawn with (see
+ * 'keepOwnColors'), once nothing draws any of them: the GPU texture, and the
+ * decoded image under it. three's GLTFLoader decodes an embedded image into an
+ * 'ImageBitmap', which 'Texture.dispose()' leaves alone and which is not given
+ * back until it is closed (see the note at the top of 'GLTFLoader.js').
+ *
+ * 'geometries' are every primitive of one parsed file, which are all that hold
+ * its images - each parse makes images of its own, and the primitives of one
+ * file drawn with one image share it - so each is freed once, after all of them
+ * have let go.
+ */
+function releaseOwnTextures(geometries: Iterable<THREE.BufferGeometry>): void {
+    const textures = new Set<THREE.Texture>();
+    for (const geometry of geometries) {
+        const texture = ownTextures.get(geometry);
+        if (texture !== undefined) {
+            textures.add(texture);
+            ownTextures.delete(geometry);
+        }
+    }
+    for (const texture of textures) {
+        texture.dispose();
+        const image = texture.image as unknown;
+        if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) {
+            image.close();
+        }
+    }
+}
+
 /** Free a template the cache let go of, once nothing on the stage draws it. */
 function releaseTemplate(group: THREE.Group): void {
+    const geometries: THREE.BufferGeometry[] = [];
     group.traverse((child) => {
         const drawable = child as THREE.Mesh;
         if (drawable.geometry !== undefined) {
-            ownTextures.get(drawable.geometry)?.dispose();
+            geometries.push(drawable.geometry);
         }
         drawable.geometry?.dispose();
         for (const material of [drawable.material ?? []].flat()) {
@@ -777,6 +808,7 @@ function releaseTemplate(group: THREE.Group): void {
             }
         }
     });
+    releaseOwnTextures(geometries);
 }
 
 /**
@@ -816,6 +848,10 @@ function disposeMaterials(material: THREE.Material | THREE.Material[] | undefine
  * included, and goes when the cache lets go of it ('releaseTemplate').
  */
 function disposeTree(root: THREE.Object3D): void {
+    // The geometry a show parsed for itself goes here, and with it the images
+    // its primitives are drawn with, which nothing else frees: they are marked
+    // as a template's are ('keepOwnColors'), and there is no template.
+    const local: THREE.BufferGeometry[] = [];
     root.traverse((node) => {
         // A callout is an element in the DOM, not in the scene, and three removes
         // it only when the callout itself is what was removed - not when, as
@@ -827,6 +863,7 @@ function disposeTree(root: THREE.Object3D): void {
         const mesh = node as THREE.Mesh;
         if (mesh.geometry && !mesh.geometry.userData.cached) {
             mesh.geometry.dispose();
+            local.push(mesh.geometry);
         }
         for (const material of [mesh.material ?? []].flat()) {
             if (material !== TEMPLATE_FACES && material !== TEMPLATE_LINES && !material.userData.cached) {
@@ -834,6 +871,7 @@ function disposeTree(root: THREE.Object3D): void {
             }
         }
     });
+    releaseOwnTextures(local);
 }
 
 export function clearGeometry(): void {
