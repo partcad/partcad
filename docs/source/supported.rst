@@ -62,19 +62,19 @@ Using CAD files:
 
 - STEP
 - BREP
+- IGES
 - STL
 - 3MF
 - OBJ
 - glTF (``.gltf`` with its buffers, or ``.glb``)
-
-Using file formats of third-party tools:
-
-- `KiCad EDA`_ (PCB)
-- Native CAD documents, without the application that wrote them, read with `cadmpeg`_ (downloaded on first
-  use, or carried by the sandbox image): FreeCAD (``.FCStd``), Autodesk Fusion (``.f3d``), SolidWorks parts
-  (``.SLDPRT``), Autodesk Inventor parts (``.ipt``), CATIA V5 parts (``.CATPart``), ACIS and ShapeManager
-  bodies (``.sat``, ``.sab``, ``.smt``, ``.smb``), Creo View packages (``.pvz``) and IGES -- each part a solid,
-  and one cadmpeg could not read whole an error rather than a part with a hole in it
+- FreeCAD (``.FCStd``)
+- Autodesk Fusion (``.f3d``)
+- SolidWorks parts (``.SLDPRT``)
+- Autodesk Inventor parts (``.ipt``)
+- CATIA V5 parts (``.CATPart``)
+- ACIS and ShapeManager (``.sat``, ``.sab``, ``.smt``, ``.smb``)
+- Creo View (``.pvz``)
+- `KiCad EDA`_ PCBs
 
 Using a part type the package defines itself (``partTypes``), including one that reads a file format of its
 own:
@@ -106,9 +106,7 @@ Assembly models (3D)
   - Generating user-friendly visual assembly instructions (PDF and HTML instruction books)
 
 - Using URDF, with links, joints and physics
-- Using a native CAD document: an Autodesk Fusion design (``.f3d``) or a Creo View package (``.pvz``), each
-  body a part, read with `cadmpeg`_
-- Using a STEP file that stays the source
+- Using a CAD file that stays the source: STEP, Autodesk Fusion (``.f3d``) or Creo View (``.pvz``)
 - ``pc filter`` declares a second assembly made of some of the links of an existing one: a sub-assembly
   carved out of a big one without editing it by hand
 
@@ -272,7 +270,6 @@ Output types a package implements itself, for both ``render:`` and ``export:``. 
 .. _OpenSCAD: https://openscad.org/
 .. _SDF: https://github.com/fogleman/sdf
 .. _KiCad EDA: https://www.kicad.org/
-.. _cadmpeg: https://github.com/cadmpeg/cadmpeg
 .. _SolidCraft: https://github.com/bherbruck/solidcraft
 .. _partcad-solidcraft: https://github.com/partcad/partcad-solidcraft
 .. _partcad-sim-gazebo: https://github.com/partcad/partcad-sim-gazebo

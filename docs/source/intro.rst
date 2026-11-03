@@ -23,12 +23,12 @@ What PartCAD works with
 * **Parts** written as code (`CadQuery <https://github.com/CadQuery/cadquery>`_,
   `build123d <https://github.com/gumyr/build123d>`_, `OpenSCAD <https://openscad.org/>`_,
   `Chili3D <https://github.com/xiangechen/chili3d>`_, `SDF <https://github.com/fogleman/sdf>`_) or read from
-  a file (STEP, BREP, STL, 3MF, OBJ, glTF, KiCad PCBs, FreeCAD documents), plus whatever format a plugin
-  package adds.
-* **Assemblies and scenes** in Assembly YAML, URDF or a STEP file, with interfaces and mating as objects of
-  their own rather than coordinates written out by hand.
-* **Outputs**: the CAD formats above, Gazebo and MuJoCo worlds, 2D projections, dimensioned drawings,
-  Markdown documentation, and PDF or HTML instruction books.
+  a file (STEP, BREP, IGES, STL, 3MF, OBJ, glTF, FreeCAD, Autodesk Fusion, SolidWorks, Autodesk Inventor,
+  CATIA V5, ACIS and Creo View files, KiCad PCBs), plus whatever format a plugin package adds.
+* **Assemblies and scenes** in Assembly YAML, URDF, or a STEP, Autodesk Fusion or Creo View file, with
+  interfaces and mating as objects of their own rather than coordinates written out by hand.
+* **Outputs**: STEP, BREP, IGES, STL, 3MF, OBJ, glTF and URDF, Gazebo and MuJoCo worlds, 2D projections,
+  dimensioned drawings, Markdown documentation, and PDF or HTML instruction books.
 * **Engineering**: finite element, modal, thermal and fluid analysis (``pc cae``), simulation in MuJoCo or
   Gazebo (``pc sim``), 2.5D toolpaths (``pc cam``), and materials and manufacturing methods that carry
   through into the bill of materials.
