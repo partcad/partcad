@@ -480,8 +480,13 @@
     },
     "cmf-ids": {
       "type": "object",
-      "description": "What other systems call this declaration, as '{system: identifier}': a vendor's own number, a colour standard's code, another CAD tool's library name. What a converter ('cmfConvention') matches another tool's names against",
-      "additionalProperties": { "type": ["string", "number"] }
+      "description": "What other systems call this declaration, as '{system: identifier}': a vendor's own number, a colour standard's code, another CAD tool's library name. What a converter ('cmfConvention') matches another tool's names against. A system that has several identifiers for it lists them",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": ["string", "number"] },
+          { "type": "array", "items": { "type": ["string", "number"] }, "minItems": 1 }
+        ]
+      }
     },
     "cmf-manufacturable": {
       "type": "boolean",
@@ -1802,6 +1807,39 @@
       "default": false
     },
     "cmf": { "$ref": "#/definitions/check-cmf" },
+    "cmfConventions": {
+      "description": "How other tools' colours, materials and finishes are read in this package, beside PartCAD's builtin conventions (partcad, step, build123d, cadquery, openscad, 3mf, gltf, ldraw). A part names one in its 'cmfConvention' parameter. See docs/design/cmf.md, section 7.",
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_.-]+$": {
+          "type": "object",
+          "properties": {
+            "desc": { "type": "string" },
+            "extends": {
+              "description": "The builtin convention whose facts it reads: what a source of that kind states. Its own name if that is a builtin, and 'step' otherwise.",
+              "type": "string",
+              "enum": ["partcad", "step", "build123d", "cadquery", "openscad", "3mf", "gltf", "ldraw"]
+            },
+            "ids": {
+              "description": "The key of a declaration's 'ids' that holds what this tool calls it. Its own name by default.",
+              "type": "string",
+              "minLength": 1
+            },
+            "catalogs": {
+              "description": "Packages to look for declarations in, beside the part's own package and this one.",
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "caseFold": {
+              "description": "Whether the tool's names are compared folded to one case.",
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "unless": { "$ref": "#/definitions/unless" },
     "docs": {
       "type": ["object", "null"],

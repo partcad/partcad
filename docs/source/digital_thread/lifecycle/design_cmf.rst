@@ -27,7 +27,7 @@ Where an item's CMF comes from
 From its definition, and nothing else:
 
 1. what its **source** states -- a STEP file's colours and materials, a script's, an OpenSCAD model's -- read through
-   the converter for the tool it came from (``cmfConvention``);
+   the converter for the tool it came from (``cmfConvention``; see :ref:`cmf-sources`);
 2. its **CMF parameters** -- ``color``, ``material`` and ``finish`` -- which fill what the source leaves unset, or, with
    ``sourceCmf``, replace it;
 3. for its colour, its **material's** claim.

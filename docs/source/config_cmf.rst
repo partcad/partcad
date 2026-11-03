@@ -191,6 +191,115 @@ specify the items in it, and the assembly is then manufacturable only if it decl
 own. A variant that is to be made or bought as such is declared as a part, as ``bracket-red`` is above, and linked by
 name.
 
+.. _cmf-sources:
+
+What a part's source says
+=========================
+
+A part's source states CMF of its own, and the CMF parameters fill in what it leaves out (``sourceCmf`` says whether
+they replace it instead):
+
+``step`` and ``kicad``
+  The colours a STEP file puts on its faces, solids and products, and the materials on its products, read through
+  OpenCASCADE's XCAF reader. The geometry is what it was before.
+
+``build123d`` and ``cadquery``
+  build123d's ``.color`` and ``.material`` on what a script shows and on the children of a compound; CadQuery's
+  ``cq.Assembly`` colours and the ``color`` (and ``alpha``) option of ``show_object``. Every part script is also handed
+  ``set_cmf`` beside ``show_object``, which states CMF in PartCAD's own terms, by reference, of the part, of one of its
+  solids, or of one of its faces:
+
+  .. code-block:: python
+
+    from build123d import Box, Cylinder, Pos
+
+    body = Box(10, 10, 10)
+    peg = Pos(0, 0, 10) * Cylinder(2, 6)
+    set_cmf(peg, color=":blue", material="//pub/std/manufacturing/material/plastic:pla")
+    top = max(body.faces(), key=lambda face: face.center().Z)
+    set_cmf(top, color=":signal-red")
+    show_object([body, peg])
+
+  What is said of a face wins over what is said of its solid, and what is said of a child over what is said of the
+  compound holding it.
+
+``scad``
+  An OpenSCAD model's ``color()``, where the OpenSCAD in use writes colours into the 3MF it exports (the development
+  snapshots since 2024 do; the 2021.01 release does not, and its parts are read as before). Each colour is an object of
+  the 3MF, and the part is all of them.
+
+``3mf`` and other meshes
+  Each object of a 3MF in the display colour of its base material.
+
+A package's own part type (``partTypes:`` of kind ``wrapper``)
+  Its script may hand back, beside the shape, what each face (and solid) of it is in, as plain data in its own terms,
+  for the convention it names to convert:
+
+  .. code-block:: python
+
+    output = {
+        "shape": shape,
+        "cmf": {
+            "convention": "ldraw",
+            "faces": [{"color": "4", "rgba": [201, 26, 9, 1.0]}, None, ...],
+            "solids": [{"material": "abs"}, ...],
+        },
+    }
+
+  One entry per face, in the order OpenCASCADE's ``TopExp::MapShapes`` visits them; ``None`` for a face it says
+  nothing of. ``solids`` is the same for the solids, and is where a material is said: a solid is what is made of
+  one, and a material said only of its faces leaves the solid's unspecified. A list that does not match the shape's
+  faces (or solids) is dropped, and said to be.
+
+``pc import`` of a STEP assembly keeps each part's colours and material in the part file it writes, and an instance's
+own colour - an overriding style on one occurrence - becomes its link's ``params: {color: ..., sourceCmf: color}``.
+
+.. _cmf-conventions:
+
+Conventions
+-----------
+
+A source names colours, materials and finishes in its own terms, and they are converted into declarations as the part
+is built. A name is looked up in the ``ids`` of the declarations of the part's own package, under the key of the
+source's convention:
+
+.. code-block:: yaml
+
+  colors:
+    signal-red:
+      display: "#C91A09"
+      ids:
+        step: "#C91A09"           # a STEP file's faces of this colour are this one
+        build123d: "#FF0000"      # and so is build123d's Color(1, 0, 0)
+  materials:
+    al-6061:
+      ids:
+        step: Aluminium 6061      # a STEP product made of 'Aluminium 6061'
+
+The builtin conventions are ``partcad`` (references, as ``set_cmf`` writes them), ``step``, ``build123d``,
+``cadquery``, ``openscad``, ``3mf``, ``gltf`` and ``ldraw``; each type uses its own, and a part's ``cmfConvention``
+parameter names another. A colour nothing claims is drawn as the source drew it, as the display-only
+``//builtin/color:rgba`` of its value; a material or a finish nothing claims is left for the parameters. Either is
+reported once per part.
+
+A package declares conventions of its own, each a variation on a builtin one:
+
+.. code-block:: yaml
+
+  cmfConventions:
+    solidworks:
+      extends: step              # reads what a STEP file states
+      ids: solidworks            # looked up under 'ids: {solidworks: ...}'
+      catalogs: [//pub/acme]     # and in these packages too, after the part's own
+      caseFold: true
+
+  parts:
+    housing:
+      type: step
+      path: housing.step
+      parameters:
+        cmfConvention: {type: string, default: solidworks}
+
 .. _cmf-check:
 
 Checking it

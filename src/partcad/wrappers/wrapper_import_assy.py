@@ -45,13 +45,17 @@ from OCP.TopExp import TopExp_Explorer
 from OCP.TopAbs import TopAbs_SOLID
 
 sys.path.append(os.path.dirname(__file__))
+import step_cmf
 import step_repair
 import wrapper_common
 
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
-# before is produced again.
-CACHE_VERSION = 1
+# before is produced again. 2: the parts keep the colours and materials their
+# definitions state (see step_cmf), and an instance's own colour is said of the
+# link that places it. 3: a colour is the sRGB the file states rather than
+# OCCT's linear value of it, in what is read and in the part files written.
+CACHE_VERSION = 3
 
 # signature -> path of the STEP file written for the first shape with it. A later
 # shape whose signature matches reuses that file rather than writing a new one.
@@ -59,6 +63,8 @@ _shape_cache = {}
 # Paths already written, so a distinct geometry that happens to share a STEP label
 # with an earlier one gets a fresh file instead of overwriting it.
 _used_files = set()
+# What the file being imported states of colours and materials ('step_cmf.Facts').
+_facts = None
 
 
 def get_label_name(label: TDF_Label, default="Unnamed") -> str:
@@ -207,10 +213,14 @@ def parse_label_recursive(label, shape_tool, parent_trsf: gp_Trsf, visited):
 
         return node
 
+    # The colour this instance sets itself, whatever its definition says: an
+    # overriding style on an occurrence, said of the link that places it.
+    override = step_cmf.instance_color(label)
+
     # Handle Simple Shape
     shape = shape_tool.GetShape_s(label)
     if shape_tool.IsSimpleShape_s(label) and not shape.IsNull():
-        return {"type": "part", "name": name, "shape": shape, "trsf": combined_trsf}
+        return {"type": "part", "name": name, "shape": shape, "trsf": combined_trsf, "override": override}
 
     # Handle Compound (multi-solid)
     if not shape.IsNull():
@@ -230,7 +240,7 @@ def parse_label_recursive(label, shape_tool, parent_trsf: gp_Trsf, visited):
             return {"type": "assembly", "name": name, "trsf": combined_trsf, "children": child_nodes}
 
         else:
-            return {"type": "part", "name": name, "shape": shape, "trsf": combined_trsf}
+            return {"type": "part", "name": name, "shape": shape, "trsf": combined_trsf, "override": override}
 
     return None
 
@@ -243,7 +253,6 @@ def parse_step_tree(step_file: str):
     app = XCAFApp_Application.GetApplication_s()
     doc = TDocStd_Document(TCollection_ExtendedString("XDE-doc"))
     app.NewDocument(TCollection_ExtendedString("XmlXCAF"), doc)
-    shape_tool = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
 
     reader = STEPCAFControl_Reader()
     # What OpenCASCADE would crash on is repaired first (see step_repair).
@@ -251,7 +260,12 @@ def parse_step_tree(step_file: str):
         read = reader.ReadFile(readable_path)
     if read != IFSelect_RetDone or reader.Transfer(doc) != 1:
         raise ValueError(f"Failed to read STEP file: {step_file}")
+    return parse_document(doc)
 
+
+def parse_document(doc):
+    """The hierarchical structure of an XCAF document's components, and what it states of their CMF."""
+    shape_tool = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
     root_nodes = []
     free_shapes = TDF_LabelSequence()
     shape_tool.GetFreeShapes(free_shapes)
@@ -261,6 +275,10 @@ def parse_step_tree(step_file: str):
         label = free_shapes.Value(i + 1)
         root_nodes.append(parse_label_recursive(label, shape_tool, identity_trsf, set()))
 
+    # What the file states of its products' colours and materials, for the
+    # part files to keep (see 'flatten_assembly_tree').
+    global _facts
+    _facts = step_cmf.Facts(doc)
     return root_nodes
 
 
@@ -298,7 +316,11 @@ def flatten_assembly_tree(node, output_folder: str, precision: int):
 
     shape = node["shape"]
     zeroed_shape = BRepBuilderAPI_Transform(shape, invert_transformation(global_trsf), True).Shape()
-    signature = shape_signature(zeroed_shape)
+    # What the definition states, matched by partner: the instance's solids are
+    # its definition's, placed. Addressed by index, which the copy above keeps.
+    section = step_cmf.section_of(shape, _facts, by_partner=True) if _facts is not None else None
+    # Two definitions of one geometry in two colours are two parts.
+    signature = shape_signature(zeroed_shape) + _colors_of(section)
 
     if signature in _shape_cache:
         part_file = _shape_cache[signature]
@@ -316,15 +338,31 @@ def flatten_assembly_tree(node, output_folder: str, precision: int):
             part_file = os.path.join(output_folder, f"{file_safe_name}_{suffix}.step")
             suffix += 1
         _used_files.add(part_file)
-        save_shape_to_step(zeroed_shape, part_file)
+        if section is not None:
+            step_cmf.write(part_file, zeroed_shape, section)
+        else:
+            save_shape_to_step(zeroed_shape, part_file)
         _shape_cache[signature] = part_file
 
-    return {
+    link = {
         "type": "part",
         "name": node_name,
         "part_file": part_file,
         "location": convert_location(global_trsf, precision),
     }
+    override = node.get("override")
+    if override is not None:
+        link["cmf"] = {"color": override[0], "rgba": list(override[1])}
+    return link
+
+
+def _colors_of(section) -> tuple:
+    """What a part's section states, as part of its signature: two parts of one geometry in different colours or
+    materials are two parts."""
+    if section is None:
+        return ()
+    stated = tuple((s.color or "", s.material or "", s.finish or "") for s in section.sets)
+    return stated + tuple(section.faces) + tuple(section.solids)
 
 
 def process(request):
@@ -336,6 +374,8 @@ def process(request):
 
     _shape_cache.clear()
     _used_files.clear()
+    global _facts
+    _facts = None
 
     root_nodes = parse_assembly_tree(assembly_file, file_type)
     if not root_nodes or all(node is None for node in root_nodes):

@@ -119,8 +119,8 @@ warning.
 ## 5. Where an item's CMF comes from
 
 **Built:** the parameters on every type, a part's declared colour drawn, canonical references, the parameters written
-into the payload, propagation through ASSY links. **Decided:** sources and converters
-([section 7](#7-conventions-and-converters)), STEP instance overrides.
+into the payload, propagation through ASSY links, sources and converters ([section 7](#7-conventions-and-converters)),
+STEP instance overrides on `pc import`.
 
 Every part type and every assembly type accepts five object-type parameters: `color`, `material` and `finish` (each a
 reference to a declaration of its kind), `sourceCmf` and `cmfConvention`. `tolerance` stays with the types that build
@@ -204,24 +204,34 @@ format to every reader and bound to OCCT versions); one solid per CMF (a painted
 
 ## 7. Conventions and converters
 
-**Decided.**
+**Built:** the convention, the readers of STEP (through XCAF), build123d, CadQuery, OpenSCAD and 3MF, `set_cmf`, the
+lookup by `ids`, `cmfConventions:`, and STEP instance overrides on `pc import`. **Decided:** the `ldraw` reader
+([section 10](#10-lego-end-to-end)). **Open:** a converter that has to run code of its own.
 
 **One PartCAD convention.** On a shape, CMF is a palette of sets; each holds a canonical colour, material and finish
 reference (each optional), the display values resolved for them, and their origin. Each solid has a material; each
 face a colour and a finish, defaulting to its solid's.
 
 **Converters** map another tool's convention into it. `cmfConvention` names one; each type has a default (`step`,
-`3mf`, `gltf`, `openscad`, `build123d`, `cadquery`, `ldraw`). Converters are implementations in a `//builtin/cmf`
-package, declared in a `cmfConventions:` section the way file types are declared under `render:` and `export:`, so a
-package may supply its own. A converter reads the source's facts - names, RGB values, material designations,
-user-defined attributes - and looks each up by `ids` among the declarations in scope (the part's own package and the
-converter's `catalogs` parameter), with the case folding its tool uses. A colour it cannot match becomes the
-display-only `rgba` of the stated value; a material or finish stays unset, for the parameters to complete; each is
-reported once per part.
+`3mf`, `gltf`, `openscad`, `build123d`, `cadquery`, `ldraw`; `partcad` takes references, as `set_cmf` writes them).
+A source's reader - the wrapper that reads its file or runs its script - writes the source's facts into the CMF
+section as they were stated, in sets of origin `raw:<convention>`: a colour's RGB and its name where it has one, a
+material's designation. The core converts every such set as the part is read, before the part's own parameters
+complete it, so nothing outside the core ever sees one. Converting is a lookup by `ids` among the declarations in
+scope (the part's own package first, then the convention's `catalogs`), with the case folding the tool uses. A colour
+it cannot match becomes the display-only `rgba` of the stated value; a material or finish stays unset, for the
+parameters to complete; each is reported once per part. A package declares conventions of its own in
+`cmfConventions:` - a variation on a builtin one, with its own `ids` key, `catalogs` and case folding - and a part
+names one in `cmfConvention`, which never applies to what `set_cmf` said in PartCAD's own terms. A converter that has to
+run code of its own (a tool whose names cannot be matched by a table) would be an implementation a package supplies,
+the way file types are under `render:`; none needs one yet.
 
-The converters, in the order they are built: `partcad` (identity), `step`, `css`, `build123d`, `cadquery`,
-`openscad`, `3mf`, `gltf`, `ldraw`, then the CAD tools whose STEP files the public index holds, found by the
-`FILE_NAME` originating system: `solidworks`, `onshape`, `fusion`, `inventor`, `creo`, `nx`, `catia`.
+Built: `partcad` (identity), `step`, `build123d`, `cadquery`, `openscad` and `3mf`; a CSS colour written where a
+reference belongs is read as its `rgba` ([section 4](#4-names-and-references)). `gltf` is a convention with no reader
+yet, and `ldraw` is partcad-ldraw's to read. Open: telling the CAD tool that wrote a STEP file from its `FILE_NAME`
+originating system, and conventions of its own for each of the tools the public index holds STEP files from
+(`solidworks`, `onshape`, `fusion`, `inventor`, `creo`, `nx`, `catia`); a package declares such a convention in
+`cmfConventions:` meanwhile.
 
 ### 7.1 Conventions surveyed
 
@@ -292,7 +302,9 @@ where there is room.
   incomplete ones first. The BOM and Build vs Buy views get Color, Material and Finish columns. The 3D view keeps each
   primitive's own material and uses a finish's roughness and metallic.
 - **Drawings:** SVG, PNG and JPEG draw each face in its display colour, still as one hidden-line drawing; an edge
-  between two colours is drawn once per colour, the later on top.
+  between two colours is drawn once per colour, the later on top. A drawing is on white, so a colour too light to see
+  there (relative luminance above 0.5; goldenrod is 0.42) is drawn darker, hue kept: a white face is drawn in grey
+  lines rather than invisible ones.
 - **glTF:** the faces of one colour are one mesh with that colour's material, so a part of one colour is still one
   primitive; the IDE keeps those materials once it draws a primitive's own (above).
 - **Exports:** STEP through XCAF - product structure and names, sRGB colours on faces, solids and products, materials
@@ -381,7 +393,10 @@ do not set, recursively.
 - *Scenario:* the same wall holds `red-brick`, an `enrich` of `brick` fixing `color: ":red"` → it stays `red-brick`.
 
 **Requirement: STEP instance overrides.** An imported STEP assembly SHALL write an instance's overridden CMF as that
-link's `params:`, inventing no part name.
+link's `params:`, inventing no part name, and SHALL write each part's file with the colours and material its definition
+states.
+- *Scenario:* a red brick placed twice, one instance overriding its colour to blue → one part file, red; the second
+  link `params: {color: <blue, converted>, sourceCmf: color}`.
 
 **Requirement: inside the BREP.** A payload SHALL be its BREP followed by the CMF section of [section 6](#6-storage-inside-the-brep);
 a reader that does not know the section SHALL read the same geometry.
@@ -390,7 +405,8 @@ a reader that does not know the section SHALL read the same geometry.
 **Requirement: scripts and OpenSCAD.** The build123d and CadQuery wrappers SHALL keep `.color` (display-only unless
 `set_cmf` names a declaration), `.material` and `.label` per shape and sub-shape, `cq.Assembly` colours and
 `show_object` colour options; scripts SHALL be handed `set_cmf(shape, color=…, material=…, finish=…)`. OpenSCAD parts
-SHALL be exported as coloured 3MF where the OpenSCAD in use writes colours.
+SHALL be exported as coloured 3MF where the OpenSCAD in use writes colours (told by its version: the snapshots since
+2024), and as before everywhere else. A STEP part SHALL be read through XCAF into the geometry the plain reader read.
 - *Scenario:* a script sets one face's colour and the part declares another → that face keeps its own, the rest take
   the part's.
 
@@ -402,9 +418,10 @@ colours sRGB.
 - *Scenario:* a source states a material on a single face → it is assigned to the solid where the whole solid agrees,
   and reported otherwise; no material per face is invented.
 
-**Requirement: converters by `cmfConvention`.** Converters SHALL be implementations in `//builtin/cmf` or a package's
+**Requirement: converters by `cmfConvention`.** Converters SHALL be the builtin conventions or a package's
 `cmfConventions:`, mapping names through `ids` within scope, turning an unmatched colour into display-only `rgba`, and
-leaving an unmatched material or finish unset, each reported once per part.
+leaving an unmatched material or finish unset, each reported once per part. `cmfConvention` SHALL NOT apply to what
+`set_cmf` states.
 - *Scenario:* a STEP face coloured RGB (0.8, 0.1, 0.05) with no matching name → `//builtin/color:rgba;color=CC1A0DFF`
   and a warning.
 
@@ -472,7 +489,7 @@ Thread with the Design tab only, selected and not shown, and only its sub-tabs.
 | Declarations, CSS display, names and escaping, canonical references, CMF parameters on every type, a part's declared colour drawn, `pc list colors\|finishes` | built |
 | The CMF section inside the BREP, its summary, the parameters written into it by the core, drawings and glTF per face, `pc info` | built |
 | Assembly propagation, the visualization-only rule, the `cmf` check (as a warning) | built |
-| STEP via XCAF; scripts and OpenSCAD as sources; converters | decided |
+| STEP via XCAF; scripts and OpenSCAD as sources; converters; `pc import` keeping CMF | built |
 | IDE: explorer, CMF tab, BOM columns, per-primitive materials | decided |
 | Exports: STEP via XCAF, glTF, 3MF, URDF/MJCF | decided |
 | `//builtin/color:rgba` shipped with PartCAD; LEGO in partcad-ldraw and its examples | decided |
