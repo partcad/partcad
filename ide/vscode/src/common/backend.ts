@@ -752,7 +752,8 @@ class JsonRpcBackend implements PartcadBackend {
                     // Which ports, where the panel narrowed it to some of them.
                     ports: a.ports,
                     // The callout boxes under the panel's tree: 'pc render
-                    // --with-component-names'/'--with-component-prices', and
+                    // --with-component-names'/'--with-component-prices'/
+                    // '--with-materials', and
                     // '--without-port-names'/'--without-interface-names' as a
                     // false. Undefined is left out of the request, and means the
                     // default.
@@ -760,6 +761,8 @@ class JsonRpcBackend implements PartcadBackend {
                     with_component_names: a.withComponentNames,
                     // eslint-disable-next-line @typescript-eslint/naming-convention
                     with_component_prices: a.withComponentPrices,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    with_materials: a.withMaterials,
                     // eslint-disable-next-line @typescript-eslint/naming-convention
                     with_port_names: a.withPortNames,
                     // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -784,6 +787,22 @@ class JsonRpcBackend implements PartcadBackend {
         reg('partcad.componentPrices', (a) =>
             this.send(
                 'supply.prices',
+                {
+                    package: a.pkg,
+                    object: a.name,
+                    kind: a.kind,
+                },
+                a.cancellation,
+            ),
+        );
+        // Where each material of an object is, cluster by cluster, for the 3D
+        // view's "Materials" callouts: worked out in a sandbox from the object's
+        // tree ('cmf.clusters'), as close as the user configuration says one
+        // cluster is. It can take a while on a large object, so it can be
+        // cancelled like a tab's request.
+        reg('partcad.materialClusters', (a) =>
+            this.send(
+                'cmf.clusters',
                 {
                     package: a.pkg,
                     object: a.name,

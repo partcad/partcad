@@ -106,7 +106,8 @@ the object's own parameters by name, which is ``-p <name>=<value>`` on the comma
 
 ``render`` and ``export`` also take what ``pc render`` draws besides the geometry, under the names it sends
 them: ``with_ports``, ``with_interfaces`` and ``with_internals`` for the ports and the interfaces;
-``with_component_names`` and ``with_component_prices`` for a callout on every component; and
+``with_component_names`` and ``with_component_prices`` for a callout on every component;
+``with_materials`` for one on every cluster of a material; and
 ``with_port_names`` and ``with_interface_names``, both true unless set false, for whether those two overlays
 write their names. Each is the ``--with-...`` option of the same name (see ``pc render`` in :doc:`/cli`). A
 price asks the suppliers for a quote, so it is the one of them that goes out to the market.

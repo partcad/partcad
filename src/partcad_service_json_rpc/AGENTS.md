@@ -321,6 +321,13 @@ carries (`partcad.render_overlay.Overlay.prices`), so `pc render --with-componen
 the 3D view cannot price one part three ways. It lives here, not in the core, because this is where the suppliers
 are asked: the core renderer draws prices it is handed and asks nobody.
 
+`cmf.clusters` is where each material of an object is, cluster by cluster -- the faces of one material that touch or
+are closer than `distance` millimetres (the user's `materialClusterDistance`, 10 unless the request says) -- which is
+what the 3D view's "Materials" callouts write. It asks a sandbox (`partcad.measure.material_clusters`, running
+`wrapper_materials.py`), because it is geometry, and that sandbox runs the very `material_clusters.py` the SVG renderer
+runs for `pc render --with-materials`, so the 3D view and a picture cannot gather one object's faces two ways. Each
+cluster names the nodes it is of by their index path in the object's tree, which is how the viewer names them.
+
 `cae.analyze` is the odd one of the six: it *runs* something rather than answering a question about the
 package, and it is the same `Shape.analyze_async()` that `pc cae fea` runs -- for every scenario of the
 analysis the part declares, or for the one `scenario` names, which is `pc cae fea -f` and what a tab asks.

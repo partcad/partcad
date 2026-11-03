@@ -1106,6 +1106,18 @@ Object commands
 
     pc render -t png --with-component-names --with-component-prices -O ./ logo
 
+  ``--with-materials`` puts a callout on every *cluster* of a material, naming it: the faces of one material, of
+  one part or of several, each of which touches another of them or is closer to it than
+  ``materialClusterDistance`` in the user configuration (``PC_MATERIAL_CLUSTER_DISTANCE``, 10 millimetres unless it
+  says otherwise; ``0`` gathers only what touches). One callout per cluster rather than one per face or per part,
+  so a frame of twelve welded steel tubes says "steel" once, pinned to the frame where it is nearest the middle of
+  it. What a face is made of is what its part's CMF says (see :doc:`/config_cmf`) - its solid's material, else its
+  own (a wall is a sheet with no solid) - and a face that states none is in no cluster.
+
+  .. code-block:: shell
+
+    pc render -t png --with-materials -O ./ logo
+
   ``--without-port-names`` and ``--without-interface-names`` draw the ports and the interfaces without their
   names, for a picture that has too many of them to read; the names are written by default. With ``--filter``,
   every callout is on what the filter keeps and nothing else.

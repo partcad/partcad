@@ -141,7 +141,13 @@ def test_the_callouts_are_drawn_on_a_layer_of_their_own(real_svg, tree):
 
 
 def test_the_renderer_and_the_core_name_the_callout_switches_alike(real_svg):
-    for name in ("COMPONENT_NAMES_KEY", "COMPONENT_PRICES_KEY", "PORT_NAMES_KEY", "INTERFACE_NAMES_KEY"):
+    for name in (
+        "COMPONENT_NAMES_KEY",
+        "COMPONENT_PRICES_KEY",
+        "PORT_NAMES_KEY",
+        "INTERFACE_NAMES_KEY",
+        "MATERIALS_KEY",
+    ):
         assert getattr(real_svg, name) == getattr(render_overlay, name)
 
 
@@ -163,3 +169,57 @@ def test_an_assembly_sold_assembled_gets_its_price_on_a_callout_of_its_own(real_
 def test_an_assembly_nobody_priced_gets_no_callout_of_its_own(real_svg, tree):
     request = {"shape_tree": tree, real_svg.COMPONENT_NAMES_KEY: True}
     assert [rows for rows, _middle in real_svg._components(request)] == [["left"], ["right"]]
+
+
+@pytest.fixture(scope="module")
+def made_of(real_svg):
+    """Three 10 mm cubes along X - ABS at 0 and 15, steel at 100 - as 'shape_tree' carries them."""
+    import build123d as bd
+    import ocp_serialize
+
+    cube = bd.Box(10, 10, 10).wrapped
+
+    def leaf(label, x, material):
+        return {
+            "name": "//pkg:cube",
+            "label": label,
+            ocp_serialize.KEY_BREP: b"",
+            ocp_serialize.KEY_SHAPE: cube,
+            ocp_serialize.KEY_LOCATION: [[x, 0, 0], [0, 0, 1], 0],
+            "properties": {"material": material},
+        }
+
+    return {
+        "name": "//pkg:top",
+        "label": None,
+        ocp_serialize.KEY_ASSEMBLY: [leaf("a", 0, ":abs"), leaf("b", 15, ":abs"), leaf("c", 100, ":steel")],
+    }
+
+
+def test_a_material_is_called_out_once_per_cluster_of_it(real_svg, made_of):
+    """The two ABS cubes 5 mm apart are one cluster at 10 mm, and two at 4."""
+    near = real_svg._materials({"shape_tree": made_of, real_svg.MATERIALS_KEY: {"distance": 10}})
+    far = real_svg._materials({"shape_tree": made_of, real_svg.MATERIALS_KEY: {"distance": 4}})
+
+    assert [rows for rows, _point in near] == [["abs"], ["steel"]]
+    assert [rows for rows, _point in far] == [["abs"], ["abs"], ["steel"]]
+    # Pinned on the material, where the tree placed it.
+    assert near[1][1][0] == pytest.approx(100, abs=5 + 1e-6)
+
+
+def test_materials_are_called_out_only_when_asked(real_svg, made_of):
+    assert real_svg._materials({"shape_tree": made_of}) == []
+
+
+def test_the_materials_are_drawn_on_a_layer_of_their_own(real_svg, made_of):
+    counted = {}
+    right, up = real_svg._camera_axes((0, -100, 0), (0, 0, 1), real_svg.LOOK_AT)
+    request = {"shape_tree": made_of, real_svg.MATERIALS_KEY: {"distance": 10}}
+    layers = {
+        layer: len(edges)
+        for layer, _color, edges in real_svg._overlay_edges(request, 110.0, right, up, (-5, -5, 105, 5), counted)
+    }
+
+    assert layers["Materials"] > 0
+    assert layers["Components"] == layers["Ports"] == layers["Interfaces"] == 0
+    assert counted == {"materials": 2}

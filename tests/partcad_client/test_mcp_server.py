@@ -354,6 +354,7 @@ def test_the_overlays_and_callouts_are_asked_for_as_pc_render_asks(tmp_path, too
             "with_internals": True,
             "with_component_names": True,
             "with_component_prices": True,
+            "with_materials": True,
             "with_port_names": False,
             "with_interface_names": False,
             **arguments,
@@ -366,6 +367,7 @@ def test_the_overlays_and_callouts_are_asked_for_as_pc_render_asks(tmp_path, too
         "with_internals": True,
         "with_component_names": True,
         "with_component_prices": True,
+        "with_materials": True,
         "with_port_names": False,
         "with_interface_names": False,
     }

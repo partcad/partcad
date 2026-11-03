@@ -39,6 +39,13 @@ switches take them off a picture that has too many of them to read. None of the
 four draws anything of its own accord about ports: a port's name is written
 only where the port is drawn.
 
+And "Materials" ("pc render --with-materials"): one callout per cluster of a
+material - the faces of one material, of one part or of several, each touching
+another or closer to it than the user's 'materialClusterDistance' - naming the
+material. Where the clusters are is a question about geometry, so it is
+answered where the geometry is, in the sandbox ('material_clusters'); what goes
+from here is that they are asked for, and how close is close.
+
 A price is not something a package declares. It is what the market answers, so
 it is the daemon's to work out - the very quote the IDE's Buy tab shows, shared
 out over the components (see 'component_prices' in the JSON-RPC service) - and
@@ -58,6 +65,9 @@ COMPONENT_NAMES_KEY = "component_names"
 COMPONENT_PRICES_KEY = "component_prices"
 PORT_NAMES_KEY = "port_names"
 INTERFACE_NAMES_KEY = "interface_names"
+# Whether the materials are called out, cluster by cluster: '{"distance": <mm>}'
+# when they are, and absent when they are not.
+MATERIALS_KEY = "materials"
 
 
 class Overlay:
@@ -83,7 +93,8 @@ class Overlay:
     component (see the module's docstring), with a row for each of the two
     asked for. 'port_names' and 'interface_names' say whether the two overlays
     above write their names; both are on unless somebody switched them off,
-    and neither draws anything on its own.
+    and neither draws anything on its own. 'materials' asks for one callout
+    per cluster of a material.
 
     'prices' is where the prices come from: an async callable taking the
     context and the shape being rendered and answering, by the full name of
@@ -104,6 +115,7 @@ class Overlay:
         port_names: bool = True,
         interface_names: bool = True,
         prices=None,
+        materials: bool = False,
     ):
         self.ports = bool(ports)
         self.interfaces = bool(interfaces)
@@ -114,10 +126,11 @@ class Overlay:
         self.port_names = bool(port_names)
         self.interface_names = bool(interface_names)
         self.prices = prices
+        self.materials = bool(materials)
 
     def __bool__(self):
         """Whether it asks for anything to be drawn on the picture."""
-        return self.ports or self.interfaces or self.components
+        return self.ports or self.interfaces or self.components or self.materials
 
     @property
     def components(self) -> bool:
@@ -127,7 +140,7 @@ class Overlay:
     def __repr__(self):
         return (
             "Overlay(ports=%r, interfaces=%r, internals=%r, select=%r, component_names=%r, "
-            "component_prices=%r, port_names=%r, interface_names=%r)"
+            "component_prices=%r, port_names=%r, interface_names=%r, materials=%r)"
             % (
                 self.ports,
                 self.interfaces,
@@ -137,6 +150,7 @@ class Overlay:
                 self.component_prices,
                 self.port_names,
                 self.interface_names,
+                self.materials,
             )
         )
 
@@ -160,6 +174,7 @@ class Overlay:
         port_names: bool = True,
         interface_names: bool = True,
         prices=None,
+        materials: bool = False,
     ):
         """The overlay these flags ask for, or None if they ask for nothing.
 
@@ -183,6 +198,7 @@ class Overlay:
             port_names=port_names,
             interface_names=interface_names,
             prices=prices,
+            materials=materials,
         )
         return overlay if overlay or not overlay.port_names or not overlay.interface_names else None
 
@@ -218,6 +234,7 @@ def effective(overlay, impl):
         port_names=overlay is None or overlay.port_names,
         interface_names=overlay is None or overlay.interface_names,
         prices=None if overlay is None else overlay.prices,
+        materials=overlay is not None and overlay.materials,
     )
     return result if result else None
 
@@ -309,6 +326,20 @@ def report(shape, records: list, overlay: Overlay) -> None:
         "%s:%s: %s: %d port(s) drawn on the projection:\n%s"
         % (shape.project_name, shape.name, asked_for, len(records), "\n".join(lines))
     )
+
+
+def material_distance(ctx) -> float:
+    """How close two surfaces of one material are to be one cluster, in millimetres: the user's to say.
+
+    'materialClusterDistance' in the user configuration ('PC_MATERIAL_CLUSTER_DISTANCE'),
+    ten unless it says otherwise.
+    """
+    from .user_config import DEFAULT_MATERIAL_CLUSTER_DISTANCE
+
+    configured = getattr(getattr(ctx, "user_config", None), "material_cluster_distance", None)
+    if isinstance(configured, bool) or not isinstance(configured, (int, float)) or configured < 0:
+        return DEFAULT_MATERIAL_CLUSTER_DISTANCE
+    return float(configured)
 
 
 def price_text(price, currency=None) -> str:

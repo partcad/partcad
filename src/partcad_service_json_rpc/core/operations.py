@@ -356,7 +356,8 @@ def _overlay(session, params):
     false -- say whether the two overlays write their names. The prices come
     from here, the one place that asks the suppliers: the overlay carries
     '_component_prices_async' as where to find them, and asks it only for a
-    picture that shows them.
+    picture that shows them. ``with_materials`` puts one on every cluster of a
+    material, as close as the user's configuration says one cluster is.
     """
     from partcad.render_overlay import Overlay
 
@@ -378,6 +379,7 @@ def _overlay(session, params):
         port_names=params.get("with_port_names") is not False,
         interface_names=params.get("with_interface_names") is not False,
         prices=prices,
+        materials=bool(params.get("with_materials", False)),
     )
 
 
@@ -4392,6 +4394,72 @@ def supply_prices(session, params):
     with pc.logging.Process("Prices", package, object_name):
         prices = asyncio.run(_component_prices_async(pc, ctx, shape, qos=params.get("qos") or None))
     return {"object": path, "prices": prices}
+
+
+# What is made of a material: what has faces for the "Materials" callout to find.
+_MADE_OF = ("part", "assembly", "scene")
+
+
+def cmf_clusters(session, params):
+    """Where each material of an object is: its clusters, one callout each.
+
+    What the IDE's 3D view writes when "Materials" is ticked, and what ``pc render
+    --with-materials`` writes on a picture: the faces of one material, of one part
+    or of several, that touch or are closer than ``distance`` millimetres --
+    ``materialClusterDistance`` from the user configuration unless the request
+    says -- gathered into clusters by the rule in the wrappers'
+    ``material_clusters``, which runs in a sandbox. ``{"object": ..., "distance":
+    <mm>, "clusters": [{"material", "name", "at", "nodes", "faces"}, ...]}``: each
+    cluster's material and what a person reads it as, the point of it the callout
+    is pinned to in the frame of the object, the path of every node of the
+    object's tree with a face in it (the paths the viewer's tree names its nodes
+    by), and how many faces it is. A face nothing names a material for is in none.
+    """
+    import asyncio
+
+    from partcad import render_overlay
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    distance = params.get("distance")
+    if distance is None:
+        distance = render_overlay.material_distance(ctx)
+    elif isinstance(distance, bool) or not isinstance(distance, (int, float)) or distance < 0:
+        raise JsonRpcError(USAGE_ERROR, "'distance' is a length in millimetres, nought or more: %r" % (distance,))
+
+    refusal = "Only parts, assemblies and scenes are made of materials; '%s' is none of them"
+    _refuse_said_kind(params, _MADE_OF, refusal)
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, object_name = resolved
+    path = _qualified(package, object_name)
+    kind = _resolve_kind(ctx, params, package, object_name, _MADE_OF, refusal)
+    shape = _getter(ctx, kind)(path)
+    if shape is None:
+        raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+
+    with pc.logging.Process("Materials", package, object_name):
+        clusters = asyncio.run(_material_clusters_async(ctx, shape, float(distance)))
+        materials = {cluster.get("material") for cluster in clusters}
+        pc.logging.info(
+            "%s: %d cluster(s) of %d material(s), %g mm apart at most"
+            % (path, len(clusters), len(materials), float(distance))
+        )
+    return {"object": path, "distance": float(distance), "clusters": clusters}
+
+
+async def _material_clusters_async(ctx, shape, distance):
+    """The clusters of each material of 'shape': see 'cmf_clusters'."""
+    from partcad import measure
+
+    tree = await shape.get_wrapped(ctx)
+    if tree is None:
+        return []
+    return await measure.material_clusters(ctx, tree, distance, cacheable=shape.artifacts_cacheable())
 
 
 async def _component_prices_async(pc, ctx, shape, qos=None):

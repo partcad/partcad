@@ -145,6 +145,13 @@ WithComponentPrices = Annotated[
         "second row of the same callout."
     ),
 ]
+WithMaterials = Annotated[
+    bool,
+    Field(
+        description="Put a callout on every cluster of a material, naming it: the faces of one material that touch "
+        "or are closer than the user's materialClusterDistance, 10 mm by default ('--with-materials')."
+    ),
+]
 WithPortNames = Annotated[
     bool, Field(description="Write the name of every port with_ports draws; false draws the frames alone.")
 ]
@@ -267,6 +274,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         with_internals: WithInternals = False,
         with_component_names: WithComponentNames = False,
         with_component_prices: WithComponentPrices = False,
+        with_materials: WithMaterials = False,
         with_port_names: WithPortNames = True,
         with_interface_names: WithInterfaceNames = True,
     ) -> CallToolResult:
@@ -287,6 +295,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
                 with_internals,
                 with_component_names,
                 with_component_prices,
+                with_materials,
                 with_port_names,
                 with_interface_names,
             )
@@ -323,6 +332,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         with_internals: WithInternals = False,
         with_component_names: WithComponentNames = False,
         with_component_prices: WithComponentPrices = False,
+        with_materials: WithMaterials = False,
         with_port_names: WithPortNames = True,
         with_interface_names: WithInterfaceNames = True,
     ) -> CallToolResult:
@@ -347,6 +357,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
                 with_internals,
                 with_component_names,
                 with_component_prices,
+                with_materials,
                 with_port_names,
                 with_interface_names,
             )
@@ -733,6 +744,7 @@ def _drawn(
     with_internals: bool,
     with_component_names: bool,
     with_component_prices: bool,
+    with_materials: bool,
     with_port_names: bool,
     with_interface_names: bool,
 ) -> dict:
@@ -749,6 +761,7 @@ def _drawn(
         "with_internals": with_internals,
         "with_component_names": with_component_names,
         "with_component_prices": with_component_prices,
+        "with_materials": with_materials,
     }
     request = {key: True for key, value in drawn.items() if value}
     if not with_port_names:

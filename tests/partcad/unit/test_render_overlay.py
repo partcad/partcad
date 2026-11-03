@@ -375,6 +375,7 @@ def test_the_request_says_only_what_differs_from_a_request_without_callouts():
         render_overlay.COMPONENT_PRICES_KEY,
         render_overlay.PORT_NAMES_KEY,
         render_overlay.INTERFACE_NAMES_KEY,
+        render_overlay.MATERIALS_KEY,
     ):
         assert key not in plain
 
@@ -386,3 +387,53 @@ def test_the_request_says_only_what_differs_from_a_request_without_callouts():
     assert asked[render_overlay.COMPONENT_PRICES_KEY] == {"//pkg:bolt": "0.25 USD"}
     assert asked[render_overlay.PORT_NAMES_KEY] is False
     assert asked[render_overlay.INTERFACE_NAMES_KEY] is False
+
+
+def test_the_materials_are_something_to_draw_and_this_runs_answer():
+    assert Overlay.of(materials=True)
+    assert not Overlay.of(materials=True).components
+    declared = _implementation(output.RENDER, {"with_ports": True})
+    assert not effective(None, declared).materials
+    assert effective(Overlay.of(materials=True), declared).materials
+    assert effective(Overlay.of(materials=True), _implementation(output.RENDER, {})).materials
+    # Never on a file that is not a picture.
+    assert effective(Overlay.of(materials=True), _implementation(output.EXPORT, {})) is None
+
+
+def test_how_close_is_one_cluster_is_the_users_to_say():
+    import types
+
+    from partcad.render_overlay import material_distance
+
+    assert (
+        material_distance(types.SimpleNamespace(user_config=types.SimpleNamespace(material_cluster_distance=2.5)))
+        == 2.5
+    )
+    assert material_distance(types.SimpleNamespace(user_config=types.SimpleNamespace(material_cluster_distance=0))) == 0
+    # Nothing to say, or nothing sensible, is ten millimetres.
+    assert material_distance(None) == 10
+    assert (
+        material_distance(types.SimpleNamespace(user_config=types.SimpleNamespace(material_cluster_distance=-1))) == 10
+    )
+
+
+def test_the_request_asks_for_the_materials_with_how_close_is_one_cluster():
+    import types
+
+    from partcad import render_overlay
+    from partcad.shape import Shape
+
+    class _Impl:
+        parameters = {}
+
+    class _Fake:
+        name = "top"
+        kind = "assembly"
+        config = {"type": "assy"}
+        project_name = "//pkg"
+
+        _output_request = Shape._output_request
+
+    ctx = types.SimpleNamespace(user_config=types.SimpleNamespace(material_cluster_distance=4.0))
+    asked = asyncio.run(_Fake()._output_request(ctx, "wrapped", _Impl(), {}, overlay=Overlay(materials=True)))
+    assert asked[render_overlay.MATERIALS_KEY] == {"distance": 4.0}

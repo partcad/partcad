@@ -2648,6 +2648,79 @@ def test_a_render_asks_for_the_prices_of_the_shape_it_draws(monkeypatch):
     assert asyncio.run(operations._component_prices_async(session.partcad, ctx, sketch)) == {}
 
 
+CLUSTER = {"material": "//:abs", "name": "abs", "at": [5.0, 0.0, 0.0], "nodes": [[0], [1]], "faces": 12}
+
+
+def _clustered(monkeypatch, ctx, kind="assembly", name="top", configured=10.0):
+    """'cmf.clusters' over a session holding one object, with the sandbox stood in for.
+
+    The rule is 'material_clusters' among the wrappers, which has tests of its
+    own; what is under test here is that the daemon hands it this object's tree
+    and the distance, and answers with what it says.
+    """
+    asked = []
+
+    async def material_clusters(ctx, tree, distance, cacheable=True):
+        asked.append((tree, distance, cacheable))
+        return [CLUSTER]
+
+    install_fake_partcad_modules(
+        monkeypatch,
+        {
+            "partcad.measure": {"material_clusters": material_clusters},
+            "partcad.render_overlay": {"material_distance": lambda ctx: configured},
+        },
+    )
+    shape = FakeObject(name, project_name="//")
+    shape.kind = kind
+
+    async def get_wrapped(ctx):
+        return {"name": "//:%s" % name, "assembly": []}
+
+    shape.get_wrapped = get_wrapped
+    shape.artifacts_cacheable = lambda: True
+    ctx.shapes[(kind, "//:%s" % name)] = shape
+    return asked
+
+
+def test_the_clusters_of_each_material_are_found_in_the_objects_tree(monkeypatch):
+    session, _ = make_session()
+    ctx = session.partcad_ctx
+    asked = _clustered(monkeypatch, ctx, configured=7.5)
+
+    result = operations.cmf_clusters(session, {"package": "//", "object": "top", "kind": "assembly"})
+
+    assert result == {"object": "//:top", "distance": 7.5, "clusters": [CLUSTER]}
+    # The tree the 3D view is drawn from, as close as the user configured.
+    assert asked == [({"name": "//:top", "assembly": []}, 7.5, True)]
+    assert ("Materials", "//") in session.partcad.logging.processes
+
+
+def test_a_request_can_say_how_close_is_one_cluster(monkeypatch):
+    session, _ = make_session()
+    asked = _clustered(monkeypatch, session.partcad_ctx)
+
+    result = operations.cmf_clusters(session, {"package": "//", "object": "top", "kind": "assembly", "distance": 0})
+
+    assert result["distance"] == 0
+    assert asked[0][1] == 0
+    for wrong in (-1, "near", True):
+        with pytest.raises(JsonRpcError) as caught:
+            operations.cmf_clusters(session, {"package": "//", "object": "top", "kind": "assembly", "distance": wrong})
+        assert caught.value.code == operations.USAGE_ERROR
+
+
+def test_only_what_is_made_has_materials(monkeypatch):
+    session, _ = make_session()
+    _clustered(monkeypatch, session.partcad_ctx)
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.cmf_clusters(session, {"package": "//", "object": "outline", "kind": "sketch"})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "Only parts, assemblies and scenes are made of materials" in caught.value.message
+
+
 def test_assembly_guide_returns_the_document_of_the_assembly(monkeypatch):
     install_fake_partcad_modules(monkeypatch, {"partcad.exception": {"AssemblyDocumentError": FakeDocumentError}})
     session, _ = make_session()
@@ -4812,6 +4885,7 @@ def test_the_overlay_reader_takes_the_flags_and_the_ports(monkeypatch):
         # The names are written unless a request says not to.
         "port_names": True,
         "interface_names": True,
+        "materials": False,
     }
     # Where the prices come from travels with every overlay, and is asked only
     # by a picture that shows them.
@@ -4838,6 +4912,9 @@ def test_the_overlay_reader_takes_the_flags_and_the_ports(monkeypatch):
     asked = overlay_calls[-1]
     assert (asked["component_names"], asked["component_prices"]) == (True, True)
     assert (asked["port_names"], asked["interface_names"]) == (False, False)
+
+    operations._overlay(session, {"with_materials": True})
+    assert overlay_calls[-1]["materials"] is True
 
 
 # ---- simulate.list and the snapshots of simulate.run ------------------------
