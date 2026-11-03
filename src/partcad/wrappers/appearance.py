@@ -280,7 +280,7 @@ def _placed_leaves(tree, memo):
         return shape.Located(ocp_serialize.toploc_from_packed(packed))
 
     def walk(node, color, one_sided, above):
-        color = _own(node, None) or color
+        color = own_color(node, None) or color
         stated = _stated_one_sided(node)
         one_sided = one_sided if stated is None else stated
         if ocp_serialize.is_shape_object(node):
