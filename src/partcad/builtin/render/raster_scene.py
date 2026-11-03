@@ -781,6 +781,10 @@ class Scene:
         import io
         import json
 
+        # An .npz is a zip archive. Anything else NumPy would take for a pickle
+        # and refuse as one, which is not what is wrong with it.
+        if not isinstance(data, (bytes, bytearray)) or not bytes(data[:4]) == b"PK\x03\x04":
+            raise ValueError("not a scene: not an .npz archive")
         try:
             with np.load(io.BytesIO(data), allow_pickle=False) as archive:
                 meta = json.loads(bytes(archive["meta"]).decode())

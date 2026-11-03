@@ -264,11 +264,19 @@ def test_a_scene_read_back_draws_every_picture_the_scene_drew(name):
 
 
 @pytest.mark.parametrize(
-    "data",
-    (b"", b"nonsense", b"PK\x03\x04 not an archive", np.zeros(3).tobytes()),
+    "data, reason",
+    (
+        (b"", "not an .npz archive"),
+        (b"nonsense", "not an .npz archive"),
+        (np.zeros(3).tobytes(), "not an .npz archive"),
+        ("a string", "not an .npz archive"),
+        (b"PK\x03\x04 not an archive", "not a scene"),
+    ),
 )
-def test_what_is_not_a_scene_is_refused(data):
-    with pytest.raises(ValueError):
+def test_what_is_not_a_scene_is_refused(data, reason):
+    # Bytes that are not an archive at all are refused as that, not as the
+    # pickle NumPy would otherwise take them for.
+    with pytest.raises(ValueError, match=reason):
         raster_scene.Scene.from_bytes(data)
 
 
