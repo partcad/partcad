@@ -15,6 +15,12 @@ except for the one bolt in it that says otherwise.
 
 A shape that says nothing is drawn in DEFAULT_COLOR.
 
+A part's faces may each say more: the CMF section its payload carries after the
+BREP (see 'cmf_section' and docs/design/cmf.md) gives a face the display colour
+of its own set, which is the most specific thing anything says about it and
+wins over what the part's node and the nodes above it say. A face its section
+leaves uncoloured is drawn in the node's colour, as before.
+
 Everything that draws a shape draws it in these colours, so that one part looks
 like one part wherever it is looked at: the projections '//builtin/render'
 writes - the SVG, and the PNG and JPEG drawn from it - and the IDE's Digital
@@ -124,19 +130,86 @@ def _own(node, warnings):
     return color
 
 
-def colors_of(tree, warnings=None):
+def _hex(rgba):
+    """A CMF set's display, '(red, green, blue, alpha)', as 'normalize' writes a colour."""
+    red, green, blue, alpha = rgba
+    color = "#%02X%02X%02X" % (red, green, blue)
+    if alpha < 1:
+        color += "%02X" % round(alpha * 255)
+    return color
+
+
+def face_colors(node, memo=None):
+    """The colour of each face of 'node' its CMF section states - None for a face it leaves uncoloured.
+
+    None when the section addresses no face one by one: the part is then one
+    colour, the one its node states. In 'TopExp::MapShapes' order, the order
+    the section addresses faces in. A node that is a piece of a compound its
+    payload holds (KEY_CHILD) is drawn in its node's colour: its section
+    addresses the compound's faces, not its own.
+
+    Reading the section decompresses the payload, so it is read only where the
+    summary recorded with it (in the node's metadata, see
+    'ocp_serialize.encode_shape') says it addresses faces one by one - which
+    nearly nothing does, so a drawing costs what it cost before - and 'memo',
+    keyed by the payload as 'ocp_serialize' shares a decoding, is what makes an
+    assembly of one brick placed 731 times read it once.
+    """
+    if not ocp_serialize.is_shape_object(node) or node.get(ocp_serialize.KEY_CHILD) is not None:
+        return None
+    if not _addresses_faces(node):
+        return None
+    payload = node[ocp_serialize.KEY_BREP]
+    key = payload if isinstance(payload, (str, bytes)) else bytes(payload)
+    if memo is not None and key in memo:
+        return memo[key]
+    colors = section_face_colors(ocp_serialize.cmf_of_payload(payload))
+    if memo is not None:
+        memo[key] = colors
+    return colors
+
+
+def section_face_colors(section):
+    """'[colour or None per face]' a CMF section gives the faces it addresses, or None if it colours none one by one.
+
+    The one rule for a face's colour, for everything that draws one: its own
+    set's display, else the part's own set's (see 'cmf_section.Section.face_set').
+    """
+    if section is None or not section.faces:
+        return None
+    colors = []
+    for index in range(len(section.faces)):
+        rgba = section.face_set(index).rgba
+        colors.append(_hex(rgba) if rgba is not None else None)
+    return colors if any(colors) else None
+
+
+def _addresses_faces(node) -> bool:
+    """Whether the CMF summary recorded with a node's geometry counts faces one by one."""
+    metadata = node.get(ocp_serialize.KEY_METADATA)
+    summary = metadata.get(ocp_serialize.METADATA_CMF) if isinstance(metadata, dict) else None
+    if not isinstance(summary, dict):
+        return False
+    return any(isinstance(entry.get("faces"), int) for entry in summary.get("sets") or [] if isinstance(entry, dict))
+
+
+def colors_of(tree, warnings=None, memo=None):
     """Every colour 'tree' is drawn in, each once, in the order they are met.
 
-    Read off what each node says, without touching any geometry, so asking costs
-    nothing. A tree with no geometry in it at all is drawn in nothing.
+    Read off what each node says, and off the CMF section of each payload that
+    has one, without decoding any geometry. A tree with no geometry in it at all
+    is drawn in nothing.
     """
     found = []
+    memo = {} if memo is None else memo
 
     def walk(node, inherited):
         color = _own(node, warnings) or inherited
         if ocp_serialize.is_shape_object(node):
-            if color not in found:
-                found.append(color)
+            for face_color in face_colors(node, memo) or [color]:
+                face_color = face_color or color
+                if face_color not in found:
+                    found.append(face_color)
         elif ocp_serialize.is_assembly_object(node):
             for child in node[ocp_serialize.KEY_ASSEMBLY]:
                 walk(child, color)
@@ -166,7 +239,8 @@ def split_by_color(tree, whole, warnings=None):
     leaves of one colour gathered into one compound. Nothing is decoded again;
     the leaves are the very shapes 'whole' was built of, placed the same way.
     """
-    colors = colors_of(tree, warnings)
+    memo = {}
+    colors = colors_of(tree, warnings, memo)
     if len(colors) <= 1:
         return [(colors[0] if colors else DEFAULT_COLOR, whole)]
 
@@ -186,10 +260,14 @@ def split_by_color(tree, whole, warnings=None):
             # by every location above it, innermost first - which is what
             # placing the compound of a node's children at the node's location
             # does to each of them.
-            shape = placed(node[ocp_serialize.KEY_SHAPE], node.get(ocp_serialize.KEY_LOCATION))
-            for packed in reversed(above):
-                shape = shape.Moved(ocp_serialize.toploc_from_packed(packed))
-            leaves[color].append(shape)
+            for face_color, piece in _pieces(node, color, memo):
+                shape = placed(piece, node.get(ocp_serialize.KEY_LOCATION))
+                for packed in reversed(above):
+                    shape = shape.Moved(ocp_serialize.toploc_from_packed(packed))
+                # 'setdefault': a section written for other geometry is ignored
+                # for the faces (see 'faces_by_color'), and the node's own
+                # colour is then one 'colors_of' may not have met.
+                leaves.setdefault(face_color, []).append(shape)
         elif ocp_serialize.is_assembly_object(node):
             location = node.get(ocp_serialize.KEY_LOCATION)
             inner = above + [location] if location is not None else above
@@ -197,4 +275,50 @@ def split_by_color(tree, whole, warnings=None):
                 walk(child, color, inner)
 
     walk(tree, DEFAULT_COLOR, [])
-    return [(color, ocp_serialize.compound_of(leaves[color])) for color in colors]
+    return [(color, ocp_serialize.compound_of(shapes)) for color, shapes in leaves.items() if shapes]
+
+
+def _pieces(node, color, memo):
+    """'[(colour, shape), ...]': a shape node's geometry, by the colour each face of it is drawn in.
+
+    The node's own geometry, whole, where its section colours no face of it one
+    by one, which is nearly always; otherwise its faces gathered by colour, a
+    compound per colour, each face where it is in the geometry. A face the
+    section leaves uncoloured is in 'color', the node's.
+    """
+    return faces_by_color(node[ocp_serialize.KEY_SHAPE], face_colors(node, memo), color)
+
+
+def faces_by_color(shape, colors, color):
+    """'[(colour, shape), ...]': 'shape' whole in 'color' if 'colors' is None, else its faces gathered by colour.
+
+    'colors' is what 'section_face_colors' answers; a face it leaves uncoloured
+    is in 'color'. A list that is not as long as the shape has faces was written
+    for other geometry, says nothing true of this one, and is ignored.
+    """
+    if colors is None:
+        return [(color, shape)]
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import TopTools_IndexedMapOfShape
+
+    faces = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(shape, TopAbs_FACE, faces)
+    if faces.Extent() != len(colors):
+        # A section written for other geometry: it says nothing true of this one.
+        return [(color, shape)]
+    groups = {}
+    for index in range(faces.Extent()):
+        groups.setdefault(colors[index] or color, []).append(faces.FindKey(index + 1))
+    # An edge that bounds no face - a wire beside the solid - has no face to
+    # take a colour from, and would otherwise be left out of every group and so
+    # out of the drawing: it is drawn in the node's own colour.
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
+
+    edge_faces = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndAncestors_s(shape, TopAbs_EDGE, TopAbs_FACE, edge_faces)
+    for index in range(1, edge_faces.Extent() + 1):
+        if edge_faces.FindFromIndex(index).Extent() == 0:
+            groups.setdefault(color, []).append(edge_faces.FindKey(index))
+    return [(face_color, ocp_serialize.compound_of(members)) for face_color, members in groups.items()]

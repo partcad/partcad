@@ -608,6 +608,12 @@ class JsonRpcBackend implements PartcadBackend {
         reg('partcad.manufacturingTree', (a) =>
             this.send('manufacturing.tree', { package: a.pkg, object: a.name, kind: a.kind }, a.cancellation),
         );
+        // The Design tab's CMF tab: what each item of an object is in, or what a
+        // colour, a material or a finish is - which only 'kind' can say, since a
+        // declaration's name is no object's.
+        reg('partcad.cmfInfo', (a) =>
+            this.send('cmf.info', { package: a.pkg, object: a.name, kind: a.kind }, a.cancellation),
+        );
         reg('partcad.manufacturingDetails', (a) =>
             this.send(
                 'manufacturing.details',

@@ -40,6 +40,30 @@ from ...project import Project
 from ..part import import_part_action
 
 
+def _instance_params(project, cmf_override):
+    """The link 'params:' that say an instance's own colour, or None (docs/design/cmf.md, section 7).
+
+    A STEP occurrence's overriding style draws that instance in its colour
+    whatever its definition says - outer wins, in STEP. PartCAD's rule is that
+    inner wins, so the importer states the source's intent in PartCAD's: the
+    colour as the link's 'color', and 'sourceCmf: color' so that it replaces
+    the part's own rather than filling in for it. The colour is the
+    declaration the package claims it with ('ids: {step: ...}'), or the
+    display-only 'rgba' of it, which a link setting it makes a picture of the
+    assembly anyway.
+    """
+    if not isinstance(cmf_override, dict) or not cmf_override.get("color"):
+        return None
+    from ...cmf_conventions import reference_for
+
+    reference = reference_for(
+        project.ctx, project.name, "color", cmf_override["color"], cmf_override.get("rgba"), "step"
+    )
+    if reference is None:
+        return None
+    return {"color": reference, "sourceCmf": "color"}
+
+
 def import_urdf_action(project: Project, assembly_file: str, config: dict) -> str:
     """Import a URDF as the parts, interfaces and .assy that say the same thing.
 
@@ -152,12 +176,16 @@ def import_assy_action(
             }
         location = CommentedSeq(node["location"])
         location.fa.set_flow_style()
-        return {
+        link = {
             "type": "part",
             "name": node["name"],
             "part": register(node["part_file"]),
             "location": location,
         }
+        params = _instance_params(project, node.get("cmf"))
+        if params:
+            link["params"] = params
+        return link
 
     top_data = build(root)
     assy_name = Path(top_data["name"]).name

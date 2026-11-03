@@ -33,6 +33,16 @@ Every number is written with 'repr()', which is the shortest text that reads
 back as the same double: nothing is rounded on the way through, where OCCT's own
 ASCII writer rounds a parameter to fifteen digits.
 
+And every number is the same on every machine, because what is written is
+digested and the digest is a cache key machines share (see
+'shape_envelope.payload_digest'). So nothing here, or in 'basic_shapes', reaches
+for an operation whose last bit depends on the platform or on the Python: only
+what IEEE 754 rounds correctly (+, -, *, /, sqrt), 'math.fsum' - exactly rounded,
+where 'sum()' of floats became compensated in Python 3.12 and so answers 3.11
+differently - and trigonometry worked out in 'decimal' ('basic_shapes.cos_sin')
+rather than by the C library, which Linux, macOS and Windows each implement
+their own way.
+
 Nothing here knows what a sketch or a part is; 'basic_shapes' does.
 """
 
@@ -92,7 +102,7 @@ def scaled(a, factor):
 
 
 def dot(a, b):
-    return sum(x * y for x, y in zip(a, b))
+    return math.fsum(x * y for x, y in zip(a, b))
 
 
 def cross(a, b):
@@ -101,7 +111,7 @@ def cross(a, b):
 
 def unit(a):
     """'a' divided by its length, as 'gp_Dir' makes it; a vector of no length is refused, as there."""
-    length = math.sqrt(sum(x * x for x in a))
+    length = math.sqrt(math.fsum(x * x for x in a))
     if length <= 1e-300 or not math.isfinite(length):
         raise ValueError("a direction needs a length: %r" % (tuple(a),))
     return tuple(x / length for x in a)
@@ -149,9 +159,6 @@ class Line:
         self.point = tuple(float(x) for x in point)
         self.direction = unit(direction)
 
-    def value(self, parameter):
-        return add(self.point, scaled(self.direction, parameter))
-
     def record(self) -> str:
         return "1 %s %s" % (_reals(self.point), _reals(self.direction))
 
@@ -165,15 +172,6 @@ class Circle:
         self.radius = float(radius)
         if not self.radius > 0.0:
             raise ValueError("a circle needs a radius greater than zero, not %r" % radius)
-
-    def value(self, parameter):
-        return add(
-            self.centre,
-            add(
-                scaled(self.xdir, self.radius * math.cos(parameter)),
-                scaled(self.ydir, self.radius * math.sin(parameter)),
-            ),
-        )
 
     def record(self) -> str:
         return "2 %s %s %s %s %s" % (

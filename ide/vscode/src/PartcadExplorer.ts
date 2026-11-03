@@ -23,6 +23,9 @@ import {
     ITEM_TYPE_PART,
     ITEM_TYPE_SOFTWARE,
     ITEM_TYPE_BROKEN,
+    ITEM_TYPE_COLOR,
+    ITEM_TYPE_MATERIAL,
+    ITEM_TYPE_FINISH,
     bareType,
 } from './PartcadItem';
 
@@ -40,8 +43,19 @@ type ItemMetadata = {
     // Optional: an older PartCAD service does not report any of these.
     scenes?: PartConfig[];
     software?: PartConfig[];
+    // Optional too: a PartCAD older than CMF declarations reports none.
+    colors?: PartConfig[];
+    materials?: PartConfig[];
+    finishes?: PartConfig[];
     broken?: BrokenItem[];
 };
+
+/** The package sections of CMF declarations, in the order CMF names them, and the item each is listed as. */
+const DECLARATION_SECTIONS: ['colors' | 'materials' | 'finishes', string][] = [
+    ['colors', ITEM_TYPE_COLOR],
+    ['materials', ITEM_TYPE_MATERIAL],
+    ['finishes', ITEM_TYPE_FINISH],
+];
 
 /** The ASSY files an .assy-typed object of one kind points at. */
 function assyPaths(items: PartConfig[] | undefined): string[] {
@@ -446,6 +460,26 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
             // is not handed over as a file to open. The inspector shows it as
             // the path it is.
             elements.push(new PartcadItem(dir, item.name, items.name, item, undefined, ITEM_TYPE_SOFTWARE));
+        }
+
+        // After the objects, because these are what the objects are made in
+        // rather than objects: the colours, materials and finishes the package
+        // declares, each kind sorted by name, an alias after what it names as
+        // above. They have no file of their own to open - a declaration is a
+        // few lines of 'partcad.yaml' - and are opened in the Digital Thread.
+        for (const [section, itemType] of DECLARATION_SECTIONS) {
+            const declared = (items[section] ?? []).slice().sort((i1, i2) => {
+                if (i1.type === 'alias' && i2.type !== 'alias') {
+                    return 1;
+                }
+                if (i1.type !== 'alias' && i2.type === 'alias') {
+                    return -1;
+                }
+                return i1['name'].localeCompare(i2['name']);
+            });
+            for (const declaration of declared) {
+                elements.push(new PartcadItem(dir, declaration.name, items.name, declaration, undefined, itemType));
+            }
         }
 
         // Last, so they never push the working objects out of view, and sorted

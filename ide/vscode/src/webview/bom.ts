@@ -10,9 +10,12 @@
 // tree flattened and counted, with the store data that says what to order. The
 // columns are the ones '_bom_output()' prints for the same reason it prints
 // them: buying an item needs the vendor and the SKU, not the name PartCAD knows
-// it by.
+// it by. The Color, Material and Finish columns after them are what the item
+// is in, which is half of what it is ordered as: a red housing and a black one
+// are two items (see 'cmf.ts', which draws them the way every view does).
 //
 
+import { CMF_COLUMNS, cmfColumns } from './cmf';
 import { el, empty, placeholder } from './dom';
 import { BomData, BomItem } from './messages';
 
@@ -35,6 +38,7 @@ export function renderBom(root: HTMLElement, data: BomData): void {
         ['Item', ''],
         ['Count', 'numeric'],
         ['Order as', ''],
+        ...CMF_COLUMNS,
         ['Description', ''],
     ] as [string, string][]) {
         head.appendChild(el('th', className, column));
@@ -63,6 +67,9 @@ function renderRow(item: BomItem): HTMLElement {
 
     row.appendChild(el('td', 'numeric', String(item.count)));
     row.appendChild(el('td', undefined, orderAs(item)));
+    for (const cell of cmfColumns(item.cmf)) {
+        row.appendChild(cell);
+    }
     row.appendChild(el('td', undefined, item.desc ?? ''));
     return row;
 }

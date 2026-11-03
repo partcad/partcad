@@ -23,23 +23,41 @@ import pyexpat  # noqa: F401
 import build123d as b3d
 
 sys.path.append(os.path.dirname(__file__))
+import cmf_capture
 import wrapper_common
 
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
-# before is produced again.
-CACHE_VERSION = 1
+# before is produced again. 2: a 3MF of several objects is all of them, not the
+# first, and each object's colour is carried in the part's CMF section.
+CACHE_VERSION = 2
+
+
+def _plain_mesh(path):
+    """The shape of every object Mesher reads at 'path', with nothing said of what they are in."""
+    import ocp_serialize
+
+    meshed = b3d.Mesher().read(path)
+    if len(meshed) == 1:
+        return meshed[0].wrapped
+    return ocp_serialize.compound_of([mesh.wrapped for mesh in meshed])
 
 
 def process(path, request):
+    section = None
     try:
         try:
-            shape = b3d.Mesher().read(path)[0].wrapped
+            shape, section = cmf_capture.read_mesh(path, request.get("cmfConvention", "3mf"))
         except Exception:
             if not request.get("fallback_import_stl", False):
                 raise
-            # First, make sure it's not the known problem in Mesher
-            shape = b3d.import_stl(path).wrapped
+            if os.path.splitext(path)[1].lower() == ".3mf":
+                # Only an STL can be read the other way: a 3MF is read again as
+                # Mesher reads it, without its colours, or fails as Mesher does.
+                shape = _plain_mesh(path)
+            else:
+                # First, make sure it's not the known problem in Mesher
+                shape = b3d.import_stl(path).wrapped
 
     except Exception as e:
         wrapper_common.handle_exception(e)
@@ -53,7 +71,7 @@ def process(path, request):
         "success": True,
         "exception": None,
         # Validated and moved here, while it is live (see wrapper_common.finished).
-        "shape": wrapper_common.finished(shape),
+        "shape": wrapper_common.finished(shape, cmf=section),
     }
 
 

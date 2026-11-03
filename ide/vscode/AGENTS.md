@@ -198,6 +198,13 @@ the show, before their lists are asked for, because a list can arrive while the 
 before the tab itself is requested -- and it is used once: the list opens on that entry instead of the first, or
 on the first when the object declares no such name, and every show says, so it does not linger.
 
+**A colour, a material or a finish opened from the explorer is shown by the host, not by PartCAD**
+(`PartcadViewer.showDeclaration`): there is nothing to draw, so the show is made here with no object in it, and the
+renderer gives it the Design group alone and in it the CMF tab alone (`isDeclaration` in `src/webview/messages.ts`) --
+one tab is no choice, so neither strip is drawn. Its strip is rebuilt `transient`ly (`Tabs.setTabs`), so the object
+shown next goes back to the Design tab that was open before rather than to CMF. The CMF tab asks `cmf.info` with the
+show's `kind`, which is the one thing that finds a declaration: its name is no object's.
+
 **The panel is a strip of tabs over one object, not a canvas.** 3D first, then FEA, Dynamic FEA, Heat Transfer and
 CFD for a part, then Manufacturing: what is built and what is bought, how to build it, the bill of materials, where
 to buy it and the assembly instructions; then Validation: every check `pc test` runs, check by check (Test, first),
@@ -459,7 +466,13 @@ Four things about it are load-bearing:
   or it reaches the screen only with the next turn of the camera.
 - **A shape is drawn in its own colour, and in goldenrod when it has none -- in every 3D pane, on every
   backend.** The colour is a node's `properties.color` (`#RRGGBB`, or `#RRGGBBAA` for a see-through one), or
-  the nearest ancestor's, and `appearance.ts` decides it; a node that nothing colours is `DEFAULT_COLOR`,
+  the nearest ancestor's, and `appearance.ts` decides it -- except for a primitive whose glb gives it a material
+  of its own, which is how a part that colours its faces one by one arrives (a mesh per colour; see
+  `wrapper_gltf._colored` and docs/design/cmf.md): `parseTemplate` notes that colour on the mesh before it drops
+  the file's materials (`keepOwnColors`, reading the loader's `associations`, because three gives a primitive
+  with no material a white default), and `paint` draws it in that colour with this viewer's material, so it is
+  shaded, faded and flickered like the rest. A face is more specific than its part or an assembly, so it wins
+  over the node's colour; a node that nothing colours is `DEFAULT_COLOR`,
   `0xdaa520` -- OCCT's `Quantity_NOC_GOLDENROD`, and the colour PartCAD's own 2D projections draw an
   uncoloured shape in. That constant is the twin of `DEFAULT_COLOR` in `src/partcad/wrappers/appearance.py`,
   and a test on the Python side reads `appearance.ts` to hold the two together: change both. The 3D view

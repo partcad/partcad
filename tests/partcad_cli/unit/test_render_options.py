@@ -105,6 +105,34 @@ def test_pc_adhoc_render_sends_what_pc_render_would(monkeypatch, tmp_path, scrip
     assert params["view"] == "top"
 
 
+@pytest.mark.parametrize("kind", ["part", "sketch"])
+def test_pc_adhoc_render_sends_the_picture_options_pc_render_sends(monkeypatch, script, kind):
+    """A picture of a bare file is asked for in the same words as one of an object, and sent under the same names."""
+    words = ["--style", "shaded", "--size", "square", "--background", "#102030", "--quality", "80", "--turn", "30"]
+    adhoc = _record(monkeypatch, "adhoc.render." + kind)
+    render = _record(monkeypatch, "render")
+
+    result = _invoke("adhoc", "render", kind, *words, str(script), "bracket.png")
+    assert result.exit_code == 0, result.output
+    assert _invoke("render", *words, "bracket").exit_code == 0
+
+    sent, expected = adhoc.calls[0][1], render.calls[0][1]
+    for key in ("style", "size", "background", "quality", "turn"):
+        assert sent[key] == expected[key], key
+    assert sent["style"] == "shaded" and sent["turn"] == [0, 0, 30.0]
+
+
+@pytest.mark.parametrize("option", ["--fps", "--duration", "--speed", "--preset"])
+def test_pc_adhoc_render_takes_no_video_option(monkeypatch, script, option):
+    """No video is rendered ad hoc, so a video's options are not offered there."""
+    recorder = _record(monkeypatch, "adhoc.render.part")
+
+    result = _invoke("adhoc", "render", "part", option, "1", str(script), "bracket.png")
+
+    assert result.exit_code == 2
+    assert recorder.calls == []
+
+
 @pytest.mark.parametrize("spelling", ["--output", "-t", "--format"])
 def test_the_file_type_has_pc_renders_spellings_too(monkeypatch, script, spelling):
     recorder = _record(monkeypatch, "adhoc.render.part")

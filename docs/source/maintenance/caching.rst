@@ -66,7 +66,29 @@ by default because they need an address that only a deployment can supply:
     cacheS3Region: us-east-1
 
 Each tier also takes ``...MaxEntrySize`` and ``...MinEntrySize`` to set the
-window of object sizes it accepts, and the memcached tier takes
+window of object sizes it accepts, and ``...MinBuildTime`` -- in seconds -- for
+how long an object has to have taken to build for the tier to keep it:
+
+=========================== =======
+Setting                     Default
+=========================== =======
+``cacheFilesMinBuildTime``  0.01
+``cacheRemoteMinBuildTime`` 0.05
+``cacheS3MinBuildTime``     0.05
+=========================== =======
+
+Reading an entry back costs time of its own -- a file read is a millisecond or
+two, a memcached or S3 round trip tens of them -- so an object built faster than
+that is kept in the process's memory instead, and a shared tier is spared an
+entry nobody would gain by fetching. Nought keeps everything, as before these
+settings existed. An object that memory will not hold either (larger than
+``cacheMemoryMaxEntrySize``, or with ``cacheMem`` off) is kept by every tier
+whose size window takes it, however fast it was built. A ``basic`` sketch or
+part is built in a fraction of a millisecond and is never looked up in or
+written to these tiers at all; what is derived from it -- a render, an export,
+a test result -- is cached as usual.
+
+The memcached tier takes
 ``cacheRemoteNamespace`` and ``cacheRemoteExpiration``. ``cacheS3`` additionally
 accepts ``cacheS3Prefix`` and ``cacheS3EndpointUrl``, the latter for an
 S3-compatible store that is not AWS.
@@ -95,6 +117,14 @@ content, but never its path or its modification time, so a fresh clone on
 another machine produces the same keys and a shared tier is shared. The digest
 is worked out again only when the file changes, and a file of 1 MB or more is
 not read again by the next process either.
+
+Where an entry is keyed by geometry rather than by declaration -- the
+tessellation the IDE draws, and the measurements and section views worked out
+from a shape -- the key is a digest of the shape's BREP itself, and of the
+colours and materials stated on its faces, never of the
+compressed bytes it travels in, so machines whose compressors differ (Python
+3.14's built-in zstd and the ``backports.zstd`` earlier Pythons use) share
+those entries too.
 
 An object made out of others is keyed on theirs as well: an ``extrude`` or
 ``sweep`` on its sketch, a ``compound`` part on its assembly, an ``assy``

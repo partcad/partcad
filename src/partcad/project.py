@@ -1306,7 +1306,7 @@ class Project(project_config.Configuration):
         )
         # A parametric declaration named without values is its defaults: its
         # fields rendered with them, as a reference that gives some renders the
-        # rest ('//pub/std/color:rgba' is drawn in its default colour).
+        # rest ('//builtin/color:rgba' is drawn in its default colour).
         if parameter_values or config.get("parameters"):
             config = cmf.with_parameters(config, parameter_values or {}, object_name)
         instance_name = cmf.instance_key(name, parameter_values)

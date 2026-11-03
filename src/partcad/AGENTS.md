@@ -296,6 +296,18 @@ at all).
   A hit in a farther tier is copied into the nearer ones that missed it, within each one's size window
   (`Cache._promote_async`), which judges it exactly as a write would (`Cache._admission_sizes`). So a test asserting on what a server holds flushes first (`cache_io.flush()`,
   `Cache.flush_async()`), and `tests/partcad/conftest.py` stops the thread after every test.
+- **A tier keeps what took long enough to build to be worth fetching** (`Cache.write_data_async(build_seconds=)`,
+  `CacheBackend.min_build_seconds`, `cacheFilesMinBuildTime` / `cacheRemoteMinBuildTime` / `cacheS3MinBuildTime`,
+  10, 50 and 50 ms). `Shape.get_wrapped` times a shape's build -- from the cache miss to the write, the validation,
+  the move and the scale included -- and a tier whose threshold it did not reach is not offered the entry: a file read
+  is milliseconds and a remote round trip tens of them, so an entry built faster costs about as much to fetch as to
+  build, and in a shared tier it is an entry nobody gains by. It is kept in this process's memory instead. Except
+  where memory will not hold it (`ShapeCache.write_async`: larger than `cacheMemoryMaxEntrySize`, or `cacheMem` off):
+  a shape in neither is built on every ask, and an assembly a daemon names as "build this first"
+  (`get_uncached_subassemblies_async`) would never come to count as built, so the whole write is then offered to every
+  tier on size alone. Only shape writes say how long; an artifact's write (a render, a tessellation, a verdict) is
+  offered on size alone, since what produced it was a sandbox.
+
 - **A file is keyed on all of its content** (`cache_hash.file_digest`): the SHA-256 of it, never its path or its
   timestamps, so a shared tier is shared. The digest is remembered by the file's identity (`cache_hash.FileMemo`:
   device, inode, size, modification and change time) for the life of the process, and for a file of 1 MB or
@@ -375,6 +387,19 @@ at all).
   output instead is `basic_shapes.CACHE_VERSION`, through `ShapeFactory.CODE_VERSIONS`. Raise it with any change to
   what either writes. The measurements every envelope carries (`bbox`, `volume`, `centroid`, `unitInertia`) are
   worked out from the dimensions, not integrated.
+
+  **Built in place** (`Shape.built_in_place`): a basic shape is built by its factory where it is asked for, in a
+  tenth of a millisecond to half of one. So it goes to no thread pool (neither `get_wrapped`'s hop nor
+  `get_shape`'s), is neither looked up in nor written to the shape cache -- a hit from the files tier took longer than
+  building it, and a miss and a write four milliseconds more -- and opens no action in the log. It keeps its cache
+  key: a render, a tessellation or a test of it is worth caching, and is cached under that key as before.
+
+  **Its bytes are the same on every machine**, because they are digested into keys machines share (see "A digest is
+  of the BREP" below). `brep_ascii` and `basic_shapes` use only what IEEE 754 rounds correctly (+, -, *, /, sqrt),
+  `math.fsum` (exactly rounded; `sum()` of floats became compensated in Python 3.12) and `basic_shapes.cos_sin`,
+  trigonometry in `decimal` rather than the C library each platform writes its own way -- which also makes a quarter
+  turn exact. `test_payload_digest.py` reads both modules' source and fails on `math.sin`, `math.cos`,
+  `math.radians`, `math.dist` or a `sum()`.
 
 - **Software is not a shape** (`software.py`, `software_factory*.py`): a package's `software:` section declares
   the files a product ships with -- firmware images, binaries -- and `Software` deliberately does not inherit
@@ -462,10 +487,10 @@ at all).
   of such a part is also the one lookup in `Project._enumerate_shapes_async()` that has to be awaited
   (`get_part_async`): the part does not exist until the object that produces it has been built.
 
-- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships six packages inside itself, reachable from
+- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships seven packages inside itself, reachable from
   every context as `//builtin/export`, `//builtin/render`, `//builtin/import`, `//builtin/open`,
-  `//builtin/cam` and `//builtin/scene` (loaded
-  on demand by `Context.get_project`, see `output.py`). All but the last declare implementations — the file
+  `//builtin/cam`, `//builtin/scene` and `//builtin/color` (loaded
+  on demand by `Context.get_project`, see `output.py`). All but the last two declare implementations — the file
   types `pc export`, `pc render`, `pc import`, `pc ide open` and `pc cam` write — in
   exactly the form a user's package declares one: a `path` to a script, its `pythonRequirements`, and the
   parameters. So adding a
@@ -489,6 +514,65 @@ at all).
   can disagree along a curved silhouette. (Not to be confused with the `reproducible` of
   `file_factory.unreproducible_reason()` below, which is about whether an object can be *made* twice, not
   whether a file is written twice the same.)
+
+- **Pictures and videos** (`./src/partcad/builtin/render/render_raster.py`, `raster_scene.py`,
+  `viewpoint.py`, `render_video.py`, `video_encode.py`): there is **one** raster renderer.
+  `render_raster.py` draws every PNG and JPEG and every frame of a video, in one of two `style`s: `lines`
+  (the default for a picture: the SVG projection, rasterized by svglib) or `shaded` (the Digital Thread's 3D
+  view, drawn by `raster_scene.py`). `//builtin/render` declares ten video file types (`mp4`, `m4v`, `mov`,
+  `qt`, `mkv`, `webm`, `avi`, `wmv`, `asf`, `ogv`), all one script, whose every frame is a `shaded` picture
+  drawn by `render_raster.Shaded` from the same fields a PNG is, turned by the video's `turn` plus its `speed`
+  times the time -- so any frame is `pc render -t png --style shaded --turn ...`, and a test holds them to the
+  same pixels. Do not give a video a way of drawing a frame that a picture does not have. `turn` itself is
+  every render's (`viewpoint.py`, `pc render --turn`): the object turned in front of the camera, which the
+  projection draws by turning its viewport the other way. Three things about it are load-bearing.
+
+  * **The pictures are drawn by numpy, not by a GPU** (`raster_scene.py`). The view is three.js in a
+    webview, and a sandbox has no browser; so the camera, the light rig, the Phong material, the tone mapping
+    and the colours of `ide/vscode/src/webview/scene.ts` are written out again, constant for constant, with
+    the shading worked out at the corners of each triangle and blended across it. That is only close to a
+    GPU's per-pixel light because large triangles are split first (`refine`, `MAX_EDGE`): a flat face OCCT
+    meshes as two triangles showed the diagonal between them as a crease. The camera looks from the 3D
+    view's direction and is framed as it is, on the sphere around the object's box (`frame_distance` is
+    `fitDistance` in `ide/vscode/src/webview/cameraView.ts`, `Scene.sphere` its `enclosingRadius`), so no
+    turn -- no frame of a video -- leaves the picture; a picture then leaves `margin` (7.5% on each side of
+    its narrower side, `render_raster.DEFAULT_MARGIN`) beyond that sphere, which the 3D view does not. A
+    change to either fit is a change to the other, and a test reads the IDE's to say so. A drawing of lines
+    gets the same margin, as padding all round. A change to what
+    the 3D view draws -- its lights, its background -- is a change to this module too. It meshes a copy of the shape: a PNG shares its decoding with the SVG beside it
+    (`TESSELLATION`), and a mesh left on, or found on, that decoding would make either depend on the other.
+  * **GStreamer is a program, run as `gst-launch-1.0`** (`video_encode.py`), with the frames on its standard
+    input. pip cannot install it, so each video file type names PartCAD's GStreamer image as its
+    `dockerImage`, `ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer` -- the
+    `gstreamer` target of `tools/containers/python/Dockerfile`, built for `DEFAULT_PYTHON_VERSION` alone --
+    and elsewhere the machine's own is used. `{version}` and `{python}` are filled in by
+    `partcad_utils.container_image.expand` (`Implementation.docker_image`), and what is keyed is the
+    declaration as written (`Implementation.docker_image_declared`), so a release moves no key. A machine
+    rendering without PartCAD's own image is told at debug level, not warned (`Context._note_image_skipped`,
+    `container_image.is_partcad_image`): the implementation says what is missing itself.
+  * **`append` keeps where the turn stopped in a tag of the container** (`video_encode.state_text`), and the
+    video appended to is decoded by a separate GStreamer process and handed to the encoding one over a
+    socket on this machine (`Pipeline._send_prefix`), rather than decoded inside it: a demuxer sends the old
+    file's tags ahead of its frames, a muxer keeps the first value of each tag it is told, and the new
+    state was lost. Raw frames carry no tags. Each muxer keeps different tags (`CONTAINERS['state_tag']`).
+    Ogg keeps none of them for a Theora stream -- `theoraenc` is no `GstTagSetter`, so its comment header
+    is written empty -- and its state goes into that header as Vorbis comments (`PARTCAD_ANGLES=...`)
+    once the file is written (`write_comments`): the one page holding the header is rebuilt with Ogg's own
+    CRC (`ogg_crc`, not zlib's), keeping its sequence number, and every other page is copied byte for byte;
+    `read_state` reads them back. ASF carries no sound, because GStreamer's ASF muxer drops video frames once
+    it interleaves audio and libav's writes broken timestamps. A video that reads a file -- the one it is
+    appended to, a soundtrack, a logo -- reports no `files`, so it is not cached; the file's path is
+    `request["package_dir"]` (`output.PACKAGE_DIR_KEY`), which is added after the request is keyed on, as
+    `cache_dir` is. A sandbox that exchanges files (`EXCHANGES_FILES`: `remote`, `docker` with
+    `useDockerRemote`) cannot read that path, and is never sent what the request says, only what the
+    command names: so a request one of whose declared fields names a file of its package (`output.names_a_package_file`)
+    gets `--package-dir <index> <directory>` after the triples (`output.PACKAGE_DIR_ARGUMENT`), which
+    sends the package and is rewritten to where it landed, and `wrapper_export` takes the group off and
+    puts that directory in the request. Which fields name such files is declared by the file type,
+    `packageFiles: [logo, audio]` (`Implementation.package_files`, an implementation key and so never a
+    parameter), and no other field is looked at: the package is sent whole, and a line of text that
+    happens to be a file's name must not send it. Do not resolve such a path in the core instead: what a
+    field means is the implementation's to say.
 
 - **Engineering analysis** (`./src/partcad/cae.py`, `Shape.analyze_async()`, `./src/partcad/test/cae.py`):
   `pc cae fea`/`dynamic`/`thermal`/`cfd` are a third output section, `cae:`, resolved by the very code that resolves
@@ -1058,7 +1142,10 @@ at all).
   `//builtin/scene` is the odd one out: it declares an *object* rather than a way of producing one — the
   scene a `simulate:` places its subject in when it names none of its own. It is an ordinary `assy` scene
   whose `.assy` is a Jinja2 template, and the only thing that makes it the default is that
-  `simulation.DEFAULT_SCENE` names it.
+  `simulation.DEFAULT_SCENE` names it. `//builtin/color` is the other: one colour declaration, the
+  display-only `rgba` (`//builtin/color:rgba;color=C91A09FF`, `manufacturable: false`). It is PartCAD's because
+  PartCAD writes references to it (`cmf.RGBA`) - for a hex or CSS colour, and for a source's colour nothing
+  claims - and a reference it writes has to resolve in any context, with or without the public index.
 
   **There is deliberately no `//builtin/simulate`.** `simulation:` is a third section resolved exactly like
   the other two — a plugin is an `output.Implementation` like any other — and PartCAD implements none of it.
@@ -1468,6 +1555,16 @@ at all).
   the cache beside one just built is the same shape in two objects; it is worked out once per payload *object*
   (`shape_envelope.Payloads`), since every node of a tree built in one process holds its part's bytes object. It is the arrangement `KEY_SKETCHES` already had, one level up, and sketches now name this
   table too.
+
+  **A digest is of the uncompressed payload, never of the zstd frame carrying it** (`payload_digest`, both copies):
+  the BREP and the CMF section after it when there is one, so one solid in two colours is two digests. Everything keyed
+  by one is shared between machines -- each shape's tessellation, and every request a wrapper is keyed on by content
+  (`cache_artifacts.request_key`, which names each payload by its digest rather than writing it out) -- and two
+  compressors need not write the same frame for the same bytes: Python 3.14 compresses with the standard library's
+  zstd, earlier ones with `backports.zstd`, and each may sit on another libzstd. Keyed on the frame, one geometry was
+  a key per compressor. The core decompresses a chunk at a time into the digest, bounded as `brep_plain()` is, at
+  about a millisecond per megabyte of BREP, once per payload object; the sandbox's copy decompresses whole. The two
+  have to agree digit for digit, which `tests/partcad/unit/test_payload_digest.py` holds them to.
 
   **The BREP form gets the same sharing where it is decoded** (`ocp_serialize._shared_shape`, used by
   `decode_shape`, `decode_tree` and `decode`): every node of one decoding that carries the same payload gets the

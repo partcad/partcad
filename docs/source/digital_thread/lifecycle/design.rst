@@ -65,9 +65,9 @@ exactly which bytes it was built from (see :ref:`reproducibility`).
 In the UI
 =========
 
-**Design** is what the Digital Thread opens on, and it is three tabs over one
-object -- the same geometry asked for three different ways. Each has a chapter
-of its own:
+**Design** is what the Digital Thread opens on, and it is four tabs over one
+object -- the same geometry asked for three different ways, and what it is in.
+Each has a chapter of its own:
 
 :doc:`3D </digital_thread/lifecycle/design_3d>`
   The shape to turn, with a tree of what it is made of -- its links, its ports
@@ -85,15 +85,21 @@ of its own:
   A dimensioned drawing of a part or an assembly, laid out by a drawing package
   rather than by PartCAD, which the tab names.
 
+:doc:`CMF </digital_thread/lifecycle/design_cmf>`
+  The colour, material and finish of each item a part or an assembly is made
+  of, the ones that are not specified first. A colour, a material or a finish
+  opened from the PartCAD Explorer is shown on this tab alone.
+
 .. image:: /images/dt-design.png
   :width: 100%
   :align: center
-  :alt: The Digital Thread's Design group: its three tabs, the object tree and the 3D view
+  :alt: The Digital Thread's Design group: its tabs, the object tree and the 3D view
 
 The panel is driven by whatever is selected in the PartCAD Explorer, and the
 :ref:`view panel <dt-design-3d>` down its right -- the orientation gizmo, the
-axis views, the sections and the viewpoint -- is shared by all three: a section
-set on the 3D tab is the section the 2D and Draft tabs draw.
+axis views, the sections and the viewpoint -- is shared by the three that draw
+the object: a section set on the 3D tab is the section the 2D and Draft tabs
+draw.
 
 The editing loop runs through this group. **Edit** in the Explorer opens the
 file an object *is* -- the script a part is written in, an ASSY file, a

@@ -12,6 +12,19 @@
 // takes the colour of the nearest node above it that does, so that a part placed
 // in an assembly that states a colour is drawn in it until it says otherwise.
 //
+// A shape can also say it face by face. A part whose CMF colours its faces one
+// by one - a two-colour moulding, a STEP file with a painted face - arrives as
+// a glTF of a mesh per colour, each primitive with a material of its own
+// (PartCAD's 'wrapper_gltf._colored'; see docs/design/cmf.md, section 9). Such
+// a primitive is drawn in its own colour, whatever the node and the nodes above
+// it say: what the part states of a face is more specific than anything stated
+// of the part or of an assembly it is placed in, which is the one precedence
+// rule of CMF. Only the colour is taken from the file - the material it is drawn
+// with is still this viewer's, so it is lit, faded by the Opacity slider and
+// flickered exactly as everything else is - and a primitive that brings no
+// material keeps the node's colour, which is every primitive of every part that
+// does not colour its faces.
+//
 // A shape that nothing above it colours is the common case, and it is drawn in
 // goldenrod: the colour OCCT draws a shape nobody coloured in
 // ('Quantity_NOC_GOLDENROD'), which is what anybody who has looked at a solid in
@@ -104,6 +117,42 @@ export function statedAppearance(node: ShowNode): Appearance | undefined {
  */
 export function appearanceOf(node: ShowNode, inherited: Appearance = DEFAULT_APPEARANCE): Appearance {
     return statedAppearance(node) ?? inherited;
+}
+
+/**
+ * Where a primitive's own colour is kept once its file's material is gone: the
+ * key of its 'userData' (see 'ownAppearance').
+ */
+export const OWN_APPEARANCE = 'partcadOwnAppearance';
+
+/**
+ * The colour a glTF primitive brings with it, or undefined when it brings none.
+ *
+ * 'fromFile' is whether 'material' is one the file declares - three gives a
+ * primitive with no material a default one of its own, white, which is not a
+ * colour anybody stated and must not be drawn as one. Read as sRGB, which is
+ * what an 'Appearance' is: three keeps a glTF's linear factors in its linear
+ * working space and gives them back converted, so a face stated '#C91A09' comes
+ * out '#C91A09' again. Its opacity counts only when the file says it is blended;
+ * an opaque material's alpha means nothing.
+ */
+export function ownAppearance(
+    material: THREE.Material | THREE.Material[] | null | undefined,
+    fromFile: boolean,
+): Appearance | undefined {
+    if (!fromFile || !material || Array.isArray(material)) {
+        return undefined;
+    }
+    const color = (material as THREE.Material & { color?: THREE.Color }).color;
+    if (color?.isColor !== true) {
+        return undefined;
+    }
+    return { color: color.getHex(THREE.SRGBColorSpace), opacity: material.transparent ? material.opacity : 1 };
+}
+
+/** What a primitive is drawn as: its own colour where it brought one, else the colour of the node holding it. */
+export function primitiveAppearance(own: Appearance | undefined, node: Appearance): Appearance {
+    return own ?? node;
 }
 
 /**

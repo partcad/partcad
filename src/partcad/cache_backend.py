@@ -83,11 +83,27 @@ class CacheBackend:
 
     name = "backend"
 
-    def __init__(self, user_config, data_type: str, min_entry_size: int = 0, max_entry_size: int = 0) -> None:
+    def __init__(
+        self,
+        user_config,
+        data_type: str,
+        min_entry_size: int = 0,
+        max_entry_size: int = 0,
+        min_build_seconds: float = 0.0,
+    ) -> None:
         self.user_config = user_config
         self.data_type = data_type
         self.min_entry_size = min_entry_size
         self.max_entry_size = max_entry_size
+        # How long what is written has to have taken to build for this tier to
+        # keep it, for a write that says how long that was (see
+        # 'Cache.write_data_async'). Below it, fetching the entry back costs
+        # about what building it again does.
+        self.min_build_seconds = min_build_seconds
+
+    def worth_keeping(self, build_seconds) -> bool:
+        """Whether what took 'build_seconds' to build is worth a place in this tier; None is always."""
+        return build_seconds is None or build_seconds >= self.min_build_seconds
 
     # Whether this tier also stores the '.name' sidecar that records which
     # object a hash belongs to. It is a local debugging aid - worth having when

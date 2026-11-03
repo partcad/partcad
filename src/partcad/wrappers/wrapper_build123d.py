@@ -16,6 +16,7 @@ import re
 import sys
 
 sys.path.append(os.path.dirname(__file__))
+import cmf_capture
 import custom_cqgi
 import wrapper_common
 import py_stubs.ocp_vscode  # Make 'sys.modules["py_stubs.ocp_vscode"]' available
@@ -41,10 +42,14 @@ from ocp_tessellate.ocp_utils import (
 #    earlier release, whose key says 1, ever reads either entry: it would take
 #    the part from the one and find components it cannot read in the other -
 #    a part handed back without its components, which is worse than a miss.
-CACHE_VERSION = 2
+# 3: what the script says its shapes are in - build123d's '.color' and '.material', and 'set_cmf' - is
+# carried in the part's CMF section (see cmf_capture).
+CACHE_VERSION = 3
 
 
 def process(path, request):
+    # What an earlier build in this process noted is not this part's.
+    cmf_capture.reset()
     build_parameters = {}
     if "patch" in request:
         patch = request["patch"]
@@ -98,6 +103,10 @@ def process(path, request):
         # BuildPart, BuildSketch, BuildLine
         if is_build123d(shape):
             shape = getattr(shape, shape._obj_name)  # convert to direct API
+
+        # What the object says it is in - '.color', '.material', its children's
+        # - noted against its shapes before it is taken apart (see cmf_capture).
+        cmf_capture.note_build123d(shape)
 
         # TODO(clairbee): do we really want to explode compounds?
         #
@@ -209,7 +218,10 @@ def process(path, request):
     # it; a sketch asks for none of it. Not one the core is about to drop: a
     # failed build, or one that showed nothing.
     compound, components = wrapper_common.encode_combined(
-        compound, components, finish=bool(build_result.success and components)
+        compound,
+        components,
+        finish=bool(build_result.success and components),
+        cmf=cmf_capture.section_for(compound) if request.get("kind", "part") == "part" and components else None,
     )
     return {
         "success": build_result.success,

@@ -129,7 +129,12 @@ from . import logging as pc_logging
 #      BREP payload ('ocp_serialize._holds_lone_polygon'). Under 15 it was
 #      written without one, and an entry written then would go on being
 #      served with an edge of nothing at all.
-VERSION = 16
+#  17: a payload's digest ('shape_envelope.payload_digest') is of its plain bytes, not
+#      of the zstd frame it is carried in, so that machines whose compressors
+#      write different frames key the same geometry alike. An assembly's tree
+#      names its payloads by that digest, and so does every tessellation and
+#      every request keyed by content; under 16 they were named by the frame.
+VERSION = 17
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.

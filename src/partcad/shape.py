@@ -17,6 +17,7 @@ import os
 import sys
 import tempfile
 import threading
+import time
 import warnings
 from typing import TYPE_CHECKING, Optional
 
@@ -174,6 +175,10 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         "cache",
         "cache_dependencies_ignore",
         "category",
+        # What the 'cmf' check holds the object to ('require'), not what it is:
+        # whether a finding fails or warns. Hashed, turning it on rebuilt the
+        # part and every assembly holding it, to the same geometry.
+        "cmf",
         # How the thing is packaged for sale, not what it is. The third of the
         # (vendor, SKU, pack size) record, and the only one of the three that
         # was missing here - so the same geometry sold in bags of 25 keyed
@@ -615,6 +620,15 @@ class Shape(ShapeConfiguration):
     # children are spread over the pool rather than built one after another on
     # the one thread it would have been given.
     built_on_pool = False
+
+    # Whether this shape is built where it is asked for, by its factory, in the
+    # time a cache lookup would take: a 'basic' sketch or part, whose BREP the
+    # factory writes itself (see 'basic_shapes'). Such a shape goes to no thread
+    # pool and is neither looked up in the shape cache nor written to it - only
+    # kept in this process's memory once built. It keeps its cache key, which
+    # everything derived from it (a render, a tessellation, a test's verdict)
+    # is cached under: those are worth caching, and the shape is not.
+    built_in_place = False
 
     # What a shape built here rather than read from a declaration is a view of,
     # and what about it: the picture of a step of an assembly instruction book
@@ -1235,7 +1249,15 @@ class Shape(ShapeConfiguration):
             # from inside a preparation, whose chain is a context variable the
             # hop would leave behind: the far side would not know it for part
             # of that preparation, and could wait for what is waiting for it.
-            if sync_threads.current_slot() is None and not _held_by_current_task(self) and _preparation.get() is None:
+            #
+            # Nor for a shape built in place, which takes less time to build than
+            # the hop would (see 'built_in_place').
+            if (
+                not self.built_in_place
+                and sync_threads.current_slot() is None
+                and not _held_by_current_task(self)
+                and _preparation.get() is None
+            ):
                 return await sync_threads.threadpool_manager.run_async(self._get_wrapped, ctx)
         return await self._get_wrapped(ctx)
 
@@ -1271,8 +1293,9 @@ class Shape(ShapeConfiguration):
             # is every part, every sketch, and most assemblies.
             await shape_ports.prepare_async(self, ctx)
 
-            # Not before the preparation is over (see above).
-            is_cacheable = self.get_cacheable() and ctx and self._prepare_finished
+            # Not before the preparation is over (see above). And not at all for a
+            # shape built in place, which is quicker to build than to read back.
+            is_cacheable = self.get_cacheable() and ctx and self._prepare_finished and not self.built_in_place
             if is_cacheable:
                 cache_hash = self.hash
                 if cache_hash:
@@ -1292,7 +1315,13 @@ class Shape(ShapeConfiguration):
                     # known yet" and is what sends 'get_metadata_async()' off to
                     # build the shape. A miss here has to leave it saying that.
                     if cached.get(self.kind) is not None:
-                        self._metadata = shape_envelope.metadata_of(cached[self.kind]) or {}
+                        # The entry holds the geometry as it was built; the
+                        # CMF it is drawn and checked with is applied on
+                        # every read (see '_with_cmf').
+                        cached[self.kind], recorded = self._with_cmf(
+                            ctx, cached[self.kind], shape_envelope.metadata_of(cached[self.kind])
+                        )
+                        self._metadata = recorded or {}
                     if to_cache_in_memory.get(self.kind, False):
                         self._wrapped = cached[self.kind]
                     if to_cache_in_memory.get("cmps", False):
@@ -1305,6 +1334,11 @@ class Shape(ShapeConfiguration):
             else:
                 cache_hash = None
 
+            # How long building this takes, everything that follows included - the
+            # validation, the move and the scale - which decides which tiers keep
+            # it (see 'Cache.write_data_async'): something built in milliseconds
+            # costs about as much to fetch from a tier as to build again.
+            build_started = time.perf_counter()
             shape = await self.get_shape(ctx)
 
             # Normalize whatever the factory produced into a BREP envelope so
@@ -1356,13 +1390,20 @@ class Shape(ShapeConfiguration):
             # never live in a wrapper of its own: a reference to another part,
             # which moves the source's geometry.
             if shape is not None and ("offset" in self.config or "scale" in self.config):
+                from . import cmf as pc_cmf
                 from . import transform
                 from .geom import Location
 
+                # What the source stated about each face, which a transform
+                # knows nothing of and rebuilds the payload without; it moves
+                # the faces and keeps them in their order, so the section is
+                # laid back after the new BREP below.
+                source_section = pc_cmf.payload_section(shape)
                 if "offset" in self.config and "offset" not in finished:
                     shape = await transform.offset(ctx, shape, self.transform("offset"))
                 if "scale" in self.config and "scale" not in finished:
                     shape = await transform.scale(ctx, shape, self.transform("scale"))
+                shape = pc_cmf.with_payload_section(shape, source_section)
 
                 # The transform rebuilt the geometry, so the encoder on the far
                 # side measured what came out and the numbers on the way back
@@ -1409,7 +1450,6 @@ class Shape(ShapeConfiguration):
             # its entry, and a run with every tier switched off all reach here
             # having built the shape and having nowhere to store what that
             # produced - and 'pc info' should still be able to say how big it is.
-            self._metadata = recorded or {}
             if recorded:
                 shape = dict(shape)
                 shape[shape_envelope.KEY_METADATA] = recorded
@@ -1435,16 +1475,46 @@ class Shape(ShapeConfiguration):
                         # it happened to be written with. See
                         # 'cache_shape.properties_key()'.
                         to_cache[properties_key(self.kind)] = properties
-                    to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
+                    to_cache_in_memory = await ctx.cache_shapes.write_async(
+                        cache_hash, to_cache, build_seconds=time.perf_counter() - build_started
+                    )
                     do_cache_in_memory = to_cache_in_memory.get(self.kind, False)
                 else:
                     do_cache_in_memory = True
-                if do_cache_in_memory:
-                    self._wrapped = shape
             else:
                 # Let the file cache tell us if we need to cache this in memory
+                do_cache_in_memory = True
+
+            # What is cached is the geometry as it was built; what is handed
+            # out is that with the CMF applied, as a hit applies it too.
+            shape, recorded = self._with_cmf(ctx, shape, recorded)
+            self._metadata = recorded or {}
+            if do_cache_in_memory:
                 self._wrapped = shape
             return shape
+
+    def _with_cmf(self, ctx, envelope, recorded):
+        """'(envelope, recorded)' with this part's CMF applied: what its source stated, converted and completed.
+
+        See 'partcad.cmf.apply_declared'. Not cached, and not something a cache
+        entry could hold: what it comes to turns on declarations the shape's key
+        does not cover - what a colour's declaration says to draw it in, which
+        declaration claims a name a STEP file uses - and an entry written with
+        one package's answer would be served to another sharing the geometry.
+        So it is applied as the shape is read, from a build or from the cache,
+        and costs a part with no CMF one look at a dictionary.
+        """
+        if envelope is None or self.kind != "part":
+            return envelope, recorded
+        from . import cmf as pc_cmf
+
+        applied, after = pc_cmf.apply_declared(ctx, self, envelope, recorded)
+        if applied is envelope:
+            return envelope, recorded
+        if after:
+            applied = dict(applied)
+            applied[shape_envelope.KEY_METADATA] = after
+        return applied, after
 
     def _shape_properties(self):
         """What this shape reports about itself, or None if it reports nothing.
@@ -2281,6 +2351,13 @@ class Shape(ShapeConfiguration):
             # about what the file will contain.
             if getattr(impl, "project", None) is not None:
                 request.setdefault("cache_dir", output.package_cache_dir(ctx, impl.project))
+            # And the directory of the package the object is in, for the same
+            # reason: what a file type names by a relative path - the soundtrack
+            # and the logo of a video - is named from there, the way every other
+            # path in a 'partcad.yaml' is.
+            package = ctx.get_project(self.project_name) if ctx is not None and self.project_name else None
+            if getattr(package, "config_dir", None):
+                request.setdefault(output.PACKAGE_DIR_KEY, os.path.abspath(package.config_dir))
 
         together = len(outputs) > 1
         impl = outputs[0].impl
@@ -2342,6 +2419,18 @@ class Shape(ShapeConfiguration):
             command = [script_path]
             for output_, config_dir in zip(outputs, config_dirs):
                 command += [output_.path, config_dir, os.path.abspath(output_.script)]
+            # The package of the object, for a file whose request names a file
+            # in it, where the sandbox would otherwise not see it: one that
+            # exchanges files is sent what the arguments name and nothing else,
+            # and rewrites those arguments - never the request, which is where
+            # 'package_dir' is. See 'output.PACKAGE_DIR_ARGUMENT'.
+            if container or getattr(runtime, "EXCHANGES_FILES", False):
+                for index, output_ in enumerate(outputs):
+                    package_dir = output_.request.get(output.PACKAGE_DIR_KEY)
+                    if output.names_a_package_file(output_.request, package_dir, output_.impl.package_files):
+                        command += [output.PACKAGE_DIR_ARGUMENT, str(index), package_dir]
+                        if container:
+                            input_dirs.append(package_dir)
             if container:
                 # The interpreter is named rather than pathed: the container's
                 # allowlist maps the name to the executable, which is what keeps
@@ -4579,6 +4668,15 @@ class Shape(ShapeConfiguration):
         sections = shape_envelope.metadata_section(metadata, shape_envelope.METADATA_SECTIONS)
         if sections:
             info.update(sections)
+
+        # What its CMF section comes to (docs/design/cmf.md, section 9): the
+        # summary recorded with the geometry, with each reference marked where
+        # it is display-only.
+        summary = metadata.get(shape_envelope.METADATA_CMF)
+        if isinstance(summary, dict):
+            from . import cmf as pc_cmf
+
+            info["CMF"] = pc_cmf.info_of(ctx, summary, self.project_name)
 
         # The per-element records are deliberately *not* reported from here.
         # They are carried for 'get_annotations_async()', whose caller is a

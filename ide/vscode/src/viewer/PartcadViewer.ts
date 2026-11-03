@@ -85,6 +85,10 @@ const TAB_COMMANDS: Record<string, string> = {
     // eslint-disable-next-line @typescript-eslint/naming-convention
     '2d': 'partcad.renderInline',
     draft: 'partcad.renderInline',
+    // What each item of the object is in - its colour, material and finish, as
+    // 'pc info' says them and the 'cmf' check judges them - or, for a colour, a
+    // material or a finish the explorer opened, what that declaration is.
+    cmf: 'partcad.cmfInfo',
     // What the object declares under 'simulate:', read rather than run; a
     // request naming one of them runs it instead (see 'SIMULATION_RUN').
     simulation: 'partcad.simulateList',
@@ -109,6 +113,11 @@ const INSPECT_COMMANDS: Record<string, string> = {
     scene: 'partcad.inspectScene',
     sketch: 'partcad.inspectSketch',
     interface: 'partcad.inspectInterface',
+    // What an object is in, which has nothing to render: opened as the
+    // explorer opens one (see 'showDeclaration').
+    color: 'partcad.inspectCmf',
+    material: 'partcad.inspectCmf',
+    finish: 'partcad.inspectCmf',
 };
 
 /** The tabs whose answer carries a file to keep for Save: the render tabs, and the assembly instructions. */
@@ -269,6 +278,22 @@ export class PartcadViewer implements vscode.Disposable {
     public restore(panel: vscode.WebviewPanel): void {
         this.panel?.dispose();
         this.attach(panel);
+    }
+
+    /**
+     * Show a colour, a material or a finish: what the explorer does with one.
+     *
+     * Not through PartCAD as everything else that is shown is, because there is
+     * nothing to draw: a declaration is what an object is in, and has no shape
+     * to tessellate or send over the viewer protocol. So the show is made here,
+     * with no object in it, and the panel asks the daemon what the declaration
+     * is when its CMF tab opens ('cmf.info'), as it asks about anything else -
+     * which is why the show carries the package and the kind: a declaration's
+     * name is no object's, and only the kind says which of the three to look in.
+     * No tab is asked for: a declaration's panel has the one.
+     */
+    public showDeclaration(pkg: string, name: string, kind: string): void {
+        this.handle({ type: MSG_SHOW, name, kind, package: pkg, object: null });
     }
 
     /** Route a protocol message from a connected PartCAD to the webview. */
@@ -470,6 +495,13 @@ export class PartcadViewer implements vscode.Disposable {
                 // the viewer was shown under, is what the choices are kept by.
                 const object = data?.object ?? `${target.package}:${target.name}`;
                 post({ data: data ? { ...data, choices: readChoices(object) } : data });
+                return;
+            }
+            if (tab === 'cmf') {
+                // Said rather than defaulted to a part: a declaration's name is
+                // found only by its kind, and an object's is looked up.
+                args.kind = target.kind ?? undefined;
+                post({ data: await vscode.commands.executeCommand(command, args) });
                 return;
             }
             if (tab === 'requirements' || tab === 'test') {
@@ -694,7 +726,9 @@ export class PartcadViewer implements vscode.Disposable {
             return;
         }
         try {
-            await vscode.commands.executeCommand(command, { name, pkg }, {}, true);
+            // The kind travels too: it is what finds a colour, a material or a
+            // finish, whose name is no object's (see 'showDeclaration').
+            await vscode.commands.executeCommand(command, { name, pkg, kind }, {}, true);
         } catch (error: any) {
             void vscode.window.showErrorMessage(`PartCAD could not show ${pkg}:${name}: ${error?.message ?? error}`);
         }
@@ -1129,6 +1163,7 @@ export class PartcadViewer implements vscode.Disposable {
 						</div>
 						<div id="pane-2d" class="pane" hidden></div>
 						<div id="pane-draft" class="pane" hidden></div>
+						<div id="pane-cmf" class="pane" hidden></div>
 						</div>
 						</div>
 						<div id="pane-analysis" class="pane pane-group" hidden>

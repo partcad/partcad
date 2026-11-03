@@ -1999,7 +1999,20 @@ class Context:
         self.docker_image_notes[image] = note
         if image not in self.docker_image_fallback_warned:
             self.docker_image_fallback_warned.add(image)
-            pc_logging.warning(note + " Anything the package needs that image for has to be in its requirements too.")
+            from partcad_utils import container_image
+
+            if container_image.is_partcad_image(image):
+                # One of PartCAD's own, named by one of its own implementations
+                # - the GStreamer image of the videos of '//builtin/render'. What
+                # the package is told to do above does not apply: there are no
+                # requirements to add, and the implementation says itself what
+                # this machine lacks, when it lacks it. Rendering without it is
+                # what every machine without Docker does, so it is not news.
+                pc_logging.debug(note)
+            else:
+                pc_logging.warning(
+                    note + " Anything the package needs that image for has to be in its requirements too."
+                )
 
     def docker_image_note(self, image: Optional[str]) -> Optional[str]:
         """Why ``image``, named by a package, was not used here; ``None`` if it was or was never asked for."""
