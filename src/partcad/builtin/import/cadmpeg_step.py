@@ -44,9 +44,22 @@ RUN_TIMEOUT_SECONDS = 1800
 
 
 def run(command):
-    """Run cadmpeg, raising with what it said when it fails or does not finish."""
+    """Run cadmpeg, raising with what it said when it fails or does not finish.
+
+    What it says is read as the UTF-8 it writes, not in the locale's encoding:
+    on Windows that is cp1252, which cannot decode the units in its reports
+    (millimetres to the fifth, with a superscript), and a failed run would lose
+    the message that says why.
+    """
     try:
-        result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=RUN_TIMEOUT_SECONDS)
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=RUN_TIMEOUT_SECONDS,
+        )
     except subprocess.TimeoutExpired:
         raise RuntimeError("%s did not finish in %d seconds" % (" ".join(command[:2]), RUN_TIMEOUT_SECONDS)) from None
     if result.returncode != 0:

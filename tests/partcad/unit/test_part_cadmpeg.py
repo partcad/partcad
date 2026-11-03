@@ -17,6 +17,7 @@ diff' of two files PartCAD wrote says whether they are the same geometry.
 import asyncio
 import importlib.util
 import os
+import subprocess
 import sys
 
 import cadmpeg_oracle
@@ -118,6 +119,17 @@ def test_a_cadmpeg_that_never_returns_is_given_up_on(monkeypatch):
     monkeypatch.setattr(step, "RUN_TIMEOUT_SECONDS", 1)
     with pytest.raises(RuntimeError, match="did not finish in 1 seconds"):
         step.run([sys.executable, "-c", "import time; time.sleep(60)"])
+
+
+def test_what_cadmpeg_says_is_read_as_utf8_whatever_the_locale(monkeypatch):
+    """A Windows locale's cp1252 cannot decode the units cadmpeg reports in, and the message was lost."""
+    step = _module("cadmpeg_step.py")
+    # What 'text=True' decodes with when nothing says otherwise: the locale's
+    # encoding, which is cp1252 on the Windows runners.
+    monkeypatch.setattr(subprocess, "_text_encoding", lambda: "cp1252")
+    says = "import sys; sys.stderr.buffer.write('off by 1e-14 mm\\u2075\\n'.encode()); sys.exit(1)"
+    with pytest.raises(RuntimeError, match="off by 1e-14 mm\u2075"):
+        step.run([sys.executable, "-c", says])
 
 
 def test_a_node_is_named_after_what_the_file_calls_it():
