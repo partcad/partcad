@@ -20,6 +20,10 @@
 // object - what it asked for and will now drop is cancelled, not left running
 // on the daemon.
 //
+// And when a colour, a material or a finish is opened: there is nothing for
+// PartCAD to draw, so the host shows it itself, and its CMF tab asks the daemon
+// by the kind, which is the only thing that finds a declaration.
+//
 
 import * as assert from 'assert';
 import * as vscode from 'vscode';
@@ -495,6 +499,90 @@ suite('The Digital Thread host, moving on', () => {
         );
         asked.forEach((call) => call.answer());
         await Promise.all(pending);
+        viewer.dispose();
+    });
+});
+
+suite('The Digital Thread host, and CMF', () => {
+    const sent: Record<string, unknown>[] = [];
+    let registration: vscode.Disposable | undefined;
+
+    suiteSetup(() => {
+        registration = vscode.commands.registerCommand('partcad.cmfInfo', (args: Record<string, unknown>) => {
+            sent.push(args);
+            return { object: `${args.pkg}:${args.name}`, kind: args.kind, items: [] };
+        });
+    });
+
+    suiteTeardown(() => registration?.dispose());
+
+    /** A host whose webview records what it is posted. */
+    function host(): {
+        viewer: PartcadViewer;
+        internals: { lastShow: unknown; fetchTab(message: Record<string, unknown>): Promise<void> };
+        posted: Record<string, unknown>[];
+    } {
+        const posted: Record<string, unknown>[] = [];
+        const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
+        const internals = viewer as unknown as {
+            lastShow: unknown;
+            panel: unknown;
+            fetchTab(message: Record<string, unknown>): Promise<void>;
+        };
+        internals.panel = {
+            webview: {
+                postMessage: (message: Record<string, unknown>) => {
+                    posted.push(message);
+                    return Promise.resolve(true);
+                },
+            },
+            dispose: () => undefined,
+        };
+        return { viewer, internals, posted };
+    }
+
+    test('a declaration is shown with no object, its package and its kind, and asks for no tab', () => {
+        const { viewer, posted } = host();
+
+        viewer.showDeclaration('//pkg', 'Medium Stone Grey', 'color');
+
+        assert.strictEqual(posted.length, 1);
+        const { type, name, kind, package: pkg, object, tab } = posted[0];
+        assert.deepStrictEqual(
+            { type, name, kind, pkg, object, tab },
+            { type: 'show', name: 'Medium Stone Grey', kind: 'color', pkg: '//pkg', object: null, tab: null },
+        );
+        viewer.dispose();
+    });
+
+    test("the CMF tab asks about what is shown by its kind: a declaration's, or an object's", async () => {
+        const { viewer, internals, posted } = host();
+
+        viewer.showDeclaration('//pkg', 'satin', 'finish');
+        await internals.fetchTab({ tab: 'cmf', token: 1 });
+        internals.lastShow = { type: 'show', name: 'housing', kind: 'part', package: '//pkg' };
+        await internals.fetchTab({ tab: 'cmf', token: 2 });
+        // Shown by a PartCAD that did not say what it is: the daemon looks it up.
+        internals.lastShow = { type: 'show', name: 'housing', package: '//pkg' };
+        await internals.fetchTab({ tab: 'cmf', token: 3 });
+
+        assert.deepStrictEqual(
+            sent.map((args) => [args.pkg, args.name, args.kind]),
+            [
+                ['//pkg', 'satin', 'finish'],
+                ['//pkg', 'housing', 'part'],
+                ['//pkg', 'housing', undefined],
+            ],
+        );
+        const answers = posted.filter((message) => message.type === 'tabData');
+        assert.deepStrictEqual(
+            answers.map((message) => [message.tab, message.token]),
+            [
+                ['cmf', 1],
+                ['cmf', 2],
+                ['cmf', 3],
+            ],
+        );
         viewer.dispose();
     });
 });

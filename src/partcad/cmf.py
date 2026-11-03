@@ -682,13 +682,17 @@ def _declarations_digest(ctx, name: str) -> typing.Optional[str]:
     return project._cmf_declarations_digest
 
 
-def declared_set(ctx, shape):
+def declared_set(ctx, shape, quiet: bool = False):
     """'(set, drops)': the CMF an object states itself as one 'cmf_section.CmfSet', and what 'sourceCmf' drops.
 
     'set' is None when it states no colour, material or finish. The colour's
     display comes from its declaration, or from the reference itself for a
     display-only 'rgba'; a part that states a material and no colour takes the
     colour its material claims. 'drops' is a tuple of components.
+
+    'quiet' is for a reader that only shows what the object states (see
+    'own_info'): a 'sourceCmf' it cannot read is reported by whoever builds the
+    part, once, rather than by every view that lists it.
     """
     import cmf_section
 
@@ -696,10 +700,11 @@ def declared_set(ctx, shape):
     raw_drops = _parameter_value(getattr(shape, "config", None), SOURCE_CMF)
     drops = source_cmf_drops(raw_drops)
     if drops is None:
-        pc_logging.error(
-            "%s:%s: 'sourceCmf' is 'keep', 'drop' or a list of %s, not %r; keeping the source's CMF"
-            % (shape.project_name, shape.name, ", ".join(KINDS), raw_drops)
-        )
+        if not quiet:
+            pc_logging.error(
+                "%s:%s: 'sourceCmf' is 'keep', 'drop' or a list of %s, not %r; keeping the source's CMF"
+                % (shape.project_name, shape.name, ", ".join(KINDS), raw_drops)
+            )
         drops = ()
     if not references:
         return None, drops
@@ -866,3 +871,192 @@ def assembly_cmf_setters(assembly, ctx=None) -> list:
         for kind in getattr(child, "cmf_parameters", None) or ():
             setters.append("the link '%s' sets '%s'" % (child.name, kind))
     return setters
+
+
+# --------------------------------------------------------------------------- #
+# What the IDE shows                                                          #
+# --------------------------------------------------------------------------- #
+
+# What 'declaration_data' says in fields of its own, and so leaves out of the
+# rest of what 'pc info' says of a declaration ('facts').
+_SAID_APART = ("Path", "Name", "Kind", "Alias of", "Desc", "Display", "Manufacturable", "Ids", "Aliases", "Url")
+
+
+def own_info(ctx, shape) -> typing.Optional[dict]:
+    """An object's own CMF as 'info_of' says it, building nothing; None where it states none.
+
+    What a line of the bill of materials and of the Build vs Buy table shows in
+    its Color, Material and Finish columns (docs/design/cmf.md, section 9). The
+    summary recorded with the object's geometry where it has been built - in
+    this process, or read back from the cache with its geometry - and otherwise
+    the colour, material and finish it declares itself, which is what its
+    parameters say before its source has been read; that answer carries
+    'declared: true', because what a STEP file or a script states is not known
+    until it is read. A column is not worth building a part for: the views that
+    show one are asked on every show of an object, and the 3D view beside them
+    is what builds it.
+    """
+    if ctx is None:
+        ctx = getattr(getattr(shape, "project", None), "ctx", None)
+    relative_to = getattr(shape, "project_name", "")
+    summary = summary_of(shape)
+    if isinstance(summary, dict):
+        return info_of(ctx, summary, relative_to)
+    declared, _drops = declared_set(ctx, shape, quiet=True)
+    if declared is None:
+        return None
+    result = info_of(ctx, {"sets": [declared.as_dict()]}, relative_to)
+    result["declared"] = True
+    return result
+
+
+def declaration_data(ctx, declaration) -> dict:
+    """A colour, a material or a finish as the IDE's CMF tab shows it.
+
+    What it is called and where ('reference', canonical: an alias is the
+    declaration it names), what it is drawn in ('display', '#RRGGBB[AA]': a
+    colour's display, a material's own look or the colour it claims; a finish's
+    'roughness' and 'metallic' instead), whether it is a claim that it can be
+    had or only a picture ('manufacturable'), what other systems call it, and
+    the rest of what 'pc info' says of it ('facts': a material's density, its
+    full name). An alias is shown as itself - its name, what it names - with
+    the facts of the declaration it resolves to, which are the ones it has.
+    """
+    shown = declaration
+    if declaration.is_alias:
+        shown = lookup(ctx, declaration.kind, declaration.reference(), declaration.project_name, quiet=True)
+    data = {
+        "name": declaration.name,
+        "kind": declaration.kind,
+        "package": declaration.project_name,
+        "reference": (shown or declaration).reference(),
+        "manufacturable": (shown or declaration).manufacturable,
+    }
+    if declaration.is_alias:
+        data["aliasOf"] = declaration.source
+        if shown is None:
+            data["errors"] = ["it is an alias of %s, which resolves to nothing" % declaration.source]
+            return data
+    desc = declaration.desc or shown.desc
+    if desc:
+        data["desc"] = desc
+    if shown.url:
+        data["url"] = shown.url
+    if shown.ids:
+        data["ids"] = dict(sorted(shown.ids.items()))
+    if declaration.aliases or shown.aliases:
+        data["aliases"] = list(dict.fromkeys(declaration.aliases + shown.aliases))
+    if shown.config.get("parameters"):
+        # Named without values, which is its defaults (see 'Project.get_cmf').
+        data["parametric"] = sorted(shown.config["parameters"])
+    rgba = display(ctx, shown)
+    if rgba is not None:
+        data["display"] = css_color.to_hex(rgba)
+    if shown.display_text is not None:
+        data["displayText"] = shown.display_text
+    claim = getattr(shown, "color_claim", None)
+    if claim:
+        data["colorClaim"] = canonical(ctx, "color", claim, shown.project_name)
+    for hint in ("roughness", "metallic"):
+        value = getattr(shown, hint, None)
+        if value is not None:
+            data[hint] = value
+    info = shown.info()
+    facts = {key: value for key, value in info.items() if key not in _SAID_APART + ("Color", "Errors")}
+    if facts:
+        data["facts"] = facts
+    errors = list(declaration.errors) + [error for error in shown.errors if error not in declaration.errors]
+    if errors:
+        data["errors"] = errors
+    return data
+
+
+async def report_async(ctx, shape) -> dict:
+    """What the IDE's CMF tab shows of a part, an assembly or a scene (docs/design/cmf.md, section 9).
+
+    'items' is a row per item: the part itself; or, for an assembly, every
+    part it holds and every sub-assembly in it that is bought whole - the
+    items the 'cmf' check judges, once each, with how many there are - each
+    with its CMF as 'info_of' says it ('cmf') and what keeps it from being
+    specified ('findings', in the check's own words). The incomplete ones come
+    first, in the order they are met; the rest after them, in that order too.
+    'own' is what an assembly sets itself, which draws what it holds rather
+    than specifying it.
+
+    Builds what it reports on, the way 'pc test' does: what a part's source
+    states is only known once it has been read. The 3D view beside the tab has
+    built all of it by the time anybody opens the tab, so it is read back from
+    the cache.
+    """
+    import asyncio
+
+    from .assembly import Assembly
+    from .test import cmf as cmf_check
+
+    if not isinstance(shape, Assembly):
+        return {"items": [await _item_async(ctx, shape, 1)]}
+    counted = {}
+    await _collect_async(ctx, shape, counted)
+    items = await asyncio.gather(*[_item_async(ctx, item, count) for item, count in counted.values()])
+    await shape.do_instantiate()
+    return {
+        "own": {"cmf": own_info(ctx, shape), "findings": cmf_check.assembly_findings(ctx, shape)},
+        # Stable: each half keeps the order its items were met in.
+        "items": sorted(items, key=lambda row: 0 if row.get("error") or row["findings"] else 1),
+    }
+
+
+async def _collect_async(ctx, assembly, counted: dict) -> None:
+    """Count into 'counted' ('{name: [item, count]}') every item 'assembly' holds that the 'cmf' check judges.
+
+    A part is one; so is a sub-assembly bought whole, which the check judges by
+    its own CMF without looking inside (docs/design/cmf.md, section 8). Every
+    other sub-assembly - one nested in its parent's file included - is looked
+    through.
+    """
+    from .assembly import Assembly
+    from .assembly_guide import resolve_alias
+
+    target = resolve_alias(ctx, assembly)
+    await target.do_instantiate()
+    for child in target.children:
+        item = child.item
+        if isinstance(item, Assembly) and not item.is_declared_purchasable():
+            await _collect_async(ctx, item, counted)
+            continue
+        entry = counted.setdefault("%s:%s" % (item.project_name, item.name), [item, 0])
+        entry[1] += 1
+
+
+async def _item_async(ctx, shape, count: int) -> dict:
+    """One row of 'report_async': an item, how many of it, its CMF, and what the 'cmf' check finds of it."""
+    from .assembly import Assembly
+    from .test import cmf as cmf_check
+
+    assembly = isinstance(shape, Assembly)
+    row = {"name": "%s:%s" % (shape.project_name, shape.name), "kind": "assembly" if assembly else "part"}
+    row["count"] = count
+    if getattr(shape, "desc", None):
+        row["desc"] = shape.desc
+    try:
+        if assembly:
+            await shape.do_instantiate()
+            findings = cmf_check.assembly_findings(ctx, shape)
+        elif await shape.get_wrapped(ctx) is None:
+            row.update({"cmf": None, "findings": [], "error": "it did not build"})
+            return row
+        else:
+            findings = cmf_check.part_findings(ctx, shape)
+        row["cmf"] = own_info(ctx, shape)
+    except Exception as e:  # pylint: disable=broad-except
+        # One item that cannot say costs its own row, not the tab.
+        row.update({"cmf": None, "findings": [], "error": str(e) or type(e).__name__})
+        return row
+    exempt = cmf_check.CmfTest().inapplicable(shape)
+    if exempt is not None:
+        # Said rather than left out: a part that is bought still has a colour
+        # somebody looks at, it is just not this check's to require one.
+        row["exempt"] = exempt
+        findings = []
+    row["findings"] = findings
+    return row

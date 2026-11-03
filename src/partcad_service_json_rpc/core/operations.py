@@ -2746,6 +2746,10 @@ _LIST_EVERY_PACKAGE = ("interfaces", "software", "colors", "materials", "finishe
 # what it is drawn in, whether it is a claim that it can be had, and what it is.
 _LIST_CMF = ("colors", "materials", "finishes")
 
+# The same three, as the package contents the explorer is sent list them: each
+# section under its own name, holding declarations of its kind.
+_CMF_SECTIONS = tuple((section, _LIST_KINDS[section]) for section in _LIST_CMF)
+
 
 def list_objects(session, params):
     """List a package's parts, sketches, assemblies, interfaces, materials or software."""
@@ -2872,6 +2876,99 @@ def _cmf_rows(ctx, project, kind: str) -> dict:
         made = "" if declaration.manufacturable else " (display only)"
         rows[name] = "%-11s%s%s%s" % (look, " " + desc if desc else "", made, alias)
     return rows
+
+
+def cmf_info(session, params):
+    """The colour, material and finish of an object, or what a colour, a material or a finish is.
+
+    What the IDE's CMF tab is drawn from (docs/design/cmf.md, section 9). For
+    a part, an assembly or a scene: ``items``, a row per item the ``cmf`` check
+    judges -- the part itself, or every part an assembly holds and every
+    sub-assembly it holds that is bought whole -- each with its CMF as ``pc
+    info`` says it and what keeps it from being specified, the incomplete ones
+    first; and for an assembly ``own``, the CMF it sets itself (see
+    ``partcad.cmf.report_async``). What a part's source states is only known
+    once the part is built, so it is: by the time anybody opens the tab, the
+    3D view beside it has built all of it.
+
+    For a declaration -- ``kind`` ``color``, ``material`` or ``finish``, which
+    the IDE knows from the explorer row it opened, and which a name alone
+    cannot say, since a declaration's name is no object's -- ``declaration``:
+    what it is called, what it is drawn in, whether it is a claim or only a
+    picture, and what other systems call it (see
+    ``partcad.cmf.declaration_data``). Nothing is built for one.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    from partcad import cmf
+
+    said = _said_kind(params)
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, name = resolved
+    path = _qualified(package, name)
+
+    if said in cmf.KINDS:
+        from partcad_utils.utils import escape_name
+
+        project = ctx.get_project(package)
+        if project is not None and name in project.object_names(said):
+            # Asked for as the explorer lists it, by its key as written: a ';'
+            # in a key is part of the name, not where its parameters start. A
+            # reference that names parameters ('rgba;color=...') is no key.
+            name = escape_name(name)
+        declaration = project.get_cmf(said, name, quiet=True) if project is not None else None
+        if declaration is None:
+            raise JsonRpcError(USAGE_ERROR, "The %s %s is not found" % (said, path))
+        return {"object": path, "kind": said, "declaration": cmf.declaration_data(ctx, declaration)}
+
+    getters = {"part": ctx.get_part, "assembly": ctx.get_assembly, "scene": ctx.get_scene}
+    refusal = (
+        "Only parts, assemblies and scenes are made in a colour, a material and a finish, and only colours, "
+        "materials and finishes are what they are made in; '%s' is none of them"
+    )
+    kind = _resolve_kind(ctx, params, package, name, getters, refusal)
+    obj = getters[kind](path)
+    if obj is None:
+        raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+    with pc.logging.Process("CMF", package, name):
+        report = asyncio.run(cmf.report_async(ctx, obj))
+    return {"object": path, "kind": kind, **report}
+
+
+def _cmf_items(session, project, kind: str) -> list:
+    """A package's colours, materials or finishes, as the explorer lists them.
+
+    What the declaration says of itself and nothing it would have to look up
+    elsewhere: an alias's target, or a display naming another package's colour,
+    is in a package that may not have loaded yet, and listing a package must
+    not load its neighbours. The CMF tab says the rest, once one is opened.
+    """
+    from partcad_utils.utils import escape_name
+
+    described = []
+    for name in project.object_names(kind):
+        try:
+            # Asked for by reference, which spells a reserved character escaped.
+            declaration = project.get_cmf(kind, escape_name(name), quiet=True)
+            if declaration is None:
+                raise Exception("the declaration cannot be read")
+            row = {"name": name, "type": "alias" if declaration.is_alias else kind}
+            desc = declaration.desc or ("alias of %s" % declaration.source if declaration.is_alias else None)
+            if desc:
+                row["desc"] = desc
+            if declaration.display_text is not None:
+                row["display"] = declaration.display_text
+            row["manufacturable"] = declaration.manufacturable
+            described.append(row)
+        except Exception as e:  # pylint: disable=broad-except
+            session.emitter.warning("Skipping the %s '%s:%s': %s" % (kind, project.name, name, e))
+    return described
 
 
 def list_packages(session, params):
@@ -5154,6 +5251,11 @@ def _load_package_contents(session, name="//"):
     assemblies = item_objs(project.assemblies)
     scenes = item_objs(project.scenes)
     software = item_objs(project.software)
+    # The package's colours, materials and finishes, which the explorer lists
+    # beside its objects and opens in a Digital Thread of their own (see
+    # docs/design/cmf.md, section 9). From the declarations, as 'pc list colors'
+    # reads them: there is nothing to make of one.
+    cmf_kinds = {section: _cmf_items(session, project, kind) for section, kind in _CMF_SECTIONS}
 
     # Objects the package declares but PartCAD could not create - most often one
     # written against a PartCAD that still had a feature since retired (the
@@ -5182,6 +5284,7 @@ def _load_package_contents(session, name="//"):
             "assemblies": assemblies,
             "scenes": scenes,
             "software": software,
+            **cmf_kinds,
             "broken": broken,
         },
     )

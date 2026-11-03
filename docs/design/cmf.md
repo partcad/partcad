@@ -286,8 +286,10 @@ once the public index passes it - the path `tolerance` took.
 
 ## 9. Presentation
 
-**Built:** `pc list colors|materials|finishes`, `pc info`'s CMF section, drawings per face, a glTF material per colour.
-**Decided:** the rest.
+**Built:** `pc list colors|materials|finishes`, `pc info`'s CMF section, drawings per face, a glTF material per colour,
+and in the IDE the explorer's declarations, the CMF tab, the BOM and Build vs Buy columns and per-primitive colours.
+**Decided:** the exports below. **Open:** highlighting a set's faces in the 3D view, drawing a finish's roughness and
+metallic, and `pc ide view` of a declaration.
 
 CMF is always shown as its three components in the order colour, material, finish: each by its declaration's name, with
 a swatch of its display where the medium allows, marked when it is display-only or unspecified, and with its origin
@@ -295,18 +297,39 @@ where there is room.
 
 - **CLI:** `pc list colors`, `pc list materials`, `pc list finishes` list name, display, display-only mark and
   description alike; `pc info` of a part gains a CMF section.
-- **IDE explorer:** colours, materials and finishes appear beside the other objects. Opening one shows a simplified
-  Digital Thread, as an interface does: the Design tab only, selected and not shown, with only its sub-tabs.
-- **IDE Digital Thread:** a CMF sub-tab under Design, beside 3D, 2D and Drafting - the sets with their faces and solids
-  and origin, highlighting a set's faces in the 3D view when chosen; for an assembly, the CMF of every item with the
-  incomplete ones first. The BOM and Build vs Buy views get Color, Material and Finish columns. The 3D view keeps each
-  primitive's own material and uses a finish's roughness and metallic.
+- **IDE explorer:** colours, materials and finishes appear beside the other objects, after them, in that order - the
+  daemon's package contents carry `colors`, `materials` and `finishes`, read off the declarations as `pc list` reads
+  them, with nothing of another package loaded to list them. A row says the display as written and marks one that is
+  display-only. Opening one shows a simplified Digital Thread, as an interface does: the Design tab only, selected and
+  not shown, and in it the CMF tab only - one tab is no choice, so neither strip is drawn and the CMF pane is the
+  panel. There is nothing for PartCAD to draw, so the extension makes that show itself, with no object in it, and the
+  tab asks the daemon by the declaration's kind (`cmf.info`), which is the one thing that finds a declaration: its name
+  is no object's. It says the name, a swatch of the display (a material's colour claim; a finish's roughness and
+  metallic instead), the description, whether it is a claim or display-only, the canonical reference (an alias
+  resolved), the `ids`, the aliases, a parametric declaration's parameters, and the rest of what `pc info` says of it.
+  The next object shown goes back to the Design tab that was open before the declaration.
+- **IDE Digital Thread:** a CMF sub-tab under Design, beside 3D, 2D and Draft (`pc ide view --design-cmf`), drawn from
+  `cmf.info`: for a part its one item, for an assembly or a scene every part it holds and every sub-assembly in it
+  bought whole - the items the `cmf` check judges, once each with their count - each with its sets (colour, material,
+  finish, each by name with a swatch and a display-only mark, then faces, solids and origin), what is unspecified, and
+  what keeps it from being specified in the check's own words; the incomplete ones first, and above them what an
+  assembly sets itself. The daemon orders and judges them, by `partcad.test.cmf`; the tab draws. It builds what it
+  reports on, as `pc test` does, which the 3D view beside it has done already. The BOM and Build vs Buy views get Color,
+  Material and Finish columns (the Material column Build vs Buy had becomes the three), from a `cmf` on each line item
+  and tree node: the summary recorded with the item's geometry where it has been built, and what it declares otherwise
+  (`partcad.cmf.own_info`, marked `declared`) - nothing is built to fill a column. The 3D view keeps each primitive's
+  own colour: a primitive whose glb gives it a material is drawn in that colour, with the viewer's own material and so
+  its shading, the Opacity slider and the flicker, and one with none keeps its node's colour as before. *Open:*
+  highlighting a set's faces in the 3D view when it is chosen (the glb has a mesh per colour, not per set, so sets of
+  one colour cannot be told apart); a finish's roughness and metallic in the 3D view (neither the glb nor the
+  viewer's Phong material carries them); and `pc ide view` of a declaration, which `inspect.object` does not know as an
+  object, as the explorer's show is made by the extension rather than sent by PartCAD.
 - **Drawings:** SVG, PNG and JPEG draw each face in its display colour, still as one hidden-line drawing; an edge
   between two colours is drawn once per colour, the later on top. A drawing is on white, so a colour too light to see
   there (relative luminance above 0.5; goldenrod is 0.42) is drawn darker, hue kept: a white face is drawn in grey
   lines rather than invisible ones.
 - **glTF:** the faces of one colour are one mesh with that colour's material, so a part of one colour is still one
-  primitive; the IDE keeps those materials once it draws a primitive's own (above).
+  primitive; the IDE draws each such primitive in its own colour (above).
 - **Exports:** STEP through XCAF - product structure and names, sRGB colours on faces, solids and products, materials
   with density on products and, where a part has several, per solid as user-defined attributes on shape aspects
   (the CAx-IF practice), finishes and PartCAD's references as user-defined attributes. glTF: a material per set. 3MF:
@@ -456,9 +479,20 @@ neither the CMF check nor the connectivity rule against `location:` SHALL descen
 **Requirement: one presentation.** CMF SHALL be shown as colour, material, finish - name, swatch, display-only and
 unspecified marks - in the IDE's CMF tab, the BOM and Build vs Buy views, `pc info`, `pc list`, and the generated
 documents.
+- *Scenario:* an assembly holding a part that states nothing and a part that is specified → its CMF tab lists the
+  first before the second, saying "no colour on any face" of it.
+- *Scenario:* a part that is not built yet → its BOM line shows the colour, material and finish it declares, marked as
+  declared, and nothing is built to show them.
 
 **Requirement: the explorer.** A colour, material or finish opened from the IDE's explorer SHALL show the Digital
 Thread with the Design tab only, selected and not shown, and only its sub-tabs.
+- *Scenario:* a package declares `colors:` → the explorer lists them after its objects; opening one shows its CMF tab
+  alone: its swatch, whether it is a claim, its canonical reference and its `ids`.
+
+**Requirement: a primitive's own colour.** The IDE's 3D view SHALL draw a primitive in the colour its glTF material
+gives it, with the viewer's own material, and a primitive with no material in its node's colour.
+- *Scenario:* a part with one face coloured `#C91A09` → that face's mesh is drawn `#C91A09`, the rest in the part's
+  colour, and the Opacity slider fades both.
 
 **Requirement: drawings and exports** as [section 9](#9-presentation) lists.
 - *Scenario:* a part with per-face CMF exported to STEP and read back with the `partcad` convention → the same
@@ -490,7 +524,7 @@ Thread with the Design tab only, selected and not shown, and only its sub-tabs.
 | The CMF section inside the BREP, its summary, the parameters written into it by the core, drawings and glTF per face, `pc info` | built |
 | Assembly propagation, the visualization-only rule, the `cmf` check (as a warning) | built |
 | STEP via XCAF; scripts and OpenSCAD as sources; converters; `pc import` keeping CMF | built |
-| IDE: explorer, CMF tab, BOM columns, per-primitive materials | decided |
+| IDE: explorer, CMF tab, BOM columns, per-primitive materials | built (highlighting a set's faces, and a finish's look in 3D, open) |
 | Exports: STEP via XCAF, glTF, 3MF, URDF/MJCF | decided |
 | `//builtin/color:rgba` shipped with PartCAD; LEGO in partcad-ldraw and its examples | decided |
 | A visual `texture` | open |

@@ -59,6 +59,10 @@ _OPERATIONS = {
     "manufacturing.details": operations.manufacturing_details,
     "manufacturing.plan": operations.manufacturing_plan,
     "supply.quote": operations.supply_quote,
+    # Not a CLI command: what the IDE's CMF tab is drawn from -- an object's
+    # colour, material and finish as 'pc info' says them, item by item, and
+    # what a colour, a material or a finish the explorer lists is.
+    "cmf.info": operations.cmf_info,
     # Not a CLI command: what the IDE's Requirements tab is drawn from. Its
     # verdicts are 'pc test -f requirements', by the same code.
     "requirements.check": operations.requirements_check,
