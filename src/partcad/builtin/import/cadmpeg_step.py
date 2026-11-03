@@ -34,9 +34,21 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 
+# How long one cadmpeg run may take before it is given up on. Generous on
+# purpose: a conversion takes seconds for a part and can take minutes for a
+# large assembly, and an assembly may declare a 'timeout:' longer than the
+# client's default five minutes. What it is for is a converter that never
+# returns on a file it cannot read, which would otherwise hold the sandbox's
+# interpreter -- and the request waiting on it -- forever.
+RUN_TIMEOUT_SECONDS = 1800
+
+
 def run(command):
-    """Run cadmpeg, raising with what it said when it fails."""
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    """Run cadmpeg, raising with what it said when it fails or does not finish."""
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=RUN_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("%s did not finish in %d seconds" % (" ".join(command[:2]), RUN_TIMEOUT_SECONDS)) from None
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip().splitlines()
         raise RuntimeError("%s failed: %s" % (" ".join(command[:2]), detail[-1] if detail else result.returncode))

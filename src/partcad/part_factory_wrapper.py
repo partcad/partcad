@@ -154,6 +154,21 @@ class PartFactoryWrapper(PartFactory):
         versions = self._part_type_versions()
         if versions is not None:
             part.add_code_versions(versions)
+        # And on what the part is judged by, which is part of what it is: read
+        # here as well as in 'instantiate()', because the cache is read before
+        # anything is instantiated (see 'Shape.key_on_required_solid').
+        if self._part_type_requires_solid():
+            part.key_on_required_solid()
+
+    def _part_type_requires_solid(self) -> bool:
+        pt_project = self.ctx.get_project(self.part_type_package)
+        pt_config = pt_project.get_part_type_config(self.part_type_name) if pt_project is not None else None
+        if pt_config is None:
+            return False  # 'instantiate()' says so, where it can fail the part
+        try:
+            return output.as_flag(pt_config.get(output.REQUIRE_SOLID_KEY), output.REQUIRE_SOLID_KEY)
+        except ValueError:
+            return False  # and so for a value that is not a flag
 
     def _part_type_versions(self):
         pt_project = self.ctx.get_project(self.part_type_package)

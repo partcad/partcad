@@ -502,6 +502,7 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
             return None
         if self.solid_required:
             part.solid_required = True
+            part.key_on_required_solid()
         self.assembly.cache_dependencies.append(part_file)
         self._parts[node_name] = part
         return part

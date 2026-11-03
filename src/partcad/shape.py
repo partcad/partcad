@@ -683,6 +683,7 @@ class Shape(ShapeConfiguration):
         # factory that builds it, from what its type declares: a 'partType' that
         # says 'requireSolid'.
         self.solid_required = False
+        self._keyed_on_required_solid = False
 
         # Memory cache
         self._wrapped = None
@@ -762,6 +763,26 @@ class Shape(ShapeConfiguration):
         the hash is used, which both of those guarantee.
         """
         self.hash.add_string("code:" + versions)
+
+    def key_on_required_solid(self) -> None:
+        """Key this shape's cache entry on being held to 'requireSolid' too.
+
+        The verdict ('_accepted_as_solid') is reached as the shape is built, and
+        a cache hit is not built: without this, a part cached before its type
+        declared 'requireSolid' - accepted then, with a warning - would be read
+        back as one that passed. Only the strict side adds to the key, so every
+        other part keeps the key it had.
+
+        Called by the factory that knows the declaration before the cache is
+        read: a 'partType' part's as it is prepared, an 'import:' reader's as
+        the part is registered. Must happen before the hash is used, as
+        'add_code_versions' must, and adds to it once: an assembly built a
+        second time hands back the parts the first pass registered.
+        """
+        if self._keyed_on_required_solid:
+            return
+        self._keyed_on_required_solid = True
+        self.hash.add_string("requireSolid")
 
     def matches(self, keyword: str) -> bool:
         if not keyword:
