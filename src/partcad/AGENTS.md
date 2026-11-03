@@ -490,6 +490,65 @@ at all).
   `file_factory.unreproducible_reason()` below, which is about whether an object can be *made* twice, not
   whether a file is written twice the same.)
 
+- **Pictures and videos** (`./src/partcad/builtin/render/render_raster.py`, `raster_scene.py`,
+  `viewpoint.py`, `render_video.py`, `video_encode.py`): there is **one** raster renderer.
+  `render_raster.py` draws every PNG and JPEG and every frame of a video, in one of two `style`s: `lines`
+  (the default for a picture: the SVG projection, rasterized by svglib) or `shaded` (the Digital Thread's 3D
+  view, drawn by `raster_scene.py`). `//builtin/render` declares ten video file types (`mp4`, `m4v`, `mov`,
+  `qt`, `mkv`, `webm`, `avi`, `wmv`, `asf`, `ogv`), all one script, whose every frame is a `shaded` picture
+  drawn by `render_raster.Shaded` from the same fields a PNG is, turned by the video's `turn` plus its `speed`
+  times the time -- so any frame is `pc render -t png --style shaded --turn ...`, and a test holds them to the
+  same pixels. Do not give a video a way of drawing a frame that a picture does not have. `turn` itself is
+  every render's (`viewpoint.py`, `pc render --turn`): the object turned in front of the camera, which the
+  projection draws by turning its viewport the other way. Three things about it are load-bearing.
+
+  * **The pictures are drawn by numpy, not by a GPU** (`raster_scene.py`). The view is three.js in a
+    webview, and a sandbox has no browser; so the camera, the light rig, the Phong material, the tone mapping
+    and the colours of `ide/vscode/src/webview/scene.ts` are written out again, constant for constant, with
+    the shading worked out at the corners of each triangle and blended across it. That is only close to a
+    GPU's per-pixel light because large triangles are split first (`refine`, `MAX_EDGE`): a flat face OCCT
+    meshes as two triangles showed the diagonal between them as a crease. The camera looks from the 3D
+    view's direction and is framed as it is, on the sphere around the object's box (`frame_distance` is
+    `fitDistance` in `ide/vscode/src/webview/cameraView.ts`, `Scene.sphere` its `enclosingRadius`), so no
+    turn -- no frame of a video -- leaves the picture; a picture then leaves `margin` (7.5% on each side of
+    its narrower side, `render_raster.DEFAULT_MARGIN`) beyond that sphere, which the 3D view does not. A
+    change to either fit is a change to the other, and a test reads the IDE's to say so. A drawing of lines
+    gets the same margin, as padding all round. A change to what
+    the 3D view draws -- its lights, its background -- is a change to this module too. It meshes a copy of the shape: a PNG shares its decoding with the SVG beside it
+    (`TESSELLATION`), and a mesh left on, or found on, that decoding would make either depend on the other.
+  * **GStreamer is a program, run as `gst-launch-1.0`** (`video_encode.py`), with the frames on its standard
+    input. pip cannot install it, so each video file type names PartCAD's GStreamer image as its
+    `dockerImage`, `ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer` -- the
+    `gstreamer` target of `tools/containers/python/Dockerfile`, built for `DEFAULT_PYTHON_VERSION` alone --
+    and elsewhere the machine's own is used. `{version}` and `{python}` are filled in by
+    `partcad_utils.container_image.expand` (`Implementation.docker_image`), and what is keyed is the
+    declaration as written (`Implementation.docker_image_declared`), so a release moves no key. A machine
+    rendering without PartCAD's own image is told at debug level, not warned (`Context._note_image_skipped`,
+    `container_image.is_partcad_image`): the implementation says what is missing itself.
+  * **`append` keeps where the turn stopped in a tag of the container** (`video_encode.state_text`), and the
+    video appended to is decoded by a separate GStreamer process and handed to the encoding one over a
+    socket on this machine (`Pipeline._send_prefix`), rather than decoded inside it: a demuxer sends the old
+    file's tags ahead of its frames, a muxer keeps the first value of each tag it is told, and the new
+    state was lost. Raw frames carry no tags. Each muxer keeps different tags (`CONTAINERS['state_tag']`).
+    Ogg keeps none of them for a Theora stream -- `theoraenc` is no `GstTagSetter`, so its comment header
+    is written empty -- and its state goes into that header as Vorbis comments (`PARTCAD_ANGLES=...`)
+    once the file is written (`write_comments`): the one page holding the header is rebuilt with Ogg's own
+    CRC (`ogg_crc`, not zlib's), keeping its sequence number, and every other page is copied byte for byte;
+    `read_state` reads them back. ASF carries no sound, because GStreamer's ASF muxer drops video frames once
+    it interleaves audio and libav's writes broken timestamps. A video that reads a file -- the one it is
+    appended to, a soundtrack, a logo -- reports no `files`, so it is not cached; the file's path is
+    `request["package_dir"]` (`output.PACKAGE_DIR_KEY`), which is added after the request is keyed on, as
+    `cache_dir` is. A sandbox that exchanges files (`EXCHANGES_FILES`: `remote`, `docker` with
+    `useDockerRemote`) cannot read that path, and is never sent what the request says, only what the
+    command names: so a request one of whose declared fields names a file of its package (`output.names_a_package_file`)
+    gets `--package-dir <index> <directory>` after the triples (`output.PACKAGE_DIR_ARGUMENT`), which
+    sends the package and is rewritten to where it landed, and `wrapper_export` takes the group off and
+    puts that directory in the request. Which fields name such files is declared by the file type,
+    `packageFiles: [logo, audio]` (`Implementation.package_files`, an implementation key and so never a
+    parameter), and no other field is looked at: the package is sent whole, and a line of text that
+    happens to be a file's name must not send it. Do not resolve such a path in the core instead: what a
+    field means is the implementation's to say.
+
 - **Engineering analysis** (`./src/partcad/cae.py`, `Shape.analyze_async()`, `./src/partcad/test/cae.py`):
   `pc cae fea`/`dynamic`/`thermal`/`cfd` are a third output section, `cae:`, resolved by the very code that resolves
   `export:` and `render:` -- same `path`/`package`, same sandbox, same meta-wrapper (`wrapper_export.py`), and

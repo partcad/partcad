@@ -59,7 +59,7 @@ RUN apt-get update \
 RUN pip wheel --no-deps --wheel-dir /wheels pycairo
 
 
-FROM python:${PYTHON_VERSION}-slim
+FROM python:${PYTHON_VERSION}-slim AS runtime
 
 # Repeated because an ARG before FROM is out of scope after it.
 ARG PYTHON_VERSION=3.11
@@ -162,3 +162,60 @@ EXPOSE 5000
 
 USER pc
 CMD ["python3", "pc-container-json-rpc.py"]
+
+
+# The GStreamer flavour: this image, with what the video file types of
+# '//builtin/render' encode with. They name it as their 'dockerImage', so a
+# machine rendering in the 'docker' sandbox renders a video here, and nothing
+# else ever pulls it.
+#
+# A stage of this Dockerfile rather than an image built 'FROM' a published tag,
+# because it is this image plus a layer: one build, one cache, and no question
+# of which base tag a branch's flavour was built on. It is built for the
+# default Python version alone ('sandbox_versions.DEFAULT_PYTHON_VERSION'),
+# which is the only one '//builtin/render' runs in, and tagged
+# '<release>-py<version>-gstreamer' -- see 'dev-tools/ci/build-sandbox-image.sh'
+# and "Build the Python sandbox images" in '.github/workflows/test.yml'.
+#
+# The plugin sets are what 'video_encode.CONTAINERS' writes: 'good' for MP4,
+# QuickTime, Matroska, WebM, AVI, VP8/VP9 and the logo overlay, 'ugly' for
+# x264, 'bad' for the ASF muxer, 'libav' for AAC and Windows Media, 'x' for the
+# Pango text overlay, and 'base-apps' for 'gst-discoverer-1.0', which reads back
+# where an appended video's turn stopped. And a font for the text to be set in.
+FROM runtime AS gstreamer
+
+USER root
+# hadolint ignore=DL3008
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends \
+    fonts-dejavu-core \
+    gstreamer1.0-libav \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-base-apps \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-ugly \
+    gstreamer1.0-tools \
+    gstreamer1.0-x \
+  && rm -rf /var/lib/apt/lists/*
+
+LABEL partcad.flavor="gstreamer"
+
+# The elements a video is written with, asked for by name: a Debian release
+# that moves one of them to another package is a build that fails here rather
+# than a video that fails in a sandbox.
+RUN for element in x264enc vp9enc theoraenc avenc_wmv2 avenc_aac opusenc vorbisenc lamemp3enc \
+      mp4mux qtmux matroskamux webmmux avimux asfmux oggmux \
+      textoverlay gdkpixbufoverlay subparse rawvideoparse tcpclientsrc concat taginject; do \
+      gst-inspect-1.0 --exists "${element}" || { echo "missing GStreamer element: ${element}"; exit 1; }; \
+    done \
+  && command -v gst-discoverer-1.0
+RUN python3 verify.py
+
+USER pc
+
+
+# The default target is the plain image, and has to be last: a build that names
+# no '--target' builds the last stage, and every build of this Dockerfile but
+# the flavour's names none.
+FROM runtime

@@ -134,6 +134,24 @@ def test_a_request_that_cannot_be_aimed_is_refused(kwargs, expected):
         resolve_viewport(**kwargs)
 
 
+def test_a_turn_goes_with_any_view():
+    """Three numbers, or one - a turn about Z, as the 3D view's Animate turns the object."""
+    assert resolve_viewport(turn=45) == {"turn": [0.0, 0.0, 45.0]}
+    assert resolve_viewport("front", turn=("10", 0, 0)) == {
+        "viewport_origin": [0, -100, 0],
+        "viewport_up": [0, 0, 1],
+        "turn": [10.0, 0.0, 0.0],
+    }
+    # Unlike a direction, a turn of nothing is a turn: the object as it stands.
+    assert resolve_viewport(turn=[0, 0, 0]) == {"turn": [0.0, 0.0, 0.0]}
+
+
+@pytest.mark.parametrize("turn", [[1, 2], "45", True, [0, float("inf"), 0], {"z": 1}])
+def test_a_turn_that_is_not_one_is_refused(turn):
+    with pytest.raises(ValueError, match="turn must be"):
+        resolve_viewport(turn=turn)
+
+
 def test_one_vector_alone_is_not_checked_against_the_other():
     """The pair is only comparable when this request settles both halves of it.
 

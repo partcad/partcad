@@ -29,14 +29,19 @@ for a file with a throwaway package around it:
   public index (`//pub/...`), which the throwaway package then imports, or a
   package directory on this machine.
 
+`--turn` comes with the viewing angle (`viewport.py`), and `--style`, `--size`,
+`--background` and `--quality` with the picture (`video.py`'s
+`picture_options`).
+
 The `pc render` options left out of `pc adhoc render` are the ones a single
 file outside any package gives nothing to: `-P`, `-r`, `--fast-only`,
 `--exclude` and a `...:` name (there is no package to walk), `-s`/`-i`/`-a`/
 `-S` (the subcommand says what the file holds), `--with-ports`,
 `--with-interfaces`, `--with-all`, `--port` and `--with-internals` (a file
 outside a package has no ports or interfaces), `--filter` (a part or a sketch
-has no links) and `--ignore-manufacturability` (no instruction book is rendered
-ad hoc).
+has no links), `--ignore-manufacturability` (no instruction book is rendered
+ad hoc) and a video's `--fps`, `--duration`, `--speed`, `--append` and
+`--preset` (no video is rendered ad hoc).
 """
 
 import os
