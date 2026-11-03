@@ -157,10 +157,18 @@ class PartFactoryWrapper(PartFactory):
         # And on what the part is judged by, which is part of what it is: read
         # here as well as in 'instantiate()', because the cache is read before
         # anything is instantiated (see 'Shape.key_on_required_solid').
-        if self._part_type_requires_solid():
+        required = self._part_type_requires_solid()
+        if required is None:
+            # A value that is not a flag. Keyed as no requirement, the part
+            # would be read back from whatever was cached before the value was
+            # written, and 'instantiate()', which fails the part for it, would
+            # never run. So it is not read from the cache at all.
+            part.cacheable = False
+        elif required:
             part.key_on_required_solid()
 
-    def _part_type_requires_solid(self) -> bool:
+    def _part_type_requires_solid(self):
+        """The partType's 'requireSolid', or None when it is not a flag."""
         pt_project = self.ctx.get_project(self.part_type_package)
         pt_config = pt_project.get_part_type_config(self.part_type_name) if pt_project is not None else None
         if pt_config is None:
@@ -168,7 +176,7 @@ class PartFactoryWrapper(PartFactory):
         try:
             return output.as_flag(pt_config.get(output.REQUIRE_SOLID_KEY), output.REQUIRE_SOLID_KEY)
         except ValueError:
-            return False  # and so for a value that is not a flag
+            return None
 
     def _part_type_versions(self):
         pt_project = self.ctx.get_project(self.part_type_package)
