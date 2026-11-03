@@ -50,19 +50,22 @@ KINDS_BY_SECTION = {section: kind for kind, section in object_names.SECTIONS.ite
 HASH_ALGORITHM = "sha256"
 
 
-def object_name_from_filename(filename: str, extension) -> str:
+def object_name_from_filename(filename: str, extension, other_extensions=()) -> str:
     """The object name a file of this name declares.
 
     'extension' is what the object's kind is written to, and only that one is
-    stripped: 'bolt.step' declares 'bolt', while 'bolt.v2.step' declares
-    'bolt.v2' rather than 'bolt'. 'None' strips whatever extension there is,
-    which is what software does - PartCAD cannot predict a firmware image's.
+    stripped -- or one of 'other_extensions', the other spellings of it
+    ('igs' for an 'iges' part, see 'Project.other_extensions'): 'bolt.step'
+    declares 'bolt', while 'bolt.v2.step' declares 'bolt.v2' rather than
+    'bolt'. 'None' strips whatever extension there is, which is what software
+    does - PartCAD cannot predict a firmware image's.
     """
     if extension is None:
         return os.path.splitext(filename)[0] or filename
-    suffix = ".%s" % extension
-    if extension and filename.lower().endswith(suffix.lower()):
-        return filename[: -len(suffix)]
+    for candidate in (extension, *other_extensions):
+        suffix = ".%s" % candidate
+        if candidate and filename.lower().endswith(suffix.lower()):
+            return filename[: -len(suffix)]
     return filename
 
 
@@ -105,7 +108,8 @@ async def add_object_from_url_async(ctx, project, section: str, url: str, kind=N
     config = dict(config or {})
     extension = None if kind is None else project.extension_for(section, kind)
     filename = filename_from_url(url, fallback="download" if extension is None else "download.%s" % extension)
-    name = object_name_from_filename(filename, extension)
+    other_extensions = () if kind is None else project.other_extensions(section, kind)
+    name = object_name_from_filename(filename, extension, other_extensions)
     # Before the download rather than after it: a name another kind of object
     # of the package has is refused whatever the file turns out to hold.
     taken = project.name_taken(KINDS_BY_SECTION.get(section), name)

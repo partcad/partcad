@@ -68,6 +68,27 @@ PART_EXTENSION_MAPPING = {
     "scad": "scad",
 }
 
+# The other spellings of a part type's extension: what its files are called by
+# whatever wrote them, as opposed to the one extension PartCAD names its own
+# ('step', and the 'extension' a built-in 'partType' declares). A part added
+# from 'bracket.stp' is 'bracket', as one added from 'bracket.step' is -- its
+# 'path' says which file it is. An ACIS body is text in a '.sat' and binary in a
+# '.sab', and ShapeManager's are '.smt' and '.smb'; cadmpeg tells them apart by
+# their content, so they are one type. 'gltf' is here because its files are
+# '.gltf' or '.glb' while PartCAD writes the type as '.json'.
+#
+# 'partcad_client.object_types.EXTENSION_ALIASES' is the client's copy, held to
+# this one by a test.
+PART_EXTENSION_ALIASES = {
+    "stp": "step",
+    "igs": "iges",
+    "gltf": "gltf",
+    "glb": "gltf",
+    "sab": "sat",
+    "smt": "sat",
+    "smb": "sat",
+}
+
 SKETCH_EXTENSION_MAPPING = {
     "svg": "svg",
     "dxf": "dxf",

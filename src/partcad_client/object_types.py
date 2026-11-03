@@ -159,7 +159,9 @@ BUILTIN_PART_TYPE_EXTENSION: Dict[str, str] = {
 # by something else as often as not, and '.stp' and '.glb' are what that
 # something else calls these. An ACIS body is text in a '.sat' and binary in a
 # '.sab', and ShapeManager's are '.smt' and '.smb'; cadmpeg tells them apart by
-# their content, so they are one type.
+# their content, so they are one type. A copy of
+# `partcad.shape.PART_EXTENSION_ALIASES`, which `pc add part` names a part by
+# ('plate.igs' adds 'plate').
 EXTENSION_ALIASES: Dict[str, str] = {
     "stp": "step",
     "igs": "iges",

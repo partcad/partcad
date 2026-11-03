@@ -131,13 +131,21 @@ def test_the_file_name_comes_from_the_url(url, filename):
         # the file it came from.
         ("bolt.v2.step", "step", "bolt.v2"),
         ("readme.md", "step", "readme.md"),
+        # Or another spelling of it, when the kind has one.
+        ("plate.igs", "iges", "plate"),
+        ("plate.IGS", "iges", "plate"),
+        ("plate.iges", "iges", "plate"),
+        ("body.sab", "sat", "body"),
+        ("body.step", "sat", "body.step"),
         # Software has no extension PartCAD can predict, so any is stripped.
         ("install.sh", None, "install"),
         ("firmware", None, "firmware"),
     ],
 )
-def test_the_object_name_comes_from_the_file_name(filename, extension, name):
-    assert object_name_from_filename(filename, extension) == name
+def test_the_object_name_comes_from_the_file_name(package, filename, extension, name):
+    project = pc.Context(str(package)).get_project("//")
+    others = project.other_extensions("parts", extension) if extension else ()
+    assert object_name_from_filename(filename, extension, others) == name
 
 
 #
@@ -300,3 +308,65 @@ def test_a_sibling_of_the_package_is_outside_it(package, tmp_path):
 
     assert not project.add_software(str(sibling / "firmware.bin"))
     assert yaml.safe_load((package / "partcad.yaml").read_text()) == {"desc": "A package under test"}
+
+
+#
+# Adding a part the package already has
+#
+
+# Each part type PartCAD ships as a declaration in '//builtin/import', the
+# extension it declares, and a file of each extension it is also found in. None
+# of these files is read: adding a part writes its declaration and builds
+# nothing, so a placeholder is enough to say what the declaration is.
+NATIVE_PART_FILES = [
+    ("fcstd", "body.FCStd", {}),
+    ("fcstd", "body.fcstd", {"path": "body.fcstd"}),
+    ("f3d", "body.f3d", {}),
+    ("sldprt", "body.SLDPRT", {}),
+    ("sldprt", "body.sldprt", {"path": "body.sldprt"}),
+    ("ipt", "body.ipt", {}),
+    ("catpart", "body.CATPart", {}),
+    ("catpart", "body.catpart", {"path": "body.catpart"}),
+    ("sat", "body.sat", {}),
+    ("sat", "body.sab", {"path": "body.sab"}),
+    ("sat", "body.smt", {"path": "body.smt"}),
+    ("sat", "body.smb", {"path": "body.smb"}),
+    ("pvz", "body.pvz", {}),
+    ("iges", "body.iges", {}),
+    ("iges", "body.igs", {"path": "body.igs"}),
+    ("step", "body.stp", {"path": "body.stp"}),
+    # Not a spelling of the type at all: the file keeps its whole name.
+    ("sat", "body.step", {"path": "body.step"}),
+]
+
+
+@pytest.mark.parametrize("kind, filename, extra", NATIVE_PART_FILES)
+def test_a_part_is_named_after_its_file_in_any_spelling_of_its_type(package, kind, filename, extra):
+    """'<name>.<declared extension>' needs no 'path'; any other spelling of the type keeps one, and the name."""
+    (package / filename).write_bytes(b"placeholder: never read, the part is not built\n")
+    project = pc.Context(str(package)).get_project("//")
+
+    assert project.add_part(kind, str(package / filename))
+
+    name = "body.step" if filename == "body.step" else "body"
+    assert _declared(package, "parts", name) == {"type": kind, **extra}
+
+
+def test_a_part_in_a_subdirectory_keeps_its_directory_in_its_name_and_path(package):
+    (package / "native").mkdir()
+    (package / "native" / "plate.igs").write_bytes(b"placeholder\n")
+    project = pc.Context(str(package)).get_project("//")
+
+    assert project.add_part("iges", str(package / "native" / "plate.igs"))
+
+    assert _declared(package, "parts", "native/plate") == {"type": "iges", "path": "native/plate.igs"}
+
+
+def test_a_part_added_from_a_url_in_another_spelling_is_named_without_it(package, served):
+    (served / "plate.igs").write_bytes(b"placeholder\n")
+    with serve(served) as url:
+        ctx = pc.Context(str(package))
+        name = asyncio.run(add_object_from_url_async(ctx, ctx.get_project("//"), "parts", "%s/plate.igs" % url, "iges"))
+
+    assert name == "plate"
+    assert _declared(package, "parts", "plate")["path"] == "plate.igs"

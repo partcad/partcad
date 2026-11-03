@@ -29,7 +29,7 @@ import yaml
 
 from partcad import factory, output
 from partcad.adhoc.adhoc import PACKAGE_ONLY_TYPES
-from partcad.shape import PART_EXTENSION_MAPPING, SCENE_EXTENSION_MAPPING
+from partcad.shape import PART_EXTENSION_ALIASES, PART_EXTENSION_MAPPING, SCENE_EXTENSION_MAPPING
 from partcad_client import object_types
 
 # Registering the part factories is `partcad.globals`' doing, and it happens on
@@ -80,6 +80,11 @@ def test_the_builtin_part_types_are_stored_in_the_extensions_they_declare():
 def test_the_types_that_only_mean_something_in_a_package_are_the_same_ones():
     """`pc ide open` refuses these by name instead of sending a conversion that is refused."""
     assert object_types.PACKAGE_ONLY_TYPES == PACKAGE_ONLY_TYPES
+
+
+def test_the_other_spellings_of_an_extension_are_the_ones_partcad_names_its_objects_by():
+    """'pc add part iges plate.igs' adds 'plate'; the client recognizes '.igs' as IGES for the same reason."""
+    assert object_types.EXTENSION_ALIASES == PART_EXTENSION_ALIASES
 
 
 def test_the_extensions_that_are_other_spellings_name_types_that_exist():

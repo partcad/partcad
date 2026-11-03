@@ -2838,6 +2838,15 @@ class Project(project_config.Configuration):
             valid, path, name = self._validate_path(path, ext)
             if not valid:
                 return False
+            if name == path:
+                # Not in the extension the type is named by, but perhaps in
+                # another spelling of it ('plate.igs' for 'iges', 'body.sab' for
+                # 'sat'): such an object is named after the file without its
+                # extension, as one in the type's own would be, and the path
+                # below says which file it is.
+                stem, own = os.path.splitext(path)
+                if own[1:].lower() in self.other_extensions(section, kind):
+                    name = stem
         else:
             # This is not a file type.
             # The user provided value is not a path. It's just the name itself.
@@ -2849,7 +2858,7 @@ class Project(project_config.Configuration):
         # found at without it, '<name>.<extension>' exactly: the extension is
         # matched without regard to case above, and a file system that tells
         # case apart finds no 'part.STEP' where it looks for 'part.step'.
-        if name == path or (path is not None and path != "%s.%s" % (name, ext)):
+        if path is not None and (name == path or path != "%s.%s" % (name, ext)):
             obj["path"] = path
 
         return self.add_object_config(section, name, obj)
@@ -2879,6 +2888,23 @@ class Project(project_config.Configuration):
         if kind in by_kind:
             return by_kind[kind]
         return self._part_type_extension(section, kind) or kind
+
+    def other_extensions(self, section: str, kind: str) -> tuple:
+        """The other spellings of the extension objects of this kind are stored in, lowercased.
+
+        'igs' for an 'iges' part, 'sab', 'smb' and 'smt' for a 'sat' one: what
+        a file of the type is called by whatever wrote it, beside the one
+        'extension_for' names (see 'shape.PART_EXTENSION_ALIASES'). Empty for
+        every other section and kind.
+        """
+        if section != "parts":
+            return ()
+        from .shape import PART_EXTENSION_ALIASES
+
+        own = (self.extension_for(section, kind) or "").lower()
+        return tuple(
+            sorted(alias for alias, aliased in PART_EXTENSION_ALIASES.items() if aliased == kind and alias != own)
+        )
 
     def add_object_config(self, section: str, name: str, obj: dict) -> bool:
         """Write one object declaration into this package's 'partcad.yaml'.
