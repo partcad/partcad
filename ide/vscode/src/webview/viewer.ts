@@ -488,7 +488,11 @@ labels.onChange((key) => {
     }
     // No longer the picture the boxes describe: forgotten, and asked for again
     // if it is the one on screen, once the boxes have settled - as a box of the
-    // tree does. Draft writes none of them, and is left alone.
+    // tree does. One still being drawn is stopped, so the daemon is not kept on
+    // it meanwhile. Draft writes none of them, and is left alone.
+    if (awaiting.has('2d')) {
+        cancelTab({ type: 'cancelTab', tab: '2d' });
+    }
     requested.delete('2d');
     awaiting.delete('2d');
     if (tabs.current === 'design' && designTabs.current === '2d') {
@@ -560,9 +564,12 @@ function stopPrices(): void {
 function onPrices(data: PricesData | undefined, error: string | undefined): void {
     if (error !== undefined || data === undefined || data === null) {
         // Nothing on screen may go on saying what an earlier quote said: an
-        // edit saved and quoted again that failed leaves no price at all.
+        // edit saved and quoted again that failed leaves no price at all. And
+        // a failure is not an answer to keep: the box ticked again, or the 3D
+        // view looked at again, asks afresh.
         prices = undefined;
         scene?.setComponentPrices({});
+        requested.delete('design');
         labelBoxes3d.setNote(`No prices: ${error ?? 'PartCAD said nothing about them.'}`);
         return;
     }
