@@ -123,6 +123,8 @@ aws = {file = ["requirements-aws.txt"]}
 # implementation: the scene a `simulate:` places its subject in. Its `.assy` is
 # read as a Jinja2 template, so it ships as a data file like the rest.
 "partcad.builtin.scene" = ["*.assy", "*.yaml"]
+# And the colour PartCAD writes references to: a declaration and nothing else.
+"partcad.builtin.color" = ["*.yaml"]
 "partcad.template" = ["*.yaml"]
 # The AI agent skills and the Claude plugin manifest `pc init` installs into a
 # repository (see `src/partcad/ai_agents/__init__.py`). They are data rather

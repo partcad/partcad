@@ -15,7 +15,7 @@ them under 'colors:', 'materials:' and 'finishes:', addresses each as
   substance as it comes; for a finish, '{roughness, metallic}' for a 3D view.
 - 'manufacturable': whether the declaration is a claim that this can be
   sourced or made as declared. True unless it says otherwise: a colour that is
-  only a picture - '//pub/std/color:rgba' - says 'false'.
+  only a picture - '//builtin/color:rgba' - says 'false'.
 - 'ids': what other systems call it ({'ldraw': '71', 'bricklink': '86', ...}),
   which is how a converter maps another tool's names onto it.
 - 'parameters': a declaration may be parametric, and its fields are rendered
@@ -43,6 +43,7 @@ import typing
 from partcad_utils.utils import RESERVED_IN_NAMES, escape_name, format_parameterized_name, parse_parameterized_name
 
 from . import logging as pc_logging
+from . import output
 from .utils import resolve_resource_path
 
 # The wrappers directory is on the path for anything that imports 'partcad'
@@ -68,8 +69,11 @@ SOURCE_CMF_KEEP = "keep"
 SOURCE_CMF_DROP = "drop"
 
 # The display-only colour anybody can name to colour a picture without claiming
-# anything: '//pub/std/color:rgba;color=RRGGBBAA'.
-RGBA = "//pub/std/color:rgba"
+# anything: '//builtin/color:rgba;color=RRGGBBAA'. PartCAD's own, because PartCAD
+# writes it - for a hex or CSS colour, and for a source's colour nothing claims -
+# and a reference it writes has to resolve wherever it is read, with or without
+# the public index at hand (see 'output.BUILTIN_COLOR_PACKAGE').
+RGBA = output.BUILTIN_COLOR_PACKAGE + ":rgba"
 
 
 class Declaration:
@@ -289,7 +293,7 @@ def with_parameters(config: dict, values: dict, object_name: str) -> dict:
     """The declaration of the instance 'values' name: its parameters set, its fields rendered.
 
     Every string field may name a parameter in PartCAD's own expression syntax
-    ('%color%', see 'partcad.expr'), which is how '//pub/std/color:rgba' turns
+    ('%color%', see 'partcad.expr'), which is how '//builtin/color:rgba' turns
     'color=C91A09FF' into its display. Not Jinja2's: 'partcad.yaml' is rendered
     as a template before it is read, long before any reference gives a value.
     """
@@ -359,7 +363,7 @@ def canonical(ctx, kind: str, value, relative_to: str = "", quiet: bool = True) 
     absolute, so that what is written in one package means the same thing in
     another. A colour that is no reference but a colour - '#C91A09', 'red' as
     CSS reads it, which is what a 'color' parameter could hold before colours
-    were declarations - becomes the display-only '//pub/std/color:rgba' of it,
+    were declarations - becomes the display-only '//builtin/color:rgba' of it,
     with a warning: it draws as it did, and claims nothing.
     """
     if value is None:
@@ -370,7 +374,7 @@ def canonical(ctx, kind: str, value, relative_to: str = "", quiet: bool = True) 
     if not value:
         return None
     # A display-only colour states itself in full: it is its own canonical
-    # reference, and the standard catalogue need not be at hand to say so.
+    # reference, and its package need not be loaded to say so.
     if kind == "color":
         rgba = rgba_of_reference(value)
         if rgba is not None:
@@ -394,15 +398,15 @@ def canonical(ctx, kind: str, value, relative_to: str = "", quiet: bool = True) 
 
 
 def rgba_reference(rgba) -> str:
-    """The display-only colour '//pub/std/color:rgba' of '(red, green, blue, alpha)'."""
+    """The display-only colour '//builtin/color:rgba' of '(red, green, blue, alpha)'."""
     red, green, blue, alpha = rgba
     return "%s;color=%02X%02X%02X%02X" % (RGBA, red, green, blue, round(alpha * 255))
 
 
 def rgba_of_reference(reference: str):
-    """The colour a '//pub/std/color:rgba' reference draws, read from the reference itself, or None.
+    """The colour a '//builtin/color:rgba' reference draws, read from the reference itself, or None.
 
-    So that a picture can be drawn where the standard catalogue is not at hand:
+    So that a picture can be drawn without loading its package:
     the reference states its colour in full.
     """
     if not isinstance(reference, str) or not reference.startswith(RGBA + ";"):
