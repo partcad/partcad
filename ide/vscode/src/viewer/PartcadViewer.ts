@@ -962,6 +962,12 @@ export class PartcadViewer implements vscode.Disposable {
                     }
                 } else if (message.type === 'fetchTab') {
                     void this.fetchTab({ ...message, tab: message.tab ?? '', token: message.token ?? 0 });
+                } else if (message.type === 'cancelTab') {
+                    // The renderer will not read the answer: stop the request
+                    // rather than keep the daemon on it (see 'CancelTabMessage').
+                    if (message.tab) {
+                        this.inFlight.cancel(message.tab);
+                    }
                 } else if (message.type === 'fetchDetails') {
                     void this.fetchDetails(message.token ?? 0, message.objects ?? [], message.width, message.height);
                 } else if (message.type === 'openSource') {

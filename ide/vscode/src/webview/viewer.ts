@@ -94,6 +94,7 @@ import { LabelBoxes, Labels, renderOptions } from './labels';
 import {
     fetchDetails,
     fetchFormats,
+    cancelTab,
     fetchTab,
     openSource,
     ready,
@@ -481,6 +482,8 @@ const labelBoxes3d = new LabelBoxes(byId('labels-3d'), labels);
 labels.onChange((key) => {
     scene?.setLabels(labels.current);
     if (key === 'componentPrices') {
+        // Asked for, or stopped, here only while the 3D view is on screen: the
+        // 2D tab's picture asks for its own prices with the render it is.
         askPrices();
     }
     // No longer the picture the boxes describe: forgotten, and asked for again
@@ -505,16 +508,25 @@ let prices: { object: string; texts: Record<string, string> } | undefined;
 
 /**
  * Ask what each component of the object on screen costs, if the Component
- * prices box is ticked: 'supply.prices', the Buy tab's quote shared out over the
- * components.
+ * prices box is ticked and the 3D view is the tab on screen: 'supply.prices',
+ * the Buy tab's quote shared out over the components.
  *
- * Asked again on every show while the box is ticked, the same object's included:
- * an edit saved may have added a part. What was known about the same object is
- * kept on screen meanwhile; another object's is not.
+ * Asked once per show, the same object's included - an edit saved may have
+ * added a part - and only once the 3D view is looked at ('onLeafSelected'): a
+ * quote goes out to every supplier, and the daemon serves one request at a
+ * time, so a quote nobody is looking at would hold up the tab somebody is.
+ * What was known about the same object is kept on screen meanwhile; another
+ * object's is not.
+ *
+ * The box cleared while a quote is out stops it, for the same reason.
  */
 function askPrices(): void {
     if (!labels.get('componentPrices') || shown === undefined) {
+        stopPrices();
         labelBoxes3d.setNote(undefined);
+        return;
+    }
+    if (tabs.current !== 'design' || designTabs.current !== '3d' || requested.has('design')) {
         return;
     }
     if (!shown.package || !PRICED_KINDS.includes(shown.kind ?? '')) {
@@ -525,13 +537,32 @@ function askPrices(): void {
         prices = undefined;
         scene?.setComponentPrices({});
     }
+    requested.add('design');
     labelBoxes3d.setNote('Asking the suppliers what each component costs…');
     request('design');
+}
+
+/**
+ * Stop a quote that is out, if one is: its answer is dropped by its token, and
+ * the host is told so that the daemon stops working on it. An answer that has
+ * already arrived is kept, so ticking the box again shows it at once.
+ */
+function stopPrices(): void {
+    if (!awaiting.has('design')) {
+        return;
+    }
+    awaiting.delete('design');
+    requested.delete('design');
+    cancelTab({ type: 'cancelTab', tab: 'design' });
 }
 
 /** What the components cost has arrived, or why it has not. */
 function onPrices(data: PricesData | undefined, error: string | undefined): void {
     if (error !== undefined || data === undefined || data === null) {
+        // Nothing on screen may go on saying what an earlier quote said: an
+        // edit saved and quoted again that failed leaves no price at all.
+        prices = undefined;
+        scene?.setComponentPrices({});
         labelBoxes3d.setNote(`No prices: ${error ?? 'PartCAD said nothing about them.'}`);
         return;
     }
@@ -1422,7 +1453,6 @@ async function show(message: ShowMessage): Promise<void> {
     }
     offerMetadata(message.object);
     offerControls(true);
-    askPrices();
 
     // Without a 3D view the geometry has nowhere to go, but the object still has
     // every other tab.
@@ -1933,6 +1963,8 @@ function onLeafSelected(tab: TabId): void {
         scene?.resizeCanvas();
         // A section chosen on the 2D or Draft tab is this tab's too.
         cut3d();
+        // What the components cost, if the box asks and this show has not.
+        askPrices();
         return;
     }
     if (isAnalysisTab(tab)) {

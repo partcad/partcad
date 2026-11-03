@@ -752,6 +752,18 @@ export interface FetchFormatsMessage {
 }
 
 /**
+ * Renderer to host: the 'fetchTab' last sent for this tab will not be read, so
+ * stop it rather than let the daemon - which serves one request at a time - run
+ * it to the end. What the 3D view sends when Component prices is cleared while
+ * a quote is out (see 'askPrices'). Its answer, if one still comes, is dropped
+ * by its token as any stale answer is.
+ */
+export interface CancelTabMessage {
+    type: 'cancelTab';
+    tab: TabId;
+}
+
+/**
  * Renderer to host: the Simulation tab's video went full screen, or came back.
  *
  * Only where the webview cannot go full screen itself -- Visual Studio Code
