@@ -75,6 +75,11 @@ export class InFlight {
         source.dispose();
     }
 
+    /** Cancel what is in flight under `key`, if anything: the renderer no longer wants its answer. */
+    cancel(key: string): void {
+        this.byKey.get(key)?.cancel();
+    }
+
     /** Cancel everything in flight. */
     cancelAll(): void {
         for (const source of this.sources) {

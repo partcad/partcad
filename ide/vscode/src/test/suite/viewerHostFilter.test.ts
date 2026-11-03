@@ -67,6 +67,88 @@ suite('The Digital Thread host, asked to render', () => {
         assert.deepStrictEqual(sent[0].filter, { head_half_1: {} });
         assert.strictEqual(sent[0].withPorts, true);
         assert.deepStrictEqual(sent[0].ports, ['hold']);
+        // No callout box said anything a render does not do anyway.
+        assert.strictEqual(sent[0].withComponentNames, undefined);
+        assert.strictEqual(sent[0].withPortNames, undefined);
+        viewer.dispose();
+    });
+
+    test('passes the callout boxes on to the daemon', async () => {
+        const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
+        const host = viewer as unknown as {
+            lastShow: unknown;
+            fetchTab(message: Record<string, unknown>): Promise<void>;
+        };
+        host.lastShow = { type: 'show', name: 'logo', kind: 'assembly', package: '//pkg' };
+        sent.length = 0;
+
+        await host.fetchTab({
+            tab: '2d',
+            token: 2,
+            format: 'svg',
+            withPorts: true,
+            withComponentNames: true,
+            withComponentPrices: true,
+            withPortNames: false,
+            withInterfaceNames: false,
+        });
+
+        assert.strictEqual(sent.length, 1);
+        assert.strictEqual(sent[0].withComponentNames, true);
+        assert.strictEqual(sent[0].withComponentPrices, true);
+        assert.strictEqual(sent[0].withPortNames, false);
+        assert.strictEqual(sent[0].withInterfaceNames, false);
+        viewer.dispose();
+    });
+});
+
+suite('The Digital Thread host, asked what the components cost', () => {
+    const asked: Record<string, unknown>[] = [];
+    let registration: vscode.Disposable | undefined;
+
+    suiteSetup(() => {
+        registration = vscode.commands.registerCommand('partcad.componentPrices', (args: Record<string, unknown>) => {
+            asked.push(args);
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            return { object: '//pkg:logo', prices: { '//pkg:bolt': { price: 0.25, currency: 'USD' } } };
+        });
+    });
+
+    suiteTeardown(() => registration?.dispose());
+
+    test("asks under the Design group's id, about the object on screen, and posts the answer back", async () => {
+        const posted: Record<string, unknown>[] = [];
+        const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
+        const host = viewer as unknown as {
+            lastShow: unknown;
+            panel: unknown;
+            fetchTab(message: Record<string, unknown>): Promise<void>;
+        };
+        host.lastShow = { type: 'show', name: 'logo', kind: 'assembly', package: '//pkg' };
+        host.panel = {
+            webview: {
+                postMessage: (message: Record<string, unknown>) => {
+                    posted.push(message);
+                    return Promise.resolve(true);
+                },
+            },
+            dispose: () => undefined,
+        };
+
+        await host.fetchTab({ tab: 'design', token: 7 });
+
+        assert.strictEqual(asked.length, 1);
+        assert.strictEqual(asked[0].pkg, '//pkg');
+        assert.strictEqual(asked[0].name, 'logo');
+        assert.strictEqual(asked[0].kind, 'assembly');
+        const answer = posted.find((message) => message.type === 'tabData');
+        assert.strictEqual(answer?.tab, 'design');
+        assert.strictEqual(answer?.token, 7);
+        assert.deepStrictEqual(answer?.data, {
+            object: '//pkg:logo',
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            prices: { '//pkg:bolt': { price: 0.25, currency: 'USD' } },
+        });
         viewer.dispose();
     });
 });

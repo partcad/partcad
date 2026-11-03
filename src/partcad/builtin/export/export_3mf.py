@@ -3,7 +3,16 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""The built-in 3MF exporter (see '//builtin/export' in partcad.yaml)."""
+"""The built-in 3MF exporter (see '//builtin/export' in partcad.yaml).
+
+The geometry is CadQuery's 3MF writer's, one mesh object of the whole shape. A
+shape that states CMF is then given it as the 3MF core specification states
+appearance: a base material per CMF set, with its name and its sRGB display
+colour, which the object and each of its triangles name (see 'cmf_3mf'). What
+PartCAD reads a 3MF with reads it back ('cmf_capture.read_mesh'), and so does
+every reader built on lib3mf, now that the package types its relationships the
+way lib3mf requires (see 'cmf_3mf.finish').
+"""
 
 import os
 import sys
@@ -22,8 +31,9 @@ import wrapper_common
 
 # What this implementation reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
-# before is produced again.
-CACHE_VERSION = 1
+# before is produced again. 2: base materials per CMF set, and the package's
+# parts typed so that lib3mf reads it.
+CACHE_VERSION = 2
 
 # How this implementation meshes what it is handed, so that the files of one
 # object written together can share one decoding of it and one mesh (see
@@ -50,7 +60,19 @@ def process(path, request):
             angularTolerance=request.get("angularTolerance", 0.1),
         )
 
-        return {"success": True, "exception": None, "files": []}
+        # The faces are meshed now, by the writer, as it wrote them: which set
+        # each triangle is in is counted off that very mesh.
+        import cmf_3mf
+
+        warnings = []
+        per_triangle = cmf_3mf.triangle_sets(obj, request.get("shape_tree"), warnings)
+        if not cmf_3mf.finish(path, per_triangle) and per_triangle is not None:
+            warnings.append(
+                "The colours of %s are not in its 3MF: the file's triangles are not the ones they were counted on"
+                % (request.get("shape_name") or "the shape")
+            )
+
+        return {"success": True, "exception": None, "files": [], "warnings": warnings}
     except Exception as e:
         wrapper_common.handle_exception(e)
         return {"success": False, "exception": wrapper_common.exception_to_str(e)}

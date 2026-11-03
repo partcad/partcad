@@ -33,7 +33,9 @@ from . import output
 from . import physics as pc_physics
 from . import render_overlay
 from . import runtime as pc_runtime
-from . import sandbox_versions, scene_world, shape_ports, shape_section, source_key, sync_threads, wrapper
+from . import sandbox_versions, scene_world, shape_ports, shape_section, source_key
+from . import surface as pc_surface
+from . import sync_threads, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
 from .shape_config import TRANSFORM_KEYS, ShapeConfiguration
@@ -1364,7 +1366,7 @@ class Shape(ShapeConfiguration):
             # A part that is not one - see '_accepted_as_solid' - goes on from
             # here as a factory that built nothing does.
             verdict = finished.get(shape_envelope.FINISHED_VALIDATED)
-            if self.kind == "part" and shape_envelope.is_shape_object(shape):
+            if self.kind == "part" and shape_envelope.is_shape_object(shape) and self._validates():
                 if verdict is not None:
                     if not self._accepted_as_solid(verdict.get("problems") or []):
                         shape = None
@@ -1536,8 +1538,14 @@ class Shape(ShapeConfiguration):
             return None
         properties = self.config.get(shape_envelope.KEY_PROPERTIES)
         if not isinstance(properties, dict):
-            return None
+            properties = {}
         properties = {key: value for key, value in properties.items() if value not in (None, {}, [], "")}
+        # The one thing a shape reports by what it *is*: a part that resolves to
+        # a surface type - a wall, or an alias of one, which states no
+        # properties of its own - is drawn from the front of its faces only
+        # (see 'partcad.surface' and 'part_factory_wall.ONE_SIDED_KEY').
+        if pc_surface.ONE_SIDED_KEY not in properties and pc_surface.is_surface(self):
+            properties[pc_surface.ONE_SIDED_KEY] = True
         return properties or None
 
     def material_reference(self) -> Optional[str]:
@@ -2177,7 +2185,7 @@ class Shape(ShapeConfiguration):
         """
         return await output.materialize_script(ctx, impl)
 
-    async def _output_request(self, ctx, obj, impl, kwargs, overlay=None, ports=None):
+    async def _output_request(self, ctx, obj, impl, kwargs, overlay=None, ports=None, prices=None):
         """What the implementation is handed.
 
         The shape, every parameter the layered configuration ended up with, and
@@ -2190,6 +2198,13 @@ class Shape(ShapeConfiguration):
         'impl.parameters' rather than before, because the resolved overlay is
         what a file type declaring 'with_ports:' asked for plus what the command
         line asked for - the declaration has already been read.
+
+        'prices' is the text of the price of each component, by object name,
+        when the overlay asks for them (see 'render_overlay.component_prices_async').
+        The callout switches go in only when they say something other than what
+        a request without them means - no component callouts, every port name
+        written - so a picture that asks for none of them is handed the request
+        it always was, and keeps the cached answer it always had.
         """
         request = {
             "wrapped": obj,
@@ -2203,6 +2218,14 @@ class Shape(ShapeConfiguration):
             request["with_ports"] = overlay.ports
             request["with_interfaces"] = overlay.interfaces
             request["ports"] = ports or []
+            if overlay.component_names:
+                request[render_overlay.COMPONENT_NAMES_KEY] = True
+            if overlay.component_prices:
+                request[render_overlay.COMPONENT_PRICES_KEY] = dict(prices or {})
+            if not overlay.port_names:
+                request[render_overlay.PORT_NAMES_KEY] = False
+            if not overlay.interface_names:
+                request[render_overlay.INTERFACE_NAMES_KEY] = False
         # An explicit argument wins over the configuration, but only when it is
         # one: 'render_async(**kwargs)' is called with a fixed set of keyword
         # arguments defaulting to None by several callers.
@@ -2240,6 +2263,15 @@ class Shape(ShapeConfiguration):
             world = self.world_facts(ctx)
             if world:
                 request[output.WORLD_KEY] = world
+        # What the CMF declarations the shapes name say about themselves - a
+        # material's density, a declaration's name - for a file type that
+        # states them, resolved here for the reason a shape's physics is: a
+        # reference is a name, and only the core can load the package that
+        # declares it. See 'output.CMF_KEY'.
+        if request.get(output.CMF_KEY) is True:
+            from . import cmf as pc_cmf
+
+            request[output.CMF_KEY] = pc_cmf.export_facts(ctx, obj, self.project_name)
         return request
 
     async def _overlay_ports_async(self, ctx, overlay, cache):
@@ -2274,6 +2306,20 @@ class Shape(ShapeConfiguration):
         render_overlay.report(self, records, overlay)
         cache[overlay.key()] = records
         return records
+
+    async def _component_prices_async(self, ctx, overlay, cache):
+        """What each component of this shape costs, worked out at most once per render call.
+
+        Asking is a quote from every supplier of every line item, so three file
+        types of one object asking for their prices ask once - and are told
+        once, in the log, when there are none. Unlike the ports, every file
+        type asks the same question, so even "none" is the answer for all of
+        them.
+        """
+        key = ("component-prices",)
+        if key not in cache:
+            cache[key] = await render_overlay.component_prices_async(self, ctx, overlay)
+        return cache[key]
 
     async def _run_implementation_async(self, ctx, impl, script, request, final_filepath):
         """Run one output implementation in a sandbox and read back its verdict.
@@ -2865,15 +2911,27 @@ class Shape(ShapeConfiguration):
 
         effective_overlay = render_overlay.effective(overlay, impl)
         ports = None
+        prices = None
         if effective_overlay is not None:
-            ports = await subject._overlay_ports_async(
-                ctx,
-                effective_overlay,
-                subject_ports if subject is not self else (ports_cache if ports_cache is not None else {}),
-            )
+            if effective_overlay.ports or effective_overlay.interfaces:
+                ports = await subject._overlay_ports_async(
+                    ctx,
+                    effective_overlay,
+                    subject_ports if subject is not self else (ports_cache if ports_cache is not None else {}),
+                )
+            if effective_overlay.component_prices:
+                # Of this object rather than of the view a filter made of it:
+                # the view is no object of the package to ask the market about,
+                # and a component's price does not change with what else is
+                # drawn beside it.
+                prices = await self._component_prices_async(
+                    ctx, effective_overlay, ports_cache if ports_cache is not None else {}
+                )
 
         try:
-            request = await subject._output_request(ctx, obj, impl, kwargs, overlay=effective_overlay, ports=ports)
+            request = await subject._output_request(
+                ctx, obj, impl, kwargs, overlay=effective_overlay, ports=ports, prices=prices
+            )
         except scene_world.WorldError as e:
             # What a scene states about its world, stated wrongly: a gravity that
             # is not a vector, a medium nothing answers to. The declaration's
@@ -4309,6 +4367,15 @@ class Shape(ShapeConfiguration):
         """
         return (self.config or {}).get("type") not in FILE_AUTHORITY_TYPES
 
+    def _validates(self) -> bool:
+        """Whether this part is held to being a body as it leaves its factory: all but a surface part.
+
+        A part whose type builds a surface on purpose - a wall - would only be
+        told what it already is, once per build, and a closed one would be
+        turned into something it was not meant to be (see 'partcad.surface').
+        """
+        return not pc_surface.is_surface(self)
+
     def finish_request(self):
         """What the wrapper that builds this part is asked to do to it before it hands it over.
 
@@ -4338,7 +4405,10 @@ class Shape(ShapeConfiguration):
         """
         if self.kind != "part":
             return None
-        request = {"validate": {"solidify": self._solidifies()}}
+        # A surface part - a wall - is a skin on purpose, and is neither closed
+        # into a solid nor judged for not being one (see 'partcad.surface'): it
+        # is moved and scaled like any part, and that is all.
+        request = {"validate": {"solidify": self._solidifies()}} if self._validates() else {}
         for key in TRANSFORM_KEYS:
             if key in self.config:
                 request[key] = self.transform(key)

@@ -314,6 +314,13 @@ fills and quotes each line item on its own, because a cart of the whole assembly
 all of it. Note that `supply.quote` deliberately does *not* go through `Context.find_suppliers()`: that reports "no
 suppliers" as an error, and in the IDE an error is a modal popup, one per part.
 
+`supply.prices` is that same quote shared out over the object's components -- what each one costs as its share of
+what the object costs to buy, by the rule in `partcad/component_prices.py` -- which is what the 3D view's "Component
+prices" callouts write. The same function (`_component_prices_async`) is the price source every render's overlay
+carries (`partcad.render_overlay.Overlay.prices`), so `pc render --with-component-prices`, the 2D tab's picture and
+the 3D view cannot price one part three ways. It lives here, not in the core, because this is where the suppliers
+are asked: the core renderer draws prices it is handed and asks nobody.
+
 `cae.analyze` is the odd one of the six: it *runs* something rather than answering a question about the
 package, and it is the same `Shape.analyze_async()` that `pc cae fea` runs -- for every scenario of the
 analysis the part declares, or for the one `scenario` names, which is `pc cae fea -f` and what a tab asks.
@@ -400,7 +407,7 @@ JSON-RPC itself; that is the one copy, and it has to stay in step. A client that
 this gets an error message saying what to build first, which is the most a client that cannot act on it can be
 given.
 
-What is deliberately *not* staged: `bom`, `assembly.guide` and `supply.quote`, which walk the assembly tree
+What is deliberately *not* staged: `bom`, `assembly.guide`, `supply.quote` and `supply.prices`, which walk the assembly tree
 without building geometry; a `render.objects` or `test.run` whose unit is a package (recursive, or naming no
 object) — what they would have to name is everything they are about to build, and they already report where
 they have got to, object by object, as they go; and `convert.object`, which rewrites a declaration rather than
@@ -431,7 +438,7 @@ knowing:
   that filter a name like `bolt` fails in every package that has no bolt -- and a render of such a package
   raises `EmptyShapesError`, which used to end the whole run.
 
-An operation whose answer is about **one** object -- `bom`, `assembly.guide`, `cae.analyze`, `supply.quote`,
+An operation whose answer is about **one** object -- `bom`, `assembly.guide`, `cae.analyze`, `supply.quote|prices`,
 `inspect.object`, `convert.object` -- calls `_refuse_recursion()` and says so, rather than guessing between a
 merged answer and a sequence of them. Adding recursion to one of those is a decision about what its result
 becomes, not a parsing change.

@@ -751,6 +751,19 @@ class JsonRpcBackend implements PartcadBackend {
                     with_internals: a.withInternals,
                     // Which ports, where the panel narrowed it to some of them.
                     ports: a.ports,
+                    // The callout boxes under the panel's tree: 'pc render
+                    // --with-component-names'/'--with-component-prices', and
+                    // '--without-port-names'/'--without-interface-names' as a
+                    // false. Undefined is left out of the request, and means the
+                    // default.
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    with_component_names: a.withComponentNames,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    with_component_prices: a.withComponentPrices,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    with_port_names: a.withPortNames,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    with_interface_names: a.withInterfaceNames,
                     // The view panel beside it: where the picture is looked at from
                     // ('pc render --viewport-origin/--viewport-up'), and what the
                     // object is cut to before it is drawn.
@@ -764,6 +777,21 @@ class JsonRpcBackend implements PartcadBackend {
             ),
         );
         reg('partcad.renderFormats', (a) => this.send('render.formats', { package: a.package }));
+        // What each component of an object costs, for the 3D view's "Component
+        // prices" callouts: the Buy tab's quote, shared out over the components
+        // ('partcad.component_prices'). The quote goes out to the suppliers, so it
+        // can be cancelled like a tab's request.
+        reg('partcad.componentPrices', (a) =>
+            this.send(
+                'supply.prices',
+                {
+                    package: a.pkg,
+                    object: a.name,
+                    kind: a.kind,
+                },
+                a.cancellation,
+            ),
+        );
         reg('partcad.exportPart', (type, path, pkg, name, params) =>
             this.send('export.part', { type, path, package: pkg, name, params }),
         );

@@ -92,6 +92,9 @@ PART_TYPE_IS_MESH: Dict[str, bool] = {
     # Shapes built by PartCAD out of something else in the package.
     "extrude": False,
     "sweep": False,
+    # A wall is a surface PartCAD builds from its dimensions (and a sketch of
+    # its openings): faces, not triangles.
+    "wall": False,
     "compound": False,
     # References to another object, which decide nothing themselves: whatever
     # they point at, a mesh application still gets there through a conversion.

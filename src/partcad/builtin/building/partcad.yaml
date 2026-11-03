@@ -1,0 +1,114 @@
+# What a space is laid out with: walls, and rooms made of them.
+#
+# For drawing a floor plan, an apartment, the room a machine is going to stand
+# in - a space rather than a product. Nothing here is manufacturable, and that
+# is what it says: a wall is a one-sided surface with no thickness and no body,
+# drawn from the side it faces and see-through from the other, so that a room
+# seen from outside is seen *into* through its near walls (see
+# `src/partcad/surface.py` for what being a surface excuses a part from, and
+# what it does not).
+#
+# Two objects, each the parametric face of a type PartCAD implements, and the
+# one colour they are drawn in: the geometry is `wall` and `walls` (see
+# `part_factory_wall.py` and `scene_factory_walls.py`), and what is here is the
+# parameters they are asked for with. A wall is coloured the way any part is,
+# by its CMF `color` parameter, and a room passes its own colour, material and
+# finish to every wall it stands up: `room;color=//my/package:sage` is a room
+# painted sage. A package that wants walls of its own - with a different default
+# height, say - declares a `type: wall` part of its own, or an `enrich` of this
+# one; a room of its own is a `type: walls` scene naming that part as its
+# `wall:`.
+
+name: //builtin/building
+desc: |
+  What a space is laid out with: `wall`, a one-sided surface drawn from the
+  side it faces and see-through from behind, straight or along an arc and with
+  doors and windows cut out of it by a sketch; and `room`, the walls standing
+  on the outline of a sketch, every one of them looking in. For floor plans and
+  space planning: none of it is manufacturable.
+
+# Said once for the whole package as well as on each object: a wall refuses to
+# be declared without it, and so would any object added here later.
+manufacturable: false
+
+# What a wall is drawn in when nothing says what it is painted: a warm grey, as
+# a plan draws one. Only a picture - a wall is never made - so it claims nothing
+# (see `config_cmf` in the documentation), and it is dark enough to read as a
+# line on the white page of a drawing.
+colors:
+  wall:
+    desc: The warm grey a wall is drawn in when nothing says what it is painted.
+    display: "#9C9284"
+    manufacturable: false
+
+parts:
+  wall:
+    type: wall
+    manufacturable: false
+    desc: |
+      A wall: a one-sided surface, seen from its front and see-through from
+      behind, which is how a room drawn from outside is seen into. Its base
+      starts at the origin and sets off along +X; it rises along +Z, and it
+      faces -Y - the way `pc render --view front` looks at it - so that seen
+      from the front it is its openings as they were drawn.
+    length: "%length%"
+    height: "%height%"
+    radius: "%radius%"
+    openings: "%openings%"
+    parameters:
+      length:
+        type: float
+        default: 3000.0
+        desc: How long the wall is along its base, in millimetres - along the arc, for an arc wall.
+      height:
+        type: float
+        default: 2700.0
+        desc: How high the wall is, in millimetres.
+      radius:
+        type: float
+        default: 0.0
+        desc: |
+          0 for a straight wall. Otherwise the wall is an arc of this radius, in
+          millimetres: bending towards the side it is seen from (to its right,
+          towards -Y) where it is positive, and away from it where it is
+          negative.
+      openings:
+        type: string
+        default: ""
+        desc: |
+          The sketch the doors and windows are cut out of the wall by, named in
+          full (`//package:sketch`), or empty for none. It is drawn as if the
+          wall were unrolled flat in front of you: X along its base from 0 to
+          the length, Y up from 0 to the height. An opening reaching beyond the
+          wall is an error.
+      # The CMF parameter every part takes, given a default: the grey above.
+      # `wall;color=//my/package:sage` paints it, and a room paints all of its
+      # walls the same way.
+      color:
+        type: string
+        default: ":wall"
+        desc: What the wall is painted - a colour declaration, named in full. Grey unless it says.
+
+scenes:
+  room:
+    type: walls
+    desc: |
+      The walls of a room, standing on the outline of the sketch `sketch`:
+      one `wall` per edge of it, each looking into the room. The sketch is one
+      enclosed outline of straight lines and arcs, drawn on the XY plane as a
+      plan is; anything else is refused with the reason. Name it with a
+      `color` - a `material`, a `finish` - and every wall is painted in it.
+    sketch: "%sketch%"
+    height: "%height%"
+    parameters:
+      sketch:
+        type: string
+        default: ""
+        desc: |
+          The sketch whose outline the walls stand on, named in full
+          (`//package:sketch`): one closed loop of straight lines and arcs of
+          circles - a face with no holes, or a closed wire - on the XY plane.
+      height:
+        type: float
+        default: 2700.0
+        desc: How high the walls are, in millimetres.

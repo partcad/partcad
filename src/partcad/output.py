@@ -206,6 +206,12 @@ BUILTIN_SCENE_PACKAGE = "//builtin/scene"
 # CSS colour, or of a source's colour nothing claims (see 'cmf.RGBA'). PartCAD
 # writes references to it, so it ships with PartCAD rather than in the index.
 BUILTIN_COLOR_PACKAGE = "//builtin/color"
+# And what a room is drawn with when a space is laid out rather than made -
+# 'wall', a one-sided surface, and 'room', the walls standing on the outline of
+# a sketch. Both are built by types PartCAD implements ('wall' and 'walls'), so
+# like the scene above they cost nothing to ship and depend on nothing but the
+# CAD kernel every sandbox has.
+BUILTIN_BUILDING_PACKAGE = "//builtin/building"
 BUILTIN_ROOT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin")
 BUILTIN_PATHS = {
     BUILTIN_ROOT_PACKAGE: BUILTIN_ROOT_PATH,
@@ -216,6 +222,7 @@ BUILTIN_PATHS = {
     BUILTIN_PACKAGES[CAM]: os.path.join(BUILTIN_ROOT_PATH, CAM),
     BUILTIN_SCENE_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "scene"),
     BUILTIN_COLOR_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "color"),
+    BUILTIN_BUILDING_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "building"),
 }
 
 # File types declared in a 'render:' section like any other, but which no
@@ -414,6 +421,17 @@ SCRIPT_KEY = "__script__"
 # spelled out there for the same reason SCRIPT_KEY is: a wrapper runs in a
 # sandbox and cannot import this.
 PROPERTIES_KEY = "properties"
+
+# The request key a file type sets to 'true' to be handed what the CMF
+# declarations its shapes name say about themselves - each material's
+# description and density, each declaration's name - which only the core can
+# read: a shape names a declaration by reference, and resolving one means
+# loading the package that declares it. The core replaces 'true' with that
+# table ('partcad.cmf.export_facts'), keyed by kind and reference, before the
+# request leaves for the sandbox; a file type that never asks is handed nothing
+# and costs nothing. Its twin is 'CMF_KEY' in 'builtin/export/export_step.py',
+# the one built-in file type that asks: a STEP file states a material's density.
+CMF_KEY = "cmf"
 
 # The request key a scene's world travels to an implementation under: the
 # gravity it states and the fluid it is filled with (see 'Scene.world_facts()').

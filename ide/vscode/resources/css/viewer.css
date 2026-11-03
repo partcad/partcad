@@ -313,14 +313,14 @@ body {
  *
  * The tree takes whatever is left after the controls at the bottom, which is
  * most of it - an assembly is a hierarchy and a part has a row per port, so the
- * list is the tall thing here and Metadata is the one line under it, for a model
- * that has any. Animate and Opacity are in the view panel on the right.
- * It shrinks on a narrow panel rather than pushing the canvas out of one.
+ * list is the tall thing here, and under it are the callout boxes and, for a
+ * model that has any, Metadata. Animate and Opacity are in the view panel on the
+ * right. It shrinks on a narrow panel rather than pushing the canvas out of one.
  *
- * Shared with the 2D and Draft panes, which have the same pane down their left
- * and nothing under the tree in it. Deliberately not scoped to '.pane-3d': the
- * three panes are answering one question and should not come to look like three
- * different widgets.
+ * Shared with the 2D and Draft panes, which have the same pane down their left -
+ * the 2D one with the same callout boxes under its tree, Draft with nothing
+ * under it. Deliberately not scoped to '.pane-3d': the three panes are answering
+ * one question and should not come to look like three different widgets.
  */
 .controls {
     display: flex;
@@ -541,6 +541,21 @@ body {
 
 .callout-line {
     font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+}
+
+/*
+ * The callouts the boxes under the tree ask for, told apart from what a shape's
+ * metadata says by a bar down their left in the colour the 2D tab's picture
+ * writes the same names in: a port's in the ports' blue, an interface's in their
+ * violet ('PORTS_COLOR' and 'INTERFACES_COLOR' in 'render_svg.py'). A
+ * component's - its name over its price - has none, as it has none there.
+ */
+.callout-port .callout-box {
+    border-left: 3px solid rgb(32, 96, 224);
+}
+
+.callout-interface .callout-box {
+    border-left: 3px solid rgb(176, 48, 192);
 }
 
 /*
@@ -1417,6 +1432,14 @@ a {
     flex: 1 1 3rem;
     min-width: 0;
     cursor: pointer;
+}
+
+/* What the prices are doing, under the callout boxes: being asked for, or why there are none. */
+.label-note {
+    color: var(--vscode-descriptionForeground);
+    font-family: var(--vscode-font-family);
+    font-size: calc(var(--vscode-font-size) * 0.9);
+    white-space: normal;
 }
 
 .control-value {

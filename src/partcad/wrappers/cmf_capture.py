@@ -274,8 +274,10 @@ def read_mesh(path, convention="3mf"):
     3MF holds an object per colour where OpenSCAD wrote it (see
     'part_factory_scad'), and then the part is all of them, each in the colour
     its base material displays, stated under 'convention' for the core to
-    convert. What this process noted before is not this file's, and is
-    forgotten first.
+    convert. An object whose triangles are in base materials of their own - as
+    PartCAD's 3MF exporter writes a part of several colours (see 'cmf_3mf') - is
+    read a face per triangle, each face in its triangle's. What this process
+    noted before is not this file's, and is forgotten first.
     """
     import build123d as b3d
 
@@ -287,6 +289,68 @@ def read_mesh(path, convention="3mf"):
     else:
         shape = ocp_serialize.compound_of([mesh.wrapped for mesh in meshed])
     reset()
-    for mesh in meshed:
-        note_build123d(mesh, origin="raw:" + convention)
+    origin = "raw:" + convention
+    per_triangle = None
+    if str(path).lower().endswith(".3mf"):
+        import cmf_3mf
+
+        per_triangle = cmf_3mf.read(path)
+        if per_triangle is not None and len(per_triangle) != len(meshed):
+            per_triangle = None
+    for index, mesh in enumerate(meshed):
+        bases = per_triangle[index][2] if per_triangle is not None else []
+        if len(set(bases)) > 1:
+            _note_triangles(mesh.wrapped, per_triangle[index], origin)
+        else:
+            note_build123d(mesh, origin=origin)
     return shape, section_for(shape)
+
+
+def _float32(value) -> float:
+    import struct
+
+    return struct.unpack("<f", struct.pack("<f", value))[0]
+
+
+def _corners(points):
+    """What a triangle is known by, wherever it is: its three corners, rounded past what a 3MF's float holds."""
+    return tuple(sorted(tuple(round(_float32(coordinate), 4) for coordinate in point) for point in points))
+
+
+def _note_triangles(shape, read, origin):
+    """Note each face of 'shape' - a mesh read a face per triangle - in the base material its triangle is in.
+
+    'read' is what 'cmf_3mf.read' says of the object: its vertices, its
+    triangles and the base each is in. A face is found by its corners, since
+    the reader's sewing keeps the triangles but not their order; one whose
+    triangle is in no base, or that is not found, is left unnoted.
+    """
+    import cmf_section
+    from OCP.BRep import BRep_Tool
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_VERTEX
+    from OCP.TopExp import TopExp
+    from OCP.TopoDS import TopoDS
+    from OCP.TopTools import TopTools_IndexedMapOfShape
+
+    vertices, triangles, bases = read
+    by_corners = {}
+    for triangle, base in zip(triangles, bases):
+        try:
+            by_corners[_corners([vertices[i] for i in triangle])] = base
+        except IndexError:
+            continue
+    faces = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(shape, TopAbs_FACE, faces)
+    for index in range(1, faces.Extent() + 1):
+        face = faces.FindKey(index)
+        corners = TopTools_IndexedMapOfShape()
+        TopExp.MapShapes_s(face, TopAbs_VERTEX, corners)
+        points = []
+        for corner in range(1, corners.Extent() + 1):
+            point = BRep_Tool.Pnt_s(TopoDS.Vertex_s(corners.FindKey(corner)))
+            points.append((point.X(), point.Y(), point.Z()))
+        base = by_corners.get(_corners(points)) if len(points) == 3 else None
+        if base is None:
+            continue
+        _name, rgba = base
+        _note(face, cmf_section.CmfSet(color="#%02X%02X%02X" % rgba[:3], rgba=rgba, origin=origin), 1)
