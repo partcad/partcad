@@ -1459,7 +1459,9 @@ def adhoc_render(session, params):
       declares on it, so that a script reads them;
     * ``options_package`` is a package to read the file type from -- one in the
       public index, or a package directory -- which the throwaway package
-      imports; the file type may then be one it declares;
+      imports; the file type may then be one it declares. A name starting with
+      ``//`` is a package and nothing else, and is never looked for on disk
+      (see ``partcad.adhoc.adhoc.options_dependency``);
     * ``output_dir`` is where the file goes when ``output_filename`` is not
       given, under the input's name with its values (by default the input's
       own directory).

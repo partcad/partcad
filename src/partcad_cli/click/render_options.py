@@ -27,7 +27,10 @@ for a file with a throwaway package around it:
   declared in the throwaway package with the type its value is written in;
 * `-e`/`--options-package` -- a package to read the file type from: one in the
   public index (`//pub/...`), which the throwaway package then imports, or a
-  package directory on this machine.
+  package directory on this machine. Which of the two is decided by the
+  spelling alone: a name starting with `//` is a package, and is never looked
+  for on disk -- so a directory is written without it (on Windows, a network
+  share with backslashes).
 
 `--turn` comes with the viewing angle (`viewport.py`), and `--style`, `--size`,
 `--background` and `--quality` with the picture (`video.py`'s
@@ -108,7 +111,7 @@ _ADHOC_OPTIONS = (
         "--options-package",
         help=(
             "Package to read the file type from: one in the public index ('//pub/...'), "
-            "or the directory of a package on this machine"
+            "or the directory of a package on this machine, by its path. A name starting with '//' is always a package"
         ),
         type=str,
         show_envvar=True,
@@ -132,7 +135,8 @@ def adhoc_params(output_type, projections, output_dir, options_package, params, 
     to read it from is named, so that a typo costs a message rather than a round
     trip; with one, whether it declares the type is the daemon's to say. A
     directory is sent absolute, because the daemon runs elsewhere; a package
-    name is sent as written.
+    name -- one starting with '//', which is what makes it one, there as here --
+    is sent as written.
     """
     if output_type is not None and options_package is None and output_type not in projections:
         raise click.BadParameter(

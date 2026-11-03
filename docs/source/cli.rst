@@ -1558,7 +1558,9 @@ Other commands
     render`` writes an instance's (``bracket_depth_12.svg``);
   - ``-e``/``--options-package`` reads the file type from a package: one in the public index (``//pub/...``),
     which the throwaway package then imports, or the directory of a package on this machine. The output may then
-    be any type that package declares.
+    be any type that package declares. A name starting with ``//`` is always a package, and is never looked for on
+    disk or on the network, so a directory is named by its path without it: ``/srv/drawing`` rather than
+    ``//srv/drawing``, and a network share on Windows with backslashes, ``\\server\share\drawing``.
 
   .. code-block:: shell
 

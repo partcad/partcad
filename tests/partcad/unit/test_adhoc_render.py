@@ -23,7 +23,12 @@ names an instance's.
 None of it needs a sandbox.
 """
 
-from pathlib import Path
+import contextlib
+import errno
+import os
+import pathlib
+import sys
+from pathlib import Path, PureWindowsPath
 
 import pytest
 import ruamel.yaml
@@ -179,10 +184,214 @@ def test_a_package_of_the_public_index_is_imported_the_way_pc_init_imports_the_i
     assert declaration == pub
 
 
-@pytest.mark.parametrize("named", ["//elsewhere/render", "no/such/directory"])
-def test_a_package_an_ad_hoc_render_cannot_reach_is_refused(named):
+# --------------------------------------------------------------------------- #
+# A package name, or a directory                                              #
+# --------------------------------------------------------------------------- #
+
+
+# The modules a look at the disk passes through on its way from the code under
+# test to the operating system ('pathlib' is a package from 3.13 on).
+_PATH_MODULES = {"os", "posixpath", "ntpath", "genericpath", "pathlib"}
+
+
+def _called_by_the_code_under_test():
+    """Whether the call being intercepted was made by 'adhoc', directly or through pathlib or 'os.path'.
+
+    And not by anything else in the process: these replace functions everybody
+    shares -- 'os.stat', pathlib's -- and the obvious other caller is not a
+    thread but a tracer. Coverage looks up the file of a function the first
+    time it sees it called, with 'os.path.realpath', in the thread that called
+    it; in a fresh xdist worker that function can be 'options_dependency'
+    itself, called under the guard. Told apart by module name rather than by
+    where a file is: in a virtual environment the standard library's
+    'platstdlib' is the one that holds 'site-packages'.
+    """
+    frame = sys._getframe(2)
+    while frame is not None:
+        module = frame.f_globals.get("__name__", "")
+        if module == adhoc.__name__:
+            return True
+        if module.split(".")[0] not in _PATH_MODULES:
+            return False
+        frame = frame.f_back
+    return False
+
+
+def _for_the_code_under_test(patch, owner, name, replacement):
+    """Replace 'owner.name' for calls '_called_by_the_code_under_test'; every other caller gets the original."""
+    original = getattr(owner, name)
+
+    def dispatch(*args, **kwargs):
+        if _called_by_the_code_under_test():
+            return replacement(*args, **kwargs)
+        return original(*args, **kwargs)
+
+    patch.setattr(owner, name, dispatch)
+
+
+@contextlib.contextmanager
+def _no_disk(monkeypatch):
+    """Fail loudly on anything that would look at a file, a directory or a share.
+
+    Every way 'options_dependency' could ask: pathlib's methods, which on 3.10
+    to 3.13 go through 'Path.stat', and the 'os' functions they call on 3.14
+    ('os.path.isdir' and 'os.path.isfile', which on Windows are 'nt' builtins
+    that never reach 'os.stat'). A context of its own rather than the test's
+    'monkeypatch', so that it covers the one call and nothing after it.
+    """
+
+    def touched(*args, **kwargs):
+        raise AssertionError("looked on disk, or on the network: %r" % (args,))
+
+    with monkeypatch.context() as patch:
+        for name in ("stat", "lstat", "exists", "is_dir", "is_file", "resolve", "absolute", "iterdir"):
+            _for_the_code_under_test(patch, pathlib.Path, name, touched)
+        for name in ("stat", "lstat", "scandir", "listdir"):
+            _for_the_code_under_test(patch, os, name, touched)
+        for name in ("exists", "isdir", "isfile", "realpath"):
+            _for_the_code_under_test(patch, os.path, name, touched)
+        yield
+
+
+@contextlib.contextmanager
+def _fake_disk(monkeypatch, *packages):
+    """A disk holding a package directory at each of 'packages' and nothing else; yields what was asked of it."""
+    asked = []
+
+    def is_dir(self, *args, **kwargs):
+        asked.append(str(self))
+        return str(self) in packages
+
+    def is_file(self, *args, **kwargs):
+        asked.append(str(self))
+        return self.name == "partcad.yaml" and str(self.parent) in packages
+
+    with monkeypatch.context() as patch:
+        _for_the_code_under_test(patch, pathlib.Path, "is_dir", is_dir)
+        _for_the_code_under_test(patch, pathlib.Path, "is_file", is_file)
+        _for_the_code_under_test(patch, pathlib.Path, "resolve", lambda self, *args, **kwargs: self)
+        yield asked
+
+
+@pytest.mark.parametrize("named", ["//elsewhere/render", "//elsewhere", "//", "//pubs/render"])
+def test_a_package_an_ad_hoc_render_cannot_reach_is_refused(monkeypatch, named):
+    """'//' is how PartCAD names a package, and one outside the public index has no workspace to be found in.
+
+    Refused for what the name is, without looking for it: the same text is a
+    path as well, and on Windows '//elsewhere/render' is a network share --
+    looking for it asks the network for a server called 'elsewhere', which can
+    be slow, can fail ('[WinError 64] The specified network name is no longer
+    available' did, on a CI runner), and can even succeed. So the refusal is
+    the same on every machine only if nothing is looked at, and that is what is
+    asserted, not merely that it is refused.
+    """
+    with _no_disk(monkeypatch):
+        with pytest.raises(adhoc.AdhocUsageError) as excinfo:
+            adhoc.options_dependency(named)
+
+    message = str(excinfo.value)
+    assert "'%s'" % named in message
+    assert "//pub/" in message
+    assert "is a package" in message
+
+
+@pytest.mark.parametrize("named", ["//pub", "//pub/feature/render/draftwright"])
+def test_a_package_of_the_public_index_is_reached_by_name_alone(monkeypatch, named):
+    """The other half of the same rule: what is in the index is never looked for on disk either."""
+    with _no_disk(monkeypatch):
+        (dependency, _), package = adhoc.options_dependency(named)
+
+    assert (dependency, package) == ("pub", named)
+
+
+def test_a_package_name_is_not_read_as_the_directory_it_spells(monkeypatch, tmp_path):
+    """A package directory written with a leading '//' is a package name, even where the OS would find the directory.
+
+    POSIX leaves a leading '//' to the implementation, and Linux and macOS read
+    '//tmp/x' as '/tmp/x': before the name was told apart by its spelling, this
+    imported the directory on those systems, and asked the network for it on
+    Windows -- one name meaning three things depending on where it ran.
+    """
+    package = tmp_path / "opts"
+    package.mkdir()
+    (package / "partcad.yaml").write_text("render: {}\n", encoding="utf-8")
+    spelled = "//" + package.as_posix().lstrip("/")
+    if os.name == "posix":
+        # What makes the case worth having: the OS would have found it.
+        assert os.path.samefile(spelled, package)
+
+    with _no_disk(monkeypatch):
+        with pytest.raises(adhoc.AdhocUsageError):
+            adhoc.options_dependency(spelled)
+
+
+def test_a_directory_on_a_network_share_is_a_directory_when_written_as_windows_writes_it(monkeypatch):
+    """A package kept on a share is a package on this machine, so '\\\\server\\share\\...' is looked at.
+
+    It is also what 'os.path.abspath' makes of a relative '-e drawing' typed in
+    a working directory on a share, which the CLI sends absolute. The
+    forward-slash spelling of that same share -- one location to Windows, as
+    'PureWindowsPath' says -- is PartCAD's spelling of a package name, and is
+    refused unlooked-at, even with a package at the share it would mean.
+    """
+    backslashes, slashes = r"\\server\share\drawing", "//server/share/drawing"
+    assert PureWindowsPath(backslashes) == PureWindowsPath(slashes)
+    assert PureWindowsPath(slashes).drive == r"\\server\share"
+
+    with _fake_disk(monkeypatch, backslashes) as asked:
+        dependency, package = adhoc.options_dependency(backslashes)
+    assert dependency == ("options", {"type": "local", "path": backslashes})
+    assert package == "//options"
+    assert backslashes in asked
+
+    with _fake_disk(monkeypatch, backslashes, slashes) as asked:
+        with pytest.raises(adhoc.AdhocUsageError):
+            adhoc.options_dependency(slashes)
+    assert asked == []
+
+
+# Relative as a client speaking the protocol may send it, and absolute as the CLI does.
+@pytest.mark.parametrize("named", ["no/such/directory", "{tmp}/missing"])
+def test_a_directory_that_is_not_there_is_refused(tmp_path, named):
+    """Anything not spelled as a package is a directory, looked for, and refused when it holds none."""
     with pytest.raises(adhoc.AdhocUsageError) as excinfo:
-        adhoc.options_dependency(named)
+        adhoc.options_dependency(named.format(tmp=tmp_path))
+
+    assert "//pub/" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("probe", ["is_dir", "is_file"])
+@pytest.mark.parametrize(
+    "error",
+    [
+        PermissionError(errno.EACCES, "Permission denied"),
+        # What a share that drops the connection raises on Windows: winerror 64,
+        # which Python maps to EINVAL, which pathlib does not take for "absent"
+        # before 3.14 and so re-raises out of 'is_dir'.
+        OSError(errno.EINVAL, "The specified network name is no longer available"),
+    ],
+    ids=["permission", "network"],
+)
+def test_a_directory_that_cannot_be_looked_at_is_refused_with_the_reason(monkeypatch, tmp_path, probe, error):
+    """A usage error that says why, rather than a traceback out of the render.
+
+    'Path.is_dir' answers False for a path that is not there, but up to Python
+    3.13 it re-raises everything else: a directory under one the user may not
+    read, a share that went away mid-question.
+    """
+
+    def fails(self, *args, **kwargs):
+        raise error
+
+    with monkeypatch.context() as patch:
+        if probe == "is_file":
+            _for_the_code_under_test(patch, pathlib.Path, "is_dir", lambda self, *args, **kwargs: True)
+        _for_the_code_under_test(patch, pathlib.Path, probe, fails)
+        with pytest.raises(adhoc.AdhocUsageError) as excinfo:
+            adhoc.options_dependency(str(tmp_path / "drawing"))
+
+    assert excinfo.value.__cause__ is error
+    assert str(error) in str(excinfo.value)
     assert "//pub/" in str(excinfo.value)
 
 
