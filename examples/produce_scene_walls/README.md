@@ -55,6 +55,14 @@ pc render -t png -S "//builtin/building:room;sketch=//pub/examples/partcad/produ
 <table><tr>
 <td valign=top><img src="././bay.svg" alt="bay" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></td>
 <td valign=top>An arc wall of radius 1500, bending towards the side it is seen from</td>
+<td valign=top>Parameters:<br/><ul>
+<li>length: 1178.097245</li>
+<li>height: 2700.0</li>
+<li>radius: 1500.0</li>
+<li>openings: </li>
+<li>color: :wall</li>
+</ul>
+</td>
 </tr></table>
 
 ### entrance
