@@ -28,11 +28,14 @@ import math
 import os
 import sys
 import textwrap
+import threading
+import types
 
 import pytest
 
 import partcad as pc
 from partcad import cmf, output, surface
+from partcad.scene_factory_walls import SceneFactoryWalls
 from partcad.test.degenerate import DegenerateTest
 from partcad.test.manufacturability import ManufacturabilityTest
 from partcad.test.shell import ShellTest
@@ -272,8 +275,16 @@ def test_the_builtin_room_says_it_needs_a_sketch(context):
     assert "names none: give it a 'sketch', as 'room;sketch=//package:sketch'" in reason
 
 
-def test_the_builtin_wall_is_drawn_in_a_colour_it_declares_and_does_not_claim(context):
-    """Its grey is a CMF colour of '//builtin/building', display-only: a wall is never made."""
+def test_the_builtin_wall_is_drawn_in_a_colour_it_declares_and_does_not_claim(package):
+    """Its grey is a CMF colour of '//builtin/building', display-only: a wall is never made.
+
+    In a context of its own. Asking for the wall itself, with no parameters,
+    records its grey in the declaration every instance of it is copied from, and
+    an instance named with another colour then keeps the grey (a CMF issue of
+    its own, reported on the pull request that brought this test); the module's
+    context goes on to paint rooms with such instances.
+    """
+    context = pc.Context(str(package))
     wall = context.get_part("//builtin/building:wall")
     assert cmf.own_parameters(wall, context) == {"color": "//builtin/building:wall"}
     colors = context.get_project(output.BUILTIN_BUILDING_PACKAGE).config_obj["colors"]
@@ -294,3 +305,53 @@ def test_a_painted_room_paints_every_wall(context):
     # And a room nobody painted is the walls' own grey.
     for _label, _name, _location, properties in _walls(context, "living"):
         assert properties["color"] == "#9C9284"
+
+
+def _reader_of(read):
+    """What '_links_async' needs of a factory, around 'read', which stands in for reading the outline."""
+    return types.SimpleNamespace(_links=None, _reader=None, _links_guard=threading.Lock(), _read_links_async=read)
+
+
+def test_callers_that_arrive_together_read_the_outline_once():
+    """From several threads and event loops at once, as a scene is prepared, staged and built: one read, one answer.
+
+    Two reads would be the same sandbox run twice and two 'Outline' actions
+    open under one name, which the progress display cannot tell apart.
+    """
+    reads = []
+
+    async def read():
+        reads.append(threading.get_ident())
+        await asyncio.sleep(0.3)
+        return ["wall-1", "wall-2"]
+
+    factory = _reader_of(read)
+    answers = []
+    threads = [
+        threading.Thread(target=lambda: answers.append(asyncio.run(SceneFactoryWalls._links_async(factory))))
+        for _ in range(3)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(30)
+
+    assert len(reads) == 1
+    assert answers == [["wall-1", "wall-2"]] * 3
+    assert factory._reader is None
+
+
+def test_a_read_that_fails_leaves_the_next_caller_to_try_again():
+    attempts = []
+
+    async def read():
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise RuntimeError("the sandbox died")
+        return ["wall-1"]
+
+    factory = _reader_of(read)
+    with pytest.raises(RuntimeError, match="the sandbox died"):
+        asyncio.run(SceneFactoryWalls._links_async(factory))
+    assert asyncio.run(SceneFactoryWalls._links_async(factory)) == ["wall-1"]
+    assert len(attempts) == 2
