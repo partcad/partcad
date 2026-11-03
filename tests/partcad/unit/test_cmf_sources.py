@@ -108,7 +108,7 @@ def test_a_colour_nothing_claims_is_a_picture_of_itself_and_is_reported(tmp_path
     with caplog.at_level(logging.WARNING):
         own = _converted(ctx, section=_raw(color="#123456", rgba=(18, 52, 86, 1.0)))
 
-    assert own.color == "//pub/std/color:rgba;color=123456FF"
+    assert own.color == "//builtin/color:rgba;color=123456FF"
     assert "nothing in scope claims color '#123456'" in caplog.text
 
 
@@ -249,7 +249,7 @@ def test_an_instance_s_colour_is_converted_one_fact_at_a_time(tmp_path):
 
     assert cmf_conventions.reference_for(ctx, "//src", "color", "#c91a09", (201, 26, 9, 1.0)) == "//src:signal-red"
     assert cmf_conventions.reference_for(ctx, "//src", "color", "#000000", (0, 0, 0, 1.0)) == (
-        "//pub/std/color:rgba;color=000000FF"
+        "//builtin/color:rgba;color=000000FF"
     )
     assert cmf_conventions.reference_for(ctx, "//src", "material", "Unobtainium") is None
 
@@ -743,7 +743,7 @@ def test_a_part_type_says_what_its_faces_are_in(tmp_path):
     assert by_color["//src:Red"]["faces"] == 2
     assert by_color["//src:Red"]["material"] == "//src:ABS"
     # Nothing claims '999': drawn as the part type said, and only a picture.
-    assert "//pub/std/color:rgba;color=010203FF" in by_color
+    assert "//builtin/color:rgba;color=010203FF" in by_color
     assert summary["unspecified"]["color"] == 3
 
 
@@ -765,9 +765,9 @@ def test_a_part_type_s_rgba_is_read_as_numbers_whatever_it_is_written_as(tmp_pat
     asyncio.run(part.get_wrapped(ctx))
 
     colors = {entry.get("color") for entry in cmf.summary_of(part)["sets"]}
-    assert "//pub/std/color:rgba;color=010203FF" in colors
+    assert "//builtin/color:rgba;color=010203FF" in colors
     # An alpha past 1 is opaque, not a byte past 255.
-    assert "//pub/std/color:rgba;color=C91A09FF" in colors
+    assert "//builtin/color:rgba;color=C91A09FF" in colors
 
 
 def _run_wrapper(monkeypatch, name, path, request):

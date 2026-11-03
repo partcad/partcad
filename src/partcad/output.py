@@ -201,6 +201,11 @@ BUILTIN_PACKAGES = {
 # 'subject' parameter is whatever is being simulated. Unlike the simulator that
 # runs it, an empty world costs nothing to ship and depends on nothing.
 BUILTIN_SCENE_PACKAGE = "//builtin/scene"
+# And the colour anybody may name to draw something in without claiming it can
+# be had in that colour: 'rgba', which is what PartCAD itself makes of a hex or
+# CSS colour, or of a source's colour nothing claims (see 'cmf.RGBA'). PartCAD
+# writes references to it, so it ships with PartCAD rather than in the index.
+BUILTIN_COLOR_PACKAGE = "//builtin/color"
 BUILTIN_ROOT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin")
 BUILTIN_PATHS = {
     BUILTIN_ROOT_PACKAGE: BUILTIN_ROOT_PATH,
@@ -210,6 +215,7 @@ BUILTIN_PATHS = {
     BUILTIN_PACKAGES[OPEN]: os.path.join(BUILTIN_ROOT_PATH, OPEN),
     BUILTIN_PACKAGES[CAM]: os.path.join(BUILTIN_ROOT_PATH, CAM),
     BUILTIN_SCENE_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "scene"),
+    BUILTIN_COLOR_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "color"),
 }
 
 # File types declared in a 'render:' section like any other, but which no

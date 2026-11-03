@@ -179,7 +179,7 @@ def test_every_name_that_could_be_written_is_spelled_as_it_was(name):
 
 
 def test_a_parameterised_reference_is_one_value():
-    for value in ["//pub/std/color:rgba;color=C91A09FF", "//p:rgba;a=1,b=2", "a%2Cb"]:
+    for value in ["//builtin/color:rgba;color=C91A09FF", "//p:rgba;a=1,b=2", "a%2Cb"]:
         name = format_parameterized_name("Brick:3004", {"color": value, "finish": "x"})
         assert parse_parameterized_name(name) == ("Brick:3004", {"color": value, "finish": "x"})
 
@@ -230,7 +230,7 @@ def test_a_parametric_declaration(ctx):
     assert found.reference() == "//vendor:rgba;color=C91A0980"
     assert css_color.to_hex(cmf.display(ctx, found)) == "#C91A0980"
     # And it reads its colour from the reference alone, where the catalogue is not at hand.
-    assert css_color.to_hex(cmf.rgba_of_reference("//pub/std/color:rgba;color=C91A0980")) == "#C91A0980"
+    assert css_color.to_hex(cmf.rgba_of_reference("//builtin/color:rgba;color=C91A0980")) == "#C91A0980"
 
 
 def test_a_display_may_name_another_colour(ctx):
@@ -267,9 +267,9 @@ def test_a_reference_is_canonicalised(ctx):
 def test_a_colour_that_is_no_declaration_is_display_only(ctx, caplog):
     root = ctx.get_project(".").name
     with caplog.at_level(logging.WARNING):
-        assert cmf.canonical(ctx, "color", "#FF000080", root, quiet=False) == "//pub/std/color:rgba;color=FF000080"
+        assert cmf.canonical(ctx, "color", "#FF000080", root, quiet=False) == "//builtin/color:rgba;color=FF000080"
     assert any("display-only" in record.getMessage() for record in caplog.records)
-    assert cmf.canonical(ctx, "color", "firebrick", root) == "//pub/std/color:rgba;color=B22222FF"
+    assert cmf.canonical(ctx, "color", "firebrick", root) == "//builtin/color:rgba;color=B22222FF"
 
 
 def test_only_cmf_parameters_are_canonicalised(ctx):
@@ -365,11 +365,32 @@ def test_the_schema_refuses(document):
 
 
 def test_a_parametric_declaration_named_without_values_is_its_defaults(ctx):
-    """'//pub/std/color:rgba' alone is drawn in its default colour, not in '#%color%'."""
+    """'//builtin/color:rgba' alone is drawn in its default colour, not in '#%color%'."""
     found = _find(ctx, "color", "//vendor:rgba")
 
     assert found.reference() == "//vendor:rgba"
     assert cmf.display(ctx, found) == (0, 0, 0, 1.0)
+
+
+def test_the_display_only_colour_ships_with_partcad(tmp_path):
+    """'//builtin/color:rgba' resolves in a package that names no index and no dependency, as PartCAD writes it."""
+    from partcad import output
+
+    ctx = _package(tmp_path, {"own": {"display": "#123456"}})
+    assert cmf.RGBA == output.BUILTIN_COLOR_PACKAGE + ":rgba"
+
+    named = cmf.lookup(ctx, "color", cmf.RGBA + ";color=C91A0980", "//", quiet=True)
+    assert named is not None and named.reference() == "//builtin/color:rgba;color=C91A0980"
+    assert css_color.to_hex(cmf.display(ctx, named)) == "#C91A0980"
+    assert named.manufacturable is False
+
+    # Named without a value, it is its default, goldenrod - and still claims nothing.
+    bare = cmf.lookup(ctx, "color", cmf.RGBA, "//", quiet=True)
+    assert css_color.to_hex(cmf.display(ctx, bare)) == "#DAA520"
+    assert bare.manufacturable is False
+
+    # And it is what a colour that is no declaration is read as.
+    assert cmf.canonical(ctx, "color", "#C91A09", "//") == "//builtin/color:rgba;color=C91A09FF"
 
 
 def test_the_listing_shows_each_declaration_by_how_it_looks(ctx):

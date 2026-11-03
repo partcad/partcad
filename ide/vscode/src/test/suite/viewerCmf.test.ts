@@ -102,7 +102,7 @@ const MOULDING: CmfInfo = {
             solids: 1,
         },
         {
-            color: '//pub/std/color:rgba;color=00FF00FF',
+            color: '//builtin/color:rgba;color=00FF00FF',
             material: '//vendor:ABS',
             finish: '//vendor:satin',
             displayOnly: ['color'],
@@ -136,7 +136,7 @@ suite('CMF in the Digital Thread', () => {
         assert.strictEqual(referenceName('//vendor:Medium Stone Grey'), 'Medium Stone Grey');
         assert.strictEqual(referenceName('//vendor:PA12%2C glass filled'), 'PA12, glass filled');
         // A parameter value that is a reference of its own does not move the split.
-        assert.strictEqual(referenceName('//pub/std/color:rgba;color=C91A09FF'), 'rgba;color=C91A09FF');
+        assert.strictEqual(referenceName('//builtin/color:rgba;color=C91A09FF'), 'rgba;color=C91A09FF');
         assert.strictEqual(referenceName('bare'), 'bare');
     });
 
@@ -304,8 +304,8 @@ suite('CMF in the Digital Thread', () => {
         const preview = draw({
             name: 'rgba',
             kind: 'color',
-            package: '//pub/std/color',
-            reference: '//pub/std/color:rgba',
+            package: '//builtin/color',
+            reference: '//builtin/color:rgba',
             manufacturable: false,
             parametric: ['color'],
             display: '#000000',

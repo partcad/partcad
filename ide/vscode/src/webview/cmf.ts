@@ -57,7 +57,7 @@ const MISSING_ON: Partial<Record<CmfComponent, [string, string]>> = {
 export function referenceName(reference: string): string {
     // A reference is '<package>:<name>', and a package path holds no ':' - so
     // the first one is the split, even when a parameter value is a reference
-    // of its own ('brick;color=//pub/std/color:rgba;color=C91A09FF').
+    // of its own ('brick;color=//builtin/color:rgba;color=C91A09FF').
     const split = reference.indexOf(':');
     const name = split < 0 ? reference : reference.slice(split + 1);
     // The characters a name escapes are the ones a reference gives a meaning

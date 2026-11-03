@@ -462,10 +462,10 @@ at all).
   of such a part is also the one lookup in `Project._enumerate_shapes_async()` that has to be awaited
   (`get_part_async`): the part does not exist until the object that produces it has been built.
 
-- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships six packages inside itself, reachable from
+- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships seven packages inside itself, reachable from
   every context as `//builtin/export`, `//builtin/render`, `//builtin/import`, `//builtin/open`,
-  `//builtin/cam` and `//builtin/scene` (loaded
-  on demand by `Context.get_project`, see `output.py`). All but the last declare implementations — the file
+  `//builtin/cam`, `//builtin/scene` and `//builtin/color` (loaded
+  on demand by `Context.get_project`, see `output.py`). All but the last two declare implementations — the file
   types `pc export`, `pc render`, `pc import`, `pc ide open` and `pc cam` write — in
   exactly the form a user's package declares one: a `path` to a script, its `pythonRequirements`, and the
   parameters. So adding a
@@ -1107,7 +1107,10 @@ at all).
   `//builtin/scene` is the odd one out: it declares an *object* rather than a way of producing one — the
   scene a `simulate:` places its subject in when it names none of its own. It is an ordinary `assy` scene
   whose `.assy` is a Jinja2 template, and the only thing that makes it the default is that
-  `simulation.DEFAULT_SCENE` names it.
+  `simulation.DEFAULT_SCENE` names it. `//builtin/color` is the other: one colour declaration, the
+  display-only `rgba` (`//builtin/color:rgba;color=C91A09FF`, `manufacturable: false`). It is PartCAD's because
+  PartCAD writes references to it (`cmf.RGBA`) - for a hex or CSS colour, and for a source's colour nothing
+  claims - and a reference it writes has to resolve in any context, with or without the public index.
 
   **There is deliberately no `//builtin/simulate`.** `simulation:` is a third section resolved exactly like
   the other two — a plugin is an `output.Implementation` like any other — and PartCAD implements none of it.
