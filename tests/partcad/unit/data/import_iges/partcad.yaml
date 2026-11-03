@@ -1,0 +1,13 @@
+desc: |
+  A part read from an IGES file by the built-in 'iges' part type of
+  '//builtin/import', which reads it with OpenCASCADE.
+
+  'plate.igs' is a 30 x 20 x 10 mm plate with an 8 mm hole through it, written
+  by OpenCASCADE 7.9's IGES writer in its default mode: the seven faces as
+  trimmed surfaces, with nothing to say they bound a solid.
+
+parts:
+  # Sewn back into the solid its seven faces bound.
+  plate:
+    type: iges
+    path: plate.igs

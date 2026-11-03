@@ -39,13 +39,14 @@
 name: //builtin/import
 desc: |
   The readers PartCAD ships with: the third-party formats an assembly or a
-  scene can be declared as, and the part types read through a program PartCAD
-  fetches rather than implements. A package adds one of its own, or replaces
-  one of these, by declaring that type in its own `import:` or `partTypes:`
-  section.
+  scene can be declared as, and the part types read by a script of their own
+  rather than by a factory of PartCAD's. A package adds one of its own, or
+  replaces one of these, by declaring that type in its own `import:` or
+  `partTypes:` section.
 
-# Part types read by a converter PartCAD downloads on first use rather than by
-# a factory of its own. A part names one by its bare name (`type: fcstd`) as if
+# Part types read by a script that runs in the sandbox rather than by a factory
+# of PartCAD's: through a converter PartCAD downloads on first use, or through
+# OpenCASCADE itself. A part names one by its bare name (`type: fcstd`) as if
 # it were built in; it is a `partType` like any a package declares, so a
 # plugin package that reads another format looks exactly like this.
 #
@@ -63,15 +64,20 @@ desc: |
 #                     broken read is caught: the definition every part is held
 #                     to, not a check of each converter's own.
 #
-# Every type below but `fcstd` is read the same way -- cadmpeg converts the file
-# to STEP and the part is what that file shows -- so they share one script,
-# 'part_cadmpeg.py', and differ only in the file they are stored in. Which
-# format a file is, cadmpeg decides from its content; the extension is what a
-# part's file is called when its declaration names none, written the way the
-# format's own application writes it.
+# `iges` is read by OpenCASCADE's IGES reader, 'part_iges.py': the counterpart
+# of the writer `pc export -t iges` uses, so what PartCAD writes it reads back.
+# cadmpeg reads IGES too, but 0.6.7 loses most of the faces of the IGES files
+# OpenCASCADE writes, and all of a solid written as one.
 #
-# Only the formats cadmpeg reads into connected solids are here: its level L3
-# ("Model") and above, as `cadmpeg inspect <file>` reports and
+# Every other type below but `fcstd` is read the same way -- cadmpeg converts
+# the file to STEP and the part is what that file shows -- so they share one
+# script, 'part_cadmpeg.py', and differ only in the file they are stored in.
+# Which format a file is, cadmpeg decides from its content; the extension is
+# what a part's file is called when its declaration names none, written the way
+# the format's own application writes it.
+#
+# Of those, only the formats cadmpeg reads into connected solids are here: its
+# level L3 ("Model") and above, as `cadmpeg inspect <file>` reports and
 # https://github.com/cadmpeg/cadmpeg/blob/main/docs/format-support.md defines.
 # Rhino `.3dm` (L2) and Siemens NX and Creo Parametric `.prt` (L1) are not:
 # cadmpeg does not yet read their bodies into solids, so every part of theirs
@@ -87,10 +93,12 @@ partTypes:
     requireSolid: true
   iges:
     desc: |
-      An IGES file (`.iges`, `.igs`): its solids, read with cadmpeg. A surface
-      model -- trimmed surfaces that bound no solid -- is not a part of this
-      type; convert it to a solid first.
-    path: part_cadmpeg.py
+      An IGES file (`.iges`, `.igs`): its solids, read with OpenCASCADE, with
+      the colours it puts on them. A solid the file states only as the faces
+      that bound it -- which is how OpenCASCADE writes IGES by default -- is
+      sewn back into that solid; faces that bound no solid are not a part of
+      this type.
+    path: part_iges.py
     extension: iges
     requireSolid: true
   f3d:

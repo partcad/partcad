@@ -141,11 +141,12 @@ PART_TYPE_EXTENSION: Dict[str, str] = {
 }
 
 # The part types PartCAD ships as `partTypes` of `//builtin/import` rather than
-# as factories -- the native CAD formats it reads through cadmpeg -- and the
-# extension each declares, spelled as the declaration spells it. A part's file is
-# `<name>.<extension>` unless it says otherwise, so that spelling is the one a
-# file imported into a package is written under. Mirrored from the declarations
-# themselves by the completeness test.
+# as factories -- the native CAD formats it reads through cadmpeg, and IGES,
+# which it reads through OpenCASCADE -- and the extension each declares, spelled
+# as the declaration spells it. A part's file is `<name>.<extension>` unless it
+# says otherwise, so that spelling is the one a file imported into a package is
+# written under. Mirrored from the declarations themselves by the completeness
+# test.
 BUILTIN_PART_TYPE_EXTENSION: Dict[str, str] = {
     "fcstd": "FCStd",
     "iges": "iges",

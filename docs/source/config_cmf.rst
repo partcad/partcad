@@ -203,7 +203,13 @@ they replace it instead):
   The colours a STEP file puts on its faces, solids and products, and the materials on its products, read through
   OpenCASCADE's XCAF reader. The geometry is what it was before.
 
-The CAD applications' files and IGES (``fcstd``, ``f3d``, ``sldprt``, ``ipt``, ``catpart``, ``sat``, ``pvz``, ``iges``)
+``iges``
+  The colours an IGES file puts on its entities, read through the IGES side of the same XCAF reader and in STEP's
+  terms, which the package's ``cmfConvention`` converts as it does a STEP part's. A face sewn into a solid (see
+  :ref:`cad-files`) keeps its colour; a solid the file states as one keeps the colour stated of it, and one sewn out
+  of faces is in the colours of its faces.
+
+The CAD applications' files (``fcstd``, ``f3d``, ``sldprt``, ``ipt``, ``catpart``, ``sat``, ``pvz``)
   What the STEP file cadmpeg converts each one to states, read the same way: for these part types and for the ``f3d``
   and ``pvz`` assemblies alike, in STEP's own terms, which the package's ``cmfConvention`` converts as it does a STEP
   part's. A FreeCAD document is read from the shapes in its archive where it can be, and those carry no colours --

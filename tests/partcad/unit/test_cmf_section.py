@@ -98,6 +98,29 @@ def test_sets_nothing_uses_are_dropped():
     assert section.faces == [0, 0] and section.default == 1
 
 
+def test_a_section_is_stated_as_a_part_type_states_it():
+    """'as_stated' is what 'wrapper_part_type' reads back: designations and colours, per face and per solid."""
+    stated = cmf_section.as_stated(_section(), "step")
+    assert stated["convention"] == "step"
+    red = {"color": "//v:red", "rgba": [201, 26, 9, 1.0]}
+    grey = {"color": "//v:grey", "material": "//m:abs", "rgba": [150, 150, 150, 1.0]}
+    assert stated["solids"] == [grey, None]
+    assert stated["faces"] == [red, red, grey, None, None, grey]
+    # Only what is addressed one by one is stated.
+    assert "solids" not in cmf_section.as_stated(Section([RED], NONE, faces=[0]), "step")
+    assert "faces" not in cmf_section.as_stated(Section([RED], NONE, solids=[0]), "step")
+
+
+def test_a_section_that_says_nothing_states_nothing():
+    assert cmf_section.as_stated(None, "step") is None
+    assert cmf_section.as_stated(Section([RED], NONE, faces=[NONE, NONE]), "step") is None
+    # A set with no designation in it is no more than no set.
+    assert cmf_section.as_stated(Section([CmfSet(origin="raw:step")], NONE, faces=[0]), "step") == {
+        "convention": "step",
+        "faces": [None],
+    }
+
+
 def test_a_truncated_section_is_refused():
     data = cmf_section.encode(_section())
     with pytest.raises(Exception):
