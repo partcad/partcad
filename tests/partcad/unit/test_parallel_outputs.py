@@ -3,17 +3,20 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""How PartCAD runs a file type that draws on several threads, and keeps what it makes.
+"""How PartCAD runs a video, and keeps what it makes.
 
-A video is the file type these are for (see 'builtin/render/partcad.yaml'), and
-three implementation keys say it (see 'output.PARALLEL_KEY' and its siblings):
+A video is a file whose extension says it is one (see 'output.VIDEO_EXTENSIONS'),
+whatever its file type is called, and no file type says how it is run or kept:
+the user's configuration does.
 
-- 'parallel': the run is given the process slots that are free when it starts,
-  says so in 'threads', and is keyed on neither 'threads' nor 'memory';
-- 'cacheTiers: remote': its file is kept only in the remote tiers of the cache,
-  never in the files on this machine, not even promoted there from a hit;
-- 'sceneCache': what it draws from is handed back, kept in every tier under a
-  key of its own, and handed in to the next file of the object at that size.
+- 'video.parallel' (on by default): the run is given the process slots that are
+  free when it starts and says so in 'threads'; off, it is told one thread.
+  Either way it is keyed on neither 'threads' nor 'memory';
+- 'video.cacheTiers' ('remote' by default): its file is kept only in the remote
+  tiers of the cache, never in the files on this machine, not even promoted
+  there from a hit - or in 'all' of them, or in 'none';
+- always: what it draws from is handed back, kept in every tier under a key of
+  its own, and handed in to the next video of the object at that size.
 
 The wrapper is the real one, run as a subprocess by this interpreter; the
 runtime around it is a stand-in that takes a process slot the way the Python
@@ -34,6 +37,7 @@ import partcad as pc
 from partcad import cache_backend, output, process_output, runtime, sandbox_lock
 from partcad.cache import Cache
 from partcad.cache_hash import CacheHash
+from partcad_utils import user_config as pc_user_config
 
 pytestmark = pytest.mark.timeout(120)
 
@@ -51,7 +55,6 @@ WRITE = textwrap.dedent("""
                     "memory": request.get("memory"),
                     "scene": scene.decode() if isinstance(scene, (bytes, bytearray)) else scene,
                     "scene_wanted": request.get("scene_wanted"),
-                    "parallel": request.get("parallel"),
                 },
                 f,
             )
@@ -61,13 +64,14 @@ WRITE = textwrap.dedent("""
         return result
     """)
 
-VIDEO = "path: write.py, size: reels, parallel: true, cacheTiers: remote, sceneCache: true"
+# Videos by their extensions, under names that are not; and a file that is not.
+EXTENSIONS = {"clip": "mp4", "reel": "webm", "wide": "mkv", "still": "still"}
 FILE_TYPES = """
-    clip: {%s, extension: clip, say: clip}
-    reel: {%s, extension: reel, say: reel}
-    wide: {%s, extension: wide, say: wide, size: landscape}
-    still: {path: write.py, extension: still, say: still}
-    """ % (VIDEO, VIDEO, VIDEO)
+    clip: {path: write.py, size: reels, extension: mp4, say: clip}
+    reel: {path: write.py, size: reels, extension: webm, say: reel}
+    wide: {path: write.py, size: landscape, extension: mkv, say: wide}
+    still: {path: write.py, size: reels, extension: still, say: still}
+    """
 
 
 class FakeRemote(cache_backend.RemoteCacheBackend):
@@ -167,6 +171,9 @@ def video(tmp_path, monkeypatch):
     sandbox = _Sandbox()
     monkeypatch.setattr(ctx, "get_python_runtime", lambda version=None, image=None: sandbox)
     monkeypatch.setattr(sandbox_lock, "process_slots", sandbox_lock.ProcessSlots(4))
+    # What a user who said nothing gets, whatever this machine's configuration says.
+    monkeypatch.setattr(ctx.user_config, "video_parallel", True)
+    monkeypatch.setattr(ctx.user_config, "video_cache_tiers", "remote")
 
     async def get_wrapped(self, _ctx):
         return {"name": self.name, "label": None}
@@ -185,8 +192,12 @@ def _render(video, format_name, **kwargs):
     return asyncio.run(run())
 
 
+def _path(video, name):
+    return os.path.join(str(video.out), "bracket." + EXTENSIONS[name])
+
+
 def _written(video, name):
-    with open(os.path.join(str(video.out), "bracket." + name)) as f:
+    with open(_path(video, name)) as f:
         return json.load(f)
 
 
@@ -221,7 +232,7 @@ def test_more_slots_are_taken_only_from_what_is_free_and_given_back():
     assert slots._in_use == 0
 
 
-def test_a_parallel_file_type_is_given_every_free_slot_and_gives_them_back(video):
+def test_a_video_is_given_every_free_slot_and_gives_them_back(video):
     results = _render(video, "clip")
     assert results["clip"]["success"]
     written = _written(video, "clip")
@@ -229,11 +240,9 @@ def test_a_parallel_file_type_is_given_every_free_slot_and_gives_them_back(video
     assert written["threads"] == 4
     assert video.sandbox.held == [4]
     assert sandbox_lock.process_slots._in_use == 0
-    # The key is PartCAD's, and not handed on.
-    assert written["parallel"] is None
 
 
-def test_a_parallel_file_type_gets_what_is_free_however_much_it_asks_for(video):
+def test_a_video_gets_what_is_free_however_much_it_asks_for(video):
     busy = sandbox_lock.process_slots.take_more(2)
     try:
         _render(video, "clip", threads=8)
@@ -245,7 +254,7 @@ def test_a_parallel_file_type_gets_what_is_free_however_much_it_asks_for(video):
     assert sandbox_lock.process_slots._in_use == 0
 
 
-def test_a_file_type_that_is_not_parallel_is_told_nothing(video):
+def test_a_file_that_is_not_a_video_is_told_nothing(video):
     _render(video, "still")
     assert _written(video, "still")["threads"] is None
 
@@ -258,13 +267,32 @@ def test_a_sandbox_elsewhere_is_given_no_slots_of_this_machine(video, monkeypatc
     assert sandbox_lock.process_slots._in_use == 0
 
 
-def test_neither_threads_nor_memory_is_part_of_what_a_parallel_file_is_cached_under(video):
+@pytest.mark.parametrize("runtime_class", [_Sandbox, _Exchanging], ids=["here", "elsewhere"])
+def test_a_user_who_turned_parallel_off_has_every_video_drawn_on_one_thread(video, monkeypatch, runtime_class):
+    sandbox = runtime_class()
+    monkeypatch.setattr(video.ctx, "get_python_runtime", lambda version=None, image=None: sandbox)
+    monkeypatch.setattr(video.ctx.user_config, "video_parallel", False)
+    _render(video, "clip", threads=8)
+    assert _written(video, "clip")["threads"] == 1
+    if runtime_class is _Sandbox:
+        # Its own slot, and nothing more.
+        assert sandbox.held == [1]
+    assert sandbox_lock.process_slots._in_use == 0
+    # And it is the same video: asked for again with the slots granted, it is
+    # the cache that answers.
+    monkeypatch.setattr(video.ctx.user_config, "video_parallel", True)
+    os.remove(_path(video, "clip"))
+    _render(video, "clip")
+    assert sandbox.calls == 1
+
+
+def test_neither_threads_nor_memory_is_part_of_what_a_video_is_cached_under(video):
     _render(video, "clip")
     assert video.sandbox.calls == 1
-    os.remove(os.path.join(str(video.out), "bracket.clip"))
+    os.remove(_path(video, "clip"))
     results = _render(video, "clip", threads=2, memory=512)
     assert video.sandbox.calls == 1 and results["clip"]["success"]
-    assert os.path.exists(os.path.join(str(video.out), "bracket.clip"))
+    assert os.path.exists(_path(video, "clip"))
     # Anything else it is told is a file of its own.
     _render(video, "clip", fps=60)
     assert video.sandbox.calls == 2
@@ -285,7 +313,7 @@ def test_a_view_of_the_remote_tiers_has_only_them():
     assert not cache.tiers(Cache.NO_TIERS).enabled
 
 
-def test_a_remote_file_type_is_kept_in_the_remote_tiers_and_never_on_this_machine(video):
+def test_a_video_is_kept_in_the_remote_tiers_and_never_on_this_machine(video):
     _render(video, "clip")
     held_remotely = [name for name in video.remote.storage if name.endswith(".artifact")]
     assert held_remotely, sorted(video.remote.storage)
@@ -295,17 +323,37 @@ def test_a_remote_file_type_is_kept_in_the_remote_tiers_and_never_on_this_machin
 
     # Asked again, it is the remote tier that answers - and the hit is not
     # copied into the files tier, as a hit of anything else would be.
-    os.remove(os.path.join(str(video.out), "bracket.clip"))
+    os.remove(_path(video, "clip"))
     _render(video, "clip")
     assert video.sandbox.calls == 1
     assert _written(video, "clip")["threads"] == 4
     assert not [name for name in _local_entries(video) if name.endswith(".artifact")]
 
 
-def test_a_file_type_that_says_nothing_is_kept_in_every_tier(video):
+def test_a_file_that_is_not_a_video_is_kept_in_every_tier(video):
     _render(video, "still")
     assert [name for name in _local_entries(video) if name.endswith(".artifact")]
     assert [name for name in video.remote.storage if name.endswith(".artifact")]
+
+
+def test_a_user_who_keeps_videos_in_every_tier_has_them_on_this_machine_too(video, monkeypatch):
+    monkeypatch.setattr(video.ctx.user_config, "video_cache_tiers", "all")
+    _render(video, "clip")
+    assert [name for name in _local_entries(video) if name.endswith(".artifact")]
+    assert [name for name in video.remote.storage if name.endswith(".artifact")]
+
+
+def test_a_user_who_keeps_videos_nowhere_has_each_made_afresh(video, monkeypatch):
+    monkeypatch.setattr(video.ctx.user_config, "video_cache_tiers", "none")
+    _render(video, "clip")
+    assert not [name for name in _local_entries(video) if name.endswith(".artifact")]
+    assert not [name for name in video.remote.storage if name.endswith(".artifact")]
+    os.remove(_path(video, "clip"))
+    _render(video, "clip")
+    assert video.sandbox.calls == 2
+    # The scene is still kept, and handed to the second run.
+    assert [name for name in video.remote.storage if name.endswith(".artifact-scene")]
+    assert _written(video, "clip")["scene"] == "the scene clip built at reels"
 
 
 # ---------------------------------------------------------------------------
@@ -338,40 +386,111 @@ def test_the_scene_is_kept_in_every_tier(video):
     assert [name for name in _local_entries(video) if name.endswith(".artifact-scene")]
 
 
-def test_a_file_type_without_a_scene_cache_is_neither_handed_one_nor_asked_for_it(video):
+def test_a_file_that_is_not_a_video_is_neither_handed_a_scene_nor_asked_for_one(video):
     _render(video, "clip")
     _render(video, "still")
     still = _written(video, "still")
     assert still["scene"] is None and still["scene_wanted"] is None
 
 
-def test_what_a_scene_is_keyed_on():
-    impl = output.Implementation(output.RENDER, "mp4", {"path": "x.py", "sceneCache": True, "parallel": "true"})
-    assert impl.scene_cache and impl.parallel and impl.cache_tiers == "all"
-    impl = output.Implementation(output.RENDER, "mp4", {"path": "x.py", "cacheTiers": "remote"})
-    assert impl.cache_tiers == "remote" and not impl.scene_cache and not impl.parallel
-    impl = output.Implementation(output.RENDER, "mp4", {"path": "x.py", "cacheTiers": "nearby"})
-    assert impl.cache_tiers == "all"
-    for key in ("parallel", "cacheTiers", "sceneCache"):
-        assert key in output.IMPLEMENTATION_KEYS
+# ---------------------------------------------------------------------------
+# What a video is
+# ---------------------------------------------------------------------------
 
 
-def test_every_video_type_says_it_is_parallel_remote_and_keeps_its_scene():
+def test_a_video_is_known_by_its_extension_not_by_its_name():
+    def impl(section, name, config):
+        return output.Implementation(section, name, {"path": "x.py", **config})
+
+    assert impl(output.RENDER, "mp4", {}).is_video
+    assert impl(output.EXPORT, "reel", {"extension": "MP4"}).is_video
+    assert impl(output.RENDER, "reel", {"extension": ".webm"}).is_video
+    assert not impl(output.RENDER, "mp4", {"extension": "png"}).is_video
+    assert not impl(output.RENDER, "png", {}).is_video
+    # Only a file PartCAD writes for 'pc render' or 'pc export'.
+    assert not impl(output.SIMULATE, "mp4", {}).is_video
+
+
+def test_no_file_type_says_how_a_video_is_run_or_kept():
     import yaml
 
+    for key in ("parallel", "cacheTiers", "sceneCache"):
+        assert key not in output.IMPLEMENTATION_KEYS
     path = os.path.join(output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.RENDER]], "partcad.yaml")
     with open(path) as stream:
         render = yaml.safe_load(stream)["render"]
     videos = [name for name, config in render.items() if (config or {}).get("path") == "render_video.py"]
     assert len(videos) == 10
-    for name in videos:
-        impl = output.Implementation(output.RENDER, name, render[name])
-        assert impl.parallel and impl.cache_tiers == "remote" and impl.scene_cache, name
-    # And nothing else is.
     for name, config in render.items():
-        if name not in videos and isinstance(config, dict):
-            impl = output.Implementation(output.RENDER, name, config)
-            assert not impl.parallel and impl.cache_tiers == "all" and not impl.scene_cache, name
+        if not isinstance(config, dict):
+            continue
+        assert not {"parallel", "cacheTiers", "sceneCache"} & set(config), name
+        # Every type 'render_video.py' writes is a video, and nothing else is.
+        assert output.Implementation(output.RENDER, name, config).is_video == (name in videos), name
+    assert {render[name].get("extension", name) for name in videos} == output.VIDEO_EXTENSIONS
+
+
+# ---------------------------------------------------------------------------
+# The user's configuration
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def home(tmp_path, monkeypatch):
+    """A '$HOME' of its own, and no 'PC_*' from the environment this runs in."""
+    for name in [n for n in os.environ if n.startswith("PC_")]:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".partcad").mkdir()
+
+    def config(text=""):
+        (tmp_path / ".partcad" / "config.yaml").write_text(text)
+        return pc_user_config.UserConfig()
+
+    return config
+
+
+def test_a_user_who_says_nothing_has_videos_drawn_in_parallel_and_kept_remotely(home):
+    config = home()
+    assert config.video_parallel is True
+    assert config.video_cache_tiers == "remote"
+
+
+def test_a_user_says_otherwise_in_the_configuration_or_the_environment(home, monkeypatch):
+    config = home("video:\n  parallel: false\n  cacheTiers: ALL\n")
+    assert config.video_parallel is False
+    assert config.video_cache_tiers == "all"
+
+    monkeypatch.setenv("PC_VIDEO_PARALLEL", "0")
+    monkeypatch.setenv("PC_VIDEO_CACHE_TIERS", "none")
+    config = home()
+    assert config.video_parallel is False
+    assert config.video_cache_tiers == "none"
+
+
+def test_one_of_the_two_in_the_file_and_the_other_in_the_environment(home, monkeypatch):
+    # A section the file gives in part, with the rest bound to the environment:
+    # how vyper has been known to raise KeyError (see 'SECTION_PATHS').
+    monkeypatch.setenv("PC_VIDEO_CACHE_TIERS", "all")
+    config = home("video:\n  parallel: false\n")
+    assert config.video_parallel is False
+    assert config.video_cache_tiers == "all"
+    assert config.to_dict()["video.cacheTiers"] == "all"
+
+
+def test_a_tier_nobody_has_is_the_default(home):
+    assert home("video:\n  cacheTiers: nearby\n").video_cache_tiers == "remote"
+    assert pc_user_config.video_cache_tiers(None) == "remote"
+    assert pc_user_config.video_cache_tiers(" Remote ") == "remote"
+
+
+def test_the_tiers_a_user_may_name_are_the_ones_the_cache_has():
+    assert set(pc_user_config.VIDEO_CACHE_TIERS) == {Cache.ALL_TIERS, Cache.REMOTE_TIERS, Cache.NO_TIERS}
+
+
+def test_both_settings_travel_to_the_daemon():
+    assert "video.parallel" in pc_user_config.OPTION_KEYS
+    assert "video.cacheTiers" in pc_user_config.OPTION_KEYS
 
 
 def test_cache_hash_of_a_scene_is_not_the_files():

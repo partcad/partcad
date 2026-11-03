@@ -61,3 +61,26 @@ serves. So ``PC_THREADS_MAX=6 pc render -r`` runs six at a time even on a daemon
 that has been running since before the variable was set. The thread pools are
 the exception: they belong to the daemon's process, and keep the size it started
 with.
+
+Videos
+======
+
+A :ref:`video <videos>` is the one thing PartCAD draws on more than one thread
+in a single sandbox process: its frames are cut into bands of rows, and the
+threads share them, the earliest frame first. It is given as many of the
+``threadsMax`` process slots as are free when it starts -- never waited for, and
+given back when it ends -- so a video rendered on its own uses the whole
+machine, and one rendered beside other work takes what that work leaves. A
+machine that would rather draw every video on one thread, in the one slot its
+run holds, says so:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    video:
+      parallel: false      # or PC_VIDEO_PARALLEL=false
+
+Neither changes a pixel of the video, nor where it is cached. A video drawn in a
+sandbox on another machine (``remote``, or a container under
+``useDockerRemote``) is given none of this machine's slots, and draws on as
+many cores as it finds there.

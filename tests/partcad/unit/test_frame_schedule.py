@@ -10,7 +10,7 @@ has threads draw them the earliest frame first; 'raster_scene.Painter' draws a
 band exactly as it draws the whole picture. None of it may change a pixel: a
 frame drawn in bands, on any number of threads, in any budget, is the frame
 drawn whole on one. And the scene the frames are drawn from is handed back to
-PartCAD and handed in again (see 'output.SCENE_CACHE_KEY'), which must not
+PartCAD and handed in again (see 'output.VIDEO_EXTENSIONS'), which must not
 change one either. Imported by path, as the sandbox imports them.
 """
 

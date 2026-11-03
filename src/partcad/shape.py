@@ -22,6 +22,7 @@ import warnings
 from typing import TYPE_CHECKING, Optional
 
 from partcad_utils import timeouts
+from partcad_utils.user_config import VIDEO_CACHE_TIERS_DEFAULT
 
 from . import cache_artifacts
 from . import cae as pc_cae
@@ -322,24 +323,30 @@ class _Output:
         self.path = path
         self.artifact = artifact
         self.before = None
-        # The cache key of the scene the file is drawn from, for an
-        # implementation that hands it back ('output.SCENE_CACHE_KEY').
+        # The cache key of the scene the file is drawn from, for a video
+        # (see 'output.VIDEO_EXTENSIONS').
         self.scene = scene
 
 
-def _kept_in(cache, impl):
-    """The tiers of 'cache' a file of 'impl' is kept in and looked for in (see 'output.CACHE_TIERS_KEY')."""
+def _kept_in(cache, impl, user_config):
+    """The tiers of 'cache' a file of 'impl' is kept in and looked for in.
+
+    Every one, unless it is a video: then the ones the user's 'video.cacheTiers'
+    names (see 'output.VIDEO_EXTENSIONS').
+    """
     if cache is None:
         return None
-    return cache.tiers(impl.cache_tiers)
+    if not impl.is_video:
+        return cache
+    return cache.tiers(getattr(user_config, "video_cache_tiers", None) or VIDEO_CACHE_TIERS_DEFAULT)
 
 
 async def _scene_in_async(cache, output_):
     """Hand the file's implementation the scene the cache holds for it, or ask it for the one it builds.
 
     Every tier, as geometry is kept: a scene is what drawing the file starts
-    from, and is drawn from again for the next file of the object at that size
-    (see 'output.SCENE_CACHE_KEY'). Put in the request after it was keyed, like
+    from, and is drawn from again for the next video of the object at that size
+    (see 'output.VIDEO_EXTENSIONS'). Put in the request after it was keyed, like
     'threads': a file is the same whether its scene was built or handed in.
     """
     if output_.scene is None:
@@ -360,7 +367,7 @@ async def _scene_out_async(cache, output_, result):
     neither the file's cached answer nor whoever asked for the file wants them.
     Out of the request too, which the file is reported from.
     """
-    if not output_.impl.scene_cache:
+    if not output_.impl.is_video:
         return
     handed_in = output_.request.pop(output.SCENE_KEY, None)
     wanted = output_.request.pop(output.SCENE_WANTED_KEY, None)
@@ -369,31 +376,35 @@ async def _scene_out_async(cache, output_, result):
         await cache_artifacts.store_entries_async(cache, output_.scene, {output.SCENE_KEY: bytes(scene)})
 
 
-# The most threads a parallel implementation is given, whatever the machine.
+# The most threads a video is drawn on, whatever the machine.
 MAX_THREADS = 64
 
 
 class _ThreadGrant:
-    """The process slots the parallel implementations among 'outputs' draw on, beyond the one their run holds.
+    """The process slots the videos among 'outputs' draw on, beyond the one their run holds.
 
-    A parallel implementation (see 'output.PARALLEL_KEY') does the work of
-    several processes in one, so it is given what several would have been: as
-    many of the slots that are free when its process starts as it can use - the
-    'threads' it asked for, or one per slot there is - and told how many in its
-    request's 'threads'. Taken by the run's request as it is written, which is
-    once the run holds its own slot ('take'), never waited for, and given back
-    when the run is over ('give_back'). A run that is not given any more draws
-    on the one thread it has; what it writes is the same either way. The
-    request is left as it was found: a file written again, once a call writing
-    several has failed, is granted afresh rather than held to that call's grant.
+    A video (see 'output.VIDEO_EXTENSIONS') does the work of several processes
+    in one, so with the user's 'video.parallel' on it is given what several
+    would have been: as many of the slots that are free when its process starts
+    as it can use - the 'threads' its file type asked for, or one per slot there
+    is - and told how many in its request's 'threads'. Taken by the run's
+    request as it is written, which is once the run holds its own slot
+    ('take'), never waited for, and given back when the run is over
+    ('give_back'). A run that is not given any more draws on the one thread it
+    has; what it writes is the same either way. The request is left as it was
+    found: a file written again, once a call writing several has failed, is
+    granted afresh rather than held to that call's grant.
 
-    Only where the run is a process on this machine: a sandbox elsewhere has
-    cores of its own, which the slots here do not count, and an implementation
-    told nothing draws on as many as it finds there.
+    With 'video.parallel' off, a video is told one thread, wherever it runs.
+    On, only a run that is a process on this machine is granted anything: a
+    sandbox elsewhere has cores of its own, which the slots here do not count,
+    and a video told nothing draws on as many as it finds there.
     """
 
-    def __init__(self, outputs, local):
-        self.outputs = [o for o in outputs if o.impl.parallel] if local else []
+    def __init__(self, outputs, local, parallel=True):
+        videos = [o for o in outputs if o.impl.is_video]
+        self.parallel = bool(parallel)
+        self.outputs = videos if (local or not self.parallel) else []
         self.taken = None
         self.asked = {}
 
@@ -404,8 +415,8 @@ class _ThreadGrant:
         for output_ in self.outputs:
             request = output_.request
             self.asked[id(output_)] = (output.THREADS_KEY in request, request.get(output.THREADS_KEY))
-            wanted[id(output_)] = self._wanted(request.get(output.THREADS_KEY))
-        self.taken = sandbox_lock.process_slots.take_more(max(wanted.values()) - 1)
+            wanted[id(output_)] = self._wanted(request.get(output.THREADS_KEY)) if self.parallel else 1
+        self.taken = sandbox_lock.process_slots.take_more(max(wanted.values()) - 1) if self.parallel else 0
         for output_ in self.outputs:
             output_.request[output.THREADS_KEY] = min(wanted[id(output_)], 1 + self.taken)
 
@@ -2638,7 +2649,11 @@ class Shape(ShapeConfiguration):
                 extra = {"session": session}
             # A process on this machine, holding one of its process slots: the
             # only kind of run the slots here say anything about.
-            grant = _ThreadGrant(outputs, local=not container and not getattr(runtime, "EXCHANGES_FILES", False))
+            grant = _ThreadGrant(
+                outputs,
+                local=not container and not getattr(runtime, "EXCHANGES_FILES", False),
+                parallel=getattr(getattr(ctx, "user_config", None), "video_parallel", True),
+            )
             try:
                 exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized, **extra)
             finally:
@@ -2873,7 +2888,7 @@ class Shape(ShapeConfiguration):
             extra,
         )
 
-        scene = await self._scene_hash(impl, script, request, extra) if impl.scene_cache else None
+        scene = await self._scene_hash(impl, script, request, extra) if impl.is_video else None
         output_ = _Output(impl, script, request, final_filepath, artifact, scene)
         if batch is not None:
             return await batch.submit(cache, output_)
@@ -2911,7 +2926,7 @@ class Shape(ShapeConfiguration):
                 missing = []
                 for index in indices:
                     output_ = outputs[index]
-                    kept = _kept_in(cache, output_.impl)
+                    kept = _kept_in(cache, output_.impl, getattr(ctx, "user_config", None))
                     result = await cache_artifacts.restore_files_async(kept, output_.artifact, output_.path)
                     if result is not None:
                         outcomes[index] = result
@@ -2932,12 +2947,12 @@ class Shape(ShapeConfiguration):
                         continue
                     written = self._written_besides(output_.impl, result, output_.path, output_.before)
                     if written is not None:
-                        kept = _kept_in(cache, output_.impl)
+                        kept = _kept_in(cache, output_.impl, getattr(ctx, "user_config", None))
                         await cache_artifacts.store_files_async(kept, output_.artifact, result, output_.path, written)
         return outcomes
 
     async def _scene_hash(self, impl, script: str, request: dict, extra: dict):
-        """The cache key of the scene a file of 'impl' is drawn from, or None (see 'output.SCENE_CACHE_KEY').
+        """The cache key of the scene a video of 'impl' is drawn from, or None (see 'output.VIDEO_EXTENSIONS').
 
         What the scene is made of, and nothing about what is made of it: the
         object ('get_artifact_key_async'), what its tree says of its shapes - the
@@ -3980,9 +3995,9 @@ class Shape(ShapeConfiguration):
         """
         try:
             subject_key = await self.get_artifact_key_async()
-            # What a parallel implementation is told about the machine it runs
-            # on changes nothing in the file it writes (see 'output.PARALLEL_KEY').
-            unkeyed = (output.THREADS_KEY, output.MEMORY_KEY) if impl.parallel else ()
+            # What a video is told about the machine it runs on changes nothing
+            # in the file it writes (see 'output.VIDEO_EXTENSIONS').
+            unkeyed = (output.THREADS_KEY, output.MEMORY_KEY) if impl.is_video else ()
             question = {
                 "section": section,
                 "label": label,

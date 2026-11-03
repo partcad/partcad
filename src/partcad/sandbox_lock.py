@@ -265,7 +265,7 @@ class ProcessSlots:
         """Take up to 'wanted' more slots, as many as are free now; how many were taken.
 
         Never waits. For a run that already holds a slot and can use more - an
-        implementation drawing on several threads (see 'output.PARALLEL_KEY') -
+        video drawing its frames on several threads (see 'output.VIDEO_EXTENSIONS') -
         and does its work on however many it gets: waiting for more would be a
         run holding a slot while it waits, which is what 'slot' never does.
         Give them back with 'give_back'.

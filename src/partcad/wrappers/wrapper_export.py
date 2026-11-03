@@ -484,10 +484,10 @@ def process(script, path, request):
     # which is the same as saying nothing.
     if isinstance(output.get(FILES_KEY), (list, tuple)):
         result[FILES_KEY] = [str(name) for name in output[FILES_KEY]]
-    # What an implementation that keeps its scene ('sceneCache') was asked to
-    # hand back: bytes, for PartCAD to keep and hand in to the next file drawn
-    # from it, and taken out of the answer before anyone else sees it (see
-    # 'partcad.output.SCENE_CACHE_KEY'). Bytes or nothing.
+    # What a video was asked to hand back of the scene it draws from: bytes, for
+    # PartCAD to keep and hand in to the next video drawn from it, and taken out
+    # of the answer before anyone else sees it (see
+    # 'partcad.output.VIDEO_EXTENSIONS'). Bytes or nothing.
     if (
         isinstance(request, dict)
         and request.get(SCENE_WANTED_KEY)

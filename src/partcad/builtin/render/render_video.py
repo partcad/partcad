@@ -404,7 +404,8 @@ def threads_of(request):
     """How many threads draw the frames: 'threads', or one per core this process may run on.
 
     PartCAD says, when it runs the video: as many as it has process slots free
-    for (see 'output.PARALLEL_KEY').
+    for, or one where its user's 'video.parallel' is off (see
+    'output.VIDEO_EXTENSIONS' in PartCAD).
     """
     try:
         cores = len(os.sched_getaffinity(0))
@@ -415,11 +416,11 @@ def threads_of(request):
 
 # The scene every frame is drawn from - the object tessellated, centred and lit,
 # the most of the work after the frames themselves - as PartCAD keeps it between
-# videos ('sceneCache' in 'partcad.yaml'; see 'output.SCENE_CACHE_KEY' in
-# PartCAD): handed in under 'scene' when it has one for this object at this
-# size, and asked for under 'scene_wanted' when it has not, in which case the
-# answer carries it, as bytes, under 'scene'. The frames themselves are never
-# kept anywhere (see 'frame_schedule').
+# videos, always (see 'output.VIDEO_EXTENSIONS' in PartCAD): handed in under
+# 'scene' when it has one for this object at this size, and asked for under
+# 'scene_wanted' when it has not, in which case the answer carries it, as bytes,
+# under 'scene'. The frames themselves are never kept anywhere (see
+# 'frame_schedule').
 SCENE_KEY = "scene"
 SCENE_WANTED_KEY = "scene_wanted"
 
