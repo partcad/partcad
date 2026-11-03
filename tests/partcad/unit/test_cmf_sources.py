@@ -25,6 +25,7 @@ Pinned here:
 """
 
 import asyncio
+import importlib
 import locale
 import logging
 import os
@@ -767,6 +768,85 @@ def test_a_part_type_s_rgba_is_read_as_numbers_whatever_it_is_written_as(tmp_pat
     assert "//pub/std/color:rgba;color=010203FF" in colors
     # An alpha past 1 is opaque, not a byte past 255.
     assert "//pub/std/color:rgba;color=C91A09FF" in colors
+
+
+def _run_wrapper(monkeypatch, name, path, request):
+    """Run the wrapper script 'name' in this process on 'request', as its sandbox does: (the module, what it wrote)."""
+    import wrapper_common
+
+    written = []
+    monkeypatch.setattr(wrapper_common, "handle_input", lambda *_args, **_kwargs: (str(path), request))
+    monkeypatch.setattr(wrapper_common, "handle_output", written.append)
+    # The wrapper is a script: importing it runs the request it is handed.
+    sys.modules.pop(name, None)
+    try:
+        module = importlib.import_module(name)
+    finally:
+        sys.modules.pop(name, None)
+    (said,) = written
+    return module, said
+
+
+def test_a_part_type_s_cmf_rides_on_the_shape_it_builds(tmp_path, monkeypatch, capsys):
+    """What a script says of its faces and solids lands on the payload; what it says wrongly is dropped, and said."""
+    pytest.importorskip("build123d")
+    import build123d as bd
+    import ocp_serialize
+
+    script = tmp_path / "coloured.py"
+    script.write_text(PART_TYPE)
+    module, said = _run_wrapper(monkeypatch, "wrapper_part_type", script, {})
+
+    assert said["success"], said["exception"]
+    (shape,) = said["shapes"]
+    carried = ocp_serialize.cmf_of_payload(shape[ocp_serialize.KEY_BREP])
+    assert [carried.face_set(i).color for i in range(3)] == ["4", "4", "999"]
+    assert carried.face_set(0).material == "abs" and carried.face_set(0).rgba == (201, 26, 9, 1.0)
+    assert {cmf_set.origin for cmf_set in carried.sets} == {"raw:ldraw"}
+
+    box = bd.Box(1, 1, 1).wrapped
+    assert module._section(None, box) is None and module._section({"faces": []}, None) is None
+    # Solids too, with no convention named: PartCAD's own terms.
+    stated = {"faces": [{"color": "4"}, None, {}, {}, {}, "not a set"], "solids": [{"material": "abs"}]}
+    section = module._section(stated, box)
+    assert section.face_set(0).color == "4" and section.face_set(1).color is None
+    assert section.solid_set(0).material == "abs"
+    assert {cmf_set.origin for cmf_set in section.sets} == {"raw:partcad"}
+    # A list for another shape is not laid on this one.
+    assert module._section({"faces": [{"color": "4"}]}, box) is None
+    assert "its shape has 6" in capsys.readouterr().err
+    # An rgba that is not four numbers is dropped, the designation kept.
+    section = module._section({"faces": [{"color": "4", "rgba": "red"}] + [None] * 5}, box)
+    assert section.face_set(0).color == "4" and section.face_set(0).rgba is None
+    assert "is not four numbers" in capsys.readouterr().err
+    # Nothing said of anything is no section.
+    assert module._section({"faces": [None] * 6}, box) is None
+
+    assert module._rgba([1.6, "2", 300, 2]) == (2, 2, 255, 1.0)
+    assert module._rgba([-5, 0, 0, -1]) == (0, 0, 0, 0.0)
+    for bad in ([1, 2, 3], "rgba", ["x", 0, 0, 1], [0, 0, 0, float("nan")], [float("inf"), 0, 0, 1]):
+        assert module._rgba(bad) is None, bad
+
+
+def test_a_step_file_the_colour_reader_refuses_is_read_as_it_always_was(tmp_path, monkeypatch, capsys):
+    """The geometry is the answer asked for and the CMF the extra: XCAF failing costs the colours, not the part."""
+    step_cmf = _wrappers()
+    import build123d as bd
+    import ocp_serialize
+
+    path = tmp_path / "red.step"
+    step_cmf.write(str(path), bd.Box(10, 20, 30).wrapped, Section([CmfSet(color="#C91A09", rgba=(201, 26, 9, 1.0))], 0))
+
+    def refuses(*_args, **_kwargs):
+        raise RuntimeError("no XCAF today")
+
+    monkeypatch.setattr(step_cmf, "read", refuses)
+    _module, said = _run_wrapper(monkeypatch, "wrapper_step", path, {})
+
+    assert said["success"], said["exception"]
+    assert "no XCAF today" in capsys.readouterr().err
+    assert ocp_serialize.cmf_of_payload(said["shape"][ocp_serialize.KEY_BREP]) is None
+    assert len(bd.Compound(ocp_serialize.decode_shape(said["shape"])).solids()) == 1
 
 
 def test_a_system_with_several_ids_for_a_colour_lists_them(tmp_path):

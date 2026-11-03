@@ -55,8 +55,9 @@ import wrapper_common
 
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
-# before is produced again. 2: a script's 'output["cmf"]' is carried.
-CACHE_VERSION = 2
+# before is produced again. 2: a script's 'output["cmf"]' is carried. 3: a
+# NaN alpha in it is dropped rather than drawn opaque.
+CACHE_VERSION = 3
 
 
 def _rgba(value):
@@ -65,12 +66,15 @@ def _rgba(value):
         return None
     try:
         red, green, blue = (max(0, min(255, int(round(float(channel))))) for channel in value[:3])
-        alpha = max(0.0, min(1.0, float(value[3])))
+        alpha = float(value[3])
     except (TypeError, ValueError, OverflowError):
         return None
-    if alpha != alpha:  # NaN, which every comparison above let through
+    # A NaN alpha is no alpha. It is asked before clamping, because the clamp
+    # would make it 1: every comparison with NaN is false, so 'min(1.0, nan)'
+    # keeps the 1.0. (A NaN channel is refused above, by 'round'.)
+    if alpha != alpha:
         return None
-    return red, green, blue, alpha
+    return red, green, blue, max(0.0, min(1.0, alpha))
 
 
 def _section(stated, shape):
