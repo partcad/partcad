@@ -121,6 +121,27 @@ _GLYPHS = {
     "?": [[(0, 5), (1, 6), (3, 6), (4, 5), (4, 4), (2, 2.4), (2, 1.6)], [(2, 0), (2, 0.6)]],
     "'": [[(2, 6), (2, 4.5)]],
     '"': [[(1.4, 6), (1.4, 4.5)], [(2.6, 6), (2.6, 4.5)]],
+    # An 'S' a little shorter than a capital, so the stroke through it shows
+    # above and below, and inside the cap height, so a row of prices is spaced
+    # as any other row is. What a price in dollars is written with on a picture
+    # (see 'render_overlay.price_label').
+    "$": [
+        [
+            (4, 4.6),
+            (3, 5.4),
+            (1, 5.4),
+            (0, 4.6),
+            (0, 3.8),
+            (1, 3),
+            (3, 3),
+            (4, 2.2),
+            (4, 1.4),
+            (3, 0.6),
+            (1, 0.6),
+            (0, 1.4),
+        ],
+        [(2, 6), (2, 0)],
+    ],
     "%": [
         [(0, 0), (4, 6)],
         [(0, 4), (1.2, 4), (1.2, 6), (0, 6), (0, 4)],

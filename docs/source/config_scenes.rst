@@ -39,7 +39,8 @@ Declare scenes
 
   scenes:
     <scene name>:
-      type: <assy>  # Assembly YAML read as a scene. An engine's own scene format is
+      type: <assy|walls>  # Assembly YAML read as a scene, or the walls of a room standing on a
+                    # sketch (see "Rooms" below). An engine's own scene format is
                     # implemented by that engine's plugin package and named through it:
                     # "sim-gazebo:world" (a Gazebo world), "sim-mujoco:mjcf" (a MuJoCo model).
       desc: <(optional) textual description>
@@ -134,9 +135,98 @@ reported.
 either key, and what it does not model, is in :ref:`sim-scenes` and
 :ref:`sim-engines`.
 
+.. _scenes-walls:
+
+Rooms: the walls standing on a sketch
+=====================================
+For laying out a space rather than making anything -- a floor plan, an apartment
+for sale, the room a machine is going to stand in -- a scene can be the walls of
+a room, worked out from a sketch of its plan:
+
+.. code-block:: yaml
+
+  sketches:
+    living-room-plan:
+      type: dxf          # or any sketch: one closed outline, drawn from above
+
+  scenes:
+    living-room:
+      type: walls
+      sketch: living-room-plan
+      height: 2700                    # mm
+      wall: //builtin/building:wall   # (optional) the part each wall is
+
+The sketch has to be **one enclosed outline** made of **straight lines and arcs of
+circles**, on the XY plane: a face with no holes in it, a closed wire, or loose
+edges that join into one. The scene is one :ref:`wall <walls>` per edge of it,
+named ``wall-1``, ``wall-2``, ... in the order a walk around the outline meets
+them, each standing where its edge starts and turned the way the edge goes. A
+line is a straight wall and an arc an arc wall of the arc's radius and length.
+
+Every wall looks into the room, whichever way round the outline was drawn: the
+walk goes clockwise, and a wall is seen from its right. So a picture of the
+room taken from outside is taken *through* the walls nearest the camera, and
+shows the far walls from the inside, the way a dollhouse or a sales brochure
+shows a flat. From straight above, every wall is seen edge-on, and the drawing
+is the plan.
+
+A sketch that is not such an outline is refused, with the reason, rather than
+approximated: two outlines (``has 2 faces``), a hole in one (a column nobody
+said how to draw), an open one, a spline (``edge 3 of ... is a B-spline``), or
+one that is not on the XY plane.
+
+``sketch:`` and ``height:`` may be ``%...%`` expressions over the scene's
+parameters, and PartCAD ships one such scene, ``//builtin/building:room``, with
+the parameters ``sketch`` and ``height``. Any package can use it without
+declaring a scene of its own -- by name, or through an ``enrich``. Name the
+sketch in full, because it belongs to your package and not to ``//builtin``:
+
+.. code-block:: yaml
+
+  scenes:
+    living-room:
+      type: enrich
+      source: //builtin/building:room
+      with:
+        sketch: //my/apartment:living-room-plan
+        height: 2600
+
+A room's own :ref:`CMF <cmf>` -- its ``color``, ``material`` and ``finish``
+parameters -- paints every wall of it, over whatever colour the wall states
+itself:
+
+.. code-block:: yaml
+
+  colors:
+    sage:
+      display: "#7D8F69"
+      manufacturable: false   # a picture: a room is never made
+
+  scenes:
+    living-room:
+      type: enrich
+      source: //builtin/building:room
+      with:
+        sketch: //my/apartment:living-room-plan
+        color: //my/apartment:sage
+
+That goes further than an assembly's CMF goes, which reaches only an item that
+states none of its own, and on purpose: a room *is* its walls, and the wall
+PartCAD ships states a colour -- a display-only warm grey -- so that a room
+nobody painted is drawn in one.
+
+``wall:`` names the part each wall is, ``//builtin/building:wall`` unless it says
+otherwise. Whatever it names is asked for with the parameters ``length``,
+``height`` and ``radius`` (see :ref:`walls`), and with the room's CMF, so a wall
+of your own is an ``enrich`` of that one, or a ``type: wall`` part declaring the
+same three parameters.
+
+A room is a scene, so it is not manufacturable, and its walls are not either:
+see :ref:`walls` for what that excuses them from in ``pc test``.
+
 Scene types a plugin adds
 =========================
-Beside ``assy``, a scene may be declared in a format an :doc:`import plugin
+Beside ``assy`` and ``walls``, a scene may be declared in a format an :doc:`import plugin
 </plugins/importers>` reads, and PartCAD itself ships none of them:
 
 ``sim-gazebo:world``

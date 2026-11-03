@@ -516,10 +516,15 @@ class Scene:
     def __init__(self, groups, pixels, warnings=None):
         """'groups' is '[(colour, shape)]', a colour being what 'appearance' writes ('#RRGGBB[AA]').
 
+        Or '[(colour, one_sided, shape)]', saying of each group whether it is
+        drawn one-sided - from the front of its faces only, as a wall is (see
+        'appearance.split_by_sides') - which 'Painter.draw' culls the backs of.
+
         'pixels' is the larger side of the picture the object will be drawn into,
         which is what decides how finely it is tessellated.
         """
-        boxes = [box for box in (bounding_box(shape) for _color, shape in groups) if box is not None]
+        groups = [group if len(group) == 3 else (group[0], False, group[1]) for group in groups]
+        boxes = [box for box in (bounding_box(shape) for _color, _one_sided, shape in groups) if box is not None]
         if not boxes:
             raise ValueError("There is nothing to draw: the object has no geometry")
         low = np.min([box[0] for box in boxes], axis=0)
@@ -534,10 +539,10 @@ class Scene:
         self.sphere = float(np.linalg.norm(size)) / 2.0 or 1.0
         tolerance = tolerance_for(float(np.linalg.norm(size)), pixels)
 
-        points, normals, corners, colors, opacity = [], [], [], [], []
+        points, normals, corners, colors, opacity, sides = [], [], [], [], [], []
         segments, segment_colors = [], []
         offset = 0
-        for color, shape in groups:
+        for color, one_sided, shape in groups:
             parsed = parse_color(color)
             if parsed is None:
                 if warnings is not None:
@@ -552,6 +557,7 @@ class Scene:
                 corners.append(c + offset)
                 colors.append(np.repeat([srgb_to_linear(np.array(rgb) / 255.0)], len(p), axis=0))
                 opacity.append(np.full(len(c), alpha))
+                sides.append(np.full(len(c), bool(one_sided)))
                 offset += len(p)
             lines = free_edges(shape, tolerance)
             if len(lines):
@@ -564,12 +570,14 @@ class Scene:
             self.corners = np.concatenate(corners)
             self.albedo = np.concatenate(colors)
             self.opacity = np.concatenate(opacity)
+            self.one_sided = np.concatenate(sides)
         else:
             self.points = np.zeros((0, 3))
             self.normals = np.zeros((0, 3))
             self.corners = np.zeros((0, 3), dtype=np.int64)
             self.albedo = np.zeros((0, 3))
             self.opacity = np.zeros(0)
+            self.one_sided = np.zeros(0, dtype=bool)
         self.segments = np.concatenate(segments) if segments else np.zeros((0, 2, 3))
         self.segment_colors = (
             np.concatenate(segment_colors).astype(np.uint8) if segment_colors else np.zeros((0, 3), np.uint8)
@@ -897,6 +905,12 @@ class Painter:
             lit = neutral_tone_mapping(lit.reshape(-1, 3)).reshape(lit.shape).astype(np.float32)
 
             solid = scene.opacity >= 1.0
+            # A one-sided triangle - of a wall - is drawn only from the side it
+            # faces, and from behind is not there at all ('side: FrontSide' in
+            # the 3D view). Decided here, frame by frame, because the object
+            # turns between the frames of a video.
+            shown = front | ~scene.one_sided
+            solid = solid & shown
             everything = bool(solid.all())
             rasterize(
                 tx, ty, planes, big_w, big_h, near, self.zbuffer, self.owner, select=None if everything else solid
@@ -905,14 +919,24 @@ class Painter:
             image[covered] = to_bytes(colors)
             limit = self.zbuffer
 
-            if not everything:
+            see_through = ~(scene.opacity >= 1.0) & shown
+            if see_through.any():
                 # One see-through layer, the nearest, over whatever is solid behind it.
                 if self.layer_owner is None:
                     self.layer_zbuffer = np.empty_like(self.zbuffer)
                     self.layer_owner = np.empty_like(self.owner)
                 owner = self.layer_owner
                 rasterize(
-                    tx, ty, planes, big_w, big_h, near, self.layer_zbuffer, owner, limit=self.zbuffer, select=~solid
+                    tx,
+                    ty,
+                    planes,
+                    big_w,
+                    big_h,
+                    near,
+                    self.layer_zbuffer,
+                    owner,
+                    limit=self.zbuffer,
+                    select=see_through,
                 )
                 covered, colors = _shade(owner, planes, big_w, lit)
                 alpha = scene.opacity[owner[covered]][:, None]

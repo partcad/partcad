@@ -38,6 +38,7 @@ import hashlib
 import math
 
 from .. import software as pc_software
+from .. import surface as pc_surface
 from ..assembly import Assembly
 from ..assembly_config import AssemblyConfiguration
 from ..file_factory import declared_hash, unreproducible_reason
@@ -86,6 +87,18 @@ class ManufacturabilityTest(Test):
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         if not shape.is_manufacturable and "force_manufacturing" not in test_ctx:
             return self.not_applicable(shape, self.inapplicable(shape))
+
+        # A surface part - a wall - is never made, by its type (see
+        # 'partcad.surface'), so getting here means something is asking for one
+        # to be: an assembly that is to be made has one in it, or a reference to
+        # one says it is manufacturable itself. Neither changes what it is.
+        surface = pc_surface.surface_type(shape)
+        if surface is not None:
+            return self.failed(
+                shape,
+                "It is a surface by its type ('%s'): one-sided faces drawn to lay out a space, with no body to "
+                "make. A manufacturable object cannot be made of one; place it in a scene instead" % surface,
+            )
 
         # Asked of every shape, before anything specific to one kind of them,
         # because it is not specific to one: it is about the file the object is

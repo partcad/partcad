@@ -36,8 +36,8 @@ cannot drift apart.
 ## The 3D view
 
 The pane is a control pane on the left, the canvas beside it and the view panel on the right (below). The control
-pane is a **tree of what is on screen**, with a checkbox on every item, and the Metadata box at the bottom of it —
-both say what is drawn, so both are one pane. How the model is looked at and drawn — the camera, a section, Animate
+pane is a **tree of what is on screen**, with a checkbox on every item, and under it the four callout boxes and the
+Metadata box — all of them say what is drawn, so all of them are one pane. How the model is looked at and drawn — the camera, a section, Animate
 and Opacity — is the view panel's. There is no name in the corner of the canvas: the first item of the tree is the
 object, and it says the same thing where it can also be switched off.
 
@@ -85,6 +85,37 @@ callout at the middle of its element's points, headed by its layer where it has 
 node like every other pane, and belong to the node's own item, so the box that hides a node hides what is said
 about it; the **Metadata** box, on by default, hides all of them at once. The box is offered only while the model on
 screen has at least one callout (`hasCallouts`), and keeps its state from one object to the next.
+
+**Four more boxes, under the tree, write names and prices on what the tree draws** (`labels.ts`): **Component
+names**, **Component prices**, **Port names** and **Interface names**, the last two ticked from the start. A
+*component* is a node that holds no other node — a part, wherever it is placed (`isComponent`) — and its callout is
+one box pinned to the middle of its shape, with its name (`componentName`: the link's label, else the object without
+its package) over its price, each where its box is ticked; a component with nothing to say has no callout. An
+assembly sold assembled is the one node holding others with a callout of its own: it is priced as one thing to order
+and the parts inside it are not priced at all, so its price is pinned to the middle of everything it holds
+(`assemblyRows`), and an assembly with no price of its own says nothing. A port's
+name is pinned to the tip of its `+Z` axis, and an interface instance's in the middle of the ports it is made of, as
+the 2D tab's picture writes them; the two are told apart from a metadata callout by a bar in the blue and the violet
+that picture draws them in. **A callout belongs to what it is pinned to**: a component's is a child of its shape and
+a port's of its triad, so the tree's box that hides a part, or a port, hides its callout — and flickers it with it —
+and an interface's name shows only while the tree draws the interface and at least one of its ports. The boxes say
+*what* is written; the tree says *on what*.
+
+The prices are not the package's: a package declares none. They are the market's answer — the very quote the Buy
+tab shows, shared out over the components (`partcad/component_prices.py`): the cheapest supplier's quote for each
+line item divided by how many it is for, a part made from stock priced as its piece of the stock, the kinds of one
+set sharing the set, and a component nobody quoted left without a price rather than given one of nought. The 3D
+view asks for them only while **Component prices** is ticked, under the Design group's own id (`design` →
+`partcad.componentPrices` → `supply.prices`, the way the Analysis tabs' list is asked under `analysis`), again on
+every show of the object, since an edit may have added a part, and says under the boxes what it is doing — asking,
+or why there are none.
+
+The boxes are one answer for the 3D and 2D tabs (`Labels`, as the tree has `Selection`), and are kept from one
+object to the next, as Metadata is. On the 2D tab they are sent with the render as the `pc render` options they are
+(`renderOptions`): `--with-component-names` and `--with-component-prices` when ticked, `--without-port-names` and
+`--without-interface-names` when cleared — each only when it says something a render does not do anyway, so the
+picture asked for with the boxes as they start is asked for in exactly the words it always was. Draft has none: a
+drawing package lays out its own.
 
 The sketches arrive on the **root node**, keyed by the reference the ports name (`port_sketches.py`): one entry
 per sketch however many ports point at it, so a bolt pattern of four holes carries one circle, parsed once and
@@ -346,6 +377,9 @@ the protocol has no authentication.
 | `src/webview/nodes.ts` | The vocabulary the renderer and the pane share about the tree |
 | `src/webview/frames.ts` | PartCAD's frame against glTF's, and the one conversion between them |
 | `src/webview/tree.ts` | The 3D view's control pane: the rows, the boxes, and what is to be drawn |
+| `src/webview/labels.ts` | The callout boxes under the tree of the 3D and 2D tabs, the answer they share, and the `pc render` options they are |
+| `src/webview/callouts.ts` | What a callout says: a shape's metadata about its elements, and a component's name and price |
+| `src/partcad/component_prices.py` | What each component costs: its share of the object's quote, for the callouts |
 | `src/webview/viewPanel.ts` | The view panel down the right of every tab that shows the object |
 | `src/webview/sidePanel.ts` | A panel along one side of a pane, and the button that folds it away |
 | `src/webview/gizmo.ts` | The view panel's orientation gizmo |
@@ -531,6 +565,13 @@ Four things follow from what the two tabs are:
   object that declares ports has them on it.
 * **A part has nothing to filter.** Its tree is one node, so the pane lists the object and (on 2D) its ports,
   and no filter is sent.
+
+Under the 2D tab's tree are the 3D view's four callout boxes (see "The 3D view"), sent with the render as
+`--with-component-names`, `--with-component-prices`, `--without-port-names` and `--without-interface-names`; a
+change to one is a change to the picture, asked for again after the same settling delay as a box of the tree.
+PartCAD lays the components' callouts out with the port and interface names, around the object and joined to
+what each names by a line (`render_svg.py`), and they follow the filter like everything else: a link the tree
+cleared is not in the picture, and neither is its callout.
 
 A node is named in the filter by its **label**, which is the name the assembly addresses that link by: the
 `name:` of the ASSY link, the part it places, or — for a child nothing named — its position, `link#2`. A port is

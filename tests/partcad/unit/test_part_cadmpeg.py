@@ -40,10 +40,10 @@ BUILTIN_IMPORT = cadmpeg_oracle.BUILTIN_IMPORT
 
 # The formats cadmpeg reads into connected solids -- its level L3 and above --
 # and the extension each one's parts are stored in, spelled as its own
-# application spells it.
+# application spells it. IGES is one of them too, and is a built-in part type,
+# but OpenCASCADE reads it ('test_part_iges.py').
 NATIVE_PART_TYPES = {
     "fcstd": "FCStd",
-    "iges": "iges",
     "f3d": "f3d",
     "sldprt": "SLDPRT",
     "ipt": "ipt",
@@ -80,14 +80,15 @@ def builtin():
 
 def test_every_format_cadmpeg_reads_into_solids_is_a_builtin_part_type(builtin):
     declared = {name: config["extension"] for name, config in builtin["partTypes"].items()}
-    assert declared == NATIVE_PART_TYPES
+    assert declared == {**NATIVE_PART_TYPES, "iges": "iges"}
 
 
 def test_every_one_of_them_fails_a_part_that_is_not_a_solid(builtin):
     """How a broken read is caught: by the check every part goes through, made binding."""
+    scripts = {"fcstd": "part_fcstd.py", "iges": "part_iges.py"}
     for name, config in builtin["partTypes"].items():
         assert config.get("requireSolid") is True, name
-        assert config["path"] == ("part_fcstd.py" if name == "fcstd" else "part_cadmpeg.py"), name
+        assert config["path"] == scripts.get(name, "part_cadmpeg.py"), name
 
 
 def test_the_assembly_types_are_the_formats_cadmpeg_reads_the_components_of(builtin):
@@ -215,6 +216,62 @@ def test_one_body_is_itself_and_several_are_one_compound():
     assert len(step.solids(both)) == 2
 
 
+def _mapped(shape, kind):
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import TopTools_IndexedMapOfShape
+
+    found = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(shape, kind, found)
+    return found
+
+
+def test_what_the_step_file_says_its_bodies_are_in_follows_them_into_the_part(tmp_path):
+    """The colours of the file's faces and solids, said of the part's in the part's own order.
+
+    'bodies' regroups what the file holds (solids first, then what bounds no
+    solid), so the part's faces and solids are the file's in another order:
+    here the two boxes are put back the other way round, and every face and
+    solid of the part still carries what the file says of that one.
+    """
+    import cmf_section
+    import step_cmf
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+    from OCP.gp import gp_Pnt
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_SOLID
+
+    step = _module("cadmpeg_step.py")
+    red = BRepPrimAPI_MakeBox(10.0, 10.0, 10.0).Shape()
+    plain = BRepPrimAPI_MakeBox(gp_Pnt(20.0, 0.0, 0.0), 5.0, 5.0, 5.0).Shape()
+    path = str(tmp_path / "two.step")
+    step_cmf.write(
+        path,
+        step.compound([red, plain]),
+        cmf_section.Section(
+            [cmf_section.CmfSet(color="#C91A09", rgba=(201, 26, 9, 1.0), origin="raw:step")],
+            cmf_section.NONE,
+            faces=[0] * 6 + [cmf_section.NONE] * 6,
+        ),
+    )
+
+    shape, facts = step.read(path)
+    whole = step_cmf.section_of(shape, facts)
+    part = step.compound(list(reversed(step.bodies(shape))))
+    stated = step.stated_cmf(part, facts)
+
+    assert stated["convention"] == "step"
+    for key, kind, said_of in (("faces", TopAbs_FACE, whole.face_set), ("solids", TopAbs_SOLID, whole.solid_set)):
+        in_file, in_part = _mapped(shape, kind), _mapped(part, kind)
+        assert len(stated[key]) == in_part.Extent()
+        for index in range(1, in_part.Extent() + 1):
+            expected = said_of(in_file.FindIndex(in_part.FindKey(index)) - 1).color
+            assert (stated[key][index - 1] or {}).get("color") == expected, (key, index)
+    # The uncoloured box comes first now, and the red one's faces are the last six.
+    assert stated["faces"][:6] == [None] * 6
+    assert stated["faces"][6:] == [{"color": "#C91A09", "rgba": [201, 26, 9, 1.0]}] * 6
+
+    assert step.stated_cmf(part, None) is None
+
+
 def test_the_installer_says_how_it_is_run(monkeypatch, capsys):
     """'cadmpeg_tool.py <directory>' is what the sandbox image's Dockerfile runs."""
     monkeypatch.setattr(sys, "argv", ["cadmpeg_tool.py"])
@@ -257,12 +314,43 @@ def test_the_part_reader_answers_with_the_bodies_or_why_there_are_none(cache_dir
         solids += 1
         explorer.Next()
     assert solids == 3, "the three bodies the design shows, and not the one it hides"
+    # With the colours the design draws them in, from the STEP cadmpeg wrote.
+    stated = run(os.path.join(DATA, "controller.f3d"))["cmf"]
+    assert stated["convention"] == "step"
+    assert "#191919" in {entry["color"] for entry in stated["faces"] if entry}
 
     assert "holds no solid" in run(SKETCHES)["exception"]
 
     unreadable = tmp_path / "unreadable.f3d"
     unreadable.write_bytes(b"not a design")
     assert "failed" in run(unreadable)["exception"]
+
+
+@pytest.mark.slow
+def test_the_colours_the_design_states_ride_on_the_part_built_of_it(cache_dir, monkeypatch):
+    """'part_cadmpeg.py' run by 'wrapper_part_type' as the sandbox runs it: the part's payload carries its colours."""
+    import ocp_serialize
+    import wrapper_common
+
+    written = []
+    request = {"path": os.path.join(DATA, "controller.f3d"), "cache_dir": cache_dir}
+    monkeypatch.setattr(
+        wrapper_common, "handle_input", lambda *_a, **_k: (os.path.join(BUILTIN_IMPORT, "part_cadmpeg.py"), request)
+    )
+    monkeypatch.setattr(wrapper_common, "handle_output", written.append)
+    # The wrapper is a script: importing it runs the request it is handed.
+    sys.modules.pop("wrapper_part_type", None)
+    try:
+        importlib.import_module("wrapper_part_type")
+    finally:
+        sys.modules.pop("wrapper_part_type", None)
+
+    (said,) = written
+    assert said["success"], said["exception"]
+    (shape,) = said["shapes"]
+    carried = ocp_serialize.cmf_of_payload(shape[ocp_serialize.KEY_BREP])
+    assert "#191919" in {carried.face_set(index).color for index in range(len(carried.faces))}
+    assert {cmf_set.origin for cmf_set in carried.sets} == {"raw:step"}
 
 
 def _part_nodes(node):
@@ -398,14 +486,3 @@ def test_a_fusion_design_as_an_assembly_places_each_body_where_the_part_has_it(c
         assert comparison["inconclusive_causes"] == ["compare.unmeasured-body"]
     assert len(comparison["unmeasured_a"]) == len(comparison["unmeasured_b"])
     assert len(comparison["pairs"]) + len(comparison["unmeasured_a"]) == 3
-
-
-@pytest.mark.slow
-def test_an_iges_file_read_into_loose_faces_is_not_a_part(ctx, cadmpeg):
-    """A read that came back without its solid fails by the check every part goes through."""
-    # cadmpeg itself finds no solid in it: six sheets, the hole's face lost.
-    assert {body["kind"] for body in cadmpeg_oracle.measure(cadmpeg, os.path.join(DATA, "plate.igs"))} == {"sheet"}
-
-    part = ctx.get_part(":plate")
-    assert asyncio.run(part.get_wrapped(ctx)) is None
-    assert any("is not a solid: it holds no solid" in error for error in part.errors), part.errors

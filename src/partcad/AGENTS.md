@@ -487,10 +487,10 @@ at all).
   of such a part is also the one lookup in `Project._enumerate_shapes_async()` that has to be awaited
   (`get_part_async`): the part does not exist until the object that produces it has been built.
 
-- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships seven packages inside itself, reachable from
+- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships eight packages inside itself, reachable from
   every context as `//builtin/export`, `//builtin/render`, `//builtin/import`, `//builtin/open`,
-  `//builtin/cam`, `//builtin/scene` and `//builtin/color` (loaded
-  on demand by `Context.get_project`, see `output.py`). All but the last two declare implementations — the file
+  `//builtin/cam`, `//builtin/scene`, `//builtin/color` and `//builtin/building` (loaded
+  on demand by `Context.get_project`, see `output.py`). All but the last three declare implementations — the file
   types `pc export`, `pc render`, `pc import`, `pc ide open` and `pc cam` write — in
   exactly the form a user's package declares one: a `path` to a script, its `pythonRequirements`, and the
   parameters. So adding a
@@ -1123,6 +1123,20 @@ at all).
   is skipped unread. A binary payload (below) has no such line, which is why its count is recorded rather than
   read.
 
+  **A surface part is the one kind of part this does not apply to, and it is a kind, not a setting**
+  (`surface.py`, `part_factory_wall.py`, `wrappers/wrapper_wall.py`). A `wall` is a sheet of one-sided faces
+  drawn to lay out a space -- a floor plan, the walls of a room -- and a skin is what it is for. Its *type* is
+  in `surface.SURFACE_PART_TYPES`, and everything follows from that, read off the declaration the part
+  resolves to (`final_config`), so an alias or an enrich of a wall is a wall: `Shape.finish_request` asks its
+  wrapper for no `validate` step and `get_wrapped` runs no `_validated_part` for it (nothing is solidified,
+  nothing is reported as not a solid); `shell`, `degenerate`, `solidity` and `validity` pass it over as not
+  applicable, naming the type; it is never manufacturable -- `PartFactoryWall` refuses a declaration whose
+  `manufacturable` is not false, said on the part or its package, and `manufacturability` fails it wherever
+  something asks for it to be made (an assembly that is to be made with a wall in it); and
+  `Shape._shape_properties` reports `oneSided: true` for it, which is what the renderers and the IDE draw it
+  by. A new surface type goes into that set, with a reason; no part, and no package, gets a way to put
+  itself there.
+
   **No object can exclude itself from this check, nor from `degenerate` or `solidity`, and none of the three
   may be given a setting that lets it.** All three report a fact about the geometry — a surface where a body
   was meant, a part that collapsed in one direction, a solid that is inside out — and a part in that state is
@@ -1146,6 +1160,42 @@ at all).
   display-only `rgba` (`//builtin/color:rgba;color=C91A09FF`, `manufacturable: false`). It is PartCAD's because
   PartCAD writes references to it (`cmf.RGBA`) - for a hex or CSS colour, and for a source's colour nothing
   claims - and a reference it writes has to resolve in any context, with or without the public index.
+
+  `//builtin/building` declares objects too: `wall`, a `type: wall` part whose `length`, `height`, `radius`
+  and `openings` are `%...%` expressions over parameters of the same names, and `room`, a `type: walls` scene
+  over `sketch` and `height`. The types are PartCAD's (`part_factory_wall.py`, `scene_factory_walls.py`), and
+  the package is how a package uses them without declaring anything: `room;sketch=//pkg:plan`. A sketch
+  handed to either has to be named in full, because a bare name resolves in `//builtin/building`. It also
+  declares one CMF colour, `wall`, display-only, which is the default of the wall's `color` parameter: a wall
+  is coloured as any part is, never with `properties: color:`. A `walls` scene passes its own CMF to every
+  wall it places, in the link's `params:` (`SceneFactoryWalls._link`) -- further than
+  `with_propagated_cmf` goes, which stops at an item that states a colour, and on purpose: the room is its
+  walls, and the shipped wall states its grey precisely so that an unpainted room has one.
+
+  **A `walls` scene is the one scene that reads geometry to know what its links are.** It is
+  `SceneFactoryAssy` with the file replaced: `read_assy` returns the links `_links_async` worked out from the
+  sketch, in a sandbox (`wrappers/wrapper_outline.py`: one closed loop of lines and arcs on XY, walked
+  clockwise so that the inside is on every wall's right, which is its front -- one wall per edge,
+  anything else refused with the reason), and `prepare_async`,
+  `subassemblies_async` and `instantiate_async` each make sure that has happened first -- so preparing such a
+  scene costs a sandbox, which no other scene does. Not under an `asyncio.Lock`: the scene is reached from
+  more than one event loop (`AssemblyFactoryAssy.instantiate` runs its own). The sketch's key is folded into
+  the scene's in `prepare_async`, and each wall is keyed as an ASSY link is. The numbers each wall is asked
+  for are rounded to a millionth of a millimetre, because they are in its instance name and so its identity;
+  and `wrapper_wall` snaps a length within `TOLERANCE` of a full circle to exactly one, or a round room's
+  wall closes with two edges a fraction of a micron apart that no boolean, and no drawing, can cut cleanly.
+
+  **One-sidedness is drawn by every renderer that draws from a viewpoint, and decided on what is drawn**
+  (`wrappers/appearance.py`'s `split_for_view`, `without_backs`). A tree with nothing one-sided in it is split
+  by `split_by_color` exactly as before, `whole` and all, so no existing drawing changes by an edge. One that
+  has is gathered a leaf at a time, and a one-sided leaf loses the faces the camera sees from behind before
+  anything is projected -- a cylindrical face is first cut along its silhouette (`_silhouette_pieces`), so the
+  near half of a round wall goes and the far half stays, and the cut adds no line the hidden-line algorithm
+  would not draw there anyway. A face seen exactly edge-on is kept, which is what makes a room seen from
+  above its plan. The shaded style (`raster_scene.py`: a PNG with `--style shaded`, and every frame of a video)
+  cannot cull once, because a video turns the object between frames: it is handed groups that say whether
+  they are one-sided (`appearance.split_by_sides`, `render_svg.by_color_and_side`), and `Painter.draw` drops a
+  one-sided triangle that faces away from the eye in that frame, by the winding it already works out.
 
   **There is deliberately no `//builtin/simulate`.** `simulation:` is a third section resolved exactly like
   the other two — a plugin is an `output.Implementation` like any other — and PartCAD implements none of it.

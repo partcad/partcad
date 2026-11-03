@@ -914,7 +914,11 @@
           "pattern": "^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$",
           "description": "The colour of this shape, as #RRGGBB or #RRGGBBAA."
         },
-        "physics": { "$ref": "#/definitions/shape-physics" }
+        "physics": { "$ref": "#/definitions/shape-physics" },
+        "oneSided": {
+          "type": "boolean",
+          "description": "Whether this shape is drawn from the front of its faces only - the side their normals point to - and is see-through from behind. What a 'wall' part reports about itself, so that a room drawn from outside is seen through its near walls; inherited, like a colour, by everything under an assembly node that states it."
+        }
       },
       "additionalProperties": false
     },
@@ -1985,8 +1989,8 @@
                   "enum": [
                     "basic", "cadquery", "build123d", "chili3d", "sdf", "svg", "dxf", "extrude",
                     "sweep", "stl", "step", "scad", "3mf", "enrich", "alias", "brep",
-                    "obj", "gltf", "kicad", "compound", "fcstd", "iges", "f3d", "sldprt",
-                    "ipt", "catpart", "sat", "pvz"
+                    "obj", "gltf", "kicad", "compound", "fcstd", "wall", "iges", "f3d",
+                    "sldprt", "ipt", "catpart", "sat", "pvz"
                   ]
                 },
                 "aliases": {
@@ -2023,6 +2027,22 @@
                   }
                 },
                 "ratio": { "type": "number", "minimum": 0.5, "maximum": 1.0 },
+                "length": {
+                  "type": ["number", "string"],
+                  "description": "'wall' only: how long the wall is along its base, in millimetres - along the arc, for an arc wall. A number, or a '%...%' expression over the part's parameters."
+                },
+                "height": {
+                  "type": ["number", "string"],
+                  "description": "'wall' only: how high the wall is, in millimetres. A number, or a '%...%' expression over the part's parameters."
+                },
+                "radius": {
+                  "type": ["number", "string"],
+                  "description": "'wall' only: 0 (the default) for a straight wall; otherwise the radius of an arc wall in millimetres, positive where it bends towards the side it is seen from (its front, -Y where it starts) and negative where it bends away from it. A number, or a '%...%' expression over the part's parameters."
+                },
+                "openings": {
+                  "type": "string",
+                  "description": "'wall' only: the sketch the wall's doors and windows are cut out by, drawn on the XY plane as if the wall were unrolled flat - X along its base from 0 to 'length', Y up from 0 to 'height'. An opening reaching beyond the wall is an error. Empty, or absent, for none; a '%...%' expression over the part's parameters is resolved."
+                },
                 "cache": { "type": "boolean", "default": true },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "with": { "$ref": "#/definitions/parameter-overrides" },
@@ -2358,14 +2378,28 @@
               "properties": {
                 "type": {
                   "type": "string",
-                  "enum": ["assy", "alias", "enrich"],
-                  "description": "'assy' is an Assembly YAML file read as a scene, which is the same format without the 'how' sections. An engine's own scene format is implemented by that engine's plugin package and is named through it - 'sim-gazebo:world' for a Gazebo world (SDFormat), 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
+                  "enum": ["assy", "alias", "enrich", "walls"],
+                  "description": "'assy' is an Assembly YAML file read as a scene, which is the same format without the 'how' sections. 'walls' is the walls of a room standing on the outline of a sketch ('sketch', 'height', 'wall'), with no file at all. An engine's own scene format is implemented by that engine's plugin package and is named through it - 'sim-gazebo:world' for a Gazebo world (SDFormat), 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
                 "fileUrl": { "$ref": "#/definitions/url" },
                 "fileHash": { "$ref": "#/definitions/file-hash" },
+                "sketch": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "'walls' only: the sketch whose outline the walls stand on - one enclosed outline of straight lines and arcs of circles, a face with no holes or a closed wire, drawn on the XY plane. A '%...%' expression over the scene's parameters is resolved."
+                },
+                "height": {
+                  "type": ["number", "string"],
+                  "description": "'walls' only: how high the walls are, in millimetres. A number, or a '%...%' expression over the scene's parameters."
+                },
+                "wall": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "'walls' only: the part each wall is, asked for with the parameters 'length', 'height' and 'radius'. '//builtin/building:wall' unless this says otherwise."
+                },
                 "ignoreCollision": {
                   "oneOf": [
                     { "type": "boolean" },

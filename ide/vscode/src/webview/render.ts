@@ -23,7 +23,9 @@
 // with the render, and - on the 2D tab, whose rows include the ports and the
 // interfaces - which overlays to draw on top of the projection. This file owns
 // the element the tree is drawn into and nothing else about it: who fills it in
-// and what a change does are 'viewer.ts'.
+// and what a change does are 'viewer.ts'. The 2D tab has the 3D view's callout
+// boxes under its tree as well ('labels.ts'), which the picture is asked for
+// with as the 'pc render' options they are.
 //
 // The file is shown the way the browser shows it: a picture through an <img>,
 // which pans and zooms ('image.ts'), and which cannot run any script an SVG
@@ -37,6 +39,7 @@
 
 import { el, empty, placeholder } from './dom';
 import { IMAGE_TYPES, ImageView } from './image';
+import { LabelBoxes, Labels } from './labels';
 import { RenderData } from './messages';
 import { PackagePicker, quickChoices } from './packagePicker';
 
@@ -52,6 +55,12 @@ export interface RenderViewOptions {
     formats?: Choice[];
     /** The packages to draw with, for a pane that names one: the quick choices, the first of which it starts on. */
     plugins?: string[];
+    /**
+     * The callout boxes, for a pane whose picture writes them: under the tree,
+     * as on the 3D view, and reading and writing the same answer ('labels.ts').
+     * The 2D tab's; a drawing package lays out its own, and Draft has none.
+     */
+    labels?: Labels;
     /** The file type, or the package, was changed: render again. */
     onChange: () => void;
     /** Another package was named - chosen, or typed - and its file types are not known yet. */
@@ -71,12 +80,19 @@ export class RenderView {
      * the object and what a change to a box should do.
      */
     public readonly treeHost = el('div', 'tree');
+    /** The callout boxes under the tree, on a pane that has them. */
+    public readonly labelBoxes: LabelBoxes | undefined;
     private image: ImageView | undefined;
 
     constructor(pane: HTMLElement, options: RenderViewOptions) {
         pane.classList.add('render');
         this.treeHost.setAttribute('role', 'tree');
         this.controls.appendChild(this.treeHost);
+        if (options.labels !== undefined) {
+            const host = el('div');
+            this.controls.appendChild(host);
+            this.labelBoxes = new LabelBoxes(host, options.labels);
+        }
         // Hidden until there is an object to list, the way the 3D view's is:
         // with nothing shown it would be an empty list beside an empty picture.
         this.controls.hidden = true;

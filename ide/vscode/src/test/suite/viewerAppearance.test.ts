@@ -29,6 +29,7 @@ import {
     ownAppearance,
     parseColor,
     primitiveAppearance,
+    statedOneSided,
 } from '../../webview/appearance';
 import { ShowNode } from '../../webview/messages';
 import { walk } from '../../webview/nodes';
@@ -169,6 +170,61 @@ suite('What colour a shape is drawn in', () => {
         assert.deepStrictEqual(ownAppearance(opaque, true), { color: 0x00ff00, opacity: 1 });
         blended.dispose();
         opaque.dispose();
+    });
+
+    test('a shape is drawn from both sides unless it says it is one-sided', () => {
+        assert.strictEqual(DEFAULT_APPEARANCE.oneSided, undefined);
+        assert.strictEqual(appearanceOf({ name: 'cube' }).oneSided, undefined);
+        assert.deepStrictEqual(appearanceOf({ name: 'wall', properties: { oneSided: true } }), {
+            ...DEFAULT_APPEARANCE,
+            oneSided: true,
+        });
+        // Only a boolean says anything; a node stating something else is drawn as
+        // if it had stated nothing.
+        for (const value of ['true', 1, null, {}]) {
+            const properties = { oneSided: value as unknown as boolean };
+            assert.strictEqual(statedOneSided({ name: 'x', properties }), undefined, String(value));
+        }
+    });
+
+    test('one-sidedness reaches the nodes under it, independently of the colour', () => {
+        const drawn = drawnAs({
+            name: 'room',
+            properties: { oneSided: true },
+            assembly: [
+                { name: 'wall-1', properties: { color: '#E4DED4' } },
+                { name: 'wall-2' },
+                { name: 'sofa', properties: { oneSided: false, color: '#336699' } },
+            ],
+        });
+        assert.deepStrictEqual(drawn.get('wall-1'), { color: 0xe4ded4, opacity: 1, oneSided: true });
+        assert.deepStrictEqual(drawn.get('wall-2'), { ...DEFAULT_APPEARANCE, oneSided: true });
+        assert.deepStrictEqual(drawn.get('sofa'), { color: 0x336699, opacity: 1 });
+
+        // A colour stated above a one-sided wall colours it, and leaves it one-sided.
+        const coloured = drawnAs({
+            name: 'scene',
+            properties: { color: '#FF0000' },
+            assembly: [{ name: 'wall', properties: { oneSided: true } }],
+        });
+        assert.deepStrictEqual(coloured.get('wall'), { color: 0xff0000, opacity: 1, oneSided: true });
+    });
+
+    test('a one-sided shape has a material of its own', () => {
+        // It culls the backs of faces, which no two-sided shape of the same colour
+        // may share.
+        const wall = appearanceOf({ name: 'wall', properties: { oneSided: true } });
+        assert.strictEqual(appearanceKey(wall), 'daa520ff/front');
+        assert.notStrictEqual(appearanceKey(wall), appearanceKey(DEFAULT_APPEARANCE));
+    });
+
+    test('a primitive in a colour of its own on a one-sided shape is one-sided too', () => {
+        // A wall whose CMF colours one face differently is still a wall: the
+        // colour is the face's, and which side it is seen from is the wall's.
+        const own = { color: 0xc91a09, opacity: 1 };
+        const wall = appearanceOf({ name: 'wall', properties: { oneSided: true } });
+        assert.deepStrictEqual(primitiveAppearance(own, wall), { ...own, oneSided: true });
+        assert.deepStrictEqual(primitiveAppearance(own, DEFAULT_APPEARANCE), own);
     });
 
     test('a line across a shape is a deeper shade of it, and still a line on a dark one', () => {

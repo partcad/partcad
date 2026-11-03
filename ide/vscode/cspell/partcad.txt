@@ -246,8 +246,10 @@ obj
 object
 of
 offset
+one
 only
 open
+openings
 openscad
 operation
 optimize
@@ -328,6 +330,7 @@ self
 sheet
 show
 side
+sided
 simulate
 simulation
 sketch
@@ -397,6 +400,8 @@ via
 viscosity
 visibility
 volume
+wall
+walls
 width
 windows
 wires

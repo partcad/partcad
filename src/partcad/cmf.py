@@ -812,6 +812,57 @@ def apply_declared(ctx, shape, envelope, recorded: dict):
     return envelope, recorded
 
 
+def export_facts(ctx, envelope, relative_to: str = "") -> dict:
+    """What the CMF declarations an envelope's shapes name say, for an export that writes it (see 'output.CMF_KEY').
+
+    '{kind: {reference: facts}}' over every reference the CMF summaries in
+    'envelope' name, as each payload's section names it: each declaration's
+    'name' and 'description' - a material's 'full' name, else its 'formal'
+    one, else its 'desc' - and a material's 'density' in kg/m^3 where it states
+    one. Read off the summaries recorded with the geometry, so nothing is
+    decoded; a reference nothing declares is left out, and the export writes it
+    by its reference alone. Plain data, for the sandbox.
+    """
+    from . import shape_envelope
+
+    references = {kind: set() for kind in KINDS}
+
+    def walk(node):
+        if isinstance(node, list):
+            for item in node:
+                walk(item)
+            return
+        if not shape_envelope.is_node(node):
+            return
+        summary = (shape_envelope.metadata_of(node) or {}).get(shape_envelope.METADATA_CMF)
+        for entry in (summary or {}).get("sets") or []:
+            if not isinstance(entry, dict):
+                continue
+            for kind in KINDS:
+                if isinstance(entry.get(kind), str):
+                    references[kind].add(entry[kind])
+        walk(node.get(shape_envelope.KEY_ASSEMBLY) or [])
+
+    walk(envelope)
+    facts = {}
+    for kind, found in references.items():
+        for reference in sorted(found):
+            if rgba_of_reference(reference) is not None:
+                continue
+            declaration = lookup(ctx, kind, reference, relative_to, quiet=True)
+            if declaration is None:
+                continue
+            entry = {"name": declaration.name}
+            description = getattr(declaration, "full", None) or getattr(declaration, "formal", None) or declaration.desc
+            if description:
+                entry["description"] = str(description)
+            density = getattr(declaration, "density", None)
+            if density is not None:
+                entry["density"] = float(density)
+            facts.setdefault(SECTIONS[kind], {})[reference] = entry
+    return facts
+
+
 def info_of(ctx, summary: dict, relative_to: str) -> dict:
     """A CMF summary as 'pc info' says it: each set's colour, material and finish, in that order.
 

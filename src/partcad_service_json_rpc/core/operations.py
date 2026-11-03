@@ -341,26 +341,43 @@ def _link_filter(params, what: str):
         raise JsonRpcError(USAGE_ERROR, "%s: %s" % (what, e)) from e
 
 
-def _overlay(params):
-    """The port overlay a request asks for, or ``None`` for none.
+def _overlay(session, params):
+    """The overlay a request asks for, or ``None`` for none.
 
     The four flags say *whether* the ports and the interfaces are drawn, and
     ``ports`` says *which* -- by the name each is reported under, which is the
     port's own name for a port of the object and the node path then the port for
     one inside it. One reader, so ``render.objects`` and ``render.inline`` cannot
     come to disagree about the parameter names (see 'partcad.render_overlay').
+
+    The callouts are four more: ``with_component_names`` and
+    ``with_component_prices`` put one on every component, and
+    ``with_port_names``/``with_interface_names`` -- true unless they are sent
+    false -- say whether the two overlays write their names. The prices come
+    from here, the one place that asks the suppliers: the overlay carries
+    '_component_prices_async' as where to find them, and asks it only for a
+    picture that shows them.
     """
     from partcad.render_overlay import Overlay
 
     select = params.get("ports")
     if isinstance(select, str):
         select = [select]
+
+    async def prices(ctx, shape):
+        return await _component_prices_async(session.partcad, ctx, shape)
+
     return Overlay.of(
         ports=params.get("with_ports", False),
         interfaces=params.get("with_interfaces", False),
         all=params.get("with_all", False),
         internals=params.get("with_internals", False),
         select=None if select is None else [str(name) for name in select],
+        component_names=bool(params.get("with_component_names", False)),
+        component_prices=bool(params.get("with_component_prices", False)),
+        port_names=params.get("with_port_names") is not False,
+        interface_names=params.get("with_interface_names") is not False,
+        prices=prices,
     )
 
 
@@ -2576,7 +2593,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.282"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.8.286"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -4332,6 +4349,65 @@ async def _supply_option(pc, ctx, cart_item, provider_name, qos):
     return option
 
 
+# What can be bought, and so priced: see 'supply_prices'.
+_PRICED = ("part", "assembly", "scene")
+
+
+def supply_prices(session, params):
+    """What each component of an object costs: its share of the object's quote.
+
+    What the IDE's 3D view writes on every component when "Component prices" is
+    ticked, and what ``pc render --with-component-prices`` writes on a picture:
+    the quote ``supply.quote`` answers -- one line item per thing to order, each
+    supplier asked for each on its own -- shared out over what the object is made
+    of, by the rule in `partcad.component_prices`. Answered by the full name of
+    each object (``<package>:<name>``), which is what every node of the tree the
+    viewer shows carries, so a part placed a hundred times is one entry:
+    ``{"object": ..., "prices": {name: {"price": <number>, "currency": <code or
+    None>}}}``. A component nobody quoted is absent rather than free.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    refusal = "Only parts, assemblies and scenes are bought; '%s' is none of them"
+    _refuse_said_kind(params, _PRICED, refusal)
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, object_name = resolved
+    path = _qualified(package, object_name)
+    kind = _resolve_kind(ctx, params, package, object_name, _PRICED, refusal)
+    shape = _getter(ctx, kind)(path)
+    if shape is None:
+        raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+
+    with pc.logging.Process("Prices", package, object_name):
+        prices = asyncio.run(_component_prices_async(pc, ctx, shape, qos=params.get("qos") or None))
+    return {"object": path, "prices": prices}
+
+
+async def _component_prices_async(pc, ctx, shape, qos=None):
+    """What each component of 'shape' costs, by full name: see 'supply_prices'.
+
+    The price source a render's overlay carries, too, so that a picture and the
+    3D view beside it cannot come to price one part two ways. Only a part, an
+    assembly or a scene is ever bought; anything else has no components to
+    price, and is answered with none rather than with a quote that fails.
+    """
+    from partcad import component_prices
+
+    if getattr(shape, "kind", None) not in _PRICED:
+        return {}
+    path = "%s:%s" % (shape.project_name, shape.name)
+    quote = await _supply_quote_async(pc, ctx, path, qos=qos, recursive=False)
+    names = await component_prices.component_names_async(shape)
+    return await component_prices.prices_async(ctx, names, quote["items"])
+
+
 def _as_price(value):
     """A quoted price as a number, or None when the provider did not give one.
 
@@ -4619,7 +4695,7 @@ def render_objects(session, params):
     # connection metadata on top of the projection. Only 'pc render' offers
     # them, and only the 'render:' file types act on them (see
     # Shape._output_request).
-    overlay = _overlay(params)
+    overlay = _overlay(session, params)
 
     link_filter = _link_filter(params, "the filter")
     if link_filter is not None:
@@ -4786,7 +4862,7 @@ def render_inline(session, params):
     if shape is None:
         raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
 
-    overlay = _overlay(params)
+    overlay = _overlay(session, params)
 
     directory = tempfile.mkdtemp(prefix="partcad-render-")
     try:

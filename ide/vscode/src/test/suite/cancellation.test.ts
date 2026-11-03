@@ -65,6 +65,21 @@ suite('The requests a view has in flight', () => {
         assert.strictEqual(answered.token.isCancellationRequested, false);
     });
 
+    test('a request the renderer gives up on is cancelled by its key, and nothing else is', () => {
+        // What 'cancelTab' does: Component prices cleared while a quote is out.
+        const inFlight = new InFlight();
+        const quote = inFlight.begin('design');
+        const render = inFlight.begin('2d');
+        inFlight.cancel('design');
+        assert.strictEqual(quote.token.isCancellationRequested, true);
+        assert.strictEqual(render.token.isCancellationRequested, false);
+        // A key with nothing in flight under it is nothing to cancel.
+        inFlight.end(quote);
+        inFlight.cancel('design');
+        inFlight.cancel('bom');
+        assert.strictEqual(render.token.isCancellationRequested, false);
+    });
+
     test('ending a request a newer one replaced leaves the newer one in place', () => {
         const inFlight = new InFlight();
         const older = inFlight.begin('2d');

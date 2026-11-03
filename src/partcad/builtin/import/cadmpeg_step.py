@@ -13,7 +13,10 @@ is that much and no more, so that there is one way of doing it:
   * 'to_step' runs the cadmpeg 'cadmpeg_tool' finds or fetches;
   * 'read' reads the STEP file as it *shows*: what it declares invisible is left
     out ('step_visible') -- cadmpeg keeps a body its author hid and marks it so --
-    and what OpenCASCADE would crash on is repaired first ('step_repair');
+    and what OpenCASCADE would crash on is repaired first ('step_repair'). It
+    reads through OpenCASCADE's XCAF reader, as a STEP part's file is read
+    ('wrapper_step'), so what the file states of its colours and materials
+    comes with the geometry, and 'stated_cmf' says it of the part;
   * 'bodies' is what of that a part can be made of: the solids, and the shells
     and faces that belong to none. Sketch curves and points, which every native
     format keeps beside its bodies, are not.
@@ -82,18 +85,60 @@ def to_step(source, cache_dir, directory, cadmpeg=None):
 
 
 def read(step):
-    """The shape of everything the STEP file at 'step' shows, as one shape."""
+    """'(shape, facts)' of everything the STEP file at 'step' shows.
+
+    'shape' is the whole of it, as one shape; 'facts' is what the file states
+    of its colours and materials ('step_cmf.Facts'), for 'stated_cmf' to say of
+    the part made of it. The XCAF reader transfers the very shapes the plain
+    one does ('step_cmf'), so the geometry is the same either way: a file it
+    refuses is read by the plain reader, for its geometry alone, with no facts.
+    """
     import step_repair
     import step_visible
+
+    with step_visible.shown(step) as shown, step_repair.readable(shown) as readable:
+        try:
+            return _read_with_facts(readable)
+        except Exception as e:  # pylint: disable=broad-except
+            sys.stderr.write("Reading the colours and materials of %s failed: %s\n" % (os.path.basename(step), e))
+        return _read_plain(readable, step), None
+
+
+def _read_with_facts(path):
+    import ocp_serialize
+    import step_cmf
+
+    document, reader = step_cmf.open_document(path)
+    inner = reader.ChangeReader()
+    shape = ocp_serialize.compound_of([inner.Shape(index + 1) for index in range(inner.NbShapes())])
+    return shape, step_cmf.Facts(document)
+
+
+def _read_plain(path, step):
     from OCP.IFSelect import IFSelect_RetDone
     from OCP.STEPControl import STEPControl_Reader
 
     reader = STEPControl_Reader()
-    with step_visible.shown(step) as shown, step_repair.readable(shown) as readable:
-        status = reader.ReadFile(readable)
-    if status != IFSelect_RetDone or reader.TransferRoots() == 0:
+    if reader.ReadFile(path) != IFSelect_RetDone or reader.TransferRoots() == 0:
         raise RuntimeError("OpenCASCADE could not read %s" % os.path.basename(step))
     return reader.OneShape()
+
+
+def stated_cmf(shape, facts):
+    """What 'facts' say 'shape' is in, as a part type's 'output["cmf"]' ('wrapper_part_type'), or None.
+
+    'shape' is made of the file's own bodies, compounded anew ('bodies',
+    'compound'): each of its faces and solids is one of the file's, where the
+    file has it, so what the file states of it is found exactly, and listed in
+    the order 'shape' has them. In STEP's own terms, which the package's
+    'cmfConvention' converts, as it does a STEP part's.
+    """
+    if not facts:
+        return None
+    import cmf_section
+    import step_cmf
+
+    return cmf_section.as_stated(step_cmf.section_of(shape, facts), "step")
 
 
 def _found(shape, kind, avoid=None):

@@ -53,9 +53,9 @@ import wrapper_common
 # raise it with any change that changes that, and everything it produced
 # before is produced again. 2: the parts keep the colours and materials their
 # definitions state (see step_cmf), and an instance's own colour is said of the
-# link that places it. 3: a colour is the sRGB the file states rather than
-# OCCT's linear value of it, in what is read and in the part files written.
-CACHE_VERSION = 3
+# link that places it. 3: a colour is read as the sRGB its file states. 4: a
+# file PartCAD wrote keeps PartCAD's references (see step_cmf).
+CACHE_VERSION = 4
 
 # signature -> path of the STEP file written for the first shape with it. A later
 # shape whose signature matches reuses that file rather than writing a new one.

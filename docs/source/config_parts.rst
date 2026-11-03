@@ -43,7 +43,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
     <part name>:
       type: <basic|scad|cadquery|build123d|chili3d|sdf|extrude|sweep
              |step|brep|iges|stl|3mf|obj|gltf|fcstd|f3d|sldprt|ipt|catpart|sat|pvz
-             |kicad|compound|alias|enrich|:<partType declared by this package>
+             |kicad|compound|wall|alias|enrich|:<partType declared by this package>
              |<package>:<partType declared by that package>>
       desc: <(optional) textual description>
       images: <(optional) the images this part was modeled from; see below>
@@ -455,7 +455,7 @@ part is the last of them. Objects placed through ``App::Link`` are not followed.
 A Fusion design or a Creo View package can also be declared as an
 :ref:`assembly <assembly-f3d-pvz>`, which keeps its components apart.
 
-Those types and ``iges`` are read with
+Those types are read with
 `cadmpeg <https://github.com/cadmpeg/cadmpeg>`_, which converts each file to
 STEP. It is not in the wheel: the first part read downloads the release PartCAD
 pins, checks it against its published SHA-256, and keeps it in PartCAD's state
@@ -467,15 +467,24 @@ pinned one. Each is a :ref:`partType <part-types>` PartCAD declares in
 of its own. Rhino ``.3dm`` and the two ``.prt`` formats, Siemens NX's and Creo
 Parametric's, are not read yet: cadmpeg does not read their bodies into solids.
 
-They also **require a solid** (``requireSolid``, see :ref:`part-types`). A body
-that did not come through whole -- a face whose geometry could not be decoded, a
-solid that comes back open or invalid -- is not a part with a hole in it: it
-fails to build, and says what is wrong with it, by the same check that only warns
-about any other part that is not a solid. For IGES that means a surface model --
-trimmed surfaces that bound no solid, which is how OpenCASCADE writes IGES by
-default -- is not an ``iges`` part. Neither, for now, is what
-``pc export -t iges`` writes: cadmpeg 0.6.7 loses faces of the IGES files
-OpenCASCADE writes, so keep a STEP file where one has to be read again.
+An ``iges`` part is read with `OpenCASCADE <https://dev.opencascade.org/>`_,
+whose IGES reader is the counterpart of the writer ``pc export -t iges`` uses, so
+what PartCAD writes it reads back. The part is the solids the file shows, in the
+colours it puts on them; an entity it blanks is left out. A solid stated as one
+(a manifold solid B-rep, IGES entity 186) is read as it is. One stated only as
+the faces that bound it -- trimmed surfaces with nothing to say they are one
+body, which is how OpenCASCADE writes IGES by default and how many CAD
+applications write it -- is sewn back together: the faces of each body, as the
+file groups them, are joined across the gaps the file's own geometry admits, and
+a shell that closes is the solid it bounds. It is a ``partType`` of
+``//builtin/import`` too.
+
+``iges`` and ``fcstd`` to ``pvz`` also **require a solid** (``requireSolid``, see
+:ref:`part-types`). A body that did not come through whole -- a face whose geometry could not be
+decoded, faces that do not close, a solid that comes back open or invalid -- is
+not a part with a hole in it: it fails to build, and says what is wrong with it,
+by the same check that only warns about any other part that is not a solid. So an
+IGES surface model whose faces bound no solid is not an ``iges`` part.
 
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Example                                                                              | Configuration             | Result                                                                                                                  |
@@ -545,6 +554,105 @@ Define parts by sweeping a sketch using the following syntax:
 |       sketch: section                                                     |                                                                                                                         |
 |       axis: [[0, 0, 20], [0, 0, 20], [20, 0, 0], [20, 20, 0], [0, 20, 0]] |                                                                                                                         |
 +---------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+
+.. _walls:
+
+Wall
+----
+
+A wall is what a room is drawn with when a space is laid out rather than made: a
+floor plan, an apartment for sale, the room a machine is going to stand in. It is
+a **surface**, not a body -- a sheet of faces with no thickness -- and it is
+**one-sided**: drawn from the side it faces, and not there at all from the other.
+So a picture of a room taken from outside is taken through the walls nearest the
+camera, and shows the far walls from the inside.
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      type: wall
+      manufacturable: false  # required, here or on the package: a wall is never made
+      length: <mm along its base; along the arc, for an arc wall>
+      height: <mm>
+      radius: <(optional) 0, the default, for a straight wall; the radius of an arc wall
+               otherwise: positive bends it towards its front, negative away from it>
+      openings: <(optional) the sketch its doors and windows are cut out by>
+
+The base of the wall starts at the origin and sets off along +X, and the wall
+rises along +Z. Its **front** faces -Y, the way ``pc render --view front`` looks
+at it, so that a wall seen from the front is its openings as they were drawn,
+the door on the left where it was drawn on the left. Walk along it from its
+start, and the side it is seen from is the one on your right. An arc wall bends
+towards its front for a positive ``radius`` -- the inside of a round room -- and
+away from it for a negative one, the outside of a column a room goes around;
+either way it is ``length`` long measured along the arc, and goes once around at
+most.
+
+The openings are a sketch drawn as if the wall were unrolled flat in front of
+you: X along its base from 0 to ``length``, Y up from 0 to ``height``, on the XY
+plane. Each face of the sketch, or each closed wire, is cut out of the wall; on an
+arc wall, X is the distance along the arc, so a door 900 mm wide is 900 mm wide
+whatever the radius. An opening may meet an edge of the wall -- a door stands on
+the floor -- and one that reaches **beyond** it is an error saying how far, rather
+than an opening quietly clipped to fit: a window drawn too wide is a mistake in
+the drawing or in the wall, and either is worth hearing about. So is an opening
+off the XY plane, and one that does not close.
+
+Any of the four may be a ``%...%`` expression over the part's parameters, which is
+how PartCAD's own wall is declared: ``//builtin/building:wall`` takes ``length``,
+``height``, ``radius`` and ``openings`` as parameters, so any package can use a
+wall without declaring one:
+
+.. code-block:: yaml
+
+  parts:
+    north-wall:
+      type: enrich
+      source: //builtin/building:wall
+      with:
+        length: 4200
+        height: 2700
+        openings: //my/apartment:north-windows  # in full: the sketch is yours, not //builtin's
+
+A room is the walls standing on the outline of a sketch, each looking in: see
+:ref:`scenes-walls`.
+
+A wall is a surface on purpose, by its type, and that is decided by the type and
+not by the part:
+
+- It is **never manufacturable**, and has to say so. A ``type: wall`` part that
+  does not state ``manufacturable: false`` -- itself, or through its package -- is
+  refused with a message saying what to add. ``pc test``'s manufacturability
+  check passes over it, and fails an assembly that is to be made with a wall in
+  it: put walls in a scene.
+- It is **not turned into a solid**, nor reported for not being one, as it is
+  built (see "A part is a body, not a skin" in the contributor notes).
+- The checks that ask whether a part is a body -- ``shell``, ``degenerate``,
+  ``solidity`` and ``validity`` -- pass over it as not applicable, saying why. A
+  straight wall is as flat as a sheet of paper, because that is what it is.
+- It reports ``oneSided: true`` among its :ref:`properties <properties>`, and
+  that is what everything that draws it reads: the 3D view in the IDE culls the
+  backs of its faces, a shaded picture or a video (``--style shaded``) does the
+  same frame by frame, and a drawing of lines leaves out the faces the camera
+  would see from behind -- cutting a curved wall where it turns away -- so that
+  from straight above every wall is seen edge-on and the drawing is the plan. An
+  alias of a wall is one-sided too.
+
+A wall is coloured as any part is, by its :ref:`CMF <cmf>` ``color`` parameter
+(and given a ``material`` or a ``finish`` the same way): what it is painted.
+``//builtin/building:wall`` is a warm grey unless it is told otherwise -- the
+display-only colour ``//builtin/building:wall``, which claims nothing, since a
+wall is never made -- so ``wall;color=//my/apartment:sage`` is a sage wall. The
+colour a wall is painted in need not be one anybody can buy, either; a colour
+that is only a picture says so:
+
+.. code-block:: yaml
+
+  colors:
+    sage:
+      display: "#7D8F69"
+      manufacturable: false
 
 References
 ----------
@@ -1005,6 +1113,7 @@ this section in from what the file already stated.
       properties:
         material: <(optional) the name of the material this shape is made of>
         color: <(optional) "#RRGGBB" or "#RRGGBBAA">
+        oneSided: <(optional) true to draw it from the front of its faces only>
         physics: # (optional)
           mass: ... # kg
           # ... see the full list under "Parts" above
@@ -1029,6 +1138,15 @@ A shape that states no colour -- most of them -- is drawn in goldenrod,
 ``#DAA520``, which is the colour OCCT draws a shape nobody coloured. A
 ``material`` says nothing about how a part looks, so a part made of one and
 stating no colour is goldenrod too.
+
+``oneSided`` is how a shape is drawn too, by the same three and by the IDE: from
+the front of its faces only -- the side their normals point to -- and not at all
+from behind. It is what a :ref:`wall <walls>` reports about itself, and it is
+inherited the way a colour is, on its own: an assembly that states it makes
+everything in it one-sided that does not say otherwise, whatever colour each of
+them is. A drawing leaves out the faces the camera would see from behind before
+it hides anything, so what is behind them shows; a face seen exactly edge-on is
+kept.
 
 Every ``physics`` property has a PartCAD name and a PartCAD unit, and the set of
 them is closed. Lengths are millimetres and angles degrees, as everywhere else
