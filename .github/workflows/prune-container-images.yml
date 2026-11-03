@@ -65,6 +65,7 @@ jobs:
           #
           #   0.8.70                        the release        -> keep
           #   0.8.70-py3.11-amd64           the release's image -> keep
+          #   0.8.70-py3.11-gstreamer-amd64 its video flavour   -> keep
           #   py3.11-amd64                  the moving tag      -> keep
           #   0.8.70-my-branch              a branch's          -> delete
           #   0.8.70-my-branch-py3.11-amd64 a branch's          -> delete

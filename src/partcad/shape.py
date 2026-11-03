@@ -2294,6 +2294,13 @@ class Shape(ShapeConfiguration):
             # about what the file will contain.
             if getattr(impl, "project", None) is not None:
                 request.setdefault("cache_dir", output.package_cache_dir(ctx, impl.project))
+            # And the directory of the package the object is in, for the same
+            # reason: what a file type names by a relative path - the soundtrack
+            # and the logo of a video - is named from there, the way every other
+            # path in a 'partcad.yaml' is.
+            package = ctx.get_project(self.project_name) if ctx is not None and self.project_name else None
+            if getattr(package, "config_dir", None):
+                request.setdefault(output.PACKAGE_DIR_KEY, os.path.abspath(package.config_dir))
 
         together = len(outputs) > 1
         impl = outputs[0].impl
@@ -2355,6 +2362,18 @@ class Shape(ShapeConfiguration):
             command = [script_path]
             for output_, config_dir in zip(outputs, config_dirs):
                 command += [output_.path, config_dir, os.path.abspath(output_.script)]
+            # The package of the object, for a file whose request names a file
+            # in it, where the sandbox would otherwise not see it: one that
+            # exchanges files is sent what the arguments name and nothing else,
+            # and rewrites those arguments - never the request, which is where
+            # 'package_dir' is. See 'output.PACKAGE_DIR_ARGUMENT'.
+            if container or getattr(runtime, "EXCHANGES_FILES", False):
+                for index, output_ in enumerate(outputs):
+                    package_dir = output_.request.get(output.PACKAGE_DIR_KEY)
+                    if output.names_a_package_file(output_.request, package_dir, output_.impl.package_files):
+                        command += [output.PACKAGE_DIR_ARGUMENT, str(index), package_dir]
+                        if container:
+                            input_dirs.append(package_dir)
             if container:
                 # The interpreter is named rather than pathed: the container's
                 # allowlist maps the name to the executable, which is what keeps

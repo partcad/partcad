@@ -224,6 +224,9 @@ def test_what_the_projection_warns_about_is_said_about_the_raster_too(tmp_path):
         def scale(self, x, y):
             pass
 
+        def translate(self, x, y):
+            pass
+
     raster.svglib.svg2rlg = lambda path: Drawing()
     raster.renderPM.drawToFile = lambda *args, **kwargs: None
 
