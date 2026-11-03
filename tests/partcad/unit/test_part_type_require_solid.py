@@ -111,3 +111,15 @@ def test_it_is_added_to_the_key_once(tmp_path):
     once = _key(package, marks=1)
     assert once != _key(package)
     assert _key(package, marks=2) == once
+
+
+def test_a_type_nobody_declared_is_reported_by_the_build_not_by_the_key(tmp_path):
+    """Preparing the part asks for its type's 'requireSolid'; a type that is not there is the build's to report."""
+    package = tmp_path / "package"
+    package.mkdir()
+    (package / "partcad.yaml").write_text(yaml.safe_dump({"parts": {"orphan": {"type": ":nowhere"}}}))
+    ctx = pc.Context(str(package))
+    part = ctx.get_part(":orphan")
+    asyncio.run(part.prepare_async(wait=True))
+    assert asyncio.run(part.get_wrapped(ctx)) is None
+    assert any("nowhere" in error for error in part.errors), part.errors

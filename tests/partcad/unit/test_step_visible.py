@@ -93,3 +93,21 @@ def test_a_name_that_looks_like_a_reference_is_not_one(step_visible):
     )
     assert "#30 = SHAPE_REPRESENTATION('#20',(#10), #5);" in text
     assert "#10 = MANIFOLD_SOLID_BREP('#20', #9);" in text
+
+
+def test_what_is_not_a_list_of_items_is_left_alone(step_visible):
+    """A representation with fewer than its three parameters, or items that are not a list, is not edited."""
+    text = (
+        "#20 = MANIFOLD_SOLID_BREP('hidden', #19);\n"
+        "#30 = SHAPE_REPRESENTATION('', #20, #5);\n"
+        "#31 = DEFINITIONAL_REPRESENTATION('');\n"
+        "#40 = INVISIBILITY((#20));\n"
+    )
+    assert step_visible.shown_text(text) == (text, 0)
+
+
+def test_a_file_whose_hidden_items_no_representation_lists_is_read_as_it_is(step_visible, tmp_path):
+    path = tmp_path / "unlisted.step"
+    path.write_text(BODIES + "#50 = MANIFOLD_SOLID_BREP('elsewhere', #49);\n#60 = INVISIBILITY((#50));\n")
+    with step_visible.shown(str(path)) as shown:
+        assert shown == str(path)

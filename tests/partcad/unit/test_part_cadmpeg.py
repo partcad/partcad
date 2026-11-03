@@ -17,6 +17,7 @@ diff' of two files PartCAD wrote says whether they are the same geometry.
 import asyncio
 import importlib.util
 import os
+import runpy
 import sys
 
 import cadmpeg_oracle
@@ -28,7 +29,7 @@ from OCP.TopAbs import TopAbs_SOLID
 from OCP.TopExp import TopExp_Explorer
 
 import partcad as pc
-from partcad import code_version
+from partcad import code_version, output
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 import ocp_serialize  # noqa: E402
@@ -191,6 +192,107 @@ def test_an_assembly_s_closed_shell_is_its_solid_and_an_open_one_is_left_to_be_j
     found = reader.bodies(both)
 
     assert [body.ShapeType() for body in found] == [TopAbs_SOLID, TopAbs_FACE]
+
+
+def test_a_file_opencascade_cannot_read_is_an_error(tmp_path):
+    step = _module("cadmpeg_step.py")
+    path = tmp_path / "broken.step"
+    path.write_text("not a STEP file\n")
+    with pytest.raises(RuntimeError, match="OpenCASCADE could not read broken.step"):
+        step.read(str(path))
+
+
+def test_one_body_is_itself_and_several_are_one_compound():
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+    from OCP.TopAbs import TopAbs_COMPOUND
+
+    step = _module("cadmpeg_step.py")
+    small = BRepPrimAPI_MakeBox(1.0, 1.0, 1.0).Shape()
+    large = BRepPrimAPI_MakeBox(2.0, 2.0, 2.0).Shape()
+    assert step.compound([small]).IsSame(small)
+    both = step.compound([small, large])
+    assert both.ShapeType() == TopAbs_COMPOUND
+    assert len(step.solids(both)) == 2
+
+
+def test_the_installer_says_how_it_is_run(monkeypatch, capsys):
+    """'cadmpeg_tool.py <directory>' is what the sandbox image's Dockerfile runs."""
+    monkeypatch.setattr(sys, "argv", ["cadmpeg_tool.py"])
+    with pytest.raises(SystemExit) as exit:
+        runpy.run_path(os.path.join(BUILTIN_IMPORT, "cadmpeg_tool.py"), run_name="__main__")
+    assert exit.value.code == 2
+    said = capsys.readouterr().err  # runpy sets argv[0] to the script's path
+    assert said.startswith("usage: ") and said.rstrip().endswith("cadmpeg_tool.py <directory>")
+
+
+# ---------------------------------------------------------------------------
+# The readers as the sandbox runs them, in this process
+# ---------------------------------------------------------------------------
+
+# A FreeCAD document of sketches and nothing else: cadmpeg converts it to a STEP
+# file with curves in it and no face, which is no body at all.
+SKETCHES = "tests/partcad/unit/data/import_fcstd/sketch_constraints.FCStd"
+
+
+@pytest.fixture(scope="module")
+def cache_dir(ctx):
+    """Where the sandbox keeps cadmpeg, with the pinned release fetched into it."""
+    cadmpeg_oracle.executable(ctx)
+    return output.package_cache_dir(ctx, output.builtin_project(ctx, output.IMPORT))
+
+
+@pytest.mark.slow
+def test_the_part_reader_answers_with_the_bodies_or_why_there_are_none(cache_dir, tmp_path):
+    """'part_cadmpeg.py' as 'wrapper_part_type.py' runs it: the shape of what a file shows, or the reason."""
+    script = os.path.join(BUILTIN_IMPORT, "part_cadmpeg.py")
+
+    def run(path):
+        request = {"path": str(path), "cache_dir": cache_dir}
+        return runpy.run_path(script, init_globals={"request": request}, run_name="__partcad_part__")["output"]
+
+    shape = run(os.path.join(DATA, "controller.f3d"))["shape"]
+    explorer = TopExp_Explorer(shape, TopAbs_SOLID)
+    solids = 0
+    while explorer.More():
+        solids += 1
+        explorer.Next()
+    assert solids == 3, "the three bodies the design shows, and not the one it hides"
+
+    assert "holds no solid" in run(SKETCHES)["exception"]
+
+    unreadable = tmp_path / "unreadable.f3d"
+    unreadable.write_bytes(b"not a design")
+    assert "failed" in run(unreadable)["exception"]
+
+
+def _part_nodes(node):
+    if node["type"] == "part":
+        yield node
+    for child in node.get("links") or []:
+        yield from _part_nodes(child)
+
+
+@pytest.mark.slow
+def test_the_assembly_reader_writes_a_part_per_body_and_the_tree_that_places_them(cache_dir, tmp_path):
+    reader = _module("import_cadmpeg.py")
+    request = {
+        "source_file": os.path.join(DATA, "controller.f3d"),
+        "cache_dir": cache_dir,
+        "output_folder": str(tmp_path / "parts"),
+    }
+
+    result = reader.process(None, request)
+
+    parts = list(_part_nodes(result["root"]))
+    assert len(parts) == 3
+    for part in parts:
+        assert part["part_type"] == "step"
+        assert os.path.isfile(part["part_file"])
+        assert part["name"] == os.path.splitext(os.path.basename(part["part_file"]))[0]
+    assert result["model_name"] == result["root"]["name"]
+
+    with pytest.raises(RuntimeError, match="shows no body"):
+        reader.process(None, {**request, "source_file": SKETCHES})
 
 
 # ---------------------------------------------------------------------------
