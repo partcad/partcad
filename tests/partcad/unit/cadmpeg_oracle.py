@@ -49,6 +49,24 @@ def _run(command):
     return subprocess.run(command, capture_output=True, encoding="utf-8", check=False)
 
 
+def decode_as_windows_does(monkeypatch):
+    """Have 'subprocess.run' decode text in cp1252 when the caller names no encoding.
+
+    Which is what Windows does: 'text=True' alone decodes in the locale's
+    encoding, and the runners' locale is cp1252. Wrapping the call rather than
+    patching how subprocess picks the encoding, because that is private and
+    differs between the Python versions PartCAD supports.
+    """
+    run = subprocess.run
+
+    def run_as_on_windows(*args, **kwargs):
+        if kwargs.get("encoding") is None and (kwargs.get("text") or kwargs.get("universal_newlines")):
+            kwargs["encoding"] = "cp1252"
+        return run(*args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", run_as_on_windows)
+
+
 def measure(cadmpeg, path):
     """The body rows 'cadmpeg measure' reports for the file at 'path'."""
     result = _run([cadmpeg, "measure", str(path), "--json"])

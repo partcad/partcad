@@ -366,13 +366,14 @@ def test_the_part_and_the_document_are_the_same_geometry(ctx, cadmpeg, tmp_path)
     assert cadmpeg_oracle.disagreements(comparison) == []
 
 
+@pytest.mark.slow
 def test_cadmpeg_s_report_is_read_as_utf8_whatever_the_locale(cadmpeg, monkeypatch):
     """This document's report gives an uncertainty in mm^5, with a superscript cp1252 has no character for.
 
     cp1252 is what Windows decodes a subprocess's output with unless told
     otherwise, and there the decode failing made the output None.
     """
-    monkeypatch.setattr(subprocess, "_text_encoding", lambda: "cp1252")
+    cadmpeg_oracle.decode_as_windows_does(monkeypatch)
     bodies = cadmpeg_oracle.measure(cadmpeg, os.path.join(os.path.dirname(PACKAGE), "design_history.FCStd"))
     assert bodies
 
