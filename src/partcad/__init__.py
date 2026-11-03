@@ -5,7 +5,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-__version__: str = "0.8.283"
+__version__: str = "0.8.284"
 
 # Must come before anything that spawns a process: everything PartCAD executes
 # in a Python sandbox inherits this environment, so this is where the sandbox
