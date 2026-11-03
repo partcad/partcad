@@ -1934,7 +1934,8 @@
                   "enum": [
                     "basic", "cadquery", "build123d", "chili3d", "sdf", "svg", "dxf", "extrude",
                     "sweep", "stl", "step", "scad", "3mf", "enrich", "alias", "brep",
-                    "obj", "gltf", "kicad", "compound", "fcstd"
+                    "obj", "gltf", "kicad", "compound", "fcstd", "iges", "f3d", "sldprt",
+                    "ipt", "catpart", "sat", "pvz"
                   ]
                 },
                 "aliases": {
@@ -2159,8 +2160,8 @@
               "properties": {
                 "type": {
                   "type": "string",
-                  "enum": ["assy", "step", "urdf", "alias", "enrich"],
-                  "description": "'assy' is an Assembly YAML file, 'step' a STEP assembly, 'urdf' a URDF robot description. A format an engine's plugin package implements is not in this list and is named through that package - 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
+                  "enum": ["assy", "step", "f3d", "pvz", "urdf", "alias", "enrich"],
+                  "description": "'assy' is an Assembly YAML file, 'step' a STEP assembly, 'f3d' an Autodesk Fusion design, 'pvz' a Creo View package, 'urdf' a URDF robot description. A format an engine's plugin package implements is not in this list and is named through that package - 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "images": {
