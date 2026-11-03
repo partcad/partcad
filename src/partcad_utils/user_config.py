@@ -319,6 +319,22 @@ def _positive_seconds(value):
     return value if math.isfinite(value) and value > 0 else None
 
 
+def _seconds_or(value, default):
+    """'value' as a finite, non-negative number of seconds, or 'default' if it is not one.
+
+    Read the way '_positive_seconds' reads one - text from the environment that
+    is a number is one, a boolean is not - except that nought is a setting here:
+    'store everything, however quickly it was built'.
+    """
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return default
+    return value if math.isfinite(value) and value >= 0 else default
+
+
 # The options a user configuration resolves to, by their configuration-file
 # names. This is what travels when one process hands its configuration to
 # another; a new option belongs here, or the daemon will keep resolving it from
@@ -329,6 +345,7 @@ OPTION_KEYS = (
     "cacheFiles",
     "cacheFilesMaxEntrySize",
     "cacheFilesMinEntrySize",
+    "cacheFilesMinBuildTime",
     "cacheMemoryMaxEntrySize",
     "cacheMemoryDoubleCacheMaxEntrySize",
     "cacheRemote",
@@ -337,6 +354,7 @@ OPTION_KEYS = (
     "cacheRemoteExpiration",
     "cacheRemoteMaxEntrySize",
     "cacheRemoteMinEntrySize",
+    "cacheRemoteMinBuildTime",
     "cacheS3",
     "cacheS3Bucket",
     "cacheS3Prefix",
@@ -344,6 +362,7 @@ OPTION_KEYS = (
     "cacheS3EndpointUrl",
     "cacheS3MaxEntrySize",
     "cacheS3MinEntrySize",
+    "cacheS3MinBuildTime",
     "cacheDependenciesIgnore",
     "cacheBypass",
     "pythonSandbox",
@@ -770,6 +789,13 @@ class UserConfig(vyper.Vyper):
         # again from its sub-assemblies on every run.
         self.set_default("cacheFilesMaxEntrySize", 50 * 1024 * 1024)
         self.set_default("cacheFilesMinEntrySize", 100)
+        # How long a shape has to have taken to build before a tier keeps it,
+        # in seconds (see 'Shape.get_wrapped', 'CacheBackend.min_build_seconds').
+        # Below it, reading the entry back costs about what building it again
+        # does - a file read is milliseconds, a memcached or S3 round trip tens
+        # of them - so the entry is kept in this process's memory instead, and
+        # a shared tier is spared an entry nobody gains by fetching.
+        self.set_default("cacheFilesMinBuildTime", 0.01)
         self.set_default("cacheRemote", False)
         self.set_default("cacheRemoteServer", "")
         self.set_default("cacheRemoteNamespace", "partcad")
@@ -778,6 +804,7 @@ class UserConfig(vyper.Vyper):
         # rejection, so a server raised above it has to say so here.
         self.set_default("cacheRemoteMaxEntrySize", 1024 * 1024)
         self.set_default("cacheRemoteMinEntrySize", 100)
+        self.set_default("cacheRemoteMinBuildTime", 0.05)
         self.set_default("cacheS3", False)
         self.set_default("cacheS3Bucket", "")
         self.set_default("cacheS3Prefix", "partcad/")
@@ -787,6 +814,7 @@ class UserConfig(vyper.Vyper):
         # slower to fetch than to rebuild, which is not a cache hit worth having.
         self.set_default("cacheS3MaxEntrySize", 100 * 1024 * 1024)
         self.set_default("cacheS3MinEntrySize", 100)
+        self.set_default("cacheS3MinBuildTime", 0.05)
         self.set_default("cacheDependenciesIgnore", False)
         self.set_default("cacheBypass", False)
 
@@ -957,6 +985,16 @@ class UserConfig(vyper.Vyper):
         self.bind_env("cacheFilesMinEntrySize", "PC_CACHE_FILES_MIN_ENTRY_SIZE")
         self.cache_min_entry_size = self.get_int("cacheFilesMinEntrySize")
 
+        # option: cacheFilesMinBuildTime
+        # description: how long a shape has to have taken to build, in seconds,
+        #              for the file cache to keep it. A shape built faster is
+        #              kept in memory instead: reading the file back would cost
+        #              about what building it again does.
+        # values: >=0, 0 means every shape
+        # default: 0.01 (10ms)
+        self.bind_env("cacheFilesMinBuildTime", "PC_CACHE_FILES_MIN_BUILD_TIME")
+        self.cache_files_min_build_time = _seconds_or(self.get("cacheFilesMinBuildTime"), 0.01)
+
         # option: cacheMemoryMaxEntrySize
         # description: the maximum size of a single memory cache entry in bytes
         # values: >=0, 0 means no limit
@@ -1022,6 +1060,15 @@ class UserConfig(vyper.Vyper):
         self.bind_env("cacheRemoteMinEntrySize", "PC_CACHE_REMOTE_MIN_ENTRY_SIZE")
         self.cache_remote_min_entry_size = self.get_int("cacheRemoteMinEntrySize")
 
+        # option: cacheRemoteMinBuildTime
+        # description: how long a shape has to have taken to build, in seconds,
+        #              for the remote (memcached) cache to keep it. A round trip
+        #              to the server costs about what building one faster does.
+        # values: >=0, 0 means every shape
+        # default: 0.05 (50ms)
+        self.bind_env("cacheRemoteMinBuildTime", "PC_CACHE_REMOTE_MIN_BUILD_TIME")
+        self.cache_remote_min_build_time = _seconds_or(self.get("cacheRemoteMinBuildTime"), 0.05)
+
         # option: cacheS3
         # description: enable the object store cache. Requires the 'aws' extra:
         #              pip install 'partcad[aws]'
@@ -1073,6 +1120,15 @@ class UserConfig(vyper.Vyper):
         # default: 100
         self.bind_env("cacheS3MinEntrySize", "PC_CACHE_S3_MIN_ENTRY_SIZE")
         self.cache_s3_min_entry_size = self.get_int("cacheS3MinEntrySize")
+
+        # option: cacheS3MinBuildTime
+        # description: how long a shape has to have taken to build, in seconds,
+        #              for the object store cache to keep it. A request to the
+        #              store costs about what building one faster does.
+        # values: >=0, 0 means every shape
+        # default: 0.05 (50ms)
+        self.bind_env("cacheS3MinBuildTime", "PC_CACHE_S3_MIN_BUILD_TIME")
+        self.cache_s3_min_build_time = _seconds_or(self.get("cacheS3MinBuildTime"), 0.05)
 
         # option: cacheDependenciesIgnore
         # description: ignore broken dependencies and cache at your own risk

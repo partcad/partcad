@@ -36,6 +36,7 @@ class FilesCacheBackend(CacheBackend):
             data_type,
             min_entry_size=user_config.cache_min_entry_size,
             max_entry_size=user_config.cache_max_entry_size,
+            min_build_seconds=getattr(user_config, "cache_files_min_build_time", 0.0),
         )
         self.cache_dir = Path(user_config.internal_state_dir) / "cache" / data_type
         self.cache_dir.mkdir(parents=True, exist_ok=True)

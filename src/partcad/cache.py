@@ -49,9 +49,15 @@ class Cache:
         return "%s.%s" % (hash_str, key)
 
     async def write_data_async(
-        self, hash: CacheHash, items: dict[str, bytes], sizes: dict[str, int] = None
+        self, hash: CacheHash, items: dict[str, bytes], sizes: dict[str, int] = None, build_seconds: float = None
     ) -> dict[str, bool]:
         """Store 'items' under 'hash', reporting which of them landed somewhere.
+
+        'build_seconds' is how long what is written took to build, where that is
+        known: a tier keeps it only if that was long enough to be worth fetching
+        back ('CacheBackend.min_build_seconds' - the files tier above ten
+        milliseconds, the remote ones above fifty, by default). None is a write
+        every tier takes on size alone, as before there was such a thing.
 
         A key that no tier accepted - too big for one, too small for another,
         every tier disabled - comes back absent rather than False, which is what
@@ -79,7 +85,11 @@ class Cache:
             sizes = self._admission_sizes(items)
 
         results = await asyncio.gather(
-            *[asyncio.create_task(self._write_backend_async(b, hash_str, items, names, sizes)) for b in self.backends]
+            *[
+                asyncio.create_task(self._write_backend_async(b, hash_str, items, names, sizes))
+                for b in self.backends
+                if b.worth_keeping(build_seconds)
+            ]
         )
 
         saved = {}
