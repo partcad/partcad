@@ -111,36 +111,51 @@ def from_archive(source, cadmpeg, tmp):
 
 
 def from_step(source, cadmpeg, tmp):
-    """The solids of everything cadmpeg converts the document to."""
+    """The solids of everything cadmpeg converts the document to, and what the STEP file says they are in."""
     import cadmpeg_step
 
     step = cadmpeg_step.to_step(source, None, tmp, cadmpeg=cadmpeg)
     try:
-        shape = cadmpeg_step.read(step)
+        shape, facts = cadmpeg_step.read(step)
     except RuntimeError:
         raise RuntimeError("cadmpeg converted %s to STEP, but OpenCASCADE could not read it" % os.path.basename(source))
-    return solids(shape)
+    return solids(shape), facts
 
 
-def convert(source, cache_dir):
-    """Read 'source', a '.FCStd' file, into one OCCT shape."""
+def read(source, cache_dir):
+    """'(shape, cmf)' of 'source', a '.FCStd' file: one OCCT shape, and what it is in (or None).
+
+    Only the STEP route says what anything is in: the archive's shapes are
+    FreeCAD's own, and the colours it draws them in are kept elsewhere in the
+    document, which is not read.
+    """
     import cadmpeg_step
 
     cadmpeg = cadmpeg_step.executable(cache_dir)
+    facts = None
     with tempfile.TemporaryDirectory(prefix="partcad-fcstd-") as tmp:
         try:
             found = from_archive(source, cadmpeg, tmp)
         except Exception:
             found = []
         if not found:
-            found = from_step(source, cadmpeg, tmp)
+            found, facts = from_step(source, cadmpeg, tmp)
     if not found:
         raise RuntimeError("%s holds no solid" % os.path.basename(source))
-    return cadmpeg_step.compound(found)
+    part = cadmpeg_step.compound(found)
+    return part, cadmpeg_step.stated_cmf(part, facts)
+
+
+def convert(source, cache_dir):
+    """Read 'source', a '.FCStd' file, into one OCCT shape."""
+    return read(source, cache_dir)[0]
 
 
 if __name__ == "__partcad_part__":
     try:
-        output = {"shape": convert(request["path"], request["cache_dir"])}  # noqa: F821
+        shape, cmf = read(request["path"], request["cache_dir"])  # noqa: F821
+        output = {"shape": shape}
+        if cmf is not None:
+            output["cmf"] = cmf
     except Exception as e:
         output = {"exception": str(e)}
