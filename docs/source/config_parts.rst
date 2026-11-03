@@ -41,8 +41,8 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <basic|scad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|gltf|extrude|sweep
-             |fcstd|f3d|sldprt|ipt|catpart|sat|pvz|iges
+      type: <basic|scad|cadquery|build123d|chili3d|sdf|extrude|sweep
+             |step|brep|iges|stl|3mf|obj|gltf|fcstd|f3d|sldprt|ipt|catpart|sat|pvz
              |kicad|compound|wall|alias|enrich|:<partType declared by this package>
              |<package>:<partType declared by that package>>
       desc: <(optional) textual description>
@@ -355,6 +355,8 @@ Two notes on how this differs from the Python script types:
   script and then exported to STEP, STL, 3MF and everything else PartCAD
   writes, but no exporter produces a ``.chili`` file.
 
+.. _cad-files:
+
 CAD Files
 ---------
 
@@ -364,58 +366,8 @@ Define parts with CAD files using the following syntax:
 
   parts:
     <part name>:
-      type: <step|brep|stl|3mf|obj|gltf|fcstd|f3d|sldprt|ipt|catpart|sat|pvz|iges>
+      type: <step|brep|iges|stl|3mf|obj|gltf|fcstd|f3d|sldprt|ipt|catpart|sat|pvz>
       binary: <(stl only) use the binary format>
-
-A CAD file published elsewhere (in a vendor's catalog, for example) does not
-have to be committed to the package: see :ref:`files` for how to have PartCAD
-download it on demand.
-
-``gltf`` reads a `glTF <https://www.khronos.org/gltf/>`_ file: a ``.gltf`` with
-the buffers it names beside it, or a single ``.glb`` (``path: model.glb``). Every
-mesh in it is placed by the node tree, glTF's metres and Y-up are restated as
-millimetres and Z-up, and the triangles are meshed into the faces of a solid,
-as an STL part's are -- so what ``pc export -t gltf`` writes reads back where it
-was. A ``.gltf``'s buffers and images are part of its cache key, and
-``pc import part`` copies them along with it -- refusing one that would replace a
-different file of the same name already in the package.
-
-FreeCAD documents
-^^^^^^^^^^^^^^^^^
-
-``fcstd`` reads a `FreeCAD <https://www.freecad.org/>`_ document (``.FCStd``)
-without FreeCAD:
-
-.. code-block:: yaml
-
-  parts:
-    bracket:
-      type: fcstd          # reads bracket.FCStd
-
-The part is what the document shows: the shapes of the features nothing else in
-it consumes, that are neither hidden nor suppressed, and only their solids. A
-PartDesign body's Pad, the Pocket cut into it and the Fillet on top are three
-solids in the file, and the part is the last of them. The geometry is the exact
-shape FreeCAD stored, so nothing is translated on the way; the history -- the
-sketches, the constraints, the parametric features -- is not carried over, and
-objects placed through ``App::Link`` are not followed.
-
-It is read with `cadmpeg <https://github.com/cadmpeg/cadmpeg>`_, which PartCAD
-does not ship in the wheel: the first part read downloads the release PartCAD
-pins, checks it against its published SHA-256, and keeps it in PartCAD's state
-directory. A ``cadmpeg`` already on the ``PATH`` is used instead when it is that
-release, which is what PartCAD's ``docker`` sandbox images carry; another release
-is passed over, because the parts read with it are cached under the pinned one.
-``fcstd`` is a :ref:`partType <part-types>` PartCAD declares in
-``//builtin/import``, which is also what a package does to teach PartCAD a format
-of its own.
-
-Other native CAD documents
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-cadmpeg reads more native formats than FreeCAD's, and PartCAD reads every one of
-them that cadmpeg reads into connected solids -- its level L3 ("Model") and above
--- the same way, without the application that wrote it:
 
 .. list-table::
    :header-rows: 1
@@ -423,6 +375,30 @@ them that cadmpeg reads into connected solids -- its level L3 ("Model") and abov
    * - ``type``
      - Format
      - File, by default
+   * - ``step``
+     - STEP
+     - ``<name>.step``
+   * - ``brep``
+     - OpenCASCADE BREP
+     - ``<name>.brep``
+   * - ``iges``
+     - IGES
+     - ``<name>.iges``
+   * - ``stl``
+     - STL
+     - ``<name>.stl``
+   * - ``3mf``
+     - 3MF
+     - ``<name>.3mf``
+   * - ``obj``
+     - Wavefront OBJ
+     - ``<name>.obj``
+   * - ``gltf``
+     - glTF: a ``.gltf`` with its buffers, or a ``.glb``
+     - ``<name>.gltf``
+   * - ``fcstd``
+     - FreeCAD document
+     - ``<name>.FCStd``
    * - ``f3d``
      - Autodesk Fusion design
      - ``<name>.f3d``
@@ -441,9 +417,9 @@ them that cadmpeg reads into connected solids -- its level L3 ("Model") and abov
    * - ``pvz``
      - Creo View package, every component's bodies as one part
      - ``<name>.pvz``
-   * - ``iges``
-     - IGES
-     - ``<name>.iges``
+
+A file of another name or extension -- a ``.stp``, a ``.glb``, a binary ACIS
+``.sab`` -- is named with ``path``:
 
 .. code-block:: yaml
 
@@ -454,28 +430,52 @@ them that cadmpeg reads into connected solids -- its level L3 ("Model") and abov
       type: ipt
       path: vendor/Shaft.ipt
 
-cadmpeg converts the file to STEP, and the part is what that STEP file shows: the
-bodies the document displays, and not one its author hid, nor the sketches, axes
-and points beside them. The history -- features, sketches, parameters,
-configurations -- is not carried over; the part is the geometry the application
-last computed. Which format a file is, cadmpeg reads from its content rather than
-its name, so a part names its file with ``path`` when it is called something else.
+A CAD file published elsewhere (in a vendor's catalog, for example) does not
+have to be committed to the package: see :ref:`files` for how to have PartCAD
+download it on demand.
 
-Every one of these types, ``fcstd`` included, **requires a solid**
-(``requireSolid``, see :ref:`part-types`). A body cadmpeg could not read whole --
-a face whose geometry it cannot decode yet, a solid that comes back open or
-invalid -- is not a part with a hole in it: it fails to build, and says what is
-wrong with it, by the same check every other part is only warned by. That is how
-a part read wrongly is caught. For IGES it means a surface model -- trimmed
-surfaces that bound no solid, which is how OpenCASCADE writes IGES by default --
-is not a part of this type. cadmpeg 0.6.7 also loses faces of the IGES files
-OpenCASCADE writes, so what ``pc export -t iges`` writes does not read back as a
-part; keep a STEP file where one has to be read again.
+``gltf`` reads every mesh in a `glTF <https://www.khronos.org/gltf/>`_ file,
+placed by the node tree, with glTF's metres and Y-up restated as millimetres and
+Z-up, and the triangles meshed into the faces of a solid, as an STL part's are --
+so what ``pc export -t gltf`` writes reads back where it was. A ``.gltf``'s
+buffers and images are part of its cache key, and ``pc import part`` copies them
+along with it -- refusing one that would replace a different file of the same
+name already in the package.
 
-Rhino ``.3dm`` and the two ``.prt`` formats, Siemens NX's and Creo
-Parametric's, are not among these: cadmpeg does not read their bodies into solids
-yet. A Fusion design or a Creo View package can also be declared as an
-:ref:`assembly <assembly-cadmpeg>`, which keeps its components apart.
+A CAD application's own file -- ``fcstd`` to ``pvz`` in the table -- is read
+without the application that wrote it, and the part is what the file shows: the
+bodies it displays, and not one its author hid, nor the sketches, axes and points
+beside them. The geometry is the exact B-rep the application last computed, not
+a mesh of it; the history -- features, sketches, constraints, parameters,
+configurations -- is not carried over. In a `FreeCAD <https://www.freecad.org/>`_
+document, what it shows is the shapes of the features nothing else in it
+consumes, that are neither hidden nor suppressed: a PartDesign body's Pad, the
+Pocket cut into it and the Fillet on top are three solids in the file, and the
+part is the last of them. Objects placed through ``App::Link`` are not followed.
+A Fusion design or a Creo View package can also be declared as an
+:ref:`assembly <assembly-f3d-pvz>`, which keeps its components apart.
+
+Those types and ``iges`` are read with
+`cadmpeg <https://github.com/cadmpeg/cadmpeg>`_, which converts each file to
+STEP. It is not in the wheel: the first part read downloads the release PartCAD
+pins, checks it against its published SHA-256, and keeps it in PartCAD's state
+directory. A ``cadmpeg`` already on the ``PATH`` is used instead when it is that
+release, which is what PartCAD's ``docker`` sandbox images carry; another
+release is passed over, because the parts read with it are cached under the
+pinned one. Each is a :ref:`partType <part-types>` PartCAD declares in
+``//builtin/import``, which is also what a package does to teach PartCAD a format
+of its own. Rhino ``.3dm`` and the two ``.prt`` formats, Siemens NX's and Creo
+Parametric's, are not read yet: cadmpeg does not read their bodies into solids.
+
+They also **require a solid** (``requireSolid``, see :ref:`part-types`). A body
+that did not come through whole -- a face whose geometry could not be decoded, a
+solid that comes back open or invalid -- is not a part with a hole in it: it
+fails to build, and says what is wrong with it, by the same check that only warns
+about any other part that is not a solid. For IGES that means a surface model --
+trimmed surfaces that bound no solid, which is how OpenCASCADE writes IGES by
+default -- is not an ``iges`` part. Neither, for now, is what
+``pc export -t iges`` writes: cadmpeg 0.6.7 loses faces of the IGES files
+OpenCASCADE writes, so keep a STEP file where one has to be read again.
 
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Example                                                                              | Configuration             | Result                                                                                                                  |
@@ -862,10 +862,10 @@ is wrong with it. Nothing about the check changes; only what its answer means:
 An ``import:`` reader declares the same key for the parts it registers (see
 :ref:`assemblies`).
 
-PartCAD ships ``partType`` s of its own in ``//builtin/import`` -- ``fcstd``, for
-FreeCAD documents, and the other native CAD formats it reads through cadmpeg --
-and a part names one of those by its bare name, ``type: fcstd``, as if it were
-built in. The SolidCraft plugin,
+PartCAD ships ``partType`` s of its own in ``//builtin/import`` -- ``iges`` and
+the CAD applications' files, ``fcstd`` to ``pvz`` (see :ref:`cad-files`) -- and a
+part names one of those by its bare name, ``type: fcstd``, as if it were built
+in. The SolidCraft plugin,
 `partcad-solidcraft <https://github.com/partcad/partcad-solidcraft>`_, is a whole
 package of them: SolidCraft designs, Rhino and IGES, downloading SolidCraft's
 command line tool on demand or running in the image it publishes, with its tests
