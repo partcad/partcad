@@ -151,14 +151,14 @@ def test_a_step_colour_is_the_srgb_the_file_states(tmp_path):
     assert found.face_set(0).color == "#C91A09"
 
 
-def test_a_step_export_is_the_assembly_s_products_named_and_placed(tmp_path):
+def _wall():
+    """An assembly: a red aluminium brick placed twice, a peg its node draws blue, and the same peg in nothing."""
     import ocp_serialize
-    import step_cmf
 
     bd = _kernel()
     brick = _envelope(bd.Box(10, 20, 30).wrapped, Section([RED.filled_from(ALUMINIUM)], 0), "//src:brick", "brick")
     peg = _envelope(bd.Cylinder(3, 10).wrapped, None, "//src:peg", "peg")
-    wall = ocp_serialize.encode_assembly(
+    return ocp_serialize.encode_assembly(
         [
             dict(brick, location=[[0, 0, 0], [0, 0, 1], 0], label="wall/left"),
             dict(brick, location=[[0, 40, 0], [0, 0, 1], 0], label="wall/right"),
@@ -169,6 +169,12 @@ def test_a_step_export_is_the_assembly_s_products_named_and_placed(tmp_path):
         name="//src:wall",
         label="wall",
     )
+
+
+def test_a_step_export_is_the_assembly_s_products_named_and_placed(tmp_path):
+    import step_cmf
+
+    wall = _wall()
     path = tmp_path / "wall.step"
     facts = {"materials": {"//src:al-6061": {"name": "al-6061", "description": "Aluminium 6061", "density": 2700.0}}}
     _export("export_step.py", path, wall, cmf=facts)
@@ -270,6 +276,35 @@ def test_a_gltf_of_a_shape_that_states_nothing_is_as_it_was(tmp_path):
 
     for material in json.loads(path.read_text()).get("materials", []):
         assert "extras" not in material
+
+
+def test_a_gltf_of_an_assembly_draws_each_part_in_its_sets_where_it_is_placed(tmp_path):
+    path = tmp_path / "wall.gltf"
+    _export("export_gltf.py", path, _wall())
+
+    meta = json.loads(path.read_text())
+    names = [material["name"] for material in meta["materials"]]
+    # The brick placed twice is one material, and the peg's node colour another.
+    assert sorted(names) == ["#0000FF", "signal-red / al-6061"]
+    meshes = {node["mesh"]: node for node in meta["nodes"] if "mesh" in node}
+    # A node per placement, in metres, in the order the assembly holds them.
+    assert [meshes[index].get("translation", [0.0, 0.0, 0.0]) for index in sorted(meshes)] == [
+        [0.0, 0.0, 0.0],
+        [0.0, 0.04, 0.0],
+        [0.0, 0.0, 0.04],
+        [0.0, 0.0, 0.08],
+    ]
+
+    def drawn(index):
+        return {
+            names[primitive["material"]] if "material" in primitive else None
+            for primitive in meta["meshes"][index]["primitives"]
+        }
+
+    assert drawn(0) == drawn(1) == {"signal-red / al-6061"}
+    assert drawn(2) == {"#0000FF"}
+    # The bare peg is drawn in nothing, as it was before any of this.
+    assert drawn(3) == {None}
 
 
 # ---------------------------------------------------------------- 3MF
@@ -385,6 +420,27 @@ def test_a_3mf_of_a_shape_that_states_nothing_keeps_its_model(tmp_path):
         assert b'Extension="rels"' in package.read("[Content_Types].xml")
     # Which lib3mf now reads, as it did not read CadQuery's.
     assert len(bd.Mesher().read(str(path))) == 1
+
+
+def test_a_3mf_of_an_assembly_paints_each_part_where_it_is_placed(tmp_path):
+    import cmf_3mf
+    import cmf_capture
+    import wrapper_export
+
+    request = wrapper_export.decode({"wrapped": _wall()})
+    whole = request["wrapped"]
+    path = tmp_path / "wall.3mf"
+    _cadquery_3mf(path, whole)
+
+    assert cmf_3mf.finish(str(path), cmf_3mf.triangle_sets(whole, request["shape_tree"]))
+
+    _read, found = cmf_capture.read_mesh(str(path))
+    colors = [found.face_set(i).color for i in range(len(found.faces))]
+    assert set(colors) == {"#C91A09", "#0000FF", None}
+    # Both bricks, each six faces of two triangles, in the brick's red.
+    assert colors.count("#C91A09") == 24
+    # The two pegs are one geometry: the one its node draws blue, the other in nothing.
+    assert colors.count("#0000FF") == colors.count(None) > 0
 
 
 # ---------------------------------------------------------------- formats with no CMF
