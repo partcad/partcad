@@ -227,6 +227,42 @@ suite('What colour a shape is drawn in', () => {
         assert.deepStrictEqual(primitiveAppearance(own, DEFAULT_APPEARANCE), own);
     });
 
+    test('a primitive drawn with an image keeps the image, and the colour it is drawn as elsewhere', () => {
+        // What a part's glb carries for faces in a colour drawn with an image (see
+        // 'wrapper_gltf._with_textures'): the image as the base colour texture,
+        // white under it, and the colour in the material's extras.
+        const map = new THREE.Texture();
+        const material = new THREE.MeshStandardMaterial({ color: 0xffffff, map });
+        material.userData.partcadColor = '#781478';
+
+        const own = ownAppearance(material, true);
+        assert.deepStrictEqual(own, { color: 0x781478, opacity: 1, map });
+        assert.deepStrictEqual(primitiveAppearance(own, DEFAULT_APPEARANCE), own);
+        // A material per image: the same colour without it, or with another, is another look.
+        assert.notStrictEqual(appearanceKey(own!), appearanceKey({ color: 0x781478, opacity: 1 }));
+        const other = new THREE.Texture();
+        assert.notStrictEqual(appearanceKey(own!), appearanceKey({ color: 0x781478, opacity: 1, map: other }));
+
+        // A file that does not say what it stands for is drawn as white elsewhere.
+        const unsaid = new THREE.MeshStandardMaterial({ color: 0xffffff, map });
+        assert.strictEqual(ownAppearance(unsaid, true)?.color, 0xffffff);
+        for (const disposable of [material, unsaid, map, other]) {
+            disposable.dispose();
+        }
+    });
+
+    test('a wall drawn with an image is one-sided and keeps its image', () => {
+        // Wallpaper: the image is the face's, and which side it is seen from is the
+        // wall's - and a material of its own, for each of the two.
+        const map = new THREE.Texture();
+        const own = { color: 0x781478, opacity: 1, map };
+        const wall = appearanceOf({ name: 'wall', properties: { oneSided: true } });
+        const drawn = primitiveAppearance(own, wall);
+        assert.deepStrictEqual(drawn, { ...own, oneSided: true });
+        assert.strictEqual(appearanceKey(drawn), `781478ff:${map.uuid}/front`);
+        map.dispose();
+    });
+
     test('a line across a shape is a deeper shade of it, and still a line on a dark one', () => {
         // The default has a name for its deeper shade.
         assert.strictEqual(DEFAULT_EDGE_COLOR, 0xb8860b);

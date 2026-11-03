@@ -286,7 +286,7 @@ class _FakeLeaf:
     def get_store_data(self):
         return _FakeStoreData()
 
-    async def get_mcftt(self, _which):
+    async def get_mcft(self, _which):
         return None
 
 

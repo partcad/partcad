@@ -433,7 +433,29 @@
                 "aliases": { "$ref": "#/definitions/cmf-aliases" },
                 "type": { "type": "string", "enum": ["alias"], "description": "'alias' makes this declaration another name for the one 'source' names" },
                 "source": { "type": "string", "minLength": 1, "description": "What an alias names: '<package>:<name>', ':<name>' or '<name>', with parameter values if it is parametric" },
-                "display": { "type": "string", "minLength": 1, "description": "What the colour is drawn in: any CSS colour ('#C91A09', 'rgb(201 26 9)', 'oklch(52% 0.19 33)', 'firebrick'), or a colour declaration whose display it takes. A hint, not a claim" }
+                "display": {
+                  "description": "How the colour is drawn. A hint, not a claim",
+                  "oneOf": [
+                    { "type": "string", "minLength": 1, "description": "What the colour is drawn in: any CSS colour ('#C91A09', 'rgb(201 26 9)', 'oklch(52% 0.19 33)', 'firebrick'), or a colour declaration whose display it takes" },
+                    {
+                      "type": "object",
+                      "description": "An image the colour's surfaces are drawn with: a texture, laid on every face in copies 'size' apart",
+                      "properties": {
+                        "image": { "type": "string", "pattern": "\\.([pP][nN][gG]|[jJ][pP][eE]?[gG])$", "description": "A PNG or a JPEG file in the package, relative to its 'partcad.yaml'" },
+                        "size": {
+                          "description": "How much of a surface one copy of the image covers, in millimetres: its width, its height in proportion, or [width, height]. 100 mm across if unset",
+                          "oneOf": [
+                            { "type": "number", "exclusiveMinimum": 0 },
+                            { "type": "array", "items": { "type": "number", "exclusiveMinimum": 0 }, "minItems": 2, "maxItems": 2 }
+                          ]
+                        },
+                        "color": { "type": "string", "minLength": 1, "description": "What the colour is drawn as where an image cannot be - a line of a drawing, a swatch: any CSS colour. The image's mean colour if unset" }
+                      },
+                      "required": ["image"],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
               },
               "additionalProperties": false
             }

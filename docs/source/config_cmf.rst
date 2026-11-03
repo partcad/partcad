@@ -82,8 +82,56 @@ states no colour is that colour, and counts as specified:
 
 A part that states no finish is **as produced**; nothing has to be declared for it.
 
-``texture`` is reserved for a visual texture, in a later change. It is not a CMF component, and no declaration states
-one.
+.. _cmf-textures:
+
+Textures
+========
+
+A colour may be drawn with an image instead of a plain colour: wood grain, a fabric, a brushed or printed surface. That
+is its ``display`` in the long form, a mapping that names a PNG or a JPEG in the package:
+
+.. code-block:: yaml
+
+  colors:
+    walnut:
+      desc: Walnut veneer, as Acme supplies it
+      ids: {acme: "WV-12"}
+      display:
+        image: textures/walnut.jpg   # a PNG or a JPEG, relative to this partcad.yaml
+        size: 300                    # (optional) mm one copy of the image covers across; or [width, height]
+        color: "#5C3A21"             # (optional) what it is drawn as where an image cannot be
+
+A texture is how the colour is drawn, and nothing more: like any display it is a hint, and whether the colour is a
+claim is still its ``manufacturable``. A part is drawn with it by naming the colour, as for any other:
+``color: :walnut``. Another colour whose ``display`` names this one is drawn with the same image.
+
+``size`` is how much of a surface one copy of the image covers, in millimetres: a number is its width, its height
+following the image's proportions, and ``[width, height]`` sets both. Unset, an image covers 100 mm across. A surface
+is covered with copies of the image side by side, laid on each face as on the side of a box around the part: seen from
+the axis the face looks along most, upright (its top towards +Z, or towards +Y on a face looking up or down), not
+mirrored, and starting from the part's origin. So a face keeps its texture wherever the part is placed, and two faces
+meeting at an edge carry one image across it. A curved face shows a seam where it turns from one side of that box to
+another.
+
+``color`` is what the colour is drawn as wherever an image cannot be: the lines of a drawing, a swatch, ``pc list``.
+Unset, it is the mean colour of the image. The image is drawn opaque; ``color`` with an alpha (``"#5C3A2180"``) makes
+the textured surface see-through.
+
+Where it is drawn:
+
+* ``pc render`` of a PNG or a JPEG with ``style: shaded``, and every frame of a video, draw it.
+* The IDE's *Digital Thread*, in its *Design > 3D* view, draws it; the CMF tab shows the image beside the colour.
+* A drawing of lines -- SVG, DXF, and a PNG or a JPEG in the default ``style: lines`` -- draws the faces' edges in
+  ``color``.
+* ``pc export`` writes ``color`` where a file holds a colour (see :ref:`cmf-exports`); no export carries the image yet.
+
+A one-sided shape -- a wall (see :ref:`walls`) -- in such a colour is laid with the image on its front, and is still
+not there from behind.
+
+The image is part of every part drawn with it: it travels inside the part's geometry, to the sandbox that renders it
+and into the glTF the IDE is sent, so keep it to what a surface needs -- a few hundred kilobytes, a thousand or two
+pixels a side. An image larger than 16 MB, outside the package, or neither a PNG nor a JPEG is reported against the
+colour, which is then drawn in no colour at all.
 
 Colour standards are not shipped with PartCAD. A package that works to one declares the colours it uses, the way a
 vendor declares its own. The one colour PartCAD ships is ``//builtin/color:rgba``, below.
@@ -334,7 +382,8 @@ What the exports write
 file, that it is not in the file. ``mjcf`` is written by ``partcad/partcad-sim-mujoco``, which writes what it writes.
 
 A face nobody coloured is written uncoloured, so that the reading tool draws it in its own default, rather than in the
-goldenrod PartCAD draws it in.
+goldenrod PartCAD draws it in. A face in a colour drawn with an image (see :ref:`cmf-textures`) is written in the colour
+it is drawn as where an image cannot be: no export carries the image yet.
 
 .. _cmf-check:
 

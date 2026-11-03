@@ -339,7 +339,7 @@ class ManufacturabilityTest(Test):
 
         self.debug(part, "Can be manufactured")
         # Only what is actually made needs a manufacturing tolerance. A part
-        # that is bought comes as it comes, which is the same reason the MCFTT
+        # that is bought comes as it comes, which is the same reason the MCFT
         # parameters are documented as having no effect on a part with a vendor
         # and an SKU.
         failure = await self.tolerance_failure(part)

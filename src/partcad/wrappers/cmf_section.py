@@ -20,6 +20,16 @@ reader; the section is what PartCAD finds after it::
                u8 roughness, u8 metallic                         finish display, 0..255 for 0..1
                u8 flags                                          1 colour, 2 roughness, 4 metallic present
     runs(x) := u32 count of x, u32 k, k x (u32 length, i32 set)  TopExp::MapShapes order; -1 for none
+    [looks]                                                      optional, see below
+
+A set whose colour is drawn with an image (a texture: see 'Texture') says so in
+a trailer after the runs, which a reader that does not know it never reaches -
+it stops after the runs, so it reads every set with the display colour beside
+it, which is what the texture is drawn as where only a colour can be::
+
+    looks   := b"PCTX", u16 k, k x look, u16 j, j x image
+    look    := i32 set, i32 name, i32 image, f64 width, f64 height     name a string index
+    image   := u32 len, bytes                                          PNG or JPEG, each once
 
 How it reads: a face's colour and finish are its set's, else the part's own
 set's; a solid's material is its set's, else the part's own set's. A face's set
@@ -32,6 +42,7 @@ that kind takes the part's own set.
 Plain Python, for the core and for a wrapper alike.
 """
 
+import hashlib
 import struct
 
 FOOTER_MAGIC = b"PARTCMF1"
@@ -43,6 +54,72 @@ NONE = -1
 COMPONENTS = ("color", "material", "finish")
 FLAG_COLOR, FLAG_ROUGHNESS, FLAG_METALLIC = 1, 2, 4
 
+# What starts the trailer of textures, and how each of its entries is written.
+LOOKS_MAGIC = b"PCTX"
+_LOOK = struct.Struct("<iiidd")
+
+# What an image starts with, by the media type it is: the two kinds a colour
+# may be drawn with (see 'Texture').
+IMAGE_SIGNATURES = (
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+)
+
+
+def image_type(image) -> "str | None":
+    """'image/png' or 'image/jpeg' for the bytes of such an image, None for anything else."""
+    for signature, mime in IMAGE_SIGNATURES:
+        if bytes(image[: len(signature)]) == signature:
+            return mime
+    return None
+
+
+class Texture:
+    """An image a colour is drawn with, and how large one copy of it is on a surface.
+
+    'image' is the bytes of a PNG or a JPEG, as the colour's declaration names
+    the file; 'name' is that file as written, for whoever shows it. 'width' and
+    'height' are how much of a surface one copy of the image covers, in
+    millimetres: a surface is covered with copies of it, side by side, laid on
+    each face from the side the face looks towards (see 'texture_mapping'). A
+    texture is part of how its colour is drawn - a hint, like a display colour -
+    and its set carries the colour it is drawn as where only a colour can be
+    drawn (a line, a swatch), in 'rgba'.
+
+    Two textures are one when their images are the same bytes and they cover the
+    same size, whatever the file was called.
+    """
+
+    __slots__ = ("image", "name", "width", "height", "digest")
+
+    def __init__(self, image, name=None, width=100.0, height=100.0, digest=None) -> None:
+        self.image = bytes(image)
+        self.name = name or None
+        self.width = float(width)
+        self.height = float(height)
+        self.digest = digest or hashlib.sha256(self.image).hexdigest()
+
+    def key(self) -> tuple:
+        return (self.digest, self.width, self.height)
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, Texture) and self.key() == other.key()
+
+    def __hash__(self) -> int:
+        return hash(self.key())
+
+    def __repr__(self) -> str:
+        return "Texture(%r, %gx%g mm, %s)" % (self.name, self.width, self.height, self.digest[:12])
+
+    @property
+    def mime_type(self) -> "str | None":
+        return image_type(self.image)
+
+    def as_dict(self) -> dict:
+        """The texture as plain data, its image named rather than carried: for a summary or a message."""
+        result = {"image": self.name, "digest": self.digest, "size": [self.width, self.height]}
+        return {key: value for key, value in result.items() if value is not None}
+
 
 class CmfSet:
     """One entry of the palette: a colour, a material and a finish, each optional.
@@ -50,12 +127,22 @@ class CmfSet:
     'rgba' is the colour's display as '(red, green, blue, alpha)', alpha from 0
     to 1; 'roughness' and 'metallic' the finish's, from 0 to 1. 'origin' says
     where the set came from ('source:step', 'declared', ...), for whoever shows it.
+    'texture' is the image the colour is drawn with where a surface can be drawn
+    with one (see 'Texture'), and 'rgba' is then what it is drawn as elsewhere.
     """
 
-    __slots__ = ("color", "material", "finish", "origin", "rgba", "roughness", "metallic")
+    __slots__ = ("color", "material", "finish", "origin", "rgba", "roughness", "metallic", "texture")
 
     def __init__(
-        self, color=None, material=None, finish=None, origin=None, rgba=None, roughness=None, metallic=None
+        self,
+        color=None,
+        material=None,
+        finish=None,
+        origin=None,
+        rgba=None,
+        roughness=None,
+        metallic=None,
+        texture=None,
     ) -> None:
         self.color = color or None
         self.material = material or None
@@ -64,9 +151,11 @@ class CmfSet:
         self.rgba = tuple(rgba) if rgba is not None else None
         self.roughness = roughness
         self.metallic = metallic
+        self.texture = texture
 
     def key(self) -> tuple:
-        return (self.color, self.material, self.finish, self.origin, self.rgba, self.roughness, self.metallic)
+        texture = self.texture.key() if self.texture is not None else None
+        return (self.color, self.material, self.finish, self.origin, self.rgba, self.roughness, self.metallic, texture)
 
     def __eq__(self, other) -> bool:
         return isinstance(other, CmfSet) and self.key() == other.key()
@@ -86,7 +175,7 @@ class CmfSet:
         for component in components:
             values[component] = None
             if component == "color":
-                values["rgba"] = None
+                values["rgba"] = values["texture"] = None
             if component == "finish":
                 values["roughness"] = values["metallic"] = None
         if all(values[component] is None for component in COMPONENTS):
@@ -100,7 +189,7 @@ class CmfSet:
             return self
         values = {name: getattr(self, name) for name in self.__slots__}
         if self.color is None and other.color is not None:
-            values["color"], values["rgba"] = other.color, other.rgba
+            values["color"], values["rgba"], values["texture"] = other.color, other.rgba, other.texture
         if self.material is None and other.material is not None:
             values["material"] = other.material
         if self.finish is None and other.finish is not None:
@@ -118,7 +207,12 @@ class CmfSet:
             result["roughness"] = self.roughness
         if self.metallic is not None:
             result["metallic"] = self.metallic
+        if self.texture is not None:
+            result["texture"] = self.texture.as_dict()
         return {key: value for key, value in result.items() if value is not None}
+
+    def textured(self) -> bool:
+        return self.texture is not None
 
 
 class Section:
@@ -176,6 +270,10 @@ class Section:
         if 0 <= index < len(self.solids) and self.solids[index] != NONE:
             return self.sets[self.solids[index]].filled_from(own) if own is not None else self.sets[self.solids[index]]
         return own if own is not None else CmfSet()
+
+    def is_textured(self) -> bool:
+        """Whether any set of this section draws its colour with an image."""
+        return any(cmf_set.texture is not None for cmf_set in self.sets)
 
     def is_empty(self) -> bool:
         return self.own() is None and all(i == NONE for i in self.faces) and all(i == NONE for i in self.solids)
@@ -361,6 +459,21 @@ def encode(section: Section) -> bytes:
                 flags,
             )
         )
+    # The textures, if any set has one: after everything a reader that knows
+    # none reads (see the module's docstring), each image once however many
+    # sets it draws. Worked out before the strings are written, since a
+    # texture's name is one of them.
+    looks, images, image_index = [], [], {}
+    for set_index, cmf_set in enumerate(section.sets):
+        texture = cmf_set.texture
+        if texture is None:
+            continue
+        if texture.digest not in image_index:
+            image_index[texture.digest] = len(images)
+            images.append(texture.image)
+        looks.append(
+            _LOOK.pack(set_index, string(texture.name), image_index[texture.digest], texture.width, texture.height)
+        )
     out = [struct.pack("<H", len(strings))]
     for value in strings:
         data = value.encode("utf-8")
@@ -372,6 +485,11 @@ def encode(section: Section) -> bytes:
         runs = _runs(indices)
         out.append(struct.pack("<II", len(indices), len(runs)))
         out.extend(struct.pack("<Ii", length, value) for length, value in runs)
+    if looks:
+        out.append(LOOKS_MAGIC + struct.pack("<H", len(looks)))
+        out.extend(looks)
+        out.append(struct.pack("<H", len(images)))
+        out.extend(_LENGTH.pack(len(image)) + image for image in images)
     return b"".join(out)
 
 
@@ -424,6 +542,22 @@ def decode(data: bytes) -> Section:
         if len(indices) != total:
             raise ValueError("a CMF section's runs cover %d of %d sub-shapes" % (len(indices), total))
         expanded.append(indices)
+    if data[offset : offset + len(LOOKS_MAGIC)] == LOOKS_MAGIC:
+        offset += len(LOOKS_MAGIC)
+        (count,) = take("<H")
+        looks = [take(_LOOK.format) for _ in range(count)]
+        (count,) = take("<H")
+        images = []
+        for _ in range(count):
+            (length,) = take("<I")
+            if offset + length > len(data):
+                raise ValueError("a CMF section's image runs past its end")
+            images.append(data[offset : offset + length])
+            offset += length
+        for set_index, name, image, width, height in looks:
+            if not (0 <= set_index < len(sets) and 0 <= image < len(images)):
+                raise ValueError("a CMF section's texture names a set or an image it does not hold")
+            sets[set_index].texture = Texture(images[image], string(name), width, height)
     return Section(sets, default, expanded[0], expanded[1])
 
 

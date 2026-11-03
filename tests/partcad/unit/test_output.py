@@ -252,6 +252,7 @@ def test_builtin_requirements_match_the_pinned_cad_stack():
         "rlpycairo": sandbox_versions.RLPYCAIRO,
         "svgpathtools": sandbox_versions.SVGPATHTOOLS,
         "ezdxf": sandbox_versions.EZDXF,
+        "pillow": sandbox_versions.PILLOW,
         "urdf-parser-py": sandbox_versions.URDF_PARSER_PY,
     }
     seen = set()

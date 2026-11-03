@@ -574,6 +574,16 @@ that is only a picture says so:
       display: "#7D8F69"
       manufacturable: false
 
+A wall papered or tiled is a wall in a colour drawn with an image (see :ref:`cmf-textures`): the image is laid on its
+front, and the wall is still one-sided -- seen from behind, it is not there, image and all.
+
+.. code-block:: yaml
+
+  colors:
+    wallpaper:
+      display: {image: textures/wallpaper.jpg, size: 530}
+      manufacturable: false
+
 References
 ----------
 
@@ -887,7 +897,7 @@ written.
 
 There are several parameter names that are reserved for values used in
 visualization, simulation calculations and, if applicable, manufacturing
-(also referred to as **MCFTT parameters** using their first letters):
+(also referred to as **MCFT parameters** using their first letters):
 
 - ``material``, ``color`` and ``finish``
 
@@ -900,9 +910,9 @@ visualization, simulation calculations and, if applicable, manufacturing
   file (see :ref:`providers`). Handing a provider the declarations, to match by
   what other systems call them (``ids``), is planned.
 
-- ``texture``
-
-  Reserved for a visual texture, in a later change. It means nothing today.
+  A part drawn with a texture -- wood grain, a fabric, a printed label -- names
+  a colour whose ``display`` is an image (see :ref:`cmf-textures`). The texture
+  is how that colour is drawn, not a parameter of its own.
 
 - ``tolerance``
 
@@ -920,11 +930,11 @@ differs from solid to solid, states that through its source: a STEP file, a
 script or an OpenSCAD model that colours what it builds (see :ref:`cmf`). The
 CMF parameters then complete what the source leaves unset.
 
-The MCFTT parameters are not required and have no impact on parts that have
+The MCFT parameters are not required and have no impact on parts that have
 ``vendor`` and ``sku`` set and that are procured using providers of the type
 ``store``.
 
-The MCFTT parameters are a request, and the request is a manufacturing one: they
+The MCFT parameters are a request, and the request is a manufacturing one: they
 say what the part should be made of, and how well, for the provider that will
 make it. They are not a claim about a shape that exists. A part read from a STEP
 file that already states its material does not answer them, and the answer is

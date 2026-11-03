@@ -1311,7 +1311,12 @@ class Project(project_config.Configuration):
             config = cmf.with_parameters(config, parameter_values or {}, object_name)
         instance_name = cmf.instance_key(name, parameter_values)
         declaration = (cmf.Color if kind == "color" else cmf.Finish)(
-            instance_name, self.name, config, base_name=name, parameter_values=parameter_values
+            instance_name,
+            self.name,
+            config,
+            base_name=name,
+            parameter_values=parameter_values,
+            config_dir=self.config_dir,
         )
         self.register_object(kind, instance_name, declaration)
         return declaration

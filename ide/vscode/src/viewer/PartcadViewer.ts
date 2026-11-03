@@ -1149,16 +1149,20 @@ export class PartcadViewer implements vscode.Disposable {
         const styleUri = webview.asWebviewUri(utils.joinPath(this.extensionUri, 'resources', 'css', 'viewer.css'));
         const nonce = getNonce();
 
-        // No 'connect-src': the geometry arrives over postMessage and is parsed
-        // from memory, so the viewer never issues a network request. Nothing
-        // here may be relaxed to load an asset from a CDN. 'media-src blob:' is
-        // the video of a simulation run, which arrives the same way and is
-        // played from memory too.
+        // No network: the geometry arrives over postMessage and is parsed from
+        // memory, so the viewer never issues a network request. Nothing here may
+        // be relaxed to load an asset from a CDN. 'media-src blob:' is the video
+        // of a simulation run, which arrives the same way and is played from
+        // memory too. 'connect-src blob:' is the image a textured face is drawn
+        // with: it is inside the glTF, and three's loader hands it to the
+        // browser's decoder by fetching a 'blob:' URL it made of those bytes
+        // itself - which reaches nothing outside this page, and without which
+        // the face is drawn with no image at all.
         return `<!DOCTYPE html>
 			<html lang="en">
 			<head>
 				<meta charset="UTF-8">
-				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data: blob:; media-src blob:; script-src 'nonce-${nonce}';">
+				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data: blob:; media-src blob:; connect-src blob:; script-src 'nonce-${nonce}';">
 				<meta name="viewport" content="width=device-width, initial-scale=1.0">
 				<link href="${styleUri}" rel="stylesheet">
 				<title>${PartcadViewer.title}</title>

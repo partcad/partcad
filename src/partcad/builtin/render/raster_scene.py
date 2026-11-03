@@ -18,7 +18,9 @@ numpy:
     drawing measured off the picture wants;
   * the material - three's MeshPhongMaterial with its defaults, both sides
     drawn, in the colour each part states and goldenrod where it states none
-    (see 'appearance.py', which every drawing PartCAD makes shares);
+    (see 'appearance.py', which every drawing PartCAD makes shares) - or with
+    the image a colour is drawn with, where it is one, laid on each face as
+    'texture_mapping.py' lays it for the IDE too;
   * the light - the rig 'scene.ts' sets up, light for light: the room's light
     as nine spherical harmonics ('ROOM_LIGHT'), the ambient, spot and point
     lights of drei's <Stage>, and Part.js's hemisphere and point lights, every
@@ -62,10 +64,17 @@ What is drawn differently, and why:
     rather than sorted and blended object by object as three does.
   * Edges are anti-aliased by drawing the whole frame larger and shrinking it
     ('supersample'), where the GPU samples each pixel several times.
+  * An image is read at no more than MAX_TEXTURE pixels a side, and sampled
+    between its four nearest pixels, where the GPU keeps every size of it it
+    may need ('mipmaps'). The light on a face drawn with one is blended across
+    each triangle as it is on any other face; only the image is read per pixel.
 
 Nothing here imports PartCAD: it runs in the render sandbox, beside the
 implementation that calls it, and reaches OCP only to tessellate. numpy is
-build123d's, which every render sandbox holds already.
+build123d's, which every render sandbox holds already. An image is decoded by
+Pillow, which every file type that draws shaded declares (a PNG and a JPEG
+through reportlab, each video type itself); a sandbox without it draws such a
+face in its colour, and says so.
 """
 
 import colorsys
@@ -125,6 +134,11 @@ MAX_TOLERANCE = 10.0
 # Split until no edge is longer than this, the blend is within a hair of the
 # light a GPU works out per pixel.
 MAX_EDGE = 0.25
+
+# The most pixels a side of an image a colour is drawn with is read at. A
+# picture 512 across shows a part's face a few hundred pixels across, and a
+# texture a few copies of the image across it: more is memory and no detail.
+MAX_TEXTURE = 1024
 
 # How many candidate pixels the rasterizer works on at once. Bounds the memory a
 # frame takes - about a hundred bytes per candidate - whatever is being drawn.
@@ -357,6 +371,78 @@ def refine(points, normals, corners, longest):
     return points, normals, corners
 
 
+def textured_triangles(shape, tolerance, texture, longest):
+    """'(points, normals, corners, uv)': 'triangles' of 'shape', refined, with where each corner is on 'texture'.
+
+    'shape' is a compound of placed pieces ('appearance.split_by_look'): each
+    is tessellated in its own frame, which is where the image is laid on it
+    ('texture_mapping.box_uv') - so that it stays where it is on the part
+    wherever the part is placed - and then moved to where it is. 'uv' is (M, 3,
+    2), a place on the image for each corner of each triangle.
+    """
+    import texture_mapping
+    from OCP.TopLoc import TopLoc_Location
+    from OCP.TopoDS import TopoDS_Iterator
+
+    pieces = []
+    iterator = TopoDS_Iterator(shape)
+    while iterator.More():
+        pieces.append(iterator.Value())
+        iterator.Next()
+    if not pieces:
+        pieces = [shape]
+    points, normals, corners, uvs = [], [], [], []
+    offset = 0
+    for piece in pieces:
+        location = piece.Location()
+        p, n, c = triangles(piece.Located(TopLoc_Location()), tolerance)
+        if not len(c):
+            continue
+        p, n, c = refine(p, n, c, longest)
+        uvs.append(texture_mapping.box_uv(p, c, texture.width, texture.height))
+        if not location.IsIdentity():
+            matrix = _matrix(location)
+            p = p @ matrix[:, :3].T + matrix[:, 3]
+            n = n @ matrix[:, :3].T
+        points.append(p)
+        normals.append(n)
+        corners.append(c + offset)
+        offset += len(p)
+    if not points:
+        return np.zeros((0, 3)), np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64), np.zeros((0, 3, 2))
+    return np.concatenate(points), np.concatenate(normals), np.concatenate(corners), np.concatenate(uvs)
+
+
+def _read_image(texture, warnings):
+    """The image 'texture' is drawn with as (H, W, 3) linear colours, or None where it cannot be read.
+
+    No larger than MAX_TEXTURE a side. None, said in 'warnings', where Pillow
+    is not in this sandbox or the image will not decode: the faces are then
+    drawn in the colour the texture's set carries beside it.
+    """
+    import io
+
+    try:
+        from PIL import Image
+    except ImportError:
+        if warnings is not None:
+            warnings.append(
+                "Pillow is not installed where this is drawn, so '%s' is drawn in its colour rather than as an image"
+                % (texture.name or "a texture")
+            )
+        return None
+    try:
+        with Image.open(io.BytesIO(texture.image)) as opened:
+            image = opened.convert("RGB")
+            image.thumbnail((MAX_TEXTURE, MAX_TEXTURE))
+            pixels = np.asarray(image, dtype=np.float64) / 255.0
+    except Exception as e:  # pylint: disable=broad-except
+        if warnings is not None:
+            warnings.append("'%s' will not decode (%s); drawn in its colour" % (texture.name or "a texture", e))
+        return None
+    return srgb_to_linear(pixels).astype(np.float32)
+
+
 def free_edges(shape, tolerance, angular_tolerance=ANGULAR_TOLERANCE):
     """The edges of 'shape' that bound no face, as line segments: an (K, 2, 3) array.
 
@@ -520,11 +606,21 @@ class Scene:
         drawn one-sided - from the front of its faces only, as a wall is (see
         'appearance.split_by_sides') - which 'Painter.draw' culls the backs of.
 
+        Or '[(colour, one_sided, shape, texture)]', where a texture is the image
+        a group is drawn with ('cmf_section.Texture'), or None: what
+        'appearance.split_by_look' answers. A group with one is a compound of
+        placed pieces, each laid with the image in its own frame (see
+        'texture_mapping') and drawn where it is.
+
         'pixels' is the larger side of the picture the object will be drawn into,
         which is what decides how finely it is tessellated.
         """
-        groups = [group if len(group) == 3 else (group[0], False, group[1]) for group in groups]
-        boxes = [box for box in (bounding_box(shape) for _color, _one_sided, shape in groups) if box is not None]
+        groups = [
+            (group[0], False, group[1], None) if len(group) == 2 else (tuple(group) + (None,))[:4] for group in groups
+        ]
+        boxes = [
+            box for box in (bounding_box(shape) for _color, _one_sided, shape, _texture in groups) if box is not None
+        ]
         if not boxes:
             raise ValueError("There is nothing to draw: the object has no geometry")
         low = np.min([box[0] for box in boxes], axis=0)
@@ -540,24 +636,46 @@ class Scene:
         tolerance = tolerance_for(float(np.linalg.norm(size)), pixels)
 
         points, normals, corners, colors, opacity, sides = [], [], [], [], [], []
+        uvs, images = [], []
         segments, segment_colors = [], []
         offset = 0
-        for color, one_sided, shape in groups:
+        # The images the triangles are drawn with, each read once however many
+        # groups draw with it: its index in 'images' by the image's digest, or
+        # None for one that cannot be read.
+        read = {}
+        for color, one_sided, shape, texture in groups:
             parsed = parse_color(color)
             if parsed is None:
                 if warnings is not None:
                     warnings.append("'%s' is not a colour; drawn in the default one" % (color,))
                 parsed = (DEFAULT_COLOR, 1.0)
             rgb, alpha = parsed
-            p, n, c = triangles(shape, tolerance)
+            index = None
+            if texture is not None:
+                if texture.digest not in read:
+                    image = _read_image(texture, warnings)
+                    if image is not None:
+                        images.append(image)
+                    read[texture.digest] = len(images) - 1 if image is not None else None
+                index = read[texture.digest]
+            if index is not None:
+                p, n, c, uv = textured_triangles(shape, tolerance, texture, MAX_EDGE * self.radius)
+            else:
+                p, n, c = triangles(shape, tolerance)
+                if len(c):
+                    p, n, c = refine(p, n, c, MAX_EDGE * self.radius)
+                uv = np.zeros((len(c), 3, 2))
             if len(c):
-                p, n, c = refine(p, n, c, MAX_EDGE * self.radius)
                 points.append(p - self.center)
                 normals.append(n)
                 corners.append(c + offset)
-                colors.append(np.repeat([srgb_to_linear(np.array(rgb) / 255.0)], len(p), axis=0))
+                # A face drawn with an image is white under it: the light falls
+                # on the image's colours (see 'Painter.draw').
+                albedo = np.ones(3) if index is not None else srgb_to_linear(np.array(rgb) / 255.0)
+                colors.append(np.repeat([albedo], len(p), axis=0))
                 opacity.append(np.full(len(c), alpha))
                 sides.append(np.full(len(c), bool(one_sided)))
+                uvs.append((uv, np.full(len(c), -1 if index is None else index, dtype=np.int64)))
                 offset += len(p)
             lines = free_edges(shape, tolerance)
             if len(lines):
@@ -571,6 +689,8 @@ class Scene:
             self.albedo = np.concatenate(colors)
             self.opacity = np.concatenate(opacity)
             self.one_sided = np.concatenate(sides)
+            self.uv = np.concatenate([uv for uv, _index in uvs]).astype(np.float64)
+            self.texture = np.concatenate([index for _uv, index in uvs])
         else:
             self.points = np.zeros((0, 3))
             self.normals = np.zeros((0, 3))
@@ -578,6 +698,11 @@ class Scene:
             self.albedo = np.zeros((0, 3))
             self.opacity = np.zeros(0)
             self.one_sided = np.zeros(0, dtype=bool)
+            self.uv = np.zeros((0, 3, 2))
+            self.texture = np.zeros(0, dtype=np.int64)
+        # The images, in linear light, by the index 'texture' holds for each
+        # triangle (-1 for one drawn in its colour).
+        self.images = images
         self.segments = np.concatenate(segments) if segments else np.zeros((0, 2, 3))
         self.segment_colors = (
             np.concatenate(segment_colors).astype(np.uint8) if segment_colors else np.zeros((0, 3), np.uint8)
@@ -850,6 +975,39 @@ def _shade(owner, planes, width, corner_colors):
     return covered, colors
 
 
+def _textured(colors, covered, owner, planes, width, scene, light):
+    """Put, in 'colors', the image under every pixel of 'covered' whose triangle is drawn with one, lit.
+
+    'colors' is what '_shade' answered for 'covered'; 'light' is '(diffuse,
+    specular)' at each corner of each triangle, from the side that is seen. The
+    place on the image and the light are blended across the triangle as it is
+    seen in depth, as the colours are, and the image read there: its colour
+    times the diffuse light, plus the specular - three's Phong shading of a
+    textured material - then tone-mapped as every other colour is.
+    """
+    import texture_mapping
+
+    triangle = owner[covered]
+    index = scene.texture[triangle]
+    chosen = np.nonzero(index >= 0)[0]
+    if not len(chosen):
+        return
+    triangle = triangle[chosen]
+    pixel = covered[chosen]
+    x = (pixel % width).astype(np.float32) + 0.5
+    y = (pixel // width).astype(np.float32) + 0.5
+    weights = planes.weights(triangle, *planes.offsets(triangle, x, y))
+    uv = np.einsum("pc,pcd->pd", weights.astype(np.float64), scene.uv[triangle])
+    diffuse_light = np.einsum("pc,pc->p", weights, light[0][triangle])
+    specular_light = np.einsum("pc,pc->p", weights, light[1][triangle])
+    albedo = np.empty((len(chosen), 3), dtype=np.float64)
+    for image_index in np.unique(index[chosen]):
+        mine = index[chosen] == image_index
+        albedo[mine] = texture_mapping.sample(scene.images[image_index], uv[mine])
+    shaded = albedo * diffuse_light[:, None] + specular_light[:, None]
+    colors[chosen] = neutral_tone_mapping(shaded).astype(colors.dtype)
+
+
 class Painter:
     """What draws pictures of one scene: their size and look, and the memory a picture is drawn in.
 
@@ -903,6 +1061,17 @@ class Painter:
             lit_back = scene.albedo * (scene.back / math.pi)[:, None] + spec_back[:, None]
             lit = np.where(front[:, None, None], lit_front[corners], lit_back[corners])
             lit = neutral_tone_mapping(lit.reshape(-1, 3)).reshape(lit.shape).astype(np.float32)
+            # For a face drawn with an image, the light alone at each corner - the
+            # diffuse light the image's colour is multiplied by, and the specular
+            # added to it - which 'textured' blends across the triangle and lays
+            # over the image pixel by pixel.
+            light = None
+            if scene.images:
+                diffuse_light = np.where(
+                    front[:, None], (scene.front / math.pi)[corners], (scene.back / math.pi)[corners]
+                )
+                specular_light = np.where(front[:, None], spec_front[corners], spec_back[corners])
+                light = (diffuse_light.astype(np.float32), specular_light.astype(np.float32))
 
             solid = scene.opacity >= 1.0
             # A one-sided triangle - of a wall - is drawn only from the side it
@@ -916,6 +1085,8 @@ class Painter:
                 tx, ty, planes, big_w, big_h, near, self.zbuffer, self.owner, select=None if everything else solid
             )
             covered, colors = _shade(self.owner, planes, big_w, lit)
+            if light is not None:
+                _textured(colors, covered, self.owner, planes, big_w, scene, light)
             image[covered] = to_bytes(colors)
             limit = self.zbuffer
 
@@ -939,6 +1110,8 @@ class Painter:
                     select=see_through,
                 )
                 covered, colors = _shade(owner, planes, big_w, lit)
+                if light is not None:
+                    _textured(colors, covered, owner, planes, big_w, scene, light)
                 alpha = scene.opacity[owner[covered]][:, None]
                 under = image[covered].astype(np.float64) / 255.0
                 over = to_bytes(colors).astype(np.float64) / 255.0

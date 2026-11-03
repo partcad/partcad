@@ -415,6 +415,9 @@ Four things about it are load-bearing:
   what rules out drei's `environment` presets, and why the renderer uses `RoomEnvironment`. It also admits
   only the one script its nonce names, so the viewer bundle is held to a single chunk
   (`LimitChunkCountPlugin`): a dependency's dynamic import split off into a file of its own would never load.
+  `connect-src blob:` is the one fetch it admits, and it reaches nothing outside the page: three's `GLTFLoader`
+  decodes an image embedded in a glb (a colour drawn with a texture) by fetching a `blob:` URL it made of those
+  bytes itself, and without it the face is drawn with no image and nothing but a console line says why.
 - **A file a tab shows is posted as a `Uint8Array` and shown through a Blob URL.** `src/viewer/payloads.ts`
   makes every file in a tab's answer bytes before it is posted -- a render, a model, a run's pictures and its
   video, the Build vs Buy thumbnails, a document's pictures (asked for with `image_bytes`) -- whether the daemon
@@ -484,7 +487,12 @@ Four things about it are load-bearing:
   `wrapper_gltf._colored` and docs/design/cmf.md): `parseTemplate` notes that colour on the mesh before it drops
   the file's materials (`keepOwnColors`, reading the loader's `associations`, because three gives a primitive
   with no material a white default), and `paint` draws it in that colour with this viewer's material, so it is
-  shaded, faded and flickered like the rest. A face is more specific than its part or an assembly, so it wins
+  shaded, faded and flickered like the rest. A primitive drawn with an image (a colour whose display is a texture;
+  `wrapper_gltf._with_textures`) keeps that image the same way, as the material's `map` with white under it --
+  but by its geometry in `ownTextures`, not in `userData`: a clone copies `userData` through JSON, which a
+  texture does not survive, while every clone shares the geometry. The image is the template's and is freed with
+  it (`releaseTemplate`); `disposeMaterial` leaves a texture marked `cached` alone. A face is more specific than
+  its part or an assembly, so it wins
   over the node's colour; a node that nothing colours is `DEFAULT_COLOR`,
   `0xdaa520` -- OCCT's `Quantity_NOC_GOLDENROD`, and the colour PartCAD's own 2D projections draw an
   uncoloured shape in. That constant is the twin of `DEFAULT_COLOR` in `src/partcad/wrappers/appearance.py`,

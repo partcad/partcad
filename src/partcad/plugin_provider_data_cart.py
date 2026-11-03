@@ -71,7 +71,6 @@ class ProviderCartItem:
     material: str = None
     color: str = None
     finish: str = None
-    # TODO(clairbee): add texture
     # TODO(clairbee): add tolerance
 
     format: str = None
@@ -127,9 +126,9 @@ class ProviderCartItem:
             raise ValueError(f"Part or assembly '{self.name}' not found")
         self._set_store_data(object)
 
-        self.material = await object.get_mcftt("material")
-        self.color = await object.get_mcftt("color")
-        self.finish = await object.get_mcftt("finish")
+        self.material = await object.get_mcft("material")
+        self.color = await object.get_mcft("color")
+        self.finish = await object.get_mcft("finish")
 
     def compose(self):
         result = {

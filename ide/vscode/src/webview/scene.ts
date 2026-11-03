@@ -700,10 +700,25 @@ function keepOwnColors(gltf: GLTF): void {
         const material = mesh.material as THREE.Material;
         const own = ownAppearance(material, gltf.parser.associations.get(material)?.materials !== undefined);
         if (own !== undefined) {
-            mesh.userData[OWN_APPEARANCE] = own;
+            const { map, ...plain } = own;
+            mesh.userData[OWN_APPEARANCE] = plain;
+            if (map !== undefined) {
+                // Not in 'userData', which a clone copies through JSON and a
+                // texture does not survive: by the geometry, which every clone
+                // of the template shares. The template's to free, not a show's.
+                map.userData.cached = true;
+                ownTextures.set(mesh.geometry, map);
+            }
         }
     });
 }
+
+/**
+ * The image each primitive of a parsed shape is drawn with, where its colour is
+ * drawn with one (see 'ownAppearance'), by the primitive's geometry: what every
+ * clone of a template shares. Freed with the template ('releaseTemplate').
+ */
+const ownTextures = new WeakMap<THREE.BufferGeometry, THREE.Texture>();
 
 /**
  * The materials a cached shape carries while nothing draws it. Never drawn with:
@@ -752,6 +767,9 @@ async function parseTemplate(buffer: ArrayBuffer): Promise<THREE.Group> {
 function releaseTemplate(group: THREE.Group): void {
     group.traverse((child) => {
         const drawable = child as THREE.Mesh;
+        if (drawable.geometry !== undefined) {
+            ownTextures.get(drawable.geometry)?.dispose();
+        }
         drawable.geometry?.dispose();
         for (const material of [drawable.material ?? []].flat()) {
             if (material !== TEMPLATE_FACES && material !== TEMPLATE_LINES) {
@@ -774,7 +792,9 @@ function releaseTemplate(group: THREE.Group): void {
 function disposeMaterial(material: THREE.Material): void {
     for (const value of Object.values(material)) {
         const texture = value as THREE.Texture | undefined;
-        if (texture?.isTexture) {
+        // An image a primitive is drawn with is its template's, and goes with
+        // the template (see 'keepOwnColors'), not with a show that drew it.
+        if (texture?.isTexture && !texture.userData.cached) {
             texture.dispose();
         }
     }
@@ -1226,7 +1246,10 @@ function paint(group: THREE.Object3D, geometry: Geometry, appearance: Appearance
         let material: THREE.Material;
         if ((drawable as THREE.Mesh).isMesh) {
             const own = drawable.userData[OWN_APPEARANCE] as Appearance | undefined;
-            material = geometry.faceMaterial(primitiveAppearance(own, appearance));
+            const map = ownTextures.get(drawable.geometry);
+            material = geometry.faceMaterial(
+                primitiveAppearance(own !== undefined && map !== undefined ? { ...own, map } : own, appearance),
+            );
         } else if ((drawable as THREE.Line).isLine) {
             material = geometry.lineMaterial(appearance);
         } else {
@@ -1297,18 +1320,24 @@ class Geometry {
      * A one-sided shape - a wall - is drawn from the front of its faces only,
      * whatever this show draws everything else with: from behind it is not there,
      * which is the whole of what it is for (see 'appearance.ts').
+     *
+     * A colour drawn with an image is drawn with it, white under it - three
+     * multiplies the two - and remembers the colour it is drawn as where an
+     * image cannot be in 'userData.flatColor' (see 'painter.ts').
      */
     faceMaterial(appearance: Appearance): THREE.Material {
         const key = appearanceKey(appearance);
         let material = this.faces.get(key);
         if (material === undefined) {
             material = new THREE.MeshPhongMaterial({
-                color: appearance.color,
+                color: appearance.map === undefined ? appearance.color : 0xffffff,
+                map: appearance.map ?? null,
                 side: appearance.oneSided ? THREE.FrontSide : this.side,
                 transparent: appearance.opacity < 1,
                 opacity: appearance.opacity,
             });
             material.userData.alpha = appearance.opacity;
+            material.userData.flatColor = appearance.color;
             this.faces.set(key, material);
         }
         return material;

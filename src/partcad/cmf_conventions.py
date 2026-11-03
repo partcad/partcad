@@ -216,23 +216,26 @@ def convert(ctx, shape, section, convention_name: typing.Optional[str]):
             if reference is None:
                 unmatched.append((kind, stated))
             values[kind] = reference
-        rgba = cmf_set.rgba
+        rgba, texture = cmf_set.rgba, cmf_set.texture
         if values["color"] is None and rgba is not None and cmf_set.color is not None:
             # Still the colour the source drew, and now said to be only that.
             values["color"] = pc_cmf.rgba_reference(rgba)
         elif values["color"] is not None and pc_cmf.rgba_of_reference(values["color"]) is None:
-            # Drawn as its declaration says, which is what claiming the name means.
-            declared = pc_cmf.display(ctx, pc_cmf.lookup(ctx, "color", values["color"], package, quiet=True))
+            # Drawn as its declaration says, which is what claiming the name
+            # means - with the image it is drawn with, if it is one.
+            color = pc_cmf.lookup(ctx, "color", values["color"], package, quiet=True)
+            declared = pc_cmf.display(ctx, color)
             rgba = declared if declared is not None else rgba
+            texture = pc_cmf.texture_of(ctx, color)
         if values["color"] is None and values["material"] is not None:
             claim = getattr(
                 pc_cmf.lookup(ctx, "material", values["material"], package, quiet=True), "color_claim", None
             )
             if claim:
                 values["color"] = pc_cmf.canonical(ctx, "color", claim, package, quiet=True)
-                rgba = pc_cmf.rgba_of_reference(values["color"]) or pc_cmf.display(
-                    ctx, pc_cmf.lookup(ctx, "color", values["color"], package, quiet=True)
-                )
+                color = pc_cmf.lookup(ctx, "color", values["color"], package, quiet=True)
+                rgba = pc_cmf.rgba_of_reference(values["color"]) or pc_cmf.display(ctx, color)
+                texture = pc_cmf.texture_of(ctx, color)
         roughness, metallic = cmf_set.roughness, cmf_set.metallic
         if values["finish"] is not None:
             # What the finish's declaration says to draw it as, and the
@@ -251,6 +254,7 @@ def convert(ctx, shape, section, convention_name: typing.Optional[str]):
                 rgba=rgba,
                 roughness=roughness,
                 metallic=metallic,
+                texture=texture,
             )
         )
     if unmatched:

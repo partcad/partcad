@@ -5,7 +5,7 @@
 #
 """The 'material' a part is made of.
 
-A part's ``material`` parameter is one of the MCFTT parameters: it does not
+A part's ``material`` parameter is one of the MCFT parameters: it does not
 describe the shape, it says what the shape is to be made out of. Until now it
 was a plain string, matched against whatever a manufacturing provider happened
 to call the same substance, and the packages that catalogued materials

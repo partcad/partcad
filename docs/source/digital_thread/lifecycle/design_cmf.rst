@@ -14,8 +14,9 @@ other systems call it, and how to draw it. Two things are kept apart:
 
 - **the claim** -- a declaration with ``manufacturable: true``, the default, says that what it declares can be sourced
   or made as declared;
-- **the display** -- a colour to draw it in, which says nothing about what can be had. A colour that is only a picture,
-  such as ``//builtin/color:rgba;color=C91A09FF``, declares ``manufacturable: false``.
+- **the display** -- a colour to draw it in, or an image to draw its surfaces with (a texture: wood grain, a fabric;
+  see :ref:`cmf-textures`), which says nothing about what can be had. A colour that is only a picture, such as
+  ``//builtin/color:rgba;color=C91A09FF``, declares ``manufacturable: false``.
 
 A finish names a process and a surface specification (a VDI 3400 reference, an SPI grade, an anodising type); a part
 that states none is as produced. A material may claim the colour of its natural surface, so an unpainted aluminium part
@@ -64,7 +65,9 @@ whether it is only a picture, and what it is. ``pc info`` of a part says what it
 
 A part's CMF travels with its geometry, inside its BREP, so whatever draws the part draws it in its colours: the SVG,
 PNG and JPEG drawings colour each face as its CMF says, and the glTF a part is shown with carries a material per
-colour, which the Digital Thread's 3D view draws each face in.
+colour, which the Digital Thread's 3D view draws each face in. A colour drawn with an image travels the same way, image
+and all: a shaded picture, a video and the 3D view draw the image on each face it colours, and a drawing of lines draws
+those faces' edges in the colour the image stands for.
 
 And so does what it is exported into: a STEP file has its colours, its materials and PartCAD's references on every
 face and solid, and reads back as the part it was; a glTF has a material per set, a 3MF a base material per set, a
