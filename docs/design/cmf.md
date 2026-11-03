@@ -86,10 +86,12 @@ no CMF component, no finish states one, and the schema refuses it on a declarati
 `Quantity_Color` are linear and are converted at the edge. A colour outside sRGB is clipped channel by channel rather
 than gamut-mapped: a display value is a hint.
 
-**The standard catalogue holds no colour standard.** `//pub/std/color` declares one thing, the parametric display-only
-`rgba` (`//pub/std/color:rgba;color=<RRGGBBAA>`, `manufacturable: false`): what anybody uses to colour a picture
-without claiming anything. Colour standards are licensed or trademarked, and a package that uses one declares it
-itself, as each vendor declares its own colours.
+**PartCAD ships one colour, and no colour standard.** `//builtin/color` declares one thing, the parametric display-only
+`rgba` (`//builtin/color:rgba;color=<RRGGBBAA>`, `manufacturable: false`): what anybody uses to colour a picture
+without claiming anything. It ships with PartCAD rather than in the public index because PartCAD writes it - for a hex
+or CSS colour, and for a source's colour nothing claims - and a reference PartCAD writes has to resolve in any context,
+in the version of PartCAD that wrote it. Colour standards are licensed or trademarked, and a package that uses one
+declares it itself, as each vendor declares its own colours.
 
 ## 4. Names and references
 
@@ -105,7 +107,7 @@ name and value afterwards (`partcad_utils.utils.parse_parameterized_name`), so f
 always was. When PartCAD writes a name back out it escapes only what would otherwise be misread - a `,` in a value
 that also holds an `=`, and a `%` that would read as an escape - so every name that could be written before is spelled
 as it was, and a parametric reference can be a value of its own
-(`Brick:3004;color=//pub/std/color:rgba;color=C91A09FF`).
+(`Brick:3004;color=//builtin/color:rgba;color=C91A09FF`).
 
 A reference is **canonicalised** before it becomes part of an item's name (`partcad.cmf.canonical`): aliases followed,
 a relative reference (`:stone`, `stone`) made absolute against the package that wrote it, its name escaped. That
@@ -339,7 +341,7 @@ reference to another colour declaration; a display SHALL NOT make anything manuf
 
 **Requirement: parametric declarations.** A declaration SHALL take `parameters:`, and its string fields SHALL name them
 as `%name%`.
-- *Scenario:* `//pub/std/color:rgba;color=C91A09FF` → drawn in `#C91A09`, not manufacturable.
+- *Scenario:* `//builtin/color:rgba;color=C91A09FF` → drawn in `#C91A09`, not manufacturable.
 
 **Requirement: aliases.** A reference through `type: alias`, or through a name in `aliases:`, SHALL resolve to the
 target, and the target's canonical reference SHALL be what enters an item's name.
@@ -348,7 +350,7 @@ target, and the target's canonical reference SHALL be what enters an item's name
 
 **Requirement: texture is reserved.** No declaration SHALL state `texture`.
 
-**Requirement: the standard catalogue.** `//pub/std/color` SHALL declare the parametric display-only `rgba`, and SHALL
+**Requirement: the built-in colour.** `//builtin/color` SHALL declare the parametric display-only `rgba`, and SHALL
 NOT declare any colour standard.
 
 ### 11.2 Names
@@ -403,7 +405,7 @@ colours sRGB.
 **Requirement: converters by `cmfConvention`.** Converters SHALL be implementations in `//builtin/cmf` or a package's
 `cmfConventions:`, mapping names through `ids` within scope, turning an unmatched colour into display-only `rgba`, and
 leaving an unmatched material or finish unset, each reported once per part.
-- *Scenario:* a STEP face coloured RGB (0.8, 0.1, 0.05) with no matching name → `//pub/std/color:rgba;color=CC1A0DFF`
+- *Scenario:* a STEP face coloured RGB (0.8, 0.1, 0.05) with no matching name → `//builtin/color:rgba;color=CC1A0DFF`
   and a warning.
 
 **Requirement: a source's precedence is stated, not inherited.** A converter whose source uses another precedence
@@ -417,7 +419,7 @@ and leave `16` unset.
 
 **Requirement: a part to be made.** Every solid SHALL have a material and every face a colour (a material's claim
 counts), each a declaration with `manufacturable: true`; a stated finish SHALL be one too; no finish is as produced.
-- *Scenario:* faces coloured `//pub/std/color:rgba;…` → the `cmf` check fails, saying the colour is display-only.
+- *Scenario:* faces coloured `//builtin/color:rgba;…` → the `cmf` check fails, saying the colour is display-only.
 
 **Requirement: a STEP part to be made.** Its file's CMF, completed or replaced by its parameters, SHALL be complete.
 
@@ -473,5 +475,5 @@ Thread with the Design tab only, selected and not shown, and only its sub-tabs.
 | STEP via XCAF; scripts and OpenSCAD as sources; converters | decided |
 | IDE: explorer, CMF tab, BOM columns, per-primitive materials | decided |
 | Exports: STEP via XCAF, glTF, 3MF, URDF/MJCF | decided |
-| `//pub/std/color:rgba` in the index; LEGO in partcad-ldraw and its examples | decided |
+| `//builtin/color:rgba` shipped with PartCAD; LEGO in partcad-ldraw and its examples | decided |
 | A visual `texture` | open |

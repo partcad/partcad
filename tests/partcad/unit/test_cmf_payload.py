@@ -292,7 +292,7 @@ def test_a_display_only_colour_is_not_a_specification(tmp_path):
     ctx = _package(tmp_path)
     preview = Section([CmfSet(color="//cmf:preview", material="//cmf:alu", rgba=(0, 255, 0, 1.0))], 0).summary()
     rgba = Section(
-        [CmfSet(color="//pub/std/color:rgba;color=00FF00FF", material="//cmf:alu", rgba=(0, 255, 0, 1.0))], 0
+        [CmfSet(color="//builtin/color:rgba;color=00FF00FF", material="//cmf:alu", rgba=(0, 255, 0, 1.0))], 0
     ).summary()
 
     assert cmf_check.part_findings(ctx, _Built(preview)) == [
@@ -586,8 +586,8 @@ def test_a_section_written_for_other_geometry_is_drawn_in_the_node_s_colour():
 
 
 def test_a_display_only_colour_is_its_own_reference_and_no_claim(tmp_path, monkeypatch):
-    """'//pub/std/color:rgba;color=…' states itself in full: no package is asked, and it claims nothing."""
-    ctx = _package(tmp_path, {"box": _stl(color="//pub/std/color:rgba;color=c91a09ff")}, files={"box.stl": ""})
+    """'//builtin/color:rgba;color=…' states itself in full: no package is asked, and it claims nothing."""
+    ctx = _package(tmp_path, {"box": _stl(color="//builtin/color:rgba;color=c91a09ff")}, files={"box.stl": ""})
     asked = []
     real = cmf.lookup
 
@@ -596,11 +596,11 @@ def test_a_display_only_colour_is_its_own_reference_and_no_claim(tmp_path, monke
         return real(ctx, kind, ref, *args, **kwargs)
 
     monkeypatch.setattr(cmf, "lookup", recording)
-    reference = cmf.canonical(ctx, "color", "//pub/std/color:rgba;color=c91a09ff")
-    assert reference == "//pub/std/color:rgba;color=C91A09FF"
+    reference = cmf.canonical(ctx, "color", "//builtin/color:rgba;color=c91a09ff")
+    assert reference == "//builtin/color:rgba;color=C91A09FF"
     described = cmf.key_of(ctx, ctx.get_part("//cmf:box"))
     assert described["color"] == {"reference": reference, "display": [201, 26, 9, 1.0], "manufacturable": False}
-    assert not [ref for ref in asked if ref.startswith("//pub/std/color:rgba")]
+    assert not [ref for ref in asked if ref.startswith("//builtin/color:rgba")]
 
 
 def test_an_alias_of_a_parametric_instance_is_listed_by_its_look(tmp_path):

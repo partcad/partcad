@@ -86,7 +86,7 @@ A part that states no finish is **as produced**; nothing has to be declared for 
 one.
 
 Colour standards are not shipped with PartCAD. A package that works to one declares the colours it uses, the way a
-vendor declares its own. The one colour the public index declares is ``//pub/std/color:rgba``, below.
+vendor declares its own. The one colour PartCAD ships is ``//builtin/color:rgba``, below.
 
 Aliases
 =======
@@ -116,12 +116,12 @@ A declaration may take parameters, which its fields name as ``%<parameter>%`` --
   colors:
     rgba:
       parameters:
-        color: {type: string, default: "000000FF"}
+        color: {type: string, default: "DAA520FF"}
       display: "#%color%"
       manufacturable: false
 
-``//pub/std/color:rgba;color=C91A09FF`` is that declaration, in the public index: the quick way to draw something in a
-colour without claiming anything.
+``//builtin/color:rgba;color=C91A09FF`` is that declaration, shipped with PartCAD: the quick way to draw something in
+a colour without claiming anything, and what PartCAD reads a hex or CSS colour as.
 
 .. _cmf-names:
 
@@ -155,7 +155,7 @@ Every part type and every assembly type accepts five parameters, whether or not 
 
 ``color``, ``material``, ``finish``
   A reference to a declaration of that kind. A colour that is no declaration but a colour (``"#C91A09"``, ``red``) is
-  read as the display-only ``//pub/std/color:rgba`` of it, with a warning.
+  read as the display-only ``//builtin/color:rgba`` of it, with a warning.
 
 ``sourceCmf``
   What of the CMF the part's source -- its file, script or OpenSCAD model -- states is kept: ``keep`` (the default)
