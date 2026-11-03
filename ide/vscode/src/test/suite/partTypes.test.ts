@@ -44,6 +44,19 @@ suite('Add part: the types offered', () => {
         assert.strictEqual(partTypeChoice('glTF')?.kind, 'gltf');
     });
 
+    test('an SDF script is started from a template, as the other scripts are', () => {
+        const sdf = partTypeChoice('SDF');
+        assert.strictEqual(sdf?.kind, 'sdf');
+        assert.strictEqual(sdf?.template, true);
+        assert.deepStrictEqual(partTypeFilters(sdf)['SDF'], ['py', 'PY']);
+        assert.deepStrictEqual(Object.keys(examples['SDF']), [
+            'Example 1: Cube',
+            'Example 2: CSG',
+            'Example 3: Smooth blend',
+            'Example 4: Gear',
+        ]);
+    });
+
     test('every label is one entry, and only the picker labels are found', () => {
         const labels = PART_TYPE_CHOICES.map((choice) => choice.label);
         assert.strictEqual(new Set(labels).size, labels.length);

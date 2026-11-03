@@ -16,6 +16,7 @@ the picker does not offer is one a user of the editor has no way to add, and an
 extension the dialog does not list is a file the dialog hides.
 """
 
+import ast
 import os
 import re
 
@@ -24,10 +25,7 @@ from partcad_client import object_types
 
 PART_TYPES_TS = os.path.join(os.path.dirname(__file__), "..", "..", "ide", "vscode", "src", "partTypes.ts")
 
-# The scripts the picker offers start from a template ('examples.ts'), which
-# is what it offers a script type for; 'sdf' has none, so it is added with
-# `pc add part sdf` and not from the picker.
-NOT_OFFERED = {"sdf"}
+EXAMPLES_TS = os.path.join(os.path.dirname(PART_TYPES_TS), "examples.ts")
 
 # Scripts are '.py' files whatever library they use, so the file says nothing of
 # which type it is: the extension is not one the type tables would name.
@@ -64,10 +62,21 @@ def _choices():
     return choices
 
 
+def _templates():
+    """The templates 'examples.ts' starts a script from, as {label: {name: text}}, read off the source."""
+    with open(EXAMPLES_TS, encoding="utf-8") as f:
+        source = f.read()
+    templates = {}
+    for match in re.finditer(r"^    '?([\w ]+?)'?: \{\n(.*?)^    \},$", source, re.M | re.S):
+        label, body = match.groups()
+        templates[label] = dict(re.findall(r"^        '([^']+)': `(.*?)`,$", body, re.M | re.S))
+    return templates
+
+
 def test_every_type_pc_add_part_takes_is_offered():
     offered = [choice["kind"] for choice in _choices()]
     assert len(offered) == len(set(offered)), "A type is offered twice"
-    assert set(offered) == set(PART_KINDS) - NOT_OFFERED
+    assert set(offered) == set(PART_KINDS)
 
 
 def test_the_native_cad_formats_are_offered():
@@ -102,3 +111,40 @@ def test_the_extension_a_type_declares_is_spelled_as_it_declares_it():
 def test_only_scripts_are_started_from_a_template():
     for choice in _choices():
         assert choice["template"] == (choice["kind"] in SCRIPT_EXTENSIONS), choice["kind"]
+
+
+def test_every_script_type_has_templates():
+    """The command opens the templates of the type picked when the file chosen does not exist yet."""
+    templates = _templates()
+    for choice in _choices():
+        if choice["template"]:
+            assert templates.get(choice["label"]), choice["label"]
+
+
+def test_every_python_template_is_a_script_its_type_runs():
+    """It parses, it uses the library its type is named after, and it shows what it made.
+
+    'show_object' is how a script hands PartCAD its result -- the wrapper builds
+    what it was shown and nothing else -- so a template that never calls it
+    starts a part that is empty.
+    """
+    library = {"CadQuery": "cadquery", "build123d": "build123d", "SDF": "sdf"}
+    templates = _templates()
+    for choice in _choices():
+        if choice["extensions"] != ["py"]:
+            continue
+        for name, text in templates[choice["label"]].items():
+            tree = ast.parse(text, filename="%s: %s" % (choice["label"], name))
+            imported = {
+                (node.module if isinstance(node, ast.ImportFrom) else alias.name).split(".")[0]
+                for node in ast.walk(tree)
+                if isinstance(node, (ast.Import, ast.ImportFrom))
+                for alias in node.names
+            }
+            assert library[choice["label"]] in imported, (choice["label"], name)
+            shown = [
+                node
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "show_object"
+            ]
+            assert shown, (choice["label"], name)

@@ -75,7 +75,7 @@ Objects
 =======
 
 - **Add** a part, assembly, scene, sketch, or interface. **Add part** asks for the part's type and then its
-  file: a script (OpenSCAD, CadQuery, build123d, Chili3D), which may be a new file started from a template; a
+  file: a script (OpenSCAD, CadQuery, build123d, SDF, Chili3D), which may be a new file started from a template; a
   file PartCAD reads itself (STEP, BREP, IGES, STL, 3MF, OBJ, glTF); or a CAD application's own file, read
   without the application (FreeCAD ``.FCStd``, Autodesk Fusion ``.f3d``, SolidWorks ``.SLDPRT``, Inventor
   ``.ipt``, CATIA V5 ``.CATPart``, ACIS/ShapeManager ``.sat``/``.sab``/``.smt``/``.smb`` and Creo View

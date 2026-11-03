@@ -50,6 +50,7 @@ export const PART_TYPE_CHOICES: PartTypeChoice[] = [
     { label: 'OpenSCAD', kind: 'scad', extensions: ['scad'], template: true },
     { label: 'CadQuery', kind: 'cadquery', extensions: ['py'], template: true },
     { label: 'build123d', kind: 'build123d', extensions: ['py'], template: true },
+    { label: 'SDF', kind: 'sdf', extensions: ['py'], template: true },
     { label: 'Chili3D', kind: 'chili3d', extensions: ['chili'], template: true },
 ];
 
