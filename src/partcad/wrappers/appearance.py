@@ -450,6 +450,26 @@ def split_for_view(tree, whole, origin, warnings=None):
     return ocp_serialize.compound_of(drawn), groups
 
 
+def split_by_sides(tree, whole, warnings=None):
+    """'[(colour, one_sided, shape), ...]': 'split_by_color' with whether each group is drawn one-sided.
+
+    For a drawing that decides what faces the camera itself, picture by
+    picture - the shaded picture, and every frame of a video, which turns the
+    object between frames - rather than once, as a projection does
+    ('split_for_view'). A tree with nothing one-sided in it is 'split_by_color'
+    exactly, each group two-sided; one that has is gathered a piece at a time,
+    by colour and by side.
+    """
+    if not has_one_sided(tree):
+        return [(color, False, shape) for color, shape in split_by_color(tree, whole, warnings)]
+    memo = {}
+    colors_of(tree, warnings, memo)
+    groups = {}
+    for color, one_sided, shape in _placed_leaves(tree, memo):
+        groups.setdefault((color, bool(one_sided)), []).append(shape)
+    return [(color, one_sided, ocp_serialize.compound_of(shapes)) for (color, one_sided), shapes in groups.items()]
+
+
 def _has_geometry(shape):
     """Whether 'shape' holds anything a drawing could draw: a face, or an edge."""
     from OCP.TopAbs import TopAbs_EDGE

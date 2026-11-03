@@ -25,6 +25,9 @@ A sketch that is not such an outline - two of them, one with a hole in it, an
 open one, one with a spline in it, one that is not on the XY plane - is refused
 with the reason, rather than approximated into some other room.
 
+A room's own colour, material and finish - its CMF parameters - paint every
+wall of it: 'room;color=//my/package:sage' (see '_link').
+
 'sketch' and 'height' may be '%...%' expressions over the scene's parameters,
 which is how '//builtin/building:room' is one declaration of every room:
 'room;sketch=//my/package:plan,height=2500'. 'wall' names the part each wall
@@ -40,6 +43,7 @@ geometry to know what its links are, which costs a sandbox once per instance of
 the scene, as it is prepared.
 """
 
+from . import cmf
 from . import config as pc_config
 from . import expr
 from . import logging as pc_logging
@@ -184,16 +188,28 @@ class SceneFactoryWalls(SceneFactoryAssy):
         return self._links
 
     def _link(self, index: int, segment: dict) -> dict:
-        """The ASSY link that places the wall following one edge of the outline."""
+        """The ASSY link that places the wall following one edge of the outline.
+
+        With the room's own colour, material and finish, where it states any:
+        a room painted sage is a room whose walls are sage, whatever colour the
+        wall it is built of is drawn in by default. That is more than an ASSY
+        assembly passes on - its CMF reaches only a link whose item states none
+        (see 'AssemblyFactoryAssy.with_propagated_cmf') - and on purpose: a room
+        *is* its walls, and the wall PartCAD ships states a colour precisely so
+        that a room nobody painted is drawn in one. Nothing here is made, so
+        nothing is claimed by it either.
+        """
         x, y = segment["start"]
+        params = {
+            "length": round(float(segment["length"]), DIGITS),
+            "height": self.height,
+            "radius": round(float(segment["radius"]), DIGITS),
+        }
+        params.update(cmf.own_parameters(self.assembly, self.ctx))
         return {
             "part": self.wall,
             "name": "wall-%d" % index,
-            "params": {
-                "length": round(float(segment["length"]), DIGITS),
-                "height": self.height,
-                "radius": round(float(segment["radius"]), DIGITS),
-            },
+            "params": params,
             "location": [[round(x, DIGITS), round(y, DIGITS), 0.0], [0.0, 0.0, 1.0], round(segment["heading"], DIGITS)],
         }
 

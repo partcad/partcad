@@ -32,7 +32,7 @@ import textwrap
 import pytest
 
 import partcad as pc
-from partcad import output, surface
+from partcad import cmf, output, surface
 from partcad.test.degenerate import DegenerateTest
 from partcad.test.manufacturability import ManufacturabilityTest
 from partcad.test.shell import ShellTest
@@ -45,6 +45,11 @@ import ocp_serialize  # noqa: E402
 
 CONFIG = """
 manufacturable: false
+
+colors:
+  sage:
+    display: "#7D8F69"
+    manufacturable: false
 
 sketches:
   plan:
@@ -95,6 +100,12 @@ scenes:
     type: walls
     sketch: holed
     height: 2500
+  painted:
+    type: enrich
+    source: //builtin/building:room
+    with:
+      sketch: //:plan
+      color: //:sage
 """
 
 # A package that is manufacturable, as a package is unless it says otherwise.
@@ -259,3 +270,27 @@ def test_the_builtin_room_says_it_needs_a_sketch(context):
     project = context.get_project(output.BUILTIN_BUILDING_PACKAGE)
     reason = project.get_broken_object_reason("scene", "room")
     assert "names none: give it a 'sketch', as 'room;sketch=//package:sketch'" in reason
+
+
+def test_the_builtin_wall_is_drawn_in_a_colour_it_declares_and_does_not_claim(context):
+    """Its grey is a CMF colour of '//builtin/building', display-only: a wall is never made."""
+    wall = context.get_part("//builtin/building:wall")
+    assert cmf.own_parameters(wall, context) == {"color": "//builtin/building:wall"}
+    colors = context.get_project(output.BUILTIN_BUILDING_PACKAGE).config_obj["colors"]
+    assert colors["wall"]["display"] == "#9C9284"
+    assert colors["wall"]["manufacturable"] is False
+
+
+def test_a_painted_room_paints_every_wall(context):
+    """A room's own colour is every wall's, over the grey the wall it is built of states."""
+    walls = _walls(context, "painted")
+
+    assert len(walls) == 4
+    for _label, name, _location, properties in walls:
+        assert "color=//:sage" in name
+        assert properties["color"] == "#7D8F69"
+        assert properties["oneSided"] is True
+
+    # And a room nobody painted is the walls' own grey.
+    for _label, _name, _location, properties in _walls(context, "living"):
+        assert properties["color"] == "#9C9284"

@@ -340,7 +340,9 @@ class Shaded:
     def build(self, warnings):
         """Tessellate and light the object, and frame the camera on it: what drawing needs. Returns itself."""
         raster_scene = self.raster_scene
-        _whole, groups = render_svg._by_color(self.request, warnings)
+        # With whether each group is one-sided - a wall - which the painter
+        # culls the backs of, frame by frame, as the 3D view does.
+        groups = render_svg.by_color_and_side(self.request, warnings)
         self.scene = raster_scene.Scene(groups, max(self.width, self.height), warnings)
         aspect = self.width / float(self.height)
         sphere = self.scene.sphere

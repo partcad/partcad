@@ -525,3 +525,61 @@ def test_a_room_seen_from_a_corner_is_drawn_without_its_near_corner(real_svg, tm
     assert near in two_sided
     assert near not in one_sided
     assert far in one_sided
+
+
+# --------------------------------------------------------------------------- #
+# A one-sided shape, shaded                                                   #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture(scope="module")
+def raster_scene():
+    """'raster_scene.py', which draws the shaded pictures and the frames of a video, with the real kernel."""
+    directory = output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.RENDER]]
+    if directory not in sys.path:
+        sys.path.append(directory)
+    import raster_scene as module
+
+    return module
+
+
+BACKGROUND = (0x1F, 0x1F, 0x1F)
+
+
+def _shaded(raster_scene, groups, direction):
+    """A shaded picture of 'groups' looked at from 'direction': the pixels that are not the background."""
+    import numpy as np
+
+    scene = raster_scene.Scene(groups, 200)
+    camera = raster_scene.Camera(direction=direction, distance=raster_scene.frame_distance(scene.sphere, 1.0))
+    frame = raster_scene.Painter(scene, camera, 80, 80, BACKGROUND).draw(np.eye(3))
+    return int(np.any(frame != np.array(BACKGROUND, dtype=np.uint8), axis=2).sum())
+
+
+def test_a_one_sided_wall_shaded_from_behind_is_not_there(raster_scene):
+    """The shaded picture culls what the 3D view culls ('side: FrontSide'), from wherever it is looked at."""
+    wall = wrapper_wall.build(LENGTH, HEIGHT)
+    front, behind = (0.3, -1.0, 0.4), (0.3, 1.0, 0.4)
+
+    # Two-sided, as everything else is drawn: seen from either side.
+    assert _shaded(raster_scene, [("#9C9284", wall)], front) > 0
+    assert _shaded(raster_scene, [("#9C9284", wall)], behind) > 0
+    # One-sided: seen from its front, and not at all from behind.
+    assert _shaded(raster_scene, [("#9C9284", True, wall)], front) > 0
+    assert _shaded(raster_scene, [("#9C9284", True, wall)], behind) == 0
+
+
+def test_a_tree_is_split_by_colour_and_by_side():
+    wall = wrapper_wall.build(LENGTH, HEIGHT)
+    leaf = {ocp_serialize.KEY_BREP: "unused", ocp_serialize.KEY_SHAPE: wall}
+    plain = {**leaf, "properties": {"color": "#E4DED4"}}
+    one_sided = {**leaf, "properties": {"color": "#E4DED4", appearance.ONE_SIDED_KEY: True}}
+
+    # Nothing one-sided: 'split_by_color' exactly, the whole as its one group.
+    [(color, sided, shape)] = appearance.split_by_sides(plain, wall)
+    assert (color, sided, shape) == ("#E4DED4", False, wall)
+
+    # A room of one wall either way: one group per colour and side.
+    room = {ocp_serialize.KEY_ASSEMBLY: [plain, one_sided]}
+    groups = appearance.split_by_sides(room, ocp_serialize.compound_of([wall, wall]))
+    assert sorted((color, sided) for color, sided, _shape in groups) == [("#E4DED4", False), ("#E4DED4", True)]

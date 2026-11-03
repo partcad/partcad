@@ -553,10 +553,26 @@ not by the part:
   straight wall is as flat as a sheet of paper, because that is what it is.
 - It reports ``oneSided: true`` among its :ref:`properties <properties>`, and
   that is what everything that draws it reads: the 3D view in the IDE culls the
-  backs of its faces, and ``pc render`` leaves out the faces the camera would see
-  from behind -- cutting a curved wall where it turns away -- so that from
-  straight above every wall is seen edge-on and the drawing is the plan. An alias
-  of a wall is one-sided too.
+  backs of its faces, a shaded picture or a video (``--style shaded``) does the
+  same frame by frame, and a drawing of lines leaves out the faces the camera
+  would see from behind -- cutting a curved wall where it turns away -- so that
+  from straight above every wall is seen edge-on and the drawing is the plan. An
+  alias of a wall is one-sided too.
+
+A wall is coloured as any part is, by its :ref:`CMF <cmf>` ``color`` parameter
+(and given a ``material`` or a ``finish`` the same way): what it is painted.
+``//builtin/building:wall`` is a warm grey unless it is told otherwise -- the
+display-only colour ``//builtin/building:wall``, which claims nothing, since a
+wall is never made -- so ``wall;color=//my/apartment:sage`` is a sage wall. The
+colour a wall is painted in need not be one anybody can buy, either; a colour
+that is only a picture says so:
+
+.. code-block:: yaml
+
+  colors:
+    sage:
+      display: "#7D8F69"
+      manufacturable: false
 
 References
 ----------

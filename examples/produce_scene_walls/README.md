@@ -15,10 +15,18 @@ pc render -t svg --view top -S living-room   # from above, it is the plan
 ```
 
 `living-room` is a `walls` scene: a wall per edge of the sketch `plan`, every
-one of them looking in. `entrance` is one wall on its own, with a door and a
-window cut out of it by the sketch `openings`, drawn as if the wall were
-unrolled flat. `bay` is an arc wall, bending towards the side it is seen
-from.
+one of them looking in, and every one painted the room's colour - a CMF
+colour, `sage`, that claims nothing, since nobody buys a wall. `entrance` is
+one wall on its own, with a door and a window cut out of it by the sketch
+`openings`, drawn as if the wall were unrolled flat. `bay` is PartCAD's own
+wall asked for an arc, bending towards the side it is seen from, in the grey
+a wall is unless it is painted.
+
+A shaded picture, or a video of the room turning, is drawn the same way:
+
+```shell
+pc render -t png --style shaded -S living-room
+```
 
 PartCAD ships both as `//builtin/building:wall` and `//builtin/building:room`,
 which any package can use without declaring anything - name the sketch in
@@ -34,7 +42,11 @@ pc render -t png -S "//builtin/building:room;sketch=//pub/examples/partcad/produ
 ### living-room
 <table><tr>
 <td valign=top><img src="././living-room.svg" alt="living-room" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></td>
-<td valign=top>The walls standing on the plan, every one looking in</td>
+<td valign=top>The walls standing on the plan, every one looking in, every one painted sage</td>
+<td valign=top>Parameters:<br/><ul>
+<li>color: :sage</li>
+</ul>
+</td>
 </tr></table>
 
 ## Parts
@@ -48,7 +60,11 @@ pc render -t png -S "//builtin/building:room;sketch=//pub/examples/partcad/produ
 ### entrance
 <table><tr>
 <td valign=top><img src="././entrance.svg" alt="entrance" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></td>
-<td valign=top>A wall with a door and a window in it, seen from the front</td>
+<td valign=top>A wall with a door and a window in it, seen from the front, painted sage</td>
+<td valign=top>Parameters:<br/><ul>
+<li>color: :sage</li>
+</ul>
+</td>
 </tr></table>
 
 ## Sketches

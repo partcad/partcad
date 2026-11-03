@@ -929,6 +929,20 @@ def _by_color(request, warnings, origin=None):
     return whole, appearance.split_by_color(tree, whole, warnings)
 
 
+def by_color_and_side(request, warnings):
+    """'[(colour, one_sided, shape), ...]': what '_by_color' answers, with whether each group is drawn one-sided.
+
+    For a drawing that culls what faces away from it itself, picture by picture -
+    the shaded picture and the frames of a video ('render_raster.Shaded') - since
+    the object turns between them (see 'appearance.split_by_sides').
+    """
+    whole = request["wrapped"]
+    tree = request.get("shape_tree")
+    if tree is None:
+        return [(appearance.DEFAULT_COLOR, False, whole)]
+    return appearance.split_by_sides(tree, whole, warnings)
+
+
 def process(path, request):
     try:
         warnings = []

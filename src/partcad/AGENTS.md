@@ -1155,7 +1155,12 @@ at all).
   and `openings` are `%...%` expressions over parameters of the same names, and `room`, a `type: walls` scene
   over `sketch` and `height`. The types are PartCAD's (`part_factory_wall.py`, `scene_factory_walls.py`), and
   the package is how a package uses them without declaring anything: `room;sketch=//pkg:plan`. A sketch
-  handed to either has to be named in full, because a bare name resolves in `//builtin/building`.
+  handed to either has to be named in full, because a bare name resolves in `//builtin/building`. It also
+  declares one CMF colour, `wall`, display-only, which is the default of the wall's `color` parameter: a wall
+  is coloured as any part is, never with `properties: color:`. A `walls` scene passes its own CMF to every
+  wall it places, in the link's `params:` (`SceneFactoryWalls._link`) -- further than
+  `with_propagated_cmf` goes, which stops at an item that states a colour, and on purpose: the room is its
+  walls, and the shipped wall states its grey precisely so that an unpainted room has one.
 
   **A `walls` scene is the one scene that reads geometry to know what its links are.** It is
   `SceneFactoryAssy` with the file replaced: `read_assy` returns the links `_links_async` worked out from the
@@ -1177,7 +1182,10 @@ at all).
   anything is projected -- a cylindrical face is first cut along its silhouette (`_silhouette_pieces`), so the
   near half of a round wall goes and the far half stays, and the cut adds no line the hidden-line algorithm
   would not draw there anyway. A face seen exactly edge-on is kept, which is what makes a room seen from
-  above its plan.
+  above its plan. The shaded style (`raster_scene.py`: a PNG with `--style shaded`, and every frame of a video)
+  cannot cull once, because a video turns the object between frames: it is handed groups that say whether
+  they are one-sided (`appearance.split_by_sides`, `render_svg.by_color_and_side`), and `Painter.draw` drops a
+  one-sided triangle that faces away from the eye in that frame, by the winding it already works out.
 
   **There is deliberately no `//builtin/simulate`.** `simulation:` is a third section resolved exactly like
   the other two — a plugin is an `output.Implementation` like any other — and PartCAD implements none of it.

@@ -191,11 +191,35 @@ sketch in full, because it belongs to your package and not to ``//builtin``:
         sketch: //my/apartment:living-room-plan
         height: 2600
 
+A room's own :ref:`CMF <cmf>` -- its ``color``, ``material`` and ``finish``
+parameters -- paints every wall of it, over whatever colour the wall states
+itself:
+
+.. code-block:: yaml
+
+  colors:
+    sage:
+      display: "#7D8F69"
+      manufacturable: false   # a picture: a room is never made
+
+  scenes:
+    living-room:
+      type: enrich
+      source: //builtin/building:room
+      with:
+        sketch: //my/apartment:living-room-plan
+        color: //my/apartment:sage
+
+That goes further than an assembly's CMF goes, which reaches only an item that
+states none of its own, and on purpose: a room *is* its walls, and the wall
+PartCAD ships states a colour -- a display-only warm grey -- so that a room
+nobody painted is drawn in one.
+
 ``wall:`` names the part each wall is, ``//builtin/building:wall`` unless it says
 otherwise. Whatever it names is asked for with the parameters ``length``,
-``height`` and ``radius`` (see :ref:`walls`), so a wall of your own -- another
-colour, say -- is an ``enrich`` of that one, or a ``type: wall`` part declaring
-the same three parameters.
+``height`` and ``radius`` (see :ref:`walls`), and with the room's CMF, so a wall
+of your own is an ``enrich`` of that one, or a ``type: wall`` part declaring the
+same three parameters.
 
 A room is a scene, so it is not manufacturable, and its walls are not either:
 see :ref:`walls` for what that excuses them from in ``pc test``.
