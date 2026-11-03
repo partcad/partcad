@@ -112,6 +112,14 @@ def test_the_scripts_are_keyed_for_the_cadmpeg_they_run():
     assert {script: code_version.declared(os.path.join(BUILTIN_IMPORT, script)) for script in KEYED_FOR} == KEYED_FOR
 
 
+def test_a_cadmpeg_that_never_returns_is_given_up_on(monkeypatch):
+    """A converter stuck on a file it cannot read fails the read rather than holding the sandbox forever."""
+    step = _module("cadmpeg_step.py")
+    monkeypatch.setattr(step, "RUN_TIMEOUT_SECONDS", 1)
+    with pytest.raises(RuntimeError, match="did not finish in 1 seconds"):
+        step.run([sys.executable, "-c", "import time; time.sleep(60)"])
+
+
 def test_a_node_is_named_after_what_the_file_calls_it():
     reader = _module("import_cadmpeg.py")
     assert reader.node_name("Lid", "x") == "Lid"
