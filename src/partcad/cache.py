@@ -45,6 +45,34 @@ class Cache:
     def enabled(self) -> bool:
         return bool(self.backends)
 
+    # Which tiers 'tiers' keeps: every one, only those shared over the network,
+    # or none at all.
+    ALL_TIERS = "all"
+    REMOTE_TIERS = "remote"
+    NO_TIERS = "none"
+
+    def tiers(self, which: str) -> "Cache":
+        """This cache, reading and writing only the tiers 'which' names ('ALL_TIERS', 'REMOTE_TIERS', 'NO_TIERS').
+
+        A view, not a copy: it shares this cache's tiers and the I/O they queue.
+        With 'REMOTE_TIERS' a write goes to the remote tiers alone, and a read
+        promotes what a farther one held into the nearer remote ones only - so
+        nothing read or written through it reaches the files on this machine.
+        That is for what is big and asked for again elsewhere rather than here:
+        a video, which the user who rendered it already has.
+        """
+        if which == self.REMOTE_TIERS:
+            backends = [b for b in self.backends if isinstance(b, cache_backend.RemoteCacheBackend)]
+        elif which == self.NO_TIERS:
+            backends = []
+        else:
+            return self
+        view = Cache.__new__(Cache)
+        view.data_type = self.data_type
+        view.user_config = self.user_config
+        view.backends = backends
+        return view
+
     def _name(self, hash_str: str, key: str) -> str:
         return "%s.%s" % (hash_str, key)
 

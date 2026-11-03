@@ -357,10 +357,54 @@ def is_document_format(format_name: str, section_obj) -> bool:
 # What is left over is what the implementation is handed, so adding a field here
 # hides it from every implementation - including the ones packages write.
 # 'packageFiles' is the implementation's too: which of its fields name files of
-# the object's package (see 'Implementation.package_files').
+# the object's package (see 'Implementation.package_files'); and so are
+# 'parallel', 'cacheTiers' and 'sceneCache', which say how PartCAD runs it and
+# keeps what it makes (see the constants below).
 IMPLEMENTATION_KEYS = frozenset(
-    {"path", "package", "pythonRequirements", "pythonVersion", "dockerImage", "container", "packageFiles"}
+    {
+        "path",
+        "package",
+        "pythonRequirements",
+        "pythonVersion",
+        "dockerImage",
+        "container",
+        "packageFiles",
+        "parallel",
+        "cacheTiers",
+        "sceneCache",
+    }
 )
+
+# 'parallel: true' says the implementation draws on as many threads as its
+# request's 'threads' says, and that how many it draws on - and the 'memory' it
+# is given to draw in - changes nothing in the file it writes. PartCAD then runs
+# it in as many of the machine's process slots as are free when it starts (see
+# 'sandbox_lock.ProcessSlots.take_more'), says how many in 'threads', and keeps
+# both fields out of the file's cache key. A video draws its frames this way.
+PARALLEL_KEY = "parallel"
+THREADS_KEY = "threads"
+MEMORY_KEY = "memory"
+
+# 'cacheTiers' says where a file of this type is kept once written: 'all' the
+# cache's tiers (the default), only the 'remote' ones - a team's memcached, S3 -
+# or 'none'. A video is 'remote': it is big, and the user who rendered it has
+# it already, so the local tiers would hold a second copy nobody on this machine
+# asks for; whoever else renders the same video gets it from a shared tier.
+CACHE_TIERS_KEY = "cacheTiers"
+CACHE_TIERS = ("all", "remote", "none")
+
+# 'sceneCache: true' says the implementation draws from a scene - the object
+# tessellated, centred and lit - that it can hand back and be handed again (see
+# 'builtin/render/raster_scene.Scene.to_bytes'). PartCAD keeps it in every tier,
+# as it keeps geometry, under a key of what it is made from: the object, its
+# colours and the size of the picture; and hands it in as 'scene' the next time
+# a file of the same object at that size is drawn, so the object is tessellated
+# once rather than once per video. It asks for it back with 'scene_wanted'.
+SCENE_CACHE_KEY = "sceneCache"
+SCENE_KEY = "scene"
+SCENE_WANTED_KEY = "scene_wanted"
+# The fields of a request that decide which scene a picture is drawn from.
+SCENE_FIELDS = ("size", "width", "height")
 OUTPUT_KEYS = frozenset({"extension", "prefix", "exclude", "output_dir"})
 RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 
@@ -762,6 +806,25 @@ class Implementation:
         if isinstance(fields, str):
             fields = [fields]
         return [field for field in fields if isinstance(field, str) and field]
+
+    @property
+    def parallel(self) -> bool:
+        """Whether this implementation draws on the threads 'threads' says, writing the same file whatever it says."""
+        return as_flag(self.config.get(PARALLEL_KEY), PARALLEL_KEY)
+
+    @property
+    def cache_tiers(self) -> str:
+        """Which of the cache's tiers keep a file of this type: 'all', 'remote' or 'none' (see 'CACHE_TIERS_KEY').
+
+        Anything else is 'all', which is what a file type that says nothing gets.
+        """
+        tiers = self.config.get(CACHE_TIERS_KEY)
+        return tiers if tiers in CACHE_TIERS else "all"
+
+    @property
+    def scene_cache(self) -> bool:
+        """Whether this implementation hands back the scene it draws from, and is handed one (see 'SCENE_CACHE_KEY')."""
+        return as_flag(self.config.get(SCENE_CACHE_KEY), SCENE_CACHE_KEY)
 
     @property
     def container(self) -> Optional[dict]:

@@ -261,6 +261,27 @@ class ProcessSlots:
         with self._mutex:
             self._in_use -= 1
 
+    def take_more(self, wanted: int) -> int:
+        """Take up to 'wanted' more slots, as many as are free now; how many were taken.
+
+        Never waits. For a run that already holds a slot and can use more - an
+        implementation drawing on several threads (see 'output.PARALLEL_KEY') -
+        and does its work on however many it gets: waiting for more would be a
+        run holding a slot while it waits, which is what 'slot' never does.
+        Give them back with 'give_back'.
+        """
+        with self._mutex:
+            taken = max(0, min(int(wanted), self._count - self._in_use))
+            self._in_use += taken
+            return taken
+
+    def give_back(self, count: int) -> None:
+        """Return slots 'take_more' took."""
+        if count <= 0:
+            return
+        with self._mutex:
+            self._in_use -= count
+
     @contextlib.contextmanager
     def slot(self):
         if not self._try_acquire():

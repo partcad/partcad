@@ -33,7 +33,7 @@ from . import output
 from . import physics as pc_physics
 from . import render_overlay
 from . import runtime as pc_runtime
-from . import sandbox_versions, scene_world, shape_ports, shape_section, source_key
+from . import sandbox_lock, sandbox_versions, scene_world, shape_ports, shape_section, source_key
 from . import surface as pc_surface
 from . import sync_threads, wrapper
 from .cache_hash import CacheHash
@@ -313,15 +313,124 @@ class _Output:
     was at 'path' before it was written ('_file_identity').
     """
 
-    __slots__ = ("impl", "script", "request", "path", "artifact", "before")
+    __slots__ = ("impl", "script", "request", "path", "artifact", "before", "scene")
 
-    def __init__(self, impl, script, request, path, artifact=None):
+    def __init__(self, impl, script, request, path, artifact=None, scene=None):
         self.impl = impl
         self.script = script
         self.request = request
         self.path = path
         self.artifact = artifact
         self.before = None
+        # The cache key of the scene the file is drawn from, for an
+        # implementation that hands it back ('output.SCENE_CACHE_KEY').
+        self.scene = scene
+
+
+def _kept_in(cache, impl):
+    """The tiers of 'cache' a file of 'impl' is kept in and looked for in (see 'output.CACHE_TIERS_KEY')."""
+    if cache is None:
+        return None
+    return cache.tiers(impl.cache_tiers)
+
+
+async def _scene_in_async(cache, output_):
+    """Hand the file's implementation the scene the cache holds for it, or ask it for the one it builds.
+
+    Every tier, as geometry is kept: a scene is what drawing the file starts
+    from, and is drawn from again for the next file of the object at that size
+    (see 'output.SCENE_CACHE_KEY'). Put in the request after it was keyed, like
+    'threads': a file is the same whether its scene was built or handed in.
+    """
+    if output_.scene is None:
+        return
+    found = await cache_artifacts.restore_entries_async(cache, output_.scene, [output.SCENE_KEY])
+    if output.SCENE_KEY in found:
+        output_.request[output.SCENE_KEY] = found[output.SCENE_KEY]
+        output_.request.pop(output.SCENE_WANTED_KEY, None)
+    else:
+        output_.request.pop(output.SCENE_KEY, None)
+        output_.request[output.SCENE_WANTED_KEY] = True
+
+
+async def _scene_out_async(cache, output_, result):
+    """Keep the scene the file's implementation handed back, and take it out of what the run answered.
+
+    Out of the answer whether it is kept or not: it is bytes for the cache, and
+    neither the file's cached answer nor whoever asked for the file wants them.
+    Out of the request too, which the file is reported from.
+    """
+    if not output_.impl.scene_cache:
+        return
+    handed_in = output_.request.pop(output.SCENE_KEY, None)
+    wanted = output_.request.pop(output.SCENE_WANTED_KEY, None)
+    scene = result.pop(output.SCENE_KEY, None) if isinstance(result, dict) else None
+    if wanted and handed_in is None and isinstance(scene, (bytes, bytearray)) and output_.scene is not None:
+        await cache_artifacts.store_entries_async(cache, output_.scene, {output.SCENE_KEY: bytes(scene)})
+
+
+# The most threads a parallel implementation is given, whatever the machine.
+MAX_THREADS = 64
+
+
+class _ThreadGrant:
+    """The process slots the parallel implementations among 'outputs' draw on, beyond the one their run holds.
+
+    A parallel implementation (see 'output.PARALLEL_KEY') does the work of
+    several processes in one, so it is given what several would have been: as
+    many of the slots that are free when its process starts as it can use - the
+    'threads' it asked for, or one per slot there is - and told how many in its
+    request's 'threads'. Taken by the run's request as it is written, which is
+    once the run holds its own slot ('take'), never waited for, and given back
+    when the run is over ('give_back'). A run that is not given any more draws
+    on the one thread it has; what it writes is the same either way. The
+    request is left as it was found: a file written again, once a call writing
+    several has failed, is granted afresh rather than held to that call's grant.
+
+    Only where the run is a process on this machine: a sandbox elsewhere has
+    cores of its own, which the slots here do not count, and an implementation
+    told nothing draws on as many as it finds there.
+    """
+
+    def __init__(self, outputs, local):
+        self.outputs = [o for o in outputs if o.impl.parallel] if local else []
+        self.taken = None
+        self.asked = {}
+
+    def take(self):
+        if not self.outputs or self.taken is not None:
+            return
+        wanted = {}
+        for output_ in self.outputs:
+            request = output_.request
+            self.asked[id(output_)] = (output.THREADS_KEY in request, request.get(output.THREADS_KEY))
+            wanted[id(output_)] = self._wanted(request.get(output.THREADS_KEY))
+        self.taken = sandbox_lock.process_slots.take_more(max(wanted.values()) - 1)
+        for output_ in self.outputs:
+            output_.request[output.THREADS_KEY] = min(wanted[id(output_)], 1 + self.taken)
+
+    def give_back(self):
+        if self.taken is None:
+            return
+        sandbox_lock.process_slots.give_back(self.taken)
+        self.taken = None
+        for output_ in self.outputs:
+            present, asked = self.asked.pop(id(output_), (False, None))
+            if present:
+                output_.request[output.THREADS_KEY] = asked
+            else:
+                output_.request.pop(output.THREADS_KEY, None)
+
+    @staticmethod
+    def _wanted(asked):
+        """How many threads a file asking for 'asked' can use: that many, or one per process slot, within 1..'MAX_THREADS'."""
+        try:
+            asked = int(asked) if asked is not None and not isinstance(asked, bool) else None
+        except (TypeError, ValueError):
+            asked = None
+        if asked is None:
+            asked = sandbox_lock.process_slots.count
+        return max(1, min(asked, MAX_THREADS))
 
 
 def _sandbox_of(impl):
@@ -2446,7 +2555,13 @@ class Shape(ShapeConfiguration):
         # request as it has always been written, as JSON. Several files are one
         # document holding every request and the shape once (see
         # '_together_request'), and are never a container's.
+        #
+        # Which is also when a parallel implementation is given the process
+        # slots it draws on beyond the one the run holds (see '_ThreadGrant'):
+        # the run holds its own by then, and what is free is what is free as
+        # it starts.
         def request_serialized():
+            grant.take()
             if together:
                 return shape_envelope.serialize(_together_request(outputs))
             if container:
@@ -2521,7 +2636,13 @@ class Shape(ShapeConfiguration):
                 extra = {"output_files": written, "session": session}
             else:
                 extra = {"session": session}
-            exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized, **extra)
+            # A process on this machine, holding one of its process slots: the
+            # only kind of run the slots here say anything about.
+            grant = _ThreadGrant(outputs, local=not container and not getattr(runtime, "EXCHANGES_FILES", False))
+            try:
+                exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized, **extra)
+            finally:
+                grant.give_back()
             if exitcode != 0 and len(errors) == 0:
                 errors = command_failure(command, exitcode)
             if errors and not together:
@@ -2752,7 +2873,8 @@ class Shape(ShapeConfiguration):
             extra,
         )
 
-        output_ = _Output(impl, script, request, final_filepath, artifact)
+        scene = await self._scene_hash(impl, script, request, extra) if impl.scene_cache else None
+        output_ = _Output(impl, script, request, final_filepath, artifact, scene)
         if batch is not None:
             return await batch.submit(cache, output_)
         (outcome,) = await self._outputs_run_async(ctx, [output_], cache)
@@ -2789,7 +2911,8 @@ class Shape(ShapeConfiguration):
                 missing = []
                 for index in indices:
                     output_ = outputs[index]
-                    result = await cache_artifacts.restore_files_async(cache, output_.artifact, output_.path)
+                    kept = _kept_in(cache, output_.impl)
+                    result = await cache_artifacts.restore_files_async(kept, output_.artifact, output_.path)
                     if result is not None:
                         outcomes[index] = result
                         continue
@@ -2797,17 +2920,58 @@ class Shape(ShapeConfiguration):
                     missing.append(index)
                 if not missing:
                     continue
+                for index in missing:
+                    await _scene_in_async(cache, outputs[index])
                 answers = await self._run_implementations_async(ctx, [outputs[index] for index in missing])
                 for index, result in zip(missing, answers):
                     outcomes[index] = result
                     output_ = outputs[index]
+                    await _scene_out_async(cache, output_, result)
                     if output_.artifact is None or not isinstance(result, dict) or not result.get("success", False):
                         # Only an answer is remembered (see 'partcad.cache_artifacts').
                         continue
                     written = self._written_besides(output_.impl, result, output_.path, output_.before)
                     if written is not None:
-                        await cache_artifacts.store_files_async(cache, output_.artifact, result, output_.path, written)
+                        kept = _kept_in(cache, output_.impl)
+                        await cache_artifacts.store_files_async(kept, output_.artifact, result, output_.path, written)
         return outcomes
+
+    async def _scene_hash(self, impl, script: str, request: dict, extra: dict):
+        """The cache key of the scene a file of 'impl' is drawn from, or None (see 'output.SCENE_CACHE_KEY').
+
+        What the scene is made of, and nothing about what is made of it: the
+        object ('get_artifact_key_async'), what its tree says of its shapes - the
+        colours - and the view or the cut of it ('extra', as '_output_run_async'
+        works it out for the file), how big a picture it is tessellated for
+        ('output.SCENE_FIELDS'), and the code and environment that build it. Not
+        the file type: an MP4 and a WebM of one object, at one size, are drawn
+        from one scene - and neither is the camera, the colours of the
+        background, the speed or anything else a frame or the encoder is told.
+
+        Never raises, like '_artifact_hash': a scene that cannot be keyed is
+        built every time, which is what it always was.
+        """
+        try:
+            subject_key = await self.get_artifact_key_async()
+            question = {
+                "section": "scene",
+                "fields": {field: request.get(field) for field in output.SCENE_FIELDS},
+                "environment": impl.environment_cache_key(),
+                "source": impl.source_cache_key(),
+                "wrappers": source_key.wrappers_key(),
+            }
+            question.update(extra or {})
+            return cache_artifacts.question_hash(
+                "%s:%s#%s" % (self.project_name, self.name, output.SCENE_KEY),
+                subject_key,
+                question,
+                files=[script],
+            )
+        except Exception as e:
+            pc_logging.debug(
+                "%s:%s: the scene of %s will not be cached: %s" % (self.project_name, self.name, impl.format_name, e)
+            )
+            return None
 
     def _written_besides(self, impl, result, final_filepath, before) -> Optional[list]:
         """What else one run wrote, as the implementation named it, or None if it cannot be said.
@@ -3816,12 +3980,15 @@ class Shape(ShapeConfiguration):
         """
         try:
             subject_key = await self.get_artifact_key_async()
+            # What a parallel implementation is told about the machine it runs
+            # on changes nothing in the file it writes (see 'output.PARALLEL_KEY').
+            unkeyed = (output.THREADS_KEY, output.MEMORY_KEY) if impl.parallel else ()
             question = {
                 "section": section,
                 "label": label,
                 "implementation": implementation,
-                "options": impl.config,
-                "request": {key: value for key, value in request.items() if key != "wrapped"},
+                "options": {key: value for key, value in impl.config.items() if key not in unkeyed},
+                "request": {key: value for key, value in request.items() if key != "wrapped" and key not in unkeyed},
                 "reproducible": impl.reproducible,
                 # Declared, never observed: see 'Implementation.environment_cache_key'.
                 "environment": impl.environment_cache_key(),

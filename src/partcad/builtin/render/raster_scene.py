@@ -615,6 +615,8 @@ class Scene:
         'pixels' is the larger side of the picture the object will be drawn into,
         which is what decides how finely it is tessellated.
         """
+        # The size it was tessellated for: a scene is drawn into pictures of it.
+        self.pixels = int(pixels)
         groups = [
             (group[0], False, group[1], None) if len(group) == 2 else (tuple(group) + (None,))[:4] for group in groups
         ]
@@ -718,6 +720,113 @@ class Scene:
     @property
     def triangle_count(self):
         return len(self.corners)
+
+    # What 'to_bytes' writes: a NumPy archive of the arrays below, and of the
+    # numbers and warnings as JSON. A scene written by another version of it is
+    # not read ('from_bytes' raises), and is built again.
+    FORMAT = 1
+    _ARRAYS = {
+        # name: (dtype, the shape of one row)
+        "points": (np.float64, (3,)),
+        "normals": (np.float64, (3,)),
+        "corners": (np.int64, (3,)),
+        "albedo": (np.float64, (3,)),
+        "opacity": (np.float64, ()),
+        "one_sided": (np.bool_, ()),
+        "uv": (np.float64, (3, 2)),
+        "texture": (np.int64, ()),
+        "segments": (np.float64, (2, 3)),
+        "segment_colors": (np.uint8, (3,)),
+    }
+
+    def to_bytes(self, warnings=()):
+        """This scene as bytes 'from_bytes' reads back into the same scene, with the 'warnings' building it gave.
+
+        Exactly the same: every array as it is, so that a picture drawn from the
+        scene read back is the picture drawn from this one, pixel for pixel. The
+        light ('front', 'back') is not written; it is worked out again from what
+        is, which is cheap. The images faces are drawn with go as the linear
+        colours they were decoded to, one array each. Nothing in it is a Python
+        object - it is read with 'allow_pickle' off - because whoever hands it
+        back is a cache.
+        """
+        import io
+        import json
+
+        meta = {
+            "format": self.FORMAT,
+            "pixels": self.pixels,
+            "center": [float(c) for c in self.center],
+            "radius": self.radius,
+            "sphere": self.sphere,
+            "warnings": [str(w) for w in warnings],
+            "images": len(self.images),
+        }
+        arrays = {name: getattr(self, name) for name in self._ARRAYS}
+        # The corners index the points, which never number 2**31.
+        arrays["corners"] = arrays["corners"].astype(np.int32)
+        for index, image in enumerate(self.images):
+            arrays["image%d" % index] = image
+        stream = io.BytesIO()
+        np.savez(stream, meta=np.frombuffer(json.dumps(meta).encode(), dtype=np.uint8), **arrays)
+        return stream.getvalue()
+
+    @classmethod
+    def from_bytes(cls, data):
+        """The scene 'to_bytes' wrote, and the warnings building it gave, as '(scene, warnings)'.
+
+        Raises ValueError for anything that is not a scene this version wrote
+        whole: the caller builds it again instead.
+        """
+        import io
+        import json
+
+        try:
+            with np.load(io.BytesIO(data), allow_pickle=False) as archive:
+                meta = json.loads(bytes(archive["meta"]).decode())
+                arrays = {name: archive[name] for name in cls._ARRAYS}
+                images = [archive["image%d" % index] for index in range(int(meta.get("images") or 0))]
+        except Exception as e:  # pylint: disable=broad-except
+            # Whatever NumPy makes of bytes that are not an archive of its own -
+            # an EOFError for none at all - they are not a scene.
+            raise ValueError("not a scene: %s" % e) from None
+        if not isinstance(meta, dict) or meta.get("format") != cls.FORMAT:
+            raise ValueError("a scene of another format: %r" % (meta.get("format") if isinstance(meta, dict) else meta))
+        scene = cls.__new__(cls)
+        try:
+            for name, (dtype, row) in cls._ARRAYS.items():
+                array = arrays[name]
+                if array.shape[1:] != row:
+                    raise ValueError("'%s' is %s" % (name, array.shape))
+                setattr(scene, name, np.ascontiguousarray(array, dtype=dtype))
+            scene.pixels = int(meta["pixels"])
+            scene.center = np.array([float(c) for c in meta["center"]], dtype=np.float64)
+            scene.radius = float(meta["radius"])
+            scene.sphere = float(meta["sphere"])
+            warnings = [str(w) for w in meta.get("warnings") or []]
+            for image in images:
+                if image.ndim != 3 or image.shape[2] != 3 or not image.size:
+                    raise ValueError("an image is %s" % (image.shape,))
+            scene.images = [np.ascontiguousarray(image, dtype=np.float32) for image in images]
+        except (KeyError, TypeError, ValueError) as e:
+            raise ValueError("not a scene: %s" % e) from None
+        points = len(scene.points)
+        if scene.center.shape != (3,) or len(scene.normals) != points or len(scene.albedo) != points:
+            raise ValueError("not a scene: its points, normals and colours disagree")
+        triangles = len(scene.corners)
+        if any(len(array) != triangles for array in (scene.opacity, scene.one_sided, scene.uv, scene.texture)):
+            raise ValueError("not a scene: its triangles disagree with their colours, sides or images")
+        if triangles and (scene.texture.min() < -1 or scene.texture.max() >= len(scene.images)):
+            raise ValueError("not a scene: a triangle names an image it does not have")
+        if len(scene.segment_colors) != len(scene.segments):
+            raise ValueError("not a scene: its lines disagree with their colours")
+        if len(scene.corners) and (scene.corners.min() < 0 or scene.corners.max() >= points):
+            raise ValueError("not a scene: a triangle names a point it does not have")
+        if not len(scene.corners) and not len(scene.segments):
+            raise ValueError("not a scene: it has neither faces nor edges")
+        scene.front = diffuse(scene.points, scene.normals, scene.radius)
+        scene.back = diffuse(scene.points, -scene.normals, scene.radius)
+        return scene, warnings
 
 
 def rotation(degrees):
@@ -877,7 +986,23 @@ class Planes:
         return weights
 
 
-def rasterize(sx, sy, planes, width, height, near, zbuffer, owner, limit=None, select=None):
+class Bounds:
+    """Which rows and columns of the screen each triangle can cover, and whether it is drawn at all.
+
+    Worked out once per frame (see 'FrameSetup'), because a frame drawn a band of
+    rows at a time asks the same question of every triangle once per band.
+    """
+
+    def __init__(self, sx, sy, planes, width, height, near):
+        self.keep = np.all(planes.depth > near, axis=1) & (np.abs(planes.area) > 1e-12)
+        self.top = np.maximum(np.ceil(sy.min(axis=1) - 0.5), 0)
+        self.bottom = np.minimum(np.floor(sy.max(axis=1) - 0.5), height - 1)
+        self.left = np.maximum(np.ceil(sx.min(axis=1) - 0.5), 0)
+        self.right = np.minimum(np.floor(sx.max(axis=1) - 0.5), width - 1)
+        self.keep &= self.right >= self.left
+
+
+def rasterize(sx, sy, planes, width, height, near, zbuffer, owner, limit=None, select=None, band=None, bounds=None):
     """Which triangle is nearest at each pixel, into 'owner' and 'zbuffer'.
 
     'sx' and 'sy' are (M, 3): each triangle's corners on the screen; 'planes' is
@@ -886,6 +1011,13 @@ def rasterize(sx, sy, planes, width, height, near, zbuffer, owner, limit=None, s
     every triangle 'select' (a boolean per triangle) leaves out. Where 'limit'
     is given (one depth per pixel) only what is nearer than it is drawn - which is
     how a see-through layer is found in front of what is solid.
+
+    'band' is the rows '(first, end)' to draw, the whole screen when None: only
+    those rows of 'owner' and 'zbuffer' are written, and a triangle is walked
+    over only the rows of it that are in the band. A pixel comes out the same
+    whichever band it is drawn in: each row is crossed where it always was, and
+    the triangles meeting at a pixel are visited in the same order. 'bounds' is
+    what 'Bounds' worked out of 'sx' and 'sy' already, when the caller has it.
 
     Each triangle is walked a row at a time, between where the row crosses its
     edges, so that no pixel outside it is ever looked at: a CAD model is a few
@@ -897,19 +1029,22 @@ def rasterize(sx, sy, planes, width, height, near, zbuffer, owner, limit=None, s
     'zbuffer' (how far it is) are filled in place: they are a frame's worth of
     memory each, and allocated afresh every frame they cost more than drawing.
     """
-    owner.fill(-1)
-    zbuffer.fill(np.inf)
+    top_row, end_row = (0, height) if band is None else band
+    owner[top_row * width : end_row * width].fill(-1)
+    zbuffer[top_row * width : end_row * width].fill(np.inf)
     if not len(sx):
         return
 
-    keep = np.all(planes.depth > near, axis=1) & (np.abs(planes.area) > 1e-12)
+    if bounds is None:
+        bounds = Bounds(sx, sy, planes, width, height, near)
+    keep = bounds.keep
     if select is not None:
-        keep &= select
-    top = np.maximum(np.ceil(sy.min(axis=1) - 0.5), 0)
-    bottom = np.minimum(np.floor(sy.max(axis=1) - 0.5), height - 1)
-    left = np.maximum(np.ceil(sx.min(axis=1) - 0.5), 0)
-    right = np.minimum(np.floor(sx.max(axis=1) - 0.5), width - 1)
-    keep &= (bottom >= top) & (right >= left)
+        keep = keep & select
+    top, bottom, left, right = bounds.top, bounds.bottom, bounds.left, bounds.right
+    if band is not None:
+        top = np.maximum(top, top_row)
+        bottom = np.minimum(bottom, end_row - 1)
+    keep = keep & (bottom >= top)
     selected = np.nonzero(keep)[0]
     if not len(selected):
         return
@@ -961,9 +1096,15 @@ def rasterize(sx, sy, planes, width, height, near, zbuffer, owner, limit=None, s
         owner[pixel[won]] = triangle[won]
 
 
-def _shade(owner, planes, width, corner_colors):
-    """The colour of every pixel a triangle was drawn at, blended across it as it is seen in depth."""
-    covered = np.nonzero(owner >= 0)[0]
+def _shade(owner, planes, width, corner_colors, start=0, stop=None):
+    """The colour of every pixel a triangle was drawn at, blended across it as it is seen in depth.
+
+    Of the pixels 'start' to 'stop' of 'owner' (flattened), all of them by
+    default: a band of rows is a run of them.
+    """
+    covered = np.nonzero(owner[start:stop] >= 0)[0]
+    if start:
+        covered += start
     triangle = owner[covered]
     x = (covered % width).astype(np.float32) + 0.5
     y = (covered // width).astype(np.float32) + 0.5
@@ -1008,6 +1149,93 @@ def _textured(colors, covered, owner, planes, width, scene, light):
     colors[chosen] = neutral_tone_mapping(shaded).astype(colors.dtype)
 
 
+# What a frame's buffers hold per sample: the colour (3 bytes), the depth (a
+# float32) and the triangle drawn there (an int32) - and the same depth and
+# triangle again for the see-through layer, where there is one.
+SAMPLE_BYTES = 3 + 4 + 4
+LAYER_SAMPLE_BYTES = 4 + 4
+
+
+class FrameBuffers:
+    """The memory one frame is drawn in, at the size it is sampled at: what a band of it writes into.
+
+    A frame is drawn into its own, and its bands - drawn by whichever threads take
+    them - each write rows of it no other band writes. Kept and drawn into again
+    frame after frame, because a frame's worth of memory allocated afresh costs
+    more than drawing it.
+    """
+
+    def __init__(self, width, height, see_through):
+        size = int(width) * int(height)
+        self.image = np.empty((size, 3), dtype=np.uint8)
+        self.zbuffer = np.empty(size, dtype=np.float32)
+        self.owner = np.empty(size, dtype=np.int32)
+        self.layer_zbuffer = np.empty(size, dtype=np.float32) if see_through else None
+        self.layer_owner = np.empty(size, dtype=np.int32) if see_through else None
+
+    @staticmethod
+    def nbytes(width, height, see_through):
+        """How much memory a frame's buffers of this size take."""
+        return int(width) * int(height) * (SAMPLE_BYTES + (LAYER_SAMPLE_BYTES if see_through else 0))
+
+
+class FrameSetup:
+    """What one frame needs before any row of it is drawn: the object projected and lit as the turned camera sees it.
+
+    Worked out once per frame - it is a few per cent of drawing one - and read
+    by every band of the frame, whichever thread draws it.
+    """
+
+    def __init__(self, scene, camera, turn, width, height):
+        basis, eye = camera.turned(turn)
+        self.near = scene.radius / 100.0
+        self.triangles = bool(scene.triangle_count)
+        if self.triangles:
+            sx, sy, depth = _project(scene.points, basis, eye, width, height, camera)
+            corners = scene.corners
+            self.tx, self.ty = sx[corners], sy[corners]
+            self.planes = Planes(self.tx, self.ty, depth[corners], camera.perspective)
+            self.bounds = Bounds(self.tx, self.ty, self.planes, width, height, self.near)
+            # Which side of each triangle faces the camera: its corners turn
+            # counter-clockwise seen from outside, and the screen's Y runs downwards.
+            front = self.planes.area < 0
+
+            # The colour each corner of each triangle is lit to from the side that
+            # is seen: the diffuse light worked out once, the specular for this
+            # camera.
+            spec_front = specular(scene.points, scene.normals, eye, scene.radius)
+            spec_back = specular(scene.points, -scene.normals, eye, scene.radius)
+            lit_front = scene.albedo * (scene.front / math.pi)[:, None] + spec_front[:, None]
+            lit_back = scene.albedo * (scene.back / math.pi)[:, None] + spec_back[:, None]
+            lit = np.where(front[:, None, None], lit_front[corners], lit_back[corners])
+            self.lit = neutral_tone_mapping(lit.reshape(-1, 3)).reshape(lit.shape).astype(np.float32)
+            # For a face drawn with an image, the light alone at each corner - the
+            # diffuse light the image's colour is multiplied by, and the specular
+            # added to it - which '_textured' blends across the triangle and lays
+            # over the image pixel by pixel, in every band.
+            self.light = None
+            if scene.images:
+                diffuse_light = np.where(
+                    front[:, None], (scene.front / math.pi)[corners], (scene.back / math.pi)[corners]
+                )
+                specular_light = np.where(front[:, None], spec_front[corners], spec_back[corners])
+                self.light = (diffuse_light.astype(np.float32), specular_light.astype(np.float32))
+
+            opaque = scene.opacity >= 1.0
+            # A one-sided triangle - of a wall - is drawn only from the side it
+            # faces, and from behind is not there at all ('side: FrontSide' in
+            # the 3D view). Decided here, frame by frame, because the object
+            # turns between the frames of a video.
+            shown = front | ~scene.one_sided
+            self.solid = opaque & shown
+            self.everything = bool(self.solid.all())
+            # The see-through triangles the camera sees, drawn as one layer over
+            # the solid ones; None when there are none.
+            see_through = ~opaque & shown
+            self.see_through = see_through if see_through.any() else None
+        self.lines = _line_samples(scene, basis, eye, width, height, camera, self.near) if len(scene.segments) else None
+
+
 class Painter:
     """What draws pictures of one scene: their size and look, and the memory a picture is drawn in.
 
@@ -1016,6 +1244,12 @@ class Painter:
     shrinks it, which is what smooths the edges. 'line_width' is how wide a line
     is, in pixels of the picture that comes out. 'background' is the sRGB colour
     of everything the object does not cover - the editor's background, in the IDE.
+
+    A picture is drawn in three steps, which a video takes apart to draw several
+    frames, and several bands of one frame, at once (see 'frame_schedule'): the
+    frame's 'setup', then each band of its rows into its 'FrameBuffers'
+    ('draw_band'), then each band shrunk into the picture ('shrink_band'). 'draw'
+    is the three in a row, over the whole picture, in the painter's own buffers.
     """
 
     def __init__(self, scene, camera, width, height, background=(0x1F, 0x1F, 0x1F), supersample=1, line_width=1.0):
@@ -1026,112 +1260,128 @@ class Painter:
         self.background = np.asarray(background, dtype=np.uint8)
         self.ss = max(1, int(supersample))
         self.line_width = float(line_width)
-        big = self.width * self.ss * self.height * self.ss
-        self.image = np.empty((big, 3), dtype=np.uint8)
-        self.zbuffer = np.empty(big, dtype=np.float32)
-        self.owner = np.empty(big, dtype=np.int32)
-        self.layer_zbuffer = None
-        self.layer_owner = None
+        self.buffers = None
 
-    def draw(self, turn):
-        """One picture, of the object turned by 'turn' (a 3x3 rotation), as (height, width, 3) sRGB bytes."""
-        scene, camera, ss = self.scene, self.camera, self.ss
-        big_w, big_h = self.width * ss, self.height * ss
-        basis, eye = camera.turned(turn)
-        near = scene.radius / 100.0
-        image = self.image
-        image[:] = self.background
+    @property
+    def sampled_width(self):
+        return self.width * self.ss
+
+    @property
+    def sampled_height(self):
+        return self.height * self.ss
+
+    @property
+    def see_through(self):
+        """Whether anything is drawn see-through, which takes a second depth and triangle per sample."""
+        return bool(self.scene.triangle_count) and bool((self.scene.opacity < 1.0).any())
+
+    def frame_bytes(self):
+        """How much memory one frame takes while it is drawn: its buffers, and the picture it is shrunk into."""
+        return (
+            FrameBuffers.nbytes(self.sampled_width, self.sampled_height, self.see_through)
+            + self.width * self.height * 3
+        )
+
+    def new_buffers(self):
+        return FrameBuffers(self.sampled_width, self.sampled_height, self.see_through)
+
+    def setup(self, turn):
+        """What every band of the picture of the object turned by 'turn' (a 3x3 rotation) needs: see 'FrameSetup'."""
+        return FrameSetup(self.scene, self.camera, turn, self.sampled_width, self.sampled_height)
+
+    def draw_band(self, setup, buffers, first, end):
+        """Draw the sampled rows 'first' to 'end' of the frame 'setup' is for into 'buffers'.
+
+        Writes those rows of the buffers and no others, so the bands of one frame
+        can be drawn at once by as many threads. A pixel comes out the same
+        whichever band it is drawn in (see 'rasterize').
+        """
+        scene = self.scene
+        big_w, big_h = self.sampled_width, self.sampled_height
+        band = (first, end)
+        start, stop = first * big_w, end * big_w
+        image = buffers.image
+        image[start:stop] = self.background
         limit = None
 
-        if scene.triangle_count:
-            sx, sy, depth = _project(scene.points, basis, eye, big_w, big_h, camera)
-            corners = scene.corners
-            tx, ty = sx[corners], sy[corners]
-            planes = Planes(tx, ty, depth[corners], camera.perspective)
-            # Which side of each triangle faces the camera: its corners turn
-            # counter-clockwise seen from outside, and the screen's Y runs downwards.
-            front = planes.area < 0
-
-            # The colour each corner of each triangle is lit to from the side that
-            # is seen: the diffuse light worked out once, the specular for this
-            # camera.
-            spec_front = specular(scene.points, scene.normals, eye, scene.radius)
-            spec_back = specular(scene.points, -scene.normals, eye, scene.radius)
-            lit_front = scene.albedo * (scene.front / math.pi)[:, None] + spec_front[:, None]
-            lit_back = scene.albedo * (scene.back / math.pi)[:, None] + spec_back[:, None]
-            lit = np.where(front[:, None, None], lit_front[corners], lit_back[corners])
-            lit = neutral_tone_mapping(lit.reshape(-1, 3)).reshape(lit.shape).astype(np.float32)
-            # For a face drawn with an image, the light alone at each corner - the
-            # diffuse light the image's colour is multiplied by, and the specular
-            # added to it - which 'textured' blends across the triangle and lays
-            # over the image pixel by pixel.
-            light = None
-            if scene.images:
-                diffuse_light = np.where(
-                    front[:, None], (scene.front / math.pi)[corners], (scene.back / math.pi)[corners]
-                )
-                specular_light = np.where(front[:, None], spec_front[corners], spec_back[corners])
-                light = (diffuse_light.astype(np.float32), specular_light.astype(np.float32))
-
-            solid = scene.opacity >= 1.0
-            # A one-sided triangle - of a wall - is drawn only from the side it
-            # faces, and from behind is not there at all ('side: FrontSide' in
-            # the 3D view). Decided here, frame by frame, because the object
-            # turns between the frames of a video.
-            shown = front | ~scene.one_sided
-            solid = solid & shown
-            everything = bool(solid.all())
+        if setup.triangles:
             rasterize(
-                tx, ty, planes, big_w, big_h, near, self.zbuffer, self.owner, select=None if everything else solid
+                setup.tx,
+                setup.ty,
+                setup.planes,
+                big_w,
+                big_h,
+                setup.near,
+                buffers.zbuffer,
+                buffers.owner,
+                select=None if setup.everything else setup.solid,
+                band=band,
+                bounds=setup.bounds,
             )
-            covered, colors = _shade(self.owner, planes, big_w, lit)
-            if light is not None:
-                _textured(colors, covered, self.owner, planes, big_w, scene, light)
+            covered, colors = _shade(buffers.owner, setup.planes, big_w, setup.lit, start, stop)
+            if setup.light is not None:
+                _textured(colors, covered, buffers.owner, setup.planes, big_w, scene, setup.light)
             image[covered] = to_bytes(colors)
-            limit = self.zbuffer
+            limit = buffers.zbuffer
 
-            see_through = ~(scene.opacity >= 1.0) & shown
-            if see_through.any():
+            if setup.see_through is not None:
                 # One see-through layer, the nearest, over whatever is solid behind it.
-                if self.layer_owner is None:
-                    self.layer_zbuffer = np.empty_like(self.zbuffer)
-                    self.layer_owner = np.empty_like(self.owner)
-                owner = self.layer_owner
+                owner = buffers.layer_owner
                 rasterize(
-                    tx,
-                    ty,
-                    planes,
+                    setup.tx,
+                    setup.ty,
+                    setup.planes,
                     big_w,
                     big_h,
-                    near,
-                    self.layer_zbuffer,
+                    setup.near,
+                    buffers.layer_zbuffer,
                     owner,
-                    limit=self.zbuffer,
-                    select=see_through,
+                    limit=buffers.zbuffer,
+                    select=setup.see_through,
+                    band=band,
+                    bounds=setup.bounds,
                 )
-                covered, colors = _shade(owner, planes, big_w, lit)
-                if light is not None:
-                    _textured(colors, covered, owner, planes, big_w, scene, light)
+                covered, colors = _shade(owner, setup.planes, big_w, setup.lit, start, stop)
+                if setup.light is not None:
+                    _textured(colors, covered, owner, setup.planes, big_w, scene, setup.light)
                 alpha = scene.opacity[owner[covered]][:, None]
                 under = image[covered].astype(np.float64) / 255.0
                 over = to_bytes(colors).astype(np.float64) / 255.0
                 image[covered] = np.round((over * alpha + under * (1.0 - alpha)) * 255.0).astype(np.uint8)
 
-        if len(scene.segments):
-            _draw_lines(image, limit, scene, basis, eye, big_w, big_h, camera, near, self.line_width * ss)
+        if setup.lines is not None:
+            _draw_line_samples(image, limit, setup.lines, big_w, big_h, self.line_width * self.ss, band)
 
-        frame = image.reshape(big_h, big_w, 3)
+    def shrink_band(self, buffers, picture, first, end):
+        """The sampled rows 'first' to 'end' of 'buffers', shrunk into their rows of 'picture' ((height, width, 3) bytes).
+
+        'first' and 'end' are multiples of the supersampling, so that every pixel
+        of the picture is the mean of samples of one band.
+        """
+        ss = self.ss
+        frame = buffers.image.reshape(self.sampled_height, self.sampled_width, 3)
         if ss == 1:
-            return frame.copy()
+            picture[first:end] = frame[first:end]
+            return
         # The mean of each block of samples, as a sum of ss * ss strided views:
         # a reduction over two axes of a strided array is several times slower.
-        total = np.zeros((self.height, self.width, 3), dtype=np.uint16)
+        total = np.zeros(((end - first) // ss, self.width, 3), dtype=np.uint16)
         for row in range(ss):
             for column in range(ss):
-                total += frame[row::ss, column::ss]
+                total += frame[first + row : end : ss, column::ss]
         total += (ss * ss) // 2
         total //= ss * ss
-        return total.astype(np.uint8)
+        picture[first // ss : end // ss] = total
+
+    def draw(self, turn):
+        """One picture, of the object turned by 'turn' (a 3x3 rotation), as (height, width, 3) sRGB bytes."""
+        if self.buffers is None:
+            self.buffers = self.new_buffers()
+        setup = self.setup(turn)
+        self.draw_band(setup, self.buffers, 0, self.sampled_height)
+        picture = np.empty((self.height, self.width, 3), dtype=np.uint8)
+        self.shrink_band(self.buffers, picture, 0, self.sampled_height)
+        return picture
 
 
 def draw(scene, camera, turn, width, height, background=(0x1F, 0x1F, 0x1F), supersample=1, line_width=1.0):
@@ -1139,15 +1389,18 @@ def draw(scene, camera, turn, width, height, background=(0x1F, 0x1F, 0x1F), supe
     return Painter(scene, camera, width, height, background, supersample, line_width).draw(turn)
 
 
-def _draw_lines(image, zbuffer, scene, basis, eye, width, height, camera, near, line_width):
-    """Draw the scene's lines into 'image', in front of nothing that is nearer than they are."""
+def _line_samples(scene, basis, eye, width, height, camera, near):
+    """The scene's lines as points along them on the screen, '(x, y, z, colour)': what '_draw_line_samples' draws.
+
+    None when no line is in front of the camera.
+    """
     ends = scene.segments.reshape(-1, 3)
     sx, sy, depth = _project(ends, basis, eye, width, height, camera)
     sx, sy, depth = sx.reshape(-1, 2), sy.reshape(-1, 2), depth.reshape(-1, 2)
     keep = np.all(depth > near, axis=1)
     sx, sy, depth, colors = sx[keep], sy[keep], depth[keep], scene.segment_colors[keep]
     if not len(sx):
-        return
+        return None
     lengths = np.hypot(sx[:, 1] - sx[:, 0], sy[:, 1] - sy[:, 0])
     steps = np.ceil(lengths * 2).astype(np.int64) + 1
     segment = np.repeat(np.arange(len(sx)), steps)
@@ -1159,15 +1412,33 @@ def _draw_lines(image, zbuffer, scene, basis, eye, width, height, camera, near, 
         z = 1.0 / ((1.0 - t) / depth[segment, 0] + t / depth[segment, 1])
     else:
         z = (1.0 - t) * depth[segment, 0] + t * depth[segment, 1]
-    color = colors[segment]
+    return x, y, z, colors[segment]
 
+
+def _draw_line_samples(image, zbuffer, samples, width, height, line_width, band=None):
+    """Draw the points of '_line_samples' into 'image', in front of nothing that is nearer than they are.
+
+    Into the rows '(first, end)' of 'band' only, all of them by default. A point
+    drawn into a band is drawn exactly as it is into the whole picture, and in
+    the same order as every other point landing on its pixel, so a band's pixels
+    come out as the whole picture's do.
+    """
+    if samples is None:
+        return
+    x, y, z, color = samples
     half = max(0.5, float(line_width) / 2.0)
     reach = int(math.ceil(half - 0.5))
+    first, end = (0, height) if band is None else band
+    if band is not None:
+        # The points that can land in the band, in the order they had: a mask,
+        # not a sort, so that what is drawn last on a pixel still is.
+        near_band = (y >= first - reach - 1) & (y < end + reach + 1)
+        x, y, z, color = x[near_band], y[near_band], z[near_band], color[near_band]
     for dy in range(-reach, reach + 1):
         for dx in range(-reach, reach + 1):
             px = np.floor(x + dx).astype(np.int64)
             py = np.floor(y + dy).astype(np.int64)
-            inside = (px >= 0) & (px < width) & (py >= 0) & (py < height)
+            inside = (px >= 0) & (px < width) & (py >= first) & (py < end)
             pixel = py[inside] * width + px[inside]
             visible = np.ones(len(pixel), dtype=bool)
             if zbuffer is not None:

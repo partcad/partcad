@@ -266,7 +266,14 @@ render:
   #                 wmv2 - whichever of them the container takes.
   #   audio_codec, audio_bitrate   likewise for the soundtrack: aac, mp3, opus,
   #                 vorbis; 192 kbit/s.
-  #   threads       how many frames are drawn at once: one per core, up to four.
+  #   threads       how many threads draw the frames, at most. PartCAD gives a
+  #                 video as many of its process slots as are free when it
+  #                 starts ('parallel', below) - one per core by default - and
+  #                 this caps it; the video is the same however many draw it.
+  #   memory        how many megabytes the frames being drawn may take at once.
+  #                 Half of what is free when they start, by default: the
+  #                 frames are drawn in bands, as many at once as fit, the
+  #                 earliest first (see 'frame_schedule.py').
   #   fade_in, fade_out, fade_color   seconds of fading from and to a colour
   #                 (black) at the start and the end.
   #   text          text over the picture: a string (shown throughout, at the
@@ -299,6 +306,22 @@ render:
   # 'reproducible' is declared for the protocol's sake and decides nothing: a
   # container is stamped with the time it was written, and an encoder running
   # on several threads is not held to the same bytes twice.
+  #
+  # Three fields say how PartCAD runs these and keeps what they make (see
+  # 'output.py'), and are not handed to 'render_video.py':
+  #
+  #   parallel      the frames are drawn on as many threads as 'threads' says,
+  #                 and the video is the same whatever it says - so PartCAD
+  #                 grants it process slots, and keys the cache on neither
+  #                 'threads' nor 'memory'.
+  #   cacheTiers    'remote': a video is kept only in the cache's shared tiers,
+  #                 for whoever renders it next elsewhere, and never in the
+  #                 files on this machine - it is big, and the user who
+  #                 rendered it has it already. Its frames are kept nowhere.
+  #   sceneCache    the object tessellated and lit for the frames is kept in
+  #                 every tier, like geometry, and handed back to the next video
+  #                 of the object at that size - in another container, at
+  #                 another speed - instead of being built again.
   mp4:
     desc: A video of the object turning, as H.264 in MP4 - what every social network takes.
     path: render_video.py
@@ -310,6 +333,9 @@ render:
     style: shaded
     # The fields that name files of the object's package (see the note above).
     packageFiles: [logo, audio]
+    parallel: true
+    cacheTiers: remote
+    sceneCache: true
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -329,6 +355,9 @@ render:
     style: shaded
     # The fields that name files of the object's package (see the note above).
     packageFiles: [logo, audio]
+    parallel: true
+    cacheTiers: remote
+    sceneCache: true
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -348,6 +377,9 @@ render:
     style: shaded
     # The fields that name files of the object's package (see the note above).
     packageFiles: [logo, audio]
+    parallel: true
+    cacheTiers: remote
+    sceneCache: true
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -367,6 +399,9 @@ render:
     style: shaded
     # The fields that name files of the object's package (see the note above).
     packageFiles: [logo, audio]
+    parallel: true
+    cacheTiers: remote
+    sceneCache: true
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -386,6 +421,9 @@ render:
     style: shaded
     # The fields that name files of the object's package (see the note above).
     packageFiles: [logo, audio]
+    parallel: true
+    cacheTiers: remote
+    sceneCache: true
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -405,6 +443,9 @@ render:
     style: shaded
     # The fields that name files of the object's package (see the note above).
     packageFiles: [logo, audio]
+    parallel: true
+    cacheTiers: remote
+    sceneCache: true
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -424,6 +465,9 @@ render:
     style: shaded
     # The fields that name files of the object's package (see the note above).
     packageFiles: [logo, audio]
+    parallel: true
+    cacheTiers: remote
+    sceneCache: true
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -444,6 +488,9 @@ render:
     style: shaded
     # The fields that name files of the object's package (see the note above).
     packageFiles: [logo, audio]
+    parallel: true
+    cacheTiers: remote
+    sceneCache: true
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -463,6 +510,9 @@ render:
     style: shaded
     # The fields that name files of the object's package (see the note above).
     packageFiles: [logo, audio]
+    parallel: true
+    cacheTiers: remote
+    sceneCache: true
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30
@@ -486,6 +536,9 @@ render:
     style: shaded
     # The fields that name files of the object's package (see the note above).
     packageFiles: [logo, audio]
+    parallel: true
+    cacheTiers: remote
+    sceneCache: true
     dockerImage: "ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer"
     size: reels
     fps: 30

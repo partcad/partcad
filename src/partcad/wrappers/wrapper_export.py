@@ -268,6 +268,10 @@ WORLD_KEY = "world"
 # 'partcad.output.FILES_KEY'.
 FILES_KEY = "files"
 
+# 'partcad.output.SCENE_KEY' and 'SCENE_WANTED_KEY'.
+SCENE_KEY = "scene"
+SCENE_WANTED_KEY = "scene_wanted"
+
 # The document a call writing several files is handed, and the answers it gives
 # (see the module's docstring). The twins of these are the 'BATCH_*' keys of
 # 'partcad.output', spelled out separately for the reason JOINT_KEY is.
@@ -480,6 +484,16 @@ def process(script, path, request):
     # which is the same as saying nothing.
     if isinstance(output.get(FILES_KEY), (list, tuple)):
         result[FILES_KEY] = [str(name) for name in output[FILES_KEY]]
+    # What an implementation that keeps its scene ('sceneCache') was asked to
+    # hand back: bytes, for PartCAD to keep and hand in to the next file drawn
+    # from it, and taken out of the answer before anyone else sees it (see
+    # 'partcad.output.SCENE_CACHE_KEY'). Bytes or nothing.
+    if (
+        isinstance(request, dict)
+        and request.get(SCENE_WANTED_KEY)
+        and isinstance(output.get(SCENE_KEY), (bytes, bytearray))
+    ):
+        result[SCENE_KEY] = bytes(output[SCENE_KEY])
     return result
 
 

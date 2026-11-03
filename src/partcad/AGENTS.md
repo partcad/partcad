@@ -573,6 +573,17 @@ at all).
     parameter), and no other field is looked at: the package is sent whole, and a line of text that
     happens to be a file's name must not send it. Do not resolve such a path in the core instead: what a
     field means is the implementation's to say.
+    Three more implementation keys say how a file type is run and kept (`output.PARALLEL_KEY`,
+    `CACHE_TIERS_KEY`, `SCENE_CACHE_KEY`), and every video type declares all three. `parallel: true` is "I
+    draw on `threads` threads and write the same file whatever it says": `Shape._run_together_locked` gives
+    such a run the process slots free as it starts (`_ThreadGrant`, `ProcessSlots.take_more` -- never
+    waited for, given back when the run ends, only for a process on this machine) and `_artifact_hash` keys
+    on neither `threads` nor `memory`. `cacheTiers: remote` keeps the file only in the remote tiers
+    (`Cache.tiers`), so a video never lands in the files tier, not even promoted from S3. `sceneCache: true`
+    is the tessellated, lit object (`raster_scene.Scene.to_bytes`): keyed by `Shape._scene_hash` on the
+    object, its colours and `output.SCENE_FIELDS` (not the file type), kept in every tier, handed in as
+    `scene` and asked for back with `scene_wanted`; the answer's `scene` is taken out before the file's own
+    answer is stored. The frames of a video are never kept anywhere (`builtin/render/frame_schedule.py`).
 
 - **Engineering analysis** (`./src/partcad/cae.py`, `Shape.analyze_async()`, `./src/partcad/test/cae.py`):
   `pc cae fea`/`dynamic`/`thermal`/`cfd` are a third output section, `cae:`, resolved by the very code that resolves

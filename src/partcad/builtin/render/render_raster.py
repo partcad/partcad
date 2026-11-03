@@ -337,16 +337,44 @@ class Shaded:
             raise OptionError(str(e)) from None
         self.scene = None
         self.camera = None
+        self.reused = False
+        self.built_warnings = []
 
-    def build(self, warnings):
-        """Tessellate and light the object, and frame the camera on it: what drawing needs. Returns itself."""
+    def build(self, warnings, scene=None):
+        """Tessellate and light the object, and frame the camera on it: what drawing needs. Returns itself.
+
+        'scene' is what 'scene_bytes' gave for this object at this size, if
+        anything: read back rather than built again, which is the same scene
+        with the same warnings - unless it is not one ('Scene.from_bytes'), or
+        not for a picture this size, and is built again after all. 'reused'
+        says which.
+        """
         raster_scene = self.raster_scene
-        # With whether each group is one-sided - a wall - which the painter
-        # culls the backs of, frame by frame, as the 3D view does; and with the
-        # image a group's colour is drawn with, where it is one, which a shaded
-        # picture draws because it draws surfaces.
-        groups = render_svg.by_look_and_side(self.request, warnings)
-        self.scene = raster_scene.Scene(groups, max(self.width, self.height), warnings)
+        pixels = max(self.width, self.height)
+        self.scene = None
+        self.reused = False
+        if scene is not None:
+            try:
+                read, built = raster_scene.Scene.from_bytes(scene)
+            except ValueError as e:
+                # Built again, which is all a scene that cannot be read costs.
+                print("The scene handed in is built again: %s" % e, file=sys.stderr)
+            else:
+                if read.pixels == pixels:
+                    self.scene, self.reused = read, True
+                    warnings.extend(built)
+        if self.scene is None:
+            built = []
+            try:
+                # With whether each group is one-sided - a wall - which the painter
+                # culls the backs of, frame by frame, as the 3D view does; and with
+                # the image a group's colour is drawn with, where it is one, which a
+                # shaded picture draws because it draws surfaces.
+                groups = render_svg.by_look_and_side(self.request, built)
+                self.scene = raster_scene.Scene(groups, pixels, built)
+            finally:
+                warnings.extend(built)
+        self.built_warnings = built
         aspect = self.width / float(self.height)
         sphere = self.scene.sphere
         # The light is seen from where a perspective camera would stand, and a
@@ -363,6 +391,10 @@ class Shaded:
             height=raster_scene.frame_height(sphere, aspect, self.margin) / self.zoom,
         )
         return self
+
+    def scene_bytes(self):
+        """The scene 'build' made, as bytes 'build' takes back (see 'raster_scene.Scene.to_bytes')."""
+        return self.scene.to_bytes(self.built_warnings)
 
     @property
     def line_width(self):
