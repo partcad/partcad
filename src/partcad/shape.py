@@ -17,6 +17,7 @@ import os
 import sys
 import tempfile
 import threading
+import time
 import warnings
 from typing import TYPE_CHECKING, Optional
 
@@ -620,6 +621,15 @@ class Shape(ShapeConfiguration):
     # the one thread it would have been given.
     built_on_pool = False
 
+    # Whether this shape is built where it is asked for, by its factory, in the
+    # time a cache lookup would take: a 'basic' sketch or part, whose BREP the
+    # factory writes itself (see 'basic_shapes'). Such a shape goes to no thread
+    # pool and is neither looked up in the shape cache nor written to it - only
+    # kept in this process's memory once built. It keeps its cache key, which
+    # everything derived from it (a render, a tessellation, a test's verdict)
+    # is cached under: those are worth caching, and the shape is not.
+    built_in_place = False
+
     # What a shape built here rather than read from a declaration is a view of,
     # and what about it: the picture of a step of an assembly instruction book
     # (see 'assembly_guide'), a filtered view (see 'assembly_filter.derive').
@@ -1211,7 +1221,15 @@ class Shape(ShapeConfiguration):
             # from inside a preparation, whose chain is a context variable the
             # hop would leave behind: the far side would not know it for part
             # of that preparation, and could wait for what is waiting for it.
-            if sync_threads.current_slot() is None and not _held_by_current_task(self) and _preparation.get() is None:
+            #
+            # Nor for a shape built in place, which takes less time to build than
+            # the hop would (see 'built_in_place').
+            if (
+                not self.built_in_place
+                and sync_threads.current_slot() is None
+                and not _held_by_current_task(self)
+                and _preparation.get() is None
+            ):
                 return await sync_threads.threadpool_manager.run_async(self._get_wrapped, ctx)
         return await self._get_wrapped(ctx)
 
@@ -1247,8 +1265,9 @@ class Shape(ShapeConfiguration):
             # is every part, every sketch, and most assemblies.
             await shape_ports.prepare_async(self, ctx)
 
-            # Not before the preparation is over (see above).
-            is_cacheable = self.get_cacheable() and ctx and self._prepare_finished
+            # Not before the preparation is over (see above). And not at all for a
+            # shape built in place, which is quicker to build than to read back.
+            is_cacheable = self.get_cacheable() and ctx and self._prepare_finished and not self.built_in_place
             if is_cacheable:
                 cache_hash = self.hash
                 if cache_hash:
@@ -1287,6 +1306,11 @@ class Shape(ShapeConfiguration):
             else:
                 cache_hash = None
 
+            # How long building this takes, everything that follows included - the
+            # validation, the move and the scale - which decides which tiers keep
+            # it (see 'Cache.write_data_async'): something built in milliseconds
+            # costs about as much to fetch from a tier as to build again.
+            build_started = time.perf_counter()
             shape = await self.get_shape(ctx)
 
             # Normalize whatever the factory produced into a BREP envelope so
@@ -1420,7 +1444,9 @@ class Shape(ShapeConfiguration):
                         # it happened to be written with. See
                         # 'cache_shape.properties_key()'.
                         to_cache[properties_key(self.kind)] = properties
-                    to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
+                    to_cache_in_memory = await ctx.cache_shapes.write_async(
+                        cache_hash, to_cache, build_seconds=time.perf_counter() - build_started
+                    )
                     do_cache_in_memory = to_cache_in_memory.get(self.kind, False)
                 else:
                     do_cache_in_memory = True

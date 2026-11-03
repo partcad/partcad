@@ -40,8 +40,11 @@ WRAPPERS = os.path.join(os.path.dirname(pc.__file__), "wrappers")
 sys.path.append(WRAPPERS)
 import ocp_serialize  # noqa: E402
 
-BRICK = b"\x28\xb5\x2f\xfd" + os.urandom(4096)
-CONE = b"\x28\xb5\x2f\xfd" + os.urandom(4096)
+# Real zstd frames of bytes that do not compress, as a part's payload is: a
+# payload is named by the digest of what it decompresses to (see
+# 'shape_envelope.payload_digest'), which the JSON table names it by.
+BRICK = shape_envelope.brep_compressed(os.urandom(4096))
+CONE = shape_envelope.brep_compressed(os.urandom(4096))
 
 
 def _leaf(payload, label, **extra):

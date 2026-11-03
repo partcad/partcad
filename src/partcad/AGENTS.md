@@ -296,6 +296,18 @@ at all).
   A hit in a farther tier is copied into the nearer ones that missed it, within each one's size window
   (`Cache._promote_async`), which judges it exactly as a write would (`Cache._admission_sizes`). So a test asserting on what a server holds flushes first (`cache_io.flush()`,
   `Cache.flush_async()`), and `tests/partcad/conftest.py` stops the thread after every test.
+- **A tier keeps what took long enough to build to be worth fetching** (`Cache.write_data_async(build_seconds=)`,
+  `CacheBackend.min_build_seconds`, `cacheFilesMinBuildTime` / `cacheRemoteMinBuildTime` / `cacheS3MinBuildTime`,
+  10, 50 and 50 ms). `Shape.get_wrapped` times a shape's build -- from the cache miss to the write, the validation,
+  the move and the scale included -- and a tier whose threshold it did not reach is not offered the entry: a file read
+  is milliseconds and a remote round trip tens of them, so an entry built faster costs about as much to fetch as to
+  build, and in a shared tier it is an entry nobody gains by. It is kept in this process's memory instead. Except
+  where memory will not hold it (`ShapeCache.write_async`: larger than `cacheMemoryMaxEntrySize`, or `cacheMem` off):
+  a shape in neither is built on every ask, and an assembly a daemon names as "build this first"
+  (`get_uncached_subassemblies_async`) would never come to count as built, so the whole write is then offered to every
+  tier on size alone. Only shape writes say how long; an artifact's write (a render, a tessellation, a verdict) is
+  offered on size alone, since what produced it was a sandbox.
+
 - **A file is keyed on all of its content** (`cache_hash.file_digest`): the SHA-256 of it, never its path or its
   timestamps, so a shared tier is shared. The digest is remembered by the file's identity (`cache_hash.FileMemo`:
   device, inode, size, modification and change time) for the life of the process, and for a file of 1 MB or
@@ -375,6 +387,19 @@ at all).
   output instead is `basic_shapes.CACHE_VERSION`, through `ShapeFactory.CODE_VERSIONS`. Raise it with any change to
   what either writes. The measurements every envelope carries (`bbox`, `volume`, `centroid`, `unitInertia`) are
   worked out from the dimensions, not integrated.
+
+  **Built in place** (`Shape.built_in_place`): a basic shape is built by its factory where it is asked for, in a
+  tenth of a millisecond to half of one. So it goes to no thread pool (neither `get_wrapped`'s hop nor
+  `get_shape`'s), is neither looked up in nor written to the shape cache -- a hit from the files tier took longer than
+  building it, and a miss and a write four milliseconds more -- and opens no action in the log. It keeps its cache
+  key: a render, a tessellation or a test of it is worth caching, and is cached under that key as before.
+
+  **Its bytes are the same on every machine**, because they are digested into keys machines share (see "A digest is
+  of the BREP" below). `brep_ascii` and `basic_shapes` use only what IEEE 754 rounds correctly (+, -, *, /, sqrt),
+  `math.fsum` (exactly rounded; `sum()` of floats became compensated in Python 3.12) and `basic_shapes.cos_sin`,
+  trigonometry in `decimal` rather than the C library each platform writes its own way -- which also makes a quarter
+  turn exact. `test_payload_digest.py` reads both modules' source and fails on `math.sin`, `math.cos`,
+  `math.radians`, `math.dist` or a `sum()`.
 
 - **Software is not a shape** (`software.py`, `software_factory*.py`): a package's `software:` section declares
   the files a product ships with -- firmware images, binaries -- and `Software` deliberately does not inherit
@@ -1517,6 +1542,16 @@ at all).
   the cache beside one just built is the same shape in two objects; it is worked out once per payload *object*
   (`shape_envelope.Payloads`), since every node of a tree built in one process holds its part's bytes object. It is the arrangement `KEY_SKETCHES` already had, one level up, and sketches now name this
   table too.
+
+  **A digest is of the uncompressed payload, never of the zstd frame carrying it** (`payload_digest`, both copies):
+  the BREP and the CMF section after it when there is one, so one solid in two colours is two digests. Everything keyed
+  by one is shared between machines -- each shape's tessellation, and every request a wrapper is keyed on by content
+  (`cache_artifacts.request_key`, which names each payload by its digest rather than writing it out) -- and two
+  compressors need not write the same frame for the same bytes: Python 3.14 compresses with the standard library's
+  zstd, earlier ones with `backports.zstd`, and each may sit on another libzstd. Keyed on the frame, one geometry was
+  a key per compressor. The core decompresses a chunk at a time into the digest, bounded as `brep_plain()` is, at
+  about a millisecond per megabyte of BREP, once per payload object; the sandbox's copy decompresses whole. The two
+  have to agree digit for digit, which `tests/partcad/unit/test_payload_digest.py` holds them to.
 
   **The BREP form gets the same sharing where it is decoded** (`ocp_serialize._shared_shape`, used by
   `decode_shape`, `decode_tree` and `decode`): every node of one decoding that carries the same payload gets the

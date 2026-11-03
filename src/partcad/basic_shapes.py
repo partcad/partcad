@@ -45,6 +45,7 @@ shape's envelope carries - is arithmetic on the same numbers, exact where OCCT
 integrates.
 """
 
+import decimal
 import math
 
 from . import brep_ascii as brep
@@ -54,7 +55,10 @@ from .brep_ascii import FORWARD, REVERSED, add, cross, scaled, sub, unit
 # What this module reports for what it produces, as a wrapper does (see
 # 'partcad.code_version'): raise it with any change that changes a shape it
 # builds or what it says about one, and everything built before is built again.
-CACHE_VERSION = 1
+#  2: trigonometry, sums and distances are the same to the last bit on every
+#     machine and every Python ('cos_sin', 'math.fsum'), and a quarter turn is
+#     exact, so a rotated shape's BREP - and its digest - changed.
+CACHE_VERSION = 2
 
 # The name that version is keyed under.
 CODE_NAME = "basic_shapes.py"
@@ -67,6 +71,57 @@ PART_KEYS = ("cuboid", "cylinder")
 _X = (1.0, 0.0, 0.0)
 _Z = (0.0, 0.0, 1.0)
 _MINUS_Z = (0.0, 0.0, -1.0)
+
+
+# Pi to well past the precision 'cos_sin' works at.
+_PI = decimal.Decimal("3.14159265358979323846264338327950288419716939937510582097494459230781640628620899")
+
+
+def cos_sin(degrees) -> tuple:
+    """'(cos, sin)' of an angle in degrees, each the double nearest the exact value, on any machine.
+
+    Not 'math.cos(math.radians(a))': that is the C library's, which Linux, macOS
+    and Windows implement differently in the last bit, of an angle already
+    rounded to radians - and a basic shape's BREP is digested into cache keys
+    other machines read (see 'brep_ascii'). Worked out here in 'decimal', which
+    is the same arithmetic everywhere: the angle is reduced exactly, in degrees,
+    to within 45 of a quarter turn, and the series summed at fifty digits before
+    the one rounding to a double. A whole number of quarter turns is exact - a
+    part turned by 90 has 0 and 1 in its matrix, not 6e-17.
+    """
+    degrees = float(degrees)
+    if not math.isfinite(degrees):
+        raise ValueError("an angle has to be a finite number of degrees, not %r" % degrees)
+    with decimal.localcontext() as context:
+        context.prec = 50
+        try:
+            angle = decimal.Decimal(degrees) % 360
+        except decimal.InvalidOperation:
+            raise ValueError("an angle of %r degrees is too large to turn by" % degrees)
+        # 'angle' is within a turn either side of nought; take off the nearest
+        # whole number of quarter turns, exactly, and turn back by them below.
+        quarters = int((angle / 90).to_integral_value(rounding=decimal.ROUND_HALF_EVEN))
+        x = (angle - 90 * quarters) * _PI / 180
+        # The two series, to where a term no longer moves fifty digits.
+        cos = sin = decimal.Decimal(0)
+        term = decimal.Decimal(1)
+        power = 0
+        while term and abs(term) >= decimal.Decimal("1e-60"):
+            if power % 2 == 0:
+                cos += term if power % 4 == 0 else -term
+            else:
+                sin += term if power % 4 == 1 else -term
+            power += 1
+            term = term * x / power
+        for _ in range(quarters % 4):
+            cos, sin = -sin, cos
+        # Plus nought, so that a negative zero is written as zero.
+        return float(cos) + 0.0, float(sin) + 0.0
+
+
+def _distance(a, b) -> float:
+    """The distance between two points, as IEEE rounds it everywhere (see 'brep_ascii')."""
+    return math.sqrt(math.fsum((x - y) * (x - y) for x, y in zip(a, b)))
 
 
 def _number(value, what) -> float:
@@ -102,7 +157,7 @@ def _polygon(points):
 def _polygon_edge(start, end):
     """A straight edge from one vertex to another, as 'BRepBuilderAPI_MakeEdge' makes it."""
     return brep.Edge(
-        brep.Line(start.point, sub(end.point, start.point)), 0.0, math.dist(start.point, end.point), start, end
+        brep.Line(start.point, sub(end.point, start.point)), 0.0, _distance(start.point, end.point), start, end
     )
 
 
@@ -230,8 +285,7 @@ class Slot(_Outline):
 
     def _point(self, px, py):
         """One point of the outline, turned by 'angle' and placed on the first end."""
-        radians = math.radians(self.angle)
-        cos, sin = math.cos(radians), math.sin(radians)
+        cos, sin = cos_sin(self.angle)
         return (self.x + px * cos - py * sin, self.y + px * sin + py * cos, 0.0)
 
     def edges(self):
@@ -307,7 +361,7 @@ def _signed_area(wire):
         if isinstance(edge.curve, brep.Circle):
             angle = edge.last - edge.first
             turn = sense * edge.curve.normal[2]
-            total += turn * edge.curve.radius**2 / 2.0 * (angle - math.sin(angle))
+            total += turn * edge.curve.radius**2 / 2.0 * (angle - cos_sin(math.degrees(angle))[1])
     return total
 
 
@@ -392,8 +446,7 @@ def _is_number(value) -> bool:
 def _rotation(axis, angle):
     """The rotation of 'angle' degrees about 'axis', as the 3x3 matrix 'gp_Mat::SetRotation' builds."""
     x, y, z = unit(axis)
-    radians = math.radians(angle)
-    sin, cos = math.sin(radians), math.cos(radians)
+    cos, sin = cos_sin(angle)
     turn = 1.0 - cos
     return (
         (1.0 + turn * (-z * z - y * y), -z * sin + turn * x * y, y * sin + turn * x * z),
@@ -403,11 +456,11 @@ def _rotation(axis, angle):
 
 
 def _apply(matrix, vector):
-    return tuple(sum(matrix[row][col] * vector[col] for col in range(3)) for row in range(3))
+    return tuple(math.fsum(matrix[row][col] * vector[col] for col in range(3)) for row in range(3))
 
 
 def _multiplied(a, b):
-    return tuple(tuple(sum(a[row][k] * b[k][col] for k in range(3)) for col in range(3)) for row in range(3))
+    return tuple(tuple(math.fsum(a[row][k] * b[k][col] for k in range(3)) for col in range(3)) for row in range(3))
 
 
 class Placement:
@@ -603,7 +656,7 @@ def _cuboid(config, placement):
 
     solid = brep.Solid([(FORWARD, brep.Shell([(FORWARD, face) for face in faces]))])
 
-    extent = [sum(half[axis] * abs(axes[axis][world]) for axis in range(3)) for world in range(3)]
+    extent = [math.fsum(half[axis] * abs(axes[axis][world]) for axis in range(3)) for world in range(3)]
     volume = 8.0 * half[0] * half[1] * half[2]
     a, b, c = half
     inertia = (

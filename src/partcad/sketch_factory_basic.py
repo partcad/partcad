@@ -25,7 +25,9 @@ class SketchFactoryBasic(SketchFactory):
     # face is lines and circles on a plane, which needs no CAD kernel to write
     # down. So no wrapper is run and no environment is keyed on - the sketch is
     # the same whatever Python the package asks for - and what is keyed instead
-    # is the version of the code that writes the geometry.
+    # is the version of the code that writes the geometry. Built in place, too
+    # (see 'Shape.built_in_place'): no thread pool, no shape cache, and no
+    # action in the log for a tenth of a millisecond of work.
     WRAPPERS = ()
     PYTHON_SANDBOX_VERSION = None
     CODE_VERSIONS = ((basic_shapes.CODE_NAME, basic_shapes.CACHE_VERSION),)
@@ -58,6 +60,7 @@ class SketchFactoryBasic(SketchFactory):
                 self.basic_config[key] = value
 
         self._create(config)
+        self.sketch.built_in_place = True
         self.sketch.hash.add_dict(self.basic_config)
 
     def info(self, sketch):
@@ -77,17 +80,16 @@ class SketchFactoryBasic(SketchFactory):
         return info
 
     async def instantiate(self, sketch):
-        with pc_logging.Action("Basic", sketch.project_name, sketch.name):
-            try:
-                payload, measurements = basic_shapes.sketch(self.basic_config)
-            except ValueError as e:
-                # What is wrong with the declaration, in its own words.
-                sketch.error("%s: %s" % (sketch.name, e))
-                return None
-            except Exception as e:
-                pc_logging.exception("Failed to create a basic sketch: %s" % e)
-                return None
+        try:
+            payload, measurements = basic_shapes.sketch(self.basic_config)
+        except ValueError as e:
+            # What is wrong with the declaration, in its own words.
+            sketch.error("%s: %s" % (sketch.name, e))
+            return None
+        except Exception as e:
+            pc_logging.exception("Failed to create a basic sketch: %s" % e)
+            return None
 
-            self.ctx.stats_sketches_instantiated += 1
-            name, label = sketch._shape_metadata()
-            return basic_shapes.envelope(payload, measurements, name=name, label=label)
+        self.ctx.stats_sketches_instantiated += 1
+        name, label = sketch._shape_metadata()
+        return basic_shapes.envelope(payload, measurements, name=name, label=label)

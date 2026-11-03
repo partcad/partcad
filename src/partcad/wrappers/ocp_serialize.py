@@ -642,17 +642,22 @@ def _shape_from_b64(brep_b64):
 
 
 def payload_digest(value) -> str:
-    """A stable name for one piece of exact geometry: a digest of its bytes.
+    """A stable name for one piece of exact geometry: a digest of its payload, before compression.
 
-    Of the compressed BREP as it arrived, not of anything derived from it, so that
-    two nodes built from one cached shape are recognised as one geometry without
-    either of them being decoded first - which is the whole point, since decoding
-    and tessellating are what the sharing is meant to avoid.
+    Of the BREP bytes and the CMF section after them, if any ('cmf_section'),
+    decompressed from the payload as it arrived - never of the
+    zstd frame, which two compressors need not write alike for the same bytes, while
+    what is keyed by this is shared between machines (see the core's
+    'shape_envelope.payload_digest', which this has to agree with digit for digit).
+    Not of anything decoded either: two nodes built from one cached shape are
+    recognised as one geometry without either being turned into a shape first -
+    which is the whole point, since decoding and tessellating are what the sharing
+    is meant to avoid.
 
     Content and not identity: nodes arrive as separately deserialized dicts, so the
     same geometry is the same bytes and never the same object.
     """
-    return hashlib.sha256(_brep_payload(value)).hexdigest()
+    return hashlib.sha256(_decompress(_brep_payload(value))).hexdigest()
 
 
 def shape_from_payload(value):
