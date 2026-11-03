@@ -118,6 +118,41 @@ Parameters = Annotated[
     Field(description="Values for the object's declared parameters, by name ('-p name=value' on the command line)."),
 ]
 
+# What a picture draws besides the geometry: the overlays and callouts of
+# `pc render`, under the parameter names `pc render` sends. Ports and interfaces
+# are not geometry, so a picture shows them only when asked; the callouts are the
+# boxes the IDE's Design 3D and 2D tabs offer under the component tree.
+WithPorts = Annotated[bool, Field(description="Draw a labelled coordinate frame at every port ('--with-ports').")]
+WithInterfaces = Annotated[
+    bool,
+    Field(description="Draw the boundary of every port, labelled with its interface ('--with-interfaces')."),
+]
+WithInternals = Annotated[
+    bool,
+    Field(
+        description="With with_ports or with_interfaces, draw the ports of everything inside an assembly too, "
+        "not only the ones it externalizes ('--with-internals')."
+    ),
+]
+WithComponentNames = Annotated[
+    bool, Field(description="Put a callout on every component with its name ('--with-component-names').")
+]
+WithComponentPrices = Annotated[
+    bool,
+    Field(
+        description="Put a callout on every component with its price: its share of the object's cheapest supply "
+        "quote, which asks the suppliers ('--with-component-prices'). With with_component_names, the price is the "
+        "second row of the same callout."
+    ),
+]
+WithPortNames = Annotated[
+    bool, Field(description="Write the name of every port with_ports draws; false draws the frames alone.")
+]
+WithInterfaceNames = Annotated[
+    bool,
+    Field(description="Write the name of every interface with_interfaces draws; false draws the boundaries alone."),
+]
+
 
 def instructions(bridge: Bridge, scope: PathScope) -> str:
     return (
@@ -227,16 +262,35 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             Field(description="A package whose 'render:' section implements the file type, such as a drawing style."),
         ] = None,
         params: Parameters = None,
+        with_ports: WithPorts = False,
+        with_interfaces: WithInterfaces = False,
+        with_internals: WithInternals = False,
+        with_component_names: WithComponentNames = False,
+        with_component_prices: WithComponentPrices = False,
+        with_port_names: WithPortNames = True,
+        with_interface_names: WithInterfaceNames = True,
     ) -> CallToolResult:
         """Render one part, assembly, scene or sketch and return the picture.
 
         `pc render`, returned instead of written. The first render of an object builds it, which can take minutes.
+        Ports, interfaces and callouts are drawn only when asked for.
         """
         request = {"package": package, "object": object, "format": format, **_kind(kind)}
         if options_package:
             request["options_package"] = options_package
         if params:
             request["params"] = _assignments(params)
+        request.update(
+            _drawn(
+                with_ports,
+                with_interfaces,
+                with_internals,
+                with_component_names,
+                with_component_prices,
+                with_port_names,
+                with_interface_names,
+            )
+        )
         try:
             outcome = _produced_a_file(await call(ctx, "render.inline", request), object, format)
         except CallFailed as e:
@@ -264,10 +318,18 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             Field(description="A package whose 'export:' or 'render:' section implements the file type."),
         ] = None,
         params: Parameters = None,
+        with_ports: WithPorts = False,
+        with_interfaces: WithInterfaces = False,
+        with_internals: WithInternals = False,
+        with_component_names: WithComponentNames = False,
+        with_component_prices: WithComponentPrices = False,
+        with_port_names: WithPortNames = True,
+        with_interface_names: WithInterfaceNames = True,
     ) -> CallToolResult:
         """Export or render one object to a file in the workspace.
 
-        `pc export` / `pc render` for one object, written where the agent says.
+        `pc export` / `pc render` for one object, written where the agent says. The ports, interfaces and
+        callouts are drawn on a picture (png, svg, ...) and mean nothing to a model format such as step.
         """
         try:
             target = scope.check(path)
@@ -278,6 +340,17 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             request["options_package"] = options_package
         if params:
             request["params"] = _assignments(params)
+        request.update(
+            _drawn(
+                with_ports,
+                with_interfaces,
+                with_internals,
+                with_component_names,
+                with_component_prices,
+                with_port_names,
+                with_interface_names,
+            )
+        )
         try:
             outcome = _produced_a_file(await call(ctx, "render.inline", request), object, format)
         except CallFailed as e:
@@ -652,3 +725,34 @@ def _kind_flag(kind: Optional[str]) -> dict:
 def _kind(kind: Optional[str]) -> dict:
     """``kind`` for a method that takes it by that name, or nothing to have it looked up."""
     return {} if kind is None else {"kind": kind}
+
+
+def _drawn(
+    with_ports: bool,
+    with_interfaces: bool,
+    with_internals: bool,
+    with_component_names: bool,
+    with_component_prices: bool,
+    with_port_names: bool,
+    with_interface_names: bool,
+) -> dict:
+    """The overlays and callouts a picture is asked for, as `pc render` sends them.
+
+    Only what differs from the default is sent, the way `pc render` sends the two
+    name switches only when they are off: a render that asks for none of these
+    is the request it always was -- which keeps the daemon's cached picture of
+    it, and is all a daemon from before these existed understands.
+    """
+    drawn = {
+        "with_ports": with_ports,
+        "with_interfaces": with_interfaces,
+        "with_internals": with_internals,
+        "with_component_names": with_component_names,
+        "with_component_prices": with_component_prices,
+    }
+    request = {key: True for key, value in drawn.items() if value}
+    if not with_port_names:
+        request["with_port_names"] = False
+    if not with_interface_names:
+        request["with_interface_names"] = False
+    return request

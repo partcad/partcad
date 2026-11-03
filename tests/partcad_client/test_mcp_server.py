@@ -337,6 +337,63 @@ def test_render_sends_the_kind_it_is_told(tmp_path):
     ]
 
 
+@pytest.mark.parametrize(
+    "tool, arguments",
+    [("render", {}), ("export", {"format": "svg", "path": "out/box.svg"})],
+)
+def test_the_overlays_and_callouts_are_asked_for_as_pc_render_asks(tmp_path, tool, arguments):
+    """Each under the name `pc render` sends it, and each name switch only when it is off."""
+    daemon, server = serve(tmp_path, {"render.inline": rendered("svg", b"<svg/>")})
+    call(
+        server,
+        tool,
+        {
+            "object": "box",
+            "with_ports": True,
+            "with_interfaces": True,
+            "with_internals": True,
+            "with_component_names": True,
+            "with_component_prices": True,
+            "with_port_names": False,
+            "with_interface_names": False,
+            **arguments,
+        },
+    )
+    (request,) = requests(daemon, "render.inline")
+    assert {key: value for key, value in request.items() if key.startswith("with_")} == {
+        "with_ports": True,
+        "with_interfaces": True,
+        "with_internals": True,
+        "with_component_names": True,
+        "with_component_prices": True,
+        "with_port_names": False,
+        "with_interface_names": False,
+    }
+
+
+def test_a_picture_asked_for_nothing_extra_is_the_request_it_always_was(tmp_path):
+    """The defaults are not sent: the daemon keeps its cached picture, and an older daemon is asked what it knows."""
+    daemon, server = serve(tmp_path, {"render.inline": rendered("png", PNG)})
+    call(server, "render", {"object": "box", "with_port_names": True, "with_component_names": False})
+    (request,) = requests(daemon, "render.inline")
+    assert not [key for key in request if key.startswith("with_")]
+
+
+def test_the_overlay_and_callout_switches_are_the_ones_pc_render_has(tmp_path):
+    """A switch the tool offers is one `pc render` sends, so the two cannot come to mean different things."""
+    import inspect
+
+    from partcad_cli.click.commands import render as pc_render
+
+    sent = set(re.findall(r'"(with_[a-z_]+)"', inspect.getsource(pc_render)))
+    _, server = serve(tmp_path)
+    tools = {tool.name: tool for tool in using(server, lambda client: client.list_tools()).tools}
+    for name in ("render", "export"):
+        offered = {key for key in tools[name].input_schema["properties"] if key.startswith("with_")}
+        assert offered, name
+        assert offered <= sent, (name, offered - sent)
+
+
 @DAEMONS
 def test_render_returns_an_svg_as_text(tmp_path, attached):
     svg = b"<svg xmlns='http://www.w3.org/2000/svg'/>"
