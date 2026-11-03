@@ -58,18 +58,25 @@ def test_with_it_a_part_that_is_a_solid_is_built(ctx):
     assert part.errors == []
 
 
-def _key(directory, require_solid=False, marks=0):
-    """The cache key of a ':skin' part, in a package whose 'skin' type differs in 'requireSolid' and nothing else."""
+def _package(directory, require_solid=None):
+    """A package with a ':skin_part' of a 'skin' type, whose 'requireSolid' is 'require_solid' (absent for None)."""
     if not directory.exists():
         directory.mkdir()
         shutil.copy(os.path.join(os.path.dirname(PACKAGE), "face.py"), directory / "face.py")
         part_type = {"path": "face.py"}
-        if require_solid:
-            part_type["requireSolid"] = True
+        if require_solid is not None:
+            part_type["requireSolid"] = require_solid
         (directory / "partcad.yaml").write_text(
             yaml.safe_dump({"partTypes": {"skin": part_type}, "parts": {"skin_part": {"type": ":skin"}}})
         )
-    part = pc.Context(str(directory)).get_part(":skin_part")
+    ctx = pc.Context(str(directory))
+    part = ctx.get_part(":skin_part")
+    return ctx, part
+
+
+def _key(directory, require_solid=None, marks=0):
+    """The cache key of a ':skin' part, in a package whose 'skin' type differs in 'requireSolid' and nothing else."""
+    _, part = _package(directory, require_solid)
     for _ in range(marks):
         part.key_on_required_solid()
     asyncio.run(part.prepare_async(wait=True))
@@ -86,6 +93,16 @@ def test_it_is_part_of_the_cache_key(tmp_path):
     assert lenient is not None
     assert _key(tmp_path / "lenient_again") == lenient
     assert _key(tmp_path / "strict", require_solid=True) != lenient
+    assert _key(tmp_path / "said_no", require_solid=False) == lenient
+
+
+def test_a_value_that_is_not_a_flag_is_reported_and_never_read_back_from_the_cache(tmp_path):
+    """Keyed as no requirement, a cache hit would skip the build that reports it."""
+    ctx, part = _package(tmp_path / "package", require_solid="sometimes")
+    asyncio.run(part.prepare_async(wait=True))
+    assert not part.get_cacheable()
+    assert asyncio.run(part.get_wrapped(ctx)) is None
+    assert any("requireSolid" in error for error in part.errors), part.errors
 
 
 def test_it_is_added_to_the_key_once(tmp_path):
