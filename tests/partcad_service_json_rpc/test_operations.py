@@ -286,7 +286,9 @@ class FakeProject:
         self.software = {}
         # The kind a section holds one of, for 'object_descriptions()' below.
         self._sections = {
+            "color": "colors",
             "material": "materials",
+            "finish": "finishes",
             "sketch": "sketches",
             "part": "parts",
             "assembly": "assemblies",
@@ -295,6 +297,10 @@ class FakeProject:
             "software": "software",
         }
         self.materials = {}
+        # The colours and finishes it declares, by name: the declarations
+        # themselves, as 'get_cmf()' answers them.
+        self.colors = {}
+        self.finishes = {}
         self.providers = {}
         self.children = []
         # The providers this package buys through, as `get_suppliers()` reports
@@ -326,6 +332,14 @@ class FakeProject:
         the same fakes, so this reads their 'desc'.
         """
         return {name: getattr(obj, "desc", None) for name, obj in getattr(self, self._sections[kind]).items()}
+
+    def object_names(self, kind):
+        """The names a package declares objects of a kind under; these fakes are their own declarations."""
+        return list(getattr(self, self._sections[kind]))
+
+    def get_cmf(self, kind, name, quiet=False):
+        """A colour, material or finish of this package, as 'Project.get_cmf()' answers it."""
+        return getattr(self, self._sections[kind]).get(name)
 
     def get_child_project_names(self):
         return list(self.children)
@@ -2157,7 +2171,7 @@ def test_a_walk_renders_only_the_packages_that_have_the_object(monkeypatch):
     # 'EmptyShapesError' out of 'Project.render_async()', which used to end the
     # whole run -- so one package without a widget cost every other package its
     # render. The packages are filtered before anything is rendered.
-    _fake_render_module(monkeypatch, lambda view, origin, up: {})
+    _fake_render_module(monkeypatch, lambda view, origin, up, turn=None: {})
     session, _ = make_session()
     session.partcad.output = types.SimpleNamespace(
         all_formats=lambda ctx: ["svg"],
@@ -2274,6 +2288,34 @@ def test_load_package_contents_lists_the_packages_software():
             "item_path": os.path.join(project.config_dir, "fw.bin"),
         }
     ]
+
+
+def test_load_package_contents_lists_the_packages_colours_materials_and_finishes():
+    from partcad import cmf, material
+
+    session, seen = make_session()
+    project = session.partcad_ctx.projects["//"]
+    project.colors = {
+        "red": cmf.Color("red", "//", {"display": "#C91A09", "desc": "Signal red"}),
+        "preview": cmf.Color("preview", "//", {"display": "#00FF00", "manufacturable": False}),
+        "stone": cmf.Color("stone", "//", {"type": "alias", "source": "//vendor:Medium Stone Grey"}),
+    }
+    project.materials = {"alu": material.Material("alu", "//", {"density": 2700, "color": ":natural"})}
+    project.finishes = {"satin": cmf.Finish("satin", "//", {"display": {"roughness": 0.6}})}
+
+    operations._load_package_contents(session, "//")
+
+    (items,) = [payload for event, payload in seen if event == events.ITEMS]
+    # Beside the objects, so the explorer can list them; what each says of
+    # itself and nothing it would have to look up in another package - an
+    # alias's target is in '//vendor', which listing this one must not load.
+    assert items["colors"] == [
+        {"name": "red", "type": "color", "desc": "Signal red", "display": "#C91A09", "manufacturable": True},
+        {"name": "preview", "type": "color", "display": "#00FF00", "manufacturable": False},
+        {"name": "stone", "type": "alias", "desc": "alias of //vendor:Medium Stone Grey", "manufacturable": True},
+    ]
+    assert items["materials"] == [{"name": "alu", "type": "material", "manufacturable": True}]
+    assert items["finishes"] == [{"name": "satin", "type": "finish", "manufacturable": True}]
 
 
 def test_load_package_contents_skips_a_child_package_it_cannot_read():
@@ -2783,7 +2825,7 @@ def test_info_shows_the_instance_the_values_name():
 
 
 def test_a_walk_with_values_renders_that_instance_where_the_object_is(monkeypatch):
-    _fake_render_module(monkeypatch, lambda view, origin, up: {})
+    _fake_render_module(monkeypatch, lambda view, origin, up, turn=None: {})
     session, _ = make_session()
     session.partcad.output = types.SimpleNamespace(
         all_formats=lambda ctx: ["svg"],
@@ -2906,7 +2948,7 @@ def test_a_package_that_declares_no_such_file_type_says_what_it_declares():
 
 def test_render_hands_the_resolved_viewport_to_the_context(monkeypatch):
     resolved = {"viewport_origin": [0, -100, 0], "viewport_up": [0, 0, 1]}
-    _fake_render_module(monkeypatch, lambda view, origin, up: dict(resolved))
+    _fake_render_module(monkeypatch, lambda view, origin, up, turn=None: dict(resolved))
 
     session, _ = make_session()
     session.partcad.output = types.SimpleNamespace(
@@ -2934,7 +2976,7 @@ def test_render_hands_the_resolved_viewport_to_the_context(monkeypatch):
 @pytest.mark.parametrize("given, sent", [(True, True), ("false", False)])
 def test_render_hands_reproducible_to_the_context(monkeypatch, given, sent):
     """'pc render --reproducible' lands beside the viewport, over what the file type declares."""
-    _fake_render_module(monkeypatch, lambda view, origin, up: {})
+    _fake_render_module(monkeypatch, lambda view, origin, up, turn=None: {})
 
     session, _ = make_session()
     session.partcad.output = types.SimpleNamespace(
@@ -2965,7 +3007,7 @@ def test_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch):
     the editor extensions speak this protocol directly.
     """
 
-    def _refuse(view, origin, up):
+    def _refuse(view, origin, up, turn=None):
         raise ValueError("Unknown view 'isometric'. Known views: front, back")
 
     _fake_render_module(monkeypatch, _refuse)
@@ -2984,7 +3026,7 @@ def test_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch):
 
 def _render_session(monkeypatch):
     """A session whose output files are recorded rather than written."""
-    _fake_render_module(monkeypatch, lambda view, origin, up: {})
+    _fake_render_module(monkeypatch, lambda view, origin, up, turn=None: {})
     session, _ = make_session()
     session.partcad.output = types.SimpleNamespace(
         all_formats=lambda ctx: ["step"],
@@ -3078,7 +3120,7 @@ def install_fake_render(monkeypatch, part=None, sketch=None, resolve_viewport=No
     sketch = sketch if sketch is not None else FakeRenderer()
     if resolve_viewport is None:
 
-        def resolve_viewport(view, origin, up):
+        def resolve_viewport(view, origin, up, turn=None):
             return {"viewport_origin": [0, -100, 0], "viewport_up": [0, 0, 1]} if view else {}
 
     install_fake_partcad_modules(
@@ -3285,6 +3327,20 @@ def test_adhoc_render_hands_reproducible_to_the_projection(monkeypatch, tmp_path
     assert part.calls[0][4] == {"reproducible": sent}
 
 
+def test_adhoc_render_hands_the_picture_options_to_the_projection(monkeypatch, tmp_path):
+    """'--style shaded' and the rest mean to a picture of a bare file what they mean to an object's."""
+    part, _ = install_fake_render(monkeypatch)
+    session = _with_output(make_session()[0])
+    picture = {"style": "shaded", "size": "square", "background": "#102030", "quality": 80}
+
+    operations.adhoc_render(
+        session,
+        adhoc_request(tmp_path, output_filename=str(tmp_path / "bracket.png"), **picture),
+    )
+
+    assert part.calls[0][4] == picture
+
+
 def test_adhoc_render_refuses_a_reproducible_that_is_not_a_flag(monkeypatch, tmp_path):
     part, _ = install_fake_render(monkeypatch)
     session = _with_output(make_session()[0])
@@ -3360,7 +3416,7 @@ def test_adhoc_render_reports_what_the_render_refused_as_a_usage_error(monkeypat
 def test_adhoc_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch, tmp_path):
     """Nothing is rendered, rather than something aimed somewhere else."""
 
-    def _refuse(view, origin, up):
+    def _refuse(view, origin, up, turn=None):
         raise ValueError("Unknown view 'isometric'. Known views: front, back")
 
     part, _ = install_fake_render(monkeypatch, resolve_viewport=_refuse)

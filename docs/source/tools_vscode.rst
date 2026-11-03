@@ -101,6 +101,11 @@ The Explorer also lists the ``software`` a package ships. Selecting one shows it
 in the Inspector and leaves the ``Digital Thread`` as it is: software is a file, not geometry, so there is
 nothing to render.
 
+And it lists the colours, materials and finishes a package declares (see :doc:`/digital_thread/lifecycle/design_cmf`),
+after its objects, each with the colour it is drawn in and marked when it is only a picture. **Display** shows one in
+the ``Digital Thread`` on its own: there is nothing of it to turn, so the panel is its **CMF** tab alone, saying what it
+is.
+
 Digital Thread
 ==============
 
@@ -109,7 +114,7 @@ a bare canvas: groups of tabs, each with tabs of its own -- **Design**, **Analys
 **Validation**, followed by **Operations**, which has nothing in it yet and is always disabled. Design
 is always the first (see :doc:`/digital_thread/introduction` for what each group is for):
 
-- **Design** — the object itself, three ways, in tabs of its own:
+- **Design** — the object itself, three ways, and what it is in, in tabs of its own:
 
   - **3D** — the shape, tessellated by PartCAD and drawn here, to turn and zoom. Always present.
   - **2D** — the object rendered to a picture, as ``pc render`` renders it: PNG, JPEG or SVG,
@@ -118,6 +123,10 @@ is always the first (see :doc:`/digital_thread/introduction` for what each group
     ``pc render -e`` uses one. **Drawn by** names it: ``//pub/feature/render/draftwright`` unless you choose or
     type another, and the formats are whatever it declares (PDF, SVG and DXF). The first drawing takes a few
     minutes while PartCAD installs draftwright.
+
+  - **CMF** — for a part, an assembly or a scene: the colour, material and finish of each item it is made of,
+    set by set with a swatch of each colour, what is unspecified, and what keeps it from being made -- the items
+    ``pc test``'s ``cmf`` check finds incomplete first (see :doc:`/digital_thread/lifecycle/design_cmf`).
 
   2D and Draft each have a **Save…** button that saves the file on screen wherever you choose. A picture is
   shown on the tab, and can be zoomed with the mouse wheel, dragged, and put back with a double-click; a PDF or
@@ -129,14 +138,15 @@ is always the first (see :doc:`/digital_thread/introduction` for what each group
 - **Manufacturing** — what making it takes:
 
   - **Build vs Buy** — for a part or an assembly: every part, piece of stock and sub-assembly it is made of,
-    with a picture, a count, its size, weight and material, and a switch saying whether it is built or bought.
+    with a picture, a count, its size, weight, colour, material and finish, and a switch saying whether it is built
+    or bought.
     A line that can be only one of the two has its switch fixed, and one that can be neither is marked
     **Incomplete**. The choices are kept on your machine, and ``pc instructions`` reads them too.
   - **Build** — for whatever is built: the order to make it in, with the instructions for the selected step.
   - **Buy** — for whatever is bought: what it can be bought from, and a quote per supplier.
   - **Bill of Materials** — for a part or an assembly: what has to be procured to have it, as ``pc bom``
-    lists it. A made part is the stock it is made from, and a sub-assembly that declares a vendor and an SKU
-    is one item ordered whole.
+    lists it, with the colour, material and finish of each line. A made part is the stock it is made from, and a
+    sub-assembly that declares a vendor and an SKU is one item ordered whole.
   - **Assembly** — for an assembly: the assembly instructions, as PDF or HTML, to read and save
     (``pc instructions``).
 

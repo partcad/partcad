@@ -263,13 +263,43 @@ async def prepare_async(shape, ctx) -> None:
     if resolve is not None:
         await shape.with_ports.resolve_async()
 
-    if not (getattr(shape, "config", None) or {}).get(assembly_ports.MAP):
+    # An assembly in a colour of its own is an enrich of one, joined by the
+    # ports its source's 'map:' gives it - resolved there, once for the source
+    # and every variant of it. The source is asked for directly rather than by
+    # preparing the enrich: a preparation can be under way on another thread,
+    # behind whatever that thread waits for (see 'AssemblyFactoryEnrich').
+    find = getattr(shape, "find_ports_source", None)
+    if find is not None:
+        source = find()
+        if source is not None and source is not shape:
+            await prepare_async(source, ctx)
+            # A source that is itself an enrich of another took that one's
+            # ports as it was prepared, after this one took the source's: take
+            # them again, as the source has them now.
+            find()
+        return
+
+    config = getattr(shape, "config", None) or {}
+    if not config.get(assembly_ports.MAP):
         return
     with_ports = getattr(shape, "with_ports", None)
     if with_ports is None or with_ports.map_resolved():
         return
 
-    await assembly_ports.resolve_async(shape, ctx)
+    locked = getattr(shape, "locked", None)
+    if locked is None:
+        await assembly_ports.resolve_async(shape, ctx)
+        return
+    # Held across the resolution, so that a caller arriving while it runs -
+    # two colours of one assembly, built side by side, both asking for its
+    # ports - waits for it and reads what it resolved, rather than resolving
+    # the same 'map:' beside it under the same action (see 'src/partcad/AGENTS.md',
+    # "No two actions open under one name"; 'Shape.get_bounding_box_async' is
+    # the same).
+    async with locked():
+        if shape.with_ports.map_resolved():
+            return
+        await assembly_ports.resolve_async(shape, ctx)
 
 
 def embeds(child) -> bool:

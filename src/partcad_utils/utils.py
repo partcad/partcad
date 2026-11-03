@@ -244,7 +244,7 @@ def parse_parameterized_name(name: str) -> tuple:
     A name or value may carry a reserved character percent-encoded (see
     'RESERVED_IN_NAMES'): the separators are found first, on the raw text, and
     each name and value is decoded afterwards. That is what lets a value be a
-    parameterised reference of its own ('color=//pub/std/color:rgba%3Bcolor%3D
+    parameterised reference of its own ('color=//builtin/color:rgba%3Bcolor%3D
     C91A09FF') without its ';' and '=' being read as this name's.
     """
     base, _, suffix = name.partition(";")

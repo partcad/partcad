@@ -11,6 +11,7 @@ import os
 from .cad import CadTest
 from .cam import CamTest
 from .cfd import CfdTest
+from .cmf import CmfTest
 from .connect import ConnectTest
 from .connectivity import ConnectivityTest
 from .degenerate import DegenerateTest
@@ -64,6 +65,11 @@ def tests(concurrency_cap: int) -> list[Test]:
                 # says. A read of the declarations, plus what the solid
                 # weighs where a physical property is required.
                 RequirementsTest(),
+                # Whether what is to be made has its colour, material and finish
+                # specified: a read of the summary the payload's CMF section was
+                # recorded with, so it costs nothing beyond the build the 'cad'
+                # check already made (docs/design/cmf.md, section 8).
+                CmfTest(),
                 DegenerateTest(),
                 # Costs no sandbox at all: the verdict is read off the envelope
                 # the core already holds (see partcad.brep_inspect), so it goes

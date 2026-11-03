@@ -10,11 +10,12 @@
 // instructions, and anything that can be bought has suppliers and prices, so the
 // panel is a strip of tabs over one object rather than a canvas:
 //
-//     (Requirements)  |  Design           |  Analysis                                 |  Manufacturing                                                    |  Validation                              |  Operations
-//                           3D | 2D | Draft     FEA | Dynamic FEA | Heat Transfer | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly    Test | Simulation | Process Emulation
+//     (Requirements)  |  Design                 |  Analysis                                 |  Manufacturing                                                    |  Validation                              |  Operations
+//                           3D | 2D | Draft | CMF     FEA | Dynamic FEA | Heat Transfer | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly    Test | Simulation | Process Emulation
 //
 // Four groups, each a strip of its own. Design is the object itself: turned in
-// 3D, rendered to a picture, drawn as a dimensioned drawing. Analysis is what
+// 3D, rendered to a picture, drawn as a dimensioned drawing, and what each of
+// its items is in - its colour, material and finish (CMF). Analysis is what
 // engineering analysis says about it - a tab per analysis, each listing the
 // scenarios the part declares for it, run (see 'analysis.ts') - and
 // Manufacturing what making it takes -
@@ -35,6 +36,13 @@
 // strip is rebuilt when the answer arrives. Opening the tab is what asks for the
 // verdicts, which are 'pc test -f requirements' (see 'requirements.ts').
 //
+// A colour, a material or a finish opened from the explorer is none of that: it
+// is what an object is in, and has no shape to turn, analyse, make or test. It
+// is shown the way an interface is in the design - the Design group alone,
+// opened and not shown, and in it the CMF tab alone, which says what the
+// declaration is (see 'isDeclaration'). One tab is no choice, so neither strip
+// is drawn for one, and the CMF pane is the panel.
+//
 // Every group always shows all of its tabs and disables the ones that do not
 // apply, and a group none of whose tabs apply is itself disabled; see 'Tabs'
 // for which tab each strip then opens on. Design and its 3D view are always
@@ -44,8 +52,8 @@
 // This file is the shell: it owns the tab strips and the panes, routes what the
 // extension host posts in, and asks for the contents of a tab the first time it
 // is looked at. Each pane draws itself ('scene.ts', 'render.ts', 'analysis.ts'
-// and 'cae.ts', 'bom.ts', 'bvb.ts', 'build.ts', 'assembly.ts', 'supply.ts',
-// 'test.ts', 'simulation.ts');
+// and 'cae.ts', 'cmf.ts', 'bom.ts', 'bvb.ts', 'build.ts', 'assembly.ts',
+// 'supply.ts', 'test.ts', 'simulation.ts');
 // none of them talks to the host directly.
 //
 // The Manufacturing strip is the one whose shape depends on an answer. Whether
@@ -79,6 +87,7 @@ import { BuildView } from './build';
 import { BvbResult, BvbView, THUMBNAIL_SIZE, visibleRows } from './bvb';
 import { hasCallouts } from './callouts';
 import { CaeResult } from './cae';
+import { CmfView } from './cmf';
 import { el, empty, placeholder } from './dom';
 import { geometryCache } from './geometryCache';
 import {
@@ -101,9 +110,11 @@ import {
     BomData,
     AnalysisTabId,
     BvbData,
+    CMF_KINDS,
     CaeListData,
     CaeRunData,
     Choices,
+    CmfData,
     DESIGN_TABS,
     DRAFT_PLUGINS,
     DetailsMessage,
@@ -128,6 +139,7 @@ import {
     ViewportData,
     groupOf,
     isAnalysisTab,
+    isDeclaration,
     isRenderTab,
 } from './messages';
 import { Choice, RenderView } from './render';
@@ -157,6 +169,7 @@ const panes: Record<TabId, HTMLElement> = {
     // eslint-disable-next-line @typescript-eslint/naming-convention
     '2d': byId('pane-2d'),
     draft: byId('pane-draft'),
+    cmf: byId('pane-cmf'),
     bvb: byId('pane-bvb'),
     build: byId('pane-build'),
     bom: byId('pane-bom'),
@@ -175,6 +188,7 @@ const panes: Record<TabId, HTMLElement> = {
 const DATA_TABS: TabId[] = ['bom', 'supply'];
 
 const supplyView = new SupplyView(panes.supply);
+const cmfView = new CmfView(panes.cmf);
 // The three Manufacturing panes that hold controls of their own - switches, a
 // checkbox, a format - own their panes for the life of the panel, as the
 // analyses do: rebuilding one on every show would take back what the user set.
@@ -952,6 +966,11 @@ function reset(tab: TabId): HTMLElement {
  * of its tabs is.
  */
 function tabsFor(message: ShowMessage | undefined): TabSpec[] {
+    if (isDeclaration(message?.kind)) {
+        // What an object is in, not an object: Design alone, which is no
+        // choice, so the strip is not drawn and the group is simply open.
+        return [{ id: 'design', label: 'Design', pane: panes.design }];
+    }
     // In front of the rest, and only when there is something to show: an
     // object that states no requirements has nothing for the tab to say, and a
     // disabled tab in front of the strip would only push the others along.
@@ -1134,7 +1153,11 @@ function validationTabsFor(message: ShowMessage | undefined): TabSpec[] {
 function setAllTabs(message: ShowMessage | undefined): void {
     // The groups' strips first, so that the panel's, opening a group, finds the
     // tab under it already chosen.
-    designTabs.setTabs(designTabsFor(message));
+    //
+    // A declaration's strip is one of passing ('transient'): the CMF tab it
+    // opens on is the only one there is, not a tab anybody chose, and the next
+    // object shown goes back to the Design tab that was open before it.
+    designTabs.setTabs(designTabsFor(message), { transient: isDeclaration(message?.kind) });
     analysisTabs.setTabs(analysisTabsFor(message));
     manufacturingTabs.setTabs(manufacturingTabsFor(message));
     validationTabs.setTabs(validationTabsFor(message));
@@ -1142,18 +1165,34 @@ function setAllTabs(message: ShowMessage | undefined): void {
 }
 
 /**
- * The Design tab's own tabs for an object: all three always shown, 3D always
+ * The Design tab's own tabs for an object: all four always shown, 3D always
  * enabled - it is what an empty panel opens on too.
  *
  * 2D is anything PartCAD can render to a picture: a part, an assembly, a scene
  * or a sketch - not an interface, which is ports rather than a shape. Draft is a
  * dimensioned drawing, which is made of a solid: a part or an assembly. Both are
  * a render the daemon makes of '<package>:<name>', so an object with no package
- * gets neither.
+ * gets neither. CMF is what is made in a colour, a material and a finish: a
+ * part, an assembly or a scene, item by item ('cmf.info').
+ *
+ * A declaration has the CMF tab and nothing else: there is nothing of it to
+ * turn, render or draw.
  */
 function designTabsFor(message: ShowMessage | undefined): TabSpec[] {
     const known = Boolean(message?.package);
     const kind = message?.kind ?? '';
+    const cmf: TabSpec = {
+        id: 'cmf',
+        label: 'CMF',
+        pane: panes.cmf,
+        disabled: !(known && (CMF_KINDS.includes(kind) || isDeclaration(kind))),
+        hint: known
+            ? 'Only what is made - a part, an assembly or a scene - is in a colour, a material and a finish'
+            : 'PartCAD did not say which package this belongs to',
+    };
+    if (isDeclaration(kind)) {
+        return [cmf];
+    }
     return [
         { id: '3d', label: '3D', pane: panes['3d'] },
         {
@@ -1168,6 +1207,7 @@ function designTabsFor(message: ShowMessage | undefined): TabSpec[] {
             pane: panes.draft,
             disabled: !(known && (kind === 'part' || kind === 'assembly')),
         },
+        cmf,
     ];
 }
 
@@ -1209,6 +1249,7 @@ async function show(message: ShowMessage): Promise<void> {
             : () => 'Waiting for a part to analyse: only a part is analysed.',
     );
     resetRenderTabs('Select this tab to render it.');
+    cmfView.setBusy('Select this tab to see what this is in.');
     resetManufacturing('Asking PartCAD what this is made of…');
     resetValidation('Asking PartCAD what this declares under simulate:…');
     showView(message);
@@ -1413,6 +1454,7 @@ function clear(): void {
     }
     resetAnalyses(() => 'Nothing to analyse.');
     resetRenderTabs('Nothing to render.');
+    cmfView.setBusy('Nothing to show.');
     resetManufacturing('Nothing to show.');
     testView.setBusy('Nothing to test: select an object.');
     requirements = undefined;
@@ -1845,6 +1887,19 @@ function onLeafSelected(tab: TabId): void {
         request('bvb');
         return;
     }
+    if (tab === 'cmf') {
+        // An object's items are built for it - what a source states is only
+        // known once it is read - which the 3D view has done by now; a
+        // declaration is read and nothing is built.
+        requested.add('cmf');
+        cmfView.setBusy(
+            isDeclaration(shown?.kind)
+                ? 'Asking PartCAD what this is…'
+                : 'Asking PartCAD what each item is in: its colour, material and finish…',
+        );
+        request('cmf');
+        return;
+    }
     if (isRenderTab(tab)) {
         renderTab(tab);
         return;
@@ -1920,6 +1975,21 @@ function onTabData(tab: TabId, token: number, data: unknown, error: string | und
 
     if (tab === 'bvb') {
         onBvb(data as BvbData | undefined, error);
+        return;
+    }
+    if (tab === 'cmf') {
+        if (error !== undefined) {
+            cmfView.showError(error);
+        } else if (data === null || data === undefined) {
+            cmfView.showError('PartCAD had nothing to say about what this is in.');
+        } else {
+            try {
+                cmfView.show(data as CmfData);
+            } catch (e: unknown) {
+                cmfView.showError(`Failed to display this: ${e}`);
+                reportError(`failed to render the 'cmf' tab: ${e}`);
+            }
+        }
         return;
     }
     if (tab === 'requirements') {

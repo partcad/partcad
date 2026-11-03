@@ -41,6 +41,7 @@ import tempfile
 import pyexpat  # noqa: F401
 
 sys.path.append(os.path.dirname(__file__))
+import appearance
 import ocp_serialize
 import wrapper_common
 
@@ -145,7 +146,30 @@ def _write_merged(obj, path, builder) -> bool:
         BRepTools.Clean_s(obj.wrapped)
 
 
-def _export(shape, angular_tolerance):
+def _colored(shape, colors):
+    """'shape' as build123d draws it in colours: a child per colour, each the faces drawn in it.
+
+    'colors' is a colour (or None) per face, from the shape's CMF section (see
+    'appearance.section_face_colors'). glTF has no colour per face, only a
+    material per primitive, so the faces of one colour are made one child and
+    the colour is put on that child - the one way of saying it the writer reads
+    (see '_write_merged') - and what comes out is a mesh per colour, each with
+    its material, in place of the one mesh an uncoloured shape is. The faces are
+    the shape's own, already triangulated; nothing is meshed again.
+    """
+    import build123d as b3d
+
+    children = []
+    for color, piece in appearance.faces_by_color(shape, colors, None):
+        child = b3d.Compound(piece)
+        if color is not None:
+            red, green, blue, alpha = appearance.parse(color)
+            child.color = b3d.Color(red / 255.0, green / 255.0, blue / 255.0, alpha)
+        children.append(child)
+    return b3d.Compound(children=children)
+
+
+def _export(shape, angular_tolerance, colors=None):
     """The binary glTF of 'shape' as it is already triangulated.
 
     One primitive per shape where that can be asked for (see '_write_merged'), and
@@ -162,7 +186,7 @@ def _export(shape, angular_tolerance):
 
     # Compound.cast, not Shape.cast: build123d 0.11 made Shape.cast abstract, so
     # it silently returns None and export_gltf then fails on None.location.
-    obj = b3d.Compound.cast(ocp_serialize.compound_of([shape]))
+    obj = _colored(shape, colors) if colors else b3d.Compound.cast(ocp_serialize.compound_of([shape]))
 
     # The writer only writes to a path, so the buffer has to come back off the
     # disk. A temp file rather than the shape's render output: this is a preview,
@@ -384,16 +408,20 @@ class NothingToDraw(Exception):
     """
 
 
-def _to_glb(shape, tolerance, angular_tolerance):
+def _to_glb(shape, tolerance, angular_tolerance, colors=None):
     """Tessellate one shape into a binary glTF buffer, at an absolute deflection.
 
     Faces become triangles and the edges that bound no face become line segments,
     so that a sketch of open lines is drawn rather than dropped: glTF can carry
     both, and export_gltf writes the second only beside the first. A shape with neither - a point,
     an empty compound - is reported rather than sent as a file that draws nothing.
+
+    'colors' is a colour per face where the shape's CMF section colours its faces
+    one by one (see '_colored'), and None - the shape in one piece, as always -
+    everywhere else.
     """
     _mesh(shape, tolerance, angular_tolerance)
-    glb = _export(shape, angular_tolerance) if _has_faces(shape) else None
+    glb = _export(shape, angular_tolerance, colors) if _has_faces(shape) else None
     if glb is None or not _draws_lines(glb):
         positions = _segments(_free_edges(shape), tolerance, angular_tolerance)
         if positions:
@@ -434,7 +462,14 @@ def process(request):
         digest = entry.get("digest")
         try:
             shape = ocp_serialize.shape_from_payload(entry[ocp_serialize.KEY_BREP])
-            geometry[digest] = ocp_serialize.encode_gltf(_to_glb(shape, tolerance, angular_tolerance))
+            # A payload is one piece of geometry with whatever CMF it carries, so
+            # what a face is drawn in is the payload's to say, and comes back
+            # under its digest like the rest. No output changes for a payload
+            # with no face-by-face section, which every payload written before
+            # sections existed is - so nothing tessellated before is stale, and
+            # CACHE_VERSION stays.
+            colors = appearance.section_face_colors(ocp_serialize.cmf_of_payload(entry[ocp_serialize.KEY_BREP]))
+            geometry[digest] = ocp_serialize.encode_gltf(_to_glb(shape, tolerance, angular_tolerance, colors))
         except NothingToDraw as e:
             empty[digest] = str(e)
         except Exception as e:

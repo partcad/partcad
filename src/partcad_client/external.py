@@ -73,7 +73,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
 
 from partcad_utils import containers
-from partcad_utils.container_image import image_name, image_tag
+from partcad_utils.container_image import expand
 from partcad_utils.workspace import determine_root_path, socket_path
 
 from . import __version__, object_types
@@ -409,7 +409,7 @@ def _image_of(value: str) -> str:
     the left; it only ever rewrites images in PartCAD's own namespace, so a
     tool a user declared keeps the image it named.
     """
-    return image_name(str(value).replace("{version}", image_tag(__version__)))
+    return expand(value, release=__version__)
 
 
 def tool_from_declaration(name: str, config: dict) -> Tool:

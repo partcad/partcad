@@ -31,6 +31,8 @@ cache
 cadquery
 cae
 cam
+case
+catalogs
 catpart
 center
 cfd
@@ -40,6 +42,7 @@ circle
 circles
 climb
 cm
+cmf
 cnc
 collide
 collision
@@ -56,6 +59,7 @@ container
 continuous
 convection
 conventional
+conventions
 count
 cover
 cuboid
@@ -108,6 +112,7 @@ exclude
 executable
 exploded
 export
+extends
 extension
 extensions
 external
@@ -129,6 +134,7 @@ flatpak
 flip
 float
 floating
+fold
 force
 formal
 format
@@ -194,6 +200,7 @@ kind
 kinds
 km
 laser
+ldraw
 lead
 length
 limits

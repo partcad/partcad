@@ -33,12 +33,14 @@ import appearance
 import label_layout
 import ocp_serialize
 import stroke_text
+import viewpoint
 import wrapper_common
 
 # What this implementation reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
-# before is produced again.
-CACHE_VERSION = 4
+# before is produced again. 5: a colour too light to see on white is drawn
+# darker (see 'legible').
+CACHE_VERSION = 5
 
 # How this implementation meshes what it is handed, for the files of one
 # object to share a decoding and a mesh when they are written together (see
@@ -845,11 +847,44 @@ def _add_projected(exporter, layer, shapes, origin, up, look_at, reproducible=Fa
         wrapper_common.handle_exception(e)
 
 
+# The lightest a line may be drawn in, as relative luminance (WCAG: white is 1,
+# goldenrod 0.42). A drawing is on white paper, and a face coloured white - what
+# a STEP file paints a part as often as not - would otherwise be drawn in lines
+# nobody can see. A colour lighter than this is drawn darker, hue kept, until it
+# is this light; goldenrod and everything darker are drawn exactly as they are.
+MAX_LINE_LUMINANCE = 0.5
+
+
+def _linear(channel: float) -> float:
+    channel /= 255.0
+    return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+
+
+def _srgb(linear: float) -> int:
+    value = linear * 12.92 if linear <= 0.0031308 else 1.055 * linear ** (1 / 2.4) - 0.055
+    return max(0, min(255, int(round(value * 255))))
+
+
+def legible(color):
+    """'color' as a line on white is drawn in: itself, or darker where it is too light to see (MAX_LINE_LUMINANCE)."""
+    if isinstance(color, str):
+        red, green, blue, alpha = appearance.parse(color)
+    else:
+        red, green, blue, alpha = (*color, 1.0) if len(color) == 3 else color
+    linear = [_linear(channel) for channel in (red, green, blue)]
+    luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    if luminance <= MAX_LINE_LUMINANCE:
+        return color
+    factor = MAX_LINE_LUMINANCE / luminance
+    # Darker, and as see-through as it was.
+    return (*(_srgb(channel * factor) for channel in linear), alpha)
+
+
 def line_color(color):
     """A colour as 'ExportSVG' has to be handed it to write exactly that colour.
 
-    'color' is an '(red, green, blue)' of integers from 0 to 255, or a colour
-    string 'appearance.parse' reads.
+    'color' is an '(red, green, blue)' of integers from 0 to 255, optionally
+    followed by an alpha from 0 to 1, or a colour string 'appearance.parse' reads.
 
     'ExportSVG' turns each channel into a fraction of 255 and, writing the file,
     back into an integer by truncating it - and a fraction of 255 does not always
@@ -860,7 +895,7 @@ def line_color(color):
     if isinstance(color, str):
         red, green, blue, alpha = appearance.parse(color)
     else:
-        (red, green, blue), alpha = color, 1.0
+        red, green, blue, alpha = (*color, 1.0) if len(color) == 3 else color
     return b3d.Color(*(min(channel + 0.5, 255) / 255.0 for channel in (red, green, blue)), alpha)
 
 
@@ -904,6 +939,9 @@ def process(path, request):
         # 'LOOK_AT' for why it is the direction asked for, as a position.
         origin = tuple(float(component) for component in viewport_origin(request))
         up = viewport_up(request)
+        # The object turned in front of that camera, which is drawn by the camera
+        # turned the other way about it (see 'viewpoint').
+        origin, up = viewpoint.turned(origin, up, viewpoint.turn_of(request))
         look_at = LOOK_AT
         # Whether this drawing has to come out the same every time it is drawn.
         # Always present in the request - PartCAD puts it there whether or not
@@ -931,7 +969,7 @@ def process(path, request):
             layer = visible_layer(color)
             exporter.add_layer(
                 layer,
-                line_color=line_color(color),
+                line_color=line_color(legible(color)),
                 line_weight=line_weight,
             )
             # A projection that cannot be added still leaves an SVG behind - an

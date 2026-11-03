@@ -570,3 +570,59 @@ def test_a_built_in_exporter_meshes_with_every_parameter_it_declares(
     assert written("again") == written("base")
     for parameter in declared[1:]:
         assert written(parameter, **{parameter: coarse[parameter]}) != written("base"), parameter
+
+
+# Writes where it was told its package is: the 'package_dir' it was handed.
+PACKAGE = textwrap.dedent("""
+    def process(path, request):
+        with open(path, "w") as f:
+            f.write(str(request.get("package_dir")))
+        return {"success": True, "files": []}
+    """)
+
+
+@pytest.mark.parametrize("count", [1, 2])
+def test_the_package_a_sandbox_was_sent_is_the_one_a_file_is_handed(
+    wrapper_export, monkeypatch, capsysbinary, tmp_path, count
+):
+    """'--package-dir <index> <directory>' after the triples: the directory the sandbox put it in, in that request.
+
+    The request's own is a path on the machine that sent it, and only an
+    argument is rewritten to where the sandbox unpacked what it was sent.
+    """
+    from partcad import output, shape_envelope
+
+    assert wrapper_export.PACKAGE_DIR_ARGUMENT == output.PACKAGE_DIR_ARGUMENT
+    assert wrapper_export.PACKAGE_DIR_KEY == output.PACKAGE_DIR_KEY
+    script = _script(tmp_path / "package", "write.py", PACKAGE)
+    names = ["a.txt", "b.txt"][:count]
+    outputs = [(str(tmp_path / name), str(tmp_path / "package"), script) for name in names]
+    unpacked = str(tmp_path / "unpacked")
+    argv = [WRAPPER] + [part for output_ in outputs for part in output_]
+    argv += [output.PACKAGE_DIR_ARGUMENT, str(count - 1), unpacked]
+    if count == 1:
+        document = {"package_dir": "/on/the/client"}
+    else:
+        requests = [{"package_dir": "/on/the/client"} for _ in names]
+        document = {"outputs": [{"request": request} for request in requests], "subjects": []}
+    monkeypatch.setattr(sys, "argv", argv)
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(shape_envelope.serialize(document))))
+    capsysbinary.readouterr()
+
+    runpy.run_path(WRAPPER, run_name="__main__")
+
+    written = [(tmp_path / name).read_text() for name in names]
+    # The file the group names is handed the sandbox's directory; any other,
+    # what its request said.
+    assert written[-1] == unpacked
+    assert written[:-1] == ["/on/the/client"] * (count - 1)
+
+
+def test_the_groups_come_off_the_arguments_and_leave_the_triples(wrapper_export):
+    argv = ["export.py", "a", "dir", "s.py", "b", "dir", "s.py", "--package-dir", "1", "/x/pkg"]
+    # Normalized like the triples' paths, so "\\x\\pkg" on Windows.
+    assert wrapper_export.package_dirs(argv) == {1: os.path.normpath("/x/pkg")}
+    assert wrapper_export.arguments(argv) == [("a", "dir", "s.py"), ("b", "dir", "s.py")]
+    # A path that happens to be called that is a path.
+    argv = ["export.py", "--package-dir", "dir", "s.py"]
+    assert wrapper_export.package_dirs(argv) == {}

@@ -1119,6 +1119,19 @@ Object commands
   assembly instruction book) never reads them. PartCAD is Z-up with ``+Y`` pointing away from the front view,
   which is what puts ``+X`` on the right of it.
 
+  ``--turn`` turns the object in front of that camera instead of moving the camera: by ``X,Y,Z`` degrees about
+  the object's own axes, through its middle, or by one number about Z — the way the 3D view's Animate turns it.
+  It goes with any of the three above, and is the ``turn`` of the file type:
+
+  .. code-block:: shell
+
+    pc render -t svg --view front --turn 0,0,45 -O ./ bracket
+
+  ``--style shaded`` draws a ``png`` or a ``jpeg`` lit and in perspective, as the Digital Thread's 3D view draws
+  it, instead of as the projection's lines; ``--size`` (``512x512`` for a picture, or a name such as ``square``
+  or ``reels``) and ``--background`` go with it. That is also how every frame of a video is drawn, so a frame is
+  a picture of its own — see :ref:`shaded-pictures` and :ref:`videos`.
+
   ``--reproducible`` and ``--no-reproducible`` are the file type's ``reproducible`` passed the same way: which
   hidden-line algorithm draws the projection for this one run. The exact one works from the surfaces and draws a
   curve as itself; the polygonal one -- the default, unless the package says otherwise -- works from a
@@ -1242,10 +1255,10 @@ instead.
   one, and ``-p <name>=<value>`` to set parameters.
 
   One flag per tab of the viewer opens it on that tab, named ``--<group>-<tab>`` the way the viewer's two strips
-  read: ``--design-3d``, ``--design-2d``, ``--design-draft``; ``--analysis-fea``, ``--analysis-dynamic``,
-  ``--analysis-thermal``, ``--analysis-cfd``; ``--manufacturing-bvb``, ``--manufacturing-build``,
-  ``--manufacturing-buy``, ``--manufacturing-bom``, ``--manufacturing-assembly``; ``--validation-test``,
-  ``--validation-simulation``. With none, the viewer stays on whichever tab it is on. The analysis tabs and the
+  read: ``--design-3d``, ``--design-2d``, ``--design-draft``, ``--design-cmf``; ``--analysis-fea``,
+  ``--analysis-dynamic``, ``--analysis-thermal``, ``--analysis-cfd``; ``--manufacturing-bvb``,
+  ``--manufacturing-build``, ``--manufacturing-buy``, ``--manufacturing-bom``, ``--manufacturing-assembly``;
+  ``--validation-test``, ``--validation-simulation``. With none, the viewer stays on whichever tab it is on. The analysis tabs and the
   Simulation tab list what the object declares -- its scenarios of that analysis, its simulations -- and select
   the first; ``--scenario <name>`` selects the one of that name instead, and is refused with any other tab. The tab travels with the
   shape, so it is the window that draws the object that switches; a tab that does not apply to the object (FEA
@@ -1498,8 +1511,10 @@ Other commands
   ``pc adhoc render`` takes what ``pc render`` takes wherever that means something for a file in no package —
   and with no ``partcad.yaml`` to configure anything in, these are the only way to say any of it:
 
-  - ``--view``, ``--viewport-origin`` and ``--viewport-up`` aim the projection, and ``--reproducible`` /
-    ``--no-reproducible`` pick the algorithm, exactly as for ``pc render``;
+  - ``--view``, ``--viewport-origin``, ``--viewport-up`` and ``--turn`` aim the projection, and
+    ``--reproducible`` / ``--no-reproducible`` pick the algorithm, exactly as for ``pc render``;
+  - ``--style``, ``--size``, ``--background`` and ``--quality`` say how a ``png`` or a ``jpeg`` is drawn, also as
+    for ``pc render``: ``--style shaded`` is the 3D view's picture of the file;
   - ``-t``/``--format`` is another spelling of ``--output``, and ``-O``/``--output-dir`` writes into a directory
     when no output file is named: the file is then named after the input;
   - ``-p``/``--param <name>=<value>`` sets a parameter of a script (a build123d or CadQuery script's parameters
@@ -1514,12 +1529,14 @@ Other commands
 
     pc adhoc render part --input build123d -t svg -O ./out -p depth=12 bracket.py   # ./out/bracket_depth_12.svg
     pc adhoc render part --reproducible --view top bracket.step bracket.svg
+    pc adhoc render part --style shaded --turn 30 --size square bracket.step bracket.png
     pc adhoc render part -e ./drawing-style -t svg-thin -O ./out bracket.step
 
   The rest of ``pc render``'s options have nothing to act on here: there is no package to walk (``-P``, ``-r``,
   ``--fast-only``, ``--exclude``), the subcommand says what the file holds (``-s``, ``-i``, ``-a``, ``-S``), a
   file in no package has no ports or interfaces (``--with-*``, ``--port``) and a part or a sketch no links
-  (``--filter``), and no instruction book is rendered ad hoc (``--ignore-manufacturability``).
+  (``--filter``), no instruction book is rendered ad hoc (``--ignore-manufacturability``), and no video either
+  (``--fps``, ``--duration``, ``--speed``, ``--append``, ``--preset``).
 
   Which of the two to use is which kind of file is wanted, and it is the same distinction as between
   ``pc export`` and ``pc render``: geometry another CAD tool can go on working with, or a picture. ``pc adhoc

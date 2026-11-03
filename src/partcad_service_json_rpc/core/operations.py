@@ -1429,10 +1429,13 @@ def adhoc_render(session, params):
     It takes what ``render.objects`` takes wherever that means something for a
     file outside any package:
 
-    * ``view``, ``viewport_origin`` and ``viewport_up`` aim the projection, and
-      ``reproducible`` picks the hidden-line algorithm, for this one render --
-      with no ``partcad.yaml`` to configure them in, this is the only way to say
-      either;
+    * ``view``, ``viewport_origin``, ``viewport_up`` and ``turn`` aim the
+      projection, and ``reproducible`` picks the hidden-line algorithm, for this
+      one render -- with no ``partcad.yaml`` to configure them in, this is the
+      only way to say either;
+    * ``style``, ``size``, ``background`` and ``quality`` are a picture's, as for
+      ``render.objects`` (`VIDEO_OPTIONS`): a ``png`` or a ``jpeg`` drawn
+      ``shaded`` is the 3D view's picture of a bare file;
     * ``params`` are parameter values of the input, which the throwaway package
       declares on it, so that a script reads them;
     * ``options_package`` is a package to read the file type from -- one in the
@@ -1500,7 +1503,9 @@ def adhoc_render(session, params):
             % (output_type, ", ".join(sorted(RENDER_EXTENSION_MAPPING))),
         )
 
-    options = _render_options(pc, params)
+    # The picture options too: 'style', 'size', 'background' and a JPEG's
+    # 'quality' mean the same to a picture of a bare file as to an object's.
+    options = {**_render_options(pc, params), **_video(params)}
     if values:
         options["parameters"] = values
     if options_package:
@@ -2571,7 +2576,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.276"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.8.282"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -2741,6 +2746,10 @@ _LIST_EVERY_PACKAGE = ("interfaces", "software", "colors", "materials", "finishe
 # what it is drawn in, whether it is a claim that it can be had, and what it is.
 _LIST_CMF = ("colors", "materials", "finishes")
 
+# The same three, as the package contents the explorer is sent list them: each
+# section under its own name, holding declarations of its kind.
+_CMF_SECTIONS = tuple((section, _LIST_KINDS[section]) for section in _LIST_CMF)
+
 
 def list_objects(session, params):
     """List a package's parts, sketches, assemblies, interfaces, materials or software."""
@@ -2841,6 +2850,7 @@ def _cmf_rows(ctx, project, kind: str) -> dict:
             rows[name] = "<broken>"
             continue
         alias = ""
+        desc = declaration.desc
         if declaration.is_alias and declaration.source is None:
             rows[name] = "<broken> (an alias naming nothing)"
             continue
@@ -2852,7 +2862,11 @@ def _cmf_rows(ctx, project, kind: str) -> dict:
             if declaration is None:
                 rows[name] = "<broken>%s" % alias
                 continue
-        if declaration.config.get("parameters"):
+            # The alias's own description where it gives one, else what it names.
+            desc = desc or declaration.desc
+        # Parametric is a declaration listed without values: an instance of
+        # one ('rgba;color=C91A09FF', which an alias may name) has a look.
+        if declaration.config.get("parameters") and not declaration.parameter_values:
             look = "parametric"
         elif kind == "finish":
             look = declaration.cmf_info().get("Display", "-")
@@ -2860,8 +2874,101 @@ def _cmf_rows(ctx, project, kind: str) -> dict:
             rgba = cmf.display(ctx, declaration)
             look = cmf.css_color.to_hex(rgba) if rgba is not None else "-"
         made = "" if declaration.manufacturable else " (display only)"
-        rows[name] = "%-11s%s%s%s" % (look, " " + declaration.desc if declaration.desc else "", made, alias)
+        rows[name] = "%-11s%s%s%s" % (look, " " + desc if desc else "", made, alias)
     return rows
+
+
+def cmf_info(session, params):
+    """The colour, material and finish of an object, or what a colour, a material or a finish is.
+
+    What the IDE's CMF tab is drawn from (docs/design/cmf.md, section 9). For
+    a part, an assembly or a scene: ``items``, a row per item the ``cmf`` check
+    judges -- the part itself, or every part an assembly holds and every
+    sub-assembly it holds that is bought whole -- each with its CMF as ``pc
+    info`` says it and what keeps it from being specified, the incomplete ones
+    first; and for an assembly ``own``, the CMF it sets itself (see
+    ``partcad.cmf.report_async``). What a part's source states is only known
+    once the part is built, so it is: by the time anybody opens the tab, the
+    3D view beside it has built all of it.
+
+    For a declaration -- ``kind`` ``color``, ``material`` or ``finish``, which
+    the IDE knows from the explorer row it opened, and which a name alone
+    cannot say, since a declaration's name is no object's -- ``declaration``:
+    what it is called, what it is drawn in, whether it is a claim or only a
+    picture, and what other systems call it (see
+    ``partcad.cmf.declaration_data``). Nothing is built for one.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    from partcad import cmf
+
+    said = _said_kind(params)
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, name = resolved
+    path = _qualified(package, name)
+
+    if said in cmf.KINDS:
+        from partcad_utils.utils import escape_name
+
+        project = ctx.get_project(package)
+        if project is not None and name in project.object_names(said):
+            # Asked for as the explorer lists it, by its key as written: a ';'
+            # in a key is part of the name, not where its parameters start. A
+            # reference that names parameters ('rgba;color=...') is no key.
+            name = escape_name(name)
+        declaration = project.get_cmf(said, name, quiet=True) if project is not None else None
+        if declaration is None:
+            raise JsonRpcError(USAGE_ERROR, "The %s %s is not found" % (said, path))
+        return {"object": path, "kind": said, "declaration": cmf.declaration_data(ctx, declaration)}
+
+    getters = {"part": ctx.get_part, "assembly": ctx.get_assembly, "scene": ctx.get_scene}
+    refusal = (
+        "Only parts, assemblies and scenes are made in a colour, a material and a finish, and only colours, "
+        "materials and finishes are what they are made in; '%s' is none of them"
+    )
+    kind = _resolve_kind(ctx, params, package, name, getters, refusal)
+    obj = getters[kind](path)
+    if obj is None:
+        raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+    with pc.logging.Process("CMF", package, name):
+        report = asyncio.run(cmf.report_async(ctx, obj))
+    return {"object": path, "kind": kind, **report}
+
+
+def _cmf_items(session, project, kind: str) -> list:
+    """A package's colours, materials or finishes, as the explorer lists them.
+
+    What the declaration says of itself and nothing it would have to look up
+    elsewhere: an alias's target, or a display naming another package's colour,
+    is in a package that may not have loaded yet, and listing a package must
+    not load its neighbours. The CMF tab says the rest, once one is opened.
+    """
+    from partcad_utils.utils import escape_name
+
+    described = []
+    for name in project.object_names(kind):
+        try:
+            # Asked for by reference, which spells a reserved character escaped.
+            declaration = project.get_cmf(kind, escape_name(name), quiet=True)
+            if declaration is None:
+                raise Exception("the declaration cannot be read")
+            row = {"name": name, "type": "alias" if declaration.is_alias else kind}
+            desc = declaration.desc or ("alias of %s" % declaration.source if declaration.is_alias else None)
+            if desc:
+                row["desc"] = desc
+            if declaration.display_text is not None:
+                row["display"] = declaration.display_text
+            row["manufacturable"] = declaration.manufacturable
+            described.append(row)
+        except Exception as e:  # pylint: disable=broad-except
+            session.emitter.warning("Skipping the %s '%s:%s': %s" % (kind, project.name, name, e))
+    return described
 
 
 def list_packages(session, params):
@@ -4458,9 +4565,16 @@ def render_objects(session, params):
     one package is used against the objects of another.
 
     ``view``, ``viewport_origin`` and ``viewport_up`` re-aim the projection for
-    this one run. They resolve to the very parameters a ``render:`` file type
-    configures, so the override lands on top of the configuration rather than
-    beside it, and a file type that does not project never reads them.
+    this one run, and ``turn`` turns the object in front of it. They resolve to
+    the very parameters a ``render:`` file type configures, so the override
+    lands on top of the configuration rather than beside it, and a file type
+    that does not project never reads them.
+
+    ``style``, ``size``, ``background``, ``fps``, ``duration``, ``speed``,
+    ``append``, ``preset`` and ``quality`` do the same for a picture and a video
+    (`VIDEO_OPTIONS`): they are fields of the raster and video file types of
+    ``//builtin/render``, handed to every file type rendered like the viewport,
+    so ``quality`` sets a JPEG's as well.
 
     ``filter`` keeps only some of the links of one assembly or scene, so that
     what is written is a view of it (see `partcad.assembly_filter`). It writes
@@ -4497,6 +4611,7 @@ def render_objects(session, params):
     # made sense of, so nothing is rendered rather than something aimed
     # somewhere else.
     render_opts = _render_options(pc, params)
+    render_opts.update(_video(params))
 
     from partcad.exception import AssemblyDocumentError
 
@@ -4598,9 +4713,10 @@ def render_inline(session, params):
     on top of the projection. They are what the ticked boxes of that panel
     resolve to, so the tab and the command line produce the same picture.
 
-    ``view``, ``viewport_origin`` and ``viewport_up`` aim the projection for this
-    one picture, exactly as they do for ``render.objects``: what the panel's
-    viewpoint fields and its orientation gizmo say. ``section`` cuts the object
+    ``view``, ``viewport_origin``, ``viewport_up`` and ``turn`` aim the
+    projection for this one picture, exactly as they do for ``render.objects``:
+    what the panel's viewpoint fields and its orientation gizmo say. The picture
+    and video options of ``render.objects`` (`VIDEO_OPTIONS`) are taken too. ``section`` cuts the object
     by a box first -- ``{"x": [lo, hi], ...}`` in millimetres in the frame of the
     object's root, an axis left out not cut (see `partcad.shape_section`) --
     which is what the panel's section sliders ask for.
@@ -4660,7 +4776,7 @@ def render_inline(session, params):
             "Only an assembly or a scene has links to filter; '%s' has none" % kind,
         )
     section = _section(params)
-    render_opts = _render_options(pc, params)
+    render_opts = {**_render_options(pc, params), **_video(params)}
 
     if kind in ("assembly", "scene"):
         # Phase one of an assembly build, as for every other request that ends
@@ -4726,6 +4842,27 @@ def _section(params):
         raise JsonRpcError(USAGE_ERROR, str(e)) from e
 
 
+# What a request may say about a picture or a video, for this one run: the
+# fields of the raster and video file types of '//builtin/render' that 'pc
+# render' offers as options (see 'partcad_cli.click.video'). Handed on as export
+# parameters, like the viewport, so that each overrides what the file type's
+# configuration says, and handed to every file type the run renders: what one
+# means is the file type's to say - 'style', 'size' and 'background' are a PNG's
+# and a JPEG's as much as a video's, and 'quality' is a JPEG's quality too.
+VIDEO_OPTIONS = ("style", "size", "background", "fps", "duration", "speed", "append", "preset", "quality")
+
+
+def _video(params):
+    """The picture and video overrides a request asks for, as export parameters: only the ones it gives."""
+    options = {}
+    for key in VIDEO_OPTIONS:
+        value = params.get(key)
+        if value is None or (key == "append" and value is False):
+            continue
+        options[key] = value
+    return options
+
+
 def _render_options(pc, params):
     """What a request overrides of a projection for one run, as export parameters.
 
@@ -4746,7 +4883,7 @@ def _render_options(pc, params):
 
 
 def _viewport(params):
-    """The viewport overrides a request asks for ('view', 'viewport_origin', 'viewport_up'), as export parameters."""
+    """The viewport overrides a request asks for ('view', 'viewport_origin', 'viewport_up', 'turn'), as export parameters."""
     from partcad.render import resolve_viewport
 
     try:
@@ -4754,6 +4891,7 @@ def _viewport(params):
             params.get("view"),
             params.get("viewport_origin"),
             params.get("viewport_up"),
+            params.get("turn"),
         )
     except ValueError as e:
         # A view nobody offers, or a vector that is not one: nothing is drawn
@@ -5113,6 +5251,11 @@ def _load_package_contents(session, name="//"):
     assemblies = item_objs(project.assemblies)
     scenes = item_objs(project.scenes)
     software = item_objs(project.software)
+    # The package's colours, materials and finishes, which the explorer lists
+    # beside its objects and opens in a Digital Thread of their own (see
+    # docs/design/cmf.md, section 9). From the declarations, as 'pc list colors'
+    # reads them: there is nothing to make of one.
+    cmf_kinds = {section: _cmf_items(session, project, kind) for section, kind in _CMF_SECTIONS}
 
     # Objects the package declares but PartCAD could not create - most often one
     # written against a PartCAD that still had a feature since retired (the
@@ -5141,6 +5284,7 @@ def _load_package_contents(session, name="//"):
             "assemblies": assemblies,
             "scenes": scenes,
             "software": software,
+            **cmf_kinds,
             "broken": broken,
         },
     )

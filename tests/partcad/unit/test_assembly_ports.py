@@ -12,6 +12,7 @@ it needs a CAD kernel: the assemblies are walked, not made.
 """
 
 import asyncio
+from unittest import mock
 
 import pytest
 
@@ -382,6 +383,131 @@ def test_an_enriched_assembly_maps_what_its_source_externalizes():
     assert _at(mount, "handle") == pytest.approx((0.0, 0.0, 5.0))
     # The source's 'top' is its upper plate's TL hole, 20mm up.
     assert _at(mount, "shifted-thru-m3") == pytest.approx((-10.0, 10.0, 25.0))
+
+
+def test_an_enriched_assembly_with_no_map_of_its_own_has_its_source_s_ports():
+    """An assembly in a colour of its own - a LEGO wheel - is joined by exactly the ports its source is."""
+    _, mount = _assembly("mount-again")
+    assert _at(mount, "hold") == pytest.approx((0.0, 0.0, 5.0))
+    assert _at(mount, "top-thru-m3") == pytest.approx((-10.0, 10.0, 20.0))
+
+
+def test_an_enrich_of_an_enrich_has_the_ports_its_first_source_maps():
+    """Whichever of the two is prepared first: the ports are worked out on the assembly with the 'map:'."""
+    _, again = _assembly("mount-again-again")
+    assert _at(again, "hold") == pytest.approx((0.0, 0.0, 5.0))
+    assert _at(again, "top-thru-m3") == pytest.approx((-10.0, 10.0, 20.0))
+
+
+def test_two_variants_asking_for_one_source_s_ports_at_once_resolve_its_map_once():
+    """Built side by side, two colours of one assembly ask for its 'map:' together: one resolves it, the other waits.
+
+    Two 'Map' actions open under one key is what 'tests/conftest.py' fails a
+    test for (see 'src/partcad/AGENTS.md'); the count says so here as well.
+    """
+    import os
+
+    # A context of its own: 'pc.init' hands back the one another test in this
+    # worker may have resolved the map in already.
+    ctx = pc.Context(os.path.dirname(PACKAGE), user_config=pc.UserConfig())
+    variants = [ctx._get_assembly(":mount-again"), ctx._get_assembly(":mount-again-again")]
+    opened = []
+    enter = pc.logging.Action.__enter__
+
+    def counting(self):
+        if self.op == "Map":
+            opened.append(self.item)
+        return enter(self)
+
+    async def both():
+        await asyncio.gather(*(shape_ports.prepare_async(variant, ctx) for variant in variants))
+
+    with mock.patch.object(pc.logging.Action, "__enter__", counting):
+        asyncio.run(both())
+
+    assert opened == ["mount"]
+    for variant in variants:
+        assert _at(variant, "hold") == pytest.approx((0.0, 0.0, 5.0))
+
+
+def test_an_enriched_assembly_with_ports_of_its_own_is_joined_by_those():
+    _, mount = _assembly("mount-own-port")
+    assert _at(mount, "own") == pytest.approx((0.0, 0.0, 9.0))
+    assert "hold" not in _ports(mount)
+    assert getattr(mount, "ports_source", None) is None
+
+
+def test_an_enriched_assembly_that_moves_its_source_is_not_joined_by_the_source_s_ports():
+    """Its source's ports are where the source is; it is moved 30mm up, and would be connected 30mm off."""
+    _, mount = _assembly("mount-moved")
+    assert "hold" not in _ports(mount)
+    assert getattr(mount, "ports_source", None) is None
+
+
+def test_an_enriched_assembly_s_ports_follow_an_override_that_arrived_after_loading():
+    """The user's override says which instance it is, whether its ports or its preparation is asked for first."""
+    import os
+
+    caller = pc.UserConfig()
+    ctx = pc.Context(os.path.dirname(PACKAGE), user_config=caller)
+    assembly = ctx._get_assembly(":parametric-again")
+    caller.parameter_config["//:parametric-again"] = {"which": "upper"}
+
+    asyncio.run(shape_ports.prepare_async(assembly, ctx))
+    assert assembly.ports_source.name.endswith("which=upper")
+    # The upper plate's 'handle': 5mm above a plate 20mm up.
+    assert _at(assembly, "chosen") == pytest.approx((0.0, 0.0, 25.0))
+
+
+def test_preparing_an_enriched_assembly_does_not_walk_its_source(monkeypatch):
+    """Its ports are its source's, worked out when asked for and not while it is prepared.
+
+    A preparation is what every reader of the object's cache key waits for, and
+    walking the source builds it: a LEGO shortcut in a colour of its own kept
+    every other reader waiting past the minute they may, and they failed.
+    """
+    from partcad import assembly_ports
+
+    walked = []
+    resolve = assembly_ports.resolve_async
+
+    async def recording(shape, ctx):
+        walked.append(shape.name)
+        await resolve(shape, ctx)
+
+    monkeypatch.setattr(assembly_ports, "resolve_async", recording)
+
+    ctx = pc.init(PACKAGE)
+    mount = ctx._get_assembly(":mount-again")
+    asyncio.run(mount.prepare_async(wait=True))
+    assert walked == []
+    assert mount.ports_source is not None
+    assert mount.with_ports is mount.ports_source.with_ports
+
+    asyncio.run(shape_ports.prepare_async(mount, ctx))
+    assert mount.with_ports.map_resolved()
+    assert _at(mount, "hold") == pytest.approx((0.0, 0.0, 5.0))
+
+
+def test_an_enriched_assembly_s_ports_do_not_wait_for_its_preparation(monkeypatch):
+    """Its source is asked for directly: a preparation under way on another thread is not waited for.
+
+    Such a preparation can be stopped behind a lock another thread holds while
+    it waits for something this one has, and waiting on it failed the F1
+    example's front wheels after a minute.
+    """
+    from partcad.shape import PreparationInFlight
+
+    ctx = pc.init(PACKAGE)
+    mount = ctx._get_assembly(":mount-again")
+
+    async def in_flight(*args, **kwargs):
+        raise PreparationInFlight("being prepared elsewhere")
+
+    monkeypatch.setattr(mount, "prepare_async", in_flight)
+    asyncio.run(shape_ports.prepare_async(mount, ctx))
+    assert _at(mount, "hold") == pytest.approx((0.0, 0.0, 5.0))
+    assert _at(mount, "top-thru-m3") == pytest.approx((-10.0, 10.0, 20.0))
 
 
 def test_a_node_s_port_may_be_externalized_beside_where_it_is():

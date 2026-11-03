@@ -257,6 +257,12 @@ KEY_METADATA = "metadata"
 METADATA_MEASUREMENTS = "measurements"
 METADATA_ANNOTATIONS = "annotations"
 METADATA_SECTIONS = "sections"
+# What the shape's CMF comes to (docs/design/cmf.md): the sets of colour,
+# material and finish it is in, with how many faces and solids each covers, and
+# what is unspecified. A summary of the CMF section the payload carries after its
+# BREP, recorded beside the geometry by whatever wrote that section, so that the
+# core - which never parses a BREP - can answer "is this specified?" and show it.
+METADATA_CMF = "cmf"
 
 # What a part is asked to go through on its way out of the wrapper that builds
 # it, and what that wrapper says it did. A part leaves its factory validated
@@ -503,13 +509,59 @@ def brep_compressed(plain: bytes) -> bytes:
     return _zstd_compress(plain, ZSTD_LEVEL)
 
 
+# How much of a payload is decompressed at a time to digest it (see 'payload_digest').
+_DIGEST_CHUNK = 1 << 20
+
+
 def payload_digest(value) -> str:
-    """A stable name for one piece of exact geometry: a digest of its compressed bytes.
+    """A stable name for one piece of exact geometry: a digest of its payload, before compression.
+
+    Of the bytes OCCT (or 'basic_shapes') wrote - the BREP, and the CMF section
+    after it when there is one ('cmf_section'), so that one solid in two colours
+    is two names - and never of the zstd frame they are carried in. Two compressors need not write the same frame for the
+    same bytes - Python 3.14 compresses with the standard library's zstd, below
+    it with 'backports.zstd', and either may be built against a different
+    libzstd - and everything keyed by this is shared between machines: the
+    tessellation of each shape ('shape_gltf'), and every request a wrapper is
+    keyed on by content ('cache_artifacts.request_key'). Keyed on the frame,
+    the same geometry was a different key wherever the compressor differed.
+
+    Decompressed a chunk at a time into the digest, so a large part costs its
+    compressed size in memory and not its plain size as well; bounded the way
+    'brep_plain()' is, and refused the same way past it. A payload that is not
+    a zstd frame is digested as it is - a peer without zstd carries it so, and
+    its digest is the one its compressed twin has.
 
     The same function as 'ocp_serialize.payload_digest' on the far side of the
     pipe, so a digest written by either end names the same payload for the other.
     """
-    return hashlib.sha256(brep_bytes(value)).hexdigest()
+    data = brep_bytes(value)
+    if not data.startswith(ZSTD_MAGIC):
+        return hashlib.sha256(data).hexdigest()
+    if _ZstdDecompressor is None:
+        raise RuntimeError(
+            "the BREP payload is zstd-compressed, but zstd is not available here. "
+            "On Python below 3.14 it comes from the 'backports.zstd' package."
+        )
+    limit = max(MAX_BREP_EXPANSION_FLOOR, MAX_BREP_EXPANSION * len(data))
+    hasher = hashlib.sha256()
+    decompressor = _ZstdDecompressor()
+    produced = 0
+    chunk = decompressor.decompress(data, max_length=_DIGEST_CHUNK)
+    while True:
+        produced += len(chunk)
+        if produced > limit:
+            raise ValueError(
+                "the BREP payload did not decompress into %d bytes or fewer (%dx its "
+                "compressed size of %d); refusing to read it" % (limit, MAX_BREP_EXPANSION, len(data))
+            )
+        hasher.update(chunk)
+        if decompressor.eof or decompressor.needs_input:
+            break
+        chunk = decompressor.decompress(b"", max_length=_DIGEST_CHUNK)
+    if not decompressor.eof:
+        raise ValueError("the BREP payload ended before its zstd frame did; refusing to read it")
+    return hasher.hexdigest()
 
 
 class Payloads:
@@ -806,6 +858,13 @@ def description(obj):
     table. Everything else a node holds is data under names its writer chose -
     a 'physics' property may well say 'geometry', a joint 'metadata' - and is
     kept whole.
+
+    Save for a node's CMF summary (METADATA_CMF), which is kept: it is what a
+    drawing paints the node's faces in and what an export writes on them, and
+    it is no part of the shape's key - CMF is applied as a shape is read, from
+    declarations the key does not cover (see 'Shape._with_cmf'). Left out with
+    the rest of KEY_METADATA, a part given another colour kept its drawing in
+    the old one, served from the cache. A node with no CMF describes as it did.
     """
     return _described_node(obj)
 
@@ -815,6 +874,9 @@ def _described_node(node):
         return _described_data(node)
     described = {}
     for key, value in node.items():
+        if key == KEY_METADATA and isinstance(value, dict) and value.get(METADATA_CMF):
+            described[METADATA_CMF] = _described_data(value[METADATA_CMF])
+            continue
         if key in _GEOMETRY_KEYS:
             continue
         if key == KEY_ASSEMBLY and isinstance(value, list):

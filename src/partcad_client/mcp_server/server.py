@@ -247,7 +247,9 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
     async def export(
         ctx: Context,
         object: ObjectName,
-        format: Annotated[str, Field(description="The file type: step, stl, 3mf, obj, gltf, brep, png, svg, ...")],
+        format: Annotated[
+            str, Field(description="The file type: step, stl, 3mf, obj, gltf, brep, png, svg, mp4, webm, ...")
+        ],
         path: Annotated[
             str,
             Field(

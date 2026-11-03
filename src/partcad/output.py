@@ -201,6 +201,11 @@ BUILTIN_PACKAGES = {
 # 'subject' parameter is whatever is being simulated. Unlike the simulator that
 # runs it, an empty world costs nothing to ship and depends on nothing.
 BUILTIN_SCENE_PACKAGE = "//builtin/scene"
+# And the colour anybody may name to draw something in without claiming it can
+# be had in that colour: 'rgba', which is what PartCAD itself makes of a hex or
+# CSS colour, or of a source's colour nothing claims (see 'cmf.RGBA'). PartCAD
+# writes references to it, so it ships with PartCAD rather than in the index.
+BUILTIN_COLOR_PACKAGE = "//builtin/color"
 BUILTIN_ROOT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin")
 BUILTIN_PATHS = {
     BUILTIN_ROOT_PACKAGE: BUILTIN_ROOT_PATH,
@@ -210,6 +215,7 @@ BUILTIN_PATHS = {
     BUILTIN_PACKAGES[OPEN]: os.path.join(BUILTIN_ROOT_PATH, OPEN),
     BUILTIN_PACKAGES[CAM]: os.path.join(BUILTIN_ROOT_PATH, CAM),
     BUILTIN_SCENE_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "scene"),
+    BUILTIN_COLOR_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "color"),
 }
 
 # File types declared in a 'render:' section like any other, but which no
@@ -343,7 +349,11 @@ def is_document_format(format_name: str, section_obj) -> bool:
 # The first group picks the implementation, the second places the output file.
 # What is left over is what the implementation is handed, so adding a field here
 # hides it from every implementation - including the ones packages write.
-IMPLEMENTATION_KEYS = frozenset({"path", "package", "pythonRequirements", "pythonVersion", "dockerImage", "container"})
+# 'packageFiles' is the implementation's too: which of its fields name files of
+# the object's package (see 'Implementation.package_files').
+IMPLEMENTATION_KEYS = frozenset(
+    {"path", "package", "pythonRequirements", "pythonVersion", "dockerImage", "container", "packageFiles"}
+)
 OUTPUT_KEYS = frozenset({"extension", "prefix", "exclude", "output_dir"})
 RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 
@@ -507,6 +517,61 @@ REPRODUCIBLE_KEY = "reproducible"
 # runs in a sandbox and cannot import this.
 FILES_KEY = "files"
 
+# The request key that says where the package of the object being written is on
+# this machine: the directory a relative path in a file type's parameters is
+# read from - the soundtrack and the logo of a video (see '//builtin/render').
+# Like 'cache_dir', it is put in after the request has been keyed on, because it
+# is a path on this machine: two machines rendering the same object with the
+# same parameters ask the same question. Which also means an implementation that
+# reads a file through it has to say so by not saying what it wrote (see
+# FILES_KEY), since what that file holds is in no key.
+PACKAGE_DIR_KEY = "package_dir"
+
+# How that directory reaches a sandbox that exchanges files rather than sharing
+# them, where a path on this machine is a path to nothing: as an argument of the
+# export wrapper, '--package-dir <index> <directory>' after every file's triple,
+# which the sandbox is sent and rewrites as it does every directory an argument
+# names. Only for a request one of whose 'packageFiles' fields names a file of
+# its package ('names_a_package_file'), since it sends the package whole. The
+# twin of 'wrapper_export.PACKAGE_DIR_ARGUMENT', which says the rest.
+PACKAGE_DIR_ARGUMENT = "--package-dir"
+
+
+def _paths_in(value):
+    """The paths a 'packageFiles' field holds: itself, its 'path' when it is a map, each of either in a list."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return _paths_in(value.get("path"))
+    if isinstance(value, (list, tuple)):
+        return [path for item in value for path in _paths_in(item)]
+    return []
+
+
+def names_a_package_file(request, package_dir, fields) -> bool:
+    """Whether one of 'fields' of 'request' is a relative path to a file in 'package_dir': a logo, a soundtrack.
+
+    'fields' are the ones the file type declares as naming files of the object's
+    package ('packageFiles'), and nothing else is looked at: a field that merely
+    happens to say the name of a file - a line of text over a video - sends
+    nothing. A field is a path, a map with a 'path', or a list of either, and
+    only a path that is there is one: a field that names nothing names nothing
+    to send.
+    """
+    if not fields or not package_dir or not os.path.isdir(package_dir):
+        return False
+    for field in fields:
+        for path in _paths_in(request.get(field)):
+            text = path.strip()
+            if (
+                0 < len(text) <= 1024
+                and not os.path.isabs(os.path.expanduser(text))
+                and os.path.isfile(os.path.join(package_dir, text))
+            ):
+                return True
+    return False
+
+
 # What 'wrapper_export.py' is handed when one call writes several files of one
 # object, and what it answers each of them with (see 'Shape._run_together_locked'
 # and the wrapper's docstring): the requests under BATCH_OUTPUTS_KEY, each under
@@ -667,6 +732,20 @@ class Implementation:
         )
 
     @property
+    def package_files(self) -> list:
+        """The fields of this file type that name files of the object's package, by a relative path.
+
+        What 'packageFiles' declares - the 'logo' and the 'audio' of a video -
+        and the only fields a sandbox that exchanges files is sent the package
+        for (see 'PACKAGE_DIR_ARGUMENT'). A file type that declares none reads
+        nothing of the package, as far as PartCAD knows, and is sent none of it.
+        """
+        fields = self.config.get("packageFiles") or []
+        if isinstance(fields, str):
+            fields = [fields]
+        return [field for field in fields if isinstance(field, str) and field]
+
+    @property
     def container(self) -> Optional[dict]:
         """The container this implementation runs in, if it does not run in a sandbox.
 
@@ -720,7 +799,22 @@ class Implementation:
         which image the `docker` sandbox is built from, and a machine using
         another sandbox ignores it and installs `python_requirements` -- which
         is why a package that declares one still has to declare those.
+
+        A declaration may leave the release and the interpreter for PartCAD to
+        fill in, as '{version}' and '{python}' (see
+        `partcad_utils.container_image.expand`): it is how '//builtin/render'
+        names PartCAD's GStreamer image for its videos without naming a release.
         """
+        declared = self.docker_image_declared
+        if declared is None:
+            return None
+        from partcad_utils import container_image
+
+        return container_image.expand(declared, python=self.python_version())
+
+    @property
+    def docker_image_declared(self) -> Optional[str]:
+        """`docker_image` as it was declared, placeholders and all: what a cached answer is keyed on."""
         declared = self._declared("dockerImage")
         if declared:
             return str(declared)
@@ -778,7 +872,10 @@ class Implementation:
             "python",
             self.python_version(),
             environment_requirements(self.project, {"pythonRequirements": self.python_requirements}),
-            image=container.get("image") or self.docker_image,
+            # As declared: '{version}' filled in would move every key on every
+            # release, which is what keying on the image the runtime ran must
+            # never do (see 'partcad.cache_artifacts').
+            image=container.get("image") or self.docker_image_declared,
         )
 
     def source_cache_key(self) -> str:

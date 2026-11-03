@@ -8,14 +8,15 @@ The panel is a strip of tabs over one object, not a canvas:
 | **3D** | everything | the viewer protocol, from whichever `partcad` asked for the shape to be shown |
 | **2D** | parts, assemblies, scenes, sketches | the daemon's `render.inline` (a picture `pc render` makes) |
 | **Draft** | parts, assemblies | the daemon's `render.inline`, with a drawing package (`pc render -e`) |
+| **CMF** | parts, assemblies, scenes; and a colour, a material or a finish opened from the explorer, alone | the daemon's `cmf.info` (each item's CMF as `pc info` says it, judged as the `cmf` check of `pc test` judges it; or what a declaration is) |
 | **FEA** | parts that declare `fea:` scenarios | the daemon's `cae.list` (what the part declares for each analysis) and `cae.analyze` (what `pc cae fea -f <name>` runs) |
 | **Dynamic FEA** | parts that declare `dynamic:` scenarios | the daemon's `cae.list` and `cae.analyze` (what `pc cae dynamic -f <name>` runs: natural frequencies and mode shapes) |
 | **Heat Transfer** | parts that declare `thermal:` scenarios | the daemon's `cae.list` and `cae.analyze` (what `pc cae thermal -f <name>` runs) |
 | **CFD** | parts that declare `cfd:` scenarios | the daemon's `cae.list` and `cae.analyze` (what `pc cae cfd -f <name>` runs) |
-| **Build vs Buy** | parts, assemblies | the daemon's `manufacturing.tree` and `manufacturing.details`, and the user's choices from `~/.partcad/garage` |
+| **Build vs Buy** | parts, assemblies | the daemon's `manufacturing.tree` and `manufacturing.details`, and the user's choices from `~/.partcad/garage`; the Color, Material and Finish columns from each node's `cmf` |
 | **Build** | whatever is built | the daemon's `manufacturing.plan` (the order `pc instructions` writes its pages in) |
 | **Buy** | whatever is bought | the daemon's `supply.quote` (the cart `pc supply quote` fills) |
-| **Bill of Materials** | parts, assemblies | the daemon's `bom` (what `pc bom` prints) |
+| **Bill of Materials** | parts, assemblies | the daemon's `bom` (what `pc bom` prints), with each line's `cmf` as Color, Material and Finish columns |
 | **Assembly** | assemblies | the daemon's `assembly.guide` (the book `pc instructions -t html\|pdf` writes) |
 | **Test** | everything | the daemon's `test.report` (the checks `pc test <object>` runs, and `partcad/test/catalog.py`) |
 | **Simulation** | parts, assemblies that declare `simulate:` | the daemon's `simulate.list` (what the object declares) and `simulate.run` (what `pc sim -f <name>` runs) |

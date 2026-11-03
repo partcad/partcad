@@ -45,7 +45,10 @@
 // colour OCCT draws an uncoloured shape in, and the colour PartCAD's own 2D
 // projections draw one in, so that the 3D tab and the 2D tab beside it show the
 // same part (see 'appearance.ts'). A coloured light would turn every one of those
-// colours into another, so the hemisphere light is white.
+// colours into another, so the hemisphere light is white. A part whose faces
+// are in colours of their own arrives as a mesh per colour, each with its own
+// glTF material, and each mesh is drawn in its own colour - with this view's
+// material, not the file's (see 'paint', and 'appearance.ts').
 //
 // A third difference is not a choice. Part.js loads OBJ, a format with no scene
 // graph and no units, so it has to rotate the model by -90 degrees about X
@@ -57,11 +60,20 @@
 // location and a port's - so those are converted; see 'frames.ts'.
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
-import { Appearance, DEFAULT_APPEARANCE, appearanceKey, appearanceOf, edgeColor } from './appearance';
+import {
+    Appearance,
+    DEFAULT_APPEARANCE,
+    OWN_APPEARANCE,
+    appearanceKey,
+    appearanceOf,
+    edgeColor,
+    ownAppearance,
+    primitiveAppearance,
+} from './appearance';
 import { calloutsOf } from './callouts';
 import {
     SceneFrame,
@@ -522,7 +534,39 @@ function parseGltf(buffer: ArrayBuffer): Promise<THREE.Group> {
     return new Promise((resolve, reject) => {
         // parse(), not load(): the bytes are already here, and load() would mean
         // a URL and therefore a network request the CSP forbids.
-        loader.parse(buffer, '', (gltf) => resolve(gltf.scene), reject);
+        loader.parse(
+            buffer,
+            '',
+            (gltf) => {
+                keepOwnColors(gltf);
+                resolve(gltf.scene);
+            },
+            reject,
+        );
+    });
+}
+
+/**
+ * Note on each primitive the colour its file gives it, before anything takes
+ * the file's materials away (see 'ownAppearance').
+ *
+ * Kept in 'userData' because that is what a clone copies: every instance of a
+ * cached shape is a clone of its template, and is painted as it is handed out.
+ * Which materials the file declares is the loader's to say ('associations'),
+ * since three gives a primitive with none a default material indistinguishable
+ * from a white one.
+ */
+function keepOwnColors(gltf: GLTF): void {
+    gltf.scene.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (!mesh.isMesh) {
+            return;
+        }
+        const material = mesh.material as THREE.Material;
+        const own = ownAppearance(material, gltf.parser.associations.get(material)?.materials !== undefined);
+        if (own !== undefined) {
+            mesh.userData[OWN_APPEARANCE] = own;
+        }
     });
 }
 
@@ -941,12 +985,16 @@ function addCallouts(parent: THREE.Group, node: ShowNode, path: number[]): void 
 
 /**
  * Give what a glTF draws the materials this viewer draws everything with, in the
- * colour 'appearance' says.
+ * colour 'appearance' says - or, for a face primitive that brought a colour of
+ * its own, in that.
  *
  * Part.js replaces whatever material the file carries with a plain
  * MeshPhongMaterial, which is what gives every PartCAD model the same look
  * regardless of how it was authored; the colour is the one thing a shape gets a
- * say in, through its properties rather than through its file. Lines get one of
+ * say in, through its properties or, face by face, through the colour of each
+ * primitive of its file (see 'keepOwnColors'). The material is still this
+ * viewer's either way, from 'geometry's one per colour, so a coloured face is
+ * shaded, faded and singled out as every other face is. Lines get one of
  * their own: an edge that bounds no face - the bend lines of a sheet metal drawing
  * - arrives as glTF line segments, and a lit material means nothing to a line.
  *
@@ -959,7 +1007,8 @@ function paint(group: THREE.Object3D, geometry: Geometry, appearance: Appearance
         const drawable = child as THREE.Mesh | THREE.Line;
         let material: THREE.Material;
         if ((drawable as THREE.Mesh).isMesh) {
-            material = geometry.faceMaterial(appearance);
+            const own = drawable.userData[OWN_APPEARANCE] as Appearance | undefined;
+            material = geometry.faceMaterial(primitiveAppearance(own, appearance));
         } else if ((drawable as THREE.Line).isLine) {
             material = geometry.lineMaterial(appearance);
         } else {

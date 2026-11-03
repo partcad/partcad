@@ -64,6 +64,28 @@ export const ITEM_TYPE_SOFTWARE = 'software';
  */
 export const ITEM_TYPE_SCENE = 'scene';
 /**
+ * A colour, a material and a finish the package declares ('colors:',
+ * 'materials:', 'finishes:'): what its objects are made in, rather than objects.
+ *
+ * Listed beside the objects, because a package of vendor colours is a package
+ * with something in it, and opened in a Digital Thread of their own - the Design
+ * group alone, with its CMF tab - as an interface is (see docs/design/cmf.md).
+ * The values are the kinds PartCAD calls them, which is what the panel and the
+ * daemon are told.
+ */
+export const ITEM_TYPE_COLOR = 'color';
+export const ITEM_TYPE_MATERIAL = 'material';
+export const ITEM_TYPE_FINISH = 'finish';
+export const DECLARATION_ITEM_TYPES = [ITEM_TYPE_COLOR, ITEM_TYPE_MATERIAL, ITEM_TYPE_FINISH];
+
+/** The icon of each: a palette, a substance, a sheen. Themed, so that they need no asset of their own. */
+const DECLARATION_ICONS: Record<string, string> = {
+    [ITEM_TYPE_COLOR]: 'symbol-color',
+    [ITEM_TYPE_MATERIAL]: 'beaker',
+    [ITEM_TYPE_FINISH]: 'sparkle',
+};
+
+/**
  * An object the package declares but PartCAD could not create.
  *
  * Shown rather than omitted: a package that lists nothing looks exactly like an
@@ -72,8 +94,17 @@ export const ITEM_TYPE_SCENE = 'scene';
  */
 export const ITEM_TYPE_BROKEN = 'broken';
 
-// eslint-disable-next-line @typescript-eslint/naming-convention
-export type PartConfig = { name: string; desc?: string; type: string; item_path?: string };
+export type PartConfig = {
+    name: string;
+    desc?: string;
+    type: string;
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    item_path?: string;
+    /** A colour's, a material's or a finish's display as written, for its row. */
+    display?: string;
+    /** Whether a colour, a material or a finish is a claim, or only a picture. */
+    manufacturable?: boolean;
+};
 
 function shortenName(name: string, parentName: string): string {
     if (name.startsWith(parentName)) {
@@ -114,7 +145,22 @@ export class PartcadItem extends vscode.TreeItem {
         }
         // this.description = `${config.desc}`;
 
-        if (itemType === ITEM_TYPE_BROKEN) {
+        if (DECLARATION_ITEM_TYPES.includes(itemType)) {
+            this.iconPath = new vscode.ThemeIcon(DECLARATION_ICONS[itemType]);
+            // Greyed beside the name, as a broken item's reason is: what it is
+            // drawn in, and that it is only a picture, are what tell one colour
+            // from the next without opening it.
+            const marks = [config.display, config.manufacturable === false ? 'display only' : undefined];
+            this.description = marks.filter((mark) => mark).join(' · ') || undefined;
+            // One value for the three: the same command opens each, and nothing
+            // in the context menu is about one kind and not the others.
+            this.contextValue = 'cmf';
+            this.command = {
+                title: 'Display',
+                command: 'partcad.inspectCmf',
+                arguments: [{ name, pkg, config, itemPath, kind: itemType }],
+            };
+        } else if (itemType === ITEM_TYPE_BROKEN) {
             // Themed rather than one of the bundled SVGs, so it reads as an
             // error in both light and dark themes without a second asset.
             this.iconPath = new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));

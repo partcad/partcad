@@ -56,11 +56,37 @@ class ConnectivityTest(Test):
         # Every setting that decides the verdict. Without them a cached pass is
         # read back after the setting that produced it has been turned off.
         config = (shape.config or {}).get("connectivity") or {}
-        return ",allowDuplicates=%s,requireAnchored=%s,manufacturable=%s" % (
+        return ",allowDuplicates=%s,requireAnchored=%s,manufacturable=%s,boughtWhole=%s" % (
             bool(config.get("allowDuplicates", False)),
             bool(config.get("requireAnchored", True)),
             bool(getattr(shape, "is_manufacturable", False)),
+            await self._bought_whole_key(shape),
         )
+
+    async def _bought_whole_key(self, shape) -> str:
+        """Which of the assemblies the verdict turns on are bought whole.
+
+        The assembly itself, which is then not held to being anchored, and every
+        assembly it places, which is then not looked inside. Bought whole is its
+        'vendor' and 'sku', and neither is in shape.hash: without this a verdict
+        reached before either was declared is read back after.
+        """
+        own = "1" if _bought_whole(shape) else "0"
+        instantiate = getattr(shape, "do_instantiate", None)
+        if instantiate is None:
+            return own
+        try:
+            await instantiate()
+        except Exception:  # pylint: disable=broad-except
+            # 'test()' meets the same failure, says so, and keeps no verdict.
+            return own
+        placed = [
+            "%d.%d" % (group, index)
+            for group, children in enumerate(self._containers(shape))
+            for index, child in enumerate(children)
+            if isinstance(child.item, Assembly) and _bought_whole(child.item)
+        ]
+        return own + ("" if not placed else ":" + "|".join(placed))
 
     def inapplicable(self, shape):
         if not isinstance(shape, Assembly):
@@ -162,12 +188,16 @@ class ConnectivityTest(Test):
         An ASSY file's top level 'links:' becomes a child assembly of the object
         the file defines, and so does every nested one, so the groups are the
         assembly's own children and then those of every assembly among them.
+
+        A sub-assembly that is bought whole is not descended into: how its
+        vendor put it together is not this assembly's to say, and it is placed
+        and connected as one item (docs/design/cmf.md, section 8).
         """
         children = list(getattr(assembly, "children", []) or [])
         yield children
         for child in children:
             item = child.item
-            if isinstance(item, Assembly):
+            if isinstance(item, Assembly) and not _bought_whole(item):
                 yield from self._containers(item)
 
     def _unanchored(self, shape, config):
@@ -185,6 +215,11 @@ class ConnectivityTest(Test):
         written entirely as coordinates is a legitimate way to write one.
         """
         if not config.get("requireAnchored", True):
+            return
+        # An assembly that is bought whole is made by its vendor, however its
+        # file places what it holds: the coordinates there draw it, and nothing
+        # here holds anything anywhere - so neither rule below is its to meet.
+        if _bought_whole(shape):
             return
         if getattr(shape, "is_manufacturable", False):
             for children in self._containers(shape):
@@ -216,6 +251,12 @@ class ConnectivityTest(Test):
                         "'%s' is placed by coordinates among items that connect, "
                         "so nothing holds it where it is" % child.name
                     )
+
+
+def _bought_whole(assembly) -> bool:
+    """Whether 'assembly' is bought as it is (its own 'vendor' and 'sku'; see 'Assembly.is_declared_purchasable')."""
+    declared = getattr(assembly, "is_declared_purchasable", None)
+    return bool(declared()) if callable(declared) else False
 
 
 def _packed(location):

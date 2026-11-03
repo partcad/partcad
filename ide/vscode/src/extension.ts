@@ -334,6 +334,11 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
                         // nothing but software has something to show.
                         (items.scenes ?? []).length === 0 &&
                         (items.software ?? []).length === 0 &&
+                        // And so do colours, materials and finishes: a vendor's
+                        // package of colours is a package of something.
+                        (items.colors ?? []).length === 0 &&
+                        (items.materials ?? []).length === 0 &&
+                        (items.finishes ?? []).length === 0 &&
                         // Objects that failed to load count as items too: a
                         // package of nothing but broken ones has something to
                         // show, and hiding the tree behind the "no items"
@@ -1064,6 +1069,22 @@ location: [[100, 0, 0], [0, 0, 1], 0]
 
             await vscode.commands.executeCommand('setContext', 'partcad.itemSelected', true);
             await partcadInspector?.inspectSoftware(software);
+            await vscode.commands.executeCommand('partcad.getStats');
+        }),
+        registerCommand(`partcad.inspectCmf`, async (declaration) => {
+            // What an object is in, not an object: there is no render to ask
+            // for and no file of its own to reopen after a restart, so it is
+            // shown the way software is in the Inspector - by what it says of
+            // itself - and in the Digital Thread as its CMF tab alone, which
+            // asks the daemon the rest (see 'PartcadViewer.showDeclaration').
+            currentItemType = declaration.kind;
+            currentItemName = declaration.name;
+            currentItemPackage = declaration.pkg;
+            currentItemParams = {};
+
+            await vscode.commands.executeCommand('setContext', 'partcad.itemSelected', true);
+            await partcadInspector?.inspectCmf(declaration);
+            partcadViewer?.showDeclaration(declaration.pkg, declaration.name, declaration.kind);
             await vscode.commands.executeCommand('partcad.getStats');
         }),
         registerCommand(`partcad.inspectFileRoot`, async () => {

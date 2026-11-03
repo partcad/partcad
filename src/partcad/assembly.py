@@ -83,6 +83,7 @@ class AssemblyChild:
         fixed=False,
         attached=None,
         also=None,
+        cmf_parameters=None,
     ):
         self.item = item
         self.name = name
@@ -112,6 +113,11 @@ class AssemblyChild:
         # placed and it can be resolved into 'also'.
         self.also_declared = list(also or [])
         self.also = []
+        # The CMF components ('color', 'material', 'finish') the link's own
+        # 'params:' set: the assembly drawing the item its own way, which is
+        # what the 'cmf' check holds against an assembly not bought whole
+        # (docs/design/cmf.md, section 8).
+        self.cmf_parameters = tuple(cmf_parameters or ())
 
     def connect_info(self):
         """What the ASSY file says about connecting this child, or None.
@@ -1069,7 +1075,7 @@ class Assembly(Shape):
                     # Bought whole, and so is whatever is inside it - the
                     # firmware its boards run comes flashed, and is no more a
                     # line item here than its screws are.
-                    _bom_detailed_add(bom, item, "assembly")
+                    _bom_detailed_add(bom, item, "assembly", ctx)
                     continue
                 _bom_detailed_merge(bom, await item._get_bom_detailed_locked(ctx))
             else:
@@ -1175,8 +1181,16 @@ def _bom_grouped_merge(grouped: dict, other: dict):
                         target[name]["for"] = list(entry["for"])
 
 
-def _bom_detailed_add(bom: dict, item, kind: str):
-    """Account for one more instance of 'item' in a detailed BoM."""
+def _bom_detailed_add(bom: dict, item, kind: str, ctx=None):
+    """Account for one more instance of 'item' in a detailed BoM.
+
+    'cmf' is the item's own colour, material and finish, which the IDE's bill
+    of materials shows as columns (see 'partcad.cmf.own_info'): what its
+    geometry carries where it has been built, and what it declares otherwise.
+    Nothing is built for it.
+    """
+    from . import cmf
+
     name = "%s:%s" % (item.project_name, item.name)
     entry = bom.get(name)
     if entry is None:
@@ -1189,6 +1203,7 @@ def _bom_detailed_add(bom: dict, item, kind: str):
             "sku": store_data.sku,
             "count_per_sku": store_data.count_per_sku,
             "item_in_sku": store_data.item_in_sku,
+            "cmf": cmf.own_info(ctx, item),
         }
     entry["count"] += 1
 
@@ -1210,7 +1225,7 @@ async def _bom_detailed_add_part(bom: dict, ctx, part):
     own = "%s:%s" % (part.project_name, part.name)
     for name in await procurement.procured_as(ctx, part):
         if name == own:
-            _bom_detailed_add(bom, part, "part")
+            _bom_detailed_add(bom, part, "part", ctx)
         else:
             await _bom_detailed_add_stock_piece(bom, ctx, name)
 
@@ -1221,7 +1236,7 @@ async def _bom_detailed_add_stock_piece(bom: dict, ctx, name: str):
     A name that resolves to nothing is still a line item -- the cart and the
     test say it is missing -- just one with nothing to order it by.
     """
-    from . import procurement
+    from . import cmf, procurement
 
     entry = bom.get(name)
     if entry is None:
@@ -1235,6 +1250,8 @@ async def _bom_detailed_add_stock_piece(bom: dict, ctx, name: str):
             "sku": store_data.sku if store_data else None,
             "count_per_sku": store_data.count_per_sku if store_data else 1,
             "item_in_sku": store_data.item_in_sku if store_data else None,
+            # Stock is ordered in whatever it is declared in, like any part.
+            "cmf": cmf.own_info(ctx, resolved) if resolved is not None else None,
         }
     entry["count"] += 1
 
@@ -1279,6 +1296,8 @@ def _bom_detailed_add_software(bom: dict, ctx, item):
                 "sku": None,
                 "count_per_sku": 1,
                 "item_in_sku": None,
+                # Nothing is made of a file, or in a colour.
+                "cmf": None,
                 "package": software.project_name,
                 "revision": package_revision(project),
                 "type": software.type,

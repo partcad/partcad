@@ -387,7 +387,7 @@ def _shell_to_solid(shell):
         return None
 
 
-def finished(shape, metadata=None):
+def finished(shape, metadata=None, cmf=None):
     """A part as it leaves the wrapper that built it: finished as its request asked, and encoded.
 
     Every part leaves its factory through one step (see 'Shape.get_wrapped'):
@@ -410,20 +410,61 @@ def finished(shape, metadata=None):
     its own: whatever the core's sandbox then says is all that is said.
 
     'metadata' is what the wrapper learnt that the geometry cannot answer, as
-    'ocp_serialize.encode_shape' takes it. A request that asks for nothing - a
-    sketch, built by the same script wrappers - and has nothing to add gets
-    the shape back as it was, for 'handle_output' to encode as it always has;
-    and so does anything that is not an OCCT shape, for 'handle_output' to
-    encode or refuse.
+    'ocp_serialize.encode_shape' takes it, and 'cmf' the CMF section of 'shape'
+    as its source stated it (see 'carried_cmf'). A request that asks for
+    nothing - a sketch, built by the same script wrappers - and has nothing to
+    add gets the shape back as it was, for 'handle_output' to encode as it
+    always has; and so does anything that is not an OCCT shape, for
+    'handle_output' to encode or refuse.
     """
-    if shape is None or (not _request_finish and not metadata):
+    if shape is None or (not _request_finish and not metadata and cmf is None):
         return shape
     import OCP.TopoDS  # noqa: F401
 
     if not isinstance(shape, OCP.TopoDS.TopoDS_Shape):
         return shape
+    before = shape
     shape, combined = _finished_live(shape, metadata)
-    return ocp_serialize.encode_shape(shape, name=_request_name, label=_request_label, metadata=combined)
+    return ocp_serialize.encode_shape(
+        shape, name=_request_name, label=_request_label, metadata=combined, cmf=carried_cmf(cmf, before, shape)
+    )
+
+
+def _count(shape, kind) -> int:
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import TopTools_IndexedMapOfShape
+
+    found = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(shape, kind, found)
+    return found.Extent()
+
+
+def carried_cmf(section, before, after):
+    """'section', a CMF section addressing 'before', as it addresses 'after', what finishing made of it.
+
+    A section addresses faces and solids by their place in 'before'
+    ('TopExp::MapShapes' order). Moving and scaling keep every face where it
+    was in that order - a moved shape is the same shape, a scaled one a copy of
+    it, made face by face - and so does 'solidify', which closes a shell into a
+    solid out of the faces it had. So the section holds as it is where the
+    faces are as many as they were, less its solid runs where finishing made
+    solids that were not there (a solid set for a solid that does not exist
+    yet is one nothing can have stated). Where finishing rebuilt the faces,
+    what the source stated of them is dropped, and said to be: never silently.
+    """
+    if section is None or before is after:
+        return section
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_SOLID
+
+    if _count(before, TopAbs_FACE) != _count(after, TopAbs_FACE):
+        sys.stderr.write("The colours and materials the source stated are dropped: finishing rebuilt its faces\n")
+        return None
+    if section.solids and _count(before, TopAbs_SOLID) != _count(after, TopAbs_SOLID):
+        import cmf_section
+
+        sys.stderr.write("The materials the source stated per solid are dropped: finishing rebuilt its solids\n")
+        return cmf_section.Section(section.sets, section.default, [], section.faces).compacted()
+    return section
 
 
 def _finished_live(shape, metadata=None):
@@ -578,7 +619,7 @@ def combine(shapes, kind):
     return compound, components
 
 
-def encode_combined(compound, components, finish=False):
+def encode_combined(compound, components, finish=False, cmf=None):
     """'combine()'s compound and components, encoded as the answer carries them.
 
     The compound holds the very shapes its components are, so each component it
@@ -598,13 +639,23 @@ def encode_combined(compound, components, finish=False):
     them: its components are then shapes of their own, as they were before it
     was moved - the core has never moved a part's components with it.
 
+    'cmf' is the compound's CMF section, as its source stated it (see
+    'carried_cmf'); the components carry the compound's payload, and with it
+    the section.
+
     Returns (shape object, components).
     """
     metadata = None
+    before = compound
     if finish and _request_finish:
         compound, metadata = _finished_live(compound)
     return ocp_serialize.encode_combined(
-        compound, components, name=_request_name, label=_request_label, metadata=metadata
+        compound,
+        components,
+        name=_request_name,
+        label=_request_label,
+        metadata=metadata,
+        cmf=carried_cmf(cmf, before, compound),
     )
 
 
