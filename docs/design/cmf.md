@@ -207,8 +207,8 @@ format to every reader and bound to OCCT versions); one solid per CMF (a painted
 
 ## 7. Conventions and converters
 
-**Built:** the convention, the readers of STEP (through XCAF), of the native CAD formats (through the STEP cadmpeg
-converts them to), build123d, CadQuery, OpenSCAD and 3MF, `set_cmf`, the lookup by `ids`, `cmfConventions:`, and STEP
+**Built:** the convention, the readers of STEP and IGES (through XCAF), of the native CAD formats (through the STEP
+cadmpeg converts them to), build123d, CadQuery, OpenSCAD and 3MF, `set_cmf`, the lookup by `ids`, `cmfConventions:`, and STEP
 instance overrides on `pc import`. **Decided:** the `ldraw` reader
 ([section 10](#10-lego-end-to-end)). **Open:** a converter that has to run code of its own.
 

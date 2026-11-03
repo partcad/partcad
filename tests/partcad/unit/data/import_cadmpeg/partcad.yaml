@@ -8,19 +8,10 @@ desc: |
   dedicated to the public domain under CC0-1.0 (sha256 89d9366b...ed4a2). It
   holds four solid bodies, one of them hidden, and 131 sketch curves.
 
-  'plate.igs' is a 30 x 20 x 10 mm plate with an 8 mm hole through it, written
-  by OpenCASCADE 7.9's IGES writer in its default mode: the seven faces as
-  trimmed surfaces, with nothing to say they bound a solid.
-
 parts:
   # The three bodies Fusion shows, as one part.
   controller:
     type: f3d
-  # cadmpeg 0.6.7 reads the six planar faces as six unconnected sheets and
-  # drops the cylindrical one: a part that is not a solid, which its type fails.
-  plate:
-    type: iges
-    path: plate.igs
 
 assemblies:
   # The same design, each body a part, placed where its component has it.

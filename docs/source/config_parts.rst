@@ -455,7 +455,7 @@ part is the last of them. Objects placed through ``App::Link`` are not followed.
 A Fusion design or a Creo View package can also be declared as an
 :ref:`assembly <assembly-f3d-pvz>`, which keeps its components apart.
 
-Those types and ``iges`` are read with
+Those types are read with
 `cadmpeg <https://github.com/cadmpeg/cadmpeg>`_, which converts each file to
 STEP. It is not in the wheel: the first part read downloads the release PartCAD
 pins, checks it against its published SHA-256, and keeps it in PartCAD's state
@@ -467,15 +467,24 @@ pinned one. Each is a :ref:`partType <part-types>` PartCAD declares in
 of its own. Rhino ``.3dm`` and the two ``.prt`` formats, Siemens NX's and Creo
 Parametric's, are not read yet: cadmpeg does not read their bodies into solids.
 
-They also **require a solid** (``requireSolid``, see :ref:`part-types`). A body
-that did not come through whole -- a face whose geometry could not be decoded, a
-solid that comes back open or invalid -- is not a part with a hole in it: it
-fails to build, and says what is wrong with it, by the same check that only warns
-about any other part that is not a solid. For IGES that means a surface model --
-trimmed surfaces that bound no solid, which is how OpenCASCADE writes IGES by
-default -- is not an ``iges`` part. Neither, for now, is what
-``pc export -t iges`` writes: cadmpeg 0.6.7 loses faces of the IGES files
-OpenCASCADE writes, so keep a STEP file where one has to be read again.
+An ``iges`` part is read with `OpenCASCADE <https://dev.opencascade.org/>`_,
+whose IGES reader is the counterpart of the writer ``pc export -t iges`` uses, so
+what PartCAD writes it reads back. The part is the solids the file shows, in the
+colours it puts on them; an entity it blanks is left out. A solid stated as one
+(a manifold solid B-rep, IGES entity 186) is read as it is. One stated only as
+the faces that bound it -- trimmed surfaces with nothing to say they are one
+body, which is how OpenCASCADE writes IGES by default and how many CAD
+applications write it -- is sewn back together: the faces of each body, as the
+file groups them, are joined across the gaps the file's own geometry admits, and
+a shell that closes is the solid it bounds. It is a ``partType`` of
+``//builtin/import`` too.
+
+``iges`` and ``fcstd`` to ``pvz`` also **require a solid** (``requireSolid``, see
+:ref:`part-types`). A body that did not come through whole -- a face whose geometry could not be
+decoded, faces that do not close, a solid that comes back open or invalid -- is
+not a part with a hole in it: it fails to build, and says what is wrong with it,
+by the same check that only warns about any other part that is not a solid. So an
+IGES surface model whose faces bound no solid is not an ``iges`` part.
 
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Example                                                                              | Configuration             | Result                                                                                                                  |

@@ -40,10 +40,10 @@ BUILTIN_IMPORT = cadmpeg_oracle.BUILTIN_IMPORT
 
 # The formats cadmpeg reads into connected solids -- its level L3 and above --
 # and the extension each one's parts are stored in, spelled as its own
-# application spells it.
+# application spells it. IGES is one of them too, and is a built-in part type,
+# but OpenCASCADE reads it ('test_part_iges.py').
 NATIVE_PART_TYPES = {
     "fcstd": "FCStd",
-    "iges": "iges",
     "f3d": "f3d",
     "sldprt": "SLDPRT",
     "ipt": "ipt",
@@ -80,14 +80,15 @@ def builtin():
 
 def test_every_format_cadmpeg_reads_into_solids_is_a_builtin_part_type(builtin):
     declared = {name: config["extension"] for name, config in builtin["partTypes"].items()}
-    assert declared == NATIVE_PART_TYPES
+    assert declared == {**NATIVE_PART_TYPES, "iges": "iges"}
 
 
 def test_every_one_of_them_fails_a_part_that_is_not_a_solid(builtin):
     """How a broken read is caught: by the check every part goes through, made binding."""
+    scripts = {"fcstd": "part_fcstd.py", "iges": "part_iges.py"}
     for name, config in builtin["partTypes"].items():
         assert config.get("requireSolid") is True, name
-        assert config["path"] == ("part_fcstd.py" if name == "fcstd" else "part_cadmpeg.py"), name
+        assert config["path"] == scripts.get(name, "part_cadmpeg.py"), name
 
 
 def test_the_assembly_types_are_the_formats_cadmpeg_reads_the_components_of(builtin):
@@ -485,14 +486,3 @@ def test_a_fusion_design_as_an_assembly_places_each_body_where_the_part_has_it(c
         assert comparison["inconclusive_causes"] == ["compare.unmeasured-body"]
     assert len(comparison["unmeasured_a"]) == len(comparison["unmeasured_b"])
     assert len(comparison["pairs"]) + len(comparison["unmeasured_a"]) == 3
-
-
-@pytest.mark.slow
-def test_an_iges_file_read_into_loose_faces_is_not_a_part(ctx, cadmpeg):
-    """A read that came back without its solid fails by the check every part goes through."""
-    # cadmpeg itself finds no solid in it: six sheets, the hole's face lost.
-    assert {body["kind"] for body in cadmpeg_oracle.measure(cadmpeg, os.path.join(DATA, "plate.igs"))} == {"sheet"}
-
-    part = ctx.get_part(":plate")
-    assert asyncio.run(part.get_wrapped(ctx)) is None
-    assert any("is not a solid: it holds no solid" in error for error in part.errors), part.errors

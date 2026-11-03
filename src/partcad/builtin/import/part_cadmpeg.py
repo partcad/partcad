@@ -5,9 +5,9 @@
 #
 """The part types cadmpeg reads: a native CAD file's bodies, as one part.
 
-One script for every format '//builtin/import' reads this way -- IGES, Fusion
-360, SolidWorks, Inventor, CATIA V5, ACIS and Creo View -- because for each of
-them the route is the same: cadmpeg converts the file to STEP, and the part is
+One script for every format '//builtin/import' reads this way -- Fusion 360,
+SolidWorks, Inventor, CATIA V5, ACIS and Creo View -- because for each of them
+the route is the same: cadmpeg converts the file to STEP, and the part is
 what that STEP file shows ('cadmpeg_step'). cadmpeg decides the format by the
 file's content, not its name, so nothing here does either; which format a part
 is, is said by its declaration.

@@ -138,25 +138,7 @@ def stated_cmf(shape, facts):
     import cmf_section
     import step_cmf
 
-    section = step_cmf.section_of(shape, facts)
-    if section is None or section.is_empty():
-        return None
-
-    def plain(index):
-        if index == cmf_section.NONE:
-            return None
-        found = section.sets[index]
-        entry = {key: getattr(found, key) for key in cmf_section.COMPONENTS if getattr(found, key) is not None}
-        if found.rgba is not None:
-            entry["rgba"] = list(found.rgba)
-        return entry or None
-
-    stated = {"convention": "step"}
-    if section.faces:
-        stated["faces"] = [plain(index) for index in section.faces]
-    if section.solids:
-        stated["solids"] = [plain(index) for index in section.solids]
-    return stated if len(stated) > 1 else None
+    return cmf_section.as_stated(step_cmf.section_of(shape, facts), "step")
 
 
 def _found(shape, kind, avoid=None):

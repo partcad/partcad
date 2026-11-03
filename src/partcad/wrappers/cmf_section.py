@@ -252,6 +252,34 @@ class Section:
         }
 
 
+def as_stated(section, convention):
+    """'section' as a part type states it, in 'output["cmf"]' ('wrapper_part_type'), or None if it says nothing.
+
+    The inverse of what 'wrapper_part_type' reads: the designations of each
+    face's and solid's set, in 'convention''s terms, with the colour to draw it
+    in. Where each set came from is not carried: the wrapper makes it
+    'raw:<convention>' again, which is what a reader states.
+    """
+    if section is None or section.is_empty():
+        return None
+
+    def plain(index):
+        if index == NONE:
+            return None
+        found = section.sets[index]
+        entry = {key: getattr(found, key) for key in COMPONENTS if getattr(found, key) is not None}
+        if found.rgba is not None:
+            entry["rgba"] = list(found.rgba)
+        return entry or None
+
+    stated = {"convention": convention}
+    if section.faces:
+        stated["faces"] = [plain(index) for index in section.faces]
+    if section.solids:
+        stated["solids"] = [plain(index) for index in section.solids]
+    return stated if len(stated) > 1 else None
+
+
 def _added(one, other):
     """Two counts of a summary added: numbers add, and a count that is not a number makes 'some' of them.
 

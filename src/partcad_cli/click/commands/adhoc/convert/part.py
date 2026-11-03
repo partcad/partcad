@@ -34,7 +34,8 @@ PART_TYPES = [
     "scad",
 ]
 # And the native CAD formats PartCAD ships as declarations rather than factories
-# (see `partcad_client.object_types`), read through cadmpeg.
+# (see `partcad_client.object_types`), read through cadmpeg -- or, for IGES,
+# OpenCASCADE.
 PART_TYPES += [part_type for part_type in object_types.BUILTIN_PART_TYPE_EXTENSION if part_type not in PART_TYPES]
 
 # What PartCAD can write. The rest are input formats only: PartCAD reads a
