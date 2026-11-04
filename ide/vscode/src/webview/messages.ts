@@ -1145,8 +1145,10 @@ export interface CmfSet {
     finish?: string;
     /** The components that are only a picture: an 'rgba' colour, or a declaration saying 'manufacturable: false'. */
     displayOnly?: CmfComponent[];
-    /** What the colour is drawn in, '#RRGGBBAA'. */
+    /** What the colour is drawn in, '#RRGGBBAA'; with an image, what it is drawn as where an image cannot be. */
     display?: string;
+    /** The image the colour is drawn with, where it is drawn with one. */
+    texture?: CmfTexture;
     /** The finish's look, from 0 to 1, for a 3D view. */
     roughness?: number;
     metallic?: number;
@@ -1155,6 +1157,18 @@ export interface CmfSet {
     /** How many faces and solids are in it, or 'all' when it is the part's own set and nothing is counted. */
     faces?: number | 'all';
     solids?: number | 'all';
+}
+
+/** An image a colour is drawn with (see 'partcad.cmf_texture'). */
+export interface CmfTexture {
+    /** The file, as the colour's declaration names it. */
+    image?: string;
+    /** A digest of the image's bytes. */
+    digest: string;
+    /** How much of a surface one copy of it covers, '[width, height]' in millimetres. */
+    size: [number, number];
+    /** A small PNG of it, as a 'data:' URL: a declaration's swatch. */
+    thumbnail?: string;
 }
 
 /** What an item's CMF comes to: its sets, and what is left unspecified ('all', 'some', or a count). */
@@ -1203,6 +1217,8 @@ export interface CmfDeclaration {
     display?: string;
     /** The display as written, which may name another colour. */
     displayText?: string;
+    /** The image it is drawn with, where its display is one (or names a colour whose is). */
+    texture?: CmfTexture;
     /** A material's claim to a colour for its natural surface, canonical. */
     colorClaim?: string;
     roughness?: number;

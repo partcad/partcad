@@ -37,8 +37,10 @@ desc: |
 # projection underneath all four: `render_png.py`, `render_jpeg.py` and
 # `render_dxf.py` all call `render_svg.process()` and then convert what it
 # wrote. Each file type below adds only what its own conversion step needs. A
-# shaded picture and a video's frames need nothing more: they are drawn with
-# numpy, which build123d brings, from a mesh OCP makes (`raster_scene.py`).
+# shaded picture and a video's frames need little more: they are drawn with
+# numpy, which build123d brings, from a mesh OCP makes (`raster_scene.py`) -
+# and with Pillow, which decodes the image a colour is drawn with. A PNG and a
+# JPEG have it through reportlab already, and each video type declares it.
 #
 # It also decides what a file type *another* package declares against these
 # scripts gets: `Implementation.python_requirements` reads a file type's
@@ -300,6 +302,9 @@ render:
   mp4:
     desc: A video of the object turning, as H.264 in MP4 - what every social network takes.
     path: render_video.py
+    # What decodes the image a colour is drawn with (see 'raster_scene.py').
+    pythonRequirements:
+      - pillow==12.2.0
     extension: mp4
     container_format: mp4
     style: shaded
@@ -316,6 +321,9 @@ render:
   m4v:
     desc: The MP4 video under the extension Apple's players file it under.
     path: render_video.py
+    # What decodes the image a colour is drawn with (see 'raster_scene.py').
+    pythonRequirements:
+      - pillow==12.2.0
     extension: m4v
     container_format: mp4
     style: shaded
@@ -332,6 +340,9 @@ render:
   mov:
     desc: A video of the object turning, as H.264 in QuickTime.
     path: render_video.py
+    # What decodes the image a colour is drawn with (see 'raster_scene.py').
+    pythonRequirements:
+      - pillow==12.2.0
     extension: mov
     container_format: mov
     style: shaded
@@ -348,6 +359,9 @@ render:
   qt:
     desc: The QuickTime video under its older extension.
     path: render_video.py
+    # What decodes the image a colour is drawn with (see 'raster_scene.py').
+    pythonRequirements:
+      - pillow==12.2.0
     extension: qt
     container_format: mov
     style: shaded
@@ -364,6 +378,9 @@ render:
   mkv:
     desc: A video of the object turning, as H.264 in Matroska.
     path: render_video.py
+    # What decodes the image a colour is drawn with (see 'raster_scene.py').
+    pythonRequirements:
+      - pillow==12.2.0
     extension: mkv
     container_format: mkv
     style: shaded
@@ -380,6 +397,9 @@ render:
   webm:
     desc: A video of the object turning, as VP9 in WebM - what a web page plays without a plugin.
     path: render_video.py
+    # What decodes the image a colour is drawn with (see 'raster_scene.py').
+    pythonRequirements:
+      - pillow==12.2.0
     extension: webm
     container_format: webm
     style: shaded
@@ -396,6 +416,9 @@ render:
   avi:
     desc: A video of the object turning, as H.264 in AVI.
     path: render_video.py
+    # What decodes the image a colour is drawn with (see 'raster_scene.py').
+    pythonRequirements:
+      - pillow==12.2.0
     extension: avi
     container_format: avi
     style: shaded
@@ -413,6 +436,9 @@ render:
     # Without a soundtrack: see 'CONTAINERS' in 'video_encode.py' for why.
     desc: A video of the object turning, as Windows Media Video in ASF.
     path: render_video.py
+    # What decodes the image a colour is drawn with (see 'raster_scene.py').
+    pythonRequirements:
+      - pillow==12.2.0
     extension: wmv
     container_format: asf
     style: shaded
@@ -429,6 +455,9 @@ render:
   asf:
     desc: The Windows Media video under the container's own extension.
     path: render_video.py
+    # What decodes the image a colour is drawn with (see 'raster_scene.py').
+    pythonRequirements:
+      - pillow==12.2.0
     extension: asf
     container_format: asf
     style: shaded
@@ -449,6 +478,9 @@ render:
     # PARTCAD_FPS and TITLE (see 'video_encode.write_comments').
     desc: A video of the object turning, as Theora in Ogg - free of patents throughout.
     path: render_video.py
+    # What decodes the image a colour is drawn with (see 'raster_scene.py').
+    pythonRequirements:
+      - pillow==12.2.0
     extension: ogv
     container_format: ogg
     style: shaded

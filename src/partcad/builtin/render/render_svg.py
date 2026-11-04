@@ -1070,6 +1070,21 @@ def by_color_and_side(request, warnings):
     return appearance.split_by_sides(tree, whole, warnings)
 
 
+def by_look_and_side(request, warnings):
+    """'[(colour, one_sided, shape, texture), ...]': 'by_color_and_side', with the image each group is drawn with.
+
+    For whatever draws surfaces, which can draw the image a colour is drawn
+    with too (see 'appearance.split_by_look'); each texture is None where
+    nothing is drawn with one, and a tree drawn with none is split exactly as
+    'by_color_and_side' splits it.
+    """
+    whole = request["wrapped"]
+    tree = request.get("shape_tree")
+    if tree is None:
+        return [(appearance.DEFAULT_COLOR, False, whole, None)]
+    return appearance.split_by_look(tree, whole, warnings)
+
+
 def process(path, request):
     try:
         warnings = []

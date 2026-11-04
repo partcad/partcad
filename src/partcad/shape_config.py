@@ -156,7 +156,7 @@ def object_type_parameter(config: dict, accepted: dict, name: str, kind: str = "
     not recognize.
 
     Reads the configuration it is handed rather than the resolved final one, the
-    same as 'get_mcftt()' does, so an alias reports what the alias itself
+    same as 'get_mcft()' does, so an alias reports what the alias itself
     declares. That is a pre-existing property of that reader, not something
     decided here.
     """
@@ -262,8 +262,8 @@ class ShapeConfiguration:
         final_config = self.get_final_config()
         return ShapeConfigStore(final_config)
 
-    async def get_mcftt(self, property: str):
-        """Get the material, color, finish, texture or tolerance of the object."""
+    async def get_mcft(self, property: str):
+        """Get the material, color, finish or tolerance of the object."""
 
         store_data = self.get_store_data()
 
@@ -416,7 +416,7 @@ class ShapeConfiguration:
     def get_object_type_parameter(self, name: str):
         """The value of an object-type parameter, with the type's default applied.
 
-        The counterpart of 'get_mcftt()' for the parameters a type contributes
+        The counterpart of 'get_mcft()' for the parameters a type contributes
         rather than the object invents. It reads the same place - the object's
         own 'parameters:' - and differs in what happens when nothing is
         declared: the default comes from the type that produces the shape, not

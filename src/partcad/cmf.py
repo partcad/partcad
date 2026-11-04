@@ -25,7 +25,8 @@ them under 'colors:', 'materials:' and 'finishes:', addresses each as
 
 A material adds its physical facts (see 'material.py') and may claim a colour
 for its natural surface ('color:'); a finish adds nothing PartCAD computes
-with. 'texture' is reserved for a visual texture and is none of these.
+with. A colour's display may also be an image - a texture its surfaces are drawn
+with - which is 'partcad.cmf_texture''s to read.
 
 A reference to a declaration is canonicalised before it becomes part of an
 item's name ('canonical'): its aliases followed, a relative reference made
@@ -42,6 +43,7 @@ import typing
 
 from partcad_utils.utils import RESERVED_IN_NAMES, escape_name, format_parameterized_name, parse_parameterized_name
 
+from . import cmf_texture
 from . import logging as pc_logging
 from . import output
 from .utils import resolve_resource_path
@@ -88,11 +90,15 @@ class Declaration:
         config: typing.Optional[dict] = None,
         base_name: typing.Optional[str] = None,
         parameter_values: typing.Optional[dict] = None,
+        config_dir: typing.Optional[str] = None,
     ) -> None:
         config = config if config is not None else {}
         self.name = name
         self.project_name = project_name
         self.config = config
+        # The directory of the package that declares it, which a file it names
+        # - a colour's image (see 'partcad.cmf_texture') - is read from.
+        self.config_dir = config_dir
         # What it was declared as, and with which values, when it is an
         # instance of a parametric declaration ('rgba;color=C91A09FF'). Given
         # by whoever declares it where it can be: a declaration's own name may
@@ -133,6 +139,10 @@ class Declaration:
         """The 'display' as written, or None."""
         display = self.config.get("display")
         return display if isinstance(display, str) and display.strip() else None
+
+    def display_words(self) -> typing.Optional[str]:
+        """The 'display' as 'pc info' and 'pc list' say it, or None."""
+        return self.display_text
 
     @property
     def ids(self) -> dict:
@@ -183,8 +193,8 @@ class Declaration:
             info["Alias of"] = self.source
         if self.desc:
             info["Desc"] = self.desc
-        if self.display_text is not None:
-            info["Display"] = self.display_text
+        if self.display_words() is not None:
+            info["Display"] = self.display_words()
         info["Manufacturable"] = "yes" if self.manufacturable else "no (display only)"
         if self.ids:
             info["Ids"] = ", ".join(
@@ -213,6 +223,14 @@ class Color(Declaration):
     """A colour a product can be made in."""
 
     kind = "color"
+
+    @property
+    def image_display(self) -> typing.Optional[dict]:
+        """The 'display' that names an image to draw the colour with (see 'partcad.cmf_texture'), or None."""
+        return cmf_texture.image_display(self.config)
+
+    def display_words(self) -> typing.Optional[str]:
+        return cmf_texture.describe(self) or self.display_text
 
 
 class Finish(Declaration):
@@ -438,6 +456,11 @@ def display(ctx, declaration, depth: int = 0):
     """
     if declaration is None or depth > 8:
         return None
+    if getattr(declaration, "image_display", None) is not None:
+        # Drawn with an image: as a colour, what the display says it is drawn as
+        # where only a colour can be (see 'texture_of').
+        loaded = cmf_texture.load(declaration)
+        return loaded[1] if loaded is not None else None
     text = declaration.display_text
     if text is not None:
         parsed = css_color.parse(text)
@@ -452,6 +475,31 @@ def display(ctx, declaration, depth: int = 0):
     if claim:
         other = lookup(ctx, "color", claim, declaration.project_name, quiet=True)
         return display(ctx, other, depth + 1)
+    return None
+
+
+def texture_of(ctx, declaration, depth: int = 0):
+    """The 'cmf_section.Texture' a declaration's surfaces are drawn with, or None if it is drawn in a colour.
+
+    The twin of 'display', and found the way it is: a colour whose display is an
+    image is drawn with it, and one whose display names another colour - or a
+    material whose display or colour claim does - is drawn as that one is. A
+    texture always comes with the colour 'display' answers, which is what it is
+    drawn as wherever an image cannot be (see 'partcad.cmf_texture').
+    """
+    if declaration is None or depth > 8:
+        return None
+    if getattr(declaration, "image_display", None) is not None:
+        loaded = cmf_texture.load(declaration)
+        return loaded[0] if loaded is not None else None
+    text = declaration.display_text
+    if text is not None:
+        if css_color.parse(text) is not None:
+            return None
+        return texture_of(ctx, lookup(ctx, "color", text, declaration.project_name, quiet=True), depth + 1)
+    claim = getattr(declaration, "color_claim", None)
+    if claim:
+        return texture_of(ctx, lookup(ctx, "color", claim, declaration.project_name, quiet=True), depth + 1)
     return None
 
 
@@ -610,6 +658,11 @@ def key_of(ctx, shape) -> dict:
             "display": list(rgba) if rgba is not None else None,
             "manufacturable": manufacturable,
         }
+        texture = texture_of(ctx, declaration) if kind == "color" and declaration is not None else None
+        if texture is not None:
+            # The image itself, by its digest: a texture redrawn changes no
+            # reference and no declaration, and is still another picture.
+            described[kind]["texture"] = list(texture.key())
         if kind == "finish" and declaration is not None:
             # What a 3D view draws a finish as, which the payload carries too.
             described[kind]["roughness"] = declaration.roughness
@@ -721,8 +774,11 @@ def declared_set(ctx, shape, quiet: bool = False):
         if claim:
             color_ref = canonical(ctx, "color", claim, material.project_name)
     rgba = rgba_of_reference(color_ref) if color_ref else None
+    texture = None
     if color_ref and rgba is None:
-        rgba = display(ctx, lookup(ctx, "color", color_ref, package, quiet=True))
+        color = lookup(ctx, "color", color_ref, package, quiet=True)
+        rgba = display(ctx, color)
+        texture = texture_of(ctx, color)
     roughness = metallic = None
     if references.get("finish"):
         finish = lookup(ctx, "finish", references["finish"], package, quiet=True)
@@ -737,6 +793,7 @@ def declared_set(ctx, shape, quiet: bool = False):
             rgba=rgba,
             roughness=roughness,
             metallic=metallic,
+            texture=texture,
         ),
         drops,
     )
@@ -892,7 +949,7 @@ def info_of(ctx, summary: dict, relative_to: str) -> dict:
                 display_only.append(kind)
         if display_only:
             row["displayOnly"] = display_only
-        for key in ("display", "roughness", "metallic", "origin", "faces", "solids"):
+        for key in ("display", "texture", "roughness", "metallic", "origin", "faces", "solids"):
             if key in entry:
                 row[key] = entry[key]
         sets.append(row)
@@ -1009,6 +1066,14 @@ def declaration_data(ctx, declaration) -> dict:
         data["display"] = css_color.to_hex(rgba)
     if shown.display_text is not None:
         data["displayText"] = shown.display_text
+    texture = texture_of(ctx, shown)
+    if texture is not None:
+        # What a swatch of it shows: the image, small, beside the colour it is
+        # drawn as where only a colour can be.
+        data["texture"] = texture.as_dict()
+        thumbnail = cmf_texture.thumbnail(texture)
+        if thumbnail is not None:
+            data["texture"]["thumbnail"] = thumbnail
     claim = getattr(shown, "color_claim", None)
     if claim:
         data["colorClaim"] = canonical(ctx, "color", claim, shown.project_name)

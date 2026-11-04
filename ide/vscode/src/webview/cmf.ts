@@ -35,7 +35,7 @@
 //
 
 import { el, empty, link, placeholder } from './dom';
-import { CmfComponent, CmfData, CmfDeclaration, CmfInfo, CmfItem, CmfSet } from './messages';
+import { CmfComponent, CmfData, CmfDeclaration, CmfInfo, CmfItem, CmfSet, CmfTexture } from './messages';
 
 /** The three components, in the order every view lists them. */
 export const COMPONENTS: CmfComponent[] = ['color', 'material', 'finish'];
@@ -132,7 +132,7 @@ export function cmfCells(info: CmfInfo | null | undefined, component: CmfCompone
         }
         seen.add(reference);
         const displayOnly = (set.displayOnly ?? []).includes(component);
-        const look = component === 'finish' ? finishLook(set) : '';
+        const look = component === 'finish' ? finishLook(set) : component === 'color' ? textureLook(set.texture) : '';
         cells.push({
             text: referenceName(reference),
             title:
@@ -156,14 +156,32 @@ export function cmfCells(info: CmfInfo | null | undefined, component: CmfCompone
     return cells;
 }
 
-/** A colour's swatch: a small square of it, with a border so that white on white is still a square. */
-export function swatch(color: string | undefined, className = 'cmf-swatch'): HTMLElement {
+/** What a colour drawn with an image is drawn with, in words; '' for one that is not. */
+export function textureLook(texture: CmfTexture | undefined): string {
+    if (texture === undefined) {
+        return '';
+    }
+    const [width, height] = texture.size;
+    return `Drawn with the image ${texture.image ?? texture.digest.slice(0, 12)}, ${width} x ${height} mm a copy`;
+}
+
+/**
+ * A colour's swatch: a small square of it, with a border so that white on white is still a square.
+ *
+ * 'image' is a 'data:' URL of the image the colour is drawn with, where it is
+ * one: the square shows that, over the colour it is drawn as elsewhere.
+ */
+export function swatch(color: string | undefined, className = 'cmf-swatch', image?: string): HTMLElement {
     const square = el('span', className);
     if (color) {
         square.style.backgroundColor = color;
         square.title = color;
-    } else {
+    } else if (image === undefined) {
         square.classList.add('cmf-swatch-none');
+    }
+    if (image !== undefined) {
+        square.style.backgroundImage = `url("${image}")`;
+        square.style.backgroundSize = 'cover';
     }
     return square;
 }
@@ -413,7 +431,7 @@ export function drawDeclaration(declaration: CmfDeclaration): HTMLElement {
     const block = el('div', 'cmf-declaration');
     const heading = el('div', 'cmf-declaration-heading');
     if (declaration.display !== undefined || declaration.kind !== 'finish') {
-        heading.appendChild(swatch(declaration.display, 'cmf-swatch cmf-swatch-large'));
+        heading.appendChild(swatch(declaration.display, 'cmf-swatch cmf-swatch-large', declaration.texture?.thumbnail));
     }
     heading.appendChild(el('span', 'cmf-declaration-name', declaration.name));
     heading.appendChild(el('span', 'badge', declaration.kind));
@@ -466,6 +484,17 @@ export function drawDeclaration(declaration: CmfDeclaration): HTMLElement {
             shown.title = `Drawn in ${declaration.display}`;
         }
         row('Display', shown);
+    }
+    if (declaration.texture !== undefined) {
+        // Drawn with an image where a surface is drawn, and in the colour beside
+        // it where only a colour can be.
+        const shown = el('span', 'cmf-value');
+        shown.appendChild(swatch(declaration.display, 'cmf-swatch', declaration.texture.thumbnail));
+        shown.appendChild(el('span', 'cmf-name', textureLook(declaration.texture)));
+        if (declaration.display !== undefined) {
+            shown.title = `Drawn in ${declaration.display} where an image cannot be: a line, a swatch`;
+        }
+        row('Image', shown);
     }
     if (declaration.colorClaim) {
         // A material with no look of its own is drawn in the colour it claims.

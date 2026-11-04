@@ -47,6 +47,8 @@ export class CanvasPainter {
     // Scratch values, reused for every element of every frame.
     private readonly ambient = new THREE.Color();
     private readonly lit = new THREE.Color();
+    /** The flat colour of a face drawn with an image, which this painter cannot draw. */
+    private readonly flat = new THREE.Color();
     private readonly direction = new THREE.Vector3();
     private readonly target = new THREE.Vector3();
     private readonly normal = new THREE.Vector3();
@@ -119,7 +121,10 @@ export class CanvasPainter {
             color.copy(material.color);
         } else {
             this.shade(face, lights, color);
-            color.multiply(material.color);
+            // A face drawn with an image is one flat colour here: the colour it
+            // is drawn as where an image cannot be (see 'Geometry.faceMaterial').
+            const flat = material.map ? material.userData.flatColor : undefined;
+            color.multiply(typeof flat === 'number' ? this.flat.setHex(flat, THREE.SRGBColorSpace) : material.color);
             if (material.emissive) {
                 color.add(material.emissive);
             }

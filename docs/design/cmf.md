@@ -49,7 +49,7 @@ So in PartCAD:
 | Where | What happened to CMF |
 | --- | --- |
 | `materials:` | Objects addressed as `<package>:<name>`: a name, a density, friction. No display, no claim, no aliases, no parameters. |
-| `color`, `finish`, `texture` parameters | Reserved names. `color` was "not implemented yet" and accepted only by homogeneous part types; `finish` and `texture` did nothing. |
+| `color`, `finish`, `texture` parameters | Reserved names. `color` was "not implemented yet" and accepted only by homogeneous part types; `finish` and `texture` did nothing. `texture` is no longer reserved: a texture is a colour's display ([section 9.1](#91-textures)). |
 | `properties.color` | One `#RRGGBB` per node, inherited downward, drawn by the renderers and the IDE. |
 | `wrapper_step.py` | `STEPControl_Reader`: every colour, material and name in the file discarded. |
 | `export_step.py` | `STEPControl_Writer` of the flattened compound: no structure, names, colours or materials. |
@@ -67,7 +67,7 @@ structure and differ only in their own facts:
 | Field | Meaning |
 | --- | --- |
 | `desc`, `url` | What it is. |
-| `display` | How to draw it. A **hint**, never a claim. A colour: any CSS colour notation (`#c91a09`, `rgb(201 26 9)`, `hsl(…)`, `oklch(…)`, `color(display-p3 …)`, `firebrick`), or the reference of another colour whose display it takes. A material: the substance's look as it comes. A finish: `{roughness, metallic}`, from 0 to 1, for a 3D view. |
+| `display` | How to draw it. A **hint**, never a claim. A colour: any CSS colour notation (`#c91a09`, `rgb(201 26 9)`, `hsl(…)`, `oklch(…)`, `color(display-p3 …)`, `firebrick`), the reference of another colour whose display it takes, or an image to draw its surfaces with, `{image, size, color}` ([section 9.1](#91-textures)). A material: the substance's look as it comes. A finish: `{roughness, metallic}`, from 0 to 1, for a 3D view. |
 | `manufacturable` | Whether the declaration is a **claim** that this can be sourced or made as declared. True unless stated. |
 | `ids` | What other systems call it: a vendor's number, a standard's code, another CAD tool's library name (`{ldraw: 71, bricklink: 86}`). What converters match against ([section 7](#7-conventions-and-converters)). |
 | `parameters` | A declaration may be parametric. Its string fields name parameters in PartCAD's own expression syntax (`%color%`, see `partcad.expr`), not Jinja2's, because `partcad.yaml` is rendered as a template before any reference gives a value. |
@@ -79,8 +79,10 @@ surface (`color:`): an unpainted aluminium part that states no colour is that co
 **finish** names its process and surface specification through `ids` (`{vdi3400: "27"}`, `{spi: "B-2"}`,
 `{moldtech: "MT-11010"}`). A part that states no finish is **as produced**, implied: nothing has to be declared for it.
 
-**`texture` is reserved** for a visual texture - an image on a surface - in a later, visualization-only change. It is
-no CMF component, no finish states one, and the schema refuses it on a declaration.
+**A texture is a colour's display.** An image on a surface - wood grain, a fabric - is how a colour is drawn, in the
+long form of its `display` ([section 9.1](#91-textures)). It is no CMF component of its own and no parameter: `texture`
+was reserved for one, and is not any more. No finish or material states one; a material whose display or colour claim
+names a textured colour is drawn with it, as it is drawn in that colour's display.
 
 **Display colours are sRGB.** CSS, STEP (as OCCT writes `COLOUR_RGB`) and 3MF write sRGB; glTF's factors and OCCT's
 `Quantity_Color` are linear and are converted at the edge. A colour outside sRGB is clipped channel by channel rather
@@ -174,7 +176,17 @@ set     := i32 color, i32 material, i32 finish, i32 origin   string indices, -1 
            u8 roughness, u8 metallic                         finish display, 0..255 for 0..1
            u8 flags                                          1 colour, 2 roughness, 4 metallic present
 runs(x) := u32 count of x, u32 k, k × (u32 length, i32 set)  in TopExp::MapShapes order; -1 for none
+           [looks]                                           optional: the sets drawn with an image
+looks   := b"PCTX", u16 k, k × look, u16 j, j × image
+look    := i32 set, i32 name, i32 image, f64 width, f64 height   name a string index; mm a copy covers
+image   := u32 len, bytes                                    PNG or JPEG, each once
 ```
+
+`looks` comes after everything a reader that knows no textures reads, so such a reader - an earlier PartCAD - reads every
+set, with the colour it is drawn as where no image can be, and stops. The image itself is in the section rather than
+named by it: a payload is drawn in a sandbox, a remote one included, and sent to the IDE, and wherever it goes its image
+has to go too. That costs a copy of the image per distinct payload drawn with it - which is why an image is held to
+16 MB and a few hundred kilobytes is what one should be - and nothing per placement, since a payload is shared.
 
 Sub-shapes are addressed by their index in `TopExp::MapShapes` order, which is stable through PartCAD's codec
 (verified for a box, a boolean result and a compound of three solids) and through `wrapper_common.solidify`, which
@@ -295,10 +307,10 @@ once the public index passes it - the path `tolerance` took.
 ## 9. Presentation
 
 **Built:** `pc list colors|materials|finishes`, `pc info`'s CMF section, drawings per face, a glTF material per colour,
-the exports (STEP through XCAF, glTF, 3MF, URDF; the formats with no CMF warn), and in the IDE the
-explorer's declarations, the CMF tab, the BOM and Build vs Buy columns and per-primitive colours. **Open:** what the
-"Exports" item lists as open; highlighting a set's faces in the 3D view, drawing a finish's roughness and metallic,
-and `pc ide view` of a declaration.
+the exports (STEP through XCAF, glTF, 3MF, URDF; the formats with no CMF warn), textures
+([section 9.1](#91-textures)), and in the IDE the explorer's declarations, the CMF tab, the BOM and Build vs Buy
+columns and per-primitive colours. **Open:** what the "Exports" item lists as open; highlighting a set's faces in the
+3D view, drawing a finish's roughness and metallic, and `pc ide view` of a declaration.
 
 CMF is always shown as its three components in the order colour, material, finish: each by its declaration's name, with
 a swatch of its display where the medium allows, marked when it is display-only or unspecified, and with its origin
@@ -378,6 +390,49 @@ where there is room.
   `docs/source/config_cmf.rst` is the configuration reference for the three sections; the parts and assemblies
   references describe the CMF parameters once, and link to them.
 
+### 9.1 Textures
+
+**Built.**
+
+A colour's `display` may be an image - `{image: <PNG or JPEG in the package>, size: <mm> | [<w>, <h>], color: <CSS>}` -
+which its surfaces are drawn with wherever surfaces are drawn: a shaded `pc render` (PNG, JPEG, every frame of a video)
+and the IDE's 3D view. `size` is how much of a surface one copy covers (100 mm across, in proportion, unless stated);
+`color` is what the colour is drawn as wherever an image cannot be - a line of a drawing, a swatch, `pc list`, a reader
+that knows no textures - and is the image's mean colour unless stated (`partcad.cmf_texture`). The image is checked as it
+is read: a PNG or a JPEG that decodes, inside its package, at most 16 MB.
+
+- **Where it goes.** `cmf.declared_set` (and a converter claiming a textured declaration's name) puts a `Texture` on the
+  set - the image's bytes, its name, its size - beside the set's display colour, and the CMF section carries it
+  ([section 6](#6-storage-inside-the-brep)). The summary says `texture: {image, digest, size}` of a set, which is what an
+  assembly's and a drawing's keys cover: an image redrawn is another picture under the same names.
+- **How it is laid.** Box mapping in the part's own frame, one rule for everything that draws one
+  (`wrappers/texture_mapping.py`): each triangle is seen along the axis its face looks along most, from the side it
+  faces, and the image laid on it upright, not mirrored, in copies `size` apart from the part's origin. A face's own
+  parameters were rejected - they are millimetres on a plane, radians around a cylinder and 0 to 1 on a B-spline, so one
+  image would be a different size on every face - and so was the world frame, which slides the image across a part as an
+  assembly moves it. What box mapping costs is a seam where a curved face turns from one axis to another.
+- **The shaded renderer** (`raster_scene.py`) tessellates a textured piece in its own frame, lays the image on it, and
+  moves it into place; the light is blended across a triangle as on any face, and the image read per pixel between its
+  four nearest pixels, at most 1024 pixels a side. Pillow decodes it: a PNG and a JPEG have it through reportlab, and the
+  video types declare it. Without it, a face is drawn in its colour, with a warning. Its groups are
+  `appearance.split_by_look`'s, `(colour, one_sided, shape, texture)`: `split_by_sides` with the image, from the one
+  walker (`_placed_leaves`) that also splits a tree for a view, so a wall in a colour drawn with an image - wallpaper,
+  tiles - is laid with it on its front and still culled from behind, frame by frame.
+- **The glTF the IDE draws** (`wrapper_gltf._with_textures`): the faces drawn with an image are a primitive of their own
+  per image, written by PartCAD - positions, normals, `TEXCOORD_0` and indices - with the image embedded once and a
+  material whose base colour texture it is, white under it, the colour in `extras.partcadColor`; the rest of the payload
+  goes through OCCT's writer as before. The viewer keeps the file's image when it replaces the file's material with its
+  own (`scene.ts`, by the primitive's geometry, which every clone shares: `userData` is copied through JSON and a texture
+  does not survive that) and draws it as the Phong material's `map`. three's loader decodes an embedded image by fetching
+  a `blob:` URL it makes itself, which is why the viewer's policy allows `connect-src blob:` and nothing more.
+- **Lines** - SVG, DXF and a PNG or JPEG of `style: lines` - draw a textured face's edges in the set's display colour,
+  with no change: that colour is in the set as it always was. So do the exports ([section 9](#9-presentation)): a
+  textured set is written as its display colour, and its references as they are.
+
+*Open:* the image in the exports - glTF (a `baseColorTexture` and `TEXCOORD_0`, laid as above, on the meshes OCCT's
+writer makes of each placement) and 3MF (`texture2d` groups); other mappings (a face's own parameters, cylindrical, a
+decal placed once); a finish's roughness and metallic drawn over an image.
+
 ## 10. LEGO, end to end
 
 **Decided.**
@@ -423,7 +478,13 @@ target, and the target's canonical reference SHALL be what enters an item's name
 - *Scenario:* `stone: {type: alias, source: "//vendor:Medium Stone Grey"}`, and a link with `params: {color: ":stone"}`
   → the item is named with `color=//vendor:Medium Stone Grey`, the same item another alias of it names.
 
-**Requirement: texture is reserved.** No declaration SHALL state `texture`.
+**Requirement: a colour drawn with an image.** A colour's display MAY be `{image, size, color}`, naming a PNG or a JPEG
+inside its package; its surfaces SHALL be drawn with the image where a surface is drawn, laid by box mapping in the part's
+own frame, and the colour SHALL be drawn as `color`, or the image's mean colour, wherever only a colour can be. `texture`
+SHALL NOT be a field of a declaration or a reserved parameter.
+- *Scenario:* `walnut: {display: {image: walnut.jpg, size: 300}}` and a part with `color: :walnut` → a shaded `pc render`
+  and the 3D view draw its faces with the image, 300 mm a copy; its SVG draws their edges in the image's mean colour.
+- *Scenario:* an image outside the package, missing, not a PNG or a JPEG, or over 16 MB → reported against the colour.
 
 **Requirement: the built-in colour.** `//builtin/color` SHALL declare the parametric display-only `rgba`, and SHALL
 NOT declare any colour standard.
@@ -559,7 +620,8 @@ gives it, with the viewer's own material, and a primitive with no material in it
 5. A claim differs from a display colour; CMF declarations take parameters and `manufacturable:`, counted by the checks.
 6. CMF set in assembly nodes costs the assembly its manufacturability unless it declares `vendor` and `sku`: it is a
    finer-grained way of drawing, not of specifying. A link's CMF-parameterised item counts as a non-manufacturable part.
-7. `texture` stays reserved for a later, visualization-only change.
+7. `texture` stays reserved for a later, visualization-only change. (Later: a texture is a colour's display, an image,
+   and `texture` is no longer reserved - [section 9.1](#91-textures).)
 8. The CMF section is binary. No finish stated is as produced, implied. Converters come in the order of
    [section 7](#7-conventions-and-converters).
 9. No colour standard ships in any PartCAD repository, for licensing reasons; packages declare the ones they use.
@@ -577,4 +639,5 @@ gives it, with the viewer's own material, and a primitive with no material in it
 | Exports: STEP via XCAF, glTF, 3MF, URDF; the formats with no CMF warn | built |
 | Exports: STEP's shared forms of a per-solid material and a finish, MJCF, references read from glTF and 3MF | open |
 | `//builtin/color:rgba` shipped with PartCAD; LEGO in partcad-ldraw and its examples | decided |
-| A visual `texture` | open |
+| Textures: a colour's display as an image, drawn by a shaded `pc render`, a video and the IDE's 3D view | built |
+| Textures in the exports | open |

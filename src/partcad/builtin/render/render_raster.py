@@ -27,9 +27,10 @@ reportlab already depends on Pillow, and both styles hand the finished image to
 'PIL.Image.save()' with 'configPIL' as its keyword arguments -- so every JPEG
 encoder option is reachable without a single extra package in the sandbox. The
 shaded style adds none either: it is numpy, which build123d brings with it, and
-OCP, which is what everything here projects with. svglib and reportlab are
-needed by the lines style alone, so that a video, which draws shaded, needs
-neither in its sandbox.
+OCP, which is what everything here projects with - and Pillow, to decode the
+image a colour is drawn with, which a PNG and a JPEG have through reportlab and
+a video declares for itself. svglib and reportlab are needed by the lines style
+alone, so that a video, which draws shaded, needs neither in its sandbox.
 
 This module is imported by its siblings rather than run on its own: it is not
 declared as the 'path' of any file type.
@@ -341,8 +342,10 @@ class Shaded:
         """Tessellate and light the object, and frame the camera on it: what drawing needs. Returns itself."""
         raster_scene = self.raster_scene
         # With whether each group is one-sided - a wall - which the painter
-        # culls the backs of, frame by frame, as the 3D view does.
-        groups = render_svg.by_color_and_side(self.request, warnings)
+        # culls the backs of, frame by frame, as the 3D view does; and with the
+        # image a group's colour is drawn with, where it is one, which a shaded
+        # picture draws because it draws surfaces.
+        groups = render_svg.by_look_and_side(self.request, warnings)
         self.scene = raster_scene.Scene(groups, max(self.width, self.height), warnings)
         aspect = self.width / float(self.height)
         sphere = self.scene.sphere

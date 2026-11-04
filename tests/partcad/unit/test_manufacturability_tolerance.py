@@ -193,7 +193,7 @@ def test_the_manufacturability_check_reports_a_missing_tolerance_against_the_par
 
 
 def test_a_purchased_part_is_not_asked_for_a_tolerance(tmp_path, monkeypatch):
-    """It comes as it comes; the MCFTT parameters do not apply to it.
+    """It comes as it comes; the MCFT parameters do not apply to it.
 
     It still fails - nothing in this package supplies it - but on the supplier
     question, which is what proves the tolerance check let it through.

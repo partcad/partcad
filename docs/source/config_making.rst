@@ -423,7 +423,7 @@ declared using the following syntax:
 
   Both ``vendor`` and ``sku`` must be set for the part to be considered
   purchasable. If either is missing, the part has to be manufactured instead,
-  which relies on the MCFTT parameters described above.
+  which relies on the MCFT parameters described above.
 
 - ``count_per_sku``
 
