@@ -8,13 +8,13 @@
     "url": "https://github.com/partcad/partcad",
     "source": "github"
   },
-  "version": "0.8.287",
+  "version": "0.9.0",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "partcad",
-      "version": "0.8.287",
+      "version": "0.9.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
