@@ -25,8 +25,10 @@ import os
 import jsonschema
 import jsonschema.exceptions
 import pytest
+import yaml
 
 import partcad as pc
+from partcad import output
 from partcad.lint.all import get_partcad_schema
 from partcad.lint.schema import AssySchemaLinting, SchemaLinting
 from partcad_utils import lint_context
@@ -237,6 +239,32 @@ def test_schema_every_registered_part_type_is_accepted():
     """
     for part_type in ("cadquery", "build123d", "chili3d", "sdf", "step", "brep", "stl", "3mf", "obj", "scad"):
         validate({"parts": {"widget": {"type": part_type}}})
+
+
+def _builtin_import():
+    with open(os.path.join(output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.IMPORT]], "partcad.yaml")) as f:
+        return yaml.safe_load(f)
+
+
+def test_schema_every_built_in_part_type_is_accepted():
+    """A part names a partType of //builtin/import by its bare name, as if it were built in.
+
+    So the schema has to know each one by that name too. 'sldprt' and the other
+    native CAD formats were declared there and missing here, and every part of
+    those types was an error in 'pc lint' and in the editor.
+    """
+    part_types = _builtin_import()["partTypes"]
+    assert part_types
+    for part_type in part_types:
+        validate({"parts": {"widget": {"type": part_type}}})
+
+
+def test_schema_every_built_in_assembly_reader_is_accepted():
+    """The same for the 'import:' readers //builtin/import declares an assembly type of."""
+    readers = {name: reader for name, reader in _builtin_import()["import"].items() if "assembly" in reader["kinds"]}
+    assert {"urdf", "f3d", "pvz"} <= set(readers)
+    for name in readers:
+        validate({"assemblies": {"gearbox": {"type": name}}})
 
 
 # Sections the loader reads that the schema did not know about.

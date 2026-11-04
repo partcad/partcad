@@ -383,9 +383,17 @@ SELECTION_KEYS = frozenset({"filter"})
 # The same, for the 'import:' section. None of these is a parameter of the
 # reader: 'kinds' says which object kinds may be declared with this type,
 # 'noun' and 'dropped' are how the core words what the reader reports, 'binary'
-# whether its files are bytes (below), and 'extension' (already reserved above)
-# is how the source file is found. The reader is handed everything else.
-IMPORT_KEYS = frozenset({"kinds", "noun", "dropped", "binary"})
+# whether its files are bytes (below), 'requireSolid' whether the parts it
+# registers fail when they are not solids (see 'REQUIRE_SOLID_KEY'), and
+# 'extension' (already reserved above) is how the source file is found. The
+# reader is handed everything else.
+IMPORT_KEYS = frozenset({"kinds", "noun", "dropped", "binary", "requireSolid"})
+
+# The 'import:' field, and the 'partTypes:' one of the same name, that says
+# every part of this type is a solid -- so that one that is not fails to build,
+# by the definition every part is held to, instead of being built with a
+# warning (see 'Shape._accepted_as_solid').
+REQUIRE_SOLID_KEY = "requireSolid"
 
 # The 'import:' field that says a format's files are bytes rather than text:
 # handed to the reader as they are, and never rendered as a Jinja2 template the
@@ -1088,6 +1096,21 @@ def builtin_part_type(ctx, name):
     if isinstance(part_types, dict) and name in part_types:
         return project.name
     return None
+
+
+def builtin_part_type_extension(ctx, name):
+    """The extension a built-in ``partType`` called ``name`` stores its parts in, or None.
+
+    As its declaration spells it: 'FCStd', 'CATPart'. That spelling is the
+    default name of a part's file ('<name>.<extension>'), and a file system that
+    tells case apart finds no other, so whoever writes such a file into a
+    package - 'pc import part' - writes it by this name.
+    """
+    if builtin_part_type(ctx, name) is None:
+        return None
+    declared = (builtin_project(ctx, IMPORT).config_obj.get("partTypes") or {}).get(name)
+    extension = declared.get("extension") if isinstance(declared, dict) else None
+    return str(extension).lstrip(".") if extension else None
 
 
 def package_cache_dir(ctx, project) -> str:

@@ -67,7 +67,9 @@ def import_part_action(
         kind, source_path = target_format, converted_path
         pc_logging.info(f"Ad-hoc conversion successful: {converted_path}")
 
-    target_path = (Path(project.path) / f"{name}.{kind}").resolve()
+    # Under the name the type looks for a file under: 'fcstd' parts are
+    # '.FCStd' files, and a CadQuery script is a '.py' one.
+    target_path = (Path(project.path) / f"{name}.{project.extension_for('parts', kind)}").resolve()
     if not target_path.exists() or not source_path.samefile(target_path):
         # Checked before anything is copied, so a refusal leaves nothing behind.
         companions = _companions_to_copy(source_path, target_path) if kind == "gltf" else []

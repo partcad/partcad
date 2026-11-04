@@ -26,9 +26,10 @@ using existing parts.
   The native format. The idea behind ASSY is to create a simplistic way to
   enumerate parts, define their parameters and define how parts connect.
 
-- STEP
+- STEP, Autodesk Fusion and Creo View
 
-  A STEP file that carries an assembly structure, used as an assembly directly,
+  A STEP file that carries an assembly structure, an Autodesk Fusion design
+  (``.f3d``) or a Creo View package (``.pvz``), used as an assembly directly,
   with its components becoming parts of the package.
 
 - URDF
@@ -47,9 +48,9 @@ using existing parts.
   `design record <https://github.com/partcad/partcad/blob/devel/docs/design/simulation.md>`__
   says what closing the gap would take.
 
-For an assembly defined by a file another tool produced - the STEP and the URDF
-above - nothing is copied into the package, so the file stays the source of
-truth.
+For an assembly defined by a file another tool produced - the STEP, Fusion,
+Creo View and URDF files above - nothing is copied into the package, so the file
+stays the source of truth.
 
 
 Declare assemblies
@@ -61,8 +62,9 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
 
   assemblies:
     <assembly name>:
-      type: <assy|step|urdf>  # Assembly YAML, a STEP file with an assembly structure,
-                              # or a URDF robot description. A format a plugin package
+      type: <assy|step|urdf|f3d|pvz>  # Assembly YAML, a STEP file with an assembly
+                              # structure, a URDF robot description, or a Fusion design
+                              # or a Creo View package. A format a plugin package
                               # implements is named through it: "sim-mujoco:mjcf".
       path: <(optional) the source file path>
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
@@ -110,7 +112,8 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
 The ``assy`` type is used to define assemblies in `Assembly YAML` format, and
 the ``step`` type reads the structure out of a STEP file (see :ref:`assembly_step`).
 The ``urdf`` type reads a robot description as an assembly directly
-(see :ref:`assembly-urdf`). A format an engine's plugin package implements is named
+(see :ref:`assembly-urdf`), and ``f3d`` and ``pvz`` a Fusion design and a Creo View
+package (see :ref:`assembly-f3d-pvz`). A format an engine's plugin package implements is named
 through that package -- ``sim-mujoco:mjcf`` for a MuJoCo model, which is also a
 :ref:`scene <scenes>` type, the section that declares it being what decides which
 it is.
@@ -301,11 +304,11 @@ Other assembly types
 --------------------
 
 ``map:`` is written for ``assy``, where the node names are the ones somebody
-wrote in the file. It works for ``step`` and ``urdf`` assemblies as best it can
--- the nodes are then the components or the links, named as the imported file
-names them, which is not something this package controls. Where that does not
-fit, those assemblies state their ports the way a part does, with ``ports:`` and
-``implements:``.
+wrote in the file. It works for ``step``, ``f3d``, ``pvz`` and ``urdf``
+assemblies as best it can -- the nodes are then the components or the links,
+named as the imported file names them, which is not something this package
+controls. Where that does not fit, those assemblies state their ports the way a
+part does, with ``ports:`` and ``implements:``.
 
 .. _assembly-manufacturing:
 
@@ -551,6 +554,44 @@ kept in sync by hand.
 Use ``pc import assembly`` when the structure is to be taken over: the resulting
 parts and ``.assy`` file are ordinary package content that can be renamed,
 re-arranged, given interfaces and connections, or replaced part by part.
+
+.. _assembly-f3d-pvz:
+
+Autodesk Fusion and Creo View
+=============================
+
+The ``f3d`` and ``pvz`` types use an Autodesk Fusion design or a Creo View
+package as an assembly the way ``step`` uses a STEP file, read without the
+application that wrote it:
+
+.. code-block:: yaml
+
+  assemblies:
+    enclosure:
+      type: f3d            # reads enclosure.f3d
+    gearbox:
+      type: pvz
+      path: vendor/gearbox.pvz
+
+The file is converted to STEP, product structure and all, by the same cadmpeg
+the ``f3d`` and ``pvz`` :ref:`part types <cad-files>` read with, and the tree is
+read out of that the way a STEP assembly's is: a part per distinct body, named
+after what the file called it where it called it anything, and a node per
+placement of it. What the file does not show is not read -- a body its author
+hid, the sketches and points beside the bodies -- and every part of the assembly
+**requires a solid**, as those part types do: a body that did not come through
+whole fails to build, by name, rather than leaving the assembly quietly a body
+short.
+
+The design's history does not survive, and neither do its joints, which STEP
+has no place for: the assembly is the mechanism at rest, as the file last placed
+it. cadmpeg 0.6.7 does not yet place a Fusion component nested inside another
+component reliably, so a design with a deep component tree can come out
+misplaced -- declare it as an ``f3d`` *part* to keep its geometry as one shape.
+Inventor (``.iam``) and SolidWorks (``.sldasm``) assemblies are not read: an
+Inventor assembly names the files its parts are in, which cadmpeg deliberately
+does not open, and cadmpeg 0.6.7 does not read a SolidWorks assembly's component
+tree.
 
 References
 ==========

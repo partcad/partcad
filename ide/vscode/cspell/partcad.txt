@@ -33,6 +33,7 @@ cae
 cam
 case
 catalogs
+catpart
 center
 cfd
 cfm
@@ -181,6 +182,7 @@ interfaces
 interference
 interferes
 intro
+ipt
 item
 ixx
 ixy
@@ -294,6 +296,7 @@ properties
 provide
 providers
 push
+pvz
 python
 quality
 radius
@@ -316,6 +319,7 @@ revolute
 root
 roughness
 safe
+sat
 scad
 scene
 scenes
@@ -332,11 +336,13 @@ simulation
 sketch
 sketches
 sku
+sldprt
 slot
 slots
 snap
 soft
 software
+solid
 source
 speed
 spring

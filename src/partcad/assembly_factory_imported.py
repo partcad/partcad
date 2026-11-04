@@ -134,6 +134,11 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
         # formats call themselves.
         self.noun = self.impl.config.get("noun") or self.impl.format_name
         self.dropped_labels = self.impl.config.get("dropped") or {}
+        # Whether every part the reader registers is a solid, so that one that
+        # is not fails rather than being built with a warning: what a reader
+        # that converts bodies out of a native CAD format declares, where such a
+        # part is one it read wrongly (see 'Shape._accepted_as_solid').
+        self.solid_required = output.as_flag(self.impl.config.get(output.REQUIRE_SOLID_KEY), output.REQUIRE_SOLID_KEY)
 
         extension = "." + self.impl.extension(self.impl.format_name)
         with pc_logging.Action("Init:" + self.impl.format_name, source_project.name, config["name"]):
@@ -495,6 +500,9 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
         if part is None:
             pc_logging.error("%s: the part '%s' failed to instantiate" % (self.name, part_name))
             return None
+        if self.solid_required:
+            part.solid_required = True
+            part.key_on_required_solid()
         self.assembly.cache_dependencies.append(part_file)
         self._parts[node_name] = part
         return part

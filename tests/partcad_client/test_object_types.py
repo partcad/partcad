@@ -80,8 +80,11 @@ def test_no_extension_is_claimed_by_both_a_mesh_and_a_solid():
         # Three script types, one extension, one answer: none of them is a mesh.
         ("/w/cube.py", False),
         ("/w/cube.scad", False),
+        # A native CAD document is a solid, read through cadmpeg.
+        ("/w/cube.sldprt", False),
+        ("/w/cube.FCStd", False),
         # Neither PartCAD nor anything else claims it.
-        ("/w/cube.sldprt", None),
+        ("/w/cube.x_t", None),
         ("/w/cube", None),
     ],
 )
@@ -94,6 +97,33 @@ def test_the_other_spellings_of_a_format_are_the_same_format():
     assert object_types.type_of_file("/w/cube.stp") == "step"
     assert object_types.type_of_file("/w/cube.igs") == "iges"
     assert object_types.type_of_file("/w/scene.glb") == "gltf"
+    assert object_types.type_of_file("/w/body.sab") == "sat"
+
+
+@pytest.mark.parametrize(
+    "path, expected",
+    [
+        ("/w/a.FCStd", "fcstd"),
+        ("/w/a.fcstd", "fcstd"),
+        ("/w/a.SLDPRT", "sldprt"),
+        ("/w/a.CATPart", "catpart"),
+        ("/w/a.ipt", "ipt"),
+        ("/w/a.f3d", "f3d"),
+        ("/w/a.pvz", "pvz"),
+        ("/w/a.smb", "sat"),
+    ],
+)
+def test_a_native_cad_document_is_named_by_its_extension_in_any_case(path, expected):
+    assert object_types.type_of_file(path) == expected
+
+
+def test_every_spelling_of_a_type_is_offered_its_own_first():
+    """What a command handed a file recognizes the type by: 'pc import part' among them."""
+    assert object_types.part_type_extensions("iges") == ("iges", "igs")
+    assert object_types.part_type_extensions("fcstd") == ("fcstd",)
+    assert object_types.part_type_extensions("SAT") == ("sat", "sab", "smb", "smt")
+    assert object_types.part_type_extensions("step") == ("step", "stp")
+    assert object_types.part_type_extensions("solidworks") == ()
 
 
 def test_an_extension_more_than_one_type_shares_names_none_of_them():
@@ -130,8 +160,8 @@ def test_a_type_that_names_no_file_of_its_own_defers_to_the_file():
 
 
 def test_with_nothing_to_go_on_the_answer_is_unknown():
-    assert object_types.is_mesh("/w/cube.sldprt") is None
-    assert object_types.is_mesh("/w/cube.sldprt", "solidworks") is None
+    assert object_types.is_mesh("/w/cube.x_t") is None
+    assert object_types.is_mesh("/w/cube.x_t", "parasolid") is None
 
 
 # ---------------------------------------------------------------------------

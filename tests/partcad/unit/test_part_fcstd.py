@@ -18,13 +18,16 @@ import hashlib
 import importlib.util
 import io
 import os
+import pathlib
 import runpy
 import shutil
+import subprocess
 import sys
 import tarfile
 import urllib.error
 import zipfile
 
+import cadmpeg_oracle
 import pytest
 
 import partcad as pc
@@ -211,10 +214,69 @@ def test_a_release_without_the_program_is_an_error(tmp_path, monkeypatch):
         tool.executable(str(tmp_path / "cache"))
 
 
-def test_cadmpeg_on_the_path_is_used_as_it_is(tmp_path, monkeypatch):
+def _answers_version(tool, monkeypatch, version):
+    """Make every cadmpeg 'tool' asks for its version answer 'version'."""
+
+    def run(command, **_kwargs):
+        assert command[1:] == ["--version"], command
+        return subprocess.CompletedProcess(command, 0, stdout="cadmpeg %s\n" % version, stderr="")
+
+    monkeypatch.setattr(tool.subprocess, "run", run)
+
+
+def test_cadmpeg_on_the_path_is_used_when_it_is_the_pinned_release(tmp_path, monkeypatch):
     tool = _tool()
     monkeypatch.setattr(tool.shutil, "which", lambda name: "/opt/bin/cadmpeg")
+    _answers_version(tool, monkeypatch, tool.VERSION)
     assert tool.executable(str(tmp_path)) == "/opt/bin/cadmpeg"
+
+
+def test_another_release_on_the_path_is_passed_over_for_the_pinned_one(tmp_path, monkeypatch):
+    """The pin is what the parts are keyed by: another release would read other geometry under that key."""
+    tool = _tool()
+    _release(tool, monkeypatch, tmp_path, "linux", "cadmpeg.tar.xz", "cadmpeg")
+    monkeypatch.setattr(tool.shutil, "which", lambda name: "/opt/bin/cadmpeg")
+    _answers_version(tool, monkeypatch, "0.0.1")
+
+    exe = tool.executable(str(tmp_path / "cache"))
+
+    assert exe != "/opt/bin/cadmpeg"
+    assert os.path.dirname(exe) == str(tmp_path / "cache" / "cadmpeg" / tool.VERSION / "linux-x86_64")
+
+
+def test_a_program_on_the_path_that_does_not_say_what_it_is_is_not_used(tmp_path, monkeypatch):
+    tool = _tool()
+    monkeypatch.setattr(tool.subprocess, "run", lambda command, **kw: subprocess.CompletedProcess(command, 1, "", ""))
+    assert tool.version_of("/opt/bin/cadmpeg") is None
+    monkeypatch.setattr(tool.subprocess, "run", lambda command, **kw: subprocess.CompletedProcess(command, 0, "", ""))
+    assert tool.version_of("/opt/bin/cadmpeg") is None
+
+    def missing(command, **_kwargs):
+        raise FileNotFoundError(command[0])
+
+    monkeypatch.setattr(tool.subprocess, "run", missing)
+    assert tool.version_of("/opt/bin/cadmpeg") is None
+
+
+def test_the_pinned_release_is_installed_where_an_image_asks(tmp_path, monkeypatch):
+    """'python3 cadmpeg_tool.py /usr/local/bin' is how the sandbox images come to carry it."""
+    tool = _tool()
+    _release(tool, monkeypatch, tmp_path, "linux", "cadmpeg.tar.xz", "release/cadmpeg")
+    # Whatever the PATH holds: the pin is what is asked for.
+    monkeypatch.setattr(tool.shutil, "which", lambda name: pytest.fail("looked on the PATH"))
+
+    installed = tool.install(str(tmp_path / "bin"))
+
+    assert installed == str(tmp_path / "bin" / "cadmpeg")
+    assert (tmp_path / "bin" / "cadmpeg").read_text() == "#!/bin/sh\n"
+
+
+def test_the_copy_the_images_carry_is_this_file_byte_for_byte():
+    """A Docker build cannot reach outside its context, so the image's copy is a copy, and only while it is one."""
+    root = pathlib.Path(__file__).resolve().parents[3]
+    baked = root / "tools" / "containers" / "_common" / "cadmpeg_tool.py"
+    source = pathlib.Path(BUILTIN_IMPORT) / "cadmpeg_tool.py"
+    assert baked.read_bytes() == source.read_bytes(), "copy %s over %s" % (source, baked)
 
 
 def test_a_platform_cadmpeg_has_no_build_for_is_named(tmp_path, monkeypatch):
@@ -283,3 +345,45 @@ def test_a_document_with_no_solid_is_an_error(ctx):
     envelope = asyncio.run(part.get_wrapped(ctx))
     assert envelope is None
     assert any("holds no solid" in str(error) for error in part.errors)
+
+
+@pytest.fixture(scope="module")
+def cadmpeg(ctx):
+    return cadmpeg_oracle.executable(ctx)
+
+
+@pytest.mark.slow
+def test_the_part_and_the_document_are_the_same_geometry(ctx, cadmpeg, tmp_path):
+    """'cadmpeg diff' of the document and the STEP file PartCAD writes of the part read from it."""
+    exported = tmp_path / "box.step"
+    asyncio.run(ctx.get_part(":box").render_async(ctx, "step", filepath=str(exported)))
+    document = os.path.join(os.path.dirname(PACKAGE), "techdraw_annotations.FCStd")
+
+    status, comparison = cadmpeg_oracle.diff(cadmpeg, document, exported)
+
+    assert comparison["verdict"] == "agree", comparison
+    assert status == 0
+    assert cadmpeg_oracle.disagreements(comparison) == []
+
+
+@pytest.mark.slow
+def test_cadmpeg_s_report_is_read_as_utf8_whatever_the_locale(cadmpeg, monkeypatch):
+    """This document's report gives an uncertainty in mm^5, with a superscript cp1252 has no character for.
+
+    cp1252 is what Windows decodes a subprocess's output with unless told
+    otherwise, and there the decode failing made the output None.
+    """
+    cadmpeg_oracle.decode_as_windows_does(monkeypatch)
+    bodies = cadmpeg_oracle.measure(cadmpeg, os.path.join(os.path.dirname(PACKAGE), "design_history.FCStd"))
+    assert bodies
+
+
+@pytest.mark.slow
+def test_the_part_is_one_of_the_bodies_the_document_holds(ctx, cadmpeg):
+    """Pad, Pocket and Fillet are each a body to cadmpeg; the part is the one FreeCAD shows."""
+    body = _measured(ctx, ":design_history")
+    bodies = cadmpeg_oracle.measure(cadmpeg, os.path.join(os.path.dirname(PACKAGE), "design_history.FCStd"))
+    volumes = [cadmpeg_oracle.volume(row) for row in bodies if row["kind"] == "solid" and cadmpeg_oracle.volume(row)]
+    assert len(volumes) > 1, "the document holds every feature's result, which is the point of the case"
+    matching = [volume for volume in volumes if cadmpeg_oracle.same_volume(volume, {"value": body["volume"]})]
+    assert matching, (body["volume"], [volume["value"] for volume in volumes])
