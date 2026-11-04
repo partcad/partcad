@@ -740,6 +740,54 @@ def test_a_material_already_recorded_outranks_what_was_asked_for(tmp_path):
     assert project.get_part("block")._shape_properties() == {"material": "//cat:abs"}
 
 
+def _asked_for_package(tmp_path, properties=""):
+    root = tmp_path / "workspace"
+    root.mkdir()
+    (root / "cube.stl").write_text("", encoding="utf-8")
+    (root / "partcad.yaml").write_text(
+        "name: //p\n"
+        "colors:\n"
+        "  grey:\n    display: '#808080'\n"
+        "  red:\n    display: '#FF0000'\n"
+        "parts:\n"
+        "  block:\n"
+        "    type: stl\n    path: cube.stl\n"
+        "    parameters:\n"
+        "      material:\n        type: string\n        default: '//cat:pla'\n"
+        "      color:\n        type: string\n        default: ':grey'\n" + properties,
+        encoding="utf-8",
+    )
+    return pc.Context(str(root)).get_project("//")
+
+
+@pytest.mark.parametrize("base_first", [False, True], ids=["instance-alone", "after-the-object"])
+def test_an_instance_records_what_it_was_asked_for_whatever_was_made_before_it(tmp_path, base_first):
+    """'block;material=...,color=...' reports its own values, whether or not 'block' was made first.
+
+    Making 'block' records what it was asked for in the declaration - which is
+    its config - and an instance is a copy of the declaration: it used to start
+    from that record, which outranks a parameter, and so reported 'block''s
+    material and was drawn in 'block''s colour.
+    """
+    project = _asked_for_package(tmp_path)
+    if base_first:
+        assert project.get_part("block")._shape_properties() == {"material": "//cat:pla", "color": "#808080"}
+
+    instance = project.get_part("block;color=:red,material=//cat:abs")
+
+    assert instance._shape_properties() == {"material": "//cat:abs", "color": "#FF0000"}
+
+
+def test_an_instance_keeps_what_its_declaration_states_itself(tmp_path):
+    """What the declaration states under 'properties:' is the instance's too, and still outranks its parameters."""
+    project = _asked_for_package(tmp_path, "    properties:\n      material: '//cat:abs'\n")
+    assert project.get_part("block")._shape_properties() == {"material": "//cat:abs", "color": "#808080"}
+
+    instance = project.get_part("block;color=:red,material=//cat:pla")
+
+    assert instance._shape_properties() == {"material": "//cat:abs", "color": "#FF0000"}
+
+
 def test_a_step_part_records_the_material_it_states_and_its_file_does_not(tmp_path):
     """A 'step' part takes 'material' too, and records it where the file says nothing.
 

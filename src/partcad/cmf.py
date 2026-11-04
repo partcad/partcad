@@ -567,7 +567,11 @@ def own_parameters(shape, ctx=None) -> dict:
 
 # Raised whenever what the core makes of an item's CMF changes, so that what
 # was built with the earlier answer is not served as this one (see 'key_of').
-KEY_VERSION = 1
+# 2: an instance named with a colour or a material reports that one, and not
+# what making the object without them recorded first (see
+# 'Project._remember_declared_properties') - a room painted after its wall had
+# been asked for was cached with grey walls under the key of the painted room.
+KEY_VERSION = 2
 
 
 def key_of(ctx, shape) -> dict:
