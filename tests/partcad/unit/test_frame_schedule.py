@@ -430,3 +430,10 @@ def test_a_video_hands_back_the_scene_it_built_when_asked_and_draws_the_same_fro
     # Not asked for, not handed back: a scene is bytes nobody wants otherwise.
     third, _ = _video(monkeypatch, tmp_path)
     assert "scene" not in third
+
+    # Handed one it cannot read, it builds its own and hands that back, for the
+    # cache to keep in place of the one it could not use.
+    fourth, rebuilt = _video(monkeypatch, tmp_path, scene=b"nonsense")
+    assert not fourth["video"]["scene_reused"]
+    raster_scene.Scene.from_bytes(fourth.pop("scene"))
+    assert all(np.array_equal(a, b) for a, b in zip(frames, rebuilt))

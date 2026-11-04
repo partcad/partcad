@@ -490,7 +490,7 @@ def process(script, path, request):
     # 'partcad.output.VIDEO_EXTENSIONS'). Bytes or nothing.
     if (
         isinstance(request, dict)
-        and request.get(SCENE_WANTED_KEY)
+        and (request.get(SCENE_WANTED_KEY) or SCENE_KEY in request)
         and isinstance(output.get(SCENE_KEY), (bytes, bytearray))
     ):
         result[SCENE_KEY] = bytes(output[SCENE_KEY])

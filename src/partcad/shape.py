@@ -363,16 +363,22 @@ async def _scene_in_async(cache, output_):
 async def _scene_out_async(cache, output_, result):
     """Keep the scene the file's implementation handed back, and take it out of what the run answered.
 
+    It hands one back when it built one: because it was asked for it, having
+    none, or because the one it was handed could not be read - and then what
+    it built takes that one's place, or every video of the object at that size
+    would be handed the same unreadable scene, and build it again, for as long
+    as the cache kept it.
+
     Out of the answer whether it is kept or not: it is bytes for the cache, and
     neither the file's cached answer nor whoever asked for the file wants them.
     Out of the request too, which the file is reported from.
     """
     if not output_.impl.is_video:
         return
-    handed_in = output_.request.pop(output.SCENE_KEY, None)
-    wanted = output_.request.pop(output.SCENE_WANTED_KEY, None)
+    output_.request.pop(output.SCENE_KEY, None)
+    output_.request.pop(output.SCENE_WANTED_KEY, None)
     scene = result.pop(output.SCENE_KEY, None) if isinstance(result, dict) else None
-    if wanted and handed_in is None and isinstance(scene, (bytes, bytearray)) and output_.scene is not None:
+    if isinstance(scene, (bytes, bytearray)) and output_.scene is not None:
         await cache_artifacts.store_entries_async(cache, output_.scene, {output.SCENE_KEY: bytes(scene)})
 
 

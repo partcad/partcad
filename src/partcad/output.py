@@ -391,7 +391,8 @@ IMPLEMENTATION_KEYS = frozenset(
 #   its colours and the size of the picture. PartCAD hands it in as 'scene' the
 #   next time a video of the object at that size is drawn, so the object is
 #   tessellated once rather than once per video, and asks for it back with
-#   'scene_wanted' when it has none. Always: there is nothing to turn off.
+#   'scene_wanted' when it has none; one that could not be read is handed back
+#   rebuilt, and replaces it. Always: there is nothing to turn off.
 VIDEO_EXTENSIONS = frozenset({"mp4", "m4v", "mov", "qt", "mkv", "webm", "avi", "wmv", "asf", "ogv"})
 THREADS_KEY = "threads"
 MEMORY_KEY = "memory"

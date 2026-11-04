@@ -59,7 +59,8 @@ WRITE = textwrap.dedent("""
                 f,
             )
         result = {"success": True, "files": []}
-        if request.get("scene_wanted"):
+        # A scene it is handed and cannot use ('unreadable'), it builds and hands back.
+        if request.get("scene_wanted") or (scene is not None and request.get("unreadable")):
             result["scene"] = ("the scene %s built at %s" % (request.get("say"), request.get("size"))).encode()
         return result
     """)
@@ -384,6 +385,17 @@ def test_the_scene_is_kept_in_every_tier(video):
     scene_entries = [name for name in video.remote.storage if name.endswith(".artifact-scene")]
     assert scene_entries
     assert [name for name in _local_entries(video) if name.endswith(".artifact-scene")]
+
+
+def test_a_scene_the_video_could_not_use_is_replaced_by_the_one_it_built(video):
+    _render(video, "clip")
+    # Handed the clip's scene, and unable to use it: it builds its own, and hands it back.
+    _render(video, "reel", unreadable=True)
+    assert _written(video, "reel")["scene"] == "the scene clip built at reels"
+    # Which the next video of the object at that size is handed, rather than the
+    # one that could not be used.
+    _render(video, "clip", fps=12)
+    assert _written(video, "clip")["scene"] == "the scene reel built at reels"
 
 
 def test_a_file_that_is_not_a_video_is_neither_handed_a_scene_nor_asked_for_one(video):

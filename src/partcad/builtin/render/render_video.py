@@ -719,6 +719,9 @@ def _process(path, request):
         "speed": list(speed),
         "scene_reused": shaded.reused,
     }
-    if request.get(SCENE_WANTED_KEY) and not shaded.reused:
+    # Handed back when it was asked for, and in place of one handed in that
+    # could not be read: what the cache holds for this object at this size is
+    # then the scene that was built, rather than the one that was not usable.
+    if not shaded.reused and (request.get(SCENE_WANTED_KEY) or request.get(SCENE_KEY) is not None):
         result[SCENE_KEY] = shaded.scene_bytes()
     return result
