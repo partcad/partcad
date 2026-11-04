@@ -583,6 +583,7 @@ class Project(project_config.Configuration):
         # states it, per kind: '{name: (declaration, its properties dictionary,
         # a copy of it)}'. See '_remember_declared_properties'.
         self._declared_properties: dict[str, dict] = {}
+        self._declared_properties_lock = threading.Lock()
 
         self.providers = {}
         self.provider_locks = {}
@@ -798,17 +799,23 @@ class Project(project_config.Configuration):
         inside, which is where making the object recorded into
         ('ProjectExternalRepository._augment'); and one whose every answer is
         new throughout says it again.
+
+        Under a lock of its own, the look and the copy together: lookups run on
+        several threads, and one switched out between finding nothing
+        remembered and copying would otherwise copy what another had since
+        made the object from and recorded.
         """
         if not isinstance(declaration, dict):
             return
         from . import shape_envelope
 
         properties = declaration.get(shape_envelope.KEY_PROPERTIES)
-        remembered = self._declared_properties.setdefault(kind, {})
-        known = remembered.get(name)
-        if known is not None and (known[0] is declaration or (properties is not None and known[1] is properties)):
-            return
-        remembered[name] = (declaration, properties, copy.deepcopy(properties))
+        with self._declared_properties_lock:
+            remembered = self._declared_properties.setdefault(kind, {})
+            known = remembered.get(name)
+            if known is not None and (known[0] is declaration or (properties is not None and known[1] is properties)):
+                return
+            remembered[name] = (declaration, properties, copy.deepcopy(properties))
 
     def _restore_declared_properties(self, kind: str, name: str, config: dict) -> None:
         """Give 'config', a copy of the declaration 'name', back the 'properties:' the declaration states itself.
