@@ -573,6 +573,20 @@ at all).
     parameter), and no other field is looked at: the package is sent whole, and a line of text that
     happens to be a file's name must not send it. Do not resolve such a path in the core instead: what a
     field means is the implementation's to say.
+    A video is run and kept unlike any other file, and no file type declares how: a render or export type
+    whose extension is in `output.VIDEO_EXTENSIONS` is a video (`Implementation.is_video`), and the rest is
+    the user's to say, in two options of their own configuration that travel to the daemon like the rest
+    (`OPTION_KEYS`). `video.parallel` (on by default): `Shape._run_together_locked` gives a video the process
+    slots free as it starts and says how many in `threads` (`_ThreadGrant`, `ProcessSlots.take_more` --
+    never waited for, given back when the run ends, only for a process on this machine); off, it says one.
+    `video.cacheTiers` (`remote` by default, or `all`, `none`) is the view of the cache a video's file is
+    kept in and looked for in (`Cache.tiers`), so by default it never lands in the files tier, not even
+    promoted from S3. `_artifact_hash` keys a video on neither `threads` nor `memory`. What its frames are
+    drawn from, the tessellated, lit object (`raster_scene.Scene.to_bytes`), is always cached, with nothing
+    to turn off: keyed by `Shape._scene_hash` on the object, its colours and `output.SCENE_FIELDS` (not the
+    file type), kept in every tier, handed in as `scene` and asked for back with `scene_wanted`; the
+    answer's `scene` is taken out before the file's own answer is stored. The frames of a video are never
+    kept anywhere (`builtin/render/frame_schedule.py`).
 
 - **Engineering analysis** (`./src/partcad/cae.py`, `Shape.analyze_async()`, `./src/partcad/test/cae.py`):
   `pc cae fea`/`dynamic`/`thermal`/`cfd` are a third output section, `cae:`, resolved by the very code that resolves

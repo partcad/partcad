@@ -36,10 +36,8 @@ Every option is a field of the file type, so a package declares it once and
 'pc render' or the IDE changes it per run. See 'docs/source/render.rst'.
 """
 
-import concurrent.futures
 import math
 import os
-import queue
 import shlex
 import sys
 import tempfile
@@ -50,6 +48,7 @@ import numpy as np
 import pyexpat  # noqa: F401
 
 sys.path.append(os.path.dirname(__file__))
+import frame_schedule
 import raster_scene
 import render_raster
 import video_encode
@@ -366,42 +365,24 @@ def soundtrack(request, seconds):
 # ---------------------------------------------------------------------------
 
 
-def frames(shaded, painters, start, speed, fps, count, fade_in, fade_out, fade_color):
-    """The new frames, drawn by as many threads as there are 'painters', in order.
+def frames(shaded, the_plan, start, speed, fps, count, fade_in, fade_out, fade_color):
+    """The new frames, drawn as 'the_plan' says ('frame_schedule'), in order.
 
     Frame 'index' is the picture 'shaded' draws turned by 'start' plus 'speed'
     times its time: what 'pc render -t png' draws with the same fields.
 
     numpy lets go of the interpreter while it works on whole arrays, which is
-    most of what drawing a frame is, so frames drawn side by side take less time
-    than one after the other - and they are handed out in order all the same.
+    most of what drawing a frame is, so the bands and frames drawn side by side
+    take less time than one after the other - and the frames are handed out in
+    order all the same, straight into the encoder and never kept anywhere.
     """
-    pool = queue.SimpleQueue()
-    for painter in painters:
-        pool.put(painter)
+    painter = shaded.painter()
 
-    def draw(index):
-        painter = pool.get()
-        try:
-            image = shaded.draw(angles_at(start, speed, index / float(fps)), painter)
-        finally:
-            pool.put(painter)
-        return faded(image, index, fps, count, fade_in, fade_out, fade_color)
+    def turn_of(index):
+        return raster_scene.rotation(angles_at(start, speed, index / float(fps)))
 
-    if len(painters) == 1:
-        for index in range(count):
-            yield draw(index)
-        return
-    window = 2 * len(painters)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(painters)) as executor:
-        pending = [executor.submit(draw, index) for index in range(min(window, count))]
-        submitted = len(pending)
-        while pending:
-            image = pending.pop(0).result()
-            if submitted < count:
-                pending.append(executor.submit(draw, submitted))
-                submitted += 1
-            yield image
+    for index, image in enumerate(frame_schedule.frames(painter, count, turn_of, the_plan)):
+        yield faded(image, index, fps, count, fade_in, fade_out, fade_color)
 
 
 def faded(image, index, fps, count, fade_in, fade_out, color):
@@ -420,9 +401,115 @@ def faded(image, index, fps, count, fade_in, fade_out, color):
 
 
 def threads_of(request):
-    """How many frames are drawn at once: 'threads', or one per core up to four."""
-    default = max(1, min(4, os.cpu_count() or 1))
-    return _number(request, "threads", default, low=1, high=64, integer=True)
+    """How many threads draw the frames: 'threads', or one per core this process may run on.
+
+    PartCAD says, when it runs the video: as many as it has process slots free
+    for, or one where its user's 'video.parallel' is off (see
+    'output.VIDEO_EXTENSIONS' in PartCAD).
+    """
+    try:
+        cores = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        cores = os.cpu_count() or 1
+    return _number(request, "threads", max(1, min(cores, 64)), low=1, high=64, integer=True)
+
+
+# The scene every frame is drawn from - the object tessellated, centred and lit,
+# the most of the work after the frames themselves - as PartCAD keeps it between
+# videos, always (see 'output.VIDEO_EXTENSIONS' in PartCAD): handed in under
+# 'scene' when it has one for this object at this size, and asked for under
+# 'scene_wanted' when it has not, in which case the answer carries it, as bytes,
+# under 'scene'. The frames themselves are never kept anywhere (see
+# 'frame_schedule').
+SCENE_KEY = "scene"
+SCENE_WANTED_KEY = "scene_wanted"
+
+
+# What share of the memory available when a video starts its frames may take,
+# when nothing says otherwise ('memory'): half, leaving the other half for
+# whatever else this machine is doing - other renders among it.
+MEMORY_SHARE = 0.5
+
+# What is assumed to be available where the machine does not say.
+MEMORY_UNKNOWN = 2 << 30
+
+
+def memory_budget(request):
+    """How many bytes the frames may take while they are drawn: 'memory' (megabytes), or a share of what is free.
+
+    What is free is asked when the frames are about to start, after the object
+    has been made ready to be drawn, so what that took is not counted twice.
+    """
+    megabytes = _number(request, "memory", None, low=1)
+    if megabytes is not None:
+        return int(megabytes * (1 << 20))
+    available = available_memory()
+    return int(MEMORY_SHARE * (available if available is not None else MEMORY_UNKNOWN))
+
+
+def available_memory():
+    """How many bytes of memory this process could have now, or None where that cannot be told.
+
+    The least of what the machine has available and what the control group it
+    runs in - a container, say - still allows.
+    """
+    found = []
+    try:
+        with open("/proc/meminfo") as stream:
+            for line in stream:
+                if line.startswith("MemAvailable:"):
+                    found.append(int(line.split()[1]) * 1024)
+                    break
+    except (OSError, ValueError, IndexError):
+        pass
+    for limit_path, usage_path in (
+        ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current"),
+        ("/sys/fs/cgroup/memory/memory.limit_in_bytes", "/sys/fs/cgroup/memory/memory.usage_in_bytes"),
+    ):
+        try:
+            with open(limit_path) as stream:
+                limit = stream.read().strip()
+            with open(usage_path) as stream:
+                usage = int(stream.read().strip())
+        except (OSError, ValueError):
+            continue
+        # 'max', or the near-infinite number cgroup v1 reports, is no limit at all.
+        if limit.isdigit() and int(limit) < (1 << 60):
+            found.append(max(0, int(limit) - usage))
+        break
+    if not found and sys.platform == "win32":
+        found.append(_windows_available_memory())
+    if not found and hasattr(os, "sysconf"):
+        try:
+            # macOS says how much there is, not how much is free: half of it.
+            found.append(os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") // 2)
+        except (OSError, ValueError):
+            pass
+    found = [value for value in found if value]
+    return min(found) if found else None
+
+
+def _windows_available_memory():  # pragma: no cover - exercised on Windows only
+    import ctypes
+
+    class _MemoryStatus(ctypes.Structure):
+        _fields_ = [
+            ("dwLength", ctypes.c_ulong),
+            ("dwMemoryLoad", ctypes.c_ulong),
+            ("ullTotalPhys", ctypes.c_ulonglong),
+            ("ullAvailPhys", ctypes.c_ulonglong),
+            ("ullTotalPageFile", ctypes.c_ulonglong),
+            ("ullAvailPageFile", ctypes.c_ulonglong),
+            ("ullTotalVirtual", ctypes.c_ulonglong),
+            ("ullAvailVirtual", ctypes.c_ulonglong),
+            ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+        ]
+
+    status = _MemoryStatus()
+    status.dwLength = ctypes.sizeof(_MemoryStatus)
+    if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+        return None
+    return int(status.ullAvailPhys)
 
 
 # ---------------------------------------------------------------------------
@@ -503,8 +590,9 @@ def _process(path, request):
     if previous is not None:
         previous_count = int(round((previous["duration"] or 0.0) * fps))
 
-    # The object made ready to be drawn.
-    shaded.build(warnings)
+    # The object made ready to be drawn - or the scene PartCAD kept of it from
+    # an earlier video, read back (see 'SCENE_KEY').
+    shaded.build(warnings, scene=request.get(SCENE_KEY))
 
     tags = {}
     state_tag = video_encode.CONTAINERS[container]["state_tag"]
@@ -571,7 +659,15 @@ def _process(path, request):
             audio=audio_path,
             tags=tags,
         )
-        painters = [shaded.painter() for _ in range(threads_of(request))]
+        # How the frames are drawn: on as many threads, and as many at once, as
+        # the memory left after the object was made ready holds.
+        the_plan = frame_schedule.plan(shaded.painter(), threads_of(request), memory_budget(request))
+        if not the_plan.fits:
+            warnings.append(
+                "A frame of %dx%d at 'antialias: %d' takes about %d MB to draw, more than the %d MB it was given "
+                "('memory'); it is drawn by one thread, a band at a time"
+                % (width, height, shaded.antialias, the_plan.needed >> 20, the_plan.budget >> 20)
+            )
         prefix = ()
         if previous is not None:
             # A bound, so that a file whose timestamps are wrong cannot have the
@@ -580,7 +676,7 @@ def _process(path, request):
             prefix = video_encode.decode_frames(path, width, height, fps, limit=previous_count + int(fps) + 1)
         try:
             written_before, written = pipeline.run(
-                frames(shaded, painters, start, speed, fps, count, fade_in, fade_out, fade_color), prefix=prefix
+                frames(shaded, the_plan, start, speed, fps, count, fade_in, fade_out, fade_color), prefix=prefix
             )
             if comments:
                 video_encode.write_comments(partial, comments)
@@ -613,9 +709,19 @@ def _process(path, request):
         "start_angle": list(start),
         "end_angle": list(end),
         "triangles": shaded.scene.triangle_count,
+        # How the frames were drawn (see 'frame_schedule.plan').
+        "threads": the_plan.workers,
+        "bands": the_plan.bands,
+        "frames_at_once": the_plan.frames,
         # The first new frame, as the fields 'pc render -t png' draws it with:
         # frame 'k' of them is the same with 'turn' grown by 'speed' times k / fps.
         "picture": shaded.fields(start),
         "speed": list(speed),
+        "scene_reused": shaded.reused,
     }
+    # Handed back when it was asked for, and in place of one handed in that
+    # could not be read: what the cache holds for this object at this size is
+    # then the scene that was built, rather than the one that was not usable.
+    if not shaded.reused and (request.get(SCENE_WANTED_KEY) or request.get(SCENE_KEY) is not None):
+        result[SCENE_KEY] = shaded.scene_bytes()
     return result

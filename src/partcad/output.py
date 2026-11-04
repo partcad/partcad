@@ -359,8 +359,47 @@ def is_document_format(format_name: str, section_obj) -> bool:
 # 'packageFiles' is the implementation's too: which of its fields name files of
 # the object's package (see 'Implementation.package_files').
 IMPLEMENTATION_KEYS = frozenset(
-    {"path", "package", "pythonRequirements", "pythonVersion", "dockerImage", "container", "packageFiles"}
+    {
+        "path",
+        "package",
+        "pythonRequirements",
+        "pythonVersion",
+        "dockerImage",
+        "container",
+        "packageFiles",
+    }
 )
+
+# A video is a file of a 'render:' or 'export:' type whose extension is one of
+# these - the containers '//builtin/render' writes. PartCAD runs and keeps a
+# video differently from every other file, and what it does is the user's to
+# say rather than the file type's (see 'Implementation.is_video'):
+#
+# - its frames are drawn on as many threads as its request's 'threads' says,
+#   and how many - and the 'memory' it is given to draw in - changes nothing in
+#   the file it writes. With 'video.parallel' on (the default) PartCAD runs it
+#   in as many of the machine's process slots as are free when it starts (see
+#   'sandbox_lock.ProcessSlots.take_more') and says how many in 'threads'; off,
+#   it says one. Either way both fields stay out of the file's cache key.
+# - it is kept in the tiers 'video.cacheTiers' names: the 'remote' ones by
+#   default - a team's memcached, S3 - since it is big and the user who
+#   rendered it has it already, so a local tier would hold a second copy nobody
+#   on this machine asks for; or 'all', or 'none'.
+# - what its frames are drawn from - the scene, the object tessellated, centred
+#   and lit (see 'builtin/render/raster_scene.Scene.to_bytes') - is kept in
+#   every tier, as geometry is, under a key of what it is made from: the object,
+#   its colours and the size of the picture. PartCAD hands it in as 'scene' the
+#   next time a video of the object at that size is drawn, so the object is
+#   tessellated once rather than once per video, and asks for it back with
+#   'scene_wanted' when it has none; one that could not be read is handed back
+#   rebuilt, and replaces it. Always: there is nothing to turn off.
+VIDEO_EXTENSIONS = frozenset({"mp4", "m4v", "mov", "qt", "mkv", "webm", "avi", "wmv", "asf", "ogv"})
+THREADS_KEY = "threads"
+MEMORY_KEY = "memory"
+SCENE_KEY = "scene"
+SCENE_WANTED_KEY = "scene_wanted"
+# The fields of a request that decide which scene a picture is drawn from.
+SCENE_FIELDS = ("size", "width", "height")
 OUTPUT_KEYS = frozenset({"extension", "prefix", "exclude", "output_dir"})
 RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 
@@ -762,6 +801,19 @@ class Implementation:
         if isinstance(fields, str):
             fields = [fields]
         return [field for field in fields if isinstance(field, str) and field]
+
+    @property
+    def is_video(self) -> bool:
+        """Whether a file of this type is a video, which PartCAD runs and keeps as 'VIDEO_EXTENSIONS' says.
+
+        Its extension decides, under whatever name the type is declared: a
+        'reel' that writes '.mp4' is a video, and a type named 'mp4' that writes
+        something else is not.
+        """
+        if self.section not in SECTIONS:
+            return False
+        extension = self.extension(self.format_name)
+        return isinstance(extension, str) and extension.strip().lstrip(".").lower() in VIDEO_EXTENSIONS
 
     @property
     def container(self) -> Optional[dict]:

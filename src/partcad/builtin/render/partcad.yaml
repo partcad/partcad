@@ -266,7 +266,14 @@ render:
   #                 wmv2 - whichever of them the container takes.
   #   audio_codec, audio_bitrate   likewise for the soundtrack: aac, mp3, opus,
   #                 vorbis; 192 kbit/s.
-  #   threads       how many frames are drawn at once: one per core, up to four.
+  #   threads       how many threads draw the frames, at most. PartCAD gives a
+  #                 video as many of its process slots as are free when it
+  #                 starts ('video.parallel', below) - one per core by default -
+  #                 and this caps it; the video is the same however many draw it.
+  #   memory        how many megabytes the frames being drawn may take at once.
+  #                 Half of what is free when they start, by default: the
+  #                 frames are drawn in bands, as many at once as fit, the
+  #                 earliest first (see 'frame_schedule.py').
   #   fade_in, fade_out, fade_color   seconds of fading from and to a colour
   #                 (black) at the start and the end.
   #   text          text over the picture: a string (shown throughout, at the
@@ -299,6 +306,17 @@ render:
   # 'reproducible' is declared for the protocol's sake and decides nothing: a
   # container is stamped with the time it was written, and an encoder running
   # on several threads is not held to the same bytes twice.
+  #
+  # PartCAD knows these for videos by their extensions (see
+  # 'output.VIDEO_EXTENSIONS'), and nothing here says how it runs them or keeps
+  # what they make: that is the user's to say, in their own configuration. With
+  # 'video.parallel' on (the default) a video is granted as many process slots
+  # as are free and told how many in 'threads'; 'video.cacheTiers' names the
+  # cache's tiers a video is kept in - 'remote' by default, so it never lands
+  # in the files on this machine. Its frames are kept nowhere, and the object
+  # tessellated and lit for them is kept in every tier, like geometry, and
+  # handed back to the next video of the object at that size - in another
+  # container, at another speed - instead of being built again.
   mp4:
     desc: A video of the object turning, as H.264 in MP4 - what every social network takes.
     path: render_video.py

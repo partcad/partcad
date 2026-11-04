@@ -1216,12 +1216,33 @@ What it costs
 Every frame is drawn on the CPU, in the sandbox, as a shaded picture is: a part
 takes a fraction of a second a frame at the default size, so a twelve-second Reel
 is a minute or two on four cores. ``antialias: 1`` -- which draws each frame once rather than at
-twice its size each way -- is about four times faster and has harder edges;
-``threads`` is how many frames are drawn at once, one per core up to four. The
+twice its size each way -- is about four times faster and has harder edges. The
 encoder's ``preset`` trades the other half.
 
-A video is cached like any other file, keyed on the object and every field --
-except one that reads a file: a soundtrack, a logo, or the video it is appended
-to. What those hold is not in the question the cache keys on, so such a video is
-made afresh every time. ``reproducible`` decides nothing for a video: a
-container is stamped with the time it is written.
+The frames are drawn on several threads at once, each frame cut into bands of
+rows that the threads share, the earliest frame first -- so they come out in
+about the order the encoder takes them, and are handed to it strictly in that
+order. PartCAD gives a video as many of its process slots as are free when it
+starts (one per core, or ``threadsMax``); ``threads`` caps that. As many frames
+are drawn at once as fit in ``memory`` megabytes -- half of what is free when the
+frames start, by default -- and a video too big for that is drawn a band at a
+time, and says so. Neither changes a single pixel of the video. A machine that
+would rather draw every video on one thread says ``video.parallel: false`` in
+its configuration (``PC_VIDEO_PARALLEL=false``).
+
+A video is cached keyed on the object and every field but ``threads`` and
+``memory`` -- except one that reads a file: a soundtrack, a logo, or the video it
+is appended to. What those hold is not in the question the cache keys on, so such
+a video is made afresh every time. By default it is kept only in the cache's
+shared tiers (``cacheRemote``, ``cacheS3``), for whoever renders it next on
+another machine, and never in the files on this one: it is big, and whoever
+rendered it has it already. ``video.cacheTiers`` in the configuration
+(``PC_VIDEO_CACHE_TIERS``) says otherwise: ``all`` keeps it on this machine too,
+and ``none`` nowhere. Its frames are kept nowhere. What every frame is drawn
+from -- the object tessellated and lit, for pictures of that size -- is always
+kept in every tier, like geometry, so that the next video of the object at that
+size (in another container, at another speed or length) starts drawing at once.
+PartCAD knows a video by its extension (``mp4``, ``m4v``, ``mov``, ``qt``,
+``mkv``, ``webm``, ``avi``, ``wmv``, ``asf``, ``ogv``), whatever its file type
+is called. ``reproducible`` decides nothing for a video: a container is stamped
+with the time it is written.

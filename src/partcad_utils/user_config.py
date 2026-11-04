@@ -304,6 +304,33 @@ class TelemetryConfig(dict):
         return str({k: v for k, v in properties})
 
 
+# What 'video.cacheTiers' may say: every tier of the cache, only the ones
+# shared over the network (a team's memcached, S3), or none. The names are the
+# ones 'partcad.cache.Cache.tiers' takes.
+VIDEO_CACHE_TIERS = ("all", "remote", "none")
+VIDEO_CACHE_TIERS_DEFAULT = "remote"
+
+
+def video_cache_tiers(value) -> str:
+    """'video.cacheTiers' as one of 'VIDEO_CACHE_TIERS'; unset is the default.
+
+    Anything else is the default too, and said once: a misspelt tier is a user
+    meaning to keep videos somewhere, and the default is where they are kept
+    when nobody says.
+    """
+    if value is None:
+        return VIDEO_CACHE_TIERS_DEFAULT
+    text = str(value).strip().lower()
+    if text in VIDEO_CACHE_TIERS:
+        return text
+    pc_logging.warning_once(
+        ("video.cacheTiers", text),
+        "video.cacheTiers is one of %s, not %r: videos are kept in the '%s' tiers"
+        % (", ".join(VIDEO_CACHE_TIERS), value, VIDEO_CACHE_TIERS_DEFAULT),
+    )
+    return VIDEO_CACHE_TIERS_DEFAULT
+
+
 def _positive_seconds(value):
     """'value' as a positive, finite number of seconds, or None.
 
@@ -381,6 +408,8 @@ OPTION_KEYS = (
     "plugin.query.timeout",
     "simulation.timeout",
     "simulation.videoResolution",
+    "video.parallel",
+    "video.cacheTiers",
     "useDocker",
     "useDockerPython",
     "useDockerKicad",
@@ -579,6 +608,29 @@ class UserConfig(vyper.Vyper):
     @threads_max.setter
     def threads_max(self, value):
         self._apply_threads_max(value)
+
+    def _set_insensitive(self, key, val, source):
+        """vyper's own, except that a section is given the option it lacked rather than a KeyError.
+
+        vyper calls this, and only this, to lay an environment variable over the
+        section of the configuration file its option is in: reading
+        'simulation.timeout' merges 'PC_SIMULATION_VIDEO_RESOLUTION' into the
+        file's 'simulation' mapping first. Its own raises KeyError when that
+        mapping does not already name the option, so a file that said
+        'simulation: {timeout: 900}' under that variable could be read option by
+        option but not copied ('to_dict'), and every command that hands its
+        configuration to the daemon failed. A file that sets part of a section
+        and an environment that sets the rest are both what a user means, and
+        the environment wins over the file, as it does everywhere else.
+
+        One level deep: an option a level further down ('git.clone.retry.max'
+        under a file that has 'git: {clone: {timeout: 5}}') fails in vyper
+        before this is reached.
+        """
+        if source and self._find_real_key(key, source) is None:
+            source[key] = val
+            return True
+        return super()._set_insensitive(key, val, source)
 
     def _apply_threads_max(self, value, origin: str = None):
         self._threads_max = threads_max_at_least_minimum(value, origin)
@@ -1317,6 +1369,38 @@ class UserConfig(vyper.Vyper):
         # default: hd
         self.bind_env("simulation.videoResolution", "PC_SIMULATION_VIDEO_RESOLUTION")
         self.simulation_video_resolution = self.get("simulation.videoResolution")
+
+        # option: video.parallel
+        # description: draw a video's frames on as many of this machine's
+        #              process slots as are free when it starts (one per core,
+        #              or 'threadsMax'), each frame cut into bands of rows that
+        #              the threads share, earliest frame first. Off, every video
+        #              is drawn on one thread, in the one slot its run holds.
+        #              Neither changes a pixel of the video, nor its cache key.
+        #              A file type's own 'threads' caps the slots it is given.
+        #              A video drawn in a sandbox elsewhere ('remote', or a
+        #              container under 'useDockerRemote') is given no slots of
+        #              this machine; on, it draws on that machine's cores.
+        # values: [True | False]
+        # default: True
+        self.bind_env("video.parallel", "PC_VIDEO_PARALLEL")
+        parallel = self.get("video.parallel")
+        self.video_parallel = True if parallel is None else to_bool(parallel)
+
+        # option: video.cacheTiers
+        # description: which tiers of the cache keep a video once it is
+        #              rendered, and are looked in for one: 'remote', the ones
+        #              shared over the network ('cacheRemote', 'cacheS3') --
+        #              a video is big, and whoever rendered it on this machine
+        #              has it already, so it is kept for whoever renders it
+        #              next on another; 'all', this machine's files too; or
+        #              'none'. Its frames are kept nowhere, and what they are
+        #              drawn from -- the object tessellated and lit -- in every
+        #              tier, like geometry, whatever this says.
+        # values: [all | remote | none]
+        # default: remote
+        self.bind_env("video.cacheTiers", "PC_VIDEO_CACHE_TIERS")
+        self.video_cache_tiers = video_cache_tiers(self.get("video.cacheTiers"))
 
         # option: telemetry
         # description: Telemetry configuration

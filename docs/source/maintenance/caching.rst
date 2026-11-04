@@ -174,6 +174,24 @@ The tessellation is kept a shape at a time, keyed on that shape's exact geometry
 and on how finely it is drawn, so an assembly shown after one of its parts was
 edited sends that part, and nothing else, to be tessellated again.
 
+A :ref:`video <videos>` -- a file whose extension is ``mp4``, ``m4v``,
+``mov``, ``qt``, ``mkv``, ``webm``, ``avi``, ``wmv``, ``asf`` or ``ogv``,
+whatever its file type is called -- is kept differently. By default it is kept
+only in the shared tiers, for whoever renders it next on another machine, and
+never in the files on this one, not even copied there from a hit: it is big, and
+whoever rendered it has it already. ``video.cacheTiers`` says otherwise --
+``all`` keeps it on this machine too, ``none`` nowhere:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    video:
+      cacheTiers: all      # or PC_VIDEO_CACHE_TIERS=all
+
+Its frames are kept nowhere, whatever that says, and what they are drawn from --
+the object tessellated and lit, for pictures of that size -- is always kept in
+every tier, so the next video of the object at that size starts drawing at once.
+
 The question is the object's own cache key plus everything the run adds to it:
 the boundary conditions and where they landed, a route's job and the machine it
 is cut on, the implementation and every option it resolved to, the sandbox it

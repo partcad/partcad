@@ -39,6 +39,9 @@ logLevel: error
 simulation:
   timeout: 900
   videoResolution: 1080p
+video:
+  parallel: false
+  cacheTiers: all
 git:
   clone:
     timeout: 42
@@ -72,6 +75,9 @@ logLevel: debug
 simulation:
   timeout: 60
   videoResolution: 480p
+video:
+  parallel: true
+  cacheTiers: none
 git:
   clone:
     retry:
@@ -206,6 +212,10 @@ def test_an_unset_option_is_left_out_rather_than_sent_as_null(tmp_path, monkeypa
         ("simulation_timeout", 900.0),
         # And how big a video of it is: it is watched on the caller's screen.
         ("simulation_video_resolution", "1080p"),
+        # Whether a video takes the machine's free slots, and where it is kept,
+        # are the caller's to say: the daemon is running on the caller's behalf.
+        ("video_parallel", False),
+        ("video_cache_tiers", "all"),
     ],
 )
 def test_the_caller_s_options_win_over_the_rebuilding_process_own(homes, attribute, expected):
@@ -328,3 +338,29 @@ def test_the_rebuilt_configuration_keeps_its_own_telemetry(homes):
     rebuilt = build(daemon_home, settings=data)
 
     assert telemetry_of(rebuilt) == baseline
+
+
+@pytest.mark.parametrize(
+    "file_text, variable, value, key",
+    [
+        ("simulation:\n  timeout: 900\n", "PC_SIMULATION_VIDEO_RESOLUTION", "480p", "simulation.videoResolution"),
+        ("video:\n  parallel: false\n", "PC_VIDEO_CACHE_TIERS", "all", "video.cacheTiers"),
+    ],
+    ids=["simulation", "video"],
+)
+def test_a_section_the_file_sets_in_part_and_the_environment_in_part_travels(
+    tmp_path, monkeypatch, file_text, variable, value, key
+):
+    """vyper raised KeyError laying the environment over a section the file names without that option."""
+    for name in [n for n in os.environ if n.startswith("PC_")]:
+        monkeypatch.delenv(name, raising=False)
+    home = config_at(tmp_path, "client", file_text)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv(variable, value)
+
+    data = UserConfig().to_dict()
+
+    assert data[key] == value
+    # And what the file said is there beside it.
+    section, option = file_text.split(":\n  ")[0], file_text.split(":\n  ")[1].split(":")[0]
+    assert "%s.%s" % (section, option) in data
