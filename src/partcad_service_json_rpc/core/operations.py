@@ -4414,6 +4414,11 @@ def cmf_clusters(session, params):
     is pinned to in the frame of the object, the path of every node of the
     object's tree with a face in it (the paths the viewer's tree names its nodes
     by), and how many faces it is. A face nothing names a material for is in none.
+
+    ``section`` is the cross-section the 3D view shows the object cut to, as
+    ``render.inline`` takes one: the tree is cut to it first, so that a callout
+    names only what is drawn. A cut keeps every node where it was, so the paths
+    are the uncut tree's.
     """
     import asyncio
 
@@ -4429,6 +4434,7 @@ def cmf_clusters(session, params):
         distance = render_overlay.material_distance(ctx)
     elif isinstance(distance, bool) or not isinstance(distance, (int, float)) or distance < 0:
         raise JsonRpcError(USAGE_ERROR, "'distance' is a length in millimetres, nought or more: %r" % (distance,))
+    section = _section(params)
 
     refusal = "Only parts, assemblies and scenes are made of materials; '%s' is none of them"
     _refuse_said_kind(params, _MADE_OF, refusal)
@@ -4443,23 +4449,26 @@ def cmf_clusters(session, params):
         raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
 
     with pc.logging.Process("Materials", package, object_name):
-        clusters = asyncio.run(_material_clusters_async(ctx, shape, float(distance)))
+        clusters = asyncio.run(_material_clusters_async(ctx, shape, float(distance), section))
         materials = {cluster.get("material") for cluster in clusters}
         pc.logging.info(
             "%s: %d cluster(s) of %d material(s), %g mm apart at most"
             % (path, len(clusters), len(materials), float(distance))
         )
-    return {"object": path, "distance": float(distance), "clusters": clusters}
+    return {"object": path, "distance": float(distance), "section": section, "clusters": clusters}
 
 
-async def _material_clusters_async(ctx, shape, distance):
-    """The clusters of each material of 'shape': see 'cmf_clusters'."""
-    from partcad import measure
+async def _material_clusters_async(ctx, shape, distance, section=None):
+    """The clusters of each material of 'shape', cut to 'section' first if there is one: see 'cmf_clusters'."""
+    from partcad import measure, shape_section
 
+    cacheable = shape.artifacts_cacheable()
     tree = await shape.get_wrapped(ctx)
     if tree is None:
         return []
-    return await measure.material_clusters(ctx, tree, distance, cacheable=shape.artifacts_cacheable())
+    if section is not None:
+        tree = await shape_section.section_async(ctx, tree, section, cacheable=cacheable)
+    return await measure.material_clusters(ctx, tree, distance, cacheable=cacheable)
 
 
 async def _component_prices_async(pc, ctx, shape, qos=None):

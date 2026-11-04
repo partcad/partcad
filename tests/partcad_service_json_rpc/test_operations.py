@@ -2664,11 +2664,15 @@ def _clustered(monkeypatch, ctx, kind="assembly", name="top", configured=10.0):
         asked.append((tree, distance, cacheable))
         return [CLUSTER]
 
+    async def section_async(ctx, tree, section, cacheable=True):
+        return dict(tree, cut=section)
+
     install_fake_partcad_modules(
         monkeypatch,
         {
             "partcad.measure": {"material_clusters": material_clusters},
             "partcad.render_overlay": {"material_distance": lambda ctx: configured},
+            "partcad.shape_section": {"normalize": lambda section: section or None, "section_async": section_async},
         },
     )
     shape = FakeObject(name, project_name="//")
@@ -2690,7 +2694,7 @@ def test_the_clusters_of_each_material_are_found_in_the_objects_tree(monkeypatch
 
     result = operations.cmf_clusters(session, {"package": "//", "object": "top", "kind": "assembly"})
 
-    assert result == {"object": "//:top", "distance": 7.5, "clusters": [CLUSTER]}
+    assert result == {"object": "//:top", "distance": 7.5, "section": None, "clusters": [CLUSTER]}
     # The tree the 3D view is drawn from, as close as the user configured.
     assert asked == [({"name": "//:top", "assembly": []}, 7.5, True)]
     assert ("Materials", "//") in session.partcad.logging.processes
@@ -2708,6 +2712,20 @@ def test_a_request_can_say_how_close_is_one_cluster(monkeypatch):
         with pytest.raises(JsonRpcError) as caught:
             operations.cmf_clusters(session, {"package": "//", "object": "top", "kind": "assembly", "distance": wrong})
         assert caught.value.code == operations.USAGE_ERROR
+
+
+def test_the_clusters_are_of_what_the_3d_view_is_cut_to(monkeypatch):
+    """A callout names only what is drawn: the tree is cut to the view's section before it is clustered."""
+    session, _ = make_session()
+    asked = _clustered(monkeypatch, session.partcad_ctx)
+    section = {"z": [0.0, 5.0]}
+
+    result = operations.cmf_clusters(
+        session, {"package": "//", "object": "top", "kind": "assembly", "section": section}
+    )
+
+    assert result["section"] == section
+    assert asked[0][0] == {"name": "//:top", "assembly": [], "cut": section}
 
 
 def test_only_what_is_made_has_materials(monkeypatch):

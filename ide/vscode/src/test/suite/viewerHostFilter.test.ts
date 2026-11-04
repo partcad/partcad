@@ -188,12 +188,14 @@ suite('The Digital Thread host, asked where each material is', () => {
             dispose: () => undefined,
         };
 
-        await host.fetchTab({ tab: '3d', token: 9 });
+        await host.fetchTab({ tab: '3d', token: 9, section: { z: [0, 5] } });
 
         assert.strictEqual(asked.length, 1);
         assert.strictEqual(asked[0].pkg, '//pkg');
         assert.strictEqual(asked[0].name, 'logo');
         assert.strictEqual(asked[0].kind, 'assembly');
+        // What the view is cut to, so that only what is drawn is called out.
+        assert.deepStrictEqual(asked[0].section, { z: [0, 5] });
         const answer = posted.find((message) => message.type === 'tabData');
         assert.strictEqual(answer?.tab, '3d');
         assert.strictEqual(answer?.token, 9);

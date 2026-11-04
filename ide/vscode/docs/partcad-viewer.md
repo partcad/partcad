@@ -119,9 +119,11 @@ once. What a face is made of is CMF's answer: its solid's material, else its own
 the `material` its node's properties name. Where the clusters are is a question about geometry, so the daemon
 answers it in a sandbox (`cmf.clusters`, by `material_clusters.py` among the wrappers) and the 3D view asks for it
 only while the box is ticked, under the 3D tab's own id (`3d` → `partcad.materialClusters` → `cmf.clusters`), once
-per show. Each cluster comes back with the point of it nearest the middle of it, in the frame of the whole tree,
-and the paths of the nodes it is of; its callout hangs from the show's root and shows while the tree draws any of
-those nodes. The 2D tab's picture finds its own clusters, of what its filter keeps.
+per show, with the section the view is cut to, so that a cut object is called out only where it is drawn. Each
+cluster comes back with the point of it nearest the middle of it, in the frame of the whole tree, and the paths of
+the nodes it is of; its callout hangs from the show's root and shows while the tree draws any of those nodes. An
+answer to a box ticked while the show is still loading is held until its geometry is on the stage (`held.ts`). The
+2D tab's picture finds its own clusters, of what its filter keeps.
 
 The boxes are one answer for the 3D and 2D tabs (`Labels`, as the tree has `Selection`), and are kept from one
 object to the next, as Metadata is. On the 2D tab they are sent with the render as the `pc render` options they are
@@ -395,6 +397,7 @@ the protocol has no authentication.
 | `src/webview/callouts.ts` | What a callout says: a shape's metadata about its elements, and a component's name and price |
 | `src/partcad/component_prices.py` | What each component costs: its share of the object's quote, for the callouts |
 | `src/partcad/wrappers/material_clusters.py` | Where each material is: its faces gathered into clusters, for the Materials callouts |
+| `src/webview/held.ts` | An answer about the object on screen, held until its geometry is on the stage |
 | `src/webview/viewPanel.ts` | The view panel down the right of every tab that shows the object |
 | `src/webview/sidePanel.ts` | A panel along one side of a pane, and the button that folds it away |
 | `src/webview/gizmo.ts` | The view panel's orientation gizmo |

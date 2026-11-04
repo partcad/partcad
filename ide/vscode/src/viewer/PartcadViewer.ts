@@ -515,6 +515,11 @@ export class PartcadViewer implements vscode.Disposable {
             }
             if (tab === 'design' || tab === '3d') {
                 args.kind = target.kind ?? 'part';
+                if (tab === '3d') {
+                    // What the 3D view is cut to, so that a material is called
+                    // out only where something is drawn.
+                    args.section = message.section;
+                }
                 post({ data: await vscode.commands.executeCommand(command, args) });
                 return;
             }
