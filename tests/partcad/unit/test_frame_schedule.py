@@ -35,6 +35,7 @@ import raster_scene  # noqa: E402
 import render_raster  # noqa: E402
 import render_video  # noqa: E402
 import video_encode  # noqa: E402
+from cmf_section import Texture  # noqa: E402
 
 
 def _plate():
@@ -58,12 +59,55 @@ def _box():
     return b3d.Box(20, 20, 20).wrapped
 
 
+def _sheet():
+    import build123d as b3d
+
+    return (b3d.Pos(0, 0, 25) * b3d.Rectangle(70, 50).faces()[0]).wrapped
+
+
+def _pieces(shape):
+    """'shape' as the compound of placed pieces a textured group is ('appearance.split_by_look')."""
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    builder.Add(compound, shape)
+    return compound
+
+
+def _checker():
+    """An image with something in it to see: squares of two colours."""
+    import io
+
+    from PIL import Image
+
+    image = Image.new("RGB", (16, 16), (200, 40, 40))
+    for x in range(16):
+        for y in range(16):
+            if (x // 4 + y // 4) % 2:
+                image.putpixel((x, y), (30, 60, 220))
+    out = io.BytesIO()
+    image.save(out, "PNG")
+    return Texture(out.getvalue(), "checker.png", 20, 20)
+
+
 SCENES = {
     "solid": lambda: [("#C0C0C0", _plate())],
     # A surface behind another that lets it show through: the second layer.
     "see-through": lambda: [("#C0C0C0", _box()), ("#3080FF80", _plate())],
     # Lines among the faces, which reach across the rows of a band.
     "lines": lambda: [("#C0C0C0", _plate()), ("#FF0000", _wire())],
+    # Walls: one-sided faces, solid and see-through, that a frame culls the backs
+    # of as the object turns, among two-sided ones.
+    "walls": lambda: [("#C0C0C0", False, _box()), ("#D0A070", True, _sheet()), ("#3080FF80", True, _plate())],
+    # Faces drawn with an image, solid and see-through: the image is read per
+    # pixel, in every band, in both passes.
+    "textures": lambda: [
+        ("#C0C0C0", False, _pieces(_plate()), _checker()),
+        ("#3080FF80", False, _pieces(_box()), _checker()),
+    ],
 }
 
 
@@ -256,6 +300,12 @@ def test_a_scene_read_back_draws_every_picture_the_scene_drew(name):
     read, warnings = raster_scene.Scene.from_bytes(data)
     assert warnings == ["a warning building it gave"]
     assert read.pixels == 120 and read.triangle_count == scene.triangle_count
+    # Which triangles are a wall's, and the images faces are drawn with, travel
+    # too: or a wall read back would be drawn from behind, and an image flat.
+    assert np.array_equal(read.one_sided, scene.one_sided)
+    assert np.array_equal(read.uv, scene.uv) and np.array_equal(read.texture, scene.texture)
+    assert len(read.images) == len(scene.images)
+    assert all(np.array_equal(a, b) for a, b in zip(read.images, scene.images))
     camera = raster_scene.Camera(distance=scene.sphere * 3, fov=50, height=scene.sphere)
     for index in range(3):
         a = raster_scene.Painter(scene, camera, 90, 120, supersample=2, line_width=2).draw(_turn(index))
@@ -278,6 +328,32 @@ def test_what_is_not_a_scene_is_refused(data, reason):
     # pickle NumPy would otherwise take them for.
     with pytest.raises(ValueError, match=reason):
         raster_scene.Scene.from_bytes(data)
+
+
+def test_a_wall_is_not_drawn_from_behind():
+    """Guards the 'walls' scene above: its one-sided faces really are culled in some frames."""
+    walls = _painter(SCENES["walls"]())
+    two_sided = _painter([(color, False, shape) for color, _one_sided, shape in SCENES["walls"]()])
+    assert walls.scene.one_sided.any() and not two_sided.scene.one_sided.any()
+    differ = [index for index in range(8) if not np.array_equal(walls.draw(_turn(index)), two_sided.draw(_turn(index)))]
+    assert differ and len(differ) < 8, differ
+
+
+def test_a_texture_is_drawn():
+    """Guards the 'textures' scene above: the image is read, and changes what is drawn."""
+    textured = _painter(SCENES["textures"]())
+    plain = _painter([(color, one_sided, shape, None) for color, one_sided, shape, _texture in SCENES["textures"]()])
+    assert len(textured.scene.images) == 1 and (textured.scene.texture >= 0).all()
+    assert not plain.scene.images
+    assert not np.array_equal(textured.draw(_turn(1)), plain.draw(_turn(1)))
+
+
+def test_a_scene_naming_an_image_it_does_not_have_is_refused():
+    scene = raster_scene.Scene(SCENES["textures"](), 120)
+    scene.texture = scene.texture.copy()
+    scene.texture[0] = len(scene.images)
+    with pytest.raises(ValueError, match="an image it does not have"):
+        raster_scene.Scene.from_bytes(scene.to_bytes())
 
 
 def test_a_scene_naming_a_point_it_does_not_have_is_refused():
