@@ -144,6 +144,15 @@ def test_a_material_a_part_named_before_cmf_is_read_from_its_properties():
     assert found["name"] == "steel"
 
 
+def test_the_package_of_a_part_with_parameters_is_the_one_before_them():
+    """A parameter's value can be a reference, with a ':' of its own."""
+    tree = _box(material=None, name="//pkg:room;medium=//pub/std:air", properties={"material": "steel"})
+
+    (found,) = _clusters(tree)
+
+    assert found["material"] == "//pkg:steel"
+
+
 def test_the_callout_is_pinned_on_the_material_near_the_middle_of_the_cluster():
     bd = _kernel()
 
@@ -152,10 +161,11 @@ def test_the_callout_is_pinned_on_the_material_near_the_middle_of_the_cluster():
 
     # The middle of the two cubes is in the gap between them, which is no
     # material; the point pinned is on a face of one of them, as near as that.
+    # The two facing faces are as near as each other, so either will do.
     point = bd.Vertex(*found["at"])
     faces = [bd.Box(10, 10, 10), bd.Pos(15, 0, 0) * bd.Box(10, 10, 10)]
     assert min(point.distance_to(cube) for cube in faces) == pytest.approx(0, abs=1e-6)
-    assert found["at"][0] == pytest.approx(5, abs=1e-6)
+    assert min(abs(found["at"][0] - 5), abs(found["at"][0] - 10)) == pytest.approx(0, abs=1e-6)
 
 
 def test_one_geometry_placed_many_times_is_read_once(monkeypatch):

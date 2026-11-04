@@ -2708,7 +2708,8 @@ def test_a_request_can_say_how_close_is_one_cluster(monkeypatch):
 
     assert result["distance"] == 0
     assert asked[0][1] == 0
-    for wrong in (-1, "near", True):
+    # Infinity too, which JSON's '1e400' decodes to: it would measure every pair apart.
+    for wrong in (-1, "near", True, float("inf"), float("nan")):
         with pytest.raises(JsonRpcError) as caught:
             operations.cmf_clusters(session, {"package": "//", "object": "top", "kind": "assembly", "distance": wrong})
         assert caught.value.code == operations.USAGE_ERROR

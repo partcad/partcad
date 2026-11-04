@@ -101,7 +101,9 @@ def _property_material(node):
     """The material a node's properties name, made absolute against its own package, or None.
 
     The way a part named its material before CMF: relative to the package that
-    declared it (':steel', 'steel'), which is the package its full name is in.
+    declared it (':steel', 'steel'), which is the package its full name is in -
+    up to its parameters, which start at the first ';' and can hold a ':' of
+    their own ('//pkg:room;medium=//pub/std:air').
     """
     properties = node.get(appearance.PROPERTIES_KEY) if isinstance(node, dict) else None
     reference = properties.get("material") if isinstance(properties, dict) else None
@@ -110,7 +112,7 @@ def _property_material(node):
     reference = reference.strip()
     if reference.startswith("//"):
         return reference
-    package = str(node.get("name") or "").rpartition(":")[0]
+    package = str(node.get("name") or "").partition(";")[0].rpartition(":")[0]
     return "%s:%s" % (package, reference.lstrip(":")) if package else reference
 
 

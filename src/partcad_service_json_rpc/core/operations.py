@@ -4432,7 +4432,14 @@ def cmf_clusters(session, params):
     distance = params.get("distance")
     if distance is None:
         distance = render_overlay.material_distance(ctx)
-    elif isinstance(distance, bool) or not isinstance(distance, (int, float)) or distance < 0:
+    elif (
+        isinstance(distance, bool)
+        or not isinstance(distance, (int, float))
+        or not math.isfinite(distance)
+        or distance < 0
+    ):
+        # Infinity among them, which JSON's '1e400' decodes to: every pair of
+        # pieces of a material would be measured apart.
         raise JsonRpcError(USAGE_ERROR, "'distance' is a length in millimetres, nought or more: %r" % (distance,))
     section = _section(params)
 

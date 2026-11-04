@@ -116,6 +116,9 @@ def _svg_implementation():
         "build123d": b3d,
         "wrapper_common": wrapper_common,
         "ocp_serialize": ocp_serialize,
+        # Stubbed like the rest: the real one would be imported against the
+        # stubbed 'ocp_serialize' and left behind for whatever runs next.
+        "material_clusters": types.ModuleType("material_clusters"),
         "label_layout": types.ModuleType("label_layout"),
         "stroke_text": types.ModuleType("stroke_text"),
     }
