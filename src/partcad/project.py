@@ -580,8 +580,8 @@ class Project(project_config.Configuration):
         # The declarations already normalized, per kind. See '_normalized'.
         self._normalized_configs: dict[str, set] = {}
         # What each declaration states of the shape it produces, as the package
-        # states it, per kind: '{name: (declaration, properties)}'. See
-        # '_remember_declared_properties'.
+        # states it, per kind: '{name: (declaration, its properties dictionary,
+        # a copy of it)}'. See '_remember_declared_properties'.
         self._declared_properties: dict[str, dict] = {}
 
         self.providers = {}
@@ -791,19 +791,24 @@ class Project(project_config.Configuration):
 
         Taken once per declaration, the first time it is normalized - which is
         before it is made into anything, since every object is made from the
-        normalized declaration - and again only for another declaration of the
-        name: a package that hands the same dictionary back keeps what it said
-        the first time, and one that hands a fresh one each time says it again.
+        normalized declaration - and again only for a declaration that states
+        its properties afresh. A package that hands the same dictionary back
+        keeps what it said the first time; so does a plugin-backed one that
+        hands back a new copy of it each time with the same 'properties:'
+        inside, which is where making the object recorded into
+        ('ProjectExternalRepository._augment'); and one whose every answer is
+        new throughout says it again.
         """
         if not isinstance(declaration, dict):
             return
-        remembered = self._declared_properties.setdefault(kind, {})
-        known = remembered.get(name)
-        if known is not None and known[0] is declaration:
-            return
         from . import shape_envelope
 
-        remembered[name] = (declaration, copy.deepcopy(declaration.get(shape_envelope.KEY_PROPERTIES)))
+        properties = declaration.get(shape_envelope.KEY_PROPERTIES)
+        remembered = self._declared_properties.setdefault(kind, {})
+        known = remembered.get(name)
+        if known is not None and (known[0] is declaration or (properties is not None and known[1] is properties)):
+            return
+        remembered[name] = (declaration, properties, copy.deepcopy(properties))
 
     def _restore_declared_properties(self, kind: str, name: str, config: dict) -> None:
         """Give 'config', a copy of the declaration 'name', back the 'properties:' the declaration states itself.
@@ -820,7 +825,7 @@ class Project(project_config.Configuration):
             return
         from . import shape_envelope
 
-        declared = known[1]
+        declared = known[2]
         if declared is None:
             config.pop(shape_envelope.KEY_PROPERTIES, None)
         else:
