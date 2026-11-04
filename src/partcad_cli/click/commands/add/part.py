@@ -26,6 +26,7 @@ PART_KINDS = [
     "stl",
     "3mf",
     "obj",
+    "gltf",
     # The native CAD formats PartCAD ships as declarations (see
     # `partcad_client.object_types`), 'iges' among them.
     *object_types.BUILTIN_PART_TYPE_EXTENSION,

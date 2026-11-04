@@ -439,6 +439,24 @@ Object commands
   it when it is first needed. A fetch that fails adds nothing, because a declaration written without the hash
   is the unpinned one this exists to avoid.
 
+  ``pc add part <type> <file>`` takes the part's type first: a script (``cadquery``, ``build123d``,
+  ``sdf``, ``scad``, ``chili3d``), a file PartCAD reads itself (``step``, ``brep``, ``stl``, ``3mf``,
+  ``obj``, ``gltf``), or one of the CAD file formats PartCAD ships as declarations (``fcstd``,
+  ``f3d``, ``sldprt``, ``ipt``, ``catpart``, ``sat``, ``pvz`` -- read through cadmpeg -- and ``iges``, read
+  by OpenCASCADE; see :ref:`cad-files`). The part
+  is named after the file, without its extension. Where the file is ``<name>.<extension>`` with the
+  extension spelled as the type declares it -- ``design.FCStd``, ``bracket.SLDPRT``, ``bracket.CATPart`` --
+  the declaration names no ``path``; any other spelling of it keeps one: another case (``design.fcstd``), or
+  another extension of the same format (``plate.igs`` for ``iges``, ``body.sab``, ``.smt`` or ``.smb`` for
+  ``sat``, ``part.stp`` for ``step``). Adding a part reads nothing: a file that does not hold what its type
+  says -- for the native formats, one that does not read into a whole solid -- is added, and fails when the
+  part is built.
+
+  .. code-block:: shell
+
+    pc add part f3d controller.f3d       # parts: {controller: {type: f3d}}
+    pc add part iges plate.igs           # parts: {plate: {type: iges, path: plate.igs}}
+
 ``pc import``
   Import an existing object into a package. Subcommands: ``part`` (import an existing part and optionally
   convert its format), ``assembly`` (import an assembly from a file, creating the parts and an Assembly

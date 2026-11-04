@@ -74,7 +74,14 @@ Packages
 Objects
 =======
 
-- **Add** a part, assembly, scene, sketch, or interface.
+- **Add** a part, assembly, scene, sketch, or interface. **Add part** asks for the part's type and then its
+  file: a script (OpenSCAD, CadQuery, build123d, SDF, Chili3D), which may be a new file started from a template; a
+  file PartCAD reads itself (STEP, BREP, IGES, STL, 3MF, OBJ, glTF); or a CAD application's own file, read
+  without the application (FreeCAD ``.FCStd``, Autodesk Fusion ``.f3d``, SolidWorks ``.SLDPRT``, Inventor
+  ``.ipt``, CATIA V5 ``.CATPart``, ACIS/ShapeManager ``.sat``/``.sab``/``.smt``/``.smb`` and Creo View
+  ``.pvz``; see :ref:`cad-files`). The file dialog offers every extension of the type, in either case. It
+  adds the part the way ``pc add part`` does (see :doc:`/cli`): nothing is read until the part is built, and
+  one of the native formats that does not read into a whole solid fails then.
 - **Import** a part, assembly, scene, or sketch from an existing file.
 - **Display** (inspect) a part, assembly, scene, sketch, or interface in the ``Digital Thread``; parts can
   also be opened for display and editing together, or their source edited directly.
