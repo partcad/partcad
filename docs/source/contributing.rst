@@ -543,7 +543,7 @@ are downloaded Poetry will also install current package in editable mode, and yo
 
 .. code-block::
 
-  Installing the current project: partcad (0.8.286)
+  Installing the current project: partcad (0.9.0)
 
 .. warning::
 
@@ -1292,6 +1292,24 @@ to the other. Both follow these rules:
    ``partcad.yaml``, and every other package should. An older PartCAD then refuses the package with
    ``Incompatible PartCAD version!`` instead of reading it wrong.
 #. **Every dependency is pinned to a particular revision**, with ``track:`` or without it.
+
+Which number a merge to PartCAD's ``devel`` moves is decided by the message of the commit that lands there -- for a
+squash merge, the pull request's title. It is the patch number unless that message *starts* with one of three markers:
+
+* ``[FEATURE]`` moves the minor number and resets the patch number, so ``0.8.286`` becomes ``0.9.0``. It is for a
+  feature significant enough that a release should be told apart from the ones before it, which is how
+  :ref:`CMF <cmf>` (colour, material and finish) started 0.9.
+* ``[MAJOR]`` moves the major number.
+* ``[SKIP]`` makes no release at all: no ``Version updated`` commit, no tag, and so none of the jobs that run on
+  ``devel`` only for such a commit.
+
+That is why a pull request never edits a version itself, not even to ask for a minor release. The files that state
+it are the ones ``dev-tools/bumpversion.toml`` names, and ``.github/workflows/version-bump.yml`` is what moves them
+and writes the tag the release is built from. A pull request that wrote ``0.9.0`` by hand would be bumped once more
+as it merged -- to ``0.9.1``, or to ``0.10.0`` under ``[FEATURE]`` -- and ``0.9.0`` would never be tagged or
+released. Put the marker in the title instead; it is worth starting the commit message with it too, since GitHub
+takes a single-commit pull request's squash message from that commit rather than from the title in some
+configurations.
 
 The same rules from a package maintainer's side, and how the index is released, are in the index's own
 `CONTRIBUTING.md <https://github.com/partcad/partcad-index/blob/devel/CONTRIBUTING.md>`_. For packages that are

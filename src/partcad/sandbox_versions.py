@@ -115,6 +115,13 @@ RLPYCAIRO = "rlpycairo==0.3.0"
 SVGPATHTOOLS = "svgpathtools==1.7.2"
 EZDXF = "ezdxf==1.4.4"
 
+# What decodes the image a colour is drawn with (a texture, see
+# 'partcad.cmf_texture') where a shaded picture is drawn: every frame of a video
+# (the video file types of '//builtin/render' declare it). A PNG and a JPEG get
+# it through reportlab already. The version PartCAD itself is locked to, which
+# is the one that read the image's size and mean colour in the first place.
+PILLOW = "pillow==12.2.0"
+
 # Installing a package on the left overwrites files owned by the packages on
 # the right, so those have to be installed again afterwards -- forcibly, since
 # pip otherwise considers them satisfied and leaves the clobbered files alone.

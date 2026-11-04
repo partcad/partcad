@@ -209,13 +209,13 @@ def test_a_parameter_carrying_a_color_field_is_not_a_parameter_named_color(tmp_p
 
 
 @pytest.mark.parametrize("name", ["material", "color"])
-def test_get_mcftt_still_reads_the_declared_value(tmp_path, name):
+def test_get_mcft_still_reads_the_declared_value(tmp_path, name):
     """The consumer of these parameters is unchanged by any of the above."""
     package = _write_package(tmp_path, {"body": _part("stl", parameters=_declare(name, "//pub:brass"))})
 
     part = pc.Context(str(package)).get_part("//:body")
 
-    assert asyncio.run(part.get_mcftt(name)) == "//pub:brass"
+    assert asyncio.run(part.get_mcft(name)) == "//pub:brass"
 
 
 def test_asking_for_the_finish_declares_nothing(tmp_path):
@@ -233,10 +233,10 @@ def test_asking_for_the_finish_declares_nothing(tmp_path):
     part = pc.Context(str(package)).get_part("//:body")
     before = copy.deepcopy(part.config.get("parameters"))
 
-    assert asyncio.run(part.get_mcftt("finish")) == "none"
+    assert asyncio.run(part.get_mcft("finish")) == "none"
     # Asked twice, because the write this guards against was a memoization: the
     # second answer came from what the first had left behind.
-    assert asyncio.run(part.get_mcftt("finish")) == "none"
+    assert asyncio.run(part.get_mcft("finish")) == "none"
 
     assert part.config.get("parameters") == before
 
@@ -248,7 +248,7 @@ def test_a_declared_finish_still_reads_back(tmp_path):
 
     part = pc.Context(str(package)).get_part("//:body")
 
-    assert asyncio.run(part.get_mcftt("finish")) == "anodized"
+    assert asyncio.run(part.get_mcft("finish")) == "anodized"
 
 
 def test_a_declared_tolerance_reads_back_as_a_number(tmp_path):
@@ -259,8 +259,8 @@ def test_a_declared_tolerance_reads_back_as_a_number(tmp_path):
     value = part.get_object_type_parameter("tolerance")
     assert isinstance(value, float)
     assert value == 0.25
-    # ...and get_mcftt, which reads the declaration as it stands, agrees.
-    assert asyncio.run(part.get_mcftt("tolerance")) == 0.25
+    # ...and get_mcft, which reads the declaration as it stands, agrees.
+    assert asyncio.run(part.get_mcft("tolerance")) == 0.25
 
 
 def test_an_undeclared_tolerance_reads_back_as_the_type_default(tmp_path):

@@ -353,8 +353,12 @@ def test_the_schema_takes_the_three_sections():
     [
         {"colors": {" leading": "#fff"}},
         {"finishes": {"x": {"display": {"roughness": 2}}}},
-        # Reserved for a visual texture, and not a colour's to state.
+        # A texture is a colour's display, not a field of its own.
         {"colors": {"x": {"texture": "y"}}},
+        # An image display is a PNG or a JPEG, and names one.
+        {"colors": {"x": {"display": {"image": "grain.gif"}}}},
+        {"colors": {"x": {"display": {"size": 100}}}},
+        {"colors": {"x": {"display": {"image": "grain.png", "size": 0}}}},
         {"materials": {"x": {"manufacturable": "no"}}},
         {"colors": {"x": {"type": "enrich"}}},
     ],

@@ -2593,7 +2593,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.286"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.9.0"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -2890,6 +2890,10 @@ def _cmf_rows(ctx, project, kind: str) -> dict:
         else:
             rgba = cmf.display(ctx, declaration)
             look = cmf.css_color.to_hex(rgba) if rgba is not None else "-"
+            texture = cmf.texture_of(ctx, declaration)
+            if texture is not None:
+                # Drawn with an image, and as that colour where only a colour can be.
+                look += " (image %s)" % texture.name
         made = "" if declaration.manufacturable else " (display only)"
         rows[name] = "%-11s%s%s%s" % (look, " " + desc if desc else "", made, alias)
     return rows
@@ -2979,8 +2983,8 @@ def _cmf_items(session, project, kind: str) -> list:
             desc = declaration.desc or ("alias of %s" % declaration.source if declaration.is_alias else None)
             if desc:
                 row["desc"] = desc
-            if declaration.display_text is not None:
-                row["display"] = declaration.display_text
+            if declaration.display_words() is not None:
+                row["display"] = declaration.display_words()
             row["manufacturable"] = declaration.manufacturable
             described.append(row)
         except Exception as e:  # pylint: disable=broad-except

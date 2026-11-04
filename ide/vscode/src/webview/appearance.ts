@@ -33,6 +33,17 @@
 // of it: a wall that states no colour is still one-sided, and a scene that
 // colours its walls does not make them two-sided.
 //
+// A colour may be drawn with an image - a texture its declaration names (see
+// 'docs/source/config_cmf.rst') - and a primitive whose faces are in one arrives
+// with that image as its material's base colour texture, laid on by PartCAD
+// ('wrapper_gltf._with_textures'; the same box mapping a shaded 'pc render'
+// draws with). Such a primitive brings its image as well as its colour: the
+// viewer's own material draws it with the image ('map'), white under it, and
+// 'color' is then what it is drawn as wherever an image cannot be - the colour
+// its declaration says, or the image's mean, which the file carries in the
+// material's 'extras' as 'partcadColor'. A wallpapered wall is one-sided and
+// drawn with an image, and is both.
+//
 // A shape that nothing above it colours is the common case, and it is drawn in
 // goldenrod: the colour OCCT draws a shape nobody coloured in
 // ('Quantity_NOC_GOLDENROD'), which is what anybody who has looked at a solid in
@@ -67,6 +78,11 @@ export interface Appearance {
      * which is drawn from both sides as it always was.
      */
     readonly oneSided?: true;
+    /**
+     * The image the faces are drawn with, where their colour is drawn with one;
+     * 'color' is then what they are drawn as where an image cannot be.
+     */
+    readonly map?: THREE.Texture;
 }
 
 /**
@@ -182,20 +198,30 @@ export function ownAppearance(
     if (color?.isColor !== true) {
         return undefined;
     }
-    return { color: color.getHex(THREE.SRGBColorSpace), opacity: material.transparent ? material.opacity : 1 };
+    const opacity = material.transparent ? material.opacity : 1;
+    const map = (material as THREE.Material & { map?: THREE.Texture | null }).map;
+    if (map?.isTexture === true) {
+        // Drawn with an image: white under it in the file, and drawn as the
+        // colour the file says wherever an image cannot be.
+        const flat = parseColor(material.userData?.partcadColor);
+        return { color: flat?.color ?? color.getHex(THREE.SRGBColorSpace), opacity, map };
+    }
+    return { color: color.getHex(THREE.SRGBColorSpace), opacity };
 }
 
 /**
  * What a primitive is drawn as: its own colour where it brought one, else the colour of the node holding it.
  *
- * Its own colour is only a colour: whether it is one-sided is still its node's, so
- * a wall whose CMF colours one face differently is a wall all the same.
+ * Its own colour - and the image it is drawn with, where it brought one - is only
+ * how it looks: whether it is one-sided is still its node's, so a wall whose CMF
+ * colours one face differently is a wall all the same.
  */
 export function primitiveAppearance(own: Appearance | undefined, node: Appearance): Appearance {
     if (own === undefined) {
         return node;
     }
-    return node.oneSided ? { color: own.color, opacity: own.opacity, oneSided: true } : own;
+    // Spread rather than rebuilt: the image it is drawn with, if any, is its own too.
+    return node.oneSided ? { ...own, oneSided: true } : own;
 }
 
 /**
@@ -209,7 +235,9 @@ export function primitiveAppearance(own: Appearance | undefined, node: Appearanc
 export function appearanceKey(appearance: Appearance): string {
     const alpha = Math.round(Math.min(1, Math.max(0, appearance.opacity)) * 255);
     const key = appearance.color.toString(16).padStart(6, '0') + alpha.toString(16).padStart(2, '0');
-    return appearance.oneSided ? key + '/front' : key;
+    // One material per image too: two images drawn as one colour are two looks.
+    const looked = appearance.map === undefined ? key : `${key}:${appearance.map.uuid}`;
+    return appearance.oneSided ? looked + '/front' : looked;
 }
 
 /**
