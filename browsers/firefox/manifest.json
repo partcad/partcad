@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PartCAD Login",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Logs PartCAD plugins in to the sites they work with: captures the credentials a plugin asks for and hands them to PartCAD on this computer.",
   "homepage_url": "https://github.com/partcad/partcad/tree/main/browsers",
   "browser_specific_settings": {
