@@ -204,6 +204,30 @@ def test_it_is_moved_and_scaled_after_it_is_validated_and_says_so(asked):
     assert finished[ocp_serialize.KEY_METADATA]["measurements"]["bbox"] == pytest.approx(_bbox(shape))
 
 
+def _mesh_face():
+    """A face that is a triangulation and no surface, as a part read from an ASCII STL is ('build123d.import_stl')."""
+    from OCP.BRep import BRep_Builder
+    from OCP.gp import gp_Pnt
+    from OCP.Poly import Poly_Triangle, Poly_Triangulation
+    from OCP.TopoDS import TopoDS_Face
+
+    triangulation = Poly_Triangulation(3, 1, False)
+    for index, point in enumerate([(0, 0, 0), (10, 0, 0), (0, 20, 30)], 1):
+        triangulation.SetNode(index, gp_Pnt(*point))
+    triangulation.SetTriangle(1, Poly_Triangle(1, 2, 3))
+    face = TopoDS_Face()
+    BRep_Builder().MakeFace(face, triangulation)
+    return face
+
+
+def test_a_mesh_with_no_surface_is_moved_and_scaled_too():
+    """A copy of the geometry alone leaves a triangulation where it was: the offset and the scale have to move it."""
+    face = _mesh_face()
+    assert _bbox(face) == [0.0, 0.0, 0.0, 10.0, 20.0, 30.0]
+    assert _bbox(wrapper_transform.relocate(face, OFFSET)) == [10.0, 0.0, 0.0, 20.0, 20.0, 30.0]
+    assert _bbox(wrapper_transform.scale(face, 2)) == [0.0, 0.0, 0.0, 20.0, 40.0, 60.0]
+
+
 def test_a_request_to_move_it_alone_moves_it_alone(asked):
     asked({"offset": OFFSET})
     finished = wrapper_common.finished(_box())

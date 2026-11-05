@@ -31,10 +31,14 @@ a shape's triangles with OCP.
 """
 
 import io
+import os
 import zipfile
 import xml.etree.ElementTree as ElementTree
 
 CORE = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+# The 3MF Materials and Properties Extension, whose colour groups 'readable_copy'
+# rewrites as base materials.
+MATERIAL = "http://schemas.microsoft.com/3dmanufacturing/material/2015/02"
 MODEL = "3D/3dmodel.model"
 
 
@@ -201,6 +205,77 @@ def _renumbered(root) -> bool:
         moved(element, "objectid")
         moved(element, "pid")
     return True
+
+
+def _colour_groups_as_bases(root) -> bool:
+    """Whether 'root' (a model part) had a colour group of the materials extension, which is now a base material group.
+
+    The 3MF Materials and Properties Extension lets an object or a triangle take
+    its colour from an '<m:colorgroup>', which is how a good many slicers and CAD
+    tools write a coloured mesh - and lib3mf, which build123d's reader is, refuses
+    an object whose default property is one ('Lib3MFException 5: unknown error').
+    A colour group and a base material group are both property groups, indexed
+    alike by an object's 'pindex' and a triangle's 'p1', so each colour group
+    becomes a '<basematerials>' of the same id in the same place, with a '<base>'
+    displaying each of its colours, and whatever named the one names the other.
+    """
+    resources = root.find(_tag("resources"))
+    if resources is None:
+        return False
+    changed = False
+    for position, group in enumerate(list(resources)):
+        if group.tag != "{%s}colorgroup" % MATERIAL:
+            continue
+        bases = ElementTree.Element(_tag("basematerials"), {"id": group.get("id", "")})
+        for index, colour in enumerate(group.findall("{%s}color" % MATERIAL)):
+            ElementTree.SubElement(
+                bases,
+                _tag("base"),
+                {"name": "colour %d" % (index + 1), "displaycolor": colour.get("color") or "#FFFFFFFF"},
+            )
+        resources[position] = bases
+        changed = True
+    return changed
+
+
+def readable_copy(path):
+    """A copy of the 3MF at 'path' that lib3mf has a better chance of reading, or None when nothing in it would change.
+
+    What it changes is what lib3mf is known to refuse in a file another tool
+    wrote: its colour groups (see '_colour_groups_as_bases'), a resource
+    numbered 0 (see '_renumbered') and relationships typed only by an
+    'Override' (see '_content_types'). The copy is a temporary file, the
+    caller's to delete; the file at 'path' is left as it is.
+    """
+    import tempfile
+
+    try:
+        with zipfile.ZipFile(path) as source:
+            members = [(info, source.read(info.filename)) for info in source.infolist()]
+    except (zipfile.BadZipFile, OSError):
+        return None
+    replaced = {}
+    for info, data in members:
+        try:
+            if info.filename == CONTENT_TYPES:
+                fixed = _content_types(data)
+                if fixed != data:
+                    replaced[info.filename] = fixed
+            elif info.filename.endswith(".model"):
+                ElementTree.register_namespace("", CORE)
+                ElementTree.register_namespace("m", MATERIAL)
+                root = ElementTree.fromstring(data)
+                if _colour_groups_as_bases(root) | _renumbered(root):
+                    replaced[info.filename] = ElementTree.tostring(root, xml_declaration=True, encoding="utf-8")
+        except ElementTree.ParseError:
+            return None
+    if not replaced:
+        return None
+    handle, copy = tempfile.mkstemp(suffix=".3mf")
+    with os.fdopen(handle, "wb") as f, zipfile.ZipFile(f, "w", zipfile.ZIP_DEFLATED) as out:
+        for info, data in members:
+            out.writestr(info, replaced.get(info.filename, data))
+    return copy
 
 
 def _painted(root, per_triangle) -> bool:
