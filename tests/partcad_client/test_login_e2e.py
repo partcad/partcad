@@ -103,6 +103,11 @@ def site():
 def _pc(workspace, home, *args):
     environment = dict(os.environ, HOME=str(home))
     environment.setdefault("PC_LOGIN_BROWSER_ARGS", "--headless=new --no-sandbox")
+    # The plugin checks the session with the site this test serves on the
+    # runner's 'localhost'. In the 'docker' sandbox - the default wherever a
+    # Docker daemon answers, as on CI - 'localhost' is the container, and the
+    # site is not there. What is tested is the login, not the sandbox's network.
+    environment["PC_PYTHON_SANDBOX"] = "venv"
     # The 'pc' beside this interpreter: the one this checkout installed.
     pc = os.path.join(os.path.dirname(sys.executable), "pc.exe" if os.name == "nt" else "pc")
     return subprocess.run(
