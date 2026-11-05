@@ -500,8 +500,15 @@ def _open_chromium(url, browser, profile, extension) -> Opened:
         if browser.kind == "chrome":
             flags.append("--disable-features=DisableLoadExtensionCommandLineSwitch")
     process = subprocess.Popen(browser.command + arguments + flags + [url], **_detached())
-    note = "" if extension is not None else "PartCAD's extension is not in this installation"
-    return Opened(browser, process, extension is not None, note)
+    if extension is None:
+        return Opened(browser, process, False, "PartCAD's extension is not in this installation")
+    if browser.kind == "chrome":
+        # Which release this is is not known here, and from 137 on the flag
+        # does nothing: say so rather than promise an extension.
+        return Opened(
+            browser, process, False, "Google Chrome 137 and later ignore --load-extension, which is all there was here"
+        )
+    return Opened(browser, process, True, "")
 
 
 class _DevToolsPipe:
@@ -665,12 +672,12 @@ _FIREFOX_PREFERENCES = {
 }
 
 
-def _write_firefox_profile(profile: Path, extension: Optional[Path]) -> Optional[Path]:
-    """Preferences, and the extension as an XPI in the profile. Returns the XPI."""
+def _write_firefox_profile(profile: Path, extension: Optional[Path]):
+    """Preferences, and the extension as an XPI in the profile. Returns (the XPI, whether it is signed)."""
     lines = ["user_pref(%s, %s);" % (json.dumps(k), json.dumps(v)) for k, v in _FIREFOX_PREFERENCES.items()]
     (profile / "user.js").write_text("\n".join(lines) + "\n", encoding="utf-8")
     if extension is None:
-        return None
+        return None, False
     xpi = profile.parent / ("%s.xpi" % FIREFOX_EXTENSION_ID)
     signed = extension / "signed.xpi"
     if signed.is_file():
@@ -683,19 +690,30 @@ def _write_firefox_profile(profile: Path, extension: Optional[Path]) -> Optional
     installed = profile / "extensions"
     installed.mkdir(exist_ok=True)
     shutil.copyfile(xpi, installed / xpi.name)
-    return xpi
+    return xpi, signed.is_file()
 
 
 def _open_firefox(url, browser, profile, extension) -> Opened:
-    xpi = _write_firefox_profile(profile, extension)
+    xpi, signed = _write_firefox_profile(profile, extension)
     command = browser.command + ["-profile", str(profile), "-no-remote", "-new-instance"] + _extra_arguments()
     if xpi is not None:
         opened = _open_firefox_over_bidi(url, browser, command, xpi)
         if opened is not None:
             return opened
     process = subprocess.Popen(command + [url], **_detached())
-    note = "" if xpi is not None else "PartCAD's extension is not in this installation"
-    return Opened(browser, process, xpi is not None, note)
+    if xpi is None:
+        return Opened(browser, process, False, "PartCAD's extension is not in this installation")
+    if signed:
+        return Opened(browser, process, True, "")
+    # Release and Beta Firefox load only signed extensions, whatever the
+    # profile's preferences say; Developer Edition, Nightly and ESR honour them.
+    return Opened(
+        browser,
+        process,
+        False,
+        "PartCAD's extension could not be installed as Firefox started, and the copy in its profile is "
+        "unsigned, which only Firefox Developer Edition, Nightly and ESR load",
+    )
 
 
 def _open_firefox_over_bidi(url, browser, command, xpi) -> Optional[Opened]:

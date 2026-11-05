@@ -147,6 +147,26 @@ def test_a_login_that_needs_the_browser_goes_round_once(monkeypatch):
     assert "sign in there" in said[0]
 
 
+def test_a_window_that_may_lack_the_extension_puts_the_manual_page_first(monkeypatch):
+    monkeypatch.setattr(pc_login.time, "sleep", lambda seconds: None)
+    said = []
+
+    def ask(results):
+        if results:
+            return {"status": "done", "parameters": {}}
+        return {"status": "browser", "spec": dict(SPEC, timeout=10)}
+
+    def without_extension(url, spec):
+        opened = _Opened()
+        opened.extension = False
+        done = url.replace("/start", "/done") + "?token=t"
+        threading.Thread(target=_get, args=(done,), daemon=True).start()
+        return opened
+
+    pc_login.login(ask, without_extension, said.append)
+    assert "may not have PartCAD's extension" in said[0] and "/manual" in said[0]
+
+
 def test_without_a_browser_the_user_is_sent_to_the_manual_page():
     said = []
 

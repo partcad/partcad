@@ -341,6 +341,14 @@ def login(
                     "Open %s in a browser, sign in to %s, and enter what it asks for."
                     % (listener.manual_url(step), title)
                 )
+            elif not getattr(opened, "extension", True):
+                # The window opened without the extension, or without knowing
+                # it has it: what to do by hand comes first, not last.
+                say(
+                    "Opened %s, which may not have PartCAD's extension in it. If its page does not take you to %s, "
+                    "open %s, sign in there, and enter what it asks for."
+                    % (getattr(opened, "browser", "the browser"), title, listener.manual_url(step))
+                )
             else:
                 say(
                     "Opened %s for %s; sign in there. If the window does not take you there, open %s instead."

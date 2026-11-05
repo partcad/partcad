@@ -210,7 +210,12 @@ def test_a_chromium_falls_back_to_the_flag_when_the_pipe_will_not_do(extension, 
     assert "--user-data-dir=%s" % profile in command
     assert "--load-extension=%s" % loaded in command
     assert "--disable-features=DisableLoadExtensionCommandLineSwitch" in command
-    assert (loaded / "manifest.json").is_file() and opened.extension
+    # Google Chrome 137 and later ignore the flag: no extension is promised.
+    assert (loaded / "manifest.json").is_file() and not opened.extension
+    assert "137" in opened.note
+
+    brave = pc_browser.open_browser("http://127.0.0.1:1/start", pc_browser.Browser("brave", ["/usr/bin/brave"]))
+    assert brave.extension and not brave.note
 
 
 def test_firefox_gets_a_profile_of_its_own_with_the_extension_in_it(extension, monkeypatch):
@@ -226,6 +231,22 @@ def test_firefox_gets_a_profile_of_its_own_with_the_extension_in_it(extension, m
     assert 'user_pref("xpinstall.signatures.required", false);' in (profile / "user.js").read_text()
     with zipfile.ZipFile(profile / "extensions" / "login@partcad.org.xpi") as xpi:
         assert sorted(xpi.namelist()) == ["background.js", "manifest.json"]
+
+
+def test_firefox_without_bidi_promises_the_extension_only_when_it_is_signed(extension, monkeypatch):
+    """Release and Beta Firefox load only signed extensions, whatever the profile says."""
+    monkeypatch.setattr(pc_browser.subprocess, "Popen", _Recorded())
+    monkeypatch.setattr(pc_browser, "_open_firefox_over_bidi", lambda *a: None)
+    firefox = pc_browser.Browser("firefox", ["/usr/bin/firefox"])
+
+    unsigned = pc_browser.open_browser("http://127.0.0.1:1/start", firefox)
+    assert not unsigned.extension and "unsigned" in unsigned.note
+
+    (extension / "source" / "firefox" / "signed.xpi").write_bytes(b"PK\x03\x04signed")
+    signed = pc_browser.open_browser("http://127.0.0.1:1/start", firefox)
+    assert signed.extension and not signed.note
+    installed = extension / "profiles" / "profile" / "extensions" / "login@partcad.org.xpi"
+    assert installed.read_bytes() == b"PK\x03\x04signed"
 
 
 def test_a_login_that_is_over_leaves_no_tabs_behind_and_keeps_its_sign_ins(tmp_path):

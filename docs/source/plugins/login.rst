@@ -152,7 +152,10 @@ PartCAD's own (``~/.partcad/browser/<browser>``; where a snap or flatpak lets it
 the everyday one, and the extension lives only there: it can read any site's cookies, which is what it is for, and
 that is a power to keep to the window it was opened for. The profile is kept, so a site signed in to once stays
 signed in. A Chromium-family browser is given the unpacked extension over its DevTools pipe (Google Chrome no
-longer honours ``--load-extension``), and Firefox over WebDriver BiDi as a temporary add-on. A default browser
+longer honours ``--load-extension``), and Firefox over WebDriver BiDi as a temporary add-on. Where neither
+works -- an older Chromium is given the flag, and a Firefox the extension in its profile, which only Developer
+Edition, Nightly and ESR load unsigned -- ``pc login`` says the window may not have the extension, and leads with
+the page where the values are entered by hand. A default browser
 that can be given neither -- Safari, or a Google Chrome on Windows, where the pipe is not available yet -- is
 passed over for an installed one that can, and with none, ``pc login`` prints the address of a page where the
 values are pasted by hand.
