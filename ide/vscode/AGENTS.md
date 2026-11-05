@@ -239,8 +239,9 @@ render (`Tree.filter()` -- the mask `pc render --filter` takes, read by `partcad
 the 2D tab, to which port overlays to draw (`Tree.overlay()` -- `--with-ports`/`--with-interfaces`/
 `--with-internals`). Do not add a second tree widget for that: a row's meaning would then have two definitions.
 
-**Under the tree of the 3D and 2D tabs are four callout boxes** (`labels.ts`): Component names, Component prices,
-Port names and Interface names, the last two ticked from the start. They say *what* is written; the tree says *on
+**Under the tree of the 3D and 2D tabs are five callout boxes** (`labels.ts`): Component names, Component prices,
+Materials, Port names and Interface names, the last two ticked from the start. A box is named for what it writes,
+with no "Show" in front of it. They say *what* is written; the tree says *on
 what*, which is why every 3D callout is a child of the thing it is about (a component's of its shape, a port's of
 its triad) and is hidden with it by three's own visibility, and why an interface's name shows only while the tree
 draws one of its ports. One answer for both tabs (`Labels`, beside `Selection`), kept across objects. The 2D tab
@@ -249,8 +250,12 @@ default picture is asked for in the words it always was. A component's name has 
 (`componentName`, and `component_name` in `render_svg.py`); a price is *never* worked out here -- PartCAD declares
 none, and the share of the Buy tab's quote each component costs is `partcad/component_prices.py`, asked for by the
 3D view as `supply.prices` under the Design group's id (`design`, the way `analysis` asks `cae.list`) and by a
-render through the overlay's price source. Metadata no longer hides the whole callout layer: each kind of callout
-has its own switch, on the callout.
+render through the overlay's price source. Materials are not worked out here either: where each cluster of a
+material is -- faces of one material that touch or are closer than the user's `materialClusterDistance` -- is
+geometry, answered in a sandbox (`cmf.clusters`, by `material_clusters.py` among the wrappers), which the 3D view
+asks for under the 3D tab's own id (`3d`) and pins under the show's root, shown while the tree draws any node of
+the cluster; the 2D tab's picture finds its own. Metadata no longer hides the whole callout layer: each kind of
+callout has its own switch, on the callout.
 
 **The three tabs share one answer** (`Selection`). What somebody wants to look at is a property of the object,
 not of the tab it is being looked at on, so the state lives outside the widgets and each of them reads and

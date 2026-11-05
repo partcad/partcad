@@ -31,6 +31,7 @@ import build123d as b3d
 sys.path.append(os.path.dirname(__file__))
 import appearance
 import label_layout
+import material_clusters
 import ocp_serialize
 import shape_measure
 import stroke_text
@@ -96,6 +97,7 @@ COMPONENT_NAMES_KEY = "component_names"
 COMPONENT_PRICES_KEY = "component_prices"
 PORT_NAMES_KEY = "port_names"
 INTERFACE_NAMES_KEY = "interface_names"
+MATERIALS_KEY = "materials"
 
 # The colour an annotation is drawn in, dashed.
 ANNOTATIONS_COLOR = (192, 64, 64)
@@ -104,6 +106,10 @@ ANNOTATIONS_COLOR = (192, 64, 64)
 # drawn in: the near-black of a drawing's own callouts, which reads against the
 # goldenrod of the geometry and is neither of the two overlays' colours.
 COMPONENTS_COLOR = (48, 48, 48)
+
+# The colour the materials' callouts are drawn in: a dark teal, which reads
+# against the goldenrod of the geometry and is none of the other overlays'.
+MATERIALS_COLOR = (0, 112, 96)
 
 # How far apart two rows of one callout are - a component's name above its
 # price - in text heights, from the bottom of one to the bottom of the next.
@@ -445,6 +451,23 @@ def _components(request):
     return found
 
 
+def _materials(request):
+    """Every cluster of a material the callouts are on, as '(rows, point)' pairs; none unless asked.
+
+    'MATERIALS_KEY' asks, with the distance two surfaces of one material may be
+    apart and still be one cluster ('{"distance": <mm>}'): one callout per
+    cluster, naming the material, pinned to the cluster where it is nearest the
+    middle of it (see 'material_clusters'). Of what 'shape_tree' holds - so
+    with '--filter', of what the filter kept.
+    """
+    asked = request.get(MATERIALS_KEY)
+    tree = request.get("shape_tree")
+    if not isinstance(asked, dict) or tree is None:
+        return []
+    found = material_clusters.clusters(tree, asked.get("distance", 0))
+    return [([cluster["name"]], tuple(cluster["at"])) for cluster in found]
+
+
 def _picture_offset(origin, up, look_at, right, upward, reproducible):
     """What 'project' adds to a point's coordinates in the plane of the picture.
 
@@ -459,7 +482,7 @@ def _picture_offset(origin, up, look_at, right, upward, reproducible):
     return (bounds.min.X - _dot(look_at, right), bounds.min.Y - _dot(look_at, upward))
 
 
-def _overlay_edges(request, max_dimension, right, up, keep_out):
+def _overlay_edges(request, max_dimension, right, up, keep_out, counted=None):
     """What "pc render" can be asked to draw on top, as (layer, colour, edges) triples.
 
     'request["ports"]' is what 'partcad.render_overlay' worked out: every port of
@@ -477,7 +500,11 @@ def _overlay_edges(request, max_dimension, right, up, keep_out):
 
     The components' callouts are a third question - "which part is this, and
     what does it cost" - answered by one box per component, its name over its
-    price, with a leader to the middle of it (see '_components').
+    price, with a leader to the middle of it (see '_components'); and the
+    materials' a fourth - "what is this made of" - answered once per cluster of
+    a material rather than once per face or per part (see '_materials').
+    'counted', when given, is told how many of those clusters there were
+    ('counted["materials"]'), for a caller with nothing else to say none.
 
     Every name, of any of them, is written around the object rather than on
     it, and joined to what it names by a leader: see 'label_layout'. They are
@@ -497,11 +524,12 @@ def _overlay_edges(request, max_dimension, right, up, keep_out):
         """'point' in the plane of the picture: how far right, how far up."""
         return (_dot(point, right), _dot(point, up))
 
-    edges = {"Ports": [], "Interfaces": [], "Components": []}
+    edges = {"Ports": [], "Interfaces": [], "Components": [], "Materials": []}
     layers = [
         ("Ports", PORTS_COLOR),
         ("Interfaces", INTERFACES_COLOR),
         ("Components", COMPONENTS_COLOR),
+        ("Materials", MATERIALS_COLOR),
     ]
     # One entry per name to write: its layer, its rows (top first), the points
     # its leaders go to, and the point that decides its side of the object.
@@ -534,6 +562,11 @@ def _overlay_edges(request, max_dimension, right, up, keep_out):
         names.append(("Interfaces", [label], [origin for origin, _tip in placed], centre))
     for rows, centre in _components(request):
         names.append(("Components", rows, [centre], None))
+    materials = _materials(request)
+    if counted is not None:
+        counted["materials"] = len(materials)
+    for rows, point in materials:
+        names.append(("Materials", rows, [point], None))
     if not names:
         return [(layer, color, edges[layer]) for layer, color in layers]
 
@@ -1169,6 +1202,7 @@ def process(path, request):
             or request.get("with_interfaces")
             or request.get(COMPONENT_NAMES_KEY)
             or request.get(COMPONENT_PRICES_KEY)
+            or request.get(MATERIALS_KEY)
         ):
             try:
                 right, upward = _camera_axes(origin, up, look_at)
@@ -1183,7 +1217,11 @@ def process(path, request):
                     bounds.max.X - shift[0],
                     bounds.max.Y - shift[1],
                 )
-                overlays = _overlay_edges(request, max_dimension, right, upward, keep_out)
+                counted = {}
+                overlays = _overlay_edges(request, max_dimension, right, upward, keep_out, counted)
+                if request.get(MATERIALS_KEY) and not counted.get("materials"):
+                    # A picture with no material on it cannot say why.
+                    warnings.append("Nothing drawn here states what it is made of: no material to call out")
                 shapes = {"Interfaces": _interface_shapes(request)}
                 for layer, color, layer_edges in overlays:
                     layer_shapes = layer_edges + shapes.get(layer, [])

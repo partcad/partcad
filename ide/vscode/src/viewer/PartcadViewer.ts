@@ -76,6 +76,11 @@ const TAB_COMMANDS: Record<string, string> = {
     // prices" callouts: asked under the Design group's id for the same reason,
     // since it is a question about the object the group shows rather than a tab.
     design: 'partcad.componentPrices',
+    // Where each material of the object is, cluster by cluster, for the 3D
+    // view's "Materials" callouts: asked under the 3D tab's own id, since only
+    // it asks - the 2D tab's picture finds its own - and nothing else is.
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '3d': 'partcad.materialClusters',
     // Running one scenario of one analysis. Every analysis is the one
     // operation; which of them is asked for travels as an argument, exactly as
     // every 'pc cae <analysis>' is one operation with the analysis in the
@@ -483,6 +488,7 @@ export class PartcadViewer implements vscode.Disposable {
                 // when it says something a render would not do anyway.
                 args.withComponentNames = render?.withComponentNames;
                 args.withComponentPrices = render?.withComponentPrices;
+                args.withMaterials = render?.withMaterials;
                 args.withPortNames = render?.withPortNames;
                 args.withInterfaceNames = render?.withInterfaceNames;
                 // What the view panel beside it says: where the picture is looked
@@ -507,8 +513,13 @@ export class PartcadViewer implements vscode.Disposable {
                 post({ data: data ? { ...data, choices: readChoices(object) } : data });
                 return;
             }
-            if (tab === 'design') {
+            if (tab === 'design' || tab === '3d') {
                 args.kind = target.kind ?? 'part';
+                if (tab === '3d') {
+                    // What the 3D view is cut to, so that a material is called
+                    // out only where something is drawn.
+                    args.section = message.section;
+                }
                 post({ data: await vscode.commands.executeCommand(command, args) });
                 return;
             }
@@ -1274,11 +1285,13 @@ interface RenderRequest {
     ports?: string[];
     /**
      * The 2D tab's callout boxes: '--with-component-names',
-     * '--with-component-prices', and '--without-port-names'/
-     * '--without-interface-names' as a false. Absent says nothing.
+     * '--with-component-prices', '--with-materials', and
+     * '--without-port-names'/'--without-interface-names' as a false. Absent
+     * says nothing.
      */
     withComponentNames?: boolean;
     withComponentPrices?: boolean;
+    withMaterials?: boolean;
     withPortNames?: boolean;
     withInterfaceNames?: boolean;
 }

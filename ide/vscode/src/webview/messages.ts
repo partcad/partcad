@@ -626,12 +626,13 @@ export interface FetchTabMessage {
     /**
      * On the 2D tab: the callout boxes under the tree, as the 'pc render'
      * options they are ('renderOptions' in 'labels.ts') -
-     * '--with-component-names', '--with-component-prices', and
-     * '--without-port-names'/'--without-interface-names' as a false. Each is
-     * sent only when it says something a render would not do anyway.
+     * '--with-component-names', '--with-component-prices', '--with-materials',
+     * and '--without-port-names'/'--without-interface-names' as a false. Each
+     * is sent only when it says something a render would not do anyway.
      */
     withComponentNames?: boolean;
     withComponentPrices?: boolean;
+    withMaterials?: boolean;
     withPortNames?: boolean;
     withInterfaceNames?: boolean;
     /**
@@ -1070,6 +1071,40 @@ export interface ComponentPrice {
 export interface PricesData {
     object: string;
     prices: Record<string, ComponentPrice>;
+}
+
+/**
+ * One cluster of a material: the faces of it, of one part or of several, that
+ * touch or are closer than the user's 'materialClusterDistance'. What one
+ * "Materials" callout is written on (see 'material_clusters' among PartCAD's
+ * wrappers).
+ */
+export interface MaterialCluster {
+    /** The material's canonical reference. */
+    material: string;
+    /** What a person reads it as: the declaration's name. */
+    name: string;
+    /** The point of the cluster the callout is pinned to, in the frame of the whole tree. */
+    at: [number, number, number];
+    /** The path of every node with a face in it, as 'nodeId' takes one. */
+    nodes: number[][];
+    /** How many faces it is. */
+    faces: number;
+}
+
+/**
+ * Where each material of an object is, as 'cmf.clusters' answers: what the 3D
+ * view's "Materials" callouts write, one per cluster.
+ *
+ * Asked under the 3D tab's own id ('3d'): only the 3D view asks it - the 2D
+ * tab's picture finds its own, with the render it is - and nothing else is
+ * asked under that id.
+ */
+export interface MaterialClustersData {
+    object: string;
+    /** How close two surfaces of one material were taken to be one cluster, in millimetres. */
+    distance: number;
+    clusters: MaterialCluster[];
 }
 
 /** What the user chose for each line that can be both built and bought, by its full name. */

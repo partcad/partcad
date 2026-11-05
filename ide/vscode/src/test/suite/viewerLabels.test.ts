@@ -104,7 +104,7 @@ suite('The callout boxes under the tree', () => {
         delete (globalThis as unknown as { document?: unknown }).document;
     });
 
-    test('they start out writing the names of what is drawn, and nothing about the components', () => {
+    test('they start out writing the names of what is drawn, and nothing about the components or materials', () => {
         const { host } = widget(new Labels());
         const { boxes, note } = drawn(host);
 
@@ -113,14 +113,20 @@ suite('The callout boxes under the tree', () => {
             [
                 ['Component names', false],
                 ['Component prices', false],
+                ['Materials', false],
                 ['Port names', true],
                 ['Interface names', true],
             ],
         );
         assert.deepStrictEqual(
             LABEL_BOXES.map(({ key }) => LABEL_DEFAULTS[key]),
-            [false, false, true, true],
+            [false, false, false, true, true],
         );
+        // What each box is called is the thing it writes, with nothing in front of it.
+        for (const { label } of LABEL_BOXES) {
+            assert.doesNotMatch(label, /^Show /);
+            assert.match(label, /^[A-Z]/);
+        }
         assert.strictEqual(note.hidden, true);
         // Each says what it is on the command line too.
         for (const row of host.children.filter((child) => child.tagName === 'label')) {
@@ -144,6 +150,7 @@ suite('The callout boxes under the tree', () => {
         assert.deepStrictEqual(labels.current, {
             componentNames: false,
             componentPrices: true,
+            materials: false,
             portNames: false,
             interfaceNames: true,
         });
@@ -171,17 +178,52 @@ suite('The callout boxes under the tree', () => {
         assert.strictEqual(drawn(host).note.hidden, true);
     });
 
+    test('the prices and the materials each have a line of the note', () => {
+        const { host, boxes } = widget(new Labels());
+
+        boxes.setNote('Finding where each material is…', 'materials');
+        boxes.setNote('Asking the suppliers what each component costs…');
+        // In the order the boxes are listed, whichever said so first.
+        assert.strictEqual(
+            drawn(host).note.textContent,
+            'Asking the suppliers what each component costs…\nFinding where each material is…',
+        );
+
+        boxes.setNote(undefined);
+        assert.strictEqual(drawn(host).note.textContent, 'Finding where each material is…');
+        boxes.setNote(undefined, 'materials');
+        assert.strictEqual(drawn(host).note.hidden, true);
+    });
+
     test('a render as the boxes start is asked for in the words it always was', () => {
         assert.deepStrictEqual(renderOptions({ ...LABEL_DEFAULTS }), {});
     });
 
     test('a render is sent each box that says something it would not do anyway', () => {
         assert.deepStrictEqual(
-            renderOptions({ componentNames: true, componentPrices: true, portNames: false, interfaceNames: false }),
-            { withComponentNames: true, withComponentPrices: true, withPortNames: false, withInterfaceNames: false },
+            renderOptions({
+                componentNames: true,
+                componentPrices: true,
+                materials: true,
+                portNames: false,
+                interfaceNames: false,
+            }),
+            {
+                withComponentNames: true,
+                withComponentPrices: true,
+                withMaterials: true,
+                withPortNames: false,
+                withInterfaceNames: false,
+            },
         );
         assert.deepStrictEqual(
-            renderOptions({ componentNames: false, componentPrices: true, portNames: true, interfaceNames: true }),
+            renderOptions({
+                componentNames: false,
+                componentPrices: true,
+                materials: false,
+                portNames: true,
+                interfaceNames: true,
+            }),
             { withComponentPrices: true },
         );
     });

@@ -27,7 +27,7 @@ from .process_crash import describe_exit_code
 _DEPENDENCIES = (sandbox_versions.OCP,)
 
 
-async def _run(ctx, request, cacheable: bool = True):
+async def _run(ctx, request, cacheable: bool = True, script: str = "measure.py"):
     if ctx is None:
         raise ValueError("A context is required to run the '%s' measurement" % request.get("operation"))
 
@@ -36,8 +36,8 @@ async def _run(ctx, request, cacheable: bool = True):
 
     cache = getattr(ctx, "cache_artifacts", None)
     artifact = cache_artifacts.wrapper_hash(
-        "measure#%s" % operation,
-        "measure.py",
+        "%s#%s" % (script.rsplit(".", 1)[0], operation),
+        script,
         cache_artifacts.request_key(request) if cacheable else None,
         _DEPENDENCIES,
     )
@@ -48,7 +48,7 @@ async def _run(ctx, request, cacheable: bool = True):
         for dep in _DEPENDENCIES:
             await runtime.ensure_async(dep)
 
-        command = [wrapper.get("measure.py"), operation]
+        command = [wrapper.get(script), operation]
         exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
         if exitcode != 0 and not errors:
             errors = "measure '%s' failed: %s" % (operation, describe_exit_code(exitcode))
@@ -110,3 +110,18 @@ async def extent_z(ctx, shape, frame: Location = None, cacheable: bool = True):
     if box is None:
         return None
     return box[5] - box[2]
+
+
+async def material_clusters(ctx, tree, distance: float, cacheable: bool = True):
+    """Where each material of 'tree' is: its clusters, as the "Materials" callout writes them.
+
+    'tree' is a shape tree as 'Shape.get_wrapped' answers it, and 'distance' how
+    far apart two surfaces of one material may be and still be one cluster, in
+    millimetres. Each cluster is '{"material", "name", "at", "nodes", "faces"}'
+    (see 'material_clusters.clusters' among the wrappers): what it is made of,
+    what a person reads that as, the point of it a callout is pinned to in the
+    frame of the tree, the path of every node with a face in it, and how many
+    faces it is. Remembered like a measurement, by the tree and the distance.
+    """
+    request = {"operation": "clusters", "shape": tree, "distance": float(distance)}
+    return await _run(ctx, request, cacheable, "materials.py")

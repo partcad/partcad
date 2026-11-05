@@ -86,8 +86,9 @@ node like every other pane, and belong to the node's own item, so the box that h
 about it; the **Metadata** box, on by default, hides all of them at once. The box is offered only while the model on
 screen has at least one callout (`hasCallouts`), and keeps its state from one object to the next.
 
-**Four more boxes, under the tree, write names and prices on what the tree draws** (`labels.ts`): **Component
-names**, **Component prices**, **Port names** and **Interface names**, the last two ticked from the start. A
+**Five more boxes, under the tree, write names, prices and materials on what the tree draws** (`labels.ts`):
+**Component names**, **Component prices**, **Materials**, **Port names** and **Interface names**, the last two ticked
+from the start. A
 *component* is a node that holds no other node — a part, wherever it is placed (`isComponent`) — and its callout is
 one box pinned to the middle of its shape, with its name (`componentName`: the link's label, else the object without
 its package) over its price, each where its box is ticked; a component with nothing to say has no callout. An
@@ -110,9 +111,24 @@ view asks for them only while **Component prices** is ticked, under the Design g
 every show of the object, since an edit may have added a part, and says under the boxes what it is doing — asking,
 or why there are none.
 
+**Materials** writes one callout per *cluster* of a material, naming it, with a bar in the teal the 2D tab's picture
+draws it in: the faces of one material, of one part or of several, each of which touches another of them or is
+closer to it than the user configuration's `materialClusterDistance` (10 mm unless it says otherwise; nought counts
+only what touches). One per cluster rather than one per face or per part, so a frame of welded tubes says "steel"
+once. What a face is made of is CMF's answer: its solid's material, else its own set's (a wall has no solid), else
+the `material` its node's properties name. Where the clusters are is a question about geometry, so the daemon
+answers it in a sandbox (`cmf.clusters`, by `material_clusters.py` among the wrappers) and the 3D view asks for it
+only while the box is ticked, under the 3D tab's own id (`3d` → `partcad.materialClusters` → `cmf.clusters`), once
+per show, with the section the view is cut to, so that a cut object is called out only where it is drawn. Each
+cluster comes back with the point of it nearest the middle of it, in the frame of the whole tree, and the paths of
+the nodes it is of; its callout hangs from the show's root and shows while the tree draws any of those nodes. An
+answer to a box ticked while the show is still loading is held until its geometry is on the stage (`held.ts`). The
+2D tab's picture finds its own clusters, of what its filter keeps.
+
 The boxes are one answer for the 3D and 2D tabs (`Labels`, as the tree has `Selection`), and are kept from one
 object to the next, as Metadata is. On the 2D tab they are sent with the render as the `pc render` options they are
-(`renderOptions`): `--with-component-names` and `--with-component-prices` when ticked, `--without-port-names` and
+(`renderOptions`): `--with-component-names`, `--with-component-prices` and `--with-materials` when ticked,
+`--without-port-names` and
 `--without-interface-names` when cleared — each only when it says something a render does not do anyway, so the
 picture asked for with the boxes as they start is asked for in exactly the words it always was. Draft has none: a
 drawing package lays out its own.
@@ -380,6 +396,8 @@ the protocol has no authentication.
 | `src/webview/labels.ts` | The callout boxes under the tree of the 3D and 2D tabs, the answer they share, and the `pc render` options they are |
 | `src/webview/callouts.ts` | What a callout says: a shape's metadata about its elements, and a component's name and price |
 | `src/partcad/component_prices.py` | What each component costs: its share of the object's quote, for the callouts |
+| `src/partcad/wrappers/material_clusters.py` | Where each material is: its faces gathered into clusters, for the Materials callouts |
+| `src/webview/held.ts` | An answer about the object on screen, held until its geometry is on the stage |
 | `src/webview/viewPanel.ts` | The view panel down the right of every tab that shows the object |
 | `src/webview/sidePanel.ts` | A panel along one side of a pane, and the button that folds it away |
 | `src/webview/gizmo.ts` | The view panel's orientation gizmo |
@@ -566,8 +584,9 @@ Four things follow from what the two tabs are:
 * **A part has nothing to filter.** Its tree is one node, so the pane lists the object and (on 2D) its ports,
   and no filter is sent.
 
-Under the 2D tab's tree are the 3D view's four callout boxes (see "The 3D view"), sent with the render as
-`--with-component-names`, `--with-component-prices`, `--without-port-names` and `--without-interface-names`; a
+Under the 2D tab's tree are the 3D view's five callout boxes (see "The 3D view"), sent with the render as
+`--with-component-names`, `--with-component-prices`, `--with-materials`, `--without-port-names` and
+`--without-interface-names`; a
 change to one is a change to the picture, asked for again after the same settling delay as a box of the tree.
 PartCAD lays the components' callouts out with the port and interface names, around the object and joined to
 what each names by a line (`render_svg.py`), and they follow the filter like everything else: a link the tree

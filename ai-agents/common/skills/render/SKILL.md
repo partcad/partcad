@@ -257,6 +257,12 @@ which asks every supplier, so it is slow, and a part nobody quoted has none):
 pc --no-ansi render -t png --view iso -O ./out/callouts --with-component-names robot-arm
 ```
 
+`--with-materials` names the material of every *cluster* of one — the faces of
+one material that touch or are closer than `materialClusterDistance` in the
+user configuration (10 mm unless it says otherwise) — once per cluster rather
+than once per part. It is how to check that the CMF a part states is the one
+meant; a picture with no callout on it means nothing drawn states a material.
+
 ## 8. Rendering part of an assembly
 
 `--filter` keeps only some of the links of an assembly or a scene, so a picture

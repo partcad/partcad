@@ -28,6 +28,8 @@ def test_registry_maps_cli_shaped_names_to_operations():
     assert registry["supply.quote"].__wrapped__ is operations.supply_quote
     # And what the 3D view's "Component prices" callouts write.
     assert registry["supply.prices"].__wrapped__ is operations.supply_prices
+    # And its "Materials" callouts.
+    assert registry["cmf.clusters"].__wrapped__ is operations.cmf_clusters
     # The Build vs Buy and Build tabs.
     assert registry["manufacturing.tree"].__wrapped__ is operations.manufacturing_tree
     assert registry["manufacturing.details"].__wrapped__ is operations.manufacturing_details

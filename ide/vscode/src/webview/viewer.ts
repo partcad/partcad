@@ -90,6 +90,7 @@ import { CaeResult } from './cae';
 import { CmfView } from './cmf';
 import { el, empty, placeholder } from './dom';
 import { geometryCache } from './geometryCache';
+import { HeldForShow } from './held';
 import { LabelBoxes, Labels, renderOptions } from './labels';
 import {
     fetchDetails,
@@ -125,6 +126,8 @@ import {
     GuideData,
     HostMessage,
     PlanData,
+    MaterialCluster,
+    MaterialClustersData,
     PricesData,
     RENDER_TABS,
     RenderData,
@@ -486,6 +489,10 @@ labels.onChange((key) => {
         // 2D tab's picture asks for its own prices with the render it is.
         askPrices();
     }
+    if (key === 'materials') {
+        // The same, for where each material is.
+        askMaterials();
+    }
     // No longer the picture the boxes describe: forgotten, and asked for again
     // if it is the one on screen, once the boxes have settled - as a box of the
     // tree does. One still being drawn is stopped, so the daemon is not kept on
@@ -585,6 +592,74 @@ function onPrices(data: PricesData | undefined, error: string | undefined): void
         Object.keys(texts).length === 0
             ? 'No supplier quoted a price for any of these. Declare a supplier in partcad.yaml to see prices.'
             : undefined,
+    );
+}
+
+/** The kinds of object made of materials, and so the ones whose materials have clusters. */
+const MADE_KINDS = ['part', 'assembly', 'scene'];
+
+/**
+ * Where each material of the object on screen is, once the daemon has said:
+ * pinned on the stage once this show's geometry is on it, which an answer to a
+ * box ticked while it was still loading can beat (see 'held.ts').
+ */
+const heldClusters = new HeldForShow<MaterialCluster[]>((clusters) => scene?.setMaterialClusters(clusters));
+
+/**
+ * Ask where each material of the object on screen is, if the Materials box is
+ * ticked and the 3D view is the tab on screen: 'cmf.clusters', worked out in a
+ * sandbox from the object's tree.
+ *
+ * Asked once per show, under the 3D tab's own id - nothing else is asked under
+ * it - and only once the 3D view is looked at ('onLeafSelected'), for the
+ * reason the prices are: the daemon serves one request at a time. A cluster
+ * names the nodes of one tree, so the show that follows drops what was pinned
+ * ('scene.ts') and this asks again. The box cleared while the answer is on its
+ * way stops it. A show cut to a section asks of what the cut keeps, so that a
+ * callout names nothing that is not drawn.
+ */
+function askMaterials(): void {
+    if (!labels.get('materials') || shown === undefined) {
+        stopMaterials();
+        labelBoxes3d.setNote(undefined, 'materials');
+        return;
+    }
+    if (tabs.current !== 'design' || designTabs.current !== '3d' || requested.has('3d')) {
+        return;
+    }
+    if (!shown.package || !MADE_KINDS.includes(shown.kind ?? '')) {
+        labelBoxes3d.setNote('Only a part, an assembly or a scene is made of a material.', 'materials');
+        return;
+    }
+    requested.add('3d');
+    labelBoxes3d.setNote('Finding where each material is…', 'materials');
+    request('3d', shown.section ? { section: shown.section } : {});
+}
+
+/** Stop finding the clusters, if that is under way; one already found is kept on screen. */
+function stopMaterials(): void {
+    if (!awaiting.has('3d')) {
+        return;
+    }
+    awaiting.delete('3d');
+    requested.delete('3d');
+    cancelTab({ type: 'cancelTab', tab: '3d' });
+}
+
+/** Where each material is has arrived, or why it has not. */
+function onMaterials(data: MaterialClustersData | undefined, error: string | undefined): void {
+    if (error !== undefined || data === undefined || data === null) {
+        heldClusters.arrive([]);
+        // Not an answer to keep: the box ticked again asks afresh.
+        requested.delete('3d');
+        labelBoxes3d.setNote(`No materials: ${error ?? 'PartCAD said nothing about them.'}`, 'materials');
+        return;
+    }
+    const clusters = data.clusters ?? [];
+    heldClusters.arrive(clusters);
+    labelBoxes3d.setNote(
+        clusters.length === 0 ? 'Nothing here states what it is made of. Give a part a material to see it.' : undefined,
+        'materials',
     );
 }
 
@@ -1368,6 +1443,7 @@ async function show(message: ShowMessage): Promise<void> {
     // Nothing in flight belongs to this object, whatever it was asked for.
     awaiting.clear();
     requested.clear();
+    heldClusters.reset();
     for (const tab of DATA_TABS) {
         reset(tab);
     }
@@ -1476,6 +1552,8 @@ async function show(message: ShowMessage): Promise<void> {
         if (generation !== mine) {
             return;
         }
+        // On the stage now: what was found about it meanwhile can be pinned to it.
+        heldClusters.onStage();
         // What the Opacity slider says, for the geometry that just arrived.
         view.setOpacity(view3d.opacityFraction);
         if (designBounds === undefined) {
@@ -1564,6 +1642,7 @@ function showView(message: ShowMessage): void {
 function clear(): void {
     generation += 1;
     shown = undefined;
+    heldClusters.reset();
     sectionSupported = false;
     shownSection = null;
     designSection = null;
@@ -1972,8 +2051,10 @@ function onLeafSelected(tab: TabId): void {
         scene?.resizeCanvas();
         // A section chosen on the 2D or Draft tab is this tab's too.
         cut3d();
-        // What the components cost, if the box asks and this show has not.
+        // What the components cost, and where each material is, if the boxes
+        // ask and this show has not.
         askPrices();
+        askMaterials();
         return;
     }
     if (isAnalysisTab(tab)) {
@@ -2148,6 +2229,10 @@ function onTabData(tab: TabId, token: number, data: unknown, error: string | und
     }
     if (tab === 'design') {
         onPrices(data as PricesData | undefined, error);
+        return;
+    }
+    if (tab === '3d') {
+        onMaterials(data as MaterialClustersData | undefined, error);
         return;
     }
     if (tab === 'build') {

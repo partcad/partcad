@@ -148,7 +148,8 @@ from ..viewport import viewport_options, viewport_params
     show_envvar=True,
 )
 # Callouts: one box on every component (a part, wherever it is placed) with its
-# name and its price, and whether the two overlays above write their names.
+# name and its price, one on every cluster of a material naming it, and whether
+# the two overlays above write their names.
 # What the IDE's 3D and 2D tabs offer as boxes under the tree.
 @click.option(
     "--with-component-names",
@@ -162,6 +163,16 @@ from ..viewport import viewport_options, viewport_params
         "Put a callout on every component with its price: its share of what the object costs, from the "
         "cheapest quote of each thing to order ('pc supply quote'). With --with-component-names, "
         "the price is the second row of the same callout"
+    ),
+    is_flag=True,
+    show_envvar=True,
+)
+@click.option(
+    "--with-materials",
+    help=(
+        "Put a callout on every cluster of a material, naming it: the faces of one material, of one part or "
+        "of several, that touch or are closer than 'materialClusterDistance' (10 mm unless the user "
+        "configuration says otherwise)"
     ),
     is_flag=True,
     show_envvar=True,
@@ -210,6 +221,7 @@ def cli(
     with_internals,
     with_component_names,
     with_component_prices,
+    with_materials,
     port_names,
     interface_names,
     style,
@@ -256,6 +268,7 @@ def cli(
             "ports": list(ports) or None,
             "with_component_names": with_component_names,
             "with_component_prices": with_component_prices,
+            "with_materials": with_materials,
             # Sent only when switched off, so that a daemon from before the two
             # existed is asked exactly what it always was.
             **({} if port_names else {"with_port_names": False}),
