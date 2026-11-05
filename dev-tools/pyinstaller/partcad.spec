@@ -159,6 +159,12 @@ datas += [
     # freezes a complete bundle.
     (str(REPO_ROOT / "ai-agents" / "common" / "skills"), "partcad/ai_agents/skills"),
     (str(REPO_ROOT / "ai-agents" / "claude" / ".claude-plugin" / "plugin.json"), "partcad/ai_agents"),
+    # The browser extension 'pc login' loads unpacked into the browser it opens
+    # ('partcad_client.browser.extension_source'), named at where it really is
+    # for the same reason as the skills above: the symlink in
+    # "src/partcad_client" that puts it in the wheel may not be one here.
+    (str(REPO_ROOT / "browsers" / "chromium"), "partcad_client/browsers/chromium"),
+    (str(REPO_ROOT / "browsers" / "firefox"), "partcad_client/browsers/firefox"),
     # Read through `importlib.resources` by `pc lint`. Both schemas -- the ASSY
     # one and the `partcad.yaml` one -- are in `partcad_utils` because both ends
     # check both kinds of file: the daemon over a package, `pc lint --file` in

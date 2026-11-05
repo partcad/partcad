@@ -212,3 +212,13 @@ def test_the_saved_overrides_reach_the_plugin_the_way_hand_written_ones_do(tmp_p
 
     save_parameter_overrides("//p:repo", {"token": "t"})
     assert UserConfig().parameter_config.to_dict()["//p:repo"] == {"token": "t"}
+
+
+def test_a_step_that_is_over_no_longer_has_a_start_page(listener):
+    """The extension asks an earlier step's start page whether its login still waits."""
+    step = listener.step(SPEC)
+    assert _get(listener.start_url(step))[0] == 200
+    _get("http://127.0.0.1:%d/partcad/login/%s/done?token=t" % (listener.port, step.nonce))
+    with pytest.raises(urllib.error.HTTPError) as gone:
+        _get(listener.start_url(step))
+    assert gone.value.code == 404

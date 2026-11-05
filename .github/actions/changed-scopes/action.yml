@@ -12,12 +12,12 @@ description: >
   tree runs -- the tests, the wheel, the dev container and the standalone
   bundles.
 
-  What it does not turn on is the four subjects that only their own directory
-  turns on: the documentation, the VS Code extension, the IDE and the Claude
-  Code plugin. That is not a gap. Each of those is built from one fixed
-  directory -- "docs/source", "ide/vscode", "ide/standalone", "ai-agents" --
-  so a path outside them cannot change what they contain, and an unclassified
-  path is by definition outside them. (The extension's tests read one more,
+  What it does not turn on is the five subjects that only their own directory
+  turns on: the documentation, the VS Code extension, the IDE, the Claude Code
+  plugin and the login extension. That is not a gap. Each of those is built
+  from one fixed directory -- "docs/source", "ide/vscode", "ide/standalone",
+  "ai-agents", "browsers" -- so a path outside them cannot change what they
+  contain, and an unclassified path is by definition outside them. (The extension's tests read one more,
   "src/partcad_utils/schema", and that directory is named below.)
 
   The plugin's own directory is the one that is *also* something else: the
@@ -97,6 +97,12 @@ outputs:
   plugin:
     description: "Build and validate the Claude Code plugin."
     value: ${{ steps.classify.outputs.plugin }}
+  browsers:
+    description: >
+      Package the PartCAD login extension ("browsers/") and test it in a real
+      browser -- "browsers.yml". On a change to the extension or to its tests,
+      and to CI.
+    value: ${{ steps.classify.outputs.browsers }}
   ide-e2e:
     description: >
       Run the IDE end-to-end test ("tests/ide/test_ide_e2e.py"): the extension
@@ -214,7 +220,7 @@ runs:
 
         if [ "${ALL}" = "true" ]; then
           add code; add deps; add docs; add ai; add devcontainer; add vscode
-          add ide; add packaging; add ci; add containers; add schema
+          add ide; add packaging; add ci; add containers; add schema; add browsers
         else
           while IFS= read -r f; do
             [ -n "${f}" ] || continue
@@ -249,6 +255,15 @@ runs:
               add docs ;;
             ide/vscode/*|ide/vscode-shim/*)
               add vscode ;;
+            browsers/*|tests/browsers/*)
+              # The login extension "pc login" puts into its browser profile,
+              # and the tests that drive it in a real browser. Two buckets,
+              # like the skills above: "browsers.yml" packages and tests it,
+              # and it is also what "pc login" loads off the installation, so
+              # it is source too -- and its static tests run in "Pytest" with
+              # everything else under "tests/". Named before "tests/*" below,
+              # which would stop at "code".
+              add browsers; add code ;;
             ide/standalone/*|.vscode/*)
               # ".vscode/extensions.json" is what the IDE ships with.
               add ide ;;
@@ -384,6 +399,7 @@ runs:
         # alone cannot change what the IDE ships.
         emit vsix                ci vscode schema
         emit plugin              ci ai
+        emit browsers            ci browsers
         # The extension and what it drives, together: "ide/" on one side, the
         # source and its dependencies on the other.
         emit ide-e2e             code deps ci vscode ide
@@ -404,7 +420,7 @@ runs:
           echo "| Subject | Runs |"
           echo "| --- | --- |"
           for subject in wheel docs pytest behave examples devcontainer \
-                         devcontainer-pytest bundle ide vsix plugin ide-e2e; do
+                         devcontainer-pytest bundle ide vsix plugin browsers ide-e2e; do
             value=$(grep -m1 "^${subject}=" "${GITHUB_OUTPUT}" | cut -d= -f2)
             printf '| `%s` | %s |\n' "${subject}" "$([ "${value}" = "true" ] && echo yes || echo no)"
           done

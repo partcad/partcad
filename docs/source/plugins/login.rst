@@ -119,4 +119,10 @@ The browser starts on a page ``pc login``'s listener serves on ``127.0.0.1``, wh
 plugin asked for; the extension reports back to that listener alone, and closes the window. The listener only
 answers its own address, and only for the random token each step is given.
 
-The extension is built and published from the ``browsers/`` directory of the PartCAD repository.
+Some sites put a check that a person is there -- "Verify you are human" -- in front of their sign-in. The
+extension's bar says so on such a page, and that is all it does there: the person answers it, nothing clicks it
+for them, and a plugin is only ever handed the credentials signing in left behind, never anything the check
+granted the browser.
+
+The extension is built and published from the ``browsers/`` directory of the PartCAD repository (see its
+``README.md``).

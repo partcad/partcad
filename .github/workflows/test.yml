@@ -619,6 +619,7 @@ jobs:
       matrix-slim: ${{ steps.set-matrix.outputs.matrix-slim }}
       matrix-behave: ${{ steps.set-matrix.outputs.matrix-behave }}
       matrix-ide-e2e: ${{ steps.set-matrix.outputs.matrix-ide-e2e }}
+      matrix-login-e2e: ${{ steps.set-matrix.outputs.matrix-login-e2e }}
       # Which of the jobs below this change can say anything about. Every one of
       # them reads its own name here; see ".github/actions/changed-scopes".
       deep: ${{ steps.depth.outputs.deep }}
@@ -754,6 +755,9 @@ jobs:
           fi
           echo "Operating systems (IDE end to end): ${OSES_IDE_E2E}"
           echo 'matrix-ide-e2e={"os": '"${OSES_IDE_E2E}"', "python-version": ['"$(jq -c '.[-1]' <<< '${{ env.PYTHONS }}')"']}' >> "${GITHUB_OUTPUT}"
+          # 'pc login' end to end: Linux only, where the runner's Google Chrome
+          # takes the extension over its DevTools pipe; one interpreter, the newest.
+          echo 'matrix-login-e2e={"os": ["ubuntu-latest"], "python-version": ['"$(jq -c '.[-1]' <<< '${{ env.PYTHONS }}')"']}' >> "${GITHUB_OUTPUT}"
 
   # What this run is going to reach for, checked before it reaches for it.
   #
@@ -1277,6 +1281,80 @@ jobs:
         with:
           name: ide-e2e-test-results-${{ matrix.os }}-${{ matrix.python-version }}
           path: ide-e2e-test-results/
+          retention-days: 7
+
+  # 'pc login' end to end: the command, the daemon, a plugin's 'login' in its
+  # sandbox, the runner's Google Chrome with PartCAD's extension in it (loaded
+  # over the DevTools pipe, which is how Chrome takes it since it stopped
+  # honouring '--load-extension'), and a local site to sign in to. See
+  # "tests/partcad_client/test_login_e2e.py". One process, like the IDE's: it
+  # starts a browser, a daemon and a sandbox, which the parallel suite must not.
+  # The extension on its own, in every browser it is built for, is
+  # "browsers.yml"'s.
+  test-login-e2e:
+    name: "Login (end to end)"
+    needs:
+      - set-matrix
+      - build-containers
+    if: ${{ needs.set-matrix.outputs.pytest == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix-login-e2e) }}
+    runs-on: ${{ matrix.os }}
+    # A cold sandbox is most of it.
+    timeout-minutes: 45
+    env:
+      PC_CONTAINER_IMAGE_TAG: ${{ needs.set-matrix.outputs.image-override }}
+      PC_CONTAINER_IMAGE_OWNER: ${{ needs.set-matrix.outputs.image-owner }}
+      PC_TEST_LOGIN_E2E: "1"
+      PC_LOGIN_BROWSER: google-chrome
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-all
+        with:
+          job: login-e2e
+      - uses: ./.github/actions/setup-test
+        with:
+          job: login-e2e
+
+      - name: Test pc login end to end
+        shell: bash -el {0}
+        run: |
+          . ~/.bashrc
+          . ~/.bash_profile
+          mamba activate ${{ format('env-test-login-e2e-{0}', matrix.python-version) }}
+
+          mkdir -pv login-e2e-test-results
+          # The session's verdict rather than the exit code, as in "Pytest" --
+          # see the note there and the root "conftest.py".
+          marker="login-e2e-test-results/session-verdict-$$"
+          export PYTEST_RESULT_MARKER="${marker}"
+          rm -f "${marker}"
+
+          rc=0
+          pytest tests/partcad_client/test_login_e2e.py \
+            --junitxml=login-e2e-test-results/junit.xml --no-cov -s \
+            -p no:error-for-skips -p no:warnings --dist no || rc=$?
+
+          verdict="$(cat "${marker}" 2>/dev/null || true)"
+          rm -f "${marker}"
+          if [ "${verdict}" != "success" ]; then
+            echo "::error::pytest recorded '${verdict:-no verdict}' (process exit code ${rc})"
+            exit "$(( rc != 0 ? rc : 1 ))"
+          fi
+          # A skip is not a pass here: the job exists to run this one test.
+          if grep -q '<skipped' login-e2e-test-results/junit.xml; then
+            echo "::error::the login end-to-end test was skipped"
+            grep -o '<skipped[^>]*>' login-e2e-test-results/junit.xml
+            exit 1
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: login-e2e-test-results-${{ matrix.os }}-${{ matrix.python-version }}
+          path: login-e2e-test-results/
           retention-days: 7
 
   test-behave:

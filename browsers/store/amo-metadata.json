@@ -1,0 +1,21 @@
+{
+  "categories": {
+    "firefox": ["other"]
+  },
+  "summary": {
+    "en-US": "Logs PartCAD plugins in to the sites they work with: captures the credentials a plugin asks for and hands them to PartCAD on this computer."
+  },
+  "description": {
+    "en-US": "PartCAD's command line installs this extension into a browser profile of its own when you run `pc login`. It does nothing until PartCAD opens a login page on this computer (127.0.0.1); it then shows a banner on the site PartCAD names, points at what to click, and once you are logged in reads exactly the values the PartCAD plugin asked for -- a cookie, a value in the page's storage, a value on the page, or one you paste -- and sends them to PartCAD on this computer, and nowhere else. It acts only on the sites the login names, only while a login is in progress, and only for as long as PartCAD waits."
+  },
+  "homepage": {
+    "en-US": "https://github.com/partcad/partcad/tree/main/browsers"
+  },
+  "support_url": {
+    "en-US": "https://github.com/partcad/partcad/issues"
+  },
+  "version": {
+    "license": "Apache-2.0",
+    "approval_notes": "The source is not built, bundled or minified: the package is the directory browsers/firefox of https://github.com/partcad/partcad as it is. The extension is inert until a page at http://127.0.0.1:<port>/partcad/login/<nonce>/start (served by PartCAD's `pc login`) hands it a login request; browsers/README.md describes the protocol and why each permission is needed, and tests/browsers/conftest.py is a stand-in for that page that can be used to try it."
+  }
+}

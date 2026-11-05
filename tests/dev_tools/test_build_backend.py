@@ -47,6 +47,9 @@ TEMPLATE = REPO_ROOT / "dev-tools" / "MANIFEST.in"
 
 # What the backend looks at, relative to the project root a build runs in.
 PACKAGE = Path("src") / "partcad" / "ai_agents"
+# The browser extension 'pc login' loads, through the symlink
+# 'src/partcad_client/browsers', which the backend checks the same way.
+BROWSERS = Path("src") / "partcad_client" / "browsers"
 
 
 def _backend():
@@ -71,6 +74,9 @@ def materialized(project):
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text("---\nname: init\n---\n", encoding="utf-8")
     (project / PACKAGE / "plugin.json").write_text('{"name": "pc", "version": "0.0.0"}\n', encoding="utf-8")
+    for family in ("chromium", "firefox"):
+        (project / BROWSERS / family).mkdir(parents=True)
+        (project / BROWSERS / family / "manifest.json").write_text('{"manifest_version": 3}\n', encoding="utf-8")
 
 
 def dropped(project):
@@ -79,6 +85,8 @@ def dropped(project):
     (project / PACKAGE / "plugin.json").write_text(
         "../../../ai-agents/claude/.claude-plugin/plugin.json", encoding="utf-8"
     )
+    (project / BROWSERS).parent.mkdir(parents=True, exist_ok=True)
+    (project / BROWSERS).write_text("../../browsers", encoding="utf-8")
 
 
 def test_the_backend_is_the_one_pyproject_declares():
@@ -163,6 +171,16 @@ def test_it_refuses_a_manifest_that_is_a_path_rather_than_a_manifest(project):
         _backend()._check_the_skills_are_there()
 
     assert "does not parse as JSON" in str(refusal.value)
+
+
+def test_it_refuses_a_tree_without_the_browser_extension(project):
+    """'pc login' loads it from the wheel: a wheel without it installs, and logs nobody in."""
+    materialized(project)
+    (project / BROWSERS / "firefox" / "manifest.json").unlink()
+
+    with pytest.raises(SystemExit) as refused:
+        _backend()._check_the_skills_are_there()
+    assert "browsers/firefox/manifest.json cannot be read" in str(refused.value).replace(os.sep, "/")
 
 
 def test_it_refuses_a_skills_directory_with_no_skills_in_it(project):

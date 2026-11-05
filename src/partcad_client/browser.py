@@ -628,6 +628,7 @@ _FIREFOX_PREFERENCES = {
     "xpinstall.signatures.required": False,
     "extensions.autoDisableScopes": 0,
     "extensions.enabledScopes": 15,
+    "extensions.startupScanScopes": 1,
     "browser.shell.checkDefaultBrowser": False,
     "browser.aboutwelcome.enabled": False,
     "datareporting.policy.dataSubmissionEnabled": False,

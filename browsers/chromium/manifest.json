@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "PartCAD Login",
+  "version": "0.9.2",
+  "description": "Logs PartCAD plugins in to the sites they work with: captures the credentials a plugin asks for and hands them to PartCAD on this computer.",
+  "homepage_url": "https://github.com/partcad/partcad/tree/main/browsers",
+  "minimum_chrome_version": "110",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": ["alarms", "cookies", "scripting", "storage", "tabs", "webNavigation"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["common.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "incognito": "not_allowed"
+}

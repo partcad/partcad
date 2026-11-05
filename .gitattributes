@@ -54,7 +54,14 @@
 # in `.github/workflows` asks for LFS -- so every published extension until now
 # carried a 130-byte pointer file where its icon should be, and showed none in
 # the marketplace or in the Extensions view. Named on its own rather than by
-# extension: the rest of the `.png`s in the tree really are rendered output.
+# extension: the rest of the `.png`s in the tree really are rendered output, but for
+# the extension's below.
+#
+# The browser extension's icons, `/browsers/*/icons/*.png`, are the same rule
+# once more, and twice over: `browsers/build.py` packs them into what goes to the
+# Chrome Web Store, Microsoft Edge Add-ons and addons.mozilla.org, and `pc login`
+# loads the directories unpacked, as they are checked out. A pointer file there
+# is an extension the browser refuses to load, for an icon it cannot decode.
 #
 # `.svg` is here for the same reason the `.png`s are, and with the same
 # exceptions for the same reason. Nearly every SVG in this tree is a *drawing* --
@@ -119,6 +126,7 @@
 **/*.svg filter=lfs diff=lfs merge=lfs -text
 **/*.pdf filter=lfs diff=lfs merge=lfs -text
 /ide/vscode/resources/logo_128x128.png -filter binary
+/browsers/*/icons/*.png -filter binary
 /ide/vscode/resources/**/*.svg -filter binary
 /cad/freecad/resources/icons/*.svg -filter binary
 /apache20.svg -filter binary

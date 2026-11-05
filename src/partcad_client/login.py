@@ -146,6 +146,11 @@ class LoginListener:
             return self._send(request, 404, "text/plain", "Not found")
         query = urllib.parse.parse_qs(parts.query, keep_blank_values=True)
         if what == "start":
+            # Only while the step is waiting: the extension asks an earlier
+            # step's start page whether its 'pc login' still waits, and
+            # refuses a new one while it does - a step that is over must say so.
+            if step.event.is_set():
+                return self._send(request, 404, "text/plain", "Not found")
             return self._send(request, 200, "text/html", self._start_page(step))
         if what == "manual":
             return self._send(request, 200, "text/html", self._manual_page(step))
@@ -198,9 +203,12 @@ class LoginListener:
         # '</' would end the script element early; JSON allows it escaped.
         data = json.dumps(spec).replace("</", "<\\/")
         title = spec.get("title") or spec.get("url")
+        # The extension marks the page it took ('<html data-partcad-login=accepted>'),
+        # which is when the note for a browser without it stops being true.
         body = (
+            "<style>html[data-partcad-login=accepted] .partcad-no-extension{display:none}</style>"
             "<script type='application/json' id='partcad-login-spec'>%s</script>"
-            "<p>If nothing happens, PartCAD's extension is not in this browser: "
+            "<p class='partcad-no-extension'>If nothing happens, PartCAD's extension is not in this browser: "
             "<a href='%s'>enter what is asked for by hand</a> instead.</p>" % (data, html.escape(spec["manual"]))
         )
         return self._page(title, "Starting the login to %s..." % title, body)

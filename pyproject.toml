@@ -90,6 +90,16 @@ backend-path = ["dev-tools/build-backend"]
 # top-level packages, and that is not something to leave implicit.
 [tool.setuptools.packages.find]
 where = ["src"]
+# 'partcad_client/browsers' is a symlink to the browser extension, which is
+# data (see 'package-data' below), not packages of modules.
+exclude = ["partcad_client.browsers", "partcad_client.browsers.*"]
+
+# And what is beside the extension under that symlink is not the extension:
+# the store packager, its README, the store listings and the packages it
+# writes. 'include-package-data' would otherwise ship every file of the tree
+# setuptools lists, 'build.py' among them.
+[tool.setuptools.exclude-package-data]
+"partcad_client" = ["browsers/*.py", "browsers/*.md", "browsers/store/*", "browsers/dist/*"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
@@ -147,6 +157,13 @@ aws = {file = ["requirements-aws.txt"]}
 # test_ai_agent_skills.py` checks that every file in the library matches one of
 # these, since a file that does not is simply absent from the install.
 "partcad.ai_agents" = ["skills/**/*", "plugin.json"]
+# The browser extension `pc login` puts into the browser it opens (see
+# `partcad_client.browser`), loaded unpacked from these directories. It is
+# built and published from the top of the repository, `browsers/`, and what is
+# under `src/partcad_client/` is a symlink into it -- the same arrangement as the
+# skills above, for the same reason: one copy, so the wheel cannot carry an
+# extension other than the one the stores publish.
+"partcad_client" = ["browsers/chromium/**/*", "browsers/firefox/**/*"]
 # The schemas `partcad_utils.assy_lint` validates against: the ASSY one and the
 # `partcad.yaml` one. Both live in `partcad_utils` because both ends check both
 # kinds of file -- the daemon over a package, every client over the one file

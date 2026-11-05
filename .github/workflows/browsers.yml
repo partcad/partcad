@@ -1,0 +1,434 @@
+# The PartCAD login extension ("browsers/"): checked, packaged and tested in a
+# real browser on every change that can affect it, and published to the browser
+# stores by a release.
+#
+# Gated like every other workflow here, and for the same reasons -- see
+# ".github/actions/changed-scopes" and "test-depth": the "scope" job decides,
+# the jobs below skip themselves rather than the trigger skipping the workflow,
+# so a required check is never left waiting for a run that was never created.
+# A push to "devel" runs it only for the version bump, which is the tree a
+# release is cut from and the one whose manifests carry the version the stores
+# will see.
+#
+# Publishing happens on a push to "main" -- the release, exactly as in
+# "deploy.yml" -- and to each store only when that store's credentials are
+# configured (see "Publishing" in "browsers/README.md", which names every
+# secret). A store with none is skipped, with a notice saying which secrets it
+# is missing: the extension is built on every release whether or not anybody
+# has registered it with a store yet. What a store receives is the archive the
+# "build" job made and tested in this same run, byte for byte.
+name: Browsers # Keep the action badge icon short
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: >
+          Publish to every configured store as well (on "main" only) -- for a
+          store whose credentials were added after the release went out.
+        type: boolean
+        default: false
+  merge_group:
+  push:
+    branches: ["main", "devel"]
+  pull_request:
+    branches: ["main", "devel"]
+
+permissions:
+  contents: read
+
+# As in "test.yml": a version bump gets a group of its own, keyed by commit. And
+# never cancelled on "main", where a cancelled run is a release that reached
+# some stores and not others.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ startsWith(github.event.head_commit.message, 'Version updated') && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
+
+env:
+  # Pinned, like every tool a release job runs. Bump it deliberately.
+  WEB_EXT: web-ext@10.8.0
+
+jobs:
+  scope:
+    name: "Set scope"
+    runs-on: ubuntu-latest
+    # The gate every workflow here carries: a push to "devel" runs this only
+    # for a version bump, the event name leads because a "schedule" or a
+    # "merge_group" carries no "head_commit", and a fork's "devel" is let
+    # through because no bump is coming there. See "build.yml".
+    if: >-
+      ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel'
+      || startsWith(github.event.head_commit.message, 'Version updated')
+      || github.event.repository.fork }}
+    outputs:
+      browsers: ${{ steps.scope.outputs.browsers }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Decide the depth
+        id: depth
+        uses: ./.github/actions/test-depth
+
+      - name: Decide what the change touches
+        id: scope
+        uses: ./.github/actions/changed-scopes
+        with:
+          deep: ${{ steps.depth.outputs.deep }}
+
+  build:
+    name: "Build and test"
+    needs: scope
+    if: ${{ needs.scope.outputs.browsers == 'true' }}
+    # One runner is all there is to it: the extension is JavaScript and JSON,
+    # and the archive built here is the one every store and platform gets.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      # pytest alone, at the version "poetry.lock" resolves, and none of
+      # PartCAD: nothing under "tests/browsers" imports it. Hence the
+      # "--confcutdir" and the empty "addopts" below -- the repository's own
+      # conftest files and options load PartCAD and coverage, which this job
+      # neither installs nor needs.
+      - name: Install pytest
+        run: python -m pip install "pytest==9.1.1" "pytest-xdist==3.8.0"
+
+      - name: Check and package
+        run: python browsers/build.py
+
+      # addons.mozilla.org's own linter, which is what a submission is run
+      # through. There is no Firefox on the runner to test the build in, so
+      # this is the Firefox build's check beyond the static tests.
+      - name: Lint the Firefox build
+        run: npx --yes "${WEB_EXT}" lint --source-dir browsers/firefox
+
+      - name: Static tests
+        run: >-
+          python -m pytest tests/browsers -o addopts="" -p no:cacheprovider --confcutdir=tests/browsers
+          -v -n 4
+
+      # Google Chrome as the runner image ships it: a branded Chrome, which
+      # ignores "--load-extension" from 137 on -- so this exercises the other
+      # way in, "Extensions.loadUnpacked" over the DevTools pipe, which is the
+      # one "pc login" uses for such a Chrome.
+      - name: End-to-end test (Google Chrome)
+        env:
+          PC_TEST_BROWSER_E2E: "1"
+          PC_TEST_BROWSER: google-chrome
+        run: >-
+          python -m pytest tests/browsers/test_login_e2e.py -o addopts="" -p no:cacheprovider
+          --confcutdir=tests/browsers -v -n 4 --basetemp="${RUNNER_TEMP}/browsers-e2e"
+
+      # What the user would have seen at each step, and each browser's log --
+      # the first things to look at when the test above fails.
+      - name: Upload the screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browsers-e2e-screenshots
+          path: |
+            ${{ runner.temp }}/browsers-e2e/**/screenshots/*.png
+            ${{ runner.temp }}/browsers-e2e/**/browser.log
+          if-no-files-found: ignore
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: partcad-login-extension
+          path: |
+            browsers/dist/*.zip
+            browsers/dist/*.xpi
+          if-no-files-found: error
+
+  # Which stores this release goes to. A secret cannot be read in a job's "if",
+  # so this job reads them and says yes or no for each store; a store with no
+  # credentials is then skipped -- "skipped", not failed -- with a notice here
+  # naming what is missing.
+  stores:
+    name: "Choose the stores"
+    needs: build
+    if: >-
+      ${{ github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) }}
+    runs-on: ubuntu-24.04
+    outputs:
+      chrome: ${{ steps.check.outputs.chrome }}
+      firefox: ${{ steps.check.outputs.firefox }}
+      edge: ${{ steps.check.outputs.edge }}
+    steps:
+      - name: Check which stores have credentials
+        id: check
+        env:
+          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+          EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+        run: |
+          set -euo pipefail
+          store() {
+            local name="$1"
+            shift
+            local missing=()
+            local secret
+            for secret in "$@"; do
+              if [ -z "${!secret:-}" ]; then
+                missing+=("${secret}")
+              fi
+            done
+            if [ "${#missing[@]}" -eq 0 ]; then
+              echo "${name}=true" >> "${GITHUB_OUTPUT}"
+              echo "${name}: configured"
+            elif [ "${#missing[@]}" -lt "$#" ]; then
+              # Some but not all: somebody set this store up and missed one.
+              echo "${name}=false" >> "${GITHUB_OUTPUT}"
+              echo "::warning::not publishing to ${name}: ${missing[*]} not set (see browsers/README.md)"
+            else
+              echo "${name}=false" >> "${GITHUB_OUTPUT}"
+              echo "::notice::not publishing to ${name}: no credentials configured (see browsers/README.md)"
+            fi
+          }
+          store chrome CHROME_PUBLISHER_ID CHROME_EXTENSION_ID CHROME_CLIENT_ID CHROME_CLIENT_SECRET CHROME_REFRESH_TOKEN
+          store firefox AMO_JWT_ISSUER AMO_JWT_SECRET
+          store edge EDGE_PRODUCT_ID EDGE_CLIENT_ID EDGE_API_KEY
+
+  publish-chrome:
+    name: "Publish to the Chrome Web Store"
+    needs: [build, stores]
+    if: ${{ needs.stores.outputs.chrome == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Two releases close together publish in order, and a publish is never
+    # cancelled between the upload and the submission.
+    concurrency:
+      group: publish-chrome-web-store
+      cancel-in-progress: false
+    steps:
+      - name: Download the packages
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-login-extension
+          path: dist
+
+      # The Chrome Web Store API, v2: an OAuth access token from a refresh
+      # token, the package uploaded to the item, then the item submitted for
+      # review, which publishes it once it passes. A store refuses a version
+      # it already has, so re-running an old release fails at the upload.
+      - name: Upload and submit
+        env:
+          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+        run: |
+          set -euo pipefail
+          package="$(find dist -name 'partcad-login-chromium-*.zip' | head -n 1)"
+          if [ -z "${package}" ]; then
+            echo "::error::no Chromium package in the artifact"
+            exit 1
+          fi
+          token="$(curl -fsS https://oauth2.googleapis.com/token \
+            --data-urlencode "client_id=${CHROME_CLIENT_ID}" \
+            --data-urlencode "client_secret=${CHROME_CLIENT_SECRET}" \
+            --data-urlencode "refresh_token=${CHROME_REFRESH_TOKEN}" \
+            --data-urlencode "grant_type=refresh_token" | jq -r '.access_token // empty')"
+          if [ -z "${token}" ]; then
+            echo "::error::Google did not issue an access token for the refresh token"
+            exit 1
+          fi
+          echo "::add-mask::${token}"
+          api="https://chromewebstore.googleapis.com"
+          item="publishers/${CHROME_PUBLISHER_ID}/items/${CHROME_EXTENSION_ID}"
+
+          upload="$(curl -sS -H "Authorization: Bearer ${token}" -X POST -T "${package}" \
+            "${api}/upload/v2/${item}:upload")"
+          echo "${upload}"
+          state="$(jq -r '.uploadState // empty' <<< "${upload}")"
+          for _ in $(seq 1 60); do
+            case "${state}" in
+            SUCCEEDED)
+              break
+              ;;
+            *IN_PROGRESS)
+              sleep 10
+              state="$(curl -fsS -H "Authorization: Bearer ${token}" "${api}/v2/${item}:fetchStatus" |
+                jq -r '.lastAsyncUploadState // empty')"
+              ;;
+            *)
+              echo "::error::the Chrome Web Store did not take ${package##*/}: ${upload}"
+              exit 1
+              ;;
+            esac
+          done
+          if [ "${state}" != "SUCCEEDED" ]; then
+            echo "::error::the upload of ${package##*/} is still ${state:-unknown} after ten minutes"
+            exit 1
+          fi
+
+          curl -fsS -H "Authorization: Bearer ${token}" -X POST "${api}/v2/${item}:publish"
+          echo
+          echo "Submitted ${package##*/} for review; it is published once it passes."
+
+  publish-firefox:
+    name: "Publish to Firefox Add-ons"
+    needs: [build, stores]
+    if: ${{ needs.stores.outputs.firefox == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: publish-firefox-add-ons
+      cancel-in-progress: false
+    steps:
+      # The listing's metadata, which a listed version is submitted with.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: browsers/store
+          sparse-checkout-cone-mode: false
+
+      - name: Download the packages
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-login-extension
+          path: dist
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      # "web-ext sign" packages a directory itself, so the archive this run
+      # built is unpacked for it: what is signed is what was tested.
+      #
+      # "listed" (the default) submits a version of the public listing, which
+      # addons.mozilla.org reviews and then signs; "unlisted" -- the repository
+      # variable AMO_CHANNEL -- has it signed for distribution by PartCAD
+      # itself, which is what a Firefox that only installs signed extensions
+      # needs from "pc login". One version number goes to one channel only.
+      - name: Sign and submit
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+          CHANNEL: ${{ vars.AMO_CHANNEL || 'listed' }}
+        run: |
+          set -euo pipefail
+          package="$(find dist -name 'partcad-login-firefox-*.xpi' | head -n 1)"
+          if [ -z "${package}" ]; then
+            echo "::error::no Firefox package in the artifact"
+            exit 1
+          fi
+          mkdir firefox
+          unzip -q "${package}" -d firefox
+          args=(--source-dir firefox --artifacts-dir signed --channel "${CHANNEL}")
+          case "${CHANNEL}" in
+          listed)
+            # Reviewed by a person before it is signed, which is not something
+            # to wait for here.
+            args+=(--amo-metadata browsers/store/amo-metadata.json --approval-timeout 0)
+            ;;
+          unlisted)
+            args+=(--approval-timeout 900000)
+            ;;
+          *)
+            echo "::error::AMO_CHANNEL is '${CHANNEL}'; it must be 'listed' or 'unlisted'"
+            exit 1
+            ;;
+          esac
+          npx --yes "${WEB_EXT}" sign "${args[@]}"
+
+      - name: Upload the signed package
+        uses: actions/upload-artifact@v7
+        with:
+          name: partcad-login-firefox-signed
+          path: signed/*.xpi
+          if-no-files-found: ignore
+
+  publish-edge:
+    name: "Publish to Microsoft Edge Add-ons"
+    needs: [build, stores]
+    if: ${{ needs.stores.outputs.edge == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: publish-edge-add-ons
+      cancel-in-progress: false
+    steps:
+      - name: Download the packages
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-login-extension
+          path: dist
+
+      # The Microsoft Edge Add-ons API, v1.1 (an API key, not an access
+      # token): the package uploaded to the product's draft submission, then
+      # the draft submitted for certification. Each is an asynchronous
+      # operation, named by the "Location" header of the request that started
+      # it and polled until it is no longer "InProgress".
+      - name: Upload and submit
+        env:
+          EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+        run: |
+          set -euo pipefail
+          package="$(find dist -name 'partcad-login-chromium-*.zip' | head -n 1)"
+          if [ -z "${package}" ]; then
+            echo "::error::no Chromium package in the artifact"
+            exit 1
+          fi
+          version="${package##*/partcad-login-chromium-}"
+          version="${version%.zip}"
+          api="https://api.addons.microsoftedge.microsoft.com/v1/products/${EDGE_PRODUCT_ID}"
+          auth=(-H "Authorization: ApiKey ${EDGE_API_KEY}" -H "X-ClientID: ${EDGE_CLIENT_ID}")
+          headers="$(mktemp)"
+
+          operation() {
+            sed -n 's/^[Ll]ocation:[[:space:]]*//p' "${headers}" | tr -d '\r' | sed 's|.*/||' | head -n 1
+          }
+          follow() {
+            local url="$1"
+            local body
+            local status
+            for _ in $(seq 1 60); do
+              body="$(curl -fsS "${auth[@]}" "${url}")"
+              status="$(jq -r '.status // empty' <<< "${body}")"
+              case "${status}" in
+              Succeeded)
+                echo "${body}"
+                return 0
+                ;;
+              InProgress)
+                sleep 10
+                ;;
+              *)
+                echo "::error::${body}"
+                return 1
+                ;;
+              esac
+            done
+            echo "::error::still in progress after ten minutes: ${url}"
+            return 1
+          }
+
+          curl -fsS -D "${headers}" -o /dev/null "${auth[@]}" -H "Content-Type: application/zip" \
+            -X POST -T "${package}" "${api}/submissions/draft/package"
+          follow "${api}/submissions/draft/package/operations/$(operation)"
+
+          curl -fsS -D "${headers}" -o /dev/null "${auth[@]}" -H "Content-Type: application/json" \
+            -X POST -d "{\"notes\": \"PartCAD ${version}\"}" "${api}/submissions"
+          follow "${api}/submissions/operations/$(operation)"
+          echo "Submitted ${package##*/} for certification."

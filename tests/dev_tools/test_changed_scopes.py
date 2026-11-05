@@ -56,6 +56,7 @@ SUBJECTS = {
     "ide",
     "vsix",
     "plugin",
+    "browsers",
     "images",
     "ide-e2e",
 }
@@ -321,6 +322,32 @@ def test_a_skill_is_the_plugin_and_the_wheel_both(tmp_path):
     assert subjects["pytest"]
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "browsers/chromium/content.js",
+        "browsers/firefox/manifest.json",
+        "browsers/build.py",
+        "tests/browsers/conftest.py",
+    ],
+)
+def test_the_login_extension_runs_its_own_workflow_and_the_tests(tmp_path, path):
+    """`browsers.yml` for the extension and its tests, and `Pytest` for the static half of them.
+
+    Not the bundles or the IDE: nothing is frozen out of `browsers/`.
+    """
+    subjects, buckets = classify(tmp_path, [path])
+    assert buckets == {"browsers", "code"}
+    assert subjects["browsers"]
+    assert subjects["pytest"] and subjects["wheel"]
+    assert not subjects["bundle"] and not subjects["ide"] and not subjects["vsix"]
+
+
+def test_the_rest_of_the_tests_do_not_run_the_login_extension(tmp_path):
+    subjects, _ = classify(tmp_path, ["tests/partcad/unit/test_part.py"])
+    assert not subjects["browsers"]
+
+
 def test_the_dev_container_alone_runs_it_but_not_pytest_inside_it(tmp_path):
     """The one mapping that is a judgement rather than a mechanism.
 
@@ -427,6 +454,9 @@ def test_every_top_level_entry_is_classified_deliberately(tmp_path):
         "ai-agents": {"ai"},
         "apache20.svg": {"docs"},
         "behave.ini": {"code"},
+        # The login extension: its own workflow, and source as well, since
+        # "pc login" loads it off the installation. See the test below.
+        "browsers": {"browsers", "code"},
         "cad": {"code"},
         "conftest.py": {"code"},
         "dev-tools": {"code"},
