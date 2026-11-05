@@ -502,17 +502,20 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         from partcad_utils.user_config import save_parameter_overrides
 
         outcomes = []
+        said = []
+        chosen = pc_browser.choose(None) if interactive and not check else None
+        # With no browser to open, nobody can be sent to one: the instructions
+        # are the answer. Waiting on the manual page instead would keep its
+        # address in this call until the wait was over.
+        non_interactive = not interactive or (chosen is None and not check)
 
         def ask(results):
-            request = {"plugin": plugin, "browser": results, "check": check, "non_interactive": not interactive}
+            request = {"plugin": plugin, "browser": results, "check": check, "non_interactive": non_interactive}
             if values:
                 request["values"] = dict(values)
             outcome = bridge.call("plugin.login", request, True, None)
             outcomes.append(outcome)
             return outcome.result
-
-        said = []
-        chosen = pc_browser.choose(None) if interactive and not check else None
 
         def open_browser(url, spec):
             return pc_browser.open_browser(url, chosen) if chosen is not None else None

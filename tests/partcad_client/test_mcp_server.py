@@ -724,3 +724,15 @@ def test_what_login_saved_is_sent_with_every_request_after_it(tmp_path, monkeypa
     call(server, "list_objects", {})
     sent = [params["userConfig"] for name, params in daemon.calls if name == "context.create"][-1]
     assert sent["parameters"]["//p:repo"] == {"formats": "stl", "token": "good"}
+
+
+def test_login_asked_to_be_interactive_with_no_browser_to_open_answers_with_instructions(tmp_path, monkeypatch):
+    """Nothing to open means nobody to send to it: the instructions now, not a wait on a page nobody sees."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from partcad_client import browser as pc_browser
+
+    monkeypatch.setattr(pc_browser, "choose", lambda name=None: None)
+    daemon, server = serve(tmp_path, {"plugin.login": _login_daemon})
+    answer = body(call(server, "login", {"plugin": "//p:repo", "interactive": True}))
+    assert answer["ok"] is True and answer["result"]["status"] == "instructions"
+    assert requests(daemon, "plugin.login")[0]["non_interactive"] is True
