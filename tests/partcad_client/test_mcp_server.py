@@ -118,6 +118,7 @@ def test_the_tools_are_the_curated_set_and_the_escape_hatch(tmp_path):
             "lint",
             "bom",
             "search",
+            "login",
             "instructions",
             "version",
             "list_methods",
@@ -140,6 +141,7 @@ def test_the_annotations_do_not_claim_less_than_the_truth(tmp_path):
     assert tools["execute"].read_only_hint is False
     assert tools["execute"].destructive_hint is True
     assert tools["execute"].idempotent_hint is False
+    assert tools["login"].read_only_hint is False
 
 
 def test_the_instructions_name_only_real_tools(tmp_path):
@@ -642,3 +644,60 @@ def test_a_request_without_a_context_that_does_something_is_not_sent_again(tmp_p
     assert result.is_error
     assert "may or may not have finished" in body(result)["error"]
     assert len(requests(daemon, "adhoc.convert")) == 1
+
+
+# --- Logging in ----------------------------------------------------------------
+
+
+LOGIN_SPEC = {
+    "url": "https://example.com/login",
+    "title": "Example",
+    "capture": [{"name": "token", "cookie": {"url": "https://example.com/", "name": "t"}}],
+    "require": "all",
+    "instructions": "An API key from https://example.com/keys does as well.",
+}
+
+
+def _login_daemon(params, emit):
+    if params.get("values"):
+        if params["values"].get("token") != "good":
+            return {"plugin": "//p:repo", "status": "failed", "message": "the site does not take it"}
+        return {"plugin": "//p:repo", "status": "done", "parameters": {"token": "good"}, "message": "Logged in"}
+    return {"plugin": "//p:repo", "status": "instructions", "spec": LOGIN_SPEC}
+
+
+def test_login_asks_for_nobody_at_the_screen_and_says_what_the_user_is_to_do(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    daemon, server = serve(tmp_path, {"plugin.login": _login_daemon})
+    answer = body(call(server, "login", {"plugin": "//p:repo"}))
+    assert answer["ok"] is True
+    assert requests(daemon, "plugin.login")[0]["non_interactive"] is True
+    result = answer["result"]
+    assert result["status"] == "instructions" and result["names"] == ["token"]
+    assert "https://example.com/login" in result["instructions"]
+    assert "An API key from https://example.com/keys" in result["instructions"]
+    assert "values {'token': '...'}" in result["instructions"]
+    assert not (tmp_path / ".partcad" / "config.yaml").exists()
+
+
+def test_login_hands_the_values_over_and_keeps_what_works_without_repeating_it(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    daemon, server = serve(tmp_path, {"plugin.login": _login_daemon})
+    answer = body(call(server, "login", {"plugin": "//p:repo", "values": {"token": "good"}}))
+    assert answer["ok"] is True, answer
+    assert requests(daemon, "plugin.login")[0]["values"] == {"token": "good"}
+    assert answer["result"]["saved"] == ["token"]
+    assert "good" not in json.dumps(answer["result"])
+    import yaml
+
+    assert yaml.safe_load((tmp_path / ".partcad" / "config.yaml").read_text())["parameters"] == {
+        "//p:repo": {"token": "good"}
+    }
+
+
+def test_login_that_the_site_refuses_is_a_failed_result(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, server = serve(tmp_path, {"plugin.login": _login_daemon})
+    result = call(server, "login", {"plugin": "//p:repo", "values": {"token": "bad"}})
+    assert result.is_error and "the site does not take it" in body(result)["error"]
+    assert not (tmp_path / ".partcad" / "config.yaml").exists()

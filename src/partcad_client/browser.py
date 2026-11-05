@@ -13,9 +13,10 @@ leaves behind and hands it to the listener 'pc login' runs (see
 **Which browser.** The user's default one - the one they are signed in to things
 in, and trust with passwords - found the way each system records it: the
 registry on Windows, LaunchServices on macOS, 'xdg-settings' on Linux. A browser
-that cannot be given the extension (Safari, or anything unknown) is passed over
-for another one that is installed, and with none, 'pc login' falls back to a
-page of its own where the values are pasted by hand.
+that cannot be given the extension (Safari, anything unknown, Google Chrome on
+Windows - see 'supported') is passed over for an installed one that can, and
+with none, 'pc login' falls back to a page of its own where the values are
+pasted by hand.
 
 **Which profile.** Never the user's everyday one. PartCAD keeps a profile of
 its own per browser, under '~/.partcad/browser/<browser>/', and the extension
@@ -311,14 +312,41 @@ def browser_named(name_or_path: str) -> Optional[Browser]:
     return next((b for b in installed_browsers() if b.kind == name_or_path.lower()), None)
 
 
+def supported(browser: Browser) -> bool:
+    """Whether PartCAD can put its extension in 'browser', on this system.
+
+    Every Firefox and every Chromium can, but one: Google Chrome stopped
+    honouring '--load-extension' in release 137, and on Windows the DevTools
+    pipe that replaces it is not set up here yet - so there, Chrome opens
+    without the extension, on a page that says to enter the values by hand.
+    """
+    if browser.family == "firefox":
+        return True
+    if browser.family != "chromium":
+        return False
+    return not (sys.platform == "win32" and browser.kind == "chrome")
+
+
 def choose(name_or_path: Optional[str] = None) -> Optional[Browser]:
-    """The browser to log in with: the one named, else the default, else one that can take the extension."""
+    """The browser to log in with.
+
+    The one named, whatever it is. Else the user's default, when PartCAD can
+    put its extension in it; else an installed one it can, best first; else
+    whichever browser there is, which opens without the extension, on a page
+    that says what to do by hand.
+    """
     if name_or_path:
         return browser_named(name_or_path)
-    browser = default_browser()
-    if browser is not None and browser.family in ("chromium", "firefox"):
-        return browser
-    return next(iter(installed_browsers()), None)
+    default = default_browser()
+    if default is not None and supported(default):
+        return default
+    installed = installed_browsers()
+    for browser in installed:
+        if supported(browser):
+            return browser
+    if default is not None and default.family in ("chromium", "firefox"):
+        return default
+    return next(iter(installed), None)
 
 
 # --- PartCAD's profile, and the extension in it ------------------------------------

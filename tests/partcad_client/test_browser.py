@@ -140,6 +140,33 @@ def test_a_browser_that_cannot_take_the_extension_is_passed_over(monkeypatch):
     assert pc_browser.choose().kind == "edge"
 
 
+def test_chrome_on_windows_is_passed_over_for_one_that_takes_the_extension(monkeypatch):
+    chrome, firefox = pc_browser.Browser("chrome", ["chrome.exe"]), pc_browser.Browser("firefox", ["firefox.exe"])
+    monkeypatch.setattr(pc_browser.sys, "platform", "win32")
+    monkeypatch.setattr(pc_browser, "default_browser", lambda: chrome)
+    monkeypatch.setattr(pc_browser, "installed_browsers", lambda: [chrome, firefox])
+    assert pc_browser.choose() is firefox
+    # ... and opened all the same when it is all there is: its page says what to do by hand.
+    monkeypatch.setattr(pc_browser, "installed_browsers", lambda: [chrome])
+    assert pc_browser.choose() is chrome
+    monkeypatch.setattr(pc_browser.sys, "platform", "linux")
+    assert pc_browser.choose() is chrome and pc_browser.supported(chrome)
+
+
+def test_with_no_default_known_an_installed_one_that_takes_the_extension_is_used(monkeypatch):
+    brave = pc_browser.Browser("brave", ["/x/brave"])
+    monkeypatch.setattr(pc_browser, "default_browser", lambda: None)
+    monkeypatch.setattr(pc_browser, "installed_browsers", lambda: [brave])
+    assert pc_browser.choose() is brave
+    monkeypatch.setattr(pc_browser, "installed_browsers", lambda: [])
+    assert pc_browser.choose() is None
+
+
+def test_a_named_browser_is_used_whatever_it_is(monkeypatch):
+    monkeypatch.setattr(pc_browser, "browser_named", lambda name: pc_browser.Browser("safari", [name]))
+    assert pc_browser.choose("/Applications/Safari").kind == "safari"
+
+
 # --- starting it ---------------------------------------------------------------------
 
 

@@ -30,8 +30,14 @@ PartCAD runs the script with ``__name__ == "login"``, as it runs ``get`` or ``qu
 
 ``partcad_login``
   PartCAD's callback. ``partcad_login.open_browser(...)`` opens the user's browser and returns what it
-  captured, ``{name: value}``; ``partcad_login.interactive`` is false under ``pc login --check``, when
-  ``open_browser`` raises ``partcad_login.NotInteractive`` instead of opening anything.
+  captured, ``{name: value}``. Three attributes say what kind of run this is:
+
+  - ``partcad_login.check`` is true under ``pc login --check``, when ``open_browser`` raises
+    ``partcad_login.CheckOnly`` instead of opening anything;
+  - ``partcad_login.non_interactive`` is true under ``pc login --agent`` (``--non-interactive``) and in the
+    ``login`` tool of ``pc mcp``: nobody is at the screen to use a browser, an AI agent is, and ``open_browser``
+    raises ``partcad_login.InstructionsNeeded`` instead -- see `With nobody at the screen`_;
+  - ``partcad_login.values`` is what was handed over with ``pc login --set NAME=VALUE``, by capture name.
 
 and answers ``output = {"result": {"parameters": {...}, "message": "..."}}`` -- the parameters to save, and one
 line for the user -- or raises. A script with no ``login`` branch answers ``{}``, and ``pc login`` says the plugin
@@ -68,7 +74,8 @@ happen twice -- which checking credentials and building a URL are not.
 What the browser is asked
 =========================
 
-``open_browser(url, capture, title=None, guide=None, require="all", done_when=None, timeout=600)``:
+``open_browser(url, capture, title=None, guide=None, require="all", done_when=None, timeout=600,
+instructions=None)``:
 
 ``url``
   Where the browser goes, once the extension has been handed the rest.
@@ -100,8 +107,42 @@ What the browser is asked
   pass through. ``done_when``'s ``selector`` takes a ``contains`` too.
 ``timeout``
   How many seconds ``pc login`` waits for the browser.
+``instructions``
+  For whoever has no browser to use: a few plain sentences on any other way in -- an API key and the page that
+  makes one, an application of one's own, an environment variable -- printed with what PartCAD says from the
+  rest (see below). Never sent to the extension.
 
 URL patterns are globs over the whole address, ``*`` matching anything.
+
+With nobody at the screen
+=========================
+
+``pc login --agent`` -- or ``--non-interactive``, the same switch; ``--interactive``, the default, turns it back
+-- is for an AI agent or a script logging in on a person's behalf. It opens no browser, since nobody would sign in
+there. When a plugin asks for one, ``pc login`` prints instead what a person would have done in it: where to sign
+in, each value to bring back and where it is found -- the cookie's name, the storage key, the label of what to
+copy -- whatever the plugin said in ``instructions``, and the command that hands it over:
+
+.. code-block:: text
+
+  $ pc login --agent //pub/universe/printables:printables_repo
+  Logging in to Printables needs a person to sign in, and this run has nobody to open a browser for.
+  ...
+  Hand them over with:
+    pc login --agent //pub/universe/printables:printables_repo --set token=<token>
+
+and exits with status 3: not logged in, and not failed either. The agent asks its user for what is listed and
+runs that command; ``--set`` answers the plugin's ``open_browser`` with the values -- in either mode, when they
+are enough for it -- and the plugin checks them with the site exactly as it checks what a browser brought, so a
+wrong one fails there and nothing is saved.
+
+``pc mcp`` logs in the same way and only that way, unless the agent says the user is at the screen: its
+``login`` tool answers with the same instructions and the names to hand over, and takes them back as ``values``
+(see :doc:`/ai_agents/mcp`).
+
+A plugin that knows better than its browser request what to tell an agent may read
+``partcad_login.non_interactive`` and answer ``{"result": {"instructions": "..."}}`` itself, without calling
+``open_browser``.
 
 The browser and the extension
 =============================
@@ -111,8 +152,9 @@ PartCAD's own (``~/.partcad/browser/<browser>``; where a snap or flatpak lets it
 the everyday one, and the extension lives only there: it can read any site's cookies, which is what it is for, and
 that is a power to keep to the window it was opened for. The profile is kept, so a site signed in to once stays
 signed in. A Chromium-family browser is given the unpacked extension over its DevTools pipe (Google Chrome no
-longer honours ``--load-extension``), and Firefox over WebDriver BiDi as a temporary add-on; a browser that can be
-given neither is passed over for one that can, and with none, ``pc login`` prints the address of a page where the
+longer honours ``--load-extension``), and Firefox over WebDriver BiDi as a temporary add-on. A default browser
+that can be given neither -- Safari, or a Google Chrome on Windows, where the pipe is not available yet -- is
+passed over for an installed one that can, and with none, ``pc login`` prints the address of a page where the
 values are pasted by hand.
 
 The browser starts on a page ``pc login``'s listener serves on ``127.0.0.1``, which hands the extension what the

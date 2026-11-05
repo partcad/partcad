@@ -216,6 +216,36 @@ def test_on_disk_cache_persists_across_instances():
                 shutil.rmtree(backend.cache_dir, ignore_errors=True)
 
 
+def test_the_users_overrides_of_the_plugin_are_part_of_the_cache_key(monkeypatch):
+    """Logging in, or changing a preference, is not answered from what was cached before it."""
+    from partcad import project_external_repository as per
+
+    ctx = pc.Context("examples")
+    cache = Cache("external/test_overrides", ctx.user_config)
+    overrides = {}
+    monkeypatch.setattr(per, "parameter_overrides", lambda user_config=None: overrides)
+    try:
+
+        def package(data):
+            repo = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", plugin_ref="//site:site_repo", cache=cache)
+            repo._repository = FakeRepository(data)
+            return repo
+
+        assert package({"objects/part": {"preview": {"type": "gltf"}}}).object_names("part") == ["preview"]
+        overrides["//site:site_repo"] = {"token": "t"}
+        signed_in = package({"objects/part": {"original": {"type": "step"}}})
+        assert signed_in.object_names("part") == ["original"]
+        assert signed_in._repository.keys == ["objects/part"]
+        # Another plugin's overrides are not this one's business.
+        overrides["//other:repo"] = {"token": "u"}
+        again = package({})
+        assert again.object_names("part") == ["original"] and again._repository.keys == []
+    finally:
+        for backend in cache.backends:
+            if isinstance(backend, FilesCacheBackend):
+                shutil.rmtree(backend.cache_dir, ignore_errors=True)
+
+
 def test_file_backed_configs_are_tagged_for_materialization():
     """Served configs with a 'path' get fileFrom=plugin; others are untouched."""
     ctx = pc.Context("examples")

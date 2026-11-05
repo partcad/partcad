@@ -37,6 +37,9 @@ from .sandbox import OutsideScope, PathScope
 _READS = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=True)
 _LOCAL = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
 _WRITES = ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=True)
+# Logging in writes the credentials it was given into the user's PartCAD
+# configuration, which it is for; the same ones again change nothing.
+_LOGS_IN = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=True)
 _ANYTHING = ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=True)
 
 # Daemon methods `execute` refuses, and why. Each would act on something that
@@ -458,6 +461,96 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         if limit:
             request["limit"] = limit
         return await run(ctx, "search.objects", request)
+
+    @server.tool(title="Log in to a model site or a supplier", annotations=_LOGS_IN)
+    async def login(
+        ctx: Context,
+        plugin: Annotated[
+            str,
+            Field(
+                description="The repository or provider, as '<package>:<name>', such as "
+                "'//pub/universe/printables:printables_repo'."
+            ),
+        ],
+        values: Annotated[
+            Optional[dict[str, str]],
+            Field(
+                description="What the user found, by the names an earlier call listed, such as {'token': '...'}. "
+                "Checked with the site, and kept in the user's PartCAD configuration when it works."
+            ),
+        ] = None,
+        check: Annotated[bool, Field(description="Only say whether the credentials there are still work.")] = False,
+        interactive: Annotated[
+            bool,
+            Field(
+                description="Open a browser on this machine for the user to sign in, and wait for them. Only when "
+                "the user says they are at its screen."
+            ),
+        ] = False,
+    ) -> CallToolResult:
+        """Log in to what a repository or provider plugin is a client of: a model site, a supplier.
+
+        `pc login --agent`. Credentials that still work are kept. Otherwise the result's 'instructions' say
+        what the user has to do -- where to sign in, what to copy -- and the names to hand it over by: call
+        this again with those 'values'.
+        """
+        from partcad_client import browser as pc_browser
+        from partcad_client import login as pc_login
+        from partcad_utils.user_config import save_parameter_overrides
+
+        outcomes = []
+
+        def ask(results):
+            request = {"plugin": plugin, "browser": results, "check": check, "non_interactive": not interactive}
+            if values:
+                request["values"] = dict(values)
+            outcome = bridge.call("plugin.login", request, True, None)
+            outcomes.append(outcome)
+            return outcome.result
+
+        said = []
+        chosen = pc_browser.choose(None) if interactive and not check else None
+
+        def open_browser(url, spec):
+            return pc_browser.open_browser(url, chosen) if chosen is not None else None
+
+        def log_in():
+            return pc_login.login(ask, open_browser, said.append, manual=chosen is None)
+
+        try:
+            answer = await anyio.to_thread.run_sync(log_in)
+        except CallFailed as e:
+            return report(e.outcome, failure=e)
+        except (RuntimeError, pc_login.LoginCancelled, pc_login.LoginTimedOut) as e:
+            outcome = outcomes[-1] if outcomes else Outcome(method="plugin.login")
+            return report(outcome, failure=CallFailed(str(e), outcome))
+        outcome = outcomes[-1]
+        name = answer.get("plugin") or plugin
+        if answer.get("status") == "instructions":
+
+            def hand_over(names):
+                return "Hand them over by calling the login tool again with plugin '%s' and values {%s}." % (
+                    name,
+                    ", ".join("'%s': '...'" % n for n in names),
+                )
+
+            outcome.result = {
+                "status": "instructions",
+                "plugin": name,
+                "instructions": pc_login.instructions_text(name, answer.get("spec") or {}, hand_over),
+                "names": [item["name"] for item in (answer.get("spec") or {}).get("capture") or []],
+            }
+            return report(outcome)
+        result = {"status": "done", "plugin": name, "message": answer.get("message") or ""}
+        parameters = answer.get("parameters") or {}
+        if parameters and not check:
+            # Named, never repeated: they are secrets, and the result is the agent's to keep.
+            result["saved"] = sorted(parameters)
+            result["config"] = await anyio.to_thread.run_sync(lambda: save_parameter_overrides(name, parameters))
+        if said:
+            result["said"] = said
+        outcome.result = result
+        return report(outcome)
 
     @server.tool(name="instructions", title="Assembly instructions", annotations=_READS)
     async def assembly_instructions(

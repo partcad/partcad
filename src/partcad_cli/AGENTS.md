@@ -131,6 +131,13 @@ run again (`partcad/wrappers/plugin_login.py`). The credentials it ends with are
 configuration file (`partcad_utils.user_config.save_parameter_overrides`), under `parameters`, which is how every
 later request -- each of which carries the caller's configuration -- hands them to the plugin.
 
+`pc login --agent` (`--non-interactive`) and the `login` tool of `pc mcp` are the same loop with nobody at the
+screen: `plugin.login` is sent `non_interactive`, the callback raises `InstructionsNeeded` where it would have
+asked for the browser, and the step comes back as `instructions` -- what the browser would have been asked, which
+the client turns into text (`partcad_client.login.instructions_text`) rather than a window. What the person then
+finds is sent back as `values` (`--set`), which answer the callback directly. Nothing about that is the daemon's
+either: the daemon still opens nothing and writes nothing.
+
 `pc ide install` and `pc ide workspace <directory>` are in-process too, and make **no** daemon call either: one
 installs the PartCAD extension into an editor on this machine, the other opens a folder as that editor's
 workspace, in the PartCAD workbench (`partcad_client.ide`). Both change this machine -- its editor, its screen --

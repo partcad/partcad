@@ -42,10 +42,15 @@ def process(path, request):
         result = {"exception": e}
     except BaseException as e:
         # The plugin asked for the browser. Not a failure: PartCAD opens it and
-        # runs 'login' again with what it brought back.
-        if type(e).__name__ != "BrowserNeeded" or not hasattr(e, "spec"):
+        # runs 'login' again with what it brought back - or, with nobody there
+        # to use one, says what to do instead.
+        if not hasattr(e, "spec"):
             raise
-        return {"browser": e.spec}
+        if type(e).__name__ == "BrowserNeeded":
+            return {"browser": e.spec}
+        if type(e).__name__ == "InstructionsNeeded":
+            return {"instructions": e.spec}
+        raise
 
     if "output" in result:
         output = result["output"]

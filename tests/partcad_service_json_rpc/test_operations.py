@@ -5432,10 +5432,13 @@ class FakeLoginPlugin:
     def __init__(self):
         self.asked = []
 
-    async def login(self, browser=(), interactive=True):
-        self.asked.append((list(browser), interactive))
+    async def login(self, browser=(), check=False, non_interactive=False, values=None):
+        self.asked.append((list(browser), check, non_interactive, dict(values or {})))
+        if values:
+            return {"parameters": {"token": values["t"]}, "message": "Logged in as ann"}
         if not browser:
-            return {"browser": {"url": "https://example.com/login", "capture": [{"name": "t"}]}}
+            spec = {"url": "https://example.com/login", "capture": [{"name": "t"}]}
+            return {"instructions": spec} if non_interactive else {"browser": spec}
         return {"parameters": {"token": browser[0]["t"]}, "message": "Logged in as ann"}
 
 
@@ -5470,14 +5473,36 @@ def test_a_login_step_that_needs_the_browser_says_what_it_is_to_do(monkeypatch, 
 
 def test_the_next_step_hands_the_plugin_what_the_browser_brought(monkeypatch):
     session, plugin = _login_session(monkeypatch)
-    step = operations.plugin_login(session, {"plugin": ":auth", "browser": [{"t": "abc"}], "interactive": True})
+    step = operations.plugin_login(session, {"plugin": ":auth", "browser": [{"t": "abc"}]})
     assert step == {
         "plugin": "//:auth",
         "status": "done",
         "parameters": {"token": "abc"},
         "message": "Logged in as ann",
     }
-    assert plugin.asked == [([{"t": "abc"}], True)]
+    assert plugin.asked == [([{"t": "abc"}], False, False, {})]
+
+
+def test_with_nobody_to_use_a_browser_the_step_is_instructions(monkeypatch):
+    session, plugin = _login_session(monkeypatch)
+    step = operations.plugin_login(session, {"plugin": "//:auth", "non_interactive": True})
+    assert step == {
+        "plugin": "//:auth",
+        "status": "instructions",
+        "spec": {"url": "https://example.com/login", "capture": [{"name": "t"}]},
+    }
+    assert plugin.asked == [([], False, True, {})]
+
+
+def test_values_handed_over_reach_the_plugin_and_a_check_says_so(monkeypatch):
+    session, plugin = _login_session(monkeypatch)
+    step = operations.plugin_login(
+        session, {"plugin": "//:auth", "non_interactive": True, "check": True, "values": {"t": "xyz"}}
+    )
+    assert step["status"] == "done" and step["parameters"] == {"token": "xyz"}
+    assert plugin.asked == [([], True, True, {"t": "xyz"})]
+    with pytest.raises(JsonRpcError, match="'values' must map"):
+        operations.plugin_login(session, {"plugin": "//:auth", "values": ["t=1"]})
 
 
 def test_a_login_names_a_plugin_the_package_declares(monkeypatch):
@@ -5491,7 +5516,7 @@ def test_a_login_names_a_plugin_the_package_declares(monkeypatch):
 def test_a_plugin_with_no_login_is_a_failed_step_not_an_error(monkeypatch):
     session, plugin = _login_session(monkeypatch)
 
-    async def unsupported(browser=(), interactive=True):
+    async def unsupported(browser=(), check=False, non_interactive=False, values=None):
         raise FakeLoginUnsupported("//:auth has no login method")
 
     plugin.login = unsupported

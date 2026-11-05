@@ -131,7 +131,7 @@ def test_a_login_that_needs_the_browser_goes_round_once(monkeypatch):
     monkeypatch.setattr(pc_login.time, "sleep", lambda seconds: None)
     asked = []
 
-    def ask(results, interactive):
+    def ask(results):
         asked.append(list(results))
         if not results:
             return {"plugin": "//p:r", "status": "browser", "spec": SPEC}
@@ -150,7 +150,7 @@ def test_a_login_that_needs_the_browser_goes_round_once(monkeypatch):
 def test_without_a_browser_the_user_is_sent_to_the_manual_page():
     said = []
 
-    def ask(results, interactive):
+    def ask(results):
         return {"status": "browser", "spec": dict(SPEC, timeout=10)}
 
     def no_browser(url, spec):
@@ -163,14 +163,42 @@ def test_without_a_browser_the_user_is_sent_to_the_manual_page():
 
 def test_a_failed_step_fails_the_login():
     with pytest.raises(RuntimeError, match="no login method"):
-        pc_login.login(lambda r, i: {"status": "failed", "message": "no login method"}, None, print)
+        pc_login.login(lambda r: {"status": "failed", "message": "no login method"}, None, print)
 
 
 def test_a_plugin_that_is_never_satisfied_is_stopped(monkeypatch):
     monkeypatch.setattr(pc_login.time, "sleep", lambda seconds: None)
     open_browser, _ = _extension({"token": "x"})
     with pytest.raises(RuntimeError, match="asked for the browser 5 times"):
-        pc_login.login(lambda r, i: {"status": "browser", "spec": SPEC}, open_browser, lambda m: None)
+        pc_login.login(lambda r: {"status": "browser", "spec": SPEC}, open_browser, lambda m: None)
+
+
+def test_instructions_end_the_loop_and_no_listener_is_started(monkeypatch):
+    def no_listener(*args, **kwargs):
+        raise AssertionError("a listener was started with nobody to use a browser")
+
+    monkeypatch.setattr(pc_login.LoginListener, "start", no_listener)
+    answer = pc_login.login(lambda r: {"status": "instructions", "spec": SPEC}, None, print)
+    assert answer["status"] == "instructions"
+
+
+def test_the_instructions_say_where_what_and_how_to_hand_it_over():
+    text = pc_login.instructions_text(
+        "//p:r",
+        dict(SPEC, instructions="An API key from https://example.com/keys does as well."),
+        lambda names: "Run: pc login --agent //p:r " + " ".join("--set %s=<%s>" % (n, n) for n in names),
+    )
+    assert "https://example.com/login" in text
+    assert "An API key from https://example.com/keys does as well." in text
+    assert "The 't' cookie of https://example.com/" in text and "Your API key" in text
+    assert "(all of them)" in text
+    assert "--set token=<token> --set key=<key>" in text
+    assert "pc login //p:r" in text
+
+
+def test_instructions_for_any_one_capture_hand_over_one():
+    text = pc_login.instructions_text("//p:r", dict(SPEC, require="any"), lambda names: "names: %s" % names)
+    assert "(any one of them)" in text and "names: ['token']" in text
 
 
 # --- what is kept ----------------------------------------------------------------------

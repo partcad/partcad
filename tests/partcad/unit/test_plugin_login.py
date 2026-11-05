@@ -111,7 +111,38 @@ def test_a_check_that_would_need_the_browser_fails(tmp_path):
     ctx = _context(tmp_path)
     repository = ctx.get_project("//").get_repository("auth_repo")
     with pytest.raises(RuntimeError, match="logging in failed"):
-        asyncio.run(repository.login(interactive=False))
+        asyncio.run(repository.login(check=True))
+
+
+def test_with_nobody_to_use_a_browser_the_plugin_answers_with_what_to_do(tmp_path):
+    ctx = _context(tmp_path)
+    repository = ctx.get_project("//").get_repository("auth_repo")
+    step = asyncio.run(repository.login(non_interactive=True))
+    assert step["instructions"]["url"] == "https://example.com/login"
+    assert step["instructions"]["capture"][0]["name"] == "token"
+
+
+@pytest.mark.parametrize("non_interactive", [False, True])
+def test_values_handed_over_answer_the_browser_and_are_checked_like_it(tmp_path, non_interactive):
+    ctx = _context(tmp_path)
+    repository = ctx.get_project("//").get_repository("auth_repo")
+    done = asyncio.run(repository.login(non_interactive=non_interactive, values={"token": "good"}))
+    assert done == {"parameters": {"token": "good"}, "message": "logged in"}
+    with pytest.raises(RuntimeError, match="logging in failed"):
+        asyncio.run(repository.login(non_interactive=non_interactive, values={"token": "bad"}))
+
+
+def test_a_plugin_may_say_what_to_do_itself(tmp_path):
+    (tmp_path / "partcad.yaml").write_text("name: //t\nrepositories:\n  r:\n    type: basic\n    path: r.py\n")
+    (tmp_path / "r.py").write_text(
+        'if __name__ == "login":\n'
+        "    assert partcad_login.non_interactive\n"
+        '    output = {"result": {"instructions": "Make a key at https://x/keys."}}\n'
+        "else:\n    output = {}\n"
+    )
+    repository = pc.Context(str(tmp_path)).get_project("//").get_repository("r")
+    step = asyncio.run(repository.login(non_interactive=True))
+    assert step["instructions"]["instructions"] == "Make a key at https://x/keys."
 
 
 def test_what_the_site_did_not_take_fails_the_login(tmp_path):
@@ -143,6 +174,17 @@ def test_a_spec_is_checked_in_the_plugin_and_says_what_is_wrong():
     )
     # 'match' written inside the source is moved beside it, where the extension reads it.
     assert spec["capture"] == [{"name": "t", "cookie": {"url": "https://x/", "name": "t"}, "match": "^a"}]
+    assert "instructions" not in spec
+    assert plugin_login.browser_spec("https://x/l", capture, instructions=" Or a key. ")["instructions"] == "Or a key."
+
+    # What '--set' hands over answers a call only when it is enough for it.
+    two = capture + [{"name": "u", "cookie": {"url": "https://x/", "name": "u"}}]
+    callback = plugin_login.LoginCallback({"values": {"t": "1"}, "non_interactive": True})
+    assert callback.open_browser("https://x/l", two, require="any") == {"t": "1"}
+    with pytest.raises(plugin_login.InstructionsNeeded):
+        callback.open_browser("https://x/l", two)
+    with pytest.raises(plugin_login.CheckOnly):
+        plugin_login.LoginCallback({"check": True, "non_interactive": True}).open_browser("https://x/l", capture)
     for bad, message in (
         ({"capture": [{"name": "t"}]}, "exactly one of"),
         ({"capture": capture + capture}, "two captures have one name"),

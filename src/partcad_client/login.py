@@ -248,36 +248,88 @@ def _describe(item: dict) -> str:
         return "The '%s' in the address %s leads to" % (item["redirect"].get("param"), item["redirect"].get("url"))
     if "dom" in item:
         return "The value shown at %s" % item["dom"].get("url")
+    if "ask" in item and item["ask"].get("label"):
+        return item["ask"]["label"]
     return item.get("name", "")
+
+
+# --- what to do with nobody to use a browser ----------------------------------------
+
+
+def instructions_text(plugin: str, spec: dict, hand_over: Callable[[list], str]) -> str:
+    """What to do instead of the browser, for a person or an agent to read: 'pc login --agent' prints it.
+
+    Made of what the browser would have been asked - where to sign in, what
+    to find there - and what the plugin itself says ('instructions'), with
+    'hand_over(names)' saying how to give PartCAD what was found. Never holds
+    a value: there are none yet.
+    """
+    title = spec.get("title") or spec.get("url") or plugin
+    lines = []
+    if spec.get("capture"):
+        lines.append(
+            "Logging in to %s needs a person to sign in, and this run has nobody to open a browser for." % title
+        )
+    else:
+        lines.append("Logging in to %s needs something only a person can do." % title)
+    if spec.get("instructions"):
+        lines += ["", spec["instructions"]]
+    capture = spec.get("capture") or []
+    if capture:
+        lines += ["", "What signing in at %s gives, and PartCAD needs:" % spec.get("url")]
+        width = max(len(item["name"]) for item in capture)
+        for item in capture:
+            lines.append("  %s  %s" % (item["name"].ljust(width), _describe(item)))
+        if len(capture) > 1:
+            lines.append("(%s)" % ("any one of them" if spec.get("require") == "any" else "all of them"))
+        names = [item["name"] for item in capture]
+        if spec.get("require") == "any":
+            names = names[:1]
+        lines += ["", hand_over(names)]
+    lines += [
+        "",
+        "PartCAD checks what it is given with the site, and keeps it in ~/.partcad/config.yaml. "
+        "A person at this machine can instead run 'pc login %s', which opens a browser for them." % plugin,
+    ]
+    return "\n".join(lines)
 
 
 # --- the loop ------------------------------------------------------------------------
 
 
 def login(
-    ask: Callable[[list, bool], dict],
+    ask: Callable[[list], dict],
     open_browser: Callable[[str, dict], object],
     say: Callable[[str], None],
-    interactive: bool = True,
     manual: bool = False,
     timeout: Optional[float] = None,
 ) -> dict:
-    """Log in, step by step, and return the daemon's last answer ({"status": "done", "parameters", ...}).
+    """Log in, step by step, and return the daemon's last answer.
 
-    'ask(browser_results, interactive)' asks the daemon for a step;
-    'open_browser(url, spec)' opens the browser on 'url' and returns something
-    with a 'close()', or None when it cannot (then the manual page is the way);
-    'say' tells the user something. Raises RuntimeError for a login that failed.
+    That is {"status": "done", "parameters", ...}, or {"status":
+    "instructions", "spec"} when the daemon was asked not to need anyone and
+    the plugin needs someone (see 'instructions_text').
+
+    'ask(browser_results)' asks the daemon for a step; 'open_browser(url,
+    spec)' opens the browser on 'url' and returns something with a 'close()',
+    or None when it cannot (then the manual page is the way); 'say' tells the
+    user something. Raises RuntimeError for a login that failed.
     """
     results = []
-    with LoginListener() as listener:
+    listener = None
+    try:
         for _ in range(MAX_STEPS):
-            answer = ask(list(results), interactive)
+            answer = ask(list(results))
             status = (answer or {}).get("status")
-            if status == "done":
+            if status in ("done", "instructions"):
                 return answer
             if status != "browser":
                 raise RuntimeError((answer or {}).get("message") or "the login failed")
+            if listener is None:
+                # Only once a browser is asked for: a login whose credentials
+                # still work, or one with nobody to use a browser, needs none.
+                listener = LoginListener()
+                listener.start()
             spec = answer["spec"]
             step = listener.step(spec)
             title = spec.get("title") or spec.get("url")
@@ -303,3 +355,6 @@ def login(
                     time.sleep(1)
                     opened.close()
         raise RuntimeError("the plugin asked for the browser %d times without being satisfied" % MAX_STEPS)
+    finally:
+        if listener is not None:
+            listener.stop()

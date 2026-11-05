@@ -16,6 +16,7 @@ import urllib.parse
 from . import logging as pc_logging
 from . import tags as pc_tags
 from .cache_hash import CacheHash
+from .config import parameter_overrides
 from .project_plugin import ProjectPlugin
 from .sync_threads import threadpool_manager
 
@@ -469,10 +470,39 @@ class ProjectExternalRepository(ProjectPlugin):
 
     def _cache_hash(self, scoped_key: str) -> CacheHash:
         # The cache directory is already scoped to this repository instance, so
-        # the scoped key alone identifies the entry within it.
+        # the scoped key identifies the entry within it - together with the
+        # user's overrides of the plugin's parameters, below.
         h = CacheHash(scoped_key, cache=True)
         h.add_string(scoped_key)
+        overrides = self._plugin_overrides()
+        if overrides:
+            h.add_string(overrides)
         return h
+
+    def _plugin_overrides(self) -> str:
+        """The user's overrides of the plugin's parameters, as text, or '' when there are none.
+
+        Part of every cache key, because what a plugin answers can depend on
+        them: credentials an earlier 'pc login' saved can make another file of
+        a model available, and a preference ('formats', 'source') picks another
+        one outright. Keyed on the scoped key alone, an answer given before the
+        user logged in, or changed their mind, would be served forever after.
+        Hashed with the rest, so no credential is written anywhere by it.
+
+        The overrides only, and not the plugin's declared parameters: those
+        are what the package declares, which changes with the package and its
+        plugin's cache version. And read off the context's configuration
+        rather than the plugin's, which would take resolving the plugin - and
+        this is asked where nothing may be resolved (see 'get_data').
+        """
+        if self._plugin_ref is None:
+            return ""
+        try:
+            package_name, repository_name = self.resolve(self._plugin_ref)
+        except Exception:  # an unresolvable reference is reported where it is used
+            return ""
+        values = parameter_overrides(self.ctx.user_config).get("%s:%s" % (package_name, repository_name))
+        return json.dumps(values, sort_keys=True, default=str) if values else ""
 
     async def _read_cache(self, scoped_key: str):
         try:

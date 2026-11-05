@@ -4545,10 +4545,16 @@ def plugin_login(session, params):
 
     Answers {"plugin": "<package>:<plugin>", "status": ...}:
 
-        "done"     logged in; 'parameters' are what to save as the user's
-                   overrides of the plugin, under 'plugin', and 'message' says so
-        "browser"  'spec' is what the browser is to do
-        "failed"   'message' says why; what the plugin said is in the log
+        "done"          logged in; 'parameters' are what to save as the user's
+                        overrides of the plugin, under 'plugin', and 'message' says so
+        "browser"       'spec' is what the browser is to do
+        "instructions"  'non_interactive' was asked for and the plugin needs
+                        what only a person can get: 'spec' is what the browser
+                        would have been asked, with the plugin's 'instructions'
+        "failed"        'message' says why; what the plugin said is in the log
+
+    'check' only checks the credentials there are; 'values' ({capture name:
+    value}, 'pc login --set') answers the plugin's request for the browser.
     """
     ctx = _ctx(session, params)
     if ctx is None:
@@ -4560,6 +4566,9 @@ def plugin_login(session, params):
     browser = params.get("browser") or []
     if not isinstance(browser, list) or not all(isinstance(result, dict) for result in browser):
         raise JsonRpcError(USAGE_ERROR, "'browser' must be a list of the results of the browser steps")
+    values = params.get("values") or {}
+    if not isinstance(values, dict) or not all(isinstance(v, (str, int, float)) for v in values.values()):
+        raise JsonRpcError(USAGE_ERROR, "'values' must map capture names to values")
 
     package_name, plugin_name = pc.utils.resolve_resource_path(ctx.current_project_path, spec)
     project = ctx.get_project(package_name)
@@ -4582,13 +4591,22 @@ def plugin_login(session, params):
 
     with pc.logging.Process("Login", full_name):
         try:
-            step = asyncio.run(plugin.login(browser, interactive=bool(params.get("interactive", True))))
+            step = asyncio.run(
+                plugin.login(
+                    browser,
+                    check=bool(params.get("check", False)),
+                    non_interactive=bool(params.get("non_interactive", False)),
+                    values=values,
+                )
+            )
         except LoginUnsupported as e:
             return {"plugin": full_name, "status": "failed", "message": str(e)}
         except RuntimeError as e:
             return {"plugin": full_name, "status": "failed", "message": str(e)}
     if "browser" in step:
         return {"plugin": full_name, "status": "browser", "spec": step["browser"]}
+    if "instructions" in step:
+        return {"plugin": full_name, "status": "instructions", "spec": step["instructions"]}
     return {"plugin": full_name, "status": "done", "parameters": step["parameters"], "message": step["message"]}
 
 

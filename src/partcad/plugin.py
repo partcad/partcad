@@ -102,7 +102,7 @@ class Plugin:
 
         self.get_caps = alru_cache(maxsize=1, typed=True)(self.get_caps)
 
-    async def login(self, browser=(), interactive: bool = True) -> dict:
+    async def login(self, browser=(), check: bool = False, non_interactive: bool = False, values=None) -> dict:
         """One step of logging in to whatever this plugin is a client of.
 
         'login' is optional for every kind of plugin. A plugin that answers it
@@ -115,21 +115,36 @@ class Plugin:
             {"browser": {...}}                         open the browser as said, then
                                                        call again with its result
                                                        appended to 'browser'
+            {"instructions": {...}}                    nobody is there to use a
+                                                       browser ('non_interactive'):
+                                                       what to do instead
 
-        and raises LoginUnsupported for a plugin with no 'login', and
-        RuntimeError for one that failed (what the plugin said is in the log
-        already, as everything it says is).
+        'check' only checks: a plugin that would need the browser fails.
+        'values' answers the plugin's request for the browser with what was
+        handed over by capture name ('pc login --set'), in either mode.
+
+        Raises LoginUnsupported for a plugin with no 'login', and RuntimeError
+        for one that failed (what the plugin said is in the log already, as
+        everything it says is).
         """
         if self.query_login is None:
             raise LoginUnsupported("%s has no login method: it is not a script PartCAD runs" % self.name)
-        answer = await self.query_login({"login": {"browser": list(browser), "interactive": bool(interactive)}})
+        state = {"browser": list(browser), "check": bool(check), "non_interactive": bool(non_interactive)}
+        if values:
+            state["values"] = {str(name): str(value) for name, value in dict(values).items()}
+        answer = await self.query_login({"login": state})
         if answer is None:
             raise RuntimeError("%s: logging in failed" % self.name)
         if isinstance(answer.get("browser"), dict):
             return {"browser": answer["browser"]}
+        if isinstance(answer.get("instructions"), dict):
+            return {"instructions": answer["instructions"]}
         result = answer.get("result")
         if result is None:
             raise LoginUnsupported("%s has no login method" % self.name)
+        if isinstance(result, dict) and isinstance(result.get("instructions"), str) and "parameters" not in result:
+            # The plugin said what to do itself, rather than asking for a browser.
+            return {"instructions": {"instructions": result["instructions"].strip(), "title": self.name}}
         if not isinstance(result, dict) or not isinstance(result.get("parameters", {}), dict):
             raise RuntimeError("%s: 'login' answered %r, not {'parameters': {...}}" % (self.name, result))
         parameters = result.get("parameters") or {}

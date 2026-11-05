@@ -269,13 +269,22 @@ Host commands
 
     pc login //pub/universe/grabcad:grabcad_repo
     pc login --check //pub/universe/grabcad:grabcad_repo   # only check; exits non-zero if they do not work
+    pc login --agent //pub/universe/grabcad:grabcad_repo   # nobody at the screen: print what to do instead
+    pc login --agent --set session=... //pub/universe/grabcad:grabcad_repo
 
   The credentials are saved in your configuration file (``~/.partcad/config.yaml``, made readable by you only)
   under ``parameters``, as your overrides of the plugin's parameters -- the same place ``--extra-param`` and a hand
   written override go -- so every later command hands them to the plugin. ``--browser`` (``PC_LOGIN_BROWSER``)
   picks another browser by path or by name (``chrome``, ``edge``, ``brave``, ``chromium``, ``firefox``), and
   ``--manual`` opens none: it prints the address of a page where what the site gave you is pasted by hand, which
-  is also where a browser without the extension ends up.
+  is also where a browser without the extension ends up. A default browser the extension cannot go into is
+  passed over for an installed one it can.
+
+  ``--agent`` (or ``--non-interactive``; ``--interactive`` is the default) is for an AI agent or a script with
+  nobody at the screen: no browser is opened, and what a person would do in it -- where to sign in, what to copy,
+  any other way in the plugin knows of, and the ``pc login --agent ... --set NAME=VALUE`` command that hands it
+  over -- is printed instead, with exit status 3. ``--set`` hands values over in either mode; the plugin checks
+  them with the site before anything is saved. ``pc mcp``'s ``login`` tool works this way by default.
 
   The browser, the listener and the configuration file are this machine's, so they are the client's; the plugin
   runs on the daemon, like every plugin, and is asked one step of its login at a time (``plugin.login``). There is
