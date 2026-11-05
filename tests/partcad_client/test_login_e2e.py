@@ -127,7 +127,12 @@ def test_pc_login_signs_in_in_the_browser_and_keeps_what_the_extension_brought(t
     workspace.mkdir()
     home.mkdir()
     (workspace / "auth.py").write_text(PLUGIN)
+    # The 'venv' sandbox (see '_pc') is built from this host's interpreter
+    # whatever version a package asks for, so ask for that one: asked for the
+    # default 3.11 on a 3.14 host, it installs what 3.11 needs - the
+    # 'backports.zstd' that 3.14 has no release of - and fails before the login.
     (workspace / "partcad.yaml").write_text(textwrap.dedent("""
+            pythonVersion: "%d.%d"
             repositories:
               auth_repo:
                 type: basic
@@ -135,7 +140,7 @@ def test_pc_login_signs_in_in_the_browser_and_keeps_what_the_extension_brought(t
                 parameters:
                   site: {type: string, default: "%s"}
                   session: {type: string, default: ""}
-            """ % site))
+            """ % (sys.version_info[0], sys.version_info[1], site)))
 
     first = _pc(workspace, home, "login", "//:auth_repo")
     assert first.returncode == 0, first.stdout + first.stderr
