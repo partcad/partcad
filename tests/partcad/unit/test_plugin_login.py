@@ -241,7 +241,18 @@ def test_a_pattern_only_python_reads_is_refused_before_the_browser_is(pattern, s
     sys.path.insert(0, str(__import__("pathlib").Path(pc.__file__).parent / "wrappers"))
     import plugin_login
 
+    import re
+
+    try:
+        re.compile(pattern)
+    except re.error:
+        # Atomic groups and possessive quantifiers came to Python in 3.11: an
+        # older one refuses them itself, before the extension's syntax is asked.
+        expected, said = "not a regular expression", ""
+    else:
+        expected = "JavaScript"
+
     capture = [{"name": "t", "cookie": {"url": "https://x/", "name": "t"}, "match": pattern}]
-    with pytest.raises(ValueError, match="JavaScript") as refused:
+    with pytest.raises(ValueError, match=expected) as refused:
         plugin_login.browser_spec("https://x/l", capture)
     assert said in str(refused.value)
