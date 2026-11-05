@@ -81,3 +81,28 @@ pc render -t png -O /tmp/pc-render -P <package> <name>     # writes a PNG under 
 
 Then follow up as the user asks — for example describe it with `/pc:describe`,
 or add it to their project.
+
+## 6. Model sites, and logging in to them
+
+Some packages are served by a plugin for a model site (Thingiverse, MakerWorld,
+GrabCAD, Printables, Cults3D: `//pub/universe/<site>/models`). Nothing in them
+is listed, so `pc search` asks the site itself, and each match is a name to use
+as it is - `763622;file=1234567`, the file and all. `--limit N` caps how many
+come back from each such package. A name's `format=` (`stl`, `step`, ...) or
+`source=preview` (the site's own mesh, coarser and needing no login, where it
+has one) picks another file of the same model.
+
+Getting a file may take the user's account on the site. Never guess a
+credential, and run `pc login` without `--agent` only when the user says they
+are at this machine's screen - it opens a browser and waits for them. Otherwise
+run
+
+```sh
+pc login --agent //pub/universe/<site>:<site>_repo
+```
+
+It exits with status 3 and prints what a person has to do - where to sign in,
+what to copy - and the `pc login --agent ... --set <name>=<value>` command that
+hands it over. Relay those instructions to the user, and run that command with
+what they give you; PartCAD checks it with the site before keeping it in their
+`~/.partcad/config.yaml`. Status 0 means they are logged in already.

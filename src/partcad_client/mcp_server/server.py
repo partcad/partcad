@@ -529,7 +529,8 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         if answer.get("status") == "instructions":
 
             def hand_over(names):
-                return "Hand them over by calling the login tool again with plugin '%s' and values {%s}." % (
+                return "Hand %s over by calling the login tool again with plugin '%s' and values {%s}." % (
+                    "it" if len(names) == 1 else "them",
                     name,
                     ", ".join("'%s': '...'" % n for n in names),
                 )

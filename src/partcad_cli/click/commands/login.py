@@ -139,7 +139,8 @@ def cli(
         name = answer.get("plugin") or plugin
 
         def hand_over(names):
-            return "Hand them over with:\n  pc login --agent %s %s" % (
+            return "Hand %s over with:\n  pc login --agent %s %s" % (
+                "it" if len(names) == 1 else "them",
                 name,
                 " ".join("--set %s=<%s>" % (n, n) for n in names),
             )
