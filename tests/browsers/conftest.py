@@ -111,11 +111,15 @@ class DevTools:
             "--user-data-dir=%s" % profile,
             "--remote-debugging-pipe",
             # What lets `Extensions.loadUnpacked` work, for a browser that
-            # ignores the two flags below.
+            # ignores the flag below.
             "--enable-unsafe-extension-debugging",
         ]
         if flags:
-            args += ["--load-extension=%s" % self.extension, "--disable-extensions-except=%s" % self.extension]
+            # Not with `--disable-extensions-except`: Google Chrome 137 and
+            # later ignore `--load-extension` but still honour that one, and
+            # an extension `Extensions.loadUnpacked` then loads stays disabled
+            # - its id comes back, and its service worker never starts.
+            args += ["--load-extension=%s" % self.extension]
         args += [
             "--no-first-run",
             "--no-default-browser-check",
