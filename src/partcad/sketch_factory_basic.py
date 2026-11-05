@@ -9,11 +9,11 @@
 
 import copy
 
+from . import basic_shapes
 from . import config as pc_config
 from . import expr
 from . import logging as pc_logging
-from . import sandbox_versions, shape_envelope, telemetry, wrapper
-from .process_crash import describe_exit_code
+from . import telemetry
 from .sketch_factory import SketchFactory
 
 
@@ -21,9 +21,16 @@ from .sketch_factory import SketchFactory
 #                 see Face::_make_from_wires in build123d/topology.py
 @telemetry.instrument()
 class SketchFactoryBasic(SketchFactory):
-    WRAPPERS = ("sketch_basic.py",)
-
-    PYTHON_SANDBOX_VERSION = sandbox_versions.DEFAULT_PYTHON_VERSION
+    # Built in this process, by 'basic_shapes', and never in a sandbox: the
+    # face is lines and circles on a plane, which needs no CAD kernel to write
+    # down. So no wrapper is run and no environment is keyed on - the sketch is
+    # the same whatever Python the package asks for - and what is keyed instead
+    # is the version of the code that writes the geometry. Built in place, too
+    # (see 'Shape.built_in_place'): no thread pool, no shape cache, and no
+    # action in the log for a tenth of a millisecond of work.
+    WRAPPERS = ()
+    PYTHON_SANDBOX_VERSION = None
+    CODE_VERSIONS = ((basic_shapes.CODE_NAME, basic_shapes.CACHE_VERSION),)
 
     def __init__(self, ctx, source_project, target_project, config):
         super().__init__(
@@ -34,19 +41,18 @@ class SketchFactoryBasic(SketchFactory):
         )
 
         # The shape parameters that define this sketch (circle/square/rectangle/slot
-        # outlines and inner cut-outs). They are forwarded verbatim to the
-        # wrapper, which turns them into an OCCT face, and folded into the cache
-        # hash here.
+        # outlines and inner cut-outs). They are what 'basic_shapes.sketch' builds
+        # the face from, and folded into the cache hash here.
         #
-        # "Verbatim" after the expressions in them have been resolved: a basic
-        # sketch has no script to hand its parameters to, so a '%...%' over them
-        # is the only way it can be parametric at all - and it is what lets one
-        # 'm' sketch serve every port of a parametrized interface instead of one
+        # After the expressions in them have been resolved: a basic sketch has
+        # no script to hand its parameters to, so a '%...%' over them is the
+        # only way it can be parametric at all - and it is what lets one 'm'
+        # sketch serve every port of a parametrized interface instead of one
         # pre-generated sketch per size. The resolved values are what goes into
         # the hash, which is what makes two sizes two cache entries.
         values = pc_config.parameter_values(config.get("parameters"))
         self.basic_config = {}
-        for key in ("circle", "square", "rectangle", "slot", "inner"):
+        for key in basic_shapes.SKETCH_KEYS:
             if key in config:
                 value = config[key]
                 if values:
@@ -54,6 +60,7 @@ class SketchFactoryBasic(SketchFactory):
                 self.basic_config[key] = value
 
         self._create(config)
+        self.sketch.built_in_place = True
         self.sketch.hash.add_dict(self.basic_config)
 
     def info(self, sketch):
@@ -73,42 +80,16 @@ class SketchFactoryBasic(SketchFactory):
         return info
 
     async def instantiate(self, sketch):
-        with pc_logging.Action("Basic", sketch.project_name, sketch.name):
-            try:
-                # Building the face (OCCT wires + BRepBuilderAPI_MakeFace) runs
-                # in a sandbox, so the core process never touches a live OCP
-                # object; only the shape parameters and the resulting BREP
-                # envelope cross the boundary.
-                runtime = self.ctx.get_python_runtime(version=self.PYTHON_SANDBOX_VERSION)
-                await runtime.ensure_async(sandbox_versions.OCP)
+        try:
+            payload, measurements = basic_shapes.sketch(self.basic_config)
+        except ValueError as e:
+            # What is wrong with the declaration, in its own words.
+            sketch.error("%s: %s" % (sketch.name, e))
+            return None
+        except Exception as e:
+            pc_logging.exception("Failed to create a basic sketch: %s" % e)
+            return None
 
-                wrapper_path = wrapper.get("sketch_basic.py")
-                request = {
-                    "config": self.basic_config,
-                    "name": "%s:%s" % (sketch.project_name, sketch.name),
-                    "label": sketch.name,
-                }
-                request_serialized = shape_envelope.serialize(request)
-                exitcode, response_serialized, errors = await runtime.run_async(
-                    [wrapper_path, "sketch_basic"], request_serialized
-                )
-                if exitcode != 0 and not errors:
-                    errors = "%s: %s: basic sketch failed: %s" % (
-                        sketch.project_name,
-                        sketch.name,
-                        describe_exit_code(exitcode),
-                    )
-                if errors:
-                    pc_logging.error(errors)
-                    raise Exception(errors)
-
-                result = shape_envelope.deserialize(response_serialized)
-                if not result["success"]:
-                    sketch.error("%s: %s" % (sketch.name, result["exception"]))
-                    return None
-
-                self.ctx.stats_sketches_instantiated += 1
-                return result["shape"]
-            except Exception as e:
-                pc_logging.exception("Failed to create a basic sketch: %s" % e)
-                return None
+        self.ctx.stats_sketches_instantiated += 1
+        name, label = sketch._shape_metadata()
+        return basic_shapes.envelope(payload, measurements, name=name, label=label)

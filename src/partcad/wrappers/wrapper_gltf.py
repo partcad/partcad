@@ -41,7 +41,9 @@ import tempfile
 import pyexpat  # noqa: F401
 
 sys.path.append(os.path.dirname(__file__))
+import appearance
 import ocp_serialize
+import texture_mapping
 import wrapper_common
 
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
@@ -145,7 +147,30 @@ def _write_merged(obj, path, builder) -> bool:
         BRepTools.Clean_s(obj.wrapped)
 
 
-def _export(shape, angular_tolerance):
+def _colored(shape, colors):
+    """'shape' as build123d draws it in colours: a child per colour, each the faces drawn in it.
+
+    'colors' is a colour (or None) per face, from the shape's CMF section (see
+    'appearance.section_face_colors'). glTF has no colour per face, only a
+    material per primitive, so the faces of one colour are made one child and
+    the colour is put on that child - the one way of saying it the writer reads
+    (see '_write_merged') - and what comes out is a mesh per colour, each with
+    its material, in place of the one mesh an uncoloured shape is. The faces are
+    the shape's own, already triangulated; nothing is meshed again.
+    """
+    import build123d as b3d
+
+    children = []
+    for color, piece in appearance.faces_by_color(shape, colors, None):
+        child = b3d.Compound(piece)
+        if color is not None:
+            red, green, blue, alpha = appearance.parse(color)
+            child.color = b3d.Color(red / 255.0, green / 255.0, blue / 255.0, alpha)
+        children.append(child)
+    return b3d.Compound(children=children)
+
+
+def _export(shape, angular_tolerance, colors=None):
     """The binary glTF of 'shape' as it is already triangulated.
 
     One primitive per shape where that can be asked for (see '_write_merged'), and
@@ -162,7 +187,7 @@ def _export(shape, angular_tolerance):
 
     # Compound.cast, not Shape.cast: build123d 0.11 made Shape.cast abstract, so
     # it silently returns None and export_gltf then fails on None.location.
-    obj = b3d.Compound.cast(ocp_serialize.compound_of([shape]))
+    obj = _colored(shape, colors) if colors else b3d.Compound.cast(ocp_serialize.compound_of([shape]))
 
     # The writer only writes to a path, so the buffer has to come back off the
     # disk. A temp file rather than the shape's render output: this is a preview,
@@ -196,6 +221,17 @@ def _export(shape, angular_tolerance):
 _GLTF_FLOAT = 5126
 _GLTF_ARRAY_BUFFER = 34962
 _GLTF_LINES = 1
+
+# And the ones a textured primitive adds: indices as 32-bit unsigned integers in
+# an index buffer, drawn as 'TRIANGLES'; and an image sampled between its pixels,
+# from the size of it the view needs, repeated both ways ('REPEAT', since an image
+# is laid on a surface in copies side by side - see 'texture_mapping').
+_GLTF_UNSIGNED_INT = 5125
+_GLTF_ELEMENT_ARRAY_BUFFER = 34963
+_GLTF_TRIANGLES = 4
+_GLTF_LINEAR = 9729
+_GLTF_LINEAR_MIPMAP_LINEAR = 9987
+_GLTF_REPEAT = 10497
 
 # The two chunk types of a binary glTF, as the little-endian integers they are
 # written as: b"JSON" and b"BIN\0".
@@ -357,6 +393,194 @@ def _with_lines(glb, positions) -> bytes:
     return _write_glb(meta, binary)
 
 
+def _face_triangles(shape):
+    """Every face of 'shape' as it is already meshed: '(points, normals, corners)' in its own frame, in mm.
+
+    'points' and 'normals' (N, 3), a normal pointing out of the material at
+    every point, and 'corners' (M, 3) indices wound counter-clockwise seen from
+    outside - what glTF draws as the front of a triangle. Each face keeps its own
+    points, so that its edges stay sharp, as the faces OCCT's writer writes do.
+    """
+    import numpy as np
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepLib import BRepLib_ToolTriangulatedShape
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_REVERSED
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopLoc import TopLoc_Location
+    from OCP.TopoDS import TopoDS
+
+    points, normals, corners = [], [], []
+    offset = 0
+    explorer = TopExp_Explorer(shape, TopAbs_FACE)
+    while explorer.More():
+        face = TopoDS.Face_s(explorer.Current())
+        explorer.Next()
+        location = TopLoc_Location()
+        poly = BRep_Tool.Triangulation_s(face, location)
+        if poly is None or poly.NbTriangles() == 0:
+            continue
+        if not poly.HasNormals():
+            BRepLib_ToolTriangulatedShape.ComputeNormals_s(face, poly)
+        count = poly.NbNodes()
+        transform = location.Transformation()
+        nodes, directions = [], []
+        for index in range(1, count + 1):
+            point = poly.Node(index).Transformed(transform)
+            nodes.append((point.X(), point.Y(), point.Z()))
+            normal = poly.Normal(index)
+            normal.Transform(transform)
+            directions.append((normal.X(), normal.Y(), normal.Z()))
+        indices = np.array([poly.Triangle(i).Get() for i in range(1, poly.NbTriangles() + 1)], dtype=np.int64) - 1
+        directions = np.array(directions, dtype=np.float64)
+        if face.Orientation() == TopAbs_REVERSED:
+            directions = -directions
+            indices = indices[:, [0, 2, 1]]
+        points.append(np.array(nodes, dtype=np.float64))
+        normals.append(directions)
+        corners.append(indices + offset)
+        offset += count
+    if not points:
+        return np.zeros((0, 3)), np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64)
+    normals = np.concatenate(normals)
+    lengths = np.linalg.norm(normals, axis=1, keepdims=True)
+    return np.concatenate(points), normals / np.where(lengths > 0, lengths, 1.0), np.concatenate(corners)
+
+
+def _textured_mesh(shape, texture):
+    """The triangles of 'shape' with the image laid on them: '(positions, normals, texcoords, indices)'.
+
+    In glTF's frame, as '_segments' writes lines: metres, Y up. A point shared
+    by triangles that lie on different sides of the image's box is one vertex
+    per side (see 'texture_mapping.box_uv'), and one vertex otherwise.
+    """
+    import numpy as np
+
+    points, normals, corners = _face_triangles(shape)
+    if not len(corners):
+        return None
+    uv = texture_mapping.gltf_texcoords(texture_mapping.box_uv(points, corners, texture.width, texture.height))
+    keys = np.concatenate([corners.reshape(-1, 1).astype(np.float64), uv.reshape(-1, 2)], axis=1)
+    unique, inverse = np.unique(keys, axis=0, return_inverse=True)
+    point_index = unique[:, 0].astype(np.int64)
+    position = points[point_index]
+    normal = normals[point_index]
+    # PartCAD's (x, y, z) mm is glTF's (x, z, -y) m, as in '_segments'.
+    position = np.stack([position[:, 0], position[:, 2], -position[:, 1]], axis=1) / 1000.0
+    normal = np.stack([normal[:, 0], normal[:, 2], -normal[:, 1]], axis=1)
+    return (
+        position.astype("<f4"),
+        normal.astype("<f4"),
+        unique[:, 1:3].astype("<f4"),
+        np.asarray(inverse, dtype="<u4").reshape(-1),
+    )
+
+
+def _with_textures(glb, groups):
+    """'glb' with a mesh for each of 'groups', each drawn with its image; started from nothing if 'glb' is None.
+
+    'groups' is '[(colour, texture, mesh), ...]': the faces of a shape drawn
+    with one image, as 'appearance.faces_by_look' gathers them, as
+    '_textured_mesh' made them ready to write. None for no groups. Each is one
+    primitive whose material has the image as its base colour, white under it
+    (glTF multiplies the two), and the image itself is in the file once however
+    many primitives draw with it - the bytes the colour's declaration names, PNG
+    or JPEG, as glTF carries either. Laid on as everything else that draws one
+    lays it ('texture_mapping'), so that the IDE shows what a shaded picture
+    does. The colour drawn as where an image cannot be is in the material's
+    'extras', for a reader that wants it.
+    """
+    if not groups:
+        return glb
+    if glb:
+        meta, binary = _read_glb(glb)
+    else:
+        meta = {"asset": {"version": "2.0", "generator": "PartCAD"}, "scene": 0, "scenes": [{"nodes": []}]}
+        binary = b""
+    binary = bytearray(binary)
+    views = meta.setdefault("bufferViews", [])
+    accessors = meta.setdefault("accessors", [])
+
+    def view(data: bytes, target=None) -> int:
+        binary.extend(b"\0" * (-len(binary) % 4))
+        entry = {"buffer": 0, "byteOffset": len(binary), "byteLength": len(data)}
+        if target is not None:
+            entry["target"] = target
+        binary.extend(data)
+        views.append(entry)
+        return len(views) - 1
+
+    def accessor(array, kind, component, target, bounds=False) -> int:
+        entry = {
+            "bufferView": view(array.tobytes(), target),
+            "componentType": component,
+            "count": int(array.shape[0]) if kind != "SCALAR" else int(array.size),
+            "type": kind,
+        }
+        if bounds:
+            entry["min"] = [float(v) for v in array.min(axis=0)]
+            entry["max"] = [float(v) for v in array.max(axis=0)]
+        accessors.append(entry)
+        return len(accessors) - 1
+
+    images = meta.setdefault("images", [])
+    textures = meta.setdefault("textures", [])
+    samplers = meta.setdefault("samplers", [])
+    materials = meta.setdefault("materials", [])
+    meshes = meta.setdefault("meshes", [])
+    nodes = meta.setdefault("nodes", [])
+    scene_nodes = meta.setdefault("scenes", [{"nodes": []}])[meta.get("scene", 0)].setdefault("nodes", [])
+    samplers.append(
+        {
+            "magFilter": _GLTF_LINEAR,
+            "minFilter": _GLTF_LINEAR_MIPMAP_LINEAR,
+            "wrapS": _GLTF_REPEAT,
+            "wrapT": _GLTF_REPEAT,
+        }
+    )
+    sampler = len(samplers) - 1
+    image_of = {}
+    for color, texture, mesh in groups:
+        position, normal, texcoord, indices = mesh
+        if texture.digest not in image_of:
+            images.append({"bufferView": view(texture.image), "mimeType": texture.mime_type or "image/png"})
+            textures.append({"sampler": sampler, "source": len(images) - 1})
+            image_of[texture.digest] = len(textures) - 1
+        parsed = appearance.parse(color) if color is not None else None
+        alpha = parsed[3] if parsed is not None else 1.0
+        material = {
+            "name": texture.name or "texture",
+            "pbrMetallicRoughness": {
+                "baseColorFactor": [1.0, 1.0, 1.0, alpha],
+                "baseColorTexture": {"index": image_of[texture.digest]},
+                "metallicFactor": 0.0,
+                "roughnessFactor": 1.0,
+            },
+            "extras": {"partcadColor": color},
+        }
+        if alpha < 1.0:
+            material["alphaMode"] = "BLEND"
+        materials.append(material)
+        primitive = {
+            "attributes": {
+                "POSITION": accessor(position, "VEC3", _GLTF_FLOAT, _GLTF_ARRAY_BUFFER, bounds=True),
+                "NORMAL": accessor(normal, "VEC3", _GLTF_FLOAT, _GLTF_ARRAY_BUFFER),
+                "TEXCOORD_0": accessor(texcoord, "VEC2", _GLTF_FLOAT, _GLTF_ARRAY_BUFFER),
+            },
+            "indices": accessor(indices, "SCALAR", _GLTF_UNSIGNED_INT, _GLTF_ELEMENT_ARRAY_BUFFER),
+            "material": len(materials) - 1,
+            "mode": _GLTF_TRIANGLES,
+        }
+        meshes.append({"name": texture.name or "texture", "primitives": [primitive]})
+        nodes.append({"name": texture.name or "texture", "mesh": len(meshes) - 1})
+        scene_nodes.append(len(nodes) - 1)
+    buffers = meta.setdefault("buffers", [])
+    if buffers:
+        buffers[0]["byteLength"] = len(binary)
+    else:
+        buffers.append({"byteLength": len(binary)})
+    return _write_glb(meta, bytes(binary))
+
+
 def _draws_lines(glb: bytes) -> bool:
     """Whether export_gltf already wrote line segments into 'glb'.
 
@@ -384,16 +608,35 @@ class NothingToDraw(Exception):
     """
 
 
-def _to_glb(shape, tolerance, angular_tolerance):
+def _to_glb(shape, tolerance, angular_tolerance, colors=None, looks=None):
     """Tessellate one shape into a binary glTF buffer, at an absolute deflection.
 
     Faces become triangles and the edges that bound no face become line segments,
     so that a sketch of open lines is drawn rather than dropped: glTF can carry
     both, and export_gltf writes the second only beside the first. A shape with neither - a point,
     an empty compound - is reported rather than sent as a file that draws nothing.
+
+    'colors' is a colour per face where the shape's CMF section colours its faces
+    one by one (see '_colored'), and None - the shape in one piece, as always -
+    everywhere else.
+
+    'looks' is what 'appearance.payload_looks' answers where the section draws
+    any face with an image, and None everywhere else. The faces drawn with one
+    are written by '_with_textures', which lays the image on them; the rest go
+    through OCCT's writer as they would have, coloured as 'colors' says.
     """
     _mesh(shape, tolerance, angular_tolerance)
-    glb = _export(shape, angular_tolerance) if _has_faces(shape) else None
+    glb = None
+    if looks is not None:
+        textured, shape_rest, colors = _split_textured(shape, looks)
+        # Read off the faces before the rest is written: writing it cleans the
+        # meshes of what it writes, and nothing here is meshed again.
+        meshes = [(color, texture, _textured_mesh(piece, texture)) for color, texture, piece in textured]
+        if shape_rest is not None and _has_faces(shape_rest):
+            glb = _export(shape_rest, angular_tolerance, colors)
+        glb = _with_textures(glb, [entry for entry in meshes if entry[2] is not None])
+    elif _has_faces(shape):
+        glb = _export(shape, angular_tolerance, colors)
     if glb is None or not _draws_lines(glb):
         positions = _segments(_free_edges(shape), tolerance, angular_tolerance)
         if positions:
@@ -401,6 +644,39 @@ def _to_glb(shape, tolerance, angular_tolerance):
     if glb is None:
         raise NothingToDraw("there are no faces or edges to draw")
     return glb
+
+
+def _split_textured(shape, looks):
+    """'(textured, rest, colors)': 'shape''s faces drawn with an image, and the others.
+
+    'textured' is '[(colour, texture, faces), ...]', one entry per image; 'rest'
+    is a compound of every other face - None where there is none - and 'colors'
+    a colour per face of it, in its own order, or None where none is coloured.
+    """
+    if looks[0] == appearance.WHOLE:
+        color, texture = looks[1]
+        return [(color, texture, shape)], None, None
+    textured, others = [], []
+    for (color, texture), piece in appearance.faces_by_look(shape, looks[1], (None, None)):
+        if texture is not None:
+            textured.append((color, texture, piece))
+        else:
+            others.append((color, piece))
+    if not others:
+        return textured, None, None
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+
+    faces, colors = [], []
+    for color, piece in others:
+        explorer = TopExp_Explorer(piece, TopAbs_FACE)
+        while explorer.More():
+            faces.append(explorer.Current())
+            colors.append(color)
+            explorer.Next()
+    if not faces:
+        return textured, None, None
+    return textured, ocp_serialize.compound_of(faces), colors if any(colors) else None
 
 
 def process(request):
@@ -434,7 +710,20 @@ def process(request):
         digest = entry.get("digest")
         try:
             shape = ocp_serialize.shape_from_payload(entry[ocp_serialize.KEY_BREP])
-            geometry[digest] = ocp_serialize.encode_gltf(_to_glb(shape, tolerance, angular_tolerance))
+            # A payload is one piece of geometry with whatever CMF it carries, so
+            # what a face is drawn in is the payload's to say, and comes back
+            # under its digest like the rest. No output changes for a payload
+            # with no face-by-face section, which every payload written before
+            # sections existed is - so nothing tessellated before is stale, and
+            # CACHE_VERSION stays.
+            #
+            # The image a colour is drawn with too (see '_with_textures'): a
+            # payload carrying one is new, so nothing tessellated before draws
+            # one and CACHE_VERSION stays for that as well.
+            section = ocp_serialize.cmf_of_payload(entry[ocp_serialize.KEY_BREP])
+            colors = appearance.section_face_colors(section)
+            looks = appearance.payload_looks(section)
+            geometry[digest] = ocp_serialize.encode_gltf(_to_glb(shape, tolerance, angular_tolerance, colors, looks))
         except NothingToDraw as e:
             empty[digest] = str(e)
         except Exception as e:

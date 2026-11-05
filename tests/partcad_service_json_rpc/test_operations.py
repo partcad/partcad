@@ -286,7 +286,9 @@ class FakeProject:
         self.software = {}
         # The kind a section holds one of, for 'object_descriptions()' below.
         self._sections = {
+            "color": "colors",
             "material": "materials",
+            "finish": "finishes",
             "sketch": "sketches",
             "part": "parts",
             "assembly": "assemblies",
@@ -295,6 +297,10 @@ class FakeProject:
             "software": "software",
         }
         self.materials = {}
+        # The colours and finishes it declares, by name: the declarations
+        # themselves, as 'get_cmf()' answers them.
+        self.colors = {}
+        self.finishes = {}
         self.providers = {}
         self.children = []
         # The providers this package buys through, as `get_suppliers()` reports
@@ -326,6 +332,14 @@ class FakeProject:
         the same fakes, so this reads their 'desc'.
         """
         return {name: getattr(obj, "desc", None) for name, obj in getattr(self, self._sections[kind]).items()}
+
+    def object_names(self, kind):
+        """The names a package declares objects of a kind under; these fakes are their own declarations."""
+        return list(getattr(self, self._sections[kind]))
+
+    def get_cmf(self, kind, name, quiet=False):
+        """A colour, material or finish of this package, as 'Project.get_cmf()' answers it."""
+        return getattr(self, self._sections[kind]).get(name)
 
     def get_child_project_names(self):
         return list(self.children)
@@ -2204,7 +2218,7 @@ def test_a_walk_renders_only_the_packages_that_have_the_object(monkeypatch):
     # 'EmptyShapesError' out of 'Project.render_async()', which used to end the
     # whole run -- so one package without a widget cost every other package its
     # render. The packages are filtered before anything is rendered.
-    _fake_render_module(monkeypatch, lambda view, origin, up: {})
+    _fake_render_module(monkeypatch, lambda view, origin, up, turn=None: {})
     session, _ = make_session()
     session.partcad.output = types.SimpleNamespace(
         all_formats=lambda ctx: ["svg"],
@@ -2321,6 +2335,34 @@ def test_load_package_contents_lists_the_packages_software():
             "item_path": os.path.join(project.config_dir, "fw.bin"),
         }
     ]
+
+
+def test_load_package_contents_lists_the_packages_colours_materials_and_finishes():
+    from partcad import cmf, material
+
+    session, seen = make_session()
+    project = session.partcad_ctx.projects["//"]
+    project.colors = {
+        "red": cmf.Color("red", "//", {"display": "#C91A09", "desc": "Signal red"}),
+        "preview": cmf.Color("preview", "//", {"display": "#00FF00", "manufacturable": False}),
+        "stone": cmf.Color("stone", "//", {"type": "alias", "source": "//vendor:Medium Stone Grey"}),
+    }
+    project.materials = {"alu": material.Material("alu", "//", {"density": 2700, "color": ":natural"})}
+    project.finishes = {"satin": cmf.Finish("satin", "//", {"display": {"roughness": 0.6}})}
+
+    operations._load_package_contents(session, "//")
+
+    (items,) = [payload for event, payload in seen if event == events.ITEMS]
+    # Beside the objects, so the explorer can list them; what each says of
+    # itself and nothing it would have to look up in another package - an
+    # alias's target is in '//vendor', which listing this one must not load.
+    assert items["colors"] == [
+        {"name": "red", "type": "color", "desc": "Signal red", "display": "#C91A09", "manufacturable": True},
+        {"name": "preview", "type": "color", "display": "#00FF00", "manufacturable": False},
+        {"name": "stone", "type": "alias", "desc": "alias of //vendor:Medium Stone Grey", "manufacturable": True},
+    ]
+    assert items["materials"] == [{"name": "alu", "type": "material", "manufacturable": True}]
+    assert items["finishes"] == [{"name": "satin", "type": "finish", "manufacturable": True}]
 
 
 def test_load_package_contents_skips_a_child_package_it_cannot_read():
@@ -2586,6 +2628,165 @@ def test_supply_reports_an_object_that_cannot_be_ordered(monkeypatch):
     assert "Nothing to supply for //:missing" in str(caught.value)
 
 
+def _priced(monkeypatch, session, ctx, kind="assembly", name="top"):
+    """'supply.prices' over the supply session above, with the price rule stood in for.
+
+    The rule is 'partcad.component_prices', which has tests of its own; what is
+    under test here is that the daemon hands it this object's quote and parts.
+    """
+    shared = []
+
+    async def component_names_async(shape):
+        return ["//:bolt", "//:nut"] if kind != "part" else ["//:%s" % name]
+
+    async def prices_async(ctx, names, items):
+        shared.append((names, [item["name"] for item in items]))
+        return {"//:bolt": {"price": 1.5 / 4, "currency": "USD"}}
+
+    install_fake_partcad_modules(
+        monkeypatch,
+        {
+            "partcad.component_prices": {
+                "component_names_async": component_names_async,
+                "prices_async": prices_async,
+            },
+        },
+    )
+    shape = FakeObject(name, project_name="//")
+    shape.kind = kind
+    ctx.shapes[(kind, "//:%s" % name)] = shape
+    return shared
+
+
+def test_prices_are_the_objects_quote_shared_out_over_its_parts(monkeypatch):
+    session, ctx = make_supply_session(monkeypatch)
+    shared = _priced(monkeypatch, session, ctx)
+
+    result = operations.supply_prices(session, {"package": "//", "object": "top", "kind": "assembly"})
+
+    assert result == {"object": "//:top", "prices": {"//:bolt": {"price": 0.375, "currency": "USD"}}}
+    # The very quote the Buy tab shows, shared over what the assembly is made of.
+    assert shared == [(["//:bolt", "//:nut"], ["//:bolt", "//:nut"])]
+    assert ("Prices", "//") in session.partcad.logging.processes
+
+
+def test_prices_are_only_of_what_anybody_sells(monkeypatch):
+    session, ctx = make_supply_session(monkeypatch)
+    _priced(monkeypatch, session, ctx)
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.supply_prices(session, {"package": "//", "object": "outline", "kind": "sketch"})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "Only parts, assemblies and scenes are bought" in caught.value.message
+
+
+def test_a_render_asks_for_the_prices_of_the_shape_it_draws(monkeypatch):
+    """The price source an overlay carries is the same rule, for the shape being rendered."""
+    session, ctx = make_supply_session(monkeypatch)
+    _priced(monkeypatch, session, ctx)
+    shape = types.SimpleNamespace(kind="assembly", project_name="//", name="top")
+
+    prices = asyncio.run(operations._component_prices_async(session.partcad, ctx, shape))
+
+    assert prices == {"//:bolt": {"price": 0.375, "currency": "USD"}}
+    # A sketch has no components anybody sells, and is not asked about.
+    sketch = types.SimpleNamespace(kind="sketch", project_name="//", name="outline")
+    assert asyncio.run(operations._component_prices_async(session.partcad, ctx, sketch)) == {}
+
+
+CLUSTER = {"material": "//:abs", "name": "abs", "at": [5.0, 0.0, 0.0], "nodes": [[0], [1]], "faces": 12}
+
+
+def _clustered(monkeypatch, ctx, kind="assembly", name="top", configured=10.0):
+    """'cmf.clusters' over a session holding one object, with the sandbox stood in for.
+
+    The rule is 'material_clusters' among the wrappers, which has tests of its
+    own; what is under test here is that the daemon hands it this object's tree
+    and the distance, and answers with what it says.
+    """
+    asked = []
+
+    async def material_clusters(ctx, tree, distance, cacheable=True):
+        asked.append((tree, distance, cacheable))
+        return [CLUSTER]
+
+    async def section_async(ctx, tree, section, cacheable=True):
+        return dict(tree, cut=section)
+
+    install_fake_partcad_modules(
+        monkeypatch,
+        {
+            "partcad.measure": {"material_clusters": material_clusters},
+            "partcad.render_overlay": {"material_distance": lambda ctx: configured},
+            "partcad.shape_section": {"normalize": lambda section: section or None, "section_async": section_async},
+        },
+    )
+    shape = FakeObject(name, project_name="//")
+    shape.kind = kind
+
+    async def get_wrapped(ctx):
+        return {"name": "//:%s" % name, "assembly": []}
+
+    shape.get_wrapped = get_wrapped
+    shape.artifacts_cacheable = lambda: True
+    ctx.shapes[(kind, "//:%s" % name)] = shape
+    return asked
+
+
+def test_the_clusters_of_each_material_are_found_in_the_objects_tree(monkeypatch):
+    session, _ = make_session()
+    ctx = session.partcad_ctx
+    asked = _clustered(monkeypatch, ctx, configured=7.5)
+
+    result = operations.cmf_clusters(session, {"package": "//", "object": "top", "kind": "assembly"})
+
+    assert result == {"object": "//:top", "distance": 7.5, "section": None, "clusters": [CLUSTER]}
+    # The tree the 3D view is drawn from, as close as the user configured.
+    assert asked == [({"name": "//:top", "assembly": []}, 7.5, True)]
+    assert ("Materials", "//") in session.partcad.logging.processes
+
+
+def test_a_request_can_say_how_close_is_one_cluster(monkeypatch):
+    session, _ = make_session()
+    asked = _clustered(monkeypatch, session.partcad_ctx)
+
+    result = operations.cmf_clusters(session, {"package": "//", "object": "top", "kind": "assembly", "distance": 0})
+
+    assert result["distance"] == 0
+    assert asked[0][1] == 0
+    # Infinity too, which JSON's '1e400' decodes to: it would measure every pair apart.
+    for wrong in (-1, "near", True, float("inf"), float("nan")):
+        with pytest.raises(JsonRpcError) as caught:
+            operations.cmf_clusters(session, {"package": "//", "object": "top", "kind": "assembly", "distance": wrong})
+        assert caught.value.code == operations.USAGE_ERROR
+
+
+def test_the_clusters_are_of_what_the_3d_view_is_cut_to(monkeypatch):
+    """A callout names only what is drawn: the tree is cut to the view's section before it is clustered."""
+    session, _ = make_session()
+    asked = _clustered(monkeypatch, session.partcad_ctx)
+    section = {"z": [0.0, 5.0]}
+
+    result = operations.cmf_clusters(
+        session, {"package": "//", "object": "top", "kind": "assembly", "section": section}
+    )
+
+    assert result["section"] == section
+    assert asked[0][0] == {"name": "//:top", "assembly": [], "cut": section}
+
+
+def test_only_what_is_made_has_materials(monkeypatch):
+    session, _ = make_session()
+    _clustered(monkeypatch, session.partcad_ctx)
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.cmf_clusters(session, {"package": "//", "object": "outline", "kind": "sketch"})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "Only parts, assemblies and scenes are made of materials" in caught.value.message
+
+
 def test_assembly_guide_returns_the_document_of_the_assembly(monkeypatch):
     install_fake_partcad_modules(monkeypatch, {"partcad.exception": {"AssemblyDocumentError": FakeDocumentError}})
     session, _ = make_session()
@@ -2830,7 +3031,7 @@ def test_info_shows_the_instance_the_values_name():
 
 
 def test_a_walk_with_values_renders_that_instance_where_the_object_is(monkeypatch):
-    _fake_render_module(monkeypatch, lambda view, origin, up: {})
+    _fake_render_module(monkeypatch, lambda view, origin, up, turn=None: {})
     session, _ = make_session()
     session.partcad.output = types.SimpleNamespace(
         all_formats=lambda ctx: ["svg"],
@@ -2953,7 +3154,7 @@ def test_a_package_that_declares_no_such_file_type_says_what_it_declares():
 
 def test_render_hands_the_resolved_viewport_to_the_context(monkeypatch):
     resolved = {"viewport_origin": [0, -100, 0], "viewport_up": [0, 0, 1]}
-    _fake_render_module(monkeypatch, lambda view, origin, up: dict(resolved))
+    _fake_render_module(monkeypatch, lambda view, origin, up, turn=None: dict(resolved))
 
     session, _ = make_session()
     session.partcad.output = types.SimpleNamespace(
@@ -2978,6 +3179,33 @@ def test_render_hands_the_resolved_viewport_to_the_context(monkeypatch):
     assert rendered and rendered[0]["render_opts"] == resolved
 
 
+@pytest.mark.parametrize("given, sent", [(True, True), ("false", False)])
+def test_render_hands_reproducible_to_the_context(monkeypatch, given, sent):
+    """'pc render --reproducible' lands beside the viewport, over what the file type declares."""
+    _fake_render_module(monkeypatch, lambda view, origin, up, turn=None: {})
+
+    session, _ = make_session()
+    session.partcad.output = types.SimpleNamespace(
+        all_formats=lambda ctx: ["svg"],
+        NON_WRAPPER_FORMATS=set(),
+        SECTIONS=("export", "render"),
+        format_names=lambda section: [],
+        split_format=lambda project_name, fmt: (fmt, None),
+        REPRODUCIBLE_KEY="reproducible",
+        as_flag=_flag,
+    )
+    rendered = []
+
+    async def _render_async(**kwargs):
+        rendered.append(kwargs)
+
+    session.partcad_ctx.render_async = _render_async
+
+    operations.render_objects(session, {"package": "//", "format": "svg", "reproducible": given})
+
+    assert rendered and rendered[0]["render_opts"] == {"reproducible": sent}
+
+
 def test_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch):
     """Nothing is rendered, rather than something aimed somewhere else.
 
@@ -2985,7 +3213,7 @@ def test_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch):
     the editor extensions speak this protocol directly.
     """
 
-    def _refuse(view, origin, up):
+    def _refuse(view, origin, up, turn=None):
         raise ValueError("Unknown view 'isometric'. Known views: front, back")
 
     _fake_render_module(monkeypatch, _refuse)
@@ -3004,7 +3232,7 @@ def test_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch):
 
 def _render_session(monkeypatch):
     """A session whose output files are recorded rather than written."""
-    _fake_render_module(monkeypatch, lambda view, origin, up: {})
+    _fake_render_module(monkeypatch, lambda view, origin, up, turn=None: {})
     session, _ = make_session()
     session.partcad.output = types.SimpleNamespace(
         all_formats=lambda ctx: ["step"],
@@ -3081,14 +3309,16 @@ def test_an_unknown_file_type_is_refused_before_anything_is_built(monkeypatch):
 
 
 class FakeRenderer:
-    def __init__(self, error=None):
+    def __init__(self, error=None, written=None):
         self.calls = []
         self.error = error
+        self.written = written
 
     def __call__(self, input_filename, input_type, output_filename, output_type, **options):
         self.calls.append((input_filename, input_type, output_filename, output_type, options))
         if self.error is not None:
             raise self.error
+        return self.written
 
 
 def install_fake_render(monkeypatch, part=None, sketch=None, resolve_viewport=None):
@@ -3096,7 +3326,7 @@ def install_fake_render(monkeypatch, part=None, sketch=None, resolve_viewport=No
     sketch = sketch if sketch is not None else FakeRenderer()
     if resolve_viewport is None:
 
-        def resolve_viewport(view, origin, up):
+        def resolve_viewport(view, origin, up, turn=None):
             return {"viewport_origin": [0, -100, 0], "viewport_up": [0, 0, 1]} if view else {}
 
     install_fake_partcad_modules(
@@ -3137,7 +3367,7 @@ def test_adhoc_render_renders_a_part_and_reports_progress(monkeypatch, tmp_path)
     ]
     assert sketch.calls == []
     assert session.partcad.logging.messages("info") == [
-        "Rendering %s (step) to %s (png)..." % (source, target),
+        "Rendering %s (step) to %s..." % (source, target),
         "Render complete: %s" % target,
     ]
 
@@ -3159,9 +3389,13 @@ def test_adhoc_render_without_a_viewport_passes_none(monkeypatch, tmp_path):
     assert part.calls[0][4] == {}
 
 
-def test_adhoc_render_derives_the_output_path_from_the_projection(monkeypatch, tmp_path):
-    """'jpeg' is the format's name but '.jpg' is the file's."""
-    part, _ = install_fake_render(monkeypatch)
+def test_adhoc_render_leaves_naming_the_output_to_the_render(monkeypatch, tmp_path):
+    """With no output file named, the render names it -- in the input's directory unless one is given.
+
+    The render is what knows the extension: 'jpeg' is the format's name but
+    '.jpg' is the file's, and a file type a package implements says its own.
+    """
+    part, _ = install_fake_render(monkeypatch, part=FakeRenderer(written=str(tmp_path / "bracket.jpg")))
     session, _ = make_session()
     source = tmp_path / "bracket.step"
 
@@ -3170,8 +3404,9 @@ def test_adhoc_render_derives_the_output_path_from_the_projection(monkeypatch, t
         {"kind": "part", "input_filename": str(source), "output_filename": None, "output_type": "jpeg"},
     )
 
-    expected = tmp_path / "bracket.jpg"
-    assert part.calls[0][2:4] == (str(expected), "jpeg")
+    assert part.calls[0][2:4] == (None, "jpeg")
+    assert part.calls[0][4]["output_dir"] == str(tmp_path)
+    assert session.partcad.logging.messages("info")[-1] == "Render complete: %s" % (tmp_path / "bracket.jpg")
 
 
 def test_adhoc_render_infers_jpeg_from_either_spelling(monkeypatch, tmp_path):
@@ -3263,10 +3498,131 @@ def test_adhoc_render_refuses_a_projection_it_does_not_write(monkeypatch, tmp_pa
     assert part.calls == [] and sketch.calls == []
 
 
+def _flag(value):
+    """'output.as_flag', for the fakes: a boolean, or a boolean's name."""
+    if isinstance(value, bool):
+        return value
+    if str(value).lower() in ("true", "false"):
+        return str(value).lower() == "true"
+    raise ValueError("'reproducible' has to be true or false, not %r" % (value,))
+
+
+def _with_output(session):
+    session.partcad.output = types.SimpleNamespace(REPRODUCIBLE_KEY="reproducible", as_flag=_flag)
+    return session
+
+
+def adhoc_request(tmp_path, **extra):
+    return {
+        "kind": "part",
+        "input_filename": str(tmp_path / "bracket.py"),
+        "input_type": "build123d",
+        "output_filename": str(tmp_path / "bracket.svg"),
+        **extra,
+    }
+
+
+@pytest.mark.parametrize("given, sent", [(True, True), (False, False), ("false", False)])
+def test_adhoc_render_hands_reproducible_to_the_projection(monkeypatch, tmp_path, given, sent):
+    """'--reproducible' is the file type's 'reproducible', for one run: "false" from a client is false."""
+    part, _ = install_fake_render(monkeypatch)
+    session = _with_output(make_session()[0])
+
+    operations.adhoc_render(session, adhoc_request(tmp_path, reproducible=given))
+
+    assert part.calls[0][4] == {"reproducible": sent}
+
+
+def test_adhoc_render_hands_the_picture_options_to_the_projection(monkeypatch, tmp_path):
+    """'--style shaded' and the rest mean to a picture of a bare file what they mean to an object's."""
+    part, _ = install_fake_render(monkeypatch)
+    session = _with_output(make_session()[0])
+    picture = {"style": "shaded", "size": "square", "background": "#102030", "quality": 80}
+
+    operations.adhoc_render(
+        session,
+        adhoc_request(tmp_path, output_filename=str(tmp_path / "bracket.png"), **picture),
+    )
+
+    assert part.calls[0][4] == picture
+
+
+def test_adhoc_render_refuses_a_reproducible_that_is_not_a_flag(monkeypatch, tmp_path):
+    part, _ = install_fake_render(monkeypatch)
+    session = _with_output(make_session()[0])
+
+    with pytest.raises(operations.JsonRpcError) as excinfo:
+        operations.adhoc_render(session, adhoc_request(tmp_path, reproducible="sometimes"))
+
+    assert excinfo.value.code == operations.USAGE_ERROR
+    assert part.calls == []
+
+
+@pytest.mark.parametrize("params", [["depth=12", "label=M4"], {"depth": "12", "label": "M4"}])
+def test_adhoc_render_hands_the_values_to_the_input(monkeypatch, tmp_path, params):
+    """Either shape a client sends them in: what the throwaway package declares them from."""
+    part, _ = install_fake_render(monkeypatch)
+    session, _ = make_session()
+
+    operations.adhoc_render(session, adhoc_request(tmp_path, params=params))
+
+    assert part.calls[0][4] == {"parameters": {"depth": "12", "label": "M4"}}
+
+
+def test_adhoc_render_takes_a_file_type_the_options_package_declares(monkeypatch, tmp_path):
+    """Not one of the built-in projections, and still not refused: the render checks it once the package is read."""
+    part, _ = install_fake_render(monkeypatch)
+    session, _ = make_session()
+
+    operations.adhoc_render(
+        session, adhoc_request(tmp_path, output_type="svg-thin", options_package=str(tmp_path / "opts"))
+    )
+
+    assert part.calls[0][3] == "svg-thin"
+    assert part.calls[0][4] == {"options_package": str(tmp_path / "opts")}
+
+
+def test_adhoc_render_writes_into_the_directory_it_is_given(monkeypatch, tmp_path):
+    part, _ = install_fake_render(monkeypatch)
+    session, _ = make_session()
+    out = tmp_path / "out"
+
+    operations.adhoc_render(
+        session, adhoc_request(tmp_path, output_filename=None, output_dir=str(out), output_type="svg")
+    )
+
+    assert part.calls[0][2] is None
+    assert part.calls[0][4] == {"output_dir": str(out)}
+
+
+def test_adhoc_render_refuses_an_output_file_and_a_directory_both(monkeypatch, tmp_path):
+    part, _ = install_fake_render(monkeypatch)
+    session, _ = make_session()
+
+    with pytest.raises(operations.JsonRpcError) as excinfo:
+        operations.adhoc_render(session, adhoc_request(tmp_path, output_dir=str(tmp_path)))
+
+    assert excinfo.value.code == operations.USAGE_ERROR
+    assert part.calls == []
+
+
+def test_adhoc_render_reports_what_the_render_refused_as_a_usage_error(monkeypatch, tmp_path):
+    """A package it cannot reach, or a file type the package does not declare: nothing was attempted."""
+    refusal = ValueError("No 'nosuch' file type is declared by /opts. It declares: svg-thin")
+    install_fake_render(monkeypatch, part=FakeRenderer(error=refusal))
+    session, _ = make_session()
+
+    with pytest.raises(operations.JsonRpcError) as excinfo:
+        operations.adhoc_render(session, adhoc_request(tmp_path, output_type="nosuch", options_package="/opts"))
+
+    assert excinfo.value.code == operations.USAGE_ERROR
+    assert "No 'nosuch' file type is declared" in str(excinfo.value)
+
+
 def test_adhoc_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch, tmp_path):
     """Nothing is rendered, rather than something aimed somewhere else."""
 
-    def _refuse(view, origin, up):
+    def _refuse(view, origin, up, turn=None):
         raise ValueError("Unknown view 'isometric'. Known views: front, back")
 
     part, _ = install_fake_render(monkeypatch, resolve_viewport=_refuse)
@@ -4580,24 +4936,51 @@ def test_the_overlay_reader_takes_the_flags_and_the_ports(monkeypatch):
             return "overlay" if any(kwargs[flag] for flag in ("ports", "interfaces", "all")) else None
 
     install_fake_partcad_modules(monkeypatch, {"partcad.render_overlay": {"Overlay": FakeOverlay}})
+    session, _ = make_session()
 
-    assert operations._overlay({}) is None
+    assert operations._overlay(session, {}) is None
+    prices = overlay_calls[-1].pop("prices")
     assert overlay_calls[-1] == {
         "ports": False,
         "interfaces": False,
         "all": False,
         "internals": False,
         "select": None,
+        "component_names": False,
+        "component_prices": False,
+        # The names are written unless a request says not to.
+        "port_names": True,
+        "interface_names": True,
+        "materials": False,
     }
+    # Where the prices come from travels with every overlay, and is asked only
+    # by a picture that shows them.
+    assert callable(prices)
 
-    operations._overlay({"with_ports": True, "ports": ["a", "b"], "with_internals": True})
+    operations._overlay(session, {"with_ports": True, "ports": ["a", "b"], "with_internals": True})
     assert overlay_calls[-1]["select"] == ["a", "b"]
     assert overlay_calls[-1]["internals"] is True
 
     # One name is a name: a client that sends a string rather than a list of one
     # is asking for that port, not for each of its characters.
-    operations._overlay({"with_ports": True, "ports": "only"})
+    operations._overlay(session, {"with_ports": True, "ports": "only"})
     assert overlay_calls[-1]["select"] == ["only"]
+
+    operations._overlay(
+        session,
+        {
+            "with_component_names": True,
+            "with_component_prices": True,
+            "with_port_names": False,
+            "with_interface_names": False,
+        },
+    )
+    asked = overlay_calls[-1]
+    assert (asked["component_names"], asked["component_prices"]) == (True, True)
+    assert (asked["port_names"], asked["interface_names"]) == (False, False)
+
+    operations._overlay(session, {"with_materials": True})
+    assert overlay_calls[-1]["materials"] is True
 
 
 # ---- simulate.list and the snapshots of simulate.run ------------------------

@@ -625,3 +625,16 @@ def test_a_command_brings_the_base_stack_with_it_even_without_once(tmp_path, mon
     made.run(["x.py"])
     for requirement in runtime_python.base_requirements(made.version):
         assert requirement in sent["requirements"]
+
+
+def test_a_package_named_after_the_files_is_sent_whole(tmp_path):
+    """'--package-dir <index> <directory>' (see 'output.PACKAGE_DIR_ARGUMENT') sends the package, and nothing else does."""
+    wrappers = tmp_path / "wrappers"
+    package = tmp_path / "package"
+    (package / "media").mkdir(parents=True)
+    wrappers.mkdir()
+    (wrappers / "export.py").write_text("")
+    command = [str(wrappers / "export.py"), str(tmp_path / "out" / "x.mp4"), str(wrappers), str(wrappers / "export.py")]
+    assert runtime_python_remote.input_dirs_for(command) == [str(wrappers)]
+    command += ["--package-dir", "0", str(package)]
+    assert runtime_python_remote.input_dirs_for(command) == [str(package), str(wrappers)]

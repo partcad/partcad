@@ -341,26 +341,45 @@ def _link_filter(params, what: str):
         raise JsonRpcError(USAGE_ERROR, "%s: %s" % (what, e)) from e
 
 
-def _overlay(params):
-    """The port overlay a request asks for, or ``None`` for none.
+def _overlay(session, params):
+    """The overlay a request asks for, or ``None`` for none.
 
     The four flags say *whether* the ports and the interfaces are drawn, and
     ``ports`` says *which* -- by the name each is reported under, which is the
     port's own name for a port of the object and the node path then the port for
     one inside it. One reader, so ``render.objects`` and ``render.inline`` cannot
     come to disagree about the parameter names (see 'partcad.render_overlay').
+
+    The callouts are four more: ``with_component_names`` and
+    ``with_component_prices`` put one on every component, and
+    ``with_port_names``/``with_interface_names`` -- true unless they are sent
+    false -- say whether the two overlays write their names. The prices come
+    from here, the one place that asks the suppliers: the overlay carries
+    '_component_prices_async' as where to find them, and asks it only for a
+    picture that shows them. ``with_materials`` puts one on every cluster of a
+    material, as close as the user's configuration says one cluster is.
     """
     from partcad.render_overlay import Overlay
 
     select = params.get("ports")
     if isinstance(select, str):
         select = [select]
+
+    async def prices(ctx, shape):
+        return await _component_prices_async(session.partcad, ctx, shape)
+
     return Overlay.of(
         ports=params.get("with_ports", False),
         interfaces=params.get("with_interfaces", False),
         all=params.get("with_all", False),
         internals=params.get("with_internals", False),
         select=None if select is None else [str(name) for name in select],
+        component_names=bool(params.get("with_component_names", False)),
+        component_prices=bool(params.get("with_component_prices", False)),
+        port_names=params.get("with_port_names") is not False,
+        interface_names=params.get("with_interface_names") is not False,
+        prices=prices,
+        materials=bool(params.get("with_materials", False)),
     )
 
 
@@ -1426,9 +1445,24 @@ def adhoc_render(session, params):
     comes from the part/sketch mappings as it does for a conversion; the *output*
     type comes from the projections instead, which is the whole difference.
 
-    ``view``, ``viewport_origin`` and ``viewport_up`` aim the projection, exactly
-    as they do for ``render.objects`` -- with no ``partcad.yaml`` to configure a
-    viewport in, this is the only way to ask for one.
+    It takes what ``render.objects`` takes wherever that means something for a
+    file outside any package:
+
+    * ``view``, ``viewport_origin``, ``viewport_up`` and ``turn`` aim the
+      projection, and ``reproducible`` picks the hidden-line algorithm, for this
+      one render -- with no ``partcad.yaml`` to configure them in, this is the
+      only way to say either;
+    * ``style``, ``size``, ``background`` and ``quality`` are a picture's, as for
+      ``render.objects`` (`VIDEO_OPTIONS`): a ``png`` or a ``jpeg`` drawn
+      ``shaded`` is the 3D view's picture of a bare file;
+    * ``params`` are parameter values of the input, which the throwaway package
+      declares on it, so that a script reads them;
+    * ``options_package`` is a package to read the file type from -- one in the
+      public index, or a package directory -- which the throwaway package
+      imports; the file type may then be one it declares;
+    * ``output_dir`` is where the file goes when ``output_filename`` is not
+      given, under the input's name with its values (by default the input's
+      own directory).
     """
     from pathlib import Path
 
@@ -1453,6 +1487,11 @@ def adhoc_render(session, params):
     input_path = Path(params["input_filename"])
     output_filename = params.get("output_filename")
     output_path = Path(output_filename) if output_filename else None
+    output_dir = params.get("output_dir")
+    if output_path is not None and output_dir:
+        raise JsonRpcError(USAGE_ERROR, "Name the output file or give an output directory, not both")
+    options_package = params.get("options_package")
+    values = _assigned(params)
 
     input_ext_to_type = {".%s" % v: k for k, v in input_mapping.items()}
     # '.jpeg' alongside the '.jpg' the mapping declares: the mapping says what
@@ -1473,38 +1512,46 @@ def adhoc_render(session, params):
     if not output_type:
         pc.logging.error("Cannot infer the projection to render. Please specify --output explicitly.")
         return None
-    if output_type not in RENDER_EXTENSION_MAPPING:
-        # Checked before the extension lookup below, which would otherwise
-        # raise KeyError for a type nobody projects to and turn a bad request
-        # into an internal error.
+    if output_type not in RENDER_EXTENSION_MAPPING and not options_package:
+        # A file type a package implements is checked once that package is
+        # read, which is the ad-hoc render's to do; with none named, there is
+        # nothing but the built-in projections it could be.
         raise JsonRpcError(
             USAGE_ERROR,
             "Cannot render to '%s'. Supported projections: %s"
             % (output_type, ", ".join(sorted(RENDER_EXTENSION_MAPPING))),
         )
+
+    # The picture options too: 'style', 'size', 'background' and a JPEG's
+    # 'quality' mean the same to a picture of a bare file as to an object's.
+    options = {**_render_options(pc, params), **_video(params)}
+    if values:
+        options["parameters"] = values
+    if options_package:
+        options["options_package"] = options_package
     if output_path is None:
-        output_path = input_path.with_suffix(".%s" % RENDER_EXTENSION_MAPPING[output_type])
+        # Named by the render, which knows the extension of whatever wrote it
+        # (see 'partcad.adhoc.write_output_file').
+        options["output_dir"] = str(Path(output_dir) if output_dir else input_path.parent)
 
-    from partcad.render import resolve_viewport
-
+    target = output_path if output_path is not None else "%s (%s)" % (options["output_dir"], output_type)
     try:
-        render_opts = resolve_viewport(
-            params.get("view"),
-            params.get("viewport_origin"),
-            params.get("viewport_up"),
+        pc.logging.info("Rendering %s (%s) to %s..." % (input_path, input_type, target))
+        written = render_fn(
+            str(input_path),
+            input_type,
+            str(output_path) if output_path is not None else None,
+            output_type,
+            **options,
         )
-    except ValueError as e:
-        raise JsonRpcError(USAGE_ERROR, str(e)) from e
-
-    try:
-        pc.logging.info("Rendering %s (%s) to %s (%s)..." % (input_path, input_type, output_path, output_type))
-        render_fn(str(input_path), input_type, str(output_path), output_type, **render_opts)
-        pc.logging.info("Render complete: %s" % output_path)
+        pc.logging.info("Render complete: %s" % (written or output_path))
     except ValueError as e:
         # A format that only means anything inside a package ('.urdf', '.assy')
         # is inferable from the filename, so it reaches here even though the
-        # CLI's choices exclude it. Nothing was attempted and nothing could have
-        # been: a usage error, not a failed render.
+        # CLI's choices exclude it -- and so does a package to read file types
+        # from that an ad-hoc render cannot reach, or a type it does not
+        # declare. Nothing was attempted and nothing could have been: a usage
+        # error, not a failed render.
         raise JsonRpcError(USAGE_ERROR, str(e))
     except Exception as e:  # pylint: disable=broad-except
         pc.logging.error("Failed to render: %s" % e)
@@ -2548,7 +2595,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.272"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.9.2"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -2673,7 +2720,9 @@ def list_all(session, params):
 # The key is the name of the package attribute holding the objects, which is why
 # 'software' looks singular here: the section is called that in both numbers.
 _LIST_LABELS = {
+    "colors": "PartCAD colors",
     "materials": "PartCAD materials",
+    "finishes": "PartCAD finishes",
     "parts": "PartCAD parts",
     "sketches": "PartCAD sketches",
     "assemblies": "PartCAD assemblies",
@@ -2684,7 +2733,9 @@ _LIST_LABELS = {
 
 # The kind each section holds one of, for the accessors that are keyed by kind.
 _LIST_KINDS = {
+    "colors": "color",
     "materials": "material",
+    "finishes": "finish",
     "parts": "part",
     "sketches": "sketch",
     "assemblies": "assembly",
@@ -2708,7 +2759,15 @@ _LIST_FROM_OBJECTS = ("interfaces",)
 # ones with geometry in them. A package of firmware images has nothing to render
 # and would be filtered out of the walk exactly as a package of interfaces is
 # (see 'Context.get_packages', and the TODO there about the two).
-_LIST_EVERY_PACKAGE = ("interfaces", "software", "materials")
+_LIST_EVERY_PACKAGE = ("interfaces", "software", "colors", "materials", "finishes")
+
+# The three kinds of CMF declaration (see 'partcad.cmf'), listed alike: name,
+# what it is drawn in, whether it is a claim that it can be had, and what it is.
+_LIST_CMF = ("colors", "materials", "finishes")
+
+# The same three, as the package contents the explorer is sent list them: each
+# section under its own name, holding declarations of its kind.
+_CMF_SECTIONS = tuple((section, _LIST_KINDS[section]) for section in _LIST_CMF)
 
 
 def list_objects(session, params):
@@ -2750,7 +2809,9 @@ def list_objects(session, params):
         output = _LIST_LABELS.get(kind, "PartCAD objects") + ":\n"
         for project_name in packages:
             project = ctx.projects[project_name]
-            if kind in _LIST_FROM_OBJECTS:
+            if kind in _LIST_CMF:
+                rows = _cmf_rows(ctx, project, _LIST_KINDS[kind])
+            elif kind in _LIST_FROM_OBJECTS:
                 # A snapshot, not the live dictionary: reading an object can
                 # resolve another one into the package - an interface declared
                 # as an alias takes its description from the interface it names
@@ -2787,6 +2848,150 @@ def list_objects(session, params):
             output += "\t<none>\n"
         pc.logging.info(output)
     return None
+
+
+def _cmf_rows(ctx, project, kind: str) -> dict:
+    """{name: description} of a package's CMF declarations, the description led by what they look like.
+
+    'display' and 'manufacturable' first, the way every view shows a CMF
+    declaration (docs/design/cmf.md, "One presentation"): a colour that is only
+    a picture says so before anything else.
+    """
+    from partcad import cmf
+    from partcad_utils.utils import escape_name
+
+    rows = {}
+    for name in project.object_names(kind):
+        # The key as written; asked for as a reference, which spells a reserved
+        # character escaped.
+        declaration = project.get_cmf(kind, escape_name(name), quiet=True)
+        if declaration is None:
+            rows[name] = "<broken>"
+            continue
+        alias = ""
+        desc = declaration.desc
+        if declaration.is_alias and declaration.source is None:
+            rows[name] = "<broken> (an alias naming nothing)"
+            continue
+        if declaration.is_alias:
+            # Shown as what it names, with that declaration's look, so that a
+            # display-only colour is marked so under every name it has.
+            alias = " (alias of %s)" % declaration.source
+            declaration = cmf.lookup(ctx, kind, declaration.source, declaration.project_name, quiet=True)
+            if declaration is None:
+                rows[name] = "<broken>%s" % alias
+                continue
+            # The alias's own description where it gives one, else what it names.
+            desc = desc or declaration.desc
+        # Parametric is a declaration listed without values: an instance of
+        # one ('rgba;color=C91A09FF', which an alias may name) has a look.
+        if declaration.config.get("parameters") and not declaration.parameter_values:
+            look = "parametric"
+        elif kind == "finish":
+            look = declaration.cmf_info().get("Display", "-")
+        else:
+            rgba = cmf.display(ctx, declaration)
+            look = cmf.css_color.to_hex(rgba) if rgba is not None else "-"
+            texture = cmf.texture_of(ctx, declaration)
+            if texture is not None:
+                # Drawn with an image, and as that colour where only a colour can be.
+                look += " (image %s)" % texture.name
+        made = "" if declaration.manufacturable else " (display only)"
+        rows[name] = "%-11s%s%s%s" % (look, " " + desc if desc else "", made, alias)
+    return rows
+
+
+def cmf_info(session, params):
+    """The colour, material and finish of an object, or what a colour, a material or a finish is.
+
+    What the IDE's CMF tab is drawn from (docs/design/cmf.md, section 9). For
+    a part, an assembly or a scene: ``items``, a row per item the ``cmf`` check
+    judges -- the part itself, or every part an assembly holds and every
+    sub-assembly it holds that is bought whole -- each with its CMF as ``pc
+    info`` says it and what keeps it from being specified, the incomplete ones
+    first; and for an assembly ``own``, the CMF it sets itself (see
+    ``partcad.cmf.report_async``). What a part's source states is only known
+    once the part is built, so it is: by the time anybody opens the tab, the
+    3D view beside it has built all of it.
+
+    For a declaration -- ``kind`` ``color``, ``material`` or ``finish``, which
+    the IDE knows from the explorer row it opened, and which a name alone
+    cannot say, since a declaration's name is no object's -- ``declaration``:
+    what it is called, what it is drawn in, whether it is a claim or only a
+    picture, and what other systems call it (see
+    ``partcad.cmf.declaration_data``). Nothing is built for one.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    from partcad import cmf
+
+    said = _said_kind(params)
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, name = resolved
+    path = _qualified(package, name)
+
+    if said in cmf.KINDS:
+        from partcad_utils.utils import escape_name
+
+        project = ctx.get_project(package)
+        if project is not None and name in project.object_names(said):
+            # Asked for as the explorer lists it, by its key as written: a ';'
+            # in a key is part of the name, not where its parameters start. A
+            # reference that names parameters ('rgba;color=...') is no key.
+            name = escape_name(name)
+        declaration = project.get_cmf(said, name, quiet=True) if project is not None else None
+        if declaration is None:
+            raise JsonRpcError(USAGE_ERROR, "The %s %s is not found" % (said, path))
+        return {"object": path, "kind": said, "declaration": cmf.declaration_data(ctx, declaration)}
+
+    getters = {"part": ctx.get_part, "assembly": ctx.get_assembly, "scene": ctx.get_scene}
+    refusal = (
+        "Only parts, assemblies and scenes are made in a colour, a material and a finish, and only colours, "
+        "materials and finishes are what they are made in; '%s' is none of them"
+    )
+    kind = _resolve_kind(ctx, params, package, name, getters, refusal)
+    obj = getters[kind](path)
+    if obj is None:
+        raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+    with pc.logging.Process("CMF", package, name):
+        report = asyncio.run(cmf.report_async(ctx, obj))
+    return {"object": path, "kind": kind, **report}
+
+
+def _cmf_items(session, project, kind: str) -> list:
+    """A package's colours, materials or finishes, as the explorer lists them.
+
+    What the declaration says of itself and nothing it would have to look up
+    elsewhere: an alias's target, or a display naming another package's colour,
+    is in a package that may not have loaded yet, and listing a package must
+    not load its neighbours. The CMF tab says the rest, once one is opened.
+    """
+    from partcad_utils.utils import escape_name
+
+    described = []
+    for name in project.object_names(kind):
+        try:
+            # Asked for by reference, which spells a reserved character escaped.
+            declaration = project.get_cmf(kind, escape_name(name), quiet=True)
+            if declaration is None:
+                raise Exception("the declaration cannot be read")
+            row = {"name": name, "type": "alias" if declaration.is_alias else kind}
+            desc = declaration.desc or ("alias of %s" % declaration.source if declaration.is_alias else None)
+            if desc:
+                row["desc"] = desc
+            if declaration.display_words() is not None:
+                row["display"] = declaration.display_words()
+            row["manufacturable"] = declaration.manufacturable
+            described.append(row)
+        except Exception as e:  # pylint: disable=broad-except
+            session.emitter.warning("Skipping the %s '%s:%s': %s" % (kind, project.name, name, e))
+    return described
 
 
 def list_packages(session, params):
@@ -4150,6 +4355,147 @@ async def _supply_option(pc, ctx, cart_item, provider_name, qos):
     return option
 
 
+# What can be bought, and so priced: see 'supply_prices'.
+_PRICED = ("part", "assembly", "scene")
+
+
+def supply_prices(session, params):
+    """What each component of an object costs: its share of the object's quote.
+
+    What the IDE's 3D view writes on every component when "Component prices" is
+    ticked, and what ``pc render --with-component-prices`` writes on a picture:
+    the quote ``supply.quote`` answers -- one line item per thing to order, each
+    supplier asked for each on its own -- shared out over what the object is made
+    of, by the rule in `partcad.component_prices`. Answered by the full name of
+    each object (``<package>:<name>``), which is what every node of the tree the
+    viewer shows carries, so a part placed a hundred times is one entry:
+    ``{"object": ..., "prices": {name: {"price": <number>, "currency": <code or
+    None>}}}``. A component nobody quoted is absent rather than free.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    refusal = "Only parts, assemblies and scenes are bought; '%s' is none of them"
+    _refuse_said_kind(params, _PRICED, refusal)
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, object_name = resolved
+    path = _qualified(package, object_name)
+    kind = _resolve_kind(ctx, params, package, object_name, _PRICED, refusal)
+    shape = _getter(ctx, kind)(path)
+    if shape is None:
+        raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+
+    with pc.logging.Process("Prices", package, object_name):
+        prices = asyncio.run(_component_prices_async(pc, ctx, shape, qos=params.get("qos") or None))
+    return {"object": path, "prices": prices}
+
+
+# What is made of a material: what has faces for the "Materials" callout to find.
+_MADE_OF = ("part", "assembly", "scene")
+
+
+def cmf_clusters(session, params):
+    """Where each material of an object is: its clusters, one callout each.
+
+    What the IDE's 3D view writes when "Materials" is ticked, and what ``pc render
+    --with-materials`` writes on a picture: the faces of one material, of one part
+    or of several, that touch or are closer than ``distance`` millimetres --
+    ``materialClusterDistance`` from the user configuration unless the request
+    says -- gathered into clusters by the rule in the wrappers'
+    ``material_clusters``, which runs in a sandbox. ``{"object": ..., "distance":
+    <mm>, "clusters": [{"material", "name", "at", "nodes", "faces"}, ...]}``: each
+    cluster's material and what a person reads it as, the point of it the callout
+    is pinned to in the frame of the object, the path of every node of the
+    object's tree with a face in it (the paths the viewer's tree names its nodes
+    by), and how many faces it is. A face nothing names a material for is in none.
+
+    ``section`` is the cross-section the 3D view shows the object cut to, as
+    ``render.inline`` takes one: the tree is cut to it first, so that a callout
+    names only what is drawn. A cut keeps every node where it was, so the paths
+    are the uncut tree's.
+    """
+    import asyncio
+
+    from partcad import render_overlay
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    distance = params.get("distance")
+    if distance is None:
+        distance = render_overlay.material_distance(ctx)
+    elif (
+        isinstance(distance, bool)
+        or not isinstance(distance, (int, float))
+        or not math.isfinite(distance)
+        or distance < 0
+    ):
+        # Infinity among them, which JSON's '1e400' decodes to: every pair of
+        # pieces of a material would be measured apart.
+        raise JsonRpcError(USAGE_ERROR, "'distance' is a length in millimetres, nought or more: %r" % (distance,))
+    section = _section(params)
+
+    refusal = "Only parts, assemblies and scenes are made of materials; '%s' is none of them"
+    _refuse_said_kind(params, _MADE_OF, refusal)
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, object_name = resolved
+    path = _qualified(package, object_name)
+    kind = _resolve_kind(ctx, params, package, object_name, _MADE_OF, refusal)
+    shape = _getter(ctx, kind)(path)
+    if shape is None:
+        raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+
+    with pc.logging.Process("Materials", package, object_name):
+        clusters = asyncio.run(_material_clusters_async(ctx, shape, float(distance), section))
+        materials = {cluster.get("material") for cluster in clusters}
+        pc.logging.info(
+            "%s: %d cluster(s) of %d material(s), %g mm apart at most"
+            % (path, len(clusters), len(materials), float(distance))
+        )
+    return {"object": path, "distance": float(distance), "section": section, "clusters": clusters}
+
+
+async def _material_clusters_async(ctx, shape, distance, section=None):
+    """The clusters of each material of 'shape', cut to 'section' first if there is one: see 'cmf_clusters'."""
+    from partcad import measure, shape_section
+
+    cacheable = shape.artifacts_cacheable()
+    tree = await shape.get_wrapped(ctx)
+    if tree is None:
+        return []
+    if section is not None:
+        tree = await shape_section.section_async(ctx, tree, section, cacheable=cacheable)
+    return await measure.material_clusters(ctx, tree, distance, cacheable=cacheable)
+
+
+async def _component_prices_async(pc, ctx, shape, qos=None):
+    """What each component of 'shape' costs, by full name: see 'supply_prices'.
+
+    The price source a render's overlay carries, too, so that a picture and the
+    3D view beside it cannot come to price one part two ways. Only a part, an
+    assembly or a scene is ever bought; anything else has no components to
+    price, and is answered with none rather than with a quote that fails.
+    """
+    from partcad import component_prices
+
+    if getattr(shape, "kind", None) not in _PRICED:
+        return {}
+    path = "%s:%s" % (shape.project_name, shape.name)
+    quote = await _supply_quote_async(pc, ctx, path, qos=qos, recursive=False)
+    names = await component_prices.component_names_async(shape)
+    return await component_prices.prices_async(ctx, names, quote["items"])
+
+
 def _as_price(value):
     """A quoted price as a number, or None when the provider did not give one.
 
@@ -4393,9 +4739,16 @@ def render_objects(session, params):
     one package is used against the objects of another.
 
     ``view``, ``viewport_origin`` and ``viewport_up`` re-aim the projection for
-    this one run. They resolve to the very parameters a ``render:`` file type
-    configures, so the override lands on top of the configuration rather than
-    beside it, and a file type that does not project never reads them.
+    this one run, and ``turn`` turns the object in front of it. They resolve to
+    the very parameters a ``render:`` file type configures, so the override
+    lands on top of the configuration rather than beside it, and a file type
+    that does not project never reads them.
+
+    ``style``, ``size``, ``background``, ``fps``, ``duration``, ``speed``,
+    ``append``, ``preset`` and ``quality`` do the same for a picture and a video
+    (`VIDEO_OPTIONS`): they are fields of the raster and video file types of
+    ``//builtin/render``, handed to every file type rendered like the viewport,
+    so ``quality`` sets a JPEG's as well.
 
     ``filter`` keeps only some of the links of one assembly or scene, so that
     what is written is a view of it (see `partcad.assembly_filter`). It writes
@@ -4428,19 +4781,11 @@ def render_objects(session, params):
         if ctx.get_project(options_package) is None:
             raise JsonRpcError(USAGE_ERROR, "Options package %s is not found" % options_package)
 
-    from partcad.render import resolve_viewport
-
-    try:
-        render_opts = resolve_viewport(
-            params.get("view"),
-            params.get("viewport_origin"),
-            params.get("viewport_up"),
-        )
-    except ValueError as e:
-        # A view nobody offers, or a vector that is not one: the request cannot
-        # be made sense of, so nothing is rendered rather than something aimed
-        # somewhere else.
-        raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    # A view nobody offers, or a vector that is not one: the request cannot be
+    # made sense of, so nothing is rendered rather than something aimed
+    # somewhere else.
+    render_opts = _render_options(pc, params)
+    render_opts.update(_video(params))
 
     from partcad.exception import AssemblyDocumentError
 
@@ -4448,7 +4793,7 @@ def render_objects(session, params):
     # connection metadata on top of the projection. Only 'pc render' offers
     # them, and only the 'render:' file types act on them (see
     # Shape._output_request).
-    overlay = _overlay(params)
+    overlay = _overlay(session, params)
 
     link_filter = _link_filter(params, "the filter")
     if link_filter is not None:
@@ -4542,9 +4887,10 @@ def render_inline(session, params):
     on top of the projection. They are what the ticked boxes of that panel
     resolve to, so the tab and the command line produce the same picture.
 
-    ``view``, ``viewport_origin`` and ``viewport_up`` aim the projection for this
-    one picture, exactly as they do for ``render.objects``: what the panel's
-    viewpoint fields and its orientation gizmo say. ``section`` cuts the object
+    ``view``, ``viewport_origin``, ``viewport_up`` and ``turn`` aim the
+    projection for this one picture, exactly as they do for ``render.objects``:
+    what the panel's viewpoint fields and its orientation gizmo say. The picture
+    and video options of ``render.objects`` (`VIDEO_OPTIONS`) are taken too. ``section`` cuts the object
     by a box first -- ``{"x": [lo, hi], ...}`` in millimetres in the frame of the
     object's root, an axis left out not cut (see `partcad.shape_section`) --
     which is what the panel's section sliders ask for.
@@ -4604,7 +4950,7 @@ def render_inline(session, params):
             "Only an assembly or a scene has links to filter; '%s' has none" % kind,
         )
     section = _section(params)
-    render_opts = _viewport(params)
+    render_opts = {**_render_options(pc, params), **_video(params)}
 
     if kind in ("assembly", "scene"):
         # Phase one of an assembly build, as for every other request that ends
@@ -4614,7 +4960,7 @@ def render_inline(session, params):
     if shape is None:
         raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
 
-    overlay = _overlay(params)
+    overlay = _overlay(session, params)
 
     directory = tempfile.mkdtemp(prefix="partcad-render-")
     try:
@@ -4670,8 +5016,48 @@ def _section(params):
         raise JsonRpcError(USAGE_ERROR, str(e)) from e
 
 
+# What a request may say about a picture or a video, for this one run: the
+# fields of the raster and video file types of '//builtin/render' that 'pc
+# render' offers as options (see 'partcad_cli.click.video'). Handed on as export
+# parameters, like the viewport, so that each overrides what the file type's
+# configuration says, and handed to every file type the run renders: what one
+# means is the file type's to say - 'style', 'size' and 'background' are a PNG's
+# and a JPEG's as much as a video's, and 'quality' is a JPEG's quality too.
+VIDEO_OPTIONS = ("style", "size", "background", "fps", "duration", "speed", "append", "preset", "quality")
+
+
+def _video(params):
+    """The picture and video overrides a request asks for, as export parameters: only the ones it gives."""
+    options = {}
+    for key in VIDEO_OPTIONS:
+        value = params.get(key)
+        if value is None or (key == "append" and value is False):
+            continue
+        options[key] = value
+    return options
+
+
+def _render_options(pc, params):
+    """What a request overrides of a projection for one run, as export parameters.
+
+    The viewport (see '_viewport') and 'reproducible', the hidden-line algorithm
+    the projection is drawn through: an explicit argument, so it lands on top of
+    what the file type declares (see 'Shape._run_together_locked'). Absent, it
+    is not sent, and the declaration stands. Read with 'output.as_flag', the one
+    reader of that field, so that the text "false" from a JSON-RPC client is
+    false here too.
+    """
+    options = _viewport(params)
+    if params.get("reproducible") is not None:
+        try:
+            options[pc.output.REPRODUCIBLE_KEY] = pc.output.as_flag(params["reproducible"])
+        except ValueError as e:
+            raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    return options
+
+
 def _viewport(params):
-    """The viewport overrides a request asks for ('view', 'viewport_origin', 'viewport_up'), as export parameters."""
+    """The viewport overrides a request asks for ('view', 'viewport_origin', 'viewport_up', 'turn'), as export parameters."""
     from partcad.render import resolve_viewport
 
     try:
@@ -4679,6 +5065,7 @@ def _viewport(params):
             params.get("view"),
             params.get("viewport_origin"),
             params.get("viewport_up"),
+            params.get("turn"),
         )
     except ValueError as e:
         # A view nobody offers, or a vector that is not one: nothing is drawn
@@ -5038,6 +5425,11 @@ def _load_package_contents(session, name="//"):
     assemblies = item_objs(project.assemblies)
     scenes = item_objs(project.scenes)
     software = item_objs(project.software)
+    # The package's colours, materials and finishes, which the explorer lists
+    # beside its objects and opens in a Digital Thread of their own (see
+    # docs/design/cmf.md, section 9). From the declarations, as 'pc list colors'
+    # reads them: there is nothing to make of one.
+    cmf_kinds = {section: _cmf_items(session, project, kind) for section, kind in _CMF_SECTIONS}
 
     # Objects the package declares but PartCAD could not create - most often one
     # written against a PartCAD that still had a feature since retired (the
@@ -5066,6 +5458,7 @@ def _load_package_contents(session, name="//"):
             "assemblies": assemblies,
             "scenes": scenes,
             "software": software,
+            **cmf_kinds,
             "broken": broken,
         },
     )

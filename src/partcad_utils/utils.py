@@ -182,6 +182,47 @@ def split_recursive_object(package, object_name):
     return package, item, True
 
 
+# The characters a reference gives a meaning to, which a name or a value written
+# inside one has to carry percent-encoded (RFC 3986's way, '%' and two hex
+# digits) to be read as itself. ':' ends a package, ';' starts the parameters,
+# ',' and '=' separate them, '#' starts a YAML comment, '*', '?', '[' and ']' are
+# patterns, and '%' is the escape itself. A CMF declaration is named as the
+# specification it comes from names it - "PA12, glass filled", "ISO 21920-1:2021"
+# - and is referred to as 'PA12%2C glass filled' (see docs/design/cmf.md).
+#
+# Splitting is done on the raw characters first and the escapes decoded after,
+# so finding the separators is exactly what it always was.
+RESERVED_IN_NAMES = ":;,=#%*?[]"
+_ESCAPE = re.compile("%(" + "|".join("%02X" % ord(c) for c in RESERVED_IN_NAMES) + ")", re.IGNORECASE)
+
+
+def escape_name(text: str, reserved: str = RESERVED_IN_NAMES) -> str:
+    """'text' with every character a reference reserves written percent-encoded.
+
+    '%' is encoded first, so that an escape already in the text is kept as the
+    text it is rather than read as an escape.
+    """
+    if not isinstance(text, str):
+        return text
+    if "%" in reserved:
+        text = text.replace("%", "%25")
+    for character in reserved:
+        if character != "%":
+            text = text.replace(character, "%%%02X" % ord(character))
+    return text
+
+
+def unescape_name(text: str) -> str:
+    """'text' with the escapes of the reserved characters decoded, and nothing else.
+
+    Only the reserved characters' escapes are read: a value that happens to
+    hold '%41' is the user's text, and decoding every escape would change it.
+    """
+    if not isinstance(text, str) or "%" not in text:
+        return text
+    return _ESCAPE.sub(lambda match: chr(int(match.group(1), 16)), text)
+
+
 def parse_parameterized_name(name: str) -> tuple:
     """Split '<name>;<param>=<value>,...' into the name and the parameters.
 
@@ -199,6 +240,12 @@ def parse_parameterized_name(name: str) -> tuple:
     value, which no object has ever declared and which was rejected moments
     later. It round-trips with 'format_parameterized_name' below, which joins
     the same way.
+
+    A name or value may carry a reserved character percent-encoded (see
+    'RESERVED_IN_NAMES'): the separators are found first, on the raw text, and
+    each name and value is decoded afterwards. That is what lets a value be a
+    parameterised reference of its own ('color=//builtin/color:rgba%3Bcolor%3D
+    C91A09FF') without its ';' and '=' being read as this name's.
     """
     base, _, suffix = name.partition(";")
     parameters = {}
@@ -210,7 +257,7 @@ def parse_parameterized_name(name: str) -> tuple:
         parameter, _, value = pair.partition("=")
         parameters[parameter] = value
         last = parameter
-    return base, parameters
+    return unescape_name(base), {unescape_name(key): unescape_name(value) for key, value in parameters.items()}
 
 
 def format_parameterized_name(base: str, parameters: dict) -> str:
@@ -235,10 +282,33 @@ def format_parameterized_name(base: str, parameters: dict) -> str:
 
 
 def _name_value(value) -> str:
-    """One parameter value as an instance's name spells it: a list as its items joined by commas."""
+    """One parameter value as an instance's name spells it: a list as its items joined by commas.
+
+    A value holding a character that would split the name is written with it
+    percent-encoded, which 'parse_parameterized_name' decodes: a parameterised
+    reference as a value ('rgba;color=C91A09FF') stays one value.
+    """
     if isinstance(value, (list, tuple)):
         return ",".join(_name_value(item) for item in value)
-    return "%s" % (value,)
+    return _escape_value("%s" % (value,))
+
+
+def _escape_value(value: str) -> str:
+    """'value' as a name has to spell it to be read back as this one value.
+
+    Only what would otherwise be misread is escaped, so that every name that
+    could be written before is spelled as it was. ':', ';' and '=' are not:
+    only the first ':' before the parameters and the first '=' of each one are
+    separators. A ',' is, but only where a later fragment holds an '=' and
+    would be read as a parameter of its own - a value without one is a list
+    written out, which is read back whole. And a '%' that would be read as an
+    escape is written as one.
+    """
+    if _ESCAPE.search(value):
+        value = value.replace("%", "%25")
+    if "," in value and "=" in value:
+        value = value.replace(",", "%2C")
+    return value
 
 
 def split_resource_path(pattern: str) -> tuple:

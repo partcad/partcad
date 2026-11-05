@@ -181,6 +181,24 @@ CACHE_VERSION = 1
 # sent it and would be a path to nothing here.
 SCRIPT_ARGUMENT = 3
 
+# The same, for the package of the object a file is of: what a file type names
+# by a relative path - the logo and the soundtrack of a video - is read from
+# there ('package_dir' in the request). A sandbox that exchanges files rather
+# than sharing them - the 'remote' one, 'docker' with 'useDockerRemote' - sees
+# none of that package, and the request's 'package_dir' names a directory on
+# the machine that sent it. So when a request names a file of its package, the
+# core sends the package as an argument, after every file's triple:
+#
+#     <path> <directory> <script> ... --package-dir <index> <package>
+#
+# one group for each file that needs one, by its place among the triples. The
+# sandbox is sent that directory because an argument names it, and rewrites the
+# argument to where it unpacked it; the wrapper takes the groups off the
+# arguments before anything reads them, and puts the directory it was handed
+# in the request as its 'package_dir'. The twin of 'output.PACKAGE_DIR_ARGUMENT'.
+PACKAGE_DIR_ARGUMENT = "--package-dir"
+PACKAGE_DIR_KEY = "package_dir"
+
 # Where the object is handed to the implementation as live geometry, and where
 # the tree it was decoded from is handed beside it. Both always: what each node
 # of the tree says about itself - its name, its colour, where it sits - is not
@@ -530,6 +548,22 @@ def run(script, path, request, shared=None, decoded=None):
     return result
 
 
+def package_dirs(argv):
+    """Take the '--package-dir <index> <directory>' groups off the end of 'argv': '{index: directory}'.
+
+    In place, so that what is left is the triples it has always been (see
+    PACKAGE_DIR_ARGUMENT).
+    """
+    found = {}
+    while len(argv) >= 4 and argv[-3] == PACKAGE_DIR_ARGUMENT:
+        try:
+            found[int(argv[-2])] = os.path.normpath(argv[-1])
+        except ValueError:
+            break
+        del argv[-3:]
+    return found
+
+
 def arguments(argv):
     """The (path, working directory, script) of each file a call writes, as its arguments name them."""
     return [
@@ -728,12 +762,20 @@ def run_together(outputs, document):
 
 
 if __name__ == "__main__":
+    # The packages first: what is left of the arguments is then the triples.
+    packages = package_dirs(sys.argv)
     # Read raw and decoded below rather than on the way in, because the
     # properties index is read off the envelopes, and decoding consumes them.
     path, request = wrapper_common.handle_input(decode=False)
     outputs = arguments(sys.argv)
     if len(outputs) > 1:
+        entries = request.get(OUTPUTS_KEY) if isinstance(request, dict) else None
+        for index, directory in packages.items():
+            if isinstance(entries, list) and 0 <= index < len(entries) and isinstance(entries[index], dict):
+                entries[index].setdefault(REQUEST_KEY, {})[PACKAGE_DIR_KEY] = directory
         run_together(outputs, request)
     else:
+        if 0 in packages and isinstance(request, dict):
+            request[PACKAGE_DIR_KEY] = packages[0]
         script = sys.argv[SCRIPT_ARGUMENT] if len(sys.argv) > SCRIPT_ARGUMENT else None
         wrapper_common.handle_output(run(script, path, request))

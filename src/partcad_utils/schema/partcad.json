@@ -359,9 +359,9 @@
     },
     "materials": {
       "type": ["object", "null"],
-      "description": "What the parts of this package can be made of. A material is not a shape - there is nothing to render, export or measure - it is a set of facts about a substance that the things with geometry refer to by name",
+      "description": "What the parts of this package can be made of. A material is not a shape - there is nothing to render, export or measure - it is a set of facts about a substance that the things with geometry refer to by name. One of the three kinds of CMF declaration (docs/design/cmf.md)",
       "patternProperties": {
-        "^[a-zA-Z0-9_/./-]+$": {
+        "^\\S(?:.*\\S)?$": {
           "oneOf": [
             {
               "type": "string",
@@ -376,6 +376,14 @@
                 "full": { "type": "string", "minLength": 1, "description": "The full name of the substance, e.g. 'Polylactic Acid'" },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "url": { "$ref": "#/definitions/url" },
+                "ids": { "$ref": "#/definitions/cmf-ids" },
+                "manufacturable": { "$ref": "#/definitions/cmf-manufacturable" },
+                "parameters": { "$ref": "#/definitions/shape-parameter" },
+                "aliases": { "$ref": "#/definitions/cmf-aliases" },
+                "type": { "type": "string", "enum": ["alias"], "description": "'alias' makes this declaration another name for the one 'source' names" },
+                "source": { "type": "string", "minLength": 1, "description": "What an alias names: '<package>:<name>', ':<name>' or '<name>', with parameter values if it is parametric" },
+                "display": { "type": "string", "minLength": 1, "description": "How the substance looks as it comes, for drawing a part made of it that states no colour: any CSS colour, or a colour declaration whose display it takes. A hint, not a claim" },
+                "color": { "type": "string", "minLength": 1, "description": "The colour declaration this material claims for its natural surface. A part made of it that states no colour of its own is that colour, and counts as specified" },
                 "density": {
                   "type": "number",
                   "exclusiveMinimum": 0,
@@ -405,6 +413,113 @@
         }
       },
       "additionalProperties": false
+    },
+    "colors": {
+      "type": ["object", "null"],
+      "description": "The colours parts of this package can be made in: CMF colour declarations (docs/design/cmf.md). Each is a claim that the colour can be sourced or made, unless it says 'manufacturable: false', with a display colour to draw it in",
+      "patternProperties": {
+        "^\\S(?:.*\\S)?$": {
+          "oneOf": [
+            { "type": "string", "minLength": 1, "description": "The short form: the display colour, in any CSS notation" },
+            { "type": "null" },
+            {
+              "type": "object",
+              "properties": {
+                "desc": { "type": "string", "maxLength": 1000 },
+                "url": { "$ref": "#/definitions/url" },
+                "ids": { "$ref": "#/definitions/cmf-ids" },
+                "manufacturable": { "$ref": "#/definitions/cmf-manufacturable" },
+                "parameters": { "$ref": "#/definitions/shape-parameter" },
+                "aliases": { "$ref": "#/definitions/cmf-aliases" },
+                "type": { "type": "string", "enum": ["alias"], "description": "'alias' makes this declaration another name for the one 'source' names" },
+                "source": { "type": "string", "minLength": 1, "description": "What an alias names: '<package>:<name>', ':<name>' or '<name>', with parameter values if it is parametric" },
+                "display": {
+                  "description": "How the colour is drawn. A hint, not a claim",
+                  "oneOf": [
+                    { "type": "string", "minLength": 1, "description": "What the colour is drawn in: any CSS colour ('#C91A09', 'rgb(201 26 9)', 'oklch(52% 0.19 33)', 'firebrick'), or a colour declaration whose display it takes" },
+                    {
+                      "type": "object",
+                      "description": "An image the colour's surfaces are drawn with: a texture, laid on every face in copies 'size' apart",
+                      "properties": {
+                        "image": { "type": "string", "pattern": "\\.([pP][nN][gG]|[jJ][pP][eE]?[gG])$", "description": "A PNG or a JPEG file in the package, relative to its 'partcad.yaml'" },
+                        "size": {
+                          "description": "How much of a surface one copy of the image covers, in millimetres: its width, its height in proportion, or [width, height]. 100 mm across if unset",
+                          "oneOf": [
+                            { "type": "number", "exclusiveMinimum": 0 },
+                            { "type": "array", "items": { "type": "number", "exclusiveMinimum": 0 }, "minItems": 2, "maxItems": 2 }
+                          ]
+                        },
+                        "color": { "type": "string", "minLength": 1, "description": "What the colour is drawn as where an image cannot be - a line of a drawing, a swatch: any CSS colour. The image's mean colour if unset" }
+                      },
+                      "required": ["image"],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "finishes": {
+      "type": ["object", "null"],
+      "description": "The finishes surfaces of this package's parts can be given: CMF finish declarations (docs/design/cmf.md) - a process, a gloss, a surface specification named in 'ids'. A part that states none is as produced",
+      "patternProperties": {
+        "^\\S(?:.*\\S)?$": {
+          "oneOf": [
+            { "type": "string", "minLength": 1, "description": "The short form: what the finish is, in words" },
+            { "type": "null" },
+            {
+              "type": "object",
+              "properties": {
+                "desc": { "type": "string", "maxLength": 1000 },
+                "url": { "$ref": "#/definitions/url" },
+                "ids": { "$ref": "#/definitions/cmf-ids" },
+                "manufacturable": { "$ref": "#/definitions/cmf-manufacturable" },
+                "parameters": { "$ref": "#/definitions/shape-parameter" },
+                "aliases": { "$ref": "#/definitions/cmf-aliases" },
+                "type": { "type": "string", "enum": ["alias"], "description": "'alias' makes this declaration another name for the one 'source' names" },
+                "source": { "type": "string", "minLength": 1, "description": "What an alias names: '<package>:<name>', ':<name>' or '<name>', with parameter values if it is parametric" },
+                "display": {
+                  "type": "object",
+                  "description": "How the finish looks in a 3D view. A hint, not a claim",
+                  "properties": {
+                    "roughness": { "type": "number", "minimum": 0, "maximum": 1, "description": "0 is a mirror, 1 is matte" },
+                    "metallic": { "type": "number", "minimum": 0, "maximum": 1 }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "cmf-ids": {
+      "type": "object",
+      "description": "What other systems call this declaration, as '{system: identifier}': a vendor's own number, a colour standard's code, another CAD tool's library name. What a converter ('cmfConvention') matches another tool's names against. A system that has several identifiers for it lists them",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": ["string", "number"] },
+          { "type": "array", "items": { "type": ["string", "number"] }, "minItems": 1 }
+        ]
+      }
+    },
+    "cmf-manufacturable": {
+      "type": "boolean",
+      "description": "Whether this declaration is a claim that it can be sourced or made as declared. True unless stated; a colour that is only a picture says false, and a part using it is not manufacturable"
+    },
+    "cmf-aliases": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      ],
+      "description": "Other names of this declaration in this package, the way other systems spell it"
     },
     "simulation-section": {
       "type": ["object", "null"],
@@ -451,6 +566,7 @@
         },
         "noun": { "type": "string", "minLength": 1, "description": "What one of these is called in a log line ('model', 'world', 'robot')" },
         "binary": { "type": "boolean", "description": "The format's files are bytes rather than text: the reader is handed each one as it is, and it is never rendered as a Jinja2 template the way a text format's file is. False by default" },
+        "requireSolid": { "type": "boolean", "description": "Whether every part the reader registers is a solid, so that one that is not - no solid in it, faces that bound nothing, an open or invalid solid, one with no volume - fails to build instead of being built with a warning. Declare it for a reader that converts bodies from a native CAD format, where such a part is one it read wrongly. False by default" },
         "dropped": {
           "type": "object",
           "description": "How each counter of the reader's 'dropped' summary is worded when it is reported. The reader counts; this names",
@@ -820,7 +936,11 @@
           "pattern": "^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$",
           "description": "The colour of this shape, as #RRGGBB or #RRGGBBAA."
         },
-        "physics": { "$ref": "#/definitions/shape-physics" }
+        "physics": { "$ref": "#/definitions/shape-physics" },
+        "oneSided": {
+          "type": "boolean",
+          "description": "Whether this shape is drawn from the front of its faces only - the side their normals point to - and is see-through from behind. What a 'wall' part reports about itself, so that a room drawn from outside is seen through its near walls; inherited, like a colour, by everything under an assembly node that states it."
+        }
       },
       "additionalProperties": false
     },
@@ -1058,6 +1178,35 @@
       "description": "A length of a 'basic' sketch: a non-negative number, or an expression over the sketch's parameters that evaluates to one.",
       "oneOf": [
         { "type": "number", "minimum": 0 },
+        { "$ref": "#/definitions/expression" }
+      ]
+    },
+    "part-cuboid": {
+      "description": "The solid of a 'basic' part that is a cuboid, centred on the origin with its sides along X, Y and Z: a number is a cube of that side, and a list is its sizes along X, Y and Z. The part's 'offset' places it.",
+      "oneOf": [
+        { "$ref": "#/definitions/part-dimension" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/definitions/part-dimension" },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      ]
+    },
+    "part-cylinder": {
+      "description": "The solid of a 'basic' part that is a cylinder, standing along Z and centred on the origin: it runs from 'z = -height / 2' to 'z = height / 2'. The part's 'offset' places it.",
+      "type": "object",
+      "properties": {
+        "radius": { "$ref": "#/definitions/part-dimension" },
+        "height": { "$ref": "#/definitions/part-dimension" }
+      },
+      "required": ["radius", "height"],
+      "additionalProperties": false
+    },
+    "part-dimension": {
+      "description": "A length of a 'basic' part: a number greater than zero, or an expression over the part's parameters that evaluates to one.",
+      "oneOf": [
+        { "type": "number", "exclusiveMinimum": 0 },
         { "$ref": "#/definitions/expression" }
       ]
     },
@@ -1382,6 +1531,18 @@
       },
       "additionalProperties": false
     },
+    "check-cmf": {
+      "description": "What 'partcad.test.cmf' does with this object, or with every object of this package.",
+      "type": "object",
+      "properties": {
+        "require": {
+          "description": "Whether colour, material and finish not specified fails 'pc test' rather than warns. An object or its package saying true is enough.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
     "mating": {
       "description": "How one particular pair of interfaces goes together. Stated once for the pair and applied to every connection that joins them, alongside the freedom of movement that connection is left with.",
       "oneOf": [
@@ -1672,6 +1833,40 @@
       "type": "boolean",
       "default": false
     },
+    "cmf": { "$ref": "#/definitions/check-cmf" },
+    "cmfConventions": {
+      "description": "How other tools' colours, materials and finishes are read in this package, beside PartCAD's builtin conventions (partcad, step, build123d, cadquery, openscad, 3mf, gltf, ldraw). A part names one in its 'cmfConvention' parameter. See docs/design/cmf.md, section 7.",
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_.-]+$": {
+          "type": "object",
+          "properties": {
+            "desc": { "type": "string" },
+            "extends": {
+              "description": "The builtin convention whose facts it reads: what a source of that kind states. Its own name if that is a builtin, and 'step' otherwise.",
+              "type": "string",
+              "enum": ["partcad", "step", "build123d", "cadquery", "openscad", "3mf", "gltf", "ldraw"]
+            },
+            "ids": {
+              "description": "The key of a declaration's 'ids' that holds what this tool calls it. Its own name by default.",
+              "type": "string",
+              "minLength": 1
+            },
+            "catalogs": {
+              "description": "Packages to look for declarations in, beside the part's own package and this one.",
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "caseFold": {
+              "description": "Whether the tool's names are compared folded to one case.",
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "unless": { "$ref": "#/definitions/unless" },
     "docs": {
       "type": ["object", "null"],
@@ -1748,7 +1943,9 @@
     "simulation": { "$ref": "#/definitions/simulation-section" },
     "import": { "$ref": "#/definitions/import-section" },
     "open": { "$ref": "#/definitions/open-section" },
+    "colors": { "$ref": "#/definitions/colors" },
     "materials": { "$ref": "#/definitions/materials" },
+    "finishes": { "$ref": "#/definitions/finishes" },
     "mates": {
       "description": "Matings declared apart from the interfaces they apply to, so that a package can mate interfaces it does not own: each source interface, then each interface it mates with.",
       "type": ["object", "null"],
@@ -1812,9 +2009,10 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "cadquery", "build123d", "chili3d", "sdf", "svg", "dxf", "extrude",
+                    "basic", "cadquery", "build123d", "chili3d", "sdf", "svg", "dxf", "extrude",
                     "sweep", "stl", "step", "scad", "3mf", "enrich", "alias", "brep",
-                    "obj", "gltf", "kicad", "compound", "fcstd"
+                    "obj", "gltf", "kicad", "compound", "fcstd", "wall", "iges", "f3d",
+                    "sldprt", "ipt", "catpart", "sat", "pvz"
                   ]
                 },
                 "aliases": {
@@ -1838,6 +2036,8 @@
                 },
                 "sketch": { "type": "string", "minLength": 1 },
                 "depth": { "type": "number" },
+                "cuboid": { "$ref": "#/definitions/part-cuboid" },
+                "cylinder": { "$ref": "#/definitions/part-cylinder" },
                 "url": { "$ref": "#/definitions/url" },
                 "axis": {
                   "type": "array",
@@ -1849,6 +2049,22 @@
                   }
                 },
                 "ratio": { "type": "number", "minimum": 0.5, "maximum": 1.0 },
+                "length": {
+                  "type": ["number", "string"],
+                  "description": "'wall' only: how long the wall is along its base, in millimetres - along the arc, for an arc wall. A number, or a '%...%' expression over the part's parameters."
+                },
+                "height": {
+                  "type": ["number", "string"],
+                  "description": "'wall' only: how high the wall is, in millimetres. A number, or a '%...%' expression over the part's parameters."
+                },
+                "radius": {
+                  "type": ["number", "string"],
+                  "description": "'wall' only: 0 (the default) for a straight wall; otherwise the radius of an arc wall in millimetres, positive where it bends towards the side it is seen from (its front, -Y where it starts) and negative where it bends away from it. A number, or a '%...%' expression over the part's parameters."
+                },
+                "openings": {
+                  "type": "string",
+                  "description": "'wall' only: the sketch the wall's doors and windows are cut out by, drawn on the XY plane as if the wall were unrolled flat - X along its base from 0 to 'length', Y up from 0 to 'height'. An opening reaching beyond the wall is an error. Empty, or absent, for none; a '%...%' expression over the part's parameters is resolved."
+                },
                 "cache": { "type": "boolean", "default": true },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "with": { "$ref": "#/definitions/parameter-overrides" },
@@ -1982,6 +2198,7 @@
                 "implements": { "$ref": "#/definitions/implements" },
                 "ports": { "$ref": "#/definitions/ports-section" },
                 "manufacturable": { "type": "boolean" },
+                "cmf": { "$ref": "#/definitions/check-cmf" },
                 "tolerance": {
                   "type": "number",
                   "minimum": 0,
@@ -2037,8 +2254,8 @@
               "properties": {
                 "type": {
                   "type": "string",
-                  "enum": ["assy", "step", "urdf", "alias", "enrich"],
-                  "description": "'assy' is an Assembly YAML file, 'step' a STEP assembly, 'urdf' a URDF robot description. A format an engine's plugin package implements is not in this list and is named through that package - 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
+                  "enum": ["assy", "step", "f3d", "pvz", "urdf", "alias", "enrich"],
+                  "description": "'assy' is an Assembly YAML file, 'step' a STEP assembly, 'f3d' an Autodesk Fusion design, 'pvz' a Creo View package, 'urdf' a URDF robot description. A format an engine's plugin package implements is not in this list and is named through that package - 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "images": {
@@ -2109,6 +2326,7 @@
                 "simulate": { "$ref": "#/definitions/simulate" },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "manufacturable": { "type": "boolean" },
+                "cmf": { "$ref": "#/definitions/check-cmf" },
                 "timeout": {
                   "type": "integer",
                   "minimum": 1,
@@ -2152,6 +2370,7 @@
                 "simulate": { "$ref": "#/definitions/simulate" },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "manufacturable": { "type": "boolean" },
+                "cmf": { "$ref": "#/definitions/check-cmf" },
                 "timeout": {
                   "type": "integer",
                   "minimum": 1,
@@ -2181,14 +2400,28 @@
               "properties": {
                 "type": {
                   "type": "string",
-                  "enum": ["assy", "alias", "enrich"],
-                  "description": "'assy' is an Assembly YAML file read as a scene, which is the same format without the 'how' sections. An engine's own scene format is implemented by that engine's plugin package and is named through it - 'sim-gazebo:world' for a Gazebo world (SDFormat), 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
+                  "enum": ["assy", "alias", "enrich", "walls"],
+                  "description": "'assy' is an Assembly YAML file read as a scene, which is the same format without the 'how' sections. 'walls' is the walls of a room standing on the outline of a sketch ('sketch', 'height', 'wall'), with no file at all. An engine's own scene format is implemented by that engine's plugin package and is named through it - 'sim-gazebo:world' for a Gazebo world (SDFormat), 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
                 "fileUrl": { "$ref": "#/definitions/url" },
                 "fileHash": { "$ref": "#/definitions/file-hash" },
+                "sketch": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "'walls' only: the sketch whose outline the walls stand on - one enclosed outline of straight lines and arcs of circles, a face with no holes or a closed wire, drawn on the XY plane. A '%...%' expression over the scene's parameters is resolved."
+                },
+                "height": {
+                  "type": ["number", "string"],
+                  "description": "'walls' only: how high the walls are, in millimetres. A number, or a '%...%' expression over the scene's parameters."
+                },
+                "wall": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "'walls' only: the part each wall is, asked for with the parameters 'length', 'height' and 'radius'. '//builtin/building:wall' unless this says otherwise."
+                },
                 "ignoreCollision": {
                   "oneOf": [
                     { "type": "boolean" },
@@ -2588,6 +2821,7 @@
             "path": { "type": "string", "minLength": 1 },
             "extension": { "type": "string", "minLength": 1, "description": "The extension of the file each part of this type is read from. Declaring one makes the part file-backed: its 'path' is relative to the part's own package and defaults to '<name>.<extension>', 'fileFrom' fetches it, and the script finds it as request['path']" },
             "dockerImage": { "type": "string", "minLength": 1, "description": "The image the 'docker' sandbox runs this partType's script in, where it can be pulled. Defaults to the declaring package's own" },
+            "requireSolid": { "type": "boolean", "default": false, "description": "Whether every part of this type is a solid, so that one that is not - no solid in it, faces that bound nothing, an open or invalid solid, one with no volume - fails to build instead of being built with a warning. Declare it for a type that reads or generates bodies, such as a converter from a native CAD format, where such a part is one it read wrongly" },
             "pythonRequirements": { "type": "array", "items": { "type": "string" } }
           },
           "additionalProperties": false

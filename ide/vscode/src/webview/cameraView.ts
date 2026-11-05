@@ -80,6 +80,52 @@ export function vectorFromStage(vector: Vec3, frame: SceneFrame): Vec3 {
 /** How far off the pole a view straight down it is put, in radians: well clear of the controls' own limit. */
 const OFF_POLE = 1e-4;
 
+/** How long "Fit" takes to get the camera there, in milliseconds: long enough to see where it went. */
+export const FIT_MILLISECONDS = 1000;
+
+/**
+ * The radius of the sphere about the middle of 'box' that holds all of it: half
+ * its diagonal, which is what a fit has to keep in view while the model turns.
+ * The box's largest side would do for the one angle the camera happens to be
+ * at, and a model that turns shows every angle - a long part seen end-on is
+ * short, and comes round to its full length a quarter turn later.
+ */
+export function enclosingRadius(box: THREE.Box3): number {
+    return box.isEmpty() ? 0 : box.getSize(new THREE.Vector3()).length() / 2;
+}
+
+/**
+ * How far from what it looks at a perspective camera has to be for a sphere of
+ * 'radius' to fit the narrower of its two fields of view - so the model fits
+ * from whichever side it is seen, whatever the turn.
+ *
+ * No margin on top: the sphere is the margin. It holds the model at every
+ * angle, so at any one angle the model's outline sits inside it, short of the
+ * edges, and only a corner turned exactly to where the sphere touches the edge
+ * of the field reaches it.
+ *
+ * 'fov' is three's: the vertical field, in degrees, and 'aspect' the canvas's
+ * width over its height. A canvas taller than it is wide sees less across than
+ * up, so the horizontal field is the one that decides there. The sphere fits
+ * where the lines from the camera that touch it lie along the field's edges,
+ * which is at 'radius / sin(half the field)'.
+ */
+export function fitDistance(radius: number, fov: number, aspect: number): number {
+    const vertical = (fov * Math.PI) / 360;
+    const horizontal = Math.atan(Math.tan(vertical) * aspect);
+    return radius / Math.sin(Math.min(vertical, horizontal));
+}
+
+/**
+ * How far through a fit 'elapsed' milliseconds into it are: 0 at the start, 1
+ * once 'FIT_MILLISECONDS' have gone by, and starting and finishing gently in
+ * between (a smoothstep) so that the camera does not lurch either way.
+ */
+export function fitProgress(elapsed: number): number {
+    const t = Math.min(1, Math.max(0, elapsed / FIT_MILLISECONDS));
+    return t * t * (3 - 2 * t);
+}
+
 /** Where 'camera' is looking from, at 'target', in PartCAD's frame. */
 export function readViewpoint(camera: THREE.Camera, target: THREE.Vector3, frame: SceneFrame): Viewpoint {
     const offset = camera.position.clone().sub(target);

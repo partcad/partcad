@@ -313,14 +313,14 @@ body {
  *
  * The tree takes whatever is left after the controls at the bottom, which is
  * most of it - an assembly is a hierarchy and a part has a row per port, so the
- * list is the tall thing here and Metadata is the one line under it, for a model
- * that has any. Animate and Opacity are in the view panel on the right.
- * It shrinks on a narrow panel rather than pushing the canvas out of one.
+ * list is the tall thing here, and under it are the callout boxes and, for a
+ * model that has any, Metadata. Animate and Opacity are in the view panel on the
+ * right. It shrinks on a narrow panel rather than pushing the canvas out of one.
  *
- * Shared with the 2D and Draft panes, which have the same pane down their left
- * and nothing under the tree in it. Deliberately not scoped to '.pane-3d': the
- * three panes are answering one question and should not come to look like three
- * different widgets.
+ * Shared with the 2D and Draft panes, which have the same pane down their left -
+ * the 2D one with the same callout boxes under its tree, Draft with nothing
+ * under it. Deliberately not scoped to '.pane-3d': the three panes are answering
+ * one question and should not come to look like three different widgets.
  */
 .controls {
     display: flex;
@@ -544,6 +544,26 @@ body {
 }
 
 /*
+ * The callouts the boxes under the tree ask for, told apart from what a shape's
+ * metadata says by a bar down their left in the colour the 2D tab's picture
+ * writes the same names in: a port's in the ports' blue, an interface's in their
+ * violet ('PORTS_COLOR' and 'INTERFACES_COLOR' in 'render_svg.py'). A
+ * component's - its name over its price - has none, as it has none there.
+ */
+.callout-port .callout-box {
+    border-left: 3px solid rgb(32, 96, 224);
+}
+
+.callout-interface .callout-box {
+    border-left: 3px solid rgb(176, 48, 192);
+}
+
+/* A material's, in the teal the picture draws it in ('MATERIALS_COLOR'). */
+.callout-material .callout-box {
+    border-left: 3px solid rgb(0, 112, 96);
+}
+
+/*
  * The panes that are read rather than looked at: the bill of materials and the
  * supply information.
  */
@@ -617,6 +637,175 @@ table.grid th {
 
 table.grid .numeric {
     text-align: right;
+    white-space: nowrap;
+}
+
+/*
+ * Colour, material and finish, drawn one way wherever they are shown: the CMF
+ * tab, and the Color, Material and Finish columns of the bill of materials and
+ * Build vs Buy (see 'cmf.ts'). A swatch is a square of the colour itself, with
+ * a border so that a white one still reads as a square on a light theme; a
+ * see-through one ("#RRGGBBAA") shows the panel through it, as it should.
+ */
+.cmf-cells {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15em;
+}
+
+.cmf-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    white-space: nowrap;
+}
+
+.cmf-value .badge {
+    margin-left: 0;
+}
+
+.cmf-swatch {
+    display: inline-block;
+    flex: 0 0 auto;
+    width: 0.9em;
+    height: 0.9em;
+    border: 1px solid var(--vscode-panel-border, currentColor);
+    border-radius: 2px;
+}
+
+/* A swatch with no colour to show: an outline, so that the gap is visible. */
+.cmf-swatch.cmf-swatch-none {
+    border-style: dashed;
+}
+
+.cmf-swatch-large {
+    width: 1.6em;
+    height: 1.6em;
+}
+
+.cmf-display-only {
+    border-color: var(--vscode-editorWarning-foreground, #cca700);
+    color: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+.cmf-unspecified,
+.cmf-unspecified .cmf-name {
+    color: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+.cmf-implied,
+.cmf-look,
+.cmf-note,
+.cmf-desc {
+    color: var(--vscode-descriptionForeground);
+}
+
+.cmf-summary {
+    margin: 0 0 0.8em 0;
+}
+
+/* One item: a block with a bar down its left in the colour of how it stands. */
+.cmf-item,
+.cmf-own {
+    margin: 0 0 1rem 0;
+    padding: 0.5rem 0.8rem;
+    border-left: 3px solid var(--vscode-descriptionForeground);
+    background: var(--vscode-textBlockQuote-background, transparent);
+}
+
+.cmf-item.cmf-specified {
+    border-left-color: var(--vscode-testing-iconPassed, #73c991);
+}
+
+.cmf-item.cmf-incomplete,
+.cmf-own.warning {
+    border-left-color: var(--vscode-testing-iconQueued, #cca700);
+}
+
+.cmf-item.cmf-error {
+    border-left-color: var(--vscode-testing-iconFailed, #f14c4c);
+}
+
+.cmf-own h3 {
+    margin: 0 0 0.3em 0;
+    font-size: 1rem;
+}
+
+.cmf-item-heading,
+.cmf-declaration-heading {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4em;
+}
+
+.cmf-item-heading .badge,
+.cmf-declaration-heading .badge {
+    margin-left: 0;
+}
+
+.cmf-count {
+    color: var(--vscode-descriptionForeground);
+}
+
+.cmf-standing {
+    margin-left: auto;
+    font-weight: 600;
+}
+
+.cmf-standing-specified {
+    color: var(--vscode-testing-iconPassed, #73c991);
+}
+
+.cmf-standing-incomplete {
+    color: var(--vscode-testing-iconQueued, #cca700);
+}
+
+.cmf-standing-error {
+    color: var(--vscode-testing-iconFailed, #f14c4c);
+}
+
+.cmf-standing-exempt {
+    color: var(--vscode-descriptionForeground);
+}
+
+.cmf-findings {
+    margin: 0.4rem 0;
+    padding-left: 1.2rem;
+}
+
+.cmf-findings li {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.cmf-sets {
+    margin-top: 0.4rem;
+}
+
+.cmf-sets p {
+    margin: 0.4em 0 0 0;
+}
+
+.cmf-declaration-name {
+    font-size: 1.3rem;
+    font-weight: 600;
+}
+
+.cmf-declaration-heading .cmf-standing {
+    margin-left: 0.4em;
+}
+
+.cmf-claim {
+    margin: 0.4em 0 0.8em 0;
+}
+
+.cmf-facts {
+    max-width: 48rem;
+}
+
+.cmf-facts th {
+    width: 9em;
     white-space: nowrap;
 }
 
@@ -1248,6 +1437,15 @@ a {
     flex: 1 1 3rem;
     min-width: 0;
     cursor: pointer;
+}
+
+/* What the prices and the materials are doing, under the callout boxes: being asked
+   for, or why there are none - a line for each. */
+.label-note {
+    color: var(--vscode-descriptionForeground);
+    font-family: var(--vscode-font-family);
+    font-size: calc(var(--vscode-font-size) * 0.9);
+    white-space: pre-line;
 }
 
 .control-value {
@@ -2133,6 +2331,12 @@ input.switch:focus-visible {
     display: flex;
     align-items: center;
     justify-content: space-between;
+}
+
+/* The buttons at the end of a heading: Fit and Reset beside the viewpoint. */
+.view-buttons {
+    display: flex;
+    gap: 0.3rem;
 }
 
 .view-title {

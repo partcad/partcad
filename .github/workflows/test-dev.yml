@@ -28,7 +28,7 @@ permissions:
   contents: read
 
 env:
-  VERSION: 0.8.272
+  VERSION: 0.9.2
   CONTAINER_REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}-devcontainer
   TOTAL_TIMEOUT: 900
@@ -762,6 +762,22 @@ jobs:
       - name: The sandbox base image
         if: needs.scope.outputs.image-push == 'true'
         uses: ./.github/actions/sandbox-image
+        env:
+          PC_CONTAINER_IMAGE_TAG: ${{ needs.scope.outputs.image-override }}
+          PC_CONTAINER_IMAGE_OWNER: ${{ needs.scope.outputs.image-owner }}
+
+      # And the one '//pub/feature/simulate/gazebo' asks for, which the
+      # simulation examples run under. Whether the 'docker' sandbox can be used
+      # at all is PartCAD's base image for the package's Python, even for a
+      # package that names an image of its own (see 'Context.
+      # _docker_or_next_best'): without this one, the Gazebo image is passed over
+      # for conda, which has no 'gz', and every 'in_gazebo' test fails -- on
+      # each run where "Build Docker Containers" has not published 3.12 yet.
+      - name: The sandbox base image (Python 3.12)
+        if: needs.scope.outputs.image-push == 'true'
+        uses: ./.github/actions/sandbox-image
+        with:
+          python-version: "3.12"
         env:
           PC_CONTAINER_IMAGE_TAG: ${{ needs.scope.outputs.image-override }}
           PC_CONTAINER_IMAGE_OWNER: ${{ needs.scope.outputs.image-owner }}

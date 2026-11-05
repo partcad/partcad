@@ -196,6 +196,139 @@ Feature: `pc add part` command
       assemblies:
       """
 
+  # The part types PartCAD ships as declarations in '//builtin/import' rather
+  # than as factories. Adding one writes its declaration and reads nothing, so
+  # these files are placeholders, never built: PartCAD has no SolidWorks,
+  # Inventor, CATIA, ACIS or Creo View file it may redistribute, and the ones it
+  # has are built below.
+  @native
+  Scenario Outline: Add a <kind> part from a file named as its type is
+    Given a file named "<file>" with content:
+      """
+      placeholder: never read, this part is not built
+      """
+    When I run "partcad add part <kind> <file>"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Part '<name>' added to the project."
+    And a file named "partcad.yaml" should have YAML content:
+      """
+      private: true
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
+      dependencies:
+      sketches:
+      parts:
+        <name>:
+          type: <kind>
+      assemblies:
+      """
+
+    Examples:
+      | kind    | file              | name     |
+      | fcstd   | design.FCStd      | design   |
+      | f3d     | design.f3d        | design   |
+      | sldprt  | bracket.SLDPRT    | bracket  |
+      | ipt     | bracket.ipt       | bracket  |
+      | catpart | bracket.CATPart   | bracket  |
+      | sat     | body.sat          | body     |
+      | pvz     | product.pvz       | product  |
+      | iges    | plate.iges        | plate    |
+
+  # Another spelling of the extension, or another case of it: the part is still
+  # named after the file, and its 'path' says which file that is, because the
+  # one it would be looked for at otherwise is '<name>.<declared extension>'.
+  @native
+  Scenario Outline: Add a <kind> part from a file in another spelling of its extension
+    Given a file named "<file>" with content:
+      """
+      placeholder: never read, this part is not built
+      """
+    When I run "partcad add part <kind> <file>"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Part '<name>' added to the project."
+    And a file named "partcad.yaml" should have YAML content:
+      """
+      private: true
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
+      dependencies:
+      sketches:
+      parts:
+        <name>:
+          type: <kind>
+          path: <file>
+      assemblies:
+      """
+
+    Examples:
+      | kind    | file              | name     |
+      | iges    | plate.igs         | plate    |
+      | sat     | body.sab          | body     |
+      | sat     | body.smt          | body     |
+      | sat     | body.smb          | body     |
+      | fcstd   | design.fcstd      | design   |
+      | sldprt  | bracket.sldprt    | bracket  |
+      | catpart | bracket.catpart   | bracket  |
+      | step    | part.stp          | part     |
+
+  @native
+  Scenario: Reject a native part type PartCAD does not have
+    Given a file named "design.3dm" with content:
+      """
+      placeholder
+      """
+    When I run "partcad add part 3dm design.3dm"
+    Then the command should exit with a status code of "2"
+    And STDERR should contain "'3dm' is not one of"
+
+  # What was added is what gets built: the Fusion design, the FreeCAD
+  # document and the IGES plate in the tree all read into solids. The plate
+  # is its seven faces sewn back into the solid they bound.
+  @native @f3d @fcstd @iges
+  Scenario: A native part added from a file builds
+    Given I copy file "tests/partcad/unit/data/import_cadmpeg/controller.f3d" to "controller.f3d" inside test workspace
+    And I copy file "tests/partcad/unit/data/import_fcstd/design_history.FCStd" to "design_history.FCStd" inside test workspace
+    And I copy file "tests/partcad/unit/data/import_iges/plate.igs" to "plate.igs" inside test workspace
+    When I run "partcad add part f3d controller.f3d"
+    Then the command should exit with a status code of "0"
+    When I run "partcad add part fcstd design_history.FCStd"
+    Then the command should exit with a status code of "0"
+    When I run "partcad add part iges plate.igs"
+    Then the command should exit with a status code of "0"
+    When I run "partcad --no-ansi export -t step :controller"
+    Then the command should exit with a status code of "0"
+    And a file named "controller.step" should exist
+    When I run "partcad --no-ansi export -t step :design_history"
+    Then the command should exit with a status code of "0"
+    And a file named "design_history.step" should exist
+    When I run "partcad --no-ansi export -t step :plate"
+    Then the command should exit with a status code of "0"
+    And a file named "plate.step" should exist
+
+  # As with STEP, adding a file does not read it -- so a file that is not what
+  # its type says is added, and fails when it is built: through cadmpeg for a
+  # Fusion design, through OpenCASCADE for IGES.
+  @native @iges @f3d @error
+  Scenario: A native part whose file cannot be read fails to build
+    Given a file named "broken.f3d" with content:
+      """
+      not a Fusion design
+      """
+    And a file named "broken_iges.igs" with content:
+      """
+      not an IGES file
+      """
+    When I run "partcad add part f3d broken.f3d"
+    Then the command should exit with a status code of "0"
+    When I run "partcad add part iges broken_iges.igs"
+    Then the command should exit with a status code of "0"
+    When I run "partcad --no-ansi export -t step :broken"
+    Then the command should exit with a non-zero status code
+    And STDERR should contain "unrecognized format"
+    And a file named "broken.step" should not exist
+    When I run "partcad --no-ansi export -t step :broken_iges"
+    Then the command should exit with a non-zero status code
+    And STDERR should contain "OpenCASCADE could not read the geometry"
+    And a file named "broken_iges.step" should not exist
+
   @wip @cadquery @error
   Scenario: Reject invalid CadQuery script
     Given a file named "invalid_cq.py" with content:

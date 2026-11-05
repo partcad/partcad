@@ -343,6 +343,12 @@ An assembly that is to be made (`manufacturable`) is held to more: no item may
 be placed by coordinates, and every item after the first has to connect to
 something.
 
+An assembly bought whole (one declaring `vendor` and `sku`) is its vendor's to
+put together: the coordinates in its file draw it, so nothing in it has to
+connect to anything, and an assembly holding it does not look inside it for
+that. The same part twice in one place, and two items on one port, are still
+reported.
+
 ### When it does not apply
 
 Anything but an assembly or a scene.
@@ -396,6 +402,48 @@ what is there instead.
   density to work it out from. State the value in a `physics:` section, or give
   the part a `material:` with a density. "Not known" is not "met".
 - `unreadable`: the requirement itself cannot be read; the detail says why.
+""",
+    ),
+    "cmf": Entry(
+        "Colour, material and finish are specified",
+        "parts and assemblies that are to be made",
+        """
+Whether what is to be made says what it is made of and what it looks like: for
+a part, a material on every solid and a colour on every face - the colour its
+material claims counts - each a declaration that claims it can be had
+(`manufacturable: true`), and a finish that is one too where a finish is stated
+(none stated is as produced). Where each comes from - the part's source, its
+`color`, `material` and `finish` parameters - is in "CMF" of the configuration
+documentation.
+
+An assembly that sets CMF itself - its own CMF parameters, a link's `params:`
+naming a colour, a material or a finish, a `properties: color:` - is drawing
+what it holds rather than specifying it, and is manufacturable only if it is
+bought whole: if it declares `vendor` and `sku`. An assembly bought whole is
+judged by its own CMF, and nothing inside it is.
+
+It warns rather than fails, unless the object or its package says
+`cmf: require: true`.
+
+### When it does not apply
+
+A sketch; an object that is not to be made (`manufacturable: false`); a part
+that is bought (`vendor` and `sku`), in whatever its vendor sells it in.
+
+### When it fails
+
+- `no colour on N face(s)` or `no material on N solid(s)`: state the missing
+  component as the part's `color` or `material` parameter, or in its source.
+- `the color '...' is display-only`: name a colour declaration that claims it
+  can be had, instead of an `rgba` or a `manufacturable: false` one.
+- `it sets CMF itself (...)`: declare the variant as a part - an `enrich` that
+  fixes `color` - and link that, or declare `vendor` and `sku` on the
+  assembly if it is bought as it is.
+
+### Settings
+
+On the object or its package: `cmf: require: true` to fail on what it finds
+rather than warn.
 """,
     ),
     "degenerate": Entry(

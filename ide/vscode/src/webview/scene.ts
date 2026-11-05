@@ -45,7 +45,10 @@
 // colour OCCT draws an uncoloured shape in, and the colour PartCAD's own 2D
 // projections draw one in, so that the 3D tab and the 2D tab beside it show the
 // same part (see 'appearance.ts'). A coloured light would turn every one of those
-// colours into another, so the hemisphere light is white.
+// colours into another, so the hemisphere light is white. A part whose faces
+// are in colours of their own arrives as a mesh per colour, each with its own
+// glTF material, and each mesh is drawn in its own colour - with this view's
+// material, not the file's (see 'paint', and 'appearance.ts').
 //
 // A third difference is not a choice. Part.js loads OBJ, a format with no scene
 // graph and no units, so it has to rotate the model by -90 degrees about X
@@ -57,19 +60,49 @@
 // location and a port's - so those are converted; see 'frames.ts'.
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
-import { Appearance, DEFAULT_APPEARANCE, appearanceKey, appearanceOf, edgeColor } from './appearance';
-import { calloutsOf } from './callouts';
-import { SceneFrame, fromStage, placeCamera as aimCamera, readViewpoint } from './cameraView';
-import { el } from './dom';
+import {
+    Appearance,
+    DEFAULT_APPEARANCE,
+    OWN_APPEARANCE,
+    appearanceKey,
+    appearanceOf,
+    edgeColor,
+    ownAppearance,
+    primitiveAppearance,
+} from './appearance';
+import { assemblyRows, calloutsOf, componentName, componentRows, isComponent } from './callouts';
+import {
+    SceneFrame,
+    enclosingRadius,
+    fitDistance,
+    fitProgress,
+    fromStage,
+    placeCamera as aimCamera,
+    readViewpoint,
+} from './cameraView';
+import { el, empty } from './dom';
 import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
 import { GeometryCache, geometryCache } from './geometryCache';
 import { geometryMissing, reportError } from './host';
-import { ShowMessage, ShowNode } from './messages';
-import { ItemId, PORT_COLOR, PORT_OPACITY, flickerOn, nodeId, portId, totalSize } from './nodes';
+import { MaterialCluster, ShowMessage, ShowNode } from './messages';
+import { LABEL_DEFAULTS, LabelChoices } from './labels';
+import {
+    ItemId,
+    PORT_COLOR,
+    PORT_OPACITY,
+    flickerOn,
+    groupPorts,
+    interfaceId,
+    interfaceLabel,
+    nodeId,
+    portId,
+    portLabel,
+    totalSize,
+} from './nodes';
 import { Bounds } from './section';
 import { Navigable, onScreen, spaceMouse } from './spacemouse';
 import {
@@ -195,6 +228,24 @@ controls.enableDamping = true;
 // which the software renderer cannot afford: off there until it is asked for.
 controls.autoRotate = !software;
 controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
+
+/**
+ * What the Animate box says: on from the start, except where the canvas painter
+ * draws (see above). A SpaceMouse being moved pauses the turn without unticking
+ * it ('animate'). A show does not touch it, and after the first one does not
+ * turn the camera either, so the turn carries on from one object to the next.
+ */
+let autoRotate = controls.autoRotate;
+
+/**
+ * What the Auto-fit box says, beside Animate: whether a show of the same object
+ * again - an edit saved, an agent's next version of it - is fitted too, as a
+ * show of another object always is. On from the start, so that a model which
+ * grows or shrinks stays in view; off for somebody zoomed in on one corner of
+ * a part they are editing, whose view a save must not take away.
+ */
+let autoFit = true;
+
 // Any movement of the camera - a drag, the damping after it, a turn of the
 // model on its own - is a new picture, and a new viewpoint for the view panel.
 controls.addEventListener('change', invalidate);
@@ -264,15 +315,191 @@ if (software) {
 }
 
 /**
+ * The callouts one show pinned to the model, by the box that switches them.
+ *
+ * Every one is a child of what it is about - a component's of its geometry, a
+ * port's of its triad, an element's of its node - so the tree's boxes, which
+ * switch those on and off, take the callout with them: three's 'CSS2DRenderer'
+ * hides a callout under anything hidden. What is left to these switches is a
+ * callout's own 'visible', which nothing else touches. An interface's is the
+ * exception, being on the node rather than on any one port: see
+ * 'refreshInterfaceCallouts'.
+ *
+ * Made per show and put in place only once the show is ('showGeometry'), so that
+ * a box changed while a show is still decoding applies to what is on screen.
+ */
+interface Callouts {
+    /** What a shape's metadata says about its elements: the Metadata box. */
+    metadata: CSS2DObject[];
+    /**
+     * One per component, its rows written by 'refreshComponentCallouts' - and one
+     * per node that holds others ('holds'), which writes something only when it
+     * is priced as a whole (see 'assemblyRows').
+     */
+    components: {
+        object: CSS2DObject;
+        box: HTMLElement;
+        name: string;
+        objectName: string | undefined;
+        holds: boolean;
+    }[];
+    /** One per port, at the tip of its +Z axis. */
+    ports: CSS2DObject[];
+    /** One per interface instance, in the middle of its ports, and the items it is drawn with. */
+    interfaces: { object: CSS2DObject; item: ItemId; ports: ItemId[] }[];
+}
+
+function noCallouts(): Callouts {
+    return { metadata: [], components: [], ports: [], interfaces: [] };
+}
+
+let callouts: Callouts = noCallouts();
+
+/** What the Metadata box says; kept across shows. */
+let showMetadata = true;
+
+/** What the callout boxes under the tree say ('labels.ts'); kept across shows. */
+let labelChoices: LabelChoices = { ...LABEL_DEFAULTS };
+
+/** The price of each component, as text, by the object it is ('<package>:<name>'). */
+let priceTexts: Readonly<Record<string, string>> = {};
+
+/**
+ * One callout per cluster of a material, naming it, and the items of the tree
+ * whose faces it is: the "Materials" box. Of the show on stage only - a cluster
+ * names the nodes of one tree by where they are in it - and empty until its
+ * answer arrives ('setMaterialClusters').
+ */
+let materialCallouts: { object: CSS2DObject; nodes: ItemId[] }[] = [];
+
+/**
+ * Where a point in the frame of the whole tree - every placement composed, the
+ * root's own included - is in the frame of the group the show is framed by:
+ * that group as it was built, undone. Taken before it is framed: framing moves
+ * the group, and a callout under it moves with it.
+ */
+let treeFrame: THREE.Matrix4 | undefined;
+
+/**
  * Whether what a shape's metadata says about its elements is pinned to them.
  *
- * The "Show metadata" box. One switch over the whole layer rather than a flag per
- * callout, so that it holds for every show that follows without each of them
- * having to be told.
+ * The "Metadata" box. Held here rather than set on each callout once, so that it
+ * holds for every show that follows without each of them having to be told.
  */
 export function setShowMetadata(enabled: boolean): void {
-    labelRenderer.domElement.style.display = enabled ? '' : 'none';
+    showMetadata = enabled;
+    callouts.metadata.forEach((object) => (object.visible = enabled));
     invalidate();
+}
+
+/** What the callout boxes say: which of the four kinds of callout are written. */
+export function setLabels(choices: LabelChoices): void {
+    labelChoices = { ...choices };
+    refreshComponentCallouts();
+    callouts.ports.forEach((object) => (object.visible = labelChoices.portNames));
+    refreshInterfaceCallouts();
+    refreshMaterialCallouts();
+    invalidate();
+}
+
+/**
+ * Pin a callout naming its material on every cluster of one, where the
+ * cluster is nearest the middle of itself (see 'cmf.clusters'), replacing the
+ * ones pinned before - or none, while they are being asked and when there are
+ * none. For the show on stage: a show that follows drops them.
+ */
+export function setMaterialClusters(clusters: readonly MaterialCluster[]): void {
+    for (const { object } of materialCallouts) {
+        object.removeFromParent();
+    }
+    materialCallouts = [];
+    if (content !== undefined && treeFrame !== undefined) {
+        for (const cluster of clusters) {
+            const callout = calloutObject('callout-material', [cluster.name]);
+            // PartCAD's frame - millimetres, Z up - is glTF's on the stage.
+            callout.object.position
+                .set(...cluster.at)
+                .applyMatrix4(TO_GLTF)
+                .applyMatrix4(treeFrame);
+            content.add(callout.object);
+            materialCallouts.push({ object: callout.object, nodes: cluster.nodes.map((path) => nodeId(path)) });
+        }
+    }
+    refreshMaterialCallouts();
+    invalidate();
+}
+
+/**
+ * Show each material's callout where the box asks and the tree draws any of
+ * the nodes its cluster is of: a cluster drawn in part is still that material,
+ * and one with none of it drawn names nothing.
+ */
+function refreshMaterialCallouts(): void {
+    for (const callout of materialCallouts) {
+        callout.object.visible = labelChoices.materials && callout.nodes.some(itemShown);
+    }
+}
+
+/**
+ * What each component costs, as the text its callout writes, by the object it
+ * is - or nothing, while it is being asked and when nobody quoted it. Kept for
+ * the shows that follow, which are told it as they are drawn.
+ */
+export function setComponentPrices(prices: Readonly<Record<string, string>>): void {
+    priceTexts = { ...prices };
+    refreshComponentCallouts();
+    invalidate();
+}
+
+/** Write every component's callout over, as the boxes and the prices now say; none where it has nothing to say. */
+function refreshComponentCallouts(made: Callouts = callouts): void {
+    for (const callout of made.components) {
+        const price = callout.objectName !== undefined ? priceTexts[callout.objectName] : undefined;
+        const rows = (callout.holds ? assemblyRows : componentRows)(callout.name, price, labelChoices);
+        empty(callout.box);
+        rows.forEach((row) => callout.box.appendChild(el('div', 'callout-line', row)));
+        callout.object.visible = rows.length > 0;
+    }
+}
+
+/** Whether the tree draws an item. */
+function itemShown(id: ItemId): boolean {
+    return visibleItems === undefined || visibleItems.has(id);
+}
+
+/**
+ * Show each interface's name where the tree draws that interface and at least
+ * one of its ports: the name is pinned in the middle of the ports, which are
+ * the only thing of it that is drawn, so with none of them drawn it would name
+ * nothing - which is also what the 2D tab's picture does, writing an interface's
+ * name only beside ports it draws.
+ */
+function refreshInterfaceCallouts(made: Callouts = callouts): void {
+    for (const callout of made.interfaces) {
+        callout.object.visible =
+            labelChoices.interfaceNames && itemShown(callout.item) && callout.ports.some(itemShown);
+    }
+}
+
+/**
+ * One callout: rows of text in a box, pinned by its bottom-left corner - where
+ * its leader line starts - so the text sits above and to the right of what it
+ * is about rather than over it. Built node by node through 'dom.ts': what it
+ * says is text out of a package, and must not become markup.
+ */
+function calloutObject(kind: string, rows: string[], title?: string): { object: CSS2DObject; box: HTMLElement } {
+    const box = el('div', 'callout-box');
+    if (title !== undefined) {
+        box.appendChild(el('div', 'callout-title', title));
+    }
+    for (const row of rows) {
+        box.appendChild(el('div', 'callout-line', row));
+    }
+    const element = el('div', `callout ${kind}`);
+    element.appendChild(box);
+    const object = new CSS2DObject(element);
+    object.center.set(0, 1);
+    return { object, box };
 }
 
 /** Everything the current show put on the stage; replaced wholesale by the next. */
@@ -284,8 +511,29 @@ let shownCut = false;
 /** What 'content' was built from, whose materials go when it does (see 'Geometry.disposeMaterials'). */
 let shownGeometry: Geometry | undefined;
 
-/** Half the largest dimension of what the current show was framed on (see 'frame'). */
+/**
+ * The radius of the sphere holding what the current show was framed on, however
+ * it is turned ('enclosingRadius'), and where its middle is on the stage: what a
+ * fit fits (see 'frame').
+ */
 let framedRadius = 1;
+const framedCentre = new THREE.Vector3();
+
+/**
+ * A "Fit" on its way: where the camera started from, and when.
+ *
+ * Only where it started from is kept, and not where it is going: the camera
+ * goes on turning while it moves - Animate, the damping of a drag - and the
+ * canvas can change shape, so where it is going is worked out on every frame
+ * ('stepFit').
+ */
+interface Fitting {
+    since: number;
+    target: THREE.Vector3;
+    distance: number;
+}
+
+let fitting: Fitting | undefined;
 
 /**
  * The radius the camera was last fitted to, while it is still where that fit put
@@ -297,12 +545,51 @@ let framedRadius = 1;
  * - a drag, the wheel, a SpaceMouse - ends that, and the camera stays put.
  *
  * The radius of that fit and not the current show's: a show that keeps the camera
- * ('keepCamera', an edit re-rendered) keeps the view it had, and a resize after it
- * changes that view by what the canvas did and not by what the edit did.
+ * (a cut, or the same object again with Auto-fit off) keeps the view it had, and a
+ * resize after it changes that view by what the canvas did and not by what the
+ * show did.
+ *
+ * Undefined, too, while a "Fit" is on its way ('fitting'), which follows the
+ * canvas itself, and set once it has arrived.
  */
 let fittedTo: number | undefined;
+
+/**
+ * Whether somebody has hold of the view right now, by hand - a drag or a turn of
+ * the wheel, between the orbit controls' own 'start' and 'end' - and by
+ * SpaceMouse, between the 'start' and 'end' it relays through the same controls
+ * ('navigable.moving').
+ *
+ * A fit is stopped when somebody takes hold of the view, and that alone is not
+ * enough: a fit can also start while they are holding it - a show arriving in
+ * the middle of a drag, a push - and 'start' has been and gone. So a fit does
+ * not take a step while the view is held ('stepFit').
+ *
+ * Two flags rather than one, because a push that comes and goes in the middle of
+ * a drag must not let go of the drag; and not a count of 'start's and 'end's,
+ * because the controls do not pair them - a touch sends a 'start' for each
+ * finger and one 'end' for all of them, and a button they ignore sends an 'end'
+ * with no 'start' - so a count drifts, and one stuck above nought would stop
+ * every fit for good.
+ */
+let dragging = false;
+let pushing = false;
+
+/** Set while the SpaceMouse relays its 'start' or 'end', so that the listeners below do not take it for a drag's. */
+let relaying = false;
+
 controls.addEventListener('start', () => {
     fittedTo = undefined;
+    if (!relaying) {
+        dragging = true;
+    }
+    // Two hands on one wheel: whoever takes hold of the view has it.
+    fitting = undefined;
+});
+controls.addEventListener('end', () => {
+    if (!relaying) {
+        dragging = false;
+    }
 });
 
 /** Which way the camera looks at the model from: Stage's default, slightly above. */
@@ -398,6 +685,8 @@ export function showItems(visible: ReadonlySet<string>): void {
             object.visible = visible.has(id);
         }
     }
+    refreshInterfaceCallouts();
+    refreshMaterialCallouts();
     invalidate();
 }
 
@@ -436,9 +725,56 @@ function parseGltf(buffer: ArrayBuffer): Promise<THREE.Group> {
     return new Promise((resolve, reject) => {
         // parse(), not load(): the bytes are already here, and load() would mean
         // a URL and therefore a network request the CSP forbids.
-        loader.parse(buffer, '', (gltf) => resolve(gltf.scene), reject);
+        loader.parse(
+            buffer,
+            '',
+            (gltf) => {
+                keepOwnColors(gltf);
+                resolve(gltf.scene);
+            },
+            reject,
+        );
     });
 }
+
+/**
+ * Note on each primitive the colour its file gives it, before anything takes
+ * the file's materials away (see 'ownAppearance').
+ *
+ * Kept in 'userData' because that is what a clone copies: every instance of a
+ * cached shape is a clone of its template, and is painted as it is handed out.
+ * Which materials the file declares is the loader's to say ('associations'),
+ * since three gives a primitive with none a default material indistinguishable
+ * from a white one.
+ */
+function keepOwnColors(gltf: GLTF): void {
+    gltf.scene.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (!mesh.isMesh) {
+            return;
+        }
+        const material = mesh.material as THREE.Material;
+        const own = ownAppearance(material, gltf.parser.associations.get(material)?.materials !== undefined);
+        if (own !== undefined) {
+            const { map, ...plain } = own;
+            mesh.userData[OWN_APPEARANCE] = plain;
+            if (map !== undefined) {
+                // Not in 'userData', which a clone copies through JSON and a
+                // texture does not survive: by the geometry, which every clone
+                // of the template shares. The template's to free, not a show's.
+                map.userData.cached = true;
+                ownTextures.set(mesh.geometry, map);
+            }
+        }
+    });
+}
+
+/**
+ * The image each primitive of a parsed shape is drawn with, where its colour is
+ * drawn with one (see 'ownAppearance'), by the primitive's geometry: what every
+ * clone of a template shares. Freed with the template ('releaseTemplate').
+ */
+const ownTextures = new WeakMap<THREE.BufferGeometry, THREE.Texture>();
 
 /**
  * The materials a cached shape carries while nothing draws it. Never drawn with:
@@ -483,10 +819,44 @@ async function parseTemplate(buffer: ArrayBuffer): Promise<THREE.Group> {
     return group;
 }
 
+/**
+ * Free the images the primitives of a parsed glTF are drawn with (see
+ * 'keepOwnColors'), once nothing draws any of them: the GPU texture, and the
+ * decoded image under it. three's GLTFLoader decodes an embedded image into an
+ * 'ImageBitmap', which 'Texture.dispose()' leaves alone and which is not given
+ * back until it is closed (see the note at the top of 'GLTFLoader.js').
+ *
+ * 'geometries' are every primitive of one parsed file, which are all that hold
+ * its images - each parse makes images of its own, and the primitives of one
+ * file drawn with one image share it - so each is freed once, after all of them
+ * have let go.
+ */
+function releaseOwnTextures(geometries: Iterable<THREE.BufferGeometry>): void {
+    const textures = new Set<THREE.Texture>();
+    for (const geometry of geometries) {
+        const texture = ownTextures.get(geometry);
+        if (texture !== undefined) {
+            textures.add(texture);
+            ownTextures.delete(geometry);
+        }
+    }
+    for (const texture of textures) {
+        texture.dispose();
+        const image = texture.image as unknown;
+        if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) {
+            image.close();
+        }
+    }
+}
+
 /** Free a template the cache let go of, once nothing on the stage draws it. */
 function releaseTemplate(group: THREE.Group): void {
+    const geometries: THREE.BufferGeometry[] = [];
     group.traverse((child) => {
         const drawable = child as THREE.Mesh;
+        if (drawable.geometry !== undefined) {
+            geometries.push(drawable.geometry);
+        }
         drawable.geometry?.dispose();
         for (const material of [drawable.material ?? []].flat()) {
             if (material !== TEMPLATE_FACES && material !== TEMPLATE_LINES) {
@@ -494,6 +864,7 @@ function releaseTemplate(group: THREE.Group): void {
             }
         }
     });
+    releaseOwnTextures(geometries);
 }
 
 /**
@@ -509,7 +880,9 @@ function releaseTemplate(group: THREE.Group): void {
 function disposeMaterial(material: THREE.Material): void {
     for (const value of Object.values(material)) {
         const texture = value as THREE.Texture | undefined;
-        if (texture?.isTexture) {
+        // An image a primitive is drawn with is its template's, and goes with
+        // the template (see 'keepOwnColors'), not with a show that drew it.
+        if (texture?.isTexture && !texture.userData.cached) {
             texture.dispose();
         }
     }
@@ -531,6 +904,10 @@ function disposeMaterials(material: THREE.Material | THREE.Material[] | undefine
  * included, and goes when the cache lets go of it ('releaseTemplate').
  */
 function disposeTree(root: THREE.Object3D): void {
+    // The geometry a show parsed for itself goes here, and with it the images
+    // its primitives are drawn with, which nothing else frees: they are marked
+    // as a template's are ('keepOwnColors'), and there is no template.
+    const local: THREE.BufferGeometry[] = [];
     root.traverse((node) => {
         // A callout is an element in the DOM, not in the scene, and three removes
         // it only when the callout itself is what was removed - not when, as
@@ -542,6 +919,7 @@ function disposeTree(root: THREE.Object3D): void {
         const mesh = node as THREE.Mesh;
         if (mesh.geometry && !mesh.geometry.userData.cached) {
             mesh.geometry.dispose();
+            local.push(mesh.geometry);
         }
         for (const material of [mesh.material ?? []].flat()) {
             if (material !== TEMPLATE_FACES && material !== TEMPLATE_LINES && !material.userData.cached) {
@@ -549,6 +927,7 @@ function disposeTree(root: THREE.Object3D): void {
             }
         }
     });
+    releaseOwnTextures(local);
 }
 
 export function clearGeometry(): void {
@@ -562,7 +941,11 @@ export function clearGeometry(): void {
     shownGeometry?.disposeMaterials();
     shownGeometry = undefined;
     shownCut = false;
+    fitting = undefined;
     drawnBy.clear();
+    callouts = noCallouts();
+    materialCallouts = [];
+    treeFrame = undefined;
     visibleItems = undefined;
     flickering = undefined;
     dropProxies();
@@ -574,15 +957,18 @@ export function clearGeometry(): void {
 }
 
 /**
- * Center 'box' at the origin, moving the model with it, and frame the camera on
- * it, as <Stage adjustCamera> does, and scale the light rig to it.
+ * Center 'box' at the origin, moving the model with it, and scale the light rig
+ * and the clipping planes to it, as <Stage adjustCamera> does - and, with
+ * 'place', put the camera on it at the opening view, as a first show does.
+ * Every other show leaves the camera where it is and asks for a "Fit"
+ * ('showGeometry'), so that it gets there over a second rather than jumping.
  *
  * 'centred' is where the last show put the model instead, for a show that cuts
  * it or takes a cut away: the cut is a part of the same object, and centred on
  * itself it would jump on the stage every time a slider is let go, with the
  * camera kept where it was. So the object stays where it was put.
  */
-function frame(group: THREE.Group, box: THREE.Box3, keepCamera: boolean, centred?: THREE.Vector3): void {
+function frame(group: THREE.Group, box: THREE.Box3, place: boolean, centred?: THREE.Vector3): void {
     if (box.isEmpty()) {
         return;
     }
@@ -590,7 +976,7 @@ function frame(group: THREE.Group, box: THREE.Box3, keepCamera: boolean, centred
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     const radius = Math.max(size.x, size.y, size.z) / 2 || 1;
-    framedRadius = radius;
+    framedRadius = enclosingRadius(box) || radius;
 
     // Stage centers the model rather than moving the camera to it, so that
     // orbiting turns the model about itself.
@@ -599,70 +985,143 @@ function frame(group: THREE.Group, box: THREE.Box3, keepCamera: boolean, centred
     } else {
         group.position.sub(center);
     }
+    // Where the middle of the box is now: the stage's origin, or where a cut
+    // keeps it. The group was at the origin when the box was measured.
+    framedCentre.copy(center).add(group.position);
 
     spotLight.position.set(radius * 2, radius * 4, radius * 2);
     stagePointLight.position.set(-radius * 2, radius, -radius * 2);
     // Part.js leaves this one at the scene origin, i.e. inside the model.
     partPointLight.position.set(0, 0, 0);
 
-    camera.near = radius / 100;
-    camera.far = radius * 100;
-    camera.updateProjectionMatrix();
-
-    if (!keepCamera) {
-        placeCamera(radius);
+    if (place) {
+        placeCamera(framedRadius);
     }
+    clip(camera.position.distanceTo(controls.target));
     controls.update();
 }
 
 /**
- * Far enough back that the bounding sphere fits the field of view, with the same
- * slight elevation Stage's default camera has.
+ * Near and far enough for the model at 'distance': a hundredth of its size in
+ * front, and behind it a hundred times its size or twice as far as it is,
+ * whichever is further - a fit from the last object's distance starts wherever
+ * that was, and a far plane drawn for the new one alone would hide it until the
+ * camera had come in.
+ */
+function clip(distance: number): void {
+    camera.near = framedRadius / 100;
+    camera.far = Math.max(framedRadius * 100, (distance + framedRadius) * 2);
+    camera.updateProjectionMatrix();
+}
+
+/**
+ * From 'VIEW_DIRECTION', at Stage's slight elevation, as far back as a fit puts
+ * it ('fitDistance' in 'cameraView.ts': every angle of the model in the
+ * narrower field), looking at the middle of the model.
  *
- * Whichever of the two fields is the narrower: 'fov' is the vertical one, and a
- * canvas taller than it is wide - a narrow panel, with the control pane beside
- * it - sees less across than up, so a model fitted to the height alone runs off
- * both sides. The canvas is measured first, because a show can arrive before
- * anything has told the camera what shape the canvas has now.
+ * The canvas is measured first, because a show can arrive before anything has
+ * told the camera what shape the canvas has now.
  */
 function placeCamera(radius: number): void {
     resizeCanvas();
-    camera.position.copy(VIEW_DIRECTION).multiplyScalar(fitDistance(radius));
-    controls.target.set(0, 0, 0);
+    const direction = VIEW_DIRECTION.clone().normalize();
+    controls.target.copy(framedCentre);
+    camera.position.copy(framedCentre).addScaledVector(direction, fitDistance(radius, camera.fov, camera.aspect));
     fittedTo = radius;
 }
 
-/** How far along 'VIEW_DIRECTION' the camera fits a model of 'radius' into the canvas as it is now. */
-function fitDistance(radius: number): number {
-    const halfHeight = Math.tan((camera.fov * Math.PI) / 360);
-    return (radius * 1.6) / (halfHeight * Math.min(1, camera.aspect));
-}
-
 /**
- * Put the camera back where a show puts it, on the model as it is already placed.
+ * Put the camera back at the opening view, on the model as it is already
+ * placed, at once: the view panel's "Reset".
  *
- * What a SpaceMouse's "Fit" button does, and the view panel's "Reset". Not
- * 'frame()': that centres the model as well, which a show does once and which a
- * second time would do nothing but accumulate rounding.
+ * Not 'frame()': that centres the model as well, which a show does once and
+ * which a second time would do nothing but accumulate rounding.
  */
-export function fitView(): void {
+export function resetView(): void {
     if (content === undefined) {
         return;
     }
+    fitting = undefined;
     placeCamera(framedRadius);
+    clip(camera.position.distanceTo(controls.target));
     controls.update();
+}
+
+/**
+ * "Fit": bring the camera, over 'FIT_MILLISECONDS', to where the whole model
+ * fits in the view however it is turned (see 'fitDistance'), looking at its
+ * middle, and from the same side it is looking from now.
+ *
+ * The view panel's Fit button, a SpaceMouse's Fit key, and what a show of the
+ * whole object after the first one ends with - always for another object, and
+ * for the same one again while Auto-fit is on ('showGeometry'). Gradual,
+ * because a view that jumps to another size is a view somebody has to find the
+ * model in again; and the angle is not touched, so a model turning on its own
+ * goes on turning through it. Taking hold of the view - a drag, the wheel, a
+ * SpaceMouse, a viewpoint chosen in the panel - stops it where it is.
+ */
+export function fit(): void {
+    if (content === undefined) {
+        return;
+    }
+    fitting = {
+        since: performance.now(),
+        target: controls.target.clone(),
+        distance: camera.position.distanceTo(controls.target),
+    };
+    // Not fitted until it is there: a resize meanwhile is the fit's to follow.
+    fittedTo = undefined;
+    invalidate();
+}
+
+/** Move a "Fit" on to where it is at 'now', before the controls take their turn; a frame of it is a new picture. */
+function stepFit(now: number): void {
+    if (fitting === undefined) {
+        return;
+    }
+    if (dragging || pushing) {
+        // Started while somebody was moving the view: theirs, as one they
+        // took hold of is (see 'dragging').
+        fitting = undefined;
+        return;
+    }
+    const along = fitProgress(now - fitting.since);
+    const goal = fitDistance(framedRadius, camera.fov, camera.aspect);
+    const distance = fitting.distance + (goal - fitting.distance) * along;
+    const direction = camera.position.clone().sub(controls.target);
+    if (direction.lengthSq() === 0) {
+        direction.copy(VIEW_DIRECTION);
+    }
+    direction.normalize();
+    controls.target.lerpVectors(fitting.target, framedCentre, along);
+    camera.position.copy(controls.target).addScaledVector(direction, distance);
+    clip(distance);
+    invalidate();
+    if (along >= 1) {
+        fitting = undefined;
+        fittedTo = framedRadius;
+    }
 }
 
 /**
  * The 3D view, as the SpaceMouse moves it: only while its tab is the one on
  * screen, and a push is a drag as far as the controls' listeners are concerned.
+ * Its Fit key is the view panel's Fit button.
  */
 const navigable: Navigable = {
     camera,
     target: controls.target,
     shown: () => onScreen(container),
-    fit: fitView,
-    moving: (moving) => controls.dispatchEvent({ type: moving ? 'start' : 'end' }),
+    fit,
+    moving: (moving) => {
+        pushing = moving;
+        relaying = true;
+        try {
+            controls.dispatchEvent({ type: moving ? 'start' : 'end' });
+        } finally {
+            relaying = false;
+        }
+    },
 };
 spaceMouse.attach(navigable);
 
@@ -690,6 +1149,7 @@ function addPorts(
     sketches: Map<string, THREE.Group>,
     material: THREE.Material,
     lineMaterial: THREE.Material,
+    made: Callouts,
 ): void {
     const ports = node.ports ?? [];
     if (ports.length === 0) {
@@ -698,6 +1158,28 @@ function addPorts(
 
     const frame = transformed(TO_GLTF);
     parent.add(frame);
+
+    // Each interface instance's name, in the middle of the ports it is made of:
+    // one name for a bolt pattern of four holes, as the 2D tab's picture writes
+    // it, rather than the same name four times. On the node rather than on a
+    // port, so whether it shows is worked out from the rows of the instance and
+    // of its ports ('refreshInterfaceCallouts').
+    groupPorts(node).interfaces.forEach((entry, index) => {
+        if (entry.ports.length === 0) {
+            return;
+        }
+        const middle = [0, 1, 2].map(
+            (axis) => entry.ports.reduce((sum, port) => sum + ports[port].location[0][axis], 0) / entry.ports.length,
+        );
+        const { object } = calloutObject('callout-interface', [interfaceLabel(entry.interface)]);
+        object.position.set(middle[0], middle[1], middle[2]);
+        frame.add(object);
+        made.interfaces.push({
+            object,
+            item: interfaceId(path, index),
+            ports: entry.ports.map((port) => portId(path, port)),
+        });
+    });
 
     ports.forEach((port, index) => {
         const item = portId(path, index);
@@ -712,6 +1194,18 @@ function addPorts(
         axes.name = port.name ?? 'port';
         frame.add(axes);
         drawnByItem(item, axes);
+
+        // Its name, at the tip of the +Z axis - the end of the triad that says
+        // which way the port faces, and where the 2D tab's picture joins a
+        // port's name to it. A child of the triad, so the port's own box hides it.
+        const name = portLabel(port);
+        if (name) {
+            const { object } = calloutObject('callout-port', [name]);
+            object.position.set(0, 0, size);
+            object.visible = labelChoices.portNames;
+            axes.add(object);
+            made.ports.push(object);
+        }
 
         const sketch = port.sketch ? sketches.get(port.sketch) : undefined;
         if (sketch === undefined) {
@@ -749,41 +1243,92 @@ function addPorts(
  * Every element is built node by node through 'dom.ts': what a callout says is
  * text out of the drawing a package ships, and must not become markup.
  */
-function addCallouts(parent: THREE.Group, node: ShowNode, path: number[]): void {
-    const callouts = calloutsOf(node);
-    if (callouts.length === 0) {
+function addCallouts(parent: THREE.Group, node: ShowNode, path: number[], made: Callouts): void {
+    const said = calloutsOf(node);
+    if (said.length === 0) {
         return;
     }
     const frame = transformed(TO_GLTF);
-    for (const callout of callouts) {
-        const box = el('div', 'callout-box');
-        if (callout.title !== undefined) {
-            box.appendChild(el('div', 'callout-title', callout.title));
-        }
-        for (const line of callout.lines) {
-            box.appendChild(el('div', 'callout-line', line));
-        }
-        const element = el('div', 'callout');
-        element.appendChild(box);
-        const label = new CSS2DObject(element);
-        // Pinned by its bottom-left corner, where the leader line starts: the text
-        // sits above and to the right of the element rather than over it.
-        label.center.set(0, 1);
-        label.position.set(callout.position[0], callout.position[1], callout.position[2]);
-        frame.add(label);
+    for (const callout of said) {
+        const { object } = calloutObject('callout-metadata', callout.lines, callout.title);
+        object.position.set(callout.position[0], callout.position[1], callout.position[2]);
+        object.visible = showMetadata;
+        frame.add(object);
+        made.metadata.push(object);
     }
     parent.add(frame);
     drawnByItem(nodeId(path), frame);
 }
 
 /**
+ * One component's callout: its name and its price, in the middle of its shape.
+ *
+ * A child of the shape itself, so the box that hides the component - and the
+ * flicker that singles it out - takes its callout with it. Written by
+ * 'refreshComponentCallouts', which is what the boxes and the prices arriving
+ * call again; a component with nothing to say has its callout hidden.
+ *
+ * The middle is of the shape's box, measured in the shape's own frame: the
+ * whole tree has had its placements composed before this is called, and the
+ * box is taken back out of them.
+ */
+function addComponentCallout(node: ShowNode, drawn: THREE.Object3D, box: THREE.Box3, made: Callouts): void {
+    if (box.isEmpty()) {
+        return;
+    }
+    const middle = drawn.worldToLocal(box.getCenter(new THREE.Vector3()));
+    const callout = calloutObject('callout-component', []);
+    callout.object.position.copy(middle);
+    drawn.add(callout.object);
+    made.components.push({
+        object: callout.object,
+        box: callout.box,
+        name: componentName(node),
+        objectName: node.name ?? undefined,
+        holds: false,
+    });
+}
+
+/**
+ * The callout of a node that holds others: its price, in the middle of
+ * everything inside it, for an assembly sold assembled (see 'assemblyRows').
+ *
+ * It has no shape of its own to be a child of, so it hangs from a group of its
+ * own under the node, registered under the node's item: the box that hides the
+ * sub-assembly hides its price, and the callout's own 'visible' stays
+ * 'refreshComponentCallouts''s to set.
+ */
+function addAssemblyCallout(node: ShowNode, path: number[], into: THREE.Group, box: THREE.Box3, made: Callouts): void {
+    if (box.isEmpty()) {
+        return;
+    }
+    const holder = new THREE.Group();
+    into.add(holder);
+    const callout = calloutObject('callout-component', []);
+    callout.object.position.copy(into.worldToLocal(box.getCenter(new THREE.Vector3())));
+    holder.add(callout.object);
+    drawnByItem(nodeId(path), holder);
+    made.components.push({
+        object: callout.object,
+        box: callout.box,
+        name: componentName(node),
+        objectName: node.name ?? undefined,
+        holds: true,
+    });
+}
+
+/**
  * Give what a glTF draws the materials this viewer draws everything with, in the
- * colour 'appearance' says.
+ * colour 'appearance' says - or, for a face primitive that brought a colour of
+ * its own, in that.
  *
  * Part.js replaces whatever material the file carries with a plain
  * MeshPhongMaterial, which is what gives every PartCAD model the same look
  * regardless of how it was authored; the colour is the one thing a shape gets a
- * say in, through its properties rather than through its file. Lines get one of
+ * say in, through its properties or, face by face, through the colour of each
+ * primitive of its file (see 'keepOwnColors'). The material is still this
+ * viewer's either way, from 'geometry's one per colour, so a coloured face is
+ * shaded, faded and singled out as every other face is. Lines get one of
  * their own: an edge that bounds no face - the bend lines of a sheet metal drawing
  * - arrives as glTF line segments, and a lit material means nothing to a line.
  *
@@ -796,7 +1341,11 @@ function paint(group: THREE.Object3D, geometry: Geometry, appearance: Appearance
         const drawable = child as THREE.Mesh | THREE.Line;
         let material: THREE.Material;
         if ((drawable as THREE.Mesh).isMesh) {
-            material = geometry.faceMaterial(appearance);
+            const own = drawable.userData[OWN_APPEARANCE] as Appearance | undefined;
+            const map = ownTextures.get(drawable.geometry);
+            material = geometry.faceMaterial(
+                primitiveAppearance(own !== undefined && map !== undefined ? { ...own, map } : own, appearance),
+            );
         } else if ((drawable as THREE.Line).isLine) {
             material = geometry.lineMaterial(appearance);
         } else {
@@ -863,18 +1412,28 @@ class Geometry {
      * A see-through colour is drawn transparent at its own opacity, and remembers
      * that opacity in 'userData.alpha' so the Opacity slider can take it as the
      * part's full strength rather than replacing it (see 'setOpacity').
+     *
+     * A one-sided shape - a wall - is drawn from the front of its faces only,
+     * whatever this show draws everything else with: from behind it is not there,
+     * which is the whole of what it is for (see 'appearance.ts').
+     *
+     * A colour drawn with an image is drawn with it, white under it - three
+     * multiplies the two - and remembers the colour it is drawn as where an
+     * image cannot be in 'userData.flatColor' (see 'painter.ts').
      */
     faceMaterial(appearance: Appearance): THREE.Material {
         const key = appearanceKey(appearance);
         let material = this.faces.get(key);
         if (material === undefined) {
             material = new THREE.MeshPhongMaterial({
-                color: appearance.color,
-                side: this.side,
+                color: appearance.map === undefined ? appearance.color : 0xffffff,
+                map: appearance.map ?? null,
+                side: appearance.oneSided ? THREE.FrontSide : this.side,
                 transparent: appearance.opacity < 1,
                 opacity: appearance.opacity,
             });
             material.userData.alpha = appearance.opacity;
+            material.userData.flatColor = appearance.color;
             this.faces.set(key, material);
         }
         return material;
@@ -1065,7 +1624,7 @@ interface Loaded {
      * matching groups back to nodes by position is exactly the kind of agreement
      * that stops holding the day a node gains a child of another sort.
      */
-    built: { node: ShowNode; path: number[]; group: THREE.Group }[];
+    built: { node: ShowNode; path: number[]; group: THREE.Group; drawn?: THREE.Group }[];
 }
 
 /**
@@ -1141,7 +1700,7 @@ async function buildNode(
         group.add(child);
     }
 
-    loaded.built.push({ node, path, group });
+    loaded.built.push({ node, path, group, drawn });
     return group;
 }
 
@@ -1244,10 +1803,41 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // out to draw with is freed with the rest of the show's materials.
     geometry.own(boundaryMaterial);
     geometry.own(boundaryLineMaterial);
-    for (const { node, path, group: into } of loaded.built) {
-        addPorts(into, node, path, size, sketches, boundaryMaterial, boundaryLineMaterial);
-        addCallouts(into, node, path);
+    // Every placement composed once, so that each component's box below is
+    // measured where the tree puts it and taken back out of it consistently.
+    group.updateMatrixWorld(true);
+    // And the frame the whole tree is in, for the materials' callouts that
+    // arrive later: this group's, before 'frame()' moves it.
+    const frameOfTree = group.matrix.clone().invert();
+    // The box of what each node holds, on the stage: its own shape's and its
+    // children's, measured before any port is added under it. 'built' lists the
+    // children before the node that holds them, so one pass does it.
+    const held = new Map<string, THREE.Box3>();
+    for (const { node, path, drawn } of loaded.built) {
+        const box = drawn !== undefined ? new THREE.Box3().setFromObject(drawn) : new THREE.Box3();
+        (node.assembly ?? []).forEach((_child, index) => {
+            const inner = held.get([...path, index].join('.'));
+            if (inner !== undefined) {
+                box.union(inner);
+            }
+        });
+        held.set(path.join('.'), box);
     }
+    const made = noCallouts();
+    for (const { node, path, group: into, drawn } of loaded.built) {
+        const box = held.get(path.join('.')) ?? new THREE.Box3();
+        addPorts(into, node, path, size, sketches, boundaryMaterial, boundaryLineMaterial, made);
+        addCallouts(into, node, path, made);
+        if (isComponent(node)) {
+            if (drawn !== undefined) {
+                addComponentCallout(node, drawn, box, made);
+            }
+        } else {
+            addAssemblyCallout(node, path, into, box, made);
+        }
+    }
+    refreshComponentCallouts(made);
+    refreshInterfaceCallouts(made);
 
     if (superseded()) {
         disposeTree(group);
@@ -1263,6 +1853,10 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     const cut = Boolean(message.section);
     const centred =
         message.keepCamera && (cut || shownCut) && content !== undefined ? content.position.clone() : undefined;
+    // Nothing on the stage yet: the camera starts at the opening view. Anything
+    // after that keeps the camera where it is - its angle above all, which
+    // Animate has been turning - and fits it to what arrived, gradually.
+    const first = content === undefined;
     if (content !== undefined) {
         scene.remove(content);
         disposeTree(content);
@@ -1270,6 +1864,10 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     shownGeometry?.disposeMaterials();
     shownGeometry = geometry;
     content = group;
+    callouts = made;
+    // A cluster names the nodes of one tree: this show's are asked again.
+    materialCallouts = [];
+    treeFrame = frameOfTree;
     shownCut = cut;
     scene.add(group);
     // Framed on every shape the show carries, whether or not it is switched on:
@@ -1282,12 +1880,28 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // and the ports of everything inside an assembly start out unticked, which
     // is a model centred on something nobody can see. An interface has no shape
     // but its ports, and is framed on those.
-    frame(
-        group,
-        geometryBox.isEmpty() ? new THREE.Box3().setFromObject(group) : geometryBox,
-        message.keepCamera,
-        centred,
-    );
+    frame(group, geometryBox.isEmpty() ? new THREE.Box3().setFromObject(group) : geometryBox, first, centred);
+    // Every show of another object after the first is fitted, over a second,
+    // from where the camera is ('fit'); and so is the same one again - an edit
+    // saved, an agent's next version of it, which may have grown or shrunk -
+    // while Auto-fit is on. With it off, the same object again keeps the camera
+    // where it was put, as it did before there was a fit at all - and a fit still
+    // on its way from showing another object, less than a second ago, carries on
+    // to the new version of it: nobody has put the camera anywhere on that object
+    // yet (taking hold of the view would have stopped the fit), and stopping it
+    // there would leave a view between the two objects' that nobody chose.
+    //
+    // Not a cut or the show that takes one away, which keeps the camera still
+    // for the reason it keeps the model where it was: the slider is moving
+    // through the object, and the view moving under it is two things moving.
+    // That includes a fit still on its way from the show before: 'frame' has
+    // just pointed it at the cut, so it stops where it is, as it does when
+    // somebody takes hold of the view.
+    if (centred !== undefined) {
+        fitting = undefined;
+    } else if (!first && (!message.keepCamera || autoFit)) {
+        fit();
+    }
     viewListeners.forEach((listener) => listener());
     buildProxies(group);
     invalidate();
@@ -1466,8 +2080,9 @@ export function resizeCanvas(): void {
     if (fittedTo !== undefined) {
         // Fitted again at the angle the turntable has it at now, along the line
         // it looks down: nearer or further, but not turned.
-        const length = fitDistance(fittedTo) * VIEW_DIRECTION.length();
+        const length = fitDistance(fittedTo, camera.fov, camera.aspect);
         camera.position.sub(controls.target).setLength(length).add(controls.target);
+        clip(length);
     }
     invalidate();
 }
@@ -1491,9 +2106,10 @@ export function setViewpoint(viewpoint: Viewpoint): void {
     if (content === undefined) {
         return;
     }
+    // Put there on purpose, like a drag: a fit on its way stops, and a resize
+    // leaves it where it is rather than fitting it again (see 'fittedTo').
+    fitting = undefined;
     aimCamera(camera, controls.target, viewpoint, stageFrame());
-    // Put there on purpose, like a drag: a resize leaves it where it is rather
-    // than fitting it again (see 'fittedTo').
     fittedTo = undefined;
     // The orbit controls take it from here; their 'change' tells the panel.
     controls.update();
@@ -1523,13 +2139,15 @@ export function modelBounds(): Bounds | undefined {
     };
 }
 
-/** What the Animate box says; a SpaceMouse being moved pauses it without unticking it. */
-let autoRotate = controls.autoRotate;
-
 export function setAutoRotate(enabled: boolean): void {
     autoRotate = enabled;
     controls.autoRotate = enabled;
     invalidate();
+}
+
+/** Whether a show of the same object again is fitted, as the Auto-fit box says (see 'autoFit'). */
+export function setAutoFit(enabled: boolean): void {
+    autoFit = enabled;
 }
 
 /**
@@ -1583,6 +2201,7 @@ function animate(): void {
     if (moved) {
         invalidate();
     }
+    stepFit(now);
     controls.update();
     if (flickering !== undefined) {
         // A flicker is a change on every frame it lasts.

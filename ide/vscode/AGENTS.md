@@ -198,6 +198,13 @@ the show, before their lists are asked for, because a list can arrive while the 
 before the tab itself is requested -- and it is used once: the list opens on that entry instead of the first, or
 on the first when the object declares no such name, and every show says, so it does not linger.
 
+**A colour, a material or a finish opened from the explorer is shown by the host, not by PartCAD**
+(`PartcadViewer.showDeclaration`): there is nothing to draw, so the show is made here with no object in it, and the
+renderer gives it the Design group alone and in it the CMF tab alone (`isDeclaration` in `src/webview/messages.ts`) --
+one tab is no choice, so neither strip is drawn. Its strip is rebuilt `transient`ly (`Tabs.setTabs`), so the object
+shown next goes back to the Design tab that was open before rather than to CMF. The CMF tab asks `cmf.info` with the
+show's `kind`, which is the one thing that finds a declaration: its name is no object's.
+
 **The panel is a strip of tabs over one object, not a canvas.** 3D first, then FEA, Dynamic FEA, Heat Transfer and
 CFD for a part, then Manufacturing: what is built and what is bought, how to build it, the bill of materials, where
 to buy it and the assembly instructions; then Validation: every check `pc test` runs, check by check (Test, first),
@@ -231,6 +238,24 @@ picture is made by PartCAD and arrives as a file. So the ticked boxes resolve to
 render (`Tree.filter()` -- the mask `pc render --filter` takes, read by `partcad_utils.assy_filter`) and, on
 the 2D tab, to which port overlays to draw (`Tree.overlay()` -- `--with-ports`/`--with-interfaces`/
 `--with-internals`). Do not add a second tree widget for that: a row's meaning would then have two definitions.
+
+**Under the tree of the 3D and 2D tabs are five callout boxes** (`labels.ts`): Component names, Component prices,
+Materials, Port names and Interface names, the last two ticked from the start. A box is named for what it writes,
+with no "Show" in front of it. They say *what* is written; the tree says *on
+what*, which is why every 3D callout is a child of the thing it is about (a component's of its shape, a port's of
+its triad) and is hidden with it by three's own visibility, and why an interface's name shows only while the tree
+draws one of its ports. One answer for both tabs (`Labels`, beside `Selection`), kept across objects. The 2D tab
+sends them as `pc render` options (`renderOptions`), each only when it differs from what a render does anyway, so a
+default picture is asked for in the words it always was. A component's name has one rule on both sides
+(`componentName`, and `component_name` in `render_svg.py`); a price is *never* worked out here -- PartCAD declares
+none, and the share of the Buy tab's quote each component costs is `partcad/component_prices.py`, asked for by the
+3D view as `supply.prices` under the Design group's id (`design`, the way `analysis` asks `cae.list`) and by a
+render through the overlay's price source. Materials are not worked out here either: where each cluster of a
+material is -- faces of one material that touch or are closer than the user's `materialClusterDistance` -- is
+geometry, answered in a sandbox (`cmf.clusters`, by `material_clusters.py` among the wrappers), which the 3D view
+asks for under the 3D tab's own id (`3d`) and pins under the show's root, shown while the tree draws any node of
+the cluster; the 2D tab's picture finds its own. Metadata no longer hides the whole callout layer: each kind of
+callout has its own switch, on the callout.
 
 **The three tabs share one answer** (`Selection`). What somebody wants to look at is a property of the object,
 not of the tab it is being looked at on, so the state lives outside the widgets and each of them reads and
@@ -282,14 +307,22 @@ mesh per node rather than an `InstancedMesh`.
 
 **Every tab that shows the object has the view panel down its right** (`viewPanel.ts`; "The view panel" in
 [docs/partcad-viewer.md](./docs/partcad-viewer.md)): the orientation gizmo, the axis views, a section slider per
-axis, the viewpoint as `viewport_origin`/`viewport_up`/target, and Animate and Opacity, which used to be at the
-bottom of the 3D view's tree. One widget for every tab; what a tab cannot do with it is disabled and says why
+axis, the viewpoint as `viewport_origin`/`viewport_up`/target with Fit (the 3D tab only) and Reset beside it, and
+Animate, Auto-fit (the 3D tab only) and Opacity, which used to be at the bottom of the 3D view's tree. One widget for every tab; what a tab cannot do with it is disabled and says why
 (`capabilitiesOf`), and only `cameraView.ts` crosses between PartCAD's frame and a stage's. A section is never a
 clipping plane here: PartCAD cuts the exact geometry (`partcad/shape_section.py`), the 3D view by asking the daemon
 to show the object again (`partcad.showSection` -> `inspect.object` with `section`) and the render tabs by sending
 it with `render.inline`, and the show says what it was cut to (`KEY_SECTION`, absent from a PartCAD that cannot
-cut). The panel starts folded, and the screenshot script drives Animate and Opacity by the ids the 3D tab's panel
-keeps (`animate-checkbox`, `opacity-slider`) without unfolding it - which is why it sets them rather than clicking.
+cut). The panel starts folded, and the screenshot script drives Animate, Opacity and Reset by the ids the 3D tab's
+panel keeps (`animate-checkbox`, `opacity-slider`, `view-reset-button`) without unfolding it - which is why it sets
+them, or clicks from inside the page, rather than clicking through Playwright.
+
+**A show after the first never moves the 3D camera at once.** It keeps the angle (which Animate has been turning)
+and runs Fit, which brings the distance and the target to where every angle of the model fits (the sphere holding
+it, no margin on top), over one second (`fit`/`stepFit` in `scene.ts`, the arithmetic in `cameraView.ts`) - another
+object always, the same one again while the Auto-fit box after Animate is ticked (the default), and a cut never. Only
+the first show of a panel, and Reset, place the camera at the opening view outright. See
+"The first show places the camera" in [docs/partcad-viewer.md](./docs/partcad-viewer.md).
 
 None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote`, `cae.analyze` and
 `simulate.run` (with `cae.list` and `simulate.list`, which read what they would run) are the CLI's own operations (`pc bom`, the book `pc render -t html` writes, the cart
@@ -387,6 +420,9 @@ Four things about it are load-bearing:
   what rules out drei's `environment` presets, and why the renderer uses `RoomEnvironment`. It also admits
   only the one script its nonce names, so the viewer bundle is held to a single chunk
   (`LimitChunkCountPlugin`): a dependency's dynamic import split off into a file of its own would never load.
+  `connect-src blob:` is the one fetch it admits, and it reaches nothing outside the page: three's `GLTFLoader`
+  decodes an image embedded in a glb (a colour drawn with a texture) by fetching a `blob:` URL it made of those
+  bytes itself, and without it the face is drawn with no image and nothing but a console line says why.
 - **A file a tab shows is posted as a `Uint8Array` and shown through a Blob URL.** `src/viewer/payloads.ts`
   makes every file in a tab's answer bytes before it is posted -- a render, a model, a run's pictures and its
   video, the Build vs Buy thumbnails, a document's pictures (asked for with `image_bytes`) -- whether the daemon
@@ -451,7 +487,18 @@ Four things about it are load-bearing:
   or it reaches the screen only with the next turn of the camera.
 - **A shape is drawn in its own colour, and in goldenrod when it has none -- in every 3D pane, on every
   backend.** The colour is a node's `properties.color` (`#RRGGBB`, or `#RRGGBBAA` for a see-through one), or
-  the nearest ancestor's, and `appearance.ts` decides it; a node that nothing colours is `DEFAULT_COLOR`,
+  the nearest ancestor's, and `appearance.ts` decides it -- except for a primitive whose glb gives it a material
+  of its own, which is how a part that colours its faces one by one arrives (a mesh per colour; see
+  `wrapper_gltf._colored` and docs/design/cmf.md): `parseTemplate` notes that colour on the mesh before it drops
+  the file's materials (`keepOwnColors`, reading the loader's `associations`, because three gives a primitive
+  with no material a white default), and `paint` draws it in that colour with this viewer's material, so it is
+  shaded, faded and flickered like the rest. A primitive drawn with an image (a colour whose display is a texture;
+  `wrapper_gltf._with_textures`) keeps that image the same way, as the material's `map` with white under it --
+  but by its geometry in `ownTextures`, not in `userData`: a clone copies `userData` through JSON, which a
+  texture does not survive, while every clone shares the geometry. The image is the template's and is freed with
+  it (`releaseTemplate`); `disposeMaterial` leaves a texture marked `cached` alone. A face is more specific than
+  its part or an assembly, so it wins
+  over the node's colour; a node that nothing colours is `DEFAULT_COLOR`,
   `0xdaa520` -- OCCT's `Quantity_NOC_GOLDENROD`, and the colour PartCAD's own 2D projections draw an
   uncoloured shape in. That constant is the twin of `DEFAULT_COLOR` in `src/partcad/wrappers/appearance.py`,
   and a test on the Python side reads `appearance.ts` to hold the two together: change both. The 3D view
@@ -463,6 +510,13 @@ Four things about it are load-bearing:
   and it is lit by a light probe of three's `RoomEnvironment` (`ROOM_LIGHT`) rather than by
   `scene.environment`, because three's WebGL renderer lights a Phong material with an environment and its
   WebGPU renderer only reflects it -- the same model was half as bright under WebGPU.
+- **A shape that states `oneSided: true` is drawn from the front of its faces only.** That is what a wall
+  reports (`src/partcad/surface.py`), and it is the whole of what a wall is for: from outside a room, its near
+  walls are looked through. `appearance.ts` reads it beside the colour and hands it down the tree the same
+  way and independently of it, and `Geometry.faceMaterial` gives such a shape a material of its own with
+  `side: FrontSide` whatever the show draws everything else with -- a key of its own too (`/front`), so a
+  wall never shares a material with a two-sided shape of its colour. Which side is the front is the
+  triangles' winding, and the glTF PartCAD sends winds every triangle the way its face's normal points.
 - **Nothing is escaped on its way into a pane.** What the tabs display is text out of a package's
   configuration -- a description, a part name, a supplier's answer, the name of a port -- so every pane builds
   its DOM node by node through `src/webview/dom.ts` rather than assigning `innerHTML`. `textContent` cannot be

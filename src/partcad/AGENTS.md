@@ -296,6 +296,18 @@ at all).
   A hit in a farther tier is copied into the nearer ones that missed it, within each one's size window
   (`Cache._promote_async`), which judges it exactly as a write would (`Cache._admission_sizes`). So a test asserting on what a server holds flushes first (`cache_io.flush()`,
   `Cache.flush_async()`), and `tests/partcad/conftest.py` stops the thread after every test.
+- **A tier keeps what took long enough to build to be worth fetching** (`Cache.write_data_async(build_seconds=)`,
+  `CacheBackend.min_build_seconds`, `cacheFilesMinBuildTime` / `cacheRemoteMinBuildTime` / `cacheS3MinBuildTime`,
+  10, 50 and 50 ms). `Shape.get_wrapped` times a shape's build -- from the cache miss to the write, the validation,
+  the move and the scale included -- and a tier whose threshold it did not reach is not offered the entry: a file read
+  is milliseconds and a remote round trip tens of them, so an entry built faster costs about as much to fetch as to
+  build, and in a shared tier it is an entry nobody gains by. It is kept in this process's memory instead. Except
+  where memory will not hold it (`ShapeCache.write_async`: larger than `cacheMemoryMaxEntrySize`, or `cacheMem` off):
+  a shape in neither is built on every ask, and an assembly a daemon names as "build this first"
+  (`get_uncached_subassemblies_async`) would never come to count as built, so the whole write is then offered to every
+  tier on size alone. Only shape writes say how long; an artifact's write (a render, a tessellation, a verdict) is
+  offered on size alone, since what produced it was a sandbox.
+
 - **A file is keyed on all of its content** (`cache_hash.file_digest`): the SHA-256 of it, never its path or its
   timestamps, so a shared tier is shared. The digest is remembered by the file's identity (`cache_hash.FileMemo`:
   device, inode, size, modification and change time) for the life of the process, and for a file of 1 MB or
@@ -342,6 +354,52 @@ at all).
   so a field added there needs nothing here. The check is never cached: what it reads -- the requirements, the
   ports and interfaces, which can live in other packages, the material -- is mostly not what a shape's cache key
   is made of.
+
+- **A basic shape is written, not built** (`basic_shapes.py`, `brep_ascii.py`, `sketch_factory_basic.py`,
+  `part_factory_basic.py`): a `basic` sketch -- a circle, square, rectangle or slot, with holes of the same -- and a
+  `basic` part -- a cuboid or a cylinder -- are nothing but the numbers in their declarations, and their geometry is
+  lines, circles, planes and one cylindrical surface. So the core writes their BREP itself, in OCCT's ASCII format
+  (version 1, which every OCCT reads), with no sandbox, no interpreter and no OCP: milliseconds, where the sandbox was
+  seconds per shape. This is the one place the core produces geometry, and it is what keeps that consistent with "the
+  core never touches a CAD library" -- `brep_ascii` knows the file format, not a kernel.
+
+  What is written is what OCCT built from the same numbers, and that is held rather than hoped for:
+  `tests/partcad/unit/test_basic_shapes.py` reads every shape back with OCP and compares it with the face the retired
+  `wrapper_sketch_basic` built (`BRepBuilderAPI_MakeFace` and `ShapeFix_Face`) and the solid `BRepPrimAPI` builds --
+  validity, area or volume, box, centroid and inertia, which way each face points. Two rules from there are easy to
+  break. **A sketch faces the way its outer outline runs**: +Z for a circle, -Z for a square, a rectangle or a slot,
+  which are drawn clockwise -- the plane `BRepLib_FindSurface` fitted to the wire -- and a hole running the same way is
+  reversed, last edge first, as `ShapeFix_Face` reversed it. A tool path or a sweep reads that orientation, and the
+  drawings under `examples/` came out byte for byte the same when the wrapper was retired. **A part is a solid by
+  construction**, every face pointing out, so it claims the validation of `Shape.finish_request()` with no problems,
+  and applies its `offset` and `scale` into its own coordinates the way `wrapper_transform` does -- declining, for the
+  core to hand to a sandbox, only an offset that is not the packed form or a scale that is not a number above zero.
+  It is built centred on the origin and placed by its `offset` alone: one solid needs one placement, where a sketch,
+  which holds several outlines, places each by its own `x` and `y`.
+
+  **A part's `offset` and `scale` are read through `ShapeConfiguration.transform()`** (`shape_config.transform_of`),
+  which works out the `%...%` expressions in them over the parameters of the declaration carrying them -- for the
+  wrapper's `finish_request()`, for the `transform.py` fallback, for the annotations moved with the part and for a
+  reference's placement of its source's ports. It is resolved as it is read and never written back: the object of a
+  bare name holds the declaration itself, which every parametrized instance is then copied from.
+
+  Neither runs a wrapper, so neither has an environment to key on (`PYTHON_SANDBOX_VERSION = None`); what keys their
+  output instead is `basic_shapes.CACHE_VERSION`, through `ShapeFactory.CODE_VERSIONS`. Raise it with any change to
+  what either writes. The measurements every envelope carries (`bbox`, `volume`, `centroid`, `unitInertia`) are
+  worked out from the dimensions, not integrated.
+
+  **Built in place** (`Shape.built_in_place`): a basic shape is built by its factory where it is asked for, in a
+  tenth of a millisecond to half of one. So it goes to no thread pool (neither `get_wrapped`'s hop nor
+  `get_shape`'s), is neither looked up in nor written to the shape cache -- a hit from the files tier took longer than
+  building it, and a miss and a write four milliseconds more -- and opens no action in the log. It keeps its cache
+  key: a render, a tessellation or a test of it is worth caching, and is cached under that key as before.
+
+  **Its bytes are the same on every machine**, because they are digested into keys machines share (see "A digest is
+  of the BREP" below). `brep_ascii` and `basic_shapes` use only what IEEE 754 rounds correctly (+, -, *, /, sqrt),
+  `math.fsum` (exactly rounded; `sum()` of floats became compensated in Python 3.12) and `basic_shapes.cos_sin`,
+  trigonometry in `decimal` rather than the C library each platform writes its own way -- which also makes a quarter
+  turn exact. `test_payload_digest.py` reads both modules' source and fails on `math.sin`, `math.cos`,
+  `math.radians`, `math.dist` or a `sum()`.
 
 - **Software is not a shape** (`software.py`, `software_factory*.py`): a package's `software:` section declares
   the files a product ships with -- firmware images, binaries -- and `Software` deliberately does not inherit
@@ -429,10 +487,10 @@ at all).
   of such a part is also the one lookup in `Project._enumerate_shapes_async()` that has to be awaited
   (`get_part_async`): the part does not exist until the object that produces it has been built.
 
-- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships six packages inside itself, reachable from
+- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships eight packages inside itself, reachable from
   every context as `//builtin/export`, `//builtin/render`, `//builtin/import`, `//builtin/open`,
-  `//builtin/cam` and `//builtin/scene` (loaded
-  on demand by `Context.get_project`, see `output.py`). All but the last declare implementations — the file
+  `//builtin/cam`, `//builtin/scene`, `//builtin/color` and `//builtin/building` (loaded
+  on demand by `Context.get_project`, see `output.py`). All but the last three declare implementations — the file
   types `pc export`, `pc render`, `pc import`, `pc ide open` and `pc cam` write — in
   exactly the form a user's package declares one: a `path` to a script, its `pythonRequirements`, and the
   parameters. So adding a
@@ -456,6 +514,65 @@ at all).
   can disagree along a curved silhouette. (Not to be confused with the `reproducible` of
   `file_factory.unreproducible_reason()` below, which is about whether an object can be *made* twice, not
   whether a file is written twice the same.)
+
+- **Pictures and videos** (`./src/partcad/builtin/render/render_raster.py`, `raster_scene.py`,
+  `viewpoint.py`, `render_video.py`, `video_encode.py`): there is **one** raster renderer.
+  `render_raster.py` draws every PNG and JPEG and every frame of a video, in one of two `style`s: `lines`
+  (the default for a picture: the SVG projection, rasterized by svglib) or `shaded` (the Digital Thread's 3D
+  view, drawn by `raster_scene.py`). `//builtin/render` declares ten video file types (`mp4`, `m4v`, `mov`,
+  `qt`, `mkv`, `webm`, `avi`, `wmv`, `asf`, `ogv`), all one script, whose every frame is a `shaded` picture
+  drawn by `render_raster.Shaded` from the same fields a PNG is, turned by the video's `turn` plus its `speed`
+  times the time -- so any frame is `pc render -t png --style shaded --turn ...`, and a test holds them to the
+  same pixels. Do not give a video a way of drawing a frame that a picture does not have. `turn` itself is
+  every render's (`viewpoint.py`, `pc render --turn`): the object turned in front of the camera, which the
+  projection draws by turning its viewport the other way. Three things about it are load-bearing.
+
+  * **The pictures are drawn by numpy, not by a GPU** (`raster_scene.py`). The view is three.js in a
+    webview, and a sandbox has no browser; so the camera, the light rig, the Phong material, the tone mapping
+    and the colours of `ide/vscode/src/webview/scene.ts` are written out again, constant for constant, with
+    the shading worked out at the corners of each triangle and blended across it. That is only close to a
+    GPU's per-pixel light because large triangles are split first (`refine`, `MAX_EDGE`): a flat face OCCT
+    meshes as two triangles showed the diagonal between them as a crease. The camera looks from the 3D
+    view's direction and is framed as it is, on the sphere around the object's box (`frame_distance` is
+    `fitDistance` in `ide/vscode/src/webview/cameraView.ts`, `Scene.sphere` its `enclosingRadius`), so no
+    turn -- no frame of a video -- leaves the picture; a picture then leaves `margin` (7.5% on each side of
+    its narrower side, `render_raster.DEFAULT_MARGIN`) beyond that sphere, which the 3D view does not. A
+    change to either fit is a change to the other, and a test reads the IDE's to say so. A drawing of lines
+    gets the same margin, as padding all round. A change to what
+    the 3D view draws -- its lights, its background -- is a change to this module too. It meshes a copy of the shape: a PNG shares its decoding with the SVG beside it
+    (`TESSELLATION`), and a mesh left on, or found on, that decoding would make either depend on the other.
+  * **GStreamer is a program, run as `gst-launch-1.0`** (`video_encode.py`), with the frames on its standard
+    input. pip cannot install it, so each video file type names PartCAD's GStreamer image as its
+    `dockerImage`, `ghcr.io/partcad/partcad-container-python:{version}-py{python}-gstreamer` -- the
+    `gstreamer` target of `tools/containers/python/Dockerfile`, built for `DEFAULT_PYTHON_VERSION` alone --
+    and elsewhere the machine's own is used. `{version}` and `{python}` are filled in by
+    `partcad_utils.container_image.expand` (`Implementation.docker_image`), and what is keyed is the
+    declaration as written (`Implementation.docker_image_declared`), so a release moves no key. A machine
+    rendering without PartCAD's own image is told at debug level, not warned (`Context._note_image_skipped`,
+    `container_image.is_partcad_image`): the implementation says what is missing itself.
+  * **`append` keeps where the turn stopped in a tag of the container** (`video_encode.state_text`), and the
+    video appended to is decoded by a separate GStreamer process and handed to the encoding one over a
+    socket on this machine (`Pipeline._send_prefix`), rather than decoded inside it: a demuxer sends the old
+    file's tags ahead of its frames, a muxer keeps the first value of each tag it is told, and the new
+    state was lost. Raw frames carry no tags. Each muxer keeps different tags (`CONTAINERS['state_tag']`).
+    Ogg keeps none of them for a Theora stream -- `theoraenc` is no `GstTagSetter`, so its comment header
+    is written empty -- and its state goes into that header as Vorbis comments (`PARTCAD_ANGLES=...`)
+    once the file is written (`write_comments`): the one page holding the header is rebuilt with Ogg's own
+    CRC (`ogg_crc`, not zlib's), keeping its sequence number, and every other page is copied byte for byte;
+    `read_state` reads them back. ASF carries no sound, because GStreamer's ASF muxer drops video frames once
+    it interleaves audio and libav's writes broken timestamps. A video that reads a file -- the one it is
+    appended to, a soundtrack, a logo -- reports no `files`, so it is not cached; the file's path is
+    `request["package_dir"]` (`output.PACKAGE_DIR_KEY`), which is added after the request is keyed on, as
+    `cache_dir` is. A sandbox that exchanges files (`EXCHANGES_FILES`: `remote`, `docker` with
+    `useDockerRemote`) cannot read that path, and is never sent what the request says, only what the
+    command names: so a request one of whose declared fields names a file of its package (`output.names_a_package_file`)
+    gets `--package-dir <index> <directory>` after the triples (`output.PACKAGE_DIR_ARGUMENT`), which
+    sends the package and is rewritten to where it landed, and `wrapper_export` takes the group off and
+    puts that directory in the request. Which fields name such files is declared by the file type,
+    `packageFiles: [logo, audio]` (`Implementation.package_files`, an implementation key and so never a
+    parameter), and no other field is looked at: the package is sent whole, and a line of text that
+    happens to be a file's name must not send it. Do not resolve such a path in the core instead: what a
+    field means is the implementation's to say.
 
 - **Engineering analysis** (`./src/partcad/cae.py`, `Shape.analyze_async()`, `./src/partcad/test/cae.py`):
   `pc cae fea`/`dynamic`/`thermal`/`cfd` are a third output section, `cae:`, resolved by the very code that resolves
@@ -963,6 +1080,16 @@ at all).
   the reason above: judged, reported, not converted. Do not give a factory or a plugin a path around this step,
   and do not add a type to that set for any reason other than the file being the authority on the part.
 
+  **The one exception is declared, never inferred** (`Shape.solid_required`, `Shape._accepted_as_solid`,
+  `output.REQUIRE_SOLID_KEY`): a `partType`, or an `import:` reader for the parts it registers, that says
+  `requireSolid: true` builds bodies by definition, so a part of it that `solid_problems` finds anything wrong
+  with -- or that nothing could check -- is one it read wrongly, and fails (`part.error`, a `None` shape, never
+  cached) instead of being warned about. That is how the native CAD types of `//builtin/import` catch a body
+  cadmpeg could not read whole: by the same definition every part is held to, made binding, and not by a check
+  of their own. Their scripts hand over every body with faces, open shells and loose faces included, precisely
+  so that one that did not come through whole is judged rather than dropped. Do not give a reader its own
+  notion of "broken"; declare `requireSolid` and let this step decide.
+
   **The step is taken where the shape is live, and the core does what is left** (`Shape.finish_request`,
   `wrappers/wrapper_common.finished`, `shape_envelope.KEY_FINISH`/`METADATA_FINISHED`). Asked of the core, the
   validation was a sandbox of its own and each of `offset` and `scale` another, every one of them an interpreter
@@ -996,6 +1123,20 @@ at all).
   is skipped unread. A binary payload (below) has no such line, which is why its count is recorded rather than
   read.
 
+  **A surface part is the one kind of part this does not apply to, and it is a kind, not a setting**
+  (`surface.py`, `part_factory_wall.py`, `wrappers/wrapper_wall.py`). A `wall` is a sheet of one-sided faces
+  drawn to lay out a space -- a floor plan, the walls of a room -- and a skin is what it is for. Its *type* is
+  in `surface.SURFACE_PART_TYPES`, and everything follows from that, read off the declaration the part
+  resolves to (`final_config`), so an alias or an enrich of a wall is a wall: `Shape.finish_request` asks its
+  wrapper for no `validate` step and `get_wrapped` runs no `_validated_part` for it (nothing is solidified,
+  nothing is reported as not a solid); `shell`, `degenerate`, `solidity` and `validity` pass it over as not
+  applicable, naming the type; it is never manufacturable -- `PartFactoryWall` refuses a declaration whose
+  `manufacturable` is not false, said on the part or its package, and `manufacturability` fails it wherever
+  something asks for it to be made (an assembly that is to be made with a wall in it); and
+  `Shape._shape_properties` reports `oneSided: true` for it, which is what the renderers and the IDE draw it
+  by. A new surface type goes into that set, with a reason; no part, and no package, gets a way to put
+  itself there.
+
   **No object can exclude itself from this check, nor from `degenerate` or `solidity`, and none of the three
   may be given a setting that lets it.** All three report a fact about the geometry — a surface where a body
   was meant, a part that collapsed in one direction, a solid that is inside out — and a part in that state is
@@ -1015,7 +1156,46 @@ at all).
   `//builtin/scene` is the odd one out: it declares an *object* rather than a way of producing one — the
   scene a `simulate:` places its subject in when it names none of its own. It is an ordinary `assy` scene
   whose `.assy` is a Jinja2 template, and the only thing that makes it the default is that
-  `simulation.DEFAULT_SCENE` names it.
+  `simulation.DEFAULT_SCENE` names it. `//builtin/color` is the other: one colour declaration, the
+  display-only `rgba` (`//builtin/color:rgba;color=C91A09FF`, `manufacturable: false`). It is PartCAD's because
+  PartCAD writes references to it (`cmf.RGBA`) - for a hex or CSS colour, and for a source's colour nothing
+  claims - and a reference it writes has to resolve in any context, with or without the public index.
+
+  `//builtin/building` declares objects too: `wall`, a `type: wall` part whose `length`, `height`, `radius`
+  and `openings` are `%...%` expressions over parameters of the same names, and `room`, a `type: walls` scene
+  over `sketch` and `height`. The types are PartCAD's (`part_factory_wall.py`, `scene_factory_walls.py`), and
+  the package is how a package uses them without declaring anything: `room;sketch=//pkg:plan`. A sketch
+  handed to either has to be named in full, because a bare name resolves in `//builtin/building`. It also
+  declares one CMF colour, `wall`, display-only, which is the default of the wall's `color` parameter: a wall
+  is coloured as any part is, never with `properties: color:`. A `walls` scene passes its own CMF to every
+  wall it places, in the link's `params:` (`SceneFactoryWalls._link`) -- further than
+  `with_propagated_cmf` goes, which stops at an item that states a colour, and on purpose: the room is its
+  walls, and the shipped wall states its grey precisely so that an unpainted room has one.
+
+  **A `walls` scene is the one scene that reads geometry to know what its links are.** It is
+  `SceneFactoryAssy` with the file replaced: `read_assy` returns the links `_links_async` worked out from the
+  sketch, in a sandbox (`wrappers/wrapper_outline.py`: one closed loop of lines and arcs on XY, walked
+  clockwise so that the inside is on every wall's right, which is its front -- one wall per edge,
+  anything else refused with the reason), and `prepare_async`,
+  `subassemblies_async` and `instantiate_async` each make sure that has happened first -- so preparing such a
+  scene costs a sandbox, which no other scene does. Not under an `asyncio.Lock`: the scene is reached from
+  more than one event loop (`AssemblyFactoryAssy.instantiate` runs its own). The sketch's key is folded into
+  the scene's in `prepare_async`, and each wall is keyed as an ASSY link is. The numbers each wall is asked
+  for are rounded to a millionth of a millimetre, because they are in its instance name and so its identity;
+  and `wrapper_wall` snaps a length within `TOLERANCE` of a full circle to exactly one, or a round room's
+  wall closes with two edges a fraction of a micron apart that no boolean, and no drawing, can cut cleanly.
+
+  **One-sidedness is drawn by every renderer that draws from a viewpoint, and decided on what is drawn**
+  (`wrappers/appearance.py`'s `split_for_view`, `without_backs`). A tree with nothing one-sided in it is split
+  by `split_by_color` exactly as before, `whole` and all, so no existing drawing changes by an edge. One that
+  has is gathered a leaf at a time, and a one-sided leaf loses the faces the camera sees from behind before
+  anything is projected -- a cylindrical face is first cut along its silhouette (`_silhouette_pieces`), so the
+  near half of a round wall goes and the far half stays, and the cut adds no line the hidden-line algorithm
+  would not draw there anyway. A face seen exactly edge-on is kept, which is what makes a room seen from
+  above its plan. The shaded style (`raster_scene.py`: a PNG with `--style shaded`, and every frame of a video)
+  cannot cull once, because a video turns the object between frames: it is handed groups that say whether
+  they are one-sided (`appearance.split_by_sides`, `render_svg.by_color_and_side`), and `Painter.draw` drops a
+  one-sided triangle that faces away from the eye in that frame, by the winding it already works out.
 
   **There is deliberately no `//builtin/simulate`.** `simulation:` is a third section resolved exactly like
   the other two — a plugin is an `output.Implementation` like any other — and PartCAD implements none of it.
@@ -1426,6 +1606,16 @@ at all).
   (`shape_envelope.Payloads`), since every node of a tree built in one process holds its part's bytes object. It is the arrangement `KEY_SKETCHES` already had, one level up, and sketches now name this
   table too.
 
+  **A digest is of the uncompressed payload, never of the zstd frame carrying it** (`payload_digest`, both copies):
+  the BREP and the CMF section after it when there is one, so one solid in two colours is two digests. Everything keyed
+  by one is shared between machines -- each shape's tessellation, and every request a wrapper is keyed on by content
+  (`cache_artifacts.request_key`, which names each payload by its digest rather than writing it out) -- and two
+  compressors need not write the same frame for the same bytes: Python 3.14 compresses with the standard library's
+  zstd, earlier ones with `backports.zstd`, and each may sit on another libzstd. Keyed on the frame, one geometry was
+  a key per compressor. The core decompresses a chunk at a time into the digest, bounded as `brep_plain()` is, at
+  about a millisecond per megabyte of BREP, once per payload object; the sandbox's copy decompresses whole. The two
+  have to agree digit for digit, which `tests/partcad/unit/test_payload_digest.py` holds them to.
+
   **The BREP form gets the same sharing where it is decoded** (`ocp_serialize._shared_shape`, used by
   `decode_shape`, `decode_tree` and `decode`): every node of one decoding that carries the same payload gets the
   same `TShape`, each in a `TopoDS_Shape` handle of its own placed where its node says. That is OCCT's own
@@ -1459,8 +1649,9 @@ at all).
   7.6 and later read) rather than left at OCCT's `CURRENT`, because a payload the core encodes in process, with
   whatever OCP its user installed, is read by the sandbox's, and one a plugin's container writes is read by PartCAD's
   own. Readers tell the formats apart by the header and read both: Chili3D's kernel has an ASCII writer only, a
-  package's `.brep` file is ASCII, and an earlier release wrote ASCII (the shape cache's `VERSION` keeps the releases'
-  entries apart). Without its mesh because a triangulation is not geometry, only what somebody meshed the faces to:
+  package's `.brep` file is ASCII, a `basic` sketch or part is ASCII because the core writes it without a kernel (see
+  "A basic shape is written, not built" above), and an earlier release wrote ASCII (the shape cache's `VERSION` keeps
+  the releases' entries apart). Without its mesh because a triangulation is not geometry, only what somebody meshed the faces to:
   everything that needs one -- a projection, an STL, a glTF, a CAE mesh -- meshes for itself at its own tolerance.
   Except a face with no surface, which *is* its triangles (an SDF part, an STL read as a mesh, an imported glTF): OCCT
   keeps those, and a shape holding one is written with all of its mesh so the edges bounding such a face keep theirs.

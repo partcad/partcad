@@ -201,6 +201,17 @@ BUILTIN_PACKAGES = {
 # 'subject' parameter is whatever is being simulated. Unlike the simulator that
 # runs it, an empty world costs nothing to ship and depends on nothing.
 BUILTIN_SCENE_PACKAGE = "//builtin/scene"
+# And the colour anybody may name to draw something in without claiming it can
+# be had in that colour: 'rgba', which is what PartCAD itself makes of a hex or
+# CSS colour, or of a source's colour nothing claims (see 'cmf.RGBA'). PartCAD
+# writes references to it, so it ships with PartCAD rather than in the index.
+BUILTIN_COLOR_PACKAGE = "//builtin/color"
+# And what a room is drawn with when a space is laid out rather than made -
+# 'wall', a one-sided surface, and 'room', the walls standing on the outline of
+# a sketch. Both are built by types PartCAD implements ('wall' and 'walls'), so
+# like the scene above they cost nothing to ship and depend on nothing but the
+# CAD kernel every sandbox has.
+BUILTIN_BUILDING_PACKAGE = "//builtin/building"
 BUILTIN_ROOT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin")
 BUILTIN_PATHS = {
     BUILTIN_ROOT_PACKAGE: BUILTIN_ROOT_PATH,
@@ -210,6 +221,8 @@ BUILTIN_PATHS = {
     BUILTIN_PACKAGES[OPEN]: os.path.join(BUILTIN_ROOT_PATH, OPEN),
     BUILTIN_PACKAGES[CAM]: os.path.join(BUILTIN_ROOT_PATH, CAM),
     BUILTIN_SCENE_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "scene"),
+    BUILTIN_COLOR_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "color"),
+    BUILTIN_BUILDING_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "building"),
 }
 
 # File types declared in a 'render:' section like any other, but which no
@@ -301,9 +314,20 @@ def name_to_segments(name: str, suffix: str = "") -> list:
     """
     base, values = parse_parameterized_name(name)
     *directories, stem = base.split("/")
-    if values:
-        stem += _UNSAFE_IN_FILE_NAME.sub("_", format_parameterized_name("", values))
-    return [*directories, stem + suffix]
+    return [*directories, stem + values_in_file_name(values) + suffix]
+
+
+def values_in_file_name(values) -> str:
+    """What an instance's parameter values add to the name of its file: '_length_10', or nothing.
+
+    The half of 'name_to_segments' that does not depend on where the name came
+    from, for a file that is named after something other than an object -- the
+    input of 'pc adhoc render', whose values are written into the name of what
+    it writes just as 'pc render' writes them into an object's.
+    """
+    if not values:
+        return ""
+    return _UNSAFE_IN_FILE_NAME.sub("_", format_parameterized_name("", values))
 
 
 def is_document_format(format_name: str, section_obj) -> bool:
@@ -332,7 +356,11 @@ def is_document_format(format_name: str, section_obj) -> bool:
 # The first group picks the implementation, the second places the output file.
 # What is left over is what the implementation is handed, so adding a field here
 # hides it from every implementation - including the ones packages write.
-IMPLEMENTATION_KEYS = frozenset({"path", "package", "pythonRequirements", "pythonVersion", "dockerImage", "container"})
+# 'packageFiles' is the implementation's too: which of its fields name files of
+# the object's package (see 'Implementation.package_files').
+IMPLEMENTATION_KEYS = frozenset(
+    {"path", "package", "pythonRequirements", "pythonVersion", "dockerImage", "container", "packageFiles"}
+)
 OUTPUT_KEYS = frozenset({"extension", "prefix", "exclude", "output_dir"})
 RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 
@@ -355,9 +383,17 @@ SELECTION_KEYS = frozenset({"filter"})
 # The same, for the 'import:' section. None of these is a parameter of the
 # reader: 'kinds' says which object kinds may be declared with this type,
 # 'noun' and 'dropped' are how the core words what the reader reports, 'binary'
-# whether its files are bytes (below), and 'extension' (already reserved above)
-# is how the source file is found. The reader is handed everything else.
-IMPORT_KEYS = frozenset({"kinds", "noun", "dropped", "binary"})
+# whether its files are bytes (below), 'requireSolid' whether the parts it
+# registers fail when they are not solids (see 'REQUIRE_SOLID_KEY'), and
+# 'extension' (already reserved above) is how the source file is found. The
+# reader is handed everything else.
+IMPORT_KEYS = frozenset({"kinds", "noun", "dropped", "binary", "requireSolid"})
+
+# The 'import:' field, and the 'partTypes:' one of the same name, that says
+# every part of this type is a solid -- so that one that is not fails to build,
+# by the definition every part is held to, instead of being built with a
+# warning (see 'Shape._accepted_as_solid').
+REQUIRE_SOLID_KEY = "requireSolid"
 
 # The 'import:' field that says a format's files are bytes rather than text:
 # handed to the reader as they are, and never rendered as a Jinja2 template the
@@ -385,6 +421,17 @@ SCRIPT_KEY = "__script__"
 # spelled out there for the same reason SCRIPT_KEY is: a wrapper runs in a
 # sandbox and cannot import this.
 PROPERTIES_KEY = "properties"
+
+# The request key a file type sets to 'true' to be handed what the CMF
+# declarations its shapes name say about themselves - each material's
+# description and density, each declaration's name - which only the core can
+# read: a shape names a declaration by reference, and resolving one means
+# loading the package that declares it. The core replaces 'true' with that
+# table ('partcad.cmf.export_facts'), keyed by kind and reference, before the
+# request leaves for the sandbox; a file type that never asks is handed nothing
+# and costs nothing. Its twin is 'CMF_KEY' in 'builtin/export/export_step.py',
+# the one built-in file type that asks: a STEP file states a material's density.
+CMF_KEY = "cmf"
 
 # The request key a scene's world travels to an implementation under: the
 # gravity it states and the fluid it is filled with (see 'Scene.world_facts()').
@@ -487,6 +534,61 @@ REPRODUCIBLE_KEY = "reproducible"
 # Its twin is 'wrapper_export.FILES_KEY', spelled out there because a wrapper
 # runs in a sandbox and cannot import this.
 FILES_KEY = "files"
+
+# The request key that says where the package of the object being written is on
+# this machine: the directory a relative path in a file type's parameters is
+# read from - the soundtrack and the logo of a video (see '//builtin/render').
+# Like 'cache_dir', it is put in after the request has been keyed on, because it
+# is a path on this machine: two machines rendering the same object with the
+# same parameters ask the same question. Which also means an implementation that
+# reads a file through it has to say so by not saying what it wrote (see
+# FILES_KEY), since what that file holds is in no key.
+PACKAGE_DIR_KEY = "package_dir"
+
+# How that directory reaches a sandbox that exchanges files rather than sharing
+# them, where a path on this machine is a path to nothing: as an argument of the
+# export wrapper, '--package-dir <index> <directory>' after every file's triple,
+# which the sandbox is sent and rewrites as it does every directory an argument
+# names. Only for a request one of whose 'packageFiles' fields names a file of
+# its package ('names_a_package_file'), since it sends the package whole. The
+# twin of 'wrapper_export.PACKAGE_DIR_ARGUMENT', which says the rest.
+PACKAGE_DIR_ARGUMENT = "--package-dir"
+
+
+def _paths_in(value):
+    """The paths a 'packageFiles' field holds: itself, its 'path' when it is a map, each of either in a list."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return _paths_in(value.get("path"))
+    if isinstance(value, (list, tuple)):
+        return [path for item in value for path in _paths_in(item)]
+    return []
+
+
+def names_a_package_file(request, package_dir, fields) -> bool:
+    """Whether one of 'fields' of 'request' is a relative path to a file in 'package_dir': a logo, a soundtrack.
+
+    'fields' are the ones the file type declares as naming files of the object's
+    package ('packageFiles'), and nothing else is looked at: a field that merely
+    happens to say the name of a file - a line of text over a video - sends
+    nothing. A field is a path, a map with a 'path', or a list of either, and
+    only a path that is there is one: a field that names nothing names nothing
+    to send.
+    """
+    if not fields or not package_dir or not os.path.isdir(package_dir):
+        return False
+    for field in fields:
+        for path in _paths_in(request.get(field)):
+            text = path.strip()
+            if (
+                0 < len(text) <= 1024
+                and not os.path.isabs(os.path.expanduser(text))
+                and os.path.isfile(os.path.join(package_dir, text))
+            ):
+                return True
+    return False
+
 
 # What 'wrapper_export.py' is handed when one call writes several files of one
 # object, and what it answers each of them with (see 'Shape._run_together_locked'
@@ -648,6 +750,20 @@ class Implementation:
         )
 
     @property
+    def package_files(self) -> list:
+        """The fields of this file type that name files of the object's package, by a relative path.
+
+        What 'packageFiles' declares - the 'logo' and the 'audio' of a video -
+        and the only fields a sandbox that exchanges files is sent the package
+        for (see 'PACKAGE_DIR_ARGUMENT'). A file type that declares none reads
+        nothing of the package, as far as PartCAD knows, and is sent none of it.
+        """
+        fields = self.config.get("packageFiles") or []
+        if isinstance(fields, str):
+            fields = [fields]
+        return [field for field in fields if isinstance(field, str) and field]
+
+    @property
     def container(self) -> Optional[dict]:
         """The container this implementation runs in, if it does not run in a sandbox.
 
@@ -701,7 +817,22 @@ class Implementation:
         which image the `docker` sandbox is built from, and a machine using
         another sandbox ignores it and installs `python_requirements` -- which
         is why a package that declares one still has to declare those.
+
+        A declaration may leave the release and the interpreter for PartCAD to
+        fill in, as '{version}' and '{python}' (see
+        `partcad_utils.container_image.expand`): it is how '//builtin/render'
+        names PartCAD's GStreamer image for its videos without naming a release.
         """
+        declared = self.docker_image_declared
+        if declared is None:
+            return None
+        from partcad_utils import container_image
+
+        return container_image.expand(declared, python=self.python_version())
+
+    @property
+    def docker_image_declared(self) -> Optional[str]:
+        """`docker_image` as it was declared, placeholders and all: what a cached answer is keyed on."""
         declared = self._declared("dockerImage")
         if declared:
             return str(declared)
@@ -759,7 +890,10 @@ class Implementation:
             "python",
             self.python_version(),
             environment_requirements(self.project, {"pythonRequirements": self.python_requirements}),
-            image=container.get("image") or self.docker_image,
+            # As declared: '{version}' filled in would move every key on every
+            # release, which is what keying on the image the runtime ran must
+            # never do (see 'partcad.cache_artifacts').
+            image=container.get("image") or self.docker_image_declared,
         )
 
     def source_cache_key(self) -> str:
@@ -962,6 +1096,21 @@ def builtin_part_type(ctx, name):
     if isinstance(part_types, dict) and name in part_types:
         return project.name
     return None
+
+
+def builtin_part_type_extension(ctx, name):
+    """The extension a built-in ``partType`` called ``name`` stores its parts in, or None.
+
+    As its declaration spells it: 'FCStd', 'CATPart'. That spelling is the
+    default name of a part's file ('<name>.<extension>'), and a file system that
+    tells case apart finds no other, so whoever writes such a file into a
+    package - 'pc import part' - writes it by this name.
+    """
+    if builtin_part_type(ctx, name) is None:
+        return None
+    declared = (builtin_project(ctx, IMPORT).config_obj.get("partTypes") or {}).get(name)
+    extension = declared.get("extension") if isinstance(declared, dict) else None
+    return str(extension).lstrip(".") if extension else None
 
 
 def package_cache_dir(ctx, project) -> str:

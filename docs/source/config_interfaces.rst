@@ -634,6 +634,12 @@ reach into an object, or define one. An expression that cannot be evaluated is
 reported by name and left standing as the text it was written as, so a
 misspelling costs that one value rather than the package.
 
+Outside interfaces, the same expressions work over a part's parameters in its
+``offset``, and over a basic sketch's or a basic part's parameters in its
+dimensions (see :ref:`basic_parts`). Each instance of a parametrized part is
+moved by its own values: ``offset: [[0, 0, "%length / 2%"], [0, 0, 1], 0]``
+stands a part of any length on the XY plane.
+
 .. note::
 
   Expressions used to have ``pi`` and ``e`` in lower case, and no longer do:

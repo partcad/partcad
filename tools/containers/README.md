@@ -6,6 +6,13 @@ Two kinds of image live here, and they are not the same kind of thing.
   architecture. These are what the `docker` sandbox runs by default, and what a third-party package builds
   `FROM` when it needs something pip cannot install. Everything in the *Base image contract* below is a
   promise these make and that a derived image inherits.
+
+  The same Dockerfile has a second target, `gstreamer`: the base image with GStreamer and its plugins in it,
+  tagged `<release>-py<version>-gstreamer`, for the Python version `//builtin/render` runs in alone. It is
+  what the video file types of `//builtin/render` name as their `dockerImage` (with `{version}` and
+  `{python}` for PartCAD to fill in), so a machine rendering in the `docker` sandbox encodes videos there. A
+  stage rather than an image of its own, because it is this image plus a layer; and not in the base image,
+  which every sandbox pulls and which stays the floor under every derived image.
 * **Application images** -- `partcad-container-kicad`. A tool PartCAD drives rather than an interpreter it
   runs scripts in.
 
@@ -78,6 +85,15 @@ the allowlist alone. Adding an entry to the allowlist is fine and is how a packa
 its own scripts; removing `python` is not — it is the name the `remote` sandbox builds its environment with,
 and the path it is pinned to is how the image says which interpreter is its own. An image with no `python3`
 cannot run the service, and serves no sandbox at all.
+
+The base image also carries **cadmpeg** at `/usr/local/bin/cadmpeg`: the native program PartCAD reads
+FreeCAD, Fusion 360, SolidWorks, Inventor, CATIA, ACIS, Creo View and IGES files with. It is not part of the
+contract — an image without it still serves every sandbox, and PartCAD downloads cadmpeg into its cache the
+first time a container needs it — but a container that has it reads those files without a download, and
+without a network. It is the release PartCAD pins and nothing else: it is installed by
+`_common/cadmpeg_tool.py`, a byte-for-byte copy of `src/partcad/builtin/import/cadmpeg_tool.py` that a test
+keeps one, and PartCAD uses a cadmpeg on `PATH` only when it reports that release. A derived image that
+installs another cadmpeg gets the download rather than its own copy.
 
 ## Why the wrappers are mounted and not baked in
 

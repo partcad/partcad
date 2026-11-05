@@ -59,7 +59,7 @@ RUN apt-get update \
 RUN pip wheel --no-deps --wheel-dir /wheels pycairo
 
 
-FROM python:${PYTHON_VERSION}-slim
+FROM python:${PYTHON_VERSION}-slim AS runtime
 
 # Repeated because an ARG before FROM is out of scope after it.
 ARG PYTHON_VERSION=3.11
@@ -142,6 +142,26 @@ COPY _common/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY _common/pc-container-json-rpc.py ./
 
+# cadmpeg, the converter PartCAD reads native CAD files with -- the `fcstd`,
+# `f3d`, `sldprt`, `iges` ... part types and the `f3d` and `pvz` assemblies. It
+# is a native program, so a sandbox cannot pip-install it, and without it every
+# container that reads such a file downloads it into its cache first: once per
+# container, and not at all in one with no network.
+#
+# Installed by the very file that pins it, so the release, the checksum it is
+# verified against and the download are PartCAD's own rather than a second
+# spelling of them here. `_common/cadmpeg_tool.py` is a byte-for-byte copy of
+# `src/partcad/builtin/import/cadmpeg_tool.py`, because a build cannot reach
+# outside this context, and a test fails when the two differ -- which is also
+# what makes a new pin a change under `tools/containers/`, and so an image
+# rebuilt with it. PartCAD uses the copy on `PATH` only when it is the release it
+# pins, so an image of another release falls back to the download rather than
+# reading files into other geometry under the same cache key.
+#
+# Linked against glibc 2.35, which both Debian releases this matrix spans have.
+COPY _common/cadmpeg_tool.py ./
+RUN python3 cadmpeg_tool.py /usr/local/bin && rm cadmpeg_tool.py && cadmpeg --version
+
 # What a caller may run. The whole of the RPC service's isolation, and per-image
 # on purpose: a caller names a command and the image decides whether it exists.
 # A derived image adding a native tool of its own adds it here.
@@ -162,3 +182,60 @@ EXPOSE 5000
 
 USER pc
 CMD ["python3", "pc-container-json-rpc.py"]
+
+
+# The GStreamer flavour: this image, with what the video file types of
+# '//builtin/render' encode with. They name it as their 'dockerImage', so a
+# machine rendering in the 'docker' sandbox renders a video here, and nothing
+# else ever pulls it.
+#
+# A stage of this Dockerfile rather than an image built 'FROM' a published tag,
+# because it is this image plus a layer: one build, one cache, and no question
+# of which base tag a branch's flavour was built on. It is built for the
+# default Python version alone ('sandbox_versions.DEFAULT_PYTHON_VERSION'),
+# which is the only one '//builtin/render' runs in, and tagged
+# '<release>-py<version>-gstreamer' -- see 'dev-tools/ci/build-sandbox-image.sh'
+# and "Build the Python sandbox images" in '.github/workflows/test.yml'.
+#
+# The plugin sets are what 'video_encode.CONTAINERS' writes: 'good' for MP4,
+# QuickTime, Matroska, WebM, AVI, VP8/VP9 and the logo overlay, 'ugly' for
+# x264, 'bad' for the ASF muxer, 'libav' for AAC and Windows Media, 'x' for the
+# Pango text overlay, and 'base-apps' for 'gst-discoverer-1.0', which reads back
+# where an appended video's turn stopped. And a font for the text to be set in.
+FROM runtime AS gstreamer
+
+USER root
+# hadolint ignore=DL3008
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends \
+    fonts-dejavu-core \
+    gstreamer1.0-libav \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-base-apps \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-ugly \
+    gstreamer1.0-tools \
+    gstreamer1.0-x \
+  && rm -rf /var/lib/apt/lists/*
+
+LABEL partcad.flavor="gstreamer"
+
+# The elements a video is written with, asked for by name: a Debian release
+# that moves one of them to another package is a build that fails here rather
+# than a video that fails in a sandbox.
+RUN for element in x264enc vp9enc theoraenc avenc_wmv2 avenc_aac opusenc vorbisenc lamemp3enc \
+      mp4mux qtmux matroskamux webmmux avimux asfmux oggmux \
+      textoverlay gdkpixbufoverlay subparse rawvideoparse tcpclientsrc concat taginject; do \
+      gst-inspect-1.0 --exists "${element}" || { echo "missing GStreamer element: ${element}"; exit 1; }; \
+    done \
+  && command -v gst-discoverer-1.0
+RUN python3 verify.py
+
+USER pc
+
+
+# The default target is the plain image, and has to be last: a build that names
+# no '--target' builds the last stage, and every build of this Dockerfile but
+# the flavour's names none.
+FROM runtime

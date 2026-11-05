@@ -18,7 +18,9 @@
 //
 
 import * as assert from 'assert';
+import * as THREE from 'three';
 
+import { enclosingRadius, fitDistance, fitProgress } from '../../webview/cameraView';
 import { ShowNode } from '../../webview/messages';
 import {
     boundsOf,
@@ -222,6 +224,61 @@ suite('The view panel: where a view is looked at from', () => {
         near(orbit(axisView('-y'), 0, 0, Z_POLE).origin, axisView('-y').origin);
     });
 
+    test('a fit keeps every side of the model in the narrower field however it turns, and no further out', () => {
+        // A bar three times as long as it is wide and six times as long as it
+        // is deep: end-on it is a sixth of its length across, and it comes round.
+        const box = new THREE.Box3(new THREE.Vector3(-30, -10, -5), new THREE.Vector3(30, 10, 5));
+        const radius = enclosingRadius(box);
+        assert.ok(Math.abs(radius - Math.sqrt(60 * 60 + 20 * 20 + 10 * 10) / 2) < 1e-9);
+        assert.strictEqual(enclosingRadius(new THREE.Box3()), 0);
+
+        for (const aspect of [0.5, 1, 2]) {
+            const fov = 50;
+            const vertical = (fov * Math.PI) / 360;
+            const half = Math.min(vertical, Math.atan(Math.tan(vertical) * aspect));
+            const distance = fitDistance(radius, fov, aspect);
+            // The sphere holding the model just touches the edges of the
+            // narrower field: no margin on top of it.
+            assert.ok(Math.abs(Math.asin(radius / distance) - half) < 1e-9, `aspect ${aspect}`);
+            // And every corner of the model, however the model is turned about
+            // the turntable's axis or tumbled over, is inside it.
+            const corners = [-1, 1].flatMap((x) =>
+                [-1, 1].flatMap((y) => [-1, 1].map((z) => new THREE.Vector3(30 * x, 10 * y, 5 * z))),
+            );
+            let widest = 0;
+            for (let turn = 0; turn < 360; turn += 5) {
+                for (let tumble = 0; tumble < 180; tumble += 15) {
+                    const rotation = new THREE.Euler((tumble * Math.PI) / 180, (turn * Math.PI) / 180, 0);
+                    for (const corner of corners) {
+                        // The camera on +Z, looking at the middle.
+                        const at = corner.clone().applyEuler(rotation);
+                        widest = Math.max(widest, Math.atan2(Math.hypot(at.x, at.y), distance - at.z));
+                    }
+                }
+            }
+            assert.ok(widest <= half + 1e-12, `aspect ${aspect}: ${widest} is outside ${half}`);
+            // And the fit is tight: as the bar turns, a corner comes close to the
+            // edge, so the sphere is all the room left round the model.
+            assert.ok(widest > 0.9 * half, `aspect ${aspect}: ${widest} leaves more room than the sphere`);
+        }
+        // Only the narrower field decides: a wide canvas is fitted by its height,
+        // a narrow one by its width.
+        assert.strictEqual(fitDistance(radius, 50, 2), fitDistance(radius, 50, 1));
+        assert.ok(fitDistance(radius, 50, 0.5) > fitDistance(radius, 50, 1));
+    });
+
+    test('a fit takes a second, and starts and ends gently', () => {
+        assert.strictEqual(fitProgress(-10), 0);
+        assert.strictEqual(fitProgress(0), 0);
+        assert.strictEqual(fitProgress(500), 0.5);
+        assert.strictEqual(fitProgress(1000), 1);
+        assert.strictEqual(fitProgress(5000), 1);
+        assert.ok(fitProgress(100) < 0.1 && fitProgress(900) > 0.9);
+        for (let elapsed = 0; elapsed < 1000; elapsed += 50) {
+            assert.ok(fitProgress(elapsed + 50) > fitProgress(elapsed));
+        }
+    });
+
     test("the gizmo's axes lie as they are seen: from the front, X right, Z up, -Y towards the reader", () => {
         const ends = new Map(projectAxes(axisView('-y')).map((end) => [end.axis, end]));
         assert.ok(Math.abs(ends.get('x')!.x - 1) < 1e-9);
@@ -316,18 +373,26 @@ suite('The view panel: the widget', () => {
             viewpoints: [] as [Viewpoint, boolean][],
             sections: [] as unknown[],
             resets: 0,
+            fits: 0,
             animate: [] as boolean[],
+            autoFit: [] as boolean[],
             opacity: [] as number[],
         };
         const view = new ViewPanel(
             {
                 onViewpoint: (viewpoint, final) => asked.viewpoints.push([viewpoint, final]),
                 onResetView: () => (asked.resets += 1),
+                onFit: () => (asked.fits += 1),
                 onSection: (section) => asked.sections.push(section),
                 onAnimate: (animate) => asked.animate.push(animate),
+                onAutoFit: (autoFit) => asked.autoFit.push(autoFit),
                 onOpacity: (opacity) => asked.opacity.push(opacity),
             },
-            { target: true, ids: { animate: 'animate-checkbox', opacity: 'opacity-slider' } },
+            {
+                target: true,
+                autoFit: true,
+                ids: { animate: 'animate-checkbox', autoFit: 'autofit-checkbox', opacity: 'opacity-slider' },
+            },
         );
         return { view, root: view.element as unknown as FakeElement, asked };
     }
@@ -423,6 +488,61 @@ suite('The view panel: the widget', () => {
         const [reset] = byClass(root, 'view-reset');
         reset.fire('click');
         assert.deepStrictEqual(asked.sections[asked.sections.length - 1], null);
+    });
+
+    test('Fit is there where the view has a camera to move, and asks for a fit', () => {
+        const { view, root, asked } = panel();
+        const [fit] = byClass(root, 'view-fit');
+        assert.strictEqual(fit.hidden, false);
+        assert.strictEqual(fit.textContent, 'Fit');
+        fit.fire('click');
+        assert.deepStrictEqual([asked.fits, asked.resets], [1, 0]);
+        view.setCapabilities({ ...EVERYTHING, viewpoint: 'Nothing is shown' });
+        assert.strictEqual(fit.disabled, true);
+        view.setCapabilities(EVERYTHING);
+        assert.strictEqual(fit.disabled, false);
+
+        // A picture has no camera to bring in: no Fit at all, rather than one
+        // that does nothing.
+        const picture = new ViewPanel(
+            { onViewpoint: () => {}, onResetView: () => {}, onSection: () => {} },
+            { target: false },
+        );
+        assert.strictEqual(byClass(picture.element as unknown as FakeElement, 'view-fit')[0].hidden, true);
+    });
+
+    test('Auto-fit sits right after Animate, starts ticked, says when it changes, and goes with Animate', () => {
+        const { view, root, asked } = panel();
+        const animate = all(root, (element) => element.id === 'animate-checkbox')[0];
+        const autoFit = all(root, (element) => element.id === 'autofit-checkbox')[0];
+        // The rows of the display group, in order: the box after Animate's is Auto-fit's.
+        const rows = byClass(root, 'control-label');
+        const row = rows.findIndex((label) => label.children.includes(autoFit));
+        assert.ok(row > 0 && rows[row - 1].children.includes(animate), 'Auto-fit is the row after Animate');
+        assert.strictEqual(rows[row].hidden, false);
+        assert.strictEqual(rows[row].children[1].textContent, 'Auto-fit');
+        assert.strictEqual(autoFit.checked, true);
+        assert.strictEqual(view.autoFitting, true);
+
+        autoFit.checked = false;
+        autoFit.fire('change');
+        assert.deepStrictEqual(asked.autoFit, [false]);
+        assert.strictEqual(view.autoFitting, false);
+
+        // Where the 3D view cannot start, neither can be changed.
+        view.setCapabilities({ ...EVERYTHING, animate: 'The 3D view could not start' });
+        assert.strictEqual(autoFit.disabled, true);
+        assert.strictEqual(rows[row].title, 'The 3D view could not start');
+
+        // A view that does not fit on a show has no Auto-fit at all.
+        const picture = new ViewPanel(
+            { onViewpoint: () => {}, onResetView: () => {}, onSection: () => {} },
+            { target: false, ids: { autoFit: 'autofit-checkbox' } },
+        );
+        const pictureRoot = picture.element as unknown as FakeElement;
+        const box = all(pictureRoot, (element) => element.id === 'autofit-checkbox')[0];
+        const label = byClass(pictureRoot, 'control-label').find((element) => element.children.includes(box));
+        assert.strictEqual(label?.hidden, true);
     });
 
     test('what a tab cannot do is disabled, and says why', () => {

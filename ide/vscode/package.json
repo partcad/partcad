@@ -4,7 +4,7 @@
   "description": "Build system and package manager for CAD files, and assembly modeling framework",
   "markdown": "github",
   "icon": "resources/logo_128x128.png",
-  "version": "0.8.272",
+  "version": "0.9.2",
   "serverInfo": {
     "name": "PartCAD",
     "module": "partcad"
@@ -670,6 +670,13 @@
         "enablement": "!partcad.editingExternally"
       },
       {
+        "command": "partcad.inspectCmf",
+        "category": "PartCAD",
+        "title": "Display",
+        "icon": "$(eye)",
+        "enablement": "!partcad.editingExternally"
+      },
+      {
         "command": "partcad.test",
         "category": "PartCAD",
         "title": "Test",
@@ -917,6 +924,11 @@
           "command": "partcad.inspectInterface",
           "group": "navigation",
           "when": "view == partcadExplorer && (viewItem == interface || viewItem == interfaceWithCode)"
+        },
+        {
+          "command": "partcad.inspectCmf",
+          "group": "navigation",
+          "when": "view == partcadExplorer && viewItem == cmf"
         },
         {
           "command": "partcad.inspectPart",

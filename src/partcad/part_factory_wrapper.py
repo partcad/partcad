@@ -154,6 +154,29 @@ class PartFactoryWrapper(PartFactory):
         versions = self._part_type_versions()
         if versions is not None:
             part.add_code_versions(versions)
+        # And on what the part is judged by, which is part of what it is: read
+        # here as well as in 'instantiate()', because the cache is read before
+        # anything is instantiated (see 'Shape.key_on_required_solid').
+        required = self._part_type_requires_solid()
+        if required is None:
+            # A value that is not a flag. Keyed as no requirement, the part
+            # would be read back from whatever was cached before the value was
+            # written, and 'instantiate()', which fails the part for it, would
+            # never run. So it is not read from the cache at all.
+            part.cacheable = False
+        elif required:
+            part.key_on_required_solid()
+
+    def _part_type_requires_solid(self):
+        """The partType's 'requireSolid', or None when it is not a flag."""
+        pt_project = self.ctx.get_project(self.part_type_package)
+        pt_config = pt_project.get_part_type_config(self.part_type_name) if pt_project is not None else None
+        if pt_config is None:
+            return False  # 'instantiate()' says so, where it can fail the part
+        try:
+            return output.as_flag(pt_config.get(output.REQUIRE_SOLID_KEY), output.REQUIRE_SOLID_KEY)
+        except ValueError:
+            return None
 
     def _part_type_versions(self):
         pt_project = self.ctx.get_project(self.part_type_package)
@@ -214,6 +237,17 @@ class PartFactoryWrapper(PartFactory):
             kind = pt_config.get("kind", "wrapper")
             if kind != "wrapper":
                 part.error("Unsupported partType kind '%s' (only 'wrapper' is implemented)" % kind)
+                return None
+
+            # A type that builds solids and nothing else says so, and then what
+            # every part is judged by fails one of its parts instead of being
+            # reported beside it (see 'Shape._accepted_as_solid'). Read here,
+            # where the declaration is always resolved, and before the shape
+            # comes back to be judged.
+            try:
+                part.solid_required = output.as_flag(pt_config.get(output.REQUIRE_SOLID_KEY), output.REQUIRE_SOLID_KEY)
+            except ValueError as e:
+                part.error("partType '%s': %s" % (self.part_type_name, e))
                 return None
 
             if self.path:

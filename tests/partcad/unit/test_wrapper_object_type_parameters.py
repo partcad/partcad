@@ -33,13 +33,15 @@ import yaml
 
 import partcad as pc
 import partcad.wrapper
-from partcad import shape_envelope
+from partcad import cmf, shape_envelope
 from partcad.part_factory_build123d import PartFactoryBuild123d
 from partcad.part_factory_cadquery import PartFactoryCadquery
 from partcad.part_factory_python import PartFactoryPython
 from partcad.part_factory_step import PartFactoryStep
 
-OBJECT_TYPE_PARAMETERS = ["color", "material", "tolerance"]
+# What a homogeneous type contributes: its tolerance, and the CMF names every
+# part type takes (docs/design/cmf.md).
+OBJECT_TYPE_PARAMETERS = sorted({"tolerance", *cmf.TYPE_PARAMETERS})
 
 
 def _load_wrapper_module(name):
@@ -127,9 +129,9 @@ def test_the_request_names_what_the_type_contributed(monkeypatch, tmp_path, part
     [
         (PartFactoryCadquery, OBJECT_TYPE_PARAMETERS),
         (PartFactoryBuild123d, OBJECT_TYPE_PARAMETERS),
-        # A type that contributes nothing offers nothing, which leaves a wrapper
-        # exactly as strict as it was.
-        (PartFactoryStep, []),
+        # A type that takes no tolerance still takes the CMF names, and offers
+        # exactly those.
+        (PartFactoryStep, sorted(cmf.TYPE_PARAMETERS)),
     ],
 )
 def test_the_names_come_from_the_part_type(factory, expected):

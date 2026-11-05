@@ -379,9 +379,22 @@ def turned(tensor, matrix):
     The one way a tensor is turned, whoever holds the rotation: 'placed()' as a
     quaternion, by way of '_rotated()', and 'shape_measure' as the matrix of an
     OCCT location.
+
+    Every entry is an exactly rounded sum ('math.fsum'), not 'sum()', whose
+    rounding changed in Python 3.12: a basic part's tensor is worked out here
+    in the core, and it is part of every request a wrapper is keyed on by
+    content, so it has to come out the same on every machine sharing a cache.
     """
-    left = [[sum(matrix[row][k] * tensor[k][col] for k in range(3)) for col in range(3)] for row in range(3)]
-    return [[sum(left[row][k] * matrix[col][k] for k in range(3)) for col in range(3)] for row in range(3)]
+    left = [[math.fsum(matrix[row][k] * tensor[k][col] for k in range(3)) for col in range(3)] for row in range(3)]
+    # An inertia tensor is symmetric, and so is what turning it makes - but the
+    # two halves of a product worked out term by term need not round alike, and
+    # a tensor off by an ulp across its diagonal is one an exporter writing both
+    # halves writes two values for. So the upper half is worked out and mirrored.
+    turned_ = [[0.0] * 3 for _ in range(3)]
+    for row in range(3):
+        for col in range(row, 3):
+            turned_[row][col] = turned_[col][row] = math.fsum(left[row][k] * matrix[col][k] for k in range(3))
+    return turned_
 
 
 def _rotated(tensor, rotation):

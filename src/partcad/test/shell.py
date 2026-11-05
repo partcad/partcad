@@ -5,6 +5,7 @@
 #
 
 from .. import brep_inspect
+from .. import surface as pc_surface
 from ..assembly import Assembly
 from ..sketch import Sketch
 from .test import Test
@@ -54,6 +55,11 @@ class ShellTest(Test):
     object can exclude itself from is a check that reports on the objects that
     did not need checking. The verdict is a fact about the geometry; what to do
     about a part that fails is a decision to take on the part.
+
+    One *kind* of part is passed over, on what it is rather than on anything it
+    asks for: a part whose type builds a surface on purpose, a wall, which is a
+    skin because a skin is what a room is drawn with and is never manufactured
+    (see 'partcad.surface'). That is decided by the type, not by the part.
     """
 
     def __init__(self) -> None:
@@ -64,7 +70,9 @@ class ShellTest(Test):
             return "a sketch is not a body"
         if isinstance(shape, Assembly):
             return "an assembly is checked through its parts, each of which is tested in its own right"
-        return None
+        # A part that is a surface by its type - a wall - is one on purpose, and
+        # is passed over on what it is, the way a sketch is: see 'partcad.surface'.
+        return pc_surface.not_a_body(shape)
 
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         # A sketch is made of edges, wires and faces, and a shell is not one of
@@ -77,6 +85,10 @@ class ShellTest(Test):
         # An assembly is checked through its parts, each tested in its own
         # right; the compound of a set of parts says nothing they do not.
         if isinstance(shape, Assembly):
+            return self.not_applicable(shape, self.inapplicable(shape))
+
+        # A wall is a skin with no body to it, by its type: see 'partcad.surface'.
+        if pc_surface.is_surface(shape):
             return self.not_applicable(shape, self.inapplicable(shape))
 
         try:

@@ -36,6 +36,7 @@ import { PartcadViewerServer } from './viewer/PartcadViewerServer';
 import { ExplorerItemLike, collectIdeState } from './ideState';
 import * as PartcadItem from './PartcadItem';
 import { examples } from './examples';
+import { PART_TYPE_CHOICES, partTypeChoice, partTypeDescription, partTypeFilters } from './partTypes';
 import { PartcadTerminals, setTerminalWriter, TERMINAL_PROFILE_ID, writeTerminal } from './terminal';
 import * as utils from './utils';
 
@@ -333,6 +334,11 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
                         // nothing but software has something to show.
                         (items.scenes ?? []).length === 0 &&
                         (items.software ?? []).length === 0 &&
+                        // And so do colours, materials and finishes: a vendor's
+                        // package of colours is a package of something.
+                        (items.colors ?? []).length === 0 &&
+                        (items.materials ?? []).length === 0 &&
+                        (items.finishes ?? []).length === 0 &&
                         // Objects that failed to load count as items too: a
                         // package of nothing but broken ones has something to
                         // show, and hiding the tree behind the "no items"
@@ -754,50 +760,25 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
                 startUri = vscode.Uri.joinPath(wsUri, packagePath);
             }
 
-            const partTypeTypes: { [partType: string]: string } = {
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                STEP: 'step',
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                STL: 'stl',
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                '3MF': '3mf',
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                OpenSCAD: 'scad',
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                CadQuery: 'cadquery',
-                build123d: 'build123d',
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                Chili3D: 'chili3d',
-            };
-            const partType = await vscode.window.showQuickPick(
-                ['STEP', 'STL', '3MF', 'OpenSCAD', 'CadQuery', 'build123d', 'Chili3D'],
+            const picked = await vscode.window.showQuickPick(
+                PART_TYPE_CHOICES.map((choice) => ({
+                    label: choice.label,
+                    description: partTypeDescription(choice),
+                })),
                 {
                     canPickMany: false,
                     title: 'What type of part would you like to create?',
+                    matchOnDescription: true,
                 },
             );
-            if (!partType) {
+            const choice = picked ? partTypeChoice(picked.label) : undefined;
+            if (!choice) {
                 await vscode.window.showWarningMessage('Part type was not selected');
                 return;
             }
-            let hasTemplates = false;
-            let filters: { [name: string]: string[] } = {};
-            if (partType === 'STEP') {
-                filters[`${partType}`] = ['step'];
-            } else if (partType === 'STL') {
-                filters[`${partType}`] = ['stl'];
-            } else if (partType === '3MF') {
-                filters[`${partType}`] = ['3mf'];
-            } else if (partType === 'OpenSCAD') {
-                filters[`${partType}`] = ['scad'];
-                hasTemplates = true;
-            } else if (partType === 'Chili3D') {
-                filters[`${partType}`] = ['chili'];
-                hasTemplates = true;
-            } else {
-                filters[`${partType}`] = ['py'];
-                hasTemplates = true;
-            }
+            const partType = choice.label;
+            const hasTemplates = choice.template === true;
+            const filters = partTypeFilters(choice);
 
             let uri = undefined;
             if (hasTemplates) {
@@ -845,7 +826,7 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
             }
 
             await vscode.commands.executeCommand('partcad.addPartReal', {
-                kind: partTypeTypes[partType],
+                kind: choice.kind,
                 path: uri.fsPath,
                 packageName: packageName,
             });
@@ -1088,6 +1069,22 @@ location: [[100, 0, 0], [0, 0, 1], 0]
 
             await vscode.commands.executeCommand('setContext', 'partcad.itemSelected', true);
             await partcadInspector?.inspectSoftware(software);
+            await vscode.commands.executeCommand('partcad.getStats');
+        }),
+        registerCommand(`partcad.inspectCmf`, async (declaration) => {
+            // What an object is in, not an object: there is no render to ask
+            // for and no file of its own to reopen after a restart, so it is
+            // shown the way software is in the Inspector - by what it says of
+            // itself - and in the Digital Thread as its CMF tab alone, which
+            // asks the daemon the rest (see 'PartcadViewer.showDeclaration').
+            currentItemType = declaration.kind;
+            currentItemName = declaration.name;
+            currentItemPackage = declaration.pkg;
+            currentItemParams = {};
+
+            await vscode.commands.executeCommand('setContext', 'partcad.itemSelected', true);
+            await partcadInspector?.inspectCmf(declaration);
+            partcadViewer?.showDeclaration(declaration.pkg, declaration.name, declaration.kind);
             await vscode.commands.executeCommand('partcad.getStats');
         }),
         registerCommand(`partcad.inspectFileRoot`, async () => {

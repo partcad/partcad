@@ -259,9 +259,13 @@ def request_key(request) -> str:
     """'content_key()' of a request a wrapper is handed, envelopes and all.
 
     Canonical rather than as it is sent: the same tree read from the cache and
-    built a moment ago is one question, whatever order its keys are in.
+    built a moment ago is one question, whatever order its keys are in. And each
+    payload stands in it as its digest ('shape_envelope.payload_digest'), which is
+    a digest of the BREP and not of the zstd frame carrying it, so the same
+    question asked on a machine whose compressor writes another frame is the same
+    key - and not a new one per zstd build in a cache two machines share.
     """
-    return content_key(json.dumps(shape_envelope.encode(request), sort_keys=True))
+    return content_key(json.dumps(shape_envelope.encode(request, payloads=shape_envelope.Payloads()), sort_keys=True))
 
 
 def wrapper_hash(

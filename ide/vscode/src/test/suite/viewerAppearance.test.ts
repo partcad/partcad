@@ -26,7 +26,10 @@ import {
     appearanceKey,
     appearanceOf,
     edgeColor,
+    ownAppearance,
     parseColor,
+    primitiveAppearance,
+    statedOneSided,
 } from '../../webview/appearance';
 import { ShowNode } from '../../webview/messages';
 import { walk } from '../../webview/nodes';
@@ -125,6 +128,139 @@ suite('What colour a shape is drawn in', () => {
         assert.strictEqual(appearanceKey(DEFAULT_APPEARANCE), 'daa520ff');
         assert.notStrictEqual(appearanceKey(parseColor('#DAA52080')!), appearanceKey(DEFAULT_APPEARANCE));
         assert.notStrictEqual(appearanceKey(parseColor('#DAA521')!), appearanceKey(DEFAULT_APPEARANCE));
+    });
+
+    test('a primitive the glTF colours keeps its colour, read back from the linear factors it was written in', () => {
+        // What a part's glb carries for a face in '#C91A09' (see
+        // 'wrapper_gltf._colored'), as three's loader reads the factor: linear.
+        const material = new THREE.MeshStandardMaterial();
+        material.color.setRGB(
+            0.5840784311294556,
+            0.01032982300966978,
+            0.0027317428030073643,
+            THREE.LinearSRGBColorSpace,
+        );
+
+        const own = ownAppearance(material, true);
+        assert.deepStrictEqual(own, { color: 0xc91a09, opacity: 1 });
+        // Its own colour wins over the node's, which is the part's or an
+        // assembly's: a face is more specific than either.
+        assert.deepStrictEqual(primitiveAppearance(own, DEFAULT_APPEARANCE), own);
+        material.dispose();
+    });
+
+    test('a primitive with no material of its own keeps the colour of its node', () => {
+        // three hands such a primitive a white default material, which is not a
+        // colour anybody stated.
+        const fallback = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        assert.strictEqual(ownAppearance(fallback, false), undefined);
+        assert.strictEqual(ownAppearance(undefined, true), undefined);
+        assert.strictEqual(ownAppearance([fallback], true), undefined);
+
+        const red = parseColor('#C91A09')!;
+        assert.deepStrictEqual(primitiveAppearance(undefined, red), red);
+        fallback.dispose();
+    });
+
+    test("a see-through primitive is as see-through as its file blends it, and an opaque one's alpha means nothing", () => {
+        const blended = new THREE.MeshStandardMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
+        assert.deepStrictEqual(ownAppearance(blended, true), { color: 0x00ff00, opacity: 0.5 });
+
+        const opaque = new THREE.MeshStandardMaterial({ color: 0x00ff00, transparent: false, opacity: 0.5 });
+        assert.deepStrictEqual(ownAppearance(opaque, true), { color: 0x00ff00, opacity: 1 });
+        blended.dispose();
+        opaque.dispose();
+    });
+
+    test('a shape is drawn from both sides unless it says it is one-sided', () => {
+        assert.strictEqual(DEFAULT_APPEARANCE.oneSided, undefined);
+        assert.strictEqual(appearanceOf({ name: 'cube' }).oneSided, undefined);
+        assert.deepStrictEqual(appearanceOf({ name: 'wall', properties: { oneSided: true } }), {
+            ...DEFAULT_APPEARANCE,
+            oneSided: true,
+        });
+        // Only a boolean says anything; a node stating something else is drawn as
+        // if it had stated nothing.
+        for (const value of ['true', 1, null, {}]) {
+            const properties = { oneSided: value as unknown as boolean };
+            assert.strictEqual(statedOneSided({ name: 'x', properties }), undefined, String(value));
+        }
+    });
+
+    test('one-sidedness reaches the nodes under it, independently of the colour', () => {
+        const drawn = drawnAs({
+            name: 'room',
+            properties: { oneSided: true },
+            assembly: [
+                { name: 'wall-1', properties: { color: '#E4DED4' } },
+                { name: 'wall-2' },
+                { name: 'sofa', properties: { oneSided: false, color: '#336699' } },
+            ],
+        });
+        assert.deepStrictEqual(drawn.get('wall-1'), { color: 0xe4ded4, opacity: 1, oneSided: true });
+        assert.deepStrictEqual(drawn.get('wall-2'), { ...DEFAULT_APPEARANCE, oneSided: true });
+        assert.deepStrictEqual(drawn.get('sofa'), { color: 0x336699, opacity: 1 });
+
+        // A colour stated above a one-sided wall colours it, and leaves it one-sided.
+        const coloured = drawnAs({
+            name: 'scene',
+            properties: { color: '#FF0000' },
+            assembly: [{ name: 'wall', properties: { oneSided: true } }],
+        });
+        assert.deepStrictEqual(coloured.get('wall'), { color: 0xff0000, opacity: 1, oneSided: true });
+    });
+
+    test('a one-sided shape has a material of its own', () => {
+        // It culls the backs of faces, which no two-sided shape of the same colour
+        // may share.
+        const wall = appearanceOf({ name: 'wall', properties: { oneSided: true } });
+        assert.strictEqual(appearanceKey(wall), 'daa520ff/front');
+        assert.notStrictEqual(appearanceKey(wall), appearanceKey(DEFAULT_APPEARANCE));
+    });
+
+    test('a primitive in a colour of its own on a one-sided shape is one-sided too', () => {
+        // A wall whose CMF colours one face differently is still a wall: the
+        // colour is the face's, and which side it is seen from is the wall's.
+        const own = { color: 0xc91a09, opacity: 1 };
+        const wall = appearanceOf({ name: 'wall', properties: { oneSided: true } });
+        assert.deepStrictEqual(primitiveAppearance(own, wall), { ...own, oneSided: true });
+        assert.deepStrictEqual(primitiveAppearance(own, DEFAULT_APPEARANCE), own);
+    });
+
+    test('a primitive drawn with an image keeps the image, and the colour it is drawn as elsewhere', () => {
+        // What a part's glb carries for faces in a colour drawn with an image (see
+        // 'wrapper_gltf._with_textures'): the image as the base colour texture,
+        // white under it, and the colour in the material's extras.
+        const map = new THREE.Texture();
+        const material = new THREE.MeshStandardMaterial({ color: 0xffffff, map });
+        material.userData.partcadColor = '#781478';
+
+        const own = ownAppearance(material, true);
+        assert.deepStrictEqual(own, { color: 0x781478, opacity: 1, map });
+        assert.deepStrictEqual(primitiveAppearance(own, DEFAULT_APPEARANCE), own);
+        // A material per image: the same colour without it, or with another, is another look.
+        assert.notStrictEqual(appearanceKey(own!), appearanceKey({ color: 0x781478, opacity: 1 }));
+        const other = new THREE.Texture();
+        assert.notStrictEqual(appearanceKey(own!), appearanceKey({ color: 0x781478, opacity: 1, map: other }));
+
+        // A file that does not say what it stands for is drawn as white elsewhere.
+        const unsaid = new THREE.MeshStandardMaterial({ color: 0xffffff, map });
+        assert.strictEqual(ownAppearance(unsaid, true)?.color, 0xffffff);
+        for (const disposable of [material, unsaid, map, other]) {
+            disposable.dispose();
+        }
+    });
+
+    test('a wall drawn with an image is one-sided and keeps its image', () => {
+        // Wallpaper: the image is the face's, and which side it is seen from is the
+        // wall's - and a material of its own, for each of the two.
+        const map = new THREE.Texture();
+        const own = { color: 0x781478, opacity: 1, map };
+        const wall = appearanceOf({ name: 'wall', properties: { oneSided: true } });
+        const drawn = primitiveAppearance(own, wall);
+        assert.deepStrictEqual(drawn, { ...own, oneSided: true });
+        assert.strictEqual(appearanceKey(drawn), `781478ff:${map.uuid}/front`);
+        map.dispose();
     });
 
     test('a line across a shape is a deeper shade of it, and still a line on a dark one', () => {

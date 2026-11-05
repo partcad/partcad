@@ -5,7 +5,6 @@
 #
 
 from .part_factory import PartFactory
-from .shape_config import NO_DEFAULT
 
 
 class PartFactoryHomogen(PartFactory):
@@ -33,14 +32,13 @@ class PartFactoryHomogen(PartFactory):
     An OpenSCAD part was a homogeneous body the entire time; nothing but the
     opt-in was missing.
 
-    A STEP file is not. It can carry many solids, each with a material and a
-    colour of its own already stated in the file, so naming one for the file
-    would be a claim about a part the file describes better than the
+    A STEP file is not. It can carry many solids, so one tolerance for the
+    file would be a claim about a part the file describes better than the
     declaration does. 'step' - and 'kicad', which is a STEP file behind a
     footprint and inherits this by inheriting 'PartFactoryStep' - therefore do
-    not mix this in. What such a part is made of belongs in 'properties:',
-    which is where a shape says what it turned out to be rather than what was
-    asked of it.
+    not mix this in. They do take the CMF parameters, like every part type:
+    what those state fills in what the file's own colours, materials and
+    finishes leave out, or replaces them ('sourceCmf'; docs/design/cmf.md).
 
     Carries no '__init__' on purpose. It is mixed in ahead of a factory's real
     base ('PartFactoryStl(PartFactoryHomogen, PartFactoryFile)'), and a
@@ -51,11 +49,9 @@ class PartFactoryHomogen(PartFactory):
     """
 
     ACCEPTED_OBJECT_TYPE_PARAMETERS = {
+        # The CMF parameters, which every part type accepts (see
+        # 'PartFactory.ACCEPTED_OBJECT_TYPE_PARAMETERS').
         **PartFactory.ACCEPTED_OBJECT_TYPE_PARAMETERS,
-        # No default: a part either was declared to be made of something, or
-        # was not, and there is nothing sensible to invent for it.
-        "material": NO_DEFAULT,
-        "color": NO_DEFAULT,
         # A default of 0.0, meaning "nobody said". It is a real value rather
         # than a sentinel because the manufacturability tests need something to
         # compare against, and because 0.0 - a demand for perfect precision -

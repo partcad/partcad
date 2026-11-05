@@ -363,7 +363,8 @@ Part: Files
 -----------
 
 One way to define parts in PartCAD is by providing a file in any of the currently
-supported formats: STEP, BREP, STL, 3MF, OBJ. There is no intention to limit the list of
+supported formats: STEP, IGES, STL, 3MF, a FreeCAD, Autodesk Fusion or SolidWorks file, and
+the rest :doc:`/supported` lists. There is no intention to limit the list of
 file formats supported. Contribute support of your favorite file format
 (ideally, implicitly, by adding the corresponding support to build123d).
 

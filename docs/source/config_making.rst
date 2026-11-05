@@ -423,7 +423,7 @@ declared using the following syntax:
 
   Both ``vendor`` and ``sku`` must be set for the part to be considered
   purchasable. If either is missing, the part has to be manufactured instead,
-  which relies on the MCFTT parameters described above.
+  which relies on the MCFT parameters described above.
 
 - ``count_per_sku``
 
@@ -576,6 +576,10 @@ can do applies to it. What it is, is a set of facts about a substance:
       viscosity: <(optional) dynamic viscosity in Pa*s>
       mu: <(optional) coefficient of sliding friction, dimensionless>
       tags: <(optional) a list of free-form tags, or a single tag>
+
+A material is one of the three kinds of CMF declaration, and takes the fields they share -- ``display``,
+``manufacturable``, ``ids``, ``aliases``, ``parameters``, ``type: alias`` -- and a ``color`` it claims for its natural
+surface: see :ref:`cmf-declarations`.
 
 The short form gives the full name and nothing else:
 

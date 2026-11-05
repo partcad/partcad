@@ -439,6 +439,24 @@ Object commands
   it when it is first needed. A fetch that fails adds nothing, because a declaration written without the hash
   is the unpinned one this exists to avoid.
 
+  ``pc add part <type> <file>`` takes the part's type first: a script (``cadquery``, ``build123d``,
+  ``sdf``, ``scad``, ``chili3d``), a file PartCAD reads itself (``step``, ``brep``, ``stl``, ``3mf``,
+  ``obj``, ``gltf``), or one of the CAD file formats PartCAD ships as declarations (``fcstd``,
+  ``f3d``, ``sldprt``, ``ipt``, ``catpart``, ``sat``, ``pvz`` -- read through cadmpeg -- and ``iges``, read
+  by OpenCASCADE; see :ref:`cad-files`). The part
+  is named after the file, without its extension. Where the file is ``<name>.<extension>`` with the
+  extension spelled as the type declares it -- ``design.FCStd``, ``bracket.SLDPRT``, ``bracket.CATPart`` --
+  the declaration names no ``path``; any other spelling of it keeps one: another case (``design.fcstd``), or
+  another extension of the same format (``plate.igs`` for ``iges``, ``body.sab``, ``.smt`` or ``.smb`` for
+  ``sat``, ``part.stp`` for ``step``). Adding a part reads nothing: a file that does not hold what its type
+  says -- for the native formats, one that does not read into a whole solid -- is added, and fails when the
+  part is built.
+
+  .. code-block:: shell
+
+    pc add part f3d controller.f3d       # parts: {controller: {type: f3d}}
+    pc add part iges plate.igs           # parts: {plate: {type: iges, path: plate.igs}}
+
 ``pc import``
   Import an existing object into a package. Subcommands: ``part`` (import an existing part and optionally
   convert its format), ``assembly`` (import an assembly from a file, creating the parts and an Assembly
@@ -1070,6 +1088,40 @@ Object commands
   frames that should have met and did not. On its own it asks for nothing; it says how deep the three options
   above reach.
 
+  ``--with-component-names`` and ``--with-component-prices`` put a callout on every *component* -- every part,
+  wherever the object places it -- joined by a line to the middle of it and laid out around the object with the
+  port and interface names. The name is what the assembly calls that link (the row the VS Code viewer lists it
+  as), and the price is the component's share of what the object costs to buy: the cheapest quote of each thing
+  to order, as ``pc supply quote`` and the viewer's Buy tab find it, divided over the components it is for -- a
+  box of a hundred bolts for an assembly of eight is an eighth of a box each, and a part cut from stock costs
+  its piece of the stock. An assembly sold assembled is priced as one thing to order, so it gets a callout of its
+  own with its price, in the middle of everything it holds, and the parts inside it get none. Asking for both
+  writes the name over the price in one callout. A price in dollars is
+  written ``$12.50`` on the picture, as the VS Code viewer writes it, and any other currency by its code
+  (``12.50 EUR``). A component nobody quoted has no price rather than a price of nought, and the log lists every
+  price drawn, each with its currency's code. Asking for prices is asking every supplier for a quote, so it takes
+  as long as ``pc supply quote`` does.
+
+  .. code-block:: shell
+
+    pc render -t png --with-component-names --with-component-prices -O ./ logo
+
+  ``--with-materials`` puts a callout on every *cluster* of a material, naming it: the faces of one material, of
+  one part or of several, each of which touches another of them or is closer to it than
+  ``materialClusterDistance`` in the user configuration (``PC_MATERIAL_CLUSTER_DISTANCE``, 10 millimetres unless it
+  says otherwise; ``0`` gathers only what touches). One callout per cluster rather than one per face or per part,
+  so a frame of twelve welded steel tubes says "steel" once, pinned to the frame where it is nearest the middle of
+  it. What a face is made of is what its part's CMF says (see :doc:`/config_cmf`) - its solid's material, else its
+  own (a wall is a sheet with no solid) - and a face that states none is in no cluster.
+
+  .. code-block:: shell
+
+    pc render -t png --with-materials -O ./ logo
+
+  ``--without-port-names`` and ``--without-interface-names`` draw the ports and the interfaces without their
+  names, for a picture that has too many of them to read; the names are written by default. With ``--filter``,
+  every callout is on what the filter keeps and nothing else.
+
   The options apply to whichever format is being written — the projection is the same one underneath ``svg``,
   ``png``, ``jpeg`` and ``dxf`` — and a package can ask for the same thing permanently, by declaring
   ``with_ports:``, ``with_interfaces:`` or ``with_internals:`` on a file type of its own (see
@@ -1101,6 +1153,32 @@ Object commands
   the package and the object configured, and a file type that does not project (``step``, ``readme``, an
   assembly instruction book) never reads them. PartCAD is Z-up with ``+Y`` pointing away from the front view,
   which is what puts ``+X`` on the right of it.
+
+  ``--turn`` turns the object in front of that camera instead of moving the camera: by ``X,Y,Z`` degrees about
+  the object's own axes, through its middle, or by one number about Z — the way the 3D view's Animate turns it.
+  It goes with any of the three above, and is the ``turn`` of the file type:
+
+  .. code-block:: shell
+
+    pc render -t svg --view front --turn 0,0,45 -O ./ bracket
+
+  ``--style shaded`` draws a ``png`` or a ``jpeg`` lit and in perspective, as the Digital Thread's 3D view draws
+  it, instead of as the projection's lines; ``--size`` (``512x512`` for a picture, or a name such as ``square``
+  or ``reels``) and ``--background`` go with it. That is also how every frame of a video is drawn, so a frame is
+  a picture of its own — see :ref:`shaded-pictures` and :ref:`videos`.
+
+  ``--reproducible`` and ``--no-reproducible`` are the file type's ``reproducible`` passed the same way: which
+  hidden-line algorithm draws the projection for this one run. The exact one works from the surfaces and draws a
+  curve as itself; the polygonal one -- the default, unless the package says otherwise -- works from a
+  triangulation and draws a curve as a run of short lines, in seconds on a model the exact one takes minutes over.
+  Left off, the file type decides. The two draw one geometry as different shapes and different numbers of them,
+  which is why a drawing that will be measured is drawn both ways and the two read against each other (the
+  ``gen-sketch`` skill's ``measure.py compare`` does that).
+
+  .. code-block:: shell
+
+    pc render -t svg --view top --reproducible -O ./exact bracket
+    pc render -t svg --view top --no-reproducible -O ./polygonal bracket
 
   A rendered file is named after the object, so several views of one object go into directories of their own
   rather than over each other:
@@ -1212,10 +1290,10 @@ instead.
   one, and ``-p <name>=<value>`` to set parameters.
 
   One flag per tab of the viewer opens it on that tab, named ``--<group>-<tab>`` the way the viewer's two strips
-  read: ``--design-3d``, ``--design-2d``, ``--design-draft``; ``--analysis-fea``, ``--analysis-dynamic``,
-  ``--analysis-thermal``, ``--analysis-cfd``; ``--manufacturing-bvb``, ``--manufacturing-build``,
-  ``--manufacturing-buy``, ``--manufacturing-bom``, ``--manufacturing-assembly``; ``--validation-test``,
-  ``--validation-simulation``. With none, the viewer stays on whichever tab it is on. The analysis tabs and the
+  read: ``--design-3d``, ``--design-2d``, ``--design-draft``, ``--design-cmf``; ``--analysis-fea``,
+  ``--analysis-dynamic``, ``--analysis-thermal``, ``--analysis-cfd``; ``--manufacturing-bvb``,
+  ``--manufacturing-build``, ``--manufacturing-buy``, ``--manufacturing-bom``, ``--manufacturing-assembly``;
+  ``--validation-test``, ``--validation-simulation``. With none, the viewer stays on whichever tab it is on. The analysis tabs and the
   Simulation tab list what the object declares -- its scenarios of that analysis, its simulations -- and select
   the first; ``--scenario <name>`` selects the one of that name instead, and is refused with any other tab. The tab travels with the
   shape, so it is the window that draws the object that switches; a tab that does not apply to the object (FEA
@@ -1459,16 +1537,46 @@ Other commands
   - ``pc adhoc convert`` — write the file back out as another format
     (``pc adhoc convert part bracket.step bracket.stl``).
   - ``pc adhoc render`` — write a 2D projection of it: ``svg``, ``png``, ``jpeg`` or ``dxf``
-    (``pc adhoc render part --view top bracket.step bracket.png``).
+    (``pc adhoc render part --view top bracket.step bracket.png``), or a file type a package implements.
 
-  Both infer the types from the file names, and take ``--input``/``--output`` to say them outright. ``pc adhoc
-  render`` takes the same ``--view``, ``--viewport-origin`` and ``--viewport-up`` as ``pc render`` — and with no
-  ``partcad.yaml`` to configure a viewport in, they are the only way to aim one. The output file name may be
-  left off when ``--output`` names the type: the file is then named after the input.
+  Both infer the types from the file names, and take ``--input``/``--output`` to say them outright. A ``.py`` is
+  read as ``sdf`` unless told otherwise: a build123d or CadQuery script takes ``--input build123d`` or
+  ``--input cadquery``.
+
+  ``pc adhoc render`` takes what ``pc render`` takes wherever that means something for a file in no package —
+  and with no ``partcad.yaml`` to configure anything in, these are the only way to say any of it:
+
+  - ``--view``, ``--viewport-origin``, ``--viewport-up`` and ``--turn`` aim the projection, and
+    ``--reproducible`` / ``--no-reproducible`` pick the algorithm, exactly as for ``pc render``;
+  - ``--style``, ``--size``, ``--background`` and ``--quality`` say how a ``png`` or a ``jpeg`` is drawn, also as
+    for ``pc render``: ``--style shaded`` is the 3D view's picture of the file;
+  - ``-t``/``--format`` is another spelling of ``--output``, and ``-O``/``--output-dir`` writes into a directory
+    when no output file is named: the file is then named after the input;
+  - ``-p``/``--param <name>=<value>`` sets a parameter of a script (a build123d or CadQuery script's parameters
+    are its top-level assignments). The value is declared with the type it is written in -- ``true``/``false``,
+    a whole number, a number, or text -- and goes into the name of a file named after the input, as ``pc
+    render`` writes an instance's (``bracket_depth_12.svg``);
+  - ``-e``/``--options-package`` reads the file type from a package: one in the public index (``//pub/...``),
+    which the throwaway package then imports, or the directory of a package on this machine. The output may then
+    be any type that package declares.
+
+  .. code-block:: shell
+
+    pc adhoc render part --input build123d -t svg -O ./out -p depth=12 bracket.py   # ./out/bracket_depth_12.svg
+    pc adhoc render part --reproducible --view top bracket.step bracket.svg
+    pc adhoc render part --style shaded --turn 30 --size square bracket.step bracket.png
+    pc adhoc render part -e ./drawing-style -t svg-thin -O ./out bracket.step
+
+  The rest of ``pc render``'s options have nothing to act on here: there is no package to walk (``-P``, ``-r``,
+  ``--fast-only``, ``--exclude``), the subcommand says what the file holds (``-s``, ``-i``, ``-a``, ``-S``), a
+  file in no package has no ports or interfaces (``--with-*``, ``--port``) and a part or a sketch no links
+  (``--filter``), no instruction book is rendered ad hoc (``--ignore-manufacturability``), and no video either
+  (``--fps``, ``--duration``, ``--speed``, ``--append``, ``--preset``).
 
   Which of the two to use is which kind of file is wanted, and it is the same distinction as between
-  ``pc export`` and ``pc render``: geometry another CAD tool can go on working with, or a picture. A file type a
-  package implements itself is available to neither, since there is no package here to declare it in.
+  ``pc export`` and ``pc render``: geometry another CAD tool can go on working with, or a picture. ``pc adhoc
+  convert`` writes only the formats PartCAD itself does; a file type a package implements is ``pc adhoc render
+  -e``'s, or ``pc export``'s on a package that imports it.
 
   The assembly formats ``assy`` and ``urdf`` are refused by both: an ASSY file is a set of references to the
   parts of a package and a URDF becomes a part per link, so neither means anything without one. Declare it in a

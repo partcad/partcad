@@ -9,8 +9,9 @@
 
 import typing
 
-from . import factory, telemetry
+from . import cmf, factory, telemetry
 from .assembly import Assembly
+from .shape_config import NO_DEFAULT
 from .shape_factory import ShapeFactory
 
 
@@ -42,12 +43,17 @@ class AssemblyFactory(ShapeFactory):
     # the same arrangement a part has (see 'PartFactory.ACCEPTED_OBJECT_TYPE_PARAMETERS',
     # which says why a name outside this registry stays free, forever).
     #
-    # 'exploded' is the one there is: the assembly drawn with its items pulled
-    # apart (see 'Assembly.exploded'). Only a type that knows what its items are
-    # joined to can do that, which is 'assy'; an assembly read from a STEP file
-    # holds geometry, not connections.
-    POLICED_OBJECT_TYPE_PARAMETERS: typing.FrozenSet[str] = frozenset({"exploded"})
-    ACCEPTED_OBJECT_TYPE_PARAMETERS: typing.Dict[str, typing.Any] = {}
+    # 'exploded' is the assembly drawn with its items pulled apart (see
+    # 'Assembly.exploded'). Only a type that knows what its items are joined to
+    # can do that, which is 'assy'; an assembly read from a STEP file holds
+    # geometry, not connections.
+    #
+    # The CMF parameters (see 'partcad.cmf') every assembly type accepts, as
+    # every part type does. An assembly's are passed on to its links as their
+    # parameters (docs/design/cmf.md), and are its own claim only when it is
+    # bought whole - when it declares a 'vendor' and an 'sku'.
+    POLICED_OBJECT_TYPE_PARAMETERS: typing.FrozenSet[str] = frozenset({"exploded", *cmf.TYPE_PARAMETERS})
+    ACCEPTED_OBJECT_TYPE_PARAMETERS: typing.Dict[str, typing.Any] = {name: NO_DEFAULT for name in cmf.TYPE_PARAMETERS}
 
     def __init__(self, ctx, source_project, target_project, config, extension=""):
         super().__init__(ctx, source_project, config)

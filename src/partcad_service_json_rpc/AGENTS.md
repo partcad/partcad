@@ -279,6 +279,14 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
   illustration a second time beside the copy inside it; `image_bytes` carries each picture of the model as its
   bytes and media type rather than as a data URI, which is how the IDE asks (and `manufacturing.plan` takes it
   too). An older daemon ignores both and sends what it always sent, which both clients still read.
+* `cmf.info`, behind the Digital Thread's CMF tab (see `partcad/cmf.py`, "What the IDE shows"): for a part, an
+  assembly or a scene, a row per item the `cmf` check judges -- the part itself, or every part an assembly holds and
+  every sub-assembly in it bought whole -- each with its CMF as `pc info` says it and the check's findings, the
+  incomplete ones first; for a colour, a material or a finish, what the declaration is. A declaration is found by
+  the `kind` the request says, since its name is no object's, and nothing is built for one; an object's items are
+  built, as `pc test` builds them, by the time the 3D view beside the tab has drawn them. The `colors`, `materials`
+  and `finishes` the explorer lists ride on the `items` notification, read off the declarations as `pc list colors`
+  reads them, and the `cmf` of each `bom` line and `manufacturing.tree` node is the item's own, building nothing.
 * `requirements.check`, behind the Digital Thread's Requirements tab: an object's `requirements:` as data -- the features,
   each with the `simulate:` entries that name it (`feature:`), and a line per required port, interface and
   physical property. Without `verify` nothing is built and every verdict is `null`, which is what lets the
@@ -305,6 +313,21 @@ directory that is deleted as soon as the document is built); `supply.quote` fill
 fills and quotes each line item on its own, because a cart of the whole assembly comes back as one price for
 all of it. Note that `supply.quote` deliberately does *not* go through `Context.find_suppliers()`: that reports "no
 suppliers" as an error, and in the IDE an error is a modal popup, one per part.
+
+`supply.prices` is that same quote shared out over the object's components -- what each one costs as its share of
+what the object costs to buy, by the rule in `partcad/component_prices.py` -- which is what the 3D view's "Component
+prices" callouts write. The same function (`_component_prices_async`) is the price source every render's overlay
+carries (`partcad.render_overlay.Overlay.prices`), so `pc render --with-component-prices`, the 2D tab's picture and
+the 3D view cannot price one part three ways. It lives here, not in the core, because this is where the suppliers
+are asked: the core renderer draws prices it is handed and asks nobody.
+
+`cmf.clusters` is where each material of an object is, cluster by cluster -- the faces of one material that touch or
+are closer than `distance` millimetres (the user's `materialClusterDistance`, 10 unless the request says) -- which is
+what the 3D view's "Materials" callouts write. It asks a sandbox (`partcad.measure.material_clusters`, running
+`wrapper_materials.py`), because it is geometry, and that sandbox runs the very `material_clusters.py` the SVG renderer
+runs for `pc render --with-materials`, so the 3D view and a picture cannot gather one object's faces two ways. Each
+cluster names the nodes it is of by their index path in the object's tree, which is how the viewer names them; a
+`section` the view is cut to cuts the tree first (`shape_section.section_async`), which keeps every node in place.
 
 `cae.analyze` is the odd one of the six: it *runs* something rather than answering a question about the
 package, and it is the same `Shape.analyze_async()` that `pc cae fea` runs -- for every scenario of the
@@ -392,7 +415,7 @@ JSON-RPC itself; that is the one copy, and it has to stay in step. A client that
 this gets an error message saying what to build first, which is the most a client that cannot act on it can be
 given.
 
-What is deliberately *not* staged: `bom`, `assembly.guide` and `supply.quote`, which walk the assembly tree
+What is deliberately *not* staged: `bom`, `assembly.guide`, `supply.quote` and `supply.prices`, which walk the assembly tree
 without building geometry; a `render.objects` or `test.run` whose unit is a package (recursive, or naming no
 object) — what they would have to name is everything they are about to build, and they already report where
 they have got to, object by object, as they go; and `convert.object`, which rewrites a declaration rather than
@@ -423,7 +446,7 @@ knowing:
   that filter a name like `bolt` fails in every package that has no bolt -- and a render of such a package
   raises `EmptyShapesError`, which used to end the whole run.
 
-An operation whose answer is about **one** object -- `bom`, `assembly.guide`, `cae.analyze`, `supply.quote`,
+An operation whose answer is about **one** object -- `bom`, `assembly.guide`, `cae.analyze`, `supply.quote|prices`,
 `inspect.object`, `convert.object` -- calls `_refuse_recursion()` and says so, rather than guessing between a
 merged answer and a sequence of them. Adding recursion to one of those is a decision about what its result
 becomes, not a parsing change.

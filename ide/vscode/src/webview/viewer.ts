@@ -10,11 +10,12 @@
 // instructions, and anything that can be bought has suppliers and prices, so the
 // panel is a strip of tabs over one object rather than a canvas:
 //
-//     (Requirements)  |  Design           |  Analysis                                 |  Manufacturing                                                    |  Validation                              |  Operations
-//                           3D | 2D | Draft     FEA | Dynamic FEA | Heat Transfer | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly    Test | Simulation | Process Emulation
+//     (Requirements)  |  Design                 |  Analysis                                 |  Manufacturing                                                    |  Validation                              |  Operations
+//                           3D | 2D | Draft | CMF     FEA | Dynamic FEA | Heat Transfer | CFD    Build vs Buy | Build | Buy | Bill of Materials | Assembly    Test | Simulation | Process Emulation
 //
 // Four groups, each a strip of its own. Design is the object itself: turned in
-// 3D, rendered to a picture, drawn as a dimensioned drawing. Analysis is what
+// 3D, rendered to a picture, drawn as a dimensioned drawing, and what each of
+// its items is in - its colour, material and finish (CMF). Analysis is what
 // engineering analysis says about it - a tab per analysis, each listing the
 // scenarios the part declares for it, run (see 'analysis.ts') - and
 // Manufacturing what making it takes -
@@ -35,6 +36,13 @@
 // strip is rebuilt when the answer arrives. Opening the tab is what asks for the
 // verdicts, which are 'pc test -f requirements' (see 'requirements.ts').
 //
+// A colour, a material or a finish opened from the explorer is none of that: it
+// is what an object is in, and has no shape to turn, analyse, make or test. It
+// is shown the way an interface is in the design - the Design group alone,
+// opened and not shown, and in it the CMF tab alone, which says what the
+// declaration is (see 'isDeclaration'). One tab is no choice, so neither strip
+// is drawn for one, and the CMF pane is the panel.
+//
 // Every group always shows all of its tabs and disables the ones that do not
 // apply, and a group none of whose tabs apply is itself disabled; see 'Tabs'
 // for which tab each strip then opens on. Design and its 3D view are always
@@ -44,8 +52,8 @@
 // This file is the shell: it owns the tab strips and the panes, routes what the
 // extension host posts in, and asks for the contents of a tab the first time it
 // is looked at. Each pane draws itself ('scene.ts', 'render.ts', 'analysis.ts'
-// and 'cae.ts', 'bom.ts', 'bvb.ts', 'build.ts', 'assembly.ts', 'supply.ts',
-// 'test.ts', 'simulation.ts');
+// and 'cae.ts', 'cmf.ts', 'bom.ts', 'bvb.ts', 'build.ts', 'assembly.ts',
+// 'supply.ts', 'test.ts', 'simulation.ts');
 // none of them talks to the host directly.
 //
 // The Manufacturing strip is the one whose shape depends on an answer. Whether
@@ -79,11 +87,15 @@ import { BuildView } from './build';
 import { BvbResult, BvbView, THUMBNAIL_SIZE, visibleRows } from './bvb';
 import { hasCallouts } from './callouts';
 import { CaeResult } from './cae';
+import { CmfView } from './cmf';
 import { el, empty, placeholder } from './dom';
 import { geometryCache } from './geometryCache';
+import { HeldForShow } from './held';
+import { LabelBoxes, Labels, renderOptions } from './labels';
 import {
     fetchDetails,
     fetchFormats,
+    cancelTab,
     fetchTab,
     openSource,
     ready,
@@ -101,9 +113,11 @@ import {
     BomData,
     AnalysisTabId,
     BvbData,
+    CMF_KINDS,
     CaeListData,
     CaeRunData,
     Choices,
+    CmfData,
     DESIGN_TABS,
     DRAFT_PLUGINS,
     DetailsMessage,
@@ -112,6 +126,9 @@ import {
     GuideData,
     HostMessage,
     PlanData,
+    MaterialCluster,
+    MaterialClustersData,
+    PricesData,
     RENDER_TABS,
     RenderData,
     RenderFormat,
@@ -128,6 +145,7 @@ import {
     ViewportData,
     groupOf,
     isAnalysisTab,
+    isDeclaration,
     isRenderTab,
 } from './messages';
 import { Choice, RenderView } from './render';
@@ -138,7 +156,7 @@ import { SimulationView } from './simulation';
 import { createVideoPlayer } from './videoPlayer';
 import { spaceMouse } from './spacemouse';
 import { controlValues, snapshot } from './state';
-import { SupplyView } from './supply';
+import { SupplyView, formatPrice } from './supply';
 import { TabSpec, Tabs } from './tabs';
 import { TestView } from './test';
 import { LinkFilter, OverlayRequest, Selection, Tree, filterIsEmpty } from './tree';
@@ -157,6 +175,7 @@ const panes: Record<TabId, HTMLElement> = {
     // eslint-disable-next-line @typescript-eslint/naming-convention
     '2d': byId('pane-2d'),
     draft: byId('pane-draft'),
+    cmf: byId('pane-cmf'),
     bvb: byId('pane-bvb'),
     build: byId('pane-build'),
     bom: byId('pane-bom'),
@@ -175,6 +194,7 @@ const panes: Record<TabId, HTMLElement> = {
 const DATA_TABS: TabId[] = ['bom', 'supply'];
 
 const supplyView = new SupplyView(panes.supply);
+const cmfView = new CmfView(panes.cmf);
 // The three Manufacturing panes that hold controls of their own - switches, a
 // checkbox, a format - own their panes for the life of the panel, as the
 // analyses do: rebuilding one on every show would take back what the user set.
@@ -252,6 +272,11 @@ const sceneLoaded: Promise<Scene | undefined> = import(/* webpackMode: "eager" *
     (module) => {
         scene = module;
         scene.setShowMetadata(metadataCheckbox?.checked ?? true);
+        // And the callout boxes, and any prices that arrived before it did.
+        scene.setLabels(labels.current);
+        scene.setComponentPrices(prices?.texts ?? {});
+        // What the box says, should it have been changed while this loaded.
+        scene.setAutoFit(view3d.autoFitting);
         if (module.software) {
             // Drawn without a GPU, the model does not turn on its own: a frame
             // every 16 ms is what the software renderer cannot afford. The box
@@ -291,6 +316,16 @@ let sceneFailed = false;
  */
 const selection = new Selection();
 
+/**
+ * What the callout boxes at the bottom of the 3D and 2D tabs' control panes say:
+ * which of component names, component prices, port names and interface names
+ * are written on the object (see 'labels.ts').
+ *
+ * One answer for both tabs, as 'selection' is, and kept from one object to the
+ * next: it is how somebody wants the object annotated, not anything about it.
+ */
+const labels = new Labels();
+
 /** The file types the 2D tab offers: PartCAD's own pictures. */
 const PICTURES: Choice[] = [
     { value: 'png', label: 'PNG' },
@@ -305,6 +340,7 @@ const renderViews: Partial<Record<TabId, RenderView>> = {
     // eslint-disable-next-line @typescript-eslint/naming-convention
     '2d': new RenderView(panes['2d'], {
         formats: PICTURES,
+        labels,
         onChange: () => renderTab('2d'),
         onSave: () => saveRendered('2d'),
     }),
@@ -441,10 +477,196 @@ if (metadataCheckbox) {
     });
 }
 
+// The callout boxes, under the tree: on the 3D view they are written by the scene
+// over what the tree draws, and the prices are asked for here when that box is
+// ticked; on the 2D tab they are sent with the render.
+const labelBoxes3d = new LabelBoxes(byId('labels-3d'), labels);
+
+labels.onChange((key) => {
+    scene?.setLabels(labels.current);
+    if (key === 'componentPrices') {
+        // Asked for, or stopped, here only while the 3D view is on screen: the
+        // 2D tab's picture asks for its own prices with the render it is.
+        askPrices();
+    }
+    if (key === 'materials') {
+        // The same, for where each material is.
+        askMaterials();
+    }
+    // No longer the picture the boxes describe: forgotten, and asked for again
+    // if it is the one on screen, once the boxes have settled - as a box of the
+    // tree does. One still being drawn is stopped, so the daemon is not kept on
+    // it meanwhile. Draft writes none of them, and is left alone.
+    if (awaiting.has('2d')) {
+        cancelTab({ type: 'cancelTab', tab: '2d' });
+    }
+    requested.delete('2d');
+    awaiting.delete('2d');
+    if (tabs.current === 'design' && designTabs.current === '2d') {
+        settleRender('2d');
+    }
+});
+
+/** The kinds of object anybody sells, and so the ones whose components have prices. */
+const PRICED_KINDS = ['part', 'assembly', 'scene'];
+
+/**
+ * What each component of the object on screen costs, as its callout writes it,
+ * once the daemon has said: by the object it is ('<package>:<name>'), for the
+ * show it was asked for ('identify').
+ */
+let prices: { object: string; texts: Record<string, string> } | undefined;
+
+/**
+ * Ask what each component of the object on screen costs, if the Component
+ * prices box is ticked and the 3D view is the tab on screen: 'supply.prices',
+ * the Buy tab's quote shared out over the components.
+ *
+ * Asked once per show, the same object's included - an edit saved may have
+ * added a part - and only once the 3D view is looked at ('onLeafSelected'): a
+ * quote goes out to every supplier, and the daemon serves one request at a
+ * time, so a quote nobody is looking at would hold up the tab somebody is.
+ * What was known about the same object is kept on screen meanwhile; another
+ * object's is not.
+ *
+ * The box cleared while a quote is out stops it, for the same reason.
+ */
+function askPrices(): void {
+    if (!labels.get('componentPrices') || shown === undefined) {
+        stopPrices();
+        labelBoxes3d.setNote(undefined);
+        return;
+    }
+    if (tabs.current !== 'design' || designTabs.current !== '3d' || requested.has('design')) {
+        return;
+    }
+    // Another object's prices go first, whether or not this one has any: they
+    // are keyed by object, and nothing of the last object may be priced here.
+    if (prices !== undefined && prices.object !== identify(shown)) {
+        prices = undefined;
+        scene?.setComponentPrices({});
+    }
+    if (!shown.package || !PRICED_KINDS.includes(shown.kind ?? '')) {
+        labelBoxes3d.setNote('Only a part, an assembly or a scene is bought, so nothing here has a price.');
+        return;
+    }
+    requested.add('design');
+    labelBoxes3d.setNote('Asking the suppliers what each component costs…');
+    request('design');
+}
+
+/**
+ * Stop a quote that is out, if one is: its answer is dropped by its token, and
+ * the host is told so that the daemon stops working on it. An answer that has
+ * already arrived is kept, so ticking the box again shows it at once.
+ */
+function stopPrices(): void {
+    if (!awaiting.has('design')) {
+        return;
+    }
+    awaiting.delete('design');
+    requested.delete('design');
+    cancelTab({ type: 'cancelTab', tab: 'design' });
+}
+
+/** What the components cost has arrived, or why it has not. */
+function onPrices(data: PricesData | undefined, error: string | undefined): void {
+    if (error !== undefined || data === undefined || data === null) {
+        // Nothing on screen may go on saying what an earlier quote said: an
+        // edit saved and quoted again that failed leaves no price at all. And
+        // a failure is not an answer to keep: the box ticked again, or the 3D
+        // view looked at again, asks afresh.
+        prices = undefined;
+        scene?.setComponentPrices({});
+        requested.delete('design');
+        labelBoxes3d.setNote(`No prices: ${error ?? 'PartCAD said nothing about them.'}`);
+        return;
+    }
+    const texts: Record<string, string> = {};
+    for (const [name, quoted] of Object.entries(data.prices ?? {})) {
+        texts[name] = formatPrice(quoted.price, quoted.currency);
+    }
+    prices = { object: identify(shown), texts };
+    scene?.setComponentPrices(texts);
+    labelBoxes3d.setNote(
+        Object.keys(texts).length === 0
+            ? 'No supplier quoted a price for any of these. Declare a supplier in partcad.yaml to see prices.'
+            : undefined,
+    );
+}
+
+/** The kinds of object made of materials, and so the ones whose materials have clusters. */
+const MADE_KINDS = ['part', 'assembly', 'scene'];
+
+/**
+ * Where each material of the object on screen is, once the daemon has said:
+ * pinned on the stage once this show's geometry is on it, which an answer to a
+ * box ticked while it was still loading can beat (see 'held.ts').
+ */
+const heldClusters = new HeldForShow<MaterialCluster[]>((clusters) => scene?.setMaterialClusters(clusters));
+
+/**
+ * Ask where each material of the object on screen is, if the Materials box is
+ * ticked and the 3D view is the tab on screen: 'cmf.clusters', worked out in a
+ * sandbox from the object's tree.
+ *
+ * Asked once per show, under the 3D tab's own id - nothing else is asked under
+ * it - and only once the 3D view is looked at ('onLeafSelected'), for the
+ * reason the prices are: the daemon serves one request at a time. A cluster
+ * names the nodes of one tree, so the show that follows drops what was pinned
+ * ('scene.ts') and this asks again. The box cleared while the answer is on its
+ * way stops it. A show cut to a section asks of what the cut keeps, so that a
+ * callout names nothing that is not drawn.
+ */
+function askMaterials(): void {
+    if (!labels.get('materials') || shown === undefined) {
+        stopMaterials();
+        labelBoxes3d.setNote(undefined, 'materials');
+        return;
+    }
+    if (tabs.current !== 'design' || designTabs.current !== '3d' || requested.has('3d')) {
+        return;
+    }
+    if (!shown.package || !MADE_KINDS.includes(shown.kind ?? '')) {
+        labelBoxes3d.setNote('Only a part, an assembly or a scene is made of a material.', 'materials');
+        return;
+    }
+    requested.add('3d');
+    labelBoxes3d.setNote('Finding where each material is…', 'materials');
+    request('3d', shown.section ? { section: shown.section } : {});
+}
+
+/** Stop finding the clusters, if that is under way; one already found is kept on screen. */
+function stopMaterials(): void {
+    if (!awaiting.has('3d')) {
+        return;
+    }
+    awaiting.delete('3d');
+    requested.delete('3d');
+    cancelTab({ type: 'cancelTab', tab: '3d' });
+}
+
+/** Where each material is has arrived, or why it has not. */
+function onMaterials(data: MaterialClustersData | undefined, error: string | undefined): void {
+    if (error !== undefined || data === undefined || data === null) {
+        heldClusters.arrive([]);
+        // Not an answer to keep: the box ticked again asks afresh.
+        requested.delete('3d');
+        labelBoxes3d.setNote(`No materials: ${error ?? 'PartCAD said nothing about them.'}`, 'materials');
+        return;
+    }
+    const clusters = data.clusters ?? [];
+    heldClusters.arrive(clusters);
+    labelBoxes3d.setNote(
+        clusters.length === 0 ? 'Nothing here states what it is made of. Give a part a material to see it.' : undefined,
+        'materials',
+    );
+}
+
 /*
  * The view panel down the right of every tab that shows the object: how it is
  * looked at - the gizmo, the axis buttons, the viewpoint - what it is cut to,
- * and, on the 3D tab, Animate and Opacity (see 'viewPanel.ts').
+ * and, on the 3D tab, Animate, Auto-fit and Opacity (see 'viewPanel.ts').
  *
  * One per tab, because each tab looks at the object its own way: the 3D view
  * turns a camera, the 2D tab asks PartCAD for a picture from where the panel
@@ -466,16 +688,26 @@ const view3d = new ViewPanel(
             holdStill();
             scene?.setViewpoint(viewpoint);
         },
-        onResetView: () => scene?.fitView(),
+        onResetView: () => scene?.resetView(),
+        // Gradually, and from where it is looking: Animate goes on turning it.
+        onFit: () => scene?.fit(),
         onSection: (section) => onSectionChanged(section),
         onAnimate: (animate) => scene?.setAutoRotate(animate),
+        onAutoFit: (autoFit) => scene?.setAutoFit(autoFit),
         onOpacity: (opacity) => scene?.setOpacity(opacity),
     },
-    // The ids the screenshot script drives these two by.
+    // The ids the screenshot script drives these by.
     {
         target: true,
         animate: true,
-        ids: { animate: 'animate-checkbox', opacity: 'opacity-slider', opacityValue: 'opacity-value' },
+        autoFit: true,
+        ids: {
+            animate: 'animate-checkbox',
+            autoFit: 'autofit-checkbox',
+            opacity: 'opacity-slider',
+            opacityValue: 'opacity-value',
+            reset: 'view-reset-button',
+        },
     },
 );
 viewPanels['3d'] = view3d;
@@ -940,6 +1172,11 @@ function reset(tab: TabId): HTMLElement {
  * of its tabs is.
  */
 function tabsFor(message: ShowMessage | undefined): TabSpec[] {
+    if (isDeclaration(message?.kind)) {
+        // What an object is in, not an object: Design alone, which is no
+        // choice, so the strip is not drawn and the group is simply open.
+        return [{ id: 'design', label: 'Design', pane: panes.design }];
+    }
     // In front of the rest, and only when there is something to show: an
     // object that states no requirements has nothing for the tab to say, and a
     // disabled tab in front of the strip would only push the others along.
@@ -1122,7 +1359,11 @@ function validationTabsFor(message: ShowMessage | undefined): TabSpec[] {
 function setAllTabs(message: ShowMessage | undefined): void {
     // The groups' strips first, so that the panel's, opening a group, finds the
     // tab under it already chosen.
-    designTabs.setTabs(designTabsFor(message));
+    //
+    // A declaration's strip is one of passing ('transient'): the CMF tab it
+    // opens on is the only one there is, not a tab anybody chose, and the next
+    // object shown goes back to the Design tab that was open before it.
+    designTabs.setTabs(designTabsFor(message), { transient: isDeclaration(message?.kind) });
     analysisTabs.setTabs(analysisTabsFor(message));
     manufacturingTabs.setTabs(manufacturingTabsFor(message));
     validationTabs.setTabs(validationTabsFor(message));
@@ -1130,18 +1371,34 @@ function setAllTabs(message: ShowMessage | undefined): void {
 }
 
 /**
- * The Design tab's own tabs for an object: all three always shown, 3D always
+ * The Design tab's own tabs for an object: all four always shown, 3D always
  * enabled - it is what an empty panel opens on too.
  *
  * 2D is anything PartCAD can render to a picture: a part, an assembly, a scene
  * or a sketch - not an interface, which is ports rather than a shape. Draft is a
  * dimensioned drawing, which is made of a solid: a part or an assembly. Both are
  * a render the daemon makes of '<package>:<name>', so an object with no package
- * gets neither.
+ * gets neither. CMF is what is made in a colour, a material and a finish: a
+ * part, an assembly or a scene, item by item ('cmf.info').
+ *
+ * A declaration has the CMF tab and nothing else: there is nothing of it to
+ * turn, render or draw.
  */
 function designTabsFor(message: ShowMessage | undefined): TabSpec[] {
     const known = Boolean(message?.package);
     const kind = message?.kind ?? '';
+    const cmf: TabSpec = {
+        id: 'cmf',
+        label: 'CMF',
+        pane: panes.cmf,
+        disabled: !(known && (CMF_KINDS.includes(kind) || isDeclaration(kind))),
+        hint: known
+            ? 'Only what is made - a part, an assembly or a scene - is in a colour, a material and a finish'
+            : 'PartCAD did not say which package this belongs to',
+    };
+    if (isDeclaration(kind)) {
+        return [cmf];
+    }
     return [
         { id: '3d', label: '3D', pane: panes['3d'] },
         {
@@ -1156,6 +1413,7 @@ function designTabsFor(message: ShowMessage | undefined): TabSpec[] {
             pane: panes.draft,
             disabled: !(known && (kind === 'part' || kind === 'assembly')),
         },
+        cmf,
     ];
 }
 
@@ -1185,6 +1443,7 @@ async function show(message: ShowMessage): Promise<void> {
     // Nothing in flight belongs to this object, whatever it was asked for.
     awaiting.clear();
     requested.clear();
+    heldClusters.reset();
     for (const tab of DATA_TABS) {
         reset(tab);
     }
@@ -1197,6 +1456,7 @@ async function show(message: ShowMessage): Promise<void> {
             : () => 'Waiting for a part to analyse: only a part is analysed.',
     );
     resetRenderTabs('Select this tab to render it.');
+    cmfView.setBusy('Select this tab to see what this is in.');
     resetManufacturing('Asking PartCAD what this is made of…');
     resetValidation('Asking PartCAD what this declares under simulate:…');
     showView(message);
@@ -1292,6 +1552,8 @@ async function show(message: ShowMessage): Promise<void> {
         if (generation !== mine) {
             return;
         }
+        // On the stage now: what was found about it meanwhile can be pinned to it.
+        heldClusters.onStage();
         // What the Opacity slider says, for the geometry that just arrived.
         view.setOpacity(view3d.opacityFraction);
         if (designBounds === undefined) {
@@ -1380,6 +1642,7 @@ function showView(message: ShowMessage): void {
 function clear(): void {
     generation += 1;
     shown = undefined;
+    heldClusters.reset();
     sectionSupported = false;
     shownSection = null;
     designSection = null;
@@ -1396,11 +1659,15 @@ function clear(): void {
     }
     offerMetadata(undefined);
     offerControls(false);
+    prices = undefined;
+    scene?.setComponentPrices({});
+    labelBoxes3d.setNote(undefined);
     for (const tab of DATA_TABS) {
         reset(tab);
     }
     resetAnalyses(() => 'Nothing to analyse.');
     resetRenderTabs('Nothing to render.');
+    cmfView.setBusy('Nothing to show.');
     resetManufacturing('Nothing to show.');
     testView.setBusy('Nothing to test: select an object.');
     requirements = undefined;
@@ -1689,6 +1956,8 @@ function renderTab(tab: TabId): void {
         // no others. Left out when the panel lists none - the Draft tab - so
         // that nothing narrows an overlay a file type asked for itself.
         ports: overlay !== undefined && overlay.select.length > 0 ? overlay.select : undefined,
+        // The callout boxes under the tree, on the tab that has them.
+        ...(tab === '2d' ? renderOptions(labels.current) : {}),
     });
 }
 
@@ -1782,6 +2051,10 @@ function onLeafSelected(tab: TabId): void {
         scene?.resizeCanvas();
         // A section chosen on the 2D or Draft tab is this tab's too.
         cut3d();
+        // What the components cost, and where each material is, if the boxes
+        // ask and this show has not.
+        askPrices();
+        askMaterials();
         return;
     }
     if (isAnalysisTab(tab)) {
@@ -1831,6 +2104,19 @@ function onLeafSelected(tab: TabId): void {
         requested.add('bvb');
         bvbView.setBusy('Asking PartCAD what this is made of…');
         request('bvb');
+        return;
+    }
+    if (tab === 'cmf') {
+        // An object's items are built for it - what a source states is only
+        // known once it is read - which the 3D view has done by now; a
+        // declaration is read and nothing is built.
+        requested.add('cmf');
+        cmfView.setBusy(
+            isDeclaration(shown?.kind)
+                ? 'Asking PartCAD what this is…'
+                : 'Asking PartCAD what each item is in: its colour, material and finish…',
+        );
+        request('cmf');
         return;
     }
     if (isRenderTab(tab)) {
@@ -1910,6 +2196,21 @@ function onTabData(tab: TabId, token: number, data: unknown, error: string | und
         onBvb(data as BvbData | undefined, error);
         return;
     }
+    if (tab === 'cmf') {
+        if (error !== undefined) {
+            cmfView.showError(error);
+        } else if (data === null || data === undefined) {
+            cmfView.showError('PartCAD had nothing to say about what this is in.');
+        } else {
+            try {
+                cmfView.show(data as CmfData);
+            } catch (e: unknown) {
+                cmfView.showError(`Failed to display this: ${e}`);
+                reportError(`failed to render the 'cmf' tab: ${e}`);
+            }
+        }
+        return;
+    }
     if (tab === 'requirements') {
         onRequirements(data as RequirementsData | undefined, error);
         return;
@@ -1924,6 +2225,14 @@ function onTabData(tab: TabId, token: number, data: unknown, error: string | und
     }
     if (tab === 'analysis') {
         onAnalyses(data as CaeListData | undefined, error);
+        return;
+    }
+    if (tab === 'design') {
+        onPrices(data as PricesData | undefined, error);
+        return;
+    }
+    if (tab === '3d') {
+        onMaterials(data as MaterialClustersData | undefined, error);
         return;
     }
     if (tab === 'build') {

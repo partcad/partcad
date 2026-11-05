@@ -31,14 +31,18 @@ import build123d as b3d
 sys.path.append(os.path.dirname(__file__))
 import appearance
 import label_layout
+import material_clusters
 import ocp_serialize
+import shape_measure
 import stroke_text
+import viewpoint
 import wrapper_common
 
 # What this implementation reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
-# before is produced again.
-CACHE_VERSION = 4
+# before is produced again. 5: a colour too light to see on white is drawn
+# darker (see 'legible').
+CACHE_VERSION = 5
 
 # How this implementation meshes what it is handed, for the files of one
 # object to share a decoding and a mesh when they are written together (see
@@ -86,8 +90,30 @@ VISIBLE_LAYER = "Visible"
 PORTS_COLOR = (32, 96, 224)
 INTERFACES_COLOR = (176, 48, 192)
 
+# The request keys of the callouts, as 'partcad.render_overlay' names them; a
+# copy, because this runs in a sandbox that has no PartCAD to import, and a test
+# holds the two together.
+COMPONENT_NAMES_KEY = "component_names"
+COMPONENT_PRICES_KEY = "component_prices"
+PORT_NAMES_KEY = "port_names"
+INTERFACE_NAMES_KEY = "interface_names"
+MATERIALS_KEY = "materials"
+
 # The colour an annotation is drawn in, dashed.
 ANNOTATIONS_COLOR = (192, 64, 64)
+
+# The colour the callouts on the components - their names, their prices - are
+# drawn in: the near-black of a drawing's own callouts, which reads against the
+# goldenrod of the geometry and is neither of the two overlays' colours.
+COMPONENTS_COLOR = (48, 48, 48)
+
+# The colour the materials' callouts are drawn in: a dark teal, which reads
+# against the goldenrod of the geometry and is none of the other overlays'.
+MATERIALS_COLOR = (0, 112, 96)
+
+# How far apart two rows of one callout are - a component's name above its
+# price - in text heights, from the bottom of one to the bottom of the next.
+ROW_PITCH = 1.5
 
 # How big the port markers and their labels are, as a fraction of the
 # projection's largest dimension - so that they are the same size on the picture
@@ -335,6 +361,113 @@ def _interface_label(port):
     return label
 
 
+def component_name(node):
+    """What a component is called in its callout.
+
+    Its label, which is what the assembly holding it calls it and what the IDE's
+    tree lists it as; and where it has none - the object rendered on its own -
+    the name of the object it is, without the package: the package is the same
+    for every callout of a picture and would only make each one longer. The
+    twin of 'componentName' in the extension's 'callouts.ts', so that the 2D
+    tab's picture and the 3D view beside it call one part one thing.
+    """
+    label = node.get("label")
+    if label:
+        return str(label)
+    name = str(node.get("name") or "")
+    return name.rsplit(":", 1)[-1] or name
+
+
+def _components(request):
+    """Every component the callouts are on, as '(rows, centre)' pairs.
+
+    A component is a node of 'shape_tree' that holds no other node - a part,
+    wherever the tree places it - and its callout is pinned to the middle of
+    its box, where it is in 'wrapped'. The rows are its name and its price, as
+    the request asks for them: 'COMPONENT_NAMES_KEY', and the text of each price
+    under 'COMPONENT_PRICES_KEY', by the full name of the object - so a part
+    nobody quoted is called by its name alone, and with no name asked for gets
+    no callout at all.
+
+    An assembly sold assembled is priced as one thing to order, and the parts
+    inside it are not priced at all (see 'partcad.component_prices'). So a node
+    that holds others gets a callout of its own when it has a price, pinned to
+    the middle of everything inside it: its name where names are asked for,
+    over its price. Without a price it gets none - its parts carry their own.
+
+    A component with nothing left to measure - a cut that missed it - has no
+    middle to pin anything to, and is passed over.
+    """
+    with_names = bool(request.get(COMPONENT_NAMES_KEY))
+    prices = request.get(COMPONENT_PRICES_KEY)
+    prices = prices if isinstance(prices, dict) else {}
+    tree = request.get("shape_tree")
+    if tree is None or not (with_names or prices):
+        return []
+
+    found = []
+
+    def united(boxes):
+        """The box holding every one of 'boxes', or None for none."""
+        boxes = [box for box in boxes if box is not None]
+        if not boxes:
+            return None
+        return [min(box[axis] for box in boxes) for axis in range(3)] + [
+            max(box[axis] for box in boxes) for axis in range(3, 6)
+        ]
+
+    def middle(box):
+        return tuple((box[axis] + box[axis + 3]) / 2 for axis in range(3))
+
+    def walk(node, above):
+        """Add the callouts at and under 'node', and answer the box of what it holds, placed."""
+        price = prices.get(node.get("name"))
+        if ocp_serialize.is_shape_object(node):
+            shape = node[ocp_serialize.KEY_SHAPE]
+            packed = node.get(ocp_serialize.KEY_LOCATION)
+            if packed is not None:
+                shape = shape.Located(ocp_serialize.toploc_from_packed(packed))
+            for location in reversed(above):
+                shape = shape.Moved(ocp_serialize.toploc_from_packed(location))
+            try:
+                box = shape_measure.bbox(shape)
+            except Exception as e:
+                sys.stderr.write("Skipping the callout on %s: %s\n" % (component_name(node), e))
+                return None
+            rows = ([component_name(node)] if with_names else []) + ([str(price)] if price else [])
+            if rows and box is not None:
+                found.append((rows, middle(box)))
+            return box
+        if ocp_serialize.is_assembly_object(node):
+            location = node.get(ocp_serialize.KEY_LOCATION)
+            inner = above + [location] if location is not None else above
+            box = united([walk(child, inner) for child in node[ocp_serialize.KEY_ASSEMBLY]])
+            if price and box is not None:
+                found.append((([component_name(node)] if with_names else []) + [str(price)], middle(box)))
+            return box
+        return None
+
+    walk(tree, [])
+    return found
+
+
+def _materials(request):
+    """Every cluster of a material the callouts are on, as '(rows, point)' pairs; none unless asked.
+
+    'MATERIALS_KEY' asks, with the distance two surfaces of one material may be
+    apart and still be one cluster ('{"distance": <mm>}'): one callout per
+    cluster, naming the material, pinned to the cluster where it is nearest the
+    middle of it (see 'material_clusters'). Of what 'shape_tree' holds - so
+    with '--filter', of what the filter kept.
+    """
+    asked = request.get(MATERIALS_KEY)
+    tree = request.get("shape_tree")
+    if not isinstance(asked, dict) or tree is None:
+        return []
+    found = material_clusters.clusters(tree, asked.get("distance", 0))
+    return [([cluster["name"]], tuple(cluster["at"])) for cluster in found]
+
+
 def _picture_offset(origin, up, look_at, right, upward, reproducible):
     """What 'project' adds to a point's coordinates in the plane of the picture.
 
@@ -349,8 +482,8 @@ def _picture_offset(origin, up, look_at, right, upward, reproducible):
     return (bounds.min.X - _dot(look_at, right), bounds.min.Y - _dot(look_at, upward))
 
 
-def _overlay_edges(request, max_dimension, right, up, keep_out):
-    """The two overlays "pc render" can be asked to draw, as (layer, edges) pairs.
+def _overlay_edges(request, max_dimension, right, up, keep_out, counted=None):
+    """What "pc render" can be asked to draw on top, as (layer, colour, edges) triples.
 
     'request["ports"]' is what 'partcad.render_overlay' worked out: every port of
     the object - and, for an assembly, of everything inside it - with the name a
@@ -361,24 +494,45 @@ def _overlay_edges(request, max_dimension, right, up, keep_out):
     and one name per port. "Which ports make up this interface" is one name per
     *instance* of an interface, with a line out to each of the ports that belong
     to it - a bolt pattern of four holes is one thing a part connects through,
-    and writing its name four times would say less, not more.
+    and writing its name four times would say less, not more. Either name is
+    left off where the request switches it off ('PORT_NAMES_KEY',
+    'INTERFACE_NAMES_KEY'), and what it names is drawn all the same.
 
-    Every name, of either overlay, is written around the object rather than on
+    The components' callouts are a third question - "which part is this, and
+    what does it cost" - answered by one box per component, its name over its
+    price, with a leader to the middle of it (see '_components'); and the
+    materials' a fourth - "what is this made of" - answered once per cluster of
+    a material rather than once per face or per part (see '_materials').
+    'counted', when given, is told how many of those clusters there were
+    ('counted["materials"]'), for a caller with nothing else to say none.
+
+    Every name, of any of them, is written around the object rather than on
     it, and joined to what it names by a leader: see 'label_layout'. They are
     laid out together, so that an interface name does not land on a port name
-    either. 'keep_out' is the object, as a box in the plane of the picture.
+    or a component's callout either. 'keep_out' is the object, as a box in the
+    plane of the picture.
     """
     ports = request.get("ports") or []
     marker_size = float(request.get("port_marker_size", DEFAULT_MARKER_SIZE)) * max_dimension
     label_size = float(request.get("port_label_size", DEFAULT_LABEL_SIZE)) * max_dimension
     with_ports = bool(request.get("with_ports"))
     with_interfaces = bool(request.get("with_interfaces"))
+    port_names = request.get(PORT_NAMES_KEY) is not False
+    interface_names = request.get(INTERFACE_NAMES_KEY) is not False
 
     def flat(point):
         """'point' in the plane of the picture: how far right, how far up."""
         return (_dot(point, right), _dot(point, up))
 
-    edges = {"Ports": [], "Interfaces": []}
+    edges = {"Ports": [], "Interfaces": [], "Components": [], "Materials": []}
+    layers = [
+        ("Ports", PORTS_COLOR),
+        ("Interfaces", INTERFACES_COLOR),
+        ("Components", COMPONENTS_COLOR),
+        ("Materials", MATERIALS_COLOR),
+    ]
+    # One entry per name to write: its layer, its rows (top first), the points
+    # its leaders go to, and the point that decides its side of the object.
     names = []
     instances = {}
     # The markers are not geometry of the object, but a name written over one
@@ -395,9 +549,9 @@ def _overlay_edges(request, max_dimension, right, up, keep_out):
         if with_ports:
             edges["Ports"].extend(_marker_edges(location, marker_size))
             marked.extend((flat(origin), flat(tip)))
-            if port.get("port"):
-                names.append(("Ports", port["port"], [tip], None))
-        if with_interfaces and port.get("interface_label"):
+            if port_names and port.get("port"):
+                names.append(("Ports", [port["port"]], [tip], None))
+        if with_interfaces and interface_names and port.get("interface_label"):
             instances.setdefault(_interface_label(port), []).append((origin, tip))
     for label, placed in instances.items():
         # One name, and a line out to each of the ports that belong to it. A
@@ -405,9 +559,16 @@ def _overlay_edges(request, max_dimension, right, up, keep_out):
         # are joined up, and a name with nothing joining it to anything names
         # nothing in particular.
         centre = tuple(sum(tip[axis] for _origin, tip in placed) / len(placed) for axis in range(3))
-        names.append(("Interfaces", label, [origin for origin, _tip in placed], centre))
+        names.append(("Interfaces", [label], [origin for origin, _tip in placed], centre))
+    for rows, centre in _components(request):
+        names.append(("Components", rows, [centre], None))
+    materials = _materials(request)
+    if counted is not None:
+        counted["materials"] = len(materials)
+    for rows, point in materials:
+        names.append(("Materials", rows, [point], None))
     if not names:
-        return [("Ports", PORTS_COLOR, edges["Ports"]), ("Interfaces", INTERFACES_COLOR, edges["Interfaces"])]
+        return [(layer, color, edges[layer]) for layer, color in layers]
 
     if marked:
         keep_out = (
@@ -418,12 +579,12 @@ def _overlay_edges(request, max_dimension, right, up, keep_out):
         )
     labels = [
         label_layout.Label(
-            stroke_text.width(text) * label_size,
-            label_size,
+            max(stroke_text.width(row) for row in rows) * label_size,
+            label_size * (1 + ROW_PITCH * (len(rows) - 1)),
             [flat(target) for target in targets],
             None if anchor is None else flat(anchor),
         )
-        for _layer, text, targets, anchor in names
+        for _layer, rows, targets, anchor in names
     ]
     label_layout.layout(labels, keep_out)
 
@@ -431,22 +592,23 @@ def _overlay_edges(request, max_dimension, right, up, keep_out):
     # so how far along the line of sight a name is put changes nothing about
     # where it is drawn; it is put level with what it names.
     normal = _cross(right, up)
-    for (layer, text, targets, _anchor), label in zip(names, labels):
+    for (layer, rows, targets, _anchor), label in zip(names, labels):
         depth = _dot(targets[0], normal)
 
         def lift(point, depth=depth):
             """A point of the picture's plane, back in 3D at 'depth'."""
             return tuple(point[0] * right[axis] + point[1] * up[axis] + depth * normal[axis] for axis in range(3))
 
-        edges[layer].extend(_label_edges(text, lift(label.position), label_size, right, up))
+        # The first row on top: each row is written from its own baseline, the
+        # last of them on the bottom of the box.
+        for index, row in enumerate(rows):
+            baseline = (label.position[0], label.position[1] + label_size * ROW_PITCH * (len(rows) - 1 - index))
+            edges[layer].extend(_label_edges(row, lift(baseline), label_size, right, up))
         attach = lift(label.attach)
         for target in targets:
             edges[layer].extend(_polyline_edges([attach, target]))
 
-    return [
-        ("Ports", PORTS_COLOR, edges["Ports"]),
-        ("Interfaces", INTERFACES_COLOR, edges["Interfaces"]),
-    ]
+    return [(layer, color, edges[layer]) for layer, color in layers]
 
 
 def _interface_shapes(request):
@@ -845,11 +1007,44 @@ def _add_projected(exporter, layer, shapes, origin, up, look_at, reproducible=Fa
         wrapper_common.handle_exception(e)
 
 
+# The lightest a line may be drawn in, as relative luminance (WCAG: white is 1,
+# goldenrod 0.42). A drawing is on white paper, and a face coloured white - what
+# a STEP file paints a part as often as not - would otherwise be drawn in lines
+# nobody can see. A colour lighter than this is drawn darker, hue kept, until it
+# is this light; goldenrod and everything darker are drawn exactly as they are.
+MAX_LINE_LUMINANCE = 0.5
+
+
+def _linear(channel: float) -> float:
+    channel /= 255.0
+    return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+
+
+def _srgb(linear: float) -> int:
+    value = linear * 12.92 if linear <= 0.0031308 else 1.055 * linear ** (1 / 2.4) - 0.055
+    return max(0, min(255, int(round(value * 255))))
+
+
+def legible(color):
+    """'color' as a line on white is drawn in: itself, or darker where it is too light to see (MAX_LINE_LUMINANCE)."""
+    if isinstance(color, str):
+        red, green, blue, alpha = appearance.parse(color)
+    else:
+        red, green, blue, alpha = (*color, 1.0) if len(color) == 3 else color
+    linear = [_linear(channel) for channel in (red, green, blue)]
+    luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    if luminance <= MAX_LINE_LUMINANCE:
+        return color
+    factor = MAX_LINE_LUMINANCE / luminance
+    # Darker, and as see-through as it was.
+    return (*(_srgb(channel * factor) for channel in linear), alpha)
+
+
 def line_color(color):
     """A colour as 'ExportSVG' has to be handed it to write exactly that colour.
 
-    'color' is an '(red, green, blue)' of integers from 0 to 255, or a colour
-    string 'appearance.parse' reads.
+    'color' is an '(red, green, blue)' of integers from 0 to 255, optionally
+    followed by an alpha from 0 to 1, or a colour string 'appearance.parse' reads.
 
     'ExportSVG' turns each channel into a fraction of 255 and, writing the file,
     back into an integer by truncating it - and a fraction of 255 does not always
@@ -860,7 +1055,7 @@ def line_color(color):
     if isinstance(color, str):
         red, green, blue, alpha = appearance.parse(color)
     else:
-        (red, green, blue), alpha = color, 1.0
+        red, green, blue, alpha = (*color, 1.0) if len(color) == 3 else color
     return b3d.Color(*(min(channel + 0.5, 255) / 255.0 for channel in (red, green, blue)), alpha)
 
 
@@ -871,7 +1066,7 @@ def visible_layer(color):
     return "%s-%s" % (VISIBLE_LAYER, color.lstrip("#"))
 
 
-def _by_color(request, warnings):
+def _by_color(request, warnings, origin=None):
     """The shape to draw and the same shape split by colour, as '(whole, groups)'.
 
     'groups' is what 'appearance.split_by_color' answers. The colours are read
@@ -879,32 +1074,72 @@ def _by_color(request, warnings):
     the geometry (see 'wrapper_export.py'). A caller that hands this module the
     geometry alone - a script of a package's own that imports it, a test - has
     said nothing about any colour, and everything is drawn in the default one.
+
+    Given 'origin', where the drawing is looked at from, a one-sided shape in
+    the tree - a wall - loses the faces that camera would see from behind
+    ('appearance.split_for_view'): from outside a room, its near walls are
+    looked through.
     """
     whole = request["wrapped"]
     tree = request.get("shape_tree")
     if tree is None:
         return whole, [(appearance.DEFAULT_COLOR, whole)]
+    if origin is not None:
+        return appearance.split_for_view(tree, whole, origin, warnings)
     return whole, appearance.split_by_color(tree, whole, warnings)
+
+
+def by_color_and_side(request, warnings):
+    """'[(colour, one_sided, shape), ...]': what '_by_color' answers, with whether each group is drawn one-sided.
+
+    For a drawing that culls what faces away from it itself, picture by picture -
+    the shaded picture and the frames of a video ('render_raster.Shaded') - since
+    the object turns between them (see 'appearance.split_by_sides').
+    """
+    whole = request["wrapped"]
+    tree = request.get("shape_tree")
+    if tree is None:
+        return [(appearance.DEFAULT_COLOR, False, whole)]
+    return appearance.split_by_sides(tree, whole, warnings)
+
+
+def by_look_and_side(request, warnings):
+    """'[(colour, one_sided, shape, texture), ...]': 'by_color_and_side', with the image each group is drawn with.
+
+    For whatever draws surfaces, which can draw the image a colour is drawn
+    with too (see 'appearance.split_by_look'); each texture is None where
+    nothing is drawn with one, and a tree drawn with none is split exactly as
+    'by_color_and_side' splits it.
+    """
+    whole = request["wrapped"]
+    tree = request.get("shape_tree")
+    if tree is None:
+        return [(appearance.DEFAULT_COLOR, False, whole, None)]
+    return appearance.split_by_look(tree, whole, warnings)
 
 
 def process(path, request):
     try:
         warnings = []
-        whole, groups = _by_color(request, warnings)
+        # The camera, from here on, for everything projected: the shape, the
+        # annotations and the overlays all have to be seen from the one place,
+        # or what is drawn on top lands somewhere else on the page. See
+        # 'LOOK_AT' for why it is the direction asked for, as a position. Worked
+        # out first, because what a one-sided shape shows depends on it.
+        origin = tuple(float(component) for component in viewport_origin(request))
+        up = viewport_up(request)
+        # The object turned in front of that camera, which is drawn by the camera
+        # turned the other way about it (see 'viewpoint').
+        origin, up = viewpoint.turned(origin, up, viewpoint.turn_of(request))
+        look_at = LOOK_AT
+
+        whole, groups = _by_color(request, warnings, origin)
         if needs_mesh_normalization(request):
             groups = [(color, _normalize_mesh(shape)) for color, shape in groups]
             if len(groups) == 1:
                 whole = groups[0][1]
             else:
                 whole = ocp_serialize.compound_of(shape for _color, shape in groups)
-
-        # The camera, from here on, for everything projected: the shape, the
-        # annotations and the overlays all have to be seen from the one place,
-        # or what is drawn on top lands somewhere else on the page. See
-        # 'LOOK_AT' for why it is the direction asked for, as a position.
-        origin = tuple(float(component) for component in viewport_origin(request))
-        up = viewport_up(request)
-        look_at = LOOK_AT
         # Whether this drawing has to come out the same every time it is drawn.
         # Always present in the request - PartCAD puts it there whether or not
         # the file type declared it - but defaulted here all the same, because
@@ -931,7 +1166,7 @@ def process(path, request):
             layer = visible_layer(color)
             exporter.add_layer(
                 layer,
-                line_color=line_color(color),
+                line_color=line_color(legible(color)),
                 line_weight=line_weight,
             )
             # A projection that cannot be added still leaves an SVG behind - an
@@ -959,10 +1194,16 @@ def process(path, request):
             )
             _add_projected(exporter, "Annotations", edges, origin, up, look_at, reproducible)
 
-        # The ports and the interfaces, when they were asked for. Drawing them
-        # cannot cost the picture: an overlay that fails is reported and the
-        # projection is still written.
-        if request.get("with_ports") or request.get("with_interfaces"):
+        # The ports and the interfaces, and the callouts on the components,
+        # when they were asked for. Drawing them cannot cost the picture: an
+        # overlay that fails is reported and the projection is still written.
+        if (
+            request.get("with_ports")
+            or request.get("with_interfaces")
+            or request.get(COMPONENT_NAMES_KEY)
+            or request.get(COMPONENT_PRICES_KEY)
+            or request.get(MATERIALS_KEY)
+        ):
             try:
                 right, upward = _camera_axes(origin, up, look_at)
                 # The object, as a box in the plane of the picture, which is
@@ -976,7 +1217,11 @@ def process(path, request):
                     bounds.max.X - shift[0],
                     bounds.max.Y - shift[1],
                 )
-                overlays = _overlay_edges(request, max_dimension, right, upward, keep_out)
+                counted = {}
+                overlays = _overlay_edges(request, max_dimension, right, upward, keep_out, counted)
+                if request.get(MATERIALS_KEY) and not counted.get("materials"):
+                    # A picture with no material on it cannot say why.
+                    warnings.append("Nothing drawn here states what it is made of: no material to call out")
                 shapes = {"Interfaces": _interface_shapes(request)}
                 for layer, color, layer_edges in overlays:
                     layer_shapes = layer_edges + shapes.get(layer, [])

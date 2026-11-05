@@ -501,6 +501,21 @@ def test_the_viewpoint_is_the_one_the_scene_is_rendered_from(tmp_path):
     assert (snapshot["width"], snapshot["height"]) == (300, 512)
 
 
+def test_the_snapshots_are_the_size_the_png_is(tmp_path):
+    """'size', as a PNG takes it, with 'width' or 'height' overriding a side of it."""
+    context = scene_package(
+        tmp_path,
+        package_render="render:\n  png:\n    size: 640x480\n",
+        scene_render="    render:\n      png:\n        width: 300\n",
+    )
+
+    from_package = simulation.snapshot_request(context, context.get_scene("//:floor"))
+    from_scene = simulation.snapshot_request(context, context.get_scene("//:table"))
+
+    assert (from_package["width"], from_package["height"]) == (640, 480)
+    assert (from_scene["width"], from_scene["height"]) == (300, 480)
+
+
 def test_a_package_says_how_every_scene_in_it_is_looked_at(tmp_path):
     """Unless the scene says otherwise, which is the order 'pc render' reads them in."""
     context = scene_package(

@@ -9,6 +9,10 @@ What a part is
 
 PartCAD has an ever-growing list of ways to define the part model:
 
+- Basic shapes
+
+  - ``cuboid``, ``cylinder``
+
 - Files
 
   - `STEP <https://en.wikipedia.org/wiki/ISO_10303>`_
@@ -37,8 +41,9 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <scad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|gltf|fcstd|extrude|sweep
-             |kicad|compound|alias|enrich|:<partType declared by this package>
+      type: <basic|scad|cadquery|build123d|chili3d|sdf|extrude|sweep
+             |step|brep|iges|stl|3mf|obj|gltf|fcstd|f3d|sldprt|ipt|catpart|sat|pvz
+             |kicad|compound|wall|alias|enrich|:<partType declared by this package>
              |<package>:<partType declared by that package>>
       desc: <(optional) textual description>
       images: <(optional) the images this part was modeled from; see below>
@@ -46,7 +51,8 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
       fileUrl: <(fileFrom=url only) the URL to download the source file from>
       # ... type-specific options ...
-      offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
+      offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]";
+               any number in it may be an expression over the part's parameters, e.g. "%length / 2%">
 
       # The below syntax is similar to the one used for interfaces,
       # with the only exception being the word "implements" instead of "inherits".
@@ -149,6 +155,60 @@ to ``parameters``, which say what is asked of the type that produces it. See
 :ref:`properties` below.
 
 See :ref:`location` for more information on the OCCT Location object.
+
+.. _basic_parts:
+
+Basic shapes
+------------
+
+A part that is one primitive solid is declared by its dimensions alone, with
+nothing to read and no script to run:
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      type: basic
+      desc: <(optional) textual description>
+      # The below are mutually exclusive options
+      cuboid: <(optional) edge size of a cube>
+      cuboid: [<size along X>, <size along Y>, <size along Z>]  # alternative syntax
+      cylinder: <(optional)>
+        radius: <radius>
+        height: <height, along Z>
+      offset: <(optional) where to put it, as for any other part>
+
+There must be exactly one field ``cuboid`` or ``cylinder``. Both solids are
+built **centred on the origin**, the way build123d's ``Box`` and ``Cylinder`` and
+CadQuery's ``box`` and ``cylinder`` are: a cylinder of height 10 runs from
+``z = -5`` to ``z = 5``. A part is one solid, so it is placed the way any other
+part is, by its ``offset`` (see :ref:`location`), which also turns it. Every
+dimension, and every number in the ``offset``, may be an expression over the
+part's ``parameters`` (see :ref:`parameters`), which is how a basic part is made
+parametric:
+
+.. code-block:: yaml
+
+  parts:
+    spacer:
+      type: basic
+      parameters:
+        length:
+          type: float
+          default: 10
+      cylinder:
+        radius: 4
+        height: "%length%"
+      # Standing on the XY plane, whatever its length.
+      offset: [[0, 0, "%length / 2%"], [0, 0, 1], 0]
+
+A basic part is a homogeneous body, so it takes the ``material``, ``color`` and
+``tolerance`` parameters.
+
+Neither a basic part nor a basic sketch (see :ref:`sketches`) is built with a CAD
+kernel: PartCAD writes its BREP itself, in milliseconds and without starting a
+CAD sandbox. It is still the solid OCCT would have built from the same numbers,
+and it renders, exports, measures and takes part in a boolean like one.
 
 CAD Scripts
 -----------
@@ -295,6 +355,8 @@ Two notes on how this differs from the Python script types:
   script and then exported to STEP, STL, 3MF and everything else PartCAD
   writes, but no exporter produces a ``.chili`` file.
 
+.. _cad-files:
+
 CAD Files
 ---------
 
@@ -304,48 +366,125 @@ Define parts with CAD files using the following syntax:
 
   parts:
     <part name>:
-      type: <step|brep|stl|3mf|obj|gltf|fcstd>
+      type: <step|brep|iges|stl|3mf|obj|gltf|fcstd|f3d|sldprt|ipt|catpart|sat|pvz>
       binary: <(stl only) use the binary format>
+
+.. list-table::
+   :header-rows: 1
+
+   * - ``type``
+     - Format
+     - File, by default
+   * - ``step``
+     - STEP
+     - ``<name>.step``
+   * - ``brep``
+     - OpenCASCADE BREP
+     - ``<name>.brep``
+   * - ``iges``
+     - IGES
+     - ``<name>.iges``
+   * - ``stl``
+     - STL
+     - ``<name>.stl``
+   * - ``3mf``
+     - 3MF
+     - ``<name>.3mf``
+   * - ``obj``
+     - Wavefront OBJ
+     - ``<name>.obj``
+   * - ``gltf``
+     - glTF: a ``.gltf`` with its buffers, or a ``.glb``
+     - ``<name>.gltf``
+   * - ``fcstd``
+     - FreeCAD document
+     - ``<name>.FCStd``
+   * - ``f3d``
+     - Autodesk Fusion design
+     - ``<name>.f3d``
+   * - ``sldprt``
+     - SolidWorks part
+     - ``<name>.SLDPRT``
+   * - ``ipt``
+     - Autodesk Inventor part
+     - ``<name>.ipt``
+   * - ``catpart``
+     - CATIA V5 part
+     - ``<name>.CATPart``
+   * - ``sat``
+     - ACIS or ShapeManager body: text ``.sat``, binary ``.sab``, ``.smt``, ``.smb``
+     - ``<name>.sat``
+   * - ``pvz``
+     - Creo View package, every component's bodies as one part
+     - ``<name>.pvz``
+
+A file of another name or extension -- a ``.stp``, a ``.glb``, a binary ACIS
+``.sab`` -- is named with ``path``:
+
+.. code-block:: yaml
+
+  parts:
+    housing:
+      type: sldprt         # reads housing.SLDPRT
+    shaft:
+      type: ipt
+      path: vendor/Shaft.ipt
 
 A CAD file published elsewhere (in a vendor's catalog, for example) does not
 have to be committed to the package: see :ref:`files` for how to have PartCAD
 download it on demand.
 
-``gltf`` reads a `glTF <https://www.khronos.org/gltf/>`_ file: a ``.gltf`` with
-the buffers it names beside it, or a single ``.glb`` (``path: model.glb``). Every
-mesh in it is placed by the node tree, glTF's metres and Y-up are restated as
-millimetres and Z-up, and the triangles are meshed into the faces of a solid,
-as an STL part's are -- so what ``pc export -t gltf`` writes reads back where it
-was. A ``.gltf``'s buffers and images are part of its cache key, and
-``pc import part`` copies them along with it -- refusing one that would replace a
-different file of the same name already in the package.
+``gltf`` reads every mesh in a `glTF <https://www.khronos.org/gltf/>`_ file,
+placed by the node tree, with glTF's metres and Y-up restated as millimetres and
+Z-up, and the triangles meshed into the faces of a solid, as an STL part's are --
+so what ``pc export -t gltf`` writes reads back where it was. A ``.gltf``'s
+buffers and images are part of its cache key, and ``pc import part`` copies them
+along with it -- refusing one that would replace a different file of the same
+name already in the package.
 
-FreeCAD documents
-^^^^^^^^^^^^^^^^^
+A CAD application's own file -- ``fcstd`` to ``pvz`` in the table -- is read
+without the application that wrote it, and the part is what the file shows: the
+bodies it displays, and not one its author hid, nor the sketches, axes and points
+beside them. The geometry is the exact B-rep the application last computed, not
+a mesh of it; the history -- features, sketches, constraints, parameters,
+configurations -- is not carried over. In a `FreeCAD <https://www.freecad.org/>`_
+document, what it shows is the shapes of the features nothing else in it
+consumes, that are neither hidden nor suppressed: a PartDesign body's Pad, the
+Pocket cut into it and the Fillet on top are three solids in the file, and the
+part is the last of them. Objects placed through ``App::Link`` are not followed.
+A Fusion design or a Creo View package can also be declared as an
+:ref:`assembly <assembly-f3d-pvz>`, which keeps its components apart.
 
-``fcstd`` reads a `FreeCAD <https://www.freecad.org/>`_ document (``.FCStd``)
-without FreeCAD:
+Those types are read with
+`cadmpeg <https://github.com/cadmpeg/cadmpeg>`_, which converts each file to
+STEP. It is not in the wheel: the first part read downloads the release PartCAD
+pins, checks it against its published SHA-256, and keeps it in PartCAD's state
+directory. A ``cadmpeg`` already on the ``PATH`` is used instead when it is that
+release, which is what PartCAD's ``docker`` sandbox images carry; another
+release is passed over, because the parts read with it are cached under the
+pinned one. Each is a :ref:`partType <part-types>` PartCAD declares in
+``//builtin/import``, which is also what a package does to teach PartCAD a format
+of its own. Rhino ``.3dm`` and the two ``.prt`` formats, Siemens NX's and Creo
+Parametric's, are not read yet: cadmpeg does not read their bodies into solids.
 
-.. code-block:: yaml
+An ``iges`` part is read with `OpenCASCADE <https://dev.opencascade.org/>`_,
+whose IGES reader is the counterpart of the writer ``pc export -t iges`` uses, so
+what PartCAD writes it reads back. The part is the solids the file shows, in the
+colours it puts on them; an entity it blanks is left out. A solid stated as one
+(a manifold solid B-rep, IGES entity 186) is read as it is. One stated only as
+the faces that bound it -- trimmed surfaces with nothing to say they are one
+body, which is how OpenCASCADE writes IGES by default and how many CAD
+applications write it -- is sewn back together: the faces of each body, as the
+file groups them, are joined across the gaps the file's own geometry admits, and
+a shell that closes is the solid it bounds. It is a ``partType`` of
+``//builtin/import`` too.
 
-  parts:
-    bracket:
-      type: fcstd          # reads bracket.FCStd
-
-The part is what the document shows: the shapes of the features nothing else in
-it consumes, that are neither hidden nor suppressed, and only their solids. A
-PartDesign body's Pad, the Pocket cut into it and the Fillet on top are three
-solids in the file, and the part is the last of them. The geometry is the exact
-shape FreeCAD stored, so nothing is translated on the way; the history -- the
-sketches, the constraints, the parametric features -- is not carried over, and
-objects placed through ``App::Link`` are not followed.
-
-It is read with `cadmpeg <https://github.com/cadmpeg/cadmpeg>`_, which PartCAD
-does not ship: the first part read downloads the release PartCAD pins, checks it
-against its published SHA-256, and keeps it in PartCAD's state directory (a
-``cadmpeg`` already on the ``PATH`` is used instead). ``fcstd`` is a
-:ref:`partType <part-types>` PartCAD declares in ``//builtin/import``, which is
-also what a package does to teach PartCAD a format of its own.
+``iges`` and ``fcstd`` to ``pvz`` also **require a solid** (``requireSolid``, see
+:ref:`part-types`). A body that did not come through whole -- a face whose geometry could not be
+decoded, faces that do not close, a solid that comes back open or invalid -- is
+not a part with a hole in it: it fails to build, and says what is wrong with it,
+by the same check that only warns about any other part that is not a solid. So an
+IGES surface model whose faces bound no solid is not an ``iges`` part.
 
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Example                                                                              | Configuration             | Result                                                                                                                  |
@@ -415,6 +554,115 @@ Define parts by sweeping a sketch using the following syntax:
 |       sketch: section                                                     |                                                                                                                         |
 |       axis: [[0, 0, 20], [0, 0, 20], [20, 0, 0], [20, 20, 0], [0, 20, 0]] |                                                                                                                         |
 +---------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+
+.. _walls:
+
+Wall
+----
+
+A wall is what a room is drawn with when a space is laid out rather than made: a
+floor plan, an apartment for sale, the room a machine is going to stand in. It is
+a **surface**, not a body -- a sheet of faces with no thickness -- and it is
+**one-sided**: drawn from the side it faces, and not there at all from the other.
+So a picture of a room taken from outside is taken through the walls nearest the
+camera, and shows the far walls from the inside.
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      type: wall
+      manufacturable: false  # required, here or on the package: a wall is never made
+      length: <mm along its base; along the arc, for an arc wall>
+      height: <mm>
+      radius: <(optional) 0, the default, for a straight wall; the radius of an arc wall
+               otherwise: positive bends it towards its front, negative away from it>
+      openings: <(optional) the sketch its doors and windows are cut out by>
+
+The base of the wall starts at the origin and sets off along +X, and the wall
+rises along +Z. Its **front** faces -Y, the way ``pc render --view front`` looks
+at it, so that a wall seen from the front is its openings as they were drawn,
+the door on the left where it was drawn on the left. Walk along it from its
+start, and the side it is seen from is the one on your right. An arc wall bends
+towards its front for a positive ``radius`` -- the inside of a round room -- and
+away from it for a negative one, the outside of a column a room goes around;
+either way it is ``length`` long measured along the arc, and goes once around at
+most.
+
+The openings are a sketch drawn as if the wall were unrolled flat in front of
+you: X along its base from 0 to ``length``, Y up from 0 to ``height``, on the XY
+plane. Each face of the sketch, or each closed wire, is cut out of the wall; on an
+arc wall, X is the distance along the arc, so a door 900 mm wide is 900 mm wide
+whatever the radius. An opening may meet an edge of the wall -- a door stands on
+the floor -- and one that reaches **beyond** it is an error saying how far, rather
+than an opening quietly clipped to fit: a window drawn too wide is a mistake in
+the drawing or in the wall, and either is worth hearing about. So is an opening
+off the XY plane, and one that does not close.
+
+Any of the four may be a ``%...%`` expression over the part's parameters, which is
+how PartCAD's own wall is declared: ``//builtin/building:wall`` takes ``length``,
+``height``, ``radius`` and ``openings`` as parameters, so any package can use a
+wall without declaring one:
+
+.. code-block:: yaml
+
+  parts:
+    north-wall:
+      type: enrich
+      source: //builtin/building:wall
+      with:
+        length: 4200
+        height: 2700
+        openings: //my/apartment:north-windows  # in full: the sketch is yours, not //builtin's
+
+A room is the walls standing on the outline of a sketch, each looking in: see
+:ref:`scenes-walls`.
+
+A wall is a surface on purpose, by its type, and that is decided by the type and
+not by the part:
+
+- It is **never manufacturable**, and has to say so. A ``type: wall`` part that
+  does not state ``manufacturable: false`` -- itself, or through its package -- is
+  refused with a message saying what to add. ``pc test``'s manufacturability
+  check passes over it, and fails an assembly that is to be made with a wall in
+  it: put walls in a scene.
+- It is **not turned into a solid**, nor reported for not being one, as it is
+  built (see "A part is a body, not a skin" in the contributor notes).
+- The checks that ask whether a part is a body -- ``shell``, ``degenerate``,
+  ``solidity`` and ``validity`` -- pass over it as not applicable, saying why. A
+  straight wall is as flat as a sheet of paper, because that is what it is.
+- It reports ``oneSided: true`` among its :ref:`properties <properties>`, and
+  that is what everything that draws it reads: the 3D view in the IDE culls the
+  backs of its faces, a shaded picture or a video (``--style shaded``) does the
+  same frame by frame, and a drawing of lines leaves out the faces the camera
+  would see from behind -- cutting a curved wall where it turns away -- so that
+  from straight above every wall is seen edge-on and the drawing is the plan. An
+  alias of a wall is one-sided too.
+
+A wall is coloured as any part is, by its :ref:`CMF <cmf>` ``color`` parameter
+(and given a ``material`` or a ``finish`` the same way): what it is painted.
+``//builtin/building:wall`` is a warm grey unless it is told otherwise -- the
+display-only colour ``//builtin/building:wall``, which claims nothing, since a
+wall is never made -- so ``wall;color=//my/apartment:sage`` is a sage wall. The
+colour a wall is painted in need not be one anybody can buy, either; a colour
+that is only a picture says so:
+
+.. code-block:: yaml
+
+  colors:
+    sage:
+      display: "#7D8F69"
+      manufacturable: false
+
+A wall papered or tiled is a wall in a colour drawn with an image (see :ref:`cmf-textures`): the image is laid on its
+front, and the wall is still one-sided -- seen from behind, it is not there, image and all.
+
+.. code-block:: yaml
+
+  colors:
+    wallpaper:
+      display: {image: textures/wallpaper.jpg, size: 530}
+      manufacturable: false
 
 References
 ----------
@@ -613,9 +861,30 @@ the ``partType`` or on its package, is the image the ``docker`` sandbox runs the
 script in when it can be pulled, read from the implementing package as it is for
 an output implementation (see :ref:`output-files`) rather than from the part's.
 
-PartCAD ships ``partType`` s of its own in ``//builtin/import`` -- ``fcstd``, for
-FreeCAD documents -- and a part names one of those by its bare name,
-``type: fcstd``, as if it were built in. The SolidCraft plugin,
+Every part is held to one definition of a solid as it is built, whatever made
+it: it has a solid in it, no faces that bound nothing, no open or invalid solid,
+none with no volume. A part that misses it is built anyway and reported, because
+a surface model is a legitimate thing to import and draw. A ``partType`` whose
+parts are bodies by definition -- a converter from a native CAD format most of
+all, where a part that misses it is one the converter read wrongly -- says so with
+``requireSolid: true``, and then such a part fails to build instead, saying what
+is wrong with it. Nothing about the check changes; only what its answer means:
+
+.. code-block:: yaml
+
+  partTypes:
+    rhino:
+      path: read_part.py
+      extension: 3dm
+      requireSolid: true
+
+An ``import:`` reader declares the same key for the parts it registers (see
+:ref:`assemblies`).
+
+PartCAD ships ``partType`` s of its own in ``//builtin/import`` -- ``iges`` and
+the CAD applications' files, ``fcstd`` to ``pvz`` (see :ref:`cad-files`) -- and a
+part names one of those by its bare name, ``type: fcstd``, as if it were built
+in. The SolidCraft plugin,
 `partcad-solidcraft <https://github.com/partcad/partcad-solidcraft>`_, is a whole
 package of them: SolidCraft designs, Rhino and IGES, downloading SolidCraft's
 command line tool on demand or running in the image it publishes, with its tests
@@ -646,30 +915,24 @@ likes, and nothing outside that script knows what it means, so PartCAD lets a
 part declare any name it wants. A few are **object-type parameters** instead:
 contributed by the part *type* rather than declared out of nothing, with a
 meaning PartCAD itself acts on. They are therefore only available on the types
-that can honour them. Today there are three - ``material``, ``color`` and
-``tolerance``.
+that can honour them. There are two groups.
 
-What decides which types accept them is whether the part is a single
-homogeneous body - one solid, made of one thing - because that is what has to
-be true for one ``material:``, one ``color:`` or one ``tolerance:`` to be true
-of the whole part. A mesh is one body: an STL file is a surface with nothing
-inside it to vary, and the only way it has a material at all is for somebody to
-say so. So is a solid built by a script, and so is one extruded from a single
-sketch. ``stl``, ``cadquery``, ``build123d``, ``sdf``, ``scad`` and ``extrude``
-accept all three.
+The **CMF parameters** - ``color``, ``material``, ``finish``, ``sourceCmf`` and
+``cmfConvention`` - are accepted by every part type and every assembly type (see
+:ref:`cmf-parameters`). Whatever a part is built from, its source may state CMF
+of its own - a STEP file per solid and per face, a script per sub-shape - and
+these complete it, or with ``sourceCmf`` replace it.
 
-A STEP file is not one body. It can carry many solids, each already stating a
-material and a colour of its own, and naming one for the file would be a claim
-about a part the file itself describes better. ``step`` rejects them, and so
-does ``kicad``, which is a STEP file behind a footprint. What such a part is
-made of belongs under :ref:`properties`, where a shape says what it turned out
-to be rather than what was asked of it. How precisely it has to be made is a
-separate question and has an answer of its own, below: see
-:ref:`tolerance-field`.
-
-Every other part type rejects them too, but for a different reason: whether it
-should accept them has not been decided yet, and answering "no" until somebody
-decides leaves the question open rather than settling it by accident.
+``tolerance`` is accepted only by the types that build a single homogeneous
+body - one solid, made of one thing - because that is what has to be true for
+one tolerance to be true of the whole part. A mesh is one body: an STL file is a
+surface with nothing inside it to vary. So is a solid built by a script, and so
+is one extruded from a single sketch. ``stl``, ``cadquery``, ``build123d``,
+``sdf``, ``scad`` and ``extrude`` accept it. A STEP file is not one body, and
+``step`` rejects it, as does ``kicad``, which is a STEP file behind a footprint;
+how precisely such a part has to be made has an answer of its own, below: see
+:ref:`tolerance-field`. Every other part type rejects it too, but for a
+different reason: whether it should accept it has not been decided yet.
 
 Declaring one of these under ``parameters:`` of a type that does not accept it
 is an error, not a warning. It costs the package that one part - the rest of
@@ -681,7 +944,7 @@ shape of its declaration - any parameter may carry ``color:`` and ``material:``
 fields of its own describing what one of its values looks like, whatever the
 part type.
 
-``tolerance`` is the one of the three that has a default, ``0.0``: it reads
+``tolerance`` is the one of them that has a default, ``0.0``: it reads
 back as that on any type that accepts it, whether or not a part declares one.
 The default is applied when the value is read and is never written into the
 part's ``parameters:`` section, because that section is part of what the shape
@@ -735,37 +998,22 @@ written.
 
 There are several parameter names that are reserved for values used in
 visualization, simulation calculations and, if applicable, manufacturing
-(also referred to as **MCFTT parameters** using their first letters):
+(also referred to as **MCFT parameters** using their first letters):
 
-- ``material``
+- ``material``, ``color`` and ``finish``
 
-  Must point at an object of type ``material``, as ``<package>:<name>``.
-  Some of them are defined in ``//pub/std/manufacturing/material``; see
-  :ref:`materials` for declaring your own.
-  This one is an object-type parameter, so it may only be declared on the part
-  types listed above.
-  When a request is made to a manufacturing API,
-  a close enough material is selected from the materials provided by the
-  manufacturer. The responsibility to select the right material is on the
-  implementation of the manufacturing API (the ``provider`` object in PartCAD).
+  The CMF parameters: each a reference to a declaration of its kind, as
+  ``<package>:<name>`` (see :ref:`cmf`). Some materials are declared in
+  ``//pub/std/manufacturing/material``. They are accepted by every part type, and
+  fill in what the part's source leaves unset (see :ref:`cmf-parameters`). A
+  part in another colour is another item. A request to a manufacturing API does
+  not carry the declarations yet: each part in it is sent as its format and its
+  file (see :ref:`providers`). Handing a provider the declarations, to match by
+  what other systems call them (``ids``), is planned.
 
-- ``color``
-
-  This one is an object-type parameter too, with the same restriction.
-
-  **Not implemented yet. Use color names for now.**
-
-- ``finish``
-
-  Optional. Can be omitted for no finish.
-
-  **Not implemented yet.**
-
-- ``texture``
-
-  Optional. Can be omitted for no texture.
-
-  **Not implemented yet.**
+  A part drawn with a texture -- wood grain, a fabric, a printed label -- names
+  a colour whose ``display`` is an image (see :ref:`cmf-textures`). The texture
+  is how that colour is drawn, not a parameter of its own.
 
 - ``tolerance``
 
@@ -778,18 +1026,16 @@ visualization, simulation calculations and, if applicable, manufacturing
   as a parameter, and their file may state it for them; see
   :ref:`tolerance-field`.
 
-If the part has variable MCFTT parameters depending on the surface,
-then either this part must be broken down into multiple parts,
-or the values must be derived from CAD files/scripts (not implemented yet).
-In the latter case the part will not be eligible for manufacturing features,
-unless a specific manufacturing service provider recognizes (vendor,SKU) values
-and have received corresponding manufacturing instructions out-of-band.
+A part whose colour or finish differs from face to face, or whose material
+differs from solid to solid, states that through its source: a STEP file, a
+script or an OpenSCAD model that colours what it builds (see :ref:`cmf`). The
+CMF parameters then complete what the source leaves unset.
 
-The MCFTT parameters are not required and have no impact on parts that have
+The MCFT parameters are not required and have no impact on parts that have
 ``vendor`` and ``sku`` set and that are procured using providers of the type
 ``store``.
 
-The MCFTT parameters are a request, and the request is a manufacturing one: they
+The MCFT parameters are a request, and the request is a manufacturing one: they
 say what the part should be made of, and how well, for the provider that will
 make it. They are not a claim about a shape that exists. A part read from a STEP
 file that already states its material does not answer them, and the answer is
@@ -877,6 +1123,7 @@ this section in from what the file already stated.
       properties:
         material: <(optional) the name of the material this shape is made of>
         color: <(optional) "#RRGGBB" or "#RRGGBBAA">
+        oneSided: <(optional) true to draw it from the front of its faces only>
         physics: # (optional)
           mass: ... # kg
           # ... see the full list under "Parts" above
@@ -901,6 +1148,15 @@ A shape that states no colour -- most of them -- is drawn in goldenrod,
 ``#DAA520``, which is the colour OCCT draws a shape nobody coloured. A
 ``material`` says nothing about how a part looks, so a part made of one and
 stating no colour is goldenrod too.
+
+``oneSided`` is how a shape is drawn too, by the same three and by the IDE: from
+the front of its faces only -- the side their normals point to -- and not at all
+from behind. It is what a :ref:`wall <walls>` reports about itself, and it is
+inherited the way a colour is, on its own: an assembly that states it makes
+everything in it one-sided that does not say otherwise, whatever colour each of
+them is. A drawing leaves out the faces the camera would see from behind before
+it hides anything, so what is behind them shows; a face seen exactly edge-on is
+kept.
 
 Every ``physics`` property has a PartCAD name and a PartCAD unit, and the set of
 them is closed. Lengths are millimetres and angles degrees, as everywhere else

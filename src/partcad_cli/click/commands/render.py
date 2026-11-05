@@ -16,13 +16,15 @@ from .. import fast_only, object_kind
 from ..exclude import exclude_option, exclude_params
 from ..link_filter import filter_option, filter_params
 from ..parameters import param_option, param_params
+from ..render_options import reproducible_option, reproducible_params
 from ..service import run
+from ..video import video_options, video_params
 from ..viewport import viewport_options, viewport_params
 
 
 @click.command(
     help=(
-        "Render a 2D projection of parts, assemblies, or scenes onto a plane. "
+        "Render a 2D projection of parts, assemblies, or scenes onto a plane, or a video of one turning. "
         "OBJECT may be written '...:<name>' to mean every object of that name in this "
         "package and in every package below it. " + object_kind.LOOKED_UP
     ),
@@ -37,7 +39,10 @@ from ..viewport import viewport_options, viewport_params
 @click.option(
     "-t",
     "--format",
-    help="The type of file to render: readme, pdf, html, svg, png, jpeg, dxf, or any type a package implements itself",
+    help=(
+        "The type of file to render: readme, pdf, html, svg, png, jpeg, dxf, a video (mp4, m4v, mov, qt, "
+        "mkv, webm, avi, wmv, asf, ogv), or any type a package implements itself"
+    ),
     type=str,
     show_envvar=True,
 )
@@ -48,6 +53,7 @@ from ..viewport import viewport_options, viewport_params
     show_envvar=True,
 )
 @viewport_options
+@reproducible_option
 @click.option(
     "-P",
     "--package",
@@ -141,6 +147,51 @@ from ..viewport import viewport_options, viewport_params
     is_flag=True,
     show_envvar=True,
 )
+# Callouts: one box on every component (a part, wherever it is placed) with its
+# name and its price, one on every cluster of a material naming it, and whether
+# the two overlays above write their names.
+# What the IDE's 3D and 2D tabs offer as boxes under the tree.
+@click.option(
+    "--with-component-names",
+    help="Put a callout on every component with its name",
+    is_flag=True,
+    show_envvar=True,
+)
+@click.option(
+    "--with-component-prices",
+    help=(
+        "Put a callout on every component with its price: its share of what the object costs, from the "
+        "cheapest quote of each thing to order ('pc supply quote'). With --with-component-names, "
+        "the price is the second row of the same callout"
+    ),
+    is_flag=True,
+    show_envvar=True,
+)
+@click.option(
+    "--with-materials",
+    help=(
+        "Put a callout on every cluster of a material, naming it: the faces of one material, of one part or "
+        "of several, that touch or are closer than 'materialClusterDistance' (10 mm unless the user "
+        "configuration says otherwise)"
+    ),
+    is_flag=True,
+    show_envvar=True,
+)
+@click.option(
+    "--with-port-names/--without-port-names",
+    "port_names",
+    default=True,
+    help="Write the name of every port --with-ports draws (the default), or draw the ports alone",
+    show_envvar=True,
+)
+@click.option(
+    "--with-interface-names/--without-interface-names",
+    "interface_names",
+    default=True,
+    help="Write the name of every interface --with-interfaces draws (the default), or draw the boundaries alone",
+    show_envvar=True,
+)
+@video_options
 @exclude_option
 @filter_option
 @param_option
@@ -154,6 +205,8 @@ def cli(
     view,
     viewport_origin,
     viewport_up,
+    turn,
+    reproducible,
     package,
     options_package,
     recursive,
@@ -166,6 +219,20 @@ def cli(
     with_interfaces,
     with_all,
     with_internals,
+    with_component_names,
+    with_component_prices,
+    with_materials,
+    port_names,
+    interface_names,
+    style,
+    size,
+    background,
+    fps,
+    duration,
+    speed,
+    append,
+    preset,
+    quality,
     exclude,
     ports,
     link_filter,
@@ -181,7 +248,9 @@ def cli(
             "output_dir": os.path.abspath(output_dir) if output_dir else None,
             "format": format,
             "ignore_manufacturability": ignore_manufacturability,
-            **viewport_params(view, viewport_origin, viewport_up),
+            **viewport_params(view, viewport_origin, viewport_up, turn),
+            **reproducible_params(reproducible),
+            **video_params(style, size, background, fps, duration, speed, append, preset, quality),
             "package": package,
             "options_package": options_package,
             "recursive": recursive,
@@ -197,6 +266,13 @@ def cli(
             # Empty is "every port the overlay found", which is what the three
             # options above meant on their own before this existed.
             "ports": list(ports) or None,
+            "with_component_names": with_component_names,
+            "with_component_prices": with_component_prices,
+            "with_materials": with_materials,
+            # Sent only when switched off, so that a daemon from before the two
+            # existed is asked exactly what it always was.
+            **({} if port_names else {"with_port_names": False}),
+            **({} if interface_names else {"with_interface_names": False}),
             "object": object,
             **param_params(params),
             **exclude_params(exclude),

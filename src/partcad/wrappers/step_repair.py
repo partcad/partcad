@@ -13,16 +13,20 @@ description, ahead of its own attributes:
     CARTESIAN_TRANSFORMATION_OPERATOR_2D('', '', $, #axis1, #axis2, #origin, 1.);
 
 Seven parameters in 2D and eight in 3D, where 'axis3' follows. Some writers --
-cadmpeg among them, for every pcurve and surface it places by transformation --
-leave the two inherited ones out. OpenCASCADE then rejects the instance when it
-loads the file, which on its own would cost a warning, and goes on to dereference
-the origin it never read when it translates the geometry that uses it: the
-process dies with SIGSEGV, and nothing says why.
+cadmpeg before 0.6.7 among them, for every pcurve and surface it places by
+transformation -- leave the two inherited ones out. OpenCASCADE then rejects the
+instance when it loads the file, which on its own would cost a warning, and goes
+on to dereference the origin it never read when it translates the geometry that
+uses it: the process dies with SIGSEGV, and nothing says why.
 
 The two missing parameters carry no geometry -- a name and an optional
 description -- so restoring them as ``''`` and ``$`` loses nothing and gives
 OpenCASCADE the instance it expects. That is all this does: a file that needs
 no repair is read as it is, without a copy.
+
+The cadmpeg PartCAD pins writes the complete form, and this stays all the same:
+'cadmpeg_tool' prefers a copy already on the PATH, which can be older, and every
+STEP file a cadmpeg part type reads comes through here whoever wrote it.
 
 Runs inside the sandbox, so it uses nothing but the standard library.
 """

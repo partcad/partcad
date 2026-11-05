@@ -17,6 +17,7 @@ import os
 import sys
 import tempfile
 import threading
+import time
 import warnings
 from typing import TYPE_CHECKING, Optional
 
@@ -32,10 +33,12 @@ from . import output
 from . import physics as pc_physics
 from . import render_overlay
 from . import runtime as pc_runtime
-from . import sandbox_versions, scene_world, shape_ports, shape_section, source_key, sync_threads, wrapper
+from . import sandbox_versions, scene_world, shape_ports, shape_section, source_key
+from . import surface as pc_surface
+from . import sync_threads, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
-from .shape_config import ShapeConfiguration
+from .shape_config import TRANSFORM_KEYS, ShapeConfiguration
 from .utils import resolve_resource_path, total_size
 
 if TYPE_CHECKING:
@@ -66,6 +69,27 @@ PART_EXTENSION_MAPPING = {
     "chili3d": "chili",
     "sdf": "py",
     "scad": "scad",
+}
+
+# The other spellings of a part type's extension: what its files are called by
+# whatever wrote them, as opposed to the one extension PartCAD names its own
+# ('step', and the 'extension' a built-in 'partType' declares). A part added
+# from 'bracket.stp' is 'bracket', as one added from 'bracket.step' is -- its
+# 'path' says which file it is. An ACIS body is text in a '.sat' and binary in a
+# '.sab', and ShapeManager's are '.smt' and '.smb'; cadmpeg tells them apart by
+# their content, so they are one type. 'gltf' is here because its files are
+# '.gltf' or '.glb' while PartCAD writes the type as '.json'.
+#
+# 'partcad_client.object_types.EXTENSION_ALIASES' is the client's copy, held to
+# this one by a test.
+PART_EXTENSION_ALIASES = {
+    "stp": "step",
+    "igs": "iges",
+    "gltf": "gltf",
+    "glb": "gltf",
+    "sab": "sat",
+    "smt": "sat",
+    "smb": "sat",
 }
 
 SKETCH_EXTENSION_MAPPING = {
@@ -174,6 +198,10 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         "cache",
         "cache_dependencies_ignore",
         "category",
+        # What the 'cmf' check holds the object to ('require'), not what it is:
+        # whether a finding fails or warns. Hashed, turning it on rebuilt the
+        # part and every assembly holding it, to the same geometry.
+        "cmf",
         # How the thing is packaged for sale, not what it is. The third of the
         # (vendor, SKU, pack size) record, and the only one of the three that
         # was missing here - so the same geometry sold in bags of 25 keyed
@@ -616,6 +644,15 @@ class Shape(ShapeConfiguration):
     # the one thread it would have been given.
     built_on_pool = False
 
+    # Whether this shape is built where it is asked for, by its factory, in the
+    # time a cache lookup would take: a 'basic' sketch or part, whose BREP the
+    # factory writes itself (see 'basic_shapes'). Such a shape goes to no thread
+    # pool and is neither looked up in the shape cache nor written to it - only
+    # kept in this process's memory once built. It keeps its cache key, which
+    # everything derived from it (a render, a tessellation, a test's verdict)
+    # is cached under: those are worth caching, and the shape is not.
+    built_in_place = False
+
     # What a shape built here rather than read from a declaration is a view of,
     # and what about it: the picture of a step of an assembly instruction book
     # (see 'assembly_guide'), a filtered view (see 'assembly_filter.derive').
@@ -660,6 +697,14 @@ class Shape(ShapeConfiguration):
         self.cache_dependencies = []
         self.cache_dependencies_broken = False
         self.cache_dependencies_ignore = self.config.get("cache_dependencies_ignore", True)
+
+        # Whether this part is only a part when it is made of solids, so that
+        # whatever 'wrapper_common.solid_problems' finds in it fails it rather
+        # than being reported beside it (see '_accepted_as_solid'). Set by the
+        # factory that builds it, from what its type declares: a 'partType' that
+        # says 'requireSolid'.
+        self.solid_required = False
+        self._keyed_on_required_solid = False
 
         # Memory cache
         self._wrapped = None
@@ -739,6 +784,26 @@ class Shape(ShapeConfiguration):
         the hash is used, which both of those guarantee.
         """
         self.hash.add_string("code:" + versions)
+
+    def key_on_required_solid(self) -> None:
+        """Key this shape's cache entry on being held to 'requireSolid' too.
+
+        The verdict ('_accepted_as_solid') is reached as the shape is built, and
+        a cache hit is not built: without this, a part cached before its type
+        declared 'requireSolid' - accepted then, with a warning - would be read
+        back as one that passed. Only the strict side adds to the key, so every
+        other part keeps the key it had.
+
+        Called by the factory that knows the declaration before the cache is
+        read: a 'partType' part's as it is prepared, an 'import:' reader's as
+        the part is registered. Must happen before the hash is used, as
+        'add_code_versions' must, and adds to it once: an assembly built a
+        second time hands back the parts the first pass registered.
+        """
+        if self._keyed_on_required_solid:
+            return
+        self._keyed_on_required_solid = True
+        self.hash.add_string("requireSolid")
 
     def matches(self, keyword: str) -> bool:
         if not keyword:
@@ -1156,7 +1221,7 @@ class Shape(ShapeConfiguration):
             self.cacheable = False
             return
 
-        transform = {key: self.config[key] for key in ("offset", "scale") if key in self.config}
+        transform = {key: self.transform(key) for key in TRANSFORM_KEYS if key in self.config}
         if not transform:
             self.hash = source.hash
             self.owns_cache_entry = False
@@ -1207,7 +1272,15 @@ class Shape(ShapeConfiguration):
             # from inside a preparation, whose chain is a context variable the
             # hop would leave behind: the far side would not know it for part
             # of that preparation, and could wait for what is waiting for it.
-            if sync_threads.current_slot() is None and not _held_by_current_task(self) and _preparation.get() is None:
+            #
+            # Nor for a shape built in place, which takes less time to build than
+            # the hop would (see 'built_in_place').
+            if (
+                not self.built_in_place
+                and sync_threads.current_slot() is None
+                and not _held_by_current_task(self)
+                and _preparation.get() is None
+            ):
                 return await sync_threads.threadpool_manager.run_async(self._get_wrapped, ctx)
         return await self._get_wrapped(ctx)
 
@@ -1243,8 +1316,9 @@ class Shape(ShapeConfiguration):
             # is every part, every sketch, and most assemblies.
             await shape_ports.prepare_async(self, ctx)
 
-            # Not before the preparation is over (see above).
-            is_cacheable = self.get_cacheable() and ctx and self._prepare_finished
+            # Not before the preparation is over (see above). And not at all for a
+            # shape built in place, which is quicker to build than to read back.
+            is_cacheable = self.get_cacheable() and ctx and self._prepare_finished and not self.built_in_place
             if is_cacheable:
                 cache_hash = self.hash
                 if cache_hash:
@@ -1264,7 +1338,13 @@ class Shape(ShapeConfiguration):
                     # known yet" and is what sends 'get_metadata_async()' off to
                     # build the shape. A miss here has to leave it saying that.
                     if cached.get(self.kind) is not None:
-                        self._metadata = shape_envelope.metadata_of(cached[self.kind]) or {}
+                        # The entry holds the geometry as it was built; the
+                        # CMF it is drawn and checked with is applied on
+                        # every read (see '_with_cmf').
+                        cached[self.kind], recorded = self._with_cmf(
+                            ctx, cached[self.kind], shape_envelope.metadata_of(cached[self.kind])
+                        )
+                        self._metadata = recorded or {}
                     if to_cache_in_memory.get(self.kind, False):
                         self._wrapped = cached[self.kind]
                     if to_cache_in_memory.get("cmps", False):
@@ -1277,6 +1357,11 @@ class Shape(ShapeConfiguration):
             else:
                 cache_hash = None
 
+            # How long building this takes, everything that follows included - the
+            # validation, the move and the scale - which decides which tiers keep
+            # it (see 'Cache.write_data_async'): something built in milliseconds
+            # costs about as much to fetch from a tier as to build again.
+            build_started = time.perf_counter()
             shape = await self.get_shape(ctx)
 
             # Normalize whatever the factory produced into a BREP envelope so
@@ -1299,10 +1384,13 @@ class Shape(ShapeConfiguration):
             # the live shape and with the same two functions: then the part is
             # converted already, and all that is left is to say what is wrong
             # with it, in the same words.
+            # A part that is not one - see '_accepted_as_solid' - goes on from
+            # here as a factory that built nothing does.
             verdict = finished.get(shape_envelope.FINISHED_VALIDATED)
-            if self.kind == "part" and shape_envelope.is_shape_object(shape):
+            if self.kind == "part" and shape_envelope.is_shape_object(shape) and self._validates():
                 if verdict is not None:
-                    self._not_a_solid(verdict.get("problems") or [])
+                    if not self._accepted_as_solid(verdict.get("problems") or []):
+                        shape = None
                 elif ctx is not None:
                     shape = await self._validated_part(ctx, shape)
             if self.components:
@@ -1325,13 +1413,20 @@ class Shape(ShapeConfiguration):
             # never live in a wrapper of its own: a reference to another part,
             # which moves the source's geometry.
             if shape is not None and ("offset" in self.config or "scale" in self.config):
+                from . import cmf as pc_cmf
                 from . import transform
                 from .geom import Location
 
+                # What the source stated about each face, which a transform
+                # knows nothing of and rebuilds the payload without; it moves
+                # the faces and keeps them in their order, so the section is
+                # laid back after the new BREP below.
+                source_section = pc_cmf.payload_section(shape)
                 if "offset" in self.config and "offset" not in finished:
-                    shape = await transform.offset(ctx, shape, self.config["offset"])
+                    shape = await transform.offset(ctx, shape, self.transform("offset"))
                 if "scale" in self.config and "scale" not in finished:
-                    shape = await transform.scale(ctx, shape, self.config["scale"])
+                    shape = await transform.scale(ctx, shape, self.transform("scale"))
+                shape = pc_cmf.with_payload_section(shape, source_section)
 
                 # The transform rebuilt the geometry, so the encoder on the far
                 # side measured what came out and the numbers on the way back
@@ -1358,10 +1453,10 @@ class Shape(ShapeConfiguration):
                 # order - or a bend line's angle would go on being pinned to
                 # the place the line was drawn rather than the place it is.
                 if "offset" in self.config:
-                    offset = Location(self.config["offset"])
+                    offset = Location(self.transform("offset"))
                     recorded = shape_envelope.moved_annotations(recorded, offset.transform_point)
                 if "scale" in self.config:
-                    factor = float(self.config["scale"])
+                    factor = float(self.transform("scale"))
                     recorded = shape_envelope.moved_annotations(
                         recorded, lambda point: [factor * axis for axis in point]
                     )
@@ -1378,7 +1473,6 @@ class Shape(ShapeConfiguration):
             # its entry, and a run with every tier switched off all reach here
             # having built the shape and having nowhere to store what that
             # produced - and 'pc info' should still be able to say how big it is.
-            self._metadata = recorded or {}
             if recorded:
                 shape = dict(shape)
                 shape[shape_envelope.KEY_METADATA] = recorded
@@ -1404,16 +1498,46 @@ class Shape(ShapeConfiguration):
                         # it happened to be written with. See
                         # 'cache_shape.properties_key()'.
                         to_cache[properties_key(self.kind)] = properties
-                    to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
+                    to_cache_in_memory = await ctx.cache_shapes.write_async(
+                        cache_hash, to_cache, build_seconds=time.perf_counter() - build_started
+                    )
                     do_cache_in_memory = to_cache_in_memory.get(self.kind, False)
                 else:
                     do_cache_in_memory = True
-                if do_cache_in_memory:
-                    self._wrapped = shape
             else:
                 # Let the file cache tell us if we need to cache this in memory
+                do_cache_in_memory = True
+
+            # What is cached is the geometry as it was built; what is handed
+            # out is that with the CMF applied, as a hit applies it too.
+            shape, recorded = self._with_cmf(ctx, shape, recorded)
+            self._metadata = recorded or {}
+            if do_cache_in_memory:
                 self._wrapped = shape
             return shape
+
+    def _with_cmf(self, ctx, envelope, recorded):
+        """'(envelope, recorded)' with this part's CMF applied: what its source stated, converted and completed.
+
+        See 'partcad.cmf.apply_declared'. Not cached, and not something a cache
+        entry could hold: what it comes to turns on declarations the shape's key
+        does not cover - what a colour's declaration says to draw it in, which
+        declaration claims a name a STEP file uses - and an entry written with
+        one package's answer would be served to another sharing the geometry.
+        So it is applied as the shape is read, from a build or from the cache,
+        and costs a part with no CMF one look at a dictionary.
+        """
+        if envelope is None or self.kind != "part":
+            return envelope, recorded
+        from . import cmf as pc_cmf
+
+        applied, after = pc_cmf.apply_declared(ctx, self, envelope, recorded)
+        if applied is envelope:
+            return envelope, recorded
+        if after:
+            applied = dict(applied)
+            applied[shape_envelope.KEY_METADATA] = after
+        return applied, after
 
     def _shape_properties(self):
         """What this shape reports about itself, or None if it reports nothing.
@@ -1435,8 +1559,14 @@ class Shape(ShapeConfiguration):
             return None
         properties = self.config.get(shape_envelope.KEY_PROPERTIES)
         if not isinstance(properties, dict):
-            return None
+            properties = {}
         properties = {key: value for key, value in properties.items() if value not in (None, {}, [], "")}
+        # The one thing a shape reports by what it *is*: a part that resolves to
+        # a surface type - a wall, or an alias of one, which states no
+        # properties of its own - is drawn from the front of its faces only
+        # (see 'partcad.surface' and 'part_factory_wall.ONE_SIDED_KEY').
+        if pc_surface.ONE_SIDED_KEY not in properties and pc_surface.is_surface(self):
+            properties[pc_surface.ONE_SIDED_KEY] = True
         return properties or None
 
     def material_reference(self) -> Optional[str]:
@@ -2076,7 +2206,7 @@ class Shape(ShapeConfiguration):
         """
         return await output.materialize_script(ctx, impl)
 
-    async def _output_request(self, ctx, obj, impl, kwargs, overlay=None, ports=None):
+    async def _output_request(self, ctx, obj, impl, kwargs, overlay=None, ports=None, prices=None):
         """What the implementation is handed.
 
         The shape, every parameter the layered configuration ended up with, and
@@ -2089,6 +2219,13 @@ class Shape(ShapeConfiguration):
         'impl.parameters' rather than before, because the resolved overlay is
         what a file type declaring 'with_ports:' asked for plus what the command
         line asked for - the declaration has already been read.
+
+        'prices' is the text of the price of each component, by object name,
+        when the overlay asks for them (see 'render_overlay.component_prices_async').
+        The callout switches go in only when they say something other than what
+        a request without them means - no component callouts, every port name
+        written - so a picture that asks for none of them is handed the request
+        it always was, and keeps the cached answer it always had.
         """
         request = {
             "wrapped": obj,
@@ -2102,6 +2239,16 @@ class Shape(ShapeConfiguration):
             request["with_ports"] = overlay.ports
             request["with_interfaces"] = overlay.interfaces
             request["ports"] = ports or []
+            if overlay.component_names:
+                request[render_overlay.COMPONENT_NAMES_KEY] = True
+            if overlay.component_prices:
+                request[render_overlay.COMPONENT_PRICES_KEY] = dict(prices or {})
+            if not overlay.port_names:
+                request[render_overlay.PORT_NAMES_KEY] = False
+            if not overlay.interface_names:
+                request[render_overlay.INTERFACE_NAMES_KEY] = False
+            if overlay.materials:
+                request[render_overlay.MATERIALS_KEY] = {"distance": render_overlay.material_distance(ctx)}
         # An explicit argument wins over the configuration, but only when it is
         # one: 'render_async(**kwargs)' is called with a fixed set of keyword
         # arguments defaulting to None by several callers.
@@ -2139,6 +2286,15 @@ class Shape(ShapeConfiguration):
             world = self.world_facts(ctx)
             if world:
                 request[output.WORLD_KEY] = world
+        # What the CMF declarations the shapes name say about themselves - a
+        # material's density, a declaration's name - for a file type that
+        # states them, resolved here for the reason a shape's physics is: a
+        # reference is a name, and only the core can load the package that
+        # declares it. See 'output.CMF_KEY'.
+        if request.get(output.CMF_KEY) is True:
+            from . import cmf as pc_cmf
+
+            request[output.CMF_KEY] = pc_cmf.export_facts(ctx, obj, self.project_name)
         return request
 
     async def _overlay_ports_async(self, ctx, overlay, cache):
@@ -2173,6 +2329,20 @@ class Shape(ShapeConfiguration):
         render_overlay.report(self, records, overlay)
         cache[overlay.key()] = records
         return records
+
+    async def _component_prices_async(self, ctx, overlay, cache):
+        """What each component of this shape costs, worked out at most once per render call.
+
+        Asking is a quote from every supplier of every line item, so three file
+        types of one object asking for their prices ask once - and are told
+        once, in the log, when there are none. Unlike the ports, every file
+        type asks the same question, so even "none" is the answer for all of
+        them.
+        """
+        key = ("component-prices",)
+        if key not in cache:
+            cache[key] = await render_overlay.component_prices_async(self, ctx, overlay)
+        return cache[key]
 
     async def _run_implementation_async(self, ctx, impl, script, request, final_filepath):
         """Run one output implementation in a sandbox and read back its verdict.
@@ -2250,6 +2420,13 @@ class Shape(ShapeConfiguration):
             # about what the file will contain.
             if getattr(impl, "project", None) is not None:
                 request.setdefault("cache_dir", output.package_cache_dir(ctx, impl.project))
+            # And the directory of the package the object is in, for the same
+            # reason: what a file type names by a relative path - the soundtrack
+            # and the logo of a video - is named from there, the way every other
+            # path in a 'partcad.yaml' is.
+            package = ctx.get_project(self.project_name) if ctx is not None and self.project_name else None
+            if getattr(package, "config_dir", None):
+                request.setdefault(output.PACKAGE_DIR_KEY, os.path.abspath(package.config_dir))
 
         together = len(outputs) > 1
         impl = outputs[0].impl
@@ -2311,6 +2488,18 @@ class Shape(ShapeConfiguration):
             command = [script_path]
             for output_, config_dir in zip(outputs, config_dirs):
                 command += [output_.path, config_dir, os.path.abspath(output_.script)]
+            # The package of the object, for a file whose request names a file
+            # in it, where the sandbox would otherwise not see it: one that
+            # exchanges files is sent what the arguments name and nothing else,
+            # and rewrites those arguments - never the request, which is where
+            # 'package_dir' is. See 'output.PACKAGE_DIR_ARGUMENT'.
+            if container or getattr(runtime, "EXCHANGES_FILES", False):
+                for index, output_ in enumerate(outputs):
+                    package_dir = output_.request.get(output.PACKAGE_DIR_KEY)
+                    if output.names_a_package_file(output_.request, package_dir, output_.impl.package_files):
+                        command += [output.PACKAGE_DIR_ARGUMENT, str(index), package_dir]
+                        if container:
+                            input_dirs.append(package_dir)
             if container:
                 # The interpreter is named rather than pathed: the container's
                 # allowlist maps the name to the executable, which is what keeps
@@ -2745,15 +2934,27 @@ class Shape(ShapeConfiguration):
 
         effective_overlay = render_overlay.effective(overlay, impl)
         ports = None
+        prices = None
         if effective_overlay is not None:
-            ports = await subject._overlay_ports_async(
-                ctx,
-                effective_overlay,
-                subject_ports if subject is not self else (ports_cache if ports_cache is not None else {}),
-            )
+            if effective_overlay.ports or effective_overlay.interfaces:
+                ports = await subject._overlay_ports_async(
+                    ctx,
+                    effective_overlay,
+                    subject_ports if subject is not self else (ports_cache if ports_cache is not None else {}),
+                )
+            if effective_overlay.component_prices:
+                # Of this object rather than of the view a filter made of it:
+                # the view is no object of the package to ask the market about,
+                # and a component's price does not change with what else is
+                # drawn beside it.
+                prices = await self._component_prices_async(
+                    ctx, effective_overlay, ports_cache if ports_cache is not None else {}
+                )
 
         try:
-            request = await subject._output_request(ctx, obj, impl, kwargs, overlay=effective_overlay, ports=ports)
+            request = await subject._output_request(
+                ctx, obj, impl, kwargs, overlay=effective_overlay, ports=ports, prices=prices
+            )
         except scene_world.WorldError as e:
             # What a scene states about its world, stated wrongly: a gravity that
             # is not a vector, a medium nothing answers to. The declaration's
@@ -4189,6 +4390,15 @@ class Shape(ShapeConfiguration):
         """
         return (self.config or {}).get("type") not in FILE_AUTHORITY_TYPES
 
+    def _validates(self) -> bool:
+        """Whether this part is held to being a body as it leaves its factory: all but a surface part.
+
+        A part whose type builds a surface on purpose - a wall - would only be
+        told what it already is, once per build, and a closed one would be
+        turned into something it was not meant to be (see 'partcad.surface').
+        """
+        return not pc_surface.is_surface(self)
+
     def finish_request(self):
         """What the wrapper that builds this part is asked to do to it before it hands it over.
 
@@ -4218,10 +4428,13 @@ class Shape(ShapeConfiguration):
         """
         if self.kind != "part":
             return None
-        request = {"validate": {"solidify": self._solidifies()}}
-        for key in ("offset", "scale"):
+        # A surface part - a wall - is a skin on purpose, and is neither closed
+        # into a solid nor judged for not being one (see 'partcad.surface'): it
+        # is moved and scaled like any part, and that is all.
+        request = {"validate": {"solidify": self._solidifies()}} if self._validates() else {}
+        for key in TRANSFORM_KEYS:
             if key in self.config:
-                request[key] = self.config[key]
+                request[key] = self.transform(key)
         return request
 
     def _finished_by_wrapper(self, claim) -> dict:
@@ -4274,10 +4487,31 @@ class Shape(ShapeConfiguration):
             )
         return accepted
 
-    def _not_a_solid(self, problems) -> None:
-        """Say what keeps this part from being a solid, if anything does - in the one wording, wherever it was judged."""
-        if problems:
-            pc_logging.warning("%s:%s is not a solid: %s" % (self.project_name, self.name, "; ".join(problems)))
+    def _accepted_as_solid(self, problems) -> bool:
+        """Say what keeps this part from being a solid, if anything does, and whether it is still a part.
+
+        In the one wording, wherever it was judged. For most parts the answer
+        is always yes and the problems are a warning: a surface model is a
+        legitimate thing to import and draw, and everything that needs a solid
+        asks the same question and declines to compute with one that is not.
+
+        Not for a part whose type builds solids and nothing else
+        ('solid_required', from a 'partType' that declares 'requireSolid'). A
+        converter that reads a native CAD format is that kind of type: what it
+        was asked for is a body, and a body that comes back open, invalid or
+        empty is one it read wrongly - a face it could not decode, a surface it
+        lost - which renders like the part and is not it. So the problems fail
+        the part, by the same definition every other part is held to, rather
+        than by a check of the converter's own.
+        """
+        if not problems:
+            return True
+        message = "%s:%s is not a solid: %s" % (self.project_name, self.name, "; ".join(problems))
+        if self.solid_required:
+            self.error(message + " (its type builds solids, so this is a part it could not read)")
+            return False
+        pc_logging.warning(message)
+        return True
 
     async def _validated_part(self, ctx, envelope):
         """A part's envelope as every part leaves its factory: solidified, and judged.
@@ -4298,10 +4532,14 @@ class Shape(ShapeConfiguration):
         says what is wrong when it is not a solid. A warning and not a failure:
         a surface model is a legitimate thing to import and draw. Everything
         that needs a solid asks the same question and declines to compute with
-        one that is not.
+        one that is not. Except for a part whose type builds solids and
+        nothing else, which the problems fail ('_accepted_as_solid'): then this
+        returns None, as a factory that built nothing does.
 
         A sandbox that cannot answer leaves the part as it was, with a warning;
-        validating geometry is not a reason to stop building it.
+        validating geometry is not a reason to stop building it. That too has
+        the one exception: a part that is only a part when it is a solid is not
+        one nobody could check.
 
         Asked in that sandbox only of a part nothing has validated yet. The
         wrapper that built the part does it itself wherever it can, on the live
@@ -4318,9 +4556,17 @@ class Shape(ShapeConfiguration):
                 ctx, {shape_envelope.KEY_BREP: envelope[shape_envelope.KEY_BREP]}, solidify
             )
         except Exception as e:
-            pc_logging.warning("%s:%s: could not be validated: %s" % (self.project_name, self.name, e))
+            message = "%s:%s: could not be validated: %s" % (self.project_name, self.name, e)
+            if self.solid_required:
+                self.error(message)
+                return None
+            pc_logging.warning(message)
             return envelope
         if result is None:
+            # '_ask_solidity' has said why already.
+            if self.solid_required:
+                self.error("%s:%s: could not be validated" % (self.project_name, self.name))
+                return None
             return envelope
         solidified = result.get("solidified")
         if isinstance(solidified, dict) and shape_envelope.KEY_BREP in solidified:
@@ -4341,7 +4587,8 @@ class Shape(ShapeConfiguration):
                 envelope[shape_envelope.KEY_METADATA] = metadata
             else:
                 envelope.pop(shape_envelope.KEY_METADATA, None)
-        self._not_a_solid(result.get("problems") or [])
+        if not self._accepted_as_solid(result.get("problems") or []):
+            return None
         return envelope
 
     async def get_bounding_box_async(self, ctx):
@@ -4514,6 +4761,15 @@ class Shape(ShapeConfiguration):
         sections = shape_envelope.metadata_section(metadata, shape_envelope.METADATA_SECTIONS)
         if sections:
             info.update(sections)
+
+        # What its CMF section comes to (docs/design/cmf.md, section 9): the
+        # summary recorded with the geometry, with each reference marked where
+        # it is display-only.
+        summary = metadata.get(shape_envelope.METADATA_CMF)
+        if isinstance(summary, dict):
+            from . import cmf as pc_cmf
+
+            info["CMF"] = pc_cmf.info_of(ctx, summary, self.project_name)
 
         # The per-element records are deliberately *not* reported from here.
         # They are carried for 'get_annotations_async()', whose caller is a

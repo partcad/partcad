@@ -241,3 +241,199 @@ def test_a_file_type_cannot_narrow_the_ports_itself():
     impl = _implementation(output.RENDER, {"with_ports": True, "ports": ["declared"]})
     assert effective(None, impl).select is None
     assert effective(Overlay(ports=True, select=["asked"]), impl).select == frozenset({"asked"})
+
+
+# ---- the callouts ------------------------------------------------------------
+#
+# What the IDE's 3D and 2D tabs call "Component names", "Component prices",
+# "Port names" and "Interface names", and 'pc render --with-component-names',
+# '--with-component-prices', '--without-port-names' and
+# '--without-interface-names'.
+
+
+def test_a_name_switched_off_is_kept_although_it_draws_nothing():
+    """It has to reach a file type that draws its ports of its own accord."""
+    assert Overlay.of() is None
+    quiet = Overlay.of(port_names=False)
+    assert quiet is not None and not quiet
+    assert not quiet.port_names and quiet.interface_names
+    assert not Overlay.of(interface_names=False).interface_names
+    # A source of prices on its own asks for nothing either.
+    assert Overlay.of(prices=lambda ctx, shape: {}) is None
+
+
+def test_a_callout_on_the_components_is_something_to_draw():
+    assert Overlay.of(component_names=True)
+    assert Overlay.of(component_prices=True).components
+    assert not Overlay(ports=True).components
+
+
+def test_the_callouts_are_this_runs_answer():
+    """A file type that draws its ports writes their names, unless the run says not to."""
+    declared = _implementation(output.RENDER, {"with_ports": True, "with_interfaces": True})
+    assert effective(None, declared).port_names
+    assert effective(None, declared).interface_names
+    assert not effective(None, declared).components
+
+    asked = effective(Overlay.of(port_names=False, interface_names=False), declared)
+    assert asked.ports and not asked.port_names and not asked.interface_names
+
+    source = object()
+    asked = effective(Overlay.of(component_names=True, component_prices=True, prices=source), declared)
+    assert asked.component_names and asked.component_prices
+    assert asked.prices is source
+
+    # Names switched off and nothing drawn: nothing at all.
+    assert effective(Overlay.of(port_names=False), _implementation(output.RENDER, {})) is None
+    # And a picture of the components is one, with no ports declared or asked.
+    assert effective(Overlay.of(component_names=True), _implementation(output.RENDER, {})).component_names
+    # Never on a file that is not a picture.
+    assert effective(Overlay.of(component_names=True), _implementation(output.EXPORT, {})) is None
+
+
+def test_the_log_writes_a_price_with_the_code_of_its_currency():
+    from partcad.render_overlay import price_text
+
+    assert price_text(1.5, "USD") == "1.50 USD"
+    assert price_text(12, None) == "12.00"
+    assert price_text(0.125, "EUR") == "0.12 EUR"
+
+
+def test_a_picture_writes_dollars_as_dollars():
+    """'$X' on the picture, as the IDE's 3D view and Buy tab write it; any other currency by its code."""
+    from partcad.render_overlay import price_label
+
+    assert price_label(1.5, "USD") == "$1.50"
+    assert price_label(1234.5, "usd") == "$1,234.50"
+    assert price_label(0.125, "EUR") == "0.12 EUR"
+    assert price_label(12, None) == "12.00"
+
+
+class _Shape:
+    project_name = "//pkg"
+    name = "top"
+
+
+def test_the_prices_come_from_the_source_the_overlay_carries():
+    from partcad.render_overlay import component_prices_async
+
+    asked = []
+
+    async def prices(ctx, shape):
+        asked.append(shape)
+        return {
+            "//pkg:bolt": {"price": 0.25, "currency": "USD"},
+            "//pkg:nut": {"price": None, "currency": "USD"},
+            "//pkg:plate": {"price": 3, "currency": None},
+        }
+
+    shape = _Shape()
+    labels = asyncio.run(component_prices_async(shape, None, Overlay(component_prices=True, prices=prices)))
+
+    assert asked == [shape]
+    # A price of nothing is no price, rather than a price of nought. What a
+    # picture writes; the log keeps the code ('0.25 USD').
+    assert labels == {"//pkg:bolt": "$0.25", "//pkg:plate": "3.00"}
+
+
+def test_no_prices_cost_nothing_but_the_prices():
+    """No source, a source that fails, a source with nothing: an empty answer and a reason."""
+    from partcad.render_overlay import component_prices_async
+
+    assert asyncio.run(component_prices_async(_Shape(), None, Overlay(component_prices=True))) == {}
+
+    async def failing(ctx, shape):
+        raise RuntimeError("no network")
+
+    assert asyncio.run(component_prices_async(_Shape(), None, Overlay(component_prices=True, prices=failing))) == {}
+
+    async def none(ctx, shape):
+        return {}
+
+    assert asyncio.run(component_prices_async(_Shape(), None, Overlay(component_prices=True, prices=none))) == {}
+
+
+def test_the_request_says_only_what_differs_from_a_request_without_callouts():
+    """A picture that asks for no callouts is handed the request it always was, and keeps its cache."""
+    from partcad import render_overlay
+    from partcad.shape import Shape
+
+    class _Impl:
+        parameters = {}
+
+    class _Fake:
+        name = "top"
+        kind = "assembly"
+        config = {"type": "assy"}
+        project_name = "//pkg"
+
+        _output_request = Shape._output_request
+
+    plain = asyncio.run(_Fake()._output_request(None, "wrapped", _Impl(), {}, overlay=Overlay(ports=True)))
+    for key in (
+        render_overlay.COMPONENT_NAMES_KEY,
+        render_overlay.COMPONENT_PRICES_KEY,
+        render_overlay.PORT_NAMES_KEY,
+        render_overlay.INTERFACE_NAMES_KEY,
+        render_overlay.MATERIALS_KEY,
+    ):
+        assert key not in plain
+
+    overlay = Overlay(ports=True, component_names=True, component_prices=True, port_names=False, interface_names=False)
+    asked = asyncio.run(
+        _Fake()._output_request(None, "wrapped", _Impl(), {}, overlay=overlay, prices={"//pkg:bolt": "0.25 USD"})
+    )
+    assert asked[render_overlay.COMPONENT_NAMES_KEY] is True
+    assert asked[render_overlay.COMPONENT_PRICES_KEY] == {"//pkg:bolt": "0.25 USD"}
+    assert asked[render_overlay.PORT_NAMES_KEY] is False
+    assert asked[render_overlay.INTERFACE_NAMES_KEY] is False
+
+
+def test_the_materials_are_something_to_draw_and_this_runs_answer():
+    assert Overlay.of(materials=True)
+    assert not Overlay.of(materials=True).components
+    declared = _implementation(output.RENDER, {"with_ports": True})
+    assert not effective(None, declared).materials
+    assert effective(Overlay.of(materials=True), declared).materials
+    assert effective(Overlay.of(materials=True), _implementation(output.RENDER, {})).materials
+    # Never on a file that is not a picture.
+    assert effective(Overlay.of(materials=True), _implementation(output.EXPORT, {})) is None
+
+
+def test_how_close_is_one_cluster_is_the_users_to_say():
+    import types
+
+    from partcad.render_overlay import material_distance
+
+    assert (
+        material_distance(types.SimpleNamespace(user_config=types.SimpleNamespace(material_cluster_distance=2.5)))
+        == 2.5
+    )
+    assert material_distance(types.SimpleNamespace(user_config=types.SimpleNamespace(material_cluster_distance=0))) == 0
+    # Nothing to say, or nothing sensible, is ten millimetres.
+    assert material_distance(None) == 10
+    assert (
+        material_distance(types.SimpleNamespace(user_config=types.SimpleNamespace(material_cluster_distance=-1))) == 10
+    )
+
+
+def test_the_request_asks_for_the_materials_with_how_close_is_one_cluster():
+    import types
+
+    from partcad import render_overlay
+    from partcad.shape import Shape
+
+    class _Impl:
+        parameters = {}
+
+    class _Fake:
+        name = "top"
+        kind = "assembly"
+        config = {"type": "assy"}
+        project_name = "//pkg"
+
+        _output_request = Shape._output_request
+
+    ctx = types.SimpleNamespace(user_config=types.SimpleNamespace(material_cluster_distance=4.0))
+    asked = asyncio.run(_Fake()._output_request(ctx, "wrapped", _Impl(), {}, overlay=Overlay(materials=True)))
+    assert asked[render_overlay.MATERIALS_KEY] == {"distance": 4.0}

@@ -149,6 +149,33 @@ def test_a_parametrized_lookup_reads_a_normalized_base(tmp_path):
     assert base["manufacturable"] is True
 
 
+def test_an_instance_of_a_plugin_part_records_its_own_material_after_the_part(tmp_path):
+    """'block;material=...' reports its own material once 'block' was made, for a plugin-backed part too.
+
+    Fetched by name, the declaration is a new copy each time ('_augment' tags a
+    file-backed one), but the 'properties:' it states are the plugin's own
+    dictionary in every copy - which is where making 'block' records the
+    material it was asked for. So the second copy, which the instance is made
+    from, already said 'block''s material (see 'Project._remember_declared_properties').
+    """
+    data = {
+        "objects/part/block": {
+            "type": "step",
+            "path": "block.step",
+            "parameters": {"material": {"type": "string", "default": "//cat:pla"}},
+            "properties": {"physics": {"mass": 1.0}},
+        }
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    repo._repository = FakeRepository(data)
+
+    assert repo.get_part("block")._shape_properties() == {"physics": {"mass": 1.0}, "material": "//cat:pla"}
+    instance = repo.get_part("block;material=//cat:abs")
+
+    assert instance._shape_properties() == {"physics": {"mass": 1.0}, "material": "//cat:abs"}
+
+
 def test_ensure_enumerated_async_warms_the_sync_accessors():
     """After the async warm-up, the sync accessors never bridge to async."""
     ctx = pc.Context("examples")

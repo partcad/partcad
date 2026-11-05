@@ -51,9 +51,11 @@ The [tutorial](https://partcad.readthedocs.io/en/latest/tutorial.html) walks thr
 
 ## What it does
 
-- **Parts** from [CadQuery], [build123d], [OpenSCAD], [Chili3D], [SDF], STEP, BREP, STL, 3MF, OBJ, glTF,
-  [KiCad EDA] PCBs, FreeCAD documents, and any format a plugin package adds ([SolidCraft], Rhino, IGES).
-- **Assemblies and scenes** in Assembly YAML, URDF or a STEP file, with interfaces and mating as objects.
+- **Parts** from [CadQuery], [build123d], [OpenSCAD], [Chili3D], [SDF], STEP, BREP, IGES, STL, 3MF, OBJ, glTF,
+  FreeCAD, Autodesk Fusion, SolidWorks, Autodesk Inventor, CATIA V5, ACIS and Creo View files, [KiCad EDA] PCBs,
+  and any format a plugin package adds ([SolidCraft], Rhino).
+- **Assemblies and scenes** in Assembly YAML, URDF, or a STEP, Autodesk Fusion or Creo View file, with interfaces
+  and mating as objects.
 - **Outputs**: STEP, BREP, STL, 3MF, OBJ, IGES, glTF, URDF, Gazebo and MuJoCo worlds, 2D projections,
   dimensioned drawings, Markdown documentation and PDF or HTML instruction books.
 - **Engineering**: FEA, modal, thermal and CFD analysis (`pc cae`), simulation in MuJoCo or Gazebo

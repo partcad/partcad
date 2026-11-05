@@ -113,6 +113,23 @@ def test_it_is_a_warning_and_it_is_said_once(monkeypatch, caplog):
     assert len(said) == 1
 
 
+def test_partcads_own_image_is_not_a_warning(monkeypatch, caplog):
+    """The video file types name PartCAD's GStreamer image, and say themselves what is missing without it.
+
+    Every machine without Docker renders them without it, so a warning on each
+    of those renders would be noise, and its advice - add the requirements - is
+    advice for a package, which has none to add. The note is still kept for a
+    failure to carry.
+    """
+    own = "ghcr.io/partcad/partcad-container-python:0.8.267-py3.11-gstreamer"
+    ctx = _Ctx(UserConfig())
+    with caplog.at_level(logging.DEBUG, logger="partcad"):
+        ctx._note_image_skipped(own, "it ran in the 'venv' sandbox")
+    said = [r for r in caplog.records if own in r.getMessage()]
+    assert said and all(r.levelno < logging.WARNING for r in said)
+    assert own in ctx.docker_image_note(own)
+
+
 def test_an_image_nobody_asked_for_has_no_note():
     ctx = _Ctx(UserConfig())
     assert ctx.docker_image_note(None) is None
