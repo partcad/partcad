@@ -13,6 +13,7 @@ is normalized to named JSON-RPC params. Operations that require a loaded context
 silently no-op when none is loaded, exactly as the legacy server did.
 """
 
+import asyncio
 import hashlib
 import math
 import os
@@ -2610,7 +2611,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.9.3"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.9.4"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -4546,6 +4547,84 @@ def _provider_currency(provider):
     return currency if isinstance(currency, str) else None
 
 
+def plugin_login(session, params):
+    """One step of 'pc login <package>:<plugin>': ask the plugin, and say what it answered.
+
+    The plugin runs here, in the daemon's sandbox, because that is where every
+    plugin runs. The browser it may ask for does not open here, and there is no
+    method that opens one: a daemon can be remote, and a sign-in window belongs
+    on the screen of whoever typed 'pc login'. So a step that needs the browser
+    is answered with what the browser is to do, the client does it, and calls
+    this again with the result appended to 'browser' -- the plugin's own
+    'partcad_login.open_browser' then returns it (see 'wrappers/plugin_login.py').
+
+    Answers {"plugin": "<package>:<plugin>", "status": ...}:
+
+        "done"          logged in; 'parameters' are what to save as the user's
+                        overrides of the plugin, under 'plugin', and 'message' says so
+        "browser"       'spec' is what the browser is to do
+        "instructions"  'non_interactive' was asked for and the plugin needs
+                        what only a person can get: 'spec' is what the browser
+                        would have been asked, with the plugin's 'instructions'
+        "failed"        'message' says why; what the plugin said is in the log
+
+    'check' only checks the credentials there are; 'values' ({capture name:
+    value}, 'pc login --set') answers the plugin's request for the browser.
+    """
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    spec = params.get("plugin") or ""
+    if ":" not in spec:
+        raise JsonRpcError(USAGE_ERROR, "Name the plugin as '<package>:<plugin>', not '%s'" % spec)
+    browser = params.get("browser") or []
+    if not isinstance(browser, list) or not all(isinstance(result, dict) for result in browser):
+        raise JsonRpcError(USAGE_ERROR, "'browser' must be a list of the results of the browser steps")
+    values = params.get("values") or {}
+    if not isinstance(values, dict) or not all(isinstance(v, (str, int, float)) for v in values.values()):
+        raise JsonRpcError(USAGE_ERROR, "'values' must map capture names to values")
+
+    package_name, plugin_name = pc.utils.resolve_resource_path(ctx.current_project_path, spec)
+    project = ctx.get_project(package_name)
+    if project is None:
+        raise JsonRpcError(USAGE_ERROR, "Package not found: %s" % package_name)
+    full_name = "%s:%s" % (project.name, plugin_name)
+    # Asked by its declaration first, so that a provider and a repository of
+    # the same name are not mistaken for one another, and a name that is
+    # neither costs no factory.
+    if project.get_repository_config(plugin_name) is not None:
+        plugin = project.get_repository(plugin_name)
+    elif project.get_provider_config(plugin_name) is not None:
+        plugin = project.get_provider(plugin_name)
+    else:
+        raise JsonRpcError(USAGE_ERROR, "'%s' declares no repository or provider '%s'" % (project.name, plugin_name))
+    if plugin is None:
+        return {"plugin": full_name, "status": "failed", "message": "%s could not be loaded" % full_name}
+
+    from partcad.plugin import LoginUnsupported
+
+    with pc.logging.Process("Login", full_name):
+        try:
+            step = asyncio.run(
+                plugin.login(
+                    browser,
+                    check=bool(params.get("check", False)),
+                    non_interactive=bool(params.get("non_interactive", False)),
+                    values=values,
+                )
+            )
+        except LoginUnsupported as e:
+            return {"plugin": full_name, "status": "failed", "message": str(e)}
+        except RuntimeError as e:
+            return {"plugin": full_name, "status": "failed", "message": str(e)}
+    if "browser" in step:
+        return {"plugin": full_name, "status": "browser", "spec": step["browser"]}
+    if "instructions" in step:
+        return {"plugin": full_name, "status": "instructions", "spec": step["instructions"]}
+    return {"plugin": full_name, "status": "done", "parameters": step["parameters"], "message": step["message"]}
+
+
 def _supply_totals(items):
     """What ordering every line item from its cheapest supplier would come to.
 
@@ -4606,6 +4685,10 @@ def search_objects(session, params):
     # shapes that implement this interface or anything derived from it. Only the
     # kinds that have ports take it; "packages" and "interfaces" do not.
     interface = params.get("interface") or None
+    # At most this many from each package whose repository plugin searches
+    # itself (see 'ProjectExternalRepository.search'); a package matched
+    # locally reports everything that matches, as it always has.
+    limit = params.get("limit") or None
     package = ctx.resolve_package_path(selected)
 
     from partcad.actions.package import search_packages
@@ -4640,7 +4723,7 @@ def search_objects(session, params):
         output = "PartCAD %s with '%s' keyword:\n" % (kind, keyword)
     with pc.logging.Process("Search " + kind.capitalize(), package):
         found = (
-            search_fn(ctx, package, recursive, keyword, interface)
+            search_fn(ctx, package, recursive, keyword, interface, limit)
             if takes_interface
             else search_fn(ctx, package, recursive, keyword)
         )
@@ -4668,6 +4751,12 @@ def search_objects(session, params):
                 line = "\t" + "%s %s" % (project_name, obj.name)
                 line += " " + " " * (84 - len(line))
                 desc = obj.desc if obj.desc is not None else ""
+                # A hit a repository plugin found is a name to instantiate, and
+                # where it came from is worth a line of its own: it is the page
+                # a person looks at before deciding it is the one.
+                url = getattr(obj, "url", None) if getattr(obj, "is_search_hit", False) else None
+                if isinstance(url, str) and url:
+                    desc = (desc + "\n" + url) if desc else url
                 desc = desc.replace("\n", "\n\t" + " " * (len(line) - 1))
                 line += "%s" % desc
             output += line + "\n"

@@ -1572,4 +1572,84 @@ class UserConfig(vyper.Vyper):
         return getattr(self, attribute)
 
 
+# How long a write of the configuration file waits for another one to finish.
+# Each holds the lock for one read and one write of a small file.
+CONFIG_LOCK_TIMEOUT = 60
+
+
+def save_parameter_overrides(object_name: str, values: dict, path: str = None) -> str:
+    """Write 'values' into the user's configuration file as overrides of the parameters of 'object_name'.
+
+    The file's 'parameters' section is what '--extra-param' and every object's
+    parameter overrides are read from (see 'ParametersConfig'), so what is
+    written here reaches the object - a plugin, once 'pc login' has signed in to
+    what it is a client of - in every command run afterwards, the way a value
+    typed into the file by hand does. Nothing else in the file is touched, its
+    comments included: it is round-tripped, not regenerated.
+
+    The values are often credentials. So the file is replaced in one step, and
+    readable by its owner only.
+
+    Two logins can finish at once -- two 'pc login's, or an agent's parallel
+    'login' calls through 'pc mcp' -- and each reads the file, adds its own
+    plugin's values and replaces it: unguarded, the later replace drops what
+    the earlier one wrote. So reading, merging and replacing happen under one
+    lock beside the file, which every caller of this function takes.
+
+    Returns the path written.
+    """
+    from filelock import FileLock
+
+    path = path or UserConfig.get_config_path()
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with FileLock(path + ".lock", timeout=CONFIG_LOCK_TIMEOUT, mode=0o600):
+        _merge_parameter_overrides(path, object_name, values)
+    return path
+
+
+def _merge_parameter_overrides(path: str, object_name: str, values: dict) -> None:
+    from ruamel.yaml import YAML
+    from ruamel.yaml.comments import CommentedMap
+
+    yaml = YAML()
+    yaml.preserve_quotes = True
+    document = None
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            document = yaml.load(f)
+    if document is None:
+        document = CommentedMap()
+    if not isinstance(document, dict):
+        raise ValueError("%s is not a mapping, so there is nowhere to put 'parameters' in it" % path)
+    section = document.get("parameters")
+    if section is None:
+        section = document["parameters"] = CommentedMap()
+    if not isinstance(section, dict):
+        raise ValueError("'parameters' in %s is not a mapping" % path)
+    entry = section.get(object_name)
+    if entry is None:
+        entry = section[object_name] = CommentedMap()
+    if not isinstance(entry, dict):
+        raise ValueError("'parameters: %s' in %s is not a mapping" % (object_name, path))
+    for name, value in values.items():
+        entry[name] = value
+
+    temporary = "%s.%d.tmp" % (path, os.getpid())
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as f:
+            yaml.dump(document, f)
+        try:
+            os.chmod(temporary, 0o600)
+        except OSError:
+            pass  # a filesystem that has no modes; the replace still happens
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.remove(temporary)
+        except OSError:
+            pass
+        raise
+
+
 user_config = UserConfig()
