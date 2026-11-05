@@ -736,3 +736,20 @@ def test_login_asked_to_be_interactive_with_no_browser_to_open_answers_with_inst
     answer = body(call(server, "login", {"plugin": "//p:repo", "interactive": True}))
     assert answer["ok"] is True and answer["result"]["status"] == "instructions"
     assert requests(daemon, "plugin.login")[0]["non_interactive"] is True
+
+
+def test_login_with_a_browser_that_will_not_start_says_so_rather_than_wait(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from partcad_client import browser as pc_browser
+
+    def browser_step(params, emit):
+        return {"plugin": "//p:repo", "status": "browser", "spec": LOGIN_SPEC}
+
+    def will_not_start(url, chosen):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(pc_browser, "choose", lambda name=None: pc_browser.Browser("chrome", ["/x/chrome"]))
+    monkeypatch.setattr(pc_browser, "open_browser", will_not_start)
+    _, server = serve(tmp_path, {"plugin.login": browser_step})
+    result = call(server, "login", {"plugin": "//p:repo", "interactive": True})
+    assert result.is_error and "could not start Google Chrome" in body(result)["error"]

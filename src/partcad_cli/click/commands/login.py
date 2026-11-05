@@ -125,7 +125,13 @@ def cli(
     def open_browser(url, spec):
         if chosen is None:
             return None
-        opened = pc_browser.open_browser(url, chosen)
+        try:
+            opened = pc_browser.open_browser(url, chosen)
+        except OSError as e:
+            # A browser named by path that will not start: the manual page,
+            # whose address the loop prints next, still does the job.
+            click.echo("Could not start %s (%s); signing in by hand instead." % (chosen.name, e))
+            return None
         if opened.note:
             click.echo("%s: %s" % (chosen.name, opened.note))
         return opened

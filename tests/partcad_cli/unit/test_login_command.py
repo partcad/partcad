@@ -162,3 +162,23 @@ def test_pc_login_refuses_what_it_cannot_mean(monkeypatch, tmp_path):
     _setup(monkeypatch, tmp_path, _Daemon())
     assert CliRunner().invoke(cli, ["--no-ansi", "login", "--set", "novalue", "//p:repo"]).exit_code == 2
     assert CliRunner().invoke(cli, ["--no-ansi", "login", "--agent", "--manual", "//p:repo"]).exit_code == 2
+
+
+def test_a_browser_that_will_not_start_is_signed_in_by_hand_instead(monkeypatch, tmp_path):
+    daemon = _Daemon()
+    _setup(monkeypatch, tmp_path, daemon)
+
+    def will_not_start(url, chosen):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(pc_browser, "open_browser", will_not_start)
+    # What a person enters on the manual page, which is where the loop goes next.
+    monkeypatch.setattr(pc_login.LoginListener, "wait", lambda self, step, timeout: {"t": "abc"})
+
+    result = CliRunner().invoke(cli, ["--no-ansi", "login", "//p:repo"])
+
+    assert result.exit_code == 0, result.output
+    assert "Could not start Google Chrome" in result.output and "/manual" in result.output
+    assert yaml.safe_load((tmp_path / ".partcad" / "config.yaml").read_text())["parameters"]["//p:repo"] == {
+        "token": "abc"
+    }

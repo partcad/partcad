@@ -80,13 +80,62 @@ def _string(value, what):
     return value
 
 
+# The groups JavaScript's RegExp reads as Python's 're' does. Anything else
+# after '(?' - an inline flag, a Python named group, a comment, an atomic
+# group - is a pattern Python takes and the extension refuses, or reads as
+# something else.
+_SHARED_GROUPS = (":", "=", "!", "<=", "<!")
+
+
+def _python_only(value):
+    """What in 'value' JavaScript's RegExp does not read as Python's 're' does, or None."""
+    i, in_class = 0, False
+    while i < len(value):
+        char = value[i]
+        if char == "\\":
+            escaped = value[i + 1 : i + 2]
+            if escaped in ("A", "Z", "z") and not in_class:
+                return "the anchor \\%s (write ^ or $)" % escaped
+            i += 2
+            continue
+        if in_class:
+            in_class = char != "]"
+        elif char == "[":
+            in_class = True
+            # A ']' right after '[' or '[^' is a member, not the end.
+            if value[i + 1 : i + 2] == "^":
+                i += 1
+            if value[i + 1 : i + 2] == "]":
+                i += 1
+        elif char == "(" and value[i + 1 : i + 2] == "?":
+            if not any(value.startswith(group, i + 2) for group in _SHARED_GROUPS):
+                return "'%s' (only (?:, (?=, (?!, (?<= and (?<! read the same)" % value[i : i + 4]
+            i += 2
+            continue
+        elif char in "*+?}" and value[i + 1 : i + 2] == "+":
+            return "the possessive quantifier '%s+'" % char
+        i += 1
+    return None
+
+
 def _pattern(value, what):
-    """A regular expression: 'match' on a capture, 'contains' on a guide step (the element's text)."""
+    """A regular expression: 'match' on a capture, 'contains' on a guide step (the element's text).
+
+    Checked as Python reads it and as the extension will: it compiles them
+    with JavaScript's RegExp, so a pattern only Python reads would pass here
+    and be refused in the browser, after the user had been sent there.
+    """
     _string(value, what)
     try:
         re.compile(value)
     except re.error as e:
         raise ValueError("open_browser: %s is not a regular expression: %s" % (what, e))
+    python_only = _python_only(value)
+    if python_only:
+        raise ValueError(
+            "open_browser: %s is read by the extension as a JavaScript regular expression, which has no %s: %r"
+            % (what, python_only, value)
+        )
     return value
 
 

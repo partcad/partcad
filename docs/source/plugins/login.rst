@@ -92,7 +92,9 @@ instructions=None)``:
   - ``ask``: ``{"label", "secret"}`` -- an input in the extension's banner, for something the user copies.
 
   Any source may add ``match``, a regular expression the value has to match to count, so that what a visitor
-  has is never taken for what a signed-in user has.
+  has is never taken for what a signed-in user has. The extension reads it, and ``contains`` below, as
+  JavaScript does, so only what both languages read alike is taken: no inline flags such as ``(?i)``, no
+  ``(?P<name>...)``, no ``\A`` or ``\Z``, no possessive quantifiers.
 ``require``
   ``"all"`` or ``"any"`` of the captures.
 ``done_when``

@@ -207,3 +207,41 @@ def test_a_spec_is_checked_in_the_plugin_and_says_what_is_wrong():
     ):
         with pytest.raises(ValueError, match=message):
             plugin_login.browser_spec("https://x/login", **bad)
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [r"^\s*log ?in\s*$", r"(?:a|b)+", r"x(?=y)", r"(?<!a)b", r"[(?i)]", r"\(?x", r"[]a]+", r"^[A-Za-z0-9_-]{16,}$"],
+)
+def test_a_pattern_both_languages_read_alike_is_taken(pattern):
+    import sys
+
+    sys.path.insert(0, str(__import__("pathlib").Path(pc.__file__).parent / "wrappers"))
+    import plugin_login
+
+    capture = [{"name": "t", "cookie": {"url": "https://x/", "name": "t"}, "match": pattern}]
+    assert plugin_login.browser_spec("https://x/l", capture)["capture"][0]["match"] == pattern
+
+
+@pytest.mark.parametrize(
+    "pattern, said",
+    [
+        (r"(?i)token", "(?i)"),
+        (r"(?P<n>x)", "(?P<"),
+        (r"(?#note)x", "(?#n"),
+        (r"(?>ab)", "(?>a"),
+        (r"\Atoken\Z", "anchor"),
+        (r"a++", "possessive"),
+    ],
+)
+def test_a_pattern_only_python_reads_is_refused_before_the_browser_is(pattern, said):
+    """The extension compiles it with JavaScript's RegExp, and would refuse it after the user was sent there."""
+    import sys
+
+    sys.path.insert(0, str(__import__("pathlib").Path(pc.__file__).parent / "wrappers"))
+    import plugin_login
+
+    capture = [{"name": "t", "cookie": {"url": "https://x/", "name": "t"}, "match": pattern}]
+    with pytest.raises(ValueError, match="JavaScript") as refused:
+        plugin_login.browser_spec("https://x/l", capture)
+    assert said in str(refused.value)

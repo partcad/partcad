@@ -518,7 +518,14 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             return outcome.result
 
         def open_browser(url, spec):
-            return pc_browser.open_browser(url, chosen) if chosen is not None else None
+            if chosen is None:
+                return None
+            try:
+                return pc_browser.open_browser(url, chosen)
+            except OSError as e:
+                # Not the manual page: its address would only come back when
+                # the wait on it was over.
+                raise RuntimeError("could not start %s: %s" % (chosen.name, e))
 
         def log_in():
             return pc_login.login(ask, open_browser, said.append, manual=chosen is None)
