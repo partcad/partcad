@@ -971,6 +971,21 @@ def add_object(session, params):
         pc.logging.error("Package %s is not found" % package)
         return None
 
+    if obj_kind == "part":
+        # 'pc add part' refuses any other type before it gets here; the editor
+        # extension and an agent's 'execute' do not, and a declaration of a type
+        # nothing reads was written and reported as added, to fail only when the
+        # part was built. One list for both ends: 'partcad_utils.part_kinds'.
+        from partcad.actions.part import addable_part_kinds
+
+        kinds = addable_part_kinds(ctx)
+        if params.get("kind") not in kinds:
+            raise JsonRpcError(
+                USAGE_ERROR,
+                "ERROR: A part cannot be added as %s. Its type is one of: %s."
+                % ("'%s'" % params["kind"] if params.get("kind") else "no type", ", ".join(kinds)),
+            )
+
     config = {}
     if params.get("desc"):
         config["desc"] = params["desc"]
@@ -2596,7 +2611,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.9.2"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.9.3"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
