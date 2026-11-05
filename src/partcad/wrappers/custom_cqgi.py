@@ -312,6 +312,13 @@ class InputParameter:
         return p
 
     def set_value(self, new_value):
+        """
+        Override the parameter by rewriting its literal in the script's syntax tree.
+
+        :param new_value: the value the script will see instead of its own default
+        :raises InvalidParameterError: if the value is not one of the valid values,
+            or a number parameter is given a value that is not numeric
+        """
         if len(self.valid_values) > 0 and new_value not in self.valid_values:
             raise InvalidParameterError(
                 "Cannot set value '{0:s}' for parameter '{1:s}': not a valid value. Valid values are {2:s} ".format(
