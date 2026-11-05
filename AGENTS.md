@@ -76,6 +76,12 @@ a CAD addon, or documentation.
   where it is written -- and a rule with a copy per reader is a rule whose copies disagree about which object a
   name is.
 
+  `part_kinds` is the same kind of rule for `pc add part`: the types a part is added from a file as. The CLI
+  refuses any other before it starts a daemon, and the daemon's `add.object` refuses it too, because the editor
+  extension and an agent's `execute` reach that method without the CLI. Only PartCAD's own factory types are
+  listed there; the native formats are its `//builtin/import` `partTypes`, which a client reads from
+  `partcad_client.object_types`, and a test holds the two halves together.
+
   `assy_lint` checks an ASSY file or a `partcad.yaml` *as it renders*, and rendering is the other thing both
   ends do: PartCAD as it loads a package, and every client as it lints the file an editor has open. So what a
   template may name (`config_template`) and what a parameter declaration means (`parameters`) are here, with

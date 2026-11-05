@@ -10,23 +10,17 @@ from pathlib import Path
 import rich_click as click
 
 from partcad_client import object_types
+from partcad_utils import part_kinds
 from partcad_utils.utils import looks_like_url
 
 from ...service import run
 
 # TODO-93: @alexanderilyin: Make this optional and detect the kind from the PATH
+# The daemon's 'add.object' refuses any other type, from the same list (see
+# 'partcad_utils.part_kinds'); refusing it here as well is what puts the choices
+# in '--help' and the error before a daemon is started.
 PART_KINDS = [
-    "cadquery",
-    "build123d",
-    "chili3d",
-    "sdf",
-    "scad",
-    "step",
-    "brep",
-    "stl",
-    "3mf",
-    "obj",
-    "gltf",
+    *part_kinds.FILE_PART_FACTORIES,
     # The native CAD formats PartCAD ships as declarations (see
     # `partcad_client.object_types`), 'iges' among them.
     *object_types.BUILTIN_PART_TYPE_EXTENSION,
