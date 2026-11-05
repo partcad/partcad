@@ -2058,9 +2058,40 @@ class Project(project_config.Configuration):
                     # of a kind gains its 'name' whether or not anything is ever
                     # made out of it (see '_normalized').
                     config = get_config(name)
+                    if self._enriches_a_package_not_loaded(factory_name, config):
+                        continue
                     self.init_object_by_config(factory_name, config_class, alias_class, config)
             except Exception as e:
                 self.record_broken_object(factory_name, name, e)
+
+    def _enriches_a_package_not_loaded(self, factory_name: str, config) -> bool:
+        """Whether 'config' is an enrich of a plugin in a package that is not loaded yet.
+
+        A plugin enrich is made from its source's declaration, so it needs the
+        source's package - and a package's own plugins are made while it loads,
+        before any package it imports: an enrich of a plugin of a dependency
+        ('//pub/universe/makerworld:makerworld_repo', with 'with:' values of
+        the user's own) could never be made then. It is left to be made when it
+        is first asked for, by 'get_object', when that package can be loaded.
+        Not every enrich, so that one whose source is at hand is still there to
+        be listed ('pc list providers') from the start.
+        """
+        if factory_name not in ("repository", "provider") or not isinstance(config, dict):
+            return False
+        if config.get("type") != "enrich":
+            return False
+        package = config.get("project") or config.get("package")
+        if not package:
+            source = config.get("source") or ""
+            if ":" not in source:
+                return False
+            try:
+                package, _ = self.resolve(source)
+            except Exception:
+                return False
+        if package in ("this", "", self.name):
+            return False
+        return package not in self.ctx.projects
 
     def init_sketch_by_config(self, config, source_project=None):
         self.init_object_by_config(

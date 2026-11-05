@@ -79,6 +79,28 @@ with the input in the global ``request`` and the output in the global
 ``output``. ``enrich`` repositories are references to another repository with
 some parameters fixed, which is how one script serves several packages.
 
+The repository an ``enrich`` points at may be another package's -- which is how a user sets a plugin's
+parameters in a package of their own, without touching the package that declares it:
+
+.. code-block:: yaml
+
+  repositories:
+    meshes_repo:
+      type: enrich
+      source: //pub/universe/makerworld:makerworld_repo
+      with:
+        formats: stl,3mf
+  dependencies:
+    makerworld_meshes:
+      type: external
+      plugin: :meshes_repo
+
+It runs as that package's plugin -- its script, the ``pythonRequirements`` its sandbox is prepared with, its
+directory -- with the parameters the ``enrich`` gives it, and it is made when it is first asked for, once that
+package can be loaded. The other way to set them is the user's own ``~/.partcad/config.yaml``, under
+``parameters``, by the plugin's name; PartCAD keys what it caches of a plugin's answers on those overrides, so a
+change to one is not answered from what was cached before it.
+
 **A repository script answers one generic key/value request.** There is no
 method per kind of object:
 

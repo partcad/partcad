@@ -17,9 +17,12 @@ class PluginFactoryProviderEnrich(PluginFactoryEnrich):
         super().__init__(ctx, source_project, target_project, config)
 
     def init_source_by_config(self, augmented_config):
+        # Made in this package, under the enrich's name, from the package of
+        # the plugin it enriches: that is where the plugin's script is, and
+        # what its sandbox is prepared with.
         self.project.init_provider_by_config(
             augmented_config,
-            self.project,
+            self.plugin_package,
         )
 
     def get_source_config(self, source_plugin_name: str, source_project=None):
