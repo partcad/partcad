@@ -163,6 +163,21 @@ filename = "server.json"
 search = "\"version\": \"{current_version}\""
 replace = "\"version\": \"{new_version}\""
 
+# The browser extension `pc login` captures a plugin's credentials with, in its
+# two shapes. Both are published to the browser stores by "browsers.yml", and a
+# store refuses a version it has already seen -- so a manifest that stopped
+# moving is an extension that stops being published, not a cosmetic lag.
+# `browsers/build.py` refuses to package the two when they disagree.
+[[tool.bumpversion.files]]
+filename = "browsers/chromium/manifest.json"
+search = "\"version\": \"{current_version}\""
+replace = "\"version\": \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "browsers/firefox/manifest.json"
+search = "\"version\": \"{current_version}\""
+replace = "\"version\": \"{new_version}\""
+
 [[tool.bumpversion.files]]
 filename = "docs/source/contributing.rst"
 search = "Installing the current project: partcad ({current_version})"

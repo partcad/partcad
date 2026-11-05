@@ -41,6 +41,7 @@ class PluginFactoryRepository(PluginFactoryPython):
         self.plugin = self._create_repository(config)
         if hasattr(self, "path"):
             self.plugin.path = self.path
+        self.attach_login(self.plugin)
 
         # Registered once the factory is built, not here (see 'factory._RegisteredOnceBuilt').
         self.register_when_built("repository", self.plugin)

@@ -27,6 +27,9 @@ __pycache__
 /dev-tools/shim/build
 /dev-tools/shim/dist
 /dev-tools/shim/LICENSE.txt
+# The browser extension's store packages, which `browsers/build.py` writes
+# beside the two directories it packages.
+/browsers/dist
 allure-report/
 allure-results/
 behave-results/

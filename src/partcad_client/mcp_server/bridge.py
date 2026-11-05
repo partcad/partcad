@@ -198,11 +198,35 @@ class Bridge:
                 conn = self._connection(outcome)
 
     def _config(self) -> dict:
+        return self._loaded_config().to_dict()
+
+    def _loaded_config(self):
         if self._user_config is None:
             from partcad_utils.user_config import user_config
 
             self._user_config = user_config
-        return self._user_config.to_dict()
+        return self._user_config
+
+    def remember_parameters(self, object_name: str, values: dict) -> None:
+        """Send 'values' as the user's overrides of 'object_name' from now on.
+
+        What the 'login' tool saves goes into the configuration file, and this
+        server read that file once, when it started; every request carries the
+        configuration as it was then. So what was saved is put into that too,
+        on top of whatever else the user overrides of the same object - or the
+        daemon would go on building contexts without it until the server
+        restarted, and the login would seem not to have happened.
+        """
+        parameters = getattr(self._loaded_config(), "parameter_config", None)
+        if parameters is None:
+            return
+        try:
+            # Not '.get': the user configuration's sections answer '[]' from
+            # what they hold, and '.get' from the empty dict beneath it.
+            current = parameters[object_name] or {}
+        except KeyError:
+            current = {}
+        parameters[object_name] = {**current, **values}
 
     def _drop(self) -> None:
         if self._conn is not None:

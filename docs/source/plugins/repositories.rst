@@ -28,6 +28,10 @@ What a repository is for
   length of a profile: the plugin answers for the one that was asked for.
 - **A format that is already a table.** A CSV, a spreadsheet, a JSON dump: one
   short script turns it into a package.
+- **A model site.** Thingiverse, GrabCAD, MakerWorld: a catalog nobody lists,
+  searched with the site's own search and fetched one model at a time. Such a
+  package serves no enumeration at all -- it answers a search, and the names the
+  search hands back.
 
 Using one
 =========
@@ -75,6 +79,28 @@ with the input in the global ``request`` and the output in the global
 ``output``. ``enrich`` repositories are references to another repository with
 some parameters fixed, which is how one script serves several packages.
 
+The repository an ``enrich`` points at may be another package's -- which is how a user sets a plugin's
+parameters in a package of their own, without touching the package that declares it:
+
+.. code-block:: yaml
+
+  repositories:
+    meshes_repo:
+      type: enrich
+      source: //pub/universe/makerworld:makerworld_repo
+      with:
+        formats: stl,3mf
+  dependencies:
+    makerworld_meshes:
+      type: external
+      plugin: :meshes_repo
+
+It runs as that package's plugin -- its script, the ``pythonRequirements`` its sandbox is prepared with, its
+directory -- with the parameters the ``enrich`` gives it, and it is made when it is first asked for, once that
+package can be loaded. The other way to set them is the user's own ``~/.partcad/config.yaml``, under
+``parameters``, by the plugin's name; PartCAD keys what it caches of a plugin's answers on those overrides, so a
+change to one is not answered from what was cached before it.
+
 **A repository script answers one generic key/value request.** There is no
 method per kind of object:
 
@@ -107,6 +133,21 @@ of object or a new piece of metadata needs no new API:
   fetched from the plugin and materialized into the package's cache directory
   when the object is built.
 
+``search/<kind>?q=<text>&limit=<n>``
+  The objects the repository finds for a search, ``{name: config, ...}`` best
+  first, for a package whose ``meta`` lists the kind under ``searchKinds``.
+  ``pc search parts`` then asks the plugin rather than matching what it lists,
+  which is what makes a catalog nobody can list searchable at all.
+
+``objects/<kind>/<name>;<param>=<value>,...``
+  One parametrized instance, for a package whose ``meta`` lists the kind under
+  ``instanceKinds``: the plugin resolves it itself, so a parameter can choose
+  another file or another format rather than only another value.
+
+A repository script may also answer ``login`` -- the api ``pc login`` asks, and
+every kind of plugin may answer -- to get the user's credentials for the service
+it is a client of. See :ref:`plugin-login`.
+
 For a hierarchy, a child package's requests are **prefixed with its
 subfolder**: a child in ``motors`` asks for ``motors/objects/part``,
 ``motors/deps`` and so on, all served by the same script.
@@ -120,12 +161,14 @@ Three example packages, in increasing order of realism.
   A flat package of parts read from a CSV file. The whole plugin is one short
   script, ``csv.py``, and the data is ``example.csv`` beside it. It declares the
   repository twice -- a ``basic`` one taking a ``filename`` parameter, and an
-  ``enrich`` of it with the filename fixed -- which is the pattern to copy.
+  ``enrich`` of it with the filename fixed -- which is the pattern to copy. It
+  also answers ``search/part``, so ``pc search`` asks it.
 
   .. code-block:: shell
 
     cd examples/plugin_repository_basic
     pc list parts example
+    pc search parts -P example -k bolt
     pc ide view example:bolt
 
   The part it serves is an ordinary part in the Digital Thread -- the package it

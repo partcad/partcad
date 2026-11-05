@@ -256,6 +256,40 @@ Host commands
 ``pc config``
   Show the current user configuration.
 
+``pc login <package>:<plugin>``
+  Sign in to what a plugin is a client of -- a model site a repository plugin serves, a store a provider
+  orders from -- and keep the credentials. The plugin's own ``login`` (see :ref:`plugin-login`) checks the
+  credentials it has first; when the site no longer takes them it asks for your browser, and ``pc login`` opens
+  your default one, in a profile of PartCAD's own (``~/.partcad/browser/<browser>``) with PartCAD's extension in
+  it, on the site's sign-in. Sign in there: the extension picks up what that leaves behind -- a cookie, a token, an
+  API key on a page, pointing at what to click where the plugin says -- hands it to a listener ``pc login`` runs
+  on ``127.0.0.1``, and closes the window.
+
+  .. code-block:: shell
+
+    pc login //pub/universe/grabcad:grabcad_repo
+    pc login --check //pub/universe/grabcad:grabcad_repo   # only check; exits non-zero if they do not work
+    pc login --agent //pub/universe/grabcad:grabcad_repo   # nobody at the screen: print what to do instead
+    pc login --agent --set session=... //pub/universe/grabcad:grabcad_repo
+
+  The credentials are saved in your configuration file (``~/.partcad/config.yaml``, made readable by you only)
+  under ``parameters``, as your overrides of the plugin's parameters -- the same place ``--extra-param`` and a hand
+  written override go -- so every later command hands them to the plugin. ``--browser`` (``PC_LOGIN_BROWSER``)
+  picks another browser by path or by name (``chrome``, ``edge``, ``brave``, ``chromium``, ``firefox``), and
+  ``--manual`` opens none: it prints the address of a page where what the site gave you is pasted by hand, which
+  is also where a browser without the extension ends up. A default browser the extension cannot go into is
+  passed over for an installed one it can.
+
+  ``--agent`` (or ``--non-interactive``; ``--interactive`` is the default) is for an AI agent or a script with
+  nobody at the screen: no browser is opened, and what a person would do in it -- where to sign in, what to copy,
+  any other way in the plugin knows of, and the ``pc login --agent ... --set NAME=VALUE`` command that hands it
+  over -- is printed instead, with exit status 3. ``--set`` hands values over in either mode; the plugin checks
+  them with the site before anything is saved. ``pc mcp``'s ``login`` tool works this way by default.
+
+  The browser, the listener and the configuration file are this machine's, so they are the client's; the plugin
+  runs on the daemon, like every plugin, and is asked one step of its login at a time (``plugin.login``). There is
+  no daemon method that opens a browser.
+
 ``pc system``
   Manage PartCAD's system-wide state and settings:
 
@@ -1608,3 +1642,16 @@ Other commands
   built and nothing is instantiated to produce it; the interfaces named in those declarations are resolved
   once per package and kept for the rest of the run. ``--keyword`` and ``--interface`` may be given together,
   and then both have to hold.
+
+  A package served by a repository plugin that searches its own catalog -- a model site's, which nobody can
+  list -- is asked for the keyword instead of being matched locally (see :ref:`repositories`). What it finds
+  is printed as names to instantiate, parameters and all, with the page each came from under it::
+
+    $ pc search parts -P //pub/universe/thingiverse/models -k "cable clip" --limit 2
+    PartCAD parts with 'cable clip' keyword:
+        //pub/universe/thingiverse/models 763622;file=1234567       Cable clip: cable_clip.stl
+                                                                    https://www.thingiverse.com/thing:763622
+        ...
+
+  ``pc search parts`` takes ``-n``/``--limit``, the most to ask each such package for. A package matched
+  locally reports every match, as before.

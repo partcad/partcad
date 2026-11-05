@@ -54,21 +54,23 @@ from setuptools.command.egg_info import manifest_maker
 _PACKAGE = os.path.join("src", "partcad", "ai_agents")
 _SKILLS = os.path.join(_PACKAGE, "skills")
 _MANIFEST = os.path.join(_PACKAGE, "plugin.json")
+_BROWSERS = os.path.join("src", "partcad_client", "browsers")
 
 # What a checkout that dropped the symlinks should be told to do. The cause is
 # named as well as the cure: whoever sees this is as likely to be installing
 # from a source zip, where `core.symlinks` is not the answer and the sdist is.
 _ADVICE = """
 This is what a checkout looks like when git did not materialize the symlinks in
-"%s" (Git for Windows does this unless "core.symlinks" is on, and a GitHub
-source zip does it everywhere). The wheel would build without the skills in it,
-install cleanly, and leave "pc init" with nothing to install.
+"%s" and "%s" (Git for Windows does this unless "core.symlinks" is on, and a
+GitHub source zip does it everywhere). The wheel would build without the skills
+or the browser extension in it, install cleanly, and leave "pc init" with
+nothing to install and "pc login" with nothing to load.
 
     git config core.symlinks true
     git checkout -- .
 
 Or build from an sdist, where these are ordinary files.
-""" % _PACKAGE
+""" % (_PACKAGE, _BROWSERS)
 
 
 # The sdist template, which lives beside this file rather than at the top of the
@@ -114,11 +116,23 @@ def _check_the_skills_are_there():
     except (OSError, UnicodeDecodeError, ValueError) as e:
         problems.append("%s does not parse as JSON (%s)" % (_MANIFEST, e))
 
+    # And the browser extension 'pc login' loads, through the symlink
+    # 'src/partcad_client/browsers': unmaterialized, it is a file holding a
+    # path, and the wheel would carry no extension and still install.
+    for family in ("chromium", "firefox"):
+        manifest_path = os.path.join(_BROWSERS, family, "manifest.json")
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                if not isinstance(json.load(f), dict):
+                    problems.append("%s is not an extension manifest" % manifest_path)
+        except (OSError, UnicodeDecodeError, ValueError) as e:
+            problems.append("%s cannot be read (%s)" % (manifest_path, e))
+
     if not problems:
         return
 
     raise SystemExit(
-        "Refusing to build: the AI agent skills would not be in the artifact.\n\n  "
+        "Refusing to build: the AI agent skills or the browser extension would not be in the artifact.\n\n  "
         + "\n  ".join(problems)
         + "\n"
         + _ADVICE
