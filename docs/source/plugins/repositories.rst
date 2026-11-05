@@ -122,6 +122,10 @@ of object or a new piece of metadata needs no new API:
   ``instanceKinds``: the plugin resolves it itself, so a parameter can choose
   another file or another format rather than only another value.
 
+A repository script may also answer ``login`` -- the api ``pc login`` asks, and
+every kind of plugin may answer -- to get the user's credentials for the service
+it is a client of. See :ref:`plugin-login`.
+
 For a hierarchy, a child package's requests are **prefixed with its
 subfolder**: a child in ``motors`` asks for ``motors/objects/part``,
 ``motors/deps`` and so on, all served by the same script.

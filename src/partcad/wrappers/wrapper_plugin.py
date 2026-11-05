@@ -24,16 +24,28 @@ CACHE_VERSION = 1
 
 
 def process(path, request):
+    init_globals = {"request": request}
+    if request.get("api") == "login":
+        # The one api that is given a callback: 'partcad_login.open_browser'
+        # (see plugin_login.py). Imported here rather than at the top, so the
+        # other apis - every key a repository is asked - pay nothing for it.
+        import plugin_login
+
+        init_globals["partcad_login"] = plugin_login.LoginCallback(request.get("login"))
     try:
         result = runpy.run_path(
             path,
-            init_globals={
-                "request": request,
-            },
+            init_globals=init_globals,
             run_name=request["api"],
         )
     except Exception as e:
         result = {"exception": e}
+    except BaseException as e:
+        # The plugin asked for the browser. Not a failure: PartCAD opens it and
+        # runs 'login' again with what it brought back.
+        if type(e).__name__ != "BrowserNeeded" or not hasattr(e, "spec"):
+            raise
+        return {"browser": e.spec}
 
     if "output" in result:
         output = result["output"]

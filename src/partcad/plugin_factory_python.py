@@ -100,6 +100,13 @@ class PluginFactoryPython(PluginFactoryFile):
         self.runtime = self.ctx.get_python_runtime(python_version, image=shape_docker_image(self.config, self.project))
         self.session = self.runtime.get_session(source_project.name)
 
+    def attach_login(self, plugin: Plugin) -> None:
+        """Let 'plugin.login()' ask this script its 'login' - an api every kind of script plugin may answer."""
+        plugin.query_login = self.query_login
+
+    async def query_login(self, request):
+        return await self.query_script(self.plugin, "login", request)
+
     def info(self, plugin: Plugin):
         return {
             "sandbox_version": self.runtime.version,

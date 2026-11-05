@@ -61,6 +61,10 @@ def command_generation() -> int:
     return _command_generation
 
 
+class LoginUnsupported(Exception):
+    """The plugin has no 'login' to answer: nothing to log in to, or a script that predates it."""
+
+
 class Plugin:
     name: str
     desc: str
@@ -76,6 +80,10 @@ class Plugin:
     # it afresh, so a transient failure does not mute it for good.
     deadline_exceeded: typing.Optional[str] = None
     deadline_generation: typing.Optional[int] = None
+    # Set by a factory whose plugins are scripts PartCAD runs - every kind of
+    # them, repositories and providers alike - to the coroutine that asks the
+    # script its 'login' (see 'login()'). None for a plugin that has no script.
+    query_login = None
 
     def __init__(self, name: str, config: dict[str, typing.Any] = {}, target_project_name=None):
         super().__init__()
@@ -93,6 +101,42 @@ class Plugin:
         self.url = config.get("url", None)
 
         self.get_caps = alru_cache(maxsize=1, typed=True)(self.get_caps)
+
+    async def login(self, browser=(), interactive: bool = True) -> dict:
+        """One step of logging in to whatever this plugin is a client of.
+
+        'login' is optional for every kind of plugin. A plugin that answers it
+        checks the credentials it has - its parameters, the user's saved
+        overrides included - and either says they still work or asks for the
+        browser, through PartCAD's 'partcad_login.open_browser' callback (see
+        'wrappers/plugin_login.py'). So this answers one of:
+
+            {"parameters": {...}, "message": "..."}   logged in: what to save
+            {"browser": {...}}                         open the browser as said, then
+                                                       call again with its result
+                                                       appended to 'browser'
+
+        and raises LoginUnsupported for a plugin with no 'login', and
+        RuntimeError for one that failed (what the plugin said is in the log
+        already, as everything it says is).
+        """
+        if self.query_login is None:
+            raise LoginUnsupported("%s has no login method: it is not a script PartCAD runs" % self.name)
+        answer = await self.query_login({"login": {"browser": list(browser), "interactive": bool(interactive)}})
+        if answer is None:
+            raise RuntimeError("%s: logging in failed" % self.name)
+        if isinstance(answer.get("browser"), dict):
+            return {"browser": answer["browser"]}
+        result = answer.get("result")
+        if result is None:
+            raise LoginUnsupported("%s has no login method" % self.name)
+        if not isinstance(result, dict) or not isinstance(result.get("parameters", {}), dict):
+            raise RuntimeError("%s: 'login' answered %r, not {'parameters': {...}}" % (self.name, result))
+        parameters = result.get("parameters") or {}
+        bad = [name for name, value in parameters.items() if not isinstance(value, (str, int, float, bool))]
+        if bad:
+            raise RuntimeError("%s: 'login' returned parameters that are not plain values: %s" % (self.name, bad))
+        return {"parameters": parameters, "message": str(result.get("message") or "")}
 
     def mark_deadline_exceeded(self, reason: str) -> None:
         """Stop asking this plugin, for the rest of the command now running."""

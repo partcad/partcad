@@ -81,6 +81,9 @@ _OPERATIONS = {
     "cae.list": operations.cae_list,
     "cam.route": operations.cam_route,
     "search.objects": operations.search_objects,
+    # 'pc login': one step of a plugin's login. The browser it may ask for is
+    # opened by the client, never here (see 'operations.plugin_login').
+    "plugin.login": operations.plugin_login,
     "render.objects": operations.render_objects,
     # Not CLI commands: one object to one file, returned as bytes, and the file
     # types a package declares -- the IDE's 2D and Draft tabs, which show a file

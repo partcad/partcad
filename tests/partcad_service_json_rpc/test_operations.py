@@ -5421,3 +5421,82 @@ def test_a_cancelled_recursive_render_starts_no_package_it_has_not_started(monke
         )
 
     assert rendered == []
+
+
+# ---- plugin.login ------------------------------------------------------------
+
+
+class FakeLoginPlugin:
+    """A plugin whose 'login' wants the browser once, then takes what it brought."""
+
+    def __init__(self):
+        self.asked = []
+
+    async def login(self, browser=(), interactive=True):
+        self.asked.append((list(browser), interactive))
+        if not browser:
+            return {"browser": {"url": "https://example.com/login", "capture": [{"name": "t"}]}}
+        return {"parameters": {"token": browser[0]["t"]}, "message": "Logged in as ann"}
+
+
+class FakeLoginUnsupported(Exception):
+    pass
+
+
+def _login_session(monkeypatch, kind="repository"):
+    install_fake_partcad_modules(monkeypatch, {"partcad.plugin": {"LoginUnsupported": FakeLoginUnsupported}})
+    session, _ = make_session()
+    project = session.partcad_ctx.projects["//"]
+    plugin = FakeLoginPlugin()
+    configs = {"repository": {}, "provider": {}}
+    configs[kind]["auth"] = {"type": "basic"}
+    project.get_repository_config = lambda name: configs["repository"].get(name)
+    project.get_provider_config = lambda name: configs["provider"].get(name)
+    project.get_repository = lambda name: plugin
+    project.get_provider = lambda name: plugin
+    return session, plugin
+
+
+@pytest.mark.parametrize("kind", ["repository", "provider"])
+def test_a_login_step_that_needs_the_browser_says_what_it_is_to_do(monkeypatch, kind):
+    session, plugin = _login_session(monkeypatch, kind)
+    step = operations.plugin_login(session, {"plugin": "//:auth"})
+    assert step == {
+        "plugin": "//:auth",
+        "status": "browser",
+        "spec": {"url": "https://example.com/login", "capture": [{"name": "t"}]},
+    }
+
+
+def test_the_next_step_hands_the_plugin_what_the_browser_brought(monkeypatch):
+    session, plugin = _login_session(monkeypatch)
+    step = operations.plugin_login(session, {"plugin": ":auth", "browser": [{"t": "abc"}], "interactive": True})
+    assert step == {
+        "plugin": "//:auth",
+        "status": "done",
+        "parameters": {"token": "abc"},
+        "message": "Logged in as ann",
+    }
+    assert plugin.asked == [([{"t": "abc"}], True)]
+
+
+def test_a_login_names_a_plugin_the_package_declares(monkeypatch):
+    session, _ = _login_session(monkeypatch)
+    with pytest.raises(JsonRpcError, match="declares no repository or provider 'nope'"):
+        operations.plugin_login(session, {"plugin": "//:nope"})
+    with pytest.raises(JsonRpcError, match="as '<package>:<plugin>'"):
+        operations.plugin_login(session, {"plugin": "auth"})
+
+
+def test_a_plugin_with_no_login_is_a_failed_step_not_an_error(monkeypatch):
+    session, plugin = _login_session(monkeypatch)
+
+    async def unsupported(browser=(), interactive=True):
+        raise FakeLoginUnsupported("//:auth has no login method")
+
+    plugin.login = unsupported
+    assert operations.plugin_login(session, {"plugin": "//:auth"}) == {
+        "plugin": "//:auth",
+        "status": "failed",
+        "message": "//:auth has no login method",
+    }

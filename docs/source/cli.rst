@@ -256,6 +256,31 @@ Host commands
 ``pc config``
   Show the current user configuration.
 
+``pc login <package>:<plugin>``
+  Sign in to what a plugin is a client of -- a model site a repository plugin serves, a store a provider
+  orders from -- and keep the credentials. The plugin's own ``login`` (see :ref:`plugin-login`) checks the
+  credentials it has first; when the site no longer takes them it asks for your browser, and ``pc login`` opens
+  your default one, in a profile of PartCAD's own (``~/.partcad/browser/<browser>``) with PartCAD's extension in
+  it, on the site's sign-in. Sign in there: the extension picks up what that leaves behind -- a cookie, a token, an
+  API key on a page, pointing at what to click where the plugin says -- hands it to a listener ``pc login`` runs
+  on ``127.0.0.1``, and closes the window.
+
+  .. code-block:: shell
+
+    pc login //pub/universe/grabcad:grabcad_repo
+    pc login --check //pub/universe/grabcad:grabcad_repo   # only check; exits non-zero if they do not work
+
+  The credentials are saved in your configuration file (``~/.partcad/config.yaml``, made readable by you only)
+  under ``parameters``, as your overrides of the plugin's parameters -- the same place ``--extra-param`` and a hand
+  written override go -- so every later command hands them to the plugin. ``--browser`` (``PC_LOGIN_BROWSER``)
+  picks another browser by path or by name (``chrome``, ``edge``, ``brave``, ``chromium``, ``firefox``), and
+  ``--manual`` opens none: it prints the address of a page where what the site gave you is pasted by hand, which
+  is also where a browser without the extension ends up.
+
+  The browser, the listener and the configuration file are this machine's, so they are the client's; the plugin
+  runs on the daemon, like every plugin, and is asked one step of its login at a time (``plugin.login``). There is
+  no daemon method that opens a browser.
+
 ``pc system``
   Manage PartCAD's system-wide state and settings:
 

@@ -118,6 +118,19 @@ own five are read straight off disk out of the wheel, so the call is made only w
 actually found — a `pc ide open` outside a workspace starts no daemon and creates no context. The daemon says
 which applications there are; it never opens one, and there is still no method that opens a file.
 
+**`pc login` sits on both sides, and the line runs between the plugin and the browser.** A plugin's `login`
+runs where every plugin runs, in the daemon's sandbox -- it may need the plugin's own dependencies, and it is the
+same script that answers `get` and `quote`. What it may ask for, the user's browser opened on a site's sign-in with
+PartCAD's extension in it, is a window on the screen of whoever typed the command, so it is the client's, for the
+reason `pc ide open` is: there is no daemon method that opens a browser, and none may be added. So the login is a
+loop of steps: `plugin.login` asks the plugin one step, and when the plugin wants the browser it answers with what
+the browser is to do; the client opens it (`partcad_client.browser`), runs the listener the extension reports to
+on 127.0.0.1 (`partcad_client.login`), and asks again with what came back -- the plugin's
+`partcad_login.open_browser` callback is *replayed*, raising the first time and returning the result when it is
+run again (`partcad/wrappers/plugin_login.py`). The credentials it ends with are written into this machine's
+configuration file (`partcad_utils.user_config.save_parameter_overrides`), under `parameters`, which is how every
+later request -- each of which carries the caller's configuration -- hands them to the plugin.
+
 `pc ide install` and `pc ide workspace <directory>` are in-process too, and make **no** daemon call either: one
 installs the PartCAD extension into an editor on this machine, the other opens a folder as that editor's
 workspace, in the PartCAD workbench (`partcad_client.ide`). Both change this machine -- its editor, its screen --
