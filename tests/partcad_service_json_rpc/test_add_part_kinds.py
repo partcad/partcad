@@ -25,6 +25,7 @@ PLATE = "tests/partcad/unit/data/import_iges/plate.igs"
 
 @pytest.fixture
 def session(tmp_path, monkeypatch):
+    """A daemon session on an empty package of its own, with a real PartCAD context."""
     (tmp_path / "partcad.yaml").write_text("name: //\n")
     monkeypatch.chdir(tmp_path)
     session = Session()
@@ -34,6 +35,7 @@ def session(tmp_path, monkeypatch):
 
 
 def declared(tmp_path) -> dict:
+    """The parts the package's 'partcad.yaml' declares now."""
     return yaml.safe_load((tmp_path / "partcad.yaml").read_text()).get("parts") or {}
 
 
@@ -44,10 +46,12 @@ def test_the_daemon_takes_the_types_the_cli_takes(session):
 
 
 def test_every_file_factory_is_one_partcad_has():
+    """The shared list names no factory type PartCAD has dropped or renamed."""
     assert set(part_kinds.FILE_PART_FACTORIES) <= set(partcad.factory.all["part"])
 
 
 def test_a_native_type_is_added(session, tmp_path, request):
+    """A native CAD type is taken, and named as 'pc add part' names it."""
     plate = tmp_path / "plate.igs"
     plate.write_bytes((request.config.rootpath / PLATE).read_bytes())
 
@@ -57,6 +61,7 @@ def test_a_native_type_is_added(session, tmp_path, request):
 
 @pytest.mark.parametrize("kind", ["3dm", "basic", ":mytype", None])
 def test_any_other_type_is_refused_and_nothing_is_written(session, tmp_path, kind):
+    """An unknown type, one not read from a file, a package's own, or none."""
     thing = tmp_path / "thing.3dm"
     thing.write_text("not a part\n")
     params = {"obj_kind": "part", "path": str(thing)}
@@ -73,6 +78,7 @@ def test_any_other_type_is_refused_and_nothing_is_written(session, tmp_path, kin
 
 
 def test_a_url_is_refused_before_anything_is_fetched(session, tmp_path):
+    """Refused before the download: a fetched file nobody can declare is wasted work."""
     # Nothing listens there: a fetch would fail with another message.
     params = {"obj_kind": "part", "kind": "3dm", "url": "http://127.0.0.1:9/thing.3dm"}
     with pytest.raises(JsonRpcError, match="cannot be added as '3dm'"):
