@@ -292,6 +292,40 @@ def test_logins_saving_at_once_keep_every_plugin_s_credentials(tmp_path):
     assert yaml.safe_load(path.read_text())["parameters"] == {name: {"token": name} for name in names}
 
 
+@pytest.mark.parametrize(
+    "text, said",
+    [
+        ("- a list\n", "is not a mapping, so there is nowhere"),
+        ("parameters: 3\n", "'parameters' in"),
+        ("parameters:\n  //p:r: 3\n", "'parameters: //p:r' in"),
+    ],
+)
+def test_a_configuration_file_with_nowhere_to_put_them_is_left_alone(tmp_path, text, said):
+    path = tmp_path / "config.yaml"
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(ValueError, match=said):
+        save_parameter_overrides("//p:r", {"token": "t"}, str(path))
+    assert path.read_text(encoding="utf-8") == text
+
+
+def test_a_write_that_fails_leaves_the_file_as_it_was_and_nothing_beside_it(tmp_path, monkeypatch):
+    from ruamel.yaml import YAML
+
+    path = tmp_path / "config.yaml"
+    path.write_text("threadsMax: 4\n", encoding="utf-8")
+
+    def full_disk(self, document, stream):
+        stream.write("parameters: {")
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(YAML, "dump", full_disk)
+    with pytest.raises(OSError, match="No space left"):
+        save_parameter_overrides("//p:r", {"token": "t"}, str(path))
+    assert path.read_text(encoding="utf-8") == "threadsMax: 4\n"
+    # No half-written copy beside it (the lock file may stay: on POSIX it is kept for the next writer).
+    assert [p.name for p in tmp_path.iterdir() if p.name.endswith(".tmp")] == []
+
+
 def test_a_missing_configuration_file_is_made(tmp_path):
     path = tmp_path / "new" / "config.yaml"
     save_parameter_overrides("//p:r", {"token": "t"}, str(path))
