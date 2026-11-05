@@ -20,6 +20,8 @@ CadQuery: the script assigns plain values and builds nothing.
 import importlib.util
 import os
 
+import pytest
+
 import partcad.wrapper
 
 
@@ -72,3 +74,11 @@ def test_boolean_parameter_overrides_the_script():
 
 def test_tuple_parameter_overrides_the_script():
     assert _run({"size": (3, 4)})["size"] == (3, 4)
+
+
+@pytest.mark.parametrize("value", ["wide", None])
+def test_non_numeric_value_for_a_number_is_rejected(value):
+    # 'float()' raises ValueError for a string and TypeError for None; both
+    # must surface as the parameter error, not as whichever one escaped.
+    with pytest.raises(custom_cqgi.InvalidParameterError):
+        _run({"width": value})

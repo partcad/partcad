@@ -337,7 +337,7 @@ class InputParameter:
                 # '.value', not the '.n' alias: it was removed in Python 3.14,
                 # where assigning it only adds an attribute nobody reads.
                 self.ast_node.value = f
-            except ValueError:
+            except (ValueError, TypeError):
                 raise InvalidParameterError(
                     "Cannot set value '{0:s}' for parameter '{1:s}': parameter must be numeric.".format(
                         str(new_value), self.name
