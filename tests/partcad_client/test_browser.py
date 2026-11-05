@@ -310,7 +310,9 @@ def test_on_linux_with_nothing_recorded_the_browser_variable_is_asked(tmp_path, 
 
 
 def test_on_macos_a_default_partcad_does_not_know_is_no_default(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(pc_browser.Path, "home", lambda: tmp_path)
+    # Found or not, an app PartCAD does not know is not asked for.
+    monkeypatch.setattr(pc_browser, "_macos_app", lambda bundle_id: pytest.fail("asked for %s" % bundle_id))
     plist = tmp_path / "Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist"
     plist.parent.mkdir(parents=True)
     handlers = [{"LSHandlerURLScheme": "https", "LSHandlerRoleAll": "com.example.reader"}]
@@ -402,7 +404,8 @@ def test_installed_browsers_are_found_where_each_system_puts_them(tmp_path, monk
         lambda path: path.replace("%PROGRAMFILES%", str(program_files)).replace("\\", "/"),
     )
     monkeypatch.setattr(pc_browser.shutil, "which", lambda name: None)
-    assert [(b.kind, b.command) for b in pc_browser.installed_browsers()] == [("chrome", [str(chrome)])]
+    # Compared as paths: the separators are this system's, not the registry's.
+    assert [(b.kind, [Path(c) for c in b.command]) for b in pc_browser.installed_browsers()] == [("chrome", [chrome])]
 
 
 def test_a_browser_named_by_its_path_is_known_by_its_file_name(tmp_path):
