@@ -38,6 +38,7 @@ def test_no_callout_option_sends_what_a_render_always_sent(monkeypatch):
 
     assert params["with_component_names"] is False
     assert params["with_component_prices"] is False
+    assert params["with_materials"] is False
     assert "with_port_names" not in params
     assert "with_interface_names" not in params
 
@@ -62,3 +63,9 @@ def test_asking_for_the_names_is_asking_for_the_default(monkeypatch):
 
     assert "with_port_names" not in params
     assert "with_interface_names" not in params
+
+
+def test_the_materials_are_asked_for(monkeypatch):
+    params = _render(monkeypatch, "--with-materials")
+
+    assert params["with_materials"] is True

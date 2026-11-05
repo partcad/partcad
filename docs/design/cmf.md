@@ -309,8 +309,11 @@ once the public index passes it - the path `tolerance` took.
 **Built:** `pc list colors|materials|finishes`, `pc info`'s CMF section, drawings per face, a glTF material per colour,
 the exports (STEP through XCAF, glTF, 3MF, URDF; the formats with no CMF warn), textures
 ([section 9.1](#91-textures)), and in the IDE the explorer's declarations, the CMF tab, the BOM and Build vs Buy
-columns and per-primitive colours. **Open:** what the "Exports" item lists as open; highlighting a set's faces in the
-3D view, drawing a finish's roughness and metallic, and `pc ide view` of a declaration.
+columns and per-primitive colours, and the "Materials" callout (the 3D and 2D tabs, `pc render --with-materials`): one
+name per cluster of a material - its faces that touch or are closer than the user's `materialClusterDistance` - found
+by `material_clusters.py` among the wrappers, from a face's solid's material, else its own set's. **Open:** what the
+"Exports" item lists as open; highlighting a set's faces in the 3D view, drawing a finish's roughness and metallic, and
+`pc ide view` of a declaration.
 
 CMF is always shown as its three components in the order colour, material, finish: each by its declaration's name, with
 a swatch of its display where the medium allows, marked when it is display-only or unspecified, and with its origin

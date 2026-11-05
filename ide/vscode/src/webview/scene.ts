@@ -88,7 +88,7 @@ import { el, empty } from './dom';
 import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
 import { GeometryCache, geometryCache } from './geometryCache';
 import { geometryMissing, reportError } from './host';
-import { ShowMessage, ShowNode } from './messages';
+import { MaterialCluster, ShowMessage, ShowNode } from './messages';
 import { LABEL_DEFAULTS, LabelChoices } from './labels';
 import {
     ItemId,
@@ -365,6 +365,22 @@ let labelChoices: LabelChoices = { ...LABEL_DEFAULTS };
 let priceTexts: Readonly<Record<string, string>> = {};
 
 /**
+ * One callout per cluster of a material, naming it, and the items of the tree
+ * whose faces it is: the "Materials" box. Of the show on stage only - a cluster
+ * names the nodes of one tree by where they are in it - and empty until its
+ * answer arrives ('setMaterialClusters').
+ */
+let materialCallouts: { object: CSS2DObject; nodes: ItemId[] }[] = [];
+
+/**
+ * Where a point in the frame of the whole tree - every placement composed, the
+ * root's own included - is in the frame of the group the show is framed by:
+ * that group as it was built, undone. Taken before it is framed: framing moves
+ * the group, and a callout under it moves with it.
+ */
+let treeFrame: THREE.Matrix4 | undefined;
+
+/**
  * Whether what a shape's metadata says about its elements is pinned to them.
  *
  * The "Metadata" box. Held here rather than set on each callout once, so that it
@@ -382,7 +398,46 @@ export function setLabels(choices: LabelChoices): void {
     refreshComponentCallouts();
     callouts.ports.forEach((object) => (object.visible = labelChoices.portNames));
     refreshInterfaceCallouts();
+    refreshMaterialCallouts();
     invalidate();
+}
+
+/**
+ * Pin a callout naming its material on every cluster of one, where the
+ * cluster is nearest the middle of itself (see 'cmf.clusters'), replacing the
+ * ones pinned before - or none, while they are being asked and when there are
+ * none. For the show on stage: a show that follows drops them.
+ */
+export function setMaterialClusters(clusters: readonly MaterialCluster[]): void {
+    for (const { object } of materialCallouts) {
+        object.removeFromParent();
+    }
+    materialCallouts = [];
+    if (content !== undefined && treeFrame !== undefined) {
+        for (const cluster of clusters) {
+            const callout = calloutObject('callout-material', [cluster.name]);
+            // PartCAD's frame - millimetres, Z up - is glTF's on the stage.
+            callout.object.position
+                .set(...cluster.at)
+                .applyMatrix4(TO_GLTF)
+                .applyMatrix4(treeFrame);
+            content.add(callout.object);
+            materialCallouts.push({ object: callout.object, nodes: cluster.nodes.map((path) => nodeId(path)) });
+        }
+    }
+    refreshMaterialCallouts();
+    invalidate();
+}
+
+/**
+ * Show each material's callout where the box asks and the tree draws any of
+ * the nodes its cluster is of: a cluster drawn in part is still that material,
+ * and one with none of it drawn names nothing.
+ */
+function refreshMaterialCallouts(): void {
+    for (const callout of materialCallouts) {
+        callout.object.visible = labelChoices.materials && callout.nodes.some(itemShown);
+    }
 }
 
 /**
@@ -631,6 +686,7 @@ export function showItems(visible: ReadonlySet<string>): void {
         }
     }
     refreshInterfaceCallouts();
+    refreshMaterialCallouts();
     invalidate();
 }
 
@@ -888,6 +944,8 @@ export function clearGeometry(): void {
     fitting = undefined;
     drawnBy.clear();
     callouts = noCallouts();
+    materialCallouts = [];
+    treeFrame = undefined;
     visibleItems = undefined;
     flickering = undefined;
     dropProxies();
@@ -1748,6 +1806,9 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // Every placement composed once, so that each component's box below is
     // measured where the tree puts it and taken back out of it consistently.
     group.updateMatrixWorld(true);
+    // And the frame the whole tree is in, for the materials' callouts that
+    // arrive later: this group's, before 'frame()' moves it.
+    const frameOfTree = group.matrix.clone().invert();
     // The box of what each node holds, on the stage: its own shape's and its
     // children's, measured before any port is added under it. 'built' lists the
     // children before the node that holds them, so one pass does it.
@@ -1804,6 +1865,9 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     shownGeometry = geometry;
     content = group;
     callouts = made;
+    // A cluster names the nodes of one tree: this show's are asked again.
+    materialCallouts = [];
+    treeFrame = frameOfTree;
     shownCut = cut;
     scene.add(group);
     // Framed on every shape the show carries, whether or not it is switched on:

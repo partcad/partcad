@@ -2247,6 +2247,8 @@ class Shape(ShapeConfiguration):
                 request[render_overlay.PORT_NAMES_KEY] = False
             if not overlay.interface_names:
                 request[render_overlay.INTERFACE_NAMES_KEY] = False
+            if overlay.materials:
+                request[render_overlay.MATERIALS_KEY] = {"distance": render_overlay.material_distance(ctx)}
         # An explicit argument wins over the configuration, but only when it is
         # one: 'render_async(**kwargs)' is called with a fixed set of keyword
         # arguments defaulting to None by several callers.

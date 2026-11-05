@@ -89,6 +89,7 @@ suite('The Digital Thread host, asked to render', () => {
             withPorts: true,
             withComponentNames: true,
             withComponentPrices: true,
+            withMaterials: true,
             withPortNames: false,
             withInterfaceNames: false,
         });
@@ -96,6 +97,7 @@ suite('The Digital Thread host, asked to render', () => {
         assert.strictEqual(sent.length, 1);
         assert.strictEqual(sent[0].withComponentNames, true);
         assert.strictEqual(sent[0].withComponentPrices, true);
+        assert.strictEqual(sent[0].withMaterials, true);
         assert.strictEqual(sent[0].withPortNames, false);
         assert.strictEqual(sent[0].withInterfaceNames, false);
         viewer.dispose();
@@ -149,6 +151,55 @@ suite('The Digital Thread host, asked what the components cost', () => {
             // eslint-disable-next-line @typescript-eslint/naming-convention
             prices: { '//pkg:bolt': { price: 0.25, currency: 'USD' } },
         });
+        viewer.dispose();
+    });
+});
+
+suite('The Digital Thread host, asked where each material is', () => {
+    const asked: Record<string, unknown>[] = [];
+    let registration: vscode.Disposable | undefined;
+    const cluster = { material: '//pkg:abs', name: 'abs', at: [5, 0, 0], nodes: [[0], [1]], faces: 12 };
+
+    suiteSetup(() => {
+        registration = vscode.commands.registerCommand('partcad.materialClusters', (args: Record<string, unknown>) => {
+            asked.push(args);
+            return { object: '//pkg:logo', distance: 10, clusters: [cluster] };
+        });
+    });
+
+    suiteTeardown(() => registration?.dispose());
+
+    test("asks under the 3D tab's id, about the object on screen, and posts the answer back", async () => {
+        const posted: Record<string, unknown>[] = [];
+        const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
+        const host = viewer as unknown as {
+            lastShow: unknown;
+            panel: unknown;
+            fetchTab(message: Record<string, unknown>): Promise<void>;
+        };
+        host.lastShow = { type: 'show', name: 'logo', kind: 'assembly', package: '//pkg' };
+        host.panel = {
+            webview: {
+                postMessage: (message: Record<string, unknown>) => {
+                    posted.push(message);
+                    return Promise.resolve(true);
+                },
+            },
+            dispose: () => undefined,
+        };
+
+        await host.fetchTab({ tab: '3d', token: 9, section: { z: [0, 5] } });
+
+        assert.strictEqual(asked.length, 1);
+        assert.strictEqual(asked[0].pkg, '//pkg');
+        assert.strictEqual(asked[0].name, 'logo');
+        assert.strictEqual(asked[0].kind, 'assembly');
+        // What the view is cut to, so that only what is drawn is called out.
+        assert.deepStrictEqual(asked[0].section, { z: [0, 5] });
+        const answer = posted.find((message) => message.type === 'tabData');
+        assert.strictEqual(answer?.tab, '3d');
+        assert.strictEqual(answer?.token, 9);
+        assert.deepStrictEqual(answer?.data, { object: '//pkg:logo', distance: 10, clusters: [cluster] });
         viewer.dispose();
     });
 });

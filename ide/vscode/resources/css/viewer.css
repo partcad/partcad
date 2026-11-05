@@ -558,6 +558,11 @@ body {
     border-left: 3px solid rgb(176, 48, 192);
 }
 
+/* A material's, in the teal the picture draws it in ('MATERIALS_COLOR'). */
+.callout-material .callout-box {
+    border-left: 3px solid rgb(0, 112, 96);
+}
+
 /*
  * The panes that are read rather than looked at: the bill of materials and the
  * supply information.
@@ -1434,12 +1439,13 @@ a {
     cursor: pointer;
 }
 
-/* What the prices are doing, under the callout boxes: being asked for, or why there are none. */
+/* What the prices and the materials are doing, under the callout boxes: being asked
+   for, or why there are none - a line for each. */
 .label-note {
     color: var(--vscode-descriptionForeground);
     font-family: var(--vscode-font-family);
     font-size: calc(var(--vscode-font-size) * 0.9);
-    white-space: normal;
+    white-space: pre-line;
 }
 
 .control-value {

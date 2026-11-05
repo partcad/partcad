@@ -319,6 +319,15 @@ def _positive_seconds(value):
     return value if math.isfinite(value) and value > 0 else None
 
 
+def _length_or(value, default):
+    """'value' as a finite, non-negative length in millimetres, or 'default' if it is not one.
+
+    Read the way '_seconds_or' reads a duration: text from the environment that
+    is a number is one, a boolean is not, and nought is a setting.
+    """
+    return _seconds_or(value, default)
+
+
 def _seconds_or(value, default):
     """'value' as a finite, non-negative number of seconds, or 'default' if it is not one.
 
@@ -390,6 +399,7 @@ OPTION_KEYS = (
     "caeThermalImplementation",
     "caeCfdImplementation",
     "camImplementation",
+    "materialClusterDistance",
     "tags",
 )
 
@@ -440,6 +450,10 @@ DEFAULT_CAE_IMPLEMENTATIONS = {
     "thermal": "//pub/feature/cae/elmer:thermal",
     "cfd": "//pub/feature/cae/openfoam:cfd",
 }
+
+# How close two surfaces of one material are for the "Materials" callout to
+# count them as one cluster, in millimetres: see 'materialClusterDistance'.
+DEFAULT_MATERIAL_CLUSTER_DISTANCE = 10.0
 
 # Which implementation produces a route when nothing says otherwise. Unlike the
 # two above this one *is* built into 'partcad': a route is arithmetic on the
@@ -1525,6 +1539,25 @@ class UserConfig(vyper.Vyper):
         self.set_default("camImplementation", DEFAULT_CAM_IMPLEMENTATION)
         self.bind_env("camImplementation", "PC_CAM_IMPLEMENTATION")
         self.cam_implementation = self.get_string("camImplementation") or DEFAULT_CAM_IMPLEMENTATION
+
+        # option: materialClusterDistance
+        # description: how far apart, in millimetres, two surfaces of one
+        #              material may be and still be one cluster of it, for the
+        #              "Materials" callout: the IDE's 3D and 2D tabs, and
+        #              "pc render --with-materials". Surfaces that touch are one
+        #              cluster whatever this says; nought counts only those. A
+        #              cluster is the faces of one material, of one part or of
+        #              several, each of which touches or is closer than this to
+        #              another of them, and it gets one callout naming the
+        #              material. Anything that is not a number of millimetres,
+        #              or is negative, is no setting at all.
+        # values: <float>
+        # default: 10
+        self.set_default("materialClusterDistance", DEFAULT_MATERIAL_CLUSTER_DISTANCE)
+        self.bind_env("materialClusterDistance", "PC_MATERIAL_CLUSTER_DISTANCE")
+        self.material_cluster_distance = _length_or(
+            self.get("materialClusterDistance"), DEFAULT_MATERIAL_CLUSTER_DISTANCE
+        )
 
     def cae_implementation(self, analysis: str) -> str:
         """Which implementation runs one analysis, by its name ("fea", "cfd", ...).
