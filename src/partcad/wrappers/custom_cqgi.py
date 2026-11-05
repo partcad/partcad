@@ -327,7 +327,9 @@ class InputParameter:
                 else:
                     f = float(new_value)
 
-                self.ast_node.n = f
+                # '.value', not the '.n' alias: it was removed in Python 3.14,
+                # where assigning it only adds an attribute nobody reads.
+                self.ast_node.value = f
             except ValueError:
                 raise InvalidParameterError(
                     "Cannot set value '{0:s}' for parameter '{1:s}': parameter must be numeric.".format(
@@ -336,21 +338,10 @@ class InputParameter:
                 )
 
         elif self.varType == StringParameterType:
-            self.ast_node.s = str(new_value)
+            self.ast_node.value = str(new_value)
         elif self.varType == BooleanParameterType:
-            if new_value:
-                if hasattr(ast, "NameConstant"):
-                    self.ast_node.value = True
-                else:
-                    self.ast_node.id = "True"
-            else:
-                if hasattr(ast, "NameConstant"):
-                    self.ast_node.value = False
-                else:
-                    self.ast_node.id = "False"
+            self.ast_node.value = bool(new_value)
         elif self.varType == TupleParameterType:
-            self.ast_node.n = new_value
-
             # Build the list of constants to set as the tuple value
             constants = []
             for nv in new_value:
@@ -507,7 +498,7 @@ class ParameterDescriptionFinder(ast.NodeTransformer):
                 # first parameter is the variable,
                 # second is the description
                 varname = node.args[0].id
-                desc = node.args[1].s
+                desc = node.args[1].value
                 self.cqModel.add_parameter_description(varname, desc)
 
         except:
