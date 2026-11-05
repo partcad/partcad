@@ -25,6 +25,8 @@ is one: it is not a failure, and a plugin's 'except Exception' around its
 whole body must not turn it into one.
 """
 
+import re
+
 # Where a capture's value may come from (see the documentation of 'open_browser').
 CAPTURE_SOURCES = ("cookie", "localStorage", "sessionStorage", "dom", "redirect", "ask")
 DONE_WHEN = ("url", "selector", "fetch")
@@ -51,6 +53,16 @@ class NotInteractive(Exception):
 def _string(value, what):
     if not isinstance(value, str) or not value.strip():
         raise ValueError("open_browser: %s must be a non-empty string, not %r" % (what, value))
+    return value
+
+
+def _pattern(value, what):
+    """A regular expression: 'match' on a capture, 'contains' on a guide step (the element's text)."""
+    _string(value, what)
+    try:
+        re.compile(value)
+    except re.error as e:
+        raise ValueError("open_browser: %s is not a regular expression: %s" % (what, e))
     return value
 
 
@@ -89,8 +101,14 @@ def _capture(item, index):
         _string(source.get("param"), where + ".redirect.param")
     elif sources[0] == "ask":
         _string(source.get("label"), where + ".ask.label")
-    if "match" in source:
-        _string(source["match"], where + ".match")
+    # 'match' belongs beside the source, which is where the extension reads it;
+    # one written inside the source is moved there, so either spelling works.
+    if "match" in source and "match" not in item:
+        item = dict(item)
+        item[sources[0]] = {k: v for k, v in source.items() if k != "match"}
+        item["match"] = source["match"]
+    if "match" in item:
+        _pattern(item["match"], where + ".match")
     return item
 
 
@@ -119,6 +137,10 @@ def browser_spec(url, capture, title=None, guide=None, require="all", done_when=
         _url(step.get("url"), "guide[%d].url" % i)
         _string(step.get("selector"), "guide[%d].selector" % i)
         _string(step.get("text"), "guide[%d].text" % i)
+        if "contains" in step:
+            _pattern(step["contains"], "guide[%d].contains" % i)
+    if done_when is not None and "contains" in done_when:
+        _pattern(done_when["contains"], "done_when.contains")
     try:
         timeout = int(timeout)
     except (TypeError, ValueError):

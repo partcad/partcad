@@ -126,3 +126,33 @@ def test_a_script_with_no_login_says_so(tmp_path):
     repository = ctx.get_project("//").get_repository("plain_repo")
     with pytest.raises(LoginUnsupported, match="has no login method"):
         asyncio.run(repository.login())
+
+
+def test_a_spec_is_checked_in_the_plugin_and_says_what_is_wrong():
+    """Run where the plugin runs, so a malformed request is the plugin's error, named."""
+    import sys
+
+    sys.path.insert(0, str(__import__("pathlib").Path(pc.__file__).parent / "wrappers"))
+    import plugin_login
+
+    capture = [{"name": "t", "cookie": {"url": "https://x/", "name": "t"}}]
+    spec = plugin_login.browser_spec(
+        "https://x/login",
+        [{"name": "t", "cookie": {"url": "https://x/", "name": "t", "match": "^a"}}],
+        guide=[{"url": "https://x/*", "selector": "button", "contains": "log ?in", "text": "Sign in"}],
+    )
+    # 'match' written inside the source is moved beside it, where the extension reads it.
+    assert spec["capture"] == [{"name": "t", "cookie": {"url": "https://x/", "name": "t"}, "match": "^a"}]
+    for bad, message in (
+        ({"capture": [{"name": "t"}]}, "exactly one of"),
+        ({"capture": capture + capture}, "two captures have one name"),
+        ({"capture": [dict(capture[0], match="(")]}, "not a regular expression"),
+        (
+            {"capture": capture, "guide": [{"url": "https://x/*", "selector": "b", "text": "t", "contains": "["}]},
+            "contains",
+        ),
+        ({"capture": capture, "require": "some"}, "'require'"),
+        ({"capture": capture, "done_when": {"url": "https://x/*", "fetch": {}}}, "exactly one of"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            plugin_login.browser_spec("https://x/login", **bad)

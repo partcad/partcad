@@ -428,7 +428,36 @@ def _detached() -> dict:
     return options
 
 
+def _forget_last_session(profile: Path) -> None:
+    """Start PartCAD's Chromium profile with no tabs of a login that is over.
+
+    The profile is kept for its sign-ins, not for its tabs: without this, a
+    login that ended with the browser killed rather than closed comes back,
+    window and all, beside the one this login opens. Only PartCAD's profile is
+    ever touched.
+    """
+    default = profile / "Default"
+    shutil.rmtree(default / "Sessions", ignore_errors=True)
+    for name in ("Current Session", "Current Tabs", "Last Session", "Last Tabs"):
+        try:
+            (default / name).unlink()
+        except OSError:
+            pass
+    preferences = default / "Preferences"
+    try:
+        settings = json.loads(preferences.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    settings.setdefault("profile", {}).update({"exit_type": "Normal", "exited_cleanly": True})
+    settings.setdefault("session", {})["restore_on_startup"] = 5  # the New Tab page, not the last session
+    try:
+        preferences.write_text(json.dumps(settings), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def _open_chromium(url, browser, profile, extension) -> Opened:
+    _forget_last_session(profile)
     arguments = ["--user-data-dir=%s" % profile] + _CHROMIUM_ARGUMENTS + _extra_arguments()
     if extension is not None and sys.platform != "win32":
         opened = _open_chromium_over_pipe(url, browser, arguments, extension)

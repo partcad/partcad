@@ -93,9 +93,11 @@ What the browser is asked
   capture is sent -- the last asks the site, from the browser, with the user's own session. Without it, the
   banner's **Done** button is the signal.
 ``guide``
-  Steps, each ``{"url", "selector", "text"}``. On a page at ``url``, the first step whose ``selector`` matches a
-  visible element is shown: the element spotlighted, the rest of the page greyed out, a pointer at it and the
-  ``text`` beside it. Clicks still pass through.
+  Steps, each ``{"url", "selector", "contains", "text"}``. On a page at ``url``, the first step whose ``selector``
+  matches a visible element -- one whose text matches ``contains`` too, a case-insensitive regular expression,
+  when the step has one: a site's "Log in" is often a button nothing but its text tells apart -- is shown: the
+  element spotlighted, the rest of the page greyed out, a pointer at it and the ``text`` beside it. Clicks still
+  pass through. ``done_when``'s ``selector`` takes a ``contains`` too.
 ``timeout``
   How many seconds ``pc login`` waits for the browser.
 

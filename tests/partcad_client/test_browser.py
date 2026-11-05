@@ -199,3 +199,19 @@ def test_firefox_gets_a_profile_of_its_own_with_the_extension_in_it(extension, m
     assert 'user_pref("xpinstall.signatures.required", false);' in (profile / "user.js").read_text()
     with zipfile.ZipFile(profile / "extensions" / "login@partcad.org.xpi") as xpi:
         assert sorted(xpi.namelist()) == ["background.js", "manifest.json"]
+
+
+def test_a_login_that_is_over_leaves_no_tabs_behind_and_keeps_its_sign_ins(tmp_path):
+    profile = tmp_path / "profile"
+    (profile / "Default" / "Sessions").mkdir(parents=True)
+    (profile / "Default" / "Sessions" / "Tabs_1").write_text("tabs")
+    (profile / "Default" / "Cookies").write_text("signed in")
+    (profile / "Default" / "Preferences").write_text(json.dumps({"profile": {"exit_type": "Crashed"}, "x": 1}))
+
+    pc_browser._forget_last_session(profile)
+
+    assert not (profile / "Default" / "Sessions").exists()
+    assert (profile / "Default" / "Cookies").read_text() == "signed in"
+    settings = json.loads((profile / "Default" / "Preferences").read_text())
+    assert settings["profile"]["exit_type"] == "Normal" and settings["session"]["restore_on_startup"] == 5
+    assert settings["x"] == 1
