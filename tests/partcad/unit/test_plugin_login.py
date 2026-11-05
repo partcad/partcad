@@ -14,6 +14,7 @@ browser brought when PartCAD runs it again.
 """
 
 import asyncio
+import re
 import textwrap
 
 import pytest
@@ -240,8 +241,6 @@ def test_a_pattern_only_python_reads_is_refused_before_the_browser_is(pattern, s
 
     sys.path.insert(0, str(__import__("pathlib").Path(pc.__file__).parent / "wrappers"))
     import plugin_login
-
-    import re
 
     try:
         re.compile(pattern)
