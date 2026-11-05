@@ -177,6 +177,15 @@ def test_a_spec_is_checked_in_the_plugin_and_says_what_is_wrong():
     assert "instructions" not in spec
     assert plugin_login.browser_spec("https://x/l", capture, instructions=" Or a key. ")["instructions"] == "Or a key."
 
+    # What to do without a browser goes to whoever has none, never to the browser.
+    asked = dict(capture=capture, instructions="Or a key.")
+    with pytest.raises(plugin_login.BrowserNeeded) as browser:
+        plugin_login.LoginCallback({}).open_browser("https://x/l", **asked)
+    assert "instructions" not in browser.value.spec
+    with pytest.raises(plugin_login.InstructionsNeeded) as instructions:
+        plugin_login.LoginCallback({"non_interactive": True}).open_browser("https://x/l", **asked)
+    assert instructions.value.spec["instructions"] == "Or a key."
+
     # What '--set' hands over answers a call only when it is enough for it.
     two = capture + [{"name": "u", "cookie": {"url": "https://x/", "name": "u"}}]
     callback = plugin_login.LoginCallback({"values": {"t": "1"}, "non_interactive": True})

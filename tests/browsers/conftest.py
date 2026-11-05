@@ -104,6 +104,7 @@ class DevTools:
         to_browser_read, to_browser_write = (_high_fd(fd) for fd in os.pipe())
         from_browser_read, from_browser_write = (_high_fd(fd) for fd in os.pipe())
         log = _high_fd(os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644))
+        self.log_path = pathlib.Path(log_path)
         self.extension = pathlib.Path(extension)
         self.flags = flags
         args = [
@@ -230,25 +231,42 @@ class DevTools:
                 return target
         return None
 
-    def load_extension(self, timeout=10):
+    def load_extension(self, timeout=30, flag_grace=5):
         """Wait for the extension; load it over the pipe if the flags did not take.
 
         `--load-extension` names an unpacked extension by its directory, and
         its id is derived from that path -- which is how a launcher can know it
         before the browser says. Google Chrome 137 and later ignore the flag,
-        and there `Extensions.loadUnpacked` is the way in.
+        and there `Extensions.loadUnpacked` is the way in: tried once the flag
+        has had `flag_grace` seconds, with `timeout` seconds for the worker
+        from when the browser answers it -- a browser that is slow to start
+        is slow to answer, too.
         """
         self.extension_id = unpacked_extension_id(self.extension)
+        if self.flags:
+            grace = time.monotonic() + flag_grace
+            while time.monotonic() < grace:
+                if self.worker():
+                    return self.extension_id
+                time.sleep(0.2)
+        self.extension_id = self.send("Extensions.loadUnpacked", {"path": str(self.extension)})["id"]
         deadline = time.monotonic() + timeout
-        loaded = False
-        while time.monotonic() < deadline:
+        while True:
             if self.worker():
                 return self.extension_id
-            if not loaded and (not self.flags or time.monotonic() > deadline - timeout / 2):
-                loaded = True
-                self.extension_id = self.send("Extensions.loadUnpacked", {"path": str(self.extension)})["id"]
+            if time.monotonic() >= deadline:
+                break
             time.sleep(0.2)
-        raise AssertionError("the extension's service worker never started")
+        raise AssertionError(
+            "the extension's service worker never started; the browser's log ends:\n%s" % self.log_tail()
+        )
+
+    def log_tail(self, size=2000):
+        """The end of what the browser wrote to its log, for a failure to show."""
+        try:
+            return self.log_path.read_text(errors="replace")[-size:]
+        except OSError as error:
+            return "(no log: %s)" % error
 
     def background(self, expression):
         """Evaluate `expression` in the extension's service worker."""

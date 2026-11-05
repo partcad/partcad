@@ -701,3 +701,26 @@ def test_login_that_the_site_refuses_is_a_failed_result(tmp_path, monkeypatch):
     result = call(server, "login", {"plugin": "//p:repo", "values": {"token": "bad"}})
     assert result.is_error and "the site does not take it" in body(result)["error"]
     assert not (tmp_path / ".partcad" / "config.yaml").exists()
+
+
+class ConfigWithParameters:
+    """A configuration whose parameter overrides are sent, as the CLI's is."""
+
+    def __init__(self):
+        self.parameter_config = {"//p:repo": {"formats": "stl"}}
+
+    def to_dict(self):
+        return {"parameters": {name: dict(values) for name, values in self.parameter_config.items()}}
+
+
+def test_what_login_saved_is_sent_with_every_request_after_it(tmp_path, monkeypatch):
+    """The server read the configuration file once; what it saved must not wait for a restart."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    daemon = FakeDaemon({"plugin.login": _login_daemon, "list.objects": lambda params, emit: None})
+    bridge = Bridge(str(tmp_path), connect=daemon.connect, user_config=ConfigWithParameters())
+    server = build_server(bridge, PathScope([bridge.root]))
+
+    assert body(call(server, "login", {"plugin": "//p:repo", "values": {"token": "good"}}))["ok"] is True
+    call(server, "list_objects", {})
+    sent = [params["userConfig"] for name, params in daemon.calls if name == "context.create"][-1]
+    assert sent["parameters"]["//p:repo"] == {"formats": "stl", "token": "good"}

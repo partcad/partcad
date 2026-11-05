@@ -482,7 +482,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
                 "Checked with the site, and kept in the user's PartCAD configuration when it works."
             ),
         ] = None,
-        check: Annotated[bool, Field(description="Only say whether the credentials there are still work.")] = False,
+        check: Annotated[bool, Field(description="Only say whether the saved credentials still work.")] = False,
         interactive: Annotated[
             bool,
             Field(
@@ -551,6 +551,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             # Named, never repeated: they are secrets, and the result is the agent's to keep.
             result["saved"] = sorted(parameters)
             result["config"] = await anyio.to_thread.run_sync(lambda: save_parameter_overrides(name, parameters))
+            bridge.remember_parameters(name, parameters)
         if said:
             result["said"] = said
         outcome.result = result

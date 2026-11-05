@@ -413,9 +413,17 @@ class ProjectExternalRepository(ProjectPlugin):
         """
         if self.skipped or not self.searches(kind):
             return []
+        # Read once: a JSON-RPC caller can send anything, and a limit that is
+        # not a positive whole number is no limit rather than an error.
+        try:
+            limit = int(limit) if limit else None
+        except (TypeError, ValueError):
+            limit = None
+        if limit is not None and limit < 1:
+            limit = None
         query = {"q": text or ""}
         if limit:
-            query["limit"] = int(limit)
+            query["limit"] = limit
         scoped = self._scope("%s/%s?%s" % (SEARCH_KEY, kind, urllib.parse.urlencode(query)))
         repository = self._repository_for(scoped)
         if repository is None:
@@ -460,7 +468,7 @@ class ProjectExternalRepository(ProjectPlugin):
                 with self._request_lock:
                     self._request_cache.setdefault(self._scope("objects/%s/%s" % (kind, name)), config)
             hits.append(SearchHit(self, kind, name, config))
-            if limit and len(hits) >= int(limit):
+            if limit and len(hits) >= limit:
                 break
         return hits
 

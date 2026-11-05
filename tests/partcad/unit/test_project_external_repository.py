@@ -1184,3 +1184,14 @@ def test_the_search_action_asks_a_repository_that_searches(tmp_path, monkeypatch
 
     assert [hit.name for hit in found] == ["763622"]
     assert "objects/part" not in fake.keys
+
+
+def test_a_limit_that_is_not_a_positive_number_is_no_limit(tmp_path):
+    """A JSON-RPC caller can send anything; it is not an error, and not one hit either."""
+    data = {"meta": {"searchKinds": ["part"]}, "search/part?q=clip": {"a": {"type": "stl"}, "b": {"type": "stl"}}}
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    repo._repository = FakeRepository(data)
+    for limit in ("abc", -1, 0, None):
+        assert [hit.name for hit in repo.search("part", "clip", limit)] == ["a", "b"], limit
+    assert all("limit" not in key for key in repo._repository.keys)

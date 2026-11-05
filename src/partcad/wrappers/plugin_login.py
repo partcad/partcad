@@ -252,4 +252,5 @@ class LoginCallback:
             )
         if self.non_interactive:
             raise InstructionsNeeded(spec)
-        raise BrowserNeeded(spec)
+        # What to do without a browser is no business of one.
+        raise BrowserNeeded({key: value for key, value in spec.items() if key != "instructions"})
