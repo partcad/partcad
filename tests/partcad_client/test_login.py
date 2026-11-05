@@ -245,6 +245,53 @@ def test_the_credentials_are_saved_as_overrides_and_nothing_else_moves(tmp_path)
         assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
 
 
+def test_a_save_waits_for_the_lock_every_writer_of_the_file_takes(tmp_path):
+    """Another login writing the file at the same moment holds this lock, and its write is not lost."""
+    from filelock import FileLock
+
+    path = tmp_path / "config.yaml"
+    path.write_text("parameters:\n  //a:r:\n    token: a\n", encoding="utf-8")
+    saved = threading.Event()
+    writer = threading.Thread(
+        target=lambda: (save_parameter_overrides("//b:r", {"token": "b"}, str(path)), saved.set()),
+        daemon=True,
+    )
+    with FileLock(str(path) + ".lock"):
+        writer.start()
+        # However long the other writer is, nothing is read or replaced until it is done.
+        assert not saved.wait(1)
+        path.write_text("parameters:\n  //a:r:\n    token: a2\n", encoding="utf-8")
+    assert saved.wait(60)
+    writer.join(60)
+
+    import yaml
+
+    assert yaml.safe_load(path.read_text())["parameters"] == {"//a:r": {"token": "a2"}, "//b:r": {"token": "b"}}
+
+
+def test_logins_saving_at_once_keep_every_plugin_s_credentials(tmp_path):
+    path = tmp_path / "config.yaml"
+    names = ["//p%d:r" % n for n in range(12)]
+    errors = []
+
+    def save(name):
+        try:
+            save_parameter_overrides(name, {"token": name}, str(path))
+        except Exception as error:  # reported below, with the name that failed
+            errors.append((name, error))
+
+    threads = [threading.Thread(target=save, args=(name,)) for name in names]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(60)
+    assert errors == []
+
+    import yaml
+
+    assert yaml.safe_load(path.read_text())["parameters"] == {name: {"token": name} for name in names}
+
+
 def test_a_missing_configuration_file_is_made(tmp_path):
     path = tmp_path / "new" / "config.yaml"
     save_parameter_overrides("//p:r", {"token": "t"}, str(path))

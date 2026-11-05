@@ -1572,6 +1572,11 @@ class UserConfig(vyper.Vyper):
         return getattr(self, attribute)
 
 
+# How long a write of the configuration file waits for another one to finish.
+# Each holds the lock for one read and one write of a small file.
+CONFIG_LOCK_TIMEOUT = 60
+
+
 def save_parameter_overrides(object_name: str, values: dict, path: str = None) -> str:
     """Write 'values' into the user's configuration file as overrides of the parameters of 'object_name'.
 
@@ -1585,12 +1590,27 @@ def save_parameter_overrides(object_name: str, values: dict, path: str = None) -
     The values are often credentials. So the file is replaced in one step, and
     readable by its owner only.
 
+    Two logins can finish at once -- two 'pc login's, or an agent's parallel
+    'login' calls through 'pc mcp' -- and each reads the file, adds its own
+    plugin's values and replaces it: unguarded, the later replace drops what
+    the earlier one wrote. So reading, merging and replacing happen under one
+    lock beside the file, which every caller of this function takes.
+
     Returns the path written.
     """
+    from filelock import FileLock
+
+    path = path or UserConfig.get_config_path()
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with FileLock(path + ".lock", timeout=CONFIG_LOCK_TIMEOUT, mode=0o600):
+        _merge_parameter_overrides(path, object_name, values)
+    return path
+
+
+def _merge_parameter_overrides(path: str, object_name: str, values: dict) -> None:
     from ruamel.yaml import YAML
     from ruamel.yaml.comments import CommentedMap
 
-    path = path or UserConfig.get_config_path()
     yaml = YAML()
     yaml.preserve_quotes = True
     document = None
@@ -1614,7 +1634,6 @@ def save_parameter_overrides(object_name: str, values: dict, path: str = None) -
     for name, value in values.items():
         entry[name] = value
 
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     temporary = "%s.%d.tmp" % (path, os.getpid())
     descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
@@ -1631,7 +1650,6 @@ def save_parameter_overrides(object_name: str, values: dict, path: str = None) -
         except OSError:
             pass
         raise
-    return path
 
 
 user_config = UserConfig()
