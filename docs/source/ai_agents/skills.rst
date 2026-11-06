@@ -132,30 +132,37 @@ Generating geometry
 
 ``/pc:gen-scene``
   Lays out a :ref:`scene <scenes>`: an arrangement of objects rather than a
-  product -- a room, a building interior, a workcell, a world to simulate
+  product -- a room, a building inside or out, a workcell, a world to simulate
   something in. It says where things are, and nothing about putting them
-  together, so the rules it follows are not the assembly's:
+  together, and what it has to get right is the surfaces that are seen or that
+  something in the scene touches, and its physical conditions -- not the inside
+  of a volume nothing interacts with. So the rules it follows are not the
+  assembly's:
 
   - Every object is a ``basic`` cuboid or cylinder at its real size, unless more
     detail can reasonably be expected: you asked for it, the catalog already has
-    the object, it is what the scene is about, or what the scene is for depends
-    on its shape.
+    the object, it is what the scene is about, or something in the scene
+    interacts with its shape.
   - Everything is placed with ``location:``, and is ``fixed: true`` -- welded to
     the world -- unless it is said to move or obviously does.
   - The scene stands on a bottom surface whose underside is at z = 0 or above,
     where every simulator writes its ground plane, unless it is in space, where
     there is none and the gravity is ``[0, 0, 0]``.
-  - A building interior stands on floor plans: :ref:`walls scenes
-    <scenes-walls>` nested inside the scene, one per room, or a single one where
-    the space is only borderline a building or could be divided several ways.
-    A room with doors or windows is its walls placed by hand, by the walls
-    scene's own rule, with the openings cut out of them.
+  - A building whose inside only is wanted stands on floor plans:
+    :ref:`walls scenes <scenes-walls>`, whose walls are see-through from
+    outside, nested in the scene -- a single one where one outline can hold the
+    space. A ``walls`` scene cuts no openings, so a room with doors or windows is
+    the same walls placed by hand, by the ``walls`` scene's own rule.
+  - A building whose outside is modelled too gets solid walls instead, modelled
+    first: each one an extrusion of its elevation sketch with the doors and
+    windows as holes, placed side by side along the building's outline.
 
   It settles the placements on a layout sketch the way ``/pc:gen-assembly`` does,
   renders four views and measures the distances again on the scene's
   projections. Since a scene is not manufacturable, ``pc test`` only warns when
-  two of its objects overlap, so the skill reads the warnings rather than the
-  exit code.
+  two of its objects overlap, and the skill judges each warning by what the
+  overlap touches: walls sharing a corner are left alone, a mobile object inside
+  another never is.
 
 ``/pc:gen-sketch``
   Authors a 2D sketch -- build123d, CadQuery, DXF, SVG or a basic outline --

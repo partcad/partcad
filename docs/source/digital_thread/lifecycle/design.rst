@@ -143,11 +143,11 @@ Agent skills
   dimensions on its projections.
 
 ``/pc:gen-scene``
-  Lays out a scene from a description -- a room, a building interior standing on
-  its floor plans, a workcell, a world to simulate in -- with every object a
-  ``basic`` primitive unless it needs more detail, placed by ``location:``, fixed
-  to the world unless it is mobile, and standing on a bottom surface at or above
-  z = 0 unless it is in space.
+  Lays out a scene from a description -- a room standing on its floor plan, a
+  building with its walls, doors and windows, a workcell, a world to simulate in
+  -- with every object a ``basic`` primitive unless it needs more detail, placed
+  by ``location:``, fixed to the world unless it is mobile, and standing on a
+  bottom surface at or above z = 0 unless it is in space.
 
 ``/pc:add-interfaces``
   Adds ``interfaces``, ports and ``implements:`` to a part that has none, so it

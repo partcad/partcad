@@ -232,21 +232,27 @@ The plugin folder is named `claude`, but the command namespace comes from
   `/pc:gen-part` does: each part as it takes shape, then each version of the
   assembly that builds and renders.
 - **`/pc:gen-scene <description>`** — generates a scene: an arrangement of
-  objects rather than a product (a room, a building interior, a workcell, a
-  world to simulate in), which says where things are and nothing about putting
-  them together. Every object is a `basic` cuboid or cylinder at its real size
-  unless more detail can reasonably be expected (asked for, in the catalog
-  already, the subject of the scene, or a shape the scene's purpose depends
-  on). Every object is placed with `location:` and is `fixed: true` unless it is
-  mobile. The scene stands on a bottom surface whose underside is at or above
-  z = 0, where every simulator writes its ground plane, except in space, which
-  has none and `gravity: [0, 0, 0]`. A building interior stands on floor plans,
-  `walls` scenes nested in the scene (one per room, or a single one in a
-  corner case), and a room with doors or windows is its walls placed by hand,
-  with the `walls` scene's own rule. `pc test` only *warns* about interference
-  in a scene, since a scene is not manufacturable, so the skill reads the warnings
-  rather than the exit code, and it checks in the top view what nothing measures:
-  that everything stays inside its walls.
+  objects rather than a product (a room, a building inside or out, a workcell,
+  a world to simulate in), which says where things are and nothing about
+  putting them together. What it has to get right is the surfaces that are seen
+  or that something in the scene touches, and its physical conditions; the
+  inside of a volume nothing interacts with need not be right. Every object is a
+  `basic` cuboid or cylinder at its real size unless more detail can reasonably
+  be expected (asked for, in the catalog already, the subject of the scene, or a
+  shape something in it interacts with). Every object is placed with
+  `location:` and is `fixed: true` unless it is mobile. The scene stands on a
+  bottom surface whose underside is at or above z = 0, where every simulator
+  writes its ground plane, except in space, which has none and
+  `gravity: [0, 0, 0]`. A building whose inside only is wanted stands on floor
+  plans, `walls` scenes whose walls are see-through from outside: a single one
+  where one outline can hold the space, and a room with doors or windows as the
+  same walls placed by hand, since a `walls` scene cuts no openings. A building
+  whose outside is modelled too gets solid walls first, each an extrusion of its
+  elevation sketch with the doors and windows as holes, placed side by side
+  along its outline. `pc test` only *warns* about overlaps in a scene, and the
+  skill judges each warning by what the overlap touches rather than treating it
+  as a defect: walls sharing a corner are left alone, a mobile object inside
+  another never is.
 - **`/pc:gen-sketch <description>`** — generates a 2D sketch whose dimensions
   are measured rather than estimated. The input is normalized to 2D first — a
   description is a table of targets, a DXF or SVG is re-rendered, a 3D

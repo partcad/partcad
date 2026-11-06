@@ -260,6 +260,8 @@ Agent skills
   :ref:`basic_parts`) unless it needs more detail, is placed with ``location:``
   and is ``fixed: true`` unless it is mobile. The scene stands on a bottom
   surface whose underside is at z = 0 or above, except in space, which has
-  none and no gravity. A building interior stands on floor plans: the ``walls``
-  scenes of "Rooms" above, nested in an ``assy`` scene that places them with
-  the floor and the furnishing. See :doc:`/ai_agents/skills`.
+  none and no gravity. A building whose inside only is wanted stands on floor
+  plans: the ``walls`` scenes of "Rooms" above, nested in an ``assy`` scene that
+  places them with the floor and the furnishing. A building whose outside is
+  modelled too gets solid walls instead, extruded from elevation sketches with
+  the doors and windows cut out of them. See :doc:`/ai_agents/skills`.
