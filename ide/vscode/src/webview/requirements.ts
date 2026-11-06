@@ -9,7 +9,7 @@
 // because a requirement is one of two kinds of thing:
 //
 //   - what PartCAD can measure - the ports, the interfaces, the physical
-//     properties and how far the volume and the mass may be from another
+//     properties and how closely the volume and the mass match another
 //     object's - listed with a mark beside each: green where 'pc test' finds
 //     the model meets it, red where it does not;
 //   - the features, which are prose, in a table: what each is, and what it is
@@ -40,7 +40,7 @@ export const SECTIONS: [string, string][] = [
     ['ports', 'Ports'],
     ['interfaces', 'Interfaces'],
     ['physics', 'Physics'],
-    ['compare', 'Compared with'],
+    ['match', 'Matches'],
 ];
 
 /** Where a check of any other section - a requirement that could not be read, a dangling 'feature:' - is listed. */

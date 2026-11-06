@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Two objects read against each other: the rules 'pc compare' and 'compare:' share.
+"""Two objects read against each other: the rules 'pc compare' and 'match:' share.
 
 What a volume and a mass *are* is 'partcad.physics', and how far apart two
 surfaces are is 'wrappers/wrapper_compare.py', each tested beside itself; both are

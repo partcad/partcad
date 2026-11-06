@@ -353,7 +353,7 @@ at all).
   read off the schema (`requirement-physics`, which a test holds to `physics` less a connection's properties),
   so a field added there needs nothing here. The check is never cached: what it reads -- the requirements, the
   ports and interfaces, which can live in other packages, the material -- is mostly not what a shape's cache key
-  is made of. The fifth section, `compare`, holds the volume and the mass to within a percentage of another
+  is made of. The fifth section, `match`, holds the volume and the mass to within a percentage of another
   object's, and reads both by `compare.py`'s rules (`within()`), so `pc test` and `pc compare` cannot disagree
   about what "within 5%" means.
 

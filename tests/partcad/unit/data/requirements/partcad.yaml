@@ -122,7 +122,7 @@ parts:
     properties:
       material: :steel
     requirements:
-      compare:
+      match:
         :plate:
           volume: 0
           weight: 1%

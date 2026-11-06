@@ -748,7 +748,7 @@ async def resolved_async(ctx, shape):
 async def amounts_async(ctx, shape):
     """How much of a part or an assembly there is: '{"volume", "mass", "massSource", "unknown"}'; None otherwise.
 
-    What 'pc compare' and a 'compare:' requirement hold two objects to, in full
+    What 'pc compare' and a 'match:' requirement hold two objects to, in full
     rather than rounded for a reader: the volume in mm^3 - a part's measured, an
     assembly's the sum of its parts', the way 'pc info' reports it - and the
     mass in kg with where it came from, by 'resolved_async()''s rules.

@@ -3821,16 +3821,16 @@ def requirements_check(session, params):
     verify = bool(params.get("verify"))
     declaration = requirements.of_shape(obj) if verify else None
     if verify and kind == "assembly":
-        if declaration is not None and (declaration.physics or declaration.compare):
+        if declaration is not None and (declaration.physics or declaration.match):
             # What an assembly weighs is worked out from the tree it is built
             # as (see 'physics.resolved_async'), so checking a physical
             # requirement builds it: phase one first, as for every request that
             # ends in one. Its ports are read off its tree, which needs no build.
             _stage_subassemblies(session, ctx, obj)
-    if declaration is not None and declaration.compare:
-        # And so does weighing an assembly a 'compare:' requirement names.
-        for reference in dict.fromkeys(requirement.reference for requirement in declaration.compare):
-            other, _why = asyncio.run(requirements.compared_object_async(ctx, obj, reference))
+    if declaration is not None and declaration.match:
+        # And so does weighing an assembly a 'match:' requirement names.
+        for reference in dict.fromkeys(requirement.reference for requirement in declaration.match):
+            other, _why = asyncio.run(requirements.matched_object_async(ctx, obj, reference))
             if other is not None and getattr(other, "kind", None) == "assembly":
                 _stage_subassemblies(session, ctx, other)
     with pc.logging.Process("Requirements", package, name):

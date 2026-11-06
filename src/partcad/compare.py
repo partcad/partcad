@@ -36,7 +36,7 @@ The two are compared where they are. Nothing moves one onto the other: two
 objects whose geometry is the same and whose origins are not are, for the
 surface, a millimetre or a metre apart, and that is reported.
 
-The same rules answer a 'compare:' requirement (see 'partcad.requirements'), so
+The same rules answer a 'match:' requirement (see 'partcad.requirements'), so
 that 'pc test' and 'pc compare' cannot disagree about what "within 5%" means.
 """
 

@@ -687,7 +687,7 @@ Object commands
   the allowance -- every point within it, and none with nothing to measure to -- and ``--max-volume-difference``
   and ``--max-mass-difference`` (in percent of the reference's) when they are given. Held to nothing, it is a
   report and exits zero. ``--json`` prints the whole comparison as one JSON object on standard output. The same
-  limits can be written into the current object's declaration, as a ``compare:`` requirement that ``pc test``
+  limits can be written into the current object's declaration, as a ``match:`` requirement that ``pc test``
   checks -- see :ref:`requirements`.
 
 ``pc bom``

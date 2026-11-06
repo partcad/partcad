@@ -28,7 +28,7 @@ terms whoever asked for the design thinks in:
                 where each instance is as matters, in the same terms.
     physics     what the object's physical properties have to be: any of the
                 fields of a 'physics:' section, in the same terms.
-    compare     how far the object's volume and mass may be from another
+    match       how closely the object's volume and mass have to match another
                 object's, in percent of that object's: "no more than 5% heavier
                 or lighter than the bracket it replaces". Keyed by the other
                 object's name, which is resolved from this object's package the
@@ -92,11 +92,11 @@ FEATURES = "features"
 PORTS = "ports"
 INTERFACES = "interfaces"
 PHYSICS = "physics"
-COMPARE = "compare"
+MATCH = "match"
 
 # The sections 'pc test' verifies against the model, in the order a report
 # lists them. 'features' is not one of them: a feature is prose.
-STRUCTURED = (PORTS, INTERFACES, PHYSICS, COMPARE)
+STRUCTURED = (PORTS, INTERFACES, PHYSICS, MATCH)
 
 # Where a feature reference that names nothing is reported: it is a mistake in
 # a 'simulate:' entry, not in the requirements. One an analysis scenario makes
@@ -503,8 +503,8 @@ class PhysicsRequirement:
         return _vector_text(self.vector) if self.vector is not None else str(self.spec)
 
 
-class CompareRequirement:
-    """How far one amount of the object - its volume or its mass - may be from another object's.
+class MatchRequirement:
+    """How closely one amount of the object - its volume or its mass - has to match another object's.
 
     'reference' is the other object's name as written; 'limit' is in percent of
     that object's amount.
@@ -542,13 +542,13 @@ class Declaration:
         self.ports: list = []
         self.interfaces: list = []
         self.physics: list = []
-        self.compare: list = []
+        self.match: list = []
         self.problems: list = []
 
     @property
     def structured(self) -> bool:
         """Whether anything here is for 'pc test' to check."""
-        return bool(self.ports or self.interfaces or self.physics or self.compare or self.problems)
+        return bool(self.ports or self.interfaces or self.physics or self.match or self.problems)
 
     @property
     def empty(self) -> bool:
@@ -628,18 +628,16 @@ def _parse_physics(raw, declaration: Declaration) -> None:
                 declaration.physics.append(PhysicsRequirement(name, spec=spec))
 
 
-# What a 'compare:' requirement may hold an object to, by the key it is written
+# What a 'match:' requirement may hold an object to, by the key it is written
 # with: 'weight' is what most people asking for one say, and is the mass.
-_COMPARED = {"volume": "volume", "mass": "mass", "weight": "mass"}
+_MATCHED = {"volume": "volume", "mass": "mass", "weight": "mass"}
 
 
-def _parse_compare(raw, declaration: Declaration) -> None:
+def _parse_match(raw, declaration: Declaration) -> None:
     from . import compare as pc_compare
 
     if not isinstance(raw, dict):
-        declaration.problems.append(
-            Problem(COMPARE, COMPARE, "'%s' is not a mapping of the objects compared with" % _fmt(raw))
-        )
+        declaration.problems.append(Problem(MATCH, MATCH, "'%s' is not a mapping of the objects to match" % _fmt(raw)))
         return
     for reference, limits in raw.items():
         reference = str(reference)
@@ -648,7 +646,7 @@ def _parse_compare(raw, declaration: Declaration) -> None:
         if not isinstance(limits, dict):
             declaration.problems.append(
                 Problem(
-                    COMPARE,
+                    MATCH,
                     reference,
                     "'%s' is not a mapping of 'volume' and 'mass' to how many percent they may differ by"
                     % _fmt(limits),
@@ -657,13 +655,13 @@ def _parse_compare(raw, declaration: Declaration) -> None:
             continue
         written = {}
         for key, value in limits.items():
-            amount = _COMPARED.get(str(key))
+            amount = _MATCHED.get(str(key))
             if amount is None:
                 declaration.problems.append(
                     Problem(
-                        COMPARE,
+                        MATCH,
                         reference,
-                        "'%s' is not compared: what is, is %s" % (key, ", ".join("'%s'" % k for k in _COMPARED)),
+                        "'%s' is not matched: what is, is %s" % (key, ", ".join("'%s'" % k for k in _MATCHED)),
                     )
                 )
                 continue
@@ -673,7 +671,7 @@ def _parse_compare(raw, declaration: Declaration) -> None:
             if amount in written:
                 declaration.problems.append(
                     Problem(
-                        COMPARE,
+                        MATCH,
                         reference,
                         "'%s' and '%s' are both the %s: say it once" % (written[amount], key, amount),
                     )
@@ -684,13 +682,13 @@ def _parse_compare(raw, declaration: Declaration) -> None:
             if limit is None:
                 declaration.problems.append(
                     Problem(
-                        COMPARE,
+                        MATCH,
                         "%s of %s" % (amount, reference),
                         "'%s' is not a percentage of 0 or more: write 5 or '5%%'" % _fmt(value),
                     )
                 )
                 continue
-            declaration.compare.append(CompareRequirement(reference, amount, limit, str(key)))
+            declaration.match.append(MatchRequirement(reference, amount, limit, str(key)))
 
 
 def _parse_ports(raw, declaration: Declaration) -> None:
@@ -804,8 +802,8 @@ def parse(raw) -> typing.Optional[Declaration]:
         _parse_interfaces(raw[INTERFACES], declaration)
     if raw.get(PHYSICS) is not None:
         _parse_physics(raw[PHYSICS], declaration)
-    if raw.get(COMPARE) is not None:
-        _parse_compare(raw[COMPARE], declaration)
+    if raw.get(MATCH) is not None:
+        _parse_match(raw[MATCH], declaration)
     return declaration
 
 
@@ -1085,7 +1083,7 @@ def _feature_references(shape, declaration: typing.Optional[Declaration], report
 
 def _declared_checks(declaration: Declaration) -> dict:
     """{section: [(requirement, Check)]} with nothing verified yet."""
-    checks = {PORTS: [], INTERFACES: [], PHYSICS: [], COMPARE: []}
+    checks = {PORTS: [], INTERFACES: [], PHYSICS: [], MATCH: []}
     for port in declaration.ports:
         checks[PORTS].append((port, Check(PORTS, port.name, port.describe())))
     for interface in declaration.interfaces:
@@ -1099,8 +1097,8 @@ def _declared_checks(declaration: Declaration) -> dict:
             checks[INTERFACES].append(((interface, instance, location), check))
     for physics in declaration.physics:
         checks[PHYSICS].append((physics, Check(PHYSICS, physics.path, physics.describe())))
-    for compared in declaration.compare:
-        checks[COMPARE].append((compared, Check(COMPARE, compared.name, compared.describe())))
+    for matched in declaration.match:
+        checks[MATCH].append((matched, Check(MATCH, matched.name, matched.describe())))
     return checks
 
 
@@ -1302,8 +1300,8 @@ async def _verify_physics(ctx, shape, entries) -> None:
         check.detail = "%s (%s)" % (_quantity(requirement.path, value), source)
 
 
-async def compared_object_async(ctx, shape, reference: str):
-    """(the part or assembly a 'compare:' requirement of 'shape' names, or None; why it is None).
+async def matched_object_async(ctx, shape, reference: str):
+    """(the part or assembly a 'match:' requirement of 'shape' names, or None; why it is None).
 
     Resolved from the object's own package, the way 'implements:' and every
     other name in a declaration is: ':bracket' is a sibling, and
@@ -1331,21 +1329,21 @@ async def compared_object_async(ctx, shape, reference: str):
     return other, None
 
 
-async def _verify_compare(ctx, shape, entries) -> None:
+async def _verify_match(ctx, shape, entries) -> None:
     from . import compare as pc_compare
 
     kind = getattr(shape, "kind", None)
     if kind not in pc_compare.KINDS:
         for _, check in entries:
             check.passed = False
-            check.detail = "a %s has no volume and no mass to compare" % kind
+            check.detail = "a %s has no volume and no mass to match" % kind
         return
 
     own = await pc_compare.side_async(ctx, shape)
     others = {}
     for requirement, check in entries:
         if requirement.reference not in others:
-            other, why = await compared_object_async(ctx, shape, requirement.reference)
+            other, why = await matched_object_async(ctx, shape, requirement.reference)
             others[requirement.reference] = (
                 (await pc_compare.side_async(ctx, other), None) if other is not None else (None, why)
             )
@@ -1414,7 +1412,7 @@ async def check_async(ctx, shape, verify: bool = True) -> Report:
         PORTS: _verify_ports,
         INTERFACES: _verify_interfaces,
         PHYSICS: _verify_physics,
-        COMPARE: _verify_compare,
+        MATCH: _verify_match,
     }
     for section in STRUCTURED:
         entries = sections[section]

@@ -371,14 +371,14 @@ placed by coordinates.
     ),
     "requirements": Entry(
         "Meets its requirements",
-        "objects whose `requirements:` require ports, interfaces, physical properties or a comparison",
+        "objects whose `requirements:` require ports, interfaces, physical properties or a match with another object",
         """
 Whether the model is what its `requirements:` say it has to be, as far as that
 can be measured: each required port is there, facing where it has to; each
 required interface is implemented, its instances where they have to be; and each
 required physical property - its mass, its centre of mass, its inertia, its
 friction - has a value that meets the requirement; and its volume and its mass
-are within the percentage `compare:` allows of each object it names - the
+are within the percentage `match:` allows of each object it names - the
 numbers `pc compare <that object> <this one>` reports. Asked again every time,
 never read from the cache.
 
@@ -389,8 +389,8 @@ is declared.
 
 ### When it does not apply
 
-An object that requires no port, interface, physical property or comparison,
-and whose simulations and analysis scenarios name no feature.
+An object that requires no port, interface, physical property or match with
+another object, and whose simulations and analysis scenarios name no feature.
 
 ### When it fails
 
@@ -403,7 +403,7 @@ what is there instead.
 - `not known: ...`: PartCAD could not find out the value - a mass with no
   density to work it out from. State the value in a `physics:` section, or give
   the part a `material:` with a density. "Not known" is not "met".
-- `compare: <amount> of <object>: within N%: ... more than N%`: the volume or
+- `match: <amount> of <object>: within N%: ... more than N%`: the volume or
   the mass is further from the other object's than the requirement allows. Run
   `pc compare <object> <this one>` for the whole comparison, and change the
   model or the limit, whichever is wrong.

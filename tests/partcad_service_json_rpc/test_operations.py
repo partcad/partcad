@@ -3670,7 +3670,7 @@ def test_adhoc_render_reports_a_failed_render(monkeypatch, tmp_path):
 # reads as.
 
 
-def _requirements_session(monkeypatch, kind="part", name="plate", physics=(), compare=()):
+def _requirements_session(monkeypatch, kind="part", name="plate", physics=(), match=()):
     asked = []
 
     class Report:
@@ -3688,10 +3688,10 @@ def _requirements_session(monkeypatch, kind="part", name="plate", physics=(), co
     def of_shape(shape):
         return types.SimpleNamespace(
             physics=list(physics),
-            compare=[types.SimpleNamespace(reference=reference) for reference in compare],
+            match=[types.SimpleNamespace(reference=reference) for reference in match],
         )
 
-    async def compared_object_async(ctx, shape, reference):
+    async def matched_object_async(ctx, shape, reference):
         package, name = FakeUtils.resolve_resource_path(shape.project_name, reference)
         for kind in ("part", "assembly"):
             found = ctx.shapes.get((kind, "%s:%s" % (package, name)))
@@ -3705,7 +3705,7 @@ def _requirements_session(monkeypatch, kind="part", name="plate", physics=(), co
             "partcad.requirements": {
                 "check_async": check_async,
                 "of_shape": of_shape,
-                "compared_object_async": compared_object_async,
+                "matched_object_async": matched_object_async,
             }
         },
     )
@@ -3765,9 +3765,9 @@ def test_requirements_check_builds_nothing_it_does_not_need(monkeypatch):
     assert [verify for _, verify in asked_declared] == [False]
 
 
-def test_requirements_check_builds_an_assembly_a_comparison_names_first_to_weigh_it(monkeypatch):
-    """A 'compare:' requirement weighs the other object too, so an assembly named there is staged as well."""
-    session, _, asked = _requirements_session(monkeypatch, name="bracket", compare=[":frame", ":frame"])
+def test_requirements_check_builds_an_assembly_a_match_names_first_to_weigh_it(monkeypatch):
+    """A 'match:' requirement weighs the other object too, so an assembly named there is staged as well."""
+    session, _, asked = _requirements_session(monkeypatch, name="bracket", match=[":frame", ":frame"])
     _assembly_with(session, "//:frame", uncached=[("//", "rail")])
 
     with pytest.raises(JsonRpcError) as caught:

@@ -190,7 +190,7 @@ manufacturing, say -- but those are not part of this section.
           //pub/std/metric/m3:m3-thru: null
         physics:
           mass: "<0.05"
-        compare:
+        match:
           :bracket-v1:        # the bracket this one replaces
             volume: 10%       # within 10% of its volume
             mass: 5%          # and within 5% of what it weighs
@@ -229,9 +229,9 @@ manufacturing, say -- but those are not part of this section.
   an assembly one of whose parts weighs nothing PartCAD knows, since what the
   others add up to is not what it weighs.
 
-``compare``
-  How far the object's volume and mass may be from another object's, in percent
-  of that object's, either way: "no more than 5% heavier or lighter than the
+``match``
+  How closely the object's volume and mass have to match another object's, in
+  percent of that object's, either way: "no more than 5% heavier or lighter than the
   bracket it replaces". Keyed by the other object's name, resolved from this
   object's package the way any reference is (``:bracket-v1`` is a sibling); each
   is a mapping of ``volume`` and ``mass`` -- ``weight`` is accepted for

@@ -187,7 +187,7 @@ parts:
 Then add `requirements:` to the same declaration — what the description asked
 for, in the description's own terms, *not* the design you chose. `pc test`
 checks the model against what it can measure — the `ports:`, `interfaces:`,
-`physics:` and `compare:` — and `/pc:validate` judges the `features:`, which are
+`physics:` and `match:` — and `/pc:validate` judges the `features:`, which are
 prose; the IDE shows both as the part's Requirements tab:
 
 ```yaml
@@ -223,14 +223,14 @@ prose; the IDE shows both as the part's Requirements tab:
   The middle element is the way the port *faces* (its Z axis), not the axis its
   location is rotated about. Write these only when the description says how the
   part connects; `/pc:add-interfaces` then adds the ports that meet them.
-- **`compare:`** is for a part asked for *relative to another object* —
+- **`match:`** is for a part asked for *relative to another object* —
   "like the old bracket, but no more than 5% heavier", "a replacement within
   2% of the original's volume". Key it by the other object's name (`:sibling`
   or `//package:name`), with `volume` and `mass` (or `weight`) as a percentage
   of that object's, either way:
 
   ```yaml
-      compare:
+      match:
         :bracket-v1:
           mass: 5%                      # within 5% of what bracket-v1 weighs
   ```
