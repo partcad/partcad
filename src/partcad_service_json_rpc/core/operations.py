@@ -4470,6 +4470,11 @@ def cmf_clusters(session, params):
     shape = _getter(ctx, kind)(path)
     if shape is None:
         raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+    if kind in ("assembly", "scene"):
+        # The clusters are found from the object's tree, so an assembly is
+        # built for them: phase one of that build, as for every other request
+        # that ends in one (see '_stage_named_object').
+        _stage_subassemblies(session, ctx, shape)
 
     with pc.logging.Process("Materials", package, object_name):
         clusters = asyncio.run(_material_clusters_async(ctx, shape, float(distance), section))
