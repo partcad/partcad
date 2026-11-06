@@ -351,7 +351,8 @@ def login(
                 )
             else:
                 say(
-                    "Opened %s for %s; sign in there. If the window does not take you there, open %s instead."
+                    "Opened %s for %s: press Continue on PartCAD's page there, then sign in. "
+                    "If the window does not take you there, open %s instead."
                     % (getattr(opened, "browser", "the browser"), title, listener.manual_url(step))
                 )
             try:

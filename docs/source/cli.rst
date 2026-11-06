@@ -261,9 +261,10 @@ Host commands
   orders from -- and keep the credentials. The plugin's own ``login`` (see :ref:`plugin-login`) checks the
   credentials it has first; when the site no longer takes them it asks for your browser, and ``pc login`` opens
   your default one, in a profile of PartCAD's own (``~/.partcad/browser/<browser>``) with PartCAD's extension in
-  it, on the site's sign-in. Sign in there: the extension picks up what that leaves behind -- a cookie, a token, an
-  API key on a page, pointing at what to click where the plugin says -- hands it to a listener ``pc login`` runs
-  on ``127.0.0.1``, and closes the window.
+  it. The extension first asks, on a page of its own, whether you want this login -- naming the site, what it
+  would take and where it would go -- and opens the site's sign-in once you press **Continue**. Sign in there: the
+  extension picks up what that leaves behind -- a cookie, a token, an API key on a page, pointing at what to click
+  where the plugin says -- hands it to a listener ``pc login`` runs on ``127.0.0.1``, and closes the window.
 
   .. code-block:: shell
 
