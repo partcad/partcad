@@ -3777,6 +3777,23 @@ def test_requirements_check_builds_an_assembly_a_match_names_first_to_weigh_it(m
     assert asked == []
 
 
+def test_requirements_check_reports_a_match_whose_object_cannot_be_looked_up_rather_than_failing(monkeypatch):
+    """Staging is an optimisation: a lookup that raises is left to the check, which reports it as one failure."""
+    session, bracket, asked = _requirements_session(monkeypatch, name="bracket", match=[":frame"])
+
+    async def broken(ctx, shape, reference):
+        raise RuntimeError("the repository did not answer")
+
+    monkeypatch.setattr(sys.modules["partcad.requirements"], "matched_object_async", broken)
+
+    report = operations.requirements_check(
+        session, {"package": "//", "object": "bracket", "kind": "part", "verify": True}
+    )
+
+    assert report == {"object": "//:bracket", "verified": True}
+    assert asked == [(bracket, True)]
+
+
 def test_requirements_check_refuses_what_declares_none(monkeypatch):
     session, _, asked = _requirements_session(monkeypatch)
 

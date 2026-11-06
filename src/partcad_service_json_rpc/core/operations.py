@@ -3830,7 +3830,14 @@ def requirements_check(session, params):
     if declaration is not None and declaration.match:
         # And so does weighing an assembly a 'match:' requirement names.
         for reference in dict.fromkeys(requirement.reference for requirement in declaration.match):
-            other, _why = asyncio.run(requirements.matched_object_async(ctx, obj, reference))
+            try:
+                other, _why = asyncio.run(requirements.matched_object_async(ctx, obj, reference))
+            except Exception as e:  # pylint: disable=broad-except
+                # Staging is only an optimisation. The same lookup is made
+                # again by the check itself, which reports a failure as that
+                # one requirement failing rather than as the whole request.
+                session.partcad.logging.debug("Not staging the object %s names: %s" % (reference, e))
+                continue
             if other is not None and getattr(other, "kind", None) == "assembly":
                 _stage_subassemblies(session, ctx, other)
     with pc.logging.Process("Requirements", package, name):
