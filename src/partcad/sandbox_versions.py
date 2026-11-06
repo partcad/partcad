@@ -360,6 +360,10 @@ def zstd_requirement(python_version: str) -> str | None:
     but pointless: the backport declares Python < 3.14, so pip would fail to
     resolve it and take the whole sandbox initialization down with it.
 
+    'python_version' is the sandbox interpreter's, which is not always the one
+    asked for: the 'venv' sandbox runs whatever the host has (see
+    'PythonRuntime.interpreter_version').
+
     Decided from the version alone, deliberately. A 3.14 interpreter built
     without libzstd would have no 'compression.zstd' either, but probing for it
     here would ask the wrong Python -- this runs in the PartCAD process, and the

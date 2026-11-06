@@ -38,6 +38,10 @@ class VenvPythonRuntime(runtime_python.PythonRuntime):
     def __init__(self, ctx, version=None):
         super().__init__(ctx, "venv", version)
 
+        # What each interpreter answered when asked its 'major.minor' (None for
+        # one that would not say), keyed by its path; see 'interpreter_version'.
+        self._interpreter_versions = {}
+
         # The interpreter the environment is made *from*. Held separately
         # because 'exec_path' has to be this one while the environment is being
         # created and the environment's own one for everything afterwards, and
@@ -72,24 +76,69 @@ class VenvPythonRuntime(runtime_python.PythonRuntime):
                 return found
         return sys.executable
 
+    def _probe_version(self, interpreter: str) -> str | None:
+        """Ask 'interpreter' its 'major.minor', or None if it would not say."""
+        try:
+            return (
+                subprocess.run(
+                    [interpreter, "-c", "import sys; print('%d.%d' % sys.version_info[:2])"],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                ).stdout.strip()
+                or None
+            )
+        except Exception as e:
+            pc_logging.debug("Could not ask %s its version: %s" % (interpreter, e))
+            return None
+
+    def interpreter_version(self) -> str:
+        """The version of the interpreter the environment is, or is about to be, built from.
+
+        Not the version asked for: a venv is made *from* an interpreter, and the
+        host's is what this one gets (see '_host_interpreter'). Everything
+        version-dependent that the base installs is decided from this, since it
+        is what pip resolves against -- asked for 3.11 on a host with only 3.14,
+        deciding from the request installed 'backports.zstd', which has no
+        release for 3.14, and the command failed on pip after its work was done.
+
+        The environment's own interpreter once it exists, the host's until then;
+        the two are the same Python, unless the host's changed since the
+        environment was built, and then the environment's is the one that runs.
+        Asked once per interpreter. The version asked for if it will not say, which
+        is what was assumed before this was asked at all.
+        """
+        interpreter = self.venv_exec_path if os.path.exists(self.venv_exec_path) else self.host_exec_path
+        # Keyed by path, so the environment's interpreter is asked afresh once
+        # it appears -- possibly built by another process, from another
+        # interpreter -- and one that would not say is not asked again, at up
+        # to a minute a time, before every provisioning command.
+        if interpreter not in self._interpreter_versions:
+            self._interpreter_versions[interpreter] = self._probe_version(interpreter)
+        actual = self._interpreter_versions[interpreter] or self.version
+        # Provisioning isolates below 3.11, and whether it has to is a question
+        # about this interpreter too (see 'provisioning_flags').
+        self.python_provisioning_flags = runtime_python.provisioning_flags(actual)
+        return actual
+
+    def flags_for(self, cmd):
+        # Learn the interpreter's version before the first provisioning command,
+        # so the flags that command gets are the ones for the interpreter it runs.
+        if cmd and cmd[0] == "-m":
+            self.interpreter_version()
+        return super().flags_for(cmd)
+
     def _report_version(self) -> None:
         """Say so when the host cannot give the version that was asked for.
 
         Once per sandbox, and a warning rather than a refusal: rendering on
         3.12 when a package asked for 3.11 usually works, and refusing to render
-        at all is worse than saying which interpreter did it.
+        at all is worse than saying which interpreter did it. What is installed
+        follows the interpreter rather than the request (see
+        'interpreter_version'), so the warning is about the rendering alone.
         """
-        try:
-            actual = subprocess.run(
-                [self.host_exec_path, "-c", "import sys; print('%d.%d' % sys.version_info[:2])"],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            ).stdout.strip()
-        except Exception as e:
-            pc_logging.debug("Could not ask %s its version: %s" % (self.host_exec_path, e))
-            return
-        if actual and actual != self.version:
+        actual = self.interpreter_version()
+        if actual != self.version:
             pc_logging.warning(
                 "Python %s was asked for and this host has %s; the '%s' sandbox is built from the host's"
                 " interpreter, so %s is what this renders on. Install conda for a sandbox that can provision"
