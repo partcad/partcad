@@ -38,7 +38,7 @@ authorship.
 The skills PartCAD ships
 ========================
 
-Fourteen of them. The name in each heading is what you type in Claude Code; under
+Fifteen of them. The name in each heading is what you type in Claude Code; under
 Cursor the same skill is ``pc-<name>``, and an agent that chooses skills by their
 description will reach for the right one without being told.
 
@@ -71,10 +71,10 @@ Generating geometry
 
 ``/pc:gen``
   The one to use when it does not matter which kind of object the request is.
-  It decides whether what was asked for is a single part, a multi-part assembly
-  or a 2D sketch, and then follows the matching skill below. "Model me a shelf
-  bracket" is a part; "model me a gearbox" is an assembly; "draw me the profile"
-  is a sketch.
+  It decides whether what was asked for is a single part, a multi-part assembly,
+  a scene or a 2D sketch, and then follows the matching skill below. "Model me a
+  shelf bracket" is a part; "model me a gearbox" is an assembly; "lay out my
+  living room" is a scene; "draw me the profile" is a sketch.
 
 ``/pc:gen-part``
   Models one part from a description, and the order it works in is the point:
@@ -129,6 +129,40 @@ Generating geometry
   Beside an IDE it shows its progress the way ``/pc:gen-part`` does: each part it
   generates as it takes shape, then every version of the assembly that builds
   and renders, all on one continuous turn of the 3D view.
+
+``/pc:gen-scene``
+  Lays out a :ref:`scene <scenes>`: an arrangement of objects rather than a
+  product -- a room, a building inside or out, a workcell, a world to simulate
+  something in. It says where things are, and nothing about putting them
+  together, and what it has to get right is the surfaces that are seen or that
+  something in the scene touches, and its physical conditions -- not the inside
+  of a volume nothing interacts with. So the rules it follows are not the
+  assembly's:
+
+  - Every object is a ``basic`` cuboid or cylinder at its real size, unless more
+    detail can reasonably be expected: you asked for it, the catalog already has
+    the object, it is what the scene is about, or something in the scene
+    interacts with its shape.
+  - Everything is placed with ``location:``, and is ``fixed: true`` -- welded to
+    the world -- unless it is said to move or obviously does.
+  - The scene stands on a bottom surface whose underside is at z = 0 or above,
+    where every simulator writes its ground plane, unless it is in space, where
+    there is none and the gravity is ``[0, 0, 0]``.
+  - A building whose inside only is wanted stands on floor plans:
+    :ref:`walls scenes <scenes-walls>`, whose walls are see-through from
+    outside, nested in the scene -- a single one where one outline can hold the
+    space. A ``walls`` scene cuts no openings, so a room with doors or windows is
+    the same walls placed by hand, by the ``walls`` scene's own rule.
+  - A building whose outside is modelled too gets solid walls instead, modelled
+    first: each one an extrusion of its elevation sketch with the doors and
+    windows as holes, placed side by side along the building's outline.
+
+  It settles the placements on a layout sketch the way ``/pc:gen-assembly`` does,
+  renders four views and measures the distances again on the scene's
+  projections. Since a scene is not manufacturable, ``pc test`` only warns when
+  two of its objects overlap, and the skill judges each warning by what the
+  overlap touches: walls sharing a corner are left alone, a mobile object inside
+  another never is.
 
 ``/pc:gen-sketch``
   Authors a 2D sketch -- build123d, CadQuery, DXF, SVG or a basic outline --

@@ -202,7 +202,7 @@ The plugin folder is named `claude`, but the command namespace comes from
   package's imports and needs PartCAD to already be here. This skill is what
   puts it here.
 - **`/pc:gen <description>`** — decides whether the request is a part, an
-  assembly, or a 2D sketch and follows the matching flow below.
+  assembly, a scene, or a 2D sketch and follows the matching flow below.
 - **`/pc:gen-part <description>`** — generates a single part: the agent picks a
   representation (build123d / cadquery / openscad / sdf), authors the CAD script
   itself, and validates it by rendering **four views** (`front`, `top`, `right`,
@@ -231,6 +231,28 @@ The plugin folder is named `claude`, but the command namespace comes from
   checks it with `pc sim`. Beside an IDE it shows its progress the way
   `/pc:gen-part` does: each part as it takes shape, then each version of the
   assembly that builds and renders.
+- **`/pc:gen-scene <description>`** — generates a scene: an arrangement of
+  objects rather than a product (a room, a building inside or out, a workcell,
+  a world to simulate in), which says where things are and nothing about
+  putting them together. What it has to get right is the surfaces that are seen
+  or that something in the scene touches, and its physical conditions; the
+  inside of a volume nothing interacts with need not be right. Every object is a
+  `basic` cuboid or cylinder at its real size unless more detail can reasonably
+  be expected (asked for, in the catalog already, the subject of the scene, or a
+  shape something in it interacts with). Every object is placed with
+  `location:` and is `fixed: true` unless it is mobile. The scene stands on a
+  bottom surface whose underside is at or above z = 0, where every simulator
+  writes its ground plane, except in space, which has none and
+  `gravity: [0, 0, 0]`. A building whose inside only is wanted stands on floor
+  plans, `walls` scenes whose walls are see-through from outside: a single one
+  where one outline can hold the space, and a room with doors or windows as the
+  same walls placed by hand, since a `walls` scene cuts no openings. A building
+  whose outside is modelled too gets solid walls first, each an extrusion of its
+  elevation sketch with the doors and windows as holes, placed side by side
+  along its outline. `pc test` only *warns* about overlaps in a scene, and the
+  skill judges each warning by what the overlap touches rather than treating it
+  as a defect: walls sharing a corner are left alone, a mobile object inside
+  another never is.
 - **`/pc:gen-sketch <description>`** — generates a 2D sketch whose dimensions
   are measured rather than estimated. The input is normalized to 2D first — a
   description is a table of targets, a DXF or SVG is re-rendered, a 3D
