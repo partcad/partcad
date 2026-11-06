@@ -1466,7 +1466,12 @@ class Context:
             suppliers_per_part = await self.find_part_suppliers(part_spec, cart)
 
             if not suppliers_per_part:
-                pc_logging.error(f"No supplier found for {name}")
+                # What a quote may go without - what a scene holds, or anything
+                # with '--ignore-missing' - is said, and is no failure.
+                if getattr(part_spec, "optional", False):
+                    pc_logging.info(f"No supplier found for {name}: it is left out")
+                else:
+                    pc_logging.error(f"No supplier found for {name}")
 
             suppliers[str(part_spec)] = suppliers_per_part
 
@@ -1506,7 +1511,10 @@ class Context:
         for supplier, extra in (await prj.get_suppliers_async()).items():
             part_suppliers.setdefault(supplier, extra)
         if len(part_suppliers) == 0:
-            pc_logging.error("No suppliers found for %s in %s" % (part_name, project_name))
+            if getattr(part_item, "optional", False):
+                pc_logging.debug("No suppliers found for %s in %s" % (part_name, project_name))
+            else:
+                pc_logging.error("No suppliers found for %s in %s" % (part_name, project_name))
             return {}
         else:
             pc_logging.debug("Part suppliers: %s" % str(part_suppliers))
@@ -1561,7 +1569,10 @@ class Context:
 
         async def _set_supplier(name, cart_item):
             if not await provider.is_part_available(cart_item):
-                pc_logging.error("Part %s is not available from %s" % (name, provider.name))
+                if getattr(cart_item, "optional", False):
+                    pc_logging.info("Part %s is not available from %s: it is left out" % (name, provider.name))
+                else:
+                    pc_logging.error("Part %s is not available from %s" % (name, provider.name))
                 suppliers[str(cart_item)] = ""
             else:
                 pc_logging.debug("Cart item: %s" % str(cart_item))
@@ -1572,6 +1583,23 @@ class Context:
         await asyncio.gather(*tasks)
 
         return suppliers
+
+    def drop_unsupplied_optional(self, cart: ProviderCart, preferred_suppliers: dict[str, str]):
+        """'(preferred_suppliers, left_out)': the optional items nobody supplies taken out, and their names.
+
+        An optional item (see 'ProviderCartItem.optional') that no supplier has
+        is not quoted at all - not even under "no provider" - so that a scene's
+        walls, or anything '--ignore-missing' covers, leave the quote for the
+        rest of it whole. 'left_out' is what the caller says it went without.
+        """
+        optional = {str(item): name for name, item in cart.parts.items() if getattr(item, "optional", False)}
+        kept, left_out = {}, []
+        for spec, supplier in preferred_suppliers.items():
+            if not supplier and spec in optional:
+                left_out.append(optional[spec])
+            else:
+                kept[spec] = supplier
+        return kept, sorted(left_out)
 
     async def prepare_supplier_carts(self, preferred_suppliers: dict[str, str]) -> dict[str, ProviderCart]:
         """Given the list of preferred suppliers, prepare the supplier carts.

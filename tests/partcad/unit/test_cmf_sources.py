@@ -531,6 +531,51 @@ def test_a_3mf_is_every_object_in_it_each_in_its_colour(tmp_path):
     assert {cmf_set.origin for cmf_set in section.sets} == {"raw:openscad"}
 
 
+def _colour_group_3mf(path, color):
+    """A 3MF of one box whose object takes its colour from a materials-extension colour group, as many slicers write one."""
+    import build123d as bd
+
+    mesher = bd.Mesher()
+    mesher.add_shape(bd.Box(10, 10, 10))
+    plain = str(path) + ".plain.3mf"
+    mesher.write(plain)
+    with zipfile.ZipFile(plain) as source:
+        model = [name for name in source.namelist() if name.endswith(".model")][0]
+        xml = source.read(model).decode()
+        material = "http://schemas.microsoft.com/3dmanufacturing/material/2015/02"
+        if 'xmlns:m="%s"' % material not in xml:
+            xml = re.sub(r"<model ", '<model xmlns:m="%s" ' % material, xml, count=1)
+        xml = xml.replace(
+            "<resources>", '<resources><m:colorgroup id="900"><m:color color="%s"/></m:colorgroup>' % color, 1
+        )
+        xml = re.sub(r'<object id="(\d+)" type="model"', r'<object id="\1" type="model" pid="900" pindex="0"', xml, 1)
+        with zipfile.ZipFile(str(path), "w") as out:
+            for name in source.namelist():
+                out.writestr(name, xml if name == model else source.read(name))
+
+
+def test_a_3mf_coloured_by_a_colour_group_is_read_in_its_colour(tmp_path):
+    """lib3mf refuses an object whose colour is a materials-extension colour group; it is read as base materials."""
+    pytest.importorskip("build123d")
+    import build123d as bd
+    import cmf_3mf
+    import cmf_capture
+
+    path = tmp_path / "grouped.3mf"
+    _colour_group_3mf(path, "#FF0000FF")
+    with pytest.raises(Exception):
+        bd.Mesher().read(str(path))
+
+    shape, section = cmf_capture.read_mesh(str(path), "3mf")
+
+    assert len(bd.Compound(shape).solids()) == 1
+    assert section.solid_set(0).color == "#FF0000"
+    # The file is left as it was, and the copy that was read is gone.
+    with zipfile.ZipFile(str(path)) as source:
+        assert b"colorgroup" in source.read([n for n in source.namelist() if n.endswith(".model")][0])
+    assert cmf_3mf.readable_copy(str(tmp_path / "missing.3mf")) is None
+
+
 def test_a_3mf_that_cannot_be_read_in_colour_is_read_without_it(tmp_path, monkeypatch):
     """The STL fallback is for an STL: a 3MF is read again as Mesher reads it, and never handed to 'import_stl'."""
     pytest.importorskip("build123d")

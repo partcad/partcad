@@ -20,6 +20,7 @@ import vyper
 
 from . import conda as pc_conda
 from . import logging as pc_logging
+from . import user_locale
 from .booleans import to_bool
 from .utils import is_editable_install
 
@@ -384,6 +385,10 @@ OPTION_KEYS = (
     "forceUpdate",
     "develIndex",
     "offline",
+    "country",
+    "language",
+    "currency",
+    "location",
     "git.clone.timeout",
     "git.clone.retry.max",
     "git.clone.retry.patience",
@@ -731,6 +736,42 @@ class UserConfig(vyper.Vyper):
         # startup default as a statement. See '__init__'.
         data["pythonSandboxDeclared"] = self._python_sandbox_declared
         return data
+
+    def address(self) -> dict:
+        """The user's address, as the 'user' section says it: its street, city, state, ZIP code and country.
+
+        The section's own fields, falling back on its 'shippingAddress', which
+        is where an address that is only for deliveries is kept. Personally
+        identifiable: never handed to a plugin (see 'user_info').
+        """
+        section = self.pii_config.to_dict() if hasattr(self, "pii_config") else {}
+        shipping = section.get("shippingAddress") or {}
+        fields = ("line1", "line2", "city", "stateCode", "zipCode", "countryCode")
+        return {
+            field: section.get(field) or shipping.get(field)
+            for field in fields
+            if section.get(field) or shipping.get(field)
+        }
+
+    def user_info(self) -> dict:
+        """What a plugin is told about the user: the country, state and city, the language and the currency.
+
+        A sanitised subset, and deliberately coarse: enough for a store to know
+        which country's range and prices to answer with and which of its shops
+        might be near, and nothing that identifies the user - no name, no
+        street, no ZIP code, no location. A plugin that needs to know which of
+        its shops is nearest asks PartCAD, which knows the location and answers
+        with a shop rather than with where the user is (see 'partcad.locality').
+        """
+        address = self.address()
+        info = {
+            "country": self.country,
+            "state": address.get("stateCode"),
+            "city": address.get("city"),
+            "language": self.language,
+            "currency": self.currency,
+        }
+        return {key: value for key, value in info.items() if value}
 
     @classmethod
     def from_dict(cls, data: dict) -> "UserConfig":
@@ -1382,6 +1423,68 @@ class UserConfig(vyper.Vyper):
         # values: <dict>
         # default: {}
         self.parameter_config = ParametersConfig(self)
+
+        # option: country
+        # description: the country the user is in, as an ISO 3166-1 alpha-2 code
+        #              ('NL'): what a store or a catalog a plugin serves is asked
+        #              for. The country of the user's address ('user.countryCode')
+        #              unless this says otherwise.
+        # values: <string>
+        # default: worked out from the locale (see below)
+        # option: language
+        # description: the language the user reads, as an ISO 639-1 code ('en')
+        # values: <string>
+        # default: worked out from the locale (see below)
+        # option: currency
+        # description: what the user pays in, as an ISO 4217 code ('EUR')
+        # values: <string>
+        # default: the currency of 'country'
+        # option: location
+        # description: where the user is on Earth: '{latitude: .., longitude: ..}'
+        #              in degrees, or "52.37,4.89" (PC_LOCATION). Never worked out
+        #              and never handed to a plugin: PartCAD answers a plugin's
+        #              question about it instead (which of these shops is
+        #              nearest), see 'partcad.locality'. 'user.location' says the
+        #              same.
+        # values: <dict>
+        # default: none
+        #
+        # The first three are worked out here, from the locale this process was
+        # started with ('nl_NL.UTF-8'), when nothing configures them - and only
+        # when this process is resolving its own configuration. A daemon
+        # rebuilding a client's ('from_dict') takes all four from what the
+        # client sent and from nothing of its own - not its file, not its
+        # environment, not its locale - so a command is answered for where
+        # whoever typed it is, not for where the daemon was started (which can
+        # be another machine). What is worked out is written back, so that
+        # 'to_dict' hands it to the daemon like anything else.
+        # See 'partcad_utils.user_locale'.
+        for key, env in (("country", "PC_COUNTRY"), ("language", "PC_LANGUAGE"), ("currency", "PC_CURRENCY")):
+            self.bind_env(key, env)
+        self.bind_env("location", "PC_LOCATION")
+
+        def _locale_option(key):
+            return self.get(key) if settings is None else settings.get(key)
+
+        address = self.address()
+        self.country = user_locale.country_code(_locale_option("country")) or user_locale.country_code(
+            address.get("countryCode")
+        )
+        self.language = user_locale.language_code(_locale_option("language"))
+        self.currency = user_locale.currency_code(_locale_option("currency"))
+        if settings is None:
+            detected_country, detected_language = user_locale.detect()
+            self.country = self.country or detected_country
+            self.language = self.language or detected_language
+        self.currency = self.currency or user_locale.currency_of(self.country)
+        self.location = user_locale.location(_locale_option("location")) or user_locale.location(
+            self.pii_config.location
+        )
+        for key in ("country", "language", "currency", "location"):
+            # What was resolved, or emptied of whatever this process's own
+            # layers said: an empty string, as a vyper override of None falls
+            # through to the environment.
+            self.set(key, getattr(self, key) or "")
 
         # option: offline
         # description: offline mode
