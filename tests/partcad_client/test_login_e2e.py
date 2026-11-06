@@ -16,13 +16,19 @@ with that cookie. The plugin is a script in a temporary package that asks for
 the cookie, waits for 'who am I' in the browser, and checks what came back
 against the site itself; what it returns has to arrive in the configuration
 file, and a second 'pc login --check' has to find it good.
+
+Before anything is captured, the extension asks on a page of its own whether
+the login is wanted (see browsers/README.md); the test says yes there, the
+way a user does, through the browser's DevTools on a port it adds for that.
 """
 
+import asyncio
 import os
 import subprocess
 import sys
 import textwrap
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
@@ -100,9 +106,15 @@ def site():
     server.shutdown()
 
 
-def _pc(workspace, home, *args):
+def _pc(workspace, home, *args, wait=True):
     environment = dict(os.environ, HOME=str(home))
-    environment.setdefault("PC_LOGIN_BROWSER_ARGS", "--headless=new --no-sandbox")
+    # A DevTools port beside the pipe 'pc login' holds, for the test to say yes
+    # on the extension's confirmation page; Chromium writes which port it took
+    # into the profile, which is where '_confirm' finds it.
+    environment["PC_LOGIN_BROWSER_ARGS"] = (
+        environment.get("PC_LOGIN_BROWSER_ARGS", "--headless=new --no-sandbox") + " --remote-debugging-port=0"
+    )
+    environment["PC_LOGIN_PROFILE_DIR"] = str(home / "login-browser")
     # The plugin checks the session with the site this test serves on the
     # runner's 'localhost'. In the 'docker' sandbox - the default wherever a
     # Docker daemon answers, as on CI - 'localhost' is the container, and the
@@ -110,14 +122,63 @@ def _pc(workspace, home, *args):
     environment["PC_PYTHON_SANDBOX"] = "venv"
     # The 'pc' beside this interpreter: the one this checkout installed.
     pc = os.path.join(os.path.dirname(sys.executable), "pc.exe" if os.name == "nt" else "pc")
-    return subprocess.run(
-        [pc if os.path.exists(pc) else "pc", "--no-ansi", *args],
-        cwd=workspace,
-        env=environment,
-        capture_output=True,
-        text=True,
-        timeout=900,
-    )
+    command = [pc if os.path.exists(pc) else "pc", "--no-ansi", *args]
+    if not wait:
+        return subprocess.Popen(
+            command, cwd=workspace, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        )
+    return subprocess.run(command, cwd=workspace, env=environment, capture_output=True, text=True, timeout=900)
+
+
+async def _press_continue(profile, timeout):
+    """Find the extension's confirmation page over the browser's DevTools port, and press Continue once armed."""
+    import aiohttp
+
+    deadline = time.monotonic() + timeout
+    port_file = profile / "DevToolsActivePort"
+    # Not through a proxy the environment may name: this is the browser on this machine.
+    async with aiohttp.ClientSession(trust_env=False) as http:
+        page = None
+        while page is None:
+            assert time.monotonic() < deadline, "the confirmation page never opened"
+            await asyncio.sleep(0.2)
+            if not port_file.exists():
+                continue
+            port = int(port_file.read_text().split()[0])
+            try:
+                async with http.get("http://127.0.0.1:%d/json/list" % port) as answer:
+                    targets = await answer.json()
+            except aiohttp.ClientError:
+                continue
+            page = next((t for t in targets if t.get("url", "").split("#")[0].endswith("/confirm.html")), None)
+        async with http.ws_connect(page["webSocketDebuggerUrl"]) as socket:
+            press = (
+                "new Promise((resolve) => { const tick = () => {"
+                " const button = document.getElementById('continue');"
+                " if (button && !button.disabled) { button.click(); resolve(true); } else { setTimeout(tick, 100); }"
+                " }; tick(); })"
+            )
+            await socket.send_json(
+                {"id": 1, "method": "Runtime.evaluate", "params": {"expression": press, "awaitPromise": True}}
+            )
+            while True:
+                answer = await socket.receive_json(timeout=max(1, deadline - time.monotonic()))
+                if answer.get("id") == 1:
+                    assert "exceptionDetails" not in answer.get("result", {}), answer
+                    return
+
+
+def _login_confirming(workspace, home, *args):
+    """'pc login', with Continue pressed on the extension's confirmation page as a user would."""
+    running = _pc(workspace, home, *args, wait=False)
+    try:
+        asyncio.run(_press_continue(home / "login-browser" / "profile", timeout=300))
+        output, _ = running.communicate(timeout=600)
+    finally:
+        if running.poll() is None:
+            running.kill()
+            running.communicate()
+    return subprocess.CompletedProcess(running.args, running.returncode, output, "")
 
 
 def test_pc_login_signs_in_in_the_browser_and_keeps_what_the_extension_brought(tmp_path, site):
@@ -142,7 +203,7 @@ def test_pc_login_signs_in_in_the_browser_and_keeps_what_the_extension_brought(t
                   session: {type: string, default: ""}
             """ % (sys.version_info[0], sys.version_info[1], site)))
 
-    first = _pc(workspace, home, "login", "//:auth_repo")
+    first = _login_confirming(workspace, home, "login", "//:auth_repo")
     assert first.returncode == 0, first.stdout + first.stderr
     assert "Logged in as ann" in first.stdout + first.stderr
     saved = yaml.safe_load((home / ".partcad" / "config.yaml").read_text())

@@ -208,7 +208,7 @@ def node():
     return found
 
 
-@pytest.mark.parametrize("script", ["common.js", "background.js", "content.js"])
+@pytest.mark.parametrize("script", ["common.js", "background.js", "content.js", "confirm.js"])
 def test_the_scripts_parse(script):
     result = subprocess.run([node(), "--check", str(CHROMIUM / script)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
