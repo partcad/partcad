@@ -27,7 +27,7 @@ from partcad_client import object_types
 
 def test_the_mesh_formats_are_the_ones_that_hold_triangles():
     meshes = {name for name, mesh in object_types.PART_TYPE_IS_MESH.items() if mesh}
-    assert meshes == {"stl", "3mf", "obj", "gltf", "threejs"}
+    assert meshes == {"stl", "3mf", "obj", "gltf", "threejs", "usd"}
 
 
 def test_every_type_answers_yes_or_no_and_nothing_else():

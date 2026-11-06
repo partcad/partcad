@@ -2012,7 +2012,7 @@
                     "basic", "cadquery", "build123d", "chili3d", "sdf", "svg", "dxf", "extrude",
                     "sweep", "stl", "step", "scad", "3mf", "enrich", "alias", "brep",
                     "obj", "gltf", "kicad", "compound", "fcstd", "wall", "iges", "f3d",
-                    "sldprt", "ipt", "catpart", "sat", "pvz"
+                    "sldprt", "ipt", "catpart", "sat", "pvz", "usd"
                   ]
                 },
                 "aliases": {

@@ -366,7 +366,7 @@ Define parts with CAD files using the following syntax:
 
   parts:
     <part name>:
-      type: <step|brep|iges|stl|3mf|obj|gltf|fcstd|f3d|sldprt|ipt|catpart|sat|pvz>
+      type: <step|brep|iges|stl|3mf|obj|gltf|fcstd|f3d|sldprt|ipt|catpart|sat|pvz|usd>
       binary: <(stl only) use the binary format>
 
 .. list-table::
@@ -417,6 +417,9 @@ Define parts with CAD files using the following syntax:
    * - ``pvz``
      - Creo View package, every component's bodies as one part
      - ``<name>.pvz``
+   * - ``usd``
+     - OpenUSD stage: a ``.usd``, ``.usda`` or ``.usdc`` layer, or a ``.usdz`` package; the meshes it shows
+     - ``<name>.usd``
 
 A file of another name or extension -- a ``.stp``, a ``.glb``, a binary ACIS
 ``.sab`` -- is named with ``path``:
@@ -466,6 +469,59 @@ pinned one. Each is a :ref:`partType <part-types>` PartCAD declares in
 ``//builtin/import``, which is also what a package does to teach PartCAD a format
 of its own. Rhino ``.3dm`` and the two ``.prt`` formats, Siemens NX's and Creo
 Parametric's, are not read yet: cadmpeg does not read their bodies into solids.
+
+.. _usd-files:
+
+A ``usd`` part is an `OpenUSD <https://openusd.org>`_ stage, and the part is the
+meshes it shows. USD describes what a renderer draws rather than what is made, so
+this is a surface and not necessarily a solid: it is built either way, and
+PartCAD says when it is not one. What is read:
+
+- **What.** The stage's default prim -- what a reference to the asset brings in --
+  and not what sits beside it, such as the studio a thumbnail was rendered in;
+  ``prim: /Path/To/Prim`` builds another, and ``prim: /`` the whole stage. Every
+  mesh under it that is visible and of the purpose asked for (``purpose``:
+  ``render``, the default, ``proxy`` or ``all``), through native instancing and
+  point instancers. A subdivision surface is its control mesh; a cube, sphere,
+  cylinder, cone or capsule is meshed; curves, points and volumes are left out,
+  and counted.
+- **Where.** In millimetres, by the stage's ``metersPerUnit``, with Z up: a Y-up
+  stage is turned onto Z, as a glTF is.
+- **When.** At the time a viewer opens the stage -- its start time code, or its
+  earliest sample -- unless ``time`` names one, which also poses a skinned
+  character.
+- **As what.** Up to 20 000 triangles, each triangle is a face and two that share
+  an edge share it: the part is drawn as lines, written to STEP, and made the
+  solid it bounds where the mesh closes. Past that, the triangles of each colour
+  are one face that is only a triangulation: fast at any size, drawn by ``pc
+  render --style shaded`` and written as STL, 3MF or glTF. ``surface`` chooses
+  (``faces``, ``mesh`` or ``auto``), and ``maxTriangles`` (5 000 000) refuses a
+  scene too large to build.
+- **In what.** The colour of its material's ``diffuseColor`` where that is a
+  colour and not a texture, else its ``displayColor``, as the part's CMF.
+
+The stage is read with Pixar's own USD library, ``usd-core``, which the type
+installs into the sandbox that builds the part and nowhere else. A part may say
+``reader: cadmpeg`` instead: `cadmpeg <https://github.com/cadmpeg/cadmpeg>`_
+reads OpenUSD from 0.6.8 on, a release PartCAD fetches for this type alone, and
+composes the stage itself. It reads what a render shows at the stage's static
+values, and nothing of a point instancer; a cube or a sphere it reads as a
+B-rep, which is left out and counted. Each parameter is a part's own, declared
+under ``parameters`` like any other:
+
+.. code-block:: yaml
+
+  parts:
+    kitchen:
+      type: usd
+      path: vendor/Kitchen_set.usdz
+      parameters:
+        prim:
+          type: string
+          default: /Kitchen_set/Props_grp
+        reader:
+          type: string
+          default: usd-core   # or cadmpeg
 
 An ``iges`` part is read with `OpenCASCADE <https://dev.opencascade.org/>`_,
 whose IGES reader is the counterpart of the writer ``pc export -t iges`` uses, so

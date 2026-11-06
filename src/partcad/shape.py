@@ -90,6 +90,9 @@ PART_EXTENSION_ALIASES = {
     "sab": "sat",
     "smt": "sat",
     "smb": "sat",
+    "usda": "usd",
+    "usdc": "usd",
+    "usdz": "usd",
 }
 
 SKETCH_EXTENSION_MAPPING = {
