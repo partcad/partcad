@@ -81,7 +81,7 @@ link. Generate it with `/pc:gen-assembly` first, or reuse one that exists.
   `location:`.
 - **Which objects are mobile** (§5). Everything else is fixed.
 - **What the scene is required to be**: "seats six", "a 1 m clear path from the
-  door to the window", "the ball rolls off the table". It is written down in §5
+  door to the window", "the ball rolls down the ramp". It is written down in §5
   as the scene's `requirements:`, and a physical claim also becomes a
   `simulate:` (§7).
 
@@ -355,6 +355,9 @@ parts:
   is inside them, and harmless. At an inside corner (the inner corner of an L) the two
   leave a recess of that size inside the room instead. Lengthen the wall
   arriving there by its thickness where the recess can be seen.
+- **A simulation does not see the openings.** MuJoCo collides with a part's
+  convex hull, so a door is solid to it. Where something has to pass through
+  one in a simulation, build that wall of convex pieces instead (§7).
 - **Then the inside**, in the same frame: the walls between rooms are made the
   same way, 100 thick, with their doors as holes; then the furnishing. A roof or
   a ceiling, where the description has one, is a slab on top of the walls. Leave
@@ -413,7 +416,9 @@ places moves, or that obviously moves:
 
 - **Mobile** (`fixed: false`): a ball, a vehicle, a cart, a drone, a robot
   vacuum, a person, an animal, and anything that is dropped, thrown, poured,
-  pushed, stacked to topple or left to settle.
+  pushed, stacked to topple or left to settle. So is anything whose staying put
+  is what a claim says (§7), such as a stack that stands or a vase that does not
+  tip: fixed, it could not fail, and the simulation would prove nothing.
 - **Fixed** (`fixed: true`): furniture, appliances, machines, shelves, fittings,
   the floor, the walls, and whatever stands on a fixed thing and is not said to
   move. A sofa *can* be moved; that does not make it mobile in this scene.
@@ -600,8 +605,8 @@ Then correct, re-test, and re-render until every view matches the description.
 ## 7. Make the claim the description makes
 
 Where the description says something physical about the scene (everything
-settles where it is put, the ball rolls off the table, the stack of boxes
-topples), declare it as a `simulate:` on the scene and check it with `pc sim`,
+settles where it is put, the stack of boxes topples, the ball rolls down the
+ramp), declare it as a `simulate:` on the scene and check it with `pc sim`,
 the way `/pc:gen-assembly` §7 does for an assembly, with the same `sim-mujoco`
 dependency (`pc add dep sim-mujoco https://github.com/partcad/partcad-sim-mujoco.git`):
 
@@ -613,22 +618,44 @@ scenes:
         desc: Switched on, nothing fixed moves and every loose object comes to rest where it was put
         feature: <the feature of its requirements this demonstrates>
         simulation: sim-mujoco:mujoco
+        params: { samples: 20 }
         validation: |
           all(
               max(abs(a - b) for a, b in zip(after["bodies"][n]["pos"], before["bodies"][n]["pos"])) < 5.0
+              and abs(sum(a * b for a, b in zip(after["bodies"][n]["quat"], before["bodies"][n]["quat"]))) > 0.996
+              and max(abs(a - b) for a, b in zip(result["samples"][-1]["bodies"][n]["pos"],
+                                                  result["samples"][-2]["bodies"][n]["pos"])) < 1.0
               for n in before["bodies"]
           )
 ```
 
+No body moved more than 5 mm or turned more than 10° (`|q₀·q₁| > cos 5°`, as in
+`/pc:gen-assembly` §7), and none was still moving between the last two
+samples. A position alone would pass a body that tipped over about its own
+origin.
+
+- **A run starts at rest**, where the scene places everything, and nothing
+  moves anything but gravity, contact and the medium: there is no initial
+  velocity, no motor and no controller. A claim driven by those can be shown:
+  settling, toppling, sliding or rolling down a slope, sinking, rising. A claim
+  that needs a push (a cart pushed, a ball thrown, a robot that moves) cannot.
+  Tell the user so, rather than changing the scene until something passes.
 - The scene is simulated as the subject of a world, by default
   `//builtin/scene:subject`, which places it where it stands. Its bottom
   surface is at z = 0 or above, so the entry needs no `offset:`.
 - **The gravity and the medium are the world's, not the scene's own.** The
-  default world states neither, so a scene with `gravity: [0, 0, 0]` simulated
-  in it falls under Earth's gravity. In space, pass the gravity to the run:
-  `params: { gravity: [0, 0, 0] }`. A medium needs a world that is filled with
-  it: write one, as the `underwater` scene of `/pc:gen-assembly` §7, and name it
-  in `scene: :<scene>/world`.
+  default world states neither, so a scene simulated in it runs under Earth's
+  gravity, whatever its own `gravity:` says. Whenever the scene's gravity is not
+  Earth's, pass it to the run as well: `params: { gravity: [0, 0, 0] }` in
+  space, `[0, 0, -1.62]` on the Moon, `[0, 0, -3.72]` on Mars. A medium needs a
+  world that is filled with it: write one, as the `underwater` scene of
+  `/pc:gen-assembly` §7, and name it in `scene: :<scene>/world`.
+- **MuJoCo collides with convex hulls.** A part that is not convex is solid
+  across its hull, so a wall's door and windows are filled in, and so is the
+  notch of an L-shaped floor extruded from its plan. That only matters where
+  something placed in the scene has to pass through or rest there. In that
+  case, build that wall or floor of convex pieces: `basic` cuboids either side
+  of an opening and above it, and a floor as rectangles.
 - `pc --no-ansi sim --json -S <scene>` prints every body by name, before and
   after, which is what a claim about one object is written against.
 
