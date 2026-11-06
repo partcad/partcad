@@ -12,6 +12,7 @@ import sys
 import rich_click as click
 
 import partcad as pc
+from partcad.render_overlay import price_label
 
 from ...cli_context import CliContext
 
@@ -118,7 +119,12 @@ def cli(cli_ctx: CliContext, api, qos, provider, recursive, specs):
                             continue
                         price = quote.result["price"]
                         cart_id = quote.result["cartId"]
-                        pc.logging.info(f"\t\t{supplier}: {cart_id}: ${price:.2f}")
+                        # In the currency the provider quoted in, which a store
+                        # outside the United States does not quote in dollars;
+                        # one that says nothing about it is taken to be in
+                        # dollars, as every quote was printed before.
+                        currency = quote.result.get("currency") or "USD"
+                        pc.logging.info(f"\t\t{supplier}: {cart_id}: {price_label(price, currency)}")
                     else:
                         pc.logging.info("No provider found:")
 
