@@ -27,6 +27,7 @@ import contextlib
 import errno
 import os
 import pathlib
+import stat
 import sys
 from pathlib import Path, PureWindowsPath
 
@@ -222,6 +223,7 @@ def _for_the_code_under_test(patch, owner, name, replacement):
     original = getattr(owner, name)
 
     def dispatch(*args, **kwargs):
+        """The replacement for the code under test, and the original for everything else."""
         if _called_by_the_code_under_test():
             return replacement(*args, **kwargs)
         return original(*args, **kwargs)
@@ -253,22 +255,35 @@ def _no_disk(monkeypatch):
         yield
 
 
+def _stat_result(mode):
+    """What 'os.stat' answers for a file of 'mode' ('stat.S_IFDIR', 'stat.S_IFREG'), the rest of it zeroes."""
+    return os.stat_result((mode | 0o755,) + (0,) * 9)
+
+
 @contextlib.contextmanager
-def _fake_disk(monkeypatch, *packages):
-    """A disk holding a package directory at each of 'packages' and nothing else; yields what was asked of it."""
+def _fake_disk(monkeypatch, *packages, failing=None, error=None):
+    """A disk holding a package directory at each of 'packages' and nothing else; yields what was asked of it.
+
+    Asked the way 'options_dependency' asks, with 'Path.stat', which answers
+    what the operating system does: the file, or 'FileNotFoundError'. Or, for
+    the path 'failing', 'error' -- what a directory the user may not read, or a
+    share that went away, answers instead.
+    """
     asked = []
 
-    def is_dir(self, *args, **kwargs):
+    def stat_of(self, *args, **kwargs):
+        """The directory or 'partcad.yaml' this disk holds at 'self', or the error the OS would raise."""
         asked.append(str(self))
-        return str(self) in packages
-
-    def is_file(self, *args, **kwargs):
-        asked.append(str(self))
-        return self.name == "partcad.yaml" and str(self.parent) in packages
+        if failing is not None and str(self) == str(failing):
+            raise error
+        if str(self) in packages:
+            return _stat_result(stat.S_IFDIR)
+        if self.name == "partcad.yaml" and str(self.parent) in packages:
+            return _stat_result(stat.S_IFREG)
+        raise FileNotFoundError(errno.ENOENT, "No such file or directory", str(self))
 
     with monkeypatch.context() as patch:
-        _for_the_code_under_test(patch, pathlib.Path, "is_dir", is_dir)
-        _for_the_code_under_test(patch, pathlib.Path, "is_file", is_file)
+        _for_the_code_under_test(patch, pathlib.Path, "stat", stat_of)
         _for_the_code_under_test(patch, pathlib.Path, "resolve", lambda self, *args, **kwargs: self)
         yield asked
 
@@ -360,39 +375,63 @@ def test_a_directory_that_is_not_there_is_refused(tmp_path, named):
     assert "//pub/" in str(excinfo.value)
 
 
-@pytest.mark.parametrize("probe", ["is_dir", "is_file"])
+@pytest.mark.parametrize("failing", ["directory", "partcad.yaml"])
 @pytest.mark.parametrize(
     "error",
     [
         PermissionError(errno.EACCES, "Permission denied"),
         # What a share that drops the connection raises on Windows: winerror 64,
-        # which Python maps to EINVAL, which pathlib does not take for "absent"
-        # before 3.14 and so re-raises out of 'is_dir'.
+        # which Python maps to EINVAL -- not "absent", so not "no package here".
         OSError(errno.EINVAL, "The specified network name is no longer available"),
     ],
     ids=["permission", "network"],
 )
-def test_a_directory_that_cannot_be_looked_at_is_refused_with_the_reason(monkeypatch, tmp_path, probe, error):
-    """A usage error that says why, rather than a traceback out of the render.
+def test_a_directory_that_cannot_be_looked_at_is_refused_with_the_reason(monkeypatch, tmp_path, failing, error):
+    """A usage error that says why, rather than a traceback out of the render or a refusal that does not.
 
-    'Path.is_dir' answers False for a path that is not there, but up to Python
-    3.13 it re-raises everything else: a directory under one the user may not
-    read, a share that went away mid-question.
+    Whichever of the two looks fails: at the directory, or at the
+    'partcad.yaml' in it. Asserted against 'Path.stat', what the code asks,
+    which raises what the operating system answers on every Python -- where
+    'Path.is_dir' and 'Path.is_file' answer False for any error from 3.14 on,
+    and asking them would have refused this with no reason given.
     """
+    directory = tmp_path / "drawing"
+    path = directory if failing == "directory" else directory / "partcad.yaml"
 
-    def fails(self, *args, **kwargs):
-        raise error
-
-    with monkeypatch.context() as patch:
-        if probe == "is_file":
-            _for_the_code_under_test(patch, pathlib.Path, "is_dir", lambda self, *args, **kwargs: True)
-        _for_the_code_under_test(patch, pathlib.Path, probe, fails)
+    with _fake_disk(monkeypatch, str(directory), failing=path, error=error) as asked:
         with pytest.raises(adhoc.AdhocUsageError) as excinfo:
-            adhoc.options_dependency(str(tmp_path / "drawing"))
+            adhoc.options_dependency(str(directory))
 
+    assert str(path) in asked
     assert excinfo.value.__cause__ is error
     assert str(error) in str(excinfo.value)
     assert "//pub/" in str(excinfo.value)
+
+
+@pytest.mark.skipif(
+    os.name != "posix" or os.geteuid() == 0,
+    reason="needs a directory this process may not read: POSIX permissions, which root is exempt from",
+)
+def test_a_directory_the_user_may_not_read_is_refused_with_the_reason(tmp_path):
+    """The case above as the operating system really answers it, with no Python in between taking it apart.
+
+    A package directory whose permissions let nobody in: looking for its
+    'partcad.yaml' is 'Permission denied', which is the reason given -- on
+    every Python, including those whose 'Path.is_file' would have answered
+    False for it and had it refused as an empty directory.
+    """
+    directory = tmp_path / "drawing"
+    directory.mkdir()
+    (directory / "partcad.yaml").write_text("render: {}\n", encoding="utf-8")
+    directory.chmod(0)
+    try:
+        with pytest.raises(adhoc.AdhocUsageError) as excinfo:
+            adhoc.options_dependency(str(directory))
+    finally:
+        directory.chmod(0o755)
+
+    assert isinstance(excinfo.value.__cause__, PermissionError)
+    assert "could not be looked at" in str(excinfo.value)
 
 
 def test_a_directory_with_no_package_in_it_is_refused(tmp_path):

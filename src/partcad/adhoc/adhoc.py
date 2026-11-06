@@ -19,6 +19,7 @@ import asyncio
 import json
 import re
 import shutil
+import stat
 import tempfile
 from pathlib import Path
 
@@ -108,6 +109,26 @@ OPTIONS_DEPENDENCY = "options"
 _NAME_ONE = "name a package in the public index ('//pub/...') or the directory of a package"
 
 
+def _is(path: Path, kind) -> bool:
+    """Whether 'path' is there and is of 'kind' ('stat.S_ISDIR', 'stat.S_ISREG'); any other answer is raised.
+
+    'Path.stat' and not 'Path.is_dir' or 'Path.is_file', because only the first
+    says the same thing on every Python this runs on: from 3.14 those two answer
+    False for any error at all, so a directory the user may not read, or a share
+    that dropped the connection, would read as "there is nothing there" and be
+    refused without its reason - which up to 3.13 they raise. Asked this way,
+    nothing being there is the one answer that is not an error, on every
+    version: 'FileNotFoundError' (a missing host or share on Windows included,
+    which Python maps to it) or 'NotADirectoryError' (a file where a directory
+    on the way should be).
+    """
+    try:
+        found = path.stat()
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    return kind(found.st_mode)
+
+
 def options_dependency(options_package):
     """What the throwaway package imports to read file types from 'options_package', and its name there.
 
@@ -150,7 +171,7 @@ def options_dependency(options_package):
         )
     directory = Path(options_package)
     try:
-        found = directory.is_dir() and (directory / consts.DEFAULT_PACKAGE_CONFIG).is_file()
+        found = _is(directory, stat.S_ISDIR) and _is(directory / consts.DEFAULT_PACKAGE_CONFIG, stat.S_ISREG)
         resolved = str(directory.resolve()) if found else None
     except OSError as e:
         raise AdhocUsageError(
