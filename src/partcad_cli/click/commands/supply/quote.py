@@ -47,6 +47,14 @@ from ...cli_context import CliContext
     is_flag=True,
     show_envvar=True,
 )
+@click.option(
+    "--ignore-missing",
+    "ignore_missing",
+    help="Quote what can be supplied and leave out what nobody supplies, instead of failing. "
+    "What a scene holds is always quoted this way",
+    is_flag=True,
+    show_envvar=True,
+)
 @click.argument(
     "specs",
     metavar="object[[,material],count]",
@@ -54,7 +62,7 @@ from ...cli_context import CliContext
     nargs=-1,
 )  # help="Part (default) or assembly to quote, with options",
 @click.pass_obj
-def cli(cli_ctx: CliContext, api, qos, provider, recursive, specs):
+def cli(cli_ctx: CliContext, api, qos, provider, recursive, ignore_missing, specs):
     """
     TODO-117: Implementing Network Error Handling
     """
@@ -62,7 +70,7 @@ def cli(cli_ctx: CliContext, api, qos, provider, recursive, specs):
         ctx: pc.Context = cli_ctx.get_partcad_context()
 
         with pc.logging.Process("SupplyQuote", "this"):
-            cart = pc.ProviderCart(qos=qos)
+            cart = pc.ProviderCart(qos=qos, ignore_missing=ignore_missing)
             asyncio.run(cart.add_objects(ctx, specs, recursive=recursive))
             pc.logging.debug("Cart: %s" % str(cart.parts))
 
@@ -79,6 +87,9 @@ def cli(cli_ctx: CliContext, api, qos, provider, recursive, specs):
                 preferred_suppliers = ctx.select_preferred_suppliers(suppliers)
                 pc.logging.debug("Preferred suppliers: %s" % str(preferred_suppliers))
 
+            # What a scene holds, and with '--ignore-missing' anything, is quoted
+            # without what nobody supplies: said here, and not a failure.
+            preferred_suppliers, left_out = ctx.drop_unsupplied_optional(cart, preferred_suppliers)
             supplier_carts = asyncio.run(ctx.prepare_supplier_carts(preferred_suppliers))
             quotes = asyncio.run(ctx.supplier_carts_to_quotes(supplier_carts))
             pc.logging.debug("Quotes: %s" % str(quotes))
@@ -119,14 +130,16 @@ def cli(cli_ctx: CliContext, api, qos, provider, recursive, specs):
                             continue
                         price = quote.result["price"]
                         cart_id = quote.result["cartId"]
-                        # In the currency the provider quoted in, which a store
-                        # outside the United States does not quote in dollars;
-                        # one that says nothing about it is taken to be in
-                        # dollars, as every quote was printed before.
-                        currency = quote.result.get("currency") or "USD"
+                        # In the currency it is in, which PartCAD has made sure
+                        # every quote says (see 'plugin_provider.with_currency').
+                        currency = quote.result.get("currency")
                         pc.logging.info(f"\t\t{supplier}: {cart_id}: {price_label(price, currency)}")
                     else:
                         pc.logging.info("No provider found:")
 
                     for part in quote.cart.parts.values():
                         pc.logging.info(f"\t\t\t{part.name}#{part.count}")
+                if left_out:
+                    pc.logging.info("Left out, as nobody supplies them:")
+                    for name in left_out:
+                        pc.logging.info(f"\t\t\t{name}#{cart.parts[name].count}")

@@ -362,3 +362,57 @@ def test_an_assembly_sold_assembled_is_still_added_as_one_item():
     """The shortcut the scene skips is untouched for what it is there for."""
     assembly = _FakeHolder({"//pkg:bolt": 2})
     assert _cart_names(_FakeProject(assembly=assembly)) == ["//pkg:thing"]
+
+
+def _cart_optional(project, ignore_missing=False):
+    from partcad.plugin_provider_data_cart import ProviderCart
+
+    cart = ProviderCart(ignore_missing=ignore_missing)
+    asyncio.run(cart.add_object(_FakeContext(project), "//pkg:thing"))
+    return {name: item.optional for name, item in cart.parts.items()}
+
+
+class _FakeAssembly(_FakeHolder):
+    """An assembly nobody sells whole: expanded into what it holds."""
+
+    def is_declared_purchasable(self):
+        return False
+
+
+def test_what_a_scene_holds_may_go_unquoted():
+    """A scene is an arrangement: what nobody sells in it is left out of a quote, not a failure of it."""
+    scene = _FakeHolder({"//pkg:bolt": 2, "//pkg:wall": 1})
+    assert _cart_optional(_FakeProject(scene=scene)) == {"//pkg:bolt": True, "//pkg:wall": True}
+
+
+def test_what_an_assembly_holds_may_go_unquoted_only_with_ignore_missing():
+    assembly = _FakeAssembly({"//pkg:bolt": 2})
+    assert _cart_optional(_FakeProject(assembly=assembly)) == {"//pkg:bolt": False}
+    assert _cart_optional(_FakeProject(assembly=assembly), ignore_missing=True) == {"//pkg:bolt": True}
+
+
+def test_an_assembly_sold_whole_and_a_part_follow_ignore_missing():
+    sold = _FakeHolder({"//pkg:bolt": 2})
+    assert _cart_optional(_FakeProject(assembly=sold)) == {"//pkg:thing": False}
+    assert _cart_optional(_FakeProject(assembly=sold), ignore_missing=True) == {"//pkg:thing": True}
+
+
+def test_an_item_is_optional_only_while_everything_that_wants_it_is():
+    """The same chair in a scene and in an assembly is the assembly's to fail over."""
+    from partcad.plugin_provider_data_cart import ProviderCart, ProviderCartItem
+
+    def item(optional):
+        made = ProviderCartItem()
+        made.name, made.count, made.optional = "//pkg:chair", 1, optional
+        return made
+
+    cart = ProviderCart()
+    cart.add_item(item(True))
+    cart.add_item(item(False))
+    assert cart.parts["//pkg:chair"].optional is False
+    assert cart.parts["//pkg:chair"].count == 2
+
+    cart = ProviderCart()
+    cart.add_item(item(True))
+    cart.add_item(item(True))
+    assert cart.parts["//pkg:chair"].optional is True

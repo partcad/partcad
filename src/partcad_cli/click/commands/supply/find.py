@@ -41,18 +41,27 @@ from ...cli_context import CliContext
     is_flag=True,
     show_envvar=True,
 )
+@click.option(
+    "--ignore-missing",
+    "ignore_missing",
+    help="Say what nobody supplies instead of failing. What a scene holds is always looked for this way",
+    is_flag=True,
+    show_envvar=True,
+)
 @click.argument(
     "specs",
     metavar="object[[,material],count]",
     nargs=-1,
 )  # help="Part (default) or assembly to quote, with options"
 @click.pass_obj
-def cli(cli_ctx: CliContext, api: bool, qos: str, provider: str, recursive: bool, specs: List[str]) -> None:
+def cli(
+    cli_ctx: CliContext, api: bool, qos: str, provider: str, recursive: bool, ignore_missing: bool, specs: List[str]
+) -> None:
     with pc.telemetry.set_context(cli_ctx.otel_context):
         ctx: pc.Context = cli_ctx.get_partcad_context()
 
         with pc.logging.Process("SupplyFind", "this"):
-            cart = pc.ProviderCart(qos=qos)
+            cart = pc.ProviderCart(qos=qos, ignore_missing=ignore_missing)
             asyncio.run(cart.add_objects(ctx, specs, recursive=recursive))
 
             suppliers = {}
@@ -67,6 +76,9 @@ def cli(cli_ctx: CliContext, api: bool, qos: str, provider: str, recursive: bool
                 for part_spec in cart.parts.values():
                     suppliers[str(part_spec)] = []
                     if not asyncio.run(provider.is_part_available(part_spec)):
+                        if part_spec.optional:
+                            pc.logging.info(f"Provider {provider.name} cannot provide {part_spec.name}: left out.")
+                            continue
                         pc.logging.error(f"Provider {provider.name} cannot provide {part_spec.name}.")
                         return
                     suppliers[str(part_spec)].append(provider.name)
