@@ -772,6 +772,45 @@ def test_a_part_type_s_rgba_is_read_as_numbers_whatever_it_is_written_as(tmp_pat
     assert "//builtin/color:rgba;color=C91A09FF" in colors
 
 
+USD_PART_TYPE = """
+from build123d import Box
+
+if __name__ == "__partcad_part__":
+    box = Box(10, 10, 10).wrapped
+    glaze = {"color": "Ceramic", "rgba": [250, 250, 245, 1.0], "roughness": 0.15, "metallic": 0}
+    steel = {"color": "Steel", "rgba": [188, 188, 188, 1.0], "roughness": "0.3", "metallic": 1.0}
+    wrong = {"color": "Odd", "roughness": "rough", "metallic": float("nan")}
+    output = {"shape": box, "cmf": {"convention": "usd", "faces": [glaze, glaze, steel, steel, wrong, None]}}
+"""
+
+
+def test_a_part_type_says_how_rough_and_how_metallic_its_faces_look(tmp_path):
+    """'roughness' and 'metallic' are carried beside a colour, read as numbers; what is no number says nothing."""
+    pytest.importorskip("build123d")
+    root = _package(
+        tmp_path / "pkg",
+        parts={"vase": {"type": ":looked"}},
+        partTypes={"looked": {"kind": "wrapper", "path": "looked.py"}},
+        colors={"Glaze": {"display": "#FAFAF5", "ids": {"usd": "Ceramic"}}},
+    )
+    (root / "looked.py").write_text(USD_PART_TYPE)
+    ctx = pc.Context(str(root))
+    part = ctx.get_part("//src:vase")
+    asyncio.run(part.get_wrapped(ctx))
+
+    by_color = {entry.get("color"): entry for entry in cmf.summary_of(part)["sets"]}
+    # The 'usd' convention: a package's colour claims a USD material by its name.
+    assert by_color["//src:Glaze"]["faces"] == 2
+    # A finish's values are kept a byte each: within 1/255 of what was said.
+    byte = pytest.approx
+    assert by_color["//src:Glaze"]["roughness"] == byte(0.15, abs=1 / 255)
+    assert by_color["//src:Glaze"]["metallic"] == 0.0
+    steel = by_color["//builtin/color:rgba;color=BCBCBCFF"]
+    assert (steel["roughness"], steel["metallic"]) == (byte(0.3, abs=1 / 255), 1.0)
+    odd = [entry for entry in by_color.values() if entry.get("faces") == 1]
+    assert all("roughness" not in entry and "metallic" not in entry for entry in odd)
+
+
 def _run_wrapper(monkeypatch, name, path, request):
     """Run the wrapper script 'name' in this process on 'request', as its sandbox does: (the module, what it wrote)."""
     import wrapper_common

@@ -6,8 +6,10 @@ desc: |
   'bracket.usda' is a closed box, 30 by 20 by 10 mm, in red, beside a proxy
   mesh and a studio floor that are not part of it: the box is the stage's
   default prim. 'scene.usda' is a Y-up stage in centimetres, a triangle placed
-  by a turned and scaled parent and three native instances of another. Both
-  are written by hand for these tests.
+  by a turned and scaled parent and three native instances of another.
+  'looks.usda' says how its faces look every way the type reads: an image
+  ('halves.bmp') laid by UVs, a subset in a metal, a 'displayColor', and an MDL
+  preset ('brushed.mdl'). All are written by hand for these tests.
 
 parts:
   bracket:
@@ -30,3 +32,6 @@ parts:
       reader:
         type: string
         default: cadmpeg
+  looks:
+    type: usd
+    path: looks.usda

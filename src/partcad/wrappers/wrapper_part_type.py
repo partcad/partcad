@@ -30,10 +30,12 @@ without importing anything of PartCAD's (docs/design/cmf.md, section 7):
     }
 
 where a set is '{"color": ..., "material": ..., "finish": ..., "rgba": [r, g,
-b, a]}', every key optional: the source's own designations, which the core
-converts by the convention's 'ids' (see 'partcad.cmf_conventions'), and the
-colour to draw a face in when nothing claims its designation ('rgba', 0-255
-and an alpha from 0 to 1).
+b, a], "roughness": r, "metallic": m}', every key optional: the source's own
+designations, which the core converts by the convention's 'ids' (see
+'partcad.cmf_conventions'); the colour to draw a face in when nothing claims
+its designation ('rgba', 0-255 and an alpha from 0 to 1); and how rough and
+how metallic the source says its surface looks, each from 0 to 1, for where
+nothing claims a finish ('roughness', 'metallic').
 
 Both '__file__' and the run name '__partcad_part__' are set on the script, so it
 can gate its build logic (``if __name__ == "__partcad_part__":``) and remain
@@ -56,8 +58,9 @@ import wrapper_common
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again. 2: a script's 'output["cmf"]' is carried. 3: a
-# NaN alpha in it is dropped rather than drawn opaque.
-CACHE_VERSION = 3
+# NaN alpha in it is dropped rather than drawn opaque. 4: its 'roughness' and
+# 'metallic' are carried.
+CACHE_VERSION = 4
 
 
 def _rgba(value):
@@ -75,6 +78,19 @@ def _rgba(value):
     if alpha != alpha:
         return None
     return red, green, blue, max(0.0, min(1.0, alpha))
+
+
+def _fraction(value):
+    """A number from 0 to 1 of a script's 'roughness' or 'metallic', or None if it is not one."""
+    if isinstance(value, bool):
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if value != value:  # NaN
+        return None
+    return max(0.0, min(1.0, value))
 
 
 def _section(stated, shape):
@@ -120,6 +136,8 @@ def _section(stated, shape):
                 finish=entry.get("finish"),
                 origin=origin,
                 rgba=rgba,
+                roughness=_fraction(entry.get("roughness")),
+                metallic=_fraction(entry.get("metallic")),
             )
             result.append(
                 palette.index_of(cmf_set) if any(cmf_set.has(c) for c in cmf_section.COMPONENTS) else cmf_section.NONE

@@ -492,22 +492,44 @@ PartCAD says when it is not one. What is read:
   character.
 - **As what.** Up to 20 000 triangles, each triangle is a face and two that share
   an edge share it: the part is drawn as lines, written to STEP, and made the
-  solid it bounds where the mesh closes. Past that, the triangles of each colour
+  solid it bounds where the mesh closes. Past that, the triangles of each look
   are one face that is only a triangulation: fast at any size, drawn by ``pc
   render --style shaded`` and written as STL, 3MF or glTF. ``surface`` chooses
   (``faces``, ``mesh`` or ``auto``), and ``maxTriangles`` (5 000 000) refuses a
   scene too large to build.
-- **In what.** The colour of its material's ``diffuseColor`` where that is a
-  colour and not a texture, else its ``displayColor``, as the part's CMF.
+- **In what.** Each face's look, as the part's CMF (see :doc:`config_cmf`):
+  the colour, roughness and metalness of the material bound to it - to its mesh,
+  or to the subset of its faces a ``GeomSubset`` binds - and how see-through it
+  is. A colour given by a texture is read off the image where the face lies on
+  it, by its UVs, and one a primvar reader names off the primvar; each
+  material's colours are its palette, by median cut, so that a part is drawn in
+  at most 1024 looks. The shaders read are ``UsdPreviewSurface``, MaterialX's
+  ``standard_surface``, OpenPBR and glTF PBR surfaces - in the stage, or in a
+  MaterialX document (``.mtlx``) it references, which ``usd-core`` as published
+  does not compose and the type reads itself - and NVIDIA's OmniPBR, OmniGlass
+  and OmniSurface, or an MDL preset in the package that calls one; where no
+  material is bound, or none of those, the face is in its
+  ``displayColor`` and ``displayOpacity``, as USD says a renderer that cannot
+  read a material draws it. A SimReady material's name
+  (``opaque__metal__aluminium``) says what the face is made of. A shaded
+  ``pc render`` draws the roughness and metalness too.
+
+Each look is stated under the ``usd`` convention, named as the material is, so
+a package's colour, material or finish claims a USD material by its name
+(``ids: {usd: Ceramic}``) and is drawn as its own declaration says; a name
+nothing claims is drawn as the stage says it looks, and is display-only. A face
+with no material is named ``displayColor``.
 
 The stage is read with Pixar's own USD library, ``usd-core``, which the type
-installs into the sandbox that builds the part and nowhere else. A part may say
+installs into the sandbox that builds the part and nowhere else, with Pillow to
+read its images (PNG, JPEG, BMP, TGA, TIFF, DDS: not EXR or Ptex). A part may say
 ``reader: cadmpeg`` instead: `cadmpeg <https://github.com/cadmpeg/cadmpeg>`_
 reads OpenUSD from 0.6.8 on, a release PartCAD fetches for this type alone, and
 composes the stage itself. It reads what a render shows at the stage's static
 values, and nothing of a point instancer; a cube or a sphere it reads as a
-B-rep, which is left out and counted. Each parameter is a part's own, declared
-under ``parameters`` like any other:
+B-rep, which is left out and counted. Its looks are an appearance's name and
+colour - a texture's mean, where one gives it - and no finish. Each parameter is
+a part's own, declared under ``parameters`` like any other:
 
 .. code-block:: yaml
 

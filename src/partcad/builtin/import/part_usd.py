@@ -23,7 +23,11 @@ ways, by the part's 'reader' parameter:
 
 Either way the result is the same: triangles in millimetres (by the stage's
 'metersPerUnit') with Z up (a 'Y' up stage is turned onto Z, as PartCAD's other
-importers do), grouped by the colour they are drawn in. Of the stage, what a
+importers do), each in the look it is drawn in - its material's name, its
+colour, its roughness and how metallic it is, and what it is made of where the
+source says, face by face (see 'usd_look'; cadmpeg gives a name and a colour).
+They are stated to PartCAD under the 'usd' convention, by which a package's
+colour, material or finish claims a USD name ('ids: {usd: <name>}'). Of the stage, what a
 reference to it would bring in is built - its default prim - unless 'prim'
 names another, and '/' is the whole of it.
 
@@ -34,7 +38,8 @@ and PartCAD says so. Up to FACES_UP_TO triangles, each triangle is a face, and
 two that share an edge share it - drawn as lines, written to STEP, made the
 solid it bounds where it closes; past that, the triangles of each colour are
 one face that is only a triangulation - fast at any size, drawn shaded and
-written as a mesh ('surface' chooses).
+written as a mesh ('surface' chooses). Each mesh is a shell of its own, so a
+mesh that closes is a solid of its own.
 
 A subdivision surface is read as its control mesh, and with 'usd-core' a cube,
 a sphere, a cylinder, a cone or a capsule as a coarse mesh of it; curves,
@@ -59,8 +64,10 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Raise with any change to what this produces (see 'partcad.code_version'),
 # which includes every change of the cadmpeg release 'cadmpeg_tool' reads
-# OpenUSD with ('USD_VERSION') and of the usd-core the part type installs.
-CACHE_VERSION = 1
+# OpenUSD with ('USD_VERSION'), of the usd-core the part type installs and of
+# 'usd_look', which says what each face looks like. 2: each face's look -
+# colour, finish, material - stated under the 'usd' convention, face by face.
+CACHE_VERSION = 2
 
 # How a stage is read: see the module's docstring.
 READERS = ("usd-core", "cadmpeg")
@@ -105,10 +112,29 @@ def _time_code(Usd, stage, value):
         raise ValueError("'time' is a number or 'default', not '%s'" % value)
 
 
+class Model:
+    """What a stage is built of: its pieces, the looks they are drawn in, and what was left out.
+
+    A piece is '(vertices n x 3, triangles m x 3, looks m)': a mesh, every
+    placement of it, its vertices in millimetres and each triangle's look an
+    index into 'looks' (see 'usd_look'). 'dropped' is {prim type: how many},
+    of what is not a surface.
+    """
+
+    def __init__(self, pieces, looks, dropped):
+        self.pieces = pieces
+        self.looks = looks
+        self.dropped = dropped
+
+    def triangle_count(self):
+        return sum(len(triangles) for _, triangles, _ in self.pieces)
+
+
 class _Collector:
-    """The triangles of a stage, grouped by the colour they are drawn in."""
+    """The triangles of a stage, a piece per mesh, each triangle in the look it is drawn in."""
 
     def __init__(self, stage, time, purposes, max_triangles):
+        import usd_look
         from pxr import UsdGeom
 
         self.stage = stage
@@ -123,9 +149,10 @@ class _Collector:
             self.out = [[scale, 0, 0, 0], [0, 0, scale, 0], [0, -scale, 0, 0], [0, 0, 0, 1]]
         else:
             self.out = [[scale, 0, 0, 0], [0, scale, 0, 0], [0, 0, scale, 0], [0, 0, 0, 1]]
-        self.groups = {}  # rgba or None -> [[vertices (n x 3)], [triangles (m x 3)], vertices so far]
-        self.colours = {}
-        self.meshes = {}  # a mesh's (points, triangles), read once however often it is placed
+        self.looks = usd_look.Looks(stage, time)
+        self.pieces = []  # (vertices, triangles, each triangle's look arrays): a piece per mesh
+        self.meshes = {}  # a mesh's (points, triangles, faces, corners, face count), read once
+        self.mesh_looks = {}  # a mesh's triangles' looks, read once however often it is placed
         self.triangles = 0
         self.dropped = {}
 
@@ -193,58 +220,6 @@ class _Collector:
 
     # -- what a prim is made of --
 
-    def colour(self, prim):
-        """(red, green, blue, alpha) - 0-255 and 0-1 - that 'prim' is drawn in, or None."""
-        path = prim.GetPath()
-        if path not in self.colours:
-            self.colours[path] = self._colour(prim)
-        return self.colours[path]
-
-    def _colour(self, prim):
-        from pxr import UsdGeom, UsdShade
-
-        rgb, opacity = None, None
-        try:
-            material, _ = UsdShade.MaterialBindingAPI(prim).ComputeBoundMaterial()
-            if material:
-                shader = material.ComputeSurfaceSource()[0]
-                if shader:
-                    diffuse = shader.GetInput("diffuseColor")
-                    if diffuse and not diffuse.HasConnectedSource() and diffuse.Get(self.time) is not None:
-                        rgb = tuple(diffuse.Get(self.time))
-                    alpha = shader.GetInput("opacity")
-                    if alpha and not alpha.HasConnectedSource() and alpha.Get(self.time) is not None:
-                        opacity = float(alpha.Get(self.time))
-        except Exception:
-            pass
-        primvars = UsdGeom.PrimvarsAPI(prim)
-        if rgb is None:
-            values = self._mean_primvar(primvars, "displayColor")
-            if values is not None:
-                rgb = values
-        if opacity is None:
-            values = self._mean_primvar(primvars, "displayOpacity")
-            if values is not None:
-                opacity = float(values[0]) if isinstance(values, tuple) else float(values)
-        if rgb is None:
-            return None
-        return (_srgb(rgb[0]), _srgb(rgb[1]), _srgb(rgb[2]), round(1.0 if opacity is None else opacity, 3))
-
-    def _mean_primvar(self, primvars, name):
-        primvar = primvars.FindPrimvarWithInheritance(name) if hasattr(primvars, "FindPrimvarWithInheritance") else None
-        if primvar is None:
-            primvar = primvars.GetPrimvar(name)
-        if not primvar or not primvar.HasValue():
-            return None
-        values = primvar.ComputeFlattened(self.time)
-        if values is None or len(values) == 0:
-            return None
-        first = values[0]
-        if hasattr(first, "__len__"):
-            count = len(values)
-            return tuple(sum(v[k] for v in values) / count for k in range(len(first)))
-        return (sum(float(v) for v in values) / len(values),)
-
     def mesh(self, prim, worlds):
         import numpy
         from pxr import UsdGeom
@@ -262,15 +237,19 @@ class _Collector:
                 if counts.sum() != len(indices) or indices.max() >= len(points):
                     self._drop("Mesh (malformed)")
                 else:
-                    triangles = fan(counts, indices, mesh.GetHoleIndicesAttr().Get(self.time) or [])
+                    triangles, corners, faces = fan_corners(
+                        counts, indices, mesh.GetHoleIndicesAttr().Get(self.time) or []
+                    )
                     if mesh.GetOrientationAttr().Get(self.time) == UsdGeom.Tokens.leftHanded:
-                        triangles = triangles[:, [0, 2, 1]]
-                    made = (numpy.asarray(points, dtype=numpy.float64), triangles)
+                        triangles, corners = triangles[:, [0, 2, 1]], corners[:, [0, 2, 1]]
+                    made = (numpy.asarray(points, dtype=numpy.float64), triangles, faces, corners, len(counts))
             self.meshes[path] = made
         if self.meshes[path] is not None:
-            self.add(prim, self.meshes[path][0], self.meshes[path][1], worlds)
+            points, triangles, faces, corners, face_count = self.meshes[path]
+            self.add(prim, points, triangles, worlds, self._looks(prim, triangles, faces, corners, face_count))
 
     def implicit(self, prim, worlds):
+        import numpy
         from pxr import UsdGeom
 
         made = implicit_mesh(prim, self.time, UsdGeom)
@@ -278,10 +257,18 @@ class _Collector:
             self._drop(prim.GetTypeName())
             return
         points, triangles = made
-        self.add(prim, points, triangles, worlds)
+        faces = numpy.zeros(len(triangles), dtype=numpy.int64)
+        self.add(prim, points, triangles, worlds, self._looks(prim, triangles, faces, triangles, 1))
 
-    def add(self, prim, points, triangles, worlds):
-        """'triangles' of 'points', placed by every matrix of 'worlds' (k x 4 x 4)."""
+    def _looks(self, prim, triangles, faces, corners, face_count):
+        """Each triangle's look arrays (see 'usd_look.Looks.faces'), read once per prim."""
+        path = prim.GetPath()
+        if path not in self.mesh_looks:
+            self.mesh_looks[path] = self.looks.faces(prim, faces, corners, triangles, face_count)
+        return self.mesh_looks[path]
+
+    def add(self, prim, points, triangles, worlds, looks):
+        """'triangles' of 'points', placed by every matrix of 'worlds' (k x 4 x 4), in 'looks' (one per triangle)."""
         import numpy
 
         if len(triangles) == 0:
@@ -299,10 +286,24 @@ class _Collector:
         mirrored = numpy.linalg.det(worlds[:, :3, :3]) < 0
         windings = numpy.where(mirrored[:, None, None], triangles[None][:, :, [0, 2, 1]], triangles[None])
         offsets = (numpy.arange(len(worlds)) * len(points))[:, None, None]
-        group = self.groups.setdefault(self.colour(prim), [[], [], 0])
-        group[0].append(placed.reshape(-1, 3))
-        group[1].append((windings + offsets).reshape(-1, 3) + group[2])
-        group[2] += len(worlds) * len(points)
+        count = len(worlds)
+        tiled = tuple(numpy.tile(a, (count,) + (1,) * (a.ndim - 1)) for a in looks)
+        self.pieces.append((placed.reshape(-1, 3), (windings + offsets).reshape(-1, 3), tiled))
+
+    def model(self):
+        """The Model of what was collected: the looks settled (see 'usd_look.settle')."""
+        import numpy
+        import usd_look
+
+        if not self.pieces:
+            return Model([], [], self.dropped)
+        arrays = [numpy.concatenate([piece[2][i] for piece in self.pieces]) for i in range(6)]
+        looks, ids = usd_look.settle(*arrays, self.looks.names, self.looks.materials)
+        pieces, start = [], 0
+        for vertices, triangles, _ in self.pieces:
+            pieces.append((vertices, triangles, ids[start : start + len(triangles)]))
+            start += len(triangles)
+        return Model(pieces, looks, self.dropped)
 
     def _drop(self, what):
         self.dropped[what] = self.dropped.get(what, 0) + 1
@@ -310,6 +311,16 @@ class _Collector:
 
 def fan(counts, indices, holes=()):
     """The triangles of polygons of 'counts' vertices, 'indices' into the points: each polygon a fan."""
+    return fan_corners(counts, indices, holes)[0]
+
+
+def fan_corners(counts, indices, holes=()):
+    """'(triangles, corners, faces)' of polygons of 'counts' vertices, 'indices' into the points: each a fan.
+
+    'triangles' are indices into the points; 'corners' the same three corners
+    as indices into 'indices' (what a face-varying primvar is indexed by); and
+    'faces' the polygon each triangle is of.
+    """
     import numpy
 
     counts = numpy.asarray(counts, dtype=numpy.int64)
@@ -321,11 +332,13 @@ def fan(counts, indices, holes=()):
         per_face[numpy.asarray(holes, dtype=numpy.int64)] = 0
     total = int(per_face.sum())
     if total == 0:
-        return numpy.zeros((0, 3), dtype=numpy.int64)
+        empty = numpy.zeros((0, 3), dtype=numpy.int64)
+        return empty, empty, numpy.zeros(0, dtype=numpy.int64)
     face = numpy.repeat(numpy.arange(len(counts)), per_face)
     k = numpy.arange(total) - numpy.repeat(numpy.cumsum(per_face) - per_face, per_face) + 1
     first = starts[face]
-    return numpy.stack([indices[first], indices[first + k], indices[first + k + 1]], axis=1)
+    corners = numpy.stack([first, first + k, first + k + 1], axis=1)
+    return indices[corners], corners, face
 
 
 def implicit_mesh(prim, time, UsdGeom, segments=32):
@@ -399,12 +412,7 @@ def _revolve(profile, segments, axis):
 
 
 def read(path, prim="", purpose="render", time="default", max_triangles=DEFAULT_MAX_TRIANGLES):
-    """(groups, dropped): the triangles of the stage at 'path', and what was left out.
-
-    'groups' is {rgba or None: (vertices n x 3, triangles m x 3)}, a group per
-    colour; 'dropped' is {prim type: how many}, of what is not a surface.
-    """
-    import numpy
+    """The Model of the stage at 'path': its meshes, the look each triangle is in, and what was left out."""
     from pxr import Gf, Usd, UsdSkel
 
     if purpose not in PURPOSES:
@@ -431,10 +439,7 @@ def read(path, prim="", purpose="render", time="default", max_triangles=DEFAULT_
         raise ValueError("the stage has no prim '%s'" % prim)
     collector = _Collector(stage, code, PURPOSES[purpose], max_triangles)
     collector.collect(start)
-    groups = {}
-    for rgba, (vertices, triangles, _) in collector.groups.items():
-        groups[rgba] = (numpy.vstack(vertices), numpy.vstack(triangles))
-    return groups, collector.dropped
+    return collector.model()
 
 
 # -- cadmpeg ---------------------------------------------------------------------
@@ -464,7 +469,7 @@ def _point(fields):
 
 def read_cadmpeg(path, cache_dir, prim="", purpose="render", time="default", max_triangles=DEFAULT_MAX_TRIANGLES,
                  cadmpeg=None):  # fmt: skip
-    """'read', by cadmpeg: (groups, dropped) of the stage at 'path'."""
+    """'read', by cadmpeg: the Model of the stage at 'path'."""
     import cadmpeg_step
     import cadmpeg_tool
 
@@ -485,11 +490,16 @@ def read_cadmpeg(path, cache_dir, prim="", purpose="render", time="default", max
             )
         with open(written, encoding="utf-8") as f:
             model = json.load(f, object_hook=_point)
-    return cadir_groups(model, prim, max_triangles)
+    return cadir_model(model, prim, max_triangles, package=path)
 
 
-def cadir_groups(model, prim="", max_triangles=DEFAULT_MAX_TRIANGLES):
-    """(groups, dropped) of a stage as cadmpeg describes it in CADIR, read as 'read' reads one."""
+def cadir_model(model, prim="", max_triangles=DEFAULT_MAX_TRIANGLES, package=None):
+    """The Model of a stage as cadmpeg describes it in CADIR, read as 'read' reads one.
+
+    A face's look is its appearance's: its name, and its base colour - or,
+    where a texture gives that and the texture is in 'package' (the USDZ read),
+    the texture's mean colour. cadmpeg says nothing of a finish.
+    """
     import numpy
 
     ir = model["model"]
@@ -513,17 +523,27 @@ def cadir_groups(model, prim="", max_triangles=DEFAULT_MAX_TRIANGLES):
     for tessellation in ir.get("tessellations") or []:
         meshes.setdefault(tessellation["body"], []).append(tessellation)
     appearances = {a["id"]: a for a in ir.get("appearances") or []}
-    bound = {}  # (kind, id) -> rgba
+    looks, look_ids = [], {}
+
+    def look_of(look):
+        if look not in look_ids:
+            look_ids[look] = len(looks)
+            looks.append(look)
+        return look_ids[look]
+
+    bound = {}  # (kind, id) -> look
     for binding in ir.get("appearance_bindings") or []:
         target = binding.get("target") or {}
-        rgba = _appearance_rgba(appearances.get(binding.get("appearance")))
-        if rgba is None:
+        appearance = appearances.get(binding.get("appearance"))
+        if not isinstance(appearance, dict):
             continue
+        rgba = _appearance_rgba(appearance, package)
+        name = str(appearance.get("name") or "appearance")
         found = target.get("id")
         if target.get("kind") == "triangle_group" and isinstance(found, dict):
-            bound[("group", found.get("tessellation"), found.get("group"))] = rgba
+            bound[("group", found.get("tessellation"), found.get("group"))] = (name, rgba, None, None, None)
         elif target.get("kind") in ("tessellation", "body"):
-            bound[(target["kind"], found)] = rgba
+            bound[(target["kind"], found)] = (name, rgba, None, None, None)
     occurrences = ir.get("occurrences") or []
     children = {}
     for occurrence in occurrences:
@@ -531,7 +551,7 @@ def cadir_groups(model, prim="", max_triangles=DEFAULT_MAX_TRIANGLES):
         children.setdefault(parent.get("occurrence") if parent.get("kind") == "occurrence" else None, []).append(
             occurrence
         )
-    groups, dropped, total = {}, {}, [0]
+    pieces, dropped, total = [], {}, [0]
     if not any(_under(o.get("native_ref", ""), root) for o in occurrences):
         raise ValueError("the stage has no prim '%s'" % root)
 
@@ -580,33 +600,27 @@ def cadir_groups(model, prim="", max_triangles=DEFAULT_MAX_TRIANGLES):
             if numpy.linalg.det(world[:3, :3]) < 0:
                 triangles = triangles[:, [0, 2, 1]]
             own = bound.get(("tessellation", tessellation.get("id"))) or bound.get(("body", body_id))
-            own = own or _cadir_rgba(body.get("color"))
-            assigned = numpy.zeros(len(triangles), dtype=bool)
+            if own is None:
+                colour = _cadir_rgba(body.get("color"))
+                own = (
+                    ("displayColor", colour, None, None, None) if colour is not None else (None, None, None, None, None)
+                )
+            ids = numpy.full(len(triangles), look_of(own), dtype=numpy.int64)
             for subset in tessellation.get("triangle_groups") or []:
-                rgba = bound.get(("group", tessellation.get("id"), subset.get("source_id")))
+                look = bound.get(("group", tessellation.get("id"), subset.get("source_id")))
                 chosen = numpy.asarray(subset.get("triangles") or [], dtype=numpy.int64)
                 chosen = chosen[(chosen >= 0) & (chosen < len(triangles))]
-                if rgba is None or len(chosen) == 0:
-                    continue
-                _group(groups, rgba, placed, triangles[chosen])
-                assigned[chosen] = True
-            if not assigned.all():
-                _group(groups, own, placed, triangles[~assigned])
+                if look is not None and len(chosen):
+                    ids[chosen] = look_of(look)
+            pieces.append((placed, triangles, ids))
 
     for top in children.get(None, []):
         visit(top, numpy.eye(4))
-    return {rgba: (numpy.vstack(v), numpy.vstack(t)) for rgba, (v, t, _) in groups.items()}, dropped
+    return Model(pieces, looks, dropped)
 
 
 def _under(path, root):
     return root == "/" or path == root or path.startswith(root.rstrip("/") + "/")
-
-
-def _group(groups, rgba, points, triangles):
-    group = groups.setdefault(rgba, [[], [], 0])
-    group[0].append(points)
-    group[1].append(triangles + group[2])
-    group[2] += len(points)
 
 
 def _cadir_rgba(colour):
@@ -616,13 +630,42 @@ def _cadir_rgba(colour):
     return (_srgb(colour["r"]), _srgb(colour["g"]), _srgb(colour["b"]), round(float(colour.get("a", 1.0)), 3))
 
 
-def _appearance_rgba(appearance):
-    """The colour an appearance draws in, as 'read' takes a material's: none when a texture gives it."""
+def _appearance_rgba(appearance, package=None):
+    """The colour an appearance draws in: its base colour, or the mean of the texture that gives it, where read."""
     if not isinstance(appearance, dict):
         return None
-    if any(t.get("slot") in ("diffuseColor", "base_color", "baseColor") for t in appearance.get("textures") or []):
-        return None
+    for texture in appearance.get("textures") or []:
+        if texture.get("slot") in ("diffuseColor", "base_color", "baseColor", "diffuse_texture"):
+            mean = _texture_mean(package, texture.get("paths") or [])
+            if mean is None:
+                return None
+            return tuple(int(round(v)) for v in mean) + (
+                round(float((appearance.get("base_color") or {}).get("a", 1.0)), 3),
+            )
     return _cadir_rgba(appearance.get("base_color"))
+
+
+def _texture_mean(package, paths):
+    """The mean sRGB colour (0-255) of the first of 'paths' found in the USDZ 'package' - by its own path's end."""
+    import zipfile
+
+    import usd_look
+
+    if not package or not str(package).lower().endswith(".usdz"):
+        return None
+    try:
+        with zipfile.ZipFile(package) as z:
+            members = z.namelist()
+    except (OSError, zipfile.BadZipFile):
+        return None
+    for path in paths:
+        tail = "/".join(part for part in str(path).replace("\\", "/").split("/") if part not in ("", ".", ".."))
+        for member in members:
+            if tail and (member == tail or member.endswith("/" + tail)):
+                image = usd_look._read_image("%s[%s]" % (package, member))
+                if image is not None:
+                    return image[:, :, :3].reshape(-1, 3).mean(axis=0) * 255.0
+    return None
 
 
 def stl_bytes(vertices, triangles):
@@ -669,8 +712,12 @@ def _triangulation_face(builder, scratch, n, vertices, triangles):
     return [face]
 
 
-def welded(vertices, triangles, tolerance=WELD):
-    """(points, triangles): corners within 'tolerance' made one, and the triangles that are then no area dropped."""
+def welded(vertices, triangles, tolerance=WELD, kept=False):
+    """(points, triangles): corners within 'tolerance' made one, and the triangles that are then no area dropped.
+
+    With 'kept', '(points, triangles, kept)': 'kept' the indices of the
+    triangles that are left, into those given.
+    """
     import numpy
 
     keys = numpy.round(vertices / tolerance).astype(numpy.int64)
@@ -682,20 +729,27 @@ def welded(vertices, triangles, tolerance=WELD):
         & (triangles[:, 1] != triangles[:, 2])
         & (triangles[:, 0] != triangles[:, 2])
     )
+    left = numpy.nonzero(distinct)[0]
     triangles = triangles[distinct]
     corners = points[triangles]
     area = numpy.linalg.norm(numpy.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]), axis=1)
-    return points, triangles[area > tolerance * tolerance]
+    large = area > tolerance * tolerance
+    if kept:
+        return points, triangles[large], left[large]
+    return points, triangles[large]
 
 
 def _shell(builder, vertices, triangles):
-    """A shell of a planar face per triangle, sharing the vertices and edges the triangles share."""
+    """'(shell, made)': a planar face per triangle, sharing the vertices and edges the triangles share.
+
+    'made' is the index of the triangle each face of the shell is, in order.
+    """
     import numpy
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace
     from OCP.gp import gp_Dir, gp_Pln, gp_Pnt
     from OCP.TopoDS import TopoDS_Shell, TopoDS_Vertex, TopoDS_Wire
 
-    points, triangles = welded(vertices, triangles)
+    points, triangles, kept = welded(vertices, triangles, kept=True)
     # Each face lies on the plane its triangle's winding faces, so that the
     # faces of a closed mesh all face the same way and the shell bounds what
     # the mesh does: left to fit a plane to the wire, OpenCASCADE picks either
@@ -711,7 +765,7 @@ def _shell(builder, vertices, triangles):
     edges, faces = {}, []
     shell = TopoDS_Shell()
     builder.MakeShell(shell)
-    for (a, b, c), normal in zip(triangles.tolist(), normals.tolist()):
+    for (a, b, c), normal, which in zip(triangles.tolist(), normals.tolist(), kept.tolist()):
         wire = TopoDS_Wire()
         builder.MakeWire(wire)
         for p, q in ((a, b), (b, c), (c, a)):
@@ -725,17 +779,39 @@ def _shell(builder, vertices, triangles):
         face = BRepBuilderAPI_MakeFace(plane, wire, True)
         if face.IsDone():
             builder.Add(shell, face.Face())
-            faces.append(None)
-    return shell, len(faces)
+            faces.append(which)
+    return shell, faces
 
 
-def build(groups, surface="auto"):
-    """(shape, cmf): the triangles of each colour as a shape, and what each face is drawn in.
+def entry(look):
+    """What the part says a face drawn in 'look' is in, for 'wrapper_part_type' (see 'usd_look'); None for nothing."""
+    if look is None:
+        return None
+    name, rgba, roughness, metallic, material = look
+    said = {}
+    if name:
+        said["color"] = name
+    if rgba is not None:
+        said["rgba"] = list(rgba)
+    if roughness is not None:
+        said["roughness"] = roughness
+    if metallic is not None:
+        said["metallic"] = metallic
+    if material:
+        said["material"] = material
+    return said or None
 
-    'surface' is one of SURFACES: a face per triangle ('faces'), a face per
-    colour that is only a triangulation ('mesh'), or the first when there are
-    no more than FACES_UP_TO triangles ('auto').
+
+def build(model, surface="auto"):
+    """(shape, cmf): the Model's triangles as a shape, and what each face is drawn in.
+
+    'surface' is one of SURFACES: a face per triangle ('faces'), each mesh a
+    shell of them; a face per look that is only a triangulation ('mesh'); or
+    the first when there are no more than FACES_UP_TO triangles ('auto'). 'cmf'
+    is what 'wrapper_part_type' reads: the 'usd' convention, and a set per face.
     """
+    import numpy
+
     if surface not in SURFACES:
         raise ValueError("'surface' is one of %s, not '%s'" % (", ".join(SURFACES), surface))
     # Pin pyexpat before importing OCP (see PartCAD's wrapper_import_mesh.py).
@@ -745,21 +821,29 @@ def build(groups, surface="auto"):
     from OCP.TopoDS import TopoDS_Compound
 
     if surface == "auto":
-        surface = "faces" if sum(len(t) for _, t in groups.values()) <= FACES_UP_TO else "mesh"
+        surface = "faces" if model.triangle_count() <= FACES_UP_TO else "mesh"
+    entries = [entry(look) for look in model.looks]
     builder = BRep_Builder()
     shapes, drawn = [], []
-    with tempfile.TemporaryDirectory(prefix="partcad-usd-") as scratch:
-        for n, (rgba, (vertices, triangles)) in enumerate(groups.items()):
-            entry = {"rgba": list(rgba)} if rgba is not None else None
-            if surface == "faces":
-                shell, count = _shell(builder, vertices, triangles)
-                if count:
-                    shapes.append(shell)
-                    drawn.extend([entry] * count)
-            else:
-                for face in _triangulation_face(builder, scratch, n, vertices, triangles):
+    if surface == "faces":
+        for vertices, triangles, looks in model.pieces:
+            shell, made = _shell(builder, vertices, triangles)
+            if made:
+                shapes.append(shell)
+                drawn.extend(entries[looks[index]] if len(entries) else None for index in made)
+    else:
+        vertices, triangles, looks, offset = [], [], [], 0
+        for points, piece, piece_looks in model.pieces:
+            vertices.append(points)
+            triangles.append(piece + offset)
+            looks.append(piece_looks)
+            offset += len(points)
+        vertices, triangles, looks = numpy.vstack(vertices), numpy.vstack(triangles), numpy.concatenate(looks)
+        with tempfile.TemporaryDirectory(prefix="partcad-usd-") as scratch:
+            for look in numpy.unique(looks).tolist():
+                for face in _triangulation_face(builder, scratch, look, vertices, triangles[looks == look]):
                     shapes.append(face)
-                    drawn.append(entry)
+                    drawn.append(entries[look] if look < len(entries) else None)
     if not shapes:
         return None, None
     if len(shapes) == 1:
@@ -769,7 +853,7 @@ def build(groups, surface="auto"):
         builder.MakeCompound(shape)
         for each in shapes:
             builder.Add(shape, each)
-    cmf = {"faces": drawn} if any(drawn) else None
+    cmf = {"convention": "usd", "faces": drawn} if any(drawn) else None
     return shape, cmf
 
 
@@ -792,12 +876,14 @@ def run(request):
             max_triangles=int(float(parameters.get("maxTriangles") or DEFAULT_MAX_TRIANGLES)),
         )
         if reader == "cadmpeg":
-            groups, dropped = read_cadmpeg(request["path"], request.get("cache_dir"), **options)
+            model = read_cadmpeg(request["path"], request.get("cache_dir"), **options)
         else:
-            groups, dropped = read(request["path"], **options)
+            model = read(request["path"], **options)
+        dropped = model.dropped
         if dropped:
             print("usd: left out what is not a mesh: %s" % describe(dropped), file=sys.stderr)
-        shape, cmf = build(groups, str(parameters.get("surface") or "auto").strip().lower()) if groups else (None, None)
+        surface = str(parameters.get("surface") or "auto").strip().lower()
+        shape, cmf = build(model, surface) if model.pieces else (None, None)
     except (ValueError, TooManyTriangles, RuntimeError) as e:
         return {"exception": "%s: %s" % (name, e)}
     if shape is None:

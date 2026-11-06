@@ -40,7 +40,7 @@ PACKAGE = "tests/partcad/unit/data/import_usd/partcad.yaml"
 # was keyed with: a release that reads OpenUSD further reads the same stage
 # into other geometry, under the same key unless this moves with it.
 USD_KEYED_FOR = "0.6.8"
-KEYED_FOR = 1
+KEYED_FOR = 2
 
 
 def _module(script):
@@ -51,6 +51,7 @@ def _module(script):
 
 
 part_usd = _module("part_usd.py")
+usd_look = _module("usd_look.py")
 
 
 @pytest.fixture(scope="module")
@@ -64,11 +65,15 @@ def declared():
 # ---------------------------------------------------------------------------
 
 
-def test_the_type_reads_a_stage_with_the_usd_core_it_pins(declared):
+def test_the_type_reads_a_stage_with_the_usd_core_it_pins_and_its_images_with_the_pillow_the_renderers_pin(declared):
     assert declared["path"] == "part_usd.py"
     assert declared["extension"] == "usd"
-    (requirement,) = declared["pythonRequirements"]
-    assert requirement.startswith("usd-core==")
+    usd_core, pillow = declared["pythonRequirements"]
+    assert usd_core.startswith("usd-core==")
+    with open(os.path.join(output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.RENDER]], "partcad.yaml")) as f:
+        renderers = yaml.safe_load(f)["render"]
+    pinned = {r for each in renderers.values() if isinstance(each, dict) for r in each.get("pythonRequirements") or []}
+    assert pillow in pinned and pillow.startswith("pillow==")
 
 
 def test_a_stage_that_is_no_solid_is_a_part_all_the_same(declared):
@@ -101,6 +106,14 @@ def test_every_spelling_of_a_stage_is_the_usd_type():
 def test_a_polygon_is_a_fan_and_a_hole_is_left_out():
     triangles = part_usd.fan([4, 3, 3], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], holes=[2])
     assert triangles.tolist() == [[0, 1, 2], [0, 2, 3], [4, 5, 6]]
+
+
+def test_a_polygon_s_triangles_know_their_face_and_their_face_vertices():
+    triangles, corners, faces = part_usd.fan_corners([4, 3], [7, 8, 9, 10, 11, 12, 13])
+    assert triangles.tolist() == [[7, 8, 9], [7, 9, 10], [11, 12, 13]]
+    # What a face-varying primvar is indexed by: the place in the face-vertex list.
+    assert corners.tolist() == [[0, 1, 2], [0, 2, 3], [4, 5, 6]]
+    assert faces.tolist() == [0, 0, 1]
 
 
 def test_corners_are_welded_and_triangles_of_no_area_dropped():
@@ -155,9 +168,14 @@ def _cadir(up="Y", default="World", occurrences=None, **model):
     }
 
 
+def _triangles(model):
+    return sum(len(triangles) for _, triangles, _ in model.pieces)
+
+
 def test_cadmpeg_s_meshes_are_placed_by_their_occurrences_and_turned_onto_z():
-    groups, dropped = part_usd.cadir_groups(_cadir())
-    ((vertices, triangles),) = groups.values()
+    model = part_usd.cadir_model(_cadir())
+    dropped = model.dropped
+    ((vertices, triangles, _),) = model.pieces
     # (10, 0, 0) is (10, 0, 50) in the triangle's parent, and (200, 0, -20) in
     # the stage, Y up: (200, 20, 0) with Z up. As usd-core reads the same stage.
     assert vertices.round(6).tolist() == [[200, 0, 0], [200, 20, 0], [200, 0, 60]]
@@ -166,11 +184,11 @@ def test_cadmpeg_s_meshes_are_placed_by_their_occurrences_and_turned_onto_z():
 
 
 def test_cadmpeg_s_stage_is_its_default_prim_unless_a_prim_is_asked_for():
-    assert sum(len(t) for _, t in part_usd.cadir_groups(_cadir())[0].values()) == 1
-    assert sum(len(t) for _, t in part_usd.cadir_groups(_cadir(), prim="/")[0].values()) == 2
-    assert sum(len(t) for _, t in part_usd.cadir_groups(_cadir(), prim="/Studio")[0].values()) == 1
+    assert _triangles(part_usd.cadir_model(_cadir())) == 1
+    assert _triangles(part_usd.cadir_model(_cadir(), prim="/")) == 2
+    assert _triangles(part_usd.cadir_model(_cadir(), prim="/Studio")) == 1
     with pytest.raises(ValueError, match="no prim"):
-        part_usd.cadir_groups(_cadir(), prim="/Nowhere")
+        part_usd.cadir_model(_cadir(), prim="/Nowhere")
 
 
 def test_what_cadmpeg_says_is_hidden_is_not_built():
@@ -178,14 +196,15 @@ def test_what_cadmpeg_says_is_hidden_is_not_built():
         occurrences=[_occurrence("/World"), _occurrence("/World/arm", "/World", visible=False),
                      _occurrence("/World/arm/m", "/World/arm")]  # fmt: skip
     )
-    assert part_usd.cadir_groups(hidden)[0] == {}
+    assert part_usd.cadir_model(hidden).pieces == []
 
 
-def test_a_colour_is_the_triangle_group_s_else_the_mesh_s_else_the_body_s_and_a_texture_gives_none():
+def test_a_look_is_the_triangle_group_s_else_the_mesh_s_else_the_body_s_and_a_texture_not_found_gives_no_colour():
     model = _cadir(
         appearances=[
-            {"id": "blue", "base_color": {"r": 0.0, "g": 0.0, "b": 1.0, "a": 1.0}},
-            {"id": "textured", "base_color": {"r": 0.5, "g": 0.5, "b": 0.5}, "textures": [{"slot": "diffuseColor"}]},
+            {"id": "blue", "name": "Blue", "base_color": {"r": 0.0, "g": 0.0, "b": 1.0, "a": 1.0}},
+            {"id": "textured", "name": "Wood", "base_color": {"r": 0.5, "g": 0.5, "b": 0.5},
+             "textures": [{"slot": "diffuseColor", "paths": ["wood.png"]}]},
         ],
         appearance_bindings=[
             {"target": {"kind": "triangle_group", "id": {"tessellation": "t/m", "group": "/World/arm/m/blue"}},
@@ -200,22 +219,31 @@ def test_a_colour_is_the_triangle_group_s_else_the_mesh_s_else_the_body_s_and_a_
         "mesh": mesh,
         "triangle_groups": [{"source_id": "/World/arm/m/blue", "triangles": [1]}],
     }
-    groups, _ = part_usd.cadir_groups(model, prim="/")
-    assert {rgba: len(t) for rgba, (_, t) in groups.items()} == {(0, 0, 255, 1.0): 1, (255, 0, 0, 1.0): 1, None: 1}
+    read = part_usd.cadir_model(model, prim="/")
+    counted = {}
+    for _, _, looks in read.pieces:
+        for look in looks.tolist():
+            counted[read.looks[look]] = counted.get(read.looks[look], 0) + 1
+    assert counted == {
+        ("Blue", (0, 0, 255, 1.0), None, None, None): 1,
+        ("displayColor", (255, 0, 0, 1.0), None, None, None): 1,
+        # The texture is in no package here: the look is the appearance's, and no colour is made up.
+        ("Wood", None, None, None, None): 1,
+    }
 
 
 def test_a_b_rep_body_is_counted_and_left_out():
     model = _cadir()
     model["model"]["bodies"][0]["regions"] = ["r0"]
     model["model"]["tessellations"] = [model["model"]["tessellations"][1]]
-    groups, dropped = part_usd.cadir_groups(model)
-    assert groups == {}
-    assert dropped == {"B-rep body (read it with 'usd-core')": 1}
+    read = part_usd.cadir_model(model)
+    assert read.pieces == []
+    assert read.dropped == {"B-rep body (read it with 'usd-core')": 1}
 
 
 def test_too_many_triangles_from_cadmpeg_says_what_to_do():
     with pytest.raises(part_usd.TooManyTriangles, match="build a 'prim'"):
-        part_usd.cadir_groups(_cadir(), prim="/", max_triangles=1)
+        part_usd.cadir_model(_cadir(), prim="/", max_triangles=1)
 
 
 def test_the_cadmpeg_reader_refuses_what_it_cannot_read_rather_than_reading_something_else(tmp_path):
@@ -230,6 +258,107 @@ def test_an_unknown_reader_is_refused():
     assert "'reader' is one of usd-core, cadmpeg" in answer["exception"]
 
 
+# ---------------------------------------------------------------------------
+# What a face looks like ('usd_look'), where it needs no usd-core
+# ---------------------------------------------------------------------------
+
+
+def test_an_mdl_preset_is_read_as_the_material_it_calls():
+    kind, arguments = usd_look.parse_mdl_preset(
+        """mdl 1.4;
+        using ::OmniPBR import OmniPBR;
+        // a comment: color(9, 9, 9)
+        export material Aluminium_Brushed_A(*)
+         = OmniPBR(
+            diffuse_texture: texture_2d("../textures/T_Albedo.png", ::tex::gamma_srgb),
+            diffuse_color_constant: color(0.1, 0.2f, 0.3),
+            enable_ORM_texture: true,
+            metallic_texture_influence: 1.0,
+            reflection_roughness_constant: 0.35,
+            normalmap_texture: texture_2d("../textures/T_Normal.png", ::tex::gamma_linear));""",
+        "Aluminium_Brushed_A",
+    )
+    assert kind == "OmniPBR"
+    assert arguments == {
+        "diffuse_texture": ("asset", "../textures/T_Albedo.png"),
+        "diffuse_color_constant": (0.1, 0.2, 0.3),
+        "enable_ORM_texture": True,
+        "metallic_texture_influence": 1.0,
+        "reflection_roughness_constant": 0.35,
+        "normalmap_texture": ("asset", "../textures/T_Normal.png"),
+    }
+    assert usd_look.parse_mdl_preset("mdl 1.4; export material X() = df::diffuse_reflection_bsdf();") is None
+
+
+def test_what_an_mdl_preset_names_is_found_beside_it_in_its_package_or_out_of_one():
+    assert usd_look._beside("/a/b.usdz[materials/x.mdl]", "../textures/t.png") == "/a/b.usdz[textures/t.png]"
+    assert usd_look._beside("/a/materials/x.mdl", "../textures/t.png") == os.path.normpath("/a/textures/t.png")
+
+
+def test_a_file_is_read_out_of_a_package_or_off_the_disk(tmp_path):
+    import zipfile
+
+    with zipfile.ZipFile(tmp_path / "p.usdz", "w") as z:
+        z.writestr("textures/t.txt", b"inside")
+    (tmp_path / "t.txt").write_bytes(b"outside")
+    assert usd_look.read_bytes("%s[textures/t.txt]" % (tmp_path / "p.usdz")) == b"inside"
+    assert usd_look.read_bytes(str(tmp_path / "t.txt")) == b"outside"
+    assert usd_look.read_bytes("%s[nothing]" % (tmp_path / "p.usdz")) is None
+
+
+def test_colours_read_face_by_face_are_a_palette_of_at_most_max_looks():
+    count = 5000
+    rng = numpy.random.default_rng(1)
+    rgb = rng.uniform(0, 255, (count, 3))
+    nothing = numpy.full(count, numpy.nan)
+    looks, ids = usd_look.settle(
+        numpy.zeros(count, dtype=int), rgb, nothing, nothing, nothing, numpy.full(count, -1), ["Paint"], []
+    )
+    assert 1 < len(looks) <= usd_look.MAX_LOOKS
+    assert len(ids) == count and ids.max() == len(looks) - 1
+    # Each is near the colour it was read as - on average, for colours as spread as these can be.
+    drawn = numpy.array([looks[i][1][:3] for i in ids], dtype=float)
+    assert numpy.abs(drawn - rgb).mean() <= 16
+
+
+def test_a_palette_keeps_a_dark_colour_s_hue():
+    """What rounding each channel to a coarse step does not: (40, 55, 58) stays a grey-green, not teal."""
+    count = 4000
+    rng = numpy.random.default_rng(2)
+    rgb = numpy.vstack([rng.normal((40, 55, 58), 3, (count // 2, 3)), rng.normal((200, 120, 40), 3, (count // 2, 3))])
+    nothing = numpy.full(count, numpy.nan)
+    looks, ids = usd_look.settle(
+        numpy.zeros(count, dtype=int), rgb, nothing, nothing, nothing, numpy.full(count, -1), ["Board"], []
+    )
+    drawn = numpy.array([looks[i][1][:3] for i in ids], dtype=float)
+    assert numpy.abs(drawn[: count // 2].mean(axis=0) - (40, 55, 58)).max() < 4
+
+
+def test_a_look_says_nothing_it_was_not_told():
+    count = 3
+    looks, ids = usd_look.settle(
+        numpy.array([0, 0, 1]),
+        numpy.array([[255.0, 0, 0], [255.0, 0, 0], [numpy.nan] * 3]),
+        numpy.array([numpy.nan, numpy.nan, 0.5]),
+        numpy.array([0.2, 0.2, numpy.nan]),
+        numpy.array([1.0, 1.0, numpy.nan]),
+        numpy.array([0, 0, -1]),
+        ["Steel", "displayColor"],
+        ["metal"],
+    )
+    assert sorted(looks, key=str) == sorted(
+        [("Steel", (255, 0, 0, 1.0), 0.2, 1.0, "metal"), ("displayColor", None, None, None, None)], key=str
+    )
+    assert ids[0] == ids[1] != ids[2]
+    assert count == len(ids)
+
+
+def test_linear_and_srgb_are_each_other_s_inverse():
+    values = numpy.linspace(0, 1, 11)
+    assert usd_look.srgb_of_linear(usd_look.linear_of_srgb(values)) / 255.0 == pytest.approx(values, abs=1e-9)
+    assert usd_look.srgb_of_linear([0.5]).round().tolist() == [188.0]
+
+
 def _count(shape, kind):
     """How many distinct sub-shapes of 'kind': an edge two faces share is one."""
     found = TopTools_IndexedMapOfShape()
@@ -237,27 +366,40 @@ def _count(shape, kind):
     return found.Extent()
 
 
-SQUARES = {
-    (255, 0, 0, 1.0): (numpy.array([[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], float), numpy.array([[0, 1, 2], [0, 2, 3]])),
-    None: (numpy.array([[0, 0, 1], [1, 0, 1], [0, 1, 1]], float), numpy.array([[0, 1, 2]])),
-}  # fmt: skip
+RED = ("Paint", (255, 0, 0, 1.0), 0.4, 1.0, "steel")
+SQUARES = part_usd.Model(
+    [
+        (numpy.array([[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], float), numpy.array([[0, 1, 2], [0, 2, 3]]),
+         numpy.array([0, 0])),
+        (numpy.array([[0, 0, 1], [1, 0, 1], [0, 1, 1]], float), numpy.array([[0, 1, 2]]), numpy.array([1])),
+    ],
+    [RED, (None, None, None, None, None)],
+    {},
+)  # fmt: skip
 
 
 @pytest.mark.parametrize("surface, faces, edges", [("faces", 3, 8), ("auto", 3, 8), ("mesh", 2, 0)])
-def test_the_shape_is_a_face_per_triangle_or_a_mesh_per_colour(surface, faces, edges):
+def test_the_shape_is_a_face_per_triangle_or_a_mesh_per_look(surface, faces, edges):
     shape, cmf = part_usd.build(SQUARES, surface)
     assert _count(shape, TopAbs_FACE) == faces
     # Two triangles sharing an edge share it: 5 edges a square, not 6.
     assert _count(shape, TopAbs_EDGE) == edges
-    red = {"rgba": [255, 0, 0, 1.0]}
-    assert cmf == {"faces": [red] * (faces - 1) + [None]}
+    red = {"color": "Paint", "rgba": [255, 0, 0, 1.0], "roughness": 0.4, "metallic": 1.0, "material": "steel"}
+    assert cmf == {"convention": "usd", "faces": [red] * (faces - 1) + [None]}
+
+
+def test_a_look_is_said_as_the_usd_convention_s_set_with_nothing_made_up():
+    assert part_usd.entry(("Glass", None, None, None, None)) == {"color": "Glass"}
+    assert part_usd.entry((None, None, None, None, None)) is None
+    assert part_usd.entry(None) is None
 
 
 def test_a_closed_mesh_of_faces_is_a_valid_closed_shell_and_the_solid_it_bounds():
     cube = numpy.array([[x, y, z] for x in (0, 1) for y in (0, 1) for z in (0, 1)], float)
     quads = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
     triangles = numpy.array([t for a, b, c, d in quads for t in ((a, b, c), (a, c, d))])
-    shape, _ = part_usd.build({None: (cube, triangles)}, "faces")
+    closed = part_usd.Model([(cube, triangles, numpy.zeros(len(triangles), dtype=int))], [RED], {})
+    shape, _ = part_usd.build(closed, "faces")
     assert BRepCheck_Analyzer(shape).IsValid()
     # Every face facing out: the solid PartCAD states of it is a cube, not nothing.
     import sys
@@ -269,7 +411,7 @@ def test_a_closed_mesh_of_faces_is_a_valid_closed_shell_and_the_solid_it_bounds(
     assert wrapper_common.solid_problems(solid) == []
     assert _volume(solid) == pytest.approx(1.0)
     with pytest.raises(ValueError, match="'surface' is one of"):
-        part_usd.build({None: (cube, triangles)}, "nurbs")
+        part_usd.build(closed, "nurbs")
 
 
 # ---------------------------------------------------------------------------
@@ -326,3 +468,26 @@ def test_both_readers_place_a_y_up_stage_in_centimetres_the_same_way(ctx):
     by_usd_core = _box(_built(ctx, ":scene"))
     assert by_usd_core == pytest.approx([0, 0, 0, 200, 20, 610], abs=1e-3)
     assert _box(_built(ctx, ":scene_cadmpeg")) == pytest.approx(by_usd_core, abs=1e-3)
+
+
+@pytest.mark.slow
+def test_each_face_is_in_the_look_its_stage_says_and_partcad_draws_it_so(ctx):
+    """An image laid by UVs, a subset in a metal, a displayColor and an MDL preset, each to its faces, as a part."""
+    from partcad import cmf
+
+    part = ctx.get_part(":looks")
+    asyncio.run(part.get_wrapped(ctx))
+    summary = cmf.summary_of(part)
+    by_display = {entry.get("display"): entry for entry in summary["sets"]}
+    # Nothing in the package claims these names, so each is drawn as the stage says it looks.
+    assert by_display["#FF0000FF"]["faces"] == 2 and by_display["#0000FFFF"]["faces"] == 2
+    # A finish's values are kept a byte each: within 1/255 of what the stage says.
+    near = lambda value: pytest.approx(value, abs=1 / 255)  # noqa: E731
+    assert by_display["#FF0000FF"]["roughness"] == near(0.8)
+    steel = by_display["#BCBCBCFF"]
+    assert (steel["faces"], steel["roughness"], steel["metallic"]) == (2, near(0.2), near(1.0))
+    assert by_display["#FFFF00FF"]["faces"] == 12
+    brushed = by_display["#597C95FF"]
+    assert (brushed["roughness"], brushed["metallic"]) == (near(0.3), near(1.0))
+    assert {entry["origin"] for entry in summary["sets"]} == {"source:usd"}
+    assert summary["unspecified"].get("color", 0) == 0

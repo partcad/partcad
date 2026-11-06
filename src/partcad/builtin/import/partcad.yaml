@@ -154,18 +154,22 @@ partTypes:
   # with cadmpeg 0.6.8, the first release that reads it, when a part says
   # `reader: cadmpeg` (see 'part_usd.py' for what each route reads). Not
   # `requireSolid`: what a renderer draws need not close, and a stage that is
-  # no solid is a legitimate part, built and reported.
+  # no solid is a legitimate part, built and reported. Pillow reads the
+  # textures a face's colour, roughness and metalness are read off (see
+  # 'usd_look.py'), at the version the render types pin it at.
   usd:
     desc: |
       An OpenUSD stage (`.usd`, `.usda`, `.usdc`, or a `.usdz` package): the
       meshes its default prim shows, or the prim a part's `prim` names, in
-      millimetres with Z up, each in the colour its material or display colour
-      gives. Read with Pixar's usd-core by default, or with cadmpeg (`reader:
-      cadmpeg`). A surface: a solid only where the meshes close.
+      millimetres with Z up, each face in the colour, roughness and metalness
+      its material - or its display colour - gives, textures included. Read
+      with Pixar's usd-core by default, or with cadmpeg (`reader: cadmpeg`).
+      A surface: a solid only where a mesh closes.
     path: part_usd.py
     extension: usd
     pythonRequirements:
       - usd-core==26.11
+      - pillow==12.2.0
 
 import:
   # A native CAD document read as an assembly, through cadmpeg: every format

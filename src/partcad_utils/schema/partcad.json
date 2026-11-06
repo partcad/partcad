@@ -1835,7 +1835,7 @@
     },
     "cmf": { "$ref": "#/definitions/check-cmf" },
     "cmfConventions": {
-      "description": "How other tools' colours, materials and finishes are read in this package, beside PartCAD's builtin conventions (partcad, step, build123d, cadquery, openscad, 3mf, gltf, ldraw). A part names one in its 'cmfConvention' parameter. See docs/design/cmf.md, section 7.",
+      "description": "How other tools' colours, materials and finishes are read in this package, beside PartCAD's builtin conventions (partcad, step, build123d, cadquery, openscad, 3mf, gltf, ldraw, usd). A part names one in its 'cmfConvention' parameter. See docs/design/cmf.md, section 7.",
       "type": "object",
       "patternProperties": {
         "^[a-zA-Z0-9_.-]+$": {
@@ -1845,7 +1845,7 @@
             "extends": {
               "description": "The builtin convention whose facts it reads: what a source of that kind states. Its own name if that is a builtin, and 'step' otherwise.",
               "type": "string",
-              "enum": ["partcad", "step", "build123d", "cadquery", "openscad", "3mf", "gltf", "ldraw"]
+              "enum": ["partcad", "step", "build123d", "cadquery", "openscad", "3mf", "gltf", "ldraw", "usd"]
             },
             "ids": {
               "description": "The key of a declaration's 'ids' that holds what this tool calls it. Its own name by default.",
