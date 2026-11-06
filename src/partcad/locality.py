@@ -18,8 +18,8 @@ The choice, best evidence first:
 
 1. 'location': the place nearest it, as the crow flies, of those that say
    where they are ('latitude'/'longitude', or 'lat'/'lng');
-2. the address's ZIP code, then its city, then its state: the first place
-   that matches, in the order the plugin gave them;
+2. the address's ZIP code (its spaces aside), then its city, then its state:
+   the first place that matches, in the order the plugin gave them;
 3. otherwise none, and the plugin decides - and should say what it decided.
 
 Nothing here asks anything of the network: an address is matched as it is
@@ -56,8 +56,15 @@ def distance_km(a, b):
     return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(min(1.0, h)))
 
 
-def _same(a, b):
-    return bool(a) and bool(b) and str(a).strip().casefold() == str(b).strip().casefold()
+def _same(a, b, key=None):
+    """Whether two names of a place are the same, as written: case aside, and for a ZIP code its spaces too."""
+    if not a or not b:
+        return False
+    a, b = str(a).strip().casefold(), str(b).strip().casefold()
+    if key == "zip":
+        # '3825 HB' and '3825HB' are one Dutch postcode; '1012' is '1012'.
+        a, b = "".join(a.split()), "".join(b.split())
+    return a == b
 
 
 def choose(user_config, spec) -> dict:
@@ -93,6 +100,6 @@ def choose(user_config, spec) -> dict:
     address = user_config.address() if hasattr(user_config, "address") else {}
     for field, key in (("zipCode", "zip"), ("city", "city"), ("stateCode", "state")):
         for place in places:
-            if _same(place.get(key), address.get(field)):
+            if _same(place.get(key), address.get(field), key):
                 return {"id": place["id"], "by": key}
     return {"id": None, "by": None}

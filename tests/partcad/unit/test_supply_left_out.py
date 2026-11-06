@@ -79,6 +79,7 @@ def test_the_nearest_of_the_places_that_say_where_they_are():
     "address, expected",
     [
         ({"zipCode": "9723", "city": "Amsterdam"}, {"id": "north", "by": "zip"}),
+        ({"zipCode": " 97 23 "}, {"id": "north", "by": "zip"}),
         ({"city": "amsterdam "}, {"id": "centre", "by": "city"}),
         ({"stateCode": "NB"}, {"id": "south", "by": "state"}),
         ({"city": "Paris"}, {"id": None, "by": None}),
