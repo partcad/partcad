@@ -38,6 +38,12 @@ SCRUBBED = "<scrubbed>"
 # place a pattern is right, and the comment there says why.
 SECRET_OPTIONS = ("remote_sandbox_token",)
 
+# Options that are personal rather than secret, reported the same way and for
+# the reason the 'user' section below is: where somebody is on Earth is not a
+# thing to paste into a bug report. Whether it is set is what a report about
+# "why did the store not pick my nearest shop" needs.
+PERSONAL_OPTIONS = ("location",)
+
 # The 'user' section is personally identifiable information in its entirety --
 # a name, an email address, a shipping address, a billing address -- so unlike
 # every other option below, none of its values is reportable. What a report can
@@ -90,6 +96,10 @@ def is_auth_key(name: str) -> bool:
     return bool(AUTH_KEY_PATTERN.search(name))
 
 
+# The variables that set a PERSONAL_OPTIONS option, scrubbed like a credential.
+PERSONAL_ENV = ("PC_LOCATION",)
+
+
 def resolved_options(config):
     """Every option the configuration resolved, whatever shape it is kept in.
 
@@ -109,7 +119,7 @@ def resolved_options(config):
 
 def option_value(key, value):
     """The value, or as much of it as a report may carry."""
-    if key in SECRET_OPTIONS:
+    if key in SECRET_OPTIONS or key in PERSONAL_OPTIONS:
         return "<set>" if value else "<not set>"
     if key == "git_auth":
         return _git_auth(value)
@@ -174,4 +184,4 @@ def environment(environ=None):
     environ = os.environ if environ is None else environ
     for name in sorted(environ):
         if name.startswith(ENV_PREFIX):
-            yield name, (SCRUBBED if is_auth_key(name) else environ[name])
+            yield name, (SCRUBBED if is_auth_key(name) or name in PERSONAL_ENV else environ[name])
