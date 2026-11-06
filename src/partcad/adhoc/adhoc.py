@@ -173,7 +173,10 @@ def options_dependency(options_package):
     try:
         found = _is(directory, stat.S_ISDIR) and _is(directory / consts.DEFAULT_PACKAGE_CONFIG, stat.S_ISREG)
         resolved = str(directory.resolve()) if found else None
-    except OSError as e:
+    except (OSError, RuntimeError) as e:
+        # 'RuntimeError' is how 'Path.resolve' says "symlink loop" up to Python
+        # 3.12. A loop there would have stopped 'stat' first, unless one was
+        # made between the two -- which is still no reason for a traceback.
         raise AdhocUsageError(
             "Cannot read file types from '%s' ad-hoc: it could not be looked at (%s); %s"
             % (options_package, e, _NAME_ONE)

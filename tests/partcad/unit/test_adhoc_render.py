@@ -425,6 +425,16 @@ def test_a_directory_the_user_may_not_read_is_refused_with_the_reason(tmp_path):
     (directory / "partcad.yaml").write_text("render: {}\n", encoding="utf-8")
     directory.chmod(0)
     try:
+        # What the test needs is a directory this process cannot read, and
+        # not being root is only the usual way to have one: a process with
+        # CAP_DAC_OVERRIDE, or a filesystem that ignores permissions, reads
+        # through mode 0 all the same, and then there is nothing to refuse.
+        try:
+            (directory / "partcad.yaml").stat()
+        except PermissionError:
+            pass
+        else:
+            pytest.skip("this process reads a directory whatever its permissions say")
         with pytest.raises(adhoc.AdhocUsageError) as excinfo:
             adhoc.options_dependency(str(directory))
     finally:
@@ -432,6 +442,29 @@ def test_a_directory_the_user_may_not_read_is_refused_with_the_reason(tmp_path):
 
     assert isinstance(excinfo.value.__cause__, PermissionError)
     assert "could not be looked at" in str(excinfo.value)
+
+
+def test_a_symlink_loop_met_while_resolving_is_refused_with_the_reason(monkeypatch, tmp_path):
+    """Up to Python 3.12 'Path.resolve' says "symlink loop" with 'RuntimeError', not 'OSError'.
+
+    It is asked last, once 'stat' has found the package, so a loop there is one
+    made in between; it is still a usage error with its reason, not a traceback.
+    """
+    directory = tmp_path / "drawing"
+    error = RuntimeError("Symlink loop from %r" % str(directory))
+
+    def loops(self, *args, **kwargs):
+        """'Path.resolve' as Python 3.10 to 3.12 answer a symlink loop."""
+        raise error
+
+    with _fake_disk(monkeypatch, str(directory)):
+        with monkeypatch.context() as patch:
+            _for_the_code_under_test(patch, pathlib.Path, "resolve", loops)
+            with pytest.raises(adhoc.AdhocUsageError) as excinfo:
+                adhoc.options_dependency(str(directory))
+
+    assert excinfo.value.__cause__ is error
+    assert "Symlink loop" in str(excinfo.value)
 
 
 def test_a_directory_with_no_package_in_it_is_refused(tmp_path):
