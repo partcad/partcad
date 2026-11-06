@@ -130,8 +130,9 @@ Agent skills
 ============
 
 ``/pc:gen``
-  Decides whether the request is a part, an assembly or a sketch and follows the
-  matching skill below. The one to use when it does not matter which it is.
+  Decides whether the request is a part, an assembly, a scene or a sketch and
+  follows the matching skill below. The one to use when it does not matter which
+  it is.
 
 ``/pc:gen-part``, ``/pc:gen-assembly``, ``/pc:gen-sketch``
   Model from a description. Each settles the dimensions first, on sketches
@@ -140,6 +141,13 @@ Agent skills
   because a single projection hides whatever is behind it -- comparing each
   view against the description it started from, and measuring the same
   dimensions on its projections.
+
+``/pc:gen-scene``
+  Lays out a scene from a description -- a room, a building interior standing on
+  its floor plans, a workcell, a world to simulate in -- with every object a
+  ``basic`` primitive unless it needs more detail, placed by ``location:``, fixed
+  to the world unless it is mobile, and standing on a bottom surface at or above
+  z = 0 unless it is in space.
 
 ``/pc:add-interfaces``
   Adds ``interfaces``, ports and ``implements:`` to a part that has none, so it

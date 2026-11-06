@@ -199,6 +199,9 @@ Tooling for AI agents doing mechanical design. See :doc:`/ai_agents/mcp`.
   - Generate a part, an assembly or a 2D sketch (``/pc:gen``, ``/pc:gen-part``, ``/pc:gen-assembly``,
     ``/pc:gen-sketch``): the agent settles every dimension on a sketch it measures and iterates, authors the CAD
     script from those numbers, and validates it by rendering it and measuring its projections
+  - Lay out a scene (``/pc:gen-scene``): a room, a building interior on its floor plans, a workcell or a world to
+    simulate in, with every object a ``basic`` primitive unless it needs more detail, placed by ``location:`` and
+    fixed to the world unless it is mobile
   - Describe an existing object (``/pc:describe``), search the catalog (``/pc:search``), add interfaces
     (``/pc:add-interfaces``)
   - Validate an object against its ``requirements:`` (``/pc:validate``): ``pc test`` for the ports,

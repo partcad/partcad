@@ -251,3 +251,15 @@ tested in: a stack of blocks that stands, a pile that does not slide. It
 declares ``simulate:`` exactly as a part or an assembly does, and ``pc sim`` and
 ``pc test`` hold it to it. See
 :ref:`Simulating a scene <validating-a-scene>` in the Validation phase.
+
+Agent skills
+============
+
+``/pc:gen-scene``
+  Lays out a scene from a description. Every object is a basic part (see
+  :ref:`basic_parts`) unless it needs more detail, is placed with ``location:``
+  and is ``fixed: true`` unless it is mobile. The scene stands on a bottom
+  surface whose underside is at z = 0 or above, except in space, which has
+  none and no gravity. A building interior stands on floor plans: the ``walls``
+  scenes of "Rooms" above, nested in an ``assy`` scene that places them with
+  the floor and the furnishing. See :doc:`/ai_agents/skills`.

@@ -16,7 +16,9 @@ pipeline — this capability is new.
 `$ARGUMENTS` is the description. Break it into components and the
 spatial/mechanical relationships between them: which parts, how many of each, and
 how they attach to or move relative to one another. Clarify only load-bearing
-ambiguities.
+ambiguities. Where nothing was put together — objects standing where they stand,
+a room, a workcell, a world — the request is a scene, not an assembly: follow
+`/pc:gen-scene` instead.
 
 Where the components go is a set of dimensions as much as a part's size is:
 the gap between two parts, the pitch of a row of them, how high a shelf sits,
@@ -746,7 +748,7 @@ revolute}`; `motion: fixed` locks one). So a cantilever stands, and a hinge swin
 only where it is declared. When what you were asked for is an arrangement rather
 than a product — a stack of blocks, a workcell — declare it under `scenes:`
 instead, where every element is a free body, with the same `simulate:`, and run
-it with `pc sim <name>`.
+it with `pc sim <name>`. `/pc:gen-scene` is the flow for that.
 
 **Name the joint the mechanism has.** One `type` per physical joint:
 

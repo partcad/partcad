@@ -202,7 +202,7 @@ The plugin folder is named `claude`, but the command namespace comes from
   package's imports and needs PartCAD to already be here. This skill is what
   puts it here.
 - **`/pc:gen <description>`** — decides whether the request is a part, an
-  assembly, or a 2D sketch and follows the matching flow below.
+  assembly, a scene, or a 2D sketch and follows the matching flow below.
 - **`/pc:gen-part <description>`** — generates a single part: the agent picks a
   representation (build123d / cadquery / openscad / sdf), authors the CAD script
   itself, and validates it by rendering **four views** (`front`, `top`, `right`,
@@ -231,6 +231,22 @@ The plugin folder is named `claude`, but the command namespace comes from
   checks it with `pc sim`. Beside an IDE it shows its progress the way
   `/pc:gen-part` does: each part as it takes shape, then each version of the
   assembly that builds and renders.
+- **`/pc:gen-scene <description>`** — generates a scene: an arrangement of
+  objects rather than a product (a room, a building interior, a workcell, a
+  world to simulate in), which says where things are and nothing about putting
+  them together. Every object is a `basic` cuboid or cylinder at its real size
+  unless more detail can reasonably be expected (asked for, in the catalog
+  already, the subject of the scene, or a shape the scene's purpose depends
+  on). Every object is placed with `location:` and is `fixed: true` unless it is
+  mobile. The scene stands on a bottom surface whose underside is at or above
+  z = 0, where every simulator writes its ground plane, except in space, which
+  has none and `gravity: [0, 0, 0]`. A building interior stands on floor plans,
+  `walls` scenes nested in the scene (one per room, or a single one in a
+  corner case), and a room with doors or windows is its walls placed by hand,
+  with the `walls` scene's own rule. `pc test` only *warns* about interference
+  in a scene, since a scene is not manufacturable, so the skill reads the warnings
+  rather than the exit code, and it checks in the top view what nothing measures:
+  that everything stays inside its walls.
 - **`/pc:gen-sketch <description>`** — generates a 2D sketch whose dimensions
   are measured rather than estimated. The input is normalized to 2D first — a
   description is a table of targets, a DXF or SVG is re-rendered, a 3D

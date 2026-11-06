@@ -38,7 +38,7 @@ authorship.
 The skills PartCAD ships
 ========================
 
-Fourteen of them. The name in each heading is what you type in Claude Code; under
+Fifteen of them. The name in each heading is what you type in Claude Code; under
 Cursor the same skill is ``pc-<name>``, and an agent that chooses skills by their
 description will reach for the right one without being told.
 
@@ -71,10 +71,10 @@ Generating geometry
 
 ``/pc:gen``
   The one to use when it does not matter which kind of object the request is.
-  It decides whether what was asked for is a single part, a multi-part assembly
-  or a 2D sketch, and then follows the matching skill below. "Model me a shelf
-  bracket" is a part; "model me a gearbox" is an assembly; "draw me the profile"
-  is a sketch.
+  It decides whether what was asked for is a single part, a multi-part assembly,
+  a scene or a 2D sketch, and then follows the matching skill below. "Model me a
+  shelf bracket" is a part; "model me a gearbox" is an assembly; "lay out my
+  living room" is a scene; "draw me the profile" is a sketch.
 
 ``/pc:gen-part``
   Models one part from a description, and the order it works in is the point:
@@ -129,6 +129,33 @@ Generating geometry
   Beside an IDE it shows its progress the way ``/pc:gen-part`` does: each part it
   generates as it takes shape, then every version of the assembly that builds
   and renders, all on one continuous turn of the 3D view.
+
+``/pc:gen-scene``
+  Lays out a :ref:`scene <scenes>`: an arrangement of objects rather than a
+  product -- a room, a building interior, a workcell, a world to simulate
+  something in. It says where things are, and nothing about putting them
+  together, so the rules it follows are not the assembly's:
+
+  - Every object is a ``basic`` cuboid or cylinder at its real size, unless more
+    detail can reasonably be expected: you asked for it, the catalog already has
+    the object, it is what the scene is about, or what the scene is for depends
+    on its shape.
+  - Everything is placed with ``location:``, and is ``fixed: true`` -- welded to
+    the world -- unless it is said to move or obviously does.
+  - The scene stands on a bottom surface whose underside is at z = 0 or above,
+    where every simulator writes its ground plane, unless it is in space, where
+    there is none and the gravity is ``[0, 0, 0]``.
+  - A building interior stands on floor plans: :ref:`walls scenes
+    <scenes-walls>` nested inside the scene, one per room, or a single one where
+    the space is only borderline a building or could be divided several ways.
+    A room with doors or windows is its walls placed by hand, by the walls
+    scene's own rule, with the openings cut out of them.
+
+  It settles the placements on a layout sketch the way ``/pc:gen-assembly`` does,
+  renders four views and measures the distances again on the scene's
+  projections. Since a scene is not manufacturable, ``pc test`` only warns when
+  two of its objects overlap, so the skill reads the warnings rather than the
+  exit code.
 
 ``/pc:gen-sketch``
   Authors a 2D sketch -- build123d, CadQuery, DXF, SVG or a basic outline --
