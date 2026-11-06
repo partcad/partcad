@@ -578,3 +578,25 @@ def test_without_verifying_a_match_is_listed_and_not_judged(ctx):
 
 def test_pc_test_fails_an_object_further_from_another_than_it_may_be(ctx):
     assert _run_test(ctx, "plate-copy") is Test.TEST_FAILED
+
+
+def test_an_object_that_cannot_be_looked_up_fails_only_the_matches_that_name_it(ctx, monkeypatch):
+    """One reference failing does not take down the others, which are checked on their own."""
+    looked_up = requirements.matched_object_async
+
+    async def failing_for_pair(ctx, shape, reference):
+        if reference == "pair":
+            raise RuntimeError("the repository did not answer")
+        return await looked_up(ctx, shape, reference)
+
+    monkeypatch.setattr(requirements, "matched_object_async", failing_for_pair)
+    report = _check(ctx, "part", "plate-copy")
+    verdicts = {key: value for key, value in _verdicts(report).items() if key[0] == "match"}
+    details = {check.name: check.detail for check in report.checks if check.section == "match"}
+
+    assert verdicts[("match", "volume of pair")] is False
+    assert details["volume of pair"] == "could not be checked: the repository did not answer"
+    # Named before and after it, and still checked: met and not met as before.
+    assert verdicts[("match", "volume of :plate")] is True
+    assert verdicts[("match", "mass of :plate")] is True
+    assert details["mass of :nowhere"] == "there is no object //:nowhere"

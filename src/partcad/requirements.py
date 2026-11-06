@@ -1343,10 +1343,15 @@ async def _verify_match(ctx, shape, entries) -> None:
     others = {}
     for requirement, check in entries:
         if requirement.reference not in others:
-            other, why = await matched_object_async(ctx, shape, requirement.reference)
-            others[requirement.reference] = (
-                (await pc_compare.side_async(ctx, other), None) if other is not None else (None, why)
-            )
+            # One object that cannot be looked up or weighed fails the
+            # requirements on it, and only those: the next object named may
+            # be perfectly well matched.
+            try:
+                other, why = await matched_object_async(ctx, shape, requirement.reference)
+                side = await pc_compare.side_async(ctx, other) if other is not None else None
+            except Exception as e:  # pylint: disable=broad-except
+                side, why = None, "could not be checked: %s" % e
+            others[requirement.reference] = (side, why)
         side, why = others[requirement.reference]
         if side is None:
             check.passed = False
