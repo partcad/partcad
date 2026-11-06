@@ -500,6 +500,7 @@ def test_pc_test_never_remembers_the_verdict(ctx):
 
 
 def test_a_match_is_read_by_amount_and_object():
+    """One requirement per object and amount: 'weight' is the mass, and null is no requirement."""
     declaration = requirements.parse({"match": {":bracket": {"volume": "5%", "weight": 2, "mass": None}}})
     assert [(c.reference, c.amount, c.limit, c.written) for c in declaration.match] == [
         (":bracket", "volume", 5.0, "volume"),
@@ -523,6 +524,7 @@ def test_a_match_is_read_by_amount_and_object():
     ],
 )
 def test_a_match_that_cannot_be_read_says_why(raw, detail):
+    """An entry that cannot be read is kept as a problem, so that it fails rather than vanishes."""
     declaration = requirements.parse({"match": raw})
     assert [problem.section for problem in declaration.problems] == ["match"]
     assert detail in declaration.problems[0].detail
@@ -535,6 +537,7 @@ def test_a_match_is_not_read_as_a_feature():
 
 
 def test_matches_are_refused_by_the_schema_where_they_say_nothing():
+    """The schema refuses what the parser reports as a problem, so 'pc lint' says it first."""
     for broken in (
         {"match": {":plate": {"volume": "lots"}}},
         {"match": {":plate": {"volume": -5}}},
@@ -548,6 +551,7 @@ def test_matches_are_refused_by_the_schema_where_they_say_nothing():
 
 
 def test_a_match_is_held_to_the_other_objects_volume_and_mass(ctx):
+    """Met against itself; not met against two of it; failed against what has no volume or mass, or is not there."""
     report = _check(ctx, "part", "plate-copy")
     assert {key: value for key, value in _verdicts(report).items() if key[0] == "match"} == {
         # The same solid of the same steel.
@@ -569,6 +573,7 @@ def test_a_match_is_held_to_the_other_objects_volume_and_mass(ctx):
 
 
 def test_without_verifying_a_match_is_listed_and_not_judged(ctx):
+    """Listed with what each requires and no verdict, until the model is asked."""
     report = _check(ctx, "part", "plate-copy", verify=False)
     matched = [check for check in report.checks if check.section == "match"]
     assert len(matched) == 6
@@ -577,6 +582,7 @@ def test_without_verifying_a_match_is_listed_and_not_judged(ctx):
 
 
 def test_pc_test_fails_an_object_further_from_another_than_it_may_be(ctx):
+    """A 'match:' requirement not met fails the 'requirements' check of 'pc test'."""
     assert _run_test(ctx, "plate-copy") is Test.TEST_FAILED
 
 
@@ -585,6 +591,7 @@ def test_an_object_that_cannot_be_looked_up_fails_only_the_matches_that_name_it(
     looked_up = requirements.matched_object_async
 
     async def failing_for_pair(ctx, shape, reference):
+        """The real lookup, except for 'pair', whose repository does not answer."""
         if reference == "pair":
             raise RuntimeError("the repository did not answer")
         return await looked_up(ctx, shape, reference)

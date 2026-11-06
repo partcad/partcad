@@ -106,6 +106,7 @@ def requests(daemon, method):
 
 
 def test_the_tools_are_the_curated_set_and_the_escape_hatch(tmp_path):
+    """The curated tools and 'execute' are all that is served, each with a schema, a title and a description."""
     _, server = serve(tmp_path)
     tools = using(server, lambda client: client.list_tools()).tools
     assert sorted(tool.name for tool in tools) == sorted(
@@ -133,6 +134,7 @@ def test_the_tools_are_the_curated_set_and_the_escape_hatch(tmp_path):
 
 
 def test_the_annotations_do_not_claim_less_than_the_truth(tmp_path):
+    """A tool that only reads says so; one that writes, logs in or runs anything does not claim to be read-only."""
     _, server = serve(tmp_path)
     tools = {tool.name: tool.annotations for tool in using(server, lambda client: client.list_tools()).tools}
     for name in ("list_objects", "info", "render", "test", "lint", "bom", "search", "instructions", "compare"):
@@ -212,6 +214,7 @@ def test_every_tool_naming_an_object_takes_its_parameter_values(tmp_path, tool, 
 
 
 def test_compare_sends_what_pc_compare_json_sends(tmp_path):
+    """The 'compare' tool sends the request 'pc compare --json' sends."""
     daemon, server = serve(tmp_path, {"compare.objects": lambda params, emit: {"passed": None}})
     result = call(server, "compare", {"reference": "bracket-v1", "current": "bracket-v2", "surface_distance": 0.5})
     assert not result.is_error
@@ -225,6 +228,7 @@ def test_compare_sends_what_pc_compare_json_sends(tmp_path):
 
 
 def test_a_comparison_that_does_not_hold_is_a_failed_result(tmp_path):
+    """'passed: false' is a failed tool result, with the report kept in it."""
     _, server = serve(tmp_path, {"compare.objects": lambda params, emit: {"passed": False}})
     result = call(server, "compare", {"reference": "a", "current": "b", "max_mass_difference": 2})
     assert result.is_error

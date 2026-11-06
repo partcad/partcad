@@ -136,6 +136,7 @@ def within(entry: dict, limit: float) -> typing.Tuple[bool, str]:
 
 
 def _how_far(percent: float) -> str:
+    """How a percentage reads between two quantities: 'the same as', or '5% more than'."""
     if percent == 0:
         return "the same as"
     return "%s%% %s than" % (number(abs(percent)), "more" if percent > 0 else "less")
@@ -152,11 +153,8 @@ def number(value) -> str:
 
 
 def quantity(value, unit) -> str:
+    """A value with its unit, the way the report writes one: '1050 mm^3'."""
     return "%s %s" % (number(value), unit) if unit else number(value)
-
-
-def _finite(value) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 async def _tolerance(shape) -> typing.Tuple[typing.Optional[float], typing.Optional[str]]:
@@ -291,6 +289,7 @@ async def compare_async(ctx, reference, current, spacing=None, limits=None, wors
 
 
 def _point(entry) -> str:
+    """Where a measured point is, the way the report writes it: '(4, 4, -5)'."""
     at = entry.get("at") or []
     return "(%s)" % ", ".join(number(round(value, 6)) for value in at)
 

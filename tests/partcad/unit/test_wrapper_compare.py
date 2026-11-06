@@ -67,6 +67,7 @@ def _mesh_of(shape, deflection=0.05):
 
 
 def test_every_vertex_is_measured_and_no_two_other_points_are_closer_than_the_spacing():
+    """Every vertex is a sample however close to another; every other sample keeps the spacing from all of them."""
     spacing = 2.0
     samples, area = wrapper_compare.sample(_reference(), spacing)
     assert area == pytest.approx(2 * (10 * 20 + 20 * 30 + 10 * 30))
@@ -84,6 +85,7 @@ def test_every_vertex_is_measured_and_no_two_other_points_are_closer_than_the_sp
 
 
 def test_nowhere_on_the_surface_is_much_further_than_the_spacing_from_a_point():
+    """Nothing much larger than the spacing can hide between two samples."""
     spacing = 2.0
     samples, _area = wrapper_compare.sample(_reference(), spacing)
     points = [item.point for item in samples]
@@ -95,6 +97,7 @@ def test_nowhere_on_the_surface_is_much_further_than_the_spacing_from_a_point():
 
 
 def test_a_point_of_a_face_is_on_the_face_with_its_outward_normal():
+    """A face's samples are on the exact surface, not on its triangles, and point out of the solid."""
     sphere = BRepPrimAPI_MakeSphere(10).Shape()
     samples, _area = wrapper_compare.sample(sphere, 1.0)
     faces = [item for item in samples if item.kind == "face"]
@@ -108,6 +111,7 @@ def test_a_point_of_a_face_is_on_the_face_with_its_outward_normal():
 
 
 def test_the_spaced_points_look_only_around_themselves():
+    """Closer than the spacing is too close; exactly the spacing, or anywhere further, is far enough."""
     spaced = wrapper_compare.Spaced(1.0)
     spaced.add((0.0, 0.0, 0.0))
     assert not spaced.far((0.5, 0.5, 0.0))
@@ -118,11 +122,13 @@ def test_the_spaced_points_look_only_around_themselves():
 
 
 def test_a_spacing_that_would_take_too_many_points_is_refused_saying_which_would_do():
+    """Too fine a spacing is refused before any point is taken, naming one that would do."""
     with pytest.raises(ValueError, match=r"measure them at least [0-9.]+ mm apart"):
         wrapper_compare.sample(_reference(), 0.001)
 
 
 def test_a_model_with_no_surface_has_nothing_to_measure_from():
+    """A vertex has no surface to sample, and a spacing of nothing is no spacing."""
     vertex = BRepBuilderAPI_MakeVertex(gp_Pnt(0, 0, 0)).Vertex()
     with pytest.raises(ValueError, match="no surface"):
         wrapper_compare.sample(vertex, 1.0)
@@ -134,6 +140,7 @@ def test_a_model_with_no_surface_has_nothing_to_measure_from():
 
 
 def test_a_model_is_nowhere_apart_from_itself():
+    """Every sample measured along a normal, at no distance, and none beyond an allowance of nothing."""
     result = wrapper_compare.surface_distance(_reference(), _reference(), 2.0, allowance=0.0)
     assert result["measured"] == sum(result["points"].values())
     assert result["missed"] == 0
@@ -143,6 +150,7 @@ def test_a_model_is_nowhere_apart_from_itself():
 
 
 def test_a_grown_box_is_as_far_out_at_its_corners_as_on_its_faces():
+    """A corner is measured along each of its faces' normals, not along their average, which would say 1.7 mm."""
     result = wrapper_compare.surface_distance(_reference(), _box(-1, -1, -1, 11, 21, 31), 2.0)
     distance = result["distance"]
     assert distance["min"] == pytest.approx(1.0)
@@ -153,6 +161,7 @@ def test_a_grown_box_is_as_far_out_at_its_corners_as_on_its_faces():
 
 
 def test_a_smaller_model_is_inside_and_its_rim_is_measured_to_its_nearest_point():
+    """A millimetre in on the faces; at the rim no normal meets the smaller box, and its corners are sqrt(3) away."""
     result = wrapper_compare.surface_distance(_box(-1, -1, -1, 11, 21, 31), _reference(), 2.0, worst=3)
     distance = result["distance"]
     assert distance["max"] == pytest.approx(-1.0)
@@ -165,6 +174,7 @@ def test_a_smaller_model_is_inside_and_its_rim_is_measured_to_its_nearest_point(
 
 
 def test_a_wider_cylinder_is_out_on_its_side_and_level_on_its_ends():
+    """Half a millimetre out on the side, and level on the ends the two cylinders share."""
     result = wrapper_compare.surface_distance(
         BRepPrimAPI_MakeCylinder(5, 20).Shape(), BRepPrimAPI_MakeCylinder(5.5, 20).Shape(), 1.0
     )
@@ -173,6 +183,7 @@ def test_a_wider_cylinder_is_out_on_its_side_and_level_on_its_ends():
 
 
 def test_the_allowance_counts_the_points_further_apart_than_it():
+    """Every point is beyond an allowance tighter than the distance, and none beyond a looser one."""
     grown = _box(-1, -1, -1, 11, 21, 31)
     tight = wrapper_compare.surface_distance(_reference(), grown, 2.0, allowance=0.5)
     loose = wrapper_compare.surface_distance(_reference(), grown, 2.0, allowance=1.5)
@@ -182,6 +193,9 @@ def test_the_allowance_counts_the_points_further_apart_than_it():
 
 
 def test_a_mesh_on_either_side_measures_as_the_exact_shape_does():
+    """A face that is only a mesh is sampled by its triangles and ray cast through its grid, with the exact shape's
+    answer.
+    """
     grown = _box(-1, -1, -1, 11, 21, 31)
     to_mesh = wrapper_compare.surface_distance(_reference(), _mesh_of(grown), 2.0)
     from_mesh = wrapper_compare.surface_distance(_mesh_of(_reference()), grown, 2.0)
@@ -195,6 +209,7 @@ def test_a_mesh_on_either_side_measures_as_the_exact_shape_does():
 
 
 def test_a_smaller_mesh_has_its_rim_measured_to_its_nearest_triangle():
+    """The rim of a larger reference is measured to the nearest triangle, as to the nearest point of a surface."""
     result = wrapper_compare.surface_distance(_box(-1, -1, -1, 11, 21, 31), _mesh_of(_reference()), 2.0)
     assert result["distance"]["min"] == pytest.approx(-math.sqrt(3.0))
     assert result["nearest"] > 0
@@ -202,6 +217,7 @@ def test_a_smaller_mesh_has_its_rim_measured_to_its_nearest_triangle():
 
 
 def test_the_nearest_triangle_is_the_nearest_one():
+    """The grid search finds what checking every triangle finds, from inside, outside and far off the mesh."""
     mesh = _mesh_of(BRepPrimAPI_MakeSphere(5).Shape(), 0.5)
     triangles = [corners for corners, _normal in wrapper_compare._triangles(mesh)]
     grid = wrapper_compare.Triangles(triangles)
@@ -212,6 +228,7 @@ def test_the_nearest_triangle_is_the_nearest_one():
 
 
 def test_a_request_is_dispatched_by_its_operation():
+    """'surface' is measured, and any other operation is refused."""
     request = {"operation": "surface", "reference": _reference(), "current": _reference(), "spacing": 5}
     assert wrapper_compare.process(request)["distance"]["maxAbs"] == 0.0
     with pytest.raises(ValueError, match="Unknown compare operation"):

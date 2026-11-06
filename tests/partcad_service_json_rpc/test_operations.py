@@ -3671,6 +3671,9 @@ def test_adhoc_render_reports_a_failed_render(monkeypatch, tmp_path):
 
 
 def _requirements_session(monkeypatch, kind="part", name="plate", physics=(), match=()):
+    """A session whose 'partcad.requirements' records what it is asked, declaring the physics and match requirements
+    given.
+    """
     asked = []
 
     class Report:
@@ -3686,12 +3689,14 @@ def _requirements_session(monkeypatch, kind="part", name="plate", physics=(), ma
         return Report(shape, verify)
 
     def of_shape(shape):
+        """A declaration with the physics and match requirements the session was set up with."""
         return types.SimpleNamespace(
             physics=list(physics),
             match=[types.SimpleNamespace(reference=reference) for reference in match],
         )
 
     async def matched_object_async(ctx, shape, reference):
+        """The part or assembly a reference names among the session's shapes."""
         package, name = FakeUtils.resolve_resource_path(shape.project_name, reference)
         for kind in ("part", "assembly"):
             found = ctx.shapes.get((kind, "%s:%s" % (package, name)))
@@ -5583,6 +5588,7 @@ def test_a_plugin_with_no_login_is_a_failed_step_not_an_error(monkeypatch):
 
 
 def _percent_limit(raw):
+    """'partcad.compare.percent_limit', as far as these tests need it."""
     try:
         value = float(str(raw).strip().rstrip("%"))
     except ValueError:
@@ -5591,10 +5597,12 @@ def _percent_limit(raw):
 
 
 def _compare_session(answer=None, fails=None):
+    """A session with the parts 'old' and 'new' and a sketch, whose 'partcad.compare' records each comparison asked for."""
     session, _ = make_session()
     asked = []
 
     async def compare_async(ctx, reference, current, spacing=None, limits=None, worst=10):
+        """Record the comparison, and answer with 'answer' or raise 'fails'."""
         asked.append({"reference": reference, "current": current, "spacing": spacing, "limits": limits, "worst": worst})
         if fails is not None:
             raise fails
@@ -5616,6 +5624,7 @@ def _compare_session(answer=None, fails=None):
 
 
 def test_compare_reads_the_current_object_against_the_reference():
+    """The two objects in the order named, the options as given, and the report printed."""
     session, asked = _compare_session({"passed": False})
 
     report = operations.compare_objects(
@@ -5642,6 +5651,7 @@ def test_compare_reads_the_current_object_against_the_reference():
 
 
 def test_compare_prints_nothing_when_asked_for_json():
+    """With 'json' the report is only returned, for the client to print."""
     session, asked = _compare_session()
     operations.compare_objects(session, {"object": "old", "current": "new", "json": True})
     assert len(asked) == 1
@@ -5665,6 +5675,7 @@ def test_compare_prints_nothing_when_asked_for_json():
     ],
 )
 def test_compare_refuses_what_it_cannot_read_before_anything_is_built(params, words):
+    """Every request it cannot read is a usage error, before anything is compared."""
     session, asked = _compare_session()
     with pytest.raises(JsonRpcError) as caught:
         operations.compare_objects(session, params)
@@ -5674,6 +5685,7 @@ def test_compare_refuses_what_it_cannot_read_before_anything_is_built(params, wo
 
 
 def test_compare_builds_an_assembly_s_sub_assemblies_first():
+    """An assembly is staged first, as for every request that builds one."""
     session, asked = _compare_session()
     session.partcad_ctx.projects["//"].assemblies["frame"] = FakeObject("frame", project_name="//")
     _assembly_with(session, "//:frame", uncached=[("//", "rail")])
@@ -5686,6 +5698,7 @@ def test_compare_builds_an_assembly_s_sub_assemblies_first():
 
 
 def test_compare_says_what_the_sandbox_refused_to_measure_as_a_usage_error():
+    """The sandbox's refusal to measure is a usage error that keeps its message."""
     session, _ = _compare_session(fails=ValueError("measure them at least 0.5 mm apart"))
     with pytest.raises(JsonRpcError) as caught:
         operations.compare_objects(session, {"object": "old", "current": "new", "surface_distance": 0.01})
@@ -5694,6 +5707,7 @@ def test_compare_says_what_the_sandbox_refused_to_measure_as_a_usage_error():
 
 
 def test_compare_reloads_the_package_of_either_object():
+    """A hand-edited 'partcad.yaml' of either object's package is read again."""
     session, _ = _compare_session()
     targets, recursive = operations._config_check_targets(
         session.partcad_ctx, {"object": "//a:old", "current": "//b:new"}

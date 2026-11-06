@@ -511,6 +511,7 @@ class MatchRequirement:
     """
 
     def __init__(self, reference: str, amount: str, limit: float, written=None):
+        """'written' is the key the amount was written with ('weight' for the mass), for a message to quote."""
         self.reference = reference
         self.amount = amount
         self.limit = limit
@@ -634,6 +635,7 @@ _MATCHED = {"volume": "volume", "mass": "mass", "weight": "mass"}
 
 
 def _parse_match(raw, declaration: Declaration) -> None:
+    """Read a 'match:' section: a requirement per object and amount, a problem per entry that cannot be read."""
     from . import compare as pc_compare
 
     if not isinstance(raw, dict):
@@ -1330,6 +1332,7 @@ async def matched_object_async(ctx, shape, reference: str):
 
 
 async def _verify_match(ctx, shape, entries) -> None:
+    """Hold the volume and the mass to each object 'match:' names, by the rules 'pc compare' reads two objects by."""
     from . import compare as pc_compare
 
     kind = getattr(shape, "kind", None)

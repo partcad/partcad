@@ -188,6 +188,9 @@ def instructions(bridge: Bridge, scope: PathScope) -> str:
 
 
 def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
+    """The MCP server for one workspace: the curated tools, 'execute' and two resources, calling the daemon through
+    'bridge' within 'scope'.
+    """
     # 'MCPServer()' calls 'logging.basicConfig()', which configures the root
     # logger -- this process's, not the SDK's -- with a Rich handler, and every
     # library's warnings then come out of `pc mcp` drawn as boxed tables. The

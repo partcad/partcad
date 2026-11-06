@@ -37,6 +37,7 @@ def _invoke(monkeypatch, answer, *args):
 
 
 def test_the_reference_comes_first_and_every_option_reaches_the_daemon(monkeypatch):
+    """'pc compare A B' sends A as the reference and B as the current object, every option as the daemon reads it."""
     daemon, result = _invoke(
         monkeypatch,
         {"passed": True},
@@ -70,6 +71,7 @@ def test_the_reference_comes_first_and_every_option_reaches_the_daemon(monkeypat
 
 
 def test_nothing_asked_is_sent_as_nothing(monkeypatch):
+    """Options left out are sent as None, and '--worst' as its default."""
     daemon, result = _invoke(monkeypatch, {"passed": None}, "a", "b")
     assert result.exit_code == 0, result.output
     ((_, params, _),) = daemon.calls
@@ -80,6 +82,7 @@ def test_nothing_asked_is_sent_as_nothing(monkeypatch):
 
 
 def test_json_is_the_report_on_stdout(monkeypatch):
+    """'--json' asks the daemon not to print, and prints its answer here."""
     answer = {"passed": None, "volume": {"percent": 5.0}}
     daemon, result = _invoke(monkeypatch, answer, "--json", "a", "b")
     assert result.exit_code == 0, result.output
@@ -88,6 +91,7 @@ def test_json_is_the_report_on_stdout(monkeypatch):
 
 
 def test_a_comparison_that_does_not_hold_fails_after_it_is_printed(monkeypatch):
+    """A comparison that does not hold exits 1, after its JSON is on stdout."""
     answer = {"passed": False}
     _, result = _invoke(monkeypatch, answer, "--json", "--max-mass-difference", "1", "a", "b")
     assert result.exit_code == 1
@@ -96,12 +100,14 @@ def test_a_comparison_that_does_not_hold_fails_after_it_is_printed(monkeypatch):
 
 
 def test_a_spacing_of_nothing_is_refused_before_anything_is_sent(monkeypatch):
+    """A '--surface-distance' of 0 is a usage error, and nothing reaches the daemon."""
     daemon, result = _invoke(monkeypatch, {"passed": None}, "--surface-distance", "0", "a", "b")
     assert result.exit_code == 2
     assert daemon.calls == []
 
 
 def test_two_objects_are_needed(monkeypatch):
+    """One object is a usage error, and nothing reaches the daemon."""
     daemon, result = _invoke(monkeypatch, {"passed": None}, "a")
     assert result.exit_code == 2
     assert daemon.calls == []

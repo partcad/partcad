@@ -31,6 +31,7 @@ class RequirementsTest(Test):
         super().__init__("requirements")
 
     def inapplicable(self, shape):
+        """Why this check does not apply to 'shape', or None when it does."""
         if not requirements.anything_to_check(shape):
             return (
                 "it requires no port, interface, physical property or match with another object ('requirements:'), "

@@ -194,6 +194,7 @@ def _norm(a):
 
 
 def _unit(a):
+    """'a' scaled to unit length, or None for a vector too short to point anywhere."""
     length = _norm(a)
     if length <= 1e-300:
         return None
@@ -201,6 +202,7 @@ def _unit(a):
 
 
 def _faces(shape):
+    """Every face of 'shape', each once."""
     found = TopTools_IndexedMapOfShape()
     TopExp.MapShapes_s(shape, TopAbs_FACE, found)
     return [TopoDS.Face_s(found.FindKey(i)) for i in range(1, found.Extent() + 1)]
@@ -308,6 +310,7 @@ def _mesh(shape, spacing):
 
 
 def _vertex_samples(shape, spaced):
+    """A sample per vertex, with the normal of each face it is on: every vertex is taken, whatever the spacing."""
     samples = []
     for vertex, faces in _with_faces(shape, TopAbs_VERTEX):
         vertex = TopoDS.Vertex_s(vertex)
@@ -345,6 +348,7 @@ def _edge_parameters(curve, length, step):
 
 
 def _edge_samples(shape, spacing, spaced, budget):
+    """Samples along the edges, each the spacing from every point taken, with the normals of the faces it bounds."""
     samples = []
     step = spacing * EDGE_STEP
     for edge, faces in _with_faces(shape, TopAbs_EDGE):
@@ -387,6 +391,10 @@ def _edge_samples(shape, spacing, spaced, budget):
 
 
 def _face_samples(shape, spacing, spaced, budget):
+    """Samples over the faces, each at least the spacing from every point taken.
+
+    A lattice over each triangle of a face's mesh, evaluated on the face's own surface where it has one.
+    """
     samples = []
     step = spacing * FACE_STEP
     for face in _faces(shape):
@@ -454,6 +462,7 @@ class Budget:
         self.spacing = spacing
 
     def spend(self):
+        """Count one more point, and refuse once more than the limit would be needed."""
         self.left -= 1
         if self.left < 0:
             raise ValueError(
@@ -500,6 +509,7 @@ def sample(shape, spacing, limit=MAX_POINTS):
 
 
 def _box(*shapes):
+    """The bounding box of all of 'shapes' together, faces that are only a mesh included."""
     box = Bnd_Box()
     for shape in shapes:
         # 'useTriangulation': a face that is only a mesh has an empty box
@@ -519,6 +529,7 @@ class Triangles:
     """
 
     def __init__(self, triangles):
+        """Hash each triangle into every cube of the grid its bounding box reaches."""
         self.triangles = triangles
         self.cells = {}
         if not triangles:
@@ -700,6 +711,7 @@ class Target:
     """The current model, as something a line can be asked where it meets."""
 
     def __init__(self, shape, reach):
+        """Faces with a surface for OCCT's intersector, meshes for the grid; 'reach' is how far to look along a line."""
         self.reach = reach
         geometric, meshes = [], []
         for face in _faces(shape):
@@ -758,6 +770,7 @@ class Target:
 
 
 def _rounded(vector):
+    """A vector as a list of plain floats, for the JSON answer."""
     return [float(value) for value in vector]
 
 
@@ -872,6 +885,7 @@ def _nearest(target, item):
 
 
 def process(request):
+    """Answer one request; 'surface' is the only operation there is."""
     operation = request.get("operation")
     if operation == "surface":
         return surface_distance(
