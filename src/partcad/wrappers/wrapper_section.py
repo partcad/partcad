@@ -51,7 +51,8 @@ import wrapper_common
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
-CACHE_VERSION = 1
+# 2: a cut node keeps its CMF section, carried onto the cut geometry.
+CACHE_VERSION = 2
 
 # The axes a section names, in the order of a point's coordinates.
 AXES = ("x", "y", "z")
@@ -144,13 +145,16 @@ def cutter(low, high, slabs):
     return corner_low, corner_high
 
 
-def _cut(shape, placement, slabs):
+def _cut(shape, placement, slabs, history=None):
     """'shape', in its own frame, intersected with the section; None when nothing of it is kept.
 
     'placement' is where the node's frame sits in the root's, every placement
     above it composed. The shape is left where it is and the box is taken to it:
     the answer is geometry in the node's frame, which the node's own placement
     goes on placing.
+
+    'history', a list, is given the boolean that made a new shape, which is what
+    says which of the new faces and solids each old one became (see '_carried').
     """
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
@@ -178,18 +182,67 @@ def _cut(shape, placement, slabs):
     result = common.Shape()
     if result is None or result.IsNull() or _is_empty(result):
         return None
+    if history is not None:
+        history.append(common)
     return result
 
 
-def _payload(shape) -> bytes:
-    """'shape' as a node's "brep" is carried: the compressed payload, as bytes.
+def _carried(section, shape, result, boolean):
+    """'section', the CMF of 'shape', as it is of 'result', what 'boolean' made of 'shape'; None if it says nothing.
+
+    A section addresses faces and solids by their place in the shape
+    ('TopExp::MapShapes'), and a cut renumbers them: some go, some are trimmed
+    into new ones, and the cut adds a face where the box passed through. So each
+    face and each solid is followed through the boolean's history - the one it
+    became if it was trimmed, itself if it was left alone, nothing if it went -
+    and the section is written again for the new numbering. The face a cut makes
+    is of no face's set; it is of its solid's, which is what a solid is made of
+    on every face, and what 'cmf_section_for' completes a face with.
+
+    What the section says of the part as a whole - its own set - is true of the
+    cut part as it was of the whole one. A list that addresses some other
+    geometry - not one entry per face or per solid of 'shape' - is not followed:
+    its entries are not true of this geometry, cut or not ('cmf_export._per').
+    """
+    import cmf_section
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_SOLID
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import TopTools_IndexedMapOfShape
+
+    found = {}
+    for kind, addressed in ((TopAbs_FACE, section.faces), (TopAbs_SOLID, section.solids)):
+        before = TopTools_IndexedMapOfShape()
+        TopExp.MapShapes_s(shape, kind, before)
+        found[kind] = {}
+        if len(addressed) != before.Extent():
+            continue
+        for position, palette in enumerate(addressed):
+            if palette == cmf_section.NONE or not 0 <= palette < len(section.sets):
+                continue
+            sub = before.FindKey(position + 1)
+            if boolean.IsDeleted(sub):
+                continue
+            modified = boolean.Modified(sub)
+            for became in modified if modified.Size() else [sub]:
+                found[kind][became] = section.sets[palette]
+    return ocp_serialize.cmf_section_for(
+        result, faces=found[TopAbs_FACE], solids=found[TopAbs_SOLID], own=section.own()
+    )
+
+
+def _payload(shape, section=None) -> bytes:
+    """'shape' as a node's "brep" is carried: the compressed payload, as bytes, its CMF 'section' after the BREP.
 
     Whoever writes the answer decides how they cross (see
     'ocp_serialize.encode'): raw behind a frame, which is what the core asks
     in, and base64 only in JSON. Base64 here was base64 inside the frame - a
     third more of every node that was cut, and a decode at the far end.
     """
-    return ocp_serialize.compressed_brep(shape)
+    if section is None or section.is_empty():
+        return ocp_serialize.compressed_brep(shape)
+    import cmf_section
+
+    return ocp_serialize.compress_payload(cmf_section.join(ocp_serialize.shape_to_brep(shape), section))
 
 
 def section_tree(tree, section, errors, keep_empty=True):
@@ -229,11 +282,18 @@ def _walk(node, parent, slabs, errors, keep_empty):
     if brep:
         try:
             shape = ocp_serialize.shape_from_payload(brep)
-            result = _cut(shape, placement, slabs)
+            history = []
+            result = _cut(shape, placement, slabs, history)
             if result is shape:
                 cut[ocp_serialize.KEY_BREP] = brep
             elif result is not None:
-                cut[ocp_serialize.KEY_BREP] = _payload(result)
+                # What the geometry is made of and drawn in goes with it: the
+                # 3D view colours a cut by it, and the "Materials" callout
+                # finds a material by it (see '_carried').
+                section = ocp_serialize.cmf_of_payload(brep)
+                if section is not None and history:
+                    section = _carried(section, shape, result, history[0])
+                cut[ocp_serialize.KEY_BREP] = _payload(result, section)
             elif keep_empty:
                 cut[ocp_serialize.KEY_BREP] = _payload(_empty_compound())
         except Exception as e:
