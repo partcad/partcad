@@ -28,8 +28,15 @@ terms whoever asked for the design thinks in:
                 where each instance is as matters, in the same terms.
     physics     what the object's physical properties have to be: any of the
                 fields of a 'physics:' section, in the same terms.
+    compare     how far the object's volume and mass may be from another
+                object's, in percent of that object's: "no more than 5% heavier
+                or lighter than the bracket it replaces". Keyed by the other
+                object's name, which is resolved from this object's package the
+                way any reference is, and read by the rules 'pc compare' reads
+                two objects by (see 'partcad.compare'); 'weight' is accepted for
+                'mass'.
 
-The last three are what ``pc test`` checks (the ``requirements`` test, see
+The last four are what ``pc test`` checks (the ``requirements`` test, see
 'test/requirements.py'), and this module is the one place that says what they
 mean -- the test, the daemon's ``requirements.check`` that the IDE's
 Requirements tab is drawn from, and anything else that asks, all go through
@@ -85,10 +92,11 @@ FEATURES = "features"
 PORTS = "ports"
 INTERFACES = "interfaces"
 PHYSICS = "physics"
+COMPARE = "compare"
 
 # The sections 'pc test' verifies against the model, in the order a report
 # lists them. 'features' is not one of them: a feature is prose.
-STRUCTURED = (PORTS, INTERFACES, PHYSICS)
+STRUCTURED = (PORTS, INTERFACES, PHYSICS, COMPARE)
 
 # Where a feature reference that names nothing is reported: it is a mistake in
 # a 'simulate:' entry, not in the requirements. One an analysis scenario makes
@@ -495,6 +503,28 @@ class PhysicsRequirement:
         return _vector_text(self.vector) if self.vector is not None else str(self.spec)
 
 
+class CompareRequirement:
+    """How far one amount of the object - its volume or its mass - may be from another object's.
+
+    'reference' is the other object's name as written; 'limit' is in percent of
+    that object's amount.
+    """
+
+    def __init__(self, reference: str, amount: str, limit: float, written=None):
+        self.reference = reference
+        self.amount = amount
+        self.limit = limit
+        self.written = amount if written is None else written
+
+    @property
+    def name(self) -> str:
+        """What a report lists the requirement under: which amount, against what."""
+        return "%s of %s" % (self.amount, self.reference)
+
+    def describe(self) -> str:
+        return "within %s%%" % _fmt(self.limit)
+
+
 class Problem:
     """A requirement that cannot be read, kept so that it fails rather than vanishes."""
 
@@ -512,12 +542,13 @@ class Declaration:
         self.ports: list = []
         self.interfaces: list = []
         self.physics: list = []
+        self.compare: list = []
         self.problems: list = []
 
     @property
     def structured(self) -> bool:
         """Whether anything here is for 'pc test' to check."""
-        return bool(self.ports or self.interfaces or self.physics or self.problems)
+        return bool(self.ports or self.interfaces or self.physics or self.compare or self.problems)
 
     @property
     def empty(self) -> bool:
@@ -595,6 +626,71 @@ def _parse_physics(raw, declaration: Declaration) -> None:
                 declaration.problems.append(Problem(PHYSICS, name, spec.error))
             else:
                 declaration.physics.append(PhysicsRequirement(name, spec=spec))
+
+
+# What a 'compare:' requirement may hold an object to, by the key it is written
+# with: 'weight' is what most people asking for one say, and is the mass.
+_COMPARED = {"volume": "volume", "mass": "mass", "weight": "mass"}
+
+
+def _parse_compare(raw, declaration: Declaration) -> None:
+    from . import compare as pc_compare
+
+    if not isinstance(raw, dict):
+        declaration.problems.append(
+            Problem(COMPARE, COMPARE, "'%s' is not a mapping of the objects compared with" % _fmt(raw))
+        )
+        return
+    for reference, limits in raw.items():
+        reference = str(reference)
+        if limits is None:
+            continue
+        if not isinstance(limits, dict):
+            declaration.problems.append(
+                Problem(
+                    COMPARE,
+                    reference,
+                    "'%s' is not a mapping of 'volume' and 'mass' to how many percent they may differ by"
+                    % _fmt(limits),
+                )
+            )
+            continue
+        written = {}
+        for key, value in limits.items():
+            amount = _COMPARED.get(str(key))
+            if amount is None:
+                declaration.problems.append(
+                    Problem(
+                        COMPARE,
+                        reference,
+                        "'%s' is not compared: what is, is %s" % (key, ", ".join("'%s'" % k for k in _COMPARED)),
+                    )
+                )
+                continue
+            if value is None:
+                # No requirement, and so no second one either.
+                continue
+            if amount in written:
+                declaration.problems.append(
+                    Problem(
+                        COMPARE,
+                        reference,
+                        "'%s' and '%s' are both the %s: say it once" % (written[amount], key, amount),
+                    )
+                )
+                continue
+            written[amount] = key
+            limit = pc_compare.percent_limit(value)
+            if limit is None:
+                declaration.problems.append(
+                    Problem(
+                        COMPARE,
+                        "%s of %s" % (amount, reference),
+                        "'%s' is not a percentage of 0 or more: write 5 or '5%%'" % _fmt(value),
+                    )
+                )
+                continue
+            declaration.compare.append(CompareRequirement(reference, amount, limit, str(key)))
 
 
 def _parse_ports(raw, declaration: Declaration) -> None:
@@ -676,7 +772,7 @@ def parse(raw) -> typing.Optional[Declaration]:
 
     The free-form shapes the section had before it had structure are still
     read, as features: a paragraph is one feature ('LEGACY_FEATURE'), a list
-    is one per item, and a key of the mapping that is not one of the four
+    is one per item, and a key of the mapping that is not one of the five
     sections is a feature named by it.
     """
     if raw is None:
@@ -696,7 +792,7 @@ def parse(raw) -> typing.Optional[Declaration]:
 
     _parse_features(raw.get(FEATURES), declaration)
     for key, value in raw.items():
-        if key in (FEATURES, PORTS, INTERFACES, PHYSICS) or value is None:
+        if key in (FEATURES,) + STRUCTURED or value is None:
             continue
         # A free-form paragraph under a heading of its own: the mapping form of
         # the section before it had structure. A feature by another name, and
@@ -708,6 +804,8 @@ def parse(raw) -> typing.Optional[Declaration]:
         _parse_interfaces(raw[INTERFACES], declaration)
     if raw.get(PHYSICS) is not None:
         _parse_physics(raw[PHYSICS], declaration)
+    if raw.get(COMPARE) is not None:
+        _parse_compare(raw[COMPARE], declaration)
     return declaration
 
 
@@ -987,7 +1085,7 @@ def _feature_references(shape, declaration: typing.Optional[Declaration], report
 
 def _declared_checks(declaration: Declaration) -> dict:
     """{section: [(requirement, Check)]} with nothing verified yet."""
-    checks = {PORTS: [], INTERFACES: [], PHYSICS: []}
+    checks = {PORTS: [], INTERFACES: [], PHYSICS: [], COMPARE: []}
     for port in declaration.ports:
         checks[PORTS].append((port, Check(PORTS, port.name, port.describe())))
     for interface in declaration.interfaces:
@@ -1001,6 +1099,8 @@ def _declared_checks(declaration: Declaration) -> dict:
             checks[INTERFACES].append(((interface, instance, location), check))
     for physics in declaration.physics:
         checks[PHYSICS].append((physics, Check(PHYSICS, physics.path, physics.describe())))
+    for compared in declaration.compare:
+        checks[COMPARE].append((compared, Check(COMPARE, compared.name, compared.describe())))
     return checks
 
 
@@ -1202,6 +1302,62 @@ async def _verify_physics(ctx, shape, entries) -> None:
         check.detail = "%s (%s)" % (_quantity(requirement.path, value), source)
 
 
+async def compared_object_async(ctx, shape, reference: str):
+    """(the part or assembly a 'compare:' requirement of 'shape' names, or None; why it is None).
+
+    Resolved from the object's own package, the way 'implements:' and every
+    other name in a declaration is: ':bracket' is a sibling, and
+    '//pub/std/...:bracket' is wherever it says.
+    """
+    from . import compare as pc_compare
+    from .utils import resolve_resource_path
+
+    try:
+        package, name = resolve_resource_path(shape.project_name, reference)
+    except Exception as e:  # pylint: disable=broad-except
+        return None, "'%s' is not an object's name: %s" % (reference, e)
+    project = await ctx.get_project_async(package)
+    if project is None:
+        return None, "there is no package %s" % package
+    kind = await project.object_kind_async(name)
+    path = "%s:%s" % (package, name)
+    if kind is None:
+        return None, "there is no object %s" % path
+    if kind not in pc_compare.KINDS:
+        return None, "%s is a %s, and only a part or an assembly has a volume and a mass" % (path, kind)
+    other = await ctx.get_part_async(path) if kind == "part" else ctx.get_assembly(path)
+    if other is None:
+        return None, "%s could not be loaded" % path
+    return other, None
+
+
+async def _verify_compare(ctx, shape, entries) -> None:
+    from . import compare as pc_compare
+
+    kind = getattr(shape, "kind", None)
+    if kind not in pc_compare.KINDS:
+        for _, check in entries:
+            check.passed = False
+            check.detail = "a %s has no volume and no mass to compare" % kind
+        return
+
+    own = await pc_compare.side_async(ctx, shape)
+    others = {}
+    for requirement, check in entries:
+        if requirement.reference not in others:
+            other, why = await compared_object_async(ctx, shape, requirement.reference)
+            others[requirement.reference] = (
+                (await pc_compare.side_async(ctx, other), None) if other is not None else (None, why)
+            )
+        side, why = others[requirement.reference]
+        if side is None:
+            check.passed = False
+            check.detail = why
+            continue
+        entry = pc_compare.amount_entry(side, own, requirement.amount)
+        check.passed, check.detail = pc_compare.within(entry, requirement.limit)
+
+
 def _declared(shape):
     """The report on 'shape' with nothing verified, and its checks by section.
 
@@ -1254,7 +1410,12 @@ async def check_async(ctx, shape, verify: bool = True) -> Report:
     if not verify:
         return report
 
-    verifiers = {PORTS: _verify_ports, INTERFACES: _verify_interfaces, PHYSICS: _verify_physics}
+    verifiers = {
+        PORTS: _verify_ports,
+        INTERFACES: _verify_interfaces,
+        PHYSICS: _verify_physics,
+        COMPARE: _verify_compare,
+    }
     for section in STRUCTURED:
         entries = sections[section]
         if not entries:

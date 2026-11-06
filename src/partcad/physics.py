@@ -745,6 +745,55 @@ async def resolved_async(ctx, shape):
     return physics, sources, unknown
 
 
+async def amounts_async(ctx, shape):
+    """How much of a part or an assembly there is: '{"volume", "mass", "massSource", "unknown"}'; None otherwise.
+
+    What 'pc compare' and a 'compare:' requirement hold two objects to, in full
+    rather than rounded for a reader: the volume in mm^3 - a part's measured, an
+    assembly's the sum of its parts', the way 'pc info' reports it - and the
+    mass in kg with where it came from, by 'resolved_async()''s rules.
+
+    'unknown' says why the mass is None. An assembly some of whose parts weigh
+    nothing known has no mass here at all, rather than the total of the others:
+    held against another object's, that total would be a difference between the
+    two designs that is not there.
+    """
+    kind = getattr(shape, "kind", None)
+    if kind == "assembly":
+        tree = await shape.get_wrapped(ctx)
+        if not isinstance(tree, dict):
+            return None
+        physics, sources, volume, _parts, unweighed = await _tree_async(tree, _Materials(ctx))
+        mass = _positive(physics.get("mass"))
+        unknown = None
+        if unweighed:
+            names = ", ".join(unweighed[:5]) + (", ..." if len(unweighed) > 5 else "")
+            unknown = "%d of its parts weigh nothing PartCAD knows: %s" % (len(unweighed), names)
+            mass = None
+        elif mass is None:
+            unknown = "no part states a mass or is made of anything that states a density"
+        return {
+            "volume": volume or None,
+            "mass": mass,
+            "massSource": sources.get("mass") if mass is not None else None,
+            "unknown": unknown,
+        }
+
+    if kind != "part":
+        return None
+    physics, sources, volume, material, material_name = await _part_async(ctx, shape)
+    mass = _positive(physics.get("mass"))
+    unknown = None
+    if mass is None:
+        unknown = _no_mass_reason(material, material_name, shape.material_reference()).removeprefix("not known: ")
+    return {
+        "volume": volume or None,
+        "mass": mass,
+        "massSource": sources.get("mass", STATED) if mass is not None else None,
+        "unknown": unknown,
+    }
+
+
 def owner_package(shape_name: str) -> str:
     """The package a shape's full name ("//pkg:part") belongs to.
 

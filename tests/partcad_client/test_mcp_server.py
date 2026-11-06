@@ -120,6 +120,7 @@ def test_the_tools_are_the_curated_set_and_the_escape_hatch(tmp_path):
             "search",
             "login",
             "instructions",
+            "compare",
             "version",
             "list_methods",
             "execute",
@@ -134,7 +135,7 @@ def test_the_tools_are_the_curated_set_and_the_escape_hatch(tmp_path):
 def test_the_annotations_do_not_claim_less_than_the_truth(tmp_path):
     _, server = serve(tmp_path)
     tools = {tool.name: tool.annotations for tool in using(server, lambda client: client.list_tools()).tools}
-    for name in ("list_objects", "info", "render", "test", "lint", "bom", "search", "instructions"):
+    for name in ("list_objects", "info", "render", "test", "lint", "bom", "search", "instructions", "compare"):
         assert tools[name].read_only_hint is True, name
     assert tools["export"].read_only_hint is False
     assert tools["export"].destructive_hint is True
@@ -208,6 +209,29 @@ def test_every_tool_naming_an_object_takes_its_parameter_values(tmp_path, tool, 
     (request,) = requests(daemon, method)
     assert request["object"] == "box"
     assert request["params"] == ["width=10"]
+
+
+def test_compare_sends_what_pc_compare_json_sends(tmp_path):
+    daemon, server = serve(tmp_path, {"compare.objects": lambda params, emit: {"passed": None}})
+    result = call(server, "compare", {"reference": "bracket-v1", "current": "bracket-v2", "surface_distance": 0.5})
+    assert not result.is_error
+    (request,) = requests(daemon, "compare.objects")
+    assert request["object"] == "bracket-v1"
+    assert request["current"] == "bracket-v2"
+    assert request["surface_distance"] == 0.5
+    assert request["max_volume_difference"] is None
+    assert request["worst"] == 10
+    assert request["json"] is True
+
+
+def test_a_comparison_that_does_not_hold_is_a_failed_result(tmp_path):
+    _, server = serve(tmp_path, {"compare.objects": lambda params, emit: {"passed": False}})
+    result = call(server, "compare", {"reference": "a", "current": "b", "max_mass_difference": 2})
+    assert result.is_error
+    reply = body(result)
+    assert reply["ok"] is False
+    assert reply["error"] == "b does not hold to a"
+    assert reply["result"] == {"passed": False}
 
 
 def test_assembly_instructions_carry_this_machines_build_vs_buy_choices(tmp_path, monkeypatch):

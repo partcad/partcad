@@ -1327,7 +1327,7 @@ export interface PlanData {
 /**
  * One requirement of 'requirements.check', and what the model made of it.
  *
- * 'section' is 'ports', 'interfaces' or 'physics' for what 'pc test' measures;
+ * 'section' is 'ports', 'interfaces', 'physics' or 'compare' for what 'pc test' measures;
  * 'simulate' for a 'simulate:' entry naming a feature nobody declared; and the
  * analysis ('fea', 'dynamic', 'thermal', 'cfd') for one of its scenarios that
  * does the same, with the scenario as 'name'. 'passed' is null until the model

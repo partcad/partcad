@@ -245,7 +245,9 @@ The plugin folder is named `claude`, but the command namespace comes from
   different shapes and different numbers of them (one arc or several, an arc or
   a run of short lines) — asked for on each render with `--reproducible` and
   `--no-reproducible`, and `measure.py compare` reads the two against each
-  other. A 3D description is studied as a bare script with `pc adhoc render`,
+  other. Its 3D counterpart is `pc compare`, which `/pc:gen-part` uses to read a
+  part against the 3D file it reproduces: volume, mass, and the surface distance
+  along the reference's normals. A 3D description is studied as a bare script with `pc adhoc render`,
   which takes `pc render`'s options. `/pc:gen-part` and `/pc:gen-assembly` run the
   same loop first, on temporary sketches. `measure.py` is the second helper the
   library ships beside a `SKILL.md`, after `part_loads.py`;

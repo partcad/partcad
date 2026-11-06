@@ -494,3 +494,87 @@ def test_pc_test_never_remembers_the_verdict(ctx):
     shape = ctx.get_part("//:plate")
     asyncio.run(RequirementsTest().test([], ctx, shape, test_ctx))
     assert test_ctx[Test.NOT_CACHEABLE] is True
+
+
+# --- 'compare:': within a percentage of another object ----------------------------
+
+
+def test_a_comparison_is_read_by_amount_and_object():
+    declaration = requirements.parse({"compare": {":bracket": {"volume": "5%", "weight": 2, "mass": None}}})
+    assert [(c.reference, c.amount, c.limit, c.written) for c in declaration.compare] == [
+        (":bracket", "volume", 5.0, "volume"),
+        (":bracket", "mass", 2.0, "weight"),
+    ]
+    assert declaration.structured
+    assert declaration.problems == []
+    assert declaration.compare[0].name == "volume of :bracket"
+    assert declaration.compare[0].describe() == "within 5%"
+
+
+@pytest.mark.parametrize(
+    "raw, detail",
+    [
+        ({":b": {"volume": "lots"}}, "'lots' is not a percentage"),
+        ({":b": {"volume": -1}}, "'-1' is not a percentage"),
+        ({":b": {"size": 1}}, "'size' is not compared"),
+        ({":b": {"mass": 1, "weight": 2}}, "'mass' and 'weight' are both the mass"),
+        ({":b": 5}, "is not a mapping of 'volume' and 'mass'"),
+        ([":b"], "is not a mapping of the objects compared with"),
+    ],
+)
+def test_a_comparison_that_cannot_be_read_says_why(raw, detail):
+    declaration = requirements.parse({"compare": raw})
+    assert [problem.section for problem in declaration.problems] == ["compare"]
+    assert detail in declaration.problems[0].detail
+
+
+def test_a_comparison_is_not_read_as_a_feature():
+    """'compare' is a section of its own now, not a heading of free-form text."""
+    declaration = requirements.parse({"compare": {":b": {"mass": 1}}, "looks": "Like the old one"})
+    assert declaration.features == {"looks": "Like the old one"}
+
+
+def test_comparisons_are_refused_by_the_schema_where_they_say_nothing():
+    for broken in (
+        {"compare": {":plate": {"volume": "lots"}}},
+        {"compare": {":plate": {"volume": -5}}},
+        {"compare": {":plate": {"size": 5}}},
+        {"compare": {":plate": 5}},
+    ):
+        config = _package()
+        config["parts"]["plate"]["requirements"] = broken
+        with pytest.raises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(instance=config, schema=get_partcad_schema())
+
+
+def test_a_comparison_is_held_to_the_other_objects_volume_and_mass(ctx):
+    report = _check(ctx, "part", "plate-copy")
+    assert {key: value for key, value in _verdicts(report).items() if key[0] == "compare"} == {
+        # The same solid of the same steel.
+        ("compare", "volume of :plate"): True,
+        ("compare", "mass of :plate"): True,
+        # Half of an assembly of two of it, resolved from the package without a ':'.
+        ("compare", "volume of pair"): False,
+        # Its air has no density, so there is no mass to hold this one to.
+        ("compare", "mass of :plate-wrong"): False,
+        ("compare", "volume of :m3-boundary"): False,
+        ("compare", "mass of :nowhere"): False,
+    }
+    details = {check.name: check.detail for check in report.checks if check.section == "compare"}
+    assert details["volume of :plate"] == "2700 mm^3, the same as the reference's 2700 mm^3 (within 0%)"
+    assert details["volume of pair"] == "2700 mm^3, 50% less than the reference's 5400 mm^3 (more than 10%)"
+    assert details["mass of :plate-wrong"] == ("the reference's is not known: the material //:air states no density")
+    assert "is a sketch" in details["volume of :m3-boundary"]
+    assert details["mass of :nowhere"] == "there is no object //:nowhere"
+
+
+def test_without_verifying_a_comparison_is_listed_and_not_judged(ctx):
+    report = _check(ctx, "part", "plate-copy", verify=False)
+    compared = [check for check in report.checks if check.section == "compare"]
+    assert len(compared) == 6
+    assert all(check.passed is None for check in compared)
+    assert compared[0].requirement == "within 0%"
+
+
+def test_pc_test_fails_an_object_further_from_another_than_it_may_be(ctx):
+    assert _run_test(ctx, "plate-copy") is Test.TEST_FAILED

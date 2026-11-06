@@ -11,8 +11,9 @@ from .test import Test
 class RequirementsTest(Test):
     """Check that the model is what the object's 'requirements:' say it has to be.
 
-    The ports, the interfaces and the physical properties - the part of the
-    requirements PartCAD can measure (see 'partcad.requirements', which is the
+    The ports, the interfaces, the physical properties and how far its volume
+    and mass may be from another object's - the part of the requirements
+    PartCAD can measure (see 'partcad.requirements', which is the
     whole of what each requirement means). A requirement on something PartCAD
     cannot find out fails rather than passes: "not known" is not "met". The
     features are prose and are not checked here, beyond a 'simulate:' entry
@@ -31,7 +32,10 @@ class RequirementsTest(Test):
 
     def inapplicable(self, shape):
         if not requirements.anything_to_check(shape):
-            return "it requires no port, interface or physical property ('requirements:'), and no simulation names a feature"
+            return (
+                "it requires no port, interface, physical property or comparison ('requirements:'), "
+                "and no simulation names a feature"
+            )
         return None
 
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:

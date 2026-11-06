@@ -347,16 +347,16 @@ On the assembly: ``connectivity: allowDuplicates: true`` to allow the same part 
 ``requirements``: Meets its requirements
 ----------------------------------------
 
-**Applies to** objects whose ``requirements:`` require ports, interfaces or physical properties. ``pc test -f requirements <object>`` runs it alone.
+**Applies to** objects whose ``requirements:`` require ports, interfaces, physical properties or a comparison. ``pc test -f requirements <object>`` runs it alone.
 
-Whether the model is what its ``requirements:`` say it has to be, as far as that can be measured: each required port is there, facing where it has to; each required interface is implemented, its instances where they have to be; and each required physical property - its mass, its centre of mass, its inertia, its friction - has a value that meets the requirement. Asked again every time, never read from the cache.
+Whether the model is what its ``requirements:`` say it has to be, as far as that can be measured: each required port is there, facing where it has to; each required interface is implemented, its instances where they have to be; and each required physical property - its mass, its centre of mass, its inertia, its friction - has a value that meets the requirement; and its volume and its mass are within the percentage ``compare:`` allows of each object it names - the numbers ``pc compare <that object> <this one>`` reports. Asked again every time, never read from the cache.
 
 The ``features:`` are sentences rather than measurements, and are judged by the ``/pc:validate`` agent skill. What this check asks of them is only that a ``simulate:`` entry or an analysis scenario naming one (``feature:``) names one that is declared.
 
 When it does not apply
 ^^^^^^^^^^^^^^^^^^^^^^
 
-An object that requires no port, interface or physical property, and whose simulations and analysis scenarios name no feature.
+An object that requires no port, interface, physical property or comparison, and whose simulations and analysis scenarios name no feature.
 
 When it fails
 ^^^^^^^^^^^^^
@@ -365,6 +365,7 @@ Each failure is ``<section>: <name>: <required>: <found>`` - what was asked for 
 
 * A port or an interface instance that is missing, or faces the wrong way: move it in the model, or correct the requirement if the requirement is what is wrong.
 * ``not known: ...``: PartCAD could not find out the value - a mass with no density to work it out from. State the value in a ``physics:`` section, or give the part a ``material:`` with a density. "Not known" is not "met".
+* ``compare: <amount> of <object>: within N%: ... more than N%``: the volume or the mass is further from the other object's than the requirement allows. Run ``pc compare <object> <this one>`` for the whole comparison, and change the model or the limit, whichever is wrong.
 * ``unreadable``: the requirement itself cannot be read; the detail says why.
 
 .. _test-cmf:

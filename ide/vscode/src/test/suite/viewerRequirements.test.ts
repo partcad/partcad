@@ -136,6 +136,22 @@ suite('The Requirements tab', () => {
         );
     });
 
+    test('a comparison with another object is a measured section of its own, after the physics', () => {
+        const groups = groupChecks([
+            check('compare', 'mass of :bracket', false),
+            check('physics', 'mass', true),
+            check('compare', 'volume of :bracket', true),
+        ]);
+
+        assert.deepStrictEqual(
+            groups.map((group) => [group.heading, group.checks.map((item) => item.name)]),
+            [
+                ['Physics', ['mass']],
+                ['Compared with', ['mass of :bracket', 'volume of :bracket']],
+            ],
+        );
+    });
+
     test('a feature lists the simulations that name it, and always the LLM last, with the skill as its tooltip', () => {
         const [stands, pretty] = data().features;
 
