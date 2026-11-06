@@ -19,12 +19,13 @@ for; the rest asks the runtime objects what they would do.
 
 import asyncio
 import os
+import subprocess
 import sys
 
 import pytest
 
 import partcad as pc
-from partcad import runtime_python_all
+from partcad import runtime_python, runtime_python_all, runtime_python_venv, sandbox_versions
 from partcad.runtime_python_none import NonePythonRuntime
 from partcad.runtime_python_venv import VenvPythonRuntime
 from partcad.user_config import UserConfig
@@ -201,6 +202,158 @@ def test_a_creation_that_writes_no_interpreter_is_a_failure_too(ctx, tmp_path):
 
     with pytest.raises(Exception, match="exited with 0|Failed to create"):
         runtime.once()
+
+
+# --------------------------------------------------------------------------- #
+# What is installed follows the interpreter, not the request                  #
+# --------------------------------------------------------------------------- #
+
+
+def _host_has(runtime, monkeypatch, actual):
+    """Make the interpreter the environment is built from answer 'actual' when asked its version.
+
+    Faked at 'subprocess.run', and only for that one question -- anything else
+    goes to the real one -- so this needs no second Python on the machine, and
+    it asks the runtime what it would do the way it really asks.
+    """
+    asked = []
+    real_run = subprocess.run
+
+    def run(cmd, *args, **kwargs):
+        if len(cmd) == 3 and cmd[1] == "-c" and "sys.version_info" in cmd[2]:
+            asked.append(cmd[0])
+            return subprocess.CompletedProcess(cmd, 0, stdout=(actual + "\n") if actual else "", stderr="")
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(runtime_python_venv.subprocess, "run", run)
+    return asked
+
+
+def _installs(runtime, monkeypatch):
+    installed = []
+    monkeypatch.setattr(runtime, "ensure_onced_locked", lambda requirement, **k: installed.append(requirement))
+
+    async def ensure_async(requirement, **k):
+        installed.append(requirement)
+
+    monkeypatch.setattr(runtime, "ensure_async_onced_locked", ensure_async)
+    return installed
+
+
+def test_a_host_with_only_3_14_is_not_given_the_3_11_zstd_backport(ctx, tmp_path, monkeypatch):
+    """The CI failure: asked for 3.11, built from 3.14, pip found no backport.
+
+    'backports.zstd' declares Python < 3.14, so installing it on the
+    interpreter the venv really is failed, and failed the command with it --
+    after the work it was asked for had been done.
+    """
+    runtime = ctx.get_python_runtime("3.11")
+    runtime.path = str(tmp_path / "pc-py-venv-3.11")
+    _host_has(runtime, monkeypatch, "3.14")
+    installed = _installs(runtime, monkeypatch)
+
+    runtime.ensure_zstd_onced_locked()
+    asyncio.run(runtime.ensure_zstd_onced_locked_async())
+    assert installed == []
+
+
+def test_a_host_older_than_asked_for_is_given_the_backport(ctx, tmp_path, monkeypatch):
+    """And the other way round: asked for 3.14 on 3.12, it has no 'compression.zstd'."""
+    runtime = ctx.get_python_runtime("3.14")
+    runtime.path = str(tmp_path / "pc-py-venv-3.14")
+    _host_has(runtime, monkeypatch, "3.12")
+    installed = _installs(runtime, monkeypatch)
+
+    runtime.ensure_zstd_onced_locked()
+    asyncio.run(runtime.ensure_zstd_onced_locked_async())
+    assert installed == [sandbox_versions.ZSTD, sandbox_versions.ZSTD]
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_provisioning_installs_for_the_interpreter_it_was_built_from(ctx, tmp_path, monkeypatch, asynchronous):
+    """The whole of 'once', not just the one step: nothing in it reads the request."""
+    runtime = ctx.get_python_runtime("3.11")
+    runtime.path = str(tmp_path / "pc-py-venv-3.11")
+    # An environment that already exists, so nothing is created.
+    os.makedirs(os.path.dirname(runtime.venv_exec_path), exist_ok=True)
+    with open(runtime.venv_exec_path, "w") as f:
+        f.write("")
+    asked = _host_has(runtime, monkeypatch, "3.14")
+    installed = _installs(runtime, monkeypatch)
+
+    if asynchronous:
+        asyncio.run(runtime.once_async())
+    else:
+        runtime.once()
+    assert runtime.provisioned
+    assert sandbox_versions.ZSTD not in installed
+    assert installed == runtime_python.base_requirements("3.14")
+    # The environment's interpreter, which is the one pip runs on, and once.
+    assert asked == [runtime.venv_exec_path]
+
+
+def test_the_version_is_asked_of_the_host_until_the_environment_exists(ctx, tmp_path, monkeypatch):
+    runtime = ctx.get_python_runtime("3.11")
+    runtime.path = str(tmp_path / "pc-py-venv-3.11")
+    asked = _host_has(runtime, monkeypatch, "3.14")
+
+    assert runtime.interpreter_version() == "3.14"
+    assert runtime.interpreter_version() == "3.14"
+    assert asked == [runtime.host_exec_path]
+
+
+def test_the_warning_still_says_what_this_renders_on(ctx, tmp_path, monkeypatch):
+    runtime = ctx.get_python_runtime("3.11")
+    runtime.path = str(tmp_path / "pc-py-venv-3.11")
+    _host_has(runtime, monkeypatch, "3.14")
+    warnings = []
+    monkeypatch.setattr(runtime_python_venv.pc_logging, "warning", warnings.append)
+
+    runtime._report_version()
+    assert len(warnings) == 1
+    assert "Python 3.11 was asked for and this host has 3.14" in warnings[0]
+
+
+def test_an_interpreter_that_will_not_say_is_taken_to_be_the_one_asked_for(ctx, tmp_path, monkeypatch):
+    """Which is what every decision assumed before the interpreter was asked."""
+    runtime = ctx.get_python_runtime("3.11")
+    runtime.path = str(tmp_path / "pc-py-venv-3.11")
+    _host_has(runtime, monkeypatch, None)
+
+    assert runtime.interpreter_version() == "3.11"
+    assert sandbox_versions.zstd_requirement(runtime.interpreter_version()) == sandbox_versions.ZSTD
+
+
+def test_provisioning_on_an_interpreter_older_than_asked_for_is_isolated(ctx, tmp_path, monkeypatch):
+    """PYTHONSAFEPATH is ignored below 3.11, so "-m pip" there needs "-I", whatever was asked for."""
+    runtime = ctx.get_python_runtime("3.12")
+    runtime.path = str(tmp_path / "pc-py-venv-3.12")
+    _host_has(runtime, monkeypatch, "3.10")
+
+    assert runtime.flags_for(["-m", "pip", "check"]) == ["-sOOIu"]
+    assert runtime.flags_for(["/somewhere/wrapper.py"]) == ["-sOOu"]
+
+
+def test_provisioning_on_a_newer_interpreter_than_asked_for_is_not(ctx, tmp_path, monkeypatch):
+    runtime = ctx.get_python_runtime("3.10")
+    runtime.path = str(tmp_path / "pc-py-venv-3.10")
+    _host_has(runtime, monkeypatch, "3.14")
+
+    assert runtime.flags_for(["-m", "venv", "--upgrade-deps", runtime.path]) == ["-sOOu"]
+
+
+def test_the_sandbox_is_still_named_after_the_version_asked_for(ctx, monkeypatch):
+    """So that a host gaining the interpreter asked for later builds a separate one."""
+    runtime = ctx.get_python_runtime("3.11")
+    _host_has(runtime, monkeypatch, "3.14")
+    runtime.interpreter_version()
+    assert runtime.path.endswith("pc-py-venv-3.11-layered")
+
+
+def test_the_real_probe_reads_the_interpreter_it_is_given(ctx):
+    runtime = ctx.get_python_runtime(VERSION)
+    assert runtime._probe_version(sys.executable) == VERSION
+    assert runtime._probe_version(os.path.join(os.path.dirname(runtime.path), "no-such-python")) is None
 
 
 # --------------------------------------------------------------------------- #

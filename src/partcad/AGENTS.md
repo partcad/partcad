@@ -1848,6 +1848,12 @@ at all).
   path, so its `sys.path[0]` is PartCAD's own `wrappers/` directory rather than anything a user writes to;
   giving it `-I` would buy no isolation and would cost it `PYTHONHASHSEED`, since `-I` implies `-E`. So do not
   collapse the two lists back into one, and do not hand `-I` to anything but a `-m` command.
+  Which list a `-m` command gets, and every other version-dependent choice of what a sandbox installs (the
+  `backports.zstd` that only an interpreter below 3.14 needs), is decided from
+  `PythonRuntime.interpreter_version()`, not from the version asked for. They are the same everywhere but
+  `venv`, which is built from whatever interpreter the host has and asks it: deciding from the request installed
+  the 3.11 backport into a 3.14 environment, where it has no release, and failed the command on pip after its
+  work was done. The sandbox keeps the requested version in its name.
   `tests/partcad/unit/test_python_env.py` asserts the outcomes (a `venv.py`/`pip.py` beside the interpreter
   never wins; a wrapper's sibling import is never shadowed by a file in PartCAD's working directory; the hash
   seed is honored on every version) on whichever version is running, so both branches are covered by the CI
