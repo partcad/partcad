@@ -1749,6 +1749,21 @@ class Context:
     def get_assembly(self, assembly_spec, params=None):
         return self._get_assembly(assembly_spec, params)
 
+    async def get_assembly_async(self, assembly_spec, params=None):
+        """'get_assembly()' for a caller already running on a loop.
+
+        The packages above it are warmed on the caller's loop, and then the
+        assembly's declarations, for the reasons '_get_part_async' gives.
+        """
+        project_name, assembly_name = resolve_resource_path(self.current_project_path, assembly_spec)
+        await self._warm_project_async(project_name)
+        prj = self.get_project(project_name)
+        if prj is None:
+            pc_logging.error("Package %s not found" % project_name)
+            return None
+        pc_logging.debug("Retrieving %s from %s" % (assembly_name, project_name))
+        return await prj.get_assembly_async(assembly_name, params)
+
     def get_assembly_shape(self, assembly_spec, params=None):
         return asyncio.run(self._get_assembly(assembly_spec, params).get_wrapped(self))
 

@@ -765,6 +765,21 @@ class ProjectExternalRepository(ProjectPlugin):
         if await self.get_data_async("objects/" + kind + "/" + name) is None and configs is None:
             await self.get_data_async("objects/" + kind)
 
+    async def _warm_object_instance_config_async(self, kind, name):
+        """Fetch what '_fetch_object_instance_config(kind, name)' reads, awaited rather than waited for.
+
+        The metadata first, because it is what says whether this package
+        resolves instances of 'kind' at all ('resolves_instances' reads it
+        synchronously), and then the instance under the key the synchronous
+        lookup asks for. A package that does not resolve them is asked for
+        nothing more.
+        """
+        if self.skipped or not self._serves_kind(kind):
+            return
+        await self.get_data_async("meta")
+        if self.resolves_instances(kind):
+            await self.get_data_async("objects/" + kind + "/" + name)
+
     def dependencies(self):
         """Child packages of this package, served by the same repository.
 
