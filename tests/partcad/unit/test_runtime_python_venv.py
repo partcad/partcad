@@ -324,6 +324,33 @@ def test_an_interpreter_that_will_not_say_is_taken_to_be_the_one_asked_for(ctx, 
     assert sandbox_versions.zstd_requirement(runtime.interpreter_version()) == sandbox_versions.ZSTD
 
 
+def test_an_interpreter_that_will_not_say_is_asked_once(ctx, tmp_path, monkeypatch):
+    """A probe can take up to a minute; it is not repeated before every pip command."""
+    runtime = ctx.get_python_runtime("3.11")
+    runtime.path = str(tmp_path / "pc-py-venv-3.11")
+    asked = _host_has(runtime, monkeypatch, None)
+
+    for _ in range(3):
+        runtime.flags_for(["-m", "pip", "check"])
+    assert asked == [runtime.host_exec_path]
+
+
+def test_the_environment_is_asked_afresh_once_it_appears(ctx, tmp_path, monkeypatch):
+    """Built meanwhile -- by another process, from another interpreter -- it is what runs."""
+    runtime = ctx.get_python_runtime("3.11")
+    runtime.path = str(tmp_path / "pc-py-venv-3.11")
+    _host_has(runtime, monkeypatch, "3.11")
+    assert runtime.interpreter_version() == "3.11"
+
+    os.makedirs(os.path.dirname(runtime.venv_exec_path), exist_ok=True)
+    with open(runtime.venv_exec_path, "w") as f:
+        f.write("")
+    asked = _host_has(runtime, monkeypatch, "3.14")
+    assert runtime.interpreter_version() == "3.14"
+    assert asked == [runtime.venv_exec_path]
+    assert sandbox_versions.zstd_requirement(runtime.interpreter_version()) is None
+
+
 def test_provisioning_on_an_interpreter_older_than_asked_for_is_isolated(ctx, tmp_path, monkeypatch):
     """PYTHONSAFEPATH is ignored below 3.11, so "-m pip" there needs "-I", whatever was asked for."""
     runtime = ctx.get_python_runtime("3.12")

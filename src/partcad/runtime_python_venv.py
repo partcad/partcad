@@ -38,9 +38,9 @@ class VenvPythonRuntime(runtime_python.PythonRuntime):
     def __init__(self, ctx, version=None):
         super().__init__(ctx, "venv", version)
 
-        # The 'major.minor' of the interpreter it is built from, once asked; see
-        # 'interpreter_version'.
-        self._interpreter_version = None
+        # What each interpreter answered when asked its 'major.minor' (None for
+        # one that would not say), keyed by its path; see 'interpreter_version'.
+        self._interpreter_versions = {}
 
         # The interpreter the environment is made *from*. Held separately
         # because 'exec_path' has to be this one while the environment is being
@@ -105,18 +105,21 @@ class VenvPythonRuntime(runtime_python.PythonRuntime):
         The environment's own interpreter once it exists, the host's until then;
         the two are the same Python, unless the host's changed since the
         environment was built, and then the environment's is the one that runs.
-        Asked once per runtime. The version asked for if neither will say, which
+        Asked once per interpreter. The version asked for if it will not say, which
         is what was assumed before this was asked at all.
         """
-        if self._interpreter_version is None:
-            interpreter = self.venv_exec_path if os.path.exists(self.venv_exec_path) else self.host_exec_path
-            self._interpreter_version = self._probe_version(interpreter)
-            if self._interpreter_version is None:
-                return self.version
-            # Provisioning isolates below 3.11, and whether it has to is a
-            # question about this interpreter too (see 'provisioning_flags').
-            self.python_provisioning_flags = runtime_python.provisioning_flags(self._interpreter_version)
-        return self._interpreter_version
+        interpreter = self.venv_exec_path if os.path.exists(self.venv_exec_path) else self.host_exec_path
+        # Keyed by path, so the environment's interpreter is asked afresh once
+        # it appears -- possibly built by another process, from another
+        # interpreter -- and one that would not say is not asked again, at up
+        # to a minute a time, before every provisioning command.
+        if interpreter not in self._interpreter_versions:
+            self._interpreter_versions[interpreter] = self._probe_version(interpreter)
+        actual = self._interpreter_versions[interpreter] or self.version
+        # Provisioning isolates below 3.11, and whether it has to is a question
+        # about this interpreter too (see 'provisioning_flags').
+        self.python_provisioning_flags = runtime_python.provisioning_flags(actual)
+        return actual
 
     def flags_for(self, cmd):
         # Learn the interpreter's version before the first provisioning command,
