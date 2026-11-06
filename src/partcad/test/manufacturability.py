@@ -177,7 +177,7 @@ class ManufacturabilityTest(Test):
         if config.get("fileFrom") is not None or declared_hash(config) is not None:
             declared.append("file:%s@%s" % (config.get("fileFrom"), declared_hash(config)))
         for ref in pc_software.resolved_software_refs(shape.project_name, config):
-            _project, software = pc_software.lookup(ctx, ref, quiet=True)
+            _project, software = pc_software.lookup(ctx, ref, quiet=True, referrer=pc_software.referrer_of(config))
             if software is None:
                 declared.append("%s@" % ref)
             else:
@@ -225,8 +225,9 @@ class ManufacturabilityTest(Test):
         hashes wrong should learn both in one run.
         """
         failures = []
-        for ref in pc_software.resolved_software_refs(shape.project_name, _final_config(shape)):
-            _project, software = pc_software.lookup(ctx, ref)
+        config = _final_config(shape)
+        for ref in pc_software.resolved_software_refs(shape.project_name, config):
+            _project, software = pc_software.lookup(ctx, ref, referrer=pc_software.referrer_of(config))
             if software is None:
                 failures.append("the software '%s' is not found" % ref)
                 continue

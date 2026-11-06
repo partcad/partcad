@@ -10,6 +10,7 @@
         type: walls
         sketch: living-room-plan   # one closed outline of lines and arcs, on XY
         height: 2700               # mm
+        thickness: 150             # (optional) mm, outside the outline
         wall: //builtin/building:wall   # (optional) the part each wall is
 
 The sketch is read as a plan is, from above: one enclosed outline - a face with
@@ -18,8 +19,18 @@ scene is one wall per edge of it, in the order a walk around it clockwise
 meets them, each named 'wall-<n>' and each a 'wall' part placed where its edge
 starts and turned the way the edge sets off (see 'wrappers/wrapper_outline.py').
 A wall looks to its right, and the right of a clockwise walk is the inside:
-so every wall looks into the room, and the room is seen into from outside
-through whichever walls are nearest.
+so every wall looks into the room, and its thickness goes back from there, to
+the left of the walk - outside the outline, which stays the room's inside face,
+at the size it was drawn.
+
+Each wall is '//builtin/building:wall' unless the scene says otherwise: a solid,
+a physical object a check measures and a simulation collides with, and drawn -
+in the 3D view and in PartCAD's pictures - as its 'visual:', the one-sided
+surface of its face (see 'partcad.visual'). So the room is seen into from outside
+through whichever walls are nearest, and is walled all the same. Two walls meet
+at an outside corner of the outline along the edge where their faces meet, with
+the square of their thickness outside them left open; at an inside corner they
+overlap by it, inside the walls, where nothing sees it.
 
 A sketch that is not such an outline - two of them, one with a hole in it, an
 open one, one with a spline in it, one that is not on the XY plane - is refused
@@ -28,12 +39,12 @@ with the reason, rather than approximated into some other room.
 A room's own colour, material and finish - its CMF parameters - paint every
 wall of it: 'room;color=//my/package:sage' (see '_link').
 
-'sketch' and 'height' may be '%...%' expressions over the scene's parameters,
-which is how '//builtin/building:room' is one declaration of every room:
-'room;sketch=//my/package:plan,height=2500'. 'wall' names the part each wall
-is, '//builtin/building:wall' unless it says otherwise; whatever it names is
-asked for with the parameters 'length', 'height' and 'radius', and has to take
-them.
+'sketch', 'height' and 'thickness' may be '%...%' expressions over the scene's
+parameters, which is how '//builtin/building:room' is one declaration of every
+room: 'room;sketch=//my/package:plan,height=2500'. 'wall' names the part each
+wall is, '//builtin/building:wall' unless it says otherwise; whatever it names
+is asked for with the parameters 'length', 'height' and 'radius', and has to take
+them - and with 'thickness' too, when the scene states one.
 
 It is built the way an ASSY scene is - this is 'SceneFactoryAssy' with the file
 replaced by the links worked out from the sketch - so it places its walls,
@@ -129,6 +140,22 @@ class SceneFactoryWalls(SceneFactoryAssy):
             if not self.height > 0.0:
                 raise WallsDeclarationError("%s: walls are taller than nothing, and 'height' is %s" % (where, height))
 
+            # Only where the scene states it: a wall part of somebody's own,
+            # which takes no thickness, is asked for with none.
+            thickness = expr.resolve(config.get("thickness"), values, where)
+            self.thickness = None
+            if thickness not in (None, ""):
+                try:
+                    self.thickness = float(thickness)
+                except (TypeError, ValueError):
+                    raise WallsDeclarationError(
+                        "%s: 'thickness' is a number of millimetres, and '%s' is not" % (where, thickness)
+                    )
+                if self.thickness < 0.0:
+                    raise WallsDeclarationError(
+                        "%s: walls are no thinner than nothing, and 'thickness' is %s" % (where, thickness)
+                    )
+
             # As a link of an ASSY file names it: resolved against this
             # package when it is not a path (see 'node_object_name').
             self.wall = str(expr.resolve(config.get("wall") or DEFAULT_WALL, values, where))
@@ -144,9 +171,10 @@ class SceneFactoryWalls(SceneFactoryAssy):
             # What the scene is built from, resolved. The sketch's content goes
             # in once it is resolved (see 'prepare_async'); what each wall is
             # built from goes in with the walls, as an ASSY scene's links do.
-            self.assembly.hash.add_dict(
-                {"walls": {"sketch": self.sketch_spec, "height": self.height, "wall": self.wall}}
-            )
+            built = {"sketch": self.sketch_spec, "height": self.height, "wall": self.wall}
+            if self.thickness is not None:
+                built["thickness"] = self.thickness
+            self.assembly.hash.add_dict({"walls": built})
             self.assembly.cache_dependencies_broken = True
 
     def post_create(self) -> None:
@@ -204,7 +232,7 @@ class SceneFactoryWalls(SceneFactoryAssy):
     async def _read_links_async(self) -> list:
         """What '_links_async' hands out: the outline read in a sandbox, as links. Asked by one caller at a time."""
         name = "%s:%s" % (self.target_project.name, self.name)
-        sketch = self.ctx.get_sketch(self.sketch_spec)
+        sketch = self.ctx.get_sketch(self.sketch_spec, referrer=self.project.name)
         if sketch is None:
             raise WallsDeclarationError("%s: the sketch '%s' is not found" % (name, self.sketch_spec))
         envelope = await sketch.get_wrapped(self.ctx)
@@ -246,6 +274,8 @@ class SceneFactoryWalls(SceneFactoryAssy):
             "height": self.height,
             "radius": round(float(segment["radius"]), DIGITS),
         }
+        if self.thickness is not None:
+            params["thickness"] = self.thickness
         params.update(cmf.own_parameters(self.assembly, self.ctx))
         return {
             "part": self.wall,
@@ -262,7 +292,7 @@ class SceneFactoryWalls(SceneFactoryAssy):
         walled as the plan it used to be.
         """
         await self._links_async()
-        sketch = self.ctx.get_sketch(self.sketch_spec)
+        sketch = self.ctx.get_sketch(self.sketch_spec, referrer=self.project.name)
         sketch_keyed = sketch is not None and await assembly.add_cache_key_of(sketch)
         await super().prepare_async(assembly)
         if not sketch_keyed:
@@ -281,6 +311,8 @@ class SceneFactoryWalls(SceneFactoryAssy):
         """What the scene stands on, beside the usual information about it."""
         info = super().info(shape)
         info["Walls"] = {"sketch": self.sketch_spec, "height": self.height, "wall": self.wall}
+        if self.thickness is not None:
+            info["Walls"]["thickness"] = self.thickness
         if self._links is not None:
             info["Walls"]["count"] = len(self._links)
         return info

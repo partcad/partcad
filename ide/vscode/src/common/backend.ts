@@ -737,6 +737,9 @@ class JsonRpcBackend implements PartcadBackend {
                     format: a.format,
                     // eslint-disable-next-line @typescript-eslint/naming-convention
                     options_package: a.plugin,
+                    // False on the Draft tab: every part drawn as itself, never as
+                    // its 'visual:'. Undefined is left out, and the file type says.
+                    visuals: a.visuals,
                     // The panel beside the drawing: which links of the object to
                     // keep, and whether its ports and interfaces are drawn on top of
                     // the projection. The same two things 'pc render --filter' and

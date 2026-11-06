@@ -154,6 +154,7 @@ a room, worked out from a sketch of its plan:
       type: walls
       sketch: living-room-plan
       height: 2700                    # mm
+      thickness: 150                  # (optional) mm, outside the outline
       wall: //builtin/building:wall   # (optional) the part each wall is
 
 The sketch has to be **one enclosed outline** made of **straight lines and arcs of
@@ -164,20 +165,34 @@ them, each standing where its edge starts and turned the way the edge goes. A
 line is a straight wall and an arc an arc wall of the arc's radius and length.
 
 Every wall looks into the room, whichever way round the outline was drawn: the
-walk goes clockwise, and a wall is seen from its right. So a picture of the
-room taken from outside is taken *through* the walls nearest the camera, and
-shows the far walls from the inside, the way a dollhouse or a sales brochure
-shows a flat. From straight above, every wall is seen edge-on, and the drawing
-is the plan.
+walk goes clockwise, and a wall is seen from its right. Its face stands on the
+outline, and its thickness goes back from there, outside it: the outline is the
+inside of the room, at the size it was drawn.
+
+Each wall is ``//builtin/building:wall`` unless the scene says otherwise, and that
+is a **solid** -- a physical wall, which ``pc test`` checks, a simulation collides
+with and an export writes -- whose :ref:`visual <part-visual>` is the one-sided
+surface of its face. So a picture of the room taken from outside, in the 3D view
+or by ``pc render``, is taken *through* the walls nearest the camera, and shows
+the far walls from the inside, the way a dollhouse or a sales brochure shows a
+flat; from straight above, every wall is seen edge-on, and the drawing is the
+plan. A STEP export of the same room, its simulation and its dimensioned drawing
+have walls with their thickness.
+
+At an outside corner of the outline two walls meet along the edge their faces
+share, and the square of their thickness outside it is left open; at an inside
+corner they overlap by it, inside the walls, where ``pc test``'s ``interference``
+check reports it and nothing sees it.
 
 A sketch that is not such an outline is refused, with the reason, rather than
 approximated: two outlines (``has 2 faces``), a hole in one (a column nobody
 said how to draw), an open one, a spline (``edge 3 of ... is a B-spline``), or
 one that is not on the XY plane.
 
-``sketch:`` and ``height:`` may be ``%...%`` expressions over the scene's
-parameters, and PartCAD ships one such scene, ``//builtin/building:room``, with
-the parameters ``sketch`` and ``height``. Any package can use it without
+``sketch:``, ``height:`` and ``thickness:`` may be ``%...%`` expressions over the
+scene's parameters, and PartCAD ships one such scene, ``//builtin/building:room``,
+with the parameters ``sketch``, ``height`` and ``thickness`` (100 mm unless it is
+told otherwise). Any package can use it without
 declaring a scene of its own -- by name, or through an ``enrich``. Name the
 sketch in full, because it belongs to your package and not to ``//builtin``:
 
@@ -217,12 +232,15 @@ nobody painted is drawn in one.
 
 ``wall:`` names the part each wall is, ``//builtin/building:wall`` unless it says
 otherwise. Whatever it names is asked for with the parameters ``length``,
-``height`` and ``radius`` (see :ref:`walls`), and with the room's CMF, so a wall
-of your own is an ``enrich`` of that one, or a ``type: wall`` part declaring the
-same three parameters.
+``height`` and ``radius`` (see :ref:`walls`) -- and ``thickness``, when the scene
+states one -- and with the room's CMF, so a wall of your own is an ``enrich`` of
+that one, or a ``type: wall`` part declaring the same parameters. A wall of your
+own with no thickness is the one-sided surface alone, and a room of it has no
+walls anything collides with: give it a thickness, and the surface as its
+``visual:``, the way ``//builtin/building:wall`` does. ``//builtin/building:wall-surface``
+itself is :ref:`private <private-objects>`, and a room cannot be built of it.
 
-A room is a scene, so it is not manufacturable, and its walls are not either:
-see :ref:`walls` for what that excuses them from in ``pc test``.
+A room is a scene, so it is not manufacturable, and its walls are not either.
 
 Scene types a plugin adds
 =========================

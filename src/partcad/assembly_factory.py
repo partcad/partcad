@@ -105,8 +105,11 @@ class AssemblyFactory(ShapeFactory):
         The indirection an alias and an enrich resolve their source through, so
         that a scene alias points at a scene and an assembly alias at an
         assembly rather than both reaching for assemblies.
+
+        A reference this factory's package wrote, so an object another package
+        keeps to itself is refused here (see 'partcad.privacy').
         """
-        return self.ctx._get_assembly(name, params)
+        return self.ctx._get_assembly(name, params, referrer=self.project.name)
 
     async def subassemblies_async(self, assembly) -> list:
         """The assemblies this one places directly, resolved but not built.

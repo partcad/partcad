@@ -1361,7 +1361,7 @@ class Context:
 
         return source_candidate_interfaces, target_candidate_interfaces
 
-    def _get_sketch(self, sketch_spec, params=None):
+    def _get_sketch(self, sketch_spec, params=None, referrer=None):
         project_name, sketch_name = resolve_resource_path(
             self.current_project_path,
             sketch_spec,
@@ -1372,10 +1372,16 @@ class Context:
             pc_logging.error("Packages found: %s" % str(self.projects))
             return None
         pc_logging.debug("Retrieving %s from %s" % (sketch_name, project_name))
-        return prj.get_sketch(sketch_name, params)
+        return prj.get_sketch(sketch_name, params, referrer=referrer)
 
-    def get_sketch(self, sketch_spec, params=None):
-        return self._get_sketch(sketch_spec, params)
+    def get_sketch(self, sketch_spec, params=None, referrer=None):
+        """The sketch '<package>:<name>' names, or None.
+
+        'referrer' is the package the reference was written in, when an object
+        of it is what names the sketch; a private sketch is refused to any
+        other package (see 'partcad.privacy'). A command passes none.
+        """
+        return self._get_sketch(sketch_spec, params, referrer=referrer)
 
     def get_sketch_shape(self, sketch_spec, params=None):
         return asyncio.run(self._get_sketch(sketch_spec, params).get_wrapped(self))
@@ -1430,7 +1436,7 @@ class Context:
             return None
         return prj.object_kind(object_name, kinds)
 
-    def _get_interface(self, interface_spec, params=None):
+    def _get_interface(self, interface_spec, params=None, referrer=None):
         project_name, interface_name = resolve_resource_path(
             self.current_project_path,
             interface_spec,
@@ -1441,15 +1447,16 @@ class Context:
             pc_logging.error("Packages found: %s" % str(self.projects))
             return None
         pc_logging.debug("Retrieving %s from %s" % (interface_name, project_name))
-        return prj.get_interface(interface_name, params)
+        return prj.get_interface(interface_name, params, referrer=referrer)
 
-    def get_interface(self, interface_spec, params=None):
+    def get_interface(self, interface_spec, params=None, referrer=None):
         """The interface named by '<package>:<name>', or None.
 
         'interface_spec' may carry parameter values ('m-thru;size=4') and
         'params' may add to them, the same as for a part or a sketch.
+        'referrer' as 'get_sketch' takes it.
         """
-        return self._get_interface(interface_spec, params)
+        return self._get_interface(interface_spec, params, referrer=referrer)
 
     def get_interface_shape(self, interface_spec, params=None):
         return asyncio.run(self._get_interface(interface_spec, params).get_wrapped(self))
@@ -1649,14 +1656,14 @@ class Context:
         pc_logging.debug("Retrieving %s from %s" % (part_name, project_name))
         return prj, part_name
 
-    def _get_part(self, part_spec, params=None) -> Optional[Part]:
+    def _get_part(self, part_spec, params=None, referrer=None) -> Optional[Part]:
         resolved = self._resolve_part_project(part_spec)
         if resolved is None:
             return None
         prj, part_name = resolved
-        return prj.get_part(part_name, params)
+        return prj.get_part(part_name, params, referrer=referrer)
 
-    async def _get_part_async(self, part_spec, params=None) -> Optional[Part]:
+    async def _get_part_async(self, part_spec, params=None, referrer=None) -> Optional[Part]:
         """'_get_part()' for a caller already running on a loop.
 
         Resolving a part may have to build the assembly that produces it, and
@@ -1670,7 +1677,7 @@ class Context:
         if resolved is None:
             return None
         prj, part_name = resolved
-        return await prj.get_part_async(part_name, params)
+        return await prj.get_part_async(part_name, params, referrer=referrer)
 
     async def _warm_project_async(self, project_path: str) -> None:
         """Fetch, on the caller's loop, what 'get_project(project_path)' would fetch blocking it.
@@ -1706,11 +1713,12 @@ class Context:
             if warm is not None:
                 await warm()
 
-    def get_part(self, part_spec, params=None) -> Optional[Part]:
-        return self._get_part(part_spec, params)
+    def get_part(self, part_spec, params=None, referrer=None) -> Optional[Part]:
+        """The part '<package>:<name>' names, or None; 'referrer' as 'get_sketch' takes it."""
+        return self._get_part(part_spec, params, referrer=referrer)
 
-    async def get_part_async(self, part_spec, params=None) -> Optional[Part]:
-        return await self._get_part_async(part_spec, params)
+    async def get_part_async(self, part_spec, params=None, referrer=None) -> Optional[Part]:
+        return await self._get_part_async(part_spec, params, referrer=referrer)
 
     def get_part_shape(self, part_spec, params=None):
         return asyncio.run(self._get_part(part_spec, params).get_wrapped(self))
@@ -1734,7 +1742,7 @@ class Context:
         """Return the SDF part's mesh (normalized in the sandbox at build time)."""
         return asyncio.run(self._get_part(part_spec, params).get_wrapped(self))
 
-    def _get_assembly(self, assembly_spec, params=None):
+    def _get_assembly(self, assembly_spec, params=None, referrer=None):
         project_name, assembly_name = resolve_resource_path(
             self.current_project_path,
             assembly_spec,
@@ -1744,10 +1752,11 @@ class Context:
             pc_logging.error("Package %s not found" % project_name)
             return None
         pc_logging.debug("Retrieving %s from %s" % (assembly_name, project_name))
-        return prj.get_assembly(assembly_name, params)
+        return prj.get_assembly(assembly_name, params, referrer=referrer)
 
-    def get_assembly(self, assembly_spec, params=None):
-        return self._get_assembly(assembly_spec, params)
+    def get_assembly(self, assembly_spec, params=None, referrer=None):
+        """The assembly '<package>:<name>' names, or None; 'referrer' as 'get_sketch' takes it."""
+        return self._get_assembly(assembly_spec, params, referrer=referrer)
 
     def get_assembly_shape(self, assembly_spec, params=None):
         return asyncio.run(self._get_assembly(assembly_spec, params).get_wrapped(self))
@@ -1759,7 +1768,7 @@ class Context:
         """
         return asyncio.run(self._get_assembly(assembly_spec, params).convert(part_type, self, **kwargs))
 
-    def _get_scene(self, scene_spec, params=None):
+    def _get_scene(self, scene_spec, params=None, referrer=None):
         project_name, scene_name = resolve_resource_path(
             self.current_project_path,
             scene_spec,
@@ -1769,10 +1778,11 @@ class Context:
             pc_logging.error("Package %s not found" % project_name)
             return None
         pc_logging.debug("Retrieving %s from %s" % (scene_name, project_name))
-        return prj.get_scene(scene_name, params)
+        return prj.get_scene(scene_name, params, referrer=referrer)
 
-    def get_scene(self, scene_spec, params=None):
-        return self._get_scene(scene_spec, params)
+    def get_scene(self, scene_spec, params=None, referrer=None):
+        """The scene '<package>:<name>' names, or None; 'referrer' as 'get_sketch' takes it."""
+        return self._get_scene(scene_spec, params, referrer=referrer)
 
     def get_scene_shape(self, scene_spec, params=None):
         return asyncio.run(self._get_scene(scene_spec, params).get_wrapped(self))

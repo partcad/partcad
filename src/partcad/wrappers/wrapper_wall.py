@@ -5,12 +5,12 @@
 #
 
 # This script is executed within the python sandbox environment (python runtime)
-# to build a wall: the surface a room is drawn with, rather than a body anybody
-# makes (see 'partcad.part_factory_wall'). The openings sketch, when there is
-# one, arrives as a BREP envelope; the dimensions arrive as plain data; and the
-# wall goes back as a BREP envelope.
+# to build a wall: the surface a room is drawn with, or - given a thickness - the
+# solid that surface is the face of (see 'partcad.part_factory_wall'). The
+# openings sketch, when there is one, arrives as a BREP envelope; the dimensions
+# arrive as plain data; and the wall goes back as a BREP envelope.
 #
-# A wall is one-sided. It is a face - or, where an opening divides it, several -
+# A wall with no thickness is one-sided. It is a face - or, where an opening divides it, several -
 # whose normal points to the side it is seen from, and it is drawn from that
 # side only, so that from the other side it is not there at all: the wall
 # between the viewer and a room is looked through, and the far walls of the room
@@ -36,6 +36,13 @@
 #     viewer: X along its base from 0 to 'length', Y up from 0 to 'height'. On an
 #     arc wall X is the distance along the arc, so a door 900 mm wide is 900 mm
 #     wide on the wall whatever the wall's radius.
+#   * A wall with a 'thickness' is that face - its elevation, the sketch of it
+#     with the openings cut out - extruded through the thickness *behind* it,
+#     away from the side it is seen from: towards +Y for a straight wall, which
+#     is outside a room traced clockwise, so that the face stays exactly where
+#     the plan drew it and the room keeps the size it was drawn at. A straight
+#     wall is a prism of its elevation; an arc wall is extruded along the
+#     radius, every point of it straight back from where it is (see 'thick').
 
 import math
 import os
@@ -339,8 +346,36 @@ def cylinder(radius):
     return Geom_CylindricalSurface(axis, radius)
 
 
-def build(length, height, radius=0.0, openings=None, where="the openings sketch"):
-    """The wall these dimensions describe, with the openings 'openings' (a sketch's shape, or None) cut out of it."""
+def thick(face, thickness):
+    """The solid 'face' is the front of: the face extruded 'thickness' straight back from where it looks.
+
+    Every point of the face moves along the face's normal, against the side the
+    face is seen from: a flat face is the prism of it, and the face of an arc
+    wall becomes the solid between two coaxial cylinders, the openings through
+    it as holes - which no prism along one direction can be. OCCT's simple
+    offset builds exactly that: the face, its offset, and the faces that join
+    their edges, as one solid.
+    """
+    from OCP.BRepOffset import BRepOffset_MakeSimpleOffset
+    from OCP.TopAbs import TopAbs_SOLID
+
+    maker = BRepOffset_MakeSimpleOffset(face, -thickness)
+    maker.SetBuildSolidFlag(True)
+    maker.Perform()
+    if not maker.IsDone():
+        raise WallError("the wall could not be given its thickness of %.6g mm" % thickness)
+    solid = maker.GetResultShape()
+    if solid is None or solid.IsNull() or solid.ShapeType() != TopAbs_SOLID:
+        raise WallError("the wall given its thickness of %.6g mm is not a solid" % thickness)
+    return solid
+
+
+def build(length, height, radius=0.0, openings=None, where="the openings sketch", thickness=0.0):
+    """The wall these dimensions describe, with the openings 'openings' (a sketch's shape, or None) cut out of it.
+
+    A surface for no 'thickness'; for one, the solid that surface is the front
+    of (see 'thick').
+    """
     from OCP.BRep import BRep_Builder
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_Transform
     from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf
@@ -349,6 +384,14 @@ def build(length, height, radius=0.0, openings=None, where="the openings sketch"
     length = float(length)
     height = float(height)
     radius = float(radius or 0.0)
+    thickness = float(thickness or 0.0)
+    if thickness < 0.0:
+        raise WallError("a wall is no thinner than nothing: 'thickness' is %s" % thickness)
+    if radius < 0.0 and thickness >= -radius:
+        raise WallError(
+            "an arc wall bending away from the side it is seen from, of radius %.6g mm, is thinner than that: "
+            "'thickness' is %.6g mm" % (-radius, thickness)
+        )
     if not length > 0.0:
         raise WallError("a wall is longer than nothing: 'length' is %s" % length)
     if not height > 0.0:
@@ -399,6 +442,8 @@ def build(length, height, radius=0.0, openings=None, where="the openings sketch"
             faces = [TopoDS.Face_s(BRepBuilderAPI_Transform(face, mirror, True).Shape()) for face in faces]
 
     faces = [oriented(face, radius) for face in faces]
+    if thickness > 0.0:
+        faces = [thick(face, thickness) for face in faces]
     if len(faces) == 1:
         return faces[0]
     compound = TopoDS_Compound()
@@ -416,6 +461,7 @@ def process(request):
         request.get("radius", 0.0),
         request.get("openings"),
         "the openings sketch '%s'" % request.get("openingsName", ""),
+        request.get("thickness", 0.0),
     )
 
 
@@ -431,8 +477,9 @@ if __name__ == "__main__":
         wrapper_common.handle_exception(e)
         model = {"success": False, "exception": str(e), "shape": None}
     else:
-        # Moved here, while it is live (see wrapper_common.finished). A wall is
-        # asked not to be validated - it is a surface on purpose, see
-        # 'Shape.finish_request' - so the request it carries says so.
+        # Moved here, while it is live (see wrapper_common.finished). A wall with
+        # no thickness is asked not to be validated - it is a surface on
+        # purpose, see 'Shape.finish_request' - so the request it carries says
+        # so; one with a thickness is a solid, validated like any part.
         model = {"success": True, "exception": None, "shape": wrapper_common.finished(shape)}
     wrapper_common.handle_output(model)

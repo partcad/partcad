@@ -53,6 +53,8 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
       # ... type-specific options ...
       offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]";
                any number in it may be an expression over the part's parameters, e.g. "%length / 2%">
+      visual: <(optional) the part a picture of this one draws in its place; see "Visual" below>
+      private: <(optional) true to keep this part to its package; see "Private objects">
 
       # The below syntax is similar to the one used for interfaces,
       # with the only exception being the word "implements" instead of "inherits".
@@ -155,6 +157,57 @@ to ``parameters``, which say what is asked of the type that produces it. See
 :ref:`properties` below.
 
 See :ref:`location` for more information on the OCCT Location object.
+
+.. _part-visual:
+
+Visual
+------
+
+A part is what it is: the body ``pc test`` measures, a simulation collides with, an analysis meshes and an export
+writes. Sometimes the right **picture** of it is something else, and ``visual:`` names the part a picture draws in
+its place:
+
+.. code-block:: yaml
+
+  parts:
+    wall:
+      type: wall
+      thickness: 100
+      visual: wall-surface   # drawn as the one-sided surface of its face
+
+    wall-surface:
+      type: wall
+      private: true          # geometry for a picture: nothing another package should build on
+
+A wall in a floor plan is a solid with a thickness, and a plan draws it as a surface a room is seen into through
+(this is ``//builtin/building:wall``). A part simplified to what a simulation collides with is drawn as the detailed
+model it stands in for. A ``visual:`` is a reference to a part, written as an ASSY link writes one -- a name of this
+package, ``:name``, ``//package:name``, with ``;parameter=value,...`` for an instance of it and ``%...%`` worked out
+over this part's parameters -- and it may name a :ref:`private <private-objects>` part of the same package.
+
+**It is drawn only where a picture is drawn**, and only there:
+
+- in the Digital Thread's **3D view**;
+- in a ``render:`` file type whose implementation draws pictures: PartCAD's own SVG, PNG and JPEG (what the IDE's
+  2D tab shows) and its videos. An implementation says so with ``visuals: true`` on its file type (see
+  :ref:`visuals <output-visuals>`); one another package supplies draws each part as it is unless it says it too.
+
+**Everywhere else the part is itself, and its visual leaves no trace**: in every export, in a DXF, in a
+dimensioned drawing -- the IDE's Draft tab asks its drawing package for one of the parts as they are, whoever
+implements it -- in every check ``pc test`` runs, in manufacturability, in an analysis, in a route, in a bill of
+materials and in a simulation. The substitution is made on the way to a picture and kept nowhere else; a picture
+is cached under the visuals it drew, so a picture of a part whose visual changed is drawn again.
+
+What is drawn:
+
+- The visual is asked for with **this part's own values** of every parameter it declares too, and the ones its
+  reference names on top: a wall 4200 mm long is drawn as a surface 4200 mm long, in the wall's colour.
+- It is drawn **where this part is**, as its own declaration builds it (its own ``offset`` included). The part keeps
+  its name, its link, its placement and its ports: what the 3D view selects, and what a filter and a callout name.
+- An ``alias`` or an ``enrich`` of a part with a visual is drawn as that visual, moved by its own ``offset``; one
+  that scales the part is drawn as itself.
+- A visual's own ``visual:`` is not followed, and a visual that cannot be had is reported and the part drawn as
+  itself.
 
 .. _basic_parts:
 
@@ -560,12 +613,27 @@ Define parts by sweeping a sketch using the following syntax:
 Wall
 ----
 
-A wall is what a room is drawn with when a space is laid out rather than made: a
+A wall is what a room is laid out with when a space is planned rather than made: a
 floor plan, an apartment for sale, the room a machine is going to stand in. It is
-a **surface**, not a body -- a sheet of faces with no thickness -- and it is
-**one-sided**: drawn from the side it faces, and not there at all from the other.
-So a picture of a room taken from outside is taken through the walls nearest the
-camera, and shows the far walls from the inside.
+its **elevation** -- a rectangle as long and as high as it is, straight or bent
+along an arc, with its doors and windows cut out of it by a sketch -- and what
+that is depends on its ``thickness``:
+
+- With **no thickness** (the default) it is a **surface**, not a body -- a sheet of
+  faces -- and it is **one-sided**: drawn from the side it faces, and not there at
+  all from the other. So a picture of a room taken from outside is taken through
+  the walls nearest the camera, and shows the far walls from the inside. It is
+  geometry for a picture.
+- With a **thickness** it is a **solid**: the elevation extruded straight back
+  through the thickness from the side it is seen from -- a prism of it for a
+  straight wall, and along the radius for an arc wall. A physical wall: ``pc
+  test`` measures it like any part, a simulation collides with it and an export
+  writes it.
+
+``//builtin/building:wall`` is a solid wall that is drawn as the surface of it:
+its :ref:`visual <part-visual>` is the one-sided ``wall-surface`` beside it, which
+is :ref:`private <private-objects>` to that package. A room laid out with it is
+walled, and is still seen into from outside in the 3D view and in every picture.
 
 .. code-block:: yaml
 
@@ -578,6 +646,7 @@ camera, and shows the far walls from the inside.
       radius: <(optional) 0, the default, for a straight wall; the radius of an arc wall
                otherwise: positive bends it towards its front, negative away from it>
       openings: <(optional) the sketch its doors and windows are cut out by>
+      thickness: <(optional) mm behind its face; 0, the default, is a one-sided surface>
 
 The base of the wall starts at the origin and sets off along +X, and the wall
 rises along +Z. Its **front** faces -Y, the way ``pc render --view front`` looks
@@ -587,7 +656,10 @@ start, and the side it is seen from is the one on your right. An arc wall bends
 towards its front for a positive ``radius`` -- the inside of a round room -- and
 away from it for a negative one, the outside of a column a room goes around;
 either way it is ``length`` long measured along the arc, and goes once around at
-most.
+most. Its ``thickness`` goes back from its front, towards +Y: outside a room traced
+clockwise, so that the face is where the plan drew it and the room is the size it
+was drawn. An arc wall bending away from its front has to be thinner than its
+radius.
 
 The openings are a sketch drawn as if the wall were unrolled flat in front of
 you: X along its base from 0 to ``length``, Y up from 0 to ``height``, on the XY
@@ -599,10 +671,10 @@ than an opening quietly clipped to fit: a window drawn too wide is a mistake in
 the drawing or in the wall, and either is worth hearing about. So is an opening
 off the XY plane, and one that does not close.
 
-Any of the four may be a ``%...%`` expression over the part's parameters, which is
+Any of the five may be a ``%...%`` expression over the part's parameters, which is
 how PartCAD's own wall is declared: ``//builtin/building:wall`` takes ``length``,
-``height``, ``radius`` and ``openings`` as parameters, so any package can use a
-wall without declaring one:
+``height``, ``radius``, ``openings`` and ``thickness`` (100 mm unless it is told
+otherwise) as parameters, so any package can use a wall without declaring one:
 
 .. code-block:: yaml
 
@@ -618,14 +690,15 @@ wall without declaring one:
 A room is the walls standing on the outline of a sketch, each looking in: see
 :ref:`scenes-walls`.
 
-A wall is a surface on purpose, by its type, and that is decided by the type and
-not by the part:
+Whatever its thickness, a wall is **never manufacturable**, and has to say so. A
+``type: wall`` part that does not state ``manufacturable: false`` -- itself, or
+through its package -- is refused with a message saying what to add. ``pc
+test``'s manufacturability check passes over it, and fails an assembly that is to
+be made with a wall in it: put walls in a scene.
 
-- It is **never manufacturable**, and has to say so. A ``type: wall`` part that
-  does not state ``manufacturable: false`` -- itself, or through its package -- is
-  refused with a message saying what to add. ``pc test``'s manufacturability
-  check passes over it, and fails an assembly that is to be made with a wall in
-  it: put walls in a scene.
+A wall with no thickness is a surface on purpose, and that is decided by the type
+and its thickness and by nothing else the part could say:
+
 - It is **not turned into a solid**, nor reported for not being one, as it is
   built (see "A part is a body, not a skin" in the contributor notes).
 - The checks that ask whether a part is a body -- ``shell``, ``degenerate``,
@@ -638,6 +711,9 @@ not by the part:
   would see from behind -- cutting a curved wall where it turns away -- so that
   from straight above every wall is seen edge-on and the drawing is the plan. An
   alias of a wall is one-sided too.
+
+A wall with a thickness is a body like any other part, and the checks hold it to
+being one. What a picture draws of it is its ``visual:``, if it says one.
 
 A wall is coloured as any part is, by its :ref:`CMF <cmf>` ``color`` parameter
 (and given a ``material`` or a ``finish`` the same way): what it is painted.

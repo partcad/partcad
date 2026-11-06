@@ -78,7 +78,7 @@ class PartFactoryExtrude(PartFactoryHomogen):
         without it an edited sketch goes on being extruded from the entry
         the old one produced.
         """
-        sketch = self.ctx.get_sketch(self.source_sketch_spec)
+        sketch = self.ctx.get_sketch(self.source_sketch_spec, referrer=self.project.name)
         if sketch is None:
             # Reported by 'instantiate', which is where it always was.
             return
@@ -92,7 +92,7 @@ class PartFactoryExtrude(PartFactoryHomogen):
     async def instantiate(self, part):
         with pc_logging.Action("Extrude", part.project_name, part.name):
             try:
-                self.sketch = self.ctx.get_sketch(self.source_sketch_spec)
+                self.sketch = self.ctx.get_sketch(self.source_sketch_spec, referrer=self.project.name)
                 sketch_env = await self.sketch.get_wrapped(self.ctx)
                 if sketch_env is None:
                     part.error("%s: %s: the source sketch produced no shape" % (part.project_name, part.name))

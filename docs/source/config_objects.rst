@@ -48,6 +48,51 @@ a part's ``type:``.
 What that buys on the command line -- naming an object without saying its kind -- is in
 :ref:`object-names`.
 
+.. _private-objects:
+
+===============
+Private objects
+===============
+
+Any of those objects -- a part, an interface, an assembly, a sketch, a scene, software -- may be kept to its
+package:
+
+.. code-block:: yaml
+
+  parts:
+    wall-surface:
+      type: wall
+      private: true
+
+Every object *of the same package* can still build on it: name it in an ASSY link, alias or enrich it, extrude
+it, place it as the wall of a ``walls`` scene, draw a part as it with :ref:`visual <part-visual>`, ship it as
+``software:``. A reference
+written in **another** package cannot, and is refused where it is written, naming the object, the package it
+is private to and the package the reference is in:
+
+.. code-block:: text
+
+  ERROR: A part '//builtin/building:wall-surface' is private to //builtin/building, and a reference written in
+  //my/house cannot name it
+
+It is how a package keeps an object it needs for its own work -- the surface a wall is drawn as, a helper
+sketch, a fixture -- from becoming something other packages depend on, and so from becoming something it can no
+longer change. ``//builtin/building`` keeps the one-sided surface of a wall private for exactly that reason:
+it is a picture, not a wall, and a room built out of it would have no walls.
+
+What is checked is a **reference**: a name a package writes, which PartCAD resolves on behalf of one of its
+objects. A **command** is not one: ``pc render``, ``pc test``, ``pc info``, the IDE's Explorer and an agent's MCP
+tools reach a private object by name like any other, because that is how its own package is developed, and
+``pc test -r`` and ``pc render -r`` go on covering everything a package declares. (This is where Bazel, whose
+``//package:target`` names PartCAD's follow, draws the same line.)
+
+A private object's parametrized instances (``wall-surface;length=4200``) are as private as it is, and so is every
+name its ``aliases:`` give it. An alias the package declares under a name of its own, without ``private:``, is
+public: that is the package choosing to publish the object under that name, which only it can do.
+
+``private:`` on an object is not the package's own top-level ``private:`` (see :ref:`packages`), which says that
+the package does not track the public index and makes none of its objects private.
+
 ===============
 Common Metadata
 ===============

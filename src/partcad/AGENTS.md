@@ -1124,10 +1124,15 @@ at all).
   read.
 
   **A surface part is the one kind of part this does not apply to, and it is a kind, not a setting**
-  (`surface.py`, `part_factory_wall.py`, `wrappers/wrapper_wall.py`). A `wall` is a sheet of one-sided faces
-  drawn to lay out a space -- a floor plan, the walls of a room -- and a skin is what it is for. Its *type* is
-  in `surface.SURFACE_PART_TYPES`, and everything follows from that, read off the declaration the part
-  resolves to (`final_config`), so an alias or an enrich of a wall is a wall: `Shape.finish_request` asks its
+  (`surface.py`, `part_factory_wall.py`, `wrappers/wrapper_wall.py`). A `wall` with no `thickness` is a sheet
+  of one-sided faces drawn to lay out a space -- a floor plan, the walls of a room -- and a skin is what it is
+  for. Its *type* is in `surface.SURFACE_PART_TYPES`, and its one dimension that says whether it has a body at
+  all, `thickness` (`part_factory_wall.thickness_of`, resolved as the factory resolves it), is 0; everything
+  follows from that, read off the declaration the part resolves to (`final_config`), so an alias or an enrich
+  of a wall is a wall. A wall *with* a thickness is its elevation extruded straight back through it
+  (`wrapper_wall.thick`: a prism for a straight wall, along the radius for an arc wall) and is a body like any
+  other, held to being one; that is what `//builtin/building:wall` is, drawn as the surface through its
+  `visual:` (see "What a part is drawn as" below). For a surface: `Shape.finish_request` asks its
   wrapper for no `validate` step and `get_wrapped` runs no `_validated_part` for it (nothing is solidified,
   nothing is reported as not a solid); `shell`, `degenerate`, `solidity` and `validity` pass it over as not
   applicable, naming the type; it is never manufacturable -- `PartFactoryWall` refuses a declaration whose
@@ -1145,6 +1150,46 @@ at all).
   what it is and decided here: a sketch is not measured for having size in every direction, and an assembly is
   checked through its parts. What to do about a part that fails is a decision to take on that part.
 
+- **What a part is drawn as is not what it is** (`visual.py`, `Shape.get_representation(visuals=)`,
+  `Shape._render_one_async`, `output.Implementation.visuals`). A part's `visual:` names another part, which a
+  *picture* draws in its place, and nothing else ever sees: `get_wrapped` is the part, and so is everything that
+  reads it -- every export, every test, manufacturability, analyses, routes, BOMs, simulations. The substitution
+  is made on a copy of the tree on its way to a picture, in exactly two places: `show_async` (the 3D view,
+  `get_representation(visuals=True)`) and `_render_one_async` for a file type whose *implementing* package
+  declares `visuals: true` on it (`//builtin/render`'s SVG, PNG, JPEG and videos; not DXF), only in `render:`,
+  and only when the caller did not pass `render_async(visuals=False)` -- which is what the IDE's Draft tab
+  sends through `render.inline`, so a dimensioned drawing is of the object as it is whoever implements it, and
+  what `pc render --no-visuals` (`render.objects`) and the MCP `render` tool's `visuals: false` ask for.
+  `visuals` is read with `Implementation._declared`, never from the layered options: a drawing package that
+  declares an `svg` of its own `path` is layered over `//builtin/render`'s `svg`, and reading the merge would
+  hand it PartCAD's `visuals: true`.
+
+  The parts of a tree are found by the object name each node carries, and only a name whose package declares
+  the part with a `visual:` or as an alias/enrich is looked up (`visual._part_named_async`), so nothing a STEP
+  assembly holds is built for the asking. A substituted node keeps the part's name, label, placement, kind,
+  joint and ports, and takes the visual's geometry, metadata and properties, plus `visual` naming it. The
+  visual is asked for with the part's own values of every parameter it declares too (CMF spelled in full,
+  `cmf.canonical_parameters`), as a reference the part's package wrote -- so it may be private there and nowhere
+  else. An alias or an enrich draws its source's visual, moved by its own `offset`; one that `scale`s draws
+  itself. An enrich does not adopt its source's `visual` or `private` (`enrich.SOURCE_ONLY_PROPERTIES`): both are
+  the source's, and its `visual:` is a reference relative to the source's package. The part's cache key does not
+  mention the visual; a picture's artifact key does (`_output_run_async(visuals=)`: each visual's own key), and
+  a visual with no key leaves the picture uncached. A visual that cannot be had is reported and the part drawn
+  as itself.
+
+- **An object may keep itself to its package** (`privacy.py`, `Project.visible_to`). `private: true` on any
+  object of the named kinds is checked on a *reference*: every getter of `Project` and `Context` takes a
+  `referrer`, the package the name was written in, and refuses a private object of another package with a
+  message naming both. The places that resolve a name on behalf of a declaration pass it -- ASSY links
+  (`linked_item`), alias and enrich sources (parts, sketches, assemblies, scenes), the sketch of an extrusion, a
+  sweep, a wall's openings, a `walls` scene's outline, an interface's sketch, a part's `visual:`, and the
+  software an object ships with (`software.lookup(referrer=)`: the package that wrote the list travels with
+  it as `software_resolved_by`, since an alias hands the list on). Nothing else does, and a lookup with no referrer is never refused: a command (`pc`, the IDE, MCP) names an object to
+  look at it, which is how its own package develops it and what `pc test -r` and `pc render -r` need. A new
+  place that resolves a reference a package wrote passes the package that wrote it. Instances and `aliases:`
+  names of a private object are private; an alias the package declares under a name of its own is not. Not the
+  package's own top-level `private:`, which is unrelated.
+
 - **One shape, one lock** (`Shape.locked()`): a shape is held still both while it is instantiated and while
   any file derived from it is produced. They are one question because the output path is derived from the
   shape -- `<part>.<format>` beside the package -- so two concurrent runs over one shape resolve to one path
@@ -1161,9 +1206,11 @@ at all).
   PartCAD writes references to it (`cmf.RGBA`) - for a hex or CSS colour, and for a source's colour nothing
   claims - and a reference it writes has to resolve in any context, with or without the public index.
 
-  `//builtin/building` declares objects too: `wall`, a `type: wall` part whose `length`, `height`, `radius`
-  and `openings` are `%...%` expressions over parameters of the same names, and `room`, a `type: walls` scene
-  over `sketch` and `height`. The types are PartCAD's (`part_factory_wall.py`, `scene_factory_walls.py`), and
+  `//builtin/building` declares objects too: `wall`, a `type: wall` part whose `length`, `height`, `radius`,
+  `openings` and `thickness` (100 mm by default) are `%...%` expressions over parameters of the same names -- a
+  solid, whose `visual:` is `wall-surface`, the same wall with no thickness, `private: true` -- and `room`, a
+  `type: walls` scene over `sketch`, `height` and `thickness`. A `walls` scene passes `thickness` to its walls
+  only when it states one, so a wall part of somebody's own that takes none is asked for with none. The types are PartCAD's (`part_factory_wall.py`, `scene_factory_walls.py`), and
   the package is how a package uses them without declaring anything: `room;sketch=//pkg:plan`. A sketch
   handed to either has to be named in full, because a bare name resolves in `//builtin/building`. It also
   declares one CMF colour, `wall`, display-only, which is the default of the wall's `color` parameter: a wall

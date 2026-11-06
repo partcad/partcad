@@ -1214,6 +1214,15 @@ Object commands
     pc render -t svg --view top --reproducible -O ./exact bracket
     pc render -t svg --view top --no-reproducible -O ./polygonal bracket
 
+  ``--no-visuals`` draws every part as it is, never as the :ref:`visual <part-visual>` it declares: the picture
+  of what an export, ``pc test`` and a simulation see. Without it, PartCAD's own pictures (``svg``, ``png``,
+  ``jpeg`` and the videos) draw each part as its visual, and everything else -- ``dxf``, a drawing package's file
+  types, every export -- draws it as it is anyway. A floor plan drawn from above with it shows its walls' thickness:
+
+  .. code-block:: shell
+
+    pc render -t svg --view top --no-visuals -S living-room
+
   A rendered file is named after the object, so several views of one object go into directories of their own
   rather than over each other:
 

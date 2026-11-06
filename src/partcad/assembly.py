@@ -1136,8 +1136,9 @@ def _software_of(ctx, item):
     if ctx is None:
         return []
     found = []
-    for ref in pc_software.resolved_software_refs(item.project_name, _final_config(item)):
-        project, software = pc_software.lookup(ctx, ref)
+    config = _final_config(item)
+    for ref in pc_software.resolved_software_refs(item.project_name, config):
+        project, software = pc_software.lookup(ctx, ref, referrer=pc_software.referrer_of(config))
         if software is None:
             continue
         found.append((ref, project, software))

@@ -156,7 +156,9 @@ class InterfacePort:
                     project.relocate(self.source_sketch_name),
                 )
                 self.source_sketch_spec = self.source_project_name + ":" + self.source_sketch_name
-                self.sketch = project.ctx.get_sketch(self.source_sketch_spec, self.sketch_params or None)
+                self.sketch = project.ctx.get_sketch(
+                    self.source_sketch_spec, self.sketch_params or None, referrer=project.name
+                )
             else:
                 self.source_project_name = project.name
                 self.source_sketch_spec = self.source_project_name + ":" + self.source_sketch_name

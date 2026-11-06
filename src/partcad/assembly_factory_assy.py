@@ -176,19 +176,26 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         return {**params, **added} if added else params
 
     def linked_item(self, kind: str, name: str, params: dict):
-        """The assembly or scene a link names, with the CMF this assembly passes on (see 'with_propagated_cmf')."""
+        """The assembly or scene a link names, with the CMF this assembly passes on (see 'with_propagated_cmf').
+
+        Asked for as a reference this assembly's package wrote, so that an
+        object another package keeps to itself is refused here, where it was
+        named (see 'partcad.privacy').
+        """
         getter = self.ctx._get_assembly if kind == "assembly" else self.ctx._get_scene
-        item = getter(name, params)
+        referrer = self.project.name
+        item = getter(name, params, referrer=referrer)
         propagated = self.with_propagated_cmf(item, params)
-        return item if propagated is params else getter(name, propagated)
+        return item if propagated is params else getter(name, propagated, referrer=referrer)
 
     async def linked_item_async(self, kind: str, name: str, params: dict):
         """'linked_item' for any kind, parts included, which resolve on the caller's loop."""
         if kind != "part":
             return self.linked_item(kind, name, params)
-        item = await self.ctx._get_part_async(name, params)
+        referrer = self.project.name
+        item = await self.ctx._get_part_async(name, params, referrer=referrer)
         propagated = self.with_propagated_cmf(item, params)
-        return item if propagated is params else await self.ctx._get_part_async(name, propagated)
+        return item if propagated is params else await self.ctx._get_part_async(name, propagated, referrer=referrer)
 
     async def prepare_async(self, assembly) -> None:
         """Resolve every part and assembly this one links to, without building.

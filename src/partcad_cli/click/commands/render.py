@@ -55,6 +55,16 @@ from ..viewport import viewport_options, viewport_params
 @viewport_options
 @reproducible_option
 @click.option(
+    "--no-visuals",
+    "no_visuals",
+    is_flag=True,
+    help=(
+        "Draw every part as it is, never as the 'visual:' it declares: the picture of what an export, a test "
+        "and a simulation see. Without it a picture draws each part as its visual, and a drawing never does"
+    ),
+    show_envvar=True,
+)
+@click.option(
     "-P",
     "--package",
     help="Package to retrieve the object from ('<package>...' for that package and every package below it)",
@@ -207,6 +217,7 @@ def cli(
     viewport_up,
     turn,
     reproducible,
+    no_visuals,
     package,
     options_package,
     recursive,
@@ -250,6 +261,8 @@ def cli(
             "ignore_manufacturability": ignore_manufacturability,
             **viewport_params(view, viewport_origin, viewport_up, turn),
             **reproducible_params(reproducible),
+            # Sent only when it says something: absent, each file type decides.
+            **({"visuals": False} if no_visuals else {}),
             **video_params(style, size, background, fps, duration, speed, append, preset, quality),
             "package": package,
             "options_package": options_package,

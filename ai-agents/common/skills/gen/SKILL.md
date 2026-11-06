@@ -65,3 +65,11 @@ are measured from.
 The part, assembly and scene flows write down what the object is required to
 be as its `requirements:` before judging the result against them, and
 `/pc:validate` gives a verdict on every one of them afterwards.
+
+All four model what the object **is** - a part is a correct physical body - and
+keep two other things apart from it, each explained in the flow that uses it:
+`visual:`, the part a *picture* of a part draws in its place and nothing else ever
+sees (`/pc:gen-part` §5; a floor plan's walls in `/pc:gen-scene` §4), and
+`private: true`, which keeps an object - a helper sketch, a part's visual, a
+layout - to its own package, so that no other package builds on it
+(`/pc:gen-sketch` §9).

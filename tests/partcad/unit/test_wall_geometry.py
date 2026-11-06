@@ -212,6 +212,67 @@ def test_an_opening_on_another_plane_or_open_is_refused():
         wrapper_wall.build(LENGTH, HEIGHT, 0.0, three_sides.Wire())
 
 
+def _volume(shape):
+    props = GProp_GProps()
+    BRepGProp.VolumeProperties_s(shape, props)
+    return props.Mass()
+
+
+def _solids(shape):
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+
+    found = []
+    explorer = TopExp_Explorer(shape, TopAbs_SOLID)
+    while explorer.More():
+        found.append(explorer.Current())
+        explorer.Next()
+    return found
+
+
+def test_a_thick_straight_wall_is_its_elevation_extruded_back_from_its_face():
+    """The face where the surface would be, the openings through it, and the thickness towards +Y behind it."""
+    wall = wrapper_wall.build(LENGTH, HEIGHT, 0.0, _openings(), thickness=150.0)
+
+    assert BRepCheck_Analyzer(wall).IsValid()
+    assert len(_solids(wall)) == 1
+    assert _volume(wall) == pytest.approx(OPENED * 150.0, rel=1e-9)
+    x_min, y_min, z_min, x_max, y_max, z_max = wrapper_wall._bounds(wall)
+    assert (x_min, y_min, z_min, x_max, y_max, z_max) == pytest.approx((0.0, 0.0, 0.0, LENGTH, 150.0, HEIGHT), abs=1e-6)
+
+
+def test_a_door_as_tall_as_a_thick_wall_leaves_two_solids():
+    wall = wrapper_wall.build(LENGTH, HEIGHT, 0.0, _compound(_rectangle(1000.0, 0.0, 2000.0, HEIGHT)), thickness=100.0)
+    assert len(_solids(wall)) == 2
+    assert _volume(wall) == pytest.approx((LENGTH - 1000.0) * HEIGHT * 100.0, rel=1e-9)
+
+
+@pytest.mark.parametrize("radius", [1500.0, -1500.0])
+def test_a_thick_arc_wall_is_extruded_along_its_radius_away_from_its_front(radius):
+    """Half a ring: outwards from its axis where it bends towards its front, inwards where it bends away."""
+    length = math.pi * abs(radius)
+    thickness = 200.0
+    wall = wrapper_wall.build(length, HEIGHT, radius, _openings(), thickness=thickness)
+
+    assert BRepCheck_Analyzer(wall).IsValid()
+    assert len(_solids(wall)) == 1
+    outer, inner = (abs(radius) + thickness, abs(radius)) if radius > 0 else (abs(radius), abs(radius) - thickness)
+    ring = math.pi * (outer**2 - inner**2) / 2.0 * HEIGHT
+    # The openings go through it radially, so each takes out its developed
+    # width at the mean radius of the ring.
+    openings = (900.0 * 2100.0 + 1200.0 * 1100.0) * thickness * ((outer + inner) / 2.0) / abs(radius)
+    assert _volume(wall) == pytest.approx(ring - openings, rel=1e-6)
+
+
+def test_a_wall_is_no_thinner_than_nothing_and_an_arc_bent_away_no_thicker_than_its_radius():
+    with pytest.raises(wrapper_wall.WallError, match="'thickness' is -1.0"):
+        wrapper_wall.build(LENGTH, HEIGHT, thickness=-1.0)
+    with pytest.raises(wrapper_wall.WallError, match="thinner than that: 'thickness' is 1000 mm"):
+        wrapper_wall.build(LENGTH, HEIGHT, -1000.0, thickness=1000.0)
+    # Bent towards its front, it goes back away from its axis, and has room.
+    assert BRepCheck_Analyzer(wrapper_wall.build(LENGTH, HEIGHT, 1000.0, thickness=1000.0)).IsValid()
+
+
 def test_a_wall_needs_a_size_and_something_left_of_it():
     with pytest.raises(wrapper_wall.WallError, match="'length' is 0.0"):
         wrapper_wall.build(0.0, HEIGHT)

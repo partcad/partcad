@@ -239,6 +239,12 @@ render (`Tree.filter()` -- the mask `pc render --filter` takes, read by `partcad
 the 2D tab, to which port overlays to draw (`Tree.overlay()` -- `--with-ports`/`--with-interfaces`/
 `--with-internals`). Do not add a second tree widget for that: a row's meaning would then have two definitions.
 
+**The Draft tab asks for its drawing with `visuals: false`, and the 2D tab leaves it out** (`PartcadViewer.fetchTab`,
+`render.inline`'s `visuals`). A part may declare a `visual:` -- another part a *picture* draws in its place, such
+as the one-sided surface PartCAD's solid wall is drawn as -- and the 3D view and PartCAD's own pictures draw it.
+A dimensioned drawing is of the object as it is, whichever package draws it and whatever its file type is called,
+so the Draft tab says so on every request rather than trusting the drawing package's declaration.
+
 **Under the tree of the 3D and 2D tabs are five callout boxes** (`labels.ts`): Component names, Component prices,
 Materials, Port names and Interface names, the last two ticked from the start. A box is named for what it writes,
 with no "Show" in front of it. They say *what* is written; the tree says *on
