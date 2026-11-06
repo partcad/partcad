@@ -625,14 +625,16 @@ scenes:
               and abs(sum(a * b for a, b in zip(after["bodies"][n]["quat"], before["bodies"][n]["quat"]))) > 0.996
               and max(abs(a - b) for a, b in zip(result["samples"][-1]["bodies"][n]["pos"],
                                                   result["samples"][-2]["bodies"][n]["pos"])) < 1.0
+              and max(abs(w) for w in after["bodies"][n]["angvel"]) < 1.0
               for n in before["bodies"]
           )
 ```
 
 No body moved more than 5 mm or turned more than 10° (`|q₀·q₁| > cos 5°`, as in
-`/pc:gen-assembly` §7), and none was still moving between the last two
-samples. A position alone would pass a body that tipped over about its own
-origin.
+`/pc:gen-assembly` §7), none was still moving between the last two samples,
+and none is still turning at the end (`angvel`, in deg/s). A position alone
+would pass a body that tipped over about its own origin, and an orientation
+alone one that is still rocking.
 
 - **A run starts at rest**, where the scene places everything, and nothing
   moves anything but gravity, contact and the medium: there is no initial
