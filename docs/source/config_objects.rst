@@ -509,6 +509,12 @@ gives it a name of its own:
       with:
         exploded: true
 
+An exploded assembly is never manufacturable, whatever it or its package says:
+it is a picture of the assembly, with every item where nothing holds it, not one
+more thing to make. So ``logo;exploded=true`` and ``logo_exploded`` above drop
+``manufacturable``, and ``pc test`` treats them as it treats anything marked
+``manufacturable: false``. ``logo`` itself keeps its own.
+
 Only the ``assy`` type accepts it, because only an ASSY file says what each item
 is connected to; declaring ``exploded`` on an assembly read from a STEP file is
 an error.

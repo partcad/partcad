@@ -280,6 +280,34 @@ def test_an_assembly_pc_test_does_not_hold_to_connectivity_is_not_held_to_it_her
     assert lint.check_file(str(root / "thing.assy")).diagnostics == []
 
 
+@pytest.mark.parametrize("exploded", ["true", "{type: bool, default: true}"])
+def test_an_exploded_assembly_is_not_held_to_being_made(tmp_path, exploded):
+    """An exploded view drops 'manufacturable' in PartCAD (see 'partcad.assembly_explode'), so here too."""
+    root = package(
+        tmp_path,
+        "manufacturable: true\nassemblies:\n  thing:\n    type: assy\n    parameters:\n      exploded: %s\n" % exploded,
+        PLACED,
+    )
+    path = str(root / "thing.assy")
+    assert lint.check_file(path).diagnostics == []
+    # Not by being declared: by being exploded. Turned off by an override, the
+    # assembly is the one to be made again, and is held to it.
+    codes = [d.code for d in lint.check_file(path, parameter_overrides={"thing": {"exploded": "false"}}).diagnostics]
+    assert codes == ["manufacturable"]
+
+
+def test_an_assembly_with_an_exploded_view_is_still_held_to_being_made(tmp_path):
+    """The view is the one dropped, not the file it is a view of, which the other declaration makes."""
+    root = package(
+        tmp_path,
+        "manufacturable: true\nassemblies:\n  thing:\n    type: assy\n"
+        "  thing_exploded:\n    type: assy\n    path: thing.assy\n    parameters:\n      exploded: true\n",
+        PLACED,
+    )
+    codes = [d.code for d in lint.check_file(str(root / "thing.assy")).diagnostics]
+    assert codes == ["manufacturable"]
+
+
 # ---- what the editor's 'partcad.lint' settings add ----------------------------
 
 

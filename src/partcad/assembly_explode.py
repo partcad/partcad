@@ -38,6 +38,13 @@ Whatever is drawn against an item moves with it. Its ports do, wherever they are
 read from - the ones '--with-internals' draws, and the ones a 'map:' makes the
 assembly's own - because every reader takes the item's placement from one
 answer ('Assembly.exploded_offsets_async', composed by 'moved').
+
+An exploded assembly is never manufacturable, whatever it or its package says:
+it is a picture of the assembly, with every item where nothing holds it, and not
+one more thing to make or buy. So the object drops the flag as it is created
+('AssemblyFactory._create'), and so does an alias or an enrich that names the
+exploded view ('names_exploded_view'), since it is that view. The assembly it is
+a view of keeps its own.
 """
 
 import asyncio
@@ -45,7 +52,13 @@ import math
 from dataclasses import dataclass
 from typing import Optional
 
+from partcad_utils.utils import parse_parameterized_name
+
 from .geom import Location
+
+# The object-type parameter of the 'assy' type that draws the whole assembly
+# pulled apart (see 'Assembly.exploded').
+PARAMETER = "exploded"
 
 # How far apart an exploded view pulls an item and what it is joined to, as a
 # fraction of the largest dimension of the two, unless the connection says
@@ -74,6 +87,24 @@ class Separation:
 
     def offset(self) -> tuple:
         return tuple(self.direction[i] * self.distance for i in range(3))
+
+
+def names_exploded_view(name: str) -> bool:
+    """Whether a reference names an assembly's exploded view: 'logo;exploded=true'.
+
+    What an alias or an enrich points at, once its 'with:' is spelled into the
+    name (see 'AssemblyFactoryAlias'): such a reference is the exploded view,
+    under a name of its own, and is no more manufacturable than the view is. A
+    value that is not a boolean answers no here; it is the assembly that is
+    named which says what is wrong with it, as it is made.
+    """
+    from .output import as_flag
+
+    _, parameters = parse_parameterized_name(name or "")
+    try:
+        return as_flag(parameters.get(PARAMETER), PARAMETER)
+    except ValueError:
+        return False
 
 
 def offset_location(offset) -> Location:
