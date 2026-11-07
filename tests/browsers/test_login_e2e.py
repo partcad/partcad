@@ -668,3 +668,44 @@ def test_only_the_confirmation_page_can_say_yes(browser, listeners, site):
     # The request is still there for the user to answer.
     confirm(tab)
     wait_for(lambda: tab.url() == site.url + "/", "the confirmed login did not open the site")
+
+
+def test_a_confirmation_page_cannot_say_yes_to_what_it_was_not_showing(browser, listeners, site):
+    """The same start page asking for something else is a new request: the page still showing the old one is stale."""
+    listener = listeners(
+        {"url": site.url + "/", "title": "Shown", "capture": [{"name": "x", "ask": {}}], "timeout": TIMEOUT}
+    )
+    shown = browser.open_window(listener.start_url)
+    wait_for(lambda: on_confirm_page(shown), "the start page did not hand over to the confirmation page")
+    assert "Shown" in page_text(shown)
+
+    # The same start page, now asking for a cookie the first page never named.
+    listener.spec["title"] = "Swapped"
+    listener.spec["capture"] = [{"name": "token", "cookie": {"url": site.url + "/", "name": "access_token"}}]
+    swapped = browser.open_window(listener.start_url)
+    wait_for(lambda: on_confirm_page(swapped), "the changed request was not asked about")
+    assert "Swapped" in page_text(swapped) and "access_token" in page_text(swapped)
+    assert shown.evaluate("location.hash") != swapped.evaluate("location.hash")
+
+    # Continue on the page that showed the first request starts nothing.
+    wait_for(lambda: shown.evaluate("!document.getElementById('continue').disabled"), "Continue was never armed")
+    shown.click("#continue")
+    wait_for(lambda: shown.evaluate("!document.getElementById('gone').hidden"), "the stale page was not told")
+    assert browser.session_state() is None
+
+    # The one that shows it can.
+    confirm(swapped)
+    wait_for(lambda: browser.session_state(), "the shown request did not start")
+    assert browser.session_state()["spec"]["title"] == "Swapped"
+
+
+def test_the_same_request_again_keeps_its_page(browser, listeners, site):
+    """The start page reloaded, asking for the same thing, is the same request: the page already open still answers it."""
+    listener = listeners({"url": site.url + "/", "capture": [{"name": "x", "ask": {}}], "timeout": TIMEOUT})
+    first = browser.open_window(listener.start_url)
+    wait_for(lambda: on_confirm_page(first), "the start page did not hand over to the confirmation page")
+    again = browser.open_window(listener.start_url)
+    wait_for(lambda: on_confirm_page(again), "the same request was not asked about again")
+    assert first.evaluate("location.hash") == again.evaluate("location.hash")
+    confirm(first)
+    wait_for(lambda: first.url() == site.url + "/", "the request did not start from the page first opened")
