@@ -71,6 +71,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 import time
 import traceback
 import urllib.error
@@ -213,6 +214,36 @@ def format_name(base, parameters):
     if not items:
         return base
     return base + ";" + ",".join("%s=%s" % (k, _escape_value(str(v))) for k, v in items)
+
+
+def query_of(key):
+    """The key taken apart, as PartCAD sends it in ``request["query"]``.
+
+    For a PartCAD that sends the key alone (the same grammar as
+    ``project_external_repository.query_of``, which a test in PartCAD holds
+    this to).
+    """
+    path, _, query_string = key.partition("?")
+    head, _, rest = path.partition("/")
+    if head == "search" and rest:
+        arguments = urllib.parse.parse_qs(query_string, keep_blank_values=True)
+        query = {"what": "search", "kind": rest, "text": (arguments.get("q") or [""])[0]}
+        try:
+            limit = int((arguments.get("limit") or [""])[0])
+        except ValueError:
+            limit = 0
+        if limit > 0:
+            query["limit"] = limit
+        return query
+    if head == "objects" and rest:
+        kind, _, name = rest.partition("/")
+        if not name:
+            return {"what": "objects", "kind": kind}
+        base, parameters = parse_name(name)
+        return {"what": "object", "kind": kind, "name": base, "parameters": parameters}
+    if head == "files" and rest:
+        return {"what": "file", "path": rest}
+    return {"what": key}
 
 
 # --- what can go wrong, said the way the user can act on it -------------------
@@ -400,10 +431,20 @@ class Http:
     def _remember(self, kind, key, content):
         path = self._path(kind, key)
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        temporary = path + ".%d.tmp" % os.getpid()
-        with open(temporary, "wb") as f:
-            f.write(content)
-        os.replace(temporary, path)
+        # A file of its own per write, not per process: 'find' reads models on
+        # a pool of threads, and two of them can store one key - a model a
+        # search lists twice, or a page two models share.
+        fd, temporary = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(content)
+            os.replace(temporary, path)
+        except BaseException:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+            raise
 
     def json(self, url, what, headers=None, data=None, method=None, ttl=DAY, valid=None):
         """The JSON at 'url', from the cache when it is younger than 'ttl' seconds.
@@ -886,14 +927,9 @@ class Site:
                 return base64.b64encode(self.download(model, file)).decode("ascii")
         raise NotFound("%s: %s has no file %s any more" % (self.NAME, model_id, path))
 
-    def find(self, query):
-        """'search/part?<query>' answered: {name: config}, best first."""
-        fields = urllib.parse.parse_qs(query)
-        text = " ".join(fields.get("q", [])).strip()
-        try:
-            limit = int((fields.get("limit") or ["0"])[0] or 0)
-        except ValueError:
-            limit = 0
+    def find(self, text, limit=None):
+        """A search for parts answered: {name: config}, best first."""
+        text = (text or "").strip()
         limit = min(limit or DEFAULT_LIMIT, MAX_LIMIT)
         if not text:
             return {}
@@ -1030,32 +1066,29 @@ class Site:
         """One key of the repository protocol; None for a key there is no answer to.
 
         Read from the key taken apart, ``request["query"]``, when PartCAD sent
-        it for this key; from the key itself otherwise.
+        it for this key - which is also the key without the subfolder of a
+        package scoped to one - and from the key itself otherwise.
         """
         query = self.request.get("query") if self.request.get("key") == key else None
-        if isinstance(query, dict) and query.get("what") == "object":
+        if not isinstance(query, dict) or "what" not in query:
+            query = query_of(key)
+        what = query["what"]
+        if what == "meta":
+            return self.meta()
+        if what == "deps":
+            return []
+        if what == "search":
+            return self.find(query.get("text"), query.get("limit")) if query.get("kind") == "part" else {}
+        if what == "objects":
+            # Nothing is listed: a model site's catalog is not something to
+            # enumerate, and PartCAD is told so by 'objectKinds'.
+            return {}
+        if what == "object":
             if query.get("kind") != "part":
                 return None
             return self.resolve(str(query.get("name") or ""), dict(query.get("parameters") or {}))
-        if key == "meta":
-            return self.meta()
-        if key == "deps":
-            return []
-        if key.startswith("search/"):
-            kind, _, query = key[len("search/") :].partition("?")
-            return self.find(query) if kind == "part" else {}
-        if key.startswith("objects/"):
-            kind, _, name = key[len("objects/") :].partition("/")
-            if not name:
-                # Nothing is listed: a model site's catalog is not something to
-                # enumerate, and PartCAD is told so by 'objectKinds'.
-                return {}
-            if kind != "part":
-                return None
-            base, parameters = parse_name(name)
-            return self.resolve(base, parameters)
-        if key.startswith("files/"):
-            return self.file(key[len("files/") :])
+        if what == "file":
+            return self.file(query.get("path") or "")
         return None
 
 

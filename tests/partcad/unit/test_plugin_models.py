@@ -684,3 +684,66 @@ def test_a_site_reads_the_key_taken_apart_when_partcad_sends_it():
     # A query for another key is not this one's.
     Site({"key": "objects/part/1", "query": dict(query, name="1")}).get(key)
     assert asked == [("763622", {"file": "clip;v2.stl"})] * 3
+
+
+def test_a_key_is_taken_apart_here_as_partcad_takes_it_apart():
+    """The fallback for a PartCAD that sends no query reads every key the way PartCAD would have sent it."""
+    from partcad.project_external_repository import query_of
+
+    for key in [
+        "meta",
+        "deps",
+        "objects/part",
+        "objects/part/763622",
+        "objects/part/763622;file=a%2Cb=c.stl,format=stl",
+        "objects/sketch/1",
+        "search/part?q=hinge",
+        "search/part?q=hinge%20clip&limit=7",
+        "search/part?q=&limit=x",
+        "files/models/1/clip.stl",
+    ]:
+        assert rm.query_of(key) == query_of(key), key
+
+
+def test_a_package_scoped_to_a_subfolder_is_answered_from_the_query():
+    """A subfolder prefixes the key and not the query: every key is read from the query when there is one."""
+    asked = []
+
+    class Site(rm.Site):
+        NAME, TITLE = "test", "Test"
+
+        def find(self, text, limit=None):
+            asked.append(("find", text, limit))
+            return {"1;file=101": {"type": "stl"}}
+
+        def resolve(self, base, parameters):
+            asked.append(("resolve", base, parameters))
+            return {"type": "stl"}
+
+        def file(self, path):
+            asked.append(("file", path))
+            return "Zm9v"
+
+    def get(key, query):
+        return Site({"key": key, "query": dict(query, subfolder="motors")}).get(key)
+
+    assert get("motors/meta", {"what": "meta"})["searchKinds"] == ["part"]
+    assert get("motors/deps", {"what": "deps"}) == []
+    assert get("motors/objects/part", {"what": "objects", "kind": "part"}) == {}
+    assert get("motors/search/part?q=clip&limit=3", {"what": "search", "kind": "part", "text": "clip", "limit": 3})
+    assert get("motors/objects/part/1", {"what": "object", "kind": "part", "name": "1", "parameters": {}})
+    assert get("motors/files/a/b.stl", {"what": "file", "path": "a/b.stl"}) == "Zm9v"
+    assert asked == [("find", "clip", 3), ("resolve", "1", {}), ("file", "a/b.stl")]
+
+
+def test_threads_storing_one_key_at_once_each_store_it_whole(http):
+    """A search reads models on a pool of threads, and two of them can store one key."""
+    import concurrent.futures
+
+    contents = [bytes([i]) * 65536 for i in range(16)]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(lambda content: http._remember("json", "https://x/shared", content), contents * 4))
+    path = http._path("json", "https://x/shared")
+    with open(path, "rb") as f:
+        assert f.read() in contents
+    assert [name for name in os.listdir(os.path.dirname(path)) if name.endswith(".tmp")] == []
