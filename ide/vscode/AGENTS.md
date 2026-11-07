@@ -501,11 +501,21 @@ Four things about it are load-bearing:
   still drawn with the viewer's Phong material -- set as `finish.ts` says, to agree with a shaded `pc render`'s
   `finished_light`: shininess `2 / r^4 - 2` (three's 30 at the default 0.5), the specular colour the dielectric's
   0.04 blended into the colour by the metalness, the diffuse colour times `1 - metallic`, and the room's
-  reflection added to the shader in `onBeforeCompile`, from the same lights evaluated along the mirrored view
-  direction. Not `MeshStandardMaterial`: a different lighting model would make a finished face of the default
-  roughness look unlike an unfinished one beside it. WebGPU does not run `onBeforeCompile`, so there a finish
-  lacks the room's reflection; the painter draws it flat in its colour (`userData.flatColor`), since a metal's
-  Phong colour is black. A primitive with no finish is drawn exactly as before. A face is more specific than
+  reflection - the rig's lights evaluated along the mirrored view direction. Not `MeshStandardMaterial`: a different
+  lighting model would make a finished face of the default roughness look unlike an unfinished one beside it. That
+  last term is one formula given to each renderer its own way, and **all three have to keep agreeing**: WebGL by a
+  shader patch (`ROOM_REFLECTION`, `onBeforeCompile`), WebGPU by a lighting model of its own (`finishNode.ts`, loaded
+  only on that backend: three's node materials drop `onBeforeCompile`, and its WebGPU build is ES modules only, which
+  the extension host's tests cannot load), the painter per triangle (`painter.ts`, `roomFresnel`, `blinnPhong`).
+  Under WebGPU a finished material reads its own values through `materialReference`, not uniform nodes made per
+  material: three builds one program for every material whose nodes look alike and keeps the first one's nodes, so
+  per-material uniforms drew every finish as the first. Below 100% on the Opacity slider a finish is drawn plain
+  (`setFinishShown`, a change of values and never of program). A primitive with no finish is drawn exactly as
+  before. **A set chosen in the CMF tab** ("Show in 3D", `choice.ts`) is drawn as it always is and everything else
+  faint, by swapping in a faded material per material (`Geometry.fadedMaterial`) and back; the Opacity slider goes on
+  setting the swapped-out ones meanwhile. A set's faces are found by the mesh `extras.partcadSets` PartCAD writes for
+  a payload whose section addresses faces or solids (`wrapper_gltf._split_by_set`), an item by node name. A face is
+  more specific than
   its part or an assembly, so it wins
   over the node's colour; a node that nothing colours is `DEFAULT_COLOR`,
   `0xdaa520` -- OCCT's `Quantity_NOC_GOLDENROD`, and the colour PartCAD's own 2D projections draw an

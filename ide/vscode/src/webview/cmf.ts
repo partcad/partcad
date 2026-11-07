@@ -30,10 +30,14 @@
 // what other systems call it. For a declaration the tab is the whole panel (see
 // 'isDeclaration' in 'messages.ts').
 //
-// Only 'dom.ts' and 'messages.ts' are imported, so that the extension host's
-// tests can import this file (see 'viewerCmf.test.ts').
+// An item, and each of its sets, can be shown in the 3D view: its "Show in 3D"
+// opens the view on the same object with that singled out (see 'choice.ts').
+//
+// Only 'dom.ts', 'messages.ts' and 'choice.ts' are imported, so that the
+// extension host's tests can import this file (see 'viewerCmf.test.ts').
 //
 
+import { CmfChoice, identityOf, setLabel } from './choice';
 import { el, empty, link, placeholder } from './dom';
 import { CmfComponent, CmfData, CmfDeclaration, CmfInfo, CmfItem, CmfSet, CmfTexture } from './messages';
 
@@ -241,9 +245,16 @@ const STANDING_LABELS: Record<ItemStanding, string> = {
     specified: 'Specified',
 };
 
+/** What singles an item or a set out in the 3D view; see 'choice.ts'. */
+export type Choose = (choice: CmfChoice) => void;
+
 /** The CMF tab. */
 export class CmfView {
-    constructor(private readonly root: HTMLElement) {}
+    /** 'choose' is what an item's or a set's "Show in 3D" asks for; without it there is no such button. */
+    constructor(
+        private readonly root: HTMLElement,
+        private readonly choose?: Choose,
+    ) {}
 
     /** Forget what was shown, and say what the pane is waiting for. */
     public setBusy(text: string): void {
@@ -284,7 +295,7 @@ export class CmfView {
             );
         }
         for (const item of items) {
-            root.appendChild(drawItem(item));
+            root.appendChild(drawItem(item, this.choose));
         }
     }
 
@@ -308,8 +319,32 @@ function drawOwn(own: { cmf: CmfInfo | null; findings: string[] }): HTMLElement 
     return section;
 }
 
+/** A "Show in 3D" button, asking for 'choice'. */
+function showButton(choice: CmfChoice, choose: Choose, title: string): HTMLElement {
+    const button = el('button', 'cmf-show', 'Show in 3D') as HTMLButtonElement;
+    button.type = 'button';
+    button.title = title;
+    button.addEventListener('click', () => choose(choice));
+    return button;
+}
+
+/** The item an item of the tab is, as the 3D view is asked to single it out. */
+export function itemChoice(item: CmfItem): CmfChoice {
+    return { item: item.name, label: referenceName(item.name) };
+}
+
+/** One of an item's sets, as the 3D view is asked to single it out. */
+export function setChoice(item: CmfItem, set: CmfSet): CmfChoice {
+    const identity = identityOf(set);
+    return {
+        item: item.name,
+        set: identity,
+        label: `${setLabel(identity, referenceName)} of ${referenceName(item.name)}`,
+    };
+}
+
 /** One item: its name, how many, how it stands, what keeps it from being specified, and its sets. */
-function drawItem(item: CmfItem): HTMLElement {
+function drawItem(item: CmfItem, choose?: Choose): HTMLElement {
     const standing = standingOf(item);
     const section = el('div', `cmf-item cmf-${standing}`);
     const heading = el('div', 'cmf-item-heading');
@@ -323,6 +358,17 @@ function drawItem(item: CmfItem): HTMLElement {
         mark.title = `The 'cmf' check does not ask this to be specified: ${item.exempt}.`;
     }
     heading.appendChild(mark);
+    if (choose !== undefined && !item.error) {
+        heading.appendChild(
+            showButton(
+                itemChoice(item),
+                choose,
+                item.count > 1
+                    ? `Show every one of the ${item.count} in the 3D view, and the rest faint`
+                    : 'Show it in the 3D view, and the rest faint',
+            ),
+        );
+    }
     section.appendChild(heading);
     if (item.desc) {
         section.appendChild(el('div', 'cmf-desc', item.desc));
@@ -339,7 +385,7 @@ function drawItem(item: CmfItem): HTMLElement {
         section.appendChild(list);
     }
     if (item.cmf) {
-        section.appendChild(drawSets(item.cmf));
+        section.appendChild(drawSets(item.cmf, choose && ((set) => choose(setChoice(item, set)))));
     } else {
         section.appendChild(placeholder('It states no colour, no material and no finish.'));
     }
@@ -351,7 +397,7 @@ function drawItem(item: CmfItem): HTMLElement {
  * and solids are in it and where it came from; and under them what is left
  * unspecified.
  */
-export function drawSets(info: CmfInfo): HTMLElement {
+export function drawSets(info: CmfInfo, choose?: (set: CmfSet) => void): HTMLElement {
     const block = el('div', 'cmf-sets');
     const table = el('table', 'grid');
     const head = el('tr');
@@ -360,13 +406,14 @@ export function drawSets(info: CmfInfo): HTMLElement {
         ['Faces', 'numeric'],
         ['Solids', 'numeric'],
         ['From', ''],
+        ...(choose !== undefined ? [['', 'cmf-show-column']] : []),
     ] as [string, string][]) {
         head.appendChild(el('th', className, column));
     }
     table.appendChild(el('thead')).appendChild(head);
     const body = el('tbody');
     for (const set of info.sets ?? []) {
-        body.appendChild(drawSet(set, info.declared === true));
+        body.appendChild(drawSet(set, info.declared === true, choose));
     }
     table.appendChild(body);
     if ((info.sets ?? []).length > 0) {
@@ -384,7 +431,7 @@ export function drawSets(info: CmfInfo): HTMLElement {
     return block;
 }
 
-function drawSet(set: CmfSet, declared: boolean): HTMLElement {
+function drawSet(set: CmfSet, declared: boolean, choose?: (set: CmfSet) => void): HTMLElement {
     const row = el('tr');
     for (const component of COMPONENTS) {
         const cell = el('td', 'cmf');
@@ -406,6 +453,15 @@ function drawSet(set: CmfSet, declared: boolean): HTMLElement {
     row.appendChild(el('td', 'numeric', count(set.faces)));
     row.appendChild(el('td', 'numeric', count(set.solids)));
     row.appendChild(el('td', undefined, set.origin ?? ''));
+    if (choose !== undefined) {
+        const cell = el('td', 'cmf-show-column');
+        const button = el('button', 'cmf-show', 'Show in 3D') as HTMLButtonElement;
+        button.type = 'button';
+        button.title = 'Show the faces in this set in the 3D view, and the rest faint';
+        button.addEventListener('click', () => choose(set));
+        cell.appendChild(button);
+        row.appendChild(cell);
+    }
     return row;
 }
 

@@ -32,10 +32,19 @@ import {
     DIELECTRIC_F0,
     FINISH_EXTRAS,
     MAX_SHININESS,
+    PLAIN_SHININESS,
+    PLAIN_SPECULAR,
+    TINT_ANCHOR,
     applyFinish,
+    blinnPhong,
+    finishStateOf,
     finishedPhong,
     parseFinish,
+    prepareFinish,
+    roomFresnel,
+    setFinishShown,
     shininessOf,
+    shownFinish,
     withRoomReflection,
 } from '../../webview/finish';
 
@@ -139,8 +148,15 @@ suite('How a finish is drawn', () => {
         const phong = THREE.ShaderLib.phong.fragmentShader;
         const patched = withRoomReflection(phong);
         assert.ok(patched !== undefined, "three's Phong shader has moved the places the reflection goes");
-        assert.ok(patched.indexOf('partcadRoomReflection(') < patched.indexOf(ADDITION_ANCHOR));
+        // Declared after three's light functions, the image's tint after the
+        // Phong material sets its specular colour and before any light reads it,
+        // and the reflection added once every light of three's has been.
         assert.ok(patched.indexOf(DECLARATION_ANCHOR) < patched.indexOf('vec3 partcadRoomReflection('));
+        assert.ok(patched.indexOf(TINT_ANCHOR) < patched.indexOf('partcadMapMetal * ( sampledDiffuseColor'));
+        assert.ok(
+            patched.indexOf('partcadMapMetal * ( sampledDiffuseColor') < patched.indexOf('lights_fragment_begin'),
+        );
+        assert.ok(patched.indexOf(ADDITION_ANCHOR) < patched.indexOf('+= partcadRoomReflection('));
         assert.strictEqual(withRoomReflection('void main() {}'), undefined);
 
         // What the patch reads of three's: the lights' functions, and what its
@@ -160,6 +176,7 @@ suite('How a finish is drawn', () => {
             assert.ok(chunks.lights_fragment_begin.includes(`vec3 ${name} =`), name);
         }
         assert.ok(chunks.lights_phong_fragment.includes('material.specularColor'));
+        assert.ok(chunks.map_fragment.includes('vec4 sampledDiffuseColor ='));
     });
 
     test("a finished material is the viewer's Phong material, set as the finish says", () => {
@@ -181,11 +198,85 @@ suite('How a finish is drawn', () => {
         material.onBeforeCompile(shader as unknown as THREE.WebGLProgramParametersWithUniforms, undefined as never);
         assert.ok(shader.fragmentShader.includes('partcadRoomReflection('));
         assert.strictEqual(shader.uniforms.partcadRoughness.value, 0.25);
+        assert.strictEqual(shader.uniforms.partcadRoomStrength.value, 1);
+        assert.strictEqual(shader.uniforms.partcadMapMetal.value, 1);
         const other = new THREE.MeshPhongMaterial();
         applyFinish(other, 0x00ff00, { roughness: 0.9, metallic: 0 });
         assert.strictEqual(material.customProgramCacheKey(), other.customProgramCacheKey());
         assert.notStrictEqual(material.customProgramCacheKey(), new THREE.MeshPhongMaterial().customProgramCacheKey());
         material.dispose();
         other.dispose();
+    });
+
+    test('below 100% opacity a finish is drawn as the plain material of its colour, and is back at 100%', () => {
+        const material = new THREE.MeshPhongMaterial();
+        const state = applyFinish(material, 0xb87333, { roughness: 0.3, metallic: 1 });
+        const shader = {
+            fragmentShader: THREE.ShaderLib.phong.fragmentShader,
+            uniforms: {} as Record<string, THREE.IUniform>,
+        };
+        material.onBeforeCompile(shader as unknown as THREE.WebGLProgramParametersWithUniforms, undefined as never);
+        const program = material.customProgramCacheKey();
+
+        setFinishShown(material, false);
+        // three's Phong defaults, in the colour itself: any other face of it.
+        assert.ok(material.color.equals(new THREE.Color(0xb87333)));
+        assert.ok(material.specular.equals(new THREE.Color(PLAIN_SPECULAR)));
+        assert.strictEqual(material.shininess, PLAIN_SHININESS);
+        // The reflection and the image's tint off, in the uniforms the shader
+        // already has: the same program, nothing compiled again.
+        assert.strictEqual(shader.uniforms.partcadRoomStrength.value, 0);
+        assert.strictEqual(shader.uniforms.partcadMapMetal.value, 0);
+        assert.strictEqual(material.customProgramCacheKey(), program);
+        assert.strictEqual(shownFinish(material), undefined);
+        assert.strictEqual(finishStateOf(material), state);
+
+        setFinishShown(material, true);
+        assert.ok(material.color.equals(state.finished.color));
+        assert.ok(material.specular.equals(state.finished.specular));
+        assert.strictEqual(shader.uniforms.partcadRoomStrength.value, 1);
+        assert.strictEqual(shownFinish(material), state);
+        material.dispose();
+
+        // A material with no finish is left alone.
+        const plain = new THREE.MeshPhongMaterial({ color: 0x336699 });
+        setFinishShown(plain, false);
+        assert.ok(plain.color.equals(new THREE.Color(0x336699)));
+        assert.strictEqual(shownFinish(plain), undefined);
+        plain.dispose();
+    });
+
+    test('a face drawn with an image is white under it, and drawn as its colour where an image cannot be', () => {
+        const material = new THREE.MeshPhongMaterial({ map: new THREE.Texture() });
+        const state = prepareFinish(material, 0xffffff, { roughness: 0.3, metallic: 1 }, 0x781478);
+        // On the GPU: no diffuse colour, the specular white - the image tints it.
+        assert.ok(material.color.equals(new THREE.Color(0, 0, 0)));
+        assert.ok(material.specular.equals(new THREE.Color(1, 1, 1)));
+        // The painter, which draws no image: the finish on the flat colour.
+        assert.ok(state.flat.specular.equals(new THREE.Color(0x781478)));
+        // And with no image, the two are one.
+        const bare = new THREE.MeshPhongMaterial();
+        assert.strictEqual(
+            prepareFinish(bare, 0x781478, { roughness: 0.3, metallic: 1 }).flat.specular.getHex(),
+            0x781478,
+        );
+        material.map?.dispose();
+        material.dispose();
+        bare.dispose();
+    });
+
+    test('the room and a highlight are what the shaded render works out', () => {
+        // 'raster_scene.finished_light' for f0 (0.5, 0.3, 0.1), roughness 0.3:
+        // the room's Fresnel at dot(N, V) 0.4, damped; and one light's
+        // Blinn-Phong at dot(N, H) 0.995 and dot(V, H) 0.8.
+        const f0 = new THREE.Color(0.5, 0.3, 0.1);
+        const room = roomFresnel(f0, 0.4, 0.3, new THREE.Color());
+        close(room.r, 0.4382192, 'room red');
+        close(room.g, 0.2814384, 'room green');
+        close(room.b, 0.1246576, 'room blue');
+        const highlight = blinnPhong(f0, shininessOf(0.3), 0.995, 0.8, new THREE.Color());
+        close(highlight.r, 1.4417378823335387, 'highlight red', 1e-9);
+        close(highlight.g, 0.8670812997238999, 'highlight green', 1e-9);
+        close(highlight.b, 0.29242471711426105, 'highlight blue', 1e-9);
     });
 });

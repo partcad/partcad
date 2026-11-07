@@ -89,6 +89,17 @@ faces and solids are in it, and where it came from -- what is left unspecified, 
 the words of ``pc test``'s ``cmf`` check. The items the check finds incomplete come first. ``pc ide view --design-cmf``
 opens on it.
 
+**Show in 3D**, beside an item and beside each of its sets, opens the 3D tab on the same object with that singled out:
+an item is every one of it in the object, and a set is the faces in it, on every one of its item -- two sets of one
+colour, a red ABS face and a red PLA one, are told apart. What was chosen is drawn as it always is and everything else
+faint, so that the faces read in place. A chip at the top of the view says what is shown; its **×** shows all of it
+again, and so does showing another object.
+
+**The 3D tab** draws each face in its colour and, where its finish says how rough or how metallic it is, as a shaded
+``pc render`` draws it: a smooth finish has a sharp highlight, a metal one takes its colour from what it reflects, and
+both reflect the room. Below 100% on the **Opacity** slider every face is drawn plain, finish or no finish: a
+see-through model is for seeing what is inside it.
+
 **The Bill of Materials and Build vs Buy** tables have Color, Material and Finish columns, so a line is ordered in
 what it is in. A line says what its geometry carries once the item has been built -- showing it in 3D builds it -- and
 what it declares until then, which its tooltip says.

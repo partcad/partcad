@@ -50,8 +50,9 @@ import wrapper_common
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
 #
-# 2: a face whose CMF set says a finish is written with it ('_with_looks'), so
-# the glTF of a payload with a finish is not what it was.
+# 2: a face whose CMF set says a finish is written with it ('_with_looks'), and
+# a payload whose section addresses faces or solids one by one is written a mesh
+# per set ('_split_by_set'), so the glTF of either is not what it was.
 CACHE_VERSION = 2
 
 # The roughness and metalness of a finish that says only one of the two: what
@@ -59,6 +60,11 @@ CACHE_VERSION = 2
 # metal), and so what the IDE is told to. A test holds the two together.
 DEFAULT_ROUGHNESS = 0.5
 DEFAULT_METALLIC = 0.0
+
+# What a mesh says, in its 'extras', of the CMF sets its faces are in: a list of
+# each set's colour, material, finish and origin, as the summary the IDE's CMF
+# tab lists a part's sets from says them (see '_face_sets').
+SETS_EXTRAS = "partcadSets"
 
 # What is handed to export_gltf's own deflection argument once the shape has been
 # meshed here. It is not a deflection: it is "whatever is already triangulated is
@@ -540,7 +546,13 @@ def _with_looks(glb, groups):
     file cannot know, so 'partcadColor' is null and the base colour is the
     default's, for a reader that knows no 'extras'.
 
-    A group with neither is not one: those faces are OCCT's to write.
+    A group with neither has no material, as OCCT's writer leaves a face
+    nobody coloured, and one with only a colour a material in it - which is how
+    every face is written where '_split_by_set' wrote the whole payload.
+
+    A group may carry a fifth entry, the CMF sets its faces are in (see
+    '_face_sets'), which its mesh says in its 'extras' as 'partcadSets': what
+    the IDE finds a set's faces by when one is chosen in the CMF tab.
     """
     if not groups:
         return glb
@@ -586,11 +598,18 @@ def _with_looks(glb, groups):
     # has none, and no empty 'images', 'textures' or 'samplers' (see below).
     sampler = None
     image_of = {}
-    for color, texture, finish, mesh in groups:
+    for group in groups:
+        color, texture, finish, mesh = group[:4]
+        sets = group[4] if len(group) > 4 else None
         position, normal, texcoord, indices = mesh
         parsed = appearance.parse(color) if color is not None else None
         alpha = parsed[3] if parsed is not None else 1.0
-        if texture is not None:
+        material = None
+        if texture is None and finish is None and color is None:
+            # Nothing of its own to be drawn as: the node's colour, as OCCT's
+            # writer leaves a face nobody coloured - with no material at all.
+            name = "faces"
+        elif texture is not None:
             if sampler is None:
                 samplers.append(
                     {
@@ -613,19 +632,20 @@ def _with_looks(glb, groups):
                 "roughnessFactor": 1.0,
             }
         else:
-            name = "finish"
+            name = "finish" if finish is not None else "color"
             red, green, blue, _ = parsed if parsed is not None else appearance.parse(appearance.DEFAULT_COLOR)
             pbr = {"baseColorFactor": [_linear(red), _linear(green), _linear(blue), alpha]}
-        extras = {"partcadColor": color}
-        if finish is not None:
-            roughness, metallic = _finish_factors(finish)
-            pbr["metallicFactor"] = metallic
-            pbr["roughnessFactor"] = roughness
-            extras["partcadFinish"] = {"roughness": roughness, "metallic": metallic}
-        material = {"name": name, "pbrMetallicRoughness": pbr, "extras": extras}
-        if alpha < 1.0:
-            material["alphaMode"] = "BLEND"
-        materials.append(material)
+        if name != "faces":
+            extras = {"partcadColor": color}
+            if finish is not None:
+                roughness, metallic = _finish_factors(finish)
+                pbr["metallicFactor"] = metallic
+                pbr["roughnessFactor"] = roughness
+                extras["partcadFinish"] = {"roughness": roughness, "metallic": metallic}
+            material = {"name": name, "pbrMetallicRoughness": pbr, "extras": extras}
+            if alpha < 1.0:
+                material["alphaMode"] = "BLEND"
+            materials.append(material)
         attributes = {
             "POSITION": accessor(position, "VEC3", _GLTF_FLOAT, _GLTF_ARRAY_BUFFER, bounds=True),
             "NORMAL": accessor(normal, "VEC3", _GLTF_FLOAT, _GLTF_ARRAY_BUFFER),
@@ -635,15 +655,19 @@ def _with_looks(glb, groups):
         primitive = {
             "attributes": attributes,
             "indices": accessor(indices, "SCALAR", _GLTF_UNSIGNED_INT, _GLTF_ELEMENT_ARRAY_BUFFER),
-            "material": len(materials) - 1,
-            "mode": _GLTF_TRIANGLES,
         }
-        meshes.append({"name": name, "primitives": [primitive]})
+        if material is not None:
+            primitive["material"] = len(materials) - 1
+        primitive["mode"] = _GLTF_TRIANGLES
+        entry = {"name": name, "primitives": [primitive]}
+        if sets is not None:
+            entry["extras"] = {SETS_EXTRAS: sets}
+        meshes.append(entry)
         nodes.append({"name": name, "mesh": len(meshes) - 1})
         scene_nodes.append(len(nodes) - 1)
     # glTF forbids an empty array where one may be left out, and the faces of a
     # finish alone draw with no image.
-    for key in ("images", "textures", "samplers"):
+    for key in ("images", "textures", "samplers", "materials"):
         if not meta[key]:
             del meta[key]
     buffers = meta.setdefault("buffers", [])
@@ -681,7 +705,7 @@ class NothingToDraw(Exception):
     """
 
 
-def _to_glb(shape, tolerance, angular_tolerance, colors=None, looks=None):
+def _to_glb(shape, tolerance, angular_tolerance, colors=None, looks=None, sets=None):
     """Tessellate one shape into a binary glTF buffer, at an absolute deflection.
 
     Faces become triangles and the edges that bound no face become line segments,
@@ -698,10 +722,29 @@ def _to_glb(shape, tolerance, angular_tolerance, colors=None, looks=None):
     The faces drawn with either are written by '_with_looks', which lays the
     image on them and says the finish; the rest go through OCCT's writer as
     they would have, coloured as 'colors' says.
+
+    'sets' is the CMF sets of each face ('_face_sets') where the section
+    addresses faces or solids one by one. Then every face is PartCAD's to write,
+    a mesh per look and per sets ('_split_by_set'), and OCCT's writer writes
+    none of it. A payload whose section addresses nothing one by one - nearly
+    every one, and every one with no section - is written as it always was.
     """
     _mesh(shape, tolerance, angular_tolerance)
     glb = None
-    if looks is not None:
+    if sets is not None:
+        groups = _split_by_set(shape, colors, looks, sets)
+        meshes = [
+            (
+                color,
+                texture,
+                finish,
+                _textured_mesh(piece, texture) if texture is not None else _finished_mesh(piece),
+                face_sets,
+            )
+            for color, texture, finish, piece, face_sets in groups
+        ]
+        glb = _with_looks(None, [entry for entry in meshes if entry[3] is not None])
+    elif looks is not None:
         drawn, shape_rest, colors = _split_drawn(shape, looks)
         # Read off the faces before the rest is written: writing it cleans the
         # meshes of what it writes, and nothing here is meshed again.
@@ -721,6 +764,95 @@ def _to_glb(shape, tolerance, angular_tolerance, colors=None, looks=None):
     if glb is None:
         raise NothingToDraw("there are no faces or edges to draw")
     return glb
+
+
+def _identity(cmf_set):
+    """What a set is known by where it is chosen: its references and where it came from ('CmfSet.as_dict')."""
+    data = cmf_set.as_dict()
+    return {key: data[key] for key in ("color", "material", "finish", "origin") if key in data}
+
+
+def _face_sets(shape, section):
+    """The CMF sets each face of 'shape' is in, as '_identity' says them; None where the section addresses none.
+
+    A face is in its own set - 'Section.face_set', filled from the part's own -
+    where the section addresses faces one by one, and in the set of each solid it
+    bounds where it addresses solids: the sets 'Section.summary' counts faces and
+    solids into, which are the sets the CMF tab lists. None where the section
+    addresses neither (a part in one set is all of it), and where it was written
+    for other geometry - a count of faces or solids that is not this shape's.
+    """
+    if section is None or (not section.faces and not section.solids):
+        return None
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_SOLID
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape, TopTools_IndexedMapOfShape
+
+    faces = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(shape, TopAbs_FACE, faces)
+    solids = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(shape, TopAbs_SOLID, solids)
+    if section.faces and faces.Extent() != len(section.faces):
+        return None
+    if section.solids and solids.Extent() != len(section.solids):
+        return None
+    of_face = [[] for _ in range(faces.Extent())]
+    if section.faces:
+        for index in range(faces.Extent()):
+            of_face[index].append(_identity(section.face_set(index)))
+    if section.solids:
+        ancestors = TopTools_IndexedDataMapOfShapeListOfShape()
+        TopExp.MapShapesAndAncestors_s(shape, TopAbs_FACE, TopAbs_SOLID, ancestors)
+        for index in range(faces.Extent()):
+            owners = (
+                ancestors.FindFromKey(faces.FindKey(index + 1)) if ancestors.Contains(faces.FindKey(index + 1)) else []
+            )
+            for owner in owners:
+                solid = solids.FindIndex(owner) - 1
+                if solid >= 0:
+                    identity = _identity(section.solid_set(solid))
+                    if identity not in of_face[index]:
+                        of_face[index].append(identity)
+    return of_face
+
+
+def _split_by_set(shape, colors, looks, sets):
+    """'[(colour, texture, finish, faces, sets), ...]': every face of 'shape', a group per look and per sets.
+
+    What a payload whose section addresses faces or solids one by one is written
+    as: all of it by PartCAD ('_with_looks'), so that the faces of each set are a
+    mesh of their own that says which sets it is in - two sets of one colour,
+    which OCCT's writer makes one mesh of, are two. A face's look is what
+    'looks' says of it where the section draws any face with an image or a finish,
+    else its colour in 'colors' (None for one nobody coloured, which is drawn in
+    its node's colour).
+    """
+    import json
+
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import TopTools_IndexedMapOfShape
+
+    faces = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(shape, TopAbs_FACE, faces)
+    face_looks = looks[1] if looks is not None and looks[0] == appearance.FACES else None
+    groups = {}
+    for index in range(faces.Extent()):
+        if face_looks is not None and index < len(face_looks):
+            color, texture, finish = (tuple(face_looks[index]) + (None, None))[:3]
+        elif looks is not None and looks[0] == appearance.WHOLE:
+            color, texture, finish = (tuple(looks[1]) + (None, None))[:3]
+        else:
+            color, texture, finish = (colors[index] if colors and index < len(colors) else None), None, None
+        key = (
+            appearance.look_key((color, texture, finish)),
+            json.dumps(sets[index], sort_keys=True),
+        )
+        groups.setdefault(key, [(color, texture, finish, sets[index]), []])[1].append(faces.FindKey(index + 1))
+    return [
+        (color, texture, finish, ocp_serialize.compound_of(members), face_sets)
+        for (color, texture, finish, face_sets), members in groups.values()
+    ]
 
 
 def _split_drawn(shape, looks):
@@ -798,12 +930,17 @@ def process(request):
             # CACHE_VERSION stays.
             #
             # The image a colour is drawn with too, and the finish a face is
-            # drawn as (see '_with_looks'). A payload that says a finish was
-            # tessellated without it before, which is why CACHE_VERSION is 2.
+            # drawn as (see '_with_looks'); and where the section addresses
+            # faces or solids one by one, a mesh per set, saying which. A
+            # payload that says a finish, or addresses faces or solids, was
+            # tessellated otherwise before, which is why CACHE_VERSION is 2.
             section = ocp_serialize.cmf_of_payload(entry[ocp_serialize.KEY_BREP])
             colors = appearance.section_face_colors(section)
             looks = appearance.payload_looks(section, finishes=True)
-            geometry[digest] = ocp_serialize.encode_gltf(_to_glb(shape, tolerance, angular_tolerance, colors, looks))
+            sets = _face_sets(shape, section)
+            geometry[digest] = ocp_serialize.encode_gltf(
+                _to_glb(shape, tolerance, angular_tolerance, colors, looks, sets)
+            )
         except NothingToDraw as e:
             empty[digest] = str(e)
         except Exception as e:

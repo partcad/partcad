@@ -8,8 +8,11 @@
 A face whose CMF set says a roughness or a metalness is a primitive of its own,
 written by PartCAD ('wrapper_gltf._with_looks'), with a material that says the
 finish as glTF does and as 'extras.partcadFinish', which is what the viewer
-reads ('ide/vscode/src/webview/finish.ts'). Every other face is OCCT's, as it
-always was, and a payload with no finish is the same bytes it was.
+reads ('ide/vscode/src/webview/finish.ts'). A payload whose section addresses
+faces or solids one by one is written a mesh per set, each saying its sets in
+'extras.partcadSets', which is what the viewer highlights a chosen set by. A
+payload whose section addresses nothing one by one is OCCT's, the same bytes it
+was.
 """
 
 import io
@@ -100,14 +103,14 @@ def test_a_part_drawn_whole_with_a_finish_is_one_primitive_that_says_it():
     assert indices["count"] >= 36 and indices["count"] % 3 == 0
 
 
-def test_the_faces_with_a_finish_are_apart_and_the_rest_are_occt_s():
+def test_the_faces_with_a_finish_are_apart_and_the_rest_keep_their_colour():
     plain = CmfSet(color="//c:blue", rgba=(0, 0, 255, 1.0))
     document = _document(_glb(_envelope(Section([plain, _brushed()], NONE, faces=[0, 1, NONE, NONE, 1, 1]))))
 
     finished = [m for m in document["materials"] if "partcadFinish" in m.get("extras", {})]
     assert len(finished) == 1
     assert finished[0]["extras"]["partcadColor"] == "#FF0000"
-    # The blue face is OCCT's, in blue, and says no finish.
+    # The blue face is in blue, and says no finish.
     colours = [m["pbrMetallicRoughness"].get("baseColorFactor") for m in document["materials"]]
     assert [0.0, 0.0, 1.0, 1.0] in colours
     assert len(_primitives(document)) >= 2
@@ -151,34 +154,26 @@ def test_an_uncoloured_face_keeps_its_finish_when_faces_are_gathered_by_look():
     assert finished[0][2][0] == pytest.approx(0.8, abs=1 / 255)
 
 
-@pytest.mark.parametrize("section", ["none", "colours", "plain"])
-def test_a_payload_with_no_finish_is_the_same_bytes(section):
-    """The glb a payload with no finish was before finishes were drawn: OCCT's, coloured as its section says."""
+@pytest.mark.parametrize("section", ["none", "plain"])
+def test_a_payload_that_addresses_nothing_one_by_one_is_the_same_bytes(section):
+    """No section, or one set for all of it: OCCT's glb, as it was before finishes or sets were drawn."""
     import appearance
     import ocp_serialize
     import wrapper_gltf
 
-    sections = {
-        "none": None,
-        "colours": Section(
-            [CmfSet(color="//c:red", rgba=(255, 0, 0, 1.0)), CmfSet(color="//c:blue", rgba=(0, 0, 255, 1.0))],
-            NONE,
-            faces=[0, 1, 0, 1, NONE, NONE],
-        ),
-        "plain": Section([CmfSet(color="//c:red", rgba=(255, 0, 0, 1.0))], 0),
-    }
+    sections = {"none": None, "plain": Section([CmfSet(color="//c:red", rgba=(255, 0, 0, 1.0))], 0)}
     envelope = _envelope(sections[section])
     drawn = _glb(envelope)
 
     cmf = ocp_serialize.cmf_of_payload(envelope["brep"])
-    assert appearance.payload_looks(cmf, finishes=True) is None
     shape = ocp_serialize.shape_from_payload(envelope["brep"])
-    before = wrapper_gltf._to_glb(shape, TOLERANCE, 0.4, appearance.section_face_colors(cmf))
-    assert drawn == before
-    assert "partcadFinish" not in drawn.decode("latin-1")
+    assert appearance.payload_looks(cmf, finishes=True) is None
+    assert wrapper_gltf._face_sets(shape, cmf) is None
+    assert drawn == wrapper_gltf._to_glb(shape, TOLERANCE, 0.4)
+    assert b"partcadFinish" not in drawn and b"partcadSets" not in drawn
 
 
-def test_a_textured_payload_with_no_finish_is_the_same_bytes():
+def test_a_part_drawn_whole_with_an_image_and_no_finish_is_the_same_bytes():
     """Looks with a finish of None write what looks without one did: '_with_textures' as it was."""
     import appearance
     import ocp_serialize
@@ -186,17 +181,108 @@ def test_a_textured_payload_with_no_finish_is_the_same_bytes():
     from cmf_section import Texture
 
     wood = CmfSet(color="//c:wood", rgba=(120, 20, 120, 1.0), texture=Texture(_png(), "wood.png", 40, 20))
-    red = CmfSet(color="//c:red", rgba=(255, 0, 0, 1.0))
-    envelope = _envelope(Section([red, wood], NONE, faces=[0, 1, NONE, NONE, 1, 1]))
+    envelope = _envelope(Section([wood], 0))
     cmf = ocp_serialize.cmf_of_payload(envelope["brep"])
-    colors = appearance.section_face_colors(cmf)
 
     def glb(finishes):
         shape = ocp_serialize.shape_from_payload(envelope["brep"])
-        looks = appearance.payload_looks(cmf, finishes=finishes)
-        return wrapper_gltf._to_glb(shape, TOLERANCE, 0.4, colors, looks)
+        return wrapper_gltf._to_glb(shape, TOLERANCE, 0.4, None, appearance.payload_looks(cmf, finishes=finishes))
 
     assert glb(True) == glb(False) == _glb(envelope)
+
+
+def _meshes(document):
+    """'[(sets, material or None), ...]': each mesh's 'partcadSets' and its one primitive's material."""
+    found = []
+    for mesh in document["meshes"]:
+        (primitive,) = mesh["primitives"]
+        material = document["materials"][primitive["material"]] if "material" in primitive else None
+        found.append((mesh.get("extras", {}).get("partcadSets"), material))
+    return found
+
+
+def _triangles(document):
+    return sum(document["accessors"][p["indices"]]["count"] for m in document["meshes"] for p in m["primitives"]) // 3
+
+
+def test_two_sets_of_one_colour_are_two_meshes_each_saying_its_set():
+    """What the IDE highlights a chosen set by: a mesh per set, not per colour, each naming its set."""
+    import ocp_serialize
+    import wrapper_gltf
+
+    abs_red = CmfSet(color="//c:red", material="//m:abs", rgba=(255, 0, 0, 1.0), origin="declared")
+    pla_red = CmfSet(color="//c:red", material="//m:pla", rgba=(255, 0, 0, 1.0), origin="declared")
+    section = Section([abs_red, pla_red], NONE, faces=[0, 0, 1, 1, NONE, NONE])
+    envelope = _envelope(section)
+    document = _document(_glb(envelope))
+
+    meshes = _meshes(document)
+    assert len(meshes) == 3
+    sets = sorted(meshes, key=lambda entry: json.dumps(entry[0]))
+    assert [entry[0] for entry in sets] == [
+        [{"color": "//c:red", "material": "//m:abs", "origin": "declared"}],
+        [{"color": "//c:red", "material": "//m:pla", "origin": "declared"}],
+        [{}],
+    ]
+    # Both red, each in a material of its own colour; the faces nobody
+    # coloured have none, and are drawn in their node's colour.
+    assert [m["pbrMetallicRoughness"]["baseColorFactor"] for _s, m in sets[:2]] == [[1.0, 0.0, 0.0, 1.0]] * 2
+    assert sets[2][1] is None
+    # Every set the CMF tab lists is one some mesh says it is in.
+    listed = [
+        {key: entry[key] for key in ("color", "material", "finish", "origin") if key in entry}
+        for entry in section.summary()["sets"]
+    ]
+    said = [identity for entry in meshes for identity in entry[0]]
+    assert all(identity in said for identity in listed)
+    # All of the part, triangle for triangle, as OCCT's writer would have written it.
+    shape = ocp_serialize.shape_from_payload(envelope["brep"])
+    assert _triangles(document) == _triangles(_document(wrapper_gltf._to_glb(shape, TOLERANCE, 0.4)))
+
+
+def test_the_faces_of_a_solid_say_its_material():
+    """A section that addresses solids: each solid's faces say the material it is made of."""
+    pytest.importorskip("build123d")
+    import build123d as bd
+    import ocp_serialize
+
+    abs_set = CmfSet(material="//m:abs")
+    pla_set = CmfSet(material="//m:pla")
+    two = bd.Compound([bd.Box(10, 10, 10), bd.Pos(20, 0, 0) * bd.Box(10, 10, 10)]).wrapped
+    envelope = ocp_serialize.encode_shape(two, cmf=Section([abs_set, pla_set], NONE, solids=[0, 1]))
+    document = _document(_glb(envelope))
+
+    meshes = _meshes(document)
+    assert sorted(json.dumps(entry[0]) for entry in meshes) == [
+        json.dumps([{"material": "//m:abs"}]),
+        json.dumps([{"material": "//m:pla"}]),
+    ]
+    # A material is no colour: both are drawn in their node's.
+    assert all(material is None for _sets, material in meshes)
+
+
+def test_a_face_in_a_set_of_its_own_on_a_solid_of_another_says_both():
+    import ocp_serialize
+    import wrapper_gltf
+
+    red = CmfSet(color="//c:red", rgba=(255, 0, 0, 1.0))
+    steel = CmfSet(material="//m:steel", finish="//f:brushed", roughness=0.3, metallic=1.0)
+    section = Section([red, steel], NONE, solids=[1], faces=[0] + [NONE] * 5)
+    envelope = _envelope(section)
+    shape = ocp_serialize.shape_from_payload(envelope["brep"])
+
+    sets = wrapper_gltf._face_sets(shape, ocp_serialize.cmf_of_payload(envelope["brep"]))
+    assert sets[0] == [{"color": "//c:red"}, {"material": "//m:steel", "finish": "//f:brushed"}]
+    assert sets[1] == [{}, {"material": "//m:steel", "finish": "//f:brushed"}]
+
+
+def test_a_section_written_for_other_geometry_addresses_no_set():
+    import ocp_serialize
+    import wrapper_gltf
+
+    envelope = _envelope(Section([CmfSet(color="//c:red", rgba=(255, 0, 0, 1.0))], NONE, faces=[0, 0, 0]))
+    shape = ocp_serialize.shape_from_payload(envelope["brep"])
+    assert wrapper_gltf._face_sets(shape, ocp_serialize.cmf_of_payload(envelope["brep"])) is None
 
 
 def test_the_default_roughness_is_the_shaded_render_s():
