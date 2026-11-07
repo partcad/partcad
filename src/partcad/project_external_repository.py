@@ -19,6 +19,7 @@ from .cache_hash import CacheHash
 from .config import parameter_overrides
 from .project_plugin import ProjectPlugin
 from .sync_threads import threadpool_manager
+from .utils import parse_parameterized_name
 
 # Distinguishes "no cached value" from a cached value of None.
 _MISSING = object()
@@ -42,6 +43,52 @@ SEARCH_KEY = "search"
 # Distinguishes "the metadata has not been parsed yet" from a parse that
 # concluded the package declares nothing.
 _UNPARSED = object()
+
+
+def query_of(key: str) -> dict:
+    """A key PartCAD asks a repository for, taken apart: what a plugin reads instead of parsing the key itself.
+
+    Sent beside the key, as the request's 'query' (see
+    'PluginFactoryRepositoryBasic.query_data'), so that the grammar of the keys
+    and the spelling of a parameterised name have one reader - this one, and
+    'parse_parameterized_name', which decodes what 'format_parameterized_name'
+    escaped - rather than one per plugin, each a little different. The key is
+    still sent as it was; a plugin that reads it keeps working.
+
+    ``what`` says which key it is:
+
+    * ``object``: ``objects/<kind>/<name>``, with the name's base as ``name``
+      and its parameters as ``parameters`` (strings, as they were written);
+    * ``objects``: ``objects/<kind>``, the enumeration of a kind;
+    * ``search``: ``search/<kind>?q=<text>[&limit=<n>]``, as ``kind``,
+      ``text`` and ``limit`` (a positive whole number, or absent);
+    * ``file``: ``files/<path>``, as ``path``;
+    * anything else (``meta``, ``deps``, ...): the key itself.
+
+    'key' is the key within the package, without the subfolder the package is
+    in (which is 'subfolder' in the request's query; see '_query_of').
+    """
+    path, _, query_string = key.partition("?")
+    head, _, rest = path.partition("/")
+    if head == SEARCH_KEY and rest:
+        arguments = urllib.parse.parse_qs(query_string, keep_blank_values=True)
+        query = {"what": "search", "kind": rest, "text": (arguments.get("q") or [""])[0]}
+        try:
+            limit = int((arguments.get("limit") or [""])[0])
+        except ValueError:
+            limit = 0
+        if limit > 0:
+            query["limit"] = limit
+        return query
+    if head == "objects" and rest:
+        kind, _, name = rest.partition("/")
+        if not name:
+            return {"what": "objects", "kind": kind}
+        base, parameters = parse_parameterized_name(name)
+        return {"what": "object", "kind": kind, "name": base, "parameters": parameters}
+    if head == "files" and rest:
+        return {"what": "file", "path": rest}
+    return {"what": key}
 
 
 class SearchHit:
@@ -209,6 +256,26 @@ class ProjectExternalRepository(ProjectPlugin):
         """Prefix a key with this package's subfolder within the repository."""
         return self._subfolder + "/" + key if self._subfolder else key
 
+    def _ask(self, repository, scoped: str):
+        """'repository.get_data(scoped)', with the key taken apart beside it where the repository takes that.
+
+        A repository is anything with an async 'get_data(key)' (see the class
+        docstring); the plugin ones take 'query' as well, and an older or a
+        hand-written one need not.
+        """
+        # Said by the class rather than read off the signature: telemetry wraps
+        # the methods of a plugin in a '(*args, **kwargs)' that hides it.
+        if getattr(repository, "accepts_query", False):
+            return repository.get_data(scoped, query=self._query_of(scoped))
+        return repository.get_data(scoped)
+
+    def _query_of(self, scoped: str) -> dict:
+        """'query_of' the key 'scoped' is, within the subfolder this package is in."""
+        prefix = self._subfolder + "/" if self._subfolder else ""
+        query = query_of(scoped[len(prefix) :] if prefix and scoped.startswith(prefix) else scoped)
+        query["subfolder"] = self._subfolder or ""
+        return query
+
     async def get_data_async(self, key: str):
         """Fetch the value for 'key' from the repository plugin (cached).
 
@@ -271,7 +338,7 @@ class ProjectExternalRepository(ProjectPlugin):
         value = None
         if repository is not None:
             try:
-                value = await repository.get_data(scoped)
+                value = await self._ask(repository, scoped)
             except Exception as e:
                 pc_logging.error("%s: failed to fetch '%s' from the repository: %s" % (self.name, scoped, e))
 
@@ -431,7 +498,7 @@ class ProjectExternalRepository(ProjectPlugin):
 
         async def ask():
             try:
-                return await repository.get_data(scoped)
+                return await self._ask(repository, scoped)
             except Exception as e:
                 pc_logging.error("%s: failed to search the repository: %s" % (self.name, e))
                 return None

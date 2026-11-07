@@ -39,11 +39,16 @@ class PluginFactoryRepositoryBasic(PluginFactoryRepository):
         self.plugin.query_get = self.query_get
         self.plugin.query_search = self.query_search
 
-    async def query_data(self, key: str):
+    async def query_data(self, key: str, query=None):
         # A single 'get' call parameterized by the key. The plugin script
         # dispatches on the key, so introducing new data (metadata, a new object
-        # kind, a subfolder) needs no new query method here.
-        return await self.query_script(self.plugin, "get", {"key": key})
+        # kind, a subfolder) needs no new query method here. 'query' is the key
+        # taken apart by PartCAD ('project_external_repository.query_of'), so
+        # that a plugin need not parse it - and cannot parse it differently.
+        request = {"key": key}
+        if query is not None:
+            request["query"] = query
+        return await self.query_script(self.plugin, "get", request)
 
     async def query_list(self, request: PluginRequestRepositoryList):
         return await self.query_script(self.plugin, "list", request.compose())
