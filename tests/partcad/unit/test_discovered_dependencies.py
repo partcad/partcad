@@ -16,6 +16,7 @@ import asyncio
 import importlib
 import os
 import sys
+import uuid
 
 import pytest
 import yaml
@@ -121,7 +122,7 @@ from build123d import Box
 if __name__ == "__partcad_part__":
     # A '.box' file names the file its size is in, as a stage names its layers.
     with open(request["path"]) as f:
-        sizes = f.read().strip()
+        sizes = f.readline().strip()
     with open(os.path.join(os.path.dirname(request["path"]), sizes)) as f:
         size = float(f.read())
     output = {"shape": Box(size, size, size).wrapped, "dependencies": [sizes, "never-read.txt", 3]}
@@ -136,7 +137,9 @@ def _package(root, reports):
     config = {"name": "//src", "partTypes": {"boxed": part_type}, "parts": {"crate": {"type": ":boxed"}}}
     (root / "partcad.yaml").write_text(yaml.safe_dump(config, sort_keys=False))
     (root / "reader.py").write_text(READER)
-    (root / "crate.box").write_text("sizes.txt\n")
+    # A line nothing reads, which makes this package's part one no other test,
+    # and no earlier run of this one, has put in the shared cache.
+    (root / "crate.box").write_text("sizes.txt\n%s\n" % uuid.uuid4())
     (root / "sizes.txt").write_text("10")
     return root
 
@@ -202,3 +205,17 @@ def test_the_wrapper_hands_back_what_the_script_said_it_read_and_nothing_that_is
     (said,) = written
     assert said["success"], said["exception"]
     assert said["dependencies"] == ["sizes.txt", "never-read.txt"]
+
+
+def test_a_part_type_that_starts_reporting_is_built_again_rather_than_served_from_before_it_did(tmp_path):
+    pytest.importorskip("build123d")
+    root = _package(tmp_path / "pkg", reports=None)
+    _, before, _ = _built(root)
+    config = yaml.safe_load((root / "partcad.yaml").read_text())
+    config["partTypes"]["boxed"]["reportsDependencies"] = True
+    (root / "partcad.yaml").write_text(yaml.safe_dump(config, sort_keys=False))
+    size, after, cached = _built(root)
+    assert (size, cached) == (10.0, False) and after != before
+    # And from then on, what it read is what it is kept for.
+    (root / "sizes.txt").write_text("30")
+    assert _built(root)[0] == 30.0

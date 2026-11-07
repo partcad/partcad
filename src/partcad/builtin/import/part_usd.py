@@ -461,7 +461,9 @@ def stage_files(path):
         from pxr import Sdf, UsdUtils
 
         layers, assets, _ = UsdUtils.ComputeAllDependencies(Sdf.AssetPath(os.path.abspath(path)))
-    except Exception:  # no usd-core, or a stage it cannot walk: the stage alone is known
+    except Exception as e:  # noqa: BLE001 - no usd-core, or a stage it cannot walk: the stage alone is known
+        # Said, because the part is then built again only when its own file changes.
+        print("usd: could not list the files %s is read from: %s" % (os.path.basename(path), e), file=sys.stderr)
         return []
     return sorted({_on_disk(p) for p in [layer.realPath for layer in layers] + list(assets) if p})
 

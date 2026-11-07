@@ -192,6 +192,10 @@ class PartFactoryWrapper(PartFactory):
         if reports is None:
             part.cacheable = False
         elif reports and part.get_cacheable():
+            # Keyed on the type reporting them as well: an entry built before
+            # it did has no list kept beside it, and served from under the
+            # same key it would never come to have one.
+            part.hash.add_string(output.REPORTS_DEPENDENCIES_KEY)
             await self._key_on_discovered(part)
 
     def _part_type_flag(self, key):

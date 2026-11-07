@@ -17,6 +17,7 @@ two to the same shape.
 import asyncio
 import importlib.util
 import os
+import uuid
 
 import numpy
 import pytest
@@ -546,7 +547,9 @@ def test_a_part_is_built_again_when_a_layer_its_stage_composes_changes(tmp_path)
     (tmp_path / "partcad.yaml").write_text(
         yaml.safe_dump({"name": "//layered", "parts": {"tile": {"type": "usd", "path": "tile.usda"}}})
     )
-    (tmp_path / "tile.usda").write_text(_ROOT_LAYER)
+    # Its own stage, which no earlier run has put in the shared cache: the cache
+    # is keyed on content, not on where the package is.
+    (tmp_path / "tile.usda").write_text(_ROOT_LAYER.replace("(\n", '(\n    doc = "%s"\n' % uuid.uuid4(), 1))
     (tmp_path / "layers" / "geometry.usda").write_text(_GEOMETRY_LAYER % {"size": 10})
 
     def built():
