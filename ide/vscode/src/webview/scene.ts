@@ -68,6 +68,7 @@ import {
     Appearance,
     DEFAULT_APPEARANCE,
     OWN_APPEARANCE,
+    OwnAppearance,
     appearanceKey,
     appearanceOf,
     edgeColor,
@@ -75,6 +76,7 @@ import {
     primitiveAppearance,
 } from './appearance';
 import { assemblyRows, calloutsOf, componentName, componentRows, isComponent } from './callouts';
+import { CmfChoice, chosen, setsOf } from './choice';
 import {
     SceneFrame,
     enclosingRadius,
@@ -85,6 +87,7 @@ import {
     readViewpoint,
 } from './cameraView';
 import { el, empty } from './dom';
+import { applyFinish, setFinishShown } from './finish';
 import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
 import { GeometryCache, geometryCache } from './geometryCache';
 import { geometryMissing, reportError } from './host';
@@ -165,11 +168,25 @@ export const backend = surface.backend;
 
 /** Whether the 3D view is drawn without a GPU at all, by the canvas painter. */
 export const software = surface.backend === 'software';
+/**
+ * Whether the 3D view is drawn by the CPU: the painter, or WebGPU on Chromium's
+ * software adapter (see 'offscreenSurface'). The pane says so, and the model
+ * does not turn on its own: a frame every 16 ms is what neither can afford.
+ */
+export const onCpu = surface.onCpu === true;
+/**
+ * How a finished face is made where the window draws with WebGPU, whose node
+ * materials take no shader patch (see 'finishNode.ts'); undefined everywhere
+ * else. Bundled with the rest ('eager'): three's WebGPU build is already in the
+ * bundle for 'surface.ts', and a chunk of its own would need a script the
+ * panel's policy does not allow.
+ */
+const finishNodes = surface.backend === 'webgpu' ? await import(/* webpackMode: "eager" */ './finishNode') : undefined;
 
 surface.domElement.classList.add('surface');
 container.appendChild(surface.domElement);
 
-if (software) {
+if (onCpu) {
     container.appendChild(softwareNotice());
 }
 
@@ -225,8 +242,8 @@ camera.position.set(0, 0, 5);
 const controls = new OrbitControls(camera, surface.domElement);
 controls.enableDamping = true;
 // Turning on its own is a frame every 16 ms for as long as the panel is open,
-// which the software renderer cannot afford: off there until it is asked for.
-controls.autoRotate = !software;
+// which a CPU drawing the frames cannot afford: off there until it is asked for.
+controls.autoRotate = !onCpu;
 controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
 
 /**
@@ -292,6 +309,13 @@ const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x000000, 0.7);
 // Part.js: <pointLight intensity={1} />, at the scene origin.
 const partPointLight = new THREE.PointLight(0xffffff, 1, 0, 0);
 scene.add(ambientLight, spotLight, stagePointLight, hemisphereLight, partPointLight);
+
+/**
+ * What of the rig a finished face reflects beyond the lights that reach it one at
+ * a time, for the WebGPU renderer's lighting model (see 'finishNode.ts'); the
+ * WebGL shader reads the same lights from three's own uniforms.
+ */
+const ROOM_RIG = { probe: roomLight, ambient: ambientLight, hemisphere: hemisphereLight };
 
 // Drawn without a GPU, the model is lit differently: the software renderer
 // knows ambient, directional and point lights and nothing else, and a flat face
@@ -628,6 +652,78 @@ let flickering: ReadonlySet<ItemId> | undefined;
 let flickeringSince = 0;
 
 /**
+ * The geometry of every node on the stage, with the names of that node and of
+ * every node above it: what an item chosen in the CMF tab is found by (see
+ * 'choice.ts'). A node's geometry is its own and none of its children's.
+ */
+let shownNodes: { names: string[]; drawn: THREE.Object3D }[] = [];
+
+/** What the CMF tab chose to show, kept across shows of the same object; see 'showChoice'. */
+let cmfChoice: CmfChoice | undefined;
+
+/**
+ * Every mesh and line drawn faint while a choice is shown, with the material it
+ * is drawn with otherwise - which the Opacity slider goes on setting meanwhile,
+ * so that taking the choice away puts back the model the slider says.
+ */
+const faded = new Map<THREE.Object3D, THREE.Material>();
+
+/**
+ * How opaque what a choice leaves out is drawn: enough to say where the chosen
+ * faces are on the part, and little enough not to be taken for them.
+ */
+const FADED_OPACITY = 0.12;
+
+/**
+ * Single out an item of the CMF tab, or one of its sets, or nothing: what it is
+ * drawn as it always is, and the rest faint (see 'choice.ts'). Answers how many
+ * meshes are what was chosen - none when nothing of it is on the stage.
+ *
+ * Kept until it is taken away, or the panel shows another object: a show of the
+ * same one again - an edit saved - is shown with it too.
+ */
+export function showChoice(choice: CmfChoice | undefined): number {
+    cmfChoice = choice;
+    const shown = applyChoice();
+    invalidate();
+    return shown;
+}
+
+/** Draw what is on the stage as 'cmfChoice' says; how many meshes are what it chose. */
+function applyChoice(): number {
+    for (const [drawable, material] of faded) {
+        (drawable as THREE.Mesh).material = material;
+    }
+    faded.clear();
+    const choice = cmfChoice;
+    const geometry = shownGeometry;
+    if (choice === undefined || geometry === undefined) {
+        return 0;
+    }
+    let shown = 0;
+    for (const { names, drawn } of shownNodes) {
+        drawn.traverse((child) => {
+            const drawable = child as THREE.Mesh | THREE.Line;
+            const isMesh = (drawable as THREE.Mesh).isMesh === true;
+            if (!isMesh && (drawable as THREE.Line).isLine !== true) {
+                return;
+            }
+            // A line is in what was chosen with the faces of its node; a set is
+            // faces, and has none.
+            const inside = chosen(choice, names, isMesh ? setsOf(drawable.userData) : undefined);
+            if (inside && (isMesh || choice.set === undefined)) {
+                shown += isMesh ? 1 : 0;
+                return;
+            }
+            const material = drawable.material as THREE.Material;
+            faded.set(drawable, material);
+            drawable.material = geometry.fadedMaterial(material);
+        });
+    }
+    return shown;
+}
+
+/**
  * Single these items out, or nothing.
  *
  * Only what is already drawn flickers: an item switched off in the pane stays off,
@@ -756,7 +852,7 @@ function keepOwnColors(gltf: GLTF): void {
         const material = mesh.material as THREE.Material;
         const own = ownAppearance(material, gltf.parser.associations.get(material)?.materials !== undefined);
         if (own !== undefined) {
-            const { map, ...plain } = own;
+            const { map, ...plain } = own as OwnAppearance & { map?: THREE.Texture };
             mesh.userData[OWN_APPEARANCE] = plain;
             if (map !== undefined) {
                 // Not in 'userData', which a clone copies through JSON and a
@@ -943,6 +1039,8 @@ export function clearGeometry(): void {
     shownCut = false;
     fitting = undefined;
     drawnBy.clear();
+    shownNodes = [];
+    faded.clear();
     callouts = noCallouts();
     materialCallouts = [];
     treeFrame = undefined;
@@ -1341,10 +1439,10 @@ function paint(group: THREE.Object3D, geometry: Geometry, appearance: Appearance
         const drawable = child as THREE.Mesh | THREE.Line;
         let material: THREE.Material;
         if ((drawable as THREE.Mesh).isMesh) {
-            const own = drawable.userData[OWN_APPEARANCE] as Appearance | undefined;
+            const own = drawable.userData[OWN_APPEARANCE] as OwnAppearance | undefined;
             const map = ownTextures.get(drawable.geometry);
             material = geometry.faceMaterial(
-                primitiveAppearance(own !== undefined && map !== undefined ? { ...own, map } : own, appearance),
+                primitiveAppearance(own?.color !== undefined && map !== undefined ? { ...own, map } : own, appearance),
             );
         } else if ((drawable as THREE.Line).isLine) {
             material = geometry.lineMaterial(appearance);
@@ -1395,6 +1493,8 @@ class Geometry {
     private readonly lines = new Map<string, THREE.LineBasicMaterial>();
     /** Any other material the show made, to be freed with these. */
     private readonly owned: THREE.Material[] = [];
+    /** What each material is drawn as while a choice leaves it out, by that material ('fadedMaterial'). */
+    private readonly faded = new Map<THREE.Material, THREE.Material>();
 
     /**
      * 'side' is which sides of a face are drawn: both, unless the painter draws a
@@ -1420,18 +1520,40 @@ class Geometry {
      * A colour drawn with an image is drawn with it, white under it - three
      * multiplies the two - and remembers the colour it is drawn as where an
      * image cannot be in 'userData.flatColor' (see 'painter.ts').
+     *
+     * A colour drawn with a finish - a face whose CMF set says how rough or how
+     * metallic it is - is drawn as a shaded 'pc render' draws it ('finish.ts'):
+     * the same Phong material, with its diffuse colour, specular colour and
+     * shininess from the finish and the room's reflection added. On an image,
+     * the image is its colour, white under it, as the render takes it.
      */
     faceMaterial(appearance: Appearance): THREE.Material {
         const key = appearanceKey(appearance);
         let material = this.faces.get(key);
         if (material === undefined) {
-            material = new THREE.MeshPhongMaterial({
-                color: appearance.map === undefined ? appearance.color : 0xffffff,
+            // White under an image: three multiplies the two.
+            const albedo = appearance.map === undefined ? appearance.color : 0xffffff;
+            const parameters: THREE.MeshPhongMaterialParameters = {
+                color: albedo,
                 map: appearance.map ?? null,
                 side: appearance.oneSided ? THREE.FrontSide : this.side,
                 transparent: appearance.opacity < 1,
                 opacity: appearance.opacity,
-            });
+            };
+            if (appearance.finish !== undefined && finishNodes !== undefined) {
+                material = finishNodes.finishedNodeMaterial(
+                    parameters,
+                    albedo,
+                    appearance.finish,
+                    appearance.color,
+                    ROOM_RIG,
+                );
+            } else {
+                material = new THREE.MeshPhongMaterial(parameters);
+                if (appearance.finish !== undefined) {
+                    applyFinish(material, albedo, appearance.finish, appearance.color);
+                }
+            }
             material.userData.alpha = appearance.opacity;
             material.userData.flatColor = appearance.color;
             this.faces.set(key, material);
@@ -1565,12 +1687,38 @@ class Geometry {
         this.owned.forEach((material) => material.dispose());
         this.faces.clear();
         this.lines.clear();
+        this.faded.clear();
         this.owned.length = 0;
     }
 
     /** Free 'material' with the rest of this show's (see 'disposeMaterials'). */
     own(material: THREE.Material): void {
         this.owned.push(material);
+    }
+
+    /**
+     * What something drawn with 'material' is drawn with while a choice in the
+     * CMF tab leaves it out (see 'choice.ts'): faint, in the colour it is drawn
+     * as where an image cannot be, plain - no image and no finish - and never in
+     * front of what was chosen, which it does not hide. One per material.
+     */
+    fadedMaterial(material: THREE.Material): THREE.Material {
+        let made = this.faded.get(material);
+        if (made === undefined) {
+            const phong = material as THREE.MeshPhongMaterial;
+            const flat = material.userData.flatColor;
+            const color = typeof flat === 'number' ? new THREE.Color().setHex(flat, THREE.SRGBColorSpace) : phong.color;
+            made = (material as THREE.LineBasicMaterial).isLineBasicMaterial
+                ? new THREE.LineBasicMaterial({ color: phong.color, toneMapped: false })
+                : new THREE.MeshPhongMaterial({ color, side: phong.side });
+            made.transparent = true;
+            made.opacity = FADED_OPACITY;
+            made.depthWrite = false;
+            made.userData.faded = true;
+            this.faded.set(material, made);
+            this.own(made);
+        }
+        return made;
     }
 }
 
@@ -1702,6 +1850,31 @@ async function buildNode(
 
     loaded.built.push({ node, path, group, drawn });
     return group;
+}
+
+/** Every node's geometry with the names of that node and the nodes above it (see 'shownNodes'). */
+function namedGeometry(built: Loaded['built']): { names: string[]; drawn: THREE.Object3D }[] {
+    const nameAt = new Map<string, string>();
+    for (const { node, path } of built) {
+        if (node.name) {
+            nameAt.set(path.join('.'), node.name);
+        }
+    }
+    const named: { names: string[]; drawn: THREE.Object3D }[] = [];
+    for (const { path, drawn } of built) {
+        if (drawn === undefined) {
+            continue;
+        }
+        const names: string[] = [];
+        for (let depth = 0; depth <= path.length; depth++) {
+            const name = nameAt.get(path.slice(0, depth).join('.'));
+            if (name !== undefined) {
+                names.push(name);
+            }
+        }
+        named.push({ names, drawn });
+    }
+    return named;
 }
 
 export async function showGeometry(message: ShowMessage): Promise<void> {
@@ -1865,6 +2038,11 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     shownGeometry = geometry;
     content = group;
     callouts = made;
+    // What a choice in the CMF tab finds an item's geometry by, and the choice
+    // drawn again on what has just arrived.
+    faded.clear();
+    shownNodes = namedGeometry(loaded.built);
+    applyChoice();
     // A cluster names the nodes of one tree: this show's are asked again.
     materialCallouts = [];
     treeFrame = frameOfTree;
@@ -2163,19 +2341,28 @@ export function setAutoFit(enabled: boolean): void {
  * A part that states a see-through colour ("#RRGGBBAA") is a part whose full
  * strength is that, and the slider scales it rather than replacing it: at 100% it
  * is as see-through as it says, and at 50% half as opaque again.
+ *
+ * Below 100%, a face with a finish is drawn as the plain material of its colour,
+ * on every renderer: the slider is for seeing into the model, and a half-clear
+ * metal is black where it should let the inside show (see 'finish.ts'). At 100%
+ * the finish is back, and a see-through colour keeps its own.
  */
 export function setOpacity(opacity: number): void {
     if (content === undefined) {
         return;
     }
     const apply = (material: THREE.Material) => {
-        if (material.userData.annotation === true) {
+        // A port's boundary has its own opacity, and what a choice in the CMF
+        // tab leaves out its own faintness.
+        if (material.userData.annotation === true || material.userData.faded === true) {
             return;
         }
         const alpha = typeof material.userData.alpha === 'number' ? material.userData.alpha : 1;
         material.transparent = true;
         material.opacity = opacity * alpha;
         material.needsUpdate = true;
+        // A see-through model is drawn plain, finishes and all (see 'finish.ts').
+        setFinishShown(material, opacity >= 1);
     };
     content.traverse((node) => {
         const mesh = node as THREE.Mesh;
@@ -2189,6 +2376,8 @@ export function setOpacity(opacity: number): void {
             apply(material);
         }
     });
+    // And what is drawn faint meanwhile, as it will be drawn once it is not.
+    faded.forEach(apply);
     invalidate();
 }
 

@@ -469,14 +469,28 @@ Four things about it are load-bearing:
   WebGL 2 by itself, and there is none. **An adapter and a successful `init()` do not make a WebGPU renderer
   that draws**, so `surface.ts` draws a probe first -- each kind of material the panes make, lines, each kind
   of light, inside a validation error scope -- and takes the painter if it fails. Two windows fail it
-  for real: a Chromium older than the WebGPU specification three is written against (r185 sends a texture
+  for real: a Chromium older than the WebGPU specification three is written against (three since r185 sends a texture
   view's `swizzle` as a string, and Chromium 141 refuses that from every `createView`, so every frame threw),
   and one whose GPU process cannot present a WebGPU canvas, where the device is lost on the first frame. A lost
   device also rejects every error scope three left open with no `catch`, which reached `host.ts`'s trap and
   wrote "The Digital Thread hit an error" over a view that was drawing fine; `watchDevice` turns those into
-  "the device was lost". Where WebGL fails because the GPU process did, WebGPU usually fails with it -
-  Chromium then offers the API and no adapter, not even the software fallback one - so the painter is what
-  such a window ends up with; WebGPU is for a GPU WebGL could not use and WebGPU can.
+  "the device was lost". **A device lost on the probe is a window that cannot present, not one that cannot
+  draw**: Chromium's software adapter (SwiftShader) loses its device the moment any canvas - on the page or
+  not, an `OffscreenCanvas` too - asks it for a frame, and draws into a texture perfectly well. So the probe is
+  drawn again by a second renderer into a render target three treats as the screen (`setOutputRenderTarget`,
+  so tone mapping and the colour space still apply), and if that passes the pane draws every frame that way
+  and copies it into a 2D canvas (`offscreenSurface`, `readback.ts`): the same renderer, materials and lights
+  as on a GPU - finishes, images and depth included, which the painter has none of - at about 50 ms a frame
+  for a 640 by 420 view, one readback in flight at a time. Keep one output target for the life of the
+  renderer and resize it: three keeps what it set up for the first, and never draws into a second. A surface
+  whose adapter is the CPU's says `onCpu`, as the painter does, which is what shows `softwareNotice` and keeps
+  the model still until it is turned. Where WebGL fails because the GPU process did, WebGPU often fails with
+  it - Chromium then offers the API and no adapter at all - and the painter is what such a window ends up
+  with. **three is at r187 or later on purpose**: r185's WebGPU renderer noticed a change to a material shared by
+  several meshes on the first of them only (its `NodeMaterialObserver` checked a material once a frame and
+  answered for the rest from the first), so the Opacity slider faded one instance of a part, and a finish
+  switched off, or a CMF choice taken away, came back on one. Every face material here is shared by every
+  instance of its colour.
 - **Every 3D pane draws only when something changed, on every backend -- not every frame.** The render loop
   runs at the display's rate and draws only when `invalidate` (`scene.ts`) or `dirty` (`cae.ts`) says the
   picture changed: the camera moved (OrbitControls' `change`, which auto-rotation and damping fire too), a
@@ -493,10 +507,29 @@ Four things about it are load-bearing:
   the file's materials (`keepOwnColors`, reading the loader's `associations`, because three gives a primitive
   with no material a white default), and `paint` draws it in that colour with this viewer's material, so it is
   shaded, faded and flickered like the rest. A primitive drawn with an image (a colour whose display is a texture;
-  `wrapper_gltf._with_textures`) keeps that image the same way, as the material's `map` with white under it --
+  `wrapper_gltf._with_looks`) keeps that image the same way, as the material's `map` with white under it --
   but by its geometry in `ownTextures`, not in `userData`: a clone copies `userData` through JSON, which a
   texture does not survive, while every clone shares the geometry. The image is the template's and is freed with
-  it (`releaseTemplate`); `disposeMaterial` leaves a texture marked `cached` alone. A face is more specific than
+  it (`releaseTemplate`); `disposeMaterial` leaves a texture marked `cached` alone. A primitive whose CMF set says
+  a finish (`extras.partcadFinish`, also written by `_with_looks`) keeps it in `userData` beside its colour, and is
+  still drawn with the viewer's Phong material -- set as `finish.ts` says, to agree with a shaded `pc render`'s
+  `finished_light`: shininess `2 / r^4 - 2` (three's 30 at the default 0.5), the specular colour the dielectric's
+  0.04 blended into the colour by the metalness, the diffuse colour times `1 - metallic`, and the room's
+  reflection - the rig's lights evaluated along the mirrored view direction. Not `MeshStandardMaterial`: a different
+  lighting model would make a finished face of the default roughness look unlike an unfinished one beside it. That
+  last term is one formula given to each renderer its own way, and **all three have to keep agreeing**: WebGL by a
+  shader patch (`ROOM_REFLECTION`, `onBeforeCompile`), WebGPU by a lighting model of its own (`finishNode.ts`, loaded
+  only on that backend: three's node materials drop `onBeforeCompile`, and its WebGPU build is ES modules only, which
+  the extension host's tests cannot load), the painter per triangle (`painter.ts`, `roomFresnel`, `blinnPhong`).
+  Under WebGPU a finished material reads its own values through `materialReference`, not uniform nodes made per
+  material: three builds one program for every material whose nodes look alike and keeps the first one's nodes, so
+  per-material uniforms drew every finish as the first. Below 100% on the Opacity slider a finish is drawn plain
+  (`setFinishShown`, a change of values and never of program). A primitive with no finish is drawn exactly as
+  before. **A set chosen in the CMF tab** ("Show in 3D", `choice.ts`) is drawn as it always is and everything else
+  faint, by swapping in a faded material per material (`Geometry.fadedMaterial`) and back; the Opacity slider goes on
+  setting the swapped-out ones meanwhile. A set's faces are found by the mesh `extras.partcadSets` PartCAD writes for
+  a payload whose section addresses faces or solids (`wrapper_gltf._split_by_set`), an item by node name. A face is
+  more specific than
   its part or an assembly, so it wins
   over the node's colour; a node that nothing colours is `DEFAULT_COLOR`,
   `0xdaa520` -- OCCT's `Quantity_NOC_GOLDENROD`, and the colour PartCAD's own 2D projections draw an

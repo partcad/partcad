@@ -403,8 +403,9 @@ changes with the number of workers. So a test may not:
   where a bound has to sit below some other timeout to mean anything, lengthen that timeout in the test.
 
 The suites that cannot be parallel run in jobs of their own, one file each and in one process:
-`tests/ide/test_ide_e2e.py` (`PC_TEST_IDE_E2E=1`) and `tests/partcad/unit/test_docker_sandbox_live.py`
-(`PC_TEST_SANDBOX_IMAGE`). Both skip in the parallel run.
+`tests/ide/test_ide_e2e.py` (`PC_TEST_IDE_E2E=1`), `tests/ide/test_viewer_render.py` (`PC_TEST_IDE_RENDER=1`, a
+browser drawing the 3D view's finishes; Linux, in the same job) and `tests/partcad/unit/test_docker_sandbox_live.py`
+(`PC_TEST_SANDBOX_IMAGE`). All three skip in the parallel run.
 
 **A warm daemon outlives a checkout, and one test says so.** `pc version` reports the version of the
 `partcad` the *daemon* loaded, which is the useful answer and not this process's — so after anything that moves

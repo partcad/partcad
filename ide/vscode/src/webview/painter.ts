@@ -18,6 +18,11 @@
 // same triangles into a canvas (18 against 5 ms at 16,000 triangles, 77 against
 // 32 at 65,000). Projecting is a fifth of the canvas time or less.
 //
+// A face with a finish is lit as 'finish.ts' says - its diffuse light, a
+// highlight from each light, and the room it reflects - by this painter's own
+// lights and in its own arithmetic ('finished'): flat, one colour per triangle,
+// like everything it draws.
+//
 // What it does not do is what a painter's algorithm cannot: two triangles that
 // cross are drawn one over the other whole, and a long thin one can be sorted
 // behind a neighbour it is in front of. 'scene.ts' draws solids front-side only
@@ -26,6 +31,8 @@
 
 import * as THREE from 'three';
 import { Projector, RenderableFace, RenderableLine } from 'three/examples/jsm/renderers/Projector.js';
+
+import { FinishState, blinnPhong, roomFresnel, shownFinish } from './finish';
 
 /**
  * How far each triangle is grown on screen, in pixels, before it is filled.
@@ -52,6 +59,14 @@ export class CanvasPainter {
     private readonly direction = new THREE.Vector3();
     private readonly target = new THREE.Vector3();
     private readonly normal = new THREE.Vector3();
+    private readonly eye = new THREE.Vector3();
+    private readonly view = new THREE.Vector3();
+    private readonly mirrored = new THREE.Vector3();
+    private readonly half = new THREE.Vector3();
+    private readonly toward = new THREE.Vector3();
+    private readonly term = new THREE.Color();
+    private readonly fresnel = new THREE.Color();
+    private readonly room = new THREE.Color();
     private readonly points = [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()];
 
     setPixelRatio(ratio: number): void {
@@ -75,6 +90,7 @@ export class CanvasPainter {
 
         // Far to near: 'sortElements' is what makes this a painter's algorithm.
         const data = this.projector.projectScene(scene, camera, true, true);
+        this.eye.setFromMatrixPosition(camera.matrixWorld);
         const lights = data.lights as THREE.Light[];
         this.ambient.setRGB(0, 0, 0);
         for (const light of lights) {
@@ -120,11 +136,19 @@ export class CanvasPainter {
             // it faces.
             color.copy(material.color);
         } else {
-            this.shade(face, lights, color);
-            // A face drawn with an image is one flat colour here: the colour it
-            // is drawn as where an image cannot be (see 'Geometry.faceMaterial').
-            const flat = material.map ? material.userData.flatColor : undefined;
-            color.multiply(typeof flat === 'number' ? this.flat.setHex(flat, THREE.SRGBColorSpace) : material.color);
+            const finish = shownFinish(material);
+            if (finish !== undefined) {
+                this.finished(face, lights, finish, color);
+            } else {
+                this.normal.copy(face.normalModel).normalize();
+                this.shade(this.normal, lights, color);
+                // A face drawn with an image is one flat colour here: the colour it
+                // is drawn as where an image cannot be (see 'Geometry.faceMaterial').
+                const flat = material.map ? material.userData.flatColor : undefined;
+                color.multiply(
+                    typeof flat === 'number' ? this.flat.setHex(flat, THREE.SRGBColorSpace) : material.color,
+                );
+            }
             if (material.emissive) {
                 color.add(material.emissive);
             }
@@ -158,16 +182,15 @@ export class CanvasPainter {
      * this does not, so a pane that lights the same scene for both gives the
      * painter its intensities over pi (see 'cae.ts').
      */
-    private shade(face: RenderableFace, lights: THREE.Light[], into: THREE.Color): void {
+    private shade(normal: THREE.Vector3, lights: THREE.Light[], into: THREE.Color): THREE.Color {
         into.copy(this.ambient);
-        this.normal.copy(face.normalModel).normalize();
         for (const light of lights) {
             const hemisphere = light as THREE.HemisphereLight;
             if (hemisphere.isHemisphereLight) {
                 // The sky's colour on a face turned to it, the ground's on one
                 // turned away, and a blend between - as three's shader has it.
                 this.direction.setFromMatrixPosition(hemisphere.matrixWorld).normalize();
-                const sky = 0.5 * this.normal.dot(this.direction) + 0.5;
+                const sky = 0.5 * normal.dot(this.direction) + 0.5;
                 into.r +=
                     (hemisphere.groundColor.r + (light.color.r - hemisphere.groundColor.r) * sky) * light.intensity;
                 into.g +=
@@ -184,13 +207,64 @@ export class CanvasPainter {
             this.direction.setFromMatrixPosition(directional.matrixWorld);
             this.target.setFromMatrixPosition(directional.target.matrixWorld);
             this.direction.sub(this.target).normalize();
-            const amount = this.normal.dot(this.direction);
+            const amount = normal.dot(this.direction);
             if (amount > 0) {
                 into.r += light.color.r * light.intensity * amount;
                 into.g += light.color.g * light.intensity * amount;
                 into.b += light.color.b * light.intensity * amount;
             }
         }
+        return into;
+    }
+
+    /**
+     * The colour of a face drawn with its finish, seen from the camera: three's
+     * Phong arithmetic times pi, as 'shade' is.
+     *
+     * The light falling on it times its diffuse colour; for each directional
+     * light, the Blinn-Phong highlight of its specular colour and shininess; and
+     * the room it mirrors - 'shade' of the mirrored view direction - by
+     * 'roomFresnel'. All from the colour it is drawn as where an image cannot be
+     * ('FinishState.flat'), since an image is one flat colour here. Lit from the
+     * side it is seen from, as the GPU renderers light a two-sided face.
+     */
+    private finished(face: RenderableFace, lights: THREE.Light[], finish: FinishState, into: THREE.Color): void {
+        const look = finish.flat;
+        const normal = this.normal.copy(face.normalModel).normalize();
+        // Seen from the middle of the triangle.
+        const view = this.view
+            .copy(face.v1.positionWorld)
+            .add(face.v2.positionWorld)
+            .add(face.v3.positionWorld)
+            .multiplyScalar(1 / 3);
+        view.subVectors(this.eye, view).normalize();
+        if (normal.dot(view) < 0) {
+            normal.negate();
+        }
+        this.shade(normal, lights, into).multiply(look.color);
+        for (const light of lights) {
+            const directional = light as THREE.DirectionalLight;
+            if (!directional.isDirectionalLight) {
+                continue;
+            }
+            const toward = this.toward.setFromMatrixPosition(directional.matrixWorld);
+            toward.sub(this.target.setFromMatrixPosition(directional.target.matrixWorld)).normalize();
+            const dotNL = normal.dot(toward);
+            if (dotNL <= 0) {
+                continue;
+            }
+            const half = this.half.addVectors(toward, view).normalize();
+            blinnPhong(look.specular, look.shininess, normal.dot(half), Math.max(0, view.dot(half)), this.term);
+            this.term.multiply(light.color).multiplyScalar(Math.PI * light.intensity * dotNL);
+            into.add(this.term);
+        }
+        const dotNV = Math.max(0, normal.dot(view));
+        const mirrored = this.mirrored
+            .copy(normal)
+            .multiplyScalar(2 * dotNV)
+            .sub(view);
+        roomFresnel(look.specular, dotNV, finish.finish.roughness, this.fresnel);
+        into.add(this.shade(mirrored, lights, this.room).multiply(this.fresnel));
     }
 
     private line(line: RenderableLine): void {

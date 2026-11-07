@@ -87,6 +87,7 @@ import { BuildView } from './build';
 import { BvbResult, BvbView, THUMBNAIL_SIZE, visibleRows } from './bvb';
 import { hasCallouts } from './callouts';
 import { CaeResult } from './cae';
+import type { CmfChoice } from './choice';
 import { CmfView } from './cmf';
 import { el, empty, placeholder } from './dom';
 import { geometryCache } from './geometryCache';
@@ -194,7 +195,40 @@ const panes: Record<TabId, HTMLElement> = {
 const DATA_TABS: TabId[] = ['bom', 'supply'];
 
 const supplyView = new SupplyView(panes.supply);
-const cmfView = new CmfView(panes.cmf);
+const cmfView = new CmfView(panes.cmf, (choice) => showInDesign(choice));
+
+/**
+ * What the CMF tab singled out in the 3D view, said over the view with a way to
+ * take it away (see 'choice.ts'). Hidden while nothing is.
+ */
+const choiceChip = el('div', 'cmf-choice');
+choiceChip.hidden = true;
+const choiceText = choiceChip.appendChild(el('span', 'cmf-choice-text'));
+const choiceClose = choiceChip.appendChild(el('button', 'cmf-choice-close', '×')) as HTMLButtonElement;
+choiceClose.type = 'button';
+choiceClose.title = 'Show all of it again';
+choiceClose.setAttribute('aria-label', 'Show all of it again');
+choiceClose.addEventListener('click', () => chooseInDesign(undefined));
+byId('viewer').appendChild(choiceChip);
+
+/**
+ * Single out what the CMF tab chose, or nothing, in the 3D view - now if it has
+ * loaded, and in what it shows next if not: the choice is the scene's to keep
+ * across shows of the same object, and 'show' takes it away for another one.
+ */
+function chooseInDesign(choice: CmfChoice | undefined): void {
+    choiceChip.hidden = choice === undefined;
+    choiceText.textContent = choice === undefined ? '' : `Showing ${choice.label}`;
+    choiceChip.title = choice === undefined ? '' : `${choice.label}, and everything else faint`;
+    void sceneLoaded.then((view) => view?.showChoice(choice));
+}
+
+/** A CMF tab's "Show in 3D": the 3D view, with that singled out. */
+function showInDesign(choice: CmfChoice): void {
+    chooseInDesign(choice);
+    tabs.click('design');
+    designTabs.click('3d');
+}
 // The three Manufacturing panes that hold controls of their own - switches, a
 // checkbox, a format - own their panes for the life of the panel, as the
 // analyses do: rebuilding one on every show would take back what the user set.
@@ -277,9 +311,9 @@ const sceneLoaded: Promise<Scene | undefined> = import(/* webpackMode: "eager" *
         scene.setComponentPrices(prices?.texts ?? {});
         // What the box says, should it have been changed while this loaded.
         scene.setAutoFit(view3d.autoFitting);
-        if (module.software) {
-            // Drawn without a GPU, the model does not turn on its own: a frame
-            // every 16 ms is what the software renderer cannot afford. The box
+        if (module.onCpu) {
+            // Drawn by the CPU, the model does not turn on its own: a frame
+            // every 16 ms is what the CPU cannot afford. The box
             // says so, and ticking it turns it on regardless.
             view3d.setAnimate(false);
         }
@@ -1520,7 +1554,9 @@ async function show(message: ShowMessage): Promise<void> {
         // A different object: what was ticked about the last one says nothing
         // about this one. Kept when the camera is, which is the same question -
         // "is this the same object again" - and a save and a re-render are.
+        // So is what the CMF tab singled out in it.
         selection.clear();
+        chooseInDesign(undefined);
     }
     if (message.object === null) {
         objectTree.clear();

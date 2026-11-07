@@ -176,9 +176,11 @@ class MeshView {
         this.scene.add(new THREE.AmbientLight(0xffffff, AMBIENT_INTENSITY * scale));
         this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, HEMISPHERE_INTENSITY * scale));
 
-        if (this.software) {
+        if (this.surface?.onCpu === true) {
             this.notice = softwareNotice();
             this.host.appendChild(this.notice);
+        }
+        if (this.software) {
             controls.addEventListener('start', () => {
                 if (this.boxes !== undefined && this.model !== undefined) {
                     this.model.visible = false;
