@@ -146,6 +146,20 @@ def _cross(a, b, c):
     return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
 
 
+def _crosses_itself(projected):
+    """Whether two edges of the closed polygon through 'projected' that share no corner cross."""
+    count = len(projected)
+    edges = [(projected[i], projected[(i + 1) % count]) for i in range(count)]
+    for i in range(count):
+        for j in range(i + 2, count):
+            if i == 0 and j == count - 1:
+                continue
+            (a, b), (c, d) = edges[i], edges[j]
+            if _cross(a, b, c) * _cross(a, b, d) < 0 and _cross(c, d, a) * _cross(c, d, b) < 0:
+                return True
+    return False
+
+
 def triangles(points):
     """The triangles, as index triples into 'points', that cover the polygon through them; None where none do.
 
@@ -157,7 +171,7 @@ def triangles(points):
     crosses itself has no such cover, and is None.
     """
     projected = _projected(points)
-    if projected is None:
+    if projected is None or _crosses_itself(projected):
         return None
     remaining = list(range(len(points)))
     result = []
@@ -181,7 +195,10 @@ def triangles(points):
             break
         else:
             return None
-    result.append(tuple(remaining))
+    a, b, c = remaining
+    if _cross(projected[a], projected[b], projected[c]) <= 0:
+        return None
+    result.append((a, b, c))
     return result
 
 

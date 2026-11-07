@@ -251,6 +251,12 @@ def test_a_polygon_crossing_itself_is_left_out_and_counted():
     assert _faces(compound) == 0
 
 
+def test_a_polygon_whose_projection_crosses_itself_has_no_triangles():
+    # Edges 1-2 and 3-4 cross at (1, 1) in the plane it is closest to; ear
+    # clipping alone cut it, the second triangle turning the other way.
+    assert wrapper_obj.triangles([(0, 0, 0), (3, 3, 0), (0, 2, 0), (2, 0, 0.1)]) is None
+
+
 def test_a_concave_non_planar_polygon_builds_inside_its_outline():
     text = "".join("v %g %g %g\n" % point for point in CONCAVE) + "f 1 2 3 4 5 6\n"
     vertices, faces = _parse(text)
