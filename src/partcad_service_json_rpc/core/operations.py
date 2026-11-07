@@ -1411,15 +1411,18 @@ def _positive_number(params, key, what):
 
 
 def compare_objects(session, params):
-    """Read one part or assembly against another: volume, mass, tolerance and, optionally, the surface.
+    """Read one part or assembly against another: volume, mass, tolerance and, optionally, displacement and surface.
 
     ``object`` is the reference and ``current`` the object held to it, the order
     ``pc compare <reference> <current>`` names them in. Every difference is the
     current one's value less the reference's, and every percentage is of the
-    reference's (see ``partcad.compare``). ``surface_distance`` measures the
-    current object's surface from the reference's at points that many
-    millimetres apart; ``max_volume_difference`` and ``max_mass_difference`` are
-    limits in percent. What comes back is the report; ``passed`` is false when
+    reference's (see ``partcad.compare``). ``displacement`` measures what each
+    would push aside if submerged -- its volume and every void sealed inside it
+    -- which ``max_displacement_difference`` also does. ``surface_distance``
+    measures the current object's surface from the reference's at points that
+    many millimetres apart; ``max_volume_difference``,
+    ``max_displacement_difference`` and ``max_mass_difference`` are limits in
+    percent. What comes back is the report; ``passed`` is false when
     something it was held to does not hold, and null when it was held to nothing.
     Unless ``json`` is set the report is also printed, through PartCAD logging,
     so that every client shows the same lines.
@@ -1433,7 +1436,11 @@ def compare_objects(session, params):
 
     spacing = _positive_number(params, "surface_distance", "The distance between the points measured")
     limits = {}
-    for amount, key in (("volume", "max_volume_difference"), ("mass", "max_mass_difference")):
+    for amount, key in (
+        ("volume", "max_volume_difference"),
+        ("displacement", "max_displacement_difference"),
+        ("mass", "max_mass_difference"),
+    ):
         raw = params.get(key)
         if raw is None:
             continue
@@ -1459,7 +1466,15 @@ def compare_objects(session, params):
     with pc.logging.Process("Compare", package, name):
         try:
             report = asyncio.run(
-                pc.compare.compare_async(ctx, reference, current, spacing=spacing, limits=limits, worst=worst)
+                pc.compare.compare_async(
+                    ctx,
+                    reference,
+                    current,
+                    spacing=spacing,
+                    limits=limits,
+                    worst=worst,
+                    displacement=bool(params.get("displacement")),
+                )
             )
         except ValueError as e:
             # The sandbox's refusal to measure -- too many points for the

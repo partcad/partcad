@@ -377,9 +377,9 @@ Whether the model is what its `requirements:` say it has to be, as far as that
 can be measured: each required port is there, facing where it has to; each
 required interface is implemented, its instances where they have to be; and each
 required physical property - its mass, its centre of mass, its inertia, its
-friction - has a value that meets the requirement; and its volume and its mass
-are within the percentage `match:` allows of each object it names - the
-numbers `pc compare <that object> <this one>` reports. Asked again every time,
+friction - has a value that meets the requirement; and its volume, its
+displacement and its mass are within the percentage `match:` allows of each
+object it names - the numbers `pc compare <that object> <this one>` reports. Asked again every time,
 never read from the cache.
 
 The `features:` are sentences rather than measurements, and are judged by the
@@ -403,10 +403,10 @@ what is there instead.
 - `not known: ...`: PartCAD could not find out the value - a mass with no
   density to work it out from. State the value in a `physics:` section, or give
   the part a `material:` with a density. "Not known" is not "met".
-- `match: <amount> of <object>: within N%: ... more than N%`: the volume or
-  the mass is further from the other object's than the requirement allows. Run
-  `pc compare <object> <this one>` for the whole comparison, and change the
-  model or the limit, whichever is wrong.
+- `match: <amount> of <object>: within N%: ... more than N%`: the volume, the
+  displacement or the mass is further from the other object's than the
+  requirement allows. Run `pc compare --displacement <object> <this one>` for
+  the whole comparison, and change the model or the limit, whichever is wrong.
 - `unreadable`: the requirement itself cannot be read; the detail says why.
 """,
     ),

@@ -12,6 +12,12 @@ object, is held to:
 
   volume     how much of each there is, in mm^3: a part's measured solid, an
              assembly's parts added up (see 'physics.amounts_async')
+  displacement
+             optionally, how much each would push aside if it were submerged,
+             in mm^3: its volume and every void sealed inside it, which a hole
+             right through it is not (see 'shape_measure.displacement' among
+             the wrappers). Measured in a sandbox, so only when asked for -
+             with 'displacement', or with a limit on it
   mass       what each weighs, in kg, stated or worked out from its material
   tolerance  how precisely each is to be made ('get_tolerance()'), and the two
              added up: how far apart two surfaces each made within its own
@@ -25,10 +31,10 @@ Every difference is the current object's value less the reference's, and every
 percentage is of the reference's: "the current one is 4% heavier".
 
 A comparison passes or fails only on what it was asked to hold the two to. A
-volume or a mass is judged only against a limit given with it, in percent of the
-reference's; the surface is judged whenever it is measured, against the two
-tolerances added up. With nothing judged, 'passed' is None: a report, not a
-verdict. A value that cannot be known -- a mass of something made of nothing
+volume, a displacement or a mass is judged only against a limit given with it,
+in percent of the reference's; the surface is judged whenever it is measured,
+against the two tolerances added up. With nothing judged, 'passed' is None: a
+report, not a verdict. A value that cannot be known -- a mass of something made of nothing
 with a density -- fails a limit set on it, because "not known" is not "within
 5%" (the rule 'partcad.requirements' has for every requirement).
 
@@ -49,10 +55,17 @@ from . import measure as pc_measure
 from . import physics as pc_physics
 
 VOLUME = "volume"
+DISPLACEMENT = "displacement"
 MASS = "mass"
-AMOUNTS = (VOLUME, MASS)
+# Every amount a limit, or a 'match:' requirement, may hold two objects to, in
+# the order a report lists them. The displacement is measured only when it is
+# asked for, and a report without it leaves it out.
+AMOUNTS = (VOLUME, DISPLACEMENT, MASS)
 
-UNITS = {VOLUME: "mm^3", MASS: "kg"}
+UNITS = {VOLUME: "mm^3", DISPLACEMENT: "mm^3", MASS: "kg"}
+
+# What a value that is not known because nothing in the object can hold it says.
+NO_SOLID = "it holds no solid"
 
 # What a limit in percent is allowed to be off by and still hold: the last bit
 # of the arithmetic, not a tolerance anyone asked for.
@@ -188,11 +201,37 @@ def name_of(shape) -> str:
     return "%s:%s" % (shape.project_name, shape.name)
 
 
-async def side_async(ctx, shape) -> dict:
-    """What one of the two objects is: its name, kind, volume, mass and tolerance."""
+async def _displacement(ctx, shape) -> dict:
+    """'{"displacement", "cavities", "displacementUnknown"}' of one object, measured in a sandbox.
+
+    A measurement that fails leaves the displacement not known and says why,
+    the way a mass nothing states is not known: one object the sandbox could
+    not measure fails a limit on it, and takes nothing else down with it.
+    """
+    try:
+        measured = await pc_measure.displacement(
+            ctx, await shape.get_wrapped(ctx), cacheable=shape.artifacts_cacheable()
+        )
+    except Exception as e:  # pylint: disable=broad-except
+        return {DISPLACEMENT: None, "cavities": None, "displacementUnknown": "could not be measured: %s" % e}
+    measured = measured or {}
+    value = measured.get(DISPLACEMENT)
+    return {
+        DISPLACEMENT: value,
+        "cavities": measured.get("cavities"),
+        "displacementUnknown": None if value is not None else NO_SOLID,
+    }
+
+
+async def side_async(ctx, shape, displacement: bool = False) -> dict:
+    """What one of the two objects is: its name, kind, volume, mass and tolerance.
+
+    With 'displacement', its displacement as well, and how many voids are
+    sealed inside its solids ('cavities'): what makes the two volumes differ.
+    """
     amounts = await pc_physics.amounts_async(ctx, shape) or {}
     tolerance, note = await _tolerance(shape)
-    return {
+    side = {
         "object": name_of(shape),
         "kind": getattr(shape, "kind", None),
         VOLUME: amounts.get(VOLUME),
@@ -202,10 +241,13 @@ async def side_async(ctx, shape) -> dict:
         "tolerance": tolerance,
         "toleranceNote": note,
     }
+    if displacement:
+        side.update(await _displacement(ctx, shape))
+    return side
 
 
 def amount_entry(reference: dict, current: dict, key: str) -> dict:
-    """How one amount ('volume' or 'mass') of two sides 'side_async()' answered differs.
+    """How one amount ('volume', 'displacement' or 'mass') of two sides 'side_async()' answered differs.
 
     'difference()', with the unit, and why each side's value is not known where
     it is not - which is what 'within()' says when it fails for that reason.
@@ -213,25 +255,33 @@ def amount_entry(reference: dict, current: dict, key: str) -> dict:
     entry = difference(reference.get(key), current.get(key))
     entry["unit"] = UNITS[key]
     if key == VOLUME:
-        entry["referenceUnknown"] = None if reference.get(key) is not None else "it holds no solid"
-        entry["currentUnknown"] = None if current.get(key) is not None else "it holds no solid"
+        entry["referenceUnknown"] = None if reference.get(key) is not None else NO_SOLID
+        entry["currentUnknown"] = None if current.get(key) is not None else NO_SOLID
+    elif key == DISPLACEMENT:
+        entry["referenceUnknown"] = reference.get("displacementUnknown")
+        entry["currentUnknown"] = current.get("displacementUnknown")
     else:
         entry["referenceUnknown"] = reference.get("massUnknown")
         entry["currentUnknown"] = current.get("massUnknown")
     return entry
 
 
-async def compare_async(ctx, reference, current, spacing=None, limits=None, worst: int = WORST) -> dict:
+async def compare_async(
+    ctx, reference, current, spacing=None, limits=None, worst: int = WORST, displacement: bool = False
+) -> dict:
     """Read 'current' against 'reference', both parts or assemblies; see the module's docstring.
 
     'spacing', when given, measures the surface with points that far apart, in
-    millimetres. 'limits' is '{"volume": percent, "mass": percent}', either of
-    them absent: how far each may differ, in percent of the reference's, for the
-    comparison to pass.
+    millimetres. 'limits' is '{"volume": percent, "displacement": percent,
+    "mass": percent}', any of them absent: how far each may differ, in percent
+    of the reference's, for the comparison to pass. 'displacement' measures the
+    displacements as well, which a limit on them also does; without either the
+    report's 'displacement' is None.
     """
     limits = dict(limits or {})
-    reference_side = await side_async(ctx, reference)
-    current_side = await side_async(ctx, current)
+    displacement = bool(displacement) or limits.get(DISPLACEMENT) is not None
+    reference_side = await side_async(ctx, reference, displacement=displacement)
+    current_side = await side_async(ctx, current, displacement=displacement)
     report = {
         "reference": reference_side,
         "current": current_side,
@@ -239,6 +289,9 @@ async def compare_async(ctx, reference, current, spacing=None, limits=None, wors
     }
     verdicts = []
     for key in AMOUNTS:
+        if key == DISPLACEMENT and not displacement:
+            report[key] = None
+            continue
         entry = amount_entry(reference_side, current_side, key)
         limit = limits.get(key)
         entry["limit"] = limit
@@ -302,7 +355,9 @@ def format_report(report: dict) -> typing.List[str]:
         "current:   %s (%s)" % (current["object"], current["kind"]),
     ]
     for key in AMOUNTS:
-        entry = report[key]
+        entry = report.get(key)
+        if entry is None:
+            continue
         unit = entry["unit"]
         line = "%s: %s -> %s" % (
             key,

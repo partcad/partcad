@@ -40,14 +40,21 @@ CACHE_VERSION = 1
 _bbox = shape_measure.bbox
 _volumes = shape_measure.volumes
 _measurements = shape_measure.measurements
+_displacement = shape_measure.displacement
 
 
 def process(request):
+    """Answer one request: 'bbox', 'measurements' or 'displacement' of the shape it carries."""
     operation = request.get("operation")
     if operation == "bbox":
         return _bbox(request["shape"])
     if operation == "measurements":
         return _measurements(request["shape"])
+    if operation == "displacement":
+        # Not in the measurements every shape carries: what 'pc compare' and a
+        # 'match:' requirement ask of the few shapes they are about, and only
+        # when they are asked to compare displacements.
+        return _displacement(request["shape"])
     raise ValueError("Unknown measure operation: %r" % (operation,))
 
 

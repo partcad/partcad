@@ -309,8 +309,8 @@ read against each other by `pc compare <reference> <current>`: their volumes,
 masses and tolerances, and with `--surface-distance <mm>` how far the current
 one's surface is from the reference's, point by point along the reference's
 normals (`/pc:gen-part` §7 says how to read it). It exits 1 when they disagree
-too: past the two tolerances added up, or past a `--max-volume-difference` or
-`--max-mass-difference` given in percent.
+too: past the two tolerances added up, or past a `--max-volume-difference`,
+`--max-displacement-difference` or `--max-mass-difference` given in percent.
 
 The exact projection costs more and can fail on a large model (that is why it
 is not the default). What makes a model large is how many edges it has, not

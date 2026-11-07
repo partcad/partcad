@@ -9,8 +9,8 @@
 // because a requirement is one of two kinds of thing:
 //
 //   - what PartCAD can measure - the ports, the interfaces, the physical
-//     properties and how closely the volume and the mass match another
-//     object's - listed with a mark beside each: green where 'pc test' finds
+//     properties and how closely the volume, the displacement and the mass
+//     match another object's - listed with a mark beside each: green where 'pc test' finds
 //     the model meets it, red where it does not;
 //   - the features, which are prose, in a table: what each is, and what it is
 //     validated by - the 'simulate:' entries that name it, the analysis

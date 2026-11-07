@@ -223,8 +223,21 @@ def test_compare_sends_what_pc_compare_json_sends(tmp_path):
     assert request["current"] == "bracket-v2"
     assert request["surface_distance"] == 0.5
     assert request["max_volume_difference"] is None
+    assert request["displacement"] is False
+    assert request["max_displacement_difference"] is None
     assert request["worst"] == 10
     assert request["json"] is True
+
+
+def test_compare_asks_for_the_displacements_as_pc_compare_displacement_does(tmp_path):
+    """'displacement' and its limit reach the daemon as the options of 'pc compare' send them."""
+    daemon, server = serve(tmp_path, {"compare.objects": lambda params, emit: {"passed": True}})
+    arguments = {"reference": "a", "current": "b", "displacement": True, "max_displacement_difference": 2}
+    result = call(server, "compare", arguments)
+    assert not result.is_error
+    (request,) = requests(daemon, "compare.objects")
+    assert request["displacement"] is True
+    assert request["max_displacement_difference"] == 2
 
 
 def test_a_comparison_that_does_not_hold_is_a_failed_result(tmp_path):

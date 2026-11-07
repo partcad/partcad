@@ -12,7 +12,8 @@ from ..service import run
 @click.command(
     help=(
         "Compare a part or an assembly with another: CURRENT against REFERENCE. Reports how their volumes "
-        "and masses differ, how precisely each is to be made, and -- with --surface-distance -- how far the "
+        "and masses differ, how precisely each is to be made, with --displacement how their displacements "
+        "differ (the volume and every void sealed inside it), and -- with --surface-distance -- how far the "
         "surface of CURRENT is from the surface of REFERENCE, measured along the normals of REFERENCE at "
         "points that far apart (every vertex, then the edges, then the faces), against the tolerances of both "
         "added up. Differences are CURRENT less REFERENCE, percentages are of REFERENCE. Exits non-zero when "
@@ -42,11 +43,33 @@ from ..service import run
     show_envvar=True,
 )
 @click.option(
+    "--displacement",
+    "displacement",
+    help=(
+        "Also compare the displacements: what each would push aside if submerged, its volume and every void "
+        "sealed inside it (not a hole right through it). Measured in a sandbox"
+    ),
+    is_flag=True,
+    show_envvar=True,
+)
+@click.option(
     "--max-volume-difference",
     "max_volume_difference",
     type=click.FloatRange(min=0),
     metavar="PERCENT",
     help="Fail unless the volume of CURRENT is within this many percent of the volume of REFERENCE",
+    default=None,
+    show_envvar=True,
+)
+@click.option(
+    "--max-displacement-difference",
+    "max_displacement_difference",
+    type=click.FloatRange(min=0),
+    metavar="PERCENT",
+    help=(
+        "Fail unless the displacement of CURRENT is within this many percent of the displacement of REFERENCE. "
+        "Implies --displacement"
+    ),
     default=None,
     show_envvar=True,
 )
@@ -79,12 +102,22 @@ from ..service import run
 @click.argument("current", type=str, required=True)
 @click.pass_obj
 def cli(
-    cli_ctx, package, surface_distance, max_volume_difference, max_mass_difference, worst, as_json, reference, current
+    cli_ctx,
+    package,
+    surface_distance,
+    displacement,
+    max_volume_difference,
+    max_displacement_difference,
+    max_mass_difference,
+    worst,
+    as_json,
+    reference,
+    current,
 ):
     """Read CURRENT against REFERENCE.
 
     A daemon command: the volumes and masses are the package graph's, and the
-    surface distance drives a CAD wrapper. The report is printed by the daemon
+    displacement and the surface distance drive CAD wrappers. The report is printed by the daemon
     through PartCAD logging, so that what a user sees does not depend on which
     client asked; `--json` is the exception, since a machine-readable object has
     to reach stdout of *this* process to be piped anywhere. What stays here is
@@ -98,7 +131,9 @@ def cli(
             "object": reference,
             "current": current,
             "surface_distance": surface_distance,
+            "displacement": displacement,
             "max_volume_difference": max_volume_difference,
+            "max_displacement_difference": max_displacement_difference,
             "max_mass_difference": max_mass_difference,
             "worst": worst,
             "json": as_json,

@@ -804,7 +804,7 @@
     },
     "requirement-match": {
       "type": ["object", "null"],
-      "description": "How closely this object's volume and mass have to match another object's: keyed by the other object's name (resolved from this object's package, so ':bracket' is a sibling), each a mapping of 'volume' and 'mass' to how many percent of the other object's they may differ by, either way -- 5 or '5%'. 'weight' is accepted for 'mass'. Read by the rules 'pc compare <other> <this>' reads the two by; a volume or a mass PartCAD cannot find out fails the requirement",
+      "description": "How closely this object's volume, displacement and mass have to match another object's: keyed by the other object's name (resolved from this object's package, so ':bracket' is a sibling), each a mapping of 'volume', 'displacement' and 'mass' to how many percent of the other object's they may differ by, either way -- 5 or '5%'. The displacement is what the object would push aside if submerged: its volume and every void sealed inside it, not a hole right through it. 'weight' is accepted for 'mass'. Read by the rules 'pc compare <other> <this>' reads the two by; an amount PartCAD cannot find out fails the requirement",
       "additionalProperties": {
         "oneOf": [
           { "type": "null" },
@@ -812,6 +812,7 @@
             "type": "object",
             "properties": {
               "volume": { "$ref": "#/definitions/requirement-percent" },
+              "displacement": { "$ref": "#/definitions/requirement-percent" },
               "mass": { "$ref": "#/definitions/requirement-percent" },
               "weight": { "$ref": "#/definitions/requirement-percent" }
             },

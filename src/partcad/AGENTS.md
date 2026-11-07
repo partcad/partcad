@@ -362,14 +362,17 @@ at all).
   read off the schema (`requirement-physics`, which a test holds to `physics` less a connection's properties),
   so a field added there needs nothing here. The check is never cached: what it reads -- the requirements, the
   ports and interfaces, which can live in other packages, the material -- is mostly not what a shape's cache key
-  is made of. The fifth section, `match`, holds the volume and the mass to within a percentage of another
-  object's, and reads both by `compare.py`'s rules (`within()`), so `pc test` and `pc compare` cannot disagree
+  is made of. The fifth section, `match`, holds the volume, the displacement and the mass to within a percentage of
+  another object's, and reads both by `compare.py`'s rules (`within()`), so `pc test` and `pc compare` cannot disagree
   about what "within 5%" means.
 
 - **Two objects read against each other is one module** (`compare.py`, with `wrappers/wrapper_compare.py` for the
   surface): what `pc compare <reference> <current>` reports -- the volumes and masses (`physics.amounts_async()`,
   the numbers `pc info` reports, in full), the tolerances (`get_tolerance()`) and their sum, the *allowance*,
-  and optionally the surface distance. That last is measured in the sandbox, one-sided from the reference: points
+  optionally the displacements -- what each solid's outer shell encloses, its volume and every void sealed inside
+  it (`wrappers/shape_measure.displacement()`, the measure wrapper's `displacement` operation, asked only when a
+  comparison or a `match:` names it, never put in the measurements every shape carries) -- and optionally the
+  surface distance. That last is measured in the sandbox, one-sided from the reference: points
   no two closer than the spacing asked for -- every vertex, then the edges, then the faces, each candidate kept
   only when a spatial hash finds nothing within the spacing -- and each measured along the reference's normals to
   the current object's surface (OCCT's line/face intersector for faces with a surface, a ray cast through a grid
