@@ -494,3 +494,116 @@ def test_pc_test_never_remembers_the_verdict(ctx):
     shape = ctx.get_part("//:plate")
     asyncio.run(RequirementsTest().test([], ctx, shape, test_ctx))
     assert test_ctx[Test.NOT_CACHEABLE] is True
+
+
+# --- 'match:': within a percentage of another object ----------------------------
+
+
+def test_a_match_is_read_by_amount_and_object():
+    """One requirement per object and amount: 'weight' is the mass, and null is no requirement."""
+    declaration = requirements.parse({"match": {":bracket": {"volume": "5%", "weight": 2, "mass": None}}})
+    assert [(c.reference, c.amount, c.limit, c.written) for c in declaration.match] == [
+        (":bracket", "volume", 5.0, "volume"),
+        (":bracket", "mass", 2.0, "weight"),
+    ]
+    assert declaration.structured
+    assert declaration.problems == []
+    assert declaration.match[0].name == "volume of :bracket"
+    assert declaration.match[0].describe() == "within 5%"
+
+
+@pytest.mark.parametrize(
+    "raw, detail",
+    [
+        ({":b": {"volume": "lots"}}, "'lots' is not a percentage"),
+        ({":b": {"volume": -1}}, "'-1' is not a percentage"),
+        ({":b": {"size": 1}}, "'size' is not matched"),
+        ({":b": {"mass": 1, "weight": 2}}, "'mass' and 'weight' are both the mass"),
+        ({":b": 5}, "is not a mapping of 'volume' and 'mass'"),
+        ([":b"], "is not a mapping of the objects to match"),
+    ],
+)
+def test_a_match_that_cannot_be_read_says_why(raw, detail):
+    """An entry that cannot be read is kept as a problem, so that it fails rather than vanishes."""
+    declaration = requirements.parse({"match": raw})
+    assert [problem.section for problem in declaration.problems] == ["match"]
+    assert detail in declaration.problems[0].detail
+
+
+def test_a_match_is_not_read_as_a_feature():
+    """'match' is a section of its own now, not a heading of free-form text."""
+    declaration = requirements.parse({"match": {":b": {"mass": 1}}, "looks": "Like the old one"})
+    assert declaration.features == {"looks": "Like the old one"}
+
+
+def test_matches_are_refused_by_the_schema_where_they_say_nothing():
+    """The schema refuses what the parser reports as a problem, so 'pc lint' says it first."""
+    for broken in (
+        {"match": {":plate": {"volume": "lots"}}},
+        {"match": {":plate": {"volume": -5}}},
+        {"match": {":plate": {"size": 5}}},
+        {"match": {":plate": 5}},
+    ):
+        config = _package()
+        config["parts"]["plate"]["requirements"] = broken
+        with pytest.raises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(instance=config, schema=get_partcad_schema())
+
+
+def test_a_match_is_held_to_the_other_objects_volume_and_mass(ctx):
+    """Met against itself; not met against two of it; failed against what has no volume or mass, or is not there."""
+    report = _check(ctx, "part", "plate-copy")
+    assert {key: value for key, value in _verdicts(report).items() if key[0] == "match"} == {
+        # The same solid of the same steel.
+        ("match", "volume of :plate"): True,
+        ("match", "mass of :plate"): True,
+        # Half of an assembly of two of it, resolved from the package without a ':'.
+        ("match", "volume of pair"): False,
+        # Its air has no density, so there is no mass to hold this one to.
+        ("match", "mass of :plate-wrong"): False,
+        ("match", "volume of :m3-boundary"): False,
+        ("match", "mass of :nowhere"): False,
+    }
+    details = {check.name: check.detail for check in report.checks if check.section == "match"}
+    assert details["volume of :plate"] == "2700 mm^3, the same as the reference's 2700 mm^3 (within 0%)"
+    assert details["volume of pair"] == "2700 mm^3, 50% less than the reference's 5400 mm^3 (more than 10%)"
+    assert details["mass of :plate-wrong"] == ("the reference's is not known: the material //:air states no density")
+    assert "is a sketch" in details["volume of :m3-boundary"]
+    assert details["mass of :nowhere"] == "there is no object //:nowhere"
+
+
+def test_without_verifying_a_match_is_listed_and_not_judged(ctx):
+    """Listed with what each requires and no verdict, until the model is asked."""
+    report = _check(ctx, "part", "plate-copy", verify=False)
+    matched = [check for check in report.checks if check.section == "match"]
+    assert len(matched) == 6
+    assert all(check.passed is None for check in matched)
+    assert matched[0].requirement == "within 0%"
+
+
+def test_pc_test_fails_an_object_further_from_another_than_it_may_be(ctx):
+    """A 'match:' requirement not met fails the 'requirements' check of 'pc test'."""
+    assert _run_test(ctx, "plate-copy") is Test.TEST_FAILED
+
+
+def test_an_object_that_cannot_be_looked_up_fails_only_the_matches_that_name_it(ctx, monkeypatch):
+    """One reference failing does not take down the others, which are checked on their own."""
+    looked_up = requirements.matched_object_async
+
+    async def failing_for_pair(ctx, shape, reference):
+        """The real lookup, except for 'pair', whose repository does not answer."""
+        if reference == "pair":
+            raise RuntimeError("the repository did not answer")
+        return await looked_up(ctx, shape, reference)
+
+    monkeypatch.setattr(requirements, "matched_object_async", failing_for_pair)
+    report = _check(ctx, "part", "plate-copy")
+    verdicts = {key: value for key, value in _verdicts(report).items() if key[0] == "match"}
+    details = {check.name: check.detail for check in report.checks if check.section == "match"}
+
+    assert verdicts[("match", "volume of pair")] is False
+    assert details["volume of pair"] == "could not be checked: the repository did not answer"
+    # Named before and after it, and still checked: met and not met as before.
+    assert verdicts[("match", "volume of :plate")] is True
+    assert verdicts[("match", "mass of :plate")] is True
+    assert details["mass of :nowhere"] == "there is no object //:nowhere"

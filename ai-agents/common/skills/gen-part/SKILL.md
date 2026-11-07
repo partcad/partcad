@@ -186,9 +186,9 @@ parts:
 
 Then add `requirements:` to the same declaration — what the description asked
 for, in the description's own terms, *not* the design you chose. `pc test`
-checks the model against what it can measure — the `ports:`, `interfaces:` and
-`physics:` — and `/pc:validate` judges the `features:`, which are prose; the
-IDE shows both as the part's Requirements tab:
+checks the model against what it can measure — the `ports:`, `interfaces:`,
+`physics:` and `match:` — and `/pc:validate` judges the `features:`, which are
+prose; the IDE shows both as the part's Requirements tab:
 
 ```yaml
     requirements:
@@ -223,6 +223,20 @@ IDE shows both as the part's Requirements tab:
   The middle element is the way the port *faces* (its Z axis), not the axis its
   location is rotated about. Write these only when the description says how the
   part connects; `/pc:add-interfaces` then adds the ports that meet them.
+- **`match:`** is for a part asked for *relative to another object* —
+  "like the old bracket, but no more than 5% heavier", "a replacement within
+  2% of the original's volume". Key it by the other object's name (`:sibling`
+  or `//package:name`), with `volume` and `mass` (or `weight`) as a percentage
+  of that object's, either way:
+
+  ```yaml
+      match:
+        :bracket-v1:
+          mass: 5%                      # within 5% of what bracket-v1 weighs
+  ```
+
+  `pc test` reads it by the numbers `pc compare :bracket-v1 <name>` reports
+  (§7). A mass needs a material with a density on both objects, as above.
 - If the part declares a `simulate:` entry that demonstrates one of the
   features, say which with `feature: <name>` on that entry.
 
@@ -384,6 +398,47 @@ until every view matches and every dimension is in tolerance — no fixed retry
 count. `/pc:describe` renders a dimensioned drawing of the finished part, for a
 person to read.
 
+### Compare it with the 3D reference, when there is one
+
+A part made to reproduce a 3D file — a STEP model, a scan as STL, a part from
+another package — has a better check than any projection: read the candidate
+against the reference itself. `pc compare` is the 3D counterpart of
+`measure.py compare`: the first object is the reference, the second the
+candidate, and every difference is the candidate's less the reference's.
+Declare the reference as a part of its own first (`pc add part step <file>`,
+or name the other package's part), then:
+
+```sh
+pc --no-ansi compare --json --surface-distance 1 <reference> <name> 2>/dev/null
+```
+
+`--surface-distance 1` measures at points 1 mm apart over the whole reference
+— every vertex, then along every edge, then over every face — how far the
+candidate's surface is along the reference's normal there: positive where the
+candidate stands outside the reference, negative inside. Pick the spacing from
+the size of the smallest feature that has to be right (half of it is a good
+start); it is refused, saying which spacing would do, when it would take too
+many points. Read, in the JSON:
+
+- `volume` and `mass`: `percent` is how far off the candidate is as a whole. A
+  large difference with a small surface distance is a missing or extra
+  feature the points fell beside; look at `surface.worst`.
+- `surface.distance`: `min` and `max` (signed), `rms`, and the `p95` of the
+  distance's size. A consistent sign is a scale or an offset — a `mean` close to
+  `max` on every face says a dimension is too large by that much; a distance
+  that is large only at `surface.worst` points says where a feature is
+  wrong.
+- `surface.beyond`: how many points are further apart than the two
+  tolerances added up (`tolerance.allowance`). Give the candidate the
+  `tolerance:` it is to be made to, where its type takes one, so that this is a
+  verdict rather than a count of every non-zero distance.
+
+Correct the script from the numbers, the way §7 corrects a dimension from its
+error, and compare again until the surface is within the allowance. The two
+are compared where they are, so a candidate whose origin is not the
+reference's measures as far off as its origin is: put the origin where the
+reference has it.
+
 ### Show each version that renders
 
 Under an IDE (§2), show each version of the part in its 3D view as soon as it
@@ -418,7 +473,8 @@ warns that no IDE was detected, the window has been closed, so stop showing.
 ## 8. Finalize
 
 Summarize what you built — the dimension table (target, measured on the part,
-error), material and mass, and assumptions — and how to view it: `pc ide view <name>`, which under an IDE is what is already
+error), material and mass, how far it is from its 3D reference if it had one
+(`pc compare`'s volume, mass and surface distance), and assumptions — and how to view it: `pc ide view <name>`, which under an IDE is what is already
 on screen (§7). Offer `/pc:validate <name>` for a verdict on every requirement,
 the features included.
 

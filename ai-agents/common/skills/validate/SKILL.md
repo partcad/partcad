@@ -11,9 +11,10 @@ so, or when the package declares it as one).
 
 An object's `requirements:` has two halves, and they are validated two ways:
 
-- **What PartCAD measures** — `ports:`, `interfaces:` and `physics:`. These are
-  checked by `pc test` (its `requirements` check), and its verdict is the
-  verdict. You report it; you do not second-guess it.
+- **What PartCAD measures** — `ports:`, `interfaces:`, `physics:` and
+  `match:` (the volume and the mass within a percentage of another
+  object's). These are checked by `pc test` (its `requirements` check), and its
+  verdict is the verdict. You report it; you do not second-guess it.
 - **`features:`** — a name and a sentence each: "takes an M3 screw from either
   side", "does not tip over on a 10° slope". Some are demonstrated by a
   simulation that names them (`feature:` on a `simulate:` entry), or by an
@@ -47,6 +48,9 @@ requirements:
     <interface>: null                            # implemented, anywhere
   physics:
     mass: "<0.5"                                 # kg
+  match:
+    <other object>:
+      mass: 5%                                   # within 5% of what that object weighs
 simulate:
   <simulation>:
     feature: <name>                              # this simulation demonstrates that feature
@@ -149,6 +153,18 @@ assembly, `--with-internals` draws the ports of what is inside, which is how a
 connection that came out wrong is found. Numbers are read off `pc info` (the
 measured bounding box and volume) or a dimensioned drawing (`/pc:describe`),
 never estimated from pixels.
+
+A feature stated against another object — "the same shape as the original",
+"interchangeable with the part it replaces" — is evidenced by reading the two
+against each other rather than by looking at both:
+
+```sh
+pc --no-ansi compare --surface-distance 1 <other object> <object> 2>&1
+```
+
+It reports how their volumes and masses differ, and how far this object's
+surface is from the other's, point by point, against the two tolerances added
+up; it exits 1 when they are further apart than that. Quote the numbers.
 
 ## 5. For an assembly: how it is bought and how it is put together
 

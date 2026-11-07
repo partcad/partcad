@@ -60,7 +60,10 @@ different shapes and different numbers of them -- and pairs every feature of
 one with the nearest of its kind in the other: it reports each pair that
 differs by more than the agreement (5e-4 of the size by default, the polygonal
 projection's own error), and each feature only one of them has. It exits 1
-when they disagree.
+when they disagree. Its 3D counterpart is `pc compare <reference> <current>`,
+which reads two parts or assemblies against each other -- volume, mass,
+tolerances and, with `--surface-distance`, how far apart their surfaces are --
+and exits 1 when they disagree in the same way.
 
 All three print text by default and JSON with `--json`. Nothing but the
 standard library is needed for `svg` and `compare`.

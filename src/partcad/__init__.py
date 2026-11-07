@@ -108,6 +108,10 @@ from . import cae  # noqa: F401
 # operation reaches a route through, and what 'Shape.route_async()' reads.
 from . import cam  # noqa: F401
 
+# And 'partcad.compare', for the same reason again: it is what the daemon's
+# 'compare.objects' operation reads two objects against each other through.
+from . import compare  # noqa: F401
+
 # And 'partcad.sandbox_lock': the daemon sizes the sandbox process slots for
 # each request through it ('sandbox_lock.follow'), and should not depend on the
 # runtimes having imported it first.

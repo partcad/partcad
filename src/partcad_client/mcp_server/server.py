@@ -176,7 +176,8 @@ def instructions(bridge: Bridge, scope: PathScope) -> str:
         "declares parameters is asked for with particular values through a tool's params ({name: value}), which "
         "is the same as naming it 'name;param=value,...'. "
         "Start with list_objects (kind=packages for the package tree) and info; look at an object with render, "
-        "which returns an image; check it against its declared requirements with test; write STEP, STL, 3MF and "
+        "which returns an image; check it against its declared requirements with test; read it against another "
+        "object -- volume, mass, and how far apart their surfaces are -- with compare; write STEP, STL, 3MF and "
         "the rest with export. To create or change an object, edit partcad.yaml and its script with your own file "
         "tools -- the daemon reloads what changed -- then render and test again. Everything else PartCAD does "
         "(bom, instructions, cae, cam, simulations, add, import, convert, install) is a daemon method: "
@@ -187,6 +188,9 @@ def instructions(bridge: Bridge, scope: PathScope) -> str:
 
 
 def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
+    """The MCP server for one workspace: the curated tools, 'execute' and two resources, calling the daemon through
+    'bridge' within 'scope'.
+    """
     # 'MCPServer()' calls 'logging.basicConfig()', which configures the root
     # logger -- this process's, not the SDK's -- with a Rich handler, and every
     # library's warnings then come out of `pc mcp` drawn as boxed tables. The
@@ -583,6 +587,54 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         if params:
             request["params"] = _assignments(params)
         return await run(ctx, "assembly.guide", request)
+
+    @server.tool(title="Compare two objects", annotations=_READS)
+    async def compare(
+        ctx: Context,
+        reference: Annotated[str, Field(description=_OBJECT + " The object compared with: what is held to.")],
+        current: Annotated[str, Field(description=_OBJECT + " The object held to the reference.")],
+        package: PackageName = None,
+        surface_distance: Annotated[
+            Optional[float],
+            Field(
+                gt=0,
+                description="Also measure how far the current object's surface is from the reference's, at points "
+                "this many millimetres apart on the reference, along its normals. Slower the smaller it is.",
+            ),
+        ] = None,
+        max_volume_difference: Annotated[
+            Optional[float],
+            Field(ge=0, description="Fail unless the volumes differ by at most this many percent of the reference's."),
+        ] = None,
+        max_mass_difference: Annotated[
+            Optional[float],
+            Field(ge=0, description="Fail unless the masses differ by at most this many percent of the reference's."),
+        ] = None,
+        worst: Annotated[int, Field(ge=0, description="How many of the points furthest apart to list.")] = 10,
+    ) -> CallToolResult:
+        """Read one part or assembly against another: volume, mass, tolerances and, optionally, the surface distance.
+
+        `pc compare --json`. Differences are the current object's less the reference's, percentages are of the
+        reference's. ok is false when something it was held to does not hold: the surface, when measured, against
+        the two tolerances added up, and any max_..._difference given.
+        """
+        request = {
+            "package": package,
+            "object": reference,
+            "current": current,
+            "surface_distance": surface_distance,
+            "max_volume_difference": max_volume_difference,
+            "max_mass_difference": max_mass_difference,
+            "worst": worst,
+            "json": True,
+        }
+        try:
+            outcome = await call(ctx, "compare.objects", request)
+        except CallFailed as e:
+            return report(e.outcome, failure=e)
+        if isinstance(outcome.result, dict) and outcome.result.get("passed") is False:
+            return report(outcome, failure=CallFailed("%s does not hold to %s" % (current, reference), outcome))
+        return report(outcome)
 
     @server.tool(title="PartCAD version", annotations=_LOCAL)
     async def version(ctx: Context) -> CallToolResult:

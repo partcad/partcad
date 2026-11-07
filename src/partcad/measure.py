@@ -112,6 +112,31 @@ async def extent_z(ctx, shape, frame: Location = None, cacheable: bool = True):
     return box[5] - box[2]
 
 
+async def surface_distance(
+    ctx, reference, current, spacing: float, allowance=None, worst: int = 10, cacheable: bool = True
+):
+    """How far the surface of 'current' is from the surface of 'reference', point by point.
+
+    Both are what 'Shape.get_wrapped' answers - a part's envelope or an
+    assembly's tree - and are compared where they are: neither is moved onto
+    the other. 'spacing' is how far apart the points measured on the reference
+    are, in millimetres; 'allowance' how far apart the two surfaces may be
+    anywhere, for the answer to count the points further apart than that; and
+    'worst' how many of the furthest points are listed. What comes back, and how
+    each point is chosen and measured, is 'wrapper_compare.surface_distance'.
+    Remembered like any other measurement, by both models and every argument.
+    """
+    request = {
+        "operation": "surface",
+        "reference": reference,
+        "current": current,
+        "spacing": float(spacing),
+        "allowance": None if allowance is None else float(allowance),
+        "worst": int(worst),
+    }
+    return await _run(ctx, request, cacheable, "compare.py")
+
+
 async def material_clusters(ctx, tree, distance: float, cacheable: bool = True):
     """Where each material of 'tree' is: its clusters, as the "Materials" callout writes them.
 

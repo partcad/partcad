@@ -150,6 +150,10 @@ command_groups = [
             "test",
             "sim",
             "info",
+            # Beside `info`: `info` says what one object is, and `compare`
+            # reads one against another -- the 3D counterpart of the gen-sketch
+            # skill's `measure.py compare`, which reads two drawings.
+            "compare",
             "bom",
             "convert",
             # Beside `convert`: both leave the package holding something it did

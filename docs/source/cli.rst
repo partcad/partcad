@@ -638,6 +638,59 @@ Object commands
   nothing and a layer that is not in the file both produce a sketch with nothing in it, and this is what
   tells them apart.
 
+.. _compare:
+
+``pc compare <reference> <current>``
+  Read one part or assembly against another: the second, the *current* object, against the first, the
+  *reference* it is held to -- a redesign against the part it replaces, a generated part against the STEP file it
+  was asked to reproduce, a printed part's scan against its model. Each name is resolved the way any object's is
+  (``-P`` selects the package of a bare one), and an object with parameters is named with its values,
+  ``'bolt;length=10'``::
+
+      pc compare bracket-v1 bracket-v2
+      pc compare //pub/std/metric/cqwarehouse:fastener/hexhead-iso4017 :my-bolt --surface-distance 0.5
+      pc compare :bracket-v1 :bracket-v2 --max-mass-difference 2 --json
+
+  It reports, for each of the two and then the difference (the current one's less the reference's, and as a
+  percentage of the reference's):
+
+  - the **volume**, in mm³ -- a part's measured solid, an assembly's parts added up, as ``pc info`` reports it;
+  - the **mass**, in kg -- stated, or worked out from the volume and the material's density (see
+    :ref:`properties`). A mass that cannot be known is said to be, with the reason, rather than given one; an
+    assembly some of whose parts weigh nothing known has none here, because the total of the others held
+    against another object's would be a difference that is not there;
+  - the **tolerance** each is to be made to (its ``tolerance:``, or what its STEP file states), and the two
+    added up: the **allowance**, how far apart two surfaces each made within its own tolerance can be. A
+    tolerance nobody stated counts as nothing; a STEP file that tolerances each feature differently states no
+    one number, and there is then no allowance.
+
+  ``--surface-distance <mm>`` also measures how far the current object's **surface** is from the reference's.
+  Points are chosen on the reference no two of them closer than that many millimetres: every vertex, whatever
+  the spacing; then points along every edge, each at least that far from every point already taken; then points
+  over every face, the same way. Each is measured along the reference's normal there, out of its material: the
+  distance is how far along that line the current object's surface is -- positive where the current object
+  stands outside the reference, negative where it stands inside. A vertex or a point of an edge is on several
+  faces and is measured along each of their normals, the nearest answer counting, so a box grown by a millimetre
+  is a millimetre away at its corners too. A point none of whose normals meets the current object -- the rim of
+  a reference larger than it -- is measured to its nearest point instead, and counted apart. The report gives
+  how many points were measured where, the signed minimum and maximum, the mean and the RMS, the median, 95th and
+  99th percentiles of the distance, how many points are further apart than the allowance, and where the furthest
+  ``--worst`` of them are (ten by default).
+
+  Choosing the points is linear in the number of candidates (a spatial hash answers "is anything closer than
+  the spacing" for each), and every point is one intersection in the sandbox, so the spacing is what decides how
+  long it takes: about the surface's area over the spacing squared points. A spacing that would need more than
+  200,000 points is refused, and the message says which spacing would do. The two objects are compared where
+  they are: nothing moves one onto the other, so two of the same shape whose origins differ are as far apart
+  as their origins are.
+
+  It exits non-zero when something it was held to does not hold: the surface, whenever it was measured, against
+  the allowance -- every point within it, and none with nothing to measure to -- and ``--max-volume-difference``
+  and ``--max-mass-difference`` (in percent of the reference's) when they are given. Held to nothing, it is a
+  report and exits zero. ``--json`` prints the whole comparison as one JSON object on standard output. The same
+  limits can be written into the current object's declaration, as a ``match:`` requirement that ``pc test``
+  checks -- see :ref:`requirements`.
+
 ``pc bom``
   Print the bill of materials of a part, an assembly or a scene: what has to be procured to have it, with how
   many of each are needed and, where the object says so, the vendor and the SKU to order it by.

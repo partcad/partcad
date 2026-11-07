@@ -1706,6 +1706,16 @@ class Context:
             if warm is not None:
                 await warm()
 
+    async def get_project_async(self, project_path: str) -> Optional[Project]:
+        """'get_project()' for a caller already running on a loop.
+
+        The plugin-backed packages above it are warmed on the caller's loop
+        first, for the reason '_warm_project_async()' gives, so that the walk
+        'get_project()' makes finds each of them memoized.
+        """
+        await self._warm_project_async(project_path)
+        return self.get_project(project_path)
+
     def get_part(self, part_spec, params=None) -> Optional[Part]:
         return self._get_part(part_spec, params)
 
