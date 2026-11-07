@@ -12,10 +12,12 @@ the lazy object-access layer is exercised without a runtime or a CAD kernel.
 
 import asyncio
 import json
+import os
 import shutil
 import textwrap
 import threading
 import time
+import uuid
 
 import pytest
 
@@ -1350,8 +1352,39 @@ def test_a_key_is_taken_apart_the_way_partcad_spells_it(key, query):
     assert query_of(key) == query
 
 
-def test_a_plugin_is_handed_the_key_taken_apart_and_the_key_as_well(tmp_path, monkeypatch):
-    (tmp_path / "echo.py").write_text(textwrap.dedent("""
+@pytest.fixture
+def served_by(tmp_path):
+    """'served_by(script)': the package '//models' of a package in 'tmp_path', served by the plugin 'script'.
+
+    A real 'basic' plugin, run in the sandbox like any other. PartCAD keeps a
+    plugin's answers on disk keyed on the plugin's name, so each one gets a name
+    of its own - what a test sees is what its plugin answered, not what an
+    earlier run's did - and is forgotten afterwards. The state directory stays
+    where it is: moving it would move the sandbox too, and build a whole new one
+    beside the one every other test shares.
+    """
+    made = []
+
+    def serve(script):
+        name = "plugin_" + uuid.uuid4().hex[:12]
+        (tmp_path / (name + ".py")).write_text(textwrap.dedent(script))
+        (tmp_path / "partcad.yaml").write_text(
+            "dependencies:\n  models:\n    type: external\n    plugin: :%s\n"
+            "repositories:\n  %s:\n    type: basic\n    path: %s.py\n" % (name, name, name)
+        )
+        ctx = pc.Context(str(tmp_path))
+        models = ctx.get_project("//models")
+        made.append((ctx.user_config.internal_state_dir, models.path))
+        return models
+
+    yield serve
+    for state, path in made:
+        shutil.rmtree(path, ignore_errors=True)
+        shutil.rmtree(os.path.join(state, "cache", "external", os.path.basename(path)), ignore_errors=True)
+
+
+def test_a_plugin_is_handed_the_key_taken_apart_and_the_key_as_well(served_by):
+    models = served_by("""
         import json
 
         if __name__ == "get":
@@ -1365,22 +1398,7 @@ def test_a_plugin_is_handed_the_key_taken_apart_and_the_key_as_well(tmp_path, mo
                 output = {"result": None}
         else:
             output = {}
-        """))
-    (tmp_path / "partcad.yaml").write_text(textwrap.dedent("""
-        dependencies:
-          models:
-            type: external
-            plugin: :echo
-        repositories:
-          echo:
-            type: basic
-            path: echo.py
-        """))
-    ctx = pc.Context(str(tmp_path))
-    # The answer is cached on disk under the package's name, which every run of
-    # this test shares: in the test's own directory, it is asked for each time.
-    monkeypatch.setattr(ctx.user_config, "internal_state_dir", str(tmp_path / "state"))
-    models = ctx.get_project("//models")
+        """)
     config = models._fetch_object_instance_config("part", "763622;file=a%3Bb.stl,format=stl")
     said = json.loads(config["desc"])
     assert said["key"] == "objects/part/763622;file=a%3Bb.stl,format=stl"
@@ -1393,9 +1411,9 @@ def test_a_plugin_is_handed_the_key_taken_apart_and_the_key_as_well(tmp_path, mo
     }
 
 
-def test_a_plugin_imports_partcads_model_site_toolkit_wherever_it_runs(tmp_path, monkeypatch):
+def test_a_plugin_imports_partcads_model_site_toolkit_wherever_it_runs(served_by):
     """'import plugin_models' is how a model-site plugin gets the toolkit: it is a wrapper, on the sandbox's path."""
-    (tmp_path / "site.py").write_text(textwrap.dedent("""
+    models = served_by("""
         import plugin_models
 
         if __name__ == "get":
@@ -1410,19 +1428,7 @@ def test_a_plugin_imports_partcads_model_site_toolkit_wherever_it_runs(tmp_path,
                 output = {"result": None}
         else:
             output = {}
-        """))
-    (tmp_path / "partcad.yaml").write_text(textwrap.dedent("""
-        dependencies:
-          models:
-            type: external
-            plugin: :site
-        repositories:
-          site:
-            type: basic
-            path: site.py
-        """))
-    ctx = pc.Context(str(tmp_path))
-    monkeypatch.setattr(ctx.user_config, "internal_state_dir", str(tmp_path / "state"))
-    config = ctx.get_project("//models")._fetch_object_instance_config("part", "1;file=a%2Cb=c.stl")
+        """)
+    config = models._fetch_object_instance_config("part", "1;file=a%2Cb=c.stl")
     # Decoded by PartCAD on the way in, spelled the way PartCAD spells it on the way out.
     assert config["desc"] == "1;file=a%2Cb=c.stl"
