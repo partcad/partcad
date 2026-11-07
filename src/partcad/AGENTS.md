@@ -339,7 +339,7 @@ at all).
   that a verdict read back puts them back.
 
 - **What an object is required to be is one module** (`requirements.py`): the `requirements:` section of a
-  part, an assembly, a scene or a sketch -- `features` in words, and `ports`, `interfaces` and `physics` where
+  part, an assembly, a scene or a sketch -- `features` in words, `ports`, `interfaces` and `physics` where
   any part of each may be null and the rest is a constant or a comparison (`>0`, `!0`, joined with commas). Its
   `check_async()` is what `pc test`'s `requirements` check runs *and* what the daemon's `requirements.check`
   answers the IDE's Requirements tab with, so the two cannot disagree; nothing else reads the section. Two rules
@@ -353,7 +353,22 @@ at all).
   read off the schema (`requirement-physics`, which a test holds to `physics` less a connection's properties),
   so a field added there needs nothing here. The check is never cached: what it reads -- the requirements, the
   ports and interfaces, which can live in other packages, the material -- is mostly not what a shape's cache key
-  is made of.
+  is made of. The fifth section, `match`, holds the volume and the mass to within a percentage of another
+  object's, and reads both by `compare.py`'s rules (`within()`), so `pc test` and `pc compare` cannot disagree
+  about what "within 5%" means.
+
+- **Two objects read against each other is one module** (`compare.py`, with `wrappers/wrapper_compare.py` for the
+  surface): what `pc compare <reference> <current>` reports -- the volumes and masses (`physics.amounts_async()`,
+  the numbers `pc info` reports, in full), the tolerances (`get_tolerance()`) and their sum, the *allowance*,
+  and optionally the surface distance. That last is measured in the sandbox, one-sided from the reference: points
+  no two closer than the spacing asked for -- every vertex, then the edges, then the faces, each candidate kept
+  only when a spatial hash finds nothing within the spacing -- and each measured along the reference's normals to
+  the current object's surface (OCCT's line/face intersector for faces with a surface, a ray cast through a grid
+  of triangles for faces that are only a mesh), or to its nearest point when no normal meets it. A face's
+  candidates are points of its triangulation evaluated on the surface at their (u, v), so the triangles only say
+  where to look. Nothing moves one object onto the other: they are compared where they are. A comparison
+  passes or fails only on what it was held to -- a limit given with a volume or a mass, the allowance whenever
+  the surface is measured -- and is a report, `passed: null`, otherwise.
 
 - **A basic shape is written, not built** (`basic_shapes.py`, `brep_ascii.py`, `sketch_factory_basic.py`,
   `part_factory_basic.py`): a `basic` sketch -- a circle, square, rectangle or slot, with holes of the same -- and a

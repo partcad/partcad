@@ -96,7 +96,11 @@ Generating geometry
   5. It renders the part **from several angles and compares each view against
      the description**, because a single projection hides whatever is behind it,
      and **measures the same dimensions again on the part's own projections** --
-     then iterates on what the comparison found.
+     then iterates on what the comparison found. A part made to reproduce a 3D
+     file is also read against that file itself with ``pc compare
+     --surface-distance`` (see :ref:`compare`): how their volumes and masses
+     differ, and how far the part's surface is from the reference's along the
+     reference's normals, point by point.
 
   When the PartCAD IDE (or VS Code with the PartCAD extension) is running beside
   the agent, every version of the part that builds and renders is also shown in
@@ -186,7 +190,8 @@ Generating geometry
   different numbers of them: one arc where the other has several, an arc where
   the other has a run of short lines, an edge whole or broken. ``measure.py
   compare`` reads the two against each other, and a reading only one of them
-  supports is resolved before it is trusted.
+  supports is resolved before it is trusted. Its 3D counterpart, for two parts
+  or assemblies rather than two drawings, is ``pc compare``.
 
   ``/pc:gen-part`` and ``/pc:gen-assembly`` run the same loop first, on
   temporary sketches, to settle a part's dimensions and an assembly's placements

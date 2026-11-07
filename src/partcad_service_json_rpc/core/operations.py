@@ -113,7 +113,9 @@ def _config_check_targets(ctx, params):
     What 'reload_changed_packages' checks, together with what those packages
     declare as dependencies. Read off the same parameters the operations read:
     'package' (the current package when absent), and an object - 'object' from
-    the CLI, 'name' from the editor - that names a package of its own.
+    the CLI, 'name' from the editor - that names a package of its own. A request
+    about two objects ('pc compare') names the second as 'current', and its
+    package is checked too.
     """
     package, object_name, recursive = _request(params)
     target = ctx.resolve_package_path(package)
@@ -125,7 +127,14 @@ def _config_check_targets(ctx, params):
             if object_package:
                 target = ctx.resolve_package_path(object_package)
             break
-    return [target], recursive
+    targets = [target]
+    other = params.get("current")
+    other_package = split_resource_path(other)[0] if isinstance(other, str) else None
+    if other_package:
+        other_target = ctx.resolve_package_path(other_package)
+        if other_target not in targets:
+            targets.append(other_target)
+    return targets, recursive
 
 
 def _qualified(package: str, name: str) -> str:
@@ -1346,6 +1355,121 @@ def info_object(session, params):
             for k, v in obj.info().items():
                 pc.logging.info("INFO: %s: %s" % (k, pformat(v)))
     return None
+
+
+def _compared_object(ctx, pc, params, key, what):
+    """The ``(path, kind, shape)`` of one of the two objects ``compare.objects`` reads.
+
+    Resolved the way ``_resolve_object`` resolves the one object of any other
+    request: against the package ``--package`` selects, unless the name carries
+    a package of its own. Only a part or an assembly has a volume and a mass, so
+    anything else is refused by name rather than reported missing.
+    """
+    raw = params.get(key)
+    if not isinstance(raw, str) or not raw:
+        raise JsonRpcError(USAGE_ERROR, "No %s object is given: 'pc compare <reference> <current>'" % what)
+    selected, name, recursive = split_recursive_object(params.get("package") or ".", raw)
+    if recursive:
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "'...' asks about a whole subtree of packages; 'pc compare' reads one object against another. "
+            "Name the %s object without the '...'." % what,
+        )
+    package_name = ctx.resolve_package_path(selected)
+    package_obj = ctx.get_project(package_name)
+    if not package_obj:
+        raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % package_name)
+    package, name = pc.utils.resolve_resource_path(package_obj.name, name)
+    path = _qualified(package, name)
+    kind = _kind_of(ctx, package, name)
+    if kind is None:
+        raise JsonRpcError(USAGE_ERROR, "The %s object %s is not found" % (what, path))
+    if kind not in pc.compare.KINDS:
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "Only parts and assemblies have a volume, a mass and a surface to compare; the %s object %s is a %s"
+            % (what, path, kind),
+        )
+    shape = _getter(ctx, kind)(path)
+    if shape is None:
+        raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+    return path, kind, shape
+
+
+def _positive_number(params, key, what):
+    """A parameter that has to be a positive number, or None when it is not given."""
+    value = params.get(key)
+    if value is None:
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError) as e:
+        raise JsonRpcError(USAGE_ERROR, "%s has to be a number, not %r" % (what, params.get(key))) from e
+    if not math.isfinite(value) or value <= 0:
+        raise JsonRpcError(USAGE_ERROR, "%s has to be more than 0, not %s" % (what, params.get(key)))
+    return value
+
+
+def compare_objects(session, params):
+    """Read one part or assembly against another: volume, mass, tolerance and, optionally, the surface.
+
+    ``object`` is the reference and ``current`` the object held to it, the order
+    ``pc compare <reference> <current>`` names them in. Every difference is the
+    current one's value less the reference's, and every percentage is of the
+    reference's (see ``partcad.compare``). ``surface_distance`` measures the
+    current object's surface from the reference's at points that many
+    millimetres apart; ``max_volume_difference`` and ``max_mass_difference`` are
+    limits in percent. What comes back is the report; ``passed`` is false when
+    something it was held to does not hold, and null when it was held to nothing.
+    Unless ``json`` is set the report is also printed, through PartCAD logging,
+    so that every client shows the same lines.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    spacing = _positive_number(params, "surface_distance", "The distance between the points measured")
+    limits = {}
+    for amount, key in (("volume", "max_volume_difference"), ("mass", "max_mass_difference")):
+        raw = params.get(key)
+        if raw is None:
+            continue
+        limit = pc.compare.percent_limit(raw)
+        if limit is None:
+            raise JsonRpcError(USAGE_ERROR, "The %s limit has to be a percentage of 0 or more, not %r" % (amount, raw))
+        limits[amount] = limit
+    worst = params.get("worst", pc.compare.WORST)
+    if isinstance(worst, bool) or not isinstance(worst, int) or worst < 0:
+        raise JsonRpcError(USAGE_ERROR, "'worst' has to be a whole number of 0 or more, not %r" % (worst,))
+
+    reference_path, reference_kind, reference = _compared_object(ctx, pc, params, "object", "reference")
+    current_path, current_kind, current = _compared_object(ctx, pc, params, "current", "current")
+
+    # What an assembly weighs, and its surface, are both worked out from the
+    # tree it is built as: phase one first, for each, as for every request that
+    # ends in building one.
+    for kind, shape in ((reference_kind, reference), (current_kind, current)):
+        if kind == "assembly":
+            _stage_subassemblies(session, ctx, shape)
+
+    package, name = current_path.split(":", 1)
+    with pc.logging.Process("Compare", package, name):
+        try:
+            report = asyncio.run(
+                pc.compare.compare_async(ctx, reference, current, spacing=spacing, limits=limits, worst=worst)
+            )
+        except ValueError as e:
+            # The sandbox's refusal to measure -- too many points for the
+            # spacing, a reference with no surface -- is the answer to a
+            # question that was asked wrongly, and says how to ask it.
+            raise JsonRpcError(USAGE_ERROR, str(e)) from e
+        if not params.get("json"):
+            for line in pc.compare.format_report(report):
+                pc.logging.info(line)
+    return report
 
 
 def open_tools(session, params):
@@ -2611,7 +2735,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.9.5"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.9.7"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -3695,14 +3819,27 @@ def requirements_check(session, params):
     from partcad import requirements
 
     verify = bool(params.get("verify"))
+    declaration = requirements.of_shape(obj) if verify else None
     if verify and kind == "assembly":
-        declaration = requirements.of_shape(obj)
-        if declaration is not None and declaration.physics:
+        if declaration is not None and (declaration.physics or declaration.match):
             # What an assembly weighs is worked out from the tree it is built
             # as (see 'physics.resolved_async'), so checking a physical
             # requirement builds it: phase one first, as for every request that
             # ends in one. Its ports are read off its tree, which needs no build.
             _stage_subassemblies(session, ctx, obj)
+    if declaration is not None and declaration.match:
+        # And so does weighing an assembly a 'match:' requirement names.
+        for reference in dict.fromkeys(requirement.reference for requirement in declaration.match):
+            try:
+                other, _why = asyncio.run(requirements.matched_object_async(ctx, obj, reference))
+            except Exception as e:  # pylint: disable=broad-except
+                # Staging is only an optimisation. The same lookup is made
+                # again by the check itself, which reports a failure as that
+                # one requirement failing rather than as the whole request.
+                session.partcad.logging.debug("Not staging the object %s names: %s" % (reference, e))
+                continue
+            if other is not None and getattr(other, "kind", None) == "assembly":
+                _stage_subassemblies(session, ctx, other)
     with pc.logging.Process("Requirements", package, name):
         report = asyncio.run(requirements.check_async(ctx, obj, verify=verify))
     return report.to_dict()

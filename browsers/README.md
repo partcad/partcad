@@ -27,19 +27,26 @@ extension does with its sections 2 to 4.
    browser at it.
 2. The content script recognises a start page by its address (`http:`, host `127.0.0.1`, `localhost` or `[::1]`, path
    `/partcad/login/<nonce>/start`, top-level frame only), reads the spec and hands it to the background. The background
-   checks it, keeps it in `storage.session` (memory only, gone when the browser exits) and sends that tab to the spec's
-   `url`. On the start page it says how that went: `<html data-partcad-login="accepted|refused">` and a
-   `<p id="partcad-login-extension" role="status">` with the reason, which the start page can style or react to.
-3. On every page of an origin the spec names, a banner along the bottom of the window says **PartCAD login:
+   checks it, keeps it in `storage.session` (memory only, gone when the browser exits) and sends that tab to the
+   extension's own **confirmation page**, `confirm.html`. On the start page it says how that went:
+   `<html data-partcad-login="accepted|refused">` and a `<p id="partcad-login-extension" role="status">` with the
+   reason, which the start page can style or react to.
+3. The confirmation page asks **Sign in to *title* for PartCAD?**: it names the site, every value the login would
+   take and where it comes from, and the address it would be sent to. Nothing is captured until the user presses
+   **Continue**; then the session starts and the tab goes to the spec's `url`. **Cancel** requests `.../cancel` -- so
+   `pc login` stops waiting -- takes nothing, and closes the tab. Continue is armed only once the page has been in
+   view for a second, and Cancel has the focus, so neither a double-click that brought the page up nor Enter says yes.
+   The start page reloaded, or gone back to, is the same request (asked again) or, once confirmed, the same login.
+4. On every page of an origin the spec names, a banner along the bottom of the window says **PartCAD login:
    *title***, what to do next, which values are captured so far (by name -- a value is never shown or sent back to a
    page), an input for every `ask`, and **Done** and **Cancel**. The guide spotlights what to click.
-4. Each value is taken as it appears: cookies through the cookie API (HttpOnly ones included), `localStorage` and
+5. Each value is taken as it appears: cookies through the cookie API (HttpOnly ones included), `localStorage` and
    `sessionStorage` and DOM values by the content script on a page of that origin or URL, `redirect` values from any
    tab's URL -- query string or fragment, and the page need not load -- and `ask` values from the banner.
-5. Once the capture is complete -- per `require`, `match` and `done_when` -- the background requests
+6. Once the capture is complete -- per `require`, `match` and `done_when` -- the background requests
    `callback?<name>=<value>&...`. On a 200 it closes the window the login ran in. On anything else it says so on the
    banner and sends again every five seconds while the session lasts (and at once when Done is pressed).
-6. **Cancel** requests `.../cancel` and closes the window. A session that runs past `timeout` ends: the banner goes and
+7. **Cancel** requests `.../cancel` and closes the window. A session that runs past `timeout` ends: the banner goes and
    nothing is sent.
 
 ### What the spec's fields mean here
@@ -87,6 +94,11 @@ never clicks, scripts or reads the check, and treats its cookies like any other 
 
 ## Safety
 
+* **Only once the user has said yes.** A start page is any page on the loopback interface at the right path, and
+  nothing proves that `pc login` served it -- another program on the same computer, another user's included, can
+  serve one. So a spec starts nothing by itself: the confirmation page says what it would take and where it would go,
+  and only a yes there starts a session. That page is the extension's own: a web page cannot script, restyle, frame or
+  cover it, and the background takes a yes only from it, for the request it is showing (by a token in its address).
 * **Only while a session is active.** With no login in progress every listener returns at once; the content script
   asks the background once per page load and does nothing else.
 * **Only for the origins the spec names**: the origin of its `url`, of every cookie's `url`, every storage `origin`,
@@ -209,6 +221,8 @@ twice fails at the store.
 
 Where the contract is silent or could be read two ways, the extension does this:
 
+* **A spec starts a session only once confirmed.** The contract had the start page start the login; the extension
+  asks the user first, on its own page, because a start page proves nothing about who served it (see Safety).
 * **Named origins include the guide's and `done_when`'s.** Section 4 says the extension acts only for the origins the
   spec's `url` and captures name. A guide step on a page the extension may not act on could never be shown, so the
   origins of guide steps and of `done_when` count as named too.

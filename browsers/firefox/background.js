@@ -4,9 +4,10 @@
  * Licensed under Apache License, Version 2.0.
  *
  * The background half of the PartCAD login extension: one login session at a
- * time, started by the page `pc login` serves on the loopback interface, and
- * ended by handing what it captured to that page's callback -- or by Cancel,
- * or by running out of time.
+ * time, asked for by the page `pc login` serves on the loopback interface,
+ * started once the user has said yes to it on the extension's own page
+ * (confirm.html), and ended by handing what it captured to that page's
+ * callback -- or by Cancel, or by running out of time.
  *
  * Chromium runs this file as the extension's service worker, and stops it
  * whenever it has been idle for a while; Firefox runs it as an event page,
@@ -41,6 +42,18 @@ const PROBE_TIMEOUT_MS = 3000;
 
 let session = null;
 
+// A login that was asked for and not yet said yes to. Nothing is captured for
+// it. What it would take, and where it would send it, is shown first on
+// confirm.html -- the extension's own page, which no web page can script,
+// restyle or cover -- and the session starts only from there. A start page is
+// any page on the loopback interface at the right path, and nothing proves
+// that `pc login` served it: without this step, whatever else listens on this
+// computer's loopback interface could start a capture of its choosing in a
+// window the user happened to open it in.
+let pending = null;
+
+const CONFIRM_PAGE = "confirm.html";
+
 // What belongs to the session but must not be persisted with it: a flag left
 // set by a worker stopped in the middle of a request would block every request
 // after it.
@@ -50,15 +63,17 @@ function freshTransient() {
   return { sending: false, failedAt: 0, fetching: false, fetchedAt: 0, fetchOk: false, timer: null };
 }
 
-const ready = Promise.resolve(api.storage.session.get("session")).then(
+const ready = Promise.resolve(api.storage.session.get(["session", "pending"])).then(
   (stored) => {
     session = (stored && stored.session) || null;
+    pending = (stored && stored.pending) || null;
     if (session) {
       scheduleExpiry(session);
     }
   },
   () => {
     session = null;
+    pending = null;
   },
 );
 
@@ -76,6 +91,20 @@ function exclusive(task) {
 function persist() {
   const request = session ? api.storage.session.set({ session: session }) : api.storage.session.remove("session");
   return Promise.resolve(request).catch(() => {});
+}
+
+function persistPending() {
+  const request = pending ? api.storage.session.set({ pending: pending }) : api.storage.session.remove("pending");
+  return Promise.resolve(request).catch(() => {});
+}
+
+// What confirm.html is opened with, and has to bring back: it says which
+// request the page is about, so that a yes is never given to a request the
+// page was not showing.
+function newToken() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function fetchWithTimeout(url, init, milliseconds) {
@@ -373,6 +402,29 @@ function describe(s, origin, pageUrl) {
   };
 }
 
+// Another login holding the browser, as the answer to give whoever asks for a
+// new one; null when there is none, or the one there was is abandoned.
+async function busyWith(startUrl) {
+  if (!session || session.startUrl === startUrl) {
+    return null;
+  }
+  // One login at a time. The one in progress keeps the browser unless
+  // `pc login` behind it has stopped waiting -- then it is abandoned, and
+  // keeping it until it times out would only make the user wait.
+  if (Date.now() < session.expiresAt && (await listening(session.startUrl))) {
+    return {
+      ok: false,
+      busy: true,
+      error:
+        "Another PartCAD login is in progress in this browser (" +
+        session.spec.title +
+        "). Finish or cancel that one, then reload this page.",
+    };
+  }
+  await endSession("abandoned");
+  return null;
+}
+
 async function onStart(message, sender) {
   const startUrl = String(sender.url || "").split("#")[0];
   if (!sender.tab || sender.frameId !== 0 || !L.startNonce(startUrl)) {
@@ -384,39 +436,51 @@ async function onStart(message, sender) {
   }
   const spec = checked.spec;
   if (session && session.startUrl === startUrl) {
-    // The start page again -- reloaded, or gone back to. Same login, so it
-    // carries on where it was.
+    // The start page again -- reloaded, or gone back to. Same login, already
+    // said yes to, so it carries on where it was.
     session.tabId = sender.tab.id;
     session.windowId = sender.tab.windowId;
     persist();
     await api.tabs.update(sender.tab.id, { url: session.spec.url });
     return { ok: true, title: session.spec.title };
   }
-  if (session) {
-    // One login at a time. The one in progress keeps the browser unless
-    // `pc login` behind it has stopped waiting -- then it is abandoned, and
-    // keeping it until it times out would only make the user wait.
-    if (Date.now() < session.expiresAt && (await listening(session.startUrl))) {
-      return {
-        ok: false,
-        busy: true,
-        error:
-          "Another PartCAD login is in progress in this browser (" +
-          session.spec.title +
-          "). Finish or cancel that one, then reload this page.",
-      };
-    }
-    await endSession("abandoned");
+  const busy = await busyWith(startUrl);
+  if (busy) {
+    return busy;
+  }
+  // Asked, not started: the user says yes on the extension's own page first.
+  // The same start page again is the same request; any other replaces it.
+  const now = Date.now();
+  if (!pending || pending.startUrl !== startUrl || now >= pending.expiresAt) {
+    pending = { token: newToken(), startUrl: startUrl, askedAt: now, expiresAt: now + spec.timeout * 1000 };
+  }
+  pending.spec = spec;
+  await persistPending();
+  try {
+    await api.tabs.update(sender.tab.id, { url: api.runtime.getURL(CONFIRM_PAGE) + "#" + pending.token });
+  } catch (error) {
+    pending = null;
+    await persistPending();
+    return { ok: false, error: "The browser would not open the extension's confirmation page: " + error.message };
+  }
+  return { ok: true, confirm: true, title: spec.title };
+}
+
+// Starts the session the user said yes to, in the tab they said it in.
+async function begin(asked, tab) {
+  const busy = await busyWith(asked.startUrl);
+  if (busy) {
+    return busy;
   }
   const now = Date.now();
   session = {
-    startUrl: startUrl,
-    origin: L.originOf(startUrl),
-    spec: spec,
-    tabId: sender.tab.id,
-    windowId: sender.tab.windowId,
+    startUrl: asked.startUrl,
+    origin: L.originOf(asked.startUrl),
+    spec: asked.spec,
+    tabId: tab.id,
+    windowId: tab.windowId,
     startedAt: now,
-    expiresAt: now + spec.timeout * 1000,
+    expiresAt: now + asked.spec.timeout * 1000,
     values: {},
     doneRequested: false,
     doneSelectorSeen: false,
@@ -426,14 +490,118 @@ async function onStart(message, sender) {
   await persist();
   scheduleExpiry(session);
   try {
-    await api.tabs.update(sender.tab.id, { url: spec.url });
+    await api.tabs.update(tab.id, { url: asked.spec.url });
   } catch (error) {
     await endSession("failed");
-    return { ok: false, error: "The browser would not open " + spec.url + ": " + error.message };
+    return { ok: false, error: "The browser would not open " + asked.spec.url + ": " + error.message };
   }
   broadcast({ type: "wake" });
-  return { ok: true, title: spec.title };
+  return { ok: true, title: asked.spec.title };
 }
+
+// --- The confirmation page ------------------------------------------------------
+
+// Whether a message came from confirm.html, in a tab: the one page that may
+// say yes or no to a login. A content script's messages carry the URL of the
+// web page it is in, which is never this.
+function fromConfirmPage(sender) {
+  return !!sender.tab && String(sender.url || "").split("#")[0] === api.runtime.getURL(CONFIRM_PAGE);
+}
+
+// The request a page is about, while it is still the one waiting.
+function waiting(token) {
+  if (!pending || typeof token !== "string" || token !== pending.token) {
+    return null;
+  }
+  if (Date.now() >= pending.expiresAt) {
+    pending = null;
+    persistPending();
+    return null;
+  }
+  return pending;
+}
+
+const NOT_WAITING =
+  "This login request is no longer waiting: it was answered already, replaced by another, or ran out of time.";
+
+// Where a capture comes from, in words, for the page that asks.
+function sourceText(capture) {
+  const source = capture[capture.kind];
+  switch (capture.kind) {
+    case "cookie":
+      return "the cookie \u201c" + source.name + "\u201d of " + source.url;
+    case "localStorage":
+    case "sessionStorage":
+      return "\u201c" + source.key + "\u201d in the " + capture.kind + " of " + source.origin;
+    case "dom":
+      return "what the page shows at \u201c" + source.selector + "\u201d on " + source.url;
+    case "redirect":
+      return "the \u201c" + source.param + "\u201d parameter of a redirect to " + source.url;
+    case "ask":
+      return "what you type in for \u201c" + source.label + "\u201d";
+    default:
+      return capture.kind;
+  }
+}
+
+async function onReview(message, sender) {
+  if (!fromConfirmPage(sender)) {
+    return { ok: false, error: "Only the extension's own page can ask this." };
+  }
+  const asked = waiting(message.token);
+  if (!asked) {
+    return { ok: false, error: NOT_WAITING };
+  }
+  return {
+    ok: true,
+    request: {
+      title: asked.spec.title,
+      url: asked.spec.url,
+      site: L.originOf(asked.spec.url),
+      requester: L.originOf(asked.startUrl),
+      captures: asked.spec.capture.map((capture) => ({ name: capture.name, from: sourceText(capture) })),
+      timeout: asked.spec.timeout,
+    },
+  };
+}
+
+async function onConfirm(message, sender) {
+  if (!fromConfirmPage(sender)) {
+    return { ok: false, error: "Only the extension's own page can confirm a login." };
+  }
+  const asked = waiting(message.token);
+  if (!asked) {
+    return { ok: false, error: NOT_WAITING };
+  }
+  pending = null;
+  await persistPending();
+  return begin(asked, sender.tab);
+}
+
+async function onDecline(message, sender) {
+  if (!fromConfirmPage(sender)) {
+    return { ok: false, error: "Only the extension's own page can decline a login." };
+  }
+  const asked = waiting(message.token);
+  if (asked) {
+    pending = null;
+    await persistPending();
+    // Whoever asked is told no, and nothing else: a `pc login` stops waiting.
+    try {
+      await fetchWithTimeout(
+        new URL("cancel", asked.startUrl).href,
+        { cache: "no-store", credentials: "omit", redirect: "error" },
+        NETWORK_TIMEOUT_MS,
+      );
+    } catch (error) {
+      // Nothing is waiting any more; the request is gone all the same.
+    }
+  }
+  Promise.resolve(api.tabs.remove(sender.tab.id)).catch(() => {});
+  return { ok: true };
+}
+
+// --- The pages of a login in progress -------------------------------------------
 
 async function onPoll(message, sender) {
   const s = session;
@@ -528,12 +696,22 @@ async function onCancel(message, sender) {
   return { active: false };
 }
 
-const HANDLERS = { start: onStart, poll: onPoll, ask: onAsk, done: onDone, cancel: onCancel };
+const HANDLERS = {
+  start: onStart,
+  review: onReview,
+  confirm: onConfirm,
+  decline: onDecline,
+  poll: onPoll,
+  ask: onAsk,
+  done: onDone,
+  cancel: onCancel,
+};
 
 api.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Only this extension's own content scripts: a web page cannot message an
-  // extension that declares no "externally_connectable", and another extension
-  // would arrive through onMessageExternal, which is not listened to.
+  // Only this extension's own content scripts and pages: a web page cannot
+  // message an extension that declares no "externally_connectable", and
+  // another extension would arrive through onMessageExternal, which is not
+  // listened to. Which of the two may ask what, each handler decides.
   if (sender.id !== api.runtime.id || !message || !L.has(HANDLERS, message.type)) {
     return false;
   }
