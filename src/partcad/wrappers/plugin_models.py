@@ -632,8 +632,14 @@ def _safe(text, limit=80):
 
 
 def file_path(model, file):
-    """Where the plugin serves a file from, as 'files/<this>': the model, a token for the file, its name."""
-    return "%s/%s/%s" % (_safe(model.id, 200), file_token(file.id), _safe(file.name))
+    """Where the plugin serves a file from, as 'files/<this>': the model, a token for the file, its name.
+
+    The model's id is quoted rather than made safe, because 'Site.file' reads
+    it back to ask the site for the model again: an id with a '/', a space or
+    a letter outside ASCII in it would otherwise come back as another id. The
+    ids of the sites there are - digits, slugs - are spelled as they were.
+    """
+    return "%s/%s/%s" % (urllib.parse.quote(model.id, safe=""), file_token(file.id), _safe(file.name))
 
 
 class Site:
@@ -932,7 +938,8 @@ class Site:
 
     def file(self, path):
         """The base64 content of 'files/<path>'."""
-        model_id, _, rest = path.partition("/")
+        quoted, _, rest = path.partition("/")
+        model_id = urllib.parse.unquote(quoted)
         token, _, _ = rest.partition("/")
         model = self.model(model_id)
         for file in model.files or []:

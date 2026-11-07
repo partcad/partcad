@@ -760,3 +760,19 @@ def test_a_cache_that_cannot_be_written_costs_a_miss_not_the_answer(tmp_path, mo
     assert http.json("https://x/a", "a") == {"a": 1}
     assert http.json("https://x/a", "a") == {"a": 1}
     assert wire.asked == ["https://x/a", "https://x/a"]
+
+
+@pytest.mark.parametrize("model_id", ["763622", "bolt-m8_1", "_leading", "a/b c:\u00fc", "x" * 201])
+def test_a_file_is_served_whatever_its_model_is_called(model_id):
+    """The path a part names carries its model's id back to the site, whatever characters it holds."""
+
+    class AnyId(Site):
+        def valid_id(self, model_id):
+            return True
+
+    site = AnyId({model_id: _model(model_id)})
+    path = site.resolve(model_id, {"file": "base.stl"})["path"]
+    assert base64.b64decode(site.get("files/" + path)) == ("%s/base.stl" % model_id).encode()
+    # The ids the sites have - digits and slugs - are spelled as they were.
+    if model_id in ("763622", "bolt-m8_1"):
+        assert path.startswith(model_id + "/")
