@@ -117,6 +117,10 @@ _OPERATIONS = {
     "test": operations.test,
     "info": operations.info,
     "info.object": operations.info_object,
+    # 'pc compare <reference> <current>': one part or assembly read against
+    # another. Not 'info.object' with a second argument: it can drive a CAD
+    # wrapper (the surface distance), and it answers with a verdict.
+    "compare.objects": operations.compare_objects,
     "context.create": operations.context_create,
     "activate": operations.activate,
     "version": operations.version,

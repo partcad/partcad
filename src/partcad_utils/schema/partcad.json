@@ -689,7 +689,7 @@
       "description": "The fluid that fills this scene, as a reference to a material ('//pub/std/manufacturing/material/fluid:water', or ':brine' for one this package catalogues). Its 'density' and 'viscosity' are what a simulation of the scene drags and buoys what moves through it with. Absent is vacuum, which is what every engine assumes"
     },
     "requirements": {
-      "description": "What this object is required to be, written before the design is: the features it has to have, in words, and the ports, interfaces and physical properties it has to have, which 'pc test' checks against the model (the 'requirements' test). Any part of a port, an interface or a physical property may be null, and most of it should be: null is no requirement. A required value is a constant (a number, a string or a boolean) or a comparison ('>0', '>=1', '<10', '<=1', '!0'), and several are joined with commas: constants are alternatives ('1,2,4'), comparisons all have to hold ('>0,<=1'). A paragraph, a list of paragraphs, or a mapping of headings to paragraphs is also accepted and read as features, which is the shape this section had before it had structure.",
+      "description": "What this object is required to be, written before the design is: the features it has to have, in words, and the ports, interfaces and physical properties it has to have, and how closely its volume and mass have to match another object's, which 'pc test' checks against the model (the 'requirements' test). Any part of a port, an interface or a physical property may be null, and most of it should be: null is no requirement. A required value is a constant (a number, a string or a boolean) or a comparison ('>0', '>=1', '<10', '<=1', '!0'), and several are joined with commas: constants are alternatives ('1,2,4'), comparisons all have to hold ('>0,<=1'). A paragraph, a list of paragraphs, or a mapping of headings to paragraphs is also accepted and read as features, which is the shape this section had before it had structure.",
       "oneOf": [
         { "type": "string", "minLength": 1 },
         { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
@@ -699,7 +699,8 @@
             "features": { "$ref": "#/definitions/requirement-features" },
             "ports": { "$ref": "#/definitions/requirement-ports" },
             "interfaces": { "$ref": "#/definitions/requirement-interfaces" },
-            "physics": { "$ref": "#/definitions/requirement-physics" }
+            "physics": { "$ref": "#/definitions/requirement-physics" },
+            "match": { "$ref": "#/definitions/requirement-match" }
           },
           "additionalProperties": { "type": "string", "minLength": 1 }
         }
@@ -800,6 +801,32 @@
         }
       },
       "additionalProperties": false
+    },
+    "requirement-match": {
+      "type": ["object", "null"],
+      "description": "How closely this object's volume and mass have to match another object's: keyed by the other object's name (resolved from this object's package, so ':bracket' is a sibling), each a mapping of 'volume' and 'mass' to how many percent of the other object's they may differ by, either way -- 5 or '5%'. 'weight' is accepted for 'mass'. Read by the rules 'pc compare <other> <this>' reads the two by; a volume or a mass PartCAD cannot find out fails the requirement",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "null" },
+          {
+            "type": "object",
+            "properties": {
+              "volume": { "$ref": "#/definitions/requirement-percent" },
+              "mass": { "$ref": "#/definitions/requirement-percent" },
+              "weight": { "$ref": "#/definitions/requirement-percent" }
+            },
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "requirement-percent": {
+      "description": "How many percent a value may differ by, either way: a number of 0 or more, or the same written with a '%' after it ('5%'); null is no requirement",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "number", "minimum": 0 },
+        { "type": "string", "pattern": "^\\s*[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?\\s*%?\\s*$" }
+      ]
     },
     "requirement-physics": {
       "type": ["object", "null"],

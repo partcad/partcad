@@ -133,6 +133,8 @@
     }
     if (!answer) {
       note("refused", "The PartCAD extension is installed but did not answer.");
+    } else if (answer.ok && answer.confirm) {
+      note("accepted", "The PartCAD extension is asking you to confirm the login to " + answer.title + "\u2026");
     } else if (answer.ok) {
       note("accepted", "The PartCAD extension is opening " + answer.title + "\u2026");
     } else {

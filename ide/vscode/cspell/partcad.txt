@@ -216,6 +216,7 @@ manufacturer
 manufacturing
 map
 mass
+match
 material
 materials
 mates
@@ -404,6 +405,7 @@ visibility
 volume
 wall
 walls
+weight
 width
 windows
 wires

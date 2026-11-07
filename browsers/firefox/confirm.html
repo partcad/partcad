@@ -1,0 +1,128 @@
+<!doctype html>
+<!--
+  PartCAD, 2026
+
+  Licensed under Apache License, Version 2.0.
+
+  Where a login is said yes or no to before anything is captured for it: what
+  the request would take, and where it would send it. The extension's own page,
+  which a web page cannot script, restyle or cover. Its script is confirm.js;
+  an extension page may not run a script written inline.
+
+  Byte-identical in `browsers/chromium` and `browsers/firefox`.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PartCAD login</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --accent: #f2b705;
+        --ink: #1d2026;
+        --muted: #5b616b;
+        --paper: #ffffff;
+        --line: #d9dce1;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #f4f4f5;
+          --muted: #a8adb5;
+          --paper: #1d2026;
+          --line: #3a3f48;
+        }
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif;
+      }
+      main {
+        max-width: 640px;
+        margin: 48px auto;
+        padding: 0 16px;
+        border-top: 4px solid var(--accent);
+      }
+      h1 {
+        font-size: 22px;
+        margin: 20px 0 8px;
+      }
+      h2 {
+        font-size: 15px;
+        margin: 24px 0 6px;
+      }
+      p,
+      li {
+        margin: 6px 0;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      code {
+        font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        overflow-wrap: anywhere;
+      }
+      ul {
+        padding-left: 20px;
+      }
+      .buttons {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+        margin-top: 28px;
+      }
+      button {
+        font: inherit;
+        padding: 8px 18px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--ink);
+        cursor: pointer;
+      }
+      button.continue {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #1d2026;
+        font-weight: 600;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .error {
+        color: #c0392b;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="request" hidden>
+      <h1>Sign in to <span id="title"></span> for PartCAD?</h1>
+      <p>
+        Something on this computer asked PartCAD's login extension to open <code id="site"></code> and bring back
+        what signs you in there. If you just ran <code>pc login</code>, or asked an agent to log PartCAD in, this is
+        that.
+      </p>
+      <h2>What it would take</h2>
+      <ul id="captures"></ul>
+      <h2>Where it would go</h2>
+      <p>To <code id="requester"></code>, which asked for it, on this computer.</p>
+      <p class="muted">
+        If you did not start a login, press Cancel: nothing is captured, and whatever asked gets nothing.
+      </p>
+      <p id="error" class="error" hidden></p>
+      <div class="buttons">
+        <button id="cancel" type="button">Cancel</button>
+        <button id="continue" class="continue" type="button" disabled>Continue</button>
+      </div>
+    </main>
+    <main id="gone" hidden>
+      <h1>Nothing to confirm</h1>
+      <p id="reason"></p>
+      <p class="muted">You can close this tab.</p>
+    </main>
+    <script src="confirm.js"></script>
+  </body>
+</html>

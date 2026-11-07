@@ -113,6 +113,28 @@ parts:
         feature: quiet
         fix: [m3-thru]
 
+  # The plate again, held to other objects: met against itself, not met against
+  # an assembly of two of it, and unmeasurable against what has no volume or
+  # mass, or is not there.
+  plate-copy:
+    type: cadquery
+    path: plate.py
+    properties:
+      material: :steel
+    requirements:
+      match:
+        :plate:
+          volume: 0
+          weight: 1%
+        pair:
+          volume: "10%"
+        :plate-wrong:
+          mass: 50
+        :m3-boundary:
+          volume: 1
+        :nowhere:
+          mass: 1
+
   # The shape the section had before it had structure.
   legacy-text:
     type: cadquery

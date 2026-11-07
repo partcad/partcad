@@ -5,7 +5,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-__version__: str = "0.9.5"
+__version__: str = "0.9.9"
 
 # Must come before anything that spawns a process: everything PartCAD executes
 # in a Python sandbox inherits this environment, so this is where the sandbox
@@ -107,6 +107,10 @@ from . import cae  # noqa: F401
 # And 'partcad.cam', for the same reason: it is what the daemon's 'cam.route'
 # operation reaches a route through, and what 'Shape.route_async()' reads.
 from . import cam  # noqa: F401
+
+# And 'partcad.compare', for the same reason again: it is what the daemon's
+# 'compare.objects' operation reads two objects against each other through.
+from . import compare  # noqa: F401
 
 # And 'partcad.sandbox_lock': the daemon sizes the sandbox process slots for
 # each request through it ('sandbox_lock.follow'), and should not depend on the
