@@ -5601,9 +5601,18 @@ def _compare_session(answer=None, fails=None):
     session, _ = make_session()
     asked = []
 
-    async def compare_async(ctx, reference, current, spacing=None, limits=None, worst=10):
+    async def compare_async(ctx, reference, current, spacing=None, limits=None, worst=10, displacement=False):
         """Record the comparison, and answer with 'answer' or raise 'fails'."""
-        asked.append({"reference": reference, "current": current, "spacing": spacing, "limits": limits, "worst": worst})
+        asked.append(
+            {
+                "reference": reference,
+                "current": current,
+                "spacing": spacing,
+                "limits": limits,
+                "worst": worst,
+                "displacement": displacement,
+            }
+        )
         if fails is not None:
             raise fails
         return dict(answer or {"passed": None})
@@ -5633,7 +5642,9 @@ def test_compare_reads_the_current_object_against_the_reference():
             "object": "old",
             "current": "new",
             "surface_distance": 0.5,
+            "displacement": True,
             "max_volume_difference": "5%",
+            "max_displacement_difference": 1,
             "max_mass_difference": 2,
             "worst": 3,
         },
@@ -5644,8 +5655,9 @@ def test_compare_reads_the_current_object_against_the_reference():
     assert call["reference"].name == "old"
     assert call["current"].name == "new"
     assert call["spacing"] == 0.5
-    assert call["limits"] == {"volume": 5.0, "mass": 2.0}
+    assert call["limits"] == {"volume": 5.0, "displacement": 1.0, "mass": 2.0}
     assert call["worst"] == 3
+    assert call["displacement"] is True
     infos = [message for level, message in session.partcad.logging.records if level == "info"]
     assert infos == ["reference: ...", "the current object passes"]
 
@@ -5657,6 +5669,7 @@ def test_compare_prints_nothing_when_asked_for_json():
     assert len(asked) == 1
     assert asked[0]["spacing"] is None
     assert asked[0]["limits"] == {}
+    assert asked[0]["displacement"] is False
     assert [record for record in session.partcad.logging.records if record[0] == "info"] == []
 
 
@@ -5671,6 +5684,7 @@ def test_compare_prints_nothing_when_asked_for_json():
         ({"object": "old", "current": "new", "surface_distance": 0}, "has to be more than 0"),
         ({"object": "old", "current": "new", "surface_distance": "far"}, "has to be a number"),
         ({"object": "old", "current": "new", "max_mass_difference": "-1"}, "The mass limit has to be"),
+        ({"object": "old", "current": "new", "max_displacement_difference": "x"}, "The displacement limit has to be"),
         ({"object": "old", "current": "new", "worst": -1}, "'worst' has to be a whole number"),
     ],
 )

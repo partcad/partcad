@@ -12,8 +12,8 @@ so, or when the package declares it as one).
 An object's `requirements:` has two halves, and they are validated two ways:
 
 - **What PartCAD measures** — `ports:`, `interfaces:`, `physics:` and
-  `match:` (the volume and the mass within a percentage of another
-  object's). These are checked by `pc test` (its `requirements` check), and its
+  `match:` (the volume, the displacement and the mass within a percentage of
+  another object's). These are checked by `pc test` (its `requirements` check), and its
   verdict is the verdict. You report it; you do not second-guess it.
 - **`features:`** — a name and a sentence each: "takes an M3 screw from either
   side", "does not tip over on a 10° slope". Some are demonstrated by a

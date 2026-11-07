@@ -135,6 +135,24 @@ parts:
         :nowhere:
           mass: 1
 
+  # Matched by its displacement too: what a plate with a void sealed inside it
+  # would push aside is more than its steel. Only the objects a 'displacement:'
+  # names are measured for one; ':plate-copy' is held to its volume alone.
+  plate-displaced:
+    type: cadquery
+    path: plate.py
+    properties:
+      material: :steel
+    requirements:
+      match:
+        :plate:
+          volume: 0
+          displacement: 1%
+        pair:
+          displacement: 60
+        :plate-copy:
+          volume: 0
+
   # The shape the section had before it had structure.
   legacy-text:
     type: cadquery

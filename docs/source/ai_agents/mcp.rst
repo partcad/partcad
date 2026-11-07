@@ -152,8 +152,8 @@ price asks the suppliers for a quote, so it is the one of them that goes out to 
      - The step-by-step build of an assembly, with this machine's Build vs Buy choices applied.
    * - ``compare``
      - ``pc compare --json``
-     - Reads one part or assembly against another: volume, mass, tolerances and, with ``surface_distance``, how
-       far apart their surfaces are. ``ok`` is false when something it was held to does not hold.
+     - Reads one part or assembly against another: volume, mass, tolerances, with ``displacement`` what each
+       would push aside if submerged, and with ``surface_distance`` how far apart their surfaces are. ``ok`` is false when something it was held to does not hold.
    * - ``version``
      - ``pc version``
      - The version of the server and of the daemon serving the workspace.

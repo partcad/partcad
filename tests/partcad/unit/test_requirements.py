@@ -22,7 +22,7 @@ import pytest
 import yaml
 
 import partcad as pc
-from partcad import requirements, simulation
+from partcad import compare, requirements, simulation
 from partcad.assembly import Assembly
 from partcad.geom import Location
 from partcad.lint.all import get_partcad_schema
@@ -501,9 +501,12 @@ def test_pc_test_never_remembers_the_verdict(ctx):
 
 def test_a_match_is_read_by_amount_and_object():
     """One requirement per object and amount: 'weight' is the mass, and null is no requirement."""
-    declaration = requirements.parse({"match": {":bracket": {"volume": "5%", "weight": 2, "mass": None}}})
+    declaration = requirements.parse(
+        {"match": {":bracket": {"volume": "5%", "displacement": 3, "weight": 2, "mass": None}}}
+    )
     assert [(c.reference, c.amount, c.limit, c.written) for c in declaration.match] == [
         (":bracket", "volume", 5.0, "volume"),
+        (":bracket", "displacement", 3.0, "displacement"),
         (":bracket", "mass", 2.0, "weight"),
     ]
     assert declaration.structured
@@ -519,7 +522,7 @@ def test_a_match_is_read_by_amount_and_object():
         ({":b": {"volume": -1}}, "'-1' is not a percentage"),
         ({":b": {"size": 1}}, "'size' is not matched"),
         ({":b": {"mass": 1, "weight": 2}}, "'mass' and 'weight' are both the mass"),
-        ({":b": 5}, "is not a mapping of 'volume' and 'mass'"),
+        ({":b": 5}, "is not a mapping of 'volume', 'displacement' and 'mass'"),
         ([":b"], "is not a mapping of the objects to match"),
     ],
 )
@@ -579,6 +582,61 @@ def test_without_verifying_a_match_is_listed_and_not_judged(ctx):
     assert len(matched) == 6
     assert all(check.passed is None for check in matched)
     assert matched[0].requirement == "within 0%"
+
+
+def test_a_displacement_is_measured_only_of_what_a_match_holds_to_it(ctx, monkeypatch):
+    """Of the object and the references a 'displacement:' names, and of nothing else: it takes a sandbox."""
+    measured = []
+
+    async def displacement(ctx, shape):
+        """'plate' stood in for as a plate with a void sealed in it: 2700 mm^3 of steel, displacing 2754."""
+        measured.append(compare.name_of(shape))
+        displaced = {"plate": 2754.0, "pair": 5400.0}.get(shape.name, 2700.0)
+        return {"displacement": displaced, "cavities": 1 if shape.name == "plate" else 0, "displacementUnknown": None}
+
+    monkeypatch.setattr(compare, "_displacement", displacement)
+    report = _check(ctx, "part", "plate-displaced")
+    verdicts = {key[1]: value for key, value in _verdicts(report).items() if key[0] == "match"}
+    details = {check.name: check.detail for check in report.checks if check.section == "match"}
+
+    assert verdicts == {
+        "volume of :plate": True,
+        "displacement of :plate": False,
+        "displacement of pair": True,
+        "volume of :plate-copy": True,
+    }
+    assert details["displacement of :plate"] == (
+        "2700 mm^3, 1.96078431% less than the reference's 2754 mm^3 (more than 1%)"
+    )
+    assert details["displacement of pair"] == "2700 mm^3, 50% less than the reference's 5400 mm^3 (within 60%)"
+    assert sorted(measured) == ["//:pair", "//:plate", "//:plate-displaced"]
+
+
+def test_a_displacement_that_cannot_be_measured_fails_the_match_and_says_why(ctx, monkeypatch):
+    """A sandbox that could not measure one object fails what is held to it, the way an unknown mass does."""
+
+    async def displacement(ctx, shape, cacheable=True):
+        """What the sandbox answers for each envelope: 'pair', the assembly, it never answers for."""
+        if shape.get("name") == "//:pair":
+            raise RuntimeError("the sandbox did not start")
+        return {"displacement": 2700.0, "solids": 1, "cavities": 0}
+
+    async def unbuilt(self, ctx):
+        """A part's envelope, as the sandbox would be handed it: nothing here builds one."""
+        return {"name": self.name}
+
+    monkeypatch.setattr(compare.pc_measure, "displacement", displacement)
+    # An assembly is already built without geometry (the fixture's 'built()').
+    monkeypatch.setattr(Shape, "get_wrapped", unbuilt)
+    report = _check(ctx, "part", "plate-displaced")
+    details = {check.name: check.detail for check in report.checks if check.section == "match"}
+    verdicts = {key[1]: value for key, value in _verdicts(report).items() if key[0] == "match"}
+
+    assert verdicts["displacement of pair"] is False
+    assert details["displacement of pair"] == (
+        "the reference's is not known: could not be measured: the sandbox did not start"
+    )
+    assert verdicts["displacement of :plate"] is True
 
 
 def test_pc_test_fails_an_object_further_from_another_than_it_may_be(ctx):

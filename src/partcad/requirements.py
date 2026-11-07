@@ -28,13 +28,13 @@ terms whoever asked for the design thinks in:
                 where each instance is as matters, in the same terms.
     physics     what the object's physical properties have to be: any of the
                 fields of a 'physics:' section, in the same terms.
-    match       how closely the object's volume and mass have to match another
-                object's, in percent of that object's: "no more than 5% heavier
-                or lighter than the bracket it replaces". Keyed by the other
-                object's name, which is resolved from this object's package the
-                way any reference is, and read by the rules 'pc compare' reads
-                two objects by (see 'partcad.compare'); 'weight' is accepted for
-                'mass'.
+    match       how closely the object's volume, displacement and mass have
+                to match another object's, in percent of that object's: "no
+                more than 5% heavier or lighter than the bracket it replaces".
+                Keyed by the other object's name, which is resolved from this
+                object's package the way any reference is, and read by the rules
+                'pc compare' reads two objects by (see 'partcad.compare');
+                'weight' is accepted for 'mass'.
 
 The last four are what ``pc test`` checks (the ``requirements`` test, see
 'test/requirements.py'), and this module is the one place that says what they
@@ -504,7 +504,7 @@ class PhysicsRequirement:
 
 
 class MatchRequirement:
-    """How closely one amount of the object - its volume or its mass - has to match another object's.
+    """How closely one amount of the object - its volume, displacement or mass - has to match another object's.
 
     'reference' is the other object's name as written; 'limit' is in percent of
     that object's amount.
@@ -631,7 +631,7 @@ def _parse_physics(raw, declaration: Declaration) -> None:
 
 # What a 'match:' requirement may hold an object to, by the key it is written
 # with: 'weight' is what most people asking for one say, and is the mass.
-_MATCHED = {"volume": "volume", "mass": "mass", "weight": "mass"}
+_MATCHED = {"volume": "volume", "displacement": "displacement", "mass": "mass", "weight": "mass"}
 
 
 def _parse_match(raw, declaration: Declaration) -> None:
@@ -650,7 +650,7 @@ def _parse_match(raw, declaration: Declaration) -> None:
                 Problem(
                     MATCH,
                     reference,
-                    "'%s' is not a mapping of 'volume' and 'mass' to how many percent they may differ by"
+                    "'%s' is not a mapping of 'volume', 'displacement' and 'mass' to how many percent they may differ by"
                     % _fmt(limits),
                 )
             )
@@ -1332,7 +1332,11 @@ async def matched_object_async(ctx, shape, reference: str):
 
 
 async def _verify_match(ctx, shape, entries) -> None:
-    """Hold the volume and the mass to each object 'match:' names, by the rules 'pc compare' reads two objects by."""
+    """Hold the amounts 'match:' names to each object it names, by the rules 'pc compare' reads two objects by.
+
+    A displacement is measured in a sandbox, so it is measured only of the
+    object and of the references some requirement holds it to.
+    """
     from . import compare as pc_compare
 
     kind = getattr(shape, "kind", None)
@@ -1342,7 +1346,10 @@ async def _verify_match(ctx, shape, entries) -> None:
             check.detail = "a %s has no volume and no mass to match" % kind
         return
 
-    own = await pc_compare.side_async(ctx, shape)
+    displaced = {
+        requirement.reference for requirement, _check in entries if requirement.amount == pc_compare.DISPLACEMENT
+    }
+    own = await pc_compare.side_async(ctx, shape, displacement=bool(displaced))
     others = {}
     for requirement, check in entries:
         if requirement.reference not in others:
@@ -1351,7 +1358,11 @@ async def _verify_match(ctx, shape, entries) -> None:
             # be perfectly well matched.
             try:
                 other, why = await matched_object_async(ctx, shape, requirement.reference)
-                side = await pc_compare.side_async(ctx, other) if other is not None else None
+                side = (
+                    await pc_compare.side_async(ctx, other, displacement=requirement.reference in displaced)
+                    if other is not None
+                    else None
+                )
             except Exception as e:  # pylint: disable=broad-except
                 side, why = None, "could not be checked: %s" % e
             others[requirement.reference] = (side, why)

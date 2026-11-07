@@ -2,8 +2,9 @@
 Feature: `pc compare` command
 
   # 'basic' parts are written by PartCAD itself, with no sandbox, so their
-  # volumes and masses cost nothing to compare. The surface distance does need
-  # the sandbox, and is covered by the unit tests of 'wrapper_compare' instead.
+  # volumes and masses cost nothing to compare. The surface distance and the
+  # displacement do need the sandbox, and are covered by the unit tests of
+  # 'wrapper_compare' and 'wrapper_measure' instead.
 
   Background: Initialize sandbox
     Given I am in "/tmp/sandbox/behave" directory

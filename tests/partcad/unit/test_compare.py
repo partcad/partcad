@@ -44,9 +44,14 @@ class _Shape:
 
 @pytest.fixture
 def amounts(monkeypatch):
-    """What each object weighs and holds, by name; and every surface measurement asked for."""
-    table = {}
+    """What each object weighs and holds, by name; and every surface and displacement measurement asked for.
+
+    What each object displaces is under 'displaced', by name: what the sandbox
+    answers, or the exception it fails with.
+    """
+    table = {"displaced": {}}
     measured = []
+    displaced = []
 
     async def amounts_async(ctx, shape):
         return table.get(shape.name)
@@ -55,9 +60,18 @@ def amounts(monkeypatch):
         measured.append((reference, current, spacing, allowance, worst, cacheable))
         return dict(table.get("surface", {}), allowance=allowance)
 
+    async def displacement(ctx, shape, cacheable=True):
+        displaced.append((shape, cacheable))
+        answer = table["displaced"].get(shape["name"])
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
     monkeypatch.setattr(compare.pc_physics, "amounts_async", amounts_async)
     monkeypatch.setattr(compare.pc_measure, "surface_distance", surface_distance)
+    monkeypatch.setattr(compare.pc_measure, "displacement", displacement)
     table["measured"] = measured
+    table["displacements measured"] = displaced
     return table
 
 
@@ -151,7 +165,9 @@ def test_with_nothing_to_hold_it_to_a_comparison_is_a_report(amounts):
     assert report["mass"]["difference"] == pytest.approx(0.000135)
     assert report["volume"]["passed"] is None
     assert report["surface"] is None
+    assert report["displacement"] is None
     assert amounts["measured"] == []
+    assert amounts["displacements measured"] == []
 
 
 def test_a_limit_given_is_a_verdict(amounts):
@@ -221,6 +237,78 @@ def test_a_tolerance_that_cannot_be_read_counts_as_nothing_and_says_why(amounts)
     assert report["tolerance"]["allowance"] == 0.0
 
 
+def _displaced(displacement, cavities=0, solids=1):
+    """What the sandbox answers for an object displacing that much, with that many voids sealed in it."""
+    return {"displacement": displacement, "solids": solids, "cavities": cavities}
+
+
+def test_the_displacements_are_measured_when_asked_for(amounts):
+    """Each object's envelope goes to the sandbox, and the two are read against each other like the volumes."""
+    amounts["old"] = _side(992.0, None)
+    amounts["new"] = _side(992.0, None)
+    amounts["displaced"] = {"old": _displaced(1000.0, cavities=1), "new": _displaced(992.0)}
+    report = _compare(_Shape("old"), _Shape("new"), displacement=True)
+
+    assert amounts["displacements measured"] == [({"name": "old"}, True), ({"name": "new"}, True)]
+    assert report["reference"]["displacement"] == 1000.0
+    assert report["reference"]["cavities"] == 1
+    assert report["current"]["cavities"] == 0
+    entry = report["displacement"]
+    assert (entry["reference"], entry["current"], entry["difference"]) == (1000.0, 992.0, -8.0)
+    assert entry["percent"] == pytest.approx(-0.8)
+    assert entry["unit"] == "mm^3"
+    assert (entry["limit"], entry["passed"]) == (None, None)
+    # The same material, so the volumes alone would say they are the same object.
+    assert report["volume"]["percent"] == 0.0
+    assert report["passed"] is None
+
+
+def test_a_limit_on_the_displacement_measures_it_and_is_a_verdict(amounts):
+    """Asked for by the limit alone, and judged like any other amount."""
+    amounts["old"] = _side(992.0, None)
+    amounts["new"] = _side(992.0, None)
+    amounts["displaced"] = {"old": _displaced(1000.0, cavities=1), "new": _displaced(992.0)}
+
+    report = _compare(_Shape("old"), _Shape("new"), limits={"displacement": 0.5})
+    assert report["displacement"]["passed"] is False
+    assert report["displacement"]["detail"] == "992 mm^3, 0.8% less than the reference's 1000 mm^3 (more than 0.5%)"
+    assert report["passed"] is False
+    assert _compare(_Shape("old"), _Shape("new"), limits={"displacement": 1})["passed"] is True
+
+
+def test_a_displacement_not_measured_fails_a_limit_and_says_why(amounts):
+    """A sandbox that fails, and an object holding no solid, leave it not known -- which no limit holds."""
+    amounts["old"] = _side(1000.0, None)
+    amounts["new"] = _side(None, None)
+    amounts["displaced"] = {"old": RuntimeError("the sandbox did not start"), "new": _displaced(None, solids=0)}
+    report = _compare(_Shape("old"), _Shape("new"), limits={"displacement": 5})
+
+    assert report["reference"]["displacementUnknown"] == "could not be measured: the sandbox did not start"
+    assert report["current"]["displacementUnknown"] == compare.NO_SOLID
+    assert report["displacement"]["passed"] is False
+    assert report["displacement"]["detail"] == (
+        "the reference's is not known: could not be measured: the sandbox did not start"
+    )
+
+    amounts["displaced"]["old"] = _displaced(1000.0)
+    report = _compare(_Shape("old"), _Shape("new"), limits={"displacement": 5})
+    assert report["displacement"]["detail"] == "it is not known: it holds no solid"
+
+
+def test_a_displacement_is_one_trip_to_the_measure_wrapper(monkeypatch):
+    """'measure.displacement' asks the measure wrapper's 'displacement', remembered like any measurement."""
+    asked = []
+
+    async def run(ctx, request, cacheable=True, script="measure.py"):
+        asked.append((request, cacheable, script))
+        return _displaced(1000.0, cavities=1)
+
+    monkeypatch.setattr(compare.pc_measure, "_run", run)
+    envelope = {"name": "old"}
+    assert asyncio.run(compare.pc_measure.displacement("ctx", envelope, cacheable=False)) == _displaced(1000.0, 1)
+    assert asked == [({"operation": "displacement", "shape": envelope}, False, "measure.py")]
+
+
 # --- the report -----------------------------------------------------------------
 
 
@@ -266,6 +354,19 @@ def test_the_report_says_each_difference_and_the_verdict(amounts):
     assert "  +0.25 mm at (4, 4, -5), on a face" in lines
     assert "  -0.5 mm at (-5, -5, -5), on an edge, to the nearest point" in lines
     assert lines[-1] == "the current object FAILS"
+
+
+def test_the_displacement_is_reported_between_the_volume_and_the_mass(amounts):
+    """Only when it was measured: a report without it is the report it always was."""
+    amounts["old"] = _side(992.0, 0.0078)
+    amounts["new"] = _side(992.0, 0.0078)
+    amounts["displaced"] = {"old": _displaced(1000.0, cavities=1), "new": _displaced(992.0)}
+    lines = compare.format_report(_compare(_Shape("old"), _Shape("new"), limits={"displacement": 1}))
+
+    assert lines[2] == "volume: 992 mm^3 -> 992 mm^3, difference 0 mm^3 (0%)"
+    assert lines[3] == "displacement: 1000 mm^3 -> 992 mm^3, difference -8 mm^3 (-0.8%)  [PASS: within 1%]"
+    assert lines[4].startswith("mass: 0.0078 kg -> 0.0078 kg")
+    assert lines[-1] == "the current object passes"
 
 
 def test_a_report_with_nothing_judged_says_it_is_not_a_verdict(amounts):

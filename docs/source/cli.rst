@@ -650,11 +650,19 @@ Object commands
       pc compare bracket-v1 bracket-v2
       pc compare //pub/std/metric/cqwarehouse:fastener/hexhead-iso4017 :my-bolt --surface-distance 0.5
       pc compare :bracket-v1 :bracket-v2 --max-mass-difference 2 --json
+      pc compare :housing-v1 :housing-v2 --max-displacement-difference 1
 
   It reports, for each of the two and then the difference (the current one's less the reference's, and as a
   percentage of the reference's):
 
   - the **volume**, in mm³ -- a part's measured solid, an assembly's parts added up, as ``pc info`` reports it;
+  - with ``--displacement``, the **displacement**, in mm³ -- what the object would push aside if it were
+    submerged: its volume and every void sealed inside it, which a hole right through it is not, since water
+    reaches that. Each solid displaces what its outer shell encloses, and an assembly what its parts' solids
+    each do, added up -- a space only several of them close off together is not in any one of them. Two
+    objects of the same material and different voids have the same volume and different displacements, and it
+    is the displacement that says whether one fits where the other did. It is measured in a sandbox, so only
+    when it is asked for; the JSON says how many sealed voids each holds (``cavities``);
   - the **mass**, in kg -- stated, or worked out from the volume and the material's density (see
     :ref:`properties`). A mass that cannot be known is said to be, with the reason, rather than given one; an
     assembly some of whose parts weigh nothing known has none here, because the total of the others held
@@ -685,8 +693,9 @@ Object commands
   as their origins are.
 
   It exits non-zero when something it was held to does not hold: the surface, whenever it was measured, against
-  the allowance -- every point within it, and none with nothing to measure to -- and ``--max-volume-difference``
-  and ``--max-mass-difference`` (in percent of the reference's) when they are given. Held to nothing, it is a
+  the allowance -- every point within it, and none with nothing to measure to -- and ``--max-volume-difference``,
+  ``--max-displacement-difference`` (which measures the displacements, as ``--displacement`` does) and
+  ``--max-mass-difference`` (in percent of the reference's) when they are given. Held to nothing, it is a
   report and exits zero. ``--json`` prints the whole comparison as one JSON object on standard output. The same
   limits can be written into the current object's declaration, as a ``match:`` requirement that ``pc test``
   checks -- see :ref:`requirements`.

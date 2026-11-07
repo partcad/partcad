@@ -45,8 +45,11 @@ def test_the_reference_comes_first_and_every_option_reaches_the_daemon(monkeypat
         "//pkg",
         "--surface-distance",
         "0.5",
+        "--displacement",
         "--max-volume-difference",
         "5",
+        "--max-displacement-difference",
+        "1",
         "--max-mass-difference",
         "2.5",
         "--worst",
@@ -63,7 +66,9 @@ def test_the_reference_comes_first_and_every_option_reaches_the_daemon(monkeypat
         "object": "bracket-v1",
         "current": "bracket-v2",
         "surface_distance": 0.5,
+        "displacement": True,
         "max_volume_difference": 5.0,
+        "max_displacement_difference": 1.0,
         "max_mass_difference": 2.5,
         "worst": 3,
         "json": False,
@@ -71,12 +76,14 @@ def test_the_reference_comes_first_and_every_option_reaches_the_daemon(monkeypat
 
 
 def test_nothing_asked_is_sent_as_nothing(monkeypatch):
-    """Options left out are sent as None, and '--worst' as its default."""
+    """Options left out are sent as None, '--displacement' as not asked, and '--worst' as its default."""
     daemon, result = _invoke(monkeypatch, {"passed": None}, "a", "b")
     assert result.exit_code == 0, result.output
     ((_, params, _),) = daemon.calls
     assert params["surface_distance"] is None
+    assert params["displacement"] is False
     assert params["max_volume_difference"] is None
+    assert params["max_displacement_difference"] is None
     assert params["max_mass_difference"] is None
     assert params["worst"] == 10
 

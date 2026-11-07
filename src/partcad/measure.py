@@ -104,6 +104,22 @@ async def measurements(ctx, shape, cacheable: bool = True):
     return await _run(ctx, {"operation": "measurements", "shape": shape}, cacheable)
 
 
+async def displacement(ctx, shape, cacheable: bool = True):
+    """How much 'shape' would push aside if it were submerged, in one sandbox trip.
+
+    ``{"displacement": float | None, "solids": int, "cavities": int}``: the
+    volume each solid's outer shell encloses, added up - its material and every
+    void sealed inside it - in mm^3, and None for a shape holding no solid.
+    'shape' is what 'Shape.get_wrapped' answers, a part's envelope or an
+    assembly's tree; an assembly's solids are its parts'. See
+    'shape_measure.displacement' among the wrappers.
+
+    Measured when asked rather than as every shape is built: only 'pc compare'
+    and a 'match:' requirement ask, and only of the objects they compare.
+    """
+    return await _run(ctx, {"operation": "displacement", "shape": shape}, cacheable)
+
+
 async def extent_z(ctx, shape, frame: Location = None, cacheable: bool = True):
     """The length of 'shape' along the Z axis of 'frame', or None if unmeasurable."""
     box = await bbox(ctx, shape, frame, cacheable)

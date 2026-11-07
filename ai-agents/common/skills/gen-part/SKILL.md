@@ -226,8 +226,10 @@ prose; the IDE shows both as the part's Requirements tab:
 - **`match:`** is for a part asked for *relative to another object* —
   "like the old bracket, but no more than 5% heavier", "a replacement within
   2% of the original's volume". Key it by the other object's name (`:sibling`
-  or `//package:name`), with `volume` and `mass` (or `weight`) as a percentage
-  of that object's, either way:
+  or `//package:name`), with `volume`, `displacement` and `mass` (or `weight`)
+  as a percentage of that object's, either way. `displacement` is the volume
+  and every void sealed inside it — what the part takes up rather than what it
+  is made of — for a part that has to fill the space the other one did:
 
   ```yaml
       match:
@@ -422,7 +424,10 @@ many points. Read, in the JSON:
 
 - `volume` and `mass`: `percent` is how far off the candidate is as a whole. A
   large difference with a small surface distance is a missing or extra
-  feature the points fell beside; look at `surface.worst`.
+  feature the points fell beside; look at `surface.worst`. A volume that is off
+  while the surface is not can be a void sealed inside one of the two, which
+  the surface points never reach: add `--displacement`, and compare
+  `displacement` and each side's `cavities`.
 - `surface.distance`: `min` and `max` (signed), `rms`, and the `p95` of the
   distance's size. A consistent sign is a scale or an offset — a `mean` close to
   `max` on every face says a dimension is too large by that much; a distance

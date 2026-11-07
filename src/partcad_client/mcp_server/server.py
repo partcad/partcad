@@ -177,7 +177,8 @@ def instructions(bridge: Bridge, scope: PathScope) -> str:
         "is the same as naming it 'name;param=value,...'. "
         "Start with list_objects (kind=packages for the package tree) and info; look at an object with render, "
         "which returns an image; check it against its declared requirements with test; read it against another "
-        "object -- volume, mass, and how far apart their surfaces are -- with compare; write STEP, STL, 3MF and "
+        "object -- volume, displacement, mass, and how far apart their surfaces are -- with compare; write STEP, "
+        "STL, 3MF and "
         "the rest with export. To create or change an object, edit partcad.yaml and its script with your own file "
         "tools -- the daemon reloads what changed -- then render and test again. Everything else PartCAD does "
         "(bom, instructions, cae, cam, simulations, add, import, convert, install) is a daemon method: "
@@ -602,9 +603,24 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
                 "this many millimetres apart on the reference, along its normals. Slower the smaller it is.",
             ),
         ] = None,
+        displacement: Annotated[
+            bool,
+            Field(
+                description="Also compare the displacements: what each would push aside if submerged, its volume "
+                "and every void sealed inside it, not a hole right through it. Measured in a sandbox.",
+            ),
+        ] = False,
         max_volume_difference: Annotated[
             Optional[float],
             Field(ge=0, description="Fail unless the volumes differ by at most this many percent of the reference's."),
+        ] = None,
+        max_displacement_difference: Annotated[
+            Optional[float],
+            Field(
+                ge=0,
+                description="Fail unless the displacements differ by at most this many percent of the reference's. "
+                "Measures them, as displacement does.",
+            ),
         ] = None,
         max_mass_difference: Annotated[
             Optional[float],
@@ -612,7 +628,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         ] = None,
         worst: Annotated[int, Field(ge=0, description="How many of the points furthest apart to list.")] = 10,
     ) -> CallToolResult:
-        """Read one part or assembly against another: volume, mass, tolerances and, optionally, the surface distance.
+        """Read one part or assembly against another: volume, mass, tolerances and, optionally, displacement and surface.
 
         `pc compare --json`. Differences are the current object's less the reference's, percentages are of the
         reference's. ok is false when something it was held to does not hold: the surface, when measured, against
@@ -623,7 +639,9 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             "object": reference,
             "current": current,
             "surface_distance": surface_distance,
+            "displacement": displacement,
             "max_volume_difference": max_volume_difference,
+            "max_displacement_difference": max_displacement_difference,
             "max_mass_difference": max_mass_difference,
             "worst": worst,
             "json": True,
