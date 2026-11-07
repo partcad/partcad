@@ -63,6 +63,12 @@ DISPLAY = "displayColor"
 # The size, in pixels a side, an image is shrunk to before it is read.
 IMAGE_SIDE = 256
 
+# The most pixels an image may be decoded at - after a JPEG's own reduction -
+# for it to be read: a 16K texture is 1 GB of RGBA, and a face drawn in one
+# colour is not worth that. A larger one is read as no image, so its texture's
+# fallback, or the face's 'displayColor', draws the face.
+MAX_DECODED_PIXELS = 8192 * 8192
+
 # SimReady names a material '<opacity>__<class>__<what>'.
 _SIMREADY = re.compile(r"^(opaque|translucent|transparent|emissive)__([A-Za-z0-9]+)__", re.IGNORECASE)
 
@@ -371,7 +377,8 @@ class Looks:
         image = self.image(resolved) if resolved else None
         if image is None:
             if fallback is not None:
-                return _fit(numpy.asarray(fallback, dtype=numpy.float64)[: len(channels)], width, len(faces))
+                # The fallback is the texture's own four channels: the ones read are taken from it.
+                return _fit(numpy.asarray(fallback, dtype=numpy.float64)[list(channels)], width, len(faces))
             return None
         uv = _primvar(prim, uv_name, self.time, faces, corners, points)
         if uv is None:
@@ -501,7 +508,7 @@ def settle(names, rgb, alpha, roughness, metallic, materials, name_table, materi
         rgba = None
         if row[2] >= 0:
             channels = [int(min(255, max(0, round(v)))) for v in row[2:5]]
-            rgba = (channels[0], channels[1], channels[2], float(row[5]) if row[5] >= 0 else 1.0)
+            rgba = (channels[0], channels[1], channels[2], round(float(row[5]), 3) if row[5] >= 0 else 1.0)
         rough = round(float(row[6]) * finish_step, 3) if row[6] >= 0 else None
         metal = round(float(row[7]) * finish_step, 3) if row[7] >= 0 else None
         looks.append((name, rgba, rough, metal, material))
@@ -892,22 +899,28 @@ def _number(value, default):
 
 
 def read_bytes(resolved):
-    """The bytes of the file at 'resolved' - 'package.usdz[inner]' for one in a package - or None."""
+    """The bytes of the file at 'resolved' - 'package.usdz[inner]' for one in a package - or None.
+
+    A package in a package is 'outer.usdz[inner.usdz[file]]', as Ar writes it.
+    """
     try:
         if resolved.endswith("]") and "[" in resolved:
             package, inner = resolved[:-1].split("[", 1)
-            if "[" in inner:  # a package in a package
-                outer = read_bytes(package + "[" + inner.split("[", 1)[0] + "]")
-                if outer is None:
-                    return None
-                with zipfile.ZipFile(io.BytesIO(outer)) as z:
-                    return z.read(inner.split("[", 1)[1])
             with zipfile.ZipFile(package) as z:
-                return z.read(inner)
+                return _member(z, inner)
         with open(resolved, "rb") as f:
             return f.read()
     except (OSError, KeyError, zipfile.BadZipFile, ValueError):
         return None
+
+
+def _member(archive, inner):
+    """The bytes of 'inner' in the open package 'archive': a file's name, or 'package[inner]' for one in a package."""
+    if inner.endswith("]") and "[" in inner:
+        nested, rest = inner[:-1].split("[", 1)
+        with zipfile.ZipFile(io.BytesIO(archive.read(nested))) as z:
+            return _member(z, rest)
+    return archive.read(inner)
 
 
 def _read_image(resolved):
@@ -919,9 +932,10 @@ def _read_image(resolved):
     try:
         from PIL import Image
 
-        Image.MAX_IMAGE_PIXELS = None
         with Image.open(io.BytesIO(data)) as image:
             image.draft("RGB", (IMAGE_SIDE, IMAGE_SIDE))  # a JPEG decodes smaller at once
+            if image.size[0] * image.size[1] > MAX_DECODED_PIXELS:
+                return None
             image = image.convert("RGBA")
             image.thumbnail((IMAGE_SIDE, IMAGE_SIDE), Image.Resampling.BOX)
             return numpy.asarray(image, dtype=numpy.float64) / 255.0

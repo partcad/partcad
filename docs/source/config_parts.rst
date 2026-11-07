@@ -545,6 +545,23 @@ a part's own, declared under ``parameters`` like any other:
           type: string
           default: usd-core   # or cadmpeg
 
+A built part is kept, and built again when its file changes. A ``.usdz`` is one
+file and needs nothing more. A stage of loose layers is not: what it composes -
+sublayers, references, payloads, the textures and MaterialX documents its
+materials name - are other files, which PartCAD does not open a stage to find.
+List them under ``dependencies``, as an OpenSCAD part lists what it includes, and
+a change to any of them builds the part again:
+
+.. code-block:: yaml
+
+  parts:
+    chair:
+      type: usd
+      path: assets/Chair/Chair.usd
+      dependencies:
+        - assets/Chair/Chair.geom.usd
+        - assets/Chair/Chair.mtlx
+
 An ``iges`` part is read with `OpenCASCADE <https://dev.opencascade.org/>`_,
 whose IGES reader is the counterpart of the writer ``pc export -t iges`` uses, so
 what PartCAD writes it reads back. The part is the solids the file shows, in the

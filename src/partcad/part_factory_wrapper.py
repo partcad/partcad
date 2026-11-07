@@ -18,6 +18,8 @@ it is one file of that format, declared exactly as a STEP or an STL part is --
 out, ``fileFrom`` to fetch it. The file is resolved against the package that
 declares the part rather than the one that declares the type, is what the
 part's cache entry depends on, and reaches the script as ``request["path"]``.
+The other files it is read from - the layers a USD stage composes - are its
+``dependencies``, which the cache entry depends on too.
 That is what makes a format a package can teach PartCAD to read: 'fcstd' in
 '//builtin/import', and the ones a plugin package supplies.
 """
@@ -86,6 +88,16 @@ class PartFactoryWrapper(PartFactory):
                     )
                 )
 
+            # The other files the part is read from, which its script cannot be
+            # asked about before it runs - the layers a USD stage composes, the
+            # textures it names: each is part of the part's cache key, as the
+            # files an OpenSCAD part includes are, so that changing one builds
+            # the part again rather than serving the shape built before.
+            self.dependencies = [
+                os.path.normpath(os.path.join(source_project.config_dir, str(dependency)))
+                for dependency in config.get("dependencies") or []
+            ]
+
             # The image is the implementing package's, as it is for an output
             # implementation (see 'Implementation.docker_image'): which
             # environment a script needs is known to whoever wrote it. The part's
@@ -106,6 +118,7 @@ class PartFactoryWrapper(PartFactory):
         if self.path:
             self.part.path = self.path
             self.part.cache_dependencies.append(self.path)
+        self.part.cache_dependencies.extend(self.dependencies)
         super().post_create()
 
     async def download_file_async(self, part) -> None:

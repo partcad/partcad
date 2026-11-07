@@ -618,7 +618,9 @@ def finished_light(points, normals, eye, radius, albedo, roughness, metallic, ir
     the room - the light 'diffuse' says falls from the way it would mirror the
     camera - as a smooth or metal surface does. Answers the diffuse light per
     point and the specular colour (n x 3), each to be added as 'Painter.draw'
-    adds them.
+    adds them, and how much of the specular is the surface's own colour per
+    unit of it (n): what a face drawn with an image tints by the image's colour
+    where it is, rather than by 'albedo' (see '_textured').
     """
     metallic = np.clip(np.asarray(metallic, dtype=np.float64), 0.0, 1.0)
     roughness = np.clip(np.asarray(roughness, dtype=np.float64), 0.0, 1.0)
@@ -627,6 +629,9 @@ def finished_light(points, normals, eye, radius, albedo, roughness, metallic, ir
     view = eye - points
     view = view / np.maximum(np.linalg.norm(view, axis=1, keepdims=True), 1e-12)
     total = np.zeros((len(points), 3))
+    # What multiplies the reflectance at normal incidence, 'f0', in 'total':
+    # the colour's share of every highlight and of the room.
+    tinted = np.zeros(len(points))
     for position, intensity, cone in lights(radius):
         towards = position - points
         towards = towards / np.maximum(np.linalg.norm(towards, axis=1, keepdims=True), 1e-12)
@@ -643,6 +648,7 @@ def finished_light(points, normals, eye, radius, albedo, roughness, metallic, ir
         f = f0 * (1.0 - fresnel) + fresnel
         d = (shininess * 0.5 + 1.0) / math.pi * np.power(dot_nh, shininess)
         total = total + (strength * dot_nl * 0.25 * d)[:, None] * f
+        tinted = tinted + strength * dot_nl * 0.25 * d * (1.0 - fresnel[:, 0])
     # The room, mirrored: the light falling from the way the camera is
     # mirrored, blurred as 'diffuse' blurs it, by Schlick's Fresnel with the
     # roughness damping what a rough surface sends back at a glance.
@@ -652,7 +658,8 @@ def finished_light(points, normals, eye, radius, albedo, roughness, metallic, ir
     glance = np.power(1.0 - dot_nv, 5.0)[:, None]
     f_room = f0 + (np.maximum(1.0 - roughness, f0.max(axis=1))[:, None] - f0) * glance
     total = total + f_room * room[:, None] * (1.0 - 0.5 * roughness)[:, None]
-    return irradiance / math.pi * (1.0 - metallic), total
+    tinted = tinted + room * (1.0 - 0.5 * roughness) * (1.0 - glance[:, 0])
+    return irradiance / math.pi * (1.0 - metallic), total, tinted * metallic
 
 
 # ---------------------------------------------------------------------------
@@ -804,23 +811,26 @@ class Scene:
         self.finished = ~np.isnan(self.finish).all(axis=1)
 
     def lit(self, eye, back=False):
-        """'(colour, diffuse, specular)' at each point from one side, for a camera at 'eye'.
+        """'(colour, diffuse, specular, metal)' at each point from one side, for a camera at 'eye'.
 
         'colour' is what the point is drawn in before tone mapping; 'diffuse'
         and 'specular' are the light alone, for a face drawn with an image -
         the diffuse light its colour is multiplied by, and the specular, grey
-        (n) where no finish is said and a colour (n x 3) where one is.
+        (n) where no finish is said and a colour (n x 3) where one is. 'metal'
+        is how much of the specular is the point's own colour, per unit of
+        it, as 'finished_light' says - None where no finish is said - so that
+        a metal drawn with an image reflects in the image's colours.
         """
         normals = -self.normals if back else self.normals
         irradiance = self.back if back else self.front
         spec = specular(self.points, normals, eye, self.radius)
         diffuse_light = irradiance / math.pi
         if not self.finished.any():
-            return self.albedo * diffuse_light[:, None] + spec[:, None], diffuse_light, spec
+            return self.albedo * diffuse_light[:, None] + spec[:, None], diffuse_light, spec, None
         said = self.finished
         roughness = np.where(np.isnan(self.finish[:, 0]), DEFAULT_ROUGHNESS, self.finish[:, 0])
         metallic = np.where(np.isnan(self.finish[:, 1]), 0.0, self.finish[:, 1])
-        finished_diffuse, finished_specular = finished_light(
+        finished_diffuse, finished_specular, finished_metal = finished_light(
             self.points[said], normals[said], eye, self.radius, self.albedo[said], roughness[said], metallic[said],
             irradiance[said],
         )  # fmt: skip
@@ -828,7 +838,9 @@ class Scene:
         diffuse_light[said] = finished_diffuse
         specular_light = np.repeat(spec[:, None], 3, axis=1)
         specular_light[said] = finished_specular
-        return self.albedo * diffuse_light[:, None] + specular_light, diffuse_light, specular_light
+        metal = np.zeros(len(self.points))
+        metal[said] = finished_metal
+        return self.albedo * diffuse_light[:, None] + specular_light, diffuse_light, specular_light, metal
 
     @property
     def triangle_count(self):
@@ -1098,7 +1110,11 @@ def _textured(colors, covered, owner, planes, width, scene, light):
     place on the image and the light are blended across the triangle as it is
     seen in depth, as the colours are, and the image read there: its colour
     times the diffuse light, plus the specular - three's Phong shading of a
-    textured material - then tone-mapped as every other colour is.
+    textured material - then tone-mapped as every other colour is. Where a
+    finish is said, 'light' carries a third array, how much of the specular is
+    the surface's own colour (see 'Scene.lit'): that much of it is the image's
+    colour there rather than the colour the triangle is drawn in elsewhere, so
+    that a metal reflects in the image's colours.
     """
     import texture_mapping
 
@@ -1123,6 +1139,10 @@ def _textured(colors, covered, owner, planes, width, scene, light):
         mine = index[chosen] == image_index
         albedo[mine] = texture_mapping.sample(scene.images[image_index], uv[mine])
     shaded = albedo * diffuse_light[:, None] + specular_light
+    if len(light) > 2:
+        metal = np.einsum("pc,pc->p", weights, light[2][triangle])
+        flat = np.einsum("pc,pcd->pd", weights, scene.albedo[scene.corners[triangle]].astype(np.float32))
+        shaded = shaded + metal[:, None] * (albedo - flat)
     colors[chosen] = neutral_tone_mapping(shaded).astype(colors.dtype)
 
 
@@ -1173,8 +1193,8 @@ class Painter:
             # The colour each corner of each triangle is lit to from the side that
             # is seen: the diffuse light worked out once, the specular for this
             # camera.
-            lit_front, diffuse_front, spec_front = scene.lit(eye)
-            lit_back, diffuse_back, spec_back = scene.lit(eye, back=True)
+            lit_front, diffuse_front, spec_front, metal_front = scene.lit(eye)
+            lit_back, diffuse_back, spec_back, metal_back = scene.lit(eye, back=True)
             lit = np.where(front[:, None, None], lit_front[corners], lit_back[corners])
             lit = neutral_tone_mapping(lit.reshape(-1, 3)).reshape(lit.shape).astype(np.float32)
             # For a face drawn with an image, the light alone at each corner - the
@@ -1187,6 +1207,9 @@ class Painter:
                 facing = front[:, None, None] if spec_front.ndim == 2 else front[:, None]
                 specular_light = np.where(facing, spec_front[corners], spec_back[corners])
                 light = (diffuse_light.astype(np.float32), specular_light.astype(np.float32))
+                if metal_front is not None:
+                    metal = np.where(front[:, None], metal_front[corners], metal_back[corners])
+                    light = light + (metal.astype(np.float32),)
 
             solid = scene.opacity >= 1.0
             # A one-sided triangle - of a wall - is drawn only from the side it

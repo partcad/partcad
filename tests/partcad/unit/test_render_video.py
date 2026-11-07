@@ -596,6 +596,13 @@ def test_a_finish_of_the_default_roughness_and_no_metal_is_drawn_as_no_finish_is
     assert (finished >= plain - 2).all()
 
 
+def test_a_shape_with_no_tree_is_drawn_whole_in_the_default_colour_and_no_finish():
+    whole = object()
+    assert render_svg.by_look_and_side({"wrapped": whole}, []) == [
+        (render_svg.appearance.DEFAULT_COLOR, False, whole, None, None)
+    ]
+
+
 def test_a_metal_is_drawn_in_its_own_colour_s_reflection_and_a_smooth_surface_s_highlight_is_sharper():
     _, matte = _sphere_frame(("#C08030", False, None, (1.0, 0.0)))
     _, metal = _sphere_frame(("#C08030", False, None, (0.3, 1.0)))

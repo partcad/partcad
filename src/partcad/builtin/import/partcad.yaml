@@ -156,7 +156,9 @@ partTypes:
   # `requireSolid`: what a renderer draws need not close, and a stage that is
   # no solid is a legitimate part, built and reported. Pillow reads the
   # textures a face's colour, roughness and metalness are read off (see
-  # 'usd_look.py'), at the version the render types pin it at.
+  # 'usd_look.py'), at the version the render types pin it at. usd-core 26.11
+  # is Python 3.11 and newer; a package that asks for 3.10 gets 25.11, the
+  # last release that has it.
   usd:
     desc: |
       An OpenUSD stage (`.usd`, `.usda`, `.usdc`, or a `.usdz` package): the
@@ -168,7 +170,8 @@ partTypes:
     path: part_usd.py
     extension: usd
     pythonRequirements:
-      - usd-core==26.11
+      - usd-core==26.11; python_version >= "3.11"
+      - usd-core==25.11; python_version < "3.11"
       - pillow==12.2.0
 
 import:

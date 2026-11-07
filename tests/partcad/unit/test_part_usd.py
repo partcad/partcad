@@ -68,8 +68,10 @@ def declared():
 def test_the_type_reads_a_stage_with_the_usd_core_it_pins_and_its_images_with_the_pillow_the_renderers_pin(declared):
     assert declared["path"] == "part_usd.py"
     assert declared["extension"] == "usd"
-    usd_core, pillow = declared["pythonRequirements"]
-    assert usd_core.startswith("usd-core==")
+    usd_core, usd_core_for_3_10, pillow = declared["pythonRequirements"]
+    # 26.11 is Python 3.11 and newer; a package on 3.10 gets the last release that has it.
+    assert usd_core == 'usd-core==26.11; python_version >= "3.11"'
+    assert usd_core_for_3_10 == 'usd-core==25.11; python_version < "3.11"'
     with open(os.path.join(output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.RENDER]], "partcad.yaml")) as f:
         renderers = yaml.safe_load(f)["render"]
     pinned = {r for each in renderers.values() if isinstance(each, dict) for r in each.get("pythonRequirements") or []}
@@ -79,6 +81,18 @@ def test_the_type_reads_a_stage_with_the_usd_core_it_pins_and_its_images_with_th
 def test_a_stage_that_is_no_solid_is_a_part_all_the_same(declared):
     """What a renderer draws need not close: a stage is built and reported, not failed."""
     assert not declared.get("requireSolid")
+
+
+def test_the_files_a_stage_composes_are_what_its_part_is_kept_for(ctx):
+    """A loose layer's textures and shaders are its 'dependencies': changing one builds the part again."""
+    looks = ctx.get_part(":looks")
+    kept_for = [os.path.abspath(path) for path in looks.cache_dependencies]
+    here = os.path.abspath(os.path.dirname(PACKAGE))
+    assert kept_for == [os.path.join(here, name) for name in ("looks.usda", "halves.bmp", "brushed.mdl")]
+    # A part that names none depends on its own file and nothing else.
+    assert [os.path.abspath(path) for path in ctx.get_part(":bracket").cache_dependencies] == [
+        os.path.join(here, "bracket.usda")
+    ]
 
 
 def test_the_script_is_keyed_for_the_cadmpeg_it_reads_openusd_with():

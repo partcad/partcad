@@ -868,6 +868,11 @@ def test_a_part_type_s_cmf_rides_on_the_shape_it_builds(tmp_path, monkeypatch, c
     for bad in ([1, 2, 3], "rgba", ["x", 0, 0, 1], [0, 0, 0, float("nan")], [float("inf"), 0, 0, 1]):
         assert module._rgba(bad) is None, bad
 
+    # A finish's roughness and metallic are fractions, clamped; anything else says nothing.
+    assert [module._fraction(v) for v in (0.25, "0.5", -1, 7)] == [0.25, 0.5, 0.0, 1.0]
+    for bad in (True, None, "rough", float("nan"), [0.5]):
+        assert module._fraction(bad) is None, bad
+
 
 def test_a_step_file_the_colour_reader_refuses_is_read_as_it_always_was(tmp_path, monkeypatch, capsys):
     """The geometry is the answer asked for and the CMF the extra: XCAF failing costs the colours, not the part."""
