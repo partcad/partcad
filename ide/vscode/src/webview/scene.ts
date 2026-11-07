@@ -169,6 +169,12 @@ export const backend = surface.backend;
 /** Whether the 3D view is drawn without a GPU at all, by the canvas painter. */
 export const software = surface.backend === 'software';
 /**
+ * Whether the 3D view is drawn by the CPU: the painter, or WebGPU on Chromium's
+ * software adapter (see 'offscreenSurface'). The pane says so, and the model
+ * does not turn on its own: a frame every 16 ms is what neither can afford.
+ */
+export const onCpu = surface.onCpu === true;
+/**
  * How a finished face is made where the window draws with WebGPU, whose node
  * materials take no shader patch (see 'finishNode.ts'); undefined everywhere
  * else. Bundled with the rest ('eager'): three's WebGPU build is already in the
@@ -180,7 +186,7 @@ const finishNodes = surface.backend === 'webgpu' ? await import(/* webpackMode: 
 surface.domElement.classList.add('surface');
 container.appendChild(surface.domElement);
 
-if (software) {
+if (onCpu) {
     container.appendChild(softwareNotice());
 }
 
@@ -236,8 +242,8 @@ camera.position.set(0, 0, 5);
 const controls = new OrbitControls(camera, surface.domElement);
 controls.enableDamping = true;
 // Turning on its own is a frame every 16 ms for as long as the panel is open,
-// which the software renderer cannot afford: off there until it is asked for.
-controls.autoRotate = !software;
+// which a CPU drawing the frames cannot afford: off there until it is asked for.
+controls.autoRotate = !onCpu;
 controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
 
 /**

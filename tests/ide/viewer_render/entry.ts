@@ -18,6 +18,7 @@ import * as WEBGPU from 'three/webgpu';
 
 import { applyFinish, setFinishShown } from '../../../ide/vscode/src/webview/finish';
 import { finishedNodeMaterial } from '../../../ide/vscode/src/webview/finishNode';
+import { createSurface } from '../../../ide/vscode/src/webview/surface';
 
 // 'ROOM_LIGHT' and 'STAGE_INTENSITY' of 'scene.ts', and the rig 'frame()' places
 // for an object of radius 1.
@@ -149,4 +150,48 @@ async function run(backend: 'webgl' | 'webgpu', cases: Case[]) {
     return { backend, drawn };
 }
 
-(window as unknown as { run: typeof run }).run = run;
+/**
+ * What a pane gets to draw with in a window with no WebGL, and the middle of a
+ * red box it drew at an odd width: WebGPU where the window gives an adapter -
+ * off the screen and copied onto a 2D canvas where it cannot present, which
+ * SwiftShader cannot - else the painter.
+ */
+async function surface() {
+    const real = HTMLCanvasElement.prototype.getContext;
+    const blocked = (kind: string) => kind === 'webgl' || kind === 'webgl2' || kind === 'experimental-webgl';
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, kind: string, ...rest: unknown[]) {
+        return blocked(kind) ? null : (real as (...args: unknown[]) => unknown).call(this, kind, ...rest);
+    } as typeof real;
+    let drawn;
+    try {
+        drawn = await createSurface('the test', { toneMapping: THREE.NeutralToneMapping });
+    } finally {
+        HTMLCanvasElement.prototype.getContext = real;
+    }
+    document.body.appendChild(drawn.domElement);
+    // Odd, so that a row of the frame is no multiple of 256 bytes.
+    drawn.setSize(301, 203);
+    const scene = new THREE.Scene();
+    scene.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshPhongMaterial({ color: 0xff0000 })));
+    scene.add(new THREE.AmbientLight(0xffffff, 2));
+    const camera = new THREE.PerspectiveCamera(50, 301 / 203, 0.1, 10);
+    camera.position.set(1.5, 1.5, 3);
+    camera.lookAt(0, 0, 0);
+    const probe = document.createElement('canvas');
+    probe.width = 301;
+    probe.height = 203;
+    const context = probe.getContext('2d') as CanvasRenderingContext2D;
+    let centre = [0, 0, 0, 0];
+    for (let attempt = 0; attempt < 50 && centre[3] === 0; attempt++) {
+        drawn.render(scene, camera);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        context.clearRect(0, 0, 301, 203);
+        context.drawImage(drawn.domElement as HTMLCanvasElement, 0, 0, 301, 203);
+        centre = Array.from(context.getImageData(150, 101, 1, 1).data);
+    }
+    drawn.dispose();
+    return { backend: drawn.backend, readsBack: drawn.readsBack === true, onCpu: drawn.onCpu === true, centre };
+}
+
+(window as unknown as { run: typeof run; surface: typeof surface }).run = run;
+(window as unknown as { surface: typeof surface }).surface = surface;

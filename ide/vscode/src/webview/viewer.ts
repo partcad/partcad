@@ -311,9 +311,9 @@ const sceneLoaded: Promise<Scene | undefined> = import(/* webpackMode: "eager" *
         scene.setComponentPrices(prices?.texts ?? {});
         // What the box says, should it have been changed while this loaded.
         scene.setAutoFit(view3d.autoFitting);
-        if (module.software) {
-            // Drawn without a GPU, the model does not turn on its own: a frame
-            // every 16 ms is what the software renderer cannot afford. The box
+        if (module.onCpu) {
+            // Drawn by the CPU, the model does not turn on its own: a frame
+            // every 16 ms is what the CPU cannot afford. The box
             // says so, and ticking it turns it on regardless.
             view3d.setAnimate(false);
         }

@@ -137,7 +137,12 @@ def page_dir():
     )
     assert bundled.returncode == 0, "esbuild failed:\n%s" % bundled.stdout
     with open(os.path.join(root, "index.html"), "w", encoding="utf-8") as page:
-        page.write('<!doctype html><html><body><script src="bundle.js"></script></body></html>')
+        # 'surface.ts' reports to the extension host, which a plain page stands in for.
+        page.write(
+            "<!doctype html><html><body>"
+            "<script>window.acquireVsCodeApi = () => ({ postMessage() {}, getState() {}, setState() {} });</script>"
+            '<script src="bundle.js"></script></body></html>'
+        )
     yield root
     shutil.rmtree(root, ignore_errors=True)
 
@@ -206,36 +211,40 @@ def browser(page_url):
 
 
 def _evaluate(url: str, expression: str):
-    """The value of 'expression', awaited, in the page at DevTools 'url'."""
+    """The value of 'expression', awaited, in the page at DevTools 'url', once the page has loaded its bundle.
+
+    The browser lists the page as soon as it opens it, before its script has
+    run, so 'run' is waited for rather than assumed - with a minute of headroom,
+    since the bundle is three twice over (its core and its WebGPU build).
+    """
 
     async def session():
         import aiohttp
 
         async with aiohttp.ClientSession() as http_session:
             async with http_session.ws_connect(url, max_msg_size=0) as ws:
-                # The bundle defines 'run' once the page has loaded it.
-                for attempt in range(2):
-                    await ws.send_json(
-                        {
-                            "id": attempt + 1,
-                            "method": "Runtime.evaluate",
-                            "params": {
-                                "expression": "typeof run === 'function'" if attempt == 0 else expression,
-                                "awaitPromise": True,
-                                "returnByValue": True,
-                            },
-                        }
-                    )
+                counter = 0
+
+                async def evaluate(text):
+                    nonlocal counter
+                    counter += 1
+                    mine = counter
+                    params = {"expression": text, "awaitPromise": True, "returnByValue": True}
+                    await ws.send_json({"id": mine, "method": "Runtime.evaluate", "params": params})
                     while True:
                         message = await asyncio.wait_for(ws.receive_json(), 300)
-                        if message.get("id") == attempt + 1:
+                        if message.get("id") == mine:
                             break
                     if "exceptionDetails" in message.get("result", {}):
                         raise RuntimeError(message["result"]["exceptionDetails"])
-                    value = message["result"]["result"].get("value")
-                    if attempt == 0 and value is not True:
+                    return message["result"]["result"].get("value")
+
+                deadline = time.monotonic() + 60
+                while await evaluate("typeof run === 'function' && typeof surface === 'function'") is not True:
+                    if time.monotonic() > deadline:
                         raise RuntimeError("the page did not load its bundle")
-                return value
+                    await asyncio.sleep(0.2)
+                return await evaluate(expression)
 
     return asyncio.run(session())
 
@@ -292,3 +301,21 @@ def test_the_3d_view_draws_a_finish_as_the_shaded_render_does(browser, backend):
         if median > MEDIAN or high > PERCENTILE_95:
             failures.append("%s: median %.4f, 95th percentile %.4f" % (json.dumps(case), median, high))
     assert not failures, "drawn otherwise than 'finished_light' says, on %s:\n%s" % (backend, "\n".join(failures))
+
+
+def test_a_window_without_webgl_draws_with_webgpu_even_where_it_cannot_present(browser):
+    """No WebGL: the pane draws with WebGPU, off the screen where the window cannot present a WebGPU canvas.
+
+    SwiftShader - what a browser with no GPU has for WebGPU - loses its device
+    the moment a canvas asks it for a frame, and draws into a texture well; so
+    the pane draws there and copies each frame onto a 2D canvas
+    ('offscreenSurface' in 'surface.ts'). At an odd width, whose rows three may
+    hand back padded, the frame still has the box in the middle of it.
+    """
+    answer = _evaluate(browser, "surface()")
+    print("surface: %s" % json.dumps(answer))
+    if answer["backend"] == "software":
+        pytest.skip("this browser gives no WebGPU adapter: the pane draws with the painter")
+    assert answer["backend"] == "webgpu"
+    red, green, blue, alpha = answer["centre"]
+    assert alpha == 255 and red > 150 and green < 40 and blue < 40, "the box is not where it was drawn: %s" % answer

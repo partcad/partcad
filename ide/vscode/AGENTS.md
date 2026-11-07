@@ -469,14 +469,28 @@ Four things about it are load-bearing:
   WebGL 2 by itself, and there is none. **An adapter and a successful `init()` do not make a WebGPU renderer
   that draws**, so `surface.ts` draws a probe first -- each kind of material the panes make, lines, each kind
   of light, inside a validation error scope -- and takes the painter if it fails. Two windows fail it
-  for real: a Chromium older than the WebGPU specification three is written against (r185 sends a texture
+  for real: a Chromium older than the WebGPU specification three is written against (three since r185 sends a texture
   view's `swizzle` as a string, and Chromium 141 refuses that from every `createView`, so every frame threw),
   and one whose GPU process cannot present a WebGPU canvas, where the device is lost on the first frame. A lost
   device also rejects every error scope three left open with no `catch`, which reached `host.ts`'s trap and
   wrote "The Digital Thread hit an error" over a view that was drawing fine; `watchDevice` turns those into
-  "the device was lost". Where WebGL fails because the GPU process did, WebGPU usually fails with it -
-  Chromium then offers the API and no adapter, not even the software fallback one - so the painter is what
-  such a window ends up with; WebGPU is for a GPU WebGL could not use and WebGPU can.
+  "the device was lost". **A device lost on the probe is a window that cannot present, not one that cannot
+  draw**: Chromium's software adapter (SwiftShader) loses its device the moment any canvas - on the page or
+  not, an `OffscreenCanvas` too - asks it for a frame, and draws into a texture perfectly well. So the probe is
+  drawn again by a second renderer into a render target three treats as the screen (`setOutputRenderTarget`,
+  so tone mapping and the colour space still apply), and if that passes the pane draws every frame that way
+  and copies it into a 2D canvas (`offscreenSurface`, `readback.ts`): the same renderer, materials and lights
+  as on a GPU - finishes, images and depth included, which the painter has none of - at about 50 ms a frame
+  for a 640 by 420 view, one readback in flight at a time. Keep one output target for the life of the
+  renderer and resize it: three keeps what it set up for the first, and never draws into a second. A surface
+  whose adapter is the CPU's says `onCpu`, as the painter does, which is what shows `softwareNotice` and keeps
+  the model still until it is turned. Where WebGL fails because the GPU process did, WebGPU often fails with
+  it - Chromium then offers the API and no adapter at all - and the painter is what such a window ends up
+  with. **three is at r187 or later on purpose**: r185's WebGPU renderer noticed a change to a material shared by
+  several meshes on the first of them only (its `NodeMaterialObserver` checked a material once a frame and
+  answered for the rest from the first), so the Opacity slider faded one instance of a part, and a finish
+  switched off, or a CMF choice taken away, came back on one. Every face material here is shared by every
+  instance of its colour.
 - **Every 3D pane draws only when something changed, on every backend -- not every frame.** The render loop
   runs at the display's rate and draws only when `invalidate` (`scene.ts`) or `dirty` (`cae.ts`) says the
   picture changed: the camera moved (OrbitControls' `change`, which auto-rotation and damping fire too), a
