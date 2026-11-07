@@ -196,6 +196,51 @@ def test_a_non_planar_quad_becomes_two_triangles():
     assert _area(compound) == pytest.approx(2 * (2**0.5 / 2))
 
 
+# An L, listed from the corner beside its notch, with one corner lifted off
+# the plane. The fan from that first corner would cover the notch
+# (1..2, 1..2), which is outside the L.
+CONCAVE = [(2, 1, 0), (1, 1, 0), (1, 2, 0), (0, 2, 0.5), (0, 0, 0), (2, 0, 0)]
+
+
+def _xy_area(a, b, c):
+    return ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) / 2
+
+
+def test_a_concave_polygon_is_cut_into_triangles_inside_it():
+    cut = wrapper_obj.triangles(CONCAVE)
+    assert len(cut) == 4
+    areas = [_xy_area(*(CONCAVE[i] for i in corners)) for corners in cut]
+    # Every triangle turns the polygon's way, and together they cover its 3 square units once.
+    assert all(area > 0 for area in areas)
+    assert sum(areas) == pytest.approx(3.0)
+    for corners in cut:
+        x = sum(CONCAVE[i][0] for i in corners) / 3
+        y = sum(CONCAVE[i][1] for i in corners) / 3
+        assert not (x > 1 and y > 1), "a triangle covers the notch"
+
+
+def test_a_convex_polygon_is_cut_into_the_fan_from_its_first_corner():
+    hexagon = [(2, 0, 0), (1, 2, 0), (-1, 2, 0), (-2, 0, 0.5), (-1, -2, 0), (1, -2, 0)]
+    assert wrapper_obj.triangles(hexagon) == [(0, 1, 2), (0, 2, 3), (0, 3, 4), (0, 4, 5)]
+
+
+def test_a_polygon_crossing_itself_is_left_out_and_counted():
+    # A bow tie, lifted at one corner so that it is not planar either.
+    vertices, faces = _parse("v 0 0 0\nv 1 1 0\nv 1 0 0.5\nv 0 1 0\nf 1 2 3 4\n")
+    assert wrapper_obj.triangles([vertices[i] for i in faces[0]]) is None
+    compound, skipped = wrapper_obj.build(vertices, faces)
+    assert skipped == 1
+    assert _faces(compound) == 0
+
+
+def test_a_concave_non_planar_polygon_builds_inside_its_outline():
+    text = "".join("v %g %g %g\n" % point for point in CONCAVE) + "f 1 2 3 4 5 6\n"
+    vertices, faces = _parse(text)
+    compound, skipped = wrapper_obj.build(vertices, faces)
+    assert skipped == 0
+    assert _faces(compound) == 4
+
+
 def test_a_face_occt_cannot_make_is_left_out_and_counted():
     # All three corners the same point: OCCT makes no wire of it, let alone a face.
     vertices, faces = _parse("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 1 1\nf 1 2 3\n")

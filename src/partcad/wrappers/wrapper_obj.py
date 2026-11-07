@@ -118,15 +118,81 @@ def _face(points):
     return None if face.IsNull() else face
 
 
+def _projected(points):
+    """'points' as 2D points, in the plane they are closest to, turning counter-clockwise; None for no such plane.
+
+    The plane is the one Newell's normal states, which is the best fit for a
+    polygon that is not planar and the plane itself for one that is. Its
+    dominant axis is dropped, and the other two swapped where that leaves the
+    polygon turning clockwise.
+    """
+    normal = [0.0, 0.0, 0.0]
+    for (x0, y0, z0), (x1, y1, z1) in zip(points, points[1:] + points[:1]):
+        normal[0] += (y0 - y1) * (z0 + z1)
+        normal[1] += (z0 - z1) * (x0 + x1)
+        normal[2] += (x0 - x1) * (y0 + y1)
+    axis = max(range(3), key=lambda i: abs(normal[i]))
+    if normal[axis] == 0.0:
+        return None
+    u, v = [i for i in range(3) if i != axis]
+    if normal[axis] < 0:
+        u, v = v, u
+    return [(point[u], point[v]) for point in points]
+
+
+def _cross(a, b, c):
+    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+
+
+def triangles(points):
+    """The triangles, as index triples into 'points', that cover the polygon through them; None where none do.
+
+    By ear clipping, in the plane the polygon is closest to ('_projected'): a
+    corner is cut off only where it turns the polygon's way and no other corner
+    lies in the triangle it cuts, so every triangle is inside the polygon,
+    concave ones included. Corners are tried from the second one on, so a
+    convex polygon is cut into the fan from its first corner. A polygon that
+    crosses itself has no such cover, and is None.
+    """
+    projected = _projected(points)
+    if projected is None:
+        return None
+    remaining = list(range(len(points)))
+    result = []
+    while len(remaining) > 3:
+        count = len(remaining)
+        for k in list(range(1, count)) + [0]:
+            a, b, c = remaining[k - 1], remaining[k], remaining[(k + 1) % count]
+            pa, pb, pc = projected[a], projected[b], projected[c]
+            if _cross(pa, pb, pc) <= 0:
+                continue
+            if any(
+                _cross(pa, pb, projected[i]) >= 0
+                and _cross(pb, pc, projected[i]) >= 0
+                and _cross(pc, pa, projected[i]) >= 0
+                for i in remaining
+                if i not in (a, b, c)
+            ):
+                continue
+            result.append((a, b, c))
+            del remaining[k]
+            break
+        else:
+            return None
+    result.append(tuple(remaining))
+    return result
+
+
 def build(vertices, faces):
     """'(compound, skipped)': the faces of an OBJ mesh as OCCT faces, and how many OCCT could not make.
 
     A planar polygon is one face, as it is in the file. One that is not planar
     (3ds Max and others write such quads) has no face OCCT can bound with it,
-    and becomes the fan of triangles from its first vertex, each of which is
-    planar; that is exact for the convex polygons such exporters write. A
-    triangle OCCT still makes no face of - all three of its points the same -
-    is left out and counted.
+    and becomes triangles ('triangles'), each of which is planar: the fan
+    from its first corner where it is convex, and triangles that stay inside it
+    where it is not. A polygon that cannot be cut so - it crosses itself - and
+    a triangle OCCT makes no face of - all three of its points the same - are
+    left out and counted.
     """
     from OCP.TopoDS import TopoDS_Builder, TopoDS_Compound
 
@@ -140,11 +206,12 @@ def build(vertices, faces):
         if made is not None:
             builder.Add(compound, made)
             continue
-        if len(points) == 3:
+        cut = triangles(points) if len(points) > 3 else None
+        if cut is None:
             skipped += 1
             continue
-        for i in range(1, len(points) - 1):
-            triangle = _face([points[0], points[i], points[i + 1]])
+        for corners in cut:
+            triangle = _face([points[i] for i in corners])
             if triangle is None:
                 skipped += 1
             else:
@@ -153,11 +220,12 @@ def build(vertices, faces):
 
 
 def process(path):
+    """The OBJ file at 'path' as a compound of OCCT faces, saying on standard error what was left out."""
     with open(path, "r") as file:
         vertices, faces = parse(file)
     compound, skipped = build(vertices, faces)
     if skipped:
-        sys.stderr.write("%d of the faces in %s bound no area, and are left out\n" % (skipped, path))
+        sys.stderr.write("%d of the faces in %s could not be made into faces, and are left out\n" % (skipped, path))
     return compound
 
 
