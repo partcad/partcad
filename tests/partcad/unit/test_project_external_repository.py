@@ -1038,6 +1038,124 @@ def test_an_instance_is_named_the_way_partcad_spells_it(tmp_path):
     assert part is not None and part.config["type"] == "step"
 
 
+def _stopped_loops(monkeypatch):
+    """The fetches a synchronous call waited for with its loop stopped, by name, as they happen."""
+    stopped = []
+    original = ProjectExternalRepository._run_elsewhere
+
+    def waited_for(coroutine):
+        stopped.append(coroutine.__qualname__)
+        return original(coroutine)
+
+    monkeypatch.setattr(ProjectExternalRepository, "_run_elsewhere", staticmethod(waited_for))
+    return stopped
+
+
+# A repository that resolves the instances of parts and of assemblies itself.
+INSTANCES = {
+    "meta": {"instanceKinds": ["part", "assembly"]},
+    "objects/part/thing": {
+        "type": "stl",
+        "path": "thing/1.stl",
+        "parameters": {"format": {"type": "string", "default": "stl"}},
+    },
+    "objects/part/thing;format=step": {"type": "step", "path": "thing/2.step"},
+    "objects/assembly/frame": {
+        "type": "assy",
+        "path": "frame.assy",
+        "parameters": {"size": {"type": "int", "default": 1}},
+    },
+    "objects/assembly/frame;size=2": {"type": "assy", "path": "frame-2.assy"},
+}
+
+
+def _instance_repo(tmp_path):
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(INSTANCES)
+    repo._repository = fake
+    return repo, fake
+
+
+def test_a_part_instance_the_repository_resolves_is_fetched_without_stopping_the_loop(tmp_path, monkeypatch):
+    """The instance's declaration, and the metadata that says to ask for one, are awaited rather than waited for.
+
+    'get_part_async' used to await the base declaration and nothing else, and
+    the synchronous lookup that followed fetched the instance - and before
+    that the metadata - with the loop stopped, which is what 'pc test' over
+    //pub once hung on (see the test above about a cold plugin part).
+    """
+    repo, fake = _instance_repo(tmp_path)
+    stopped = _stopped_loops(monkeypatch)
+
+    part = asyncio.run(repo.get_part_async("thing;format=step", quiet=True))
+
+    assert part is not None and part.config["type"] == "step"
+    assert stopped == []
+    assert "objects/part/thing;format=step" in fake.keys
+
+
+def test_an_instance_asked_for_by_its_parameters_is_the_one_fetched(tmp_path, monkeypatch):
+    """Values handed over apart from the name make the same key the lookup asks for."""
+    repo, fake = _instance_repo(tmp_path)
+    stopped = _stopped_loops(monkeypatch)
+
+    part = asyncio.run(repo.get_part_async("thing", {"format": "step"}, quiet=True))
+
+    assert part is not None and part.config["type"] == "step"
+    assert stopped == []
+    assert "objects/part/thing;format=step" in fake.keys
+
+
+def test_an_assembly_instance_the_repository_resolves_is_fetched_without_stopping_the_loop(tmp_path, monkeypatch):
+    """'get_assembly_async' is to an assembly what 'get_part_async' is to a part."""
+    repo, fake = _instance_repo(tmp_path)
+    stopped = _stopped_loops(monkeypatch)
+
+    assembly = asyncio.run(repo.get_assembly_async("frame;size=2", quiet=True))
+
+    assert assembly is not None and assembly.config["path"] == "frame-2.assy"
+    assert stopped == []
+    assert "objects/assembly/frame;size=2" in fake.keys
+
+
+def test_a_package_that_resolves_no_instances_is_asked_for_none_by_the_warm_up(tmp_path, monkeypatch):
+    """The metadata says so, and nothing is fetched for an instance the parameters are applied to instead."""
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(
+        {
+            "meta": {},
+            "objects/part/widget": {"type": "step", "path": "w.step", "parameters": {"width": {"default": 2.0}}},
+        }
+    )
+    repo._repository = fake
+    stopped = _stopped_loops(monkeypatch)
+
+    part = asyncio.run(repo.get_part_async("widget;width=3", quiet=True))
+
+    assert part is not None and part.config["parameters"]["width"]["default"] == 3.0
+    assert stopped == []
+    assert not any(";" in key for key in fake.keys)
+
+
+def test_the_context_resolves_an_assembly_instance_of_a_cold_plugin_package_without_stopping_its_loop(
+    tmp_path, monkeypatch
+):
+    """Through 'Context.get_assembly_async': the packages above it warmed first, then its declarations."""
+    data = {"deps": ["motors"]}
+    data.update({"motors/" + key: value for key, value in INSTANCES.items()})
+    ctx, _, fake = _plugin_package_under_a_root(tmp_path, data)
+    monkeypatch.setattr(ctx.user_config, "internal_state_dir", str(tmp_path / "state"))
+    stopped = _stopped_loops(monkeypatch)
+
+    assembly = asyncio.run(ctx.get_assembly_async("//test/ext/motors:frame;size=2"))
+
+    assert assembly is not None and assembly.config["path"] == "frame-2.assy"
+    assert stopped == []
+    assert "motors/objects/assembly/frame;size=2" in fake.keys
+
+
 def test_a_repository_that_does_not_resolve_instances_is_never_asked_for_one(tmp_path):
     """Without 'instanceKinds' the parameters are applied to the base, as they always were."""
     data = {
