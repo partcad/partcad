@@ -32,6 +32,12 @@ using existing parts.
   (``.f3d``) or a Creo View package (``.pvz``), used as an assembly directly,
   with its components becoming parts of the package.
 
+- glTF
+
+  A `glTF <https://www.khronos.org/gltf/>`_ scene (``.gltf`` or ``.glb``) used
+  as an assembly directly, a part per mesh, placed as its nodes place them --
+  compressed web assets included.
+
 - URDF
 
   A `URDF <https://wiki.ros.org/urdf>`_ robot description used as an assembly
@@ -62,10 +68,10 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
 
   assemblies:
     <assembly name>:
-      type: <assy|step|urdf|f3d|pvz>  # Assembly YAML, a STEP file with an assembly
-                              # structure, a URDF robot description, or a Fusion design
-                              # or a Creo View package. A format a plugin package
-                              # implements is named through it: "sim-mujoco:mjcf".
+      type: <assy|step|gltf|urdf|f3d|pvz>  # Assembly YAML, a STEP file with an assembly
+                              # structure, a glTF scene, a URDF robot description, or a
+                              # Fusion design or a Creo View package. A format a plugin
+                              # package implements is named through it: "sim-mujoco:mjcf".
       path: <(optional) the source file path>
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
       fileUrl: <(fileFrom=url only) the URL to download the source file from>
@@ -112,8 +118,8 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
 The ``assy`` type is used to define assemblies in `Assembly YAML` format, and
 the ``step`` type reads the structure out of a STEP file (see :ref:`assembly_step`).
 The ``urdf`` type reads a robot description as an assembly directly
-(see :ref:`assembly-urdf`), and ``f3d`` and ``pvz`` a Fusion design and a Creo View
-package (see :ref:`assembly-f3d-pvz`). A format an engine's plugin package implements is named
+(see :ref:`assembly-urdf`), ``gltf`` a glTF scene (see :ref:`assembly-gltf`), and
+``f3d`` and ``pvz`` a Fusion design and a Creo View package (see :ref:`assembly-f3d-pvz`). A format an engine's plugin package implements is named
 through that package -- ``sim-mujoco:mjcf`` for a MuJoCo model, which is also a
 :ref:`scene <scenes>` type, the section that declares it being what decides which
 it is.
@@ -304,8 +310,8 @@ Other assembly types
 --------------------
 
 ``map:`` is written for ``assy``, where the node names are the ones somebody
-wrote in the file. It works for ``step``, ``f3d``, ``pvz`` and ``urdf``
-assemblies as best it can -- the nodes are then the components or the links,
+wrote in the file. It works for ``step``, ``gltf``, ``f3d``, ``pvz`` and ``urdf``
+assemblies as best it can -- the nodes are then the components, the meshes or the links,
 named as the imported file names them, which is not something this package
 controls. Where that does not fit, those assemblies state their ports the way a
 part does, with ``ports:`` and ``implements:``.
@@ -554,6 +560,54 @@ kept in sync by hand.
 Use ``pc import assembly`` when the structure is to be taken over: the resulting
 parts and ``.assy`` file are ordinary package content that can be renamed,
 re-arranged, given interfaces and connections, or replaced part by part.
+
+The same holds for a glTF file (see :ref:`assembly-gltf`): ``pc import assembly
+scene.glb`` writes a ``.glb`` per mesh, each an ordinary ``gltf`` part, and an
+``.assy`` that places them.
+
+.. _assembly-gltf:
+
+glTF
+====
+
+The ``gltf`` type uses a `glTF 2.0 <https://www.khronos.org/gltf/>`_ scene -- a
+``.gltf`` with its buffers, or a ``.glb`` -- as an assembly, and keeps its node
+tree:
+
+.. code-block:: yaml
+
+  assemblies:
+    scene:
+      type: gltf             # reads scene.gltf, or scene.glb
+    kit:
+      type: gltf
+      fileFrom: url
+      fileUrl: https://example.com/models/kit.glb
+
+- a node that draws a mesh and has no children is a part, placed where the node
+  puts it;
+- a node with children is a sub-assembly, holding a part for its own mesh, if it
+  draws one, and its children; a node drawn many times by
+  ``EXT_mesh_gpu_instancing`` is a sub-assembly holding a part per copy;
+- a node that does neither is left out, as is one ``KHR_node_visibility`` hides.
+
+Each distinct mesh is one part, ``<assembly name>/<mesh name>``, placed as many
+times as the scene draws it, which is what makes the bill of materials come out
+right. Its geometry is a ``.glb`` holding that mesh and its materials and nothing
+else, written to PartCAD's internal state directory, and the part is a ``gltf``
+part read from it (see :ref:`gltf-files`) -- a solid per closed piece of the
+mesh, each face in its material's colour. What a node does to its mesh that a
+placement cannot -- scale it, stretch it, mirror it -- is made into that mesh's
+file instead, so a mesh scaled two ways is two parts.
+
+The compressed glTF the web delivers -- Draco, meshoptimizer, quantized and
+instanced -- is read as the ``gltf`` part type reads it. Animations, skins and
+morph targets are not: the assembly is the scene as its nodes place it, and what
+it leaves out is reported.
+
+``pc add assembly gltf scene.glb`` writes the declaration for an existing file,
+and ``pc import assembly scene.glb`` converts the file into the package's own
+parts and ``.assy`` instead (see the comparison under :ref:`assembly_step`).
 
 .. _assembly-f3d-pvz:
 

@@ -105,7 +105,8 @@ pc --no-ansi adhoc convert sketch outline.svg outline.dxf
 - **part** reads `step`, `brep`, `stl`, `3mf`, `threejs`, `obj`, `iges`, `gltf`,
   `fcstd`, `f3d`, `sldprt`, `ipt`, `catpart`, `sat`, `pvz`, `cadquery`,
   `build123d`, `chili3d`, `sdf`, `scad`, and writes the first eight — PartCAD
-  reads the rest but has no exporter that writes them back.
+  reads the rest but has no exporter that writes them back. `gltf` reads a `.glb`
+  too, and the web's compressed glTF (Draco, meshopt, quantized, GPU-instanced).
 - **sketch** reads and writes `svg`, `dxf`, `cadquery`, `build123d`.
 - `urdf` and `assy` are refused: an ASSY file is a set of references to the parts
   of a package and a URDF becomes a part per link, so neither means anything

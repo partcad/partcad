@@ -394,8 +394,8 @@ Define parts with CAD files using the following syntax:
      - Wavefront OBJ
      - ``<name>.obj``
    * - ``gltf``
-     - glTF: a ``.gltf`` with its buffers, or a ``.glb``
-     - ``<name>.gltf``
+     - glTF: a ``.gltf`` with its buffers, or a ``.glb`` (see :ref:`gltf-files`)
+     - ``<name>.gltf``, or ``<name>.glb`` where that is the file there is
    * - ``fcstd``
      - FreeCAD document
      - ``<name>.FCStd``
@@ -434,13 +434,8 @@ A CAD file published elsewhere (in a vendor's catalog, for example) does not
 have to be committed to the package: see :ref:`files` for how to have PartCAD
 download it on demand.
 
-``gltf`` reads every mesh in a `glTF <https://www.khronos.org/gltf/>`_ file,
-placed by the node tree, with glTF's metres and Y-up restated as millimetres and
-Z-up, and the triangles meshed into the faces of a solid, as an STL part's are --
-so what ``pc export -t gltf`` writes reads back where it was. A ``.gltf``'s
-buffers and images are part of its cache key, and ``pc import part`` copies them
-along with it -- refusing one that would replace a different file of the same
-name already in the package.
+``gltf`` reads every mesh a `glTF <https://www.khronos.org/gltf/>`_ file draws,
+including the compressed glTF made for the web -- see :ref:`gltf-files`.
 
 A CAD application's own file -- ``fcstd`` to ``pvz`` in the table -- is read
 without the application that wrote it, and the part is what the file shows: the
@@ -499,6 +494,120 @@ IGES surface model whose faces bound no solid is not an ``iges`` part.
 |                                                                                      |       # type: 3mf         |                                                                                                                         |
 |                                                                                      |       # type: obj         |                                                                                                                         |
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
+
+.. _gltf-files:
+
+glTF and compressed web assets
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A ``gltf`` part is everything a `glTF 2.0 <https://www.khronos.org/gltf/>`_ file
+draws: a ``.gltf`` with the buffers it names beside it, or one binary ``.glb``.
+With no ``path`` the part is ``<name>.gltf``, or ``<name>.glb`` where that is the
+file the package has (and, for a file ``fileFrom`` fetches, whichever its URL
+ends in):
+
+.. code-block:: yaml
+
+  parts:
+    bracket:
+      type: gltf             # reads bracket.gltf, or bracket.glb
+    pirate:
+      type: gltf
+      path: assets/pirate.glb
+    chair:
+      type: gltf
+      fileFrom: url
+      fileUrl: https://example.com/models/chair.glb
+
+**Where it is.** The scene the file shows is read node by node, each mesh placed
+by the transforms of the nodes above it, and glTF's metres and +Y up are restated
+as PartCAD's millimetres and +Z up -- so what ``pc export -t gltf`` writes reads
+back where it was. A node's scale, a non-uniform one included, is made into the
+mesh it scales.
+
+**What it is made of.** A mesh file states only triangles, and a part is a body,
+so the triangles are made into bodies:
+
+- vertices at the very same place are made one, so a mesh drawn with a vertex
+  per corner of each face -- as a mesh with hard edges always is -- is joined up
+  again;
+- a triangle with no area (two corners at one place, or all three on one line)
+  is dropped, and counted;
+- triangles that share an edge are one piece, so a file that draws three boxes in
+  one mesh is three solids;
+- a piece every edge of which has a triangle on both sides is a solid, its
+  triangles turned to face out of it; any other piece is a surface (a shell),
+  which the part keeps with a warning, as it does any part that is not a solid.
+
+A body a file draws as several meshes -- a mesh per colour, which is how PartCAD's
+own export and OpenCASCADE's writer draw one -- is one solid again: the pieces
+that do not close on their own are put together before they are made into
+bodies, while two closed bodies that merely touch stay two. Each triangle is a
+planar face of the B-rep, and coplanar faces are not merged. A mesh the scene
+draws many times is built once and placed many times.
+
+**Colours.** Each face is in the colour of its triangle's material, stated in the
+part's CMF in glTF's own terms -- the material's name, its base colour, its
+roughness and metallic -- for the ``gltf`` convention to convert, and a package
+claims a material by its name with ``ids: {gltf: <name>}``. A material PartCAD's
+own export wrote is read as the references it keeps, so a part exported to glTF
+and read back is in the colours, material and finish it had. See
+:ref:`cmf-sources`.
+
+**Compressed web assets.** glTF made for delivery over the web is usually made
+smaller by the tools that prepare it -- ``gltfpack``, ``gltf-transform``, the
+exporters of Blender and three.js, 3D asset stores -- with one of these
+extensions, and a file made that way is read like any other:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 35 35
+
+   * - Extension
+     - What it does to the file
+     - How PartCAD reads it
+   * - ``KHR_draco_mesh_compression``
+     - Compresses each primitive with Google's `Draco <https://google.github.io/draco/>`_
+     - Decoded by `DracoPy <https://github.com/seung-lab/DracoPy>`_, Python bindings
+       to Draco's own decoder, which the sandbox installs the first time a
+       Draco-compressed file is read, and never for any other
+   * - ``EXT_meshopt_compression``, ``KHR_meshopt_compression``
+     - Compresses buffer views with `meshoptimizer <https://meshoptimizer.org/>`_'s
+       codecs: vertex data (both versions of the codec), triangle lists, index
+       sequences, and the octahedral, quaternion, exponential and colour filters
+     - Decoded by PartCAD itself, which is checked against meshoptimizer's own
+       encoder and decoder
+   * - ``KHR_mesh_quantization``
+     - Stores positions as 8- or 16-bit integers, with the node's scale undoing it
+     - Read as the numbers they stand for
+   * - ``EXT_mesh_gpu_instancing``
+     - Draws a node's mesh many times, a translation, rotation and scale per copy
+     - Each copy is a body where its row puts it
+
+Draco and quantization are lossy: what is read is what the file holds, which is
+the model rounded to the precision it was compressed at. A file that *requires*
+(``extensionsRequired``) any other extension is refused, and the error names it
+-- unless the extension changes only how the file looks, which a shape does not
+carry: its materials (``KHR_materials_*``), textures (``KHR_texture_transform``,
+``KHR_texture_basisu``, ``EXT_texture_webp``, ``EXT_texture_avif``) and lights.
+
+**What is not read.** Points and lines, animations, morph targets, nodes
+``KHR_node_visibility`` hides, cameras and lights, textures and vertex colours.
+A skinned mesh is read as it is bound, not in any pose a skeleton would put it
+in. Each of these is reported once, as a warning, when the file has it.
+
+**Size.** A face per triangle makes a large B-rep of a dense mesh: tens of
+thousands of triangles build in a second or two, a few hundred thousand in tens of
+seconds, and whatever is done to the faces afterwards -- a boolean, a section, a
+STEP export -- is as slow as that many faces make it. A scanned or sculpted model
+is best simplified before it is made a part.
+
+A ``.gltf``'s buffers and images are part of its cache key, and ``pc import part``
+copies them along with it -- refusing one that would replace a different file of
+the same name already in the package. A ``.glb`` is imported as a ``.glb``.
+
+A glTF file can also be declared as an :ref:`assembly <assembly-gltf>`, which
+keeps its meshes apart, a part each, placed as its nodes place them.
 
 .. _extrude:
 
