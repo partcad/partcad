@@ -21,6 +21,13 @@ by: the scripts that run cadmpeg raise their CACHE_VERSION with it, and another
 release on the PATH would read the same file into other geometry under the
 same key.
 
+One format is read with a release of its own: OpenUSD, which cadmpeg reads from
+0.6.8 on ('USD_VERSION'). That release is not the pin for everything, because
+moving every format to it would not be a move made for USD's sake -- 0.6.8
+reads a Fusion design that PartCAD's tests hold to three bodies as two. The
+'usd' part type asks for it by name, and it is fetched, verified and kept the
+same way, beside the pin rather than in its place.
+
 The same file, run as a program, puts the pinned release into a directory:
 
     python3 cadmpeg_tool.py /usr/local/bin
@@ -47,7 +54,9 @@ import zipfile
 
 NAME = "cadmpeg"
 VERSION = "0.6.7"
-RELEASE_URL = "https://github.com/cadmpeg/cadmpeg/releases/download/v%s/" % VERSION
+# Where a release is published, by its version.
+RELEASES_URL = "https://github.com/cadmpeg/cadmpeg/releases/download/v%s/"
+RELEASE_URL = RELEASES_URL % VERSION
 
 # (operating system, machine) -> (asset, SHA-256), from the release's
 # 'sha256.sum'. A platform missing here has no build to download.
@@ -71,6 +80,32 @@ ASSETS = {
     ("windows", "x86_64"): (
         "cadmpeg-x86_64-pc-windows-msvc.zip",
         "9891426730d6a0fad3240aeb49f42b071143aec4e78912edaffb757733a14227",
+    ),
+}
+
+# The release the 'usd' part type reads OpenUSD with (see above), and its
+# assets, from that release's 'sha256.sum'.
+USD_VERSION = "0.6.8"
+USD_ASSETS = {
+    ("linux", "x86_64"): (
+        "cadmpeg-x86_64-unknown-linux-gnu.tar.xz",
+        "f9637b1d8ddea300ad4c8a67f1ef4edb235a5bfd45ebbd6ef58ed7e20a18038d",
+    ),
+    ("linux", "aarch64"): (
+        "cadmpeg-aarch64-unknown-linux-gnu.tar.xz",
+        "9087cbc0da2b89626ca7f3daa3b5b74d29474cd328d124d94ee59c32143ddbe4",
+    ),
+    ("darwin", "x86_64"): (
+        "cadmpeg-x86_64-apple-darwin.tar.xz",
+        "dd52cfce1156bba4924787a7775003d5726319f3461264200b8b705d02a25904",
+    ),
+    ("darwin", "aarch64"): (
+        "cadmpeg-aarch64-apple-darwin.tar.xz",
+        "3f0cf7c5464cc6f14d22ddc168987c995366d3492dd041bd1568f6ff4bf368e1",
+    ),
+    ("windows", "x86_64"): (
+        "cadmpeg-x86_64-pc-windows-msvc.zip",
+        "e83573441c2f0f300004493fcfe51435226d6f5f6fc871153f3fa8ddfcde928b",
     ),
 }
 
@@ -116,12 +151,12 @@ def version_of(path):
     return words[1] if result.returncode == 0 and len(words) >= 2 and words[0] == NAME else None
 
 
-def executable(cache_dir):
-    """The path of a cadmpeg to run, downloading the pinned release if need be."""
+def executable(cache_dir, version=VERSION):
+    """The path of a cadmpeg to run, downloading the pinned release - or 'version', 'USD_VERSION' - if need be."""
     found = shutil.which(NAME)
-    if found and version_of(found) == VERSION:
+    if found and version_of(found) == version:
         return found
-    return download(cache_dir)
+    return download(cache_dir, version)
 
 
 def install(directory):
@@ -139,16 +174,18 @@ def install(directory):
     return target
 
 
-def download(cache_dir):
-    """The pinned release, downloaded into 'cache_dir' once and verified, and the path of its program."""
+def download(cache_dir, version=VERSION):
+    """The pinned release - or 'version' - downloaded into 'cache_dir' once and verified, and the path of its program."""
     system, machine = host()
-    if (system, machine) not in ASSETS:
+    # Looked up when asked, not when imported: what is fetched of each release.
+    assets = {VERSION: ASSETS, USD_VERSION: USD_ASSETS}[version]
+    if (system, machine) not in assets:
         raise RuntimeError(
             "cadmpeg publishes no build for %s/%s; install it and put it on the PATH" % (system, machine)
         )
-    asset, sha256 = ASSETS[(system, machine)]
+    asset, sha256 = assets[(system, machine)]
     exe_name = NAME + (".exe" if system == "windows" else "")
-    target = os.path.join(cache_dir, NAME, VERSION, "%s-%s" % (system, machine))
+    target = os.path.join(cache_dir, NAME, version, "%s-%s" % (system, machine))
     exe = os.path.join(target, exe_name)
     if os.path.isfile(exe):
         return exe
@@ -160,7 +197,7 @@ def download(cache_dir):
     staging = tempfile.mkdtemp(prefix=".download-", dir=os.path.dirname(target))
     try:
         archive = os.path.join(staging, asset)
-        fetch(RELEASE_URL + asset, archive)
+        fetch(RELEASES_URL % version + asset, archive)
         digest = hashlib.sha256()
         with open(archive, "rb") as f:
             for chunk in iter(lambda: f.read(1 << 20), b""):

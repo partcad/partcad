@@ -233,6 +233,18 @@ def _textured(node) -> bool:
     return any(entry.get("texture") for entry in _summary_sets(node))
 
 
+def _finished(node) -> bool:
+    """Whether the CMF summary recorded with a node's geometry says how rough or how metallic any of it looks."""
+    return any("roughness" in entry or "metallic" in entry for entry in _summary_sets(node))
+
+
+def finish_of(cmf_set):
+    """'(roughness, metallic)' a set says its surface looks, each None where it does not say; None where it says neither."""
+    if cmf_set is None or (cmf_set.roughness is None and cmf_set.metallic is None):
+        return None
+    return cmf_set.roughness, cmf_set.metallic
+
+
 def colors_of(tree, warnings=None, memo=None):
     """Every colour 'tree' is drawn in, each once, in the order they are met.
 
@@ -284,7 +296,7 @@ def has_one_sided(tree):
     return walk(tree, False)
 
 
-def _placed_leaves(tree, memo, looks=False):
+def _placed_leaves(tree, memo, looks=False, finishes=False):
     """Every piece of 'tree' a drawing draws, as '(colour, one_sided, shape, texture)', placed where it is in the whole.
 
     A piece is a shape node's geometry, or - where its CMF section colours its
@@ -299,7 +311,9 @@ def _placed_leaves(tree, memo, looks=False):
     is drawn with, if any - where the node's section draws any face with an
     image ('payload_looks'), and 'texture' says which image; without, every
     texture is None and the pieces are by colour alone, as a drawing of lines
-    draws them.
+    draws them. With 'finishes' as well, a look is also how rough and how
+    metallic the faces look, and each leaf is
+    '(colour, one_sided, shape, texture, finish)' (see 'split_by_look').
     """
     leaves = []
 
@@ -313,18 +327,19 @@ def _placed_leaves(tree, memo, looks=False):
         stated = _stated_one_sided(node)
         one_sided = one_sided if stated is None else stated
         if ocp_serialize.is_shape_object(node):
-            node_looks = _node_looks(node, color, memo) if looks else None
+            node_looks = _node_looks(node, color, memo, finishes) if looks else None
+            plain = (None, None) if finishes else (None,)
             if node_looks is None:
-                pieces = [((face_color, None), piece) for face_color, piece in _pieces(node, color, memo)]
+                pieces = [((face_color,) + plain, piece) for face_color, piece in _pieces(node, color, memo)]
             elif node_looks[0] == WHOLE:
                 pieces = [(node_looks[1], node[ocp_serialize.KEY_SHAPE])]
             else:
-                pieces = faces_by_look(node[ocp_serialize.KEY_SHAPE], node_looks[1], (color, None))
-            for (face_color, texture), piece in pieces:
+                pieces = faces_by_look(node[ocp_serialize.KEY_SHAPE], node_looks[1], (color,) + plain)
+            for look, piece in pieces:
                 shape = placed(piece, node.get(ocp_serialize.KEY_LOCATION))
                 for packed in reversed(above):
                     shape = shape.Moved(ocp_serialize.toploc_from_packed(packed))
-                leaves.append((face_color, one_sided, shape, texture))
+                leaves.append((look[0], one_sided, shape) + tuple(look[1:]))
         elif ocp_serialize.is_assembly_object(node):
             location = node.get(ocp_serialize.KEY_LOCATION)
             inner = above + [location] if location is not None else above
@@ -630,12 +645,12 @@ FACES = "faces"
 
 
 def look_key(look):
-    """A look - '(colour, texture or None)' - as something to tell looks apart by."""
-    color, texture = look
-    return color, texture.key() if texture is not None else None
+    """A look - '(colour, texture or None)', or with a finish '(..., finish or None)' - to tell looks apart by."""
+    color, texture = look[0], look[1]
+    return (color, texture.key() if texture is not None else None) + tuple(look[2:])
 
 
-def payload_looks(section, color=None, piece=False):
+def payload_looks(section, color=None, piece=False, finishes=False):
     """What a payload is drawn as, where its CMF section draws any of it with an image; None where none.
 
     '(WHOLE, look)' where every face of it is drawn alike - the part's own set
@@ -651,24 +666,37 @@ def payload_looks(section, color=None, piece=False):
     'face_colors'): its section addresses the compound's faces and not its own,
     so it is drawn with the part's own image, if that is what draws every face,
     and otherwise as if no image were there.
+
+    With 'finishes', a look is '(colour, texture, finish)', 'finish' being
+    '(roughness, metallic)' or None ('finish_of'), and a payload is drawn as
+    looks wherever its section says either an image or a finish.
     """
-    if section is None or not section.is_textured():
+    if section is None:
         return None
+    finished = finishes and any(finish_of(cmf_set) is not None for cmf_set in section.sets)
+    if not section.is_textured() and not finished:
+        return None
+
+    def look(cmf_set):
+        drawn = (_hex(cmf_set.rgba) if cmf_set.rgba is not None else color, cmf_set.texture)
+        return drawn + (finish_of(cmf_set),) if finishes else drawn
+
     own = section.own()
     if section.faces and not piece:
-        looks = []
-        for index in range(len(section.faces)):
-            face = section.face_set(index)
-            looks.append((_hex(face.rgba) if face.rgba is not None else color, face.texture))
-        return (FACES, looks) if any(texture is not None for _color, texture in looks) else None
-    if own is not None and own.texture is not None and not section.faces:
-        return WHOLE, (_hex(own.rgba) if own.rgba is not None else color, own.texture)
+        looks = [look(section.face_set(index)) for index in range(len(section.faces))]
+        drawn_apart = any(each[1] is not None or (finishes and each[2] is not None) for each in looks)
+        return (FACES, looks) if drawn_apart else None
+    if own is not None and not section.faces and (own.texture is not None or (finishes and finish_of(own))):
+        return WHOLE, look(own)
     return None
 
 
-def _node_looks(node, color, memo):
-    """'payload_looks' of a shape node, read off its section only where its summary says it draws an image."""
-    if not ocp_serialize.is_shape_object(node) or not _textured(node):
+def _node_looks(node, color, memo, finishes=False):
+    """'payload_looks' of a shape node, read off its section only where its summary says it draws an image.
+
+    Or, with 'finishes', where it says how rough or how metallic any of it looks.
+    """
+    if not ocp_serialize.is_shape_object(node) or not (_textured(node) or (finishes and _finished(node))):
         return None
     payload = node[ocp_serialize.KEY_BREP]
     key = payload if isinstance(payload, (str, bytes)) else bytes(payload)
@@ -679,13 +707,14 @@ def _node_looks(node, color, memo):
         section = ocp_serialize.cmf_of_payload(payload)
         if memo is not None:
             memo[memo_key] = section
-    return payload_looks(section, color, piece=node.get(ocp_serialize.KEY_CHILD) is not None)
+    return payload_looks(section, color, piece=node.get(ocp_serialize.KEY_CHILD) is not None, finishes=finishes)
 
 
-def looks_of(tree, warnings=None, memo=None):
+def looks_of(tree, warnings=None, memo=None, finishes=False):
     """Every look 'tree' is drawn as, each once, in the order they are met: 'colors_of', with images.
 
-    Each look is '(colour, texture or None)'.
+    Each look is '(colour, texture or None)', and with 'finishes'
+    '(colour, texture or None, finish or None)'.
     """
     found, seen = [], set()
     memo = {} if memo is None else memo
@@ -699,10 +728,10 @@ def looks_of(tree, warnings=None, memo=None):
     def walk(node, inherited):
         color = own_color(node, warnings) or inherited
         if ocp_serialize.is_shape_object(node):
-            looks = _node_looks(node, color, memo)
+            looks = _node_looks(node, color, memo, finishes)
             if looks is None:
                 for face_color in face_colors(node, memo) or [color]:
-                    add((face_color or color, None))
+                    add((face_color or color, None, None) if finishes else (face_color or color, None))
             elif looks[0] == WHOLE:
                 add(looks[1])
             else:
@@ -716,7 +745,7 @@ def looks_of(tree, warnings=None, memo=None):
     return found
 
 
-def split_by_look(tree, whole, warnings=None):
+def split_by_look(tree, whole, warnings=None, finishes=False):
     """'[(colour, one_sided, shape, texture), ...]': 'split_by_sides', with the image each group is drawn with.
 
     For whatever draws surfaces - a shaded picture and every frame of a video -
@@ -730,18 +759,27 @@ def split_by_look(tree, whole, warnings=None):
     draws one takes each child's location off it to lay the image, and puts it
     back to draw it. 'whole' itself is never handed back for one - its children
     are sub-assemblies as often as parts.
+
+    With 'finishes', each group is '(colour, one_sided, shape, texture,
+    finish)', 'finish' being '(roughness, metallic)' or None ('finish_of'): the
+    faces a CMF section says the finish of are drawn apart, and where nothing
+    says one this is 'split_by_sides' exactly, with None for each.
     """
     memo = {}
-    looks = looks_of(tree, warnings, memo)
-    if all(texture is None for _color, texture in looks):
-        return [(color, one_sided, shape, None) for color, one_sided, shape in split_by_sides(tree, whole, warnings)]
+    looks = looks_of(tree, warnings, memo, finishes)
+    extra = (None,) if finishes else ()
+    if all(look[1] is None and (not finishes or look[2] is None) for look in looks):
+        return [
+            (color, one_sided, shape, None) + extra for color, one_sided, shape in split_by_sides(tree, whole, warnings)
+        ]
     groups = {}
-    for color, one_sided, shape, texture in _placed_leaves(tree, memo, looks=True):
-        key = (look_key((color, texture)), bool(one_sided))
-        groups.setdefault(key, (color, texture, []))[2].append(shape)
+    for leaf in _placed_leaves(tree, memo, looks=True, finishes=finishes):
+        color, one_sided, shape, rest = leaf[0], leaf[1], leaf[2], leaf[3:]
+        key = (look_key((color,) + tuple(rest)), bool(one_sided))
+        groups.setdefault(key, (color, rest, []))[2].append(shape)
     return [
-        (color, one_sided, ocp_serialize.compound_of(shapes), texture)
-        for (_key, one_sided), (color, texture, shapes) in groups.items()
+        (color, one_sided, ocp_serialize.compound_of(shapes)) + tuple(rest)
+        for (_key, one_sided), (color, rest, shapes) in groups.items()
     ]
 
 

@@ -24,7 +24,7 @@ What PartCAD works with
   `build123d <https://github.com/gumyr/build123d>`_, `OpenSCAD <https://openscad.org/>`_,
   `Chili3D <https://github.com/xiangechen/chili3d>`_, `SDF <https://github.com/fogleman/sdf>`_) or read from
   a file (STEP, BREP, IGES, STL, 3MF, OBJ, glTF, FreeCAD, Autodesk Fusion, SolidWorks, Autodesk Inventor,
-  CATIA V5, ACIS and Creo View files, KiCad PCBs), plus whatever format a plugin package adds.
+  CATIA V5, ACIS and Creo View files, OpenUSD stages, KiCad PCBs), plus whatever format a plugin package adds.
 * **Assemblies and scenes** in Assembly YAML, URDF, or a STEP, Autodesk Fusion or Creo View file, with
   interfaces and mating as objects of their own rather than coordinates written out by hand.
 * **Outputs**: STEP, BREP, IGES, STL, 3MF, OBJ, glTF and URDF, Gazebo and MuJoCo worlds, 2D projections,

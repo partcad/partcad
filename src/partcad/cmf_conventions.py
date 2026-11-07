@@ -72,6 +72,8 @@ BUILTIN = {
     "openscad": Convention("openscad", "openscad", True),
     "3mf": Convention("3mf", "3mf", False),
     "gltf": Convention("gltf", "gltf", False),
+    # OpenUSD: a material's name, as USD names it (see the 'usd' part type).
+    "usd": Convention("usd", "usd", False),
     "ldraw": Convention("ldraw", "ldraw", False),
 }
 

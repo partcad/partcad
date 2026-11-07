@@ -477,8 +477,8 @@ Object commands
   ``pc add part <type> <file>`` takes the part's type first: a script (``cadquery``, ``build123d``,
   ``sdf``, ``scad``, ``chili3d``), a file PartCAD reads itself (``step``, ``brep``, ``stl``, ``3mf``,
   ``obj``, ``gltf``), or one of the CAD file formats PartCAD ships as declarations (``fcstd``,
-  ``f3d``, ``sldprt``, ``ipt``, ``catpart``, ``sat``, ``pvz`` -- read through cadmpeg -- and ``iges``, read
-  by OpenCASCADE; see :ref:`cad-files`). The part
+  ``f3d``, ``sldprt``, ``ipt``, ``catpart``, ``sat``, ``pvz`` -- read through cadmpeg -- ``iges``, read
+  by OpenCASCADE, and ``usd``, an OpenUSD stage, read by usd-core; see :ref:`cad-files`). The part
   is named after the file, without its extension. Where the file is ``<name>.<extension>`` with the
   extension spelled as the type declares it -- ``design.FCStd``, ``bracket.SLDPRT``, ``bracket.CATPart`` --
   the declaration names no ``path``; any other spelling of it keeps one: another case (``design.fcstd``), or

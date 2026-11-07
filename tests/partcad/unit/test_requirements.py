@@ -639,6 +639,19 @@ def test_a_displacement_that_cannot_be_measured_fails_the_match_and_says_why(ctx
     assert verdicts["displacement of :plate"] is True
 
 
+def test_an_assembly_matched_against_is_looked_up_on_the_callers_loop(ctx, monkeypatch):
+    """'pair' is looked up with 'get_assembly_async': the check runs on a loop, which a synchronous lookup stops."""
+    shape = ctx.get_part("//:plate-copy")
+
+    def synchronous(*args, **kwargs):
+        raise AssertionError("an assembly was looked up synchronously from a coroutine")
+
+    monkeypatch.setattr(ctx, "get_assembly", synchronous)
+    report = asyncio.run(requirements.check_async(ctx, shape))
+    details = {check.name: check.detail for check in report.checks if check.section == "match"}
+    assert details["volume of pair"] == "2700 mm^3, 50% less than the reference's 5400 mm^3 (more than 10%)"
+
+
 def test_pc_test_fails_an_object_further_from_another_than_it_may_be(ctx):
     """A 'match:' requirement not met fails the 'requirements' check of 'pc test'."""
     assert _run_test(ctx, "plate-copy") is Test.TEST_FAILED

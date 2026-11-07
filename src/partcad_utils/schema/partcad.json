@@ -1863,7 +1863,7 @@
     },
     "cmf": { "$ref": "#/definitions/check-cmf" },
     "cmfConventions": {
-      "description": "How other tools' colours, materials and finishes are read in this package, beside PartCAD's builtin conventions (partcad, step, build123d, cadquery, openscad, 3mf, gltf, ldraw). A part names one in its 'cmfConvention' parameter. See docs/design/cmf.md, section 7.",
+      "description": "How other tools' colours, materials and finishes are read in this package, beside PartCAD's builtin conventions (partcad, step, build123d, cadquery, openscad, 3mf, gltf, ldraw, usd). A part names one in its 'cmfConvention' parameter. See docs/design/cmf.md, section 7.",
       "type": "object",
       "patternProperties": {
         "^[a-zA-Z0-9_.-]+$": {
@@ -1873,7 +1873,7 @@
             "extends": {
               "description": "The builtin convention whose facts it reads: what a source of that kind states. Its own name if that is a builtin, and 'step' otherwise.",
               "type": "string",
-              "enum": ["partcad", "step", "build123d", "cadquery", "openscad", "3mf", "gltf", "ldraw"]
+              "enum": ["partcad", "step", "build123d", "cadquery", "openscad", "3mf", "gltf", "ldraw", "usd"]
             },
             "ids": {
               "description": "The key of a declaration's 'ids' that holds what this tool calls it. Its own name by default.",
@@ -2040,7 +2040,7 @@
                     "basic", "cadquery", "build123d", "chili3d", "sdf", "svg", "dxf", "extrude",
                     "sweep", "stl", "step", "scad", "3mf", "enrich", "alias", "brep",
                     "obj", "gltf", "kicad", "compound", "fcstd", "wall", "iges", "f3d",
-                    "sldprt", "ipt", "catpart", "sat", "pvz"
+                    "sldprt", "ipt", "catpart", "sat", "pvz", "usd"
                   ]
                 },
                 "aliases": {
@@ -2850,6 +2850,7 @@
             "extension": { "type": "string", "minLength": 1, "description": "The extension of the file each part of this type is read from. Declaring one makes the part file-backed: its 'path' is relative to the part's own package and defaults to '<name>.<extension>', 'fileFrom' fetches it, and the script finds it as request['path']" },
             "dockerImage": { "type": "string", "minLength": 1, "description": "The image the 'docker' sandbox runs this partType's script in, where it can be pulled. Defaults to the declaring package's own" },
             "requireSolid": { "type": "boolean", "default": false, "description": "Whether every part of this type is a solid, so that one that is not - no solid in it, faces that bound nothing, an open or invalid solid, one with no volume - fails to build instead of being built with a warning. Declare it for a type that reads or generates bodies, such as a converter from a native CAD format, where such a part is one it read wrongly" },
+            "reportsDependencies": { "type": "boolean", "default": false, "description": "Whether the script reports, in output[\"dependencies\"], the other files it read as it built a part - the layers an OpenUSD stage composes, the textures it names - so that the part is built again when one of them changes, with nothing to list under dependencies" },
             "pythonRequirements": { "type": "array", "items": { "type": "string" } }
           },
           "additionalProperties": false

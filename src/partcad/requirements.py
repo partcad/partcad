@@ -1325,7 +1325,8 @@ async def matched_object_async(ctx, shape, reference: str):
         return None, "there is no object %s" % path
     if kind not in pc_compare.KINDS:
         return None, "%s is a %s, and only a part or an assembly has a volume and a mass" % (path, kind)
-    other = await ctx.get_part_async(path) if kind == "part" else ctx.get_assembly(path)
+    get_async = ctx.get_part_async if kind == "part" else ctx.get_assembly_async
+    other = await get_async(path)
     if other is None:
         return None, "%s could not be loaded" % path
     return other, None

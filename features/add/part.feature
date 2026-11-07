@@ -232,6 +232,7 @@ Feature: `pc add part` command
       | sat     | body.sat          | body     |
       | pvz     | product.pvz       | product  |
       | iges    | plate.iges        | plate    |
+      | usd     | stage.usd         | stage    |
 
   # Another spelling of the extension, or another case of it: the part is still
   # named after the file, and its 'path' says which file that is, because the
@@ -268,6 +269,8 @@ Feature: `pc add part` command
       | sldprt  | bracket.sldprt    | bracket  |
       | catpart | bracket.catpart   | bracket  |
       | step    | part.stp          | part     |
+      | usd     | stage.usdz        | stage    |
+      | usd     | stage.usda        | stage    |
 
   @native
   Scenario: Reject a native part type PartCAD does not have

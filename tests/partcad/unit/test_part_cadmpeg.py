@@ -80,13 +80,19 @@ def builtin():
 
 def test_every_format_cadmpeg_reads_into_solids_is_a_builtin_part_type(builtin):
     declared = {name: config["extension"] for name, config in builtin["partTypes"].items()}
-    assert declared == {**NATIVE_PART_TYPES, "iges": "iges"}
+    # OpenUSD is a built-in part type too, and cadmpeg reads it, but into
+    # meshes rather than solids ('test_part_usd.py').
+    assert declared == {**NATIVE_PART_TYPES, "iges": "iges", "usd": "usd"}
 
 
 def test_every_one_of_them_fails_a_part_that_is_not_a_solid(builtin):
     """How a broken read is caught: by the check every part goes through, made binding."""
     scripts = {"fcstd": "part_fcstd.py", "iges": "part_iges.py"}
     for name, config in builtin["partTypes"].items():
+        if name == "usd":
+            # What a renderer draws need not close (see 'test_part_usd.py').
+            assert not config.get("requireSolid")
+            continue
         assert config.get("requireSolid") is True, name
         assert config["path"] == scripts.get(name, "part_cadmpeg.py"), name
 
