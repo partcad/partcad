@@ -134,7 +134,9 @@ def _projected(points):
     axis = max(range(3), key=lambda i: abs(normal[i]))
     if normal[axis] == 0.0:
         return None
-    u, v = [i for i in range(3) if i != axis]
+    # The two other axes in cyclic order - (y, z), (z, x), (x, y) - turn counter-clockwise about a
+    # positive normal; ascending order would not for y, where (x, z) turns the other way.
+    u, v = ((1, 2), (2, 0), (0, 1))[axis]
     if normal[axis] < 0:
         u, v = v, u
     return [(point[u], point[v]) for point in points]
@@ -230,7 +232,8 @@ def process(path):
 
 
 if __name__ == "__main__":
-    path, request = wrapper_common.handle_input()
+    # Called for what it sets up as well: 'finished' reads the request it was handed.
+    path, _request = wrapper_common.handle_input()
     try:
         shape = process(path)
     except Exception as e:

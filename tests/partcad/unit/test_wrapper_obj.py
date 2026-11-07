@@ -224,6 +224,24 @@ def test_a_convex_polygon_is_cut_into_the_fan_from_its_first_corner():
     assert wrapper_obj.triangles(hexagon) == [(0, 1, 2), (0, 2, 3), (0, 3, 4), (0, 4, 5)]
 
 
+# A non-planar quad facing each axis, listed both ways round: whichever axis
+# the plane is projected along, and whichever way it faces, it is two triangles.
+FACING = {
+    "x": [(0, 0, 0), (0, 1, 0), (0.01, 1, 1), (0, 0, 1)],
+    "y": [(0, 0, 0), (0, 0, 1), (1, 0.01, 1), (1, 0, 0)],
+    "z": [(0, 0, 0), (1, 0, 0), (1, 1, 0.01), (0, 1, 0)],
+}
+
+
+@pytest.mark.parametrize("axis", sorted(FACING))
+@pytest.mark.parametrize("reverse", [False, True])
+def test_a_non_planar_quad_is_cut_whichever_way_it_faces(axis, reverse):
+    quad = FACING[axis][::-1] if reverse else FACING[axis]
+    cut = wrapper_obj.triangles(quad)
+    assert cut is not None and len(cut) == 2
+    assert sorted(i for corners in cut for i in corners) == [0, 0, 1, 2, 2, 3]
+
+
 def test_a_polygon_crossing_itself_is_left_out_and_counted():
     # A bow tie, lifted at one corner so that it is not planar either.
     vertices, faces = _parse("v 0 0 0\nv 1 1 0\nv 1 0 0.5\nv 0 1 0\nf 1 2 3 4\n")
