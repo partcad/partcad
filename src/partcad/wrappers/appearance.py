@@ -800,7 +800,7 @@ def faces_by_look(shape, looks, look):
         return [(look, shape)]
     groups = {}
     for index in range(faces.Extent()):
-        face_look = looks[index] if looks[index][0] is not None else (look[0], looks[index][1])
+        face_look = looks[index] if looks[index][0] is not None else (look[0],) + tuple(looks[index][1:])
         groups.setdefault(look_key(face_look), (face_look, []))[1].append(faces.FindKey(index + 1))
     edge_faces = TopTools_IndexedDataMapOfShapeListOfShape()
     TopExp.MapShapesAndAncestors_s(shape, TopAbs_EDGE, TopAbs_FACE, edge_faces)

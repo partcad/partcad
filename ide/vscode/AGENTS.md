@@ -493,10 +493,19 @@ Four things about it are load-bearing:
   the file's materials (`keepOwnColors`, reading the loader's `associations`, because three gives a primitive
   with no material a white default), and `paint` draws it in that colour with this viewer's material, so it is
   shaded, faded and flickered like the rest. A primitive drawn with an image (a colour whose display is a texture;
-  `wrapper_gltf._with_textures`) keeps that image the same way, as the material's `map` with white under it --
+  `wrapper_gltf._with_looks`) keeps that image the same way, as the material's `map` with white under it --
   but by its geometry in `ownTextures`, not in `userData`: a clone copies `userData` through JSON, which a
   texture does not survive, while every clone shares the geometry. The image is the template's and is freed with
-  it (`releaseTemplate`); `disposeMaterial` leaves a texture marked `cached` alone. A face is more specific than
+  it (`releaseTemplate`); `disposeMaterial` leaves a texture marked `cached` alone. A primitive whose CMF set says
+  a finish (`extras.partcadFinish`, also written by `_with_looks`) keeps it in `userData` beside its colour, and is
+  still drawn with the viewer's Phong material -- set as `finish.ts` says, to agree with a shaded `pc render`'s
+  `finished_light`: shininess `2 / r^4 - 2` (three's 30 at the default 0.5), the specular colour the dielectric's
+  0.04 blended into the colour by the metalness, the diffuse colour times `1 - metallic`, and the room's
+  reflection added to the shader in `onBeforeCompile`, from the same lights evaluated along the mirrored view
+  direction. Not `MeshStandardMaterial`: a different lighting model would make a finished face of the default
+  roughness look unlike an unfinished one beside it. WebGPU does not run `onBeforeCompile`, so there a finish
+  lacks the room's reflection; the painter draws it flat in its colour (`userData.flatColor`), since a metal's
+  Phong colour is black. A primitive with no finish is drawn exactly as before. A face is more specific than
   its part or an assembly, so it wins
   over the node's colour; a node that nothing colours is `DEFAULT_COLOR`,
   `0xdaa520` -- OCCT's `Quantity_NOC_GOLDENROD`, and the colour PartCAD's own 2D projections draw an

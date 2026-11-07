@@ -123,7 +123,10 @@ export class CanvasPainter {
             this.shade(face, lights, color);
             // A face drawn with an image is one flat colour here: the colour it
             // is drawn as where an image cannot be (see 'Geometry.faceMaterial').
-            const flat = material.map ? material.userData.flatColor : undefined;
+            // So is a face drawn with a finish, whose material's colour is only
+            // what is no metal of it: this painter draws no highlight and no
+            // reflection, and a metal face would otherwise be black.
+            const flat = material.map || material.userData.finish ? material.userData.flatColor : undefined;
             color.multiply(typeof flat === 'number' ? this.flat.setHex(flat, THREE.SRGBColorSpace) : material.color);
             if (material.emissive) {
                 color.add(material.emissive);

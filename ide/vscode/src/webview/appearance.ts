@@ -36,13 +36,24 @@
 // A colour may be drawn with an image - a texture its declaration names (see
 // 'docs/source/config_cmf.rst') - and a primitive whose faces are in one arrives
 // with that image as its material's base colour texture, laid on by PartCAD
-// ('wrapper_gltf._with_textures'; the same box mapping a shaded 'pc render'
+// ('wrapper_gltf._with_looks'; the same box mapping a shaded 'pc render'
 // draws with). Such a primitive brings its image as well as its colour: the
 // viewer's own material draws it with the image ('map'), white under it, and
 // 'color' is then what it is drawn as wherever an image cannot be - the colour
 // its declaration says, or the image's mean, which the file carries in the
 // material's 'extras' as 'partcadColor'. A wallpapered wall is one-sided and
 // drawn with an image, and is both.
+//
+// A face may also say how rough and how metallic it looks: its CMF set's
+// finish. PartCAD writes the faces of a finish as a primitive of their own, whose
+// material says it in its 'extras' as 'partcadFinish'
+// ('wrapper_gltf._with_looks'), and such a primitive is drawn as a shaded
+// 'pc render' draws it - highlights as sharp as it is smooth, tinted by its colour
+// as far as it is metal, the room reflected (see 'finish.ts'). Still with this
+// viewer's material, so the Opacity slider and the flicker reach it as they reach
+// every face. A finish is the face's own like its colour, and a face whose set
+// says a finish and no colour keeps its node's colour, drawn with that finish.
+// A primitive that says no finish is drawn exactly as it always was.
 //
 // A shape that nothing above it colours is the common case, and it is drawn in
 // goldenrod: the colour OCCT draws a shape nobody coloured in
@@ -60,6 +71,7 @@
 
 import * as THREE from 'three';
 
+import { FINISH_EXTRAS, Finish, parseFinish } from './finish';
 import type { ShowNode } from './messages';
 
 /** A colour as the 3D panes draw a shape in it. */
@@ -83,7 +95,20 @@ export interface Appearance {
      * 'color' is then what they are drawn as where an image cannot be.
      */
     readonly map?: THREE.Texture;
+    /**
+     * How rough and how metallic the faces look, where their CMF finish says
+     * (see 'finish.ts'). Absent for every face that says nothing, which is drawn
+     * with the viewer's Phong material as it always was.
+     */
+    readonly finish?: Finish;
 }
+
+/**
+ * What a glTF primitive brings with it: its colour (an 'Appearance'), or only a
+ * finish, for faces whose CMF set says a finish and no colour - which are in
+ * whatever colour their node is.
+ */
+export type OwnAppearance = Appearance | { readonly color?: undefined; readonly finish: Finish };
 
 /**
  * The colour of a shape that states none: goldenrod, #DAA520.
@@ -190,7 +215,7 @@ export const OWN_APPEARANCE = 'partcadOwnAppearance';
 export function ownAppearance(
     material: THREE.Material | THREE.Material[] | null | undefined,
     fromFile: boolean,
-): Appearance | undefined {
+): OwnAppearance | undefined {
     if (!fromFile || !material || Array.isArray(material)) {
         return undefined;
     }
@@ -200,13 +225,21 @@ export function ownAppearance(
     }
     const opacity = material.transparent ? material.opacity : 1;
     const map = (material as THREE.Material & { map?: THREE.Texture | null }).map;
+    // A finish, where PartCAD wrote one ('wrapper_gltf._with_looks').
+    const finish = parseFinish(material.userData?.[FINISH_EXTRAS]);
+    const finished = finish === undefined ? {} : { finish };
     if (map?.isTexture === true) {
         // Drawn with an image: white under it in the file, and drawn as the
         // colour the file says wherever an image cannot be.
         const flat = parseColor(material.userData?.partcadColor);
-        return { color: flat?.color ?? color.getHex(THREE.SRGBColorSpace), opacity, map };
+        return { color: flat?.color ?? color.getHex(THREE.SRGBColorSpace), opacity, map, ...finished };
     }
-    return { color: color.getHex(THREE.SRGBColorSpace), opacity };
+    if (finish !== undefined && material.userData?.partcadColor === null) {
+        // A finish and no colour: the base colour is the file's stand-in for
+        // a reader that knows no 'extras', and the face is in its node's.
+        return { finish };
+    }
+    return { color: color.getHex(THREE.SRGBColorSpace), opacity, ...finished };
 }
 
 /**
@@ -216,9 +249,13 @@ export function ownAppearance(
  * how it looks: whether it is one-sided is still its node's, so a wall whose CMF
  * colours one face differently is a wall all the same.
  */
-export function primitiveAppearance(own: Appearance | undefined, node: Appearance): Appearance {
+export function primitiveAppearance(own: OwnAppearance | undefined, node: Appearance): Appearance {
     if (own === undefined) {
         return node;
+    }
+    if (own.color === undefined) {
+        // Only a finish: the node's colour, drawn with it.
+        return { ...node, finish: own.finish };
     }
     // Spread rather than rebuilt: the image it is drawn with, if any, is its own too.
     return node.oneSided ? { ...own, oneSided: true } : own;
@@ -237,7 +274,11 @@ export function appearanceKey(appearance: Appearance): string {
     const key = appearance.color.toString(16).padStart(6, '0') + alpha.toString(16).padStart(2, '0');
     // One material per image too: two images drawn as one colour are two looks.
     const looked = appearance.map === undefined ? key : `${key}:${appearance.map.uuid}`;
-    return appearance.oneSided ? looked + '/front' : looked;
+    // And one per finish: the same colour drawn rough and drawn polished are two looks.
+    const finish = appearance.finish;
+    const finished =
+        finish === undefined ? looked : `${looked}~r${finish.roughness.toFixed(3)}m${finish.metallic.toFixed(3)}`;
+    return appearance.oneSided ? finished + '/front' : finished;
 }
 
 /**

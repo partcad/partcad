@@ -316,9 +316,9 @@ the exports (STEP through XCAF, glTF, 3MF, URDF; the formats with no CMF warn), 
 ([section 9.1](#91-textures)), and in the IDE the explorer's declarations, the CMF tab, the BOM and Build vs Buy
 columns and per-primitive colours, and the "Materials" callout (the 3D and 2D tabs, `pc render --with-materials`): one
 name per cluster of a material - its faces that touch or are closer than the user's `materialClusterDistance` - found
-by `material_clusters.py` among the wrappers, from a face's solid's material, else its own set's. **Open:** what the
-"Exports" item lists as open; highlighting a set's faces in the 3D view, drawing a finish's roughness and metallic there, and
-`pc ide view` of a declaration.
+by `material_clusters.py` among the wrappers, from a face's solid's material, else its own set's, and in the 3D view a
+finish's roughness and metallic, lit as a shaded drawing lights them. **Open:** what the "Exports" item lists as open;
+highlighting a set's faces in the 3D view, and `pc ide view` of a declaration.
 
 CMF is always shown as its three components in the order colour, material, finish: each by its declaration's name, with
 a swatch of its display where the medium allows, marked when it is display-only or unspecified, and with its origin
@@ -348,11 +348,22 @@ where there is room.
   and tree node: the summary recorded with the item's geometry where it has been built, and what it declares otherwise
   (`partcad.cmf.own_info`, marked `declared`) - nothing is built to fill a column. The 3D view keeps each primitive's
   own colour: a primitive whose glb gives it a material is drawn in that colour, with the viewer's own material and so
-  its shading, the Opacity slider and the flicker, and one with none keeps its node's colour as before. *Open:*
-  highlighting a set's faces in the 3D view when it is chosen (the glb has a mesh per colour, not per set, so sets of
-  one colour cannot be told apart); a finish's roughness and metallic in the 3D view (neither the glb nor the
-  viewer's Phong material carries them); and `pc ide view` of a declaration, which `inspect.object` does not know as an
-  object, as the explorer's show is made by the extension rather than sent by PartCAD.
+  its shading, the Opacity slider and the flicker, and one with none keeps its node's colour as before. It draws each
+  face's finish too: the faces whose set says a roughness or a metalness are a primitive per look, written by PartCAD
+  (`wrapper_gltf._with_looks`, as the faces of an image are), with a material saying the finish as glTF does
+  (`metallicFactor`, `roughnessFactor`) and again as `extras.partcadFinish`, the defaults (roughness 0.5, no metal)
+  filled in for what it leaves unsaid; a face with a finish and no colour has a null `partcadColor` and is drawn in its
+  node's colour. The viewer draws such a primitive as `finished_light` draws it (`finish.ts`), still with its Phong
+  material so the Opacity slider and the flicker reach it: the shininess from the roughness, the specular colour the
+  dielectric's 0.04 blended into the colour by the metalness, the diffuse colour times `1 - metallic`, and the room's
+  reflection added to the shader (`onBeforeCompile`) from the same lights, evaluated along the mirrored view
+  direction. Rendered through WebGL, it agrees with `finished_light` to within a fraction of a percent; WebGPU does not
+  run the shader patch and draws a finish without the room's reflection, and the canvas painter draws it flat in its
+  colour. A primitive with no finish is written and drawn as before: the glb of a payload with none is the same
+  bytes. *Open:* highlighting a set's faces in the 3D view when it is chosen (the glb has a mesh per colour, not per
+  set, so sets of one colour cannot be told apart); the room's reflection of a finish under WebGPU (a node material
+  of its own); and `pc ide view` of a declaration, which `inspect.object` does not know as an object, as the
+  explorer's show is made by the extension rather than sent by PartCAD.
 - **Drawings:** SVG, PNG and JPEG draw each face in its display colour, still as one hidden-line drawing; an edge
   between two colours is drawn once per colour, the later on top. A drawing is on white, so a colour too light to see
   there (relative luminance above 0.5; goldenrod is 0.42) is drawn darker, hue kept: a white face is drawn in grey
@@ -364,7 +375,8 @@ where there is room.
   says neither is lit with three's Phong material as before, and a drawing with no finish anywhere is the same bytes
   it was.
 - **glTF:** the faces of one colour are one mesh with that colour's material, so a part of one colour is still one
-  primitive; the IDE draws each such primitive in its own colour (above).
+  primitive; the IDE draws each such primitive in its own colour (above). The faces of a finish are a primitive of
+  their own, with the finish in their material (above).
 - **Exports** (`wrappers/cmf_export.py`, read off `shape_tree` and each payload's section; a face nobody coloured is
   written uncoloured, not in goldenrod):
   - **STEP** through XCAF (`step_cmf.Writer`): a product per part and per assembly, named after it, and a component per
@@ -432,7 +444,7 @@ is read: a PNG or a JPEG that decodes, inside its package, at most 16 MB.
   `appearance.split_by_look`'s, `(colour, one_sided, shape, texture)`: `split_by_sides` with the image, from the one
   walker (`_placed_leaves`) that also splits a tree for a view, so a wall in a colour drawn with an image - wallpaper,
   tiles - is laid with it on its front and still culled from behind, frame by frame.
-- **The glTF the IDE draws** (`wrapper_gltf._with_textures`): the faces drawn with an image are a primitive of their own
+- **The glTF the IDE draws** (`wrapper_gltf._with_looks`): the faces drawn with an image are a primitive of their own
   per image, written by PartCAD - positions, normals, `TEXCOORD_0` and indices - with the image embedded once and a
   material whose base colour texture it is, white under it, the colour in `extras.partcadColor`; the rest of the payload
   goes through OCCT's writer as before. The viewer keeps the file's image when it replaces the file's material with its
@@ -445,7 +457,8 @@ is read: a PNG or a JPEG that decodes, inside its package, at most 16 MB.
 
 *Open:* the image in the exports - glTF (a `baseColorTexture` and `TEXCOORD_0`, laid as above, on the meshes OCCT's
 writer makes of each placement) and 3MF (`texture2d` groups); other mappings (a face's own parameters, cylindrical, a
-decal placed once); a finish's roughness and metallic drawn over an image.
+decal placed once). A finish drawn over an image is drawn as on a white face, the image multiplying its diffuse
+light, in a shaded drawing and in the IDE alike: its highlights are not tinted by the image's colours.
 
 ## 10. LEGO, end to end
 

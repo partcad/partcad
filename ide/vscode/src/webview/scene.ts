@@ -68,6 +68,7 @@ import {
     Appearance,
     DEFAULT_APPEARANCE,
     OWN_APPEARANCE,
+    OwnAppearance,
     appearanceKey,
     appearanceOf,
     edgeColor,
@@ -85,6 +86,7 @@ import {
     readViewpoint,
 } from './cameraView';
 import { el, empty } from './dom';
+import { applyFinish } from './finish';
 import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
 import { GeometryCache, geometryCache } from './geometryCache';
 import { geometryMissing, reportError } from './host';
@@ -756,7 +758,7 @@ function keepOwnColors(gltf: GLTF): void {
         const material = mesh.material as THREE.Material;
         const own = ownAppearance(material, gltf.parser.associations.get(material)?.materials !== undefined);
         if (own !== undefined) {
-            const { map, ...plain } = own;
+            const { map, ...plain } = own as OwnAppearance & { map?: THREE.Texture };
             mesh.userData[OWN_APPEARANCE] = plain;
             if (map !== undefined) {
                 // Not in 'userData', which a clone copies through JSON and a
@@ -1341,10 +1343,10 @@ function paint(group: THREE.Object3D, geometry: Geometry, appearance: Appearance
         const drawable = child as THREE.Mesh | THREE.Line;
         let material: THREE.Material;
         if ((drawable as THREE.Mesh).isMesh) {
-            const own = drawable.userData[OWN_APPEARANCE] as Appearance | undefined;
+            const own = drawable.userData[OWN_APPEARANCE] as OwnAppearance | undefined;
             const map = ownTextures.get(drawable.geometry);
             material = geometry.faceMaterial(
-                primitiveAppearance(own !== undefined && map !== undefined ? { ...own, map } : own, appearance),
+                primitiveAppearance(own?.color !== undefined && map !== undefined ? { ...own, map } : own, appearance),
             );
         } else if ((drawable as THREE.Line).isLine) {
             material = geometry.lineMaterial(appearance);
@@ -1420,6 +1422,12 @@ class Geometry {
      * A colour drawn with an image is drawn with it, white under it - three
      * multiplies the two - and remembers the colour it is drawn as where an
      * image cannot be in 'userData.flatColor' (see 'painter.ts').
+     *
+     * A colour drawn with a finish - a face whose CMF set says how rough or how
+     * metallic it is - is drawn as a shaded 'pc render' draws it ('finish.ts'):
+     * the same Phong material, with its diffuse colour, specular colour and
+     * shininess from the finish and the room's reflection added. On an image,
+     * the image is its colour, white under it, as the render takes it.
      */
     faceMaterial(appearance: Appearance): THREE.Material {
         const key = appearanceKey(appearance);
@@ -1434,6 +1442,9 @@ class Geometry {
             });
             material.userData.alpha = appearance.opacity;
             material.userData.flatColor = appearance.color;
+            if (appearance.finish !== undefined) {
+                applyFinish(material, appearance.map === undefined ? appearance.color : 0xffffff, appearance.finish);
+            }
             this.faces.set(key, material);
         }
         return material;
