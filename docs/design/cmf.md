@@ -242,7 +242,7 @@ names one in `cmfConvention`, which never applies to what `set_cmf` said in Part
 run code of its own (a tool whose names cannot be matched by a table) would be an implementation a package supplies,
 the way file types are under `render:`; none needs one yet.
 
-Built: `partcad` (identity), `step`, `build123d`, `cadquery`, `openscad` and `3mf`; a CSS colour written where a
+Built: `partcad` (identity), `step`, `build123d`, `cadquery`, `openscad`, `3mf` and `gltf`; a CSS colour written where a
 reference belongs is read as its `rgba` ([section 4](#4-names-and-references)). A STEP file PartCAD wrote states its
 references in an attribute of its own ([section 9](#9-presentation), "Exports"), and the reader states them in sets of
 origin `raw:partcad`, as `set_cmf` does: PartCAD's own terms, which no `cmfConvention` applies to. A reference that does
@@ -250,8 +250,14 @@ not resolve where the file is read is what an unclaimed name is - a colour drawn
 or finish left for the parameters - and is not looked up under `ids.step` by its value.
 `usd` is the `usd` part type's: a face's look named as its USD material is (`displayColor` where none is bound), with
 the colour, and the roughness and metalness, the stage says, which a part type states beside its designations
-(`wrapper_part_type`) and which are drawn where no finish claims the name. `gltf` is a convention with no reader yet,
-and `ldraw` is partcad-ldraw's to read. Open: telling the CAD tool that wrote a STEP file from its `FILE_NAME`
+(`wrapper_part_type`) and which are drawn where no finish claims the name. The `gltf` reader (`wrapper_import_gltf`)
+states a primitive's material as glTF does: its name as the colour (a nameless one as the `#RRGGBB` it draws), its
+linear base colour as sRGB, its roughness and metallic as the finish's display, and only what the material states - a
+textured material with no factor states no colour, and glTF's defaults of 1 are not stated for it. A material
+PartCAD's glTF export wrote is read as the references under its `extras.partcad`, in sets of origin `raw:partcad`, as
+the STEP attribute is. The set covering most of a solid is the solid's (a material is a solid's, so the faces' agreed
+one is said of it), and faces in another say theirs, so a part exported to glTF reads back with the sets it had.
+`ldraw` is partcad-ldraw's to read. Open: telling the CAD tool that wrote a STEP file from its `FILE_NAME`
 originating system, and conventions of its own for each of the tools the public index holds STEP files from
 (`solidworks`, `onshape`, `fusion`, `inventor`, `creo`, `nx`, `catia`); a package declares such a convention in
 `cmfConventions:` meanwhile.
@@ -427,8 +433,8 @@ where there is room.
   - **Open:** a material per *solid* in the STEP form other tools read (CAx-IF user-defined attributes on shape
     aspects; OCCT writes a material per product only, and reads a multi-solid product's onto its first solid); finishes
     in a STEP form other tools read (only in `partcad.cmf`); instance overrides (SHUO), which PartCAD has no use for
-    since it writes colour on definitions; references read back from a glTF (`extras`) or a 3MF (base names: the `3mf`
-    convention matches the display value); the CMF section after the BREP of a `.brep` export; and **MJCF**, which
+    since it writes colour on definitions; references read back from a 3MF (base names: the `3mf` convention matches
+    the display value) - a glTF's (`extras`) are read back, see [section 7](#7-conventions-and-converters); the CMF section after the BREP of a `.brep` export; and **MJCF**, which
     `partcad/partcad-sim-mujoco` writes - `cmf_export.groups` is what a geom per set would be made of.
 - **Documentation:** `docs/source/digital_thread/lifecycle/design_cmf.rst` explains the model;
   `docs/source/config_cmf.rst` is the configuration reference for the three sections; the parts and assemblies
@@ -684,7 +690,8 @@ gives it, with the viewer's own material, and a primitive with no material in it
 | STEP via XCAF; scripts and OpenSCAD as sources; converters; `pc import` keeping CMF | built |
 | IDE: explorer, CMF tab, BOM columns, per-primitive materials, finishes in 3D, a set singled out | built |
 | Exports: STEP via XCAF, glTF, 3MF, URDF; the formats with no CMF warn | built |
-| Exports: STEP's shared forms of a per-solid material and a finish, MJCF, references read from glTF and 3MF | open |
+| References read back from a glTF export (`extras.partcad`), and a glTF's own materials under the `gltf` convention | built |
+| Exports: STEP's shared forms of a per-solid material and a finish, MJCF, references read from 3MF | open |
 | `//builtin/color:rgba` shipped with PartCAD; LEGO in partcad-ldraw and its examples | decided |
 | Textures: a colour's display as an image, drawn by a shaded `pc render`, a video and the IDE's 3D view | built |
 | Textures in the exports | open |

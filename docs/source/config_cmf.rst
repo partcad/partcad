@@ -293,6 +293,25 @@ The CAD applications' files (``fcstd``, ``f3d``, ``sldprt``, ``ipt``, ``catpart`
   Each object of a 3MF in the display colour of its base material, and each triangle that names a base material of
   its own in that one's.
 
+``gltf``
+  Each face in the material of its triangle's primitive, as glTF states it, under the ``gltf`` convention: the
+  material's name is the colour's, which a package claims with ``ids: {gltf: <name>}`` (one with no name is the colour
+  it draws, as ``#RRGGBB``); its base colour -- glTF's linear factor, restated as sRGB -- is what the face is drawn in;
+  and its roughness and metallic factors are the finish's display. Only what a material states is read: one drawn with
+  a texture and no colour factor states no colour, and one that leaves out roughness or metallic does not have glTF's
+  defaults stated for it. The material that covers most of a solid is the solid's, and the faces in another say
+  theirs. A material PartCAD's own export wrote is read as the references it keeps under ``extras.partcad`` -- the
+  colour, material and finish the part had, whatever ``cmfConvention`` says. Textures and vertex colours are not read.
+  The parts of a ``gltf`` assembly, and of one ``pc import assembly`` makes of a glTF file, are read the same way.
+
+  .. code-block:: yaml
+
+    colors:
+      signal-red:
+        display: "#C91A09"
+        ids:
+          gltf: RedPaint          # a glTF material named 'RedPaint' is this colour
+
 A package's own part type (``partTypes:`` of kind ``wrapper``)
   Its script may hand back, beside the shape, what each face (and solid) of it is in, as plain data in its own terms,
   for the convention it names to convert:
@@ -381,7 +400,8 @@ What the exports write
 
 ``gltf``
   A material per set: named after its colour, material and finish, its display as glTF's (linear) base colour, its
-  finish's roughness and metallic, and the references under the material's ``extras.partcad``.
+  finish's roughness and metallic, and the references under the material's ``extras.partcad`` -- which is what a
+  ``gltf`` part reads back (see :ref:`cmf-sources`).
 
 ``3mf``
   A base material per set, with its name and its display colour, named by the mesh object and by every triangle in

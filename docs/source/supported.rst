@@ -66,7 +66,8 @@ Using CAD files:
 - STL
 - 3MF
 - OBJ
-- glTF (``.gltf`` with its buffers, or ``.glb``)
+- glTF (``.gltf`` with its buffers, or ``.glb``), compressed web assets included: Draco, meshoptimizer
+  (``EXT_meshopt_compression``, ``KHR_meshopt_compression``), quantized and GPU-instanced meshes
 - FreeCAD (``.FCStd``)
 - Autodesk Fusion (``.f3d``)
 - SolidWorks parts (``.SLDPRT``)
@@ -108,6 +109,7 @@ Assembly models (3D)
 
 - Using URDF, with links, joints and physics
 - Using a CAD file that stays the source: STEP, Autodesk Fusion (``.f3d``) or Creo View (``.pvz``)
+- Using a glTF scene (``.gltf``, ``.glb``), a part per mesh, placed as its nodes place them
 - ``pc filter`` declares a second assembly made of some of the links of an existing one: a sub-assembly
   carved out of a big one without editing it by hand
 
