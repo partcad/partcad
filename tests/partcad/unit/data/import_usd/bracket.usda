@@ -1,0 +1,36 @@
+#usda 1.0
+(
+    doc = "A closed box, 30 by 20 by 10 millimetres, in red; beside it, a proxy and a studio floor that are not it."
+    defaultPrim = "Bracket"
+    metersPerUnit = 0.001
+    upAxis = "Z"
+)
+
+def Xform "Bracket"
+{
+    def Mesh "Body"
+    {
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 1, 3, 2, 4, 6, 7, 5, 0, 4, 5, 1, 2, 3, 7, 6, 0, 2, 6, 4, 1, 5, 7, 3]
+        point3f[] points = [(0, 0, 0), (0, 0, 10), (0, 20, 0), (0, 20, 10), (30, 0, 0), (30, 0, 10), (30, 20, 0), (30, 20, 10)]
+        color3f[] primvars:displayColor = [(1, 0, 0)]
+    }
+
+    def Mesh "Proxy"
+    {
+        uniform token purpose = "proxy"
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(0, 0, 100), (1, 0, 100), (0, 1, 100)]
+    }
+}
+
+def Xform "Studio"
+{
+    def Mesh "Floor"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1000, -1000, -1), (1000, -1000, -1), (1000, 1000, -1), (-1000, 1000, -1)]
+    }
+}

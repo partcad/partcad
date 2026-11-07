@@ -22,7 +22,7 @@ the `partcad` one it mirrors and fails when a type is added there and not here.
 That test is the reason these are tables and not a handful of `if`s.
 
 "Mesh" means the file itself carries triangles -- what an STL, a 3MF, an OBJ, a
-glTF or a three.js JSON is. Everything else is False, and False means exactly one
+glTF, a three.js JSON or an OpenUSD stage is. Everything else is False, and False means exactly one
 thing to a caller: *this is not already a mesh*, so an application that needs one
 has to be given a converted copy. It is deliberately not a claim that the type
 has no geometry -- `alias` and `enrich` are references, `extrude` and `sweep` are
@@ -114,6 +114,9 @@ PART_TYPE_IS_MESH: Dict[str, bool] = {
     "catpart": False,
     "sat": False,
     "pvz": False,
+    # An OpenUSD stage (`//builtin/import`): what a renderer draws, which is
+    # polygon meshes, as an OBJ's are.
+    "usd": True,
     # An assembly description, not a shape: a URDF names the mesh files of its
     # links. It is in the part extension mapping, so it is answered here too.
     "urdf": False,
@@ -141,8 +144,9 @@ PART_TYPE_EXTENSION: Dict[str, str] = {
 }
 
 # The part types PartCAD ships as `partTypes` of `//builtin/import` rather than
-# as factories -- the native CAD formats it reads through cadmpeg, and IGES,
-# which it reads through OpenCASCADE -- and the extension each declares, spelled
+# as factories -- the native CAD formats it reads through cadmpeg, IGES, which
+# it reads through OpenCASCADE, and OpenUSD, which it reads through usd-core --
+# and the extension each declares, spelled
 # as the declaration spells it. A part's file is `<name>.<extension>` unless it
 # says otherwise, so that spelling is the one a file imported into a package is
 # written under. Mirrored from the declarations themselves by the completeness
@@ -156,6 +160,7 @@ BUILTIN_PART_TYPE_EXTENSION: Dict[str, str] = {
     "catpart": "CATPart",
     "sat": "sat",
     "pvz": "pvz",
+    "usd": "usd",
 }
 
 # Other spellings of the formats above. PartCAD names one extension per type,
@@ -163,7 +168,8 @@ BUILTIN_PART_TYPE_EXTENSION: Dict[str, str] = {
 # by something else as often as not, and '.stp' and '.glb' are what that
 # something else calls these. An ACIS body is text in a '.sat' and binary in a
 # '.sab', and ShapeManager's are '.smt' and '.smb'; cadmpeg tells them apart by
-# their content, so they are one type. A copy of
+# their content, so they are one type; so does USD of its text and binary
+# layers and its packages. A copy of
 # `partcad.shape.PART_EXTENSION_ALIASES`, which `pc add part` names a part by
 # ('plate.igs' adds 'plate').
 EXTENSION_ALIASES: Dict[str, str] = {
@@ -174,6 +180,9 @@ EXTENSION_ALIASES: Dict[str, str] = {
     "sab": "sat",
     "smt": "sat",
     "smb": "sat",
+    "usda": "usd",
+    "usdc": "usd",
+    "usdz": "usd",
 }
 
 # The extension of an ASSY file. 'assy' is an assembly type rather than a part

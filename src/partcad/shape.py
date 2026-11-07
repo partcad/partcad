@@ -90,6 +90,9 @@ PART_EXTENSION_ALIASES = {
     "sab": "sat",
     "smt": "sat",
     "smb": "sat",
+    "usda": "usd",
+    "usdc": "usd",
+    "usdz": "usd",
 }
 
 SKETCH_EXTENSION_MAPPING = {
@@ -1478,6 +1481,11 @@ class Shape(ShapeConfiguration):
                 shape[shape_envelope.KEY_METADATA] = recorded
 
             if cache_hash:
+                # Under the key this shape has now, which is the one it was
+                # looked up under unless building it told it more about what it
+                # is made of: a part type that reports the files it read keys the
+                # part on them as it builds it (see 'discovered_dependencies').
+                cache_hash = self.hash
                 if is_cacheable and self.owns_cache_entry:
                     # The geometry and everything recorded about it go into the
                     # one entry, in the one write, because they were produced

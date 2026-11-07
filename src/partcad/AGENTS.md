@@ -320,6 +320,15 @@ at all).
   changes a file it has declared settled waits for the file system's clock to move first. `code_version`
   remembers a script's `CACHE_VERSION` by the same rule, and `source_key` goes by the same `RACY_NS`.
 
+- **A file a part was read from that nothing declared is keyed on once a build has reported it**
+  (`discovered_dependencies`). A part's key has to be known before it is built, and the layers an OpenUSD stage
+  composes are not known until it is read. So a `partType` that says `reportsDependencies` has its script list the
+  other files it read (`output["dependencies"]`); `PartFactoryWrapper` keeps that list in the shape cache under the
+  part's *declared* key (`<key>.deps`, taken with `CacheHash.snapshot()` as the last step of `prepare_async`), and
+  every later lookup reads it back and continues that key with the content of each file in it. The build that wrote
+  the list re-keys the part at once, which is why `Shape._get_wrapped` writes under `self.hash` as it stands after
+  the build rather than the hash it read under. A part whose type says nothing pays nothing: no list is read.
+
 - **Location/coordinate format**: 3D locations (OpenCASCADE `TopLoc_Location`) are represented as
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.
