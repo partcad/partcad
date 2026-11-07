@@ -395,6 +395,11 @@ IMPORT_KEYS = frozenset({"kinds", "noun", "dropped", "binary", "requireSolid"})
 # warning (see 'Shape._accepted_as_solid').
 REQUIRE_SOLID_KEY = "requireSolid"
 
+# The 'partTypes:' field that says the type's script reports, as it builds a
+# part, the other files it read - the layers an OpenUSD stage composes - so that
+# the part is keyed on them from then on (see 'partcad.discovered_dependencies').
+REPORTS_DEPENDENCIES_KEY = "reportsDependencies"
+
 # The 'import:' field that says a format's files are bytes rather than text:
 # handed to the reader as they are, and never rendered as a Jinja2 template the
 # way a text format's are (see 'partcad.file_source').

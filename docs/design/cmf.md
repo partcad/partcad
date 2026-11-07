@@ -220,8 +220,8 @@ format to every reader and bound to OCCT versions); one solid per CMF (a painted
 ## 7. Conventions and converters
 
 **Built:** the convention, the readers of STEP and IGES (through XCAF), of the native CAD formats (through the STEP
-cadmpeg converts them to), build123d, CadQuery, OpenSCAD and 3MF, `set_cmf`, the lookup by `ids`, `cmfConventions:`, and STEP
-instance overrides on `pc import`. **Decided:** the `ldraw` reader
+cadmpeg converts them to), build123d, CadQuery, OpenSCAD, 3MF and OpenUSD, `set_cmf`, the lookup by `ids`,
+`cmfConventions:`, and STEP instance overrides on `pc import`. **Decided:** the `ldraw` reader
 ([section 10](#10-lego-end-to-end)). **Open:** a converter that has to run code of its own.
 
 **One PartCAD convention.** On a shape, CMF is a palette of sets; each holds a canonical colour, material and finish
@@ -248,7 +248,10 @@ references in an attribute of its own ([section 9](#9-presentation), "Exports"),
 origin `raw:partcad`, as `set_cmf` does: PartCAD's own terms, which no `cmfConvention` applies to. A reference that does
 not resolve where the file is read is what an unclaimed name is - a colour drawn as stated and display-only, a material
 or finish left for the parameters - and is not looked up under `ids.step` by its value.
-`gltf` is a convention with no reader yet, and `ldraw` is partcad-ldraw's to read. Open: telling the CAD tool that wrote a STEP file from its `FILE_NAME`
+`usd` is the `usd` part type's: a face's look named as its USD material is (`displayColor` where none is bound), with
+the colour, and the roughness and metalness, the stage says, which a part type states beside its designations
+(`wrapper_part_type`) and which are drawn where no finish claims the name. `gltf` is a convention with no reader yet,
+and `ldraw` is partcad-ldraw's to read. Open: telling the CAD tool that wrote a STEP file from its `FILE_NAME`
 originating system, and conventions of its own for each of the tools the public index holds STEP files from
 (`solidworks`, `onshape`, `fusion`, `inventor`, `creo`, `nx`, `catia`); a package declares such a convention in
 `cmfConventions:` meanwhile.
@@ -274,6 +277,7 @@ From vendor and standards documentation; *unverified* marks what could not be co
 | build123d | `.color`, `.label`, `.material` (0.13: a `FinishedMaterial`); innermost wins | as left | as left | none | none |
 | CadQuery 2.7 | `Assembly.add(color=…)` | `Material` (wraps `XCAFDoc_Material`) | none | none | a product per (colour, shape) |
 | LDraw | a code per triangle; `16` is "the colour that places me" | implied by the code (`RUBBER`) | implied by the code (`CHROME`, `PEARLESCENT`, `METAL`) | none | none |
+| OpenUSD | a material bound to a mesh or a `GeomSubset` of its faces: `UsdPreviewSurface`, MaterialX, MDL (OmniPBR); a texture gives a colour per face; `displayColor` where none is read | none in the schema; SimReady's material names (`opaque__metal__...`), a physics binding | the shader's roughness and metalness | composition, instancing | variant sets |
 
 What this decided: colour and physical material are separate everywhere, and a material may lend a default look;
 material sits at part or body level and appearance goes down to faces; occurrence overrides are display data in every
@@ -306,13 +310,14 @@ once the public index passes it - the path `tolerance` took.
 
 ## 9. Presentation
 
-**Built:** `pc list colors|materials|finishes`, `pc info`'s CMF section, drawings per face, a glTF material per colour,
+**Built:** `pc list colors|materials|finishes`, `pc info`'s CMF section, drawings per face, a shaded drawing's finishes,
+a glTF material per colour,
 the exports (STEP through XCAF, glTF, 3MF, URDF; the formats with no CMF warn), textures
 ([section 9.1](#91-textures)), and in the IDE the explorer's declarations, the CMF tab, the BOM and Build vs Buy
 columns and per-primitive colours, and the "Materials" callout (the 3D and 2D tabs, `pc render --with-materials`): one
 name per cluster of a material - its faces that touch or are closer than the user's `materialClusterDistance` - found
 by `material_clusters.py` among the wrappers, from a face's solid's material, else its own set's. **Open:** what the
-"Exports" item lists as open; highlighting a set's faces in the 3D view, drawing a finish's roughness and metallic, and
+"Exports" item lists as open; highlighting a set's faces in the 3D view, drawing a finish's roughness and metallic there, and
 `pc ide view` of a declaration.
 
 CMF is always shown as its three components in the order colour, material, finish: each by its declaration's name, with
@@ -352,6 +357,12 @@ where there is room.
   between two colours is drawn once per colour, the later on top. A drawing is on white, so a colour too light to see
   there (relative luminance above 0.5; goldenrod is 0.42) is drawn darker, hue kept: a white face is drawn in grey
   lines rather than invisible ones.
+- **Shaded drawings** (`pc render --style shaded`, PNG, JPEG and video, `raster_scene`): a face whose set says a
+  finish's roughness or metalness is lit as a metallic-roughness surface - its highlight as sharp as it is smooth
+  (Blinn-Phong, shininess `2 / r^4 - 2`, which is three's 30 at the default 0.5), tinted by its colour as far as it is
+  metal, its diffuse light what is no metal of it, and the room's light reflected - `finished_light`. A face whose set
+  says neither is lit with three's Phong material as before, and a drawing with no finish anywhere is the same bytes
+  it was.
 - **glTF:** the faces of one colour are one mesh with that colour's material, so a part of one colour is still one
   primitive; the IDE draws each such primitive in its own colour (above).
 - **Exports** (`wrappers/cmf_export.py`, read off `shape_tree` and each payload's section; a face nobody coloured is

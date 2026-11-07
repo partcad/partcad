@@ -74,6 +74,7 @@ Using CAD files:
 - CATIA V5 parts (``.CATPart``)
 - ACIS and ShapeManager (``.sat``, ``.sab``, ``.smt``, ``.smb``)
 - Creo View (``.pvz``)
+- OpenUSD (``.usd``, ``.usda``, ``.usdc``, ``.usdz``), as the meshes a stage shows
 - `KiCad EDA`_ PCBs
 
 Using a part type the package defines itself (``partTypes``), including one that reads a file format of its

@@ -32,7 +32,7 @@
 
 [project]
 name = "partcad"
-version = "0.9.10"
+version = "0.9.12"
 description = "Package manager for CAD models and a modelling framework"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "sdf", "cad", "design", "openscad", "step", "stl"]
@@ -545,6 +545,12 @@ allure-behave = "^2.16.0"
 pytest-xdist = "^3.8.0"
 pyhamcrest = "^2.1.0"
 strip-ansi = "^0.1.1"
+# Pixar's USD library, which the 'usd' part type of '//builtin/import' reads a
+# stage with in its sandbox. Never a runtime dependency: the tests import it to
+# drive that type's reader in process ('tests/partcad/unit/test_part_usd.py'),
+# where coverage can see it. The release the type pins, which is 3.11 and newer;
+# on 3.10 those tests skip, as the sandbox there reads with 25.11.
+usd-core = { version = "26.11", python = ">=3.11" }
 nox = "^2026.7.11"
 nox-poetry = "^1.2.0"
 python-jsonrpc-server = "^0.4.0"

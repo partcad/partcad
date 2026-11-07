@@ -1,0 +1,44 @@
+desc: |
+  Parts read from OpenUSD stages by the built-in 'usd' part type, each one
+  twice: with usd-core, which the type installs into the sandbox, and with
+  cadmpeg ('reader: cadmpeg').
+
+  'bracket.usda' is a closed box, 30 by 20 by 10 mm, in red, beside a proxy
+  mesh and a studio floor that are not part of it: the box is the stage's
+  default prim. 'scene.usda' is a Y-up stage in centimetres, a triangle placed
+  by a turned and scaled parent and three native instances of another.
+  'looks.usda' says how its faces look every way the type reads: an image
+  ('halves.bmp') laid by UVs, a subset in a metal, a 'displayColor', and an MDL
+  preset ('brushed.mdl'), which the type reports reading as it builds the part.
+  'bracket_listed' lists a file under 'dependencies' instead. All are written by
+  hand for these tests.
+
+parts:
+  bracket:
+    type: usd
+    path: bracket.usda
+  bracket_cadmpeg:
+    type: usd
+    path: bracket.usda
+    parameters:
+      reader:
+        type: string
+        default: cadmpeg
+  scene:
+    type: usd
+    path: scene.usda
+  scene_cadmpeg:
+    type: usd
+    path: scene.usda
+    parameters:
+      reader:
+        type: string
+        default: cadmpeg
+  looks:
+    type: usd
+    path: looks.usda
+  bracket_listed:
+    type: usd
+    path: bracket.usda
+    dependencies:
+      - halves.bmp
