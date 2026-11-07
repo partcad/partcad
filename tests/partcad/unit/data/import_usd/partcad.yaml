@@ -9,8 +9,9 @@ desc: |
   by a turned and scaled parent and three native instances of another.
   'looks.usda' says how its faces look every way the type reads: an image
   ('halves.bmp') laid by UVs, a subset in a metal, a 'displayColor', and an MDL
-  preset ('brushed.mdl'), which are its 'dependencies'. All are written by hand
-  for these tests.
+  preset ('brushed.mdl'), which the type reports reading as it builds the part.
+  'bracket_listed' lists a file under 'dependencies' instead. All are written by
+  hand for these tests.
 
 parts:
   bracket:
@@ -36,6 +37,8 @@ parts:
   looks:
     type: usd
     path: looks.usda
+  bracket_listed:
+    type: usd
+    path: bracket.usda
     dependencies:
       - halves.bmp
-      - brushed.mdl

@@ -138,6 +138,10 @@ class Looks:
         self.materials = []
         self._name_index = {}
         self._material_index = {}
+        # Every file a look was read from - an image, a MaterialX document, an
+        # MDL module - by its resolved path: what the part is built from besides
+        # the layers of the stage (see 'part_usd.read').
+        self.read = set()
 
     def name_id(self, name):
         if name not in self._name_index:
@@ -271,6 +275,7 @@ class Looks:
         kind, arguments = known if known is not None else (None, {})
         resolved = getattr(source, "resolvedPath", "") if source is not None else ""
         if kind is None and resolved:
+            self.read.add(resolved)
             text = read_bytes(resolved)
             preset = parse_mdl_preset(text.decode("utf-8", "replace") if text else "", sub)
             if preset is not None:
@@ -343,6 +348,7 @@ class Looks:
         """The MaterialX document at 'resolved', read once."""
         key = ("mtlx", resolved)
         if key not in self.surfaces:
+            self.read.add(resolved)
             self.surfaces[key] = MtlxDocument(resolved)
         return self.surfaces[key]
 
@@ -351,6 +357,7 @@ class Looks:
     def image(self, resolved):
         """The image at 'resolved' as floats (rows, columns, 4), 0 to 1; None where it cannot be read."""
         if resolved not in self.images:
+            self.read.add(resolved)
             self.images[resolved] = _read_image(resolved)
         return self.images[resolved]
 

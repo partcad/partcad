@@ -169,6 +169,10 @@ partTypes:
       A surface: a solid only where a mesh closes.
     path: part_usd.py
     extension: usd
+    # A stage of loose layers is read from more files than the one a part
+    # names: the script reports them as it builds the part, and the part is
+    # rebuilt when one of them changes.
+    reportsDependencies: true
     pythonRequirements:
       - usd-core==26.11; python_version >= "3.11"
       - usd-core==25.11; python_version < "3.11"

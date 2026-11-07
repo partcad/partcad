@@ -37,6 +37,15 @@ its designation ('rgba', 0-255 and an alpha from 0 to 1); and how rough and
 how metallic the source says its surface looks, each from 0 to 1, for where
 nothing claims a finish ('roughness', 'metallic').
 
+A script that reads files beyond the one it is handed ('request["path"]') - the
+layers a stage composes, the textures it names - may say which, so that the part
+is built again when one of them changes, if its partType says
+'reportsDependencies' (see 'partcad.discovered_dependencies'):
+
+    output["dependencies"] = ["layers/geometry.usd", "/abs/path/wood.png", ...]
+
+each absolute or relative to the directory of 'request["path"]'.
+
 Both '__file__' and the run name '__partcad_part__' are set on the script, so it
 can gate its build logic (``if __name__ == "__partcad_part__":``) and remain
 importable for its own unit tests.
@@ -195,7 +204,11 @@ def process(path, request):
     else:
         shapes = wrapper_common.finished_shapes(shapes)
 
-    return {"success": True, "exception": None, "shapes": shapes}
+    answer = {"success": True, "exception": None, "shapes": shapes}
+    dependencies = output.get("dependencies")
+    if isinstance(dependencies, (list, tuple)):
+        answer["dependencies"] = [str(entry) for entry in dependencies if isinstance(entry, str)]
+    return answer
 
 
 path, request = wrapper_common.handle_input()

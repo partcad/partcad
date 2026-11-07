@@ -2849,6 +2849,7 @@
             "extension": { "type": "string", "minLength": 1, "description": "The extension of the file each part of this type is read from. Declaring one makes the part file-backed: its 'path' is relative to the part's own package and defaults to '<name>.<extension>', 'fileFrom' fetches it, and the script finds it as request['path']" },
             "dockerImage": { "type": "string", "minLength": 1, "description": "The image the 'docker' sandbox runs this partType's script in, where it can be pulled. Defaults to the declaring package's own" },
             "requireSolid": { "type": "boolean", "default": false, "description": "Whether every part of this type is a solid, so that one that is not - no solid in it, faces that bound nothing, an open or invalid solid, one with no volume - fails to build instead of being built with a warning. Declare it for a type that reads or generates bodies, such as a converter from a native CAD format, where such a part is one it read wrongly" },
+            "reportsDependencies": { "type": "boolean", "default": false, "description": "Whether the script reports, in output[\"dependencies\"], the other files it read as it built a part - the layers an OpenUSD stage composes, the textures it names - so that the part is built again when one of them changes, with nothing to list under dependencies" },
             "pythonRequirements": { "type": "array", "items": { "type": "string" } }
           },
           "additionalProperties": false

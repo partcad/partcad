@@ -545,22 +545,13 @@ a part's own, declared under ``parameters`` like any other:
           type: string
           default: usd-core   # or cadmpeg
 
-A built part is kept, and built again when its file changes. A ``.usdz`` is one
-file and needs nothing more. A stage of loose layers is not: what it composes -
-sublayers, references, payloads, the textures and MaterialX documents its
-materials name - are other files, which PartCAD does not open a stage to find.
-List them under ``dependencies``, as an OpenSCAD part lists what it includes, and
-a change to any of them builds the part again:
-
-.. code-block:: yaml
-
-  parts:
-    chair:
-      type: usd
-      path: assets/Chair/Chair.usd
-      dependencies:
-        - assets/Chair/Chair.geom.usd
-        - assets/Chair/Chair.mtlx
+A built part is kept, and built again when what it was read from changes: its
+file, and every other file the stage was read from - the layers it composes
+(sublayers, references, payloads), and the images, MaterialX documents and MDL
+modules its looks come from. The type reports those as it builds the part (it
+says ``reportsDependencies``, see :ref:`part-types`), so a stage of loose layers
+needs nothing listed for it; with ``reader: cadmpeg``, they are what
+``usd-core``'s own walk of the stage finds.
 
 An ``iges`` part is read with `OpenCASCADE <https://dev.opencascade.org/>`_,
 whose IGES reader is the counterpart of the writer ``pc export -t iges`` uses, so
@@ -946,6 +937,23 @@ declares the type: ``path`` is relative to the part's package, it defaults to
 ``<part name>.<extension>``, ``fileFrom`` fetches it, and it is what the part's
 cache entry depends on, so editing it rebuilds the part. The script finds it as
 ``request["path"]``, an absolute path.
+
+A format whose files name other files -- an OpenUSD stage that composes layers
+and names textures -- is read from more than the one a part names, and those
+are not known until the file is read. A ``partType`` whose script says which it
+read declares ``reportsDependencies: true``; the script lists them as it builds
+the part, absolute or relative to the directory of ``request["path"]``:
+
+.. code-block:: python
+
+  output["dependencies"] = ["layers/geometry.usda", "textures/wood.png"]
+
+PartCAD keeps that list beside the part in its cache, and keys the part on the
+content of every file in it from then on, so editing one of them builds the part
+again, and that build reports the list afresh. Nothing has to be listed in the
+part's configuration. The first build has no list to go by, which is no loss:
+there is nothing cached for it to be read back from yet. A part's
+``dependencies:`` is still read too, for the files a script does not report.
 
 The script is a converter more often than not, and a converter is often a
 program pip cannot install. Two things serve that. ``request["cache_dir"]`` is a

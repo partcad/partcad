@@ -936,7 +936,9 @@ def test_the_script_answers_with_the_shape_its_cmf_and_what_it_left_out(tmp_path
     answer = part_usd.run(
         {"path": os.path.join(DATA, "looks.usda"), "parameters": {"surface": "mesh", "maxTriangles": "1e6"}}
     )
-    assert set(answer) == {"shape", "cmf"}
+    assert set(answer) == {"shape", "cmf", "dependencies"}
+    # What it was read from besides the stage: the image and the MDL preset its looks name.
+    assert answer["dependencies"] == ["brushed.mdl", "halves.bmp"]
     curves = _stage(
         tmp_path,
         _root(
@@ -948,6 +950,53 @@ def test_the_script_answers_with_the_shape_its_cmf_and_what_it_left_out(tmp_path
     assert "left out what is not a mesh: 1 BasisCurves" in capsys.readouterr().err
     answer = part_usd.run({"path": curves, "parameters": {"purpose": "final"}})
     assert "'purpose' is one of" in answer["exception"]
+
+
+def test_a_stage_reports_the_layers_it_composed_and_the_files_its_looks_came_from(tmp_path):
+    """What a stage of loose layers was read from: a sublayer, a reference, a texture, and one outside its folder."""
+    (tmp_path / "layers").mkdir()
+    (tmp_path / "textures").mkdir()
+    elsewhere = tmp_path.parent / ("%s-elsewhere" % tmp_path.name)
+    elsewhere.mkdir()
+    _image(tmp_path / "textures" / "red.png", [[[255, 0, 0, 255]]])
+    _stage(tmp_path, _root(_quad("Floor")), name="layers/floor.usda")
+    _stage(elsewhere, _root(_quad("Shelf", 40)), name="shelf.usda")
+    texture = _material(
+        "Red",
+        _shader("UsdPreviewSurface", ["color3f inputs:diffuseColor.connect = </Root/Materials/Red/Tex.outputs:rgb>"]),
+        children=_shader("UsdUVTexture", ["asset inputs:file = @../textures/red.png@"], "float3 outputs:rgb").replace(
+            '"Shader"', '"Tex"'
+        ),
+    )
+    _stage(tmp_path, _root(_quad("Tile", 20, "/Root/Materials/Red"), _materials(texture)), name="layers/tiles.usda")
+    shelf = str(elsewhere / "shelf.usda").replace(os.sep, "/")
+    path = _stage(
+        tmp_path,
+        """
+        def Xform "Root" (
+            prepend references = [@./layers/tiles.usda@</Root>, @%s@</Root>]
+        )
+        {
+        }
+        """ % shelf,
+        extra="    subLayers = [@./layers/floor.usda@]\n",
+    )
+    model = part_usd.read(path)
+    assert model.triangle_count() == 6
+    said = part_usd.reported(model.files, path)
+    assert sorted(said) == sorted(
+        ["layers/floor.usda", "layers/tiles.usda", "textures/red.png", os.path.abspath(str(elsewhere / "shelf.usda"))]
+    )
+    # cadmpeg composes a stage itself, so what it was read from is what USD's own walk of it finds.
+    walked = part_usd.reported(part_usd.stage_files(path), path)
+    assert set(said) <= set(walked)
+    assert part_usd.stage_files(str(tmp_path / "missing.usda")) == []
+
+
+def test_a_package_is_one_file_and_reports_nothing_else():
+    assert part_usd._on_disk("/a/b.usdz[c/d.png]") == "/a/b.usdz"
+    assert part_usd._on_disk("/a/b.usda") == "/a/b.usda"
+    assert part_usd.reported(["/a/stage.usdz", "/a/stage.usdz"], "/a/stage.usdz") == []
 
 
 # ---------------------------------------------------------------------------

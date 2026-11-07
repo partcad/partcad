@@ -19,7 +19,9 @@ out, ``fileFrom`` to fetch it. The file is resolved against the package that
 declares the part rather than the one that declares the type, is what the
 part's cache entry depends on, and reaches the script as ``request["path"]``.
 The other files it is read from - the layers a USD stage composes - are its
-``dependencies``, which the cache entry depends on too.
+``dependencies``, which the cache entry depends on too: those its package lists,
+and, for a type that says ``reportsDependencies``, the ones its script reports
+reading as it builds the part (see 'partcad.discovered_dependencies').
 That is what makes a format a package can teach PartCAD to read: 'fcstd' in
 '//builtin/import', and the ones a plugin package supplies.
 """
@@ -27,7 +29,7 @@ That is what makes a format a package can teach PartCAD to read: 'fcstd' in
 import base64
 import os
 
-from . import code_version
+from . import code_version, discovered_dependencies
 from . import logging as pc_logging
 from . import output, sandbox_versions, shape_envelope, telemetry, transform, wrapper
 from .part_factory import PartFactory
@@ -97,6 +99,11 @@ class PartFactoryWrapper(PartFactory):
                 os.path.normpath(os.path.join(source_project.config_dir, str(dependency)))
                 for dependency in config.get("dependencies") or []
             ]
+            # The part's key without the files its script reported reading the
+            # last time it was built, for a type that reports them: what that
+            # list is kept under, and what the key with them continues (see
+            # 'partcad.discovered_dependencies'). Set as the part is prepared.
+            self._declared_key = None
 
             # The image is the implementing package's, as it is for an output
             # implementation (see 'Implementation.docker_image'): which
@@ -170,7 +177,7 @@ class PartFactoryWrapper(PartFactory):
         # And on what the part is judged by, which is part of what it is: read
         # here as well as in 'instantiate()', because the cache is read before
         # anything is instantiated (see 'Shape.key_on_required_solid').
-        required = self._part_type_requires_solid()
+        required = self._part_type_flag(output.REQUIRE_SOLID_KEY)
         if required is None:
             # A value that is not a flag. Keyed as no requirement, the part
             # would be read back from whatever was cached before the value was
@@ -179,17 +186,58 @@ class PartFactoryWrapper(PartFactory):
             part.cacheable = False
         elif required:
             part.key_on_required_solid()
+        # Last, because it is keyed on everything above: the files the part's
+        # script reported reading the last time it was built.
+        reports = self._part_type_flag(output.REPORTS_DEPENDENCIES_KEY)
+        if reports is None:
+            part.cacheable = False
+        elif reports and part.get_cacheable():
+            await self._key_on_discovered(part)
 
-    def _part_type_requires_solid(self):
-        """The partType's 'requireSolid', or None when it is not a flag."""
+    def _part_type_flag(self, key):
+        """The partType's flag 'key': False where it is not declared, None where it is not a flag."""
         pt_project = self.ctx.get_project(self.part_type_package)
         pt_config = pt_project.get_part_type_config(self.part_type_name) if pt_project is not None else None
         if pt_config is None:
             return False  # 'instantiate()' says so, where it can fail the part
         try:
-            return output.as_flag(pt_config.get(output.REQUIRE_SOLID_KEY), output.REQUIRE_SOLID_KEY)
+            return output.as_flag(pt_config.get(key), key)
         except ValueError:
             return None
+
+    def _discovered_base_dir(self) -> str:
+        """What the files a script reports are relative to: the directory of the part's file, or its package's."""
+        return os.path.dirname(os.path.abspath(self.path)) if self.path else self.project.config_dir
+
+    async def _key_on_discovered(self, part) -> None:
+        """Key 'part' on the files its script reported reading the last time it was built, if it was.
+
+        The list is kept under the part's declared key - everything it is keyed
+        on before this - which is what is looked up here; the part is then keyed
+        on that and on the content of every file in the list (see
+        'partcad.discovered_dependencies').
+        """
+        self._declared_key = part.hash.snapshot()
+        if self._declared_key.get() is None:
+            return
+        found = await self.ctx.cache_shapes.read_data_async(self._declared_key, [discovered_dependencies.KEY])
+        listed = discovered_dependencies.parse(found.get(discovered_dependencies.KEY))
+        if listed:
+            part.hash = discovered_dependencies.keyed_on(self._declared_key, listed, self._discovered_base_dir())
+
+    async def _record_discovered(self, part, reported) -> None:
+        """Keep the files a build of 'part' reported reading, and key the part on them from now on.
+
+        Kept under the declared key, where the next lookup finds them, and the
+        part is keyed on them at once, so that the entry this build writes is
+        the one that lookup asks for.
+        """
+        base_dir = self._discovered_base_dir()
+        listed = discovered_dependencies.normalized(reported, base_dir, own=self.path)
+        await self.ctx.cache_shapes.write_data_async(
+            self._declared_key, {discovered_dependencies.KEY: discovered_dependencies.serialize(listed)}
+        )
+        part.hash = discovered_dependencies.keyed_on(self._declared_key, listed, base_dir)
 
     def _part_type_versions(self):
         pt_project = self.ctx.get_project(self.part_type_package)
@@ -354,6 +402,8 @@ class PartFactoryWrapper(PartFactory):
             if not shapes:
                 part.error("The partType wrapper produced no shape")
                 return None
+            if self._declared_key is not None:
+                await self._record_discovered(part, response.get("dependencies") or [])
             self.ctx.stats_parts_instantiated += 1
             # One shape, which is what the wrapper hands back for a part however
             # many the script made: it compounds them itself, while they are

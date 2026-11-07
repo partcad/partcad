@@ -40,7 +40,7 @@ PACKAGE = "tests/partcad/unit/data/import_usd/partcad.yaml"
 # was keyed with: a release that reads OpenUSD further reads the same stage
 # into other geometry, under the same key unless this moves with it.
 USD_KEYED_FOR = "0.6.8"
-KEYED_FOR = 2
+KEYED_FOR = 3
 
 
 def _module(script):
@@ -83,16 +83,21 @@ def test_a_stage_that_is_no_solid_is_a_part_all_the_same(declared):
     assert not declared.get("requireSolid")
 
 
-def test_the_files_a_stage_composes_are_what_its_part_is_kept_for(ctx):
-    """A loose layer's textures and shaders are its 'dependencies': changing one builds the part again."""
-    looks = ctx.get_part(":looks")
-    kept_for = [os.path.abspath(path) for path in looks.cache_dependencies]
+def test_the_files_a_part_lists_are_what_it_is_kept_for_besides_its_own(ctx):
+    """A wrapper part's 'dependencies' are part of its cache key, as an OpenSCAD part's are."""
     here = os.path.abspath(os.path.dirname(PACKAGE))
-    assert kept_for == [os.path.join(here, name) for name in ("looks.usda", "halves.bmp", "brushed.mdl")]
-    # A part that names none depends on its own file and nothing else.
+    listed = ctx.get_part(":bracket_listed")
+    assert [os.path.abspath(path) for path in listed.cache_dependencies] == [
+        os.path.join(here, name) for name in ("bracket.usda", "halves.bmp")
+    ]
+    # A part that names none depends on its own file, and on what its build reports.
     assert [os.path.abspath(path) for path in ctx.get_part(":bracket").cache_dependencies] == [
         os.path.join(here, "bracket.usda")
     ]
+
+
+def test_the_type_says_it_reports_the_files_it_reads(declared):
+    assert declared["reportsDependencies"] is True
 
 
 def test_the_script_is_keyed_for_the_cadmpeg_it_reads_openusd_with():
@@ -505,3 +510,52 @@ def test_each_face_is_in_the_look_its_stage_says_and_partcad_draws_it_so(ctx):
     assert (brushed["roughness"], brushed["metallic"]) == (near(0.3), near(1.0))
     assert {entry["origin"] for entry in summary["sets"]} == {"source:usd"}
     assert summary["unspecified"].get("color", 0) == 0
+
+
+_ROOT_LAYER = """#usda 1.0
+(
+    defaultPrim = "Root"
+    metersPerUnit = 0.001
+    upAxis = "Z"
+    subLayers = [@./layers/geometry.usda@]
+)
+"""
+
+_GEOMETRY_LAYER = """#usda 1.0
+(
+    metersPerUnit = 0.001
+    upAxis = "Z"
+)
+
+def Xform "Root"
+{
+    def Mesh "Tile"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(0, 0, 0), (%(size)s, 0, 0), (%(size)s, 10, 0), (0, 10, 0)]
+    }
+}
+"""
+
+
+@pytest.mark.slow
+def test_a_part_is_built_again_when_a_layer_its_stage_composes_changes(tmp_path):
+    """Nothing lists the layer: the type reports it as it builds the part, and the part is keyed on it from then on."""
+    (tmp_path / "layers").mkdir()
+    (tmp_path / "partcad.yaml").write_text(
+        yaml.safe_dump({"name": "//layered", "parts": {"tile": {"type": "usd", "path": "tile.usda"}}})
+    )
+    (tmp_path / "tile.usda").write_text(_ROOT_LAYER)
+    (tmp_path / "layers" / "geometry.usda").write_text(_GEOMETRY_LAYER % {"size": 10})
+
+    def built():
+        ctx = pc.Context(str(tmp_path / "partcad.yaml"))
+        part = ctx.get_part(":tile")
+        cached = asyncio.run(part.is_cached_async(ctx))
+        return _box(_built(ctx, ":tile"))[3], cached
+
+    assert built() == (pytest.approx(10), False)
+    assert built() == (pytest.approx(10), True)
+    (tmp_path / "layers" / "geometry.usda").write_text(_GEOMETRY_LAYER % {"size": 25})
+    assert built() == (pytest.approx(25), False)

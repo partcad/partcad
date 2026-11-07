@@ -66,8 +66,10 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # which includes every change of the cadmpeg release 'cadmpeg_tool' reads
 # OpenUSD with ('USD_VERSION'), of the usd-core the part type installs and of
 # 'usd_look', which says what each face looks like. 2: each face's look -
-# colour, finish, material - stated under the 'usd' convention, face by face.
-CACHE_VERSION = 2
+# colour, finish, material - stated under the 'usd' convention, face by face. 3:
+# the files the stage was read from are reported, so a part is built again,
+# and so keyed on them, rather than read back from before they were.
+CACHE_VERSION = 3
 
 # How a stage is read: see the module's docstring.
 READERS = ("usd-core", "cadmpeg")
@@ -121,10 +123,13 @@ class Model:
     of what is not a surface.
     """
 
-    def __init__(self, pieces, looks, dropped):
+    def __init__(self, pieces, looks, dropped, files=()):
         self.pieces = pieces
         self.looks = looks
         self.dropped = dropped
+        # Every file on disk the stage was read from: its layers, and the
+        # images, MaterialX documents and MDL modules its looks came from.
+        self.files = sorted(set(files))
 
     def triangle_count(self):
         return sum(len(triangles) for _, triangles, _ in self.pieces)
@@ -439,7 +444,43 @@ def read(path, prim="", purpose="render", time="default", max_triangles=DEFAULT_
         raise ValueError("the stage has no prim '%s'" % prim)
     collector = _Collector(stage, code, PURPOSES[purpose], max_triangles)
     collector.collect(start)
-    return collector.model()
+    model = collector.model()
+    read = [layer.realPath for layer in stage.GetUsedLayers()] + sorted(collector.looks.read)
+    model.files = sorted({_on_disk(path) for path in read if path})
+    return model
+
+
+def _on_disk(resolved):
+    """The file on disk 'resolved' is in: the package, for a file in one ('a.usdz[b.png]')."""
+    return resolved.split("[", 1)[0] if resolved.endswith("]") and "[" in resolved else resolved
+
+
+def stage_files(path):
+    """Every file on disk the stage at 'path' names, by USD's own walk of it: for a reader that composes it itself."""
+    try:
+        from pxr import Sdf, UsdUtils
+
+        layers, assets, _ = UsdUtils.ComputeAllDependencies(Sdf.AssetPath(os.path.abspath(path)))
+    except Exception:  # no usd-core, or a stage it cannot walk: the stage alone is known
+        return []
+    return sorted({_on_disk(p) for p in [layer.realPath for layer in layers] + list(assets) if p})
+
+
+def reported(files, path):
+    """'files' as the part reports them: relative to the directory of 'path' where under it, and not 'path' itself."""
+    base = os.path.dirname(os.path.abspath(path))
+    own = os.path.normcase(os.path.abspath(path))
+    said = []
+    for file in files:
+        file = os.path.abspath(file)
+        if os.path.normcase(file) == own:
+            continue
+        try:
+            under = os.path.commonpath([os.path.normcase(file), os.path.normcase(base)]) == os.path.normcase(base)
+        except ValueError:  # another drive
+            under = False
+        said.append(os.path.relpath(file, base).replace(os.sep, "/") if under else file)
+    return said
 
 
 # -- cadmpeg ---------------------------------------------------------------------
@@ -490,7 +531,9 @@ def read_cadmpeg(path, cache_dir, prim="", purpose="render", time="default", max
             )
         with open(written, encoding="utf-8") as f:
             model = json.load(f, object_hook=_point)
-    return cadir_model(model, prim, max_triangles, package=path)
+    read = cadir_model(model, prim, max_triangles, package=path)
+    read.files = stage_files(path)
+    return read
 
 
 def cadir_model(model, prim="", max_triangles=DEFAULT_MAX_TRIANGLES, package=None):
@@ -891,6 +934,9 @@ def run(request):
     output = {"shape": shape}
     if cmf:
         output["cmf"] = cmf
+    # What else it was built from, so that changing one of those files builds
+    # it again (the type says 'reportsDependencies').
+    output["dependencies"] = reported(model.files, request["path"])
     return output
 
 
