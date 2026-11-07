@@ -562,3 +562,33 @@ def test_a_part_is_built_again_when_a_layer_its_stage_composes_changes(tmp_path)
     assert built() == (pytest.approx(10), True)
     (tmp_path / "layers" / "geometry.usda").write_text(_GEOMETRY_LAYER % {"size": 25})
     assert built() == (pytest.approx(25), False)
+
+
+@pytest.mark.slow
+def test_a_part_is_built_again_when_a_layer_its_stage_names_but_lacks_appears(tmp_path):
+    """Keyed on the layer as missing, the part is read back until it is there, and built again when it is."""
+    (tmp_path / "layers").mkdir()
+    (tmp_path / "partcad.yaml").write_text(
+        yaml.safe_dump({"name": "//layered", "parts": {"tile": {"type": "usd", "path": "tile.usda"}}})
+    )
+    root = _ROOT_LAYER.replace("(\n", '(\n    doc = "%s"\n' % uuid.uuid4(), 1)
+    (tmp_path / "tile.usda").write_text(
+        root.replace("@./layers/geometry.usda@", "@./layers/later.usda@, @./layers/geometry.usda@")
+    )
+    (tmp_path / "layers" / "geometry.usda").write_text(_GEOMETRY_LAYER % {"size": 10})
+
+    def built():
+        ctx = pc.Context(str(tmp_path / "partcad.yaml"))
+        cached = asyncio.run(ctx.get_part(":tile").is_cached_async(ctx))
+        return _box(_built(ctx, ":tile"))[3], cached
+
+    assert built() == (pytest.approx(10), False)
+    assert built() == (pytest.approx(10), True)
+    # The stronger layer, over the same mesh, when it turns up.
+    later = (
+        (_GEOMETRY_LAYER % {"size": 40})
+        .replace('def Xform "Root"', 'over "Root"')
+        .replace('def Mesh "Tile"', 'over "Tile"')
+    )
+    (tmp_path / "layers" / "later.usda").write_text(later)
+    assert built() == (pytest.approx(40), False)

@@ -30,7 +30,10 @@ A file is listed relative to the directory of the file the part is read from
 where it is under it, which keeps the list the same wherever the package is and
 whichever machine reads it from a shared tier, and absolute otherwise. A listed
 file that is not there is hashed as missing (see 'CacheHash.add_filename'), so
-one that appears later builds the part again too.
+one that appears later builds the part again too - which is why a part type
+reports the files it looked for and did not find, as well as the ones it read.
+A script that cannot tell what it read says so ('None'), and that build is not
+cached: it is built again until it can.
 """
 
 import json

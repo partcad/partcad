@@ -548,10 +548,12 @@ a part's own, declared under ``parameters`` like any other:
 A built part is kept, and built again when what it was read from changes: its
 file, and every other file the stage was read from - the layers it composes
 (sublayers, references, payloads), and the images, MaterialX documents and MDL
-modules its looks come from. The type reports those as it builds the part (it
-says ``reportsDependencies``, see :ref:`part-types`), so a stage of loose layers
-needs nothing listed for it; with ``reader: cadmpeg``, they are what
-``usd-core``'s own walk of the stage finds.
+modules its looks come from - and every one of those the stage names that is not
+there, so that one turning up builds the part again too. The type reports them as
+it builds the part (it says ``reportsDependencies``, see :ref:`part-types`), by
+``usd-core``'s own walk of the stage and what reading its looks opened, so a
+stage of loose layers needs nothing listed for it. A stage that cannot be walked
+is built every time rather than cached.
 
 An ``iges`` part is read with `OpenCASCADE <https://dev.opencascade.org/>`_,
 whose IGES reader is the counterpart of the writer ``pc export -t iges`` uses, so
@@ -952,8 +954,11 @@ PartCAD keeps that list beside the part in its cache, and keys the part on the
 content of every file in it from then on, so editing one of them builds the part
 again, and that build reports the list afresh. Nothing has to be listed in the
 part's configuration. The first build has no list to go by, which is no loss:
-there is nothing cached for it to be read back from yet. A part's
-``dependencies:`` is still read too, for the files a script does not report.
+there is nothing cached for it to be read back from yet. A file the script looked
+for and did not find belongs in the list too: it is keyed on as missing, so its
+appearing builds the part again. A script that cannot tell what it read says
+``output["dependencies"] = None``, and the part is then not cached at all. A
+part's ``dependencies:`` is still read too, for the files a script does not report.
 
 The script is a converter more often than not, and a converter is often a
 program pip cannot install. Two things serve that. ``request["cache_dir"]`` is a

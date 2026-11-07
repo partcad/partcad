@@ -128,8 +128,10 @@ class Model:
         self.looks = looks
         self.dropped = dropped
         # Every file on disk the stage was read from: its layers, and the
-        # images, MaterialX documents and MDL modules its looks came from.
-        self.files = sorted(set(files))
+        # images, MaterialX documents and MDL modules its looks came from -
+        # and the ones it names that are not there. None where that could not
+        # be told (see 'stage_files').
+        self.files = None if files is None else sorted(set(files))
 
     def triangle_count(self):
         return sum(len(triangles) for _, triangles, _ in self.pieces)
@@ -445,8 +447,15 @@ def read(path, prim="", purpose="render", time="default", max_triangles=DEFAULT_
     collector = _Collector(stage, code, PURPOSES[purpose], max_triangles)
     collector.collect(start)
     model = collector.model()
-    read = [layer.realPath for layer in stage.GetUsedLayers()] + sorted(collector.looks.read)
-    model.files = sorted({_on_disk(path) for path in read if path})
+    # What USD's own walk of the stage finds - what it names that is not there
+    # included - and what composing it and reading its looks opened: the walk
+    # does not see a texture an MDL preset or a MaterialX document names.
+    walked = stage_files(path)
+    if walked is None:
+        model.files = None
+    else:
+        read = [layer.realPath for layer in stage.GetUsedLayers()] + sorted(collector.looks.read)
+        model.files = sorted(set(walked) | {_on_disk(p) for p in read if p})
     return model
 
 
@@ -456,16 +465,24 @@ def _on_disk(resolved):
 
 
 def stage_files(path):
-    """Every file on disk the stage at 'path' names, by USD's own walk of it: for a reader that composes it itself."""
+    """Every file the stage at 'path' names, by USD's own walk of it; None where it cannot be walked.
+
+    Its layers, the assets they name, and the ones they name that are not
+    there - where they would be, which is what a part is then keyed on as
+    missing, so that one appearing builds it again. None says that what the
+    part is read from is not known, and then the part is not cached at all
+    (see 'partcad.discovered_dependencies').
+    """
     try:
         from pxr import Sdf, UsdUtils
 
-        layers, assets, _ = UsdUtils.ComputeAllDependencies(Sdf.AssetPath(os.path.abspath(path)))
-    except Exception as e:  # noqa: BLE001 - no usd-core, or a stage it cannot walk: the stage alone is known
-        # Said, because the part is then built again only when its own file changes.
-        print("usd: could not list the files %s is read from: %s" % (os.path.basename(path), e), file=sys.stderr)
-        return []
-    return sorted({_on_disk(p) for p in [layer.realPath for layer in layers] + list(assets) if p})
+        layers, assets, unresolved = UsdUtils.ComputeAllDependencies(Sdf.AssetPath(os.path.abspath(path)))
+    except Exception as e:  # noqa: BLE001 - no usd-core, or a stage it cannot walk: nothing is known
+        print("usd: could not list the files %s is read from, so it is not cached: %s" % (os.path.basename(path), e),
+              file=sys.stderr)  # fmt: skip
+        return None
+    named = [layer.realPath for layer in layers] + list(assets) + list(unresolved)
+    return sorted({_on_disk(p) for p in named if p})
 
 
 def reported(files, path):
@@ -938,7 +955,7 @@ def run(request):
         output["cmf"] = cmf
     # What else it was built from, so that changing one of those files builds
     # it again (the type says 'reportsDependencies').
-    output["dependencies"] = reported(model.files, request["path"])
+    output["dependencies"] = None if model.files is None else reported(model.files, request["path"])
     return output
 
 

@@ -990,7 +990,36 @@ def test_a_stage_reports_the_layers_it_composed_and_the_files_its_looks_came_fro
     # cadmpeg composes a stage itself, so what it was read from is what USD's own walk of it finds.
     walked = part_usd.reported(part_usd.stage_files(path), path)
     assert set(said) <= set(walked)
-    assert part_usd.stage_files(str(tmp_path / "missing.usda")) == []
+    assert part_usd.stage_files(str(tmp_path / "missing.usda")) in ([], None)
+
+
+def test_what_a_stage_names_that_is_not_there_is_reported_too(tmp_path):
+    """Keyed as missing, a sublayer or a texture that appears later builds the part again."""
+    (tmp_path / "layers").mkdir()
+    texture = _material(
+        "Gone",
+        _shader("UsdPreviewSurface", ["color3f inputs:diffuseColor.connect = </Root/Materials/Gone/Tex.outputs:rgb>"]),
+        children=_shader("UsdUVTexture", ["asset inputs:file = @../textures/gone.png@"], "float3 outputs:rgb").replace(
+            '"Shader"', '"Tex"'
+        ),
+    )
+    _stage(tmp_path, _root(_quad("Tile", 0, "/Root/Materials/Gone"), _materials(texture)), name="layers/tile.usda")
+    path = _stage(tmp_path, "", extra="    subLayers = [@./layers/tile.usda@, @./layers/later.usda@]\n")
+    said = part_usd.reported(part_usd.read(path).files, path)
+    assert {"layers/tile.usda", "layers/later.usda", "textures/gone.png"} <= set(said)
+
+
+def test_a_stage_that_cannot_be_walked_says_its_files_are_not_known(monkeypatch):
+    from pxr import UsdUtils
+
+    def cannot(*_args, **_kwargs):
+        raise RuntimeError("not today")
+
+    monkeypatch.setattr(UsdUtils, "ComputeAllDependencies", cannot)
+    path = os.path.join(DATA, "looks.usda")
+    assert part_usd.stage_files(path) is None
+    assert part_usd.read(path).files is None
+    assert part_usd.run({"path": path, "parameters": {"surface": "mesh"}})["dependencies"] is None
 
 
 def test_a_package_is_one_file_and_reports_nothing_else():

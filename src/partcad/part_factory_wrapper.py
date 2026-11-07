@@ -32,6 +32,7 @@ import os
 from . import code_version, discovered_dependencies
 from . import logging as pc_logging
 from . import output, sandbox_versions, shape_envelope, telemetry, transform, wrapper
+from .cache_hash import CacheHash
 from .part_factory import PartFactory
 from .process_crash import describe_exit_code
 from .runtime_python import environment_requirements
@@ -407,7 +408,14 @@ class PartFactoryWrapper(PartFactory):
                 part.error("The partType wrapper produced no shape")
                 return None
             if self._declared_key is not None:
-                await self._record_discovered(part, response.get("dependencies") or [])
+                if "dependencies" in response and response["dependencies"] is None:
+                    # The script could not tell what it read: a part kept under
+                    # a key that leaves those files out would be served after
+                    # one of them changed. Not cached, then, and so built again.
+                    pc_logging.warning("%s: what it is read from could not be told, so it is not cached" % part.name)
+                    part.hash = CacheHash(part.hash.name)
+                else:
+                    await self._record_discovered(part, response.get("dependencies") or [])
             self.ctx.stats_parts_instantiated += 1
             # One shape, which is what the wrapper hands back for a part however
             # many the script made: it compounds them itself, while they are

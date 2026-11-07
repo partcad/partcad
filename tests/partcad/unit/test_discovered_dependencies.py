@@ -129,14 +129,14 @@ if __name__ == "__partcad_part__":
 """
 
 
-def _package(root, reports):
+def _package(root, reports, script=READER):
     root.mkdir(parents=True, exist_ok=True)
     part_type = {"kind": "wrapper", "path": "reader.py", "extension": "box"}
     if reports is not None:
         part_type["reportsDependencies"] = reports
     config = {"name": "//src", "partTypes": {"boxed": part_type}, "parts": {"crate": {"type": ":boxed"}}}
     (root / "partcad.yaml").write_text(yaml.safe_dump(config, sort_keys=False))
-    (root / "reader.py").write_text(READER)
+    (root / "reader.py").write_text(script)
     # A line nothing reads, which makes this package's part one no other test,
     # and no earlier run of this one, has put in the shared cache.
     (root / "crate.box").write_text("sizes.txt\n%s\n" % uuid.uuid4())
@@ -219,3 +219,34 @@ def test_a_part_type_that_starts_reporting_is_built_again_rather_than_served_fro
     # And from then on, what it read is what it is kept for.
     (root / "sizes.txt").write_text("30")
     assert _built(root)[0] == 30.0
+
+
+def test_a_part_whose_script_cannot_tell_what_it_read_is_not_cached(tmp_path):
+    """Kept under a key that leaves those files out, it would be served after one of them changed."""
+    pytest.importorskip("build123d")
+    unknown = READER.replace('"dependencies": [sizes, "never-read.txt", 3]', '"dependencies": None')
+    assert unknown != READER
+    root = _package(tmp_path / "pkg", reports=True, script=unknown)
+    assert _built(root)[2] is False
+    assert _built(root)[2] is False
+    (root / "sizes.txt").write_text("20")
+    assert _built(root)[0] == 20.0
+
+
+def test_the_wrapper_says_when_the_script_could_not_tell_what_it_read(tmp_path, monkeypatch):
+    pytest.importorskip("build123d")
+    import wrapper_common
+
+    unknown = READER.replace('"dependencies": [sizes, "never-read.txt", 3]', '"dependencies": None')
+    root = _package(tmp_path / "pkg", reports=True, script=unknown)
+    written = []
+    request = {"path": str(root / "crate.box")}
+    monkeypatch.setattr(wrapper_common, "handle_input", lambda *_args, **_kwargs: (str(root / "reader.py"), request))
+    monkeypatch.setattr(wrapper_common, "handle_output", written.append)
+    sys.modules.pop("wrapper_part_type", None)
+    try:
+        importlib.import_module("wrapper_part_type")
+    finally:
+        sys.modules.pop("wrapper_part_type", None)
+    (said,) = written
+    assert said["success"] and "dependencies" in said and said["dependencies"] is None

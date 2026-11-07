@@ -44,7 +44,8 @@ is built again when one of them changes, if its partType says
 
     output["dependencies"] = ["layers/geometry.usd", "/abs/path/wood.png", ...]
 
-each absolute or relative to the directory of 'request["path"]'.
+each absolute or relative to the directory of 'request["path"]'. A script that
+cannot tell what it read says None, and the part is then not cached.
 
 Both '__file__' and the run name '__partcad_part__' are set on the script, so it
 can gate its build logic (``if __name__ == "__partcad_part__":``) and remain
@@ -205,9 +206,12 @@ def process(path, request):
         shapes = wrapper_common.finished_shapes(shapes)
 
     answer = {"success": True, "exception": None, "shapes": shapes}
-    dependencies = output.get("dependencies")
-    if isinstance(dependencies, (list, tuple)):
-        answer["dependencies"] = [str(entry) for entry in dependencies if isinstance(entry, str)]
+    if "dependencies" in output:
+        dependencies = output["dependencies"]
+        if dependencies is None:
+            answer["dependencies"] = None  # not known: see 'PartFactoryWrapper'
+        elif isinstance(dependencies, (list, tuple)):
+            answer["dependencies"] = [str(entry) for entry in dependencies if isinstance(entry, str)]
     return answer
 
 
