@@ -449,12 +449,19 @@ async function onStart(message, sender) {
     return busy;
   }
   // Asked, not started: the user says yes on the extension's own page first.
-  // The same start page again is the same request; any other replaces it.
+  // The same start page asking for the same thing again is the same request,
+  // and keeps its token. Anything else -- another page, or the same one now
+  // asking for something else -- is a new request with a new token, so that a
+  // confirmation page still showing the old one cannot say yes to the new one.
   const now = Date.now();
-  if (!pending || pending.startUrl !== startUrl || now >= pending.expiresAt) {
-    pending = { token: newToken(), startUrl: startUrl, askedAt: now, expiresAt: now + spec.timeout * 1000 };
+  const same =
+    pending &&
+    pending.startUrl === startUrl &&
+    now < pending.expiresAt &&
+    JSON.stringify(pending.spec) === JSON.stringify(spec);
+  if (!same) {
+    pending = { token: newToken(), startUrl: startUrl, spec: spec, askedAt: now, expiresAt: now + spec.timeout * 1000 };
   }
-  pending.spec = spec;
   await persistPending();
   try {
     await api.tabs.update(sender.tab.id, { url: api.runtime.getURL(CONFIRM_PAGE) + "#" + pending.token });
