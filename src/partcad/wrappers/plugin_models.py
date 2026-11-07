@@ -85,7 +85,10 @@ import zipfile
 # comes in several, and an exact boundary representation is worth more than a
 # mesh of it; among the meshes, 3MF knows its units and STL does not. A '.glb'
 # is a glTF with its buffers inside it - a '.gltf' names files beside it, which
-# a single file cannot bring along. OpenSCAD is last, because a '.scad' on a
+# a single file cannot bring along. OpenUSD - a '.usdz' is how Sketchfab and
+# Apple's AR Quick Look hand one out, a stage packed with its textures - is
+# after glTF: a scene format first, whose geometry is a mesh like any other
+# here. OpenSCAD is last, because a '.scad' on a
 # model site is usually the customizable source of the STLs beside it, and may
 # 'use <>' files that do not come with it.
 #
@@ -102,6 +105,7 @@ FORMATS = (
     ("stl", "stl", ("stl",)),
     ("obj", "obj", ("obj",)),
     ("glb", "gltf", ("glb",)),
+    ("usd", "usd", ("usdz", "usd", "usdc", "usda")),
     ("sldprt", "sldprt", ("sldprt",)),
     ("ipt", "ipt", ("ipt",)),
     ("catpart", "catpart", ("catpart",)),
