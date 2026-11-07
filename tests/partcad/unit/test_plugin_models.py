@@ -747,3 +747,16 @@ def test_threads_storing_one_key_at_once_each_store_it_whole(http):
     with open(path, "rb") as f:
         assert f.read() in contents
     assert [name for name in os.listdir(os.path.dirname(path)) if name.endswith(".tmp")] == []
+
+
+def test_a_cache_that_cannot_be_written_costs_a_miss_not_the_answer(tmp_path, monkeypatch):
+    """A read-only home in a sandbox, a full disk: the site answered, and that answer is what was asked for."""
+    blocked = tmp_path / "cache"
+    blocked.write_text("a file where the cache directory should be")
+    monkeypatch.setenv("PARTCAD_TEST_CACHE", str(blocked))
+    http = rm.Http("test", "PartCAD-test")
+    wire = Wire({"https://x/a": (200, {}, {"a": 1})})
+    monkeypatch.setattr(http, "request", wire)
+    assert http.json("https://x/a", "a") == {"a": 1}
+    assert http.json("https://x/a", "a") == {"a": 1}
+    assert wire.asked == ["https://x/a", "https://x/a"]

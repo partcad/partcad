@@ -429,7 +429,16 @@ class Http:
         return None
 
     def _remember(self, kind, key, content):
-        path = self._path(kind, key)
+        """Keep 'content' for 'key', if the cache can be written: a cache that cannot costs a miss, not the answer."""
+        try:
+            self._store(self._path(kind, key), content)
+        except OSError:
+            # A read-only home in a sandbox, a full disk: the site has answered
+            # by now, and that answer is what the request was for.
+            pass
+
+    @staticmethod
+    def _store(path, content):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         # A file of its own per write, not per process: 'find' reads models on
         # a pool of threads, and two of them can store one key - a model a
