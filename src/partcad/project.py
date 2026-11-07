@@ -3077,9 +3077,20 @@ class Project(project_config.Configuration):
 
         'igs' for an 'iges' part, 'sab', 'smb' and 'smt' for a 'sat' one: what
         a file of the type is called by whatever wrote it, beside the one
-        'extension_for' names (see 'shape.PART_EXTENSION_ALIASES'). Empty for
-        every other section and kind.
+        'extension_for' names (see 'shape.PART_EXTENSION_ALIASES'). For an
+        assembly or a scene of an 'import:' type, the extensions its declaration
+        lists after its first ('glb' for a 'gltf' assembly). Empty for every
+        other section and kind.
         """
+        if section in ("assemblies", "scenes"):
+            from . import output
+
+            implementation = output.import_declaration(self.ctx, self, kind)
+            declared = implementation.config.get("extension") if implementation is not None else None
+            if not isinstance(declared, list) or not declared:
+                return ()
+            own = str(declared[0]).lstrip(".").lower()
+            return tuple(sorted({str(each).lstrip(".").lower() for each in declared} - {own}))
         if section != "parts":
             return ()
         from .shape import PART_EXTENSION_ALIASES

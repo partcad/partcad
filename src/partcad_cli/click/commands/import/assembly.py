@@ -14,6 +14,7 @@ from ...service import run
 # assembly_type: [file_extensions]
 SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT = {
     "step": ["step", "stp"],
+    "gltf": ["gltf", "glb"],
     "urdf": ["urdf"],
 }
 
@@ -34,8 +35,9 @@ def cli(cli_ctx, package: str, assembly_file: str, desc: str):
     CLI command to import an assembly from a file.
     Automatically creates multiple parts and an assembly.
 
-    A STEP file becomes one part per solid; a URDF becomes one part per link
-    plus an interface pair per joint, so the assembly connects its parts
+    A STEP file becomes one part per solid, and a glTF file (`.gltf`, `.glb`)
+    one `gltf` part per mesh, in its materials' colours; a URDF becomes one part
+    per link plus an interface pair per joint, so the assembly connects its parts
     instead of placing them by coordinates. Either way the package ends up
     holding PartCAD's own objects - `pc add assembly` is what declares a file
     where it lies instead.

@@ -1253,10 +1253,24 @@ at all).
   `assembly_factory_imported.py` is one factory for every such type, and the reader it runs is named by the
   declaration. Everything below the reader — sandbox, tree walk, part registration, the report of what was
   dropped — was identical in the three factories that used to exist, so only the reader knows XML and only
-  the reader is a plugin. `//builtin/import` ships `urdf` and nothing else; `mjcf` and `world` belong to the
-  two engine plugins, beside the exporter, the `open:` entry and the simulator that share their knowledge of
+  the reader is a plugin. `//builtin/import` ships the assembly types `urdf`, `gltf`, `f3d` and `pvz`;
+  `mjcf` and `world` belong to the two engine plugins, beside the exporter, the `open:` entry and the simulator that share their knowledge of
   the format. The wheel carries no copy of either, so `type: world` resolves to nothing and says which
   package to name: the spelling is the full path, `type: sim-gazebo:world`.
+
+  **glTF is read by PartCAD's own reader, not OCCT's** (`wrappers/gltf_document.py`), for the part type and the
+  assembly type alike. OCCT 7.9's `RWGltf_CafReader`, as `cadquery-ocp-novtk` builds it, reads no Draco ("Draco
+  library missing"), no quantized positions and no meshopt -- which is most of the glTF the web delivers -- and
+  answered a Draco file with "holds no triangles". So the reader is plain Python and NumPy: Draco through DracoPy
+  (installed into the sandbox only for a file whose `extensionsUsed` names it, see `part_factory_gltf`), meshopt
+  through `wrappers/meshopt_decode.py`, written from the two extensions' appendices because no Python decoder
+  reaches every platform the sandbox runs on, and held to meshoptimizer's own encoder and decoder by
+  `tests/partcad/unit/data/import_gltf/meshopt_vectors.json`. Triangles become bodies in `wrappers/mesh_brep.py`
+  (weld, split by shared edges, orient, `BRepBuilderAPI_MakeShapeOnMesh`), some thirty times faster than
+  build123d's `Mesher`, which the part used to go through via an STL. Only `wrapper_import_gltf.py` states a
+  `CACHE_VERSION`: a change to what any of those three modules reads or builds is a change to it. The assembly
+  reader (`builtin/import/import_gltf.py`) writes a `.glb` per distinct mesh and names it as a `gltf` part, so a
+  part of a glTF assembly is read exactly as a glTF part is.
 
   **A type named by its full path is resolved from the package that declared the object, not from the root.**
   `Context.get_project_from()`, not `get_project()`: a package's objects are created as part of loading it,
