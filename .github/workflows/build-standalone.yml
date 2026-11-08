@@ -983,6 +983,23 @@ jobs:
         if: runner.os == 'Linux'
         uses: ./.github/actions/sandbox-image
 
+      # And the one '//pub/feature/simulate/gazebo' asks for, which the
+      # simulation examples run under -- the same step, for the same reason, as
+      # "The sandbox base image (Python 3.12)" in "test-dev.yml". Whether the
+      # 'docker' sandbox can be used at all is PartCAD's base image for the
+      # package's Python, even for a package that names an image of its own (see
+      # 'Context._docker_or_next_best'): without this one, the Gazebo image is
+      # passed over for conda, which has no 'gz', and every 'in_gazebo' test
+      # fails. On the version bump that is every time on Linux arm64: "Build
+      # Docker Containers" in "test.yml" builds Python by Python, amd64 before
+      # arm64, and had not pushed '<release>-py3.12-arm64' by the time this job
+      # reached the simulations ("manifest unknown").
+      - name: The sandbox base image (Python 3.12)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/sandbox-image
+        with:
+          python-version: "3.12"
+
       - name: Take the runner's conda out of the way
         shell: bash
         run: |

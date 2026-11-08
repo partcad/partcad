@@ -279,6 +279,21 @@ def test_a_frame_cut_off_says_so():
         shape_envelope.deserialize(frame[:-100])
 
 
+def test_a_frame_cut_off_where_its_last_line_parses_still_says_so():
+    """What is left of a frame ends in an attachment, any bytes at all, and its last line can be valid JSON.
+
+    The test above cuts a random payload, and about once in 700 the line its
+    tail ended in was a lone digit - which came back as the answer, 'DID NOT
+    RAISE'. This is that case on purpose.
+    """
+    tail = b"\x01" * 100
+    frame = ocp_serialize.serialize({"shape": _leaf(b"\x01" * 64 + b"\n7" + tail, "brick")})
+    assert frame.endswith(b"\n7" + tail)
+
+    with pytest.raises(ValueError, match="did not arrive whole"):
+        shape_envelope.deserialize(frame[:-100])
+
+
 def test_no_answer_at_all_says_so():
     with pytest.raises(ValueError, match="no output"):
         shape_envelope.deserialize(b"")
