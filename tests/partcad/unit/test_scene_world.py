@@ -467,8 +467,8 @@ def simulating(tmp_path, scene_declares):
         + "    parameters:\n      subject:\n        type: string\n        default: ''\n"
         + world
         + "parts:\n  block:\n    type: step\n    path: cube.step\n"
-        + "    simulate:\n      sinks:\n        simulation: //sim:toy\n        scene: :tank\n"
-        + "        validation: 'True'\n",
+        + "    qual:\n      sim:\n        sinks:\n          path: //sim:toy\n          scene: :tank\n"
+        + "          validation: 'True'\n",
         encoding="utf-8",
     )
     context = pc.Context(str(root))

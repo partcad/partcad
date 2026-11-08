@@ -1103,7 +1103,7 @@ async def report_async(ctx, shape) -> dict:
     'own' is what an assembly sets itself, which draws what it holds rather
     than specifying it.
 
-    Builds what it reports on, the way 'pc test' does: what a part's source
+    Builds what it reports on, the way 'pc qual test' does: what a part's source
     states is only known once it has been read. The 3D view beside the tab has
     built all of it by the time anybody opens the tab, so it is read back from
     the cache.
@@ -1111,7 +1111,7 @@ async def report_async(ctx, shape) -> dict:
     import asyncio
 
     from .assembly import Assembly
-    from .test import cmf as cmf_check
+    from .qual.basic import cmf as cmf_check
 
     if not isinstance(shape, Assembly):
         return {"items": [await _item_async(ctx, shape, 1)]}
@@ -1151,7 +1151,7 @@ async def _collect_async(ctx, assembly, counted: dict) -> None:
 async def _item_async(ctx, shape, count: int) -> dict:
     """One row of 'report_async': an item, how many of it, its CMF, and what the 'cmf' check finds of it."""
     from .assembly import Assembly
-    from .test import cmf as cmf_check
+    from .qual.basic import cmf as cmf_check
 
     assembly = isinstance(shape, Assembly)
     row = {"name": "%s:%s" % (shape.project_name, shape.name), "kind": "assembly" if assembly else "part"}

@@ -53,7 +53,7 @@ async def get_runtime(ctx):
         #
         # 'SandboxUnavailable' rather than a plain exception because it
         # already means exactly this and is already handled as an answer
-        # rather than a fault -- 'pc test' skips on it, the daemon reports
+        # rather than a fault -- 'pc qual test' skips on it, the daemon reports
         # it to the IDE without a traceback (see
         # 'partcad_service_json_rpc.core.operations').
         #

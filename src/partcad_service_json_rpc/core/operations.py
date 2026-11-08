@@ -240,7 +240,7 @@ def _object_kind(params):
     """The kind of object the flags of a request say its object is, or None for none.
 
     The same flags on every command that takes an object, read in the same
-    order, so that ``pc render -s`` and ``pc test -s`` cannot disagree about
+    order, so that ``pc render -s`` and ``pc qual test -s`` cannot disagree about
     what ``-s`` selects. Saying nothing is the ordinary case now: a name is one
     object of its package whatever its kind, so it is looked up instead (see
     ``_kind_of``), and a flag is only a way of skipping the lookup.
@@ -1170,10 +1170,10 @@ def test(session, params):
         object_name = _assigned_name(params, object_name)
 
     if object_name == "":
-        with session.partcad.logging.Process("Test", package):
+        with session.partcad.logging.Process("Qual", package):
             all_packages = ctx.get_all_packages(parent_name=package, has_stuff=True)
             for pkg_name in [p["name"] for p in all_packages]:
-                with session.partcad.logging.Action("Test", pkg_name):
+                with session.partcad.logging.Action("Qual", pkg_name):
                     ctx.projects[pkg_name].test_log_wrapper(ctx)
         return None
 
@@ -1199,7 +1199,7 @@ def test(session, params):
         return None
 
     if obj:
-        with session.partcad.logging.Process("Test", object_name):
+        with session.partcad.logging.Process("Qual", object_name):
             obj.test_log_wrapper(ctx)
     return None
 
@@ -1723,10 +1723,10 @@ async def _test_package_async(pc, package, coroutine):
     logs nothing else, and a long run's log otherwise said nothing below its
     total. The packages are tested together, so each duration counts from the
     start of the run and they overlap; the run takes as long as the slowest of
-    them, not their sum. The 'Test' process of the run is what a single
+    them, not their sum. The 'Qual' process of the run is what a single
     package's tests already report under.
     """
-    with pc.logging.Action("Test", package):
+    with pc.logging.Action("Qual", package):
         return await coroutine
 
 
@@ -1738,7 +1738,7 @@ async def _test_async(ctx, pc, packages, filter_prefix, said, object_name, fast_
 
     ``named`` is whether one object was asked about on its own -- an object
     name and no walk below the package -- and reaches the checks as
-    ``Test.NAMED``. ``...:bolt`` names an object too, but every one of that name
+    ``Qualification.NAMED``. ``...:bolt`` names an object too, but every one of that name
     in a tree, which is a walk and is tested as one.
     """
     import asyncio
@@ -1828,7 +1828,7 @@ async def _test_async(ctx, pc, packages, filter_prefix, said, object_name, fast_
     await asyncio.gather(*tasks)
 
 
-# The kinds of object that are shapes, which is what 'pc test' tests and the
+# The kinds of object that are shapes, which is what 'pc qual test' tests and the
 # viewer shows: everything a command names but software, which is a file.
 _SHAPES = ("part", "interface", "assembly", "sketch", "scene")
 
@@ -1846,8 +1846,8 @@ def _subtypes(params):
         raise JsonRpcError(USAGE_ERROR, str(e))
 
 
-def test_run(session, params):
-    """Qualify a part/assembly/sketch/interface or a whole package: `pc qual test` and `pc test`.
+def qual_run(session, params):
+    """Qualify a part/assembly/sketch/interface or a whole package: `pc qual test` and `pc qual test`.
 
     ``subtypes`` limits the run to the checks of those subtypes of qualification
     (``basic``, ``topology``, ``sim``, ``other``), all of them when absent.
@@ -1867,7 +1867,7 @@ def test_run(session, params):
         return None
     package = package_obj.name
 
-    with pc.logging.Process("Test", package):
+    with pc.logging.Process("Qual", package):
         if recursive:
             all_packages = ctx.get_all_packages(parent_name=package, exclude=_excluded(ctx, params))
             if ctx.stats_git_ops:
@@ -2018,7 +2018,8 @@ async def _simulate_async(
     results = []
     for kind, shape in targets:
         for declaration in pc_simulation.of_shape(shape):
-            if filter_name and declaration.name != filter_name:
+            # By prefix, as '-f' selects everything else 'pc qual test' runs.
+            if filter_name and not declaration.name.startswith(filter_name):
                 continue
             # A safe point (see 'cancellation'): between one simulation and the next.
             cancellation.check()
@@ -2031,11 +2032,11 @@ async def _simulate_async(
     return results
 
 
-# The kinds of object that declare what they are supposed to do ('simulate:').
+# The kinds of object that declare what they are supposed to do ('qual: sim:').
 _SIMULATED = ("part", "assembly", "scene")
 
 
-def simulate_run(session, params):
+def qual_simulate(session, params):
     """Run the simulations a part, an assembly or a scene declares, and validate them.
 
     ``view``, ``viewport_origin`` and ``viewport_up`` take the pictures of every
@@ -2065,7 +2066,7 @@ def simulate_run(session, params):
         else:
             packages = [package]
 
-        # '-a' and '-S' only: what declares a 'simulate:' is a part, an
+        # '-a' and '-S' only: what declares simulations is a part, an
         # assembly or a scene.
         kind = "scene" if params.get("scene") else ("assembly" if params.get("assembly") else None)
         if recursive and object_name:
@@ -2090,7 +2091,7 @@ def simulate_run(session, params):
                 params.get("filter"),
                 bool(params.get("fast_only")),
                 # Another simulation plugin than the declarations name, for
-                # every simulation this runs ('pc sim --plugin').
+                # every simulation this runs ('pc qual test --simulation --plugin').
                 params.get("plugin") or None,
                 viewport or None,
             )
@@ -2099,7 +2100,7 @@ def simulate_run(session, params):
     # Asking for something in particular and matching nothing is a failure;
     # walking a tree that happens to declare no simulation is not. The two look
     # identical here - an empty result list - and only the request tells them
-    # apart, so it is the request that is consulted. Without this, 'pc sim -a'
+    # apart, so it is the request that is consulted. Without this, 'pc qual test --simulation -a'
     # on a name that does not exist reports success and exits 0.
     asked_for = [object_name, params.get("assembly"), params.get("scene"), params.get("filter")]
     named_one = any(value for value in asked_for)
@@ -2109,11 +2110,11 @@ def simulate_run(session, params):
         if named_one:
             unmatched = True
             pc.logging.error(
-                "Nothing here declares a 'simulate:' section matching %s"
+                "Nothing here declares a simulation ('qual: sim:') matching %s"
                 % ", ".join("'%s'" % value for value in asked_for if value)
             )
         else:
-            pc.logging.info("Nothing declares a 'simulate:' section here")
+            pc.logging.info("Nothing declares a simulation ('qual: sim:') here")
     for result in results:
         pc.logging.info(_simulation_line(result))
         if result.snapshots:
@@ -2136,7 +2137,7 @@ def simulate_run(session, params):
         # The pictures and the video as bytes as well as paths, which is what
         # the IDE's Simulation tab needs -- a webview has no file system in
         # reach, and the daemon that wrote them may not be on the machine
-        # showing them -- and what 'pc sim --video' saves.
+        # showing them -- and what 'pc qual test --simulation --video' saves.
         for entry, result in zip(simulations, results):
             entry["images"] = _inline_snapshots(pc, entry.get("snapshots") or {})
             if entry.get("video"):
@@ -2191,7 +2192,7 @@ def _inline_file(pc, path: str, what: str):
     }
 
 
-def simulate_list(session, params):
+def qual_simulations(session, params):
     """The simulations one part, assembly or scene declares, without running any.
 
     What the IDE's Simulation tab (Qualification) is enabled by and lists: a ``qual: sim:``
@@ -2199,7 +2200,7 @@ def simulate_list(session, params):
     configuration costs -- nothing is built and nothing is run -- which is what
     makes it cheap enough to ask on every show. ``kind`` says whether
     ``object`` is a part, an assembly or a scene, as ``-a`` and ``-S`` do for
-    ``pc sim``, and is looked up when it is not given: a stack of blocks is an
+    ``pc qual test --simulation``, and is looked up when it is not given: a stack of blocks is an
     arrangement, so it is a scene, and it declares what it is supposed to do
     like anything else.
 
@@ -3830,12 +3831,12 @@ def requirements_check(session, params):
     """What an object is required to be and, with ``verify``, whether the model is it.
 
     What the IDE's Requirements tab is drawn from: the features, each with the
-    ``simulate:`` entries that name it, and a line per port, interface and
+    ``qual: sim:`` entries that name it, and a line per port, interface and
     physical property required (see ``partcad.requirements``). Without
     ``verify`` nothing is built and every verdict is ``null`` -- a read of the
     declaration, cheap enough to ask on every show, which is how the tab knows
     whether there is anything to show at all. With it each requirement is
-    checked by the code ``pc test``'s ``requirements`` test runs, so the two
+    checked by the code ``pc qual test``'s ``requirements`` test runs, so the two
     cannot disagree.
     """
     import asyncio
@@ -3886,7 +3887,7 @@ def requirements_check(session, params):
     return report.to_dict()
 
 
-def test_report(session, params):
+def qual_report(session, params):
     """Every check ``pc qual test <object>`` runs on one object and, with ``verify``, its verdict.
 
     What the IDE's Qualification tabs are drawn from -- Basic, Topology and Other,
@@ -3899,7 +3900,7 @@ def test_report(session, params):
     nothing is run: the list, with the checks that do not apply saying why, which
     is cheap enough to draw the tab with while the rest are running.
 
-    The checks are run as ``pc test <object>`` runs them, through the same cache,
+    The checks are run as ``pc qual test <object>`` runs them, through the same cache,
     so a verdict here and one on the command line are the same verdict. An
     assembly or a scene is staged first, as every request that builds one is.
     """
@@ -3916,7 +3917,7 @@ def test_report(session, params):
         "sketch": ctx.get_sketch,
         "interface": ctx.get_interface,
     }
-    refusal = "'%s' is not a kind of object 'pc test' tests"
+    refusal = "'%s' is not a kind of object 'pc qual test' tests"
     _refuse_said_kind(params, getters, refusal)
     resolved = _resolve_object(ctx, pc, params)
     if resolved is None:
@@ -3934,7 +3935,7 @@ def test_report(session, params):
     verify = bool(params.get("verify"))
     if verify and kind in ("assembly", "scene"):
         _stage_subassemblies(session, ctx, obj)
-    with pc.logging.Process("Test", package, name):
+    with pc.logging.Process("Qual", package, name):
         results = asyncio.run(report.run_async(ctx, obj, verify=verify, subtypes=subtypes))
     return report.to_dict(path, kind, results, verify, subtypes)
 
@@ -4040,7 +4041,7 @@ def cae_analyze(session, params):
     IDE's tabs need -- a webview has no file system in reach, so a model it
     cannot be handed is a model it cannot draw.
 
-    The answer is the one ``simulate.run`` gives for a part's simulations: an
+    The answer is the one ``qual.simulate`` gives for a part's simulations: an
     entry per scenario under ``analyses``, each carrying ``error`` -- the
     sentence that says why it produced no answer, or null -- and how many there
     were and how many failed, with every finding of every scenario under
@@ -4149,7 +4150,7 @@ async def _cae_scenario_async(ctx, pc, shape, path, analysis, scenario, params) 
     Every failure is said in the log as it is caught, by the report the command,
     the check and the IDE's tab all say for it -- which implementation was asked,
     what it said, and which machine it did not work on -- so that ``pc cae
-    fea``, ``pc test -f fea`` and the FEA tab tell a user the same thing about
+    fea``, ``pc qual test -f fea`` and the FEA tab tell a user the same thing about
     the same machine.
     """
     named = None if scenario.legacy else scenario.name
@@ -4181,7 +4182,7 @@ async def _cae_scenario_async(ctx, pc, shape, path, analysis, scenario, params) 
     except pc.runtime.SandboxUnavailable as e:
         # No sandbox to run the analysis in is the same answer as an
         # implementation that was asked and could not run: the part has no
-        # result, and the machine is why. Reported the way 'pc test' reports
+        # result, and the machine is why. Reported the way 'pc qual test' reports
         # it, with both remedies.
         entry["error"] = pc.cae.dysfunction_report(
             path,
@@ -4220,7 +4221,7 @@ def cae_list(session, params):
     What the IDE's Analysis tabs are enabled by and list: an analysis section is
     configuration, so reading it costs what reading the part's configuration
     costs -- nothing is built and nothing is run -- which is what makes it cheap
-    enough to ask on every show, the way ``simulate.list`` is for the Simulation
+    enough to ask on every show, the way ``qual.simulations`` is for the Simulation
     tab. Every analysis PartCAD runs is answered, with an empty list for one the
     part declares nothing for: "nothing to analyse here" is the ordinary case. A
     section that cannot be read is answered under ``errors`` with the sentence

@@ -1243,7 +1243,7 @@ def test_an_image_nobody_can_get_names_every_name_it_tried():
 #
 # A daemon answering says a container could be started; it says nothing about
 # whether the image to start it from can be reached. 'image_available' is what
-# turns that into one question 'pc test' can ask before it commits to a sandbox.
+# turns that into one question 'pc qual test' can ask before it commits to a sandbox.
 
 
 def test_an_image_is_unavailable_without_a_container_runtime(monkeypatch):

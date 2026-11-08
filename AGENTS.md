@@ -180,13 +180,6 @@ a CAD addon, or documentation.
   `ide/vscode` it is a thin client of the JSON-RPC service (the standalone PyInstaller bundle), because
   FreeCAD's embedded Python cannot host `partcad` itself.
 
-* [plugins/qual-lockwire](./plugins/qual-lockwire/README.md):
-
-  A PartCAD package, not Python of PartCAD's own: the qualification plugin for
-  [Lockwire](https://lockwirerobotics.com/), a test of the `other` subtype (see `src/partcad/qual`). It is kept
-  self-contained -- nothing in it refers to this repository -- so that it can move to a repository of its own and be
-  imported by URL like any plugin package; until then its tests are `tests/partcad/unit/test_lockwire_plugin.py`.
-
 * [dev-tools/shim/](./dev-tools/shim/pyproject.toml):
 
   The `partcad-cli` compatibility package: no modules, no entry points, one dependency on `partcad`. It exists
@@ -370,7 +363,7 @@ especially when an LLM agent parses the output. Without it, `pc` draws animated 
 characters corrupt captured output; with it, output is plain text with `INFO:`/`ERROR:` prefixes, each line led
 by the UTC time the daemon logged it (`2026-10-02T14:31:01.816Z INFO:partcad:...`). Every process ends in a
 `DONE: <op>: <package>[: <item>]: <seconds>s` line, in either mode, and with `--verbose` so does every action; a
-recursive `pc test` runs each package as an action, so a verbose log of a long run says what each package took.
+recursive `pc qual test` runs each package as an action, so a verbose log of a long run says what each package took.
 Note that
 `--no-ansi` routes those logs to **stderr** (plain `logging`), whereas the default ANSI renderer writes to
 **stdout** — so capture both streams (`2>&1`) when parsing. The flag is global and goes before the subcommand:

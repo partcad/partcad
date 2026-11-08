@@ -38,7 +38,7 @@ machine is found on another that has the same plugin, which is what #753
 promised ('Implementation.environment_cache_key' keeps the same rule for the
 sandbox).
 
-**Cheap**, because it is asked on every run and every 'pc test' verdict: a file
+**Cheap**, because it is asked on every run and every 'pc qual test' verdict: a file
 is read and hashed once per process, and after that only when its size or its
 modification time changes. That costs one 'stat' per source file per run, which
 is what makes a local edit invalidate in a long-lived daemon without reading the

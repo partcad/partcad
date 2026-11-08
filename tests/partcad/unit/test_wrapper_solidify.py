@@ -110,7 +110,7 @@ def test_the_solid_is_oriented_rather_than_left_inside_out():
 
     Declaring a solid from one without orienting it produces a solid of negative
     volume - which renders correctly and makes every boolean against it
-    meaningless, the failure 'partcad.test.solidity' exists to report. Converting
+    meaningless, the failure 'partcad.qual.basic.solidity' exists to report. Converting
     a shell must not manufacture one.
     """
     reversed_shell = _sub_shape(_box(), TopAbs_SHELL).Reversed()

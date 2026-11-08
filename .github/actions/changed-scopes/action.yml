@@ -316,11 +316,6 @@ runs:
               add schema; add code ;;
             src/*|tests/*|features/*|cad/*|tools/*|dev-tools/*|conftest.py|behave.ini)
               add code ;;
-            plugins/*)
-              # Plugin packages kept here until they have repositories of their
-              # own ("plugins/qual-lockwire"). Not part of the wheel, but their
-              # tests are pytest's ("tests/partcad/unit/test_lockwire_plugin.py").
-              add code ;;
             server.json)
               # The MCP Registry entry. Nothing builds it into anything: "deploy.yml"
               # publishes it as it is, and "tests/dev_tools/test_mcp_registry.py" is

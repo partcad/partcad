@@ -27,7 +27,7 @@ pc cae cfd :pipe             # how does oil flow through it     section 4
 ```
 
 Each analysis section of a part is a map of named **scenarios**, the way
-`simulate:` is a map of simulations: every question of that kind the part is
+`qual: sim:` is a map of simulations: every question of that kind the part is
 asked, each under a name of its own. These parts declare one scenario each --
 `fea: tip-load`, `dynamic: clamped`, `thermal: tip-heated`, `cfd: poiseuille`
 -- because each is the one textbook case below; a part asked more than one
@@ -48,7 +48,7 @@ this machine. Every implementation names an image carrying its solver and
 mesher, so with a container runtime there is nothing to install; without one,
 PartCAD runs it in an ordinary sandbox and it finds a solver installed here (each
 package's README says where it looks). On a machine with no container runtime
-`pc test` **skips** a part whose implementation names an image rather than
+`pc qual test` **skips** a part whose implementation names an image rather than
 failing it: a container is the only way PartCAD has of supplying what pip cannot
 install, so on such a machine the question was never really put. The skip is a
 `WARNING` carrying the whole report. Where a container runtime *is* running,
@@ -284,7 +284,7 @@ pc cae fea -i //pub/feature/cae/elmer:fea :cantilever
 pc cae cfd -i //pub/feature/cae/moose:cfd :pipe
 
 # all of them as checks that fail on any finding
-pc test
+pc qual test
 
 # where the boundary conditions actually landed, which is the first thing
 # to look at when a number is wrong
@@ -315,7 +315,7 @@ ignored and the analysis uses whatever Elmer the daemon can see. `pc daemon stop
 first. The same applies to anything else you set in the environment to steer a
 run.
 
-**`pc test` caches its verdicts.** A second `pc test -f fea` returns the previous
+**`pc qual test` caches its verdicts.** A second `pc qual test -f fea` returns the previous
 answer in hundredths of a second without going near a solver, which is the point
 of the cache and is confusing when you are trying to observe a change in
 behaviour. The cache key covers the boundary conditions, the implementation and

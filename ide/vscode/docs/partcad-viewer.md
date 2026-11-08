@@ -4,11 +4,11 @@ The panel is a strip of tabs over one object, not a canvas:
 
 | Tab | Shown for | Where it comes from |
 | --- | --- | --- |
-| **Requirements** | an object that declares `requirements:` | the daemon's `requirements.check` (the verdicts `pc test -f requirements` reaches) |
+| **Requirements** | an object that declares `requirements:` | the daemon's `requirements.check` (the verdicts `pc qual test -f requirements` reaches) |
 | **3D** | everything | the viewer protocol, from whichever `partcad` asked for the shape to be shown |
 | **2D** | parts, assemblies, scenes, sketches | the daemon's `render.inline` (a picture `pc render` makes) |
 | **Draft** | parts, assemblies | the daemon's `render.inline`, with a drawing package (`pc render -e`) |
-| **CMF** | parts, assemblies, scenes; and a colour, a material or a finish opened from the explorer, alone | the daemon's `cmf.info` (each item's CMF as `pc info` says it, judged as the `cmf` check of `pc test` judges it; or what a declaration is) |
+| **CMF** | parts, assemblies, scenes; and a colour, a material or a finish opened from the explorer, alone | the daemon's `cmf.info` (each item's CMF as `pc info` says it, judged as the `cmf` check of `pc qual test` judges it; or what a declaration is) |
 | **FEA** | parts that declare `fea:` scenarios | the daemon's `cae.list` (what the part declares for each analysis) and `cae.analyze` (what `pc cae fea -f <name>` runs) |
 | **Dynamic FEA** | parts that declare `dynamic:` scenarios | the daemon's `cae.list` and `cae.analyze` (what `pc cae dynamic -f <name>` runs: natural frequencies and mode shapes) |
 | **Heat Transfer** | parts that declare `thermal:` scenarios | the daemon's `cae.list` and `cae.analyze` (what `pc cae thermal -f <name>` runs) |
@@ -19,7 +19,7 @@ The panel is a strip of tabs over one object, not a canvas:
 | **Bill of Materials** | parts, assemblies | the daemon's `bom` (what `pc bom` prints), with each line's `cmf` as Color, Material and Finish columns |
 | **Assembly** | assemblies | the daemon's `assembly.guide` (the book `pc instructions -t html\|pdf` writes) |
 | **Basic**, **Topology** | everything | the daemon's `qual.report` with the tab's `subtypes` (the tests `pc qual test --basic`/`--topology <object>` runs, and `partcad/qual/catalog.py`) |
-| **Simulation** | parts, assemblies, scenes that declare `qual: sim:` | the daemon's `simulate.list` (what the object declares) and `simulate.run` (what `pc sim -f <name>` runs) |
+| **Simulation** | parts, assemblies, scenes that declare `qual: sim:` | the daemon's `qual.simulations` (what the object declares) and `qual.simulate` (what `pc qual test --simulation -f <name>` runs) |
 | **Other** | everything | the daemon's `qual.report` with `subtypes: ['other']` (the tests plugins supply that the object declares, and each tool's report) |
 
 The 3D view is what a show opens on: "show this part" means the geometry. Requirements is the one tab in front
@@ -434,8 +434,8 @@ the protocol has no authentication.
 | `src/webview/requirements.ts` | The Requirements tab: the marks, and the features with what validates each |
 | `src/webview/test.ts` | The Test tab: every check with its mark, and the one selected - its verdict, findings, artifacts and text |
 | `src/partcad/qual/report.py` | One object's `pc qual test` as a list of verdicts, for the Basic, Topology and Other tabs |
-| `src/partcad/test/catalog.py` | What each check is and what to do when it fails, for this tab and for the documentation |
-| `src/partcad/requirements.py` | What a requirement means and whether the model meets it, for this tab and for `pc test` |
+| `src/partcad/qual/catalog.py` | What each check is and what to do when it fails, for this tab and for the documentation |
+| `src/partcad/requirements.py` | What a requirement means and whether the model meets it, for this tab and for `pc qual test` |
 | `src/common/garage.ts` | Where the Build vs Buy choices are kept, on this machine |
 | `src/webview/analysis.ts` | The Analysis tabs (FEA, Dynamic FEA, Heat Transfer, CFD): which apply, the scenarios declared, the Simulation tab's toolbar ("Analysed by", "Analyse"), and what each run answered |
 | `src/webview/packagePicker.ts` | The package field "Drawn by", "Simulated by" and "Analysed by" are: an editable combo box, and the quick choices it offers |
@@ -443,7 +443,7 @@ the protocol has no authentication.
 | `src/webview/scenarioList.ts` | The list of declared entries the Simulation and Analysis tabs share: rows, verdict marks, the keyboard |
 | `src/webview/simulation.ts` | The Simulation tab: the simulations declared, and the video of each run with the scene before and after it as its still |
 | `src/webview/videoPlayer.ts` | The player the Simulation tab plays a run's video in: Video.js, MSE, the still, and full screen |
-| `src/partcad/simulation.py` | What `simulate:` declares, how a run goes, and the pictures and the video a plugin is asked for |
+| `src/partcad/simulation.py` | What `qual: sim:` declares, how a run goes, and the pictures and the video a plugin is asked for |
 | `src/partcad/cae.py` | What a part declares about an analysis -- its named scenarios -- and in what units |
 | `src/partcad/assembly_guide.py` | The instruction book, built once for every format |
 | `src/partcad/document.py` | The renderer-independent document model |
@@ -648,15 +648,15 @@ like Build vs Buy, and it is cheap: `requirements.check` without `verify` reads 
 nothing. The strip is rebuilt when that answer changes whether the tab is offered, and a reader who was on the
 tab for the last object lands on it again.
 
-Opening the tab is what asks for the verdicts (`verify: true`), and they are exactly what `pc test -f
+Opening the tab is what asks for the verdicts (`verify: true`), and they are exactly what `pc qual test -f
 requirements` reaches, because both are `partcad/requirements.py`. While they are on the way every mark is
 pending — a requirement nobody has measured yet is neither met nor unmet. Then each port, interface and physical
 property required gets a green or a red mark (the editor's own test-explorer colours) beside what was required and
-what was found. A `simulate:` entry or an analysis scenario naming a feature that is not declared, and a
+what was found. A `qual: sim:` entry or an analysis scenario naming a feature that is not declared, and a
 requirement that cannot be read, are listed after them as problems, and fail the same way.
 
 The features follow, as a table: the name, what the feature is, and what validates it — a banner per
-`simulate:` entry that names it (`feature:`), then a banner per analysis scenario that names it (an entry of a
+`qual: sim:` entry that names it (`feature:`), then a banner per analysis scenario that names it (an entry of a
 part's `fea:`, `dynamic:`, `thermal:` or `cfd:` with a `feature:`), labelled with its analysis as its tab is --
 **FEA: loaded** -- because scenarios are named within an analysis, in a colour of its own and with the command
 that runs it as its tooltip (`pc cae fea -f loaded`), then an **LLM** banner on every feature, whose tooltip
@@ -705,12 +705,12 @@ shapes), `thermal` (steady-state heat transfer) and `cfd` -- and that id, not th
 (`partcad.cae`) and a fifth analysis is a row in `ANALYSIS_TABS`/`ANALYSIS_LABELS` (`src/webview/messages.ts`), a
 pane in the HTML and an entry in the host's `TAB_COMMANDS`.
 
-A part's section for an analysis is a map of **named scenarios**, the way `simulate:` is a map of named
+A part's section for an analysis is a map of **named scenarios**, the way `qual: sim:` is a map of named
 simulations: each one set of boundary conditions, with a `desc:`, the requirement `feature:` it demonstrates, and
 optionally an `implementation:` and `params:` of its own. (The older unnamed form, `fea: {fix: ..., load: ...}`,
 is read as one scenario named `default`.) What a part declares is asked on every show of a part, once for all four
 tabs -- `cae.list`, which reads the configuration and runs nothing, asked under the group's own id (`analysis`)
--- exactly as Simulation's `simulate.list` is, and the strips are rebuilt when it arrives. A tab is enabled only
+-- exactly as Simulation's `qual.simulations` is, and the strips are rebuilt when it arrives. A tab is enabled only
 when the part declares at least one scenario for it; until the answer arrives every tab says it is asking, a
 daemon that cannot answer leaves them disabled saying so, and one that declares none says that in its tooltip
 ("This part declares no CFD scenarios: it has no 'cfd:' section"). The group is enabled when any of its tabs is.
@@ -749,7 +749,7 @@ Three things about the selected scenario are worth knowing:
   model was written to (`<part>.<analysis>.<scenario>.<extension>`). The model arrives as bytes rather than as
   that path: a webview has no file system in reach, and the daemon may not even be on this machine.
 * **The findings are the bottom fifth of the pane, and only when there are any.** An analysis that found
-  nothing is a pass, and a pass gives the model the whole pane. This is also what `pc test` checks: its `fea`,
+  nothing is a pass, and a pass gives the model the whole pane. This is also what `pc qual test` checks: its `fea`,
   `dynamic`, `thermal` and `cfd` tests fail a part whose analysis produced any finding.
 
 The 3D viewer here is deliberately not `scene.ts`. That one is a studio -- an environment map, a light rig,
@@ -769,12 +769,12 @@ items rather than run and reported: in the IDE `pc_logging.error` is a modal pop
 The Qualification group holds **Basic** and **Topology** (above), **Simulation**, **Other** and **Process
 Emulation**, which has nothing in it yet and is always disabled -- so the group is always enabled, for Basic, and
 opens on it. Simulation is offered only for an object that declares a simulation: whether it does is asked on
-every show (`simulate.list`, which reads `qual: sim:` -- or the older `simulate:` -- and runs nothing), exactly as Build vs Buy's tree is, and the panel's strip is rebuilt when the answer
+every show (`qual.simulations`, which reads `qual: sim:` and runs nothing), exactly as Build vs Buy's tree is, and the panel's strip is rebuilt when the answer
 arrives.
 
 The tab is laid out like Build: the simulations on the left, in the order the object declares them, the first
 selected (or the one `pc ide view --qualification-simulation --scenario <name>` names); the selected one on the
-right. Selecting one runs it -- `simulate.run`, which is `pc sim -f <name>` --
+right. Selecting one runs it -- `qual.simulate`, which is `pc qual test --simulation -f <name>` --
 the first time it is looked at for this object, and the answer is kept until the next show. What comes back is
 the verdict of its `validation:` expression, said once: as a mark before the simulation's name in the list (a
 green ✓ when it held, a red ✗ when it did not, a red ! when it could not run, a muted • when there was nothing
@@ -786,7 +786,7 @@ and **Simulate**. **Simulated by** is the package field (see "The package field"
 plugins `//pub/feature/simulate` registers (`SIMULATION_PLUGINS`), and it is filled in with the one the
 simulation names -- matched by what follows its `:`, because a package usually names it through a dependency of
 its own (`sim-mujoco:mujoco`), and offered as itself, first, when it is neither. While that one is in it nothing
-is overridden; another, chosen or typed, runs the simulation with it (`pc sim --plugin`),
+is overridden; another, chosen or typed, runs the simulation with it (`pc qual test --simulation --plugin`),
 the way choosing a drawing package draws again, and **Simulate** runs it afresh. Answers are kept per
 simulation *and* per plugin, so switching back to one already run shows it. Under the toolbar is what the
 simulation is about, then the video of the run, in a player (`videoPlayer.ts`) whose still -- until it is

@@ -949,7 +949,7 @@ def _all_link_names(node, found=None) -> set:
     What 'interferes:' is checked against. A connection names the further items
     one act of joining drives through, and those are matched by name across the
     assemblies an ASSY file embeds (see 'Assembly.connected_children()' and
-    'partcad.test.interference'), so the whole document is the scope rather than
+    'partcad.qual.topology.interference'), so the whole document is the scope rather than
     one 'links:' list.
     """
     if found is None:
@@ -1163,7 +1163,7 @@ def _check_connect(node, path, names, index, everywhere, report, templated) -> N
 #
 # Two rules for what is marked 'manufacturable: true' -- on the object, on its
 # package, or on a package above it. "Marked", not "is": PartCAD takes an
-# object as manufacturable unless something says otherwise, and 'pc test'
+# object as manufacturable unless something says otherwise, and 'pc qual test'
 # holds it to that, but a package nobody has said anything about yet is one
 # being sketched, and an editor that underlined every part of it would be
 # underlining work in progress. Saying 'manufacturable: true' -- which is what
@@ -1241,8 +1241,8 @@ def check_motion(data, root_node=None) -> list:
 def check_manufacturable_assembly(data, root_node=None) -> list:
     """Report an item of an assembly that is to be made that is not connected to anything.
 
-    The same rule 'partcad.test.connectivity' holds a manufacturable assembly
-    to, and in the same words, so that the editor and 'pc test' say one thing:
+    The same rule 'partcad.qual.basic.connectivity' holds a manufacturable assembly
+    to, and in the same words, so that the editor and 'pc qual test' say one thing:
     somebody has to physically put this together, and a coordinate does not
     tell them anything they can act on -- it says where a part ends up, not
     what holds it there. So no item of any 'links:' list may say 'location:',
@@ -1286,7 +1286,7 @@ def check_manufacturable_assembly(data, root_node=None) -> list:
         if data.get(assy_filter.LINKS) is None and "location" in data:
             # A file that is one part or one assembly and nothing else: its
             # root is not the frame of a list but the one item it places
-            # ('AssemblyFactoryAssy.instantiate_async'), and 'pc test' reports
+            # ('AssemblyFactoryAssy.instantiate_async'), and 'pc qual test' reports
             # it like any other.
             _report_at(
                 diagnostics,

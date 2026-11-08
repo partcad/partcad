@@ -24,8 +24,8 @@ from partcad import procurement
 from partcad.manufacturing_instructions import describe
 from partcad.part_config import PartConfiguration
 from partcad.plugin_provider_data_cart import ProviderCart
-from partcad.test import manufacturability
-from partcad.test.test import Test
+from partcad.qual.basic import manufacturability
+from partcad.qual.qualification import Qualification
 
 PACKAGE = "tests/partcad/unit/data/made_from_stock/partcad.yaml"
 PROVIDER_NAME = "//:store"
@@ -219,7 +219,7 @@ def _verdict(ctx, name):
 
 def test_a_made_part_is_believed_and_its_stock_is_checked():
     ctx = _context()
-    assert _verdict(ctx, "bracket") == Test.TEST_PASSED
+    assert _verdict(ctx, "bracket") == Qualification.TEST_PASSED
     # Nobody was asked for the bracket or the blank: they are made. The sheet
     # at the end of the chain is what somebody has to carry.
     assert set(ctx.asked) == {"//:sheet"}
@@ -228,35 +228,35 @@ def test_a_made_part_is_believed_and_its_stock_is_checked():
 def test_a_made_part_fails_when_its_stock_cannot_be_had(caplog):
     ctx = _context(available=())
     with caplog.at_level("ERROR"):
-        assert _verdict(ctx, "blank") == Test.TEST_FAILED
+        assert _verdict(ctx, "blank") == Qualification.TEST_FAILED
     assert "The stock '//:sheet' it is made from cannot be had" in caplog.text
 
 
 def test_a_part_made_from_nothing_it_names_needs_nothing_procured():
     ctx = _context(available=())
-    assert _verdict(ctx, "knob") == Test.TEST_PASSED
+    assert _verdict(ctx, "knob") == Qualification.TEST_PASSED
     assert ctx.asked == []
 
 
 def test_a_part_that_is_both_is_bought_when_it_can_be():
     ctx = _context(available=("//:spacer",))
-    assert _verdict(ctx, "spacer") == Test.TEST_PASSED
+    assert _verdict(ctx, "spacer") == Qualification.TEST_PASSED
     # Procurement answered, so making it was never looked into.
     assert ctx.asked == ["//:spacer"]
 
 
 def test_a_part_that_is_both_is_made_when_it_cannot_be_bought():
     ctx = _context(available=("//:sheet",))
-    assert _verdict(ctx, "spacer") == Test.TEST_PASSED
+    assert _verdict(ctx, "spacer") == Qualification.TEST_PASSED
     assert ctx.asked == ["//:spacer", "//:sheet"]
 
     ctx = _context(available=())
-    assert _verdict(ctx, "spacer") == Test.TEST_FAILED
+    assert _verdict(ctx, "spacer") == Qualification.TEST_FAILED
 
 
 def test_a_part_that_is_only_bought_still_needs_a_supplier():
     ctx = _context(available=())
-    assert _verdict(ctx, "sheet") == Test.TEST_FAILED
+    assert _verdict(ctx, "sheet") == Qualification.TEST_FAILED
 
 
 #

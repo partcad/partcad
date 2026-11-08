@@ -4,9 +4,9 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Unit tests for `simulate:`, the simulation plugins, and what validates a run.
+"""Unit tests for simulations (`qual: sim:`), the simulation plugins, and what validates a run.
 
-A part says what it is; `simulate:` is where it says what it is supposed to do
+A part says what it is; `qual: sim:` is where it says what it is supposed to do
 once it is placed in a world and the world is run. Nothing here runs a
 simulator: what is under test is everything around one -- how a declaration is
 read, which scene and which plugin it resolves to, what the scene is asked for,
@@ -35,9 +35,11 @@ def declaration(**config):
 def test_a_named_declaration_per_simulation_is_the_usual_form():
     declared = simulation.declared(
         {
-            "simulate": {
-                "stands": {"validation": "True"},
-                "falls": {"validation": "False"},
+            "qual": {
+                "sim": {
+                    "stands": {"validation": "True"},
+                    "falls": {"validation": "False"},
+                }
             }
         }
     )
@@ -53,7 +55,7 @@ def test_there_is_no_unnamed_short_form():
     A section written that way is read as one simulation per key, which is what
     the configuration schema says it is.
     """
-    declared = simulation.declared({"simulate": {"validation": "True"}})
+    declared = simulation.declared({"qual": {"sim": {"validation": "True"}}})
 
     # Read as one simulation named 'validation' whose settings are the string
     # "True" - which is not a mapping, so it is reported and comes out empty
@@ -66,7 +68,7 @@ def test_there_is_no_unnamed_short_form():
 
 def test_an_object_that_declares_nothing_has_no_simulations():
     assert simulation.declared({}) == []
-    assert simulation.declared({"simulate": None}) == []
+    assert simulation.declared({"qual": {"sim": None}}) == []
 
 
 def test_a_declaration_that_names_no_scene_gets_the_built_in_one():
@@ -287,11 +289,12 @@ def package(tmp_path):
         "  block:\n"
         "    type: step\n"
         "    path: cube.step\n"
-        "    simulate:\n"
-        "      stands:\n"
-        "        simulation: //sim:toy\n"
-        "        offset: [[0, 0, 10], [0, 0, 1], 0]\n"
-        '        validation: |\n          after["bodies"]["block"]["pos"][2] > 5.0\n',
+        "    qual:\n"
+        "      sim:\n"
+        "        stands:\n"
+        "          path: //sim:toy\n"
+        "          offset: [[0, 0, 10], [0, 0, 1], 0]\n"
+        '          validation: |\n            after["bodies"]["block"]["pos"][2] > 5.0\n',
         encoding="utf-8",
     )
     context = pc.Context(str(root))

@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""One object's `pc test`, as the IDE's Test tab is drawn from it.
+"""One object's `pc qual test`, as the IDE's Test tab is drawn from it.
 
 The subject is the package of 'test_requirements.py' ('data/requirements'): a
 part, an assembly of two of them, a sketch and an interface. Nothing here builds
@@ -16,8 +16,8 @@ import asyncio
 import pytest
 
 import partcad as pc
-from partcad.test import catalog, report
-from partcad.test.test import Test
+from partcad.qual import catalog, report
+from partcad.qual.qualification import Qualification
 
 PACKAGE = "tests/partcad/unit/data/requirements/partcad.yaml"
 
@@ -73,7 +73,7 @@ def test_a_report_carries_the_entry_of_each_check(ctx):
     assert first["status"] is None and first["findings"] == [] and first["artifacts"] == []
 
 
-class _Saying(Test):
+class _Saying(Qualification):
     """A check that says what it is told to, about the shape it is asked about and another."""
 
     def __init__(self, name, say):
@@ -102,7 +102,7 @@ def _raises(check, shape):
 
 
 def test_what_each_check_said_becomes_its_verdict_and_findings(ctx):
-    Test.MAX_CONCURRENT_TESTS = 8
+    Qualification.MAX_CONCURRENT_TESTS = 8
     checks = [
         _Saying("passes", lambda check, shape: check.passed(shape, "all three met")),
         _Saying("fails", lambda check, shape: check.failed(shape, "it is %s", "wrong")),

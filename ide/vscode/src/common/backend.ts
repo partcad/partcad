@@ -641,7 +641,7 @@ class JsonRpcBackend implements PartcadBackend {
             ),
         );
         // The Requirements tab: what the object is required to be, and with
-        // 'verify' whether the model is it ('pc test -f requirements').
+        // 'verify' whether the model is it ('pc qual test -f requirements').
         reg('partcad.requirements', (a) =>
             this.send(
                 'requirements.check',
@@ -651,7 +651,7 @@ class JsonRpcBackend implements PartcadBackend {
         );
         // The Qualification tabs: every test of the subtypes asked for 'pc qual
         // test' runs on one object, and with 'verify' how each came out.
-        reg('partcad.testReport', (a) =>
+        reg('partcad.qualReport', (a) =>
             this.send(
                 'qual.report',
                 { package: a.pkg, object: a.name, kind: a.kind, verify: a.verify, subtypes: a.subtypes },
@@ -695,19 +695,19 @@ class JsonRpcBackend implements PartcadBackend {
         reg('partcad.caeDefaults', () => this.send('cae.defaults', {}));
         // The Qualification group's Simulation tab. What an object declares under
         // 'qual: sim:' is configuration, read on every show to decide whether the
-        // tab applies; running one is 'pc sim -f <name>', with the pictures
+        // tab applies; running one is 'pc qual test --simulation -f <name>', with the pictures
         // the plugin took of the scene sent back as bytes rather than as paths.
         reg('partcad.simulateList', (a) =>
-            this.send('simulate.list', { package: a.pkg, object: a.name, kind: a.kind }, a.cancellation),
+            this.send('qual.simulations', { package: a.pkg, object: a.name, kind: a.kind }, a.cancellation),
         );
         reg('partcad.simulateRun', (a) =>
             this.send(
-                'simulate.run',
+                'qual.simulate',
                 {
                     package: a.pkg,
                     object: a.name,
                     assembly: a.kind === 'assembly',
-                    // A stack of blocks is a scene, and declares 'simulate:' too.
+                    // A stack of blocks is a scene, and declares 'qual: sim:' too.
                     scene: a.kind === 'scene',
                     filter: a.scenario,
                     // Another simulation plugin than the one it names, when the

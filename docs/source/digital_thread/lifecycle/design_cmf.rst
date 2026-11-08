@@ -55,7 +55,7 @@ bought whole is judged by its own CMF: how its vendor put it together, and what 
 vendor's to say.
 
 ``pc qual test`` asks all of this of everything to be made, in its ``cmf`` check (see :ref:`cmf-check`). It warns for
-now, and fails an object that says ``qual: basic: cmf: require: true`` (or the older ``cmf: require: true``), or whose
+now, and fails an object that says ``qual: basic: cmf: require: true``, or whose
 package says ``cmf: require: true``.
 
 Seeing it
@@ -87,7 +87,7 @@ picture, the reference an item names it by, what other systems call it (``ids``)
 scene is every part it holds and every sub-assembly in it that is bought whole, each once, with how many there are. Each
 item lists its sets -- colour, material and finish, each by name with a swatch, marked when display-only, and how many
 faces and solids are in it, and where it came from -- what is left unspecified, and what keeps it from being made, in
-the words of ``pc test``'s ``cmf`` check. The items the check finds incomplete come first. ``pc ide view --design-cmf``
+the words of ``pc qual test``'s ``cmf`` check. The items the check finds incomplete come first. ``pc ide view --design-cmf``
 opens on it.
 
 **Show in 3D**, beside an item and beside each of its sets, opens the 3D tab on the same object with that singled out:

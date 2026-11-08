@@ -27,8 +27,12 @@ shown:
 
 ``topology``
   A verdict and a *place on the object*: the volumes two parts share, the faces
-  and edges of a part to be made that nothing tolerances. What a failure is about
-  is left behind as geometry, and shown on the object with everything else faded.
+  and edges of a part to be made that nothing tolerances, the faces and edges of
+  a part that are badly made. What a finding is about is left behind as geometry,
+  and shown on the object with everything else faded. Only ever *part* of the
+  object: a finding that is the whole of it -- every face of a part that
+  tolerances nothing -- points at nothing in particular, and is said in words
+  instead, or left to the basic test whose finding it is.
 
 ``sim``
   The simulations the object declares, run: the object placed in a world, the
@@ -80,10 +84,14 @@ Under ``basic:``, ``topology:`` and ``other:``, an entry named after a built-in
 test is that test's **parameters** -- ``<object>.qual.basic.<test>.<param>: <value>``
 -- and an entry that says ``path:`` is a test a **plugin** supplies, which must be
 declared: ``path:`` names the plugin, and every other key is handed to it. Under
-``sim:`` every entry is a simulation, whose ``path:`` names the simulation plugin
-(it was ``simulation:``, under a section called ``simulate:``; both are still
-read, as are the older ``interference:``, ``connectivity:`` and ``cmf:`` keys a
-few built-in tests took their parameters from).
+``sim:`` every entry is a simulation, whose ``path:`` names the simulation plugin.
+
+The keys this section replaced -- ``qual: sim:`` (whose entries named their plugin
+``simulation:``), and the ``interference:``, ``connectivity:`` and ``cmf:`` a few
+built-in tests took their parameters from on the object -- are no longer read. An
+object that still has one is told what to write instead, as an error, rather than
+having the setting quietly ignored. (A package's own ``cmf: require: true``, which
+says it for every object of the package, is not one of them.)
 
 None of this is part of what the object *is*: editing ``qual:`` does not rebuild
 the object, and each test folds what it reads of it into its own verdict's key.
@@ -110,8 +118,9 @@ object -- its name, its package's directory, and the object itself as a file
 when the plugin declares a ``format:`` -- and answers a verdict, findings, and,
 by subtype, the geometry a topology finding is about or the report an ``other``
 tool wrote. ``src/partcad/wrappers/wrapper_qual.py`` is the contract.
-``plugins/qual-lockwire`` in the PartCAD repository is one, for
-`Lockwire <https://lockwirerobotics.com/>`_.
+`partcad-qual-lockwire <https://github.com/partcad/partcad-qual-lockwire>`_ is
+one, for `Lockwire <https://lockwirerobotics.com/>`_: a package of its own, imported
+by URL, whose ``lockwire`` test is the one the examples on this page declare.
 
 On the command line
 ===================
@@ -138,10 +147,11 @@ the object's package:
   pc qual add --other --path //pub/qual/lockwire:lockwire --set lockfile=rover.lockwire.yaml rover budgets
   pc qual add --topology --set minArea=1.0 bracket tolerance-surfaces
 
-``pc test`` and ``pc sim`` are the older spellings: ``pc test`` runs every subtype,
-and ``pc sim`` runs the simulations, with ``-f <name>`` for one of them, ``--json``
-to print everything the simulator reported, and ``--before``/``--after``/``--video``
-to save what a run produced. ``pc cae fea`` and its siblings run the engineering
+``pc qual test --simulation`` on its own runs the simulations and reports each run as it
+went, with ``-f <name>`` for one of them, ``--json`` to print everything the simulator
+reported, ``--plugin`` to run them with another simulator, and
+``--before``/``--after``/``--video`` to save what a run produced. ``pc cae fea`` and
+its siblings run the engineering
 analyses, whose findings are basic tests of their own (see
 :doc:`/digital_thread/lifecycle/analysis`).
 
@@ -160,10 +170,17 @@ per subtype, and one more that is reserved:
   Always enabled.
 
 **Topology**
-  Every topology test, the same way, and for a failure, the place it is about:
+  Every topology test, the same way, and for a finding, the place it is about:
   **Show** opens the object in the 3D view with the finding -- the overlap, the
-  untoleranced faces, the untoleranced edges as tubes -- in a colour of its own
-  and everything else faded, and a chip over the view to clear it.
+  untoleranced faces, the defective edges as tubes -- in a colour of its own,
+  everything else faded, and a callout on each piece of it (the first dozen)
+  saying which it is: ``face 3: Plane, 200 mm^2``, ``edge 7: free (a hole in the
+  skin)``, ``volume 1: 5.000 mm^3``.
+
+  What the test said goes with it. A card in the corner of the view says which
+  test it is and how it came out, every line it said, and what is drawn; it folds
+  to its title line to keep out of the way, **×** shows all of the object again,
+  and **Back to the Topology tab** returns to the object with that test open.
 
 :ref:`Simulation <sim-in-the-ui>`
   Every simulation the object declares, run and played back: whether its
@@ -185,7 +202,7 @@ per subtype, and one more that is reserved:
   :alt: The Qualification group: its tabs, every test and the verdicts
 
 Every tab **runs** what it shows the first time it is looked at -- the tests as
-``pc qual test --<subtype> <object>`` runs them, a simulation as ``pc sim -f
+``pc qual test --<subtype> <object>`` runs them, a simulation as ``pc qual test --simulation -f
 <name>`` runs it -- and through the same cache, so the panel and the command line
 give the same answer and **Run again** is how to ask afresh. An object that
 belongs to no package, such as a shape shown from a script, has nothing to ask
@@ -216,7 +233,7 @@ world ``subject_kind: scene``:
             validation: |
               max(abs(after["bodies"][n]["pos"][2] - before["bodies"][n]["pos"][2]) for n in before["bodies"]) < 5.0
 
-``pc qual test --simulation stable`` runs it, as does ``pc sim stable``.
+``pc qual test --simulation stable`` runs it, as does ``pc qual test --simulation stable``.
 ``examples/feature_simulate`` declares its three stacks this way.
 
 Qualifying continuously
@@ -233,7 +250,7 @@ Agent skills
 ============
 
 ``/pc:validate``
-  The skill for this phase. It runs ``pc qual test`` and ``pc sim``, renders the
+  The skill for this phase. It runs ``pc qual test`` and ``pc qual test --simulation``, renders the
   object from every angle that matters with its ports and interfaces drawn, reads
   the bill of materials and the assembly instructions of an assembly, and gives
   every requirement a verdict with the evidence named. The ``features:`` half of

@@ -13,7 +13,7 @@ An object's `requirements:` has two halves, and they are validated two ways:
 
 - **What PartCAD measures** — `ports:`, `interfaces:`, `physics:` and
   `match:` (the volume, the displacement and the mass within a percentage of
-  another object's). These are checked by `pc test` (its `requirements` check), and its
+  another object's). These are checked by `pc qual test` (its `requirements` check), and its
   verdict is the verdict. You report it; you do not second-guess it.
 - **`features:`** — a name and a sentence each: "takes an M3 screw from either
   side", "does not tip over on a 10° slope". Some are demonstrated by a
@@ -34,7 +34,7 @@ Make sure PartCAD is available as `/pc:init` describes.
 
 Find the object in `partcad.yaml` and read its `requirements:`, its
 `qual:` section (its simulations are under `qual: sim:`, or in an older
-`simulate:` section) and, for a part, its analysis sections (`fea:`, `dynamic:`,
+`qual: sim:` section) and, for a part, its analysis sections (`fea:`, `dynamic:`,
 `thermal:`, `cfd:`). `pc --no-ansi info <object>` (whatever kind of object it
 is) prints the declaration too, through whatever an alias or an enrich points
 at.
@@ -84,17 +84,18 @@ pc --no-ansi -v qual test -f requirements <object> 2>&1    # every requirement, 
 The first is the whole suite, every subtype of qualification test: whether the
 object builds, and everything else PartCAD asks of it -- basic tests (words),
 topology tests (places on the object: parts that overlap, faces and edges of a
-part to be made that nothing tolerances), its simulations, and the tests other
+part to be made that nothing tolerances, faces and edges that are badly made),
+its simulations, and the tests other
 tools supply through plugins that it declares under `qual: other:`. Every
 built-in test, what it asks and what to do when it fails, is listed in PartCAD's
 documentation (Digital Thread → Qualification → Qualification tests), and the
 IDE's Qualification tabs -- Basic, Topology, Simulation, Other -- show the same
-verdicts test by test. `pc test` is the older spelling of the same command. A failure there that is not a requirement still matters to
+verdicts test by test. A failure there that is not a requirement still matters to
 the features — a part that is a surface rather than a solid (`shell`) is not
 going to "carry a load", whatever the renders look like.
 
 The second lists each port, interface and physical property: a met one at
-`DEBUG` (hence `-v`) and one that is not as `Test failed: ...: requirements:
+`DEBUG` (hence `-v`) and one that is not as `Qualification failed: ...: requirements:
 <section>: <name>: <required>: <found>`. A requirement on something PartCAD
 cannot find out — a mass with no density to work it out from, an assembly one of
 whose parts weighs nothing known — fails as "not known". Report it that way; it is not met as
@@ -102,16 +103,16 @@ far as anybody can show.
 
 ## 3. Run the simulations
 
-Run `pc sim` as well as `pc qual test`, every time, even though `pc qual test`
+Run `pc qual test --simulation` as well as `pc qual test`, every time, even though `pc qual test`
 already ran the same simulations as its `sim` check: that check gives a verdict, and this
 gives what happened.
 
 ```sh
-pc --no-ansi sim <object> --json 2>&1               # a part, an assembly or a scene
+pc --no-ansi qual test --simulation <object> --json 2>&1               # a part, an assembly or a scene
 ```
 
-Simulations (`qual: sim:`, or an older `simulate:`) are declared by a part, an
-assembly or a scene, and `pc sim` takes all three. A sketch has nothing to simulate.
+Simulations (`qual: sim:`, or an older `qual: sim:`) are declared by a part, an
+assembly or a scene, and `pc qual test --simulation` takes all three. A sketch has nothing to simulate.
 
 Every simulation runs and its `validation:` is evaluated. A simulation
 that names a feature is evidence for that feature, and `--json` gives what
@@ -123,7 +124,7 @@ A simulation naming a feature the requirements do not declare is a
 mistake `pc qual test` already reported; mention it.
 
 For a part, run the scenarios of every analysis it declares the same way, for
-the same reason -- `pc test`'s `fea`, `dynamic`, `thermal` and `cfd` checks give
+the same reason -- `pc qual test`'s `fea`, `dynamic`, `thermal` and `cfd` checks give
 the verdict, and this gives what each scenario found:
 
 ```sh
@@ -193,13 +194,13 @@ One line per requirement:
 
 | Requirement | Verdict | Evidence |
 | --- | --- | --- |
-| port `top` faces down | met | `pc test -f requirements` |
+| port `top` faces down | met | `pc qual test -f requirements` |
 | `mass` < 0.5 kg | not met | 0.62 kg, worked out from the volume and PLA |
 | feature `stands` | met | simulation `upright` validated; `after` shows a tilt of 0.3° |
 | feature `m3-either-side` | met | top and bottom views show both counterbores |
 | feature `survives-drop` | cannot tell | no simulation names it; needs an impact analysis |
 
-- The measured requirements take `pc test`'s verdict, unchanged.
+- The measured requirements take `pc qual test`'s verdict, unchanged.
 - A feature is **met** only when something you gathered shows it — a
   simulation that validated, a view in which it is visible, a line of the bill of
   materials, a step of the instructions — and the evidence column names which.

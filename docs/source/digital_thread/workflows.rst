@@ -15,7 +15,7 @@ From an idea to a part
 #. Describe the part to an agent: ``/pc:gen-part`` (or ``/pc:gen-assembly``)
    writes the ``requirements:`` down from the description first, in its own
    terms, and only then models it (see :ref:`claude-plugin`).
-#. ``pc test`` proves it builds, can be made, and has the ports, interfaces and
+#. ``pc qual test`` proves it builds, can be made, and has the ports, interfaces and
    physical properties it is required to have.
 #. ``/pc:validate`` runs everything, looks at the part from every angle that
    matters, and gives each requirement a verdict -- met, not met, or "cannot
@@ -29,7 +29,7 @@ Changing a design without breaking it
 #. Open **Qualification**: every test runs again, through the cache, so what did
    not change is not asked again. A failure says what it found; a topology one --
    an interference, a face nobody toleranced -- shows where it is, on the object.
-#. ``pc test`` and ``pc sim`` in CI hold every change to the same checks, and
+#. ``pc qual test`` and ``pc qual test --simulation`` in CI hold every change to the same checks, and
    rendered pictures checked in beside the package make a change in how anything
    looks a diff somebody reviews.
 
@@ -47,7 +47,7 @@ From a design to an order
 Reviewing somebody else's product
 =================================
 
-``pc test -P <package>...`` checks every object of a package and everything below
+``pc qual test -P <package>...`` checks every object of a package and everything below
 it. In the Digital Thread, each object shows its requirements, its design, its
 analyses, how it is made, and its checks with what each one found -- the whole
 thread of one object on one screen.

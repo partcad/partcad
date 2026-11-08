@@ -360,7 +360,7 @@ def test_an_object_with_no_section_says_so_by_name(package):
 
 
 # --------------------------------------------------------------------------- #
-# The `cam` check `pc test` runs                                              #
+# The `cam` check `pc qual test` runs                                              #
 # --------------------------------------------------------------------------- #
 #
 # `CamTest` asks one question -- produce the route, and see whether one comes
@@ -371,19 +371,19 @@ def test_an_object_with_no_section_says_so_by_name(package):
 
 
 def _cam_check():
-    from partcad.test.cam import CamTest
+    from partcad.qual.basic.cam import CamTest
 
     return CamTest()
 
 
 def test_the_check_is_selected_by_its_own_name():
-    """`pc test -f` filters by name prefix, and nothing else starts with `cam`.
+    """`pc qual test -f` filters by name prefix, and nothing else starts with `cam`.
 
     It is the half of the rename that makes the split usable: `-f
     manufacturability` selects that check and its seven siblings, `-f cam`
     selects this one alone.
     """
-    from partcad.test.all import tests as all_tests
+    from partcad.qual.registry import builtin as all_tests
 
     names = [test.name for test in all_tests(4)]
     assert "cam" in names
@@ -403,7 +403,7 @@ def test_the_check_is_selected_by_its_own_name():
 def test_an_object_that_declares_nothing_is_not_this_check_s_business(package):
     """Declaring `cam:` is how a user says "check this one".
 
-    Without that, `pc test -r` over a package tree would start a CAD sandbox for
+    Without that, `pc qual test -r` over a package tree would start a CAD sandbox for
     every bolt in it, and a bolt has no outline a machine could follow.
     """
     check = _cam_check()

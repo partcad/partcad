@@ -344,14 +344,6 @@ VIEWER_TABS = {
     "qualification": ("basic", "topology", "simulation", "other"),
 }
 
-# The tabs that were called something else, by the '<group>-<tab>' a show used
-# to name them with, and the tab each is now: Qualification was Validation, and
-# its Test tab was what Basic and Topology are now.
-FORMER_TABS = {
-    "validation-test": "basic",
-    "validation-simulation": "simulation",
-}
-
 
 class ProtocolError(Exception):
     """A frame that could not be parsed, or a payload that is not a message."""

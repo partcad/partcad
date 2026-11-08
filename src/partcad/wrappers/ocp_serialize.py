@@ -517,7 +517,7 @@ def shape_from_brep_file(path: str):
     A package's '.brep' is ASCII - that is what every tool writes by default -
     but one PartCAD wrote itself need not be: the volumes an interference check
     leaves behind are the payloads it answered with, decompressed into files
-    (see 'partcad.test.interference_artifact'). The file is read by OCCT from
+    (see 'partcad.qual.topology.interference_artifact'). The file is read by OCCT from
     its path rather than into memory first, and only its first bytes are read
     here.
     """

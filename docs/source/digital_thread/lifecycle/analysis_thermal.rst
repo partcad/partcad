@@ -72,7 +72,7 @@ On the command line
   pc cae thermal :heatsink                                # every scenario
   pc cae thermal -f in-use :heatsink                      # one of them
   pc ide view --analysis-thermal :heatsink                # shown in the panel
-  pc test -f thermal :heatsink                            # as the check pc test runs
+  pc qual test -f thermal :heatsink                            # as the check pc qual test runs
 
 Who runs it
 ===========

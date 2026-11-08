@@ -51,10 +51,10 @@ docs:
     than a cone). So `collar`, `wall`, `stage` and `cone` have no Gazebo run.
   usage: |
     ```shell
-    pc sim -a pendulum       # released horizontal, it passes the bottom at the speed its fall gives it
-    pc sim -a nut            # a nut runs down its screw as slowly as the turn it is given says
-    pc test -f sim           # every one, as the check pc test runs
-    pc sim --json -a nudged  # what each engine reports: joints.swing, in degrees and deg/s
+    pc qual test --simulation -a pendulum       # released horizontal, it passes the bottom at the speed its fall gives it
+    pc qual test --simulation -a nut            # a nut runs down its screw as slowly as the turn it is given says
+    pc qual test -f sim           # every one, as the check pc qual test runs
+    pc qual test --simulation --json -a nudged  # what each engine reports: joints.swing, in degrees and deg/s
     ```
 
     ### The closed forms
@@ -959,7 +959,7 @@ scenes:
     # SDFormat's 9.8.
     gravity: [0, 0, -9.81]
     parameters:
-      # The three the scene PartCAD ships takes, assigned by 'pc sim'. The
+      # The three the scene PartCAD ships takes, assigned by 'pc qual test --simulation'. The
       # pendulum by default, so the scene on its own holds something to draw.
       subject:
         type: string

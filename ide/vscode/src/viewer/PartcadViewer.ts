@@ -55,14 +55,14 @@ interface WebviewNode extends Omit<ViewerNode, 'gltf' | 'assembly' | 'sketches' 
  */
 const TAB_COMMANDS: Record<string, string> = {
     // What the object is required to be, and with 'verify' whether the model is
-    // it - the verdicts 'pc test -f requirements' reaches.
+    // it - the verdicts 'pc qual test -f requirements' reaches.
     requirements: 'partcad.requirements',
     // Every test of one subtype of qualification 'pc qual test' runs on the
     // object, and with 'verify' its verdict: the subtype is the tab's (see
     // 'QUAL_TEST_TABS').
-    basic: 'partcad.testReport',
-    topology: 'partcad.testReport',
-    other: 'partcad.testReport',
+    basic: 'partcad.qualReport',
+    topology: 'partcad.qualReport',
+    other: 'partcad.qualReport',
     // What the object is made of and what each part of it declares; the user's
     // choices are added here, from this machine (see 'common/garage.ts').
     bvb: 'partcad.manufacturingTree',
@@ -107,7 +107,7 @@ const TAB_COMMANDS: Record<string, string> = {
     simulation: 'partcad.simulateList',
 };
 
-/** What the Simulation tab asks when it names a simulation: run it, 'pc sim -f <name>'. */
+/** What the Simulation tab asks when it names a simulation: run it, 'pc qual test --simulation -f <name>'. */
 const SIMULATION_RUN = 'partcad.simulateRun';
 
 /** What the view panel's section sliders ask, on the 3D tab: show the object again, cut. */
@@ -570,7 +570,7 @@ export class PartcadViewer implements vscode.Disposable {
                 // A run carries its pictures back as bytes, for the reason a
                 // render does: the daemon may be on another machine.
                 args.scenario = message.scenario;
-                // Another plugin than the simulation names: 'pc sim --plugin'.
+                // Another plugin than the simulation names: 'pc qual test --simulation --plugin'.
                 args.plugin = message.plugin;
                 // And where its pictures are taken from, when the view panel says.
                 args.viewportOrigin = message.viewportOrigin;

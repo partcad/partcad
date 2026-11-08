@@ -45,11 +45,11 @@ Under 'sim:' every entry is a simulation, whose plugin 'path:' names a package's
 'simulation:' section (see 'partcad.simulation').
 
 Before this section existed, three checks read their parameters from a key of
-their own on the object -- 'interference:', 'connectivity:' and 'cmf:' (and
-'validity:', which only ever said 'skip') -- and simulations were declared in
-'simulate:', naming their plugin as 'simulation:'. All of those are still read:
-a package in the index is not broken by PartCAD moving the place a setting
-belongs. Where both say something, 'qual:' wins.
+their own on the object -- 'interference:', 'connectivity:' and 'cmf:' -- and
+simulations were declared in 'simulate:', naming their plugin as 'simulation:'.
+None of those is read any more. An object that still says one is told what to
+write instead ('RETIRED'), rather than having its setting, or its simulations,
+quietly ignored.
 """
 
 import typing
@@ -87,9 +87,15 @@ PATH = "path"
 # parameters handed to the plugin.
 RESERVED = (PATH, "desc", "feature")
 
-# Where the legacy spelling of a simulation named its plugin.
-LEGACY_SIM_SECTION = "simulate"
-LEGACY_SIM_PATH = "simulation"
+# The keys of an object's declaration that 'qual:' replaced, and what each is now.
+# Not read: said, so that a package still written the old way is told how to say
+# it now rather than losing the setting without a word.
+RETIRED = {
+    "simulate": "'qual: sim:', each simulation naming its plugin as 'path:' rather than 'simulation:'",
+    "interference": "'qual: topology: interference:'",
+    "connectivity": "'qual: basic: connectivity:'",
+    "cmf": "'qual: basic: cmf:'",
+}
 
 
 # What has been said about a declaration's mistakes in this command: every check
@@ -123,9 +129,21 @@ def _final(shape_or_config) -> dict:
     return config if isinstance(config, dict) else {}
 
 
+def retired(config: dict) -> typing.List[str]:
+    """What an object's declaration still says the way it was said before 'qual:', as sentences saying what to write."""
+    return [
+        "'%s:' is no longer read: it is %s" % (key, replacement)
+        for key, replacement in RETIRED.items()
+        if isinstance(config, dict) and config.get(key) is not None
+    ]
+
+
 def section(shape_or_config) -> dict:
     """The object's 'qual:' section; empty when it declares none, or something that is not a mapping."""
     config = _final(shape_or_config)
+    name = config.get("name") if isinstance(config, dict) else None
+    for sentence in retired(config):
+        _error("%s%s" % ("%s: " % name if name else "", sentence))
     value = config.get(SECTION)
     if value is None:
         return {}
@@ -149,25 +167,19 @@ def subtype_section(shape_or_config, subtype: str) -> dict:
     return value
 
 
-def params(shape_or_config, subtype: str, name: str, legacy: typing.Optional[str] = None) -> dict:
+def params(shape_or_config, subtype: str, name: str) -> dict:
     """The parameters of the built-in check 'name' of 'subtype', as the object declares them.
 
-    'qual: <subtype>: <name>:' over the check's legacy key ('legacy'), each
-    key of the result one parameter. An entry that names a plugin ('path:')
-    is a plugin's check that happens to share the name, and is not parameters.
+    'qual: <subtype>: <name>:', each key one parameter. An entry that names a
+    plugin ('path:') is a plugin's check that happens to share the name, and is
+    not parameters.
     """
-    config = _final(shape_or_config)
-    result = {}
-    if legacy:
-        old = config.get(legacy)
-        if isinstance(old, dict):
-            result.update(old)
-    entry = subtype_section(config, subtype).get(name)
+    entry = subtype_section(_final(shape_or_config), subtype).get(name)
     if isinstance(entry, dict) and PATH not in entry:
-        result.update(entry)
-    elif entry is not None and not isinstance(entry, dict):
+        return dict(entry)
+    if entry is not None and not isinstance(entry, dict):
         _error("'%s: %s: %s:' must be a mapping of parameters" % (SECTION, subtype, name))
-    return result
+    return {}
 
 
 class Declaration:
@@ -215,35 +227,8 @@ def declared(shape_or_config, subtype: str, builtin_names=()) -> list:
 
 
 def simulations(shape_or_config) -> typing.List[typing.Tuple[str, dict]]:
-    """The simulations an object declares, as (name, entry) pairs with the plugin under 'path'.
-
-    'qual: sim:' first, then the legacy 'simulate:' section, whose plugin is
-    named 'simulation:'; a name declared in both is the 'qual: sim:' one, and the
-    other is reported rather than run twice.
-    """
-    config = _final(shape_or_config)
-    result = []
-    seen = set()
-    for name, entry in subtype_section(config, SIM).items():
-        seen.add(name)
-        result.append((name, entry))
-    legacy = config.get(LEGACY_SIM_SECTION)
-    if legacy:
-        if not isinstance(legacy, dict):
-            _error("The '%s' section must be a mapping of simulation names" % LEGACY_SIM_SECTION)
-        else:
-            for name, entry in legacy.items():
-                if name in seen:
-                    _error(
-                        "The simulation '%s' is declared under both '%s: %s:' and '%s:'; the first is run"
-                        % (name, SECTION, SIM, LEGACY_SIM_SECTION)
-                    )
-                    continue
-                if isinstance(entry, dict) and LEGACY_SIM_PATH in entry and PATH not in entry:
-                    entry = dict(entry)
-                    entry[PATH] = entry.pop(LEGACY_SIM_PATH)
-                result.append((name, entry))
-    return result
+    """The simulations an object declares under 'qual: sim:', as (name, entry) pairs, in order."""
+    return list(subtype_section(_final(shape_or_config), SIM).items())
 
 
 def subtypes_of(selection) -> typing.Tuple[str, ...]:

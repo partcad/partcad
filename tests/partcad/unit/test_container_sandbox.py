@@ -183,7 +183,7 @@ def test_a_directory_is_substituted_by_prefix(package_dir, tmp_path):
 def test_no_container_runtime_is_reported_as_such(monkeypatch):
     """`SandboxUnavailable`, and not some other failure.
 
-    `pc test` skips on this one and fails on everything else, so it has to be
+    `pc qual test` skips on this one and fails on everything else, so it has to be
     distinguishable rather than "an exception happened while starting".
     """
     import asyncio

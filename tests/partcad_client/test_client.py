@@ -151,7 +151,7 @@ def _stalling_client(path, timeout):
 def test_client_gives_up_on_a_service_that_stops_answering(socket_dir):
     """A handler that never returns must not hold the client forever.
 
-    Regression: 'pc test' deadlocked inside the daemon, and because the client
+    Regression: 'pc qual test' deadlocked inside the daemon, and because the client
     waited on the response with no bound, the CLI sat in 'framing.read_message'
     until CI's own watchdog killed the job 40 minutes later.
     """

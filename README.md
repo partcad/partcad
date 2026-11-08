@@ -59,7 +59,7 @@ The [tutorial](https://partcad.readthedocs.io/en/latest/tutorial.html) walks thr
 - **Outputs**: STEP, BREP, STL, 3MF, OBJ, IGES, glTF, URDF, Gazebo and MuJoCo worlds, 2D projections,
   dimensioned drawings, Markdown documentation and PDF or HTML instruction books.
 - **Engineering**: FEA, modal, thermal and CFD analysis (`pc cae`), simulation in MuJoCo or Gazebo
-  (`pc sim`), 2.5D toolpaths (`pc cam`), and materials and manufacturing methods carried into the bill of
+  (`pc qual test --simulation`), 2.5D toolpaths (`pc cam`), and materials and manufacturing methods carried into the bill of
   materials.
 - **Supply chain**: a Build vs Buy decision per line item, stock-based procurement for made parts, and
   automated purchasing from the command line.

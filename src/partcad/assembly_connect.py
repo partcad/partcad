@@ -343,7 +343,7 @@ class ConnectHow:
         self.hold_to_force_max = DEFAULT_HOLD_FORCE_MAX
         self.hold_force_specified = False
 
-        # What makes these instructions invalid, for 'pc test' to report. Every
+        # What makes these instructions invalid, for 'pc qual test' to report. Every
         # one of them is also repaired in place, so that an assembly still
         # builds; the list is what says the repair happened.
         self.problems: list[str] = []

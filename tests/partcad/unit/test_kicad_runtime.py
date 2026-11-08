@@ -38,7 +38,7 @@ def test_no_container_runtime_is_reported_as_such(tmp_path, monkeypatch):
     """`SandboxUnavailable`, and not whatever the Docker SDK happens to raise.
 
     The type is what makes it an answer rather than a fault everywhere it is
-    handled: `pc test` skips on it, and the daemon reports it to the IDE
+    handled: `pc qual test` skips on it, and the daemon reports it to the IDE
     without a traceback.
     """
     monkeypatch.setattr(runtime, "docker_available", lambda: False)

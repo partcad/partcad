@@ -1236,7 +1236,7 @@ async def build_guide_async(
     tree, index = await build_plan.tree_async(ctx, assembly, force_manufacturing=force_manufacturing)
     # The assembly asked about is documented whatever is wrong with following
     # it: 'check_source' has decided it is one to write instructions for, and
-    # what its steps fail to say is for 'pc test' and the Build vs Buy table to
+    # what its steps fail to say is for 'pc qual test' and the Build vs Buy table to
     # report - an instruction book that refused to show the steps would hide
     # exactly what needs fixing.
     tree["build"] = bool(tree.get("children"))

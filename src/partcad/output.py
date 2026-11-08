@@ -87,7 +87,7 @@ ANALYSIS_SECTIONS = (CAE,)
 #
 # Out of 'ANALYSIS_SECTIONS' too, and that one is not a technicality. An
 # analysis answers a question *about* an object -- and reports findings, which
-# 'pc test' fails on; a route says how to *make* one, and what it reports is how
+# 'pc qual test' fails on; a route says how to *make* one, and what it reports is how
 # long the job is. Nothing a caller does with the one is what it does with the
 # other, and the two are unalike even in their bottom layer: 'cae:' has no
 # built-in package and this one does (see BUILTIN_PACKAGES).
@@ -97,7 +97,7 @@ MANUFACTURING_SECTIONS = (CAM,)
 ALL_SECTIONS = SECTIONS + ANALYSIS_SECTIONS + MANUFACTURING_SECTIONS
 
 # Another section resolved the same way that produces no output file at all:
-# 'simulation:' declares the plugins 'pc sim' runs a scene through. Out of
+# 'simulation:' declares the plugins 'pc qual test --simulation' runs a scene through. Out of
 # 'SECTIONS' for the reason 'cae:' is, and out of 'ANALYSIS_SECTIONS' too -- a
 # simulation names no file type, so there is nothing for 'pc export -t' or
 # 'pc cae' to be offered. It is an 'Implementation' like any other: a script,
@@ -210,7 +210,7 @@ BUILTIN_PACKAGES = {
     CAM: "//builtin/cam",
 }
 # The one built-in package that declares objects rather than implementations:
-# the scene a 'simulate:' that names no scene of its own is run in, whose
+# the scene a 'qual: sim:' that names no scene of its own is run in, whose
 # 'subject' parameter is whatever is being simulated. Unlike the simulator that
 # runs it, an empty world costs nothing to ship and depends on nothing.
 BUILTIN_SCENE_PACKAGE = "//builtin/scene"
@@ -519,7 +519,7 @@ WORLD_KEY = "world"
 #
 # Not to be confused with the other 'reproducible' in this package, which is
 # about whether an *object* can be made twice: 'file_factory.unreproducible_reason()'
-# asks whether what a part is built from is pinned, and 'pc test' fails a part
+# asks whether what a part is built from is pinned, and 'pc qual test' fails a part
 # that is not. That one is a property of a declaration; this one is a property of
 # a file somebody wrote.
 #

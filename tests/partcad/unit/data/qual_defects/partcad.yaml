@@ -1,0 +1,30 @@
+# What 'defects' is tested against (tests/partcad/unit/test_qual_defects.py).
+#
+# The two BREP files were written with OCCT for this package:
+#
+# - open_box.brep: a 20 x 10 x 5 mm box with one of its six faces left out,
+#   made into a solid all the same - four free edges around the hole, and a
+#   shell OCCT finds not closed;
+# - sliver.brep: a 20 x 10 x 10 mm block fused with a 20 x 10.0005 x 5 mm one,
+#   which leaves faces half a micrometre wide along one side and edges as long.
+parts:
+  open_box:
+    type: brep
+    path: open_box.brep
+    desc: A box with a face missing
+  sliver:
+    type: brep
+    path: sliver.brep
+    desc: A block with slivers along one side
+  sliver_tolerated:
+    type: brep
+    path: sliver.brep
+    desc: The same block, with slivers held to a smaller size than it has
+    qual:
+      topology:
+        defects:
+          minLength: 0.0001
+  sound:
+    type: basic
+    cuboid: [20, 10, 5]
+    desc: A box, which is well made

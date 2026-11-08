@@ -35,9 +35,9 @@ docs:
 
   usage: |
     ```shell
-    pc sim -a arm --json              # both runs, and what acts on every body at their end
+    pc qual test --simulation -a arm --json              # both runs, and what acts on every body at their end
     pc cae fea -f dropped :knee-gear  # the gear under what the worm holds it with
-    pc test                           # both, as checks
+    pc qual test                           # both, as checks
     ```
 
 assemblies:
@@ -47,8 +47,10 @@ assemblies:
     desc: OpenVMP Don1's lower and upper arm, joined at the knee, which the knee's worm drive holds
     # Some of it is still placed by coordinates: the motors, their mounts and the
     # hook, which Don1's arms place that way (see their own 'connectivity:').
-    connectivity:
-      requireAnchored: false
+    qual:
+      basic:
+        connectivity:
+          requireAnchored: false
     parameters:
       # Where the knee starts and where its worm holds it: the turn of the upper
       # arm's hub on the knee shaft, in degrees from where Don1 draws it. At 90
@@ -117,10 +119,12 @@ scenes:
     path: hung.assy
     gravity: [0, 0, -9.81]
     # What it holds is the arm, and that is still partly placed by coordinates.
-    connectivity:
-      requireAnchored: false
+    qual:
+      basic:
+        connectivity:
+          requireAnchored: false
     parameters:
-      # The three the scene PartCAD ships takes, assigned by 'pc sim'. The arm
+      # The three the scene PartCAD ships takes, assigned by 'pc qual test --simulation'. The arm
       # by default, so the scene on its own holds something to draw.
       subject:
         type: string

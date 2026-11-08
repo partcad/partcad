@@ -126,7 +126,7 @@ is always the first (see :doc:`/digital_thread/introduction` for what each group
 
   - **CMF** — for a part, an assembly or a scene: the colour, material and finish of each item it is made of,
     set by set with a swatch of each colour, what is unspecified, and what keeps it from being made -- the items
-    ``pc test``'s ``cmf`` check finds incomplete first (see :doc:`/digital_thread/lifecycle/design_cmf`).
+    ``pc qual test``'s ``cmf`` check finds incomplete first (see :doc:`/digital_thread/lifecycle/design_cmf`).
 
   2D and Draft each have a **Save…** button that saves the file on screen wherever you choose. A picture is
   shown on the tab, and can be zoomed with the mouse wheel, dragged, and put back with a double-click; a PDF or
@@ -159,14 +159,17 @@ is always the first (see :doc:`/digital_thread/introduction` for what each group
     when it applies and what to do when it fails (:doc:`/digital_thread/lifecycle/qualification_tests`). Always
     the first tab, and always enabled; an object that belongs to no package has nothing to ask PartCAD about,
     and the tab says so.
-  - **Topology** — the topology tests, the same way: the parts of an assembly that overlap, and the faces and
-    edges of a part to be made that nothing tolerances. A failure says where it is: **Show** opens the object
-    in the 3D view with the finding -- the volumes two parts share, the untoleranced faces, the untoleranced
-    edges drawn as tubes -- in a colour of its own and everything else faded, and a chip over the view takes
-    it away again.
+  - **Topology** — the topology tests, the same way: the parts of an assembly that overlap, the faces and
+    edges of a part to be made that nothing tolerances, and the faces and edges of a part that are badly made
+    (``defects``). A finding says where it is: **Show** opens the object in the 3D view with the finding --
+    the volumes two parts share, the untoleranced or defective faces, the edges drawn as tubes -- in a colour
+    of its own, everything else faded, and a callout on each piece saying which it is. A card over the view
+    keeps what the test said: its verdict, every line of its findings, and what is drawn. It folds to its
+    title, **×** shows all of the object again, and **Back to the Topology tab** returns to the object with
+    that test open.
   - **Simulation** — for a part, an assembly or a scene that declares simulations under ``qual: sim:`` (see :doc:`/digital_thread/lifecycle/simulation`):
     the simulations it declares, listed on the left with the first one selected. Selecting one runs it, as
-    ``pc sim -f <name>`` does, and shows whether its ``validation:`` held, and plays the video of the run the
+    ``pc qual test --simulation -f <name>`` does, and shows whether its ``validation:`` held, and plays the video of the run the
     simulation plugin recorded (see :ref:`sim-video`), in a player with the usual controls -- play and pause,
     replay, a step back and forward, a position to drag, the speed, and full screen. Until it is played, the
     player shows two pictures of the scene the plugin took -- before anything moved on the left, and when the
@@ -177,7 +180,7 @@ is always the first (see :doc:`/digital_thread/introduction` for what each group
     Whether each run held is a green or red mark before its name in the list. Above the pictures, as on the
     Draft tab, **Simulated by** names the plugin that runs it -- filled in with the one it names, offering the
     ones PartCAD knows of, and taking any other name typed into it; another runs it with that one, like
-    ``pc sim --plugin`` -- and **Simulate** runs it afresh. Under the
+    ``pc qual test --simulation --plugin`` -- and **Simulate** runs it afresh. Under the
     pictures, **Criteria**, **Before** and **After** open on a click: the ``validation:`` expression, and the
     ``before`` and ``after`` the plugin reported, which are what that expression is evaluated over.
   - **Other** — the tests plugins supply that the object declares under ``qual: other:``, each with the

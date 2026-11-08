@@ -1,20 +1,20 @@
 ---
 name: sim-assembly-fea
-description: Turn what a simulation of an assembly measured into a stress analysis of one part in it - run the assembly's `simulate:` entry, read the forces and moments acting on the body the part is welded into at the end of the run (the "after" state), work out which of them load the part and where, and add the part a new named FEA scenario (an entry of its `fea:` section, beside any it already has) that applies them as forces with directions in its own frame (with its apparent gravity), then run that scenario with `pc cae fea -f` and, in an IDE, show the result in the Digital Thread. Use for /pc:sim-assembly-fea, or when the user asks how a simulated motion stresses a part, wants an FEA "under the loads from the simulation", or asks whether a gear, a shaft or a bracket survives what a mechanism does to it.
+description: Turn what a simulation of an assembly measured into a stress analysis of one part in it - run one of the simulations the assembly declares (`qual.sim`), read the forces and moments acting on the body the part is welded into at the end of the run (the "after" state), work out which of them load the part and where, and add the part a new named FEA scenario (an entry of its `fea:` section, beside any it already has) that applies them as forces with directions in its own frame (with its apparent gravity), then run that scenario with `pc cae fea -f` and, in an IDE, show the result in the Digital Thread. Use for /pc:sim-assembly-fea, or when the user asks how a simulated motion stresses a part, wants an FEA "under the loads from the simulation", or asks whether a gear, a shaft or a bracket survives what a mechanism does to it.
 ---
 
 # pc:sim-assembly-fea
 
 Find out what a mechanism does to one of its parts, and analyse the part under
 it. `$ARGUMENTS` names three things: the **assembly**, the **simulation** (the
-name of an entry in its `simulate:`), and the **part** (a link path in the
+name of an entry in its `qual: sim:`), and the **part** (a link path in the
 assembly, such as `lower/knee-worm-gear/gear`, or a part name such as
 `motion/worm_gear_28t` when only one placement of it is in the assembly). Ask
 for whichever is missing; `pc --no-ansi info -a <assembly>` prints the
-assembly's `simulate:` entries, and the result of a run lists its parts.
+assembly's `qual: sim:` entries, and the result of a run lists its parts.
 
 What you produce is a new **FEA scenario** -- one named entry of the part's
-`fea:` section, which is a map of scenarios the way `simulate:` is a map of
+`fea:` section, which is a map of scenarios the way `qual: sim:` is a map of
 simulations -- whose every number came out of the simulation, a run of that
 scenario with its result, and a short account of how each load got from the
 simulation to the part. You add a scenario; you never replace the section. A
@@ -36,7 +36,7 @@ sure PartCAD is available as `/pc:init` describes.
 
 ```sh
 mkdir -p /tmp/pc-sim-fea
-pc --no-ansi sim -a <assembly> -f <simulation> --json > /tmp/pc-sim-fea/sim.json 2> /tmp/pc-sim-fea/sim.log
+pc --no-ansi qual test --simulation -a <assembly> -f <simulation> --json > /tmp/pc-sim-fea/sim.json 2> /tmp/pc-sim-fea/sim.log
 ```
 
 `--json` prints the whole result on standard output and the log goes to
@@ -166,7 +166,7 @@ name too (`dropped_in_gazebo`). Then:
   (`default`, which is what PartCAD already calls it, or a better one if its
   comments say where it came from), then add yours beside it. Say that you did.
 - If the simulation names the requirement it demonstrates (`feature:` on the
-  `simulate:` entry), give the scenario the same `feature:`: the analysis is
+  `qual: sim:` entry), give the scenario the same `feature:`: the analysis is
   evidence for the same claim, and the IDE's Requirements tab lists it there.
 
 ```yaml
@@ -236,7 +236,7 @@ condition to the mesh nodes near its port either way, and names a port it found
 no node near. Any implementation whose `reads:` lists `force` and `gravity`
 will do -- CalculiX, Elmer, Code_Aster, MOOSE; on the same part they should
 agree to within what their meshes differ by. The model is written
-beside the package as `<part>.fea.<scenario>.glb`. `pc test -f fea :<part>` runs
+beside the package as `<part>.fea.<scenario>.glb`. `pc qual test -f fea :<part>` runs
 every scenario of the part as a check, yours included.
 
 If the daemon was already running when you edited an ASSY file, `pc daemon stop`

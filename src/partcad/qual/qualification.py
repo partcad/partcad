@@ -26,9 +26,6 @@ how its findings are presented (see 'partcad.qual'):
                 the video ('partcad.simulation')
     other       a report of an external tool's own: a table of findings, in that
                 tool's vocabulary ('report()')
-
-The class used to be called 'Test', after 'pc test', and still answers to that
-name ('Test' below), so that a check written against it keeps working.
 """
 
 import contextvars
@@ -43,26 +40,26 @@ from ..concurrency import ReentrantGate
 from . import config as qual_config
 from .config import BASIC, OTHER, SIM, TOPOLOGY
 
-# Shared by every Test, because MAX_CONCURRENT_TESTS is a cap on tests as a
+# Shared by every Qualification, because MAX_CONCURRENT_TESTS is a cap on tests as a
 # whole rather than on any one of them.
 #
 # Re-entrant, and it has to be: 'ManufacturabilityTest.test' runs the whole suite over every
 # object the assembly under test is procured from, from inside the call this
 # gate has already admitted. Counting those nested runs as new arrivals is what
-# used to wedge 'pc test -r' for good -- with every permit held by a caller
+# used to wedge 'pc qual test -r' for good -- with every permit held by a caller
 # waiting for a permit, no test ever finished and the daemon stopped answering.
-_gate = ReentrantGate("partcad.test.concurrency")
+_gate = ReentrantGate("partcad.qual.concurrency")
 
 
 # What 'failed()' said while a verdict was being worked out, so that a failure
 # read back from the cache can say it again. A context variable rather than an
-# attribute: one Test instance checks every object concurrently, and each
+# attribute: one Qualification instance checks every object concurrently, and each
 # 'test_cached()' call is a task of its own, so the collector has to belong to
 # the call. Holds (test, shape, messages); 'failed()' appends only for that test
 # and that shape, because a check that tests other objects on the way -- an
 # assembly's manufacturability testing its parts -- logs their failures too,
 # and those are theirs to remember, under their own keys.
-_reasons: contextvars.ContextVar = contextvars.ContextVar("partcad.test.reasons", default=None)
+_reasons: contextvars.ContextVar = contextvars.ContextVar("partcad.qual.reasons", default=None)
 
 # How much of what a failure said is kept with it. A reason is a sentence or a
 # short report; this is a bound on a pathological one, not a budget.
@@ -77,7 +74,7 @@ _MAX_REASONS_BYTES = 64 * 1024
 # check run any other way is collected by nobody. Like '_reasons', it notes only
 # what the check says about that shape, not about the objects it tests on the
 # way.
-_report: contextvars.ContextVar = contextvars.ContextVar("partcad.test.report", default=None)
+_report: contextvars.ContextVar = contextvars.ContextVar("partcad.qual.report", default=None)
 
 
 def semaphore_wrapper(f):
@@ -108,7 +105,7 @@ class Qualification(ABC):
     NOT_CACHEABLE = "not_cacheable"
 
     # A key the caller sets on 'test_ctx' to say the object was asked about on
-    # its own, by name -- 'pc test <object>' -- rather than reached by walking a
+    # its own, by name -- 'pc qual test <object>' -- rather than reached by walking a
     # package or a tree of them. Most checks give the same verdict either way;
     # one that does not reads this (see 'SimTest', where a claim with no
     # condition to check is a skip in a walk and a failure when asked about).
@@ -135,23 +132,17 @@ class Qualification(ABC):
     # is one of them, never this class directly.
     SUBTYPE: str = BASIC
 
-    # Where this check's parameters were declared before 'qual:' existed, on
-    # the object: 'interference:' for 'interference', 'connectivity:' for
-    # 'connectivity'. Still read, under what 'qual:' says (see 'params()').
-    LEGACY_KEY: typing.Optional[str] = None
-
     def __init__(self, name: str) -> None:
         self.name = name
 
     def params(self, shape) -> dict:
         """The parameters this check is given for 'shape': '<object>.qual.<subtype>.<name>'.
 
-        Every key of that mapping is one parameter, as the object declares it,
-        over what the check's legacy key says (see 'LEGACY_KEY'). Empty when the
-        object declares none, which is every check's ordinary case: a built-in
-        check has a default for each of its parameters.
+        Every key of that mapping is one parameter, as the object declares it.
+        Empty when the object declares none, which is every check's ordinary
+        case: a built-in check has a default for each of its parameters.
         """
-        return qual_config.params(shape, self.SUBTYPE, self.name, legacy=self.LEGACY_KEY)
+        return qual_config.params(shape, self.SUBTYPE, self.name)
 
     def doc(self) -> typing.Optional[dict]:
         """What this check is, as the IDE draws it beside the verdict (see 'partcad.qual.catalog')."""
@@ -194,7 +185,7 @@ class Qualification(ABC):
             # all of it added by 'prepare_async()', which used to run only once
             # 'test()' built the shape. By then the key had been read, so the
             # verdict was remembered under one that covered none of it: every
-            # assembly a package-wide 'pc test' reached logged "Hash update after
+            # assembly a package-wide 'pc qual test' reached logged "Hash update after
             # being used", and a check answered without building the shape kept
             # its pass after a part the assembly links to had changed.
             #
@@ -228,7 +219,7 @@ class Qualification(ABC):
                 # check that ran first answered for both: the assembly passed on
                 # its part's own "not applicable", or the part failed its own
                 # run with the assembly's failure, depending on which of the two
-                # a package-wide 'pc test' reached first.
+                # a package-wide 'pc qual test' reached first.
                 #
                 # Nothing is added for an object that is to be made, which
                 # answers the same either way, so an assembly's walk still reads
@@ -347,7 +338,7 @@ class Qualification(ABC):
             if "action_prefix" not in test_ctx
             else f"{test_ctx['action_prefix']}:{shape.project_name}"
         )
-        with pc_logging.Action("Test", action_name, shape.name, self.name):
+        with pc_logging.Action("Qual", action_name, shape.name, self.name):
             return await self.test_cached(tests_to_run, ctx, shape, test_ctx)
 
     def _log_message_prepare(self, *args) -> str:
@@ -361,7 +352,7 @@ class Qualification(ABC):
     def debug(self, shape, *args) -> None:
         """This methods works like logging.debug() but prepends the message with the test name and the shape name."""
         message = self._log_message_prepare(*args)
-        pc_logging.debug(f"Test: {shape.project_name}:{shape.name}: {self.name}{message}")
+        pc_logging.debug(f"Qualification: {shape.project_name}:{shape.name}: {self.name}{message}")
 
     def info(self, shape, *args) -> None:
         """Like logging.info(), prefixed with the test name and the shape name.
@@ -371,21 +362,27 @@ class Qualification(ABC):
         here, so that a pass is not mistaken for a clean bill of health.
         """
         message = self._log_message_prepare(*args)
-        pc_logging.info(f"Test: {shape.project_name}:{shape.name}: {self.name}{message}")
+        pc_logging.info(f"Qualification: {shape.project_name}:{shape.name}: {self.name}{message}")
         self._note(shape, "info", message)
 
     def warned(self, shape, *args) -> bool:
-        """What the check found, on an object nobody is going to make.
+        """What the check found, as a finding that does not fail the run.
 
-        A finding, reported, that does not fail the run. An object that says
+        Two kinds of check say this. One that would fail an object to be made,
+        on an object nobody is going to make: an object that says
         'manufacturable: false' is a record of something - an import kept as it
         arrived, a model of a part somebody else makes - and holding it to what
         a thing being built is held to would mean either editing it until the
         checks are happy, which destroys the record, or turning the checks off,
         which loses the finding. Said out loud and not fatal keeps both.
+
+        And one whose findings are cautions rather than faults on any object -
+        'defects', which shows the pieces of a part the kernel will not certify,
+        on parts that are very often fine to use. Said the same way, for the
+        same reason: a red build over them would say something untrue.
         """
         message = self._log_message_prepare(*args)
-        pc_logging.warning(f"Test: {shape.project_name}:{shape.name}: {self.name}{message}")
+        pc_logging.warning(f"Qualification: {shape.project_name}:{shape.name}: {self.name}{message}")
         self._note(shape, "warning", message)
         return self.TEST_PASSED
 
@@ -397,7 +394,7 @@ class Qualification(ABC):
         a failure read back from the cache can say it again.
         """
         message = self._log_message_prepare(*args)
-        pc_logging.error(f"Test failed: {shape.project_name}:{shape.name}: {self.name}{message}")
+        pc_logging.error(f"Qualification failed: {shape.project_name}:{shape.name}: {self.name}{message}")
         self._note(shape, "error", message)
         collecting = _reasons.get()
         if collecting is not None and collecting[0] is self and collecting[1] is shape and message:
@@ -408,7 +405,7 @@ class Qualification(ABC):
     def passed(self, shape, *args) -> bool:
         """This methods works like logging.error() but prepends the message with the test name and the shape name."""
         message = self._log_message_prepare(*args)
-        pc_logging.debug(f"Test passed: {shape.project_name}:{shape.name}: {self.name}{message}")
+        pc_logging.debug(f"Qualification passed: {shape.project_name}:{shape.name}: {self.name}{message}")
         self._note(shape, "passed", message)
         return self.TEST_PASSED
 
@@ -432,7 +429,7 @@ class Qualification(ABC):
         and nothing that changes it changes the cache key.
         """
         message = self._log_message_prepare(*args)
-        pc_logging.warning(f"Test skipped: {shape.project_name}:{shape.name}: {self.name}{message}")
+        pc_logging.warning(f"Qualification skipped: {shape.project_name}:{shape.name}: {self.name}{message}")
         self._note(shape, "skipped", message)
         return self.TEST_PASSED
 
@@ -441,14 +438,14 @@ class Qualification(ABC):
 
         Logged at DEBUG, as it always was -- a check that does not apply is the
         usual case and says nothing a reader of the run needs -- and noted for a
-        report (see 'partcad.test.report'), which shows it as "not applicable"
+        report (see 'partcad.qual.report'), which shows it as "not applicable"
         rather than as a pass the object did nothing to earn.
         """
         if args and args[0] is None:
             # 'inapplicable()' had no reason to give: say nothing rather than "None".
             args = ()
         message = self._log_message_prepare(*args)
-        pc_logging.debug(f"Test: {shape.project_name}:{shape.name}: {self.name}: Not applicable{message}")
+        pc_logging.debug(f"Qualification: {shape.project_name}:{shape.name}: {self.name}: Not applicable{message}")
         self._note(shape, "not-applicable", message)
         return self.TEST_PASSED
 
@@ -469,7 +466,7 @@ class Qualification(ABC):
 
         An object PartCAD can show -- {'kind', 'package', 'name', 'title',
         'desc'} -- such as the assembly the interference check puts together of
-        two parts that overlap and what they share (see 'test/interference.py').
+        two parts that overlap and what they share (see 'qual/topology/interference.py').
         Noted for a report, and kept with a failure in the cache like what it
         said, so that a verdict read back from there still has it.
         """
@@ -505,7 +502,7 @@ class Qualification(ABC):
 class BasicQualification(Qualification):
     """A check whose findings are words: a verdict, and what was said about it.
 
-    Every check 'pc test' ran before qualifications had subtypes is one of
+    Every check 'pc qual test' ran before qualifications had subtypes is one of
     these, but for the ones that point at geometry (see 'TopologyQualification').
     """
 
@@ -556,7 +553,3 @@ class OtherQualification(Qualification):
     """
 
     SUBTYPE = OTHER
-
-
-# The name this class had when every qualification was a 'pc test' check.
-Test = Qualification

@@ -17,7 +17,7 @@ by hand. This does it, with the standard library alone:
     python part_loads.py loads <sim.json> <part> [--simulation NAME] [--reading after]
     python part_loads.py point <sim.json> <from part> <to part> X Y Z [--direction]
 
-`<sim.json>` is what `pc --no-ansi sim ... --json` printed (or the result of one
+`<sim.json>` is what `pc --no-ansi qual test --simulation ... --json` printed (or the result of one
 run, `{"before": ..., "after": ...}`); `-` reads it from standard input. A part
 is named by its path of labels (`subject/lower/knee-worm-gear/gear`), by the end
 of one (`knee-worm-gear/gear`), or by the part it is (`motion/worm_gear_28t`, or
@@ -125,12 +125,14 @@ def cross(a, b):
 
 
 def run_of(document, simulation=None):
-    """The result of one run out of 'pc sim --json', or the document itself where it is one."""
+    """The result of one run out of 'pc qual test --simulation --json', or the document itself where it is one."""
     if isinstance(document, dict) and "before" in document and "after" in document:
         return document
     runs = (document or {}).get("simulations") if isinstance(document, dict) else None
     if not runs:
-        raise SystemExit("No simulation in this document: it is neither 'pc sim --json' nor a run's result")
+        raise SystemExit(
+            "No simulation in this document: it is neither 'pc qual test --simulation --json' nor a run's result"
+        )
     if simulation is not None:
         runs = [run for run in runs if run.get("simulation") == simulation]
         if not runs:
@@ -325,7 +327,7 @@ def _read(path):
         return json.load(sys.stdin)
     with open(path, encoding="utf-8") as f:
         text = f.read()
-    # 'pc sim --json' can be captured with the log on the same stream: the
+    # 'pc qual test --simulation --json' can be captured with the log on the same stream: the
     # document is from the first line that opens it.
     start = text.find("{\n")
     return json.loads(text[start:] if start > 0 else text)

@@ -89,7 +89,7 @@ at all).
 
   A package that breaks the rule keeps the name for the declaration of the kind earliest in that order -- the one
   a bare name finds -- and refuses every other one as it loads: dropped from what the package serves, and
-  recorded through `record_broken_object` with the reason, so the log, `pc test` and the Explorer all say it. An
+  recorded through `record_broken_object` with the reason, so the log, `pc qual test` and the Explorer all say it. An
   alias (`aliases:`) is a name like a declaration, and is refused the same way. A plugin-backed package is
   checked again each time it lists a kind, which can take a name away from a kind listed earlier.
   `add_object_config` (every `pc add`, `pc import`, `pc filter`) refuses a taken name before writing it, and
@@ -123,7 +123,7 @@ at all).
   already holds. A
   semaphore counts it as a new arrival instead, and once as many callers as the limit are each waiting on a
   nested call, every permit is held by somebody waiting for one and the loop stops for good. That is what hung
-  `pc test -r`, and with it the daemon serving it. The gate keeps one semaphore per event loop for the same
+  `pc qual test -r`, and with it the daemon serving it. The gate keeps one semaphore per event loop for the same
   reason `sandbox_lock.py` polls: these are taken from several loops at once, and the daemon runs one
   `asyncio.run()` per request, so a semaphore kept for the process belongs to whichever request created it.
 
@@ -276,7 +276,7 @@ at all).
 - **A key is read once its shape is prepared** (`Shape.prepare_async(wait=True)`): a preparation hashes in what
   a shape is made of -- the file a `fileFrom` or a plugin fetches, the keys of what an assembly links to -- and a
   hash adds its files when it is first read, so a key read while one is under way is kept, half of it missing, for
-  the rest of the process. Every key reader (`get_cache_key_async()`, `get_wrapped()`, `Test.test_cached()`)
+  the rest of the process. Every key reader (`get_cache_key_async()`, `get_wrapped()`, `Qualification.test_cached()`)
   waits for a preparation begun elsewhere, and two waits are refused rather than started, because they could
   never end: one that would close a cycle of preparations (each records what it waits for), and a thread that
   holds a shape's lock waiting for a preparation on another thread, which that lock may be what stops. A refused
@@ -333,20 +333,22 @@ at all).
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.
 
-- **Every question asked of an object to qualify it is a `Qualification`** (`qual/qualification.py`; `Test` is
-  its old name, and `partcad.test.test`, `.all`, `.report` and `.catalog` are aliases of the `qual` modules), of
+- **Every question asked of an object to qualify it is a `Qualification`** (`qual/qualification.py`), and every
+  built-in one lives in `qual/basic/`, `qual/topology/` or `qual/sim.py`, by its subtype -- there is no
+  `partcad.test` package and no `Test` class any more. A check is of
   one of four subtypes told apart by what it produces and so by how it is shown (`qual/config.py`): `basic`
   (words), `topology` (a place on the object, left behind as geometry), `sim` (a simulation run) and `other` (a
   report of another tool's own). The built-in checks are `qual/registry.py`'s list, each subtype by its class
-  (`BasicQualification`, `TopologyQualification`, ...): `interference`, `tolerance-surfaces` and
+  (`BasicQualification`, `TopologyQualification`, ...): `defects`, `interference`, `tolerance-surfaces` and
   `tolerance-edges` are topology, `sim` is sim, the rest basic. They are always applied; what an object says
   about them is its `qual:` section -- `<object>.qual.<subtype>.<test>.<param>` is a built-in check's parameter,
-  read through `Qualification.params()` over the key the check used before (`interference:`, `connectivity:`,
-  `cmf:`), and an entry with `path:` is a check a **plugin** supplies, declared by a package's own `qual:` section
-  (`qual/plugin.py`, `wrappers/wrapper_qual.py`) and run only where an object declares it
-  (`registry.for_shape()`). `qual` is outside the shape's hash, so a check folds into `cache_key_suffix()` what
-  of it it reads. Simulations are `qual: sim:` with the plugin as `path:`; `simulate:` with `simulation:` is
-  still read (`qual_config.simulations()`).
+  read through `Qualification.params()`, and an entry with `path:` is a check a **plugin** supplies, declared by
+  a package's own `qual:` section (`qual/plugin.py`, `wrappers/wrapper_qual.py`) and run only where an object
+  declares it (`registry.for_shape()`). `qual` is outside the shape's hash, so a check folds into
+  `cache_key_suffix()` what of it it reads. Simulations are `qual: sim:` with the plugin as `path:`. The keys
+  `qual:` replaced on an object -- `simulate:`, `interference:`, `connectivity:`, `cmf:` -- are not read, and an
+  object that still says one is told what to write instead (`qual_config.RETIRED`); a package's own `cmf:
+  require:` is not one of them.
 
 - **One object's qualification as data is `qual/report.py`, and what each check is, `qual/catalog.py`.** The
   report runs the checks `pc qual test <object>` runs -- of the subtypes asked for, then what the object declares
@@ -359,16 +361,22 @@ at all).
   (`python -m partcad.qual.catalog --write`); a test fails when a check has no entry or the page is stale. A
   topology check leaves an assembly behind for each finding, with `focus` naming the link that is the finding,
   which the IDE leaves unfaded: the interference check the two parts and a sub-assembly `interference` of what they
-  share (`test/interference_artifact.py`), the tolerance checks the part and a sub-assembly `focus` of the faces,
-  or tubes along the edges, nothing tolerances (`qual/highlight.py`) -- `brep` parts read from content-addressed
-  files under `internalStateDir`, registered in memory under names worked out from what they are, so they are
-  found by name and cached like any part, and kept with a cached failure so that a verdict read back puts them
-  back.
+  share (`qual/topology/interference_artifact.py`), the tolerance and `defects` checks the part and a sub-assembly
+  `focus` of the faces, or tubes along the edges, the finding is about (`qual/highlight.py`) -- `brep` parts read
+  from content-addressed files under `internalStateDir`, registered in memory under names worked out from what
+  they are, so they are found by name and cached like any part, and kept with a cached failure so that a verdict
+  read back puts them back. An artifact also lists `features`, a point and a label for each of the first dozen
+  pieces, which the IDE pins callouts to. **A topology finding is part of the object, never all of it**
+  (`highlight.covers_all`): every face of a part that tolerances nothing singles nothing out, so the tolerance
+  checks leave that to `manufacturability`, and a finding that is the whole part anyway is said in words with
+  nothing drawn. `defects` is the place-on-the-object half of two basic checks that stay whole-part questions:
+  `validity` (OCCT will not certify it) and `degenerate` (it is flat) -- the faces and edges OCCT rejects, the free
+  edges, and the slivers thinner than `degenerate`'s threshold, reported and never failed.
 
 - **What an object is required to be is one module** (`requirements.py`): the `requirements:` section of a
   part, an assembly, a scene or a sketch -- `features` in words, `ports`, `interfaces` and `physics` where
   any part of each may be null and the rest is a constant or a comparison (`>0`, `!0`, joined with commas). Its
-  `check_async()` is what `pc test`'s `requirements` check runs *and* what the daemon's `requirements.check`
+  `check_async()` is what `pc qual test`'s `requirements` check runs *and* what the daemon's `requirements.check`
   answers the IDE's Requirements tab with, so the two cannot disagree; nothing else reads the section. Two rules
   in it are deliberate. A location requirement's middle element is the direction a frame *faces* (its Z axis),
   not the rotation axis a port's location is written with -- "faces down" is what a requirement means, and a
@@ -381,7 +389,7 @@ at all).
   so a field added there needs nothing here. The check is never cached: what it reads -- the requirements, the
   ports and interfaces, which can live in other packages, the material -- is mostly not what a shape's cache key
   is made of. The fifth section, `match`, holds the volume, the displacement and the mass to within a percentage of
-  another object's, and reads both by `compare.py`'s rules (`within()`), so `pc test` and `pc compare` cannot disagree
+  another object's, and reads both by `compare.py`'s rules (`within()`), so `pc qual test` and `pc compare` cannot disagree
   about what "within 5%" means.
 
 - **Two objects read against each other is one module** (`compare.py`, with `wrappers/wrapper_compare.py` for the
@@ -489,8 +497,8 @@ at all).
   Keep all of it clear of the hashes PartCAD computes for itself -- `CacheHash`, a git revision -- which
   identify something PartCAD built or fetched, where this states in advance which bytes were asked for.
 
-  That test reads more than the shape's hash covers, which is what `Test.cache_key_suffix()` exists for: a
-  corrected `fileHash` has to move the cache key, or `pc test` answers the new declaration with the old one's
+  That test reads more than the shape's hash covers, which is what `Qualification.cache_key_suffix()` exists for: a
+  corrected `fileHash` has to move the cache key, or `pc qual test` answers the new declaration with the old one's
   failure.
 
 - **A key must not depend on what else happens to be loaded.** A connected assembly keys on the interfaces its
@@ -619,7 +627,7 @@ at all).
     happens to be a file's name must not send it. Do not resolve such a path in the core instead: what a
     field means is the implementation's to say.
 
-- **Engineering analysis** (`./src/partcad/cae.py`, `Shape.analyze_async()`, `./src/partcad/test/cae.py`):
+- **Engineering analysis** (`./src/partcad/cae.py`, `Shape.analyze_async()`, `./src/partcad/qual/basic/cae.py`):
   `pc cae fea`/`dynamic`/`thermal`/`cfd` are a third output section, `cae:`, resolved by the very code that resolves
   `export:` and `render:` -- same `path`/`package`, same sandbox, same meta-wrapper (`wrapper_export.py`), and
   `Shape._run_implementation_async()` is the body all three share. It is deliberately **not** in
@@ -630,7 +638,7 @@ at all).
 
   What is genuinely new is the two halves either side of the script. Going in, the *part* declares the
   boundary conditions in a section named after the analysis, because they belong to the part and not to
-  whoever analyses it -- as a map of named **scenarios**, the way `simulate:` is a map of simulations, since a
+  whoever analyses it -- as a map of named **scenarios**, the way `qual: sim:` is a map of simulations, since a
   part is asked more than one question of each kind. `cae.of_shape()` reads the section into `cae.Scenario`s
   (name, `desc:`, `feature:`, `implementation:`, `params:`) without failing on a malformed one, so a listing --
   `cae.list`, the IDE's tabs, `partcad.requirements`' feature references -- never fails on one scenario's
@@ -639,7 +647,7 @@ at all).
   `cae.LEGACY_SCENARIO` and warned about once: it is told apart by its keys, which is why no scenario may be
   named after one. `Shape.analyze_async()` runs **one** scenario (`scenario=`, or the only one) and writes its
   model to `<part>.<analysis>.<scenario>.<ext>` (`cae.model_suffix()`; the unnamed form keeps
-  `<part>.<analysis>.<ext>`); every caller that wants several -- `pc cae`, `pc test` -- loops, one scenario
+  `<part>.<analysis>.<ext>`); every caller that wants several -- `pc cae`, `pc qual test` -- loops, one scenario
   after another, and reports each on its own. The request an implementation is handed is the one scenario's,
   unchanged in shape, so an implementation knows nothing of scenarios. `cae.ROLES` says which keys each analysis reads and how -- a *set* (`fix:`, `outlet:`)
   or a *value* parsed into one stored unit (`load:` in newtons, a bare number being a mass weighed at
@@ -652,12 +660,12 @@ at all).
   part it covers (a sketchless port covers the face it lies on); the same module meshes with gmsh with those
   faces named and writes the result glTF, so the solver-independent half of every implementation lives here
   once. Coming back, the implementation reports **findings** beside the file it wrote, a JSON array that
-  `pc cae` prints, `pc test`'s per-analysis checks fail on, and the IDE lists under the model. `cae.py` imports
+  `pc cae` prints, `pc qual test`'s per-analysis checks fail on, and the IDE lists under the model. `cae.py` imports
   nothing from `partcad`, which is what lets it be tested without a sandbox.
 
   Both checks are gated on the part *declaring* the section -- and then run every scenario of it -- and that
   gate is the whole cost model: a
-  `pc test -r` over a package tree must not start a solver for every bolt in it, and a bolt with no `fea:` has
+  `pc qual test -r` over a package tree must not start a solver for every bolt in it, and a bolt with no `fea:` has
   nothing to tell one. Declaring `fea:` is how a user asks for the check, which is why it needs no flag.
 
   A **missing or misconfigured plugin fails**: the implementation is named `<package>:<file type>` by the
@@ -672,16 +680,16 @@ at all).
   sentence usually omits and the reader always needs -- which implementation was asked, and which machine it
   did not work on. Whether that is a failure or the one excuse -- an implementation that names a `container:`
   or a `dockerImage`, on a machine with no container runtime; one that names neither is never excused -- is
-  `ImplementationTest._verdict()` in `./src/partcad/test/implementation.py`, which the `sim` check shares:
+  `ImplementationTest._verdict()` in `./src/partcad/qual/basic/implementation.py`, which the `sim` check shares:
   one rule for a missing solver and a missing simulator, not one per check.
 
   This was the other way round until it was found to be hiding things worth failing over: a CFD implementation
   that never converges, and a plugin that cannot be installed on a whole platform. The consequence is the
-  point -- declaring `fea:` in a shared package makes `pc test` fail for everyone who has not installed what
+  point -- declaring `fea:` in a shared package makes `pc qual test` fail for everyone who has not installed what
   the implementation needs, which is what declaring it means. A package that does not want that should not
-  declare the section, the same gate that stops `pc test -r` starting a solver for every bolt in a tree.
+  declare the section, the same gate that stops `pc qual test -r` starting a solver for every bolt in a tree.
 
-  That failure is the one verdict `pc test` does **not** cache, via `Test.NOT_CACHEABLE` on the `test_ctx`. A
+  That failure is the one verdict `pc qual test` does **not** cache, via `Qualification.NOT_CACHEABLE` on the `test_ctx`. A
   cache key describes the question -- the shape's hash, the boundary conditions, the implementation and its
   options -- and nothing in it describes the machine, because a test cannot know what its implementation needs
   installed. Installing CalculiX therefore changes no key, and a remembered failure would go on failing a part
@@ -757,7 +765,7 @@ at all).
   tessellate is not remembered and is tried again next time, alone; one with no face and no edge
   (`wrapper_gltf.NothingToDraw`) is, since that is a fact about its geometry. `cache: false` still
   holds: the caller passes whether the object may be cached. The test wrappers (interference, solidity,
-  manufacturability) are deliberately not here -- they run only inside a `pc test` check, whose verdict is
+  manufacturability) are deliberately not here -- they run only inside a `pc qual test` check, whose verdict is
   cached already -- and neither is a shape's build, which is the shape cache.
 
   The key (`question_hash`, built by `Shape._artifact_hash()` for the two output sections) is the subject's
@@ -834,7 +842,7 @@ at all).
   findings, and `wrapper_export.py` passes them through without interpreting them: what is worth counting
   differs between a router and a wire EDM.
 
-  `pc test` runs it as the `cam` check (`./src/partcad/test/cam.py`), which is `CaeTest`'s shape over
+  `pc qual test` runs it as the `cam` check (`./src/partcad/qual/basic/cam.py`), which is `CaeTest`'s shape over
   `route_async()`: the same gate (declare the section or the check does not apply), the same cache key
   (the job, the implementation, and its resolved options), the same refusal to call a failure a skip. One
   thing differs, and it is where the file goes: an analysis keeps its model beside the package because the
@@ -842,15 +850,15 @@ at all).
   indistinguishable from the one `pc cam` writes -- so the check routes into a temporary directory and
   deletes it.
 
-  **The check that used to be called `cam` is `manufacturability`** (`./src/partcad/test/manufacturability.py`
+  **The check that used to be called `cam` is `manufacturability`** (`./src/partcad/qual/basic/manufacturability.py`
   and its four method-specific siblings). It asks whether an object can be made or bought at all; this one
   asks whether the program that makes it can be produced. One word answered both until `pc cam` existed. `-f`
   filters by name prefix, which is what makes the split clean: `-f manufacturability` selects that check and
   its siblings, `-f cam` selects the route check alone. Renaming a check changes every cached verdict's key,
-  so the first `pc test` after this re-runs everything -- once.
+  so the first `pc qual test` after this re-runs everything -- once.
 
 - **A subtractive part names what it is cut from and what cuts it** (`part_config_manufacturing.py`,
-  `test/manufacturability_subtractive.py`, `test/manufacturability_machine.py`): `subtractive` was a label until
+  `qual/basic/manufacturability_subtractive.py`, `qual/basic/manufacturability_machine.py`): `subtractive` was a label until
   this -- a part declared it and nothing read it. It now carries two claims, and each is checked.
 
   `source:` is the stock. Cutting only removes material, so the part has to be what is left of it: nothing of it
@@ -910,8 +918,8 @@ at all).
   keeping true -- `_orient` is the identity for the default `-Z` precisely so that it stays so. A part that
   names one **unreadably** is refused rather than routed: `_read_machine` records that in `machine_error` and
   returns no machine, which is the same answer it gives for a part that named none, so falling back would hand
-  a router program to somebody who wrote `laser:`. `pc test` reporting it as well is not enough, because
-  nothing makes `pc cam` wait for `pc test`.
+  a router program to somebody who wrote `laser:`. `pc qual test` reporting it as well is not enough, because
+  nothing makes `pc cam` wait for `pc qual test`.
 
   Which machine it is belongs in a cache key wherever it is read -- `manufacturing:` is one of the keys a
   shape's hash deliberately leaves out, so a part moved from CNC to laser has the same hash and a different
@@ -931,7 +939,7 @@ at all).
   be `$name`, the part's own parameter (`parse_cuts`), because a part cut to length is nearly always parametric.
   It takes no job keys, and it is not in `ROUTED_MACHINES`: `pc cam` passes over a part that is only cut
   and refuses `-m cut`, and a saw beside a laser leaves the laser as the one route. `manufacturability-cut`
-  (`test/manufacturability_cut.py`, `wrapper_manufacturability.cut`) makes each cut in the stock and requires
+  (`qual/basic/manufacturability_cut.py`, `wrapper_manufacturability.cut`) makes each cut in the stock and requires
   the result to *be* the part, and every cut to take something off. The furniture desk in
   `partcad-furniture-basic` is built this way from `//pub/svc/commerce/homedepot` lumber.
 
@@ -963,7 +971,7 @@ at all).
   exactly that order and returns which page is which item's; the IDE's Build tab lists the same plan, so the two
   cannot disagree. The IDE recounts the Build vs Buy rows itself (`ide/vscode/src/webview/bvb.ts`), so the
   effective-choice rule is written there too. The choices are kept by clients only (`partcad_utils/garage.py`).
-  "Can be built" in that tree is what `pc test -f manufacturability` would accept without geometry or a
+  "Can be built" in that tree is what `pc qual test -f manufacturability` would accept without geometry or a
   supplier: instructions that are complete, a tolerance, a pinned file, an ASSY file for an assembly (the
   `problems` of a node, worded as the test words them; `test/manufacturability.tolerance_failure` is shared).
   `manufacturable: false` makes a node missing unless something manufacturable it is used in overrides it -
@@ -973,7 +981,7 @@ at all).
   interfaces).
 
 - **A sheet metal part names what is bent and how** (`part_config_manufacturing.py`,
-  `test/manufacturability_sheet_metal.py`, `wrappers/dxf_metadata.py`): `sheet_metal` is the one manufacturing
+  `qual/basic/manufacturability_sheet_metal.py`, `wrappers/dxf_metadata.py`): `sheet_metal` is the one manufacturing
   method that is not described by the part alone. The others say how a shape comes out of stock; this one says
   an existing flat piece went through a brake, so its `manufacturing:` section carries a `source:` (the part
   that is bent) and an `instructions:` (the sketch that says where the bends are), both required and both
@@ -994,7 +1002,7 @@ at all).
   the drawing the instructions come from -- which is why that hook is a coroutine.
 
   `examples/produce_part_sheet_metal` is the whole of it in one package, and is what the end-to-end
-  `@pc-test-sheet-metal` scenario in `features/test.feature` runs against.
+  `@pc-qual-test-sheet-metal` scenario in `features/qual_test.feature` runs against.
 
 - **A sketch says what its drawing said** (`Sketch.get_annotations`, `shape_envelope.METADATA_ANNOTATIONS`,
   `wrappers/dxf_metadata.py`): BREP has nowhere to put an angle written against a line, and a DXF says exactly
@@ -1163,7 +1171,7 @@ at all).
   `TShapes` section — one record per shape, each opening with a two-letter type code — and counts the shells no
   solid references, by the same rule. It counts the references rather than resolving them, so it never has to know
   which end of the record list the indices count from. `test/shell.py` is the check that reports the result, and
-  it is the cheapest one `pc test` runs. Do not answer this question in a sandbox, and do not turn the scanner into
+  it is the cheapest one `pc qual test` runs. Do not answer this question in a sandbox, and do not turn the scanner into
   a BREP reader: everything between a record's type code and the line its sub-shape list ends on is geometry, and
   is skipped unread. A binary payload (below) has no such line, which is why its count is recorded rather than
   read.
@@ -1199,7 +1207,7 @@ at all).
   `asyncio.Lock` cannot do without waiting on itself for good. The cost is that two different outputs of one
   shape no longer overlap; PartCAD's parallelism is across shapes.
   `//builtin/scene` is the odd one out: it declares an *object* rather than a way of producing one — the
-  scene a `simulate:` places its subject in when it names none of its own. It is an ordinary `assy` scene
+  scene a `qual: sim:` places its subject in when it names none of its own. It is an ordinary `assy` scene
   whose `.assy` is a Jinja2 template, and the only thing that makes it the default is that
   `simulation.DEFAULT_SCENE` names it. `//builtin/color` is the other: one colour declaration, the
   display-only `rgba` (`//builtin/color:rgba;color=C91A09FF`, `manufacturable: false`). It is PartCAD's because
@@ -1255,8 +1263,8 @@ at all).
   `simulation:` is also **not** in `output.SECTIONS`: everything that reads that tuple is asking which file
   types exist, and a simulation is not one.
 
-  **`pc test` runs `simulate:` as its `sim` check** (`./src/partcad/test/sim.py`), through
-  `simulation.run_async()` -- the code `pc sim` runs, so the two cannot come to run a simulation differently.
+  **`pc qual test` runs `qual: sim:` as its `sim` check** (`./src/partcad/qual/sim.py`), through
+  `simulation.run_async()` -- the code `pc qual test --simulation` runs, so the two cannot come to run a simulation differently.
   Same gate as `fea`/`cfd`/`cam` (a part, an assembly or a scene that declares the section, nothing else), same verdict
   on a run that did not deliver (`ImplementationTest._verdict()`), and `simulation.SimulationConfigError` is
   what keeps a plugin or a scene that cannot be found out of the one excuse. `run_async(report=False)` is how
@@ -1275,11 +1283,11 @@ at all).
   a *stopped* child blocks the event loop inside CPython's child watcher and with it every timer. Neither kills
   by number alone: `runtime.process_owner` (pid plus start time) is checked first, because a reaped run's pid
   and group id can belong to somebody else by then. A spent budget is `SimulationTimeout`; a non-zero exit, a signal or an
-  answer that is not a JSON object is `SimulationCrash` with the tail of stderr. Both reach `pc test` as a
+  answer that is not a JSON object is `SimulationCrash` with the tail of stderr. Both reach `pc qual test` as a
   run that did not deliver -- a failure, with the one excuse -- and neither is cached.
 
   A declaration with **no `validation:`** is not run: in a walk over a package it is skipped, and asked about
-  by name (`Test.NAMED`, which `_test_async` sets for an object named without a walk) it fails. `pc sim` still
+  by name (`Qualification.NAMED`, which `_test_async` sets for an object named without a walk) it fails. `pc qual test --simulation` still
   runs it and reports that it ran -- there it is how somebody looks at what a plugin reports before writing the
   condition.
 
@@ -1567,7 +1575,7 @@ at all).
   format. A joint rides to an
   exporter on its child's envelope node (`shape_envelope.KEY_JOINT`, stamped by `Assembly._place` because it
   belongs to the placement, not the object); `pc info -a` lists them, and what resolving them found wrong
-  (`AssemblyChild.joint_problems`) fails `pc test`'s `connect` check rather than `pc lint`, because it is a
+  (`AssemblyChild.joint_problems`) fails `pc qual test`'s `connect` check rather than `pc lint`, because it is a
   finding about interfaces in other packages that a lint verdict, cached on one file, would serve stale.
 
 - **A name a file format cannot hold is transcoded, never renamed in PartCAD** (`./src/partcad/wrappers/naming.py`,

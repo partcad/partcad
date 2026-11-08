@@ -49,7 +49,7 @@ answers was stored to begin with.
      - ``manufacturing:``, ``vendor:``/``sku:``, materials, instructions
    * - :doc:`Qualification </digital_thread/lifecycle/qualification>`
      - Is it what it claims to be, and does it do what it is supposed to?
-     - every claim above, checked by ``pc test``, ``pc sim`` and ``simulate:``
+     - every claim above, checked by ``pc qual test``, ``pc qual test --simulation`` and ``qual: sim:``
    * - :doc:`Operations </digital_thread/lifecycle/operations>`
      - How is the thing that was made actually doing?
      - nothing yet; the phase is reserved

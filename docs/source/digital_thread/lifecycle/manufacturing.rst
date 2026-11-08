@@ -109,7 +109,7 @@ On the command line
 How manufacturing is checked
 ============================
 
-``pc test`` asks of every manufacturable object what ``pc supply`` would order
+``pc qual test`` asks of every manufacturable object what ``pc supply`` would order
 and what ``pc instructions`` would tell somebody to do: the
 ``manufacturability`` check, and one for each method -- additive, subtractive,
 forming, sheet metal, and the laser, drill and cut machines -- plus ``cam``,

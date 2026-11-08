@@ -61,7 +61,7 @@ pc ide view -a connect-mates
 
 # the same mount, with the instructions needed to actually assemble it
 pc info -a connect-instructions
-pc test -a connect-instructions
+pc qual test -a connect-instructions
 
 # placement == "inner"
 pc ide view -a -p placement=inner connect-ports

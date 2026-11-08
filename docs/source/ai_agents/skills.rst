@@ -92,7 +92,7 @@ Generating geometry
      stated, derived or measured from the reference. A part that is one constant
      profile is then simply an extrusion of the sketch that was validated.
   4. It authors and registers the script from those numbers, then validates it
-     with ``pc test``.
+     with ``pc qual test``.
   5. It renders the part **from several angles and compares each view against
      the description**, because a single projection hides whatever is behind it,
      and **measures the same dimensions again on the part's own projections** --
@@ -163,7 +163,7 @@ Generating geometry
 
   It settles the placements on a layout sketch the way ``/pc:gen-assembly`` does,
   renders four views and measures the distances again on the scene's
-  projections. Since a scene is not manufacturable, ``pc test`` only warns when
+  projections. Since a scene is not manufacturable, ``pc qual test`` only warns when
   two of its objects overlap, and the skill judges each warning by what the
   overlap touches: walls sharing a corner are left alone, a mobile object inside
   another never is.
@@ -262,7 +262,7 @@ Checking and analysing
   The skill for the :doc:`Qualification phase </digital_thread/lifecycle/qualification>`,
   and the only one that judges a requirement no program can measure.
 
-  It reads what the object's ``requirements:`` section asks for, runs ``pc test``
+  It reads what the object's ``requirements:`` section asks for, runs ``pc qual test``
   for the ports, interfaces and physical properties PartCAD measures, runs every
   simulation and every engineering analysis scenario, renders the object from
   every angle that matters with its ports and interfaces drawn, and -- for an
@@ -275,7 +275,7 @@ Checking and analysing
   Turns what a simulation measured into a stress analysis of one part, which is
   a thing neither tool does on its own.
 
-  It runs the assembly's ``simulate:`` entry, reads the forces and moments acting
+  It runs the assembly's ``qual: sim:`` entry, reads the forces and moments acting
   at the end of the run on the body the part is welded into, works out which of
   them actually load that part and where they land, and writes a new named
   scenario into the part's ``fea:`` section beside any already there. Then it

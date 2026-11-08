@@ -7,9 +7,9 @@ A part says what it *is*. `qual: sim:` is where it says what it is supposed
 to **do** -- or, as here, what it is supposed not to do:
 
 ```shell
-pc sim -S stable      # the stack stands; the validation passes
-pc sim -S unstable    # the top block falls off; that validation passes too
-pc sim                # every simulation this package declares
+pc qual test --simulation -S stable      # the stack stands; the validation passes
+pc qual test --simulation -S unstable    # the top block falls off; that validation passes too
+pc qual test --simulation                # every simulation this package declares
 ```
 
 `stable` and `unstable` are the same two blocks. In `stable` the upper one
@@ -54,8 +54,8 @@ instead of aluminium. Same geometry, same locations, same scene, same
 simulation -- and the top block ends up on the floor.
 
 ```shell
-pc sim -S stable      # nothing moves
-pc sim -S slippery    # the top block slides off
+pc qual test --simulation -S stable      # nothing moves
+pc qual test --simulation -S slippery    # the top block slides off
 ```
 
 The scene both run in is `tilted`, whose gravity leans 15 degrees off
@@ -90,7 +90,7 @@ either case a number nobody chose.
 every body was before and after:
 
 ```shell
-pc sim --json -S slippery
+pc qual test --simulation --json -S slippery
 ```
 
 The scene reaches the simulator as the MJCF PartCAD writes. That is an
@@ -110,8 +110,8 @@ like any other. `tank` is filled with `water`, and holds whatever is
 simulated in it 100 mm above its floor.
 
 ```shell
-pc sim -f sinks block    # the aluminium block sinks to the bottom of the tank
-pc sim float             # the float rises -- and, in the default scene, falls
+pc qual test --simulation -f sinks block    # the aluminium block sinks to the bottom of the tank
+pc qual test --simulation float             # the float rises -- and, in the default scene, falls
 ```
 
 `float` is the same 20 mm cube as `block`, standing for a sealed float that
@@ -138,7 +138,7 @@ buoyancy -- so its weight and the lift make a couple that turns the heavy
 side down. Released tilted 60 degrees, it is upright within a second.
 
 ```shell
-pc sim buoy           # the ballasted float rights itself as it rises
+pc qual test --simulation buoy           # the ballasted float rights itself as it rises
 ```
 
 `water` is declared below so that this example stays self-contained; the

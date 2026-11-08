@@ -20,11 +20,13 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 
 import { TestArtifact, TestData, TestResult } from '../../webview/messages';
+import { FindingCard } from '../../webview/finding';
 import {
     TestView,
     columnsOf,
     commandOf,
     defaultSelection,
+    findingOf,
     focusOf,
     inline,
     markOf,
@@ -47,6 +49,7 @@ class FakeElement {
     public readonly classList = {
         add: (...names: string[]) => names.forEach((name) => this.toggleClass(name, true)),
         toggle: (name: string, on: boolean) => this.toggleClass(name, on),
+        contains: (name: string) => this.className.split(' ').includes(name),
     };
 
     constructor(public readonly tagName: string) {}
@@ -195,10 +198,17 @@ suite('The Qualification tabs', () => {
 
     test('every check is listed, the failure is opened, and where it is is offered', () => {
         const shown: TestArtifact[] = [];
+        const of: string[] = [];
         const root = new FakeElement('div');
         const view = new TestView(
             root as unknown as HTMLElement,
-            { onRun: () => {}, onShow: (a) => shown.push(a) },
+            {
+                onRun: () => {},
+                onShow: (a, r) => {
+                    shown.push(a);
+                    of.push(r.name);
+                },
+            },
             { subtype: 'topology' },
         );
 
@@ -222,6 +232,83 @@ suite('The Qualification tabs', () => {
         assert.strictEqual(button.textContent, 'Show');
         button.click();
         assert.deepStrictEqual(shown, [OVERLAP]);
+        // With the check that left it, whose words go on being shown with it.
+        assert.deepStrictEqual(of, ['interference']);
+    });
+
+    test('a finding shown in 3D keeps what the check said, where its pieces are, and the way back', () => {
+        const check = result('interference', 'failed', {
+            findings: [{ level: 'error', text: "'a' and 'b' share 5.000 mm^3" }],
+        });
+        const artifact: TestArtifact = {
+            ...OVERLAP,
+            features: [
+                { at: [1, 2, 3], label: 'volume 1: 5.000 mm^3' },
+                { at: [1, Number.NaN, 3], label: 'nowhere' },
+            ],
+        };
+        const subject = { package: '//pkg', name: 'gearbox', kind: 'assembly' };
+        const finding = findingOf(artifact, check, 'topology', subject);
+        assert.ok(finding !== undefined);
+        assert.strictEqual(finding.title, 'The interference check');
+        assert.strictEqual(finding.check, 'interference');
+        assert.strictEqual(finding.status, 'failed');
+        assert.deepStrictEqual(finding.findings, check.findings);
+        assert.deepStrictEqual(finding.features, [{ at: [1, 2, 3], label: 'volume 1: 5.000 mm^3' }]);
+        assert.deepStrictEqual(finding.subject, subject);
+        assert.strictEqual(findingOf({ ...OVERLAP, focus: undefined }, check, 'topology', subject), undefined);
+
+        const host = new FakeElement('div');
+        const backs: string[] = [];
+        let closed = 0;
+        const card = new FindingCard(host as unknown as HTMLElement, {
+            onClose: () => (closed += 1),
+            onBack: (shown) => backs.push(shown.check),
+        });
+        const root = find(host, 'finding-card')[0];
+        assert.strictEqual(root.hidden, true);
+
+        card.show(finding);
+        assert.strictEqual(root.hidden, false);
+        // The words the Topology tab said, said over the view.
+        assert.ok(root.text.includes("'a' and 'b' share 5.000 mm^3"));
+        assert.ok(root.text.includes('The interference check'));
+        assert.ok(root.text.includes('pc qual test --topology -f interference'));
+        assert.ok(root.text.includes('Where they overlap'));
+        assert.strictEqual(find(root, 'finding-mark')[0].className, 'finding-mark failed');
+
+        // Folded to its title, and back.
+        const body = find(root, 'finding-body')[0];
+        find(root, 'finding-fold')[0].click();
+        assert.strictEqual(body.hidden, true);
+        find(root, 'finding-fold')[0].click();
+        assert.strictEqual(body.hidden, false);
+
+        find(root, 'finding-back')[0].click();
+        assert.deepStrictEqual(backs, ['interference']);
+        find(root, 'finding-close')[0].click();
+        assert.strictEqual(closed, 1);
+        card.hide();
+        assert.strictEqual(root.hidden, true);
+        assert.strictEqual(card.finding, undefined);
+    });
+
+    test('"Back" opens the check the finding was of, once the object it is on is listed again', () => {
+        const root = new FakeElement('div');
+        const view = new TestView(
+            root as unknown as HTMLElement,
+            { onRun: () => {}, onShow: () => {} },
+            { subtype: 'topology' },
+        );
+        view.prefer('cad');
+        // The show of the object comes first, and takes every choice back - but not this one.
+        view.setBusy('Select this tab to run the tests.');
+        view.show(data(), false);
+        assert.strictEqual(view.selected, 'cad');
+        // Once: the next object opens on what is worth reading, as ever.
+        view.setBusy('Select this tab to run the tests.');
+        view.show(data(), false);
+        assert.strictEqual(view.selected, 'interference');
     });
 
     test('a topology finding is singled out by the node its focus names', () => {
@@ -350,7 +437,7 @@ suite('The Digital Thread host, asked for a Qualification tab', () => {
     let registration: vscode.Disposable | undefined;
 
     suiteSetup(() => {
-        registration = vscode.commands.registerCommand('partcad.testReport', (args: Record<string, unknown>) => {
+        registration = vscode.commands.registerCommand('partcad.qualReport', (args: Record<string, unknown>) => {
             sent.push(args);
             return { object: '//pkg:gearbox', kind: 'assembly', verified: args.verify, tests: [] };
         });

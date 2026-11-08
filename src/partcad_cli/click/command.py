@@ -138,21 +138,16 @@ command_groups = [
     },
     {
         # `search` sits beside `list`: both enumerate the objects in a package,
-        # one filtered by keyword and one not. `sim` sits beside `test`: both
-        # ask whether an object is any good, one about making it and one about
-        # what it does once it is made.
+        # one filtered by keyword and one not.
         "name": "Object commands",
         "commands": [
             "list",
             "search",
             "add",
             "import",
-            # `qual` is the one that asks whether an object is what it claims
-            # to be, a subtype at a time; `test` and `sim` are its older
-            # spellings -- every subtype, and the simulations alone.
+            # `qual` asks whether an object is what it claims to be, a subtype
+            # at a time: its tests (`pc qual test`), its simulations among them.
             "qual",
-            "test",
-            "sim",
             "info",
             # Beside `info`: `info` says what one object is, and `compare`
             # reads one against another -- the 3D counterpart of the gen-sketch

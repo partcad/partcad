@@ -15,7 +15,7 @@ stands out. The artifact says which link is the finding ('FOCUS_KEY'), and the
 IDE's Topology tab shows the assembly with everything else faded.
 
 Nothing declares these objects, so they are made the way the interference check
-makes the overlaps it shows (see 'partcad.test.interference_artifact', which
+makes the overlaps it shows (see 'partcad.qual.topology.interference_artifact', which
 predates this and keeps its own layout): registered in the subject's package,
 in memory only, under names worked out from what they are --
 
@@ -26,6 +26,17 @@ in memory only, under names worked out from what they are --
 -- so that checking the same object again names the same objects, and asking for
 one by name, in any request to the same daemon, finds it. Each is marked
 'Shape.artifact', which keeps it out of what lists the package's declarations.
+
+A finding is a **part** of the object, never all of it. A highlight of every face
+singles nothing out -- it is the object again, in another colour -- so a check
+whose finding covers the whole of what it looks at says so in words and leaves
+nothing behind ('covers_all'). That is what a topology check is for: a place,
+which a basic check's words cannot give.
+
+What the artifact says besides is what the IDE needs to read the finding where it
+is drawn: 'features', up to 'MAX_FEATURES' of the pieces found, each a point in
+the subject's frame and a label ("face 3: a sliver"), which the 3D view pins a
+callout to.
 
 Each piece of geometry is a 'brep' part read from a file under PartCAD's state
 directory ('internalStateDir'/qual), named after a digest of its bytes, so the
@@ -56,6 +67,11 @@ FOCUS = "focus"
 # The folder under PartCAD's state directory the geometry is written to.
 FOLDER = "qual"
 
+# The key of an artifact listing where the pieces of the finding are, and the
+# most of them it lists: a callout for each of two thousand edges hides the part.
+FEATURES_KEY = "features"
+MAX_FEATURES = 12
+
 # What each kind of geometry is drawn in: colours no part is likely to be, and
 # that read against the faded rest of the object.
 COLORS = {
@@ -63,6 +79,30 @@ COLORS = {
     "edge": "#FF9500",
     "volume": "#FF2D55",
 }
+
+
+def covers_all(found: int, total: int) -> bool:
+    """Whether a finding of 'found' pieces out of 'total' is the whole object, which a topology check does not draw."""
+    return total > 0 and found >= total
+
+
+def callouts(items) -> typing.List[dict]:
+    """The callouts of a finding, as an artifact keeps them: each {'at': [x, y, z], 'label'}, the first 'MAX_FEATURES'."""
+    result = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        at = item.get("at")
+        if not isinstance(at, (list, tuple)) or len(at) != 3:
+            continue
+        try:
+            point = [float(value) for value in at]
+        except (TypeError, ValueError):
+            continue
+        result.append({"at": point, "label": str(item.get("label") or "")})
+        if len(result) >= MAX_FEATURES:
+            break
+    return result
 
 
 def write_brep(ctx, data: bytes, folder: str = FOLDER) -> str:
@@ -136,13 +176,15 @@ async def make_async(
     title: str,
     desc: str,
     geometry: typing.List[dict],
+    features: typing.Optional[list] = None,
 ) -> typing.Optional[dict]:
     """The artifact for one finding of 'check' on 'shape', registered and ready to be shown.
 
     'geometry' is what the finding is about, each a {'name', 'kind', 'brep',
     'desc'} where 'brep' is OCCT BREP bytes, as a wrapper answered them
-    ('shape_envelope.brep_plain'), and 'kind' is 'face', 'edge' or 'volume'. None
-    when there is nothing to show, or it could not be kept.
+    ('shape_envelope.brep_plain'), and 'kind' is 'face', 'edge' or 'volume'.
+    'features' are where its pieces are, for the callouts (see the module's
+    docstring). None when there is nothing to show, or it could not be kept.
     """
     pieces = []
     try:
@@ -173,6 +215,7 @@ async def make_async(
         "title": title,
         "desc": desc,
         FOCUS_KEY: FOCUS,
+        FEATURES_KEY: callouts(features),
         "recipe": {
             "subject": {"object": "%s:%s" % (shape.project_name, shape.name), "kind": kind},
             "geometry": pieces,

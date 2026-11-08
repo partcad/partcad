@@ -8,9 +8,9 @@ mechanism: one arm of [OpenVMP](https://github.com/openvmp/openvmp-models)'s
 Don1 robot, and the worm gear in its knee.
 
 ```shell
-pc sim -a arm --json              # both runs, and what acts on every body at their end  sections 1 and 2
+pc qual test --simulation -a arm --json              # both runs, and what acts on every body at their end  sections 1 and 2
 pc cae fea -f dropped :knee-gear  # the gear under what the worm holds it with           sections 3 and 4
-pc test                           # both, as checks
+pc qual test                           # both, as checks
 ```
 
 The step in between -- from what acts on a body to what acts on one part of
@@ -80,7 +80,7 @@ the gear's own frame, the frame its ports and so its `fea:` scenarios are
 written in:
 
 ```shell
-pc --no-ansi sim -a arm -f dropped --json > sim.json
+pc --no-ansi qual test --simulation -a arm -f dropped --json > sim.json
 python part_loads.py loads sim.json knee-worm-gear/gear
 ```
 
@@ -226,5 +226,5 @@ That instant is a second scenario of the same analysis, not a replacement for
 the first: the skill run with that reading writes it beside `dropped`, under a
 name of its own, and both are then asked every time the package is tested. It
 is not declared here because it does not pass -- 120 MPa is over the allowable,
-so `pc test` would fail on it, which is the point of asking it and not what an
+so `pc qual test` would fail on it, which is the point of asking it and not what an
 example should do on every run.

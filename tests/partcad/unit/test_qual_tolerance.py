@@ -37,7 +37,7 @@ def _topology(ctx, name, verify=True):
 
 def test_a_topology_run_asks_only_the_topology_checks(ctx):
     results = _topology(ctx, "feature_by_feature", verify=False)
-    assert list(results) == ["interference", "tolerance-surfaces", "tolerance-edges"]
+    assert list(results) == ["defects", "interference", "tolerance-surfaces", "tolerance-edges"]
     assert all(result.subtype == "topology" for result in results.values())
 
 
@@ -72,10 +72,17 @@ def test_what_the_file_does_not_tolerance_fails_and_is_left_to_look_at(ctx):
     faces_part = ctx.get_part("//:feature_by_feature/tolerance-surfaces/focus/faces")
     assert faces_part.config["properties"]["color"] == highlight.COLORS["face"]
 
+    # A callout on each face, the largest first, where it is on the part.
+    features = artifact[highlight.FEATURES_KEY]
+    assert len(features) == 5
+    assert all(feature["label"].startswith("face ") and "mm^2" in feature["label"] for feature in features)
+    assert all(len(feature["at"]) == 3 for feature in features)
+
     edges = results["tolerance-edges"]
     assert edges.status == report.FAILED
     assert "13 of its 14 edges have no tolerance" in edges.findings[0]["text"]
     assert edges.artifacts[0]["title"] == "13 edges without a tolerance"
+    assert len(edges.artifacts[0][highlight.FEATURES_KEY]) == highlight.MAX_FEATURES
 
 
 def test_a_general_tolerance_told_not_to_count_and_small_faces_left_out(ctx):
@@ -85,3 +92,23 @@ def test_a_general_tolerance_told_not_to_count_and_small_faces_left_out(ctx):
     assert "1 of its 7 faces has no tolerance" in text
     assert "general: false" in text
     assert "4 smaller than 100 mm^2 not counted" in text
+
+
+def test_a_part_that_tolerances_nothing_is_manufacturability_s_and_not_drawn(ctx):
+    # Every face of it would be the finding, which is the part: nothing in
+    # particular to point at (see 'partcad.qual.highlight.covers_all').
+    results = _topology(ctx, "untoleranced")
+    for name in ("tolerance-surfaces", "tolerance-edges"):
+        assert results[name].status == report.NOT_APPLICABLE
+        assert "manufacturability" in results[name].findings[0]["text"]
+        assert results[name].artifacts == []
+
+
+def test_a_finding_that_is_every_face_is_said_in_words_alone(ctx):
+    faces = _topology(ctx, "told_off")["tolerance-surfaces"]
+    assert faces.status == report.FAILED
+    text = faces.findings[0]["text"]
+    assert "none of its 6 faces has a tolerance" in text
+    assert "general: false" in text
+    assert "that is all of it" in text
+    assert faces.artifacts == []

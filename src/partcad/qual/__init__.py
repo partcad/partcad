@@ -25,8 +25,7 @@ it under 'qual:' ('partcad.qual.config', 'partcad.qual.plugin'). `pc qual test`
 runs them, a subtype at a time with '--basic', '--topology', '--simulation' and
 '--other', and the IDE's Qualification group has a tab for each.
 
-This was called validation, and its checks were `pc test`'s; both spellings of
-the command still work.
+This was called validation.
 """
 
 from .config import BASIC, OTHER, SECTION, SIM, SUBTYPES, TITLES, TOPOLOGY  # noqa: F401

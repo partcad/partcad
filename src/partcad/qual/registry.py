@@ -22,35 +22,36 @@ asked.
 import os
 import typing
 
-from ..test.cad import CadTest
-from ..test.cam import CamTest
-from ..test.cfd import CfdTest
-from ..test.cmf import CmfTest
-from ..test.connect import ConnectTest
-from ..test.connectivity import ConnectivityTest
-from ..test.degenerate import DegenerateTest
-from ..test.dynamic import DynamicTest
-from ..test.fea import FeaTest
-from ..test.interference import InterferenceTest
-from ..test.manufacturability import ManufacturabilityTest
-from ..test.manufacturability_additive_solid import ManufacturabilityAdditiveSolidTest
-from ..test.manufacturability_cut import ManufacturabilityCutTest
-from ..test.manufacturability_drill import ManufacturabilityDrillTest
-from ..test.manufacturability_forming import ManufacturabilityFormingTest
-from ..test.manufacturability_laser import ManufacturabilityLaserTest
-from ..test.manufacturability_sheet_metal import ManufacturabilitySheetMetalTest
-from ..test.manufacturability_subtractive import ManufacturabilitySubtractiveTest
-from ..test.requirements import RequirementsTest
-from ..test.shell import ShellTest
-from ..test.sim import SimTest
-from ..test.solidity import SolidityTest
-from ..test.thermal import ThermalTest
-from ..test.tolerance import ToleranceEdgesTest, ToleranceSurfacesTest
-from ..test.validity import ValidityTest
 from . import config as qual_config
-from .qualification import Qualification, Test
+from .basic.cad import CadTest
+from .basic.cam import CamTest
+from .basic.cfd import CfdTest
+from .basic.cmf import CmfTest
+from .basic.connect import ConnectTest
+from .basic.connectivity import ConnectivityTest
+from .basic.degenerate import DegenerateTest
+from .basic.dynamic import DynamicTest
+from .basic.fea import FeaTest
+from .basic.manufacturability import ManufacturabilityTest
+from .basic.manufacturability_additive_solid import ManufacturabilityAdditiveSolidTest
+from .basic.manufacturability_cut import ManufacturabilityCutTest
+from .basic.manufacturability_drill import ManufacturabilityDrillTest
+from .basic.manufacturability_forming import ManufacturabilityFormingTest
+from .basic.manufacturability_laser import ManufacturabilityLaserTest
+from .basic.manufacturability_sheet_metal import ManufacturabilitySheetMetalTest
+from .basic.manufacturability_subtractive import ManufacturabilitySubtractiveTest
+from .basic.requirements import RequirementsTest
+from .basic.shell import ShellTest
+from .basic.solidity import SolidityTest
+from .basic.thermal import ThermalTest
+from .basic.validity import ValidityTest
+from .qualification import Qualification
+from .sim import SimTest
+from .topology.defects import DefectsTest
+from .topology.interference import InterferenceTest
+from .topology.tolerance import ToleranceEdgesTest, ToleranceSurfacesTest
 
-_global_tests: list[Test] = []
+_global_tests: list[Qualification] = []
 
 
 def builtin(concurrency_cap: typing.Optional[int] = None) -> list[Qualification]:
@@ -61,7 +62,7 @@ def builtin(concurrency_cap: typing.Optional[int] = None) -> list[Qualification]
     """
     if concurrency_cap is None:
         concurrency_cap = max(os.cpu_count(), 8)
-    Test.MAX_CONCURRENT_TESTS = concurrency_cap
+    Qualification.MAX_CONCURRENT_TESTS = concurrency_cap
     if len(_global_tests) == 0:
         _global_tests.extend(
             [
@@ -101,6 +102,11 @@ def builtin(concurrency_cap: typing.Optional[int] = None) -> list[Qualification]
                 # Reports rather than fails: the parts it has most to say about
                 # are ones nothing is functionally wrong with.
                 ValidityTest(),
+                # Where the two above have something to say, which pieces of the
+                # part are the reason: its free edges, its slivers, and the faces
+                # and edges OCCT rejects. A sandbox run per part, after the
+                # whole-part checks that cost next to nothing.
+                DefectsTest(),
                 # Realizes the assembly and intersects the pairs whose boxes
                 # meet, so it is the most expensive of the geometry checks and
                 # goes after the ones that are nearly free.
@@ -115,7 +121,7 @@ def builtin(concurrency_cap: typing.Optional[int] = None) -> list[Qualification]
                 ToleranceSurfacesTest(),
                 ToleranceEdgesTest(),
                 # Only ever run for an object that declares the matching
-                # section; see 'test/cae.py' and 'test/cam.py'. A package with
+                # section; see 'qual/basic/cae.py' and 'qual/basic/cam.py'. A package with
                 # no 'cam:' and no analysis section in it pays nothing for
                 # these being here.
                 #
@@ -129,7 +135,7 @@ def builtin(concurrency_cap: typing.Optional[int] = None) -> list[Qualification]
                 DynamicTest(),
                 ThermalTest(),
                 CfdTest(),
-                # The same gate again, on 'simulate:', for a part or an
+                # The same gate again, on 'qual: sim:', for a part or an
                 # assembly: an object that declares none pays nothing. Last,
                 # because a simulation builds the object and a scene around it
                 # and starts a simulator, and is the most expensive question
@@ -139,10 +145,6 @@ def builtin(concurrency_cap: typing.Optional[int] = None) -> list[Qualification]
             ]
         )
     return _global_tests
-
-
-# The name every caller used when these were 'pc test''s checks.
-tests = builtin
 
 
 def select(quals: list, subtypes=None, prefix: typing.Optional[str] = None) -> list:

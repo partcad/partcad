@@ -37,7 +37,7 @@
 // read before what it is. Whether there is one is a question for the daemon, so
 // it is asked on every show - a read of the declaration, nothing built - and the
 // strip is rebuilt when the answer arrives. Opening the tab is what asks for the
-// verdicts, which are 'pc test -f requirements' (see 'requirements.ts').
+// verdicts, which are 'pc qual test -f requirements' (see 'requirements.ts').
 //
 // A colour, a material or a finish opened from the explorer is none of that: it
 // is what an object is in, and has no shape to turn, analyse, make or test. It
@@ -146,7 +146,7 @@ import {
     TabId,
     TestArtifact,
     TestData,
-    TopologyFocus,
+    TestResult,
     isQualTestTab,
     ViewportData,
     groupOf,
@@ -164,7 +164,8 @@ import { spaceMouse } from './spacemouse';
 import { controlValues, snapshot } from './state';
 import { SupplyView, formatPrice } from './supply';
 import { TabSpec, Tabs } from './tabs';
-import { TestView, focusOf } from './test';
+import { FindingCard } from './finding';
+import { Finding, TestView, findingOf } from './test';
 import { LinkFilter, OverlayRequest, Selection, Tree, filterIsEmpty } from './tree';
 import { Capability, ViewCapabilities, ViewPanel } from './viewPanel';
 import { Viewpoint } from './viewpoint';
@@ -219,6 +220,16 @@ choiceClose.addEventListener('click', () => chooseInDesign(undefined));
 byId('viewer').appendChild(choiceChip);
 
 /**
+ * A topology finding shown in the 3D view, said over it: the check's verdict
+ * and words, which stay on the Topology tab otherwise (see 'finding.ts').
+ * Hidden while none is shown; while one is, it says what the CMF chip would.
+ */
+const findingCard = new FindingCard(byId('viewer'), {
+    onClose: () => showFinding(undefined),
+    onBack: (finding) => backToFinding(finding),
+});
+
+/**
  * Single out what the CMF tab chose, or nothing, in the 3D view - now if it has
  * loaded, and in what it shows next if not: the choice is the scene's to keep
  * across shows of the same object, and 'show' takes it away for another one.
@@ -232,6 +243,10 @@ function chooseInDesign(choice: CmfChoice | undefined): void {
 
 /** A CMF tab's "Show in 3D": the 3D view, with that singled out. */
 function showInDesign(choice: CmfChoice): void {
+    // Instead of a finding, if one was singled out: one thing at a time is.
+    if (findingCard.finding !== undefined) {
+        showFinding(undefined);
+    }
     chooseInDesign(choice);
     tabs.click('design');
     designTabs.click('3d');
@@ -271,17 +286,17 @@ const requirementsView = new RequirementsView(panes.requirements);
 const testViews: Partial<Record<TabId, TestView>> = {
     basic: new TestView(
         panes.basic,
-        { onRun: () => runTests('basic'), onShow: (artifact) => showArtifact(artifact) },
+        { onRun: () => runTests('basic'), onShow: (artifact, result) => showArtifact(artifact, result, 'basic') },
         { subtype: 'basic' },
     ),
     topology: new TestView(
         panes.topology,
-        { onRun: () => runTests('topology'), onShow: (artifact) => showArtifact(artifact) },
+        { onRun: () => runTests('topology'), onShow: (artifact, result) => showArtifact(artifact, result, 'topology') },
         { subtype: 'topology' },
     ),
     other: new TestView(
         panes.other,
-        { onRun: () => runTests('other'), onShow: (artifact) => showArtifact(artifact) },
+        { onRun: () => runTests('other'), onShow: (artifact, result) => showArtifact(artifact, result, 'other') },
         {
             subtype: 'other',
             none: "This declares no tests of other tools. A plugin's test is declared under 'qual: other:' ('pc qual add --other --path <package>:<plugin> <object> <name>').",
@@ -1625,21 +1640,25 @@ async function show(message: ShowMessage): Promise<void> {
     // What the user had switched off is kept when the camera is: both mean "the
     // same object again", which is what a save and a re-render produce, and
     // losing a selection to one is as unwelcome as losing the camera.
+    const named = `${message.package ?? ''}:${message.name ?? ''}`;
     if (!message.keepCamera) {
         // A different object: what was ticked about the last one says nothing
         // about this one. Kept when the camera is, which is the same question -
         // "is this the same object again" - and a save and a re-render are.
-        // So is what the CMF tab singled out in it.
+        // So is what the CMF tab singled out in it, and the finding said over it.
         selection.clear();
         chooseInDesign(undefined);
+        if (findingCard.finding !== undefined && findingCard.finding.focus.object !== named) {
+            showFinding(undefined);
+        }
     }
     // The object a topology finding's "Show" asked for has arrived: single the
     // finding out in it, with the CMF tab's way of singling something out - the
     // rest faint - which is what the choice is drawn again with once the
-    // geometry has loaded.
-    if (pendingFocus !== undefined && `${message.package ?? ''}:${message.name ?? ''}` === pendingFocus.object) {
-        chooseInDesign({ item: pendingFocus.item, label: pendingFocus.label });
-        pendingFocus = undefined;
+    // geometry has loaded; and say over it what the check said.
+    if (pendingFinding !== undefined && named === pendingFinding.focus.object) {
+        showFinding(pendingFinding);
+        pendingFinding = undefined;
     }
     if (message.object === null) {
         objectTree.clear();
@@ -1693,7 +1712,15 @@ async function show(message: ShowMessage): Promise<void> {
     // strip and the panel's are both told, before they are rebuilt for this
     // object, which is when they choose what to open. Every show says, so that
     // a request this object could not honour does not linger for the next one.
-    requestTab(message.tab);
+    //
+    // Or the tab "Back" on a finding's card asked for, when this is the object
+    // the finding is on: the reader goes back to where they pressed "Show".
+    let tab = message.tab;
+    if (returning !== undefined && returning.object === named) {
+        tab = tab ?? returning.tab;
+        returning = undefined;
+    }
+    requestTab(tab);
     // Rebuilt on every show, which also re-asks for whatever tab the user is on:
     // the object may be the same one after an edit, and its answers may not be.
     setAllTabs(message);
@@ -1761,6 +1788,7 @@ function showView(message: ShowMessage): void {
 function clear(): void {
     generation += 1;
     shown = undefined;
+    showFinding(undefined);
     heldClusters.reset();
     sectionSupported = false;
     shownSection = null;
@@ -1867,7 +1895,7 @@ function resetSimulations(text: string): void {
 }
 
 /**
- * Run one simulation of the object on screen: 'pc sim -f <name>'.
+ * Run one simulation of the object on screen: 'pc qual test --simulation -f <name>'.
  *
  * A token per run rather than the tab's one token, because several runs can be
  * in flight for one object - a reader who selects one simulation and then the
@@ -1894,7 +1922,7 @@ function runSimulation(scenario: string, plugin: string | undefined, viewpoint: 
     });
 }
 
-/** What the object declares under 'simulate:' has arrived: list it, and rebuild the strips it decides. */
+/** What the object declares under 'qual: sim:' has arrived: list it, and rebuild the strips it decides. */
 function onSimulations(data: SimulationListData | undefined, error: string | undefined): void {
     if (error !== undefined || data === undefined || data === null) {
         simulations = 'failed';
@@ -2548,7 +2576,13 @@ function onTests(tab: TabId, data: TestData | undefined, error: string | undefin
  * on arrives: the show that follows the request, which is the first moment the
  * 3D view has the finding's geometry to leave unfaded.
  */
-let pendingFocus: TopologyFocus | undefined;
+let pendingFinding: Finding | undefined;
+
+/**
+ * Where "Back" on a finding's card goes, until the object it names arrives:
+ * that object, as '<package>:<name>', and the tab to open on it.
+ */
+let returning: { object: string; tab: TabId } | undefined;
 
 /**
  * An artifact's button: show the object the check left behind, as the explorer
@@ -2559,13 +2593,56 @@ let pendingFocus: TopologyFocus | undefined;
  * switched off to leave what they share - and left on this tab, the next show
  * would only start checking the artifact itself.
  */
-function showArtifact(artifact: TestArtifact): void {
+function showArtifact(artifact: TestArtifact, result: TestResult, subtype: string): void {
     // A topology finding is shown singled out: what it is about in a colour of
-    // its own, the rest faint, and the chip over the view saying what it is.
-    pendingFocus = focusOf(artifact);
+    // its own, the rest faint, a callout on each piece, and what the check
+    // said in a card over the view - with the way back to it.
+    const subject =
+        shown !== undefined && shown.package && shown.name
+            ? { package: shown.package, name: shown.name, kind: shown.kind ?? 'part' }
+            : undefined;
+    pendingFinding = findingOf(artifact, result, subtype, subject);
     tabs.click('design');
     designTabs.click('3d');
     showObject({ type: 'showObject', package: artifact.package, name: artifact.name, kind: artifact.kind });
+}
+
+/**
+ * Say a topology finding over the 3D view and single it out in it, or take
+ * whichever is said away - and with it what it singled out, so that all of the
+ * object is drawn again.
+ */
+function showFinding(finding: Finding | undefined): void {
+    if (finding === undefined) {
+        const was = findingCard.finding;
+        findingCard.hide();
+        void sceneLoaded.then((view) => view?.setFindingCallouts([]));
+        if (was !== undefined) {
+            chooseInDesign(undefined);
+        }
+        return;
+    }
+    // The CMF chip says less than the card does, about the same thing.
+    chooseInDesign({ item: finding.focus.item, label: finding.focus.label });
+    choiceChip.hidden = true;
+    findingCard.show(finding);
+    void sceneLoaded.then((view) => view?.setFindingCallouts(finding.features));
+}
+
+/**
+ * "Back" on a finding's card: the object the finding is on, on the tab of its
+ * subtype, with the check that found it open - where "Show" was pressed.
+ */
+function backToFinding(finding: Finding): void {
+    const subject = finding.subject;
+    if (subject === undefined) {
+        return;
+    }
+    const tab = finding.subtype as TabId;
+    testViews[tab]?.prefer(finding.check);
+    returning = { object: `${subject.package}:${subject.name}`, tab };
+    showFinding(undefined);
+    showObject({ type: 'showObject', package: subject.package, name: subject.name, kind: subject.kind });
 }
 
 /** The Build tab's plan, or its pages: the plan is drawn, and the pages asked for after it. */

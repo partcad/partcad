@@ -313,7 +313,7 @@ def test_one_not_meant_to_be_made_is_missing_whatever_it_could_otherwise_be():
 
 
 #
-# Against the examples: the tree says what 'pc test -f manufacturability' says
+# Against the examples: the tree says what 'pc qual test -f manufacturability' says
 #
 
 

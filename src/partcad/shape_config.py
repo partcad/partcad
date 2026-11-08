@@ -295,7 +295,7 @@ class ShapeConfiguration:
             #
             #     Cannot set value 'finish': not a parameter of the model.
             #
-            # Which build that was depended on timing. 'pc test' runs an
+            # Which build that was depended on timing. 'pc qual test' runs an
             # object's checks concurrently, so the manufacturability check
             # asking for the finish raced the CAD check building the shape, and
             # the write landed first only sometimes. It also moved the shape's

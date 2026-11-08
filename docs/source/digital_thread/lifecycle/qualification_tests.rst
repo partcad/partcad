@@ -358,7 +358,7 @@ When it fails
 Settings
 ^^^^^^^^
 
-On the assembly, under ``qual: basic: connectivity:``: ``allowDuplicates: true`` to allow the same part twice in one place, and ``requireAnchored: false`` to allow items placed by coordinates. The older spelling, ``connectivity:`` on the assembly itself, is still read.
+On the assembly, under ``qual: basic: connectivity:``: ``allowDuplicates: true`` to allow the same part twice in one place, and ``requireAnchored: false`` to allow items placed by coordinates.
 
 .. _test-requirements:
 
@@ -369,7 +369,7 @@ On the assembly, under ``qual: basic: connectivity:``: ``allowDuplicates: true``
 
 Whether the model is what its ``requirements:`` say it has to be, as far as that can be measured: each required port is there, facing where it has to; each required interface is implemented, its instances where they have to be; and each required physical property - its mass, its centre of mass, its inertia, its friction - has a value that meets the requirement; and its volume, its displacement and its mass are within the percentage ``match:`` allows of each object it names - the numbers ``pc compare <that object> <this one>`` reports. Asked again every time, never read from the cache.
 
-The ``features:`` are sentences rather than measurements, and are judged by the ``/pc:validate`` agent skill. What this check asks of them is only that a ``simulate:`` entry or an analysis scenario naming one (``feature:``) names one that is declared.
+The ``features:`` are sentences rather than measurements, and are judged by the ``/pc:validate`` agent skill. What this check asks of them is only that a ``qual: sim:`` entry or an analysis scenario naming one (``feature:``) names one that is declared.
 
 When it does not apply
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -414,7 +414,7 @@ When it fails
 Settings
 ^^^^^^^^
 
-``require: true`` to fail on what it finds rather than warn: on the object, as ``qual: basic: cmf: require: true`` (or the older ``cmf: require: true``), and on its package, as ``cmf: require: true``.
+``require: true`` to fail on what it finds rather than warn: on the object, as ``qual: basic: cmf: require: true``, and on its package, for every object of it, as ``cmf: require: true``.
 
 .. _test-degenerate:
 
@@ -435,6 +435,8 @@ When it fails
 
 * ``The shape built but occupies no space at all``: nothing came out of the build but an empty shape; find the geometry that went missing.
 * ``The shape is flat in ...``: it is less than a thousandth of a millimetre thick in one direction - a missing extrusion, a missing file, a surface where a solid was meant.
+
+A part that has size but has pieces that do not - a sliver of a face, an edge of no length - passes this and is shown those pieces by ``defects``. This one stays about the whole part, in words: a box that is flat has nothing in it to point at.
 
 .. _test-shell:
 
@@ -491,7 +493,7 @@ A sketch, which is not a body, and an assembly or a scene, which is checked thro
 When it fails
 ^^^^^^^^^^^^^
 
-It does not fail. When it says ``the geometry is a solid but not a well formed one``, rebuild the part more simply where it can be - fewer tiny faces, no self-intersections - or re-export it from its source.
+It does not fail. When it says ``the geometry is a solid but not a well formed one``, look at ``defects`` in the Topology tab, which shows the faces and edges that are the reason; rebuild the part more simply where it can be - fewer tiny faces, no self-intersections - or re-export it from its source.
 
 .. _test-cam:
 
@@ -635,6 +637,36 @@ Topology
 
 Checks whose findings are places on the object, left behind as geometry to look at. ``pc qual test --topology`` runs these alone.
 
+.. _test-defects:
+
+``defects``: No badly made faces or edges
+-----------------------------------------
+
+**Applies to** parts. ``pc qual test -f defects <object>`` runs it alone.
+
+Which faces and edges of a part are badly made, shown where they are. ``validity`` says that the geometry kernel will not certify a part, and ``degenerate`` that a part has no size in some direction; both are about the whole of it. This finds the pieces that are the reason, and leaves them behind to look at:
+
+* \*\*free\*\* edges of a solid - an edge that bounds one face only, which is a hole in its skin (a part meshed from triangles that were never joined has hundreds);
+* \*\*slivers\*\* - an edge shorter than a thousandth of a millimetre, or a face narrower than that, which a mesher chokes on and a CAM path stalls at: the ``degenerate`` question asked of each piece;
+* faces and edges the kernel finds fault with on their own - a wire that crosses itself, a curve that leaves its surface - by the kernel's own name for it.
+
+The faces and the edges (as tubes along them) are left behind in an assembly of the part and, in a sub-assembly named ``focus``, the pieces, drawn in red and orange. The IDE's Topology tab shows them with the rest of the part faded and a callout on each (\*\*Show\*\*). Like ``validity``, it reports and never fails.
+
+When it does not apply
+^^^^^^^^^^^^^^^^^^^^^^
+
+A sketch, a surface by its type (a wall), a part that holds no solid (``shell`` reports that), and an assembly or a scene, which is checked through its parts.
+
+When it fails
+^^^^^^^^^^^^^
+
+It does not fail. When it reports ``K of its N faces ... are defective``, rebuild those pieces in the part's source - join the free edges, merge or remove the slivers - or re-export it from its tool. When every face is defective, nothing is drawn: that is the whole part, and ``validity`` says the same of it.
+
+Settings
+^^^^^^^^
+
+On the part, under ``qual: topology: defects:``: ``minLength:`` (mm, default 0.001), the length below which an edge, and the width below which a face, is a sliver.
+
 .. _test-interference:
 
 ``interference``: Parts do not overlap
@@ -662,7 +694,7 @@ When it fails
 Settings
 ^^^^^^^^
 
-On the assembly, under ``qual: topology: interference:``: ``minVolume:`` (in mm^3, default 0.05), below which an overlap is taken for the arithmetic of two surfaces that touch, and ``minFraction:``, the same floor as a share of the smaller part. The older spelling, ``interference:`` on the assembly itself, is still read.
+On the assembly, under ``qual: topology: interference:``: ``minVolume:`` (in mm^3, default 0.05), below which an overlap is taken for the arithmetic of two surfaces that touch, and ``minFraction:``, the same floor as a share of the smaller part.
 
 .. _test-tolerance-surfaces:
 
@@ -673,18 +705,20 @@ On the assembly, under ``qual: topology: interference:``: ``minVolume:`` (in mm^
 
 Whether every face of a part that is to be made says how precisely it has to be made. A face is covered by the part's general tolerance - its ``tolerance:``, or the ``tolerance`` parameter of a type that takes one, which is a drawing's "unless otherwise stated" - or by a dimension or a geometric tolerance of the STEP file the part is read from that refers to it. ``manufacturability`` asks only whether the part states a tolerance at all, and passes a file that tolerances some of its features; this asks which.
 
-The faces nothing covers are counted, the largest is named, and all of them are left behind to look at: an assembly of the part and, in a sub-assembly named ``focus``, the faces themselves, drawn in red. The IDE's Topology tab shows it with the rest of the part faded (\*\*Show\*\*).
+The faces nothing covers are counted, the largest is named, and all of them are left behind to look at: an assembly of the part and, in a sub-assembly named ``focus``, the faces themselves, drawn in red. The IDE's Topology tab shows it with the rest of the part faded and a callout on each of the largest (\*\*Show\*\*).
+
+Only some of its faces, though. A part that tolerances nothing at all has every face untoleranced, and showing all of them singles nothing out: that part states no tolerance, which is ``manufacturability``'s finding, and this check does not apply to it.
 
 When it does not apply
 ^^^^^^^^^^^^^^^^^^^^^^
 
-Anything but a part; a part that says ``manufacturable: false``; a part that is bought (``vendor:`` and ``sku:``) or does not say how it is made; a surface by its type (a wall).
+Anything but a part; a part that says ``manufacturable: false``; a part that is bought (``vendor:`` and ``sku:``) or does not say how it is made; a surface by its type (a wall); a part that states no general tolerance and whose file tolerances nothing (``manufacturability`` fails it).
 
 When it fails
 ^^^^^^^^^^^^^
 
-* ``none of its N faces has a tolerance``: the part states no general tolerance and its file tolerances nothing. Give it a ``tolerance:``, or tolerance its features in the CAD tool its STEP file comes from.
 * ``K of its N faces have no tolerance``: the file tolerances some faces and not these, and there is no general tolerance to cover the rest. Tolerance them, or state a general tolerance for the ones that need nothing tighter.
+* ``none of its N faces has a tolerance ... that is all of it``: the part's general tolerance is set not to count (``general: false``) and its file tolerances nothing, or nothing of the size counted. Said in words, with nothing drawn.
 
 Settings
 ^^^^^^^^
@@ -710,7 +744,7 @@ As for ``tolerance-surfaces``.
 When it fails
 ^^^^^^^^^^^^^
 
-* ``none of its N edges has a tolerance``, ``K of its N edges have no tolerance``: as for ``tolerance-surfaces`` - a general tolerance covers every edge, and an edge between two toleranced faces is covered by them.
+* ``K of its N edges have no tolerance``, ``none of its N edges has a tolerance ... that is all of it``: as for ``tolerance-surfaces`` - a general tolerance covers every edge, and an edge between two toleranced faces is covered by them.
 
 Settings
 ^^^^^^^^
@@ -731,7 +765,7 @@ The simulations an object declares under ``qual: sim:``, run and judged. ``pc qu
 
 **Applies to** parts, assemblies and scenes that declare simulations (``qual: sim:``). ``pc qual test -f sim <object>`` runs it alone.
 
-Whether the object does what its simulations say it does: each simulation declared under ``qual: sim:`` is run - the object placed in its scene and handed to the simulation plugin its ``path:`` names - and its ``validation:`` condition has to hold over what came back. The same runs as ``pc qual test --simulation`` and ``pc sim``, which also prints everything the plugin reported (``--json``). It is the most expensive question asked, and is asked last; the IDE plays each run in the Simulation tab.
+Whether the object does what its simulations say it does: each simulation declared under ``qual: sim:`` is run - the object placed in its scene and handed to the simulation plugin its ``path:`` names - and its ``validation:`` condition has to hold over what came back. ``pc qual test --simulation`` runs these alone, and then also prints everything the plugin reported (``--json``). It is the most expensive question asked, and is asked last; the IDE plays each run in the Simulation tab.
 
 When it does not apply
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -741,7 +775,7 @@ Anything but a part, an assembly or a scene, and one that declares no simulation
 When it fails
 ^^^^^^^^^^^^^
 
-* ``... ran, and its 'validation' does not hold``: the object did not behave as claimed. Run ``pc sim --json`` to see ``before`` and ``after``, then change the design, or the condition if the condition is what is wrong.
+* ``... ran, and its 'validation' does not hold``: the object did not behave as claimed. Run ``pc qual test --simulation --json`` to see ``before`` and ``after``, then change the design, or the condition if the condition is what is wrong.
 * ``... could not be run``: the plugin or the scene the entry names is not found, or the simulator failed; the report says which.
 * ``... states no 'validation'``: asked about by name, an entry with no condition fails; add one over ``before`` and ``after``. Walked to as part of a package, it is skipped instead.
 
@@ -750,7 +784,7 @@ It is skipped, with a warning, where the simulator runs in a container and there
 Settings
 ^^^^^^^^
 
-``qual: sim: <name>:`` - ``path:`` (the plugin), ``scene:``, ``offset:``, ``validation:``, ``params:``, and ``feature:``, the feature of the requirements it demonstrates. The older spelling, ``simulate: <name>:`` with the plugin as ``simulation:``, is still read.
+``qual: sim: <name>:`` - ``path:`` (the plugin), ``scene:``, ``offset:``, ``validation:``, ``params:``, and ``feature:``, the feature of the requirements it demonstrates.
 
 .. _qual-other:
 

@@ -22,6 +22,6 @@ def cli() -> None:
 
     A qualification test is of one of four subtypes -- basic, topology,
     simulation and other (see `partcad.qual`) -- and `pc qual test` runs all of
-    them unless told which. `pc test` and `pc sim` are the older spellings of
+    them unless told which. `pc qual test` and `pc qual test --simulation` are the older spellings of
     `pc qual test` and `pc qual test --simulation`, and still work.
     """

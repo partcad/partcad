@@ -8,7 +8,7 @@ import functools
 
 import rich_click as click
 
-from partcad_ide_client.protocol import FORMER_TABS, SCENARIO_TABS, VIEWER_TABS
+from partcad_ide_client.protocol import SCENARIO_TABS, VIEWER_TABS
 
 from ... import object_kind
 from ...parameters import param_option, param_params
@@ -63,11 +63,6 @@ def tab_options(command):
     @functools.wraps(command)
     def wrapper(*args, **kwargs):
         chosen = [(flag, tab) for flag, tab in flags if kwargs.pop("tab_" + tab.replace("-", "_"), False)]
-        # The spellings a tab had before it was renamed, kept so that a script
-        # naming one still opens the tab it meant (see 'FORMER_TABS').
-        chosen += [
-            (flag, tab) for flag, tab in FORMER_TABS.items() if kwargs.pop("former_" + flag.replace("-", "_"), False)
-        ]
         if len(chosen) > 1:
             raise click.UsageError(
                 "The Digital Thread shows one tab at a time; pass one of %s."
@@ -76,14 +71,6 @@ def tab_options(command):
         kwargs["tab"] = chosen[0][1] if chosen else None
         return command(*args, **kwargs)
 
-    for flag, tab in FORMER_TABS.items():
-        wrapper = click.option(
-            "--" + flag,
-            "former_" + flag.replace("-", "_"),
-            is_flag=True,
-            hidden=True,
-            help="Open the viewer on the '%s' tab: its former name" % tab,
-        )(wrapper)
     for flag, tab in reversed(flags):
         wrapper = click.option(
             "--" + flag,

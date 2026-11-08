@@ -284,14 +284,14 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
   every sub-assembly in it bought whole -- each with its CMF as `pc info` says it and the check's findings, the
   incomplete ones first; for a colour, a material or a finish, what the declaration is. A declaration is found by
   the `kind` the request says, since its name is no object's, and nothing is built for one; an object's items are
-  built, as `pc test` builds them, by the time the 3D view beside the tab has drawn them. The `colors`, `materials`
+  built, as `pc qual test` builds them, by the time the 3D view beside the tab has drawn them. The `colors`, `materials`
   and `finishes` the explorer lists ride on the `items` notification, read off the declarations as `pc list colors`
   reads them, and the `cmf` of each `bom` line and `manufacturing.tree` node is the item's own, building nothing.
 * `requirements.check`, behind the Digital Thread's Requirements tab: an object's `requirements:` as data -- the features,
-  each with the `simulate:` entries that name it (`feature:`), and a line per required port, interface and
+  each with the `qual: sim:` entries that name it (`feature:`), and a line per required port, interface and
   physical property. Without `verify` nothing is built and every verdict is `null`, which is what lets the
   extension ask on every show whether there is a tab to offer at all; with it each line carries the verdict
-  `pc test`'s `requirements` check reaches, by the same code (`partcad/requirements.py`). An assembly is staged
+  `pc qual test`'s `requirements` check reaches, by the same code (`partcad/requirements.py`). An assembly is staged
   only when a physical property is to be checked, because that is what builds it -- what it weighs is worked out
   from the tree it is built as (`partcad/physics.py`), while its ports are read off a tree that needs no build.
 * `qual.report` (and its older name `test.report`), behind the Digital Thread's Qualification tabs: every test
@@ -337,11 +337,11 @@ cluster names the nodes it is of by their index path in the object's tree, which
 `cae.analyze` is the odd one of the six: it *runs* something rather than answering a question about the
 package, and it is the same `Shape.analyze_async()` that `pc cae fea` runs -- for every scenario of the
 analysis the part declares, or for the one `scenario` names, which is `pc cae fea -f` and what a tab asks.
-Its answer is shaped like `simulate.run`'s: an entry per scenario under `analyses`, each with an `error`
+Its answer is shaped like `qual.simulate`'s: an entry per scenario under `analyses`, each with an `error`
 that is null or the sentence saying why that scenario produced nothing -- one scenario's failure is that
 entry's, not a JSON-RPC error, and does not stop the next -- and every finding under `findings`, tagged with
 its scenario. What leaves nothing to run at all (no such part, no such section, no such scenario) is still a
-`USAGE_ERROR`. `cae.list` is `simulate.list`'s twin: what each analysis declares, read and not run, which is
+`USAGE_ERROR`. `cae.list` is `qual.simulations`'s twin: what each analysis declares, read and not run, which is
 what enables and fills each analysis tab. Two things about `cae.analyze` are for the webview specifically.
 `inline` asks for the model's bytes beside the path it was written to, because a panel
 with no file system cannot open a path -- and the daemon may not even be on the viewer's machine. And
@@ -358,7 +358,7 @@ because a route is a file and one object's broken section must not cost the othe
 
 ### Files cross as attachments
 
-A method that hands a file back -- `render.inline`, `cae.analyze` with `inline`, `simulate.run` with `inline`,
+A method that hands a file back -- `render.inline`, `cae.analyze` with `inline`, `qual.simulate` with `inline`,
 the thumbnails of `manufacturing.details`, the `file` of `assembly.guide`, and the model's pictures with
 `image_bytes` -- returns its **bytes**, and the transport decides how they cross (`partcad_utils.framing`). To a
 client that said it reads them, they are raw segments after the message, named in the JSON as

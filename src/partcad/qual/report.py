@@ -14,7 +14,7 @@ the report an external tool wrote (an 'other' check's), and what the check is
 
 It runs the checks `pc qual test <object>` runs, the way it runs them -- the same
 instances, through 'test_cached()', so the same cache -- and only listens.
-Every check reports through 'Test.failed()', 'warned()', 'info()', 'skipped()'
+Every check reports through 'Qualification.failed()', 'warned()', 'info()', 'skipped()'
 and 'not_applicable()', and each of them hands what it says to the report
 collecting for that check and that object (see 'test._report'). So nothing a
 check says has to be said twice, and a check that says nothing new reports
@@ -23,15 +23,16 @@ nothing new; there is no second implementation of any verdict here.
 A verdict here is one of five, where `pc qual test` has two:
 
 - 'passed', and 'failed';
-- 'warned': a finding on an object nobody is going to make ('Test.warned()'),
-  which `pc qual test` reports and does not fail;
-- 'skipped': the question could not be put on this machine ('Test.skipped()'),
+- 'warned': a finding that does not fail the run - on an object nobody is going
+  to make, or a caution such as 'defects'' ('Qualification.warned()'), which
+  `pc qual test` reports and does not fail;
+- 'skipped': the question could not be put on this machine ('Qualification.skipped()'),
   which `pc qual test` passes, out loud;
 - 'not-applicable': the check has nothing to ask of this object. Decided by
-  'Test.inapplicable()' before the check is run at all -- from what the object
+  'Qualification.inapplicable()' before the check is run at all -- from what the object
   is and declares, without the cache, so that a pass an earlier run left there
   is not shown for a check that never applied -- or by the check itself, when
-  it finds out only as it runs ('Test.not_applicable()').
+  it finds out only as it runs ('Qualification.not_applicable()').
 """
 
 import asyncio
@@ -39,7 +40,7 @@ import typing
 
 from . import config as qual_config
 from . import registry
-from .qualification import Test, _report
+from .qualification import Qualification, _report
 
 PASSED = "passed"
 FAILED = "failed"
@@ -86,7 +87,7 @@ class Result:
         self.artifacts = artifacts if artifacts is not None else []
 
     @classmethod
-    def of(cls, test: Test, verdict: bool, notes: list) -> "Result":
+    def of(cls, test: Qualification, verdict: bool, notes: list) -> "Result":
         """The result of a check that ran, from its verdict and what it said."""
         result = cls(test.name, subtype=test.SUBTYPE, doc=test.doc())
         levels = set()
@@ -130,7 +131,7 @@ class Result:
         }
 
 
-async def _run_one(test: Test, tests: list, ctx, shape, test_ctx: dict) -> Result:
+async def _run_one(test: Qualification, tests: list, ctx, shape, test_ctx: dict) -> Result:
     """Run one check through its cache, collecting what it says about 'shape'."""
     notes: list = []
     token = _report.set((test, shape, notes))
@@ -140,7 +141,7 @@ async def _run_one(test: Test, tests: list, ctx, shape, test_ctx: dict) -> Resul
         # A check that broke has not passed: `pc qual test` reports the same object
         # as failed when one of its checks raises.
         notes.append(("error", "the check could not be run: %s" % e))
-        verdict = Test.TEST_FAILED
+        verdict = Qualification.TEST_FAILED
     finally:
         _report.reset(token)
     return Result.of(test, verdict, notes)
@@ -169,7 +170,7 @@ async def run_async(ctx, shape, tests: typing.Optional[list] = None, verify: boo
     read, which is what lets a client show the list before the slow ones are
     done.
 
-    Asked about one object by name, as `pc qual test <object>` is ('Test.NAMED'), so
+    Asked about one object by name, as `pc qual test <object>` is ('Qualification.NAMED'), so
     a check that answers differently when walked to gives the answer a user
     asking about this object gets on the command line.
     """
@@ -199,7 +200,7 @@ async def run_async(ctx, shape, tests: typing.Optional[list] = None, verify: boo
             running.append(index)
 
     if running:
-        test_ctx = {Test.NAMED: True}
+        test_ctx = {Qualification.NAMED: True}
         # Each check is handed the built-in list as what "the suite" is: a check
         # that runs the others over what the object is made of (manufacturability)
         # runs those, and not the checks this object declares for itself.
@@ -210,7 +211,7 @@ async def run_async(ctx, shape, tests: typing.Optional[list] = None, verify: boo
 
 
 def to_dict(object_name: str, kind: str, results: list, verified: bool, subtypes=None) -> dict:
-    """A report as the JSON-RPC methods 'qual.report' and 'test.report' answer it."""
+    """A report as the JSON-RPC method 'qual.report' answers it."""
     return {
         "object": object_name,
         "kind": kind,

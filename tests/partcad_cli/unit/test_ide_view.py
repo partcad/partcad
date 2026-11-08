@@ -80,10 +80,6 @@ def shown(monkeypatch):
         ("--qualification-topology", "topology"),
         ("--qualification-simulation", "simulation"),
         ("--qualification-other", "other"),
-        # Qualification was Validation, and its Test tab what Basic is now: the
-        # old flags still open the tab they meant.
-        ("--validation-test", "basic"),
-        ("--validation-simulation", "simulation"),
     ],
 )
 def test_a_tab_flag_asks_the_viewer_to_open_on_that_tab(click_runner, shown, flag, tab):

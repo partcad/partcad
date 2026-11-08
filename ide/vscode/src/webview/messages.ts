@@ -608,7 +608,7 @@ export interface FetchTabMessage {
      * PartCAD's own.
      *
      * On the Simulation tab: the simulation plugin to run it with instead of
-     * the one it names, as '<package>:<name>' -- 'pc sim --plugin'. Left out,
+     * the one it names, as '<package>:<name>' -- 'pc qual test --simulation --plugin'. Left out,
      * it runs with its own.
      */
     plugin?: string;
@@ -670,13 +670,13 @@ export interface FetchTabMessage {
     /**
      * On the Requirements tab: what is required alone (false, a read of the
      * declaration), or whether the model meets it as well (true, what
-     * 'pc test -f requirements' checks). On a Qualification tab: the tests alone
-     * (false, nothing run), or their verdicts as well (true, 'pc test').
+     * 'pc qual test -f requirements' checks). On a Qualification tab: the tests alone
+     * (false, nothing run), or their verdicts as well (true, 'pc qual test').
      */
     verify?: boolean;
     /**
      * On the Simulation tab: the simulation to run, by the name the object's
-     * 'simulate:' section declares it under -- 'pc sim -f'. Left out, the tab
+     * 'qual: sim:' section declares it under -- 'pc qual test --simulation -f'. Left out, the tab
      * is asking what the object declares rather than running anything.
      *
      * On an analysis tab: the scenario to run, by the name the part's section
@@ -754,7 +754,17 @@ export interface TopologyFocus {
     object: string;
     /** The node to leave unfaded, as '<package>:<name>', which is how the tree names a node. */
     item: string;
-    /** What the chip over the view says is shown. */
+    /** What the finding is called where it is shown: the artifact's title. */
+    label: string;
+}
+
+/**
+ * One piece of a topology finding, where it is: a point in the frame of the
+ * object the finding is on - millimetres, Z up - and what the callout pinned to
+ * it says ("face 3: a sliver"). See 'partcad.qual.highlight.FEATURES_KEY'.
+ */
+export interface TopologyFeature {
+    at: [number, number, number];
     label: string;
 }
 
@@ -1045,7 +1055,7 @@ export interface CaeListData {
 /**
  * The answer to a run of an analysis: what 'pc cae <analysis> -f <name>' prints
  * with '--json'. An entry per scenario run - the panel asks for one at a time -
- * shaped like 'simulate.run''s answer.
+ * shaped like 'qual.simulate''s answer.
  */
 export interface CaeRunData {
     object: string;
@@ -1186,7 +1196,7 @@ export interface TreeNode {
      */
     manufacturable?: boolean;
     /**
-     * What stops it from being built, worded as 'pc test -f manufacturability'
+     * What stops it from being built, worded as 'pc qual test -f manufacturability'
      * words it: incomplete instructions, no tolerance, an unpinned file, an
      * assembly that is not an ASSY file. 'build' is false whenever this is not
      * empty.
@@ -1359,8 +1369,8 @@ export interface PlanData {
 /**
  * One requirement of 'requirements.check', and what the model made of it.
  *
- * 'section' is 'ports', 'interfaces', 'physics' or 'match' for what 'pc test' measures;
- * 'simulate' for a 'simulate:' entry naming a feature nobody declared; and the
+ * 'section' is 'ports', 'interfaces', 'physics' or 'match' for what 'pc qual test' measures;
+ * 'simulate' for a 'qual: sim:' entry naming a feature nobody declared; and the
  * analysis ('fea', 'dynamic', 'thermal', 'cfd') for one of its scenarios that
  * does the same, with the scenario as 'name'. 'passed' is null until the model
  * has been asked.
@@ -1373,7 +1383,7 @@ export interface RequirementCheck {
     detail?: string | null;
 }
 
-/** One feature: its name, what it is, and the 'simulate:' entries and analysis scenarios that name it. */
+/** One feature: its name, what it is, and the 'qual: sim:' entries and analysis scenarios that name it. */
 export interface RequirementFeature {
     name: string;
     desc: string;
@@ -1398,7 +1408,7 @@ export interface RequirementsData {
     requirements: RequirementCheck[];
 }
 
-/** One simulation an object declares, as 'simulate.list' answers: its 'simulate:' entry. */
+/** One simulation an object declares, as 'qual.simulations' answers: its 'qual: sim:' entry. */
 export interface SimulationScenario {
     name: string;
     desc?: string | null;
@@ -1411,7 +1421,7 @@ export interface SimulationScenario {
 }
 
 /**
- * What an object declares under 'simulate:', without running any of it.
+ * What an object declares under 'qual: sim:', without running any of it.
  *
  * Configuration, so it costs what reading the object costs: it is asked for on
  * every show of a part or an assembly, because whether the Simulation tab
@@ -1431,7 +1441,7 @@ export interface SimulationImage {
 }
 
 /**
- * One run of one simulation, as 'simulate.run' reports it ('pc sim --json').
+ * One run of one simulation, as 'qual.simulate' reports it ('pc qual test --simulation --json').
  *
  * 'passed' is the verdict of the 'validation:' expression: null when there is
  * none, or when the run never got far enough to have one -- which 'error' then
@@ -1457,7 +1467,7 @@ export interface SimulationRun {
     recording?: SimulationImage;
 }
 
-/** The answer to a run: what 'pc sim -f <name>' prints with '--json'. */
+/** The answer to a run: what 'pc qual test --simulation -f <name>' prints with '--json'. */
 export interface SimulationRunData {
     simulations: SimulationRun[];
     total: number;
@@ -1488,6 +1498,8 @@ export interface TestArtifact {
      * 'partcad.qual.highlight').
      */
     focus?: string;
+    /** For a topology finding: where its pieces are, the first few of them, for a callout on each. */
+    features?: TopologyFeature[];
 }
 
 /** One column of an 'other' test's report: the key of a row it is, and its heading. */
@@ -1508,14 +1520,14 @@ export interface TestReport {
     rows?: Record<string, unknown>[];
 }
 
-/** One block of a check's documentation: the markup of 'partcad.test.catalog'. */
+/** One block of a check's documentation: the markup of 'partcad.qual.catalog'. */
 export type TestDocBlock =
     | { type: 'heading'; text: string }
     | { type: 'paragraph'; text: string }
     | { type: 'list'; items: string[] }
     | { type: 'code'; language: string; text: string };
 
-/** What a check is, when it applies and what to do when it fails: 'partcad.test.catalog.describe()'. */
+/** What a check is, when it applies and what to do when it fails: 'partcad.qual.catalog.describe()'. */
 export interface TestDoc {
     title: string;
     applies: string;

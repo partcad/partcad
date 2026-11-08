@@ -17,18 +17,22 @@ def test_a_built_in_checks_parameters_are_read_under_its_subtype():
     assert qual_config.params(config, "basic", "interference") == {}
 
 
-def test_qual_wins_over_the_older_key_and_the_older_key_is_still_read():
-    config = {
-        "interference": {"minVolume": 1.0, "minFraction": 0.5},
-        "qual": {"topology": {"interference": {"minVolume": 0.01}}},
-    }
-    assert qual_config.params(config, "topology", "interference", legacy="interference") == {
-        "minVolume": 0.01,
-        "minFraction": 0.5,
-    }
-    assert qual_config.params(
-        {"connectivity": {"requireAnchored": False}}, "basic", "connectivity", legacy="connectivity"
-    ) == {"requireAnchored": False}
+@pytest.mark.parametrize(
+    "key, value, said",
+    [
+        ("interference", {"minVolume": 1.0}, "'qual: topology: interference:'"),
+        ("connectivity", {"requireAnchored": False}, "'qual: basic: connectivity:'"),
+        ("cmf", {"require": True}, "'qual: basic: cmf:'"),
+        ("simulate", {"stands": {"simulation": "x:y"}}, "'qual: sim:'"),
+    ],
+)
+def test_the_keys_qual_replaced_are_not_read_and_say_what_to_write(caplog, key, value, said):
+    qual_config._reported.clear()
+    config = {"name": "bracket", key: value}
+    assert qual_config.params(config, "topology", "interference") == {}
+    assert qual_config.params(config, "basic", "connectivity") == {}
+    assert qual_config.simulations(config) == []
+    assert "bracket: '%s:' is no longer read: it is %s" % (key, said) in caplog.text
 
 
 def test_an_entry_that_names_a_plugin_is_a_declaration_not_parameters():
@@ -73,28 +77,17 @@ def test_an_unknown_subtype_is_reported(caplog):
     assert "is not a subtype of qualification" in caplog.text
 
 
-def test_simulations_are_read_from_qual_sim_and_from_the_older_section():
-    config = {
-        "qual": {"sim": {"stands": {"path": "sim-mujoco:mujoco", "validation": "True"}}},
-        "simulate": {
-            "floats": {"simulation": "sim-mujoco:mujoco", "validation": "True"},
-            "stands": {"simulation": "other:other"},
-        },
-    }
-    simulations = dict(qual_config.simulations(config))
-    assert list(simulations) == ["stands", "floats"]
-    # 'qual: sim:' wins a name declared twice, and the older 'simulation:' is
-    # read as the 'path:' it now is.
-    assert simulations["stands"]["path"] == "sim-mujoco:mujoco"
-    assert simulations["floats"]["path"] == "sim-mujoco:mujoco"
-    assert "simulation" not in simulations["floats"]
+def test_simulations_are_read_from_qual_sim_in_order():
+    config = {"qual": {"sim": {"stands": {"path": "sim-mujoco:mujoco"}, "floats": {"path": "sim-mujoco:mujoco"}}}}
+    assert [name for name, _ in qual_config.simulations(config)] == ["stands", "floats"]
 
 
-def test_a_simulation_declaration_reads_path_and_the_older_simulation():
+def test_a_simulation_declaration_names_its_plugin_by_path():
     from partcad import simulation
 
     assert simulation.SimulationDeclaration("a", {"path": "p:q"}).simulation == "p:q"
-    assert simulation.SimulationDeclaration("a", {"simulation": "p:q"}).simulation == "p:q"
+    # The older key names nothing now.
+    assert simulation.SimulationDeclaration("a", {"simulation": "p:q"}).simulation is None
     (declared,) = simulation.declared({"qual": {"sim": {"a": {"path": "p:q", "validation": "True"}}}})
     assert (declared.name, declared.simulation, declared.validation) == ("a", "p:q", "True")
 
@@ -122,6 +115,7 @@ def test_every_built_in_check_is_of_a_subtype_and_those_that_point_at_geometry_a
     subtypes = {qual.name: qual.SUBTYPE for qual in registry.builtin()}
     assert set(subtypes.values()) <= set(qual_config.SUBTYPES)
     assert {name for name, subtype in subtypes.items() if subtype == "topology"} == {
+        "defects",
         "interference",
         "tolerance-surfaces",
         "tolerance-edges",
@@ -133,6 +127,7 @@ def test_every_built_in_check_is_of_a_subtype_and_those_that_point_at_geometry_a
 def test_a_run_of_one_subtype_selects_its_checks():
     quals = registry.builtin()
     assert [qual.name for qual in registry.select(quals, ["topology"])] == [
+        "defects",
         "interference",
         "tolerance-surfaces",
         "tolerance-edges",
@@ -144,16 +139,15 @@ def test_a_run_of_one_subtype_selects_its_checks():
     assert registry.select(quals, ["other"]) == []
 
 
-def test_the_old_names_are_the_new_modules():
-    from partcad.qual import catalog, qualification, report
-    from partcad.test import all as old_all
-    from partcad.test import catalog as old_catalog
-    from partcad.test import report as old_report
-    from partcad.test import test as old_test
+def test_the_old_names_are_gone():
+    """Qualification is all there is: no 'partcad.test' package and no 'Test' class to reach it by."""
+    import importlib
 
-    assert old_test.Test is qualification.Qualification
-    assert old_report is report and old_catalog is catalog
-    assert old_all.tests is registry.builtin
+    from partcad.qual import qualification
+
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("partcad.test")
+    assert not hasattr(qualification, "Test")
 
 
 def test_an_entry_is_written_into_the_objects_qual_section(tmp_path):
@@ -184,16 +178,10 @@ def test_an_entry_is_written_into_the_objects_qual_section(tmp_path):
     "declaration, held",
     [
         ({}, True),
-        ({"connectivity": {"requireAnchored": False}}, False),
         ({"qual": {"basic": {"connectivity": {"requireAnchored": False}}}}, False),
-        # 'qual:' wins over the older key, as it does for the check itself.
-        (
-            {
-                "connectivity": {"requireAnchored": False},
-                "qual": {"basic": {"connectivity": {"requireAnchored": True}}},
-            },
-            True,
-        ),
+        ({"qual": {"basic": {"connectivity": {"requireAnchored": True}}}}, True),
+        # Where the check no longer reads it, neither does the editor.
+        ({"connectivity": {"requireAnchored": False}}, True),
     ],
 )
 def test_the_editor_reads_connectivity_where_the_check_does(declaration, held):

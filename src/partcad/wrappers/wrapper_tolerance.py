@@ -6,7 +6,7 @@
 """Which faces and edges of a part have no manufacturing tolerance, and where they are.
 
 The sandbox half of the 'tolerance-surfaces' and 'tolerance-edges' checks
-('partcad.test.tolerance'). The core has already decided that the part states no
+('partcad.qual.topology.tolerance'). The core has already decided that the part states no
 general tolerance -- one that would cover every feature at once -- so what is
 left to ask is which features are toleranced on their own, by the GD&T of the
 STEP file the part is read from, and which are not.
@@ -40,7 +40,10 @@ import pyexpat  # noqa: F401
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 
-CACHE_VERSION = 1
+# Raised to 2 when the verdict made of it stopped drawing a finding that is the
+# whole part (see 'partcad.qual.highlight.covers_all'): a verdict cached before
+# that carries such a drawing.
+CACHE_VERSION = 2
 
 # How many untoleranced features are described one by one in the answer, and
 # how many edges get a tube. A part that tolerances nothing has every one of its

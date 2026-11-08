@@ -44,8 +44,8 @@ def _invoke(*args):
 COMMANDS = [
     ("commands.render", "render.objects", ["render"]),
     ("commands.export", "render.objects", ["export"]),
-    ("commands.test", "test.run", ["test"]),
-    ("commands.sim", "simulate.run", ["sim"]),
+    ("commands.qual.test", "qual.run", ["qual", "test"]),
+    ("commands.qual.test", "qual.simulate", ["qual", "test", "--simulation"]),
     ("commands.cam", "cam.route", ["cam"]),
     ("commands.instructions", "assembly.guide", ["instructions"]),
     ("commands.info", "info.object", ["info"]),
@@ -65,7 +65,7 @@ def test_every_value_reaches_the_daemon_as_written(monkeypatch, module, method, 
     result = _invoke(*command, "bolt", "-p", "length=10", "--param", "include=BEND_UP,BEND_DOWN")
 
     # Not 'exit_code == 0': what a command does with the answer is its own
-    # business ('pc sim' fails a run that simulated nothing, which this fake
+    # business ('pc qual test --simulation' fails a run that simulated nothing, which this fake
     # answer is). A usage error, though, would be the option not parsing.
     assert result.exit_code != 2, result.output
     ((called, params),) = recorder.calls
@@ -107,7 +107,8 @@ def test_dash_p_is_the_parameter_on_every_one_of_them(module, method, command):
     with its default length. This is the check that it has not.
     """
     found = cli
-    for name in command:
+    # The command's own words, not the flags some entries are invoked with.
+    for name in [word for word in command if not word.startswith("-")]:
         # The groups load their commands on demand, so they are asked rather
         # than read off '.commands'.
         found = found.get_command(click.Context(found), name)

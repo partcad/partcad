@@ -41,14 +41,19 @@ import {
     TestReport,
     TestResult,
     TestStatus,
+    TopologyFeature,
     TopologyFocus,
 } from './messages';
 
 export interface TestCallbacks {
     /** "Run again" was pressed: the checks have to be asked for once more. */
     onRun: () => void;
-    /** An artifact's button was pressed: show that object in the panel. */
-    onShow: (artifact: TestArtifact) => void;
+    /**
+     * An artifact's button was pressed: show that object in the panel - with
+     * the check that left it, whose verdict and words go on being shown with it
+     * (see 'findingOf').
+     */
+    onShow: (artifact: TestArtifact, result: TestResult) => void;
 }
 
 /** Which subtype of qualification a view shows, and what it says where it has nothing to show. */
@@ -70,7 +75,7 @@ export function markOf(result: TestResult, running: boolean): TestMark {
     return running ? 'pending' : 'unknown';
 }
 
-const MARK_TEXT: Record<TestMark, string> = {
+export const MARK_TEXT: Record<TestMark, string> = {
     passed: '✓',
     failed: '✗',
     warned: '!',
@@ -81,7 +86,7 @@ const MARK_TEXT: Record<TestMark, string> = {
     unknown: '?',
 };
 
-const MARK_TITLE: Record<TestMark, string> = {
+export const MARK_TITLE: Record<TestMark, string> = {
     passed: 'Passed',
     failed: 'Failed',
     warned: 'Passed, with a finding',
@@ -149,10 +154,10 @@ function paragraph(tag: 'p' | 'li' | 'h3', text: string, className?: string): HT
     return node;
 }
 
-const VERDICT: Record<TestStatus, string> = {
+export const VERDICT: Record<TestStatus, string> = {
     passed: 'Passed',
     failed: 'Failed',
-    warned: 'Passed, with findings: on an object nobody is going to make, what a check finds is reported rather than failed',
+    warned: 'Passed, with findings: what the check found is reported rather than failed - on an object nobody is going to make, or a caution rather than a fault',
     skipped: 'Skipped: the question could not be asked on this machine',
     // eslint-disable-next-line @typescript-eslint/naming-convention
     'not-applicable': 'Not applicable',
@@ -171,6 +176,12 @@ export class TestView {
     private chosen: string | undefined;
     /** Whether 'chosen' is the reader's, by a click, rather than this view's guess at what to open on. */
     private picked = false;
+    /**
+     * A check to open on the next time checks arrive, whatever object they are
+     * of: the one a finding shown in 3D was of, when "Back" takes the reader
+     * to it again (see 'prefer').
+     */
+    private preferred: string | undefined;
 
     constructor(
         root: HTMLElement,
@@ -235,6 +246,11 @@ export class TestView {
         // The check the reader opened, while it is there - a re-run should not
         // move them - and otherwise the one most worth reading, worked out
         // again as the verdicts that decide which that is come in.
+        if (this.preferred !== undefined && names.has(this.preferred)) {
+            this.chosen = this.preferred;
+            this.picked = true;
+        }
+        this.preferred = undefined;
         if (!this.picked || this.chosen === undefined || !names.has(this.chosen)) {
             this.chosen = defaultSelection(data.tests);
             this.picked = false;
@@ -256,6 +272,15 @@ export class TestView {
             result.status === 'not-applicable' ? result : { ...result, status: null, findings: [], artifacts: [] },
         );
         this.show({ ...data, verified: false, tests: pending }, true);
+    }
+
+    /**
+     * Open on this check when the checks next arrive, as if it had been
+     * clicked: for an object that is about to be shown, whose checks have not
+     * been asked for yet. Kept through 'setBusy', which the show starts with.
+     */
+    public prefer(name: string): void {
+        this.preferred = name;
     }
 
     /** Open a check by name, as clicking it does. */
@@ -378,13 +403,13 @@ export class TestView {
             const topology = result.artifacts.some((artifact) => artifact.focus);
             box.appendChild(el('h3', undefined, topology ? 'Where it is' : 'Left behind to look at'));
             for (const artifact of result.artifacts) {
-                box.appendChild(this.artifact(artifact));
+                box.appendChild(this.artifact(artifact, result));
             }
         }
         return box;
     }
 
-    private artifact(artifact: TestArtifact): HTMLElement {
+    private artifact(artifact: TestArtifact, result: TestResult): HTMLElement {
         const node = el('div', artifact.focus ? 'test-artifact topology' : 'test-artifact');
         node.appendChild(el('p', 'name', artifact.title ?? artifact.name));
         if (artifact.desc) {
@@ -396,7 +421,7 @@ export class TestView {
         button.title = artifact.focus
             ? `${artifact.package}:${artifact.name}: in the 3D view, with the finding singled out`
             : `${artifact.package}:${artifact.name}`;
-        button.addEventListener('click', () => this.callbacks.onShow(artifact));
+        button.addEventListener('click', () => this.callbacks.onShow(artifact, result));
         node.appendChild(button);
         return node;
     }
@@ -420,6 +445,63 @@ export function focusOf(artifact: TestArtifact): TopologyFocus | undefined {
         object: `${artifact.package}:${artifact.name}`,
         item: `${artifact.package}:${artifact.name}/${artifact.focus}`,
         label: artifact.title ?? artifact.focus,
+    };
+}
+
+/** The object a finding is on, to go back to: as 'ShowObjectMessage' names one. */
+export interface FindingSubject {
+    package: string;
+    name: string;
+    kind: string;
+}
+
+/**
+ * A topology finding as it is shown in 3D: what to single out, where to pin a
+ * callout, and everything the Topology tab said about it - the check, its
+ * verdict and its words - so that the 3D view can go on saying it (see
+ * 'finding.ts'), and the object to go back to.
+ */
+export interface Finding {
+    focus: TopologyFocus;
+    features: TopologyFeature[];
+    /** The check, by name, as 'pc qual test -f' takes it. */
+    check: string;
+    /** The check's title, from its entry of the catalog, or its name. */
+    title: string;
+    subtype: string;
+    status: TestStatus | null;
+    findings: TestFinding[];
+    /** What the artifact says it is. */
+    desc?: string;
+    subject?: FindingSubject;
+}
+
+/**
+ * What showing a topology artifact keeps on screen with it; undefined for an
+ * artifact that is not a topology finding.
+ */
+export function findingOf(
+    artifact: TestArtifact,
+    result: TestResult,
+    subtype: string,
+    subject: FindingSubject | undefined,
+): Finding | undefined {
+    const focus = focusOf(artifact);
+    if (focus === undefined) {
+        return undefined;
+    }
+    return {
+        focus,
+        features: (artifact.features ?? []).filter(
+            (feature) => Array.isArray(feature.at) && feature.at.length === 3 && feature.at.every(Number.isFinite),
+        ),
+        check: result.name,
+        title: result.doc?.title ?? result.name,
+        subtype,
+        status: result.status,
+        findings: result.findings,
+        desc: artifact.desc,
+        subject,
     };
 }
 
@@ -501,7 +583,8 @@ export function reportTable(report: TestReport): HTMLElement {
     return node;
 }
 
-function findings(found: TestFinding[]): HTMLElement {
+/** What a check said, line by line, as the tab and the finding card over the 3D view both list it. */
+export function findings(found: TestFinding[]): HTMLElement {
     const list = el('ul', 'test-findings');
     for (const finding of found) {
         // Said as the check said it: a failure is often several lines - a

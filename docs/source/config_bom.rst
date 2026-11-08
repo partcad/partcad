@@ -69,7 +69,7 @@ move anything: the mate is recomputed from the new part's ports. That is what ma
 materials interchangeable rather than merely editable.
 
 It is also what makes the refinement chain above safe. An ``enrich`` of a part keeps the source's interfaces,
-so a part narrowed three times still mates the way the abstract one did -- and ``pc test`` checks that it
+so a part narrowed three times still mates the way the abstract one did -- and ``pc qual test`` checks that it
 does, since the connection test is run against whatever the assembly actually resolves to.
 
 ========================================

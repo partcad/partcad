@@ -5,6 +5,8 @@
 #
 """`pc qual test` and `pc qual add`: what each asks the daemon."""
 
+import re
+
 import pytest
 from click.testing import CliRunner
 
@@ -29,7 +31,6 @@ def _calls(monkeypatch, module):
         ([], []),
         (["--basic"], ["basic"]),
         (["--topology", "--other"], ["topology", "other"]),
-        (["--simulation"], ["sim"]),
         (["--sim", "--basic"], ["basic", "sim"]),
     ],
 )
@@ -41,6 +42,32 @@ def test_qual_test_asks_for_the_subtypes_named(monkeypatch, flags, subtypes):
     assert method == "qual.run"
     assert params["subtypes"] == subtypes
     assert params["object"] == ":bracket"
+
+
+def test_the_simulations_alone_are_run_and_reported_as_they_ran(monkeypatch):
+    calls = []
+
+    def run(cli_ctx, method, params, needs_context=False):
+        calls.append((method, params))
+        return {"ok": True, "total": 1, "failed": 0, "simulations": []}
+
+    monkeypatch.setattr(test, "run", run)
+    result = CliRunner().invoke(cli, ["--no-ansi", "qual", "test", "--simulation", "-f", "stands", "-S", "stack"])
+    assert result.exit_code == 0, result.output
+    ((method, params),) = calls
+    assert method == "qual.simulate"
+    assert (params["filter"], params["object"], params["scene"]) == ("stands", "stack", True)
+
+
+@pytest.mark.parametrize("option", [["--json"], ["--plugin", "x:y"], ["--before", "b.yaml"], ["--video", "v.webm"]])
+def test_what_only_a_simulation_run_takes_is_refused_with_other_subtypes(monkeypatch, option):
+    calls = _calls(monkeypatch, test)
+    result = CliRunner().invoke(cli, ["--no-ansi", "qual", "test", "--basic", *option, ":bracket"])
+    assert result.exit_code == 2
+    # Drawn in a box by rich-click: read as words.
+    words = " ".join(re.sub(r"\x1b\[[0-9;]*m", "", result.output).replace("│", " ").split())
+    assert "apply to '--simulation' on its own" in words
+    assert calls == []
 
 
 def test_qual_add_declares_a_plugins_test_with_its_parameters(monkeypatch):

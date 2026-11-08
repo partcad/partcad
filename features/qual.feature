@@ -8,9 +8,10 @@ Feature: `pc qual` command
   @success @pc-qual-sim
   Scenario: A simulation declared under 'qual: sim:' is run by the plugin its 'path:' names
     # Simulations are the 'sim' subtype of qualification, declared under
-    # 'qual: sim:' with the plugin as 'path:'. This one names a plugin the
-    # package does not declare, so it fails before anything is built -- no
-    # geometry, no scene, no sandbox -- and fails on any machine.
+    # 'qual: sim:' with the plugin as 'path:', and '--simulation' alone runs
+    # them and says what each found. This one names a plugin the package does
+    # not declare, so it fails before anything is built -- no geometry, no
+    # scene, no sandbox -- and fails on any machine.
     Given a file named "partcad.yaml" with content:
       """
       parts:
@@ -34,8 +35,9 @@ Feature: `pc qual` command
       """
     When I run "pc qual test --simulation block"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "//:block: sim: the simulation 'stands' could not be run"
+    And STDOUT should contain "//:block: the simulation 'stands' failed"
     And STDOUT should contain "declares no simulation 'nosuch'"
+    And STDERR should contain "1 of 1 simulation(s) did not pass"
 
   @success @pc-qual-other
   Scenario: A test a plugin supplies is run only where it is declared, and fails naming a plugin nobody declares

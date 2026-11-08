@@ -41,11 +41,11 @@ def _invoke(*args):
 @pytest.mark.parametrize(
     "module, method, args",
     [
-        ("test", "test.run", ["test", "-P", "//pub..."]),
+        ("qual.test", "qual.run", ["qual", "test", "-P", "//pub..."]),
         ("render", "render.objects", ["render", "-P", "//pub..."]),
         ("lint", "lint.run", ["lint", "-P", "//pub..."]),
         ("info", "info.object", ["info", "//pub...:bolt"]),
-        ("sim", "simulate.run", ["sim", "-P", "//pub..."]),
+        ("qual.test", "qual.simulate", ["qual", "test", "--simulation", "-P", "//pub..."]),
         ("list.parts", "list.objects", ["list", "parts", "//pub..."]),
         ("list.packages", "list.packages", ["list", "packages", "//pub..."]),
     ],
@@ -56,7 +56,7 @@ def test_every_exclusion_reaches_the_daemon(monkeypatch, module, method, args):
     result = _invoke(*args, "-x", "//pub/universe/lego/ldraw", "--exclude", "//pub/electronics/sbcs/intel")
 
     # Not 'exit_code == 0': what a command does with the answer is its own
-    # business ('pc sim' fails a run that simulated nothing, which this fake
+    # business ('pc qual test --simulation' fails a run that simulated nothing, which this fake
     # answer is). A usage error, though, would be the option not parsing.
     assert result.exit_code != 2, result.output
     ((called, params),) = recorder.calls
@@ -65,9 +65,9 @@ def test_every_exclusion_reaches_the_daemon(monkeypatch, module, method, args):
 
 
 def test_no_exclusion_is_an_empty_list(monkeypatch):
-    recorder = _record(monkeypatch, "test")
+    recorder = _record(monkeypatch, "qual.test")
 
-    result = _invoke("test", "-P", "//pub...")
+    result = _invoke("qual", "test", "-P", "//pub...")
 
     assert result.exit_code == 0, result.output
     ((_, params),) = recorder.calls

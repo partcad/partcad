@@ -488,6 +488,114 @@ body {
     background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
 }
 
+/*
+ * A topology finding shown in the 3D view: the check, its verdict and its words,
+ * in the view's top-left corner where the CMF chip would be (see 'finding.ts').
+ * Marked down its edge in the colour a finding is drawn in, as its row on the
+ * Topology tab is, so that the card and what it is about read as one; folded, it
+ * is its title line and nothing else.
+ */
+.finding-card {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    width: min(26rem, calc(100% - 1rem));
+    max-height: calc(100% - 1rem);
+    overflow: auto;
+    border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border, transparent));
+    border-left: 3px solid #ff2d55;
+    border-radius: 3px;
+    background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+    color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
+    font-size: 0.9em;
+    box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.3));
+}
+
+.finding-card[hidden] {
+    display: none;
+}
+
+.finding-head {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.2rem 0.2rem 0.5rem;
+}
+
+.finding-mark {
+    flex: none;
+    font-weight: 600;
+}
+
+.finding-mark.passed {
+    color: var(--vscode-testing-iconPassed, #73c991);
+}
+
+.finding-mark.failed {
+    color: var(--vscode-testing-iconFailed, #f14c4c);
+}
+
+.finding-mark.warned,
+.finding-mark.skipped {
+    color: var(--vscode-testing-iconQueued, #cca700);
+}
+
+.finding-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.finding-fold,
+.finding-close {
+    flex: none;
+    width: auto;
+    padding: 0 0.4rem;
+    border: none;
+    border-radius: 2px;
+    font: inherit;
+    cursor: pointer;
+    color: var(--vscode-foreground);
+    background: transparent;
+}
+
+.finding-fold:hover,
+.finding-close:hover {
+    background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+}
+
+.finding-body {
+    padding: 0 0.6rem 0.5rem;
+}
+
+.finding-body p {
+    margin: 0.3rem 0;
+}
+
+.finding-about,
+.finding-note,
+.finding-status {
+    color: var(--vscode-descriptionForeground);
+}
+
+.finding-body .test-findings {
+    margin: 0.3rem 0;
+}
+
+.finding-back {
+    width: auto;
+    margin-top: 0.2rem;
+    padding: 0.15rem 0.6rem;
+}
+
+/* A callout on a piece of a finding, in the colour the finding is drawn in. */
+.callout-finding .callout-box {
+    border-left: 3px solid #ff2d55;
+}
+
 /* An item's or a set's "Show in 3D" on the CMF tab. */
 .cmf-show {
     width: auto;
@@ -880,7 +988,7 @@ table.grid .numeric {
  * The Requirements tab: a mark beside each measured requirement, and a banner
  * for each thing a feature is validated by. The marks take the colours the
  * editor's own test explorer uses for a passed and a failed test, which is what
- * they are: the verdicts of 'pc test -f requirements'.
+ * they are: the verdicts of 'pc qual test -f requirements'.
  */
 /* One set of columns for every section, so that they line up from one to the next. */
 .requirements table.grid {

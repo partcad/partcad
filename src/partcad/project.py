@@ -886,7 +886,7 @@ class Project(project_config.Configuration):
         point: 'pc list parts -r //pub' over a catalog of twenty thousand parts
         used to run a factory per row. What that also means is that a listing
         no longer reports a declaration PartCAD cannot use - it does not look
-        closely enough to find out. That is 'pc test's question, and it asks it
+        closely enough to find out. That is 'pc qual test's question, and it asks it
         of every object.
         """
         descriptions = {}
@@ -982,7 +982,7 @@ class Project(project_config.Configuration):
         names: a name is one object of a package whatever its kind (see
         'NAMED_OBJECT_KINDS'), so the name is enough to find it, and the kind is
         looked up rather than asked for. 'kinds' narrows the search to what the
-        caller can do anything with -- 'pc sim' simulates parts, assemblies and
+        caller can do anything with -- 'pc qual test --simulation' simulates parts, assemblies and
         scenes, and a sketch called 'bolt' is not one -- and is searched in the
         order of 'NAMED_OBJECT_KINDS' whatever order it is given in.
 
@@ -1067,7 +1067,7 @@ class Project(project_config.Configuration):
         'NAMED_OBJECT_KINDS' keeps the name, which is also the object a bare
         name resolves to, and every other one is refused: dropped from the
         declarations this package serves, and recorded as broken with the
-        reason, so that the log, 'pc test' and the Explorer all say what is
+        reason, so that the log, 'pc qual test' and the Explorer all say what is
         wrong and what to do about it. Refusing it rather than letting one
         silently shadow the other is the point: otherwise a name would mean one
         object to 'pc render' and another to whatever named it with a flag.
