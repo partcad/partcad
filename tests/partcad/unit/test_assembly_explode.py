@@ -42,6 +42,20 @@ PACKAGE = textwrap.dedent("""
         source: :stack
         with:
           exploded: true
+      stack_pulled_apart:
+        type: alias
+        source: :stack;exploded=true
+      stack_enriched:
+        type: enrich
+        source: :stack
+        with:
+          exploded: true
+      shown:
+        type: assy
+        path: stack.assy
+        manufacturable: true
+        parameters:
+          exploded: true
       imported:
         type: step
         path: block.step
@@ -252,6 +266,44 @@ def test_an_item_that_is_an_assembly_moves_as_one_piece(tmp_path, monkeypatch, c
         "column:lid:top": 45.0,
         "column:cap:top": 55.0,
     }
+
+
+# --------------------------------------------------------------------------- #
+# An exploded view is not something to make                                   #
+# --------------------------------------------------------------------------- #
+
+
+def test_an_exploded_assembly_is_not_manufacturable(ctx):
+    """It is a picture of the assembly with every item where nothing holds it."""
+    assert ctx.get_assembly("//explode:stack").is_manufacturable is True
+    assert ctx.get_assembly("//explode:stack;exploded=true").is_manufacturable is False
+    # The assembly it is a view of keeps its own, and so does one that asks
+    # for the view and turns it off.
+    assert ctx.get_assembly("//explode:stack").is_manufacturable is True
+    assert ctx.get_assembly("//explode:stack;exploded=false").is_manufacturable is True
+
+
+@pytest.mark.parametrize("name", ["stack_exploded", "stack_pulled_apart", "stack_enriched"])
+def test_an_exploded_view_under_a_name_of_its_own_is_not_manufacturable(ctx, name):
+    """A reference to the view is the view: 'with: exploded: true', or a source written with it."""
+    assert ctx.get_assembly("//explode:%s" % name).is_manufacturable is False
+
+
+def test_an_assembly_declared_exploded_is_not_manufacturable_whatever_it_is_marked(ctx):
+    shown = ctx.get_assembly("//explode:shown")
+    assert shown.is_manufacturable is False
+    # Dropped from the object and not from its declaration, which an instance
+    # is copied from: the same assembly asked for whole is manufacturable, as
+    # it is marked, after the exploded one has been made.
+    assert shown.config["manufacturable"] is True
+    assert ctx.get_assembly("//explode:shown;exploded=false").is_manufacturable is True
+
+
+def test_the_editor_reads_the_parameter_partcad_does():
+    """'partcad_utils' cannot import 'partcad', so the lint has the name in a copy of its own."""
+    from partcad_utils import lint_context
+
+    assert lint_context.EXPLODED == assembly_explode.PARAMETER
 
 
 def test_a_type_that_cannot_explode_refuses_to_be_asked(ctx):

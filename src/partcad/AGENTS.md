@@ -1437,6 +1437,15 @@ at all).
   (`AssemblyFactory.POLICED_OBJECT_TYPE_PARAMETERS`): only `assy` can say what is joined to what, so any other
   type declaring it is refused; an alias and an enrich pass it on to their source.
 
+  **An exploded assembly is never manufacturable**, whatever it or its package marks: it is a picture with
+  every item where nothing holds it. `AssemblyFactory._create` drops `is_manufacturable` as the object is
+  created, and `AssemblyFactoryAlias` does the same for an alias or an enrich that names the view
+  (`assembly_explode.names_exploded_view`), since it is that view, cache key and all. Only on the object,
+  **never in `config`**: the config is the declaration a parameterized instance is deep-copied from, so
+  writing `manufacturable: false` there would leave `logo;exploded=false` unmanufacturable when `logo`
+  defaults to exploded. `partcad_utils.lint_context` makes the same call for the editor, from what the file
+  is rendered with, so an exploded declaration's ASSY file is not held to the rules for one that is made.
+
   Which way and how far an item backs out is **one rule shared with the instruction book**
   (`counterpart`, `separation_async`): the joint's direction or the line between the two centers, by the
   connection's `exploded:` or half of the larger item. The whole assembly adds that moves add up along the
