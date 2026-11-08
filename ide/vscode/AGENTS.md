@@ -306,15 +306,19 @@ negotiated, because this extension and PartCAD are released apart: see "Payloads
 mesh per node rather than an `InstancedMesh`.
 
 **Every tab that shows the object has the view panel down its right** (`viewPanel.ts`; "The view panel" in
-[docs/partcad-viewer.md](./docs/partcad-viewer.md)): the orientation gizmo, the axis views, a section slider per
-axis, the viewpoint as `viewport_origin`/`viewport_up`/target with Fit (the 3D tab only) and Reset beside it, and
-Animate, Auto-fit (the 3D tab only) and Opacity, which used to be at the bottom of the 3D view's tree. One widget for every tab; what a tab cannot do with it is disabled and says why
+[docs/partcad-viewer.md](./docs/partcad-viewer.md)): the orientation gizmo, the axis views, the viewpoint as
+`viewport_origin`/`viewport_up`/target with the projection (Orthographic, Isometric, Perspective) right after its
+title and Fit (the 3D tab only) and Reset beside it, a section slider per axis, and Animate, Auto-fit (the 3D tab
+only) and Opacity, which used to be at the bottom of the 3D view's tree. One widget for every tab; what a tab cannot do with it is disabled and says why
 (`capabilitiesOf`), and only `cameraView.ts` crosses between PartCAD's frame and a stage's. A section is never a
 clipping plane here: PartCAD cuts the exact geometry (`partcad/shape_section.py`), the 3D view by asking the daemon
 to show the object again (`partcad.showSection` -> `inspect.object` with `section`) and the render tabs by sending
 it with `render.inline`, and the show says what it was cut to (`KEY_SECTION`, absent from a PartCAD that cannot
-cut). The panel starts folded, and the screenshot script drives Animate, Opacity and Reset by the ids the 3D tab's
-panel keeps (`animate-checkbox`, `opacity-slider`, `view-reset-button`) without unfolding it - which is why it sets
+cut). A view drawn without perspective is drawn by an orthographic copy of the orbit camera (`matchOrthographic`), never
+by moving the controls onto another camera: navigation, Fit and the SpaceMouse go on moving and reading the
+perspective one, so nothing about them has two versions. The panel starts folded, and the screenshot script drives
+Animate, Opacity and Reset by the ids the 3D tab's panel keeps (`animate-checkbox`, `opacity-slider`,
+`view-reset-button`; the projection is `projection-select`) without unfolding it - which is why it sets
 them, or clicks from inside the page, rather than clicking through Playwright.
 
 **A show after the first never moves the 3D camera at once.** It keeps the angle (which Animate has been turning)

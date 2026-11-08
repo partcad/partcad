@@ -15,7 +15,8 @@
 // 'src/components/Part.js'), which is the viewer PartCAD already ships on the
 // web, so that a part looks the same in the IDE as it does on partcad.org:
 //
-//   * an auto-rotating orbit camera, framed on the model;
+//   * an auto-rotating orbit camera, framed on the model - in perspective, or
+//     without it where the view panel says so (see 'flatCamera');
 //   * drei's <Stage> lighting - an environment's light plus an ambient/spot/point
 //     trio scaled from the model's size;
 //   * the hemisphere and point lights Part.js adds on top of Stage (the
@@ -83,6 +84,7 @@ import {
     fitDistance,
     fitProgress,
     fromStage,
+    matchOrthographic,
     placeCamera as aimCamera,
     readViewpoint,
 } from './cameraView';
@@ -192,7 +194,7 @@ if (onCpu) {
 
 /** Draw the stage once. */
 function drawStage(): void {
-    surface.render(scene, camera);
+    surface.render(scene, drawingCamera());
 }
 
 /**
@@ -238,6 +240,32 @@ export function onViewChange(listener: () => void): void {
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 10000);
 camera.position.set(0, 0, 5);
+
+/**
+ * What draws the stage while the view panel says to draw it without
+ * perspective - orthographic, or isometric, which is that from a corner.
+ *
+ * Only ever a copy of 'camera' ('matchOrthographic'): everything that moves the
+ * view - the orbit controls, a fit, the SpaceMouse, the panel's viewpoint - goes
+ * on moving 'camera', and on reading it, whichever of the two draws. So nothing
+ * about how the view is navigated, framed or reported has two versions, and
+ * switching between the two keeps the model where it is and the size it is.
+ */
+const flatCamera = new THREE.OrthographicCamera();
+
+/** Whether the stage is drawn in perspective, as the view panel says: it is until it says otherwise. */
+let perspective = true;
+
+/** The camera the stage is drawn with now: 'camera', or 'flatCamera' following it. */
+function drawingCamera(): THREE.Camera {
+    if (perspective) {
+        return camera;
+    }
+    // As far out as the model reaches from what the camera looks at, wherever
+    // a pan has taken that.
+    matchOrthographic(flatCamera, camera, controls.target, controls.target.distanceTo(framedCentre) + framedRadius);
+    return flatCamera;
+}
 
 const controls = new OrbitControls(camera, surface.domElement);
 controls.enableDamping = true;
@@ -2236,7 +2264,7 @@ export function screenshot(): string {
     if (!(canvas instanceof HTMLCanvasElement)) {
         throw new Error('the 3D view is not drawn on a canvas');
     }
-    surface.render(scene, camera);
+    surface.render(scene, drawingCamera());
     return canvas.toDataURL('image/png');
 }
 
@@ -2315,6 +2343,16 @@ export function modelBounds(): Bounds | undefined {
         min: [0, 1, 2].map((axis) => Math.min(corners[0][axis], corners[1][axis])) as Bounds['min'],
         max: [0, 1, 2].map((axis) => Math.max(corners[0][axis], corners[1][axis])) as Bounds['max'],
     };
+}
+
+/**
+ * Draw the stage in perspective, or without it - the view panel's projection.
+ * Where it is looked from does not move: an isometric view is the panel's to
+ * turn to, as any other viewpoint is.
+ */
+export function setPerspective(enabled: boolean): void {
+    perspective = enabled;
+    invalidate();
 }
 
 export function setAutoRotate(enabled: boolean): void {
@@ -2414,7 +2452,7 @@ function animate(): void {
         dirty = false;
         const started = performance.now();
         drawStage();
-        labelRenderer.render(scene, camera);
+        labelRenderer.render(scene, drawingCamera());
         drawTime = performance.now() - started;
     }
     reportFrameRate(now, draws, drawTime);

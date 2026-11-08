@@ -2277,8 +2277,9 @@ input.switch:focus-visible {
 
 /*
  * The view panel ('viewPanel.ts'): the gizmo at the top in the middle, the axis
- * buttons under it, then the section sliders, the viewpoint and how the model
- * is drawn, each a group under a heading in the editor's own side bar style.
+ * buttons under it, then the viewpoint with its projection, the section sliders
+ * and how the model is drawn, each a group under a heading in the editor's own
+ * side bar style.
  */
 .view-panel {
     display: flex;
@@ -2400,10 +2401,41 @@ input.switch:focus-visible {
     justify-content: space-between;
 }
 
+/* The title of a heading, and what goes right after it: the viewpoint's projection. */
+.view-heading-start {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
 /* The buttons at the end of a heading: Fit and Reset beside the viewpoint. */
 .view-buttons {
     display: flex;
     gap: 0.3rem;
+}
+
+/* How the view is drawn, as compact as the buttons across from it: the panel is narrow. */
+.view-projection {
+    min-width: 0;
+    padding: 0 0.1em;
+    border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border, transparent));
+    border-radius: 2px;
+    background: var(--vscode-dropdown-background);
+    color: var(--vscode-dropdown-foreground);
+    font-family: inherit;
+    font-size: 0.9em;
+    cursor: pointer;
+}
+
+.view-projection:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.view-projection:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
 }
 
 .view-title {

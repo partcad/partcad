@@ -267,9 +267,10 @@ sight (`rz`) is dropped, and a tilt stops at the poles.
 ## The view panel
 
 Down the right of every tab that shows the object — 3D, 2D and Draft, each analysis, and Simulation — is one
-widget, `viewPanel.ts`: the orientation gizmo (`gizmo.ts`), a button per axis view, a two-ended section slider per
-axis, the viewpoint as three editable vectors with **Fit** (where the view has a camera of its own to bring in, which
-it says by giving `onFit`; only the 3D tab does) and **Reset** beside them, and Animate, Auto-fit (the 3D tab only) and Opacity. It is a
+widget, `viewPanel.ts`: the orientation gizmo (`gizmo.ts`), a button per axis view, the viewpoint as three editable
+vectors with the projection right after its heading's title and **Fit** (where the view has a camera of its own to
+bring in, which it says by giving `onFit`; only the 3D tab does) and **Reset** beside them, a two-ended section
+slider per axis, and Animate, Auto-fit (the 3D tab only) and Opacity. It is a
 `SidePanel` (`sidePanel.ts`):
 folded into a strip with the editor's side bar button at the top of it, and brought out by that button. Out or
 folded is one answer per side for the whole panel, not per tab, and the right side starts folded.
@@ -288,6 +289,20 @@ round the camera is, and the up vector says it instead; the camera is put a hair
 side, and read back as on it (`cameraView.ts`, the only code that crosses between PartCAD's frame and a stage's).
 The analysis view's stage is a glTF's frame for a glTF result and the file's own coordinates for an STL, which then
 turns about its Y.
+
+**The projection is how the view is drawn, not where from** (`Projection` in `viewpoint.ts`): **Perspective**,
+three's 50 degrees and the default; **Orthographic**, without perspective, from wherever the view looks; and
+**Isometric**, which is a corner as well - choosing it turns the view to the diagonal of the octant it looks from
+(`isometricView`, upright about the pole, at the distance it was) and reports that as a viewpoint, which holds the
+3D view still there as any chosen viewpoint does; and a view turned off the diagonal is reported as Orthographic
+again (`isIsometric`), since that is what it is still drawn in. A view without perspective is drawn by an
+`OrthographicCamera` that copies the orbit camera every frame (`matchOrthographic` in `cameraView.ts`): the same line
+of sight, the same width and height at the target, and standing back far enough for the whole model to be in front
+of it. The controls, Fit, the SpaceMouse and every viewpoint read or set go on using the perspective camera, so none
+of them has an orthographic version, switching keeps the model the size it was, and coming nearer zooms in rather
+than cutting into the model. The 3D view and an analysis's model offer it. The 2D tab does not: PartCAD draws its
+picture, edges without perspective and a shaded picture in it, as the file type's `render:` section says - and
+Draft and Simulation are a drawing package's and a simulation plugin's, which choose their own.
 
 **A section is cut by PartCAD, before anything is drawn** — three ranges, one per axis, in the frame of the
 object's root, naming only the axes that cut (`section.ts`); `partcad/shape_section.py` is the other end. The 3D

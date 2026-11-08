@@ -12,6 +12,9 @@
 // axis. That the section sliders span the object as its tree says it is placed,
 // and that what is sent names only the axes that cut. And that the panel reports
 // what was asked for, once it is settled, and nothing it cannot do on a tab.
+// And, for the projection beside the viewpoint, that an isometric view is one -
+// a diagonal, all three axes alike - and that a view drawn without perspective
+// is the size, at what it looks at, that it was in perspective.
 //
 // The widget is exercised through a stand-in DOM, as the control tree's is (see
 // 'viewerTree.test.ts'): this suite runs in the extension host, which has none.
@@ -20,7 +23,7 @@
 import * as assert from 'assert';
 import * as THREE from 'three';
 
-import { enclosingRadius, fitDistance, fitProgress } from '../../webview/cameraView';
+import { enclosingRadius, fitDistance, fitProgress, matchOrthographic } from '../../webview/cameraView';
 import { ShowNode } from '../../webview/messages';
 import {
     boundsOf,
@@ -35,6 +38,8 @@ import { isExpanded, onToggle, setExpanded } from '../../webview/sidePanel';
 import { ViewCapabilities, ViewPanel } from '../../webview/viewPanel';
 import {
     AXIS_VIEWS,
+    DEFAULT_VIEWPOINT,
+    Projection,
     Vec3,
     Viewpoint,
     Y_POLE,
@@ -42,8 +47,11 @@ import {
     axisOf,
     axisView,
     basis,
+    dot,
     formatVector,
     fromTurntable,
+    isIsometric,
+    isometricView,
     length,
     orbit,
     parseVector,
@@ -150,7 +158,7 @@ function byClass(root: FakeElement, name: string): FakeElement[] {
     return all(root, (element) => element.classList.contains(name));
 }
 
-const EVERYTHING: ViewCapabilities = { viewpoint: true, section: true, animate: true, opacity: true };
+const EVERYTHING: ViewCapabilities = { viewpoint: true, projection: true, section: true, animate: true, opacity: true };
 
 /** A part 10 x 20 x 30 mm with its corner on the origin, as its tree records it. */
 function brick(location?: ShowNode['location']): ShowNode {
@@ -279,6 +287,85 @@ suite('The view panel: where a view is looked at from', () => {
         }
     });
 
+    test('an isometric view is the corner of the octant the view looks from, upright, at its distance', () => {
+        const third = 1 / Math.sqrt(3);
+        const from: Viewpoint = { origin: [-300, 400, -10], up: [0, 0, 1], target: [1, 2, 3] };
+        const corner = isometricView(from);
+        const away = length(from.origin) * third;
+        near(corner.origin, [-away, away, -away]);
+        near(corner.target, [1, 2, 3]);
+        // Upright: up is square to the line of sight, and Z is up in the picture.
+        assert.ok(Math.abs(dot(corner.up, corner.origin)) < 1e-9);
+        assert.ok(corner.up[2] > 0);
+        assert.ok(isIsometric(corner));
+        assert.strictEqual(problemWith(corner), undefined);
+
+        // An axis view is square to two axes, which say nothing about which
+        // side to look from: the opening view's side is taken.
+        near(isometricView(axisView('-y')).origin, [100 * third, -100 * third, 100 * third]);
+        near(isometricView(axisView('z')).origin, [100 * third, -100 * third, 100 * third]);
+        // As is a rounding error of the rest: the front view read off a camera.
+        near(isometricView({ ...axisView('-y'), origin: [-1e-12, -100, 1e-12] }).origin, [
+            100 * third,
+            -100 * third,
+            100 * third,
+        ]);
+        // The opening view is one, and no axis view is.
+        assert.ok(isIsometric(DEFAULT_VIEWPOINT));
+        assert.ok(AXIS_VIEWS.every((axis) => !isIsometric(axisView(axis))));
+        assert.ok(!isIsometric(orbit(DEFAULT_VIEWPOINT, 0.01, 0)));
+        assert.ok(
+            isometricView(undefined).origin.every(
+                (component, axis) => component === isometricView(DEFAULT_VIEWPOINT).origin[axis],
+            ),
+        );
+
+        // About Y, the picture is upright about Y.
+        const yUp = isometricView({ origin: [5, 5, 5], up: [0, 1, 0], target: [0, 0, 0] }, Y_POLE);
+        near(yUp.origin, [5, 5, 5]);
+        assert.ok(Math.abs(dot(yUp.up, yUp.origin)) < 1e-9 && yUp.up[1] > 0);
+    });
+
+    test('drawn without perspective, what the view looks at stays the size it was in perspective', () => {
+        for (const [aspect, distance, reach] of [
+            [1, 10, 2],
+            [2, 3, 8],
+            [0.5, 50, 1],
+        ]) {
+            const camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000);
+            const target = new THREE.Vector3(1, 2, 3);
+            camera.position.copy(target).add(new THREE.Vector3(0.6, 0.5, 0.8).normalize().multiplyScalar(distance));
+            camera.lookAt(target);
+            camera.updateProjectionMatrix();
+            camera.updateMatrixWorld();
+            const flat = new THREE.OrthographicCamera();
+            matchOrthographic(flat, camera, target, reach);
+
+            // The same line of sight, and at the target the same width and height.
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+            const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+            for (const point of [
+                target.clone(),
+                target.clone().addScaledVector(right, distance * 0.3),
+                target
+                    .clone()
+                    .addScaledVector(up, -distance * 0.2)
+                    .addScaledVector(right, distance * 0.1),
+            ]) {
+                const seen = point.clone().project(camera);
+                const drawn = point.clone().project(flat);
+                assert.ok(Math.abs(seen.x - drawn.x) < 1e-9 && Math.abs(seen.y - drawn.y) < 1e-9, `aspect ${aspect}`);
+            }
+            // Everything within reach of the target is in front of it, behind
+            // where the perspective camera stands included.
+            const back = camera.position.clone().sub(target).normalize();
+            for (const along of [-reach, 0, reach * 0.999]) {
+                const depth = target.clone().addScaledVector(back, along).project(flat).z;
+                assert.ok(depth >= -1 && depth <= 1, `aspect ${aspect}: ${along} along is clipped (${depth})`);
+            }
+        }
+    });
+
     test("the gizmo's axes lie as they are seen: from the front, X right, Z up, -Y towards the reader", () => {
         const ends = new Map(projectAxes(axisView('-y')).map((end) => [end.axis, end]));
         assert.ok(Math.abs(ends.get('x')!.x - 1) < 1e-9);
@@ -374,6 +461,7 @@ suite('The view panel: the widget', () => {
             sections: [] as unknown[],
             resets: 0,
             fits: 0,
+            projections: [] as Projection[],
             animate: [] as boolean[],
             autoFit: [] as boolean[],
             opacity: [] as number[],
@@ -383,6 +471,7 @@ suite('The view panel: the widget', () => {
                 onViewpoint: (viewpoint, final) => asked.viewpoints.push([viewpoint, final]),
                 onResetView: () => (asked.resets += 1),
                 onFit: () => (asked.fits += 1),
+                onProjection: (projection) => asked.projections.push(projection),
                 onSection: (section) => asked.sections.push(section),
                 onAnimate: (animate) => asked.animate.push(animate),
                 onAutoFit: (autoFit) => asked.autoFit.push(autoFit),
@@ -439,6 +528,119 @@ suite('The view panel: the widget', () => {
         assert.strictEqual(origin.value, '0, 0, 200');
     });
 
+    test('the viewpoint comes before the section, with the projection right after its title', () => {
+        const { view } = panel();
+        const body = view.side.body as unknown as FakeElement;
+        const groups = body.children.filter((child) => child.classList.contains('view-group'));
+        assert.deepStrictEqual(
+            groups.map((group) => group.className),
+            ['view-group view-viewpoint', 'view-group view-section', 'view-group view-display'],
+        );
+        const titles = groups.map((group) => byClass(group, 'view-title').map((title) => title.textContent));
+        assert.deepStrictEqual(titles, [['Viewpoint'], ['Section'], []]);
+
+        // In the viewpoint's heading: its title, then the projection; Fit and
+        // Reset at the far end.
+        const [heading] = byClass(groups[0], 'view-heading');
+        const [start, end] = heading.children;
+        assert.deepStrictEqual(
+            start.children.map((child) => child.tagName),
+            ['span', 'select'],
+        );
+        const select = start.children[1];
+        assert.deepStrictEqual(
+            select.children.map((option) => [option.value, option.textContent]),
+            [
+                ['orthographic', 'Orthographic'],
+                ['isometric', 'Isometric'],
+                ['perspective', 'Perspective'],
+            ],
+        );
+        assert.strictEqual(select.value, 'perspective', 'in perspective unless the tab says otherwise');
+        assert.strictEqual(view.projection, 'perspective');
+        assert.deepStrictEqual(
+            end.children.map((child) => child.textContent),
+            ['Fit', 'Reset'],
+        );
+    });
+
+    test('a projection chosen is reported; Isometric turns the view to the nearest corner, and off it is Orthographic', () => {
+        const { view, root, asked } = panel();
+        view.setCapabilities(EVERYTHING);
+        view.setViewpoint({ origin: [-50, -200, 30], up: [0, 0, 1], target: [1, 2, 3] });
+        const [select] = byClass(root, 'view-projection');
+
+        select.value = 'orthographic';
+        select.fire('change');
+        assert.deepStrictEqual(asked.projections, ['orthographic']);
+        assert.strictEqual(asked.viewpoints.length, 0, 'orthographic is drawn from where the view is');
+
+        select.value = 'isometric';
+        select.fire('change');
+        assert.deepStrictEqual(asked.projections, ['orthographic', 'isometric']);
+        assert.strictEqual(asked.viewpoints.length, 1);
+        const [corner, final] = asked.viewpoints[0];
+        assert.strictEqual(final, true);
+        const distance = length([-50, -200, 30]) / Math.sqrt(3);
+        near(corner.origin, [-distance, -distance, distance]);
+        near(corner.target, [1, 2, 3]);
+        assert.strictEqual(view.projection, 'isometric');
+        // The fields say where it went.
+        const [origin] = byClass(root, 'view-vector');
+        assert.strictEqual(origin.value, formatVector(corner.origin));
+
+        // The view read back from there is still the corner.
+        view.setViewpoint(corner);
+        assert.strictEqual(view.projection, 'isometric');
+        // Turned off it - an axis button, here - it is drawn as it was, without
+        // perspective, and that is what it is called now.
+        byClass(root, 'view-axis')[0].fire('click');
+        assert.strictEqual(view.projection, 'orthographic');
+        assert.strictEqual(select.value, 'orthographic');
+        assert.deepStrictEqual(asked.projections, ['orthographic', 'isometric', 'orthographic']);
+
+        select.value = 'perspective';
+        select.fire('change');
+        assert.strictEqual(asked.projections[asked.projections.length - 1], 'perspective');
+        // Turning the view in perspective says nothing about the projection.
+        byClass(root, 'view-axis')[1].fire('click');
+        assert.strictEqual(asked.projections.length, 4);
+    });
+
+    test('where the projection cannot change it says why, and where the view cannot turn there is no corner', () => {
+        const { view, root, asked } = panel();
+        const [select] = byClass(root, 'view-projection');
+        const corner = select.children.find((option) => option.value === 'isometric')!;
+        view.setCapabilities({ ...EVERYTHING, projection: 'PartCAD draws the picture' });
+        assert.strictEqual(select.disabled, true);
+        assert.strictEqual(select.title, 'PartCAD draws the picture');
+        select.value = 'orthographic';
+        select.fire('change');
+        assert.deepStrictEqual(asked.projections, []);
+        assert.strictEqual(select.value, 'perspective', 'it goes on saying what the view is drawn in');
+
+        view.setCapabilities({ ...EVERYTHING, viewpoint: 'Nothing is shown' });
+        assert.strictEqual(select.disabled, false);
+        assert.strictEqual(corner.disabled, true);
+        select.value = 'isometric';
+        select.fire('change');
+        assert.deepStrictEqual(asked.projections, []);
+        assert.deepStrictEqual(asked.viewpoints, []);
+        view.setCapabilities(EVERYTHING);
+        assert.strictEqual(corner.disabled, false);
+
+        // A tab that draws without perspective says so from the start.
+        const picture = new ViewPanel(
+            { onViewpoint: () => {}, onResetView: () => {}, onSection: () => {} },
+            { target: false, projection: 'orthographic' },
+        );
+        assert.strictEqual(picture.projection, 'orthographic');
+        assert.strictEqual(
+            byClass(picture.element as unknown as FakeElement, 'view-projection')[0].value,
+            'orthographic',
+        );
+    });
+
     test('a viewpoint typed in is what is asked for, and one that is not one is refused there', () => {
         const { view, root, asked } = panel();
         view.setCapabilities(EVERYTHING);
@@ -485,7 +687,8 @@ suite('The view panel: the widget', () => {
         low.fire('input');
         assert.strictEqual(low.value, '499');
 
-        const [reset] = byClass(root, 'view-reset');
+        // The section's own Reset, under the viewpoint's Fit and Reset.
+        const [reset] = byClass(byClass(root, 'view-section')[0], 'view-reset');
         reset.fire('click');
         assert.deepStrictEqual(asked.sections[asked.sections.length - 1], null);
     });
@@ -550,6 +753,7 @@ suite('The view panel: the widget', () => {
         view.setBounds(boundsOf(brick()));
         view.setCapabilities({
             viewpoint: 'A drawing lays its views out itself',
+            projection: 'A drawing lays its views out itself',
             section: true,
             animate: 'A picture holds still',
             opacity: 'A picture holds still',
@@ -579,7 +783,8 @@ suite('The view panel: the widget', () => {
             byClass(root, 'view-note')
                 .filter((note) => !note.hidden)
                 .map((note) => note.textContent);
-        assert.deepStrictEqual(visible(), ['Nothing is shown', 'The 3D view is starting']);
+        // The viewpoint's first: it is above the section.
+        assert.deepStrictEqual(visible(), ['The 3D view is starting', 'Nothing is shown']);
 
         view.setCapabilities(EVERYTHING);
         assert.deepStrictEqual(visible(), ['Cutting…']);

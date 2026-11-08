@@ -11,15 +11,19 @@
 //   * the orientation gizmo ('gizmo.ts'), which turns the view;
 //   * a button per axis view - X, -X, Y, -Y, Z, -Z - each looking along that
 //     axis from that end, as 'pc render --view' names them (see 'viewpoint.ts');
-//   * a section slider per axis, X, Y and Z, each two-ended: its ends start at
-//     the two faces of the object's bounding box, and moving one inwards cuts
-//     that much off from that side. PartCAD does the cutting (see 'section.ts');
 //   * where the view is looked at from, as the three vectors a 'render:' section
 //     says it with - Origin, Up and, where the view has one to move, Target -
 //     each a field that can be typed into, copied out of and pasted into; with
 //     Reset, back to the view the tab starts with, and - on a view with a camera
 //     of its own to move, which says so with 'onFit' - Fit, which brings the
-//     whole model into view from where it is looked at now;
+//     whole model into view from where it is looked at now. Beside its heading,
+//     how the view is drawn: Orthographic, Isometric or Perspective ('Projection'
+//     in 'viewpoint.ts'). Isometric is a corner as well as a projection, so
+//     choosing it turns the view there, and turning the view off it makes it
+//     Orthographic again - which is what it is still drawn in;
+//   * a section slider per axis, X, Y and Z, each two-ended: its ends start at
+//     the two faces of the object's bounding box, and moving one inwards cuts
+//     that much off from that side. PartCAD does the cutting (see 'section.ts');
 //   * Animate and Opacity, which used to be at the bottom of the 3D view's tree,
 //     and - on a view that says what it does with 'onAutoFit', the 3D view's -
 //     Auto-fit between them: whether showing the same object again fits it.
@@ -35,7 +39,9 @@
 // moves its camera, the 2D tab renders again. Sliders and fields report once a
 // change is settled - a slider let go, a field left or Entered - because on most
 // tabs a change is a round trip to the daemon; the gizmo reports as it is
-// dragged, saying when the drag is over, so that a camera can follow it.
+// dragged, saying when the drag is over, so that a camera can follow it. The
+// projection is reported as soon as it is chosen: no tab that offers it has a
+// daemon to ask.
 //
 // Everything is built node by node through 'dom.ts', as every pane is.
 //
@@ -59,11 +65,15 @@ import {
     AXIS_VIEWS,
     AxisView,
     DEFAULT_VIEWPOINT,
+    PROJECTIONS,
     Pole,
+    Projection,
     Viewpoint,
     Z_POLE,
     axisView,
     formatVector,
+    isIsometric,
+    isometricView,
     orbit,
     parseVector,
     problemWith,
@@ -75,6 +85,11 @@ export type Capability = true | string;
 export interface ViewCapabilities {
     /** The gizmo, the axis buttons and the viewpoint fields. */
     viewpoint: Capability;
+    /**
+     * The projection beside the viewpoint's heading. Isometric also turns the
+     * view, and is offered only where the viewpoint can be moved.
+     */
+    projection: Capability;
     /** The section sliders. */
     section: Capability;
     animate: Capability;
@@ -92,6 +107,13 @@ export interface ViewPanelCallbacks {
      * button is not there.
      */
     onFit?: () => void;
+    /**
+     * How the view is to be drawn: in perspective, or without it. Isometric is
+     * without it, and the turn to its corner is reported as a viewpoint, after
+     * this; a view turned off that corner is reported here again, as
+     * orthographic.
+     */
+    onProjection?: (projection: Projection) => void;
     /** The section was changed - a slider let go - or reset (null). */
     onSection: (section: Section | null) => void;
     onAnimate?: (animate: boolean) => void;
@@ -113,12 +135,41 @@ export interface ViewPanelOptions {
     /** Whether showing the same object again starts out fitting it, which the Auto-fit box then says. */
     autoFit?: boolean;
     /**
-     * Ids for the Animate box, the Opacity slider and the viewpoint's Reset, for
-     * the one panel that is driven from outside the webview (the 3D tab's, by
-     * the screenshot script).
+     * How the view starts out drawn, which the projection then says: in
+     * perspective unless this says otherwise. A tab that cannot change it says
+     * here what it draws in.
      */
-    ids?: { animate?: string; autoFit?: string; opacity?: string; opacityValue?: string; reset?: string };
+    projection?: Projection;
+    /**
+     * Ids for the Animate box, the Opacity slider, the viewpoint's Reset and the
+     * projection, for the one panel that is driven from outside the webview (the
+     * 3D tab's, by the screenshot script).
+     */
+    ids?: {
+        animate?: string;
+        autoFit?: string;
+        opacity?: string;
+        opacityValue?: string;
+        reset?: string;
+        projection?: string;
+    };
 }
+
+/** What the projection calls each one, and what hovering over it says. */
+const PROJECTION_LABELS: Readonly<Record<Projection, { label: string; title: string }>> = {
+    orthographic: {
+        label: 'Orthographic',
+        title: 'Without perspective, from wherever the view looks: a length is drawn the same size however far away',
+    },
+    isometric: {
+        label: 'Isometric',
+        title: 'Without perspective, from the nearest corner: all three axes foreshortened alike',
+    },
+    perspective: {
+        label: 'Perspective',
+        title: 'In perspective: what is nearer is drawn larger, as an eye sees it',
+    },
+};
 
 /** The ends of one section slider, and what they say. */
 interface SliderRow {
@@ -141,6 +192,8 @@ export class ViewPanel {
     private readonly viewReset = el('button', 'view-reset', 'Reset');
     private readonly viewFit = el('button', 'view-reset view-fit', 'Fit');
     private readonly viewNote = el('div', 'view-note');
+    private readonly projectionSelect = el('select', 'view-projection');
+    private readonly projectionOptions = new Map<Projection, HTMLOptionElement>();
     private readonly fields: { origin: HTMLInputElement; up: HTMLInputElement; target: HTMLInputElement };
     private readonly targetRow: HTMLElement;
     private readonly animate: HTMLInputElement;
@@ -152,7 +205,15 @@ export class ViewPanel {
     private readonly autoFitRow: HTMLElement;
     private readonly opacityRow: HTMLElement;
 
-    private capabilities: ViewCapabilities = { viewpoint: true, section: true, animate: true, opacity: true };
+    private capabilities: ViewCapabilities = {
+        viewpoint: true,
+        projection: true,
+        section: true,
+        animate: true,
+        opacity: true,
+    };
+    /** What the projection says the view is drawn in. */
+    private chosen: Projection;
     /**
      * What each field was last given, so that one somebody is typing into is
      * left alone and one they have finished with - Entered, with the cursor
@@ -205,20 +266,24 @@ export class ViewPanel {
             this.axisButtons.set(axis, button);
         }
 
-        // The section: a two-ended slider per axis.
-        const section = el('div', 'view-group view-section');
-        section.appendChild(this.heading('Section', this.sectionReset));
-        this.sectionReset.type = 'button';
-        this.sectionReset.title = 'Keep the whole object';
-        this.sectionReset.addEventListener('click', () => this.resetSection());
-        for (const axis of SECTION_AXES) {
-            section.appendChild(this.slider(axis));
+        // Where the view is looked at from, and - right after its title - how
+        // it is drawn.
+        this.chosen = options.projection ?? 'perspective';
+        this.projectionSelect.setAttribute('aria-label', 'Projection');
+        if (options.ids?.projection) {
+            this.projectionSelect.id = options.ids.projection;
         }
-        section.appendChild(this.sectionNote);
-
-        // Where the view is looked at from.
+        for (const projection of PROJECTIONS) {
+            const option = el('option', undefined, PROJECTION_LABELS[projection].label);
+            option.value = projection;
+            option.title = PROJECTION_LABELS[projection].title;
+            this.projectionSelect.appendChild(option);
+            this.projectionOptions.set(projection, option);
+        }
+        this.projectionSelect.value = this.chosen;
+        this.projectionSelect.addEventListener('change', () => this.project(this.projectionSelect.value as Projection));
         const view = el('div', 'view-group view-viewpoint');
-        view.appendChild(this.heading('Viewpoint', this.viewFit, this.viewReset));
+        view.appendChild(this.heading('Viewpoint', [this.viewFit, this.viewReset], this.projectionSelect));
         this.viewReset.type = 'button';
         if (options.ids?.reset) {
             this.viewReset.id = options.ids.reset;
@@ -237,6 +302,17 @@ export class ViewPanel {
         this.targetRow = target.row;
         this.targetRow.hidden = !options.target;
         view.append(origin.row, up.row, target.row, this.viewNote);
+
+        // The section: a two-ended slider per axis.
+        const section = el('div', 'view-group view-section');
+        section.appendChild(this.heading('Section', [this.sectionReset]));
+        this.sectionReset.type = 'button';
+        this.sectionReset.title = 'Keep the whole object';
+        this.sectionReset.addEventListener('click', () => this.resetSection());
+        for (const axis of SECTION_AXES) {
+            section.appendChild(this.slider(axis));
+        }
+        section.appendChild(this.sectionNote);
 
         // How the model is drawn: Animate, Auto-fit and Opacity.
         const display = el('div', 'view-group view-display');
@@ -285,7 +361,7 @@ export class ViewPanel {
         display.append(this.animateRow, this.autoFitRow, this.opacityRow);
 
         this.groups = { viewpoint: view, section, display };
-        body.append(gizmoRow, buttons, section, view, display);
+        body.append(gizmoRow, buttons, view, section, display);
 
         this.setViewpoint(undefined);
         this.setBounds(undefined);
@@ -328,6 +404,12 @@ export class ViewPanel {
         }
         this.notes.view = { text: note, error: false };
         this.drawNotes();
+        this.leaveCorner(viewpoint);
+    }
+
+    /** How the view is drawn, as the projection says. */
+    public get projection(): Projection {
+        return this.chosen;
     }
 
     /** The view the panel shows, if it knows one. */
@@ -373,11 +455,17 @@ export class ViewPanel {
         return parseInt(this.opacity.value, 10) / 100;
     }
 
-    private heading(text: string, ...buttons: HTMLElement[]): HTMLElement {
+    /** A group's heading: its title, then 'beside' it, and 'buttons' at the far end. */
+    private heading(text: string, buttons: HTMLElement[], beside?: HTMLElement): HTMLElement {
         const heading = el('div', 'view-heading');
+        const start = el('span', 'view-heading-start');
+        start.appendChild(el('span', 'view-title', text));
+        if (beside !== undefined) {
+            start.appendChild(beside);
+        }
         const end = el('span', 'view-buttons');
         end.append(...buttons);
-        heading.append(el('span', 'view-title', text), end);
+        heading.append(start, end);
         return heading;
     }
 
@@ -558,6 +646,41 @@ export class ViewPanel {
         this.callbacks.onViewpoint(chosen, true);
     }
 
+    /**
+     * A projection was chosen: reported, and for Isometric the view turned to
+     * the nearest corner - from where it is now, at the distance it is at.
+     */
+    private project(projection: Projection): void {
+        if (this.capabilities.projection !== true || !PROJECTIONS.includes(projection)) {
+            this.projectionSelect.value = this.chosen;
+            return;
+        }
+        if (projection === 'isometric' && this.capabilities.viewpoint !== true) {
+            this.projectionSelect.value = this.chosen;
+            return;
+        }
+        this.chosen = projection;
+        this.callbacks.onProjection?.(projection);
+        if (projection === 'isometric') {
+            const corner = isometricView(this.viewpoint, this.pole);
+            this.setViewpoint(corner);
+            this.callbacks.onViewpoint(corner, true);
+        }
+    }
+
+    /**
+     * The view moved: off its corner, an isometric view is an orthographic one,
+     * which is what it is still drawn in, and the projection says so.
+     */
+    private leaveCorner(viewpoint: Viewpoint | undefined): void {
+        if (this.chosen !== 'isometric' || viewpoint === undefined || isIsometric(viewpoint)) {
+            return;
+        }
+        this.chosen = 'orthographic';
+        this.projectionSelect.value = this.chosen;
+        this.callbacks.onProjection?.(this.chosen);
+    }
+
     /** A field was changed: the viewpoint the three now say, if they say one. */
     private typed(): void {
         if (this.capabilities.viewpoint !== true) {
@@ -587,6 +710,7 @@ export class ViewPanel {
                 this.gizmo.set(viewpoint);
                 this.notes.view = { error: false };
                 this.drawNotes();
+                this.leaveCorner(viewpoint);
                 this.callbacks.onViewpoint(viewpoint, true);
                 return;
             }
@@ -598,7 +722,7 @@ export class ViewPanel {
 
     /** Draw what each part can do. */
     private apply(): void {
-        const { viewpoint, section, animate, opacity } = this.capabilities;
+        const { viewpoint, projection, section, animate, opacity } = this.capabilities;
 
         const viewing = viewpoint === true;
         this.gizmo.setEnabled(viewing, viewing ? undefined : viewpoint);
@@ -615,6 +739,19 @@ export class ViewPanel {
             ? 'Bring the whole model into view from where it is looked at now, so that it fits however it turns'
             : '';
         this.groups.viewpoint.classList.toggle('disabled', !viewing);
+
+        const projecting = projection === true;
+        this.projectionSelect.disabled = !projecting;
+        this.projectionSelect.title = projecting
+            ? 'How the view is drawn: without perspective (Orthographic), without it from the nearest corner ' +
+              '(Isometric), or in perspective'
+            : projection;
+        // A corner is a viewpoint: where the view cannot be turned, it cannot be turned to one.
+        const corner = this.projectionOptions.get('isometric');
+        if (corner !== undefined) {
+            corner.disabled = !viewing;
+        }
+        this.projectionSelect.value = this.chosen;
 
         const cutting = section === true && this.bounds !== undefined;
         for (const row of this.sliders.values()) {
