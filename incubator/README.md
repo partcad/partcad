@@ -66,14 +66,15 @@ answers briefly: prices an hour, products and searches a day.
 ### What was built
 
 Four packages, each one script serving both plugins, on a toolkit they share
-([`_shared/distributor.py`](_shared/README.md)) built on PartCAD's own `plugin_models`:
+([`_shared/distributor.py`](_shared/README.md)) built on PartCAD's own `plugin_models`. Three
+have repositories of their own now; Mouser is still here.
 
 | Package | Store | Catalogue | Models |
 | --- | --- | --- | --- |
-| [`partcad-svc-commerce-digikey`](partcad-svc-commerce-digikey/README.md) | DigiKey numbers, and any manufacturer's part by MPN, in your currency | DigiKey's categories, searched | where DigiKey links a model file |
-| [`partcad-svc-commerce-octopart`](partcad-svc-commerce-octopart/README.md) | the cheapest authorized offer among every distributor | Octopart's categories, searched; parts are `<MPN>~<manufacturer>` | the STEP in the KiCad library |
-| [`partcad-svc-commerce-mcmaster`](partcad-svc-commerce-mcmaster/README.md) | McMaster-Carr numbers, by the pack | by part number | McMaster-Carr's STEP |
-| [`partcad-svc-commerce-mouser`](partcad-svc-commerce-mouser/README.md) | Mouser numbers, and any manufacturer's part by MPN | searched, nothing to build | none |
+| [`partcad-svc-commerce-digikey`](https://github.com/partcad/partcad-svc-commerce-digikey) | DigiKey numbers, and any manufacturer's part by MPN, in your currency | DigiKey's categories, searched | where DigiKey links a model file; else SnapMagic's, by an alias of its `snapmagic` package |
+| [`partcad-svc-commerce-octopart`](https://github.com/partcad/partcad-svc-commerce-octopart) | the cheapest authorized offer among every distributor | Octopart's categories, searched; parts are `<MPN>~<manufacturer>` | the STEP in the KiCad library |
+| [`partcad-svc-commerce-mscmaster-carrr`](https://github.com/partcad/partcad-svc-commerce-mscmaster-carrr) (McMaster-Carr) | McMaster-Carr numbers, by the pack | by part number | McMaster-Carr's STEP; a mock server to test against |
+| [`partcad-svc-commerce-mouser`](partcad-svc-commerce-mouser/README.md) (here) | Mouser numbers, and any manufacturer's part by MPN | searched, nothing to build | none |
 
 What they have in common, and what is new about them:
 
@@ -94,26 +95,45 @@ What they have in common, and what is new about them:
 
 ### Status
 
-All four are tested against their APIs' documented shapes, answered from tables - 94 tests
-with the toolkit's, none touching the network - and none has yet been run against a live API,
-for want of credentials here. Before each gets a repository, a run with real keys should
+All four are tested against their APIs' documented shapes, answered from tables, none
+touching the network. DigiKey (with SnapMagic), Octopart and McMaster-Carr have also been run
+end to end in PartCAD 0.9.22 - a search, a part built from its model, a quote - against servers
+standing in for their APIs: McMaster-Carr's is `mock_mcmaster.py` in its repository, over TLS
+with a client certificate, and each plugin takes an `api` parameter to be pointed at one. None
+has been run against a live API yet, for want of credentials here; a run with real keys should
 confirm what the documentation could not: DigiKey's media types for model files, whether
 Octopart's KiCad downloads need a sign-in on the user's plan, McMaster-Carr's pack wording, and
 Mouser's `RawPrice`. Each package's README says what it cannot do yet.
 
 Two things PartCAD itself could do better, found on the way:
 
+* **A catalogue that is searched, not listed, is invisible to `pc list packages`.**
+  `Context.get_packages(has_stuff=True)` keeps a package only if it lists an object, so the
+  categories of DigiKey's and Octopart's catalogues are neither listed nor found by
+  `pc search packages` (and `pc list packages <one of them>` shows no description, since a
+  plugin's metadata is not applied before it is printed). A package that searches itself
+  (`searchKinds`) could count as having something to look at - with a recursive search then
+  asking only the top of a plugin's tree, which a distributor's search covers, rather than a
+  thousand categories one by one. Until then the categories are found by name, and each
+  package's description names the ones below it.
 * **A store and its catalogue keep their credentials apart.** `pc login` saves a plugin's
   keys under that plugin's name, so a package whose provider and repository use one API is
   logged in to twice. A package-level credential, or a provider that names the repository it
   shares keys with, would make it once.
 * **`distributor.py` is a copy in each package**, kept byte-identical by a digest, which is
-  how `plugin_models` started. Once these packages have proved themselves it belongs in
-  PartCAD's wrappers as `plugin_distributors.py`, tested with the rest of PartCAD.
+  how `plugin_models` started. `_shared/` here is the copy to edit, and `_shared/copy.sh`
+  puts it into the incubated packages and into the checkouts of the graduated ones named on
+  its command line. Once these packages have proved themselves it belongs in PartCAD's
+  wrappers as `plugin_distributors.py`, tested with the rest of PartCAD.
+* **A relative reference climbs one level only.** A catalogue's categories would name their
+  package's store relatively (`../..:digikey`), so that the package works wherever it is
+  imported; but `resolve_resource_path` collapses `..` in a single pass, and
+  `//a/b/c` + `../..` resolves to `//a/b/c/..`. So the plugins name their store by the
+  index's path, as IKEA's do.
 
 ### Next
 
-* Live runs with real keys, then a repository each, then the index (below).
+* Live runs with real keys, then the index (below).
 * **TraceParts**, as a catalogue of its own (`partcad-repo-traceparts`, beside the model
   sites): manufacturers' catalogues, categories, and a STEP by part number over a documented
   API. It is what would give Mouser's, Grainger's and Fastenal's products geometry, by their
@@ -140,16 +160,23 @@ pins it beside the other stores:
     revision: <commit>
 ```
 
-and the same for `octopart`, `mcmaster` and `mouser`.
+and the same for `octopart` and `mcmaster` (whose repository's name has a typo to fix first:
+`partcad-svc-commerce-mscmaster-carrr`), and later `mouser`.
 
 ## Testing
 
 Each package's tests need `pytest` and PartCAD's `plugin_models`, which `conftest.py` finds in
-an installed `partcad`, in `$PARTCAD_WRAPPERS`, or in this checkout:
+an installed `partcad` (`pip install --no-deps partcad` is enough), in `$PARTCAD_WRAPPERS`, or
+in a PartCAD checkout - this one, or one beside the package's own:
 
 ```shell
-cd incubator/partcad-svc-commerce-digikey && pytest -c /dev/null --rootdir . .
+cd incubator/partcad-svc-commerce-mouser && pytest -c /dev/null --rootdir . .
 ```
 
 `-c /dev/null` keeps this repository's own pytest configuration, which is PartCAD's, out of
-it. The shared files are edited in `_shared/` and copied out with `_shared/copy.sh`.
+it. The shared files are edited in `_shared/` and copied out with `_shared/copy.sh`:
+
+```shell
+incubator/_shared/copy.sh ../partcad-svc-commerce-digikey ../partcad-svc-commerce-octopart \
+  ../partcad-svc-commerce-mscmaster-carrr
+```

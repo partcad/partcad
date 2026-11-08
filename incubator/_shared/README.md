@@ -1,12 +1,16 @@
 # The shared part of the distributor plugins
 
-`distributor.py` is in every `partcad-svc-commerce-<store>` package in this
-directory, byte for byte, and so are `conftest.py` and `test_distributor.py`.
-This copy is the one to edit; `copy.sh` puts it into every package and writes
-the digest each package's own tests hold its copy to (`distributor.sha256`).
+`distributor.py` is in every `partcad-svc-commerce-<store>` package, byte for
+byte - the ones incubated in this directory, and the ones that have moved out
+to repositories of their own (DigiKey, Octopart, McMaster-Carr) - and so are
+`conftest.py` and `test_distributor.py`. This copy is the one to edit;
+`copy.sh` puts it into every package here and into every checkout named on its
+command line, and writes the digest each package's own tests hold its copy to
+(`distributor.sha256`).
 
 ```shell
-./incubator/_shared/copy.sh
+./incubator/_shared/copy.sh ../partcad-svc-commerce-digikey ../partcad-svc-commerce-octopart \
+  ../partcad-svc-commerce-mscmaster-carrr
 ```
 
 It is the distributor counterpart of PartCAD's `plugin_models` (the toolkit for
@@ -23,8 +27,12 @@ client, its cache, the errors, the name grammar and the part types are
   manufacturer and its part number; priced at the quantity actually ordered
   (the minimum, the order multiple, the price break it reaches), with stock
   said per line and never refused;
-* **OAuth 2.0 client credentials**, with the token kept on disk until it
-  expires (each api is a process of its own);
+* **OAuth 2.0 client credentials**, in the form or as HTTP Basic
+  (`basic=True`, which OAuth prefers and Nexar takes), with the token kept on
+  disk until it expires (each api is a process of its own);
+* **an alias for a product with no model**: a distributor that links a CAD
+  partner's page (DigiKey to SnapMagic) answers `alias_of`, and the product is
+  served as an alias of the partner's part, still bought from the distributor;
 * **logging in** with an API key or a client ID and secret pasted into PartCAD's
   login banner, or handed over with `pc login --agent ... --set`.
 

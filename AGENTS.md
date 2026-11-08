@@ -190,10 +190,11 @@ a CAD addon, documentation, or a PartCAD package incubated here until it has a r
 
   PartCAD *packages* - plugins, not code of the wheel - kept here until they have repositories of their own
   that the public index pins. Each directory is one future repository, named as it will be, and moves out
-  whole. Today that is four distributors, each a store provider and a catalogue (a repository plugin) from
-  one API - DigiKey, Octopart, McMaster-Carr, Mouser - on a toolkit they share (`_shared/distributor.py`,
-  copied into each by `_shared/copy.sh` and held to it by a digest) that builds on `plugin_models`. The
-  README has the evaluation of the eleven distributors considered. Nothing here is built, packaged or tested
+  whole. Today that is Mouser, a store provider and a catalogue (a repository plugin) from one API; DigiKey,
+  Octopart and McMaster-Carr, built the same way, have moved out to `partcad/partcad-svc-commerce-*`. All
+  four share a toolkit (`_shared/distributor.py`, which builds on `plugin_models`): `_shared/` is the copy to
+  edit, and `_shared/copy.sh` copies it into the packages here and into checkouts of the moved-out ones, each
+  held to it by a digest. The README has the evaluation of the eleven distributors considered. Nothing here is built, packaged or tested
   by CI (`changed-scopes` counts it as documentation); the linters read it, and each package's tests run by
   hand: `cd incubator/<package> && pytest -c /dev/null --rootdir . .`.
 

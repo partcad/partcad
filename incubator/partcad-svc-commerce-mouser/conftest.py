@@ -7,8 +7,9 @@
 
 A plugin runs in a sandbox that has PartCAD's wrappers on its path, and imports
 'plugin_models' from there. The tests do the same: from $PARTCAD_WRAPPERS when
-it is set, else from the 'partcad' that is installed, else from the PartCAD
-checkout this package is incubated in.
+it is set, else from the 'partcad' that is installed ('pip install --no-deps
+partcad' is enough: only the file is needed), else from a PartCAD checkout -
+the one this package is incubated in, or one beside it.
 """
 
 import importlib.util
@@ -28,6 +29,11 @@ def _wrappers():
         spec = None
     if spec is not None and spec.origin:
         return os.path.join(os.path.dirname(spec.origin), "wrappers")
+    # A PartCAD checkout: the one this package is incubated in, or one beside this checkout.
+    for checkout in (os.path.join(_HERE, os.pardir, os.pardir), os.path.join(_HERE, os.pardir, "partcad")):
+        wrappers = os.path.join(checkout, "src", "partcad", "wrappers")
+        if os.path.exists(os.path.join(wrappers, "plugin_models.py")):
+            return wrappers
     return os.path.join(_HERE, os.pardir, os.pardir, "src", "partcad", "wrappers")
 
 

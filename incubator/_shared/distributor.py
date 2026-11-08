@@ -49,6 +49,7 @@ store and its catalogue are two plugins, and each keeps its own: log in to
 both.
 """
 
+import base64
 import concurrent.futures
 import hashlib
 import json
@@ -384,6 +385,15 @@ class Distributor(pm.Site):
             meta["desc"] = desc + ". Search it: nothing is listed."
             if category.url:
                 meta["url"] = category.url
+        # What is below, by name: a package that lists nothing is one PartCAD's
+        # 'pc list packages' leaves out, so this is where its children are said.
+        try:
+            below = [c.slug for c in (self.tree() if category is None else category.children)]
+        except SiteError:
+            below = []  # the root's description needs no credentials, the categories do
+        if below:
+            shown = ", ".join(below[:60]) + (", ..." if len(below) > 60 else "")
+            meta["desc"] = "%s\nCategories: %s." % (meta["desc"].rstrip(), shown)
         return meta
 
     def children_of(self, category):
@@ -468,6 +478,9 @@ class Distributor(pm.Site):
                 )
         model = self.model(sku)
         if not any(f.format for f in model.files or []):
+            source = self.alias_of(model)
+            if source:
+                return self.alias_config(model, source)
             vendor, sku = self.vendor_sku(model.product)
             raise NotFound(
                 "%s: %s has no 3D model at %s. It is still sold: a part of your own declared with "
@@ -495,7 +508,7 @@ class Distributor(pm.Site):
         return what or who or "%s %s" % (self.TITLE, product.sku)
 
     def describe(self, product, file=None):
-        """What 'pc list'/'pc inspect' say of a product: what it is, its specifications, how it is sold."""
+        """What 'pc list' and 'pc info' say of a product: what it is, its specifications, how it is sold."""
         sentences = [self.title_of(product)]
         if product.desc and product.title and fold(product.desc) not in fold(sentences[0]):
             sentences.append(product.desc)
@@ -543,6 +556,31 @@ class Distributor(pm.Site):
             config["count_per_sku"] = product.pack
         return config
 
+    def alias_of(self, model):
+        """Another package's part to draw a product with, when the distributor has no model of it; else None.
+
+        A distributor that links to a CAD partner's page for a model - DigiKey
+        to SnapMagic - can serve the product as an alias of that partner's part.
+        """
+        return None
+
+    def alias_config(self, model, source):
+        """A product drawn with another package's part: an alias of it, still bought from this distributor."""
+        product = model.product
+        vendor, sku = self.vendor_sku(product)
+        config = {
+            "type": "alias",
+            "source": source,
+            "desc": "%s 3D model: %s." % (self.describe(product), source),
+            "vendor": vendor,
+            "sku": sku,
+        }
+        if product.url:
+            config["url"] = product.url
+        if product.pack > 1:
+            config["count_per_sku"] = product.pack
+        return config
+
     def unserved(self, model):
         vendor, sku = self.vendor_sku(model.product)
         return "no 3D model at %s; quote it as 'vendor: %s', 'sku: %s'" % (self.TITLE, vendor, sku)
@@ -572,7 +610,11 @@ class Distributor(pm.Site):
                 continue
             readable = [f for f in model.files or [] if f.format]
             if not readable:
-                hits[name_of(product.sku)] = self.unserved_hit(model, self.unserved(model))
+                source = self.alias_of(model)
+                if source:
+                    hits[name_of(product.sku)] = self.alias_config(model, source)
+                else:
+                    hits[name_of(product.sku)] = self.unserved_hit(model, self.unserved(model))
                 continue
             try:
                 file = self.choose(model)
@@ -740,8 +782,13 @@ class Distributor(pm.Site):
 
     # -- OAuth 2.0 client credentials, kept on disk until they expire --
 
-    def bearer(self, token_url, client_id, client_secret, what, extra=None):
-        """An access token for the client credentials, from the cache while it lasts."""
+    def bearer(self, token_url, client_id, client_secret, what, extra=None, basic=False):
+        """An access token for the client credentials, from the cache while it lasts.
+
+        'basic' sends the client's ID and secret as HTTP Basic authentication,
+        which OAuth 2.0 prefers (RFC 6749, 2.3.1), rather than in the form,
+        which is all some servers take (DigiKey's).
+        """
         if not client_id or not client_secret:
             raise self.needs_credentials(what)
         digest = hashlib.sha256(("%s\n%s\n%s" % (token_url, client_id, client_secret)).encode("utf-8")).hexdigest()
@@ -753,13 +800,16 @@ class Distributor(pm.Site):
                 return kept["token"]
         except (OSError, ValueError, KeyError):
             pass
-        form = {"client_id": client_id, "client_secret": client_secret, "grant_type": "client_credentials"}
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        form = {"grant_type": "client_credentials"}
+        if basic:
+            pair = "%s:%s" % (urllib.parse.quote(client_id, safe=""), urllib.parse.quote(client_secret, safe=""))
+            headers["Authorization"] = "Basic " + base64.b64encode(pair.encode("utf-8")).decode("ascii")
+        else:
+            form.update(client_id=client_id, client_secret=client_secret)
         form.update(extra or {})
         response = self.http.request(
-            token_url,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            data=urllib.parse.urlencode(form).encode("ascii"),
-            method="POST",
+            token_url, headers=headers, data=urllib.parse.urlencode(form).encode("ascii"), method="POST"
         )
         if response.status in (400, 401, 403):
             raise NeedsCredentials(

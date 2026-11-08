@@ -373,3 +373,44 @@ def test_answers_in_another_currency_are_cached_apart(tmp_path, monkeypatch):
     dollars = Fake({"parameters": {}, "userInfo": {"country": "US", "currency": "USD"}})
     assert euros.http.root != dollars.http.root
     assert Fake({"parameters": {"currency": "USD"}, "userInfo": {"country": "US"}}).http.root == dollars.http.root
+
+
+class Aliased(Fake):
+    def alias_of(self, model):
+        product = model.product
+        return "//pub/cad/partner:%s~%s" % (product.mpn, d.slug(product.manufacturer)) if product.mpn else None
+
+
+def test_a_product_without_a_model_can_be_drawn_with_a_partners(tmp_path, monkeypatch):
+    monkeypatch.setenv("PARTCAD_FAKE_CACHE", str(tmp_path))
+    made = Aliased({"parameters": {}})
+    config = made.get("objects/part/" + d.name_of("LT1013CN8#PBF"))
+    assert config["type"] == "alias"
+    assert config["source"] == "//pub/cad/partner:LT1013CN8#PBF~analog-devices-inc"
+    # Still bought from the distributor, by its own number.
+    assert (config["vendor"], config["sku"]) == ("fake", "LT1013CN8#PBF")
+    hits = made.get("search/part?q=opamp")
+    assert hits["LT1013CN8%23PBF"]["type"] == "alias"
+
+
+def test_client_credentials_can_go_as_http_basic(fake):
+    made = fake()
+    asked = []
+
+    def wire(url, headers=None, data=None, method=None, timeout=60):
+        asked.append((headers, data))
+        return d.pm.Response(200, {}, b'{"access_token": "t2", "expires_in": 600}', url)
+
+    made.http.request = wire
+    assert made.bearer("https://example.com/token", "id 1", "s:2", "a search", basic=True) == "t2"
+    headers, form = asked[0]
+    assert headers["Authorization"] == "Basic " + d.base64.b64encode(b"id%201:s%3A2").decode()
+    assert b"client_secret" not in form and b"grant_type=client_credentials" in form
+
+
+def test_a_package_says_the_categories_below_it(fake):
+    """'pc list packages' leaves out a package that lists nothing, so its description names what is below."""
+    made = fake()
+    assert made.get("meta")["desc"].endswith("Categories: resistors, integrated-circuits-ics, integrated-circuits.")
+    assert made.get("resistors/meta")["desc"].endswith("Categories: chip-resistor-surface-mount, through-hole.")
+    assert "Categories" not in made.get("resistors/through-hole/meta")["desc"]
