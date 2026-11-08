@@ -211,6 +211,35 @@ instance. This is intentional -- referencing two copies of the same package at
 once is almost always a mistake, and the alternative would be an implicit,
 easily-missed dependency on the upstream package.
 
+.. _relative-references:
+
+Relative references
+-------------------
+
+A reference to another package -- a supplier, an object's ``source``, the
+``package`` of an assembly's item -- is absolute when it starts with ``//``, and
+is otherwise read from the location of the package that wrote it. In the
+package half of a reference, a name is a package below that one and each ``..``
+is one level up:
+
+.. code-block:: yaml
+
+  # written in //vendor/store/products/resistors
+  suppliers:
+    ../..:store:              # //vendor/store:store
+    ../../../hardware:shop:   # //vendor/hardware:shop
+
+Because it is read from the location, a relative reference keeps naming the same
+package wherever the tree that holds both of them is imported. Only a whole path
+segment is a ``..``: ``...`` is the wildcard, and a name with dots in it is a
+name.
+
+A reference with more ``..`` than there are levels above the package that wrote
+it names no package at all. It is not taken to mean the root: it fails as "not
+found", under a name that keeps the ``..`` it had left over (``../..:x`` written
+in ``//vendor`` is ``//..:x``), because a reference that miscounted its levels
+should not quietly name some other package.
+
 .. _templates:
 
 =========

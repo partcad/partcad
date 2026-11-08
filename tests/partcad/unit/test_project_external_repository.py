@@ -384,6 +384,28 @@ def test_a_supplier_is_resolved_against_the_package_that_names_it():
     assert repo.get_suppliers() == {"//ext:shop": {}}
 
 
+@pytest.mark.parametrize(
+    "package, supplier",
+    [
+        ("//x/digikey/products", "..:digikey"),
+        ("//x/digikey/products/resistors", "../..:digikey"),
+        ("//x/digikey/products/resistors/chip", "../../..:digikey"),
+    ],
+)
+def test_a_catalogue_names_its_own_store_relatively_from_any_depth(package, supplier):
+    """However deep the plugin serves a package, its suppliers are read from where it is.
+
+    A catalogue served as '<package>/products/<category>/<subcategory>' names
+    the store beside it at the top of its own package with one '..' per level,
+    so that it works wherever the package is imported rather than only at its
+    place in the public index. Every '..' after the first used to be lost.
+    """
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, package, "/tmp/ext", config_obj={})
+    repo._repository = FakeRepository({"meta": {"suppliers": {supplier: {}}}})
+    assert repo.get_suppliers() == {"//x/digikey:digikey": {}}
+
+
 def test_a_supplier_lookup_from_a_loop_never_stops_it(monkeypatch):
     """Who sells a part is asked from a loop, so the metadata is fetched on it.
 
