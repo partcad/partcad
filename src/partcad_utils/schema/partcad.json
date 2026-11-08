@@ -641,7 +641,8 @@
     },
     "simulate": {
       "type": ["object", "null"],
-      "description": "The simulations this object declares: what it is supposed to do, or not do, once it is placed in a world and the world is run. A part, an assembly or a scene declares them, and 'pc sim' and 'pc test' run them",
+      "deprecated": true,
+      "description": "Deprecated: 'qual: sim:', with 'path' for 'simulation'. The simulations this object declares: what it is supposed to do, or not do, once it is placed in a world and the world is run. A part, an assembly or a scene declares them, and 'pc sim' and 'pc qual test' run them",
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/simulate-entry" }
       },
@@ -681,6 +682,110 @@
       },
       "required": ["simulation"],
       "additionalProperties": false
+    },
+    "qual": {
+      "type": ["object", "null"],
+      "description": "How this object is qualified: one mapping per subtype of qualification test. Under 'basic', 'topology' and 'other', an entry named after a built-in test is that test's parameters ('<object>.qual.basic.<test>.<param>'), and an entry that says 'path' declares a test a plugin supplies. Under 'sim', every entry is a simulation. 'pc qual test' runs them, a subtype at a time with '--basic', '--topology', '--simulation' and '--other'",
+      "properties": {
+        "basic": { "$ref": "#/definitions/qual-tests" },
+        "topology": { "$ref": "#/definitions/qual-tests" },
+        "sim": {
+          "type": ["object", "null"],
+          "description": "The simulations this object declares: what it is supposed to do, or not do, once it is placed in a world and the world is run",
+          "patternProperties": {
+            "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/qual-sim-entry" }
+          },
+          "additionalProperties": false
+        },
+        "other": { "$ref": "#/definitions/qual-tests" }
+      },
+      "additionalProperties": false
+    },
+    "qual-tests": {
+      "type": ["object", "null"],
+      "description": "The tests of one subtype: a built-in test's parameters under its own name, or a test a plugin supplies, declared with 'path'",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "type": ["object", "null"],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The qualification plugin that runs this test, by full path, declared in that package's 'qual:' section. Absent for a built-in test, whose parameters the other keys are"
+            },
+            "desc": { "type": "string", "maxLength": 1000 },
+            "feature": {
+              "description": "The feature of this object's 'requirements:' that this test demonstrates, by name, or a list of them",
+              "oneOf": [
+                { "type": "string", "minLength": 1 },
+                { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true }
+              ]
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "qual-sim-entry": {
+      "type": "object",
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The simulation plugin that runs it, by full path, declared in that package's 'simulation:' section. Required: PartCAD implements no simulator, so a package imports one (e.g. github.com/partcad/partcad-sim-mujoco) and names it here"
+        },
+        "scene": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The scene this object is simulated in, by full path. Its 'subject' parameter is assigned this object's own full path. Defaults to '//builtin/scene:subject', an empty world holding the subject and nothing else"
+        },
+        "offset": { "$ref": "#/definitions/OCCTLocation" },
+        "validation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A Python expression over 'before', 'after' and 'result' that is true when the simulation went as it should"
+        },
+        "params": {
+          "type": "object",
+          "description": "Parameter values handed to the simulation plugin, overriding what its own declaration defaults to (e.g. 'duration')"
+        },
+        "feature": {
+          "description": "The feature of this object's 'requirements:' that this simulation demonstrates, by name, or a list of them",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true }
+          ]
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    },
+    "qual-section": {
+      "type": ["object", "null"],
+      "description": "The qualification plugins this package supplies: tests an object asks for by naming one under its own 'qual: <subtype>:'. One is declared as a simulation plugin is - a script, the sandbox it needs and its parameters' defaults - with the subtype of test it is",
+      "patternProperties": {
+        "^[a-zA-Z0-9_.-]+$": { "$ref": "#/definitions/qual-type" }
+      },
+      "additionalProperties": false
+    },
+    "qual-type": {
+      "type": ["object", "null"],
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "path": { "type": "string", "minLength": 1, "description": "The script that runs the test, relative to the package that declares it (see wrappers/wrapper_qual.py)" },
+        "package": { "type": "string", "minLength": 1, "description": "The package holding 'path', when it is not this one" },
+        "subtype": { "type": "string", "enum": ["basic", "topology", "other"], "default": "other", "description": "What the test produces: words ('basic'), places on the object ('topology'), or a report of its own ('other')" },
+        "kinds": { "type": "array", "items": { "type": "string", "enum": ["part", "assembly", "scene", "sketch"] }, "uniqueItems": true, "description": "What it can be asked of; all of them when absent" },
+        "format": { "type": "string", "minLength": 1, "description": "The file type the object is exported to and handed over in; nothing is exported when absent" },
+        "formatOptions": { "type": "object", "description": "Export parameters for that conversion" },
+        "timeout": { "type": "number", "exclusiveMinimum": 0, "description": "How long a run may take, in seconds (600 when absent)" },
+        "cache": { "type": "boolean", "default": false, "description": "Whether its verdict is a property of the object and its parameters alone, and may be remembered" },
+        "pythonVersion": { "type": "string", "minLength": 1 },
+        "pythonRequirements": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": true
     },
     "scene-gravity": {
       "type": "array",
@@ -1975,6 +2080,7 @@
     "cae": { "$ref": "#/definitions/output-section" },
     "cam": { "$ref": "#/definitions/output-section" },
     "simulation": { "$ref": "#/definitions/simulation-section" },
+    "qual": { "$ref": "#/definitions/qual-section" },
     "import": { "$ref": "#/definitions/import-section" },
     "open": { "$ref": "#/definitions/open-section" },
     "colors": { "$ref": "#/definitions/colors" },
@@ -2139,6 +2245,7 @@
                 "thermal": { "$ref": "#/definitions/cae-thermal" },
                 "cfd": { "$ref": "#/definitions/cae-cfd" },
                 "simulate": { "$ref": "#/definitions/simulate" },
+                "qual": { "$ref": "#/definitions/qual" },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
@@ -2358,6 +2465,7 @@
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "simulate": { "$ref": "#/definitions/simulate" },
+                "qual": { "$ref": "#/definitions/qual" },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "manufacturable": { "type": "boolean" },
                 "cmf": { "$ref": "#/definitions/check-cmf" },
@@ -2402,6 +2510,7 @@
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "simulate": { "$ref": "#/definitions/simulate" },
+                "qual": { "$ref": "#/definitions/qual" },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "manufacturable": { "type": "boolean" },
                 "cmf": { "$ref": "#/definitions/check-cmf" },
@@ -2484,6 +2593,7 @@
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "simulate": { "$ref": "#/definitions/simulate" },
+                "qual": { "$ref": "#/definitions/qual" },
                 "manufacturable": {
                   "type": "boolean",
                   "default": false,
@@ -2527,6 +2637,7 @@
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "simulate": { "$ref": "#/definitions/simulate" },
+                "qual": { "$ref": "#/definitions/qual" },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "manufacturable": { "type": "boolean", "default": false },
                 "gravity": { "$ref": "#/definitions/scene-gravity" },
@@ -2556,6 +2667,7 @@
           "properties": {
             "type": { "type": "string", "enum": ["basic", "dxf", "svg", "cadquery", "build123d", "enrich", "alias"] },
             "desc": { "type": "string", "maxLength": 1000 },
+            "qual": { "$ref": "#/definitions/qual" },
             "images": {
               "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
               "type": "array",

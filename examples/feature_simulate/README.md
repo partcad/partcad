@@ -3,7 +3,7 @@
 PartCAD example project which demonstrates simulating a part or a scene.
 
 ## Usage
-A part says what it *is*. `simulate:` is where it says what it is supposed
+A part says what it *is*. `qual: sim:` is where it says what it is supposed
 to **do** -- or, as here, what it is supposed not to do:
 
 ```shell
@@ -24,20 +24,20 @@ together, and everything in it is attached to it; a stack of blocks is an
 arrangement -- each block is where it is, and nothing holds it there -- so
 each block is a rigid body of its own, free to slide and to fall. That is
 the rule PartCAD decides what becomes a body by. A scene declares
-`simulate:` exactly as a part does, and is placed in the world it is
+`qual: sim:` exactly as a part does, and is placed in the world it is
 simulated in by that world's `scene:` link.
 
-Each `simulate:` states five things: the `scene:` the object is placed in
+Each `qual: sim:` states five things: the `scene:` the object is placed in
 (here the default, `//builtin/scene:subject`, an empty world holding the
 subject and nothing else), the `offset:` that puts it there -- the blocks
 are drawn about their own centres, so the stack is lifted 10 mm to stand its
-bottom face on the floor -- the `simulation:` plugin that runs it, the
+bottom face on the floor -- the `path:` of the plugin that runs it, the
 `validation:` expression that says whether what happened is what was
 supposed to happen, and a `desc:` for whoever reads the result.
 
 ### The simulator is somebody else's package
 
-PartCAD implements no simulator. It ships the *concept* -- the `simulate:`
+PartCAD implements no simulator. It ships the *concept* -- the `qual: sim:`
 section, the `simulation:` section a plugin is declared in, the sandbox the
 plugin runs in, and the MJCF export a scene reaches it through -- and a
 package supplies the physics. This one names
@@ -115,7 +115,7 @@ pc sim float             # the float rises -- and, in the default scene, falls
 ```
 
 `float` is the same 20 mm cube as `block`, standing for a sealed float that
-weighs 3 g: less than the 8 g of water it displaces. Its `simulate:` runs it
+weighs 3 g: less than the 8 g of water it displaces. Its `qual: sim:` runs it
 twice, in the tank and in the default scene, and the two validations are
 opposite claims about the same part. The default scene is a vacuum, as every
 scene that states no `medium:` is, so there the float falls like anything

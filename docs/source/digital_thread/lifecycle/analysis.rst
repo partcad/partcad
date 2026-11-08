@@ -105,9 +105,9 @@ it costs, what it needs installed and what its failure means are particular to
 the analysis.
 
 The simulations are not here. They are run from
-:ref:`Validation → Simulation <sim-in-the-ui>`, because what a simulation
+:ref:`Qualification → Simulation <sim-in-the-ui>`, because what a simulation
 answers is whether the object does what it says it does, which is a question of
-validation rather than of analysis.
+qualification rather than of analysis.
 
 
 On the command line

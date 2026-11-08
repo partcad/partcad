@@ -26,9 +26,9 @@ Changing a design without breaking it
 
 #. Edit the script or the declaration; the Digital Thread shows the object again
    as soon as it is saved.
-#. Open **Validation**: every check runs again, through the cache, so what did
-   not change is not asked again. A failure says what it found; an interference
-   leaves an assembly of the two parts and what they share to look at.
+#. Open **Qualification**: every test runs again, through the cache, so what did
+   not change is not asked again. A failure says what it found; a topology one --
+   an interference, a face nobody toleranced -- shows where it is, on the object.
 #. ``pc test`` and ``pc sim`` in CI hold every change to the same checks, and
    rendered pictures checked in beside the package make a change in how anything
    looks a diff somebody reviews.

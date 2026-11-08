@@ -2,7 +2,7 @@
 # 'fixed', so the subject's root body -- the lower arm -- is welded to the
 # world, and the knee inside it still moves.
 #
-# Where it goes, and which way up, is what the 'simulate:' says with its
+# Where it goes, and which way up, is what the 'qual: sim:' says with its
 # 'offset:', in the seven numbers the scene PartCAD ships takes
 # ('//builtin/scene:subject'; see the note beside 'subject_offset' there for why
 # they arrive without brackets or commas).

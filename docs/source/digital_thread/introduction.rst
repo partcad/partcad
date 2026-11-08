@@ -52,10 +52,10 @@ declaration of the same object:
        software, an assembly's instructions
      - ``pc bom``, ``pc supply``, ``pc instructions``, ``pc cam``
      - **Manufacturing**
-   * - :doc:`Validation </digital_thread/lifecycle/qualification>`
+   * - :doc:`Qualification </digital_thread/lifecycle/qualification>`
      - the claims all of the above make, checked
-     - ``pc test``, ``pc sim``, ``/pc:validate``
-     - **Validation**
+     - ``pc qual test``, ``pc sim``, ``/pc:validate``
+     - **Qualification**
 
 Because every phase is written into one declaration, nothing is copied from one
 phase to the next, and nothing can fall out of step: the mass a requirement is

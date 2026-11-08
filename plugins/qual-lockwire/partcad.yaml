@@ -1,0 +1,39 @@
+# PartCAD qualification plugin for Lockwire (https://lockwirerobotics.com/).
+#
+# Lockwire keeps a robot's power, mass, bus and torque figures in one lockfile,
+# each with a source and a witness, and checks that they add up. This package
+# supplies that check to PartCAD as a qualification test of the 'other'
+# subtype: an object declares it under 'qual: other:', naming its lockfile, and
+# 'pc qual test --other' (and the IDE's Qualification -> Other tab) runs
+# Lockwire over it and reports what it found, in Lockwire's own words.
+#
+# Self-contained, so that it can be lifted into a repository of its own and
+# imported like any other package: nothing here refers to the PartCAD
+# repository it ships in.
+name: qual-lockwire
+desc: Lockwire's power, mass, bus and torque budgets, as a PartCAD qualification test
+url: https://github.com/Shivansh2703/lockwire
+
+qual:
+  lockwire:
+    desc: >-
+      Lockwire's consistency checks over the robot's lockfile: rail power, rail
+      rollup, joint torque, bus bandwidth, mass, endurance, voltage and reference
+      integrity. Fails on a NO-GO.
+    path: lockwire_qual.py
+    subtype: other
+    kinds: [assembly, part, scene]
+    # Lockwire needs Python 3.12 or newer.
+    pythonVersion: "3.12"
+    pythonRequirements:
+      - lockwire>=0.2
+    # Lockwire reads its own lockfile and nothing PartCAD hashes, so a verdict is
+    # never remembered: every run asks it again.
+    cache: false
+    timeout: 300
+    # Parameters, which an object may override beside 'path:'.
+    #
+    # The lockfile, relative to the declaring object's package.
+    lockfile: lockwire.yaml
+    # Whether 'GO with notes' fails, as 'lockwire check --strict' does.
+    strict: false

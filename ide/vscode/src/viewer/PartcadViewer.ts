@@ -752,7 +752,7 @@ export class PartcadViewer implements vscode.Disposable {
     }
 
     /**
-     * Show another object in the panel, as the explorer would: what a Test tab
+     * Show another object in the panel, as the explorer would: what a Qualification tab
      * artifact opens with (an interference's two parts and what they share).
      *
      * Through the explorer's own command, so that it is shown the one way

@@ -2489,7 +2489,7 @@ function onRequirements(data: RequirementsData | undefined, error: string | unde
 }
 
 /**
- * Opening the Test tab: list the checks first, which runs nothing, and run them
+ * Opening a Qualification tab: list its tests first, which runs nothing, and run them
  * once the list is on screen (see 'onTests').
  *
  * In two steps because the second is as slow as the slowest check - an

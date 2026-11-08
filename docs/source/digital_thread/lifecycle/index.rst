@@ -47,7 +47,7 @@ answers was stored to begin with.
    * - :doc:`Manufacturing </digital_thread/lifecycle/manufacturing>`
      - How does it come to exist -- what is bought, what is built, in what order?
      - ``manufacturing:``, ``vendor:``/``sku:``, materials, instructions
-   * - :doc:`Validation </digital_thread/lifecycle/qualification>`
+   * - :doc:`Qualification </digital_thread/lifecycle/qualification>`
      - Is it what it claims to be, and does it do what it is supposed to?
      - every claim above, checked by ``pc test``, ``pc sim`` and ``simulate:``
    * - :doc:`Operations </digital_thread/lifecycle/operations>`
@@ -70,13 +70,13 @@ are for that phase:
 **The Digital Thread panel.** The panel of the :ref:`PartCAD IDE <partcad-ide>`
 and of the :ref:`Visual Studio Code extension <vscode-extension>` is this list of
 phases, as a strip of tabs over whichever object is selected. Five of them are
-always there -- **Design**, **Analysis**, **Manufacturing**, **Validation** and
+always there -- **Design**, **Analysis**, **Manufacturing**, **Qualification** and
 **Operations** -- and **Requirements** appears in front of them for an object
 that declares any. Most of the five open a **second strip** of their own
 underneath, and every tab of it has a chapter here, under the phase it belongs
 to: the object three ways under Design, the four analyses under Analysis, the
 five steps from a decision to an instruction book under Manufacturing, and the
-two ways of checking under Validation. **Operations** is shown disabled, because
+a tab per subtype of qualification test under Qualification. **Operations** is shown disabled, because
 there is nothing in it yet.
 
 Each of those chapters is written the same way -- what the tab shows (**In the

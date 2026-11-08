@@ -39,7 +39,7 @@ agents, and the per-OS notes are all in
 pc init                      # a package in the current directory, with agent skills for Claude Code and Cursor
 pc ide view my_part          # show it in the Digital Thread of the IDE or the extension
 pc render my_part            # SVG, PNG, DXF... from any angle
-pc test                      # the ports, interfaces, physics and simulations the objects declare
+pc qual test                 # qualify: basic, topology (overlaps, untoleranced faces), simulation, plugins
 pc instructions my_assembly  # the assembly instruction book, PDF or HTML, with the bill of materials
 ```
 

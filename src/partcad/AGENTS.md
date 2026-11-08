@@ -333,19 +333,37 @@ at all).
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.
 
-- **One object's `pc test` as data is `test/report.py`, and what each check is, `test/catalog.py`.** The report
-  runs the checks `pc test <object>` runs, through `test_cached()`, and only listens: every `failed()`,
-  `warned()`, `info()`, `skipped()`, `not_applicable()` and `artifact()` a check makes is handed to the report
-  collecting for that check and that object (`test._report`). A check says whether it applies in
-  `inapplicable()` -- from what the object is and declares, without building it or reading the cache -- and its
-  `test()` asks the same method, so the two cannot disagree. The catalog is the text of every check, read by
-  the IDE's Test tab and generated into `docs/source/digital_thread/lifecycle/testing.rst`
-  (`python -m partcad.test.catalog --write`); a test fails when a check has no entry or the page is stale. The
-  interference check leaves an assembly behind for each pair it reports (`test/interference_artifact.py`): the
-  two parts where the assembly places them and a sub-assembly `interference` of what they share, as `brep`
-  parts read from content-addressed files under `internalStateDir`, all registered in memory under names worked
-  out from the pair -- so they are found by name and cached like any part -- and kept with a cached failure so
-  that a verdict read back puts them back.
+- **Every question asked of an object to qualify it is a `Qualification`** (`qual/qualification.py`; `Test` is
+  its old name, and `partcad.test.test`, `.all`, `.report` and `.catalog` are aliases of the `qual` modules), of
+  one of four subtypes told apart by what it produces and so by how it is shown (`qual/config.py`): `basic`
+  (words), `topology` (a place on the object, left behind as geometry), `sim` (a simulation run) and `other` (a
+  report of another tool's own). The built-in checks are `qual/registry.py`'s list, each subtype by its class
+  (`BasicQualification`, `TopologyQualification`, ...): `interference`, `tolerance-surfaces` and
+  `tolerance-edges` are topology, `sim` is sim, the rest basic. They are always applied; what an object says
+  about them is its `qual:` section -- `<object>.qual.<subtype>.<test>.<param>` is a built-in check's parameter,
+  read through `Qualification.params()` over the key the check used before (`interference:`, `connectivity:`,
+  `cmf:`), and an entry with `path:` is a check a **plugin** supplies, declared by a package's own `qual:` section
+  (`qual/plugin.py`, `wrappers/wrapper_qual.py`) and run only where an object declares it
+  (`registry.for_shape()`). `qual` is outside the shape's hash, so a check folds into `cache_key_suffix()` what
+  of it it reads. Simulations are `qual: sim:` with the plugin as `path:`; `simulate:` with `simulation:` is
+  still read (`qual_config.simulations()`).
+
+- **One object's qualification as data is `qual/report.py`, and what each check is, `qual/catalog.py`.** The
+  report runs the checks `pc qual test <object>` runs -- of the subtypes asked for, then what the object declares
+  -- through `test_cached()`, and only listens: every `failed()`, `warned()`, `info()`, `skipped()`,
+  `not_applicable()`, `artifact()` and `report()` a check makes is handed to the report collecting for that check
+  and that object (`qualification._report`). A check says whether it applies in `inapplicable()` -- from what the
+  object is and declares, without building it or reading the cache -- and its `test()` asks the same method, so
+  the two cannot disagree. The catalog is the text of every built-in check, read by the IDE's Qualification tabs
+  and generated, a section per subtype, into `docs/source/digital_thread/lifecycle/qualification_tests.rst`
+  (`python -m partcad.qual.catalog --write`); a test fails when a check has no entry or the page is stale. A
+  topology check leaves an assembly behind for each finding, with `focus` naming the link that is the finding,
+  which the IDE leaves unfaded: the interference check the two parts and a sub-assembly `interference` of what they
+  share (`test/interference_artifact.py`), the tolerance checks the part and a sub-assembly `focus` of the faces,
+  or tubes along the edges, nothing tolerances (`qual/highlight.py`) -- `brep` parts read from content-addressed
+  files under `internalStateDir`, registered in memory under names worked out from what they are, so they are
+  found by name and cached like any part, and kept with a cached failure so that a verdict read back puts them
+  back.
 
 - **What an object is required to be is one module** (`requirements.py`): the `requirements:` section of a
   part, an assembly, a scene or a sketch -- `features` in words, `ports`, `interfaces` and `physics` where

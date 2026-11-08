@@ -73,7 +73,7 @@ _MAX_REASONS_BYTES = 64 * 1024
 # said -- 'error' for 'failed()', 'warning' for 'warned()', 'info', 'skipped',
 # 'not-applicable', and 'passed' for what a pass said about itself -- and of
 # ('artifact', dict) for what it left behind to be looked at. Set by
-# 'partcad.test.report', which is what the IDE's Test tab is drawn from; a
+# 'partcad.qual.report', which is what the IDE's Qualification tabs are drawn from; a
 # check run any other way is collected by nobody. Like '_reasons', it notes only
 # what the check says about that shape, not about the objects it tests on the
 # way.

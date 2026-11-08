@@ -413,9 +413,10 @@ class FakeProject:
         self.parts_requested.append(name)
         return self.parts.get(name)
 
-    async def test_log_wrapper_async(self, ctx, tests=None, fast_only=False):
+    async def test_log_wrapper_async(self, ctx, tests=None, fast_only=False, subtypes=None, prefix=None):
         self.tested_whole_package = True
         self.tested_fast_only = fast_only
+        self.tested_subtypes = subtypes
 
     def object_config(self, kind, name):
         obj = getattr(self, self._sections[kind]).get(name)
@@ -1970,19 +1971,34 @@ def test_inspect_object_reports_a_missing_object_of_the_requested_package():
 
 
 class FakeTestBase:
-    """'partcad.test.test.Test' as '_test_async' reads it: the context keys."""
+    """'partcad.qual.qualification.Qualification' as '_test_async' reads it: the context keys."""
 
     NAMED = "named"
 
 
 def install_fake_tests(monkeypatch, checks=()):
     """The check list '_test_async' imports. Empty by default: what is under test
-    here is which package each request lands on, not what the checks then do."""
+    here is which package each request lands on, not what the checks then do.
+
+    'select' keeps what a run of 'subtypes' asks for (a check with no subtype is
+    basic), and 'for_shape' adds nothing: no fake object declares a plugin's test.
+    """
+
+    def select(quals, subtypes=None, prefix=None):
+        chosen = subtypes or ("basic", "topology", "sim", "other")
+        return [
+            q for q in quals if getattr(q, "SUBTYPE", "basic") in chosen and (not prefix or q.name.startswith(prefix))
+        ]
+
     install_fake_partcad_modules(
         monkeypatch,
         {
-            "partcad.test.all": {"tests": lambda threads_max: list(checks)},
-            "partcad.test.test": {"Test": FakeTestBase},
+            "partcad.qual.registry": {
+                "builtin": lambda threads_max: list(checks),
+                "select": select,
+                "for_shape": lambda quals, shape, subtypes=None, prefix=None: list(quals),
+            },
+            "partcad.qual.qualification": {"Qualification": FakeTestBase},
         },
     )
 
@@ -3831,14 +3847,14 @@ def test_requirements_check_names_what_it_could_not_find(monkeypatch):
 def _report_session(monkeypatch, kind="part", name="plate"):
     asked = []
 
-    async def run_async(ctx, shape, verify=True):
+    async def run_async(ctx, shape, verify=True, subtypes=None):
         asked.append((shape, verify))
         return ["results of %s" % shape.name]
 
-    def to_dict(object_name, kind, results, verified):
+    def to_dict(object_name, kind, results, verified, subtypes=None):
         return {"object": object_name, "kind": kind, "tests": results, "verified": verified}
 
-    install_fake_partcad_modules(monkeypatch, {"partcad.test.report": {"run_async": run_async, "to_dict": to_dict}})
+    install_fake_partcad_modules(monkeypatch, {"partcad.qual.report": {"run_async": run_async, "to_dict": to_dict}})
     session, _ = make_session()
     shape = FakeObject(name, project_name="//")
     session.partcad_ctx.shapes[(kind, "//:" + name)] = shape
@@ -4723,6 +4739,39 @@ def test_a_whole_package_test_run_hands_fast_only_on(monkeypatch):
 
     assert root.tested_whole_package
     assert root.tested_fast_only is True
+
+
+def test_a_qual_run_hands_the_subtypes_it_was_asked_for_on(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("widget"))
+
+    operations.test_run(session, {"subtypes": ["other", "topology"]})
+
+    # In presentation order, whatever order they were asked in.
+    assert root.tested_subtypes == ("topology", "other")
+
+
+def test_a_qual_run_of_no_subtype_is_every_subtype(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("widget"))
+
+    operations.test_run(session, {})
+
+    assert root.tested_subtypes is None
+
+
+def test_a_qual_run_of_an_unknown_subtype_is_a_usage_error(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.test_run(session, {"subtypes": ["validation"]})
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "is not a subtype of qualification" in str(caught.value)
 
 
 def test_a_named_slow_assembly_is_not_tested_with_fast_only(monkeypatch):

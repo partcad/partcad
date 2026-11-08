@@ -167,8 +167,18 @@ def _held_to_connectivity(declaration: dict) -> bool:
     assembly that says 'requireAnchored: false', and does not run for one that
     says 'skip: true'; the editor says no more than the test would.
     """
-    connectivity = declaration.get("connectivity")
-    if not isinstance(connectivity, dict):
+    # 'qual: basic: connectivity:' over the 'connectivity:' it was declared as
+    # before qualification had a section (see 'partcad.qual.config.params').
+    connectivity = {}
+    legacy = declaration.get("connectivity")
+    if isinstance(legacy, dict):
+        connectivity.update(legacy)
+    qual = declaration.get("qual")
+    basic = qual.get("basic") if isinstance(qual, dict) else None
+    current = basic.get("connectivity") if isinstance(basic, dict) else None
+    if isinstance(current, dict):
+        connectivity.update(current)
+    if not connectivity:
         return True
     return connectivity.get("requireAnchored", True) is not False and connectivity.get("skip") is not True
 

@@ -54,8 +54,9 @@ variant that is to be made or bought as such is declared as a part, and the asse
 bought whole is judged by its own CMF: how its vendor put it together, and what the parts inside it are made of, are its
 vendor's to say.
 
-``pc test`` asks all of this of everything to be made, in its ``cmf`` check (see :ref:`cmf-check`). It warns for now,
-and fails what says ``cmf: require: true``.
+``pc qual test`` asks all of this of everything to be made, in its ``cmf`` check (see :ref:`cmf-check`). It warns for
+now, and fails an object that says ``qual: basic: cmf: require: true`` (or the older ``cmf: require: true``), or whose
+package says ``cmf: require: true``.
 
 Seeing it
 =========

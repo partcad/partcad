@@ -17,7 +17,7 @@ The step in between -- from what acts on a body to what acts on one part of
 it -- is engineering rather than arithmetic, and is what the
 [`/pc:sim-assembly-fea`](../../ai-agents/common/skills/sim-assembly-fea/SKILL.md)
 skill does. It adds a **scenario** to the part's `fea:` -- a section that is a
-map of named scenarios, the way `simulate:` is a map of simulations -- named
+map of named scenarios, the way `qual: sim:` is a map of simulations -- named
 after the simulation and the reading the loads came from: `knee-gear`'s
 `dropped` is what it wrote, and every number in it is worked out below.
 

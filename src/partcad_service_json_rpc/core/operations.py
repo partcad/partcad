@@ -2194,7 +2194,7 @@ def _inline_file(pc, path: str, what: str):
 def simulate_list(session, params):
     """The simulations one part, assembly or scene declares, without running any.
 
-    What the IDE's Validation tab is enabled by and lists: a ``simulate:``
+    What the IDE's Simulation tab (Qualification) is enabled by and lists: a ``qual: sim:``
     section is configuration, so reading it costs what reading the object's
     configuration costs -- nothing is built and nothing is run -- which is what
     makes it cheap enough to ask on every show. ``kind`` says whether

@@ -670,7 +670,7 @@ export interface FetchTabMessage {
     /**
      * On the Requirements tab: what is required alone (false, a read of the
      * declaration), or whether the model meets it as well (true, what
-     * 'pc test -f requirements' checks). On the Test tab: the checks alone
+     * 'pc test -f requirements' checks). On a Qualification tab: the tests alone
      * (false, nothing run), or their verdicts as well (true, 'pc test').
      */
     verify?: boolean;
@@ -733,7 +733,7 @@ export interface ShowSectionMessage {
 /**
  * Renderer to host: show this object in the panel, as if it had been selected.
  *
- * What a Test tab's artifact opens with: an object the check left behind to be
+ * What a Qualification tab's artifact opens with: an object the check left behind to be
  * looked at, such as the two parts an interference was found between and what
  * they share. Shown the way the explorer shows anything, through the daemon;
  * not remembered as the selection, since nothing declares it.
@@ -1414,7 +1414,7 @@ export interface SimulationScenario {
  * What an object declares under 'simulate:', without running any of it.
  *
  * Configuration, so it costs what reading the object costs: it is asked for on
- * every show of a part or an assembly, because whether the Validation group
+ * every show of a part or an assembly, because whether the Simulation tab
  * applies at all depends on it.
  */
 export interface SimulationListData {

@@ -505,7 +505,28 @@ Object commands
   declare it as an assembly of the ``step`` or ``gltf`` type or a scene of that reader's type instead (see
   :ref:`assembly_step`, :ref:`assembly-gltf` and :ref:`scenes`).
 
+``pc qual test``
+  Run the qualification tests of a part, an assembly, a scene or a sketch -- or of every object of a package
+  with ``-P <package>...`` (see :ref:`recursive-names`). Every test is of one of four subtypes, told apart by
+  what it produces (see :doc:`/digital_thread/lifecycle/qualification`): ``--basic`` (findings in words),
+  ``--topology`` (findings that are places on the object, left behind as geometry to look at: parts that
+  overlap, faces and edges of a part to be made that nothing tolerances), ``--simulation`` (the simulations the
+  object declares under ``qual: sim:``) and ``--other`` (tests other tools supply through plugins). The flags
+  combine; with none, every subtype is run. ``-f`` filters by name prefix, and the object is found by its name
+  as for ``pc test``. The built-in tests are always applied; a plugin's test runs only on an object that
+  declares it. The tests and what each takes are listed in
+  :doc:`/digital_thread/lifecycle/qualification_tests`.
+
+``pc qual add``
+  Declare a qualification test of an object, writing ``<object>.qual.<subtype>.<name>`` into its package:
+  ``pc qual add --other --path <package>:<plugin> --set lockfile=rover.yaml rover budgets`` declares a test
+  a plugin supplies, resolved before anything is written; ``pc qual add --topology --set minArea=1.0 bracket
+  tolerance-surfaces`` sets a built-in test's parameters; ``pc qual add --simulation --path <package>:<plugin>
+  --set validation=... block stands`` declares a simulation. ``--set KEY=VALUE`` may be repeated, each value
+  read as YAML.
+
 ``pc test``
+  The older spelling of ``pc qual test``, which runs every subtype.
   Run tests on a part, assembly, or scene. Name the package as ``-P <package>...`` to test the packages
   below it too, or the object as ``...:<name>`` to test every object of that name from here down (see
   :ref:`recursive-names`). Use ``-f`` to filter
@@ -517,7 +538,7 @@ Object commands
   it with can be produced (``cam``; see :ref:`pc cam <cam>`), whether every scenario of the engineering
   analyses a part asks for comes back clean (``fea``, ``dynamic``, ``thermal`` and ``cfd``; see
   :ref:`pc cae <cae>`), whether a
-  part or an assembly does what its ``simulate:`` section says it does (``sim``; see ``pc sim`` below), and
+  part or an assembly does what its simulations say it does (``qual: sim:``; ``sim``; see ``pc sim`` below), and
   whether the object has the ports, interfaces and physical properties its ``requirements:`` say it has to
   (``requirements``; see :ref:`requirements`). Those last seven apply only to an object that declares the
   matching section, so a package that declares none pays nothing for them. Every check is listed, with when it
@@ -561,7 +582,8 @@ Object commands
   obtainable and be the one that was meant. A board nobody can flash is not a board anybody can make.
 
 ``pc sim``
-  Run the simulations a part, an assembly or a scene declares in its ``simulate:`` section, and check the
+  Run the simulations a part, an assembly or a scene declares under ``qual: sim:`` (or the older
+  ``simulate:``), and check the
   ``validation:`` condition each of them states. The object is found by its name whether it is a part, an
   assembly or a scene -- a stack of blocks is an arrangement rather than a product, so it is a scene (see
   :ref:`sim-bodies`) -- and ``-a`` or ``-S`` says which instead of looking it up (see :ref:`object-names`). Use ``-P <package>...`` or ``...:<name>`` to run everything the packages below declare

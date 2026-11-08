@@ -1,0 +1,25 @@
+# The rover whose budgets Lockwire checks: an object that declares the Lockwire
+# test, and the lockfile it names. Run from the plugin package above this one,
+# which is what '//:lockwire' names:
+#
+#     cd plugins/qual-lockwire
+#     lockwire start --example rover && mv lockwire.yaml example/rover.lockwire.yaml
+#     pc --no-ansi qual test --other -P //example
+#
+# 'lockwire start' writes a starter lockfile (see Lockwire's README); without
+# one, the test fails saying where it looked and how to make one.
+name: qual-lockwire-example
+desc: An object whose power, mass, bus and torque budgets Lockwire checks
+
+parts:
+  rover:
+    type: brep
+    path: chassis.brep
+    desc: The rover's chassis, standing in for the robot the lockfile describes
+    manufacturable: false
+    qual:
+      other:
+        budgets:
+          path: //:lockwire
+          desc: The rover's power, mass, bus and torque budgets, as Lockwire checks them
+          lockfile: rover.lockwire.yaml

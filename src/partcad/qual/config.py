@@ -92,6 +92,25 @@ LEGACY_SIM_SECTION = "simulate"
 LEGACY_SIM_PATH = "simulation"
 
 
+# What has been said about a declaration's mistakes in this command: every check
+# of every object reads 'qual:', and one mistake said once per check is the same
+# sentence a dozen times. Keyed on the command, so that a warm daemon says it
+# again for the next command rather than never again (see 'plugin.begin_command').
+_reported: set = set()
+
+
+def _error(message: str) -> None:
+    from ..plugin import command_generation
+
+    key = (command_generation(), message)
+    if key in _reported:
+        return
+    if len(_reported) > 4096:
+        _reported.clear()
+    _reported.add(key)
+    pc_logging.error(message)
+
+
 def _final(shape_or_config) -> dict:
     """The declaration to read: a mapping as it is, or what a shape resolves to."""
     if isinstance(shape_or_config, dict):
@@ -111,11 +130,11 @@ def section(shape_or_config) -> dict:
     if value is None:
         return {}
     if not isinstance(value, dict):
-        pc_logging.error("'%s' must be a mapping of subtypes (%s)" % (SECTION, ", ".join(SUBTYPES)))
+        _error("'%s' must be a mapping of subtypes (%s)" % (SECTION, ", ".join(SUBTYPES)))
         return {}
     unknown = [key for key in value if key not in SUBTYPES]
     for key in unknown:
-        pc_logging.error("'%s: %s:' is not a subtype of qualification (%s)" % (SECTION, key, ", ".join(SUBTYPES)))
+        _error("'%s: %s:' is not a subtype of qualification (%s)" % (SECTION, key, ", ".join(SUBTYPES)))
     return value
 
 
@@ -125,7 +144,7 @@ def subtype_section(shape_or_config, subtype: str) -> dict:
     if value is None:
         return {}
     if not isinstance(value, dict):
-        pc_logging.error("'%s: %s:' must be a mapping of names" % (SECTION, subtype))
+        _error("'%s: %s:' must be a mapping of names" % (SECTION, subtype))
         return {}
     return value
 
@@ -147,7 +166,7 @@ def params(shape_or_config, subtype: str, name: str, legacy: typing.Optional[str
     if isinstance(entry, dict) and PATH not in entry:
         result.update(entry)
     elif entry is not None and not isinstance(entry, dict):
-        pc_logging.error("'%s: %s: %s:' must be a mapping of parameters" % (SECTION, subtype, name))
+        _error("'%s: %s: %s:' must be a mapping of parameters" % (SECTION, subtype, name))
     return result
 
 
@@ -180,13 +199,13 @@ def declared(shape_or_config, subtype: str, builtin_names=()) -> list:
             continue
         if PATH not in entry:
             if name not in builtin_names:
-                pc_logging.error(
+                _error(
                     "'%s: %s: %s:' names no built-in check and no plugin ('path:'): declare the plugin that runs it"
                     % (SECTION, subtype, name)
                 )
             continue
         if name in builtin_names:
-            pc_logging.error(
+            _error(
                 "'%s: %s: %s:' names a plugin, but '%s' is a built-in check: give the plugin's check another name"
                 % (SECTION, subtype, name, name)
             )
@@ -211,11 +230,11 @@ def simulations(shape_or_config) -> typing.List[typing.Tuple[str, dict]]:
     legacy = config.get(LEGACY_SIM_SECTION)
     if legacy:
         if not isinstance(legacy, dict):
-            pc_logging.error("The '%s' section must be a mapping of simulation names" % LEGACY_SIM_SECTION)
+            _error("The '%s' section must be a mapping of simulation names" % LEGACY_SIM_SECTION)
         else:
             for name, entry in legacy.items():
                 if name in seen:
-                    pc_logging.error(
+                    _error(
                         "The simulation '%s' is declared under both '%s: %s:' and '%s:'; the first is run"
                         % (name, SECTION, SIM, LEGACY_SIM_SECTION)
                     )

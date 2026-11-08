@@ -294,11 +294,16 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
   `pc test`'s `requirements` check reaches, by the same code (`partcad/requirements.py`). An assembly is staged
   only when a physical property is to be checked, because that is what builds it -- what it weighs is worked out
   from the tree it is built as (`partcad/physics.py`), while its ports are read off a tree that needs no build.
-* `test.report`, behind the Digital Thread's Test tab: every check `pc test <object>` runs, as a list -- each
-  with its verdict (`passed`, `failed`, `warned`, `skipped`, `not-applicable`), what it said, what it left behind
-  to be looked at, and its entry in `partcad/test/catalog.py`. Without `verify` nothing is run and only the checks
-  that do not apply have a verdict; with it the checks run through the same cache `pc test` reads, so the two
-  give the same answer (`partcad/test/report.py`). An assembly or a scene is staged first when it is run.
+* `qual.report` (and its older name `test.report`), behind the Digital Thread's Qualification tabs: every test
+  `pc qual test <object>` runs of the `subtypes` asked for (`basic`, `topology`, `sim`, `other`; all of them when
+  absent), as a list -- each with its subtype, its verdict (`passed`, `failed`, `warned`, `skipped`,
+  `not-applicable`), what it said, what it left behind to be looked at (a topology finding's object, with the
+  `focus` link the IDE singles out), what an `other` test's tool reported (`reports`), and its entry in
+  `partcad/qual/catalog.py`. Without `verify` nothing is run and only the tests that do not apply have a verdict;
+  with it the tests run through the same cache `pc qual test` reads, so the two give the same answer
+  (`partcad/qual/report.py`). An assembly or a scene is staged first when it is run. `qual.run` (and `test.run`) is
+  `pc qual test` itself, with the same `subtypes`; `qual.add` writes an entry of an object's `qual:` section, as
+  `pc qual add` asks, resolving a plugin's test before anything is written.
 
 Server-to-client
 notifications carry the same semantics as the extension's legacy `?/partcad/*` events (`info`/`warn`/`error`, `items`,

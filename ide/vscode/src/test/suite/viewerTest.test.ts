@@ -33,7 +33,7 @@ import {
 } from '../../webview/test';
 import { PartcadViewer } from '../../viewer/PartcadViewer';
 
-/** Just enough of an element for 'dom.ts' and the Test tab. */
+/** Just enough of an element for 'dom.ts' and the Qualification tabs. */
 class FakeElement {
     public readonly children: (FakeElement | string)[] = [];
     public className = '';
