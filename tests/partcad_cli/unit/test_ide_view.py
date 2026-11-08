@@ -76,7 +76,13 @@ def shown(monkeypatch):
         ("--manufacturing-buy", "supply"),
         ("--manufacturing-bom", "bom"),
         ("--manufacturing-assembly", "assembly"),
-        ("--validation-test", "test"),
+        ("--qualification-basic", "basic"),
+        ("--qualification-topology", "topology"),
+        ("--qualification-simulation", "simulation"),
+        ("--qualification-other", "other"),
+        # Qualification was Validation, and its Test tab what Basic is now: the
+        # old flags still open the tab they meant.
+        ("--validation-test", "basic"),
         ("--validation-simulation", "simulation"),
     ],
 )
@@ -126,7 +132,7 @@ def test_a_scenario_rides_with_the_tab_that_lists_it(click_runner, shown):
 
 
 def test_no_scenario_sends_no_scenario(click_runner, shown):
-    result = click_runner.invoke(cli, ["--no-ansi", "ide", "view", "--validation-simulation", ":cube"])
+    result = click_runner.invoke(cli, ["--no-ansi", "ide", "view", "--qualification-simulation", ":cube"])
     assert result.exit_code == 0, result.output
     assert "scenario" not in shown[0][1]
 
@@ -135,5 +141,5 @@ def test_no_scenario_sends_no_scenario(click_runner, shown):
 def test_a_scenario_without_a_tab_that_lists_it_is_refused(click_runner, shown, flags):
     result = click_runner.invoke(cli, ["--no-ansi", "ide", "view", *flags, "--scenario", "loaded", ":cube"])
     assert result.exit_code != 0
-    assert "--analysis-fea" in result.output and "--validation-simulation" in result.output
+    assert "--analysis-fea" in result.output and "--qualification-simulation" in result.output
     assert shown == []

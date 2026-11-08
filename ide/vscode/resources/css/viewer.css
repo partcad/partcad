@@ -959,7 +959,8 @@ table.grid .numeric {
 }
 
 /*
- * The Test tab (Validation): every check 'pc test' runs on the left, with a mark
+ * The Basic, Topology and Other tabs (Qualification): every test of the tab's
+ * subtype 'pc qual test' runs on the left, with a mark
  * in the colours the editor's own test explorer uses, and the check selected in
  * the middle - laid out like the Build tab, a list beside a page.
  */
@@ -1122,6 +1123,58 @@ table.grid .numeric {
 
 .test-artifact .description {
     color: var(--vscode-descriptionForeground);
+}
+
+/*
+ * A topology finding: where on the object it is, offered to be shown there with
+ * the rest faded. Marked down its edge in the colour the finding is drawn in
+ * (see 'partcad.qual.highlight.COLORS'), so the row and the 3D view read as one.
+ */
+.test-artifact.topology {
+    padding-left: 0.6rem;
+    border-left: 3px solid #ff2d55;
+}
+
+/* An 'other' test's report: its tool's verdict, summary and findings, as the tool wrote them. */
+.test-report {
+    margin: 0.6rem 0;
+}
+
+.test-report h3 {
+    margin: 0.4rem 0 0.2rem;
+    font-size: 1em;
+}
+
+.test-report-verdict {
+    margin: 0.1rem 0;
+    font-weight: 600;
+}
+
+.test-report-summary {
+    margin: 0.1rem 0 0.4rem;
+    color: var(--vscode-descriptionForeground);
+}
+
+.test-report-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.95em;
+}
+
+.test-report-table th,
+.test-report-table td {
+    padding: 0.2rem 0.4rem;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+}
+
+.test-report-table tr.error td:first-child {
+    border-left: 3px solid var(--vscode-errorForeground);
+}
+
+.test-report-table tr.warning td:first-child {
+    border-left: 3px solid var(--vscode-editorWarning-foreground);
 }
 
 .test-doc h3 {

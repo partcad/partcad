@@ -18,8 +18,9 @@ The panel is a strip of tabs over one object, not a canvas:
 | **Buy** | whatever is bought | the daemon's `supply.quote` (the cart `pc supply quote` fills) |
 | **Bill of Materials** | parts, assemblies | the daemon's `bom` (what `pc bom` prints), with each line's `cmf` as Color, Material and Finish columns |
 | **Assembly** | assemblies | the daemon's `assembly.guide` (the book `pc instructions -t html\|pdf` writes) |
-| **Test** | everything | the daemon's `test.report` (the checks `pc test <object>` runs, and `partcad/test/catalog.py`) |
-| **Simulation** | parts, assemblies that declare `simulate:` | the daemon's `simulate.list` (what the object declares) and `simulate.run` (what `pc sim -f <name>` runs) |
+| **Basic**, **Topology** | everything | the daemon's `qual.report` with the tab's `subtypes` (the tests `pc qual test --basic`/`--topology <object>` runs, and `partcad/qual/catalog.py`) |
+| **Simulation** | parts, assemblies, scenes that declare `qual: sim:` | the daemon's `simulate.list` (what the object declares) and `simulate.run` (what `pc sim -f <name>` runs) |
+| **Other** | everything | the daemon's `qual.report` with `subtypes: ['other']` (the tests plugins supply that the object declares, and each tool's report) |
 
 The 3D view is what a show opens on: "show this part" means the geometry. Requirements is the one tab in front
 of it, and only for an object that declares any — see below. The rest are questions about
@@ -432,7 +433,7 @@ the protocol has no authentication.
 | `src/webview/supply.ts` | The Buy tab: the list, and one item's suppliers |
 | `src/webview/requirements.ts` | The Requirements tab: the marks, and the features with what validates each |
 | `src/webview/test.ts` | The Test tab: every check with its mark, and the one selected - its verdict, findings, artifacts and text |
-| `src/partcad/test/report.py` | One object's `pc test` as a list of verdicts, for this tab |
+| `src/partcad/qual/report.py` | One object's `pc qual test` as a list of verdicts, for the Basic, Topology and Other tabs |
 | `src/partcad/test/catalog.py` | What each check is and what to do when it fails, for this tab and for the documentation |
 | `src/partcad/requirements.py` | What a requirement means and whether the model meets it, for this tab and for `pc test` |
 | `src/common/garage.ts` | Where the Build vs Buy choices are kept, on this machine |
@@ -614,19 +615,26 @@ PartCAD reports it under, so both sides compose one string from the same parts.
 
 ## The tabs beside the 3D view
 
-**Test**, under Validation, is every check `pc test` runs, and is always enabled and first: every object has
-checks, if only to say that they do not apply to it. An object that belongs to no package - a shape shown from a
-script - has nothing to ask the daemon about, and the tab says so rather than offering a list. Opening it asks twice, in a row: `test.report` without `verify`, which
-runs nothing and lists every check with those that do not apply saying why, and then with it, which runs the
-checks as `pc test <object>` runs them and through the same cache, so the panel and the command line give the
-same verdicts. The list is on screen, every other mark pending, for as long as the second takes. It opens on the
+**Basic**, under Qualification, is every basic test `pc qual test --basic` runs, and is always enabled and first:
+every object has tests, if only to say that they do not apply to it. **Topology** and **Other** are the same view
+(`test.ts`, a `TestView` per tab, each asking `qual.report` for its own subtype) over the topology tests and the
+tests plugins supply. An object that belongs to no package - a shape shown from a
+script - has nothing to ask the daemon about, and the tab says so rather than offering a list. Opening one asks twice, in a row: `qual.report` without `verify`, which
+runs nothing and lists every test with those that do not apply saying why, and then with it, which runs the
+tests as `pc qual test --<subtype> <object>` runs them and through the same cache, so the panel and the command
+line give the same verdicts. The list is on screen, every other mark pending, for as long as the second takes. It opens on the
 first failure, or else the first finding, or else the first check that applies, and keeps the one the reader
 clicks. What each check is - when it applies and what to do when it fails - is its entry in
-`partcad/test/catalog.py`, the same text the documentation's list of checks is generated from. A check that left
-something behind to look at offers it with **Show in the Digital Thread**, which moves the panel to Design and
-shows that object the way the explorer would (`showObject`, then the explorer's `partcad.inspect*` command,
-without remembering it as the selection): for an interference, the two parts where the assembly places them and
-a sub-assembly `interference` of what they share, registered by the daemon under a name worked out from the pair.
+`partcad/qual/catalog.py`, the same text the documentation's list of tests is generated from. A topology test that
+failed leaves something behind to look at and offers it with **Show**, which moves the panel to Design and shows
+that object the way the explorer would (`showObject`, then the explorer's `partcad.inspect*` command, without
+remembering it as the selection): for an interference, the two parts where the assembly places them and a
+sub-assembly `interference` of what they share; for `tolerance-surfaces` and `tolerance-edges`, the part and a
+sub-assembly `focus` of the faces, or of tubes along the edges, that nothing tolerances -- each registered by the
+daemon under a name worked out from what it is (`partcad.qual.highlight`). The artifact's `focus` names that
+sub-assembly, and when the show of the artifact arrives the webview singles it out with the CMF tab's choice
+(`chooseInDesign`): drawn as it is, in the colour of a finding, the rest faint, a chip over the view to clear it.
+An 'other' test's tool report (`reports`) is drawn under its verdict as a table, its rows marked by severity.
 
 Each non-3D tab is fetched on first look and cached until the next show, so opening one costs one daemon round
 trip and switching back to it costs none. Every request carries the generation of the object it was made for and an
@@ -719,7 +727,7 @@ run, … while it runs, and an empty slot of the same width before it has. A sce
 that cannot be read, a solver that would not start, no sandbox to start it in, an implementation that does not
 resolve -- is not a refusal of the request any more: it comes back as that scenario's `error`, and the tab shows
 the sentence where the model would have been. `pc ide view --analysis-fea --scenario <name>` opens the tab on
-that scenario instead of the first (the show's `scenario`, as for `--validation-simulation`), and `pc ide state`
+that scenario instead of the first (the show's `scenario`, as for `--qualification-simulation`), and `pc ide state`
 reports each analysis tab's selected scenario, what each is set to run with, and each one's verdict.
 
 Three things about the selected scenario are worth knowing:
@@ -758,14 +766,14 @@ A package that declares no `suppliers:` is the ordinary case, not a failure, so 
 items rather than run and reported: in the IDE `pc_logging.error` is a modal popup, and
 `Context.find_part_suppliers()` raises one per part.
 
-The Validation group holds **Test** (above), **Simulation** and **Process Emulation**, which has nothing in it
-yet and is always disabled -- so the group is always enabled, for Test, and opens on it. Simulation is offered
-only for an object that declares a simulation: whether it does is asked on every show (`simulate.list`, which reads the `simulate:`
-section and runs nothing), exactly as Build vs Buy's tree is, and the panel's strip is rebuilt when the answer
+The Qualification group holds **Basic** and **Topology** (above), **Simulation**, **Other** and **Process
+Emulation**, which has nothing in it yet and is always disabled -- so the group is always enabled, for Basic, and
+opens on it. Simulation is offered only for an object that declares a simulation: whether it does is asked on
+every show (`simulate.list`, which reads `qual: sim:` -- or the older `simulate:` -- and runs nothing), exactly as Build vs Buy's tree is, and the panel's strip is rebuilt when the answer
 arrives.
 
 The tab is laid out like Build: the simulations on the left, in the order the object declares them, the first
-selected (or the one `pc ide view --validation-simulation --scenario <name>` names); the selected one on the
+selected (or the one `pc ide view --qualification-simulation --scenario <name>` names); the selected one on the
 right. Selecting one runs it -- `simulate.run`, which is `pc sim -f <name>` --
 the first time it is looked at for this object, and the answer is kept until the next show. What comes back is
 the verdict of its `validation:` expression, said once: as a mark before the simulation's name in the list (a

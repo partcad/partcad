@@ -111,7 +111,7 @@ Digital Thread
 
 Displaying an object opens the ``Digital Thread``, which is a strip of tabs over that one object rather than
 a bare canvas: groups of tabs, each with tabs of its own -- **Design**, **Analysis**, **Manufacturing** and
-**Validation**, followed by **Operations**, which has nothing in it yet and is always disabled. Design
+**Qualification**, followed by **Operations**, which has nothing in it yet and is always disabled. Design
 is always the first (see :doc:`/digital_thread/introduction` for what each group is for):
 
 - **Design** — the object itself, three ways, and what it is in, in tabs of its own:
@@ -151,14 +151,20 @@ is always the first (see :doc:`/digital_thread/introduction` for what each group
     (``pc instructions``).
 
   Manufacturing is for a part or an assembly; for a scene, a sketch or an interface it is disabled.
-- **Validation** — whether the object is what it claims to be, and does what it is supposed to:
+- **Qualification** — whether the object is what it claims to be, and does what it is supposed to, a tab per
+  subtype of qualification test (see :doc:`/digital_thread/lifecycle/qualification`):
 
-  - **Test** — every check ``pc test`` runs, with how each came out on this object: passed, failed, warned,
-    skipped, or not applicable and why. The check selected shows what it found and what it is, when it applies
-    and what to do when it fails (:doc:`/digital_thread/lifecycle/qualification_tests`). An interference leaves an assembly of the two
-    parts and what they share, to open in 3D. Always the first tab, and always enabled; an object that belongs
-    to no package has nothing to ask PartCAD about, and the tab says so.
-  - **Simulation** — for a part, an assembly or a scene that declares a ``simulate:`` section (see :doc:`/digital_thread/lifecycle/simulation`):
+  - **Basic** — every basic test ``pc qual test --basic`` runs, with how each came out on this object: passed,
+    failed, warned, skipped, or not applicable and why. The test selected shows what it found and what it is,
+    when it applies and what to do when it fails (:doc:`/digital_thread/lifecycle/qualification_tests`). Always
+    the first tab, and always enabled; an object that belongs to no package has nothing to ask PartCAD about,
+    and the tab says so.
+  - **Topology** — the topology tests, the same way: the parts of an assembly that overlap, and the faces and
+    edges of a part to be made that nothing tolerances. A failure says where it is: **Show** opens the object
+    in the 3D view with the finding -- the volumes two parts share, the untoleranced faces, the untoleranced
+    edges drawn as tubes -- in a colour of its own and everything else faded, and a chip over the view takes
+    it away again.
+  - **Simulation** — for a part, an assembly or a scene that declares simulations under ``qual: sim:`` (see :doc:`/digital_thread/lifecycle/simulation`):
     the simulations it declares, listed on the left with the first one selected. Selecting one runs it, as
     ``pc sim -f <name>`` does, and shows whether its ``validation:`` held, and plays the video of the run the
     simulation plugin recorded (see :ref:`sim-video`), in a player with the usual controls -- play and pause,
@@ -174,9 +180,11 @@ is always the first (see :doc:`/digital_thread/introduction` for what each group
     ``pc sim --plugin`` -- and **Simulate** runs it afresh. Under the
     pictures, **Criteria**, **Before** and **After** open on a click: the ``validation:`` expression, and the
     ``before`` and ``after`` the plugin reported, which are what that expression is evaluated over.
+  - **Other** — the tests plugins supply that the object declares under ``qual: other:``, each with the
+    report its tool wrote, drawn as a table; for an object that declares none, how to declare one.
   - **Process Emulation** — nothing yet; always disabled.
 
-  Validation is always enabled, for its Test tab; Simulation is disabled for anything that declares no
+  Qualification is always enabled, for its Basic tab; Simulation is disabled for anything that declares no
   simulation.
 
 Every group always shows all of its tabs and disables the ones that do not apply, and a group none of whose

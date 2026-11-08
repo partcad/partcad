@@ -649,12 +649,12 @@ class JsonRpcBackend implements PartcadBackend {
                 a.cancellation,
             ),
         );
-        // The Test tab: every check 'pc test' runs on one object, and with
-        // 'verify' how each came out.
+        // The Qualification tabs: every test of the subtypes asked for 'pc qual
+        // test' runs on one object, and with 'verify' how each came out.
         reg('partcad.testReport', (a) =>
             this.send(
-                'test.report',
-                { package: a.pkg, object: a.name, kind: a.kind, verify: a.verify },
+                'qual.report',
+                { package: a.pkg, object: a.name, kind: a.kind, verify: a.verify, subtypes: a.subtypes },
                 a.cancellation,
             ),
         );
@@ -693,9 +693,9 @@ class JsonRpcBackend implements PartcadBackend {
             ),
         );
         reg('partcad.caeDefaults', () => this.send('cae.defaults', {}));
-        // The Validation group's Simulation tab. What an object declares under
-        // 'simulate:' is configuration, read on every show to decide whether the
-        // group applies; running one is 'pc sim -f <name>', with the pictures
+        // The Qualification group's Simulation tab. What an object declares under
+        // 'qual: sim:' is configuration, read on every show to decide whether the
+        // tab applies; running one is 'pc sim -f <name>', with the pictures
         // the plugin took of the scene sent back as bytes rather than as paths.
         reg('partcad.simulateList', (a) =>
             this.send('simulate.list', { package: a.pkg, object: a.name, kind: a.kind }, a.cancellation),

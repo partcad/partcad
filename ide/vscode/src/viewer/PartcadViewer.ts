@@ -57,8 +57,12 @@ const TAB_COMMANDS: Record<string, string> = {
     // What the object is required to be, and with 'verify' whether the model is
     // it - the verdicts 'pc test -f requirements' reaches.
     requirements: 'partcad.requirements',
-    // Every check 'pc test' runs on the object, and with 'verify' its verdict.
-    test: 'partcad.testReport',
+    // Every test of one subtype of qualification 'pc qual test' runs on the
+    // object, and with 'verify' its verdict: the subtype is the tab's (see
+    // 'QUAL_TEST_TABS').
+    basic: 'partcad.testReport',
+    topology: 'partcad.testReport',
+    other: 'partcad.testReport',
     // What the object is made of and what each part of it declares; the user's
     // choices are added here, from this machine (see 'common/garage.ts').
     bvb: 'partcad.manufacturingTree',
@@ -98,7 +102,7 @@ const TAB_COMMANDS: Record<string, string> = {
     // 'pc info' says them and the 'cmf' check judges them - or, for a colour, a
     // material or a finish the explorer opened, what that declaration is.
     cmf: 'partcad.cmfInfo',
-    // What the object declares under 'simulate:', read rather than run; a
+    // What the object declares under 'qual: sim:', read rather than run; a
     // request naming one of them runs it instead (see 'SIMULATION_RUN').
     simulation: 'partcad.simulateList',
 };
@@ -172,6 +176,17 @@ interface RenderedFile {
  * 'ANALYSIS_TABS' is the same list, in the order it draws the strip in.
  */
 const ANALYSIS_TABS = new Set(['fea', 'dynamic', 'thermal', 'cfd']);
+
+/**
+ * The Qualification tabs drawn from 'qual.report', and the subtype of
+ * qualification each asks for: the host's copy of 'QUAL_TEST_TABS' in
+ * 'webview/messages.ts', which it does not import.
+ */
+const QUAL_TEST_TABS: Record<string, string> = { basic: 'basic', topology: 'topology', other: 'other' };
+
+function isQualTestTab(tab: string): boolean {
+    return Object.prototype.hasOwnProperty.call(QUAL_TEST_TABS, tab);
+}
 
 /**
  * The "Digital Thread" editor tab.
@@ -530,9 +545,13 @@ export class PartcadViewer implements vscode.Disposable {
                 post({ data: await vscode.commands.executeCommand(command, args) });
                 return;
             }
-            if (tab === 'requirements' || tab === 'test') {
+            if (tab === 'requirements' || isQualTestTab(tab)) {
                 args.kind = target.kind ?? 'part';
                 args.verify = message.verify === true;
+                if (isQualTestTab(tab)) {
+                    // One tab per subtype of qualification, each asking for its own.
+                    args.subtypes = [QUAL_TEST_TABS[tab]];
+                }
                 post({ data: await vscode.commands.executeCommand(command, args) });
                 return;
             }
@@ -1222,11 +1241,13 @@ export class PartcadViewer implements vscode.Disposable {
 						<div id="pane-assembly" class="pane" hidden></div>
 						</div>
 						</div>
-						<div id="pane-validation" class="pane pane-group" hidden>
-						<div id="validation-tabs" class="tabs sub-tabs" hidden></div>
+						<div id="pane-qualification" class="pane pane-group" hidden>
+						<div id="qualification-tabs" class="tabs sub-tabs" hidden></div>
 						<div class="panes">
-						<div id="pane-test" class="pane" hidden></div>
+						<div id="pane-basic" class="pane" hidden></div>
+						<div id="pane-topology" class="pane" hidden></div>
 						<div id="pane-simulation" class="pane" hidden></div>
+						<div id="pane-other" class="pane" hidden></div>
 						<div id="pane-emulation" class="pane" hidden></div>
 						</div>
 						</div>

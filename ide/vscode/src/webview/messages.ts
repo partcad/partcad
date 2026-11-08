@@ -20,15 +20,16 @@ import type { SpaceMouseSettings } from './spacemouse';
  *
  * Two levels of them. The panel's own strip is five groups, always the same
  * five: 'design', the object itself; 'analysis', what analysing it says;
- * 'manufacturing', what making it takes; 'validation', whether it is what it
+ * 'manufacturing', what making it takes; 'qualification', whether it is what it
  * claims to be and does what it is supposed to; and 'operations', which has
  * nothing in it yet and is shown disabled. Each group is a strip of its own:
  * the object as '3d' (first, always), '2d', 'draft' and 'cmf' (what each of
  * its items is in: colour, material, finish); 'fea', 'dynamic',
  * 'thermal' and 'cfd'; 'bvb' (Build vs Buy), 'build', 'supply' (labelled Buy),
- * 'bom' and 'assembly'; and 'test', what 'pc test' says of it check by check,
- * before 'simulation' and 'emulation' (Process Emulation), which has nothing in
- * it yet and is shown disabled.
+ * 'bom' and 'assembly'; and a tab per subtype of qualification - 'basic' and
+ * 'topology', what 'pc qual test' says of it test by test, 'simulation', and
+ * 'other', the tests plugins supply - before 'emulation' (Process Emulation),
+ * which has nothing in it yet and is shown disabled.
  *
  * In front of the five, and only for an object that declares any:
  * 'requirements', a tab of its own with no strip under it.
@@ -42,7 +43,7 @@ export type TabId =
     | 'design'
     | 'analysis'
     | 'manufacturing'
-    | 'validation'
+    | 'qualification'
     | 'operations'
     | '3d'
     | '2d'
@@ -59,7 +60,25 @@ export type TabId =
     | 'cfd'
     | 'simulation'
     | 'emulation'
-    | 'test';
+    | 'basic'
+    | 'topology'
+    | 'other';
+
+/**
+ * The Qualification tabs drawn from 'qual.report', each the tests of one subtype
+ * of qualification, and that subtype as 'pc qual test' and the daemon name it.
+ * The Simulation tab is the 'sim' subtype, and has a list and a player of its own.
+ */
+export const QUAL_TEST_TABS: Partial<Record<TabId, string>> = {
+    basic: 'basic',
+    topology: 'topology',
+    other: 'other',
+};
+
+/** Whether a tab is one of 'QUAL_TEST_TABS'. */
+export function isQualTestTab(tab: TabId | string): boolean {
+    return Object.prototype.hasOwnProperty.call(QUAL_TEST_TABS, tab);
+}
 
 /**
  * The tabs that run an analysis, each named after the analysis it runs: the
@@ -109,7 +128,7 @@ export const TAB_GROUPS: Partial<Record<TabId, TabId[]>> = {
     manufacturing: ['bvb', 'build', 'supply', 'bom', 'assembly'],
     // Not 'emulation' (Process Emulation) yet: it holds nothing and is always
     // disabled, so a request for it could never be met.
-    validation: ['test', 'simulation'],
+    qualification: ['basic', 'topology', 'simulation', 'other'],
 };
 
 /** The group a tab of 'TAB_GROUPS' is in, or undefined for anything else. */
@@ -724,6 +743,19 @@ export interface ShowObjectMessage {
     package: string;
     name: string;
     kind: string;
+}
+
+/**
+ * What the 3D view singles out of an object a topology test left behind, once
+ * it has been shown: the object's link 'focus' names, as '<package>:<name>'.
+ */
+export interface TopologyFocus {
+    /** The object shown, as '<package>:<name>'. */
+    object: string;
+    /** The node to leave unfaded, as '<package>:<name>', which is how the tree names a node. */
+    item: string;
+    /** What the chip over the view says is shown. */
+    label: string;
 }
 
 /** Renderer to host: the thumbnails and measurements of these objects, sized 'width' x 'height'. */
@@ -1433,7 +1465,7 @@ export interface SimulationRunData {
     ok: boolean;
 }
 
-/** How a check came out: see 'partcad.test.report'. Null until it has been run. */
+/** How a check came out: see 'partcad.qual.report'. Null until it has been run. */
 export type TestStatus = 'passed' | 'failed' | 'warned' | 'skipped' | 'not-applicable';
 
 /** Something a check said on the way to its verdict. */
@@ -1449,6 +1481,31 @@ export interface TestArtifact {
     name: string;
     title?: string;
     desc?: string;
+    /**
+     * For a topology finding: the link of the object that is the finding - the
+     * volumes two parts share, the faces nothing tolerances - as a path of link
+     * names from its root. What the 3D view leaves unfaded (see
+     * 'partcad.qual.highlight').
+     */
+    focus?: string;
+}
+
+/** One column of an 'other' test's report: the key of a row it is, and its heading. */
+export interface TestReportColumn {
+    key: string;
+    title?: string;
+}
+
+/**
+ * The report an 'other' test's tool wrote, handed on as it wrote it: see
+ * 'partcad.qual.qualification.OtherQualification'.
+ */
+export interface TestReport {
+    title?: string;
+    summary?: string;
+    verdict?: string;
+    columns?: TestReportColumn[];
+    rows?: Record<string, unknown>[];
 }
 
 /** One block of a check's documentation: the markup of 'partcad.test.catalog'. */
@@ -1465,20 +1522,26 @@ export interface TestDoc {
     blocks: TestDocBlock[];
 }
 
-/** One check of 'test.report', and what it decided. */
+/** One check of 'qual.report', and what it decided. */
 export interface TestResult {
     name: string;
+    /** Its subtype of qualification: 'basic', 'topology', 'sim' or 'other'. */
+    subtype?: string;
     status: TestStatus | null;
     findings: TestFinding[];
     artifacts: TestArtifact[];
+    /** What an 'other' test's tool reported. */
+    reports?: TestReport[];
     doc: TestDoc | null;
 }
 
-/** The 'test' tab's data: 'partcad.test.report.to_dict()'. */
+/** A Qualification tab's data: 'partcad.qual.report.to_dict()'. */
 export interface TestData {
     object: string;
     kind: string;
     /** Whether the checks were run, or only listed. */
     verified: boolean;
+    /** The subtypes asked for. */
+    subtypes?: string[];
     tests: TestResult[];
 }
