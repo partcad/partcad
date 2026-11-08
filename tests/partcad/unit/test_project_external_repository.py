@@ -11,9 +11,15 @@ the lazy object-access layer is exercised without a runtime or a CAD kernel.
 """
 
 import asyncio
+import json
+import os
 import shutil
+import textwrap
 import threading
 import time
+import uuid
+
+import pytest
 
 import partcad as pc
 from partcad import context as pc_context
@@ -1313,3 +1319,116 @@ def test_a_limit_that_is_not_a_positive_number_is_no_limit(tmp_path):
     for limit in ("abc", -1, 0, None):
         assert [hit.name for hit in repo.search("part", "clip", limit)] == ["a", "b"], limit
     assert all("limit" not in key for key in repo._repository.keys)
+
+
+# --- the key taken apart, for the plugin -------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "key, query",
+    [
+        ("meta", {"what": "meta"}),
+        ("deps", {"what": "deps"}),
+        ("objects/part", {"what": "objects", "kind": "part"}),
+        ("objects/part/763622", {"what": "object", "kind": "part", "name": "763622", "parameters": {}}),
+        (
+            "objects/part/763622;file=a%3Bb.stl,format=stl",
+            {"what": "object", "kind": "part", "name": "763622", "parameters": {"file": "a;b.stl", "format": "stl"}},
+        ),
+        # A comma with no '=' continues the value, as 'parse_parameterized_name' reads it.
+        (
+            "objects/part/x;include=A,B",
+            {"what": "object", "kind": "part", "name": "x", "parameters": {"include": "A,B"}},
+        ),
+        ("search/part?q=cable+clip&limit=5", {"what": "search", "kind": "part", "text": "cable clip", "limit": 5}),
+        ("search/part?q=a%2Fb&limit=x", {"what": "search", "kind": "part", "text": "a/b"}),
+        ("search/part?limit=0", {"what": "search", "kind": "part", "text": ""}),
+        ("files/models/763622/a b.stl", {"what": "file", "path": "models/763622/a b.stl"}),
+    ],
+)
+def test_a_key_is_taken_apart_the_way_partcad_spells_it(key, query):
+    from partcad.project_external_repository import query_of
+
+    assert query_of(key) == query
+
+
+@pytest.fixture
+def served_by(tmp_path):
+    """'served_by(script)': the package '//models' of a package in 'tmp_path', served by the plugin 'script'.
+
+    A real 'basic' plugin, run in the sandbox like any other. PartCAD keeps a
+    plugin's answers on disk keyed on the plugin's name, so each one gets a name
+    of its own - what a test sees is what its plugin answered, not what an
+    earlier run's did - and is forgotten afterwards. The state directory stays
+    where it is: moving it would move the sandbox too, and build a whole new one
+    beside the one every other test shares.
+    """
+    made = []
+
+    def serve(script):
+        name = "plugin_" + uuid.uuid4().hex[:12]
+        (tmp_path / (name + ".py")).write_text(textwrap.dedent(script))
+        (tmp_path / "partcad.yaml").write_text(
+            "dependencies:\n  models:\n    type: external\n    plugin: :%s\n"
+            "repositories:\n  %s:\n    type: basic\n    path: %s.py\n" % (name, name, name)
+        )
+        ctx = pc.Context(str(tmp_path))
+        models = ctx.get_project("//models")
+        made.append((ctx.user_config.internal_state_dir, models.path))
+        return models
+
+    yield serve
+    for state, path in made:
+        shutil.rmtree(path, ignore_errors=True)
+        shutil.rmtree(os.path.join(state, "cache", "external", os.path.basename(path)), ignore_errors=True)
+
+
+def test_a_plugin_is_handed_the_key_taken_apart_and_the_key_as_well(served_by):
+    models = served_by("""
+        import json
+
+        if __name__ == "get":
+            key = request["key"]
+            if key == "meta":
+                output = {"result": {"instanceKinds": ["part"]}}
+            elif key.startswith("objects/part/"):
+                said = {"key": key, "query": request.get("query")}
+                output = {"result": {"type": "step", "path": "x.step", "desc": json.dumps(said)}}
+            else:
+                output = {"result": None}
+        else:
+            output = {}
+        """)
+    config = models._fetch_object_instance_config("part", "763622;file=a%3Bb.stl,format=stl")
+    said = json.loads(config["desc"])
+    assert said["key"] == "objects/part/763622;file=a%3Bb.stl,format=stl"
+    assert said["query"] == {
+        "what": "object",
+        "kind": "part",
+        "name": "763622",
+        "parameters": {"file": "a;b.stl", "format": "stl"},
+        "subfolder": "",
+    }
+
+
+def test_a_plugin_imports_partcads_model_site_toolkit_wherever_it_runs(served_by):
+    """'import plugin_models' is how a model-site plugin gets the toolkit: it is a wrapper, on the sandbox's path."""
+    models = served_by("""
+        import plugin_models
+
+        if __name__ == "get":
+            key = request["key"]
+            if key == "meta":
+                output = {"result": {"instanceKinds": ["part"]}}
+            elif key.startswith("objects/part/"):
+                q = request["query"]
+                name = plugin_models.format_name(q["name"], q["parameters"])
+                output = {"result": {"type": "step", "path": "x.step", "desc": name}}
+            else:
+                output = {"result": None}
+        else:
+            output = {}
+        """)
+    config = models._fetch_object_instance_config("part", "1;file=a%2Cb=c.stl")
+    # Decoded by PartCAD on the way in, spelled the way PartCAD spells it on the way out.
+    assert config["desc"] == "1;file=a%2Cb=c.stl"
