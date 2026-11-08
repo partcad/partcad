@@ -1112,16 +1112,27 @@ def deserialize(data) -> dict:
         # which slips past the exit-code and stderr checks in the callers. Say so
         # here rather than letting loads() raise a bare, contextless JSONDecodeError.
         raise ValueError("the wrapper produced no output to deserialize (empty response)")
+    cut_off = data.startswith(_FRAME_TEXT) or "\n" + _FRAME_TEXT in data
     try:
-        return loads(line)
+        answer = loads(line)
     except ValueError:
-        if data.startswith(_FRAME_TEXT) or "\n" + _FRAME_TEXT in data:
+        if cut_off:
             # Not JSON because it was never meant to be: a frame that ended
             # before its header said it would, or one decoded as text.
-            raise ValueError(
-                "the wrapper's answer is a frame that did not arrive whole (%d bytes of it did)" % len(data)
-            )
+            raise ValueError(_cut_off_message(data))
         raise
+    if cut_off and not isinstance(answer, dict):
+        # Nor is it when its last line parses. What is left of a frame ends in
+        # an attachment - any bytes at all - and among bytes that do not
+        # compress, a lone digit after one that reads as a line break is
+        # valid JSON: the number came back as the answer, about once in 700
+        # random payloads. An answer is an object.
+        raise ValueError(_cut_off_message(data))
+    return answer
+
+
+def _cut_off_message(data) -> str:
+    return "the wrapper's answer is a frame that did not arrive whole (%d bytes of it did)" % len(data)
 
 
 def deserialize_all(data, skipped=None) -> list:
