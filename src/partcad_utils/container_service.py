@@ -1042,11 +1042,8 @@ def _feed(stream, data):
 
     def write():
         try:
-            stream.write(data)
-        except (OSError, ValueError):
-            pass
-        try:
-            stream.close()
+            with stream:
+                stream.write(data)
         except (OSError, ValueError):
             pass
 
