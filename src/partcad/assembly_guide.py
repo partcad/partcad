@@ -1467,7 +1467,10 @@ async def build_guide_async(
 
     composed = await asyncio.gather(_title_page(project, assembly, images, list(sections.values()), ctx), *composers)
 
-    pages = [composed[0], doc.Page(title="Bill of Materials", blocks=await _bom_page_blocks(project, grouped, dir_path))]
+    pages = [
+        composed[0],
+        doc.Page(title="Bill of Materials", blocks=await _bom_page_blocks(project, grouped, dir_path)),
+    ]
     page_of = {build_plan.ROOT_ID: 0}
     for item_id, page in zip(page_items, composed[1:]):
         page_of[item_id] = len(pages)

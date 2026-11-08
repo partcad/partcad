@@ -259,12 +259,14 @@ def test_a_material_is_printed_as_its_own_name():
         formal = "AL 5052"
         full = "Aluminium alloy 5052"
         name = "aluminium-5052"
+        project_name = "//pub"
+        is_alias = False
 
     class _Catalogue:
         name = "//pub"
 
-        def get_material(self, name, quiet=False):
-            return _Material() if name == "aluminium-5052" else None
+        def get_cmf(self, kind, name, quiet=False):
+            return _Material() if (kind, name) == ("material", "aluminium-5052") else None
 
     class _Ctx:
         def get_project(self, name):
