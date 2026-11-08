@@ -1289,7 +1289,8 @@ at all).
   assembly type alike. OCCT 7.9's `RWGltf_CafReader`, as `cadquery-ocp-novtk` builds it, reads no Draco ("Draco
   library missing"), no quantized positions and no meshopt -- which is most of the glTF the web delivers -- and
   answered a Draco file with "holds no triangles". So the reader is plain Python and NumPy: Draco through DracoPy
-  (installed into the sandbox only for a file whose `extensionsUsed` names it, see `part_factory_gltf`), meshopt
+  (for a part, installed into the sandbox only for a file whose `extensionsUsed` names it, see `part_factory_gltf`;
+  the assembly type declares it in `pythonRequirements` and has it on every read, since it also brings NumPy), meshopt
   through `wrappers/meshopt_decode.py`, written from the two extensions' appendices because no Python decoder
   reaches every platform the sandbox runs on, and held to meshoptimizer's own encoder and decoder by
   `tests/partcad/unit/data/import_gltf/meshopt_vectors.json`. Triangles become bodies in `wrappers/mesh_brep.py`

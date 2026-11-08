@@ -72,7 +72,10 @@ READ = frozenset({DRACO, QUANTIZATION, INSTANCING, VISIBILITY, *MESHOPT})
 # Extensions that change how a file looks, or what it says about itself, and not
 # the shape it is: a file that requires one is read without it, since a shape
 # carries no texture, light or camera. 'KHR_materials_pbrSpecularGlossiness' is
-# read for its colour (see 'Document.material').
+# read for its colour (see 'Document.material'). Every 'KHR_materials_*' is one
+# of these, including those Khronos ratifies after this list was written
+# ('MATERIALS'): a material is how a surface is drawn.
+MATERIALS = "KHR_materials_"
 APPEARANCE = frozenset(
     {
         "KHR_materials_anisotropy",
@@ -245,13 +248,13 @@ class Document:
         version = str((self.json.get("asset") or {}).get("version", ""))
         if not version.startswith("2."):
             raise GltfError("the file is glTF %s, and PartCAD reads glTF 2.0" % (version or "of no version"))
-        required = set(self.json.get("extensionsRequired") or [])
-        missing = sorted(required - READ - APPEARANCE)
+        required = _names(self.json.get("extensionsRequired"))
+        missing = sorted(name for name in required - READ - APPEARANCE if not name.startswith(MATERIALS))
         if missing:
             raise UnsupportedExtension(
                 "the file requires %s, which PartCAD does not read" % ", ".join("'%s'" % name for name in missing)
             )
-        self.used = set(self.json.get("extensionsUsed") or [])
+        self.used = _names(self.json.get("extensionsUsed"))
         self.dropped = Counter()
         self._buffers = {}
         self._views = {}
@@ -282,7 +285,7 @@ class Document:
             header, _, payload = uri.partition(",")
             data = base64.b64decode(payload) if header.endswith(";base64") else unquote_to_bytes(payload)
         else:
-            path = os.path.join(self.directory, unquote(uri))
+            path = self._beside(unquote(uri))
             try:
                 with open(path, "rb") as f:
                     data = f.read()
@@ -292,6 +295,26 @@ class Document:
             raise GltfError("buffer %d is shorter than the file says" % index)
         self._buffers[index] = data
         return data
+
+    def _beside(self, relative) -> str:
+        """The path of a buffer the file names, which has to be at or below the file's own directory.
+
+        A '.gltf' names its buffers relative to itself, and one fetched from a
+        catalog could otherwise name any file this machine can read - an absolute
+        path, '../../.ssh/id_rsa' - and have its bytes read as vertices into a
+        shape that is then exported or shared. Symbolic links are followed before
+        the check, so one cannot lead out either. This is what 'gltf_companions'
+        already holds the files it hashes and copies to.
+        """
+        base = os.path.realpath(self.directory)
+        path = os.path.realpath(os.path.join(base, relative))
+        try:
+            inside = not os.path.isabs(relative) and os.path.commonpath([base, path]) == base
+        except ValueError:  # another drive, on Windows
+            inside = False
+        if not inside:
+            raise GltfError("the buffer '%s' the file names is outside the directory the file is in" % relative)
+        return path
 
     def view(self, index):
         """'(bytes, byte stride or None)' of buffer view 'index', decompressed when meshoptimizer compressed it."""
@@ -547,6 +570,11 @@ class Document:
         for root in self.roots():
             walk(root, np.eye(4))
         return found
+
+
+def _names(value) -> set:
+    """The extension names a file lists: its strings, and nothing for a list that is not one."""
+    return {name for name in value if isinstance(name, str)} if isinstance(value, list) else set()
 
 
 def _factor(value):

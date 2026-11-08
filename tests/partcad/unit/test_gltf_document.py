@@ -78,6 +78,17 @@ def test_a_required_extension_that_only_changes_how_it_looks_is_read_without_it(
     assert len(document.primitives(0)[0].triangles) == 1
 
 
+def test_every_materials_extension_is_appearance_and_a_name_that_is_no_string_is_no_extension(tmp_path):
+    # 'KHR_materials_diffuse_roughness' is not in the list 'APPEARANCE' was
+    # written with, and is a material all the same; a list entry that is not a
+    # name names nothing, and is not an extension the file could be refused for.
+    path = _triangle_file(
+        tmp_path, indices=[0, 1, 2], extensionsRequired=["KHR_materials_diffuse_roughness", {"not": "a name"}, 7]
+    )
+    document = gltf_document.Document(path)
+    assert len(document.primitives(0)[0].triangles) == 1
+
+
 @pytest.mark.parametrize("version", ["1.0", None])
 def test_anything_but_gltf_2_is_refused(tmp_path, version):
     asset = {"version": version} if version else {}
@@ -162,6 +173,34 @@ def test_a_buffer_beside_the_file_that_is_not_there_is_named(tmp_path):
     path = tmp_path / "model.gltf"
     path.write_text(json.dumps({"asset": {"version": "2.0"}, "buffers": [{"uri": "mesh%20data.bin", "byteLength": 4}]}))
     with pytest.raises(gltf_document.GltfError, match="'mesh data.bin'"):
+        gltf_document.Document(path).buffer(0)
+
+
+def test_a_buffer_outside_the_file_s_directory_is_not_read(tmp_path):
+    secret = tmp_path / "secret.bin"
+    secret.write_bytes(b"\1" * 64)
+    inner = tmp_path / "package"
+    inner.mkdir()
+    uris = ["..%2Fsecret.bin", "../secret.bin", str(secret)]
+    path = inner / "model.gltf"
+    path.write_text(json.dumps({"asset": {"version": "2.0"}, "buffers": [{"uri": u, "byteLength": 4} for u in uris]}))
+    document = gltf_document.Document(path)
+    for index in range(len(uris)):
+        with pytest.raises(gltf_document.GltfError, match="outside the directory the file is in"):
+            document.buffer(index)
+
+
+def test_a_symbolic_link_does_not_lead_a_buffer_out_of_the_file_s_directory(tmp_path):
+    (tmp_path / "secret.bin").write_bytes(b"\1" * 64)
+    inner = tmp_path / "package"
+    inner.mkdir()
+    try:
+        os.symlink(tmp_path / "secret.bin", inner / "mesh.bin")
+    except (OSError, NotImplementedError):
+        pytest.skip("No symbolic links here")
+    path = inner / "model.gltf"
+    path.write_text(json.dumps({"asset": {"version": "2.0"}, "buffers": [{"uri": "mesh.bin", "byteLength": 4}]}))
+    with pytest.raises(gltf_document.GltfError, match="outside the directory the file is in"):
         gltf_document.Document(path).buffer(0)
 
 
@@ -334,3 +373,17 @@ def test_an_open_piece_is_a_shell():
     bodies, dropped = mesh_brep.bodies(points, np.array([[0, 1, 2], [0, 2, 3]]))
     assert dropped == 0
     assert [(body.closed, body.shape.ShapeType().name) for body in bodies] == [(False, "TopAbs_SHELL")]
+
+
+def test_a_mesh_of_many_pieces_is_split_in_order():
+    """A thousand separate tetrahedra: a piece each, its triangles in the order the mesh has them."""
+    tetrahedron = np.array([[0, 2, 1], [0, 1, 3], [1, 2, 3], [0, 3, 2]])
+    count = 1000
+    triangles = (tetrahedron[None, :, :] + 4 * np.arange(count)[:, None, None]).reshape(-1, 3)
+    # Shuffled, so the pieces are not simply consecutive runs of the list.
+    order = np.random.default_rng(5).permutation(len(triangles))
+    found = mesh_brep.pieces(triangles[order])
+    assert len(found) == count
+    assert all(list(piece) == sorted(piece) for piece in found)
+    assert sorted(int(t) for piece in found for t in piece) == list(range(len(triangles)))
+    assert {tuple(sorted(int(order[t]) // 4 for t in piece)) for piece in found} == {(i,) * 4 for i in range(count)}

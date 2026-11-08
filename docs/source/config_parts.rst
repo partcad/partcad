@@ -421,7 +421,7 @@ Define parts with CAD files using the following syntax:
      - OpenUSD stage: a ``.usd``, ``.usda`` or ``.usdc`` layer, or a ``.usdz`` package; the meshes it shows
      - ``<name>.usd``
 
-A file of another name or extension -- a ``.stp``, a ``.glb``, a binary ACIS
+A file of another name or extension -- a ``.stp``, an ``.igs``, a binary ACIS
 ``.sab`` -- is named with ``path``:
 
 .. code-block:: yaml
@@ -692,7 +692,9 @@ is best simplified before it is made a part.
 
 A ``.gltf``'s buffers and images are part of its cache key, and ``pc import part``
 copies them along with it -- refusing one that would replace a different file of
-the same name already in the package. A ``.glb`` is imported as a ``.glb``.
+the same name already in the package. A buffer the ``.gltf`` names outside its own
+directory -- an absolute path, or one that climbs out with ``..`` -- is not read,
+and the part fails saying so. A ``.glb`` is imported as a ``.glb``.
 
 A glTF file can also be declared as an :ref:`assembly <assembly-gltf>`, which
 keeps its meshes apart, a part each, placed as its nodes place them.

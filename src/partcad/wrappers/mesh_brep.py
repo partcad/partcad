@@ -114,7 +114,13 @@ def pieces(triangles: np.ndarray) -> list:
             parent[second] = first
     roots = np.array([find(node) for node in range(count)])
     _, labels = np.unique(roots, return_inverse=True)
-    return [np.nonzero(labels == label)[0] for label in range(labels.max() + 1)]
+    # Grouped in one pass: a stable sort keeps each piece's triangles in their
+    # order, which is what 'split' and a face's triangle are read by. Selecting
+    # each label's triangles in turn was a pass over all of them per piece, and a
+    # mesh of a hundred thousand pieces took that many passes.
+    labels = labels.reshape(-1)
+    order = np.argsort(labels, kind="stable")
+    return np.split(order, np.cumsum(np.bincount(labels))[:-1])
 
 
 def orient(points: np.ndarray, triangles: np.ndarray):
