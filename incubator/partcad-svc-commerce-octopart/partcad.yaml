@@ -1,0 +1,94 @@
+# PartCAD package: Octopart, as a store and as a catalogue of what distributors sell.
+#
+# Published as //pub/svc/commerce/octopart, with the other stores. Its provider
+# 'octopart' quotes a manufacturer's part at the cheapest authorized
+# distributor's offer. Its external dependency 'products' is the catalogue
+# (//pub/svc/commerce/octopart/products), whose child packages - served by the
+# octopart_repo plugin - are Octopart's own categories. Both are one script,
+# octopart.py, asking Nexar's GraphQL API (the "Octopart API") with an app of
+# the user's own. See the README.
+name: //pub/svc/commerce/octopart
+
+desc: |
+  Octopart: a provider that quotes any manufacturer's part, by its manufacturer
+  and part number, at the cheapest offer among every authorized distributor
+  Octopart indexes - DigiKey, Mouser, Farnell, RS, Arrow, TME and the rest - in
+  your currency; and those parts as PartCAD parts, by Octopart's own
+  categories and found with Octopart's search. Every part Octopart has a 3D
+  model of is a part, its model taken from the KiCad library Octopart's CAD
+  partner made of it. Both through Nexar's API, with an app of your own (at
+  portal.nexar.com; its free plan answers a limited number of parts a month).
+url: https://octopart.com
+
+# The first PartCAD that gives a repository plugin its key taken apart
+# ('request["query"]') and the toolkit 'plugin_models' this builds on.
+partcad: ">=0.9.17"
+
+manufacturable: false
+
+docs:
+  name: Octopart for PartCAD
+  usage: |
+    ```shell
+    pc login //pub/svc/commerce/octopart:octopart_repo
+    pc login //pub/svc/commerce/octopart:octopart
+    pc list packages //pub/svc/commerce/octopart/products...
+    pc search parts -P //pub/svc/commerce/octopart/products/discrete-semiconductors/diodes -k bav99
+    pc inspect //pub/svc/commerce/octopart/products:BAV99~nexperia
+    pc supply quote //pub/svc/commerce/octopart/products:BAV99~nexperia#100
+    ```
+
+dependencies:
+  products:
+    type: external
+    plugin: :octopart_repo
+    desc: What authorized distributors sell, by Octopart's categories. Searched, not listed.
+
+suppliers:
+  octopart:
+
+providers:
+  octopart:
+    type: store
+    path: octopart.py
+    desc: >-
+      The cheapest authorized distributor's offer of a manufacturer's part, among every one Octopart indexes,
+      in your currency.
+    # A part is quoted by its manufacturer ('vendor') and its part number
+    # ('sku'), whichever package declares it: this store quotes electronic
+    # parts of any package, not only its own catalogue's. The country and the
+    # currency are PartCAD's to say - your 'country' and 'currency'.
+    parameters:
+      client_id:
+        type: string
+        default: ""
+        desc: >-
+          The Client ID of your Nexar app (portal.nexar.com, with the Supply
+          scope). Set by 'pc login //pub/svc/commerce/octopart:octopart', or
+          NEXAR_CLIENT_ID. Never set it in a package.
+      client_secret:
+        type: string
+        default: ""
+        desc: >-
+          The Client Secret of your Nexar app. Set by 'pc login', or
+          NEXAR_CLIENT_SECRET. Never set it in a package.
+
+repositories:
+  octopart_repo:
+    type: basic
+    path: octopart.py
+    desc: Serves what authorized distributors sell as parts, by Octopart's categories, searched with Octopart's search.
+    parameters:
+      client_id:
+        type: string
+        default: ""
+        desc: >-
+          The Client ID of your Nexar app. Set by 'pc login
+          //pub/svc/commerce/octopart:octopart_repo', or NEXAR_CLIENT_ID. Never
+          set it in a package.
+      client_secret:
+        type: string
+        default: ""
+        desc: >-
+          The Client Secret of your Nexar app. Set by 'pc login', or
+          NEXAR_CLIENT_SECRET. Never set it in a package.

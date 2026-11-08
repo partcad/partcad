@@ -1,0 +1,128 @@
+# PartCAD package: DigiKey, as a store and as a catalogue of its range.
+#
+# Published as //pub/svc/commerce/digikey, with the other stores. Its provider
+# 'digikey' quotes DigiKey part numbers - and any manufacturer's part DigiKey
+# lists, by its MPN - at DigiKey's prices for the user's country. Its external
+# dependency 'products' is the catalogue (//pub/svc/commerce/digikey/products),
+# whose child packages - served by the digikey_repo plugin - are DigiKey's own
+# categories. Both are one script, digikey.py, asking DigiKey's Product
+# Information API v4 with an API app of the user's own. See the README.
+name: //pub/svc/commerce/digikey
+
+desc: |
+  DigiKey: a provider that quotes DigiKey part numbers - and any manufacturer's
+  part DigiKey lists, by the manufacturer's part number - at DigiKey's prices
+  for your country, with its stock; and DigiKey's range as PartCAD parts, by
+  DigiKey's own categories and found with DigiKey's own search. Every product
+  DigiKey has a 3D model of is a part, bought from DigiKey by its DigiKey part
+  number. Both through DigiKey's Product Information API v4, with an API app of
+  your own (free, at developer.digikey.com).
+url: https://www.digikey.com
+
+# The first PartCAD that gives a repository plugin its key taken apart
+# ('request["query"]') and the toolkit 'plugin_models' this builds on.
+partcad: ">=0.9.17"
+
+# A product is bought, not made, and its model is the distributor's drawing of
+# it, not something to manufacture from.
+manufacturable: false
+
+docs:
+  name: DigiKey for PartCAD
+  usage: |
+    ```shell
+    pc login //pub/svc/commerce/digikey:digikey_repo
+    pc login //pub/svc/commerce/digikey:digikey
+    pc list packages //pub/svc/commerce/digikey/products...
+    pc search parts -P //pub/svc/commerce/digikey/products -k ATmega328P
+    pc search parts -P //pub/svc/commerce/digikey/products/integrated-circuits-ics/embedded-microcontrollers -k "avr dip"
+    pc inspect //pub/svc/commerce/digikey/products:ATMEGA328P-PU-ND
+    pc supply quote //pub/svc/commerce/digikey/products:ATMEGA328P-PU-ND#10
+    ```
+
+dependencies:
+  # The catalogue. Its children, DigiKey's categories, are reported by the
+  # plugin's 'deps', so this one dependency is the whole tree.
+  products:
+    type: external
+    plugin: :digikey_repo
+    desc: DigiKey's range, by DigiKey's own categories. Searched, not listed.
+
+# The store supplies its own products. The categories of 'products' list the
+# same provider in their metadata, so every product finds it.
+suppliers:
+  digikey:
+
+providers:
+  digikey:
+    type: store
+    path: digikey.py
+    desc: DigiKey's prices and stock, for DigiKey part numbers and for any manufacturer's part DigiKey lists.
+    # The site, language and currency of a quote are PartCAD's to say - your
+    # 'country', 'language' and 'currency' - and DigiKey's closest to them is
+    # used. Credentials are yours: 'pc login' keeps them in
+    # ~/.partcad/config.yaml, under 'parameters', by this provider's name.
+    parameters:
+      client_id:
+        type: string
+        default: ""
+        desc: >-
+          The Client ID of your DigiKey API app (developer.digikey.com). Set by
+          'pc login //pub/svc/commerce/digikey:digikey', or DIGIKEY_CLIENT_ID.
+          Never set it in a package.
+      client_secret:
+        type: string
+        default: ""
+        desc: >-
+          The Client Secret of your DigiKey API app. Set by 'pc login', or
+          DIGIKEY_CLIENT_SECRET. Never set it in a package.
+      account:
+        type: string
+        default: ""
+        desc: >-
+          Your DigiKey account number (X-DIGIKEY-Account-Id), for your own
+          prices ('MyPricing') where DigiKey has some for you. Empty is
+          DigiKey's standard prices.
+      sandbox:
+        type: string
+        default: "false"
+        desc: >-
+          'true' asks DigiKey's sandbox (sandbox-api.digikey.com), with a
+          sandbox app's credentials, instead of the production API.
+
+repositories:
+  digikey_repo:
+    type: basic
+    path: digikey.py
+    desc: Serves DigiKey's range as parts, by DigiKey's categories, searched with DigiKey's search.
+    # Yours to change without touching this package, in ~/.partcad/config.yaml,
+    # by the plugin's name - which is also where 'pc login' keeps the keys:
+    #
+    #   parameters:
+    #     //pub/svc/commerce/digikey:digikey_repo:
+    #       formats: stl
+    parameters:
+      client_id:
+        type: string
+        default: ""
+        desc: >-
+          The Client ID of your DigiKey API app. Set by 'pc login
+          //pub/svc/commerce/digikey:digikey_repo', or DIGIKEY_CLIENT_ID. Never
+          set it in a package.
+      client_secret:
+        type: string
+        default: ""
+        desc: >-
+          The Client Secret of your DigiKey API app. Set by 'pc login', or
+          DIGIKEY_CLIENT_SECRET. Never set it in a package.
+      formats:
+        type: string
+        default: ""
+        desc: >-
+          The formats to take a product's 3D model in, best first, separated
+          by commas: step, brep, iges, 3mf, stl, obj, glb. Empty is all of
+          them, in that order. A part's own 'format' overrides it.
+      sandbox:
+        type: string
+        default: "false"
+        desc: "'true' asks DigiKey's sandbox, with a sandbox app's credentials."

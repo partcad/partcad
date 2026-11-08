@@ -4,7 +4,7 @@
 
 This repository contains all open source software that forms the PartCAD ecosystem. It ships **one** Python
 distribution, `partcad`, plus a `partcad-cli` compatibility shim; everything else here is an editor extension,
-a CAD addon, or documentation.
+a CAD addon, documentation, or a PartCAD package incubated here until it has a repository of its own.
 
 ### The packages, all inside the one wheel
 
@@ -185,6 +185,17 @@ a CAD addon, or documentation.
   The `partcad-cli` compatibility package: no modules, no entry points, one dependency on `partcad`. It exists
   so that an older `pip install partcad-cli` keeps working. Do not give it modules or entry points — two
   distributions owning one import name or one console script break each other on uninstall, silently.
+
+* [incubator/](./incubator/README.md):
+
+  PartCAD *packages* - plugins, not code of the wheel - kept here until they have repositories of their own
+  that the public index pins. Each directory is one future repository, named as it will be, and moves out
+  whole. Today that is four distributors, each a store provider and a catalogue (a repository plugin) from
+  one API - DigiKey, Octopart, McMaster-Carr, Mouser - on a toolkit they share (`_shared/distributor.py`,
+  copied into each by `_shared/copy.sh` and held to it by a digest) that builds on `plugin_models`. The
+  README has the evaluation of the eleven distributors considered. Nothing here is built, packaged or tested
+  by CI (`changed-scopes` counts it as documentation); the linters read it, and each package's tests run by
+  hand: `cd incubator/<package> && pytest -c /dev/null --rootdir . .`.
 
 * [README.md](./README.md) and [docs/source](./docs/source):
 

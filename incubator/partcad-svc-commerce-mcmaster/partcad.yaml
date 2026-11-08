@@ -1,0 +1,91 @@
+# PartCAD package: McMaster-Carr, as a store and as a catalogue of its range.
+#
+# Published as //pub/svc/commerce/mcmaster, with the other stores. Its provider
+# 'mcmaster' quotes McMaster-Carr part numbers at McMaster-Carr's prices. Its
+# external dependency 'products' is the catalogue
+# (//pub/svc/commerce/mcmaster/products): a McMaster-Carr part, by its number,
+# with its CAD model. Both are one script, mcmaster.py, asking McMaster-Carr's
+# Product Information API - which is for McMaster-Carr's approved customers,
+# with a client certificate McMaster-Carr issues. See the README.
+name: //pub/svc/commerce/mcmaster
+
+desc: |
+  McMaster-Carr: a provider that quotes McMaster-Carr part numbers at
+  McMaster-Carr's prices, by the pack where McMaster-Carr sells packs; and
+  McMaster-Carr's parts as PartCAD parts, by their part numbers, each with the
+  3D STEP model McMaster-Carr publishes of it. McMaster-Carr's API has no
+  search and no categories: a part is asked for by the number McMaster-Carr's
+  website shows. Through McMaster-Carr's Product Information API, which is for
+  approved customers: the account, its password and the client certificate
+  McMaster-Carr issues are yours.
+url: https://www.mcmaster.com
+
+# The first PartCAD that gives a repository plugin its key taken apart
+# ('request["query"]') and the toolkit 'plugin_models' this builds on.
+partcad: ">=0.9.17"
+
+manufacturable: false
+
+# A client certificate is a PKCS#12 file, which Python's ssl cannot read alone.
+pythonRequirements:
+  - cryptography>=42
+
+docs:
+  name: McMaster-Carr for PartCAD
+  usage: |
+    ```shell
+    pc login //pub/svc/commerce/mcmaster:mcmaster_repo
+    pc login //pub/svc/commerce/mcmaster:mcmaster
+    pc inspect //pub/svc/commerce/mcmaster/products:91290A115
+    pc search parts -P //pub/svc/commerce/mcmaster/products -k 91290A115
+    pc supply quote //pub/svc/commerce/mcmaster/products:91290A115#200
+    ```
+
+dependencies:
+  products:
+    type: external
+    plugin: :mcmaster_repo
+    desc: McMaster-Carr parts with their CAD models, by part number.
+
+suppliers:
+  mcmaster:
+
+providers:
+  mcmaster:
+    type: store
+    path: mcmaster.py
+    desc: McMaster-Carr's prices for McMaster-Carr part numbers, by the pack where it sells packs, in US dollars.
+    parameters: &credentials
+      username:
+        type: string
+        default: ""
+        desc: >-
+          The user name of your McMaster-Carr account, enabled for the API.
+          Set by 'pc login', or MCMASTER_USERNAME. Never set it in a package.
+      password:
+        type: string
+        default: ""
+        desc: >-
+          Its password. Set by 'pc login', or MCMASTER_PASSWORD. Never set it
+          in a package.
+      certificate:
+        type: string
+        default: ""
+        desc: >-
+          The client certificate McMaster-Carr issued you: the path of the
+          .pfx/.p12 (or .pem) file, or its content in base64 where the plugin
+          runs in a container that cannot see the file. Set by 'pc login', or
+          MCMASTER_CERTIFICATE. Never set it in a package.
+      certificate_password:
+        type: string
+        default: ""
+        desc: >-
+          The certificate's password. Set by 'pc login', or
+          MCMASTER_CERTIFICATE_PASSWORD. Never set it in a package.
+
+repositories:
+  mcmaster_repo:
+    type: basic
+    path: mcmaster.py
+    desc: Serves McMaster-Carr parts with their CAD models, by part number.
+    parameters: *credentials

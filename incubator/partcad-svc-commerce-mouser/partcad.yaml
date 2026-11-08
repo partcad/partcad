@@ -1,0 +1,66 @@
+# PartCAD package: Mouser, as a store and as a searchable catalogue of its range.
+#
+# Published as //pub/svc/commerce/mouser, with the other stores. Its provider
+# 'mouser' quotes Mouser part numbers - and any manufacturer's part Mouser
+# lists, by its MPN - at Mouser's prices. Its external dependency 'products' is
+# Mouser's range, searched with Mouser's search: Mouser's API has no categories
+# and no 3D models, so what a search finds is the Mouser number to quote it by,
+# not a part to build. Both are one script, mouser.py, asking Mouser's Search
+# API with a key of the user's own. See the README.
+name: //pub/svc/commerce/mouser
+
+desc: |
+  Mouser: a provider that quotes Mouser part numbers - and any manufacturer's
+  part Mouser lists, by the manufacturer's part number - at Mouser's prices in
+  your account's currency, with its stock; and Mouser's range, searched with
+  Mouser's own search, each product found with the Mouser number to quote it
+  by. Mouser's API has no categories and no 3D models, so nothing here is a
+  part to build. Through Mouser's Search API, with a key of your own (free, at
+  mouser.com/api-search).
+url: https://www.mouser.com
+
+# The first PartCAD that gives a repository plugin its key taken apart
+# ('request["query"]') and the toolkit 'plugin_models' this builds on.
+partcad: ">=0.9.17"
+
+manufacturable: false
+
+docs:
+  name: Mouser for PartCAD
+  usage: |
+    ```shell
+    pc login //pub/svc/commerce/mouser:mouser_repo
+    pc login //pub/svc/commerce/mouser:mouser
+    pc search parts -P //pub/svc/commerce/mouser/products -k LM358
+    pc supply quote --provider //pub/svc/commerce/mouser:mouser :my-op-amp#10
+    ```
+
+dependencies:
+  products:
+    type: external
+    plugin: :mouser_repo
+    desc: Mouser's range, searched with Mouser's search. No categories, and nothing to build.
+
+suppliers:
+  mouser:
+
+providers:
+  mouser:
+    type: store
+    path: mouser.py
+    desc: Mouser's prices and stock, for Mouser part numbers and for any manufacturer's part Mouser lists.
+    parameters: &credentials
+      api_key:
+        type: string
+        default: ""
+        desc: >-
+          Your Mouser Search API key (mouser.com/api-search; not the Cart or
+          Order key). Set by 'pc login', or MOUSER_API_KEY. Never set it in a
+          package.
+
+repositories:
+  mouser_repo:
+    type: basic
+    path: mouser.py
+    desc: Finds Mouser's products with Mouser's search, each with the Mouser number to quote it by.
+    parameters: *credentials

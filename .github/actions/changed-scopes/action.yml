@@ -253,6 +253,13 @@ runs:
               # Agent scaffolding for people working in this repository. Nothing
               # packages it and no test reads it.
               add docs ;;
+            incubator/*)
+              # PartCAD packages kept here until they have repositories of their
+              # own (see "incubator/README.md"). Nothing packages them and no job
+              # runs their tests; the linters, which no bucket gates, still read
+              # them. Without this they would count as unrecognised, which runs
+              # everything a source change runs.
+              add docs ;;
             ide/vscode/*|ide/vscode-shim/*)
               add vscode ;;
             browsers/*|tests/browsers/*)
