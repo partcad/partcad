@@ -3,19 +3,20 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""What each check of `pc test` is, written once for the IDE and the documentation.
+"""What each built-in qualification check is, written once for the IDE and the documentation.
 
-The IDE's Test tab shows an entry of 'partcad.test.catalog' beside each verdict,
-and 'docs/source/digital_thread/lifecycle/testing.rst' lists the same entries. Neither
-may describe a check that does not exist, leave one out, or say something the
-other does not.
+The IDE's Qualification tabs show an entry of 'partcad.qual.catalog' beside each
+verdict, and 'docs/source/digital_thread/lifecycle/qualification_tests.rst'
+lists the same entries, a section per subtype. Neither may describe a check that
+does not exist, leave one out, or say something the other does not.
 """
 
 import os
 
 import pytest
 
-from partcad.test import catalog
+from partcad.qual import catalog
+from partcad.qual.config import SUBTYPES
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
@@ -28,15 +29,21 @@ def test_the_documentation_says_what_the_catalog_says():
     with open(os.path.join(ROOT, catalog.PAGE), encoding="utf-8") as stream:
         page = stream.read()
     assert catalog.page(page) == page, (
-        "%s is out of date: run 'poetry run python -m partcad.test.catalog --write'" % catalog.PAGE
+        "%s is out of date: run 'poetry run python -m partcad.qual.catalog --write'" % catalog.PAGE
     )
 
 
-def test_the_documentation_lists_the_checks_in_the_order_pc_test_runs_them():
+def test_the_documentation_lists_the_checks_by_subtype_in_the_order_they_run():
     with open(os.path.join(ROOT, catalog.PAGE), encoding="utf-8") as stream:
         page = stream.read()
-    positions = [page.index(".. _test-%s:" % name) for name in catalog.registered()]
+    subtypes = catalog.registered_subtypes()
+    names = sorted(catalog.registered(), key=lambda name: SUBTYPES.index(subtypes[name]))
+    positions = [page.index(".. _test-%s:" % name) for name in names]
     assert positions == sorted(positions)
+    # And each one under the heading of its own subtype.
+    for name in names:
+        heading = page.rindex(".. _qual-", 0, page.index(".. _test-%s:" % name))
+        assert page.startswith(".. _qual-%s:" % subtypes[name], heading), name
 
 
 @pytest.mark.parametrize("name", sorted(catalog.TESTS))

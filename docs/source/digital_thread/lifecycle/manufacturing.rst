@@ -114,7 +114,7 @@ and what ``pc instructions`` would tell somebody to do: the
 ``manufacturability`` check, and one for each method -- additive, subtractive,
 forming, sheet metal, and the laser, drill and cut machines -- plus ``cam``,
 whether the route a machine is to cut it with can be produced. See
-:doc:`/digital_thread/lifecycle/testing`.
+:doc:`/digital_thread/lifecycle/qualification_tests`.
 
 Agent skills
 ============

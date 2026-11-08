@@ -1730,8 +1730,8 @@ async def _test_package_async(pc, package, coroutine):
         return await coroutine
 
 
-async def _test_async(ctx, pc, packages, filter_prefix, said, object_name, fast_only=False, named=False):
-    """Run the checks over what was selected.
+async def _test_async(ctx, pc, packages, filter_prefix, said, object_name, fast_only=False, named=False, subtypes=None):
+    """Run the checks over what was selected: those of 'subtypes', all of them for none.
 
     ``said`` is the kind a flag named the object as, or None to have each
     package say what its object of that name is (see ``_kind_of``).
@@ -1743,16 +1743,14 @@ async def _test_async(ctx, pc, packages, filter_prefix, said, object_name, fast_
     """
     import asyncio
 
-    from partcad.test.all import tests as all_tests
-    from partcad.test.test import Test
+    from partcad.qual import registry as qual_registry
+    from partcad.qual.qualification import Qualification
 
-    test_ctx = {Test.NAMED: True} if named else {}
+    test_ctx = {Qualification.NAMED: True} if named else {}
     tasks = []
     # The context's configuration -- the caller's -- rather than the daemon's
     # own, which says nothing about how this command was invoked.
-    tests_to_run = all_tests(ctx.user_config.threads_max)
-    if filter_prefix:
-        tests_to_run = list(filter(lambda t: t.name.startswith(filter_prefix), tests_to_run))
+    tests_to_run = qual_registry.select(qual_registry.builtin(ctx.user_config.threads_max), subtypes, filter_prefix)
 
     scheduled = set()
     for package in packages:
@@ -1786,7 +1784,9 @@ async def _test_async(ctx, pc, packages, filter_prefix, said, object_name, fast_
             pc.logging.error("Package %s is not found" % target)
             continue
         if not obj:
-            task = prj.test_log_wrapper_async(ctx, tests=tests_to_run, fast_only=fast_only)
+            task = prj.test_log_wrapper_async(
+                ctx, tests=tests_to_run, fast_only=fast_only, subtypes=subtypes, prefix=filter_prefix
+            )
             tasks.append(_test_package_async(pc, target, task) if len(packages) > 1 else task)
             continue
         # Software is not tested: it is a file, not a shape.
@@ -1818,7 +1818,12 @@ async def _test_async(ctx, pc, packages, filter_prefix, said, object_name, fast_
             elif fast_only and pc.fast_only.leaves_out(shape):
                 continue
             else:
-                tasks.extend([t.test_log_wrapper(tests_to_run, ctx, shape, test_ctx) for t in tests_to_run])
+                tasks.extend(
+                    [
+                        t.test_log_wrapper(tests_to_run, ctx, shape, test_ctx)
+                        for t in qual_registry.for_shape(tests_to_run, shape, subtypes, filter_prefix)
+                    ]
+                )
 
     await asyncio.gather(*tasks)
 
@@ -1828,8 +1833,25 @@ async def _test_async(ctx, pc, packages, filter_prefix, said, object_name, fast_
 _SHAPES = ("part", "interface", "assembly", "sketch", "scene")
 
 
+def _subtypes(params):
+    """The subtypes of qualification a request asks for, None for all of them; a usage error for an unknown one."""
+    from partcad.qual import config as qual_config
+
+    selection = params.get("subtypes")
+    if not selection:
+        return None
+    try:
+        return qual_config.subtypes_of(selection)
+    except ValueError as e:
+        raise JsonRpcError(USAGE_ERROR, str(e))
+
+
 def test_run(session, params):
-    """Run PartCAD tests on a part/assembly/sketch/interface or a whole package."""
+    """Qualify a part/assembly/sketch/interface or a whole package: `pc qual test` and `pc test`.
+
+    ``subtypes`` limits the run to the checks of those subtypes of qualification
+    (``basic``, ``topology``, ``sim``, ``other``), all of them when absent.
+    """
     import asyncio
 
     ctx = _ctx(session, params)
@@ -1837,6 +1859,7 @@ def test_run(session, params):
         return None
     pc = session.partcad
     selected, object_name, recursive = _request(params)
+    subtypes = _subtypes(params)
     package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
     if not package_obj:
@@ -1874,6 +1897,7 @@ def test_run(session, params):
                 object_name,
                 bool(params.get("fast_only")),
                 named=bool(object_name) and not recursive,
+                subtypes=subtypes,
             )
         )
     return None
@@ -3863,13 +3887,15 @@ def requirements_check(session, params):
 
 
 def test_report(session, params):
-    """Every check ``pc test <object>`` runs on one object and, with ``verify``, its verdict.
+    """Every check ``pc qual test <object>`` runs on one object and, with ``verify``, its verdict.
 
-    What the IDE's Test tab is drawn from: one line per check, in the order ``pc
-    test`` runs them, each with its verdict, what it said, what it left behind to
+    What the IDE's Qualification tabs are drawn from -- Basic, Topology and Other,
+    each asking for its own ``subtypes``: one line per check, in the order they
+    run, each with its subtype, its verdict, what it said, what it left behind to
     be looked at -- the assembly the interference check puts together of two
-    parts that overlap, say -- and what the check is and how to act on it (see
-    ``partcad.test.report`` and ``partcad.test.catalog``). Without ``verify``
+    parts that overlap, the faces a part has no tolerance on -- the report an
+    external tool wrote, and what the check is and how to act on it (see
+    ``partcad.qual.report`` and ``partcad.qual.catalog``). Without ``verify``
     nothing is run: the list, with the checks that do not apply saying why, which
     is cheap enough to draw the tab with while the rest are running.
 
@@ -3902,14 +3928,95 @@ def test_report(session, params):
     if obj is None:
         raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
 
-    from partcad.test import report
+    from partcad.qual import report
 
+    subtypes = _subtypes(params)
     verify = bool(params.get("verify"))
     if verify and kind in ("assembly", "scene"):
         _stage_subassemblies(session, ctx, obj)
     with pc.logging.Process("Test", package, name):
-        results = asyncio.run(report.run_async(ctx, obj, verify=verify))
-    return report.to_dict(path, kind, results, verify)
+        results = asyncio.run(report.run_async(ctx, obj, verify=verify, subtypes=subtypes))
+    return report.to_dict(path, kind, results, verify, subtypes)
+
+
+def qual_add(session, params):
+    """Declare a qualification of one object: ``pc qual add``.
+
+    Writes ``<object>.qual.<subtype>.<name>`` into the object's package: a check
+    a plugin supplies (``path`` names the plugin), a simulation (``subtype``
+    ``sim``, ``path`` naming the simulation plugin), or the parameters of a
+    built-in check (``name`` is the check's, and there is no ``path``). Every
+    other key of ``entry`` is written beside them as it is. A plugin's check is
+    resolved before anything is written, so that a declaration naming a plugin
+    that is not there, or one of another subtype, is refused here rather than
+    reported by the next run.
+    """
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    from partcad.qual import config as qual_config
+    from partcad.qual import plugin as qual_plugin
+    from partcad.qual import registry as qual_registry
+
+    subtype = (_subtypes({"subtypes": params.get("subtype") or qual_config.OTHER}) or (qual_config.OTHER,))[0]
+    name = params.get("name")
+    if not name or not isinstance(name, str):
+        raise JsonRpcError(USAGE_ERROR, "a qualification needs a name")
+    entry = dict(params.get("entry") or {})
+    path = params.get("path")
+    if path:
+        entry[qual_config.PATH] = path
+
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, object_name = resolved
+    getters = {
+        "part": ctx.get_part,
+        "assembly": ctx.get_assembly,
+        "scene": ctx.get_scene,
+        "sketch": ctx.get_sketch,
+    }
+    refusal = "'%s' is not a kind of object that is qualified"
+    _refuse_said_kind(params, getters, refusal)
+    kind = _resolve_kind(ctx, params, package, object_name, getters, refusal)
+    package_obj = ctx.get_project(package)
+    if package_obj is None:
+        raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % package)
+
+    builtin = qual_registry.builtin_names(subtype)
+    if subtype == qual_config.SIM:
+        if not path:
+            raise JsonRpcError(USAGE_ERROR, "a simulation needs the plugin that runs it ('--path')")
+    elif path:
+        if name in builtin:
+            raise JsonRpcError(USAGE_ERROR, "'%s' is a built-in check; give the plugin's check another name" % name)
+        try:
+            impl = qual_plugin.resolve_plugin(ctx, package, path)
+        except qual_plugin.QualPluginError as e:
+            raise JsonRpcError(USAGE_ERROR, "The check '%s' %s" % (name, e))
+        declared_subtype = impl.config.get("subtype") or qual_config.OTHER
+        if declared_subtype != subtype:
+            raise JsonRpcError(
+                USAGE_ERROR,
+                "The plugin '%s' supplies a check of the '%s' subtype, not '%s'" % (path, declared_subtype, subtype),
+            )
+    elif name not in builtin:
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "'%s' is not a built-in check of the '%s' subtype (%s); name the plugin that runs it with '--path'"
+            % (name, subtype, ", ".join(builtin) or "there are none"),
+        )
+
+    if not package_obj.add_qual_config(kind, object_name, subtype, name, entry):
+        raise JsonRpcError(USAGE_ERROR, "Nothing was written: the reason is reported above")
+    _invalidate_context(session, params)
+    pc.logging.info(
+        "Declared '%s: %s: %s' on %s" % (qual_config.SECTION, subtype, name, _qualified(package, object_name))
+    )
+    return {"object": _qualified(package, object_name), "kind": kind, "subtype": subtype, "name": name, "entry": entry}
 
 
 def cae_analyze(session, params):

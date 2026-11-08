@@ -29,11 +29,11 @@ import hashlib
 from ..part import Part
 from ..part_config import PartConfiguration
 from ..part_config_manufacturing import METHOD_SUBTRACTIVE
+from ..qual.qualification import BasicQualification, Test
 from .manufacturability_reference import reference_key, resolve_reference
-from .test import Test
 
 
-class ManufacturabilityMachineTest(Test):
+class ManufacturabilityMachineTest(BasicQualification):
     """One subtractive machine's own limits, asked of the parts that name it.
 
     Subclasses set `machine` to the kind they are about and implement

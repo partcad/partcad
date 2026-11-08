@@ -36,8 +36,8 @@ import hashlib
 from ..part import Part
 from ..part_config import PartConfiguration
 from ..part_config_manufacturing import METHOD_SUBTRACTIVE
+from ..qual.qualification import BasicQualification, Test
 from .manufacturability_reference import reference_key, resolve_reference
-from .test import Test
 
 # How much of the part may lie outside its stock and still count as inside it,
 # as a fraction of the part's own volume.
@@ -51,7 +51,7 @@ from .test import Test
 OUTSIDE_FRACTION = 1e-6
 
 
-class ManufacturabilitySubtractiveTest(Test):
+class ManufacturabilitySubtractiveTest(BasicQualification):
     WRAPPERS = ("manufacturability.py",)
 
     def __init__(self) -> None:

@@ -56,6 +56,7 @@ from .. import shape_envelope
 from ..assembly import Assembly, AssemblyChild
 from ..geom import Location
 from ..part_config import PartConfiguration
+from ..qual import highlight
 
 # The sub-assembly of the volumes the two parts share, and the folder under
 # PartCAD's state directory their files are written to.
@@ -135,6 +136,9 @@ async def make_async(ctx, assembly, overlap: dict) -> typing.Optional[dict]:
         "title": "'%s' and '%s'" % (a, b),
         "desc": "Where '%s' and '%s' overlap: the two, and the %.3f mm^3 they share as the parts of '%s'"
         % (a, b, overlap.get("volume", 0.0), SUBASSEMBLY),
+        # The link that is the finding: what the IDE's Topology tab leaves
+        # unfaded when it shows this (see 'partcad.qual.highlight').
+        highlight.FOCUS_KEY: SUBASSEMBLY,
         "recipe": {
             "a": {"path": a, "object": members["a"]["object"], "location": members["a"]["location"]},
             "b": {"path": b, "object": members["b"]["object"], "location": members["b"]["location"]},
@@ -189,6 +193,9 @@ async def restore_async(ctx, artifact: dict) -> bool:
             "path": path,
             "desc": "Volume %d of what %s share" % (index, artifact.get("title", "the two")),
             "manufacturable": False,
+            # Drawn in the colour a finding is, so that it stands out from the
+            # two parts it is the overlap of.
+            "properties": {"color": highlight.COLORS["volume"]},
         }
         config = PartConfiguration.normalize(
             part_name, config, "%s:%s" % (project.name, part_name), project.ctx.user_config

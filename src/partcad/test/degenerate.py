@@ -6,15 +6,15 @@
 
 from .. import surface as pc_surface
 from ..assembly import Assembly
+from ..qual.qualification import BasicQualification, Test
 from ..sketch import Sketch
-from .test import Test
 
 # How thin, in millimetres, an object may be in one direction before it counts
 # as flat. Not settable per object: see the class docstring.
 TOLERANCE = 1e-3
 
 
-class DegenerateTest(Test):
+class DegenerateTest(BasicQualification):
     """Fail a shape that came out with no size to it.
 
     A part can instantiate perfectly and still be wrong in a way nothing looks

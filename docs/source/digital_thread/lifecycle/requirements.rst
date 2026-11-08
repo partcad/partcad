@@ -97,7 +97,7 @@ On the command line
 - ``pc sim`` runs every simulation, including those that name a feature.
 - ``/pc:validate`` gathers the rest of the evidence -- renders from every angle
   that matters, the bill of materials and the assembly instructions -- and gives
-  each requirement a verdict. See :doc:`/digital_thread/lifecycle/validation`.
+  each requirement a verdict. See :doc:`/digital_thread/lifecycle/qualification`.
 
 ``pc info`` prints the section as it is read, which is how to see what a template
 or an :ref:`enrich <part-types>` left behind. ``pc lint`` reports a ``requirements:``

@@ -12,7 +12,7 @@ Product Lifecycle
    design.rst
    analysis.rst
    manufacturing.rst
-   validation.rst
+   qualification.rst
    operations.rst
 
 
@@ -47,7 +47,7 @@ answers was stored to begin with.
    * - :doc:`Manufacturing </digital_thread/lifecycle/manufacturing>`
      - How does it come to exist -- what is bought, what is built, in what order?
      - ``manufacturing:``, ``vendor:``/``sku:``, materials, instructions
-   * - :doc:`Validation </digital_thread/lifecycle/validation>`
+   * - :doc:`Validation </digital_thread/lifecycle/qualification>`
      - Is it what it claims to be, and does it do what it is supposed to?
      - every claim above, checked by ``pc test``, ``pc sim`` and ``simulate:``
    * - :doc:`Operations </digital_thread/lifecycle/operations>`

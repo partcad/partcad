@@ -250,7 +250,7 @@ A scene can be the thing a claim is about, not only the world another object is
 tested in: a stack of blocks that stands, a pile that does not slide. It
 declares ``simulate:`` exactly as a part or an assembly does, and ``pc sim`` and
 ``pc test`` hold it to it. See
-:ref:`Simulating a scene <validating-a-scene>` in the Validation phase.
+:ref:`Simulating a scene <qualifying-a-scene>` in the Validation phase.
 
 Agent skills
 ============

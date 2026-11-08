@@ -20,7 +20,7 @@ and there is nothing to picture: every screenshot of the panel on these pages
 shows it, greyed, at the end of the row. Hovering over it says why.
 
 **Process Emulation**, the third tab of :doc:`Validation
-</digital_thread/lifecycle/validation>`, is reserved in the same way and for the
+</digital_thread/lifecycle/qualification>`, is reserved in the same way and for the
 related question of how making it would go. It holds nothing yet either.
 
 On the command line

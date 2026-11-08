@@ -446,7 +446,7 @@ def test_a_declaration_that_names_no_plugin_says_where_to_get_one(package, monke
 
     assert result.failed is True
     assert result.passed is None
-    assert "names no 'simulation:'" in result.error
+    assert "names no plugin to run it ('path:')" in result.error
     assert simulation.KNOWN_SIMULATION in result.error
 
 

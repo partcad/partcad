@@ -10,10 +10,10 @@
 from ..part import Part
 from ..part_config import PartConfiguration
 from ..part_config_manufacturing import METHOD_ADDITIVE
-from .test import Test
+from ..qual.qualification import BasicQualification, Test
 
 
-class ManufacturabilityAdditiveSolidTest(Test):
+class ManufacturabilityAdditiveSolidTest(BasicQualification):
     WRAPPERS = ("manufacturability.py",)
 
     def __init__(self) -> None:

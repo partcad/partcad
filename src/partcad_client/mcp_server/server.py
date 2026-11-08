@@ -16,7 +16,7 @@ wrote meanwhile, and an image instead of base64 wherever there is one.
 import base64
 import json
 import logging
-from typing import Annotated, Any, Literal, Optional
+from typing import Annotated, Any, List, Literal, Optional
 
 import anyio
 import anyio.from_thread
@@ -397,14 +397,23 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         package: PackageName = None,
         recursive: Annotated[bool, Field(description="Also test the packages below this one.")] = False,
         params: Parameters = None,
+        subtypes: Annotated[
+            Optional[List[Literal["basic", "topology", "sim", "other"]]],
+            Field(
+                description="The subtypes of qualification test to run: basic (findings in words), topology "
+                "(places on the object), sim (the simulations it declares), other (plugins' checks). All when left out."
+            ),
+        ] = None,
     ) -> CallToolResult:
-        """Check objects against the requirements and tests they declare.
+        """Qualify objects: run the qualification tests they are held to and declare.
 
-        `pc test`. ok is false when any check failed, and the errors say which.
+        `pc qual test` (`pc test`). ok is false when any check failed, and the errors say which.
         """
         request = {"package": package, "object": object, "recursive": recursive, **_kind_flag(kind)}
         if params:
             request["params"] = _assignments(params)
+        if subtypes:
+            request["subtypes"] = list(subtypes)
         return await run(ctx, "test.run", request)
 
     @server.tool(title="Lint a package", annotations=_READS)

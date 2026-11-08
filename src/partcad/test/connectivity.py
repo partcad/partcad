@@ -5,10 +5,10 @@
 #
 
 from ..assembly import Assembly
-from .test import Test
+from ..qual.qualification import BasicQualification, Test
 
 
-class ConnectivityTest(Test):
+class ConnectivityTest(BasicQualification):
     """Fail an assembly whose parts are placed in ways that do not add up.
 
     Three things, all of which an assembly can do while building perfectly and
@@ -43,11 +43,16 @@ class ConnectivityTest(Test):
 
         assemblies:
           gearbox:
-            connectivity:
-              allowDuplicates: false   # two items in one place
-              requireAnchored: true    # every item after the first connected
-              skip: false
+            qual:
+              basic:
+                connectivity:
+                  allowDuplicates: false   # two items in one place
+                  requireAnchored: true    # every item after the first connected
     """
+
+    # Its parameters, 'qual: basic: connectivity:' on the object, were once declared as
+    # 'connectivity:' there, which is still read.
+    LEGACY_KEY = "connectivity"
 
     def __init__(self) -> None:
         super().__init__("connectivity")
@@ -55,7 +60,7 @@ class ConnectivityTest(Test):
     async def cache_key_suffix(self, ctx, shape) -> str:
         # Every setting that decides the verdict. Without them a cached pass is
         # read back after the setting that produced it has been turned off.
-        config = (shape.config or {}).get("connectivity") or {}
+        config = self.params(shape)
         return ",allowDuplicates=%s,requireAnchored=%s,manufacturable=%s,boughtWhole=%s" % (
             bool(config.get("allowDuplicates", False)),
             bool(config.get("requireAnchored", True)),
@@ -98,7 +103,7 @@ class ConnectivityTest(Test):
         if reason is not None:
             return self.not_applicable(shape, reason)
 
-        config = (shape.config or {}).get("connectivity") or {}
+        config = self.params(shape)
 
         try:
             await shape.do_instantiate()

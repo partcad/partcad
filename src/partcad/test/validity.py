@@ -6,11 +6,11 @@
 
 from .. import surface as pc_surface
 from ..assembly import Assembly
+from ..qual.qualification import BasicQualification, Test
 from ..sketch import Sketch
-from .test import Test
 
 
-class ValidityTest(Test):
+class ValidityTest(BasicQualification):
     """Report a part whose geometry OCCT will not certify.
 
     'BRepCheck_Analyzer' asks whether a shape is well formed in OCCT's terms:

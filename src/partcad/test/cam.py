@@ -47,11 +47,11 @@ from .. import cam as pc_cam
 from .. import output
 from .. import runtime as pc_runtime
 from ..part import Part
+from ..qual.qualification import BasicQualification, Test
 from ..sketch import Sketch
-from .test import Test
 
 
-class CamTest(Test):
+class CamTest(BasicQualification):
     def __init__(self) -> None:
         """`pc test -f cam` selects it, and nothing else now starts with `cam`."""
         super().__init__("cam")

@@ -259,7 +259,7 @@ Checking and analysing
 ======================
 
 ``/pc:validate``
-  The skill for the :doc:`Validation phase </digital_thread/lifecycle/validation>`,
+  The skill for the :doc:`Validation phase </digital_thread/lifecycle/qualification>`,
   and the only one that judges a requirement no program can measure.
 
   It reads what the object's ``requirements:`` section asks for, runs ``pc test``

@@ -68,7 +68,7 @@ that was needed. The same runs serve both: ``pc test`` runs every scenario of
 every ``fea:``, ``dynamic:``, ``thermal:`` and ``cfd:``, and every ``simulate:``
 entry, declared as its checks of the same names (``sim`` for a simulation), and
 fails an object any of whose scenarios finds a problem or whose simulation does
-not behave as it says (see :doc:`/digital_thread/lifecycle/validation`).
+not behave as it says (see :doc:`/digital_thread/lifecycle/qualification`).
 
 In the UI
 =========

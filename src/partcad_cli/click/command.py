@@ -147,6 +147,10 @@ command_groups = [
             "search",
             "add",
             "import",
+            # `qual` is the one that asks whether an object is what it claims
+            # to be, a subtype at a time; `test` and `sim` are its older
+            # spellings -- every subtype, and the simulations alone.
+            "qual",
             "test",
             "sim",
             "info",

@@ -71,9 +71,13 @@ _OPERATIONS = {
     # Not a CLI command: what the IDE's Requirements tab is drawn from. Its
     # verdicts are 'pc test -f requirements', by the same code.
     "requirements.check": operations.requirements_check,
-    # Not a CLI command: what the IDE's Test tab is drawn from -- 'pc test
-    # <object>', one line per check rather than a log, by the same checks.
+    # Not a CLI command: what the IDE's Qualification tabs are drawn from --
+    # 'pc qual test <object>', one line per check rather than a log, by the same
+    # checks; a tab asks for its own 'subtypes'. 'test.report' is its older name.
+    "qual.report": operations.test_report,
     "test.report": operations.test_report,
+    # 'pc qual add': one entry of an object's 'qual:' section, written.
+    "qual.add": operations.qual_add,
     "cae.analyze": operations.cae_analyze,
     "cae.defaults": operations.cae_defaults,
     # Not a CLI command: the scenarios a part declares for each analysis, read
@@ -99,10 +103,14 @@ _OPERATIONS = {
     "open.tools": operations.open_tools,
     "adhoc.convert": operations.adhoc_convert,
     "adhoc.render": operations.adhoc_render,
+    # 'pc qual test' -- and 'pc test', its older spelling, which asks for every
+    # subtype.
+    "qual.run": operations.test_run,
     "test.run": operations.test_run,
     "simulate.run": operations.simulate_run,
-    # Not a CLI command: what an object declares under 'simulate:', read rather
-    # than run -- what the IDE's Validation tab is enabled by and lists.
+    # Not a CLI command: what an object declares under 'qual: sim:', read rather
+    # than run -- what the IDE's Simulation tab (Qualification) is enabled by
+    # and lists.
     "simulate.list": operations.simulate_list,
     "lint.run": operations.lint_run,
     "daemon.reset": operations.daemon_reset,

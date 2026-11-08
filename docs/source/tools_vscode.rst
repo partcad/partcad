@@ -155,7 +155,7 @@ is always the first (see :doc:`/digital_thread/introduction` for what each group
 
   - **Test** — every check ``pc test`` runs, with how each came out on this object: passed, failed, warned,
     skipped, or not applicable and why. The check selected shows what it found and what it is, when it applies
-    and what to do when it fails (:doc:`/digital_thread/lifecycle/testing`). An interference leaves an assembly of the two
+    and what to do when it fails (:doc:`/digital_thread/lifecycle/qualification_tests`). An interference leaves an assembly of the two
     parts and what they share, to open in 3D. Always the first tab, and always enabled; an object that belongs
     to no package has nothing to ask PartCAD about, and the tab says so.
   - **Simulation** — for a part, an assembly or a scene that declares a ``simulate:`` section (see :doc:`/digital_thread/lifecycle/simulation`):

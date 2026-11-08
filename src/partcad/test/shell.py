@@ -7,11 +7,11 @@
 from .. import brep_inspect
 from .. import surface as pc_surface
 from ..assembly import Assembly
+from ..qual.qualification import BasicQualification, Test
 from ..sketch import Sketch
-from .test import Test
 
 
-class ShellTest(Test):
+class ShellTest(BasicQualification):
     """Fail a part that came back as a skin rather than as a body.
 
     A shell is a set of faces joined along their edges, with nothing said about

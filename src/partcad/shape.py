@@ -229,6 +229,12 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         # Outputs, not inputs. A part that gains a material has not become a
         # different shape (see test_shape_properties.py).
         "properties",
+        # How the object is qualified, not what it is: the parameters of the
+        # built-in checks, the checks plugins supply, and the simulations (see
+        # 'partcad.qual.config'). Each check folds into its own verdict's key
+        # what of this it reads ('Qualification.cache_key_suffix()'), and a
+        # simulation's run is keyed as the 'simulate' entry below says.
+        "qual",
         # What the object is supposed to do once it is placed in a world, not
         # what it is. A simulation's own answer is cached under a key of its
         # own that covers what decides it -- the scene, the plugin, its

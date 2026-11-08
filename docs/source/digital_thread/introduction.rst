@@ -52,7 +52,7 @@ declaration of the same object:
        software, an assembly's instructions
      - ``pc bom``, ``pc supply``, ``pc instructions``, ``pc cam``
      - **Manufacturing**
-   * - :doc:`Validation </digital_thread/lifecycle/validation>`
+   * - :doc:`Validation </digital_thread/lifecycle/qualification>`
      - the claims all of the above make, checked
      - ``pc test``, ``pc sim``, ``/pc:validate``
      - **Validation**
@@ -89,7 +89,7 @@ A declaration states claims: this part is made by laser cutting, this assembly's
 parts do not overlap, this mass is under 50 grams, this robot does not tip over.
 ``pc test`` checks every claim that can be measured, ``pc sim`` every claim about
 behaviour that a simulation can show, and the ``/pc:validate`` agent skill
-judges the rest from evidence it gathers and names. See :doc:`/digital_thread/lifecycle/validation`.
+judges the rest from evidence it gathers and names. See :doc:`/digital_thread/lifecycle/qualification`.
 
 Packages build on packages
 ==========================

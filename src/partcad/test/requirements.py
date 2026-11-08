@@ -5,10 +5,10 @@
 #
 
 from .. import requirements
-from .test import Test
+from ..qual.qualification import BasicQualification, Test
 
 
-class RequirementsTest(Test):
+class RequirementsTest(BasicQualification):
     """Check that the model is what the object's 'requirements:' say it has to be.
 
     The ports, the interfaces, the physical properties and how closely its

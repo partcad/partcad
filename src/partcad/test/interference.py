@@ -7,8 +7,8 @@
 from partcad_utils import assy_filter
 
 from ..assembly import Assembly
+from ..qual.qualification import Test, TopologyQualification
 from . import interference_artifact
-from .test import Test
 
 # The floor that separates a boolean's arithmetic noise from a real overlap.
 # Two touching surfaces should answer zero and answer a sliver instead; this is
@@ -16,7 +16,7 @@ from .test import Test
 DEFAULT_MIN_VOLUME = 0.05
 
 
-class InterferenceTest(Test):
+class InterferenceTest(TopologyQualification):
     """Fail an assembly whose parts share space.
 
     The 'cad' test passes an assembly whose parts are all in the wrong place -
@@ -73,17 +73,23 @@ class InterferenceTest(Test):
 
         assemblies:
           gearbox:
-            interference:
-              minVolume: 0.01     # a tighter floor, for geometry that is exact
+            qual:
+              topology:
+                interference:
+                  minVolume: 0.01     # a tighter floor, for geometry that is exact
     """
 
     WRAPPERS = ("interference.py",)
+
+    # Its parameters, 'qual: topology: interference:' on the object, were once declared as
+    # 'interference:' there, which is still read.
+    LEGACY_KEY = "interference"
 
     def __init__(self) -> None:
         super().__init__("interference")
 
     async def cache_key_suffix(self, ctx, shape) -> str:
-        config = (shape.config or {}).get("interference") or {}
+        config = self.params(shape)
         return ",manufacturable=%s,minVolume=%s,minFraction=%s" % (
             bool(getattr(shape, "is_manufacturable", True)),
             config.get("minVolume", DEFAULT_MIN_VOLUME),
@@ -103,7 +109,7 @@ class InterferenceTest(Test):
         if reason is not None:
             return self.not_applicable(shape, reason)
 
-        config = (shape.config or {}).get("interference") or {}
+        config = self.params(shape)
 
         # Worked out before the geometry is, so that the pairs the joints
         # account for are never measured. They are still filtered out of the

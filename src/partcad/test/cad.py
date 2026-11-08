@@ -7,10 +7,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .test import Test
+from ..qual.qualification import BasicQualification, Test
 
 
-class CadTest(Test):
+class CadTest(BasicQualification):
     def __init__(self) -> None:
         super().__init__("cad")
 

@@ -45,8 +45,8 @@ from ..file_factory import declared_hash, unreproducible_reason
 from ..part import Part
 from ..part_config import PartConfiguration
 from ..plugin_provider_data_cart import ProviderCartItem, resolve_cart_object
+from ..qual.qualification import BasicQualification, Test
 from ..shape_config import final_config as _final_config
-from .test import Test
 
 
 async def tolerance_failure(part) -> str | None:
@@ -72,7 +72,7 @@ async def tolerance_is_per_feature(part) -> bool:
     return tolerance is not None and math.isnan(tolerance)
 
 
-class ManufacturabilityTest(Test):
+class ManufacturabilityTest(BasicQualification):
     # It runs the whole suite over everything the object is procured from.
     WRAPPERS = ("interference.py", "manufacturability.py", "solidity.py")
 

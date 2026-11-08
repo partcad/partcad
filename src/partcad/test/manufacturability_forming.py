@@ -10,10 +10,10 @@
 from ..part import Part
 from ..part_config import PartConfiguration
 from ..part_config_manufacturing import METHOD_FORMING
-from .test import Test
+from ..qual.qualification import BasicQualification, Test
 
 
-class ManufacturabilityFormingTest(Test):
+class ManufacturabilityFormingTest(BasicQualification):
     WRAPPERS = ("manufacturability.py",)
 
     def __init__(self) -> None:

@@ -160,6 +160,19 @@ SIMULATE = "simulation"
 # knowing they exist.
 IMPORT = "import"
 
+# Another section resolved the same way that produces no file: 'qual:' declares
+# the qualification plugins a package supplies -- checks of an object that an
+# object asks for by naming the plugin under its own 'qual: <subtype>:' (see
+# 'partcad.qual.plugin'). Out of 'SECTIONS' for the reason 'simulation:' is, and
+# with no built-in package for the reason 'cae:' has none: a check that needs
+# a plugin is a check of somebody else's, with a release cycle of its own, and
+# the checks PartCAD does implement are built in ('partcad.qual.registry').
+#
+# On an object, 'qual:' is something else -- what the object declares about how
+# it is qualified ('partcad.qual.config') -- which is why this one is read only
+# from a package's own configuration.
+QUAL = "qual"
+
 # The fifth, and the only one whose implementation is not a script: 'open:'
 # declares the third-party applications 'pc ide open' can launch. An entry is data
 # and nothing else -- where the application is on each operating system, what to
@@ -371,6 +384,14 @@ RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 # opposite of what a scene means on its own). They configure the run, so they
 # are held out of the plugin's request for the same reason 'path' is.
 SIMULATION_KEYS = frozenset({"format", "formatOptions"})
+
+# The same, for the 'qual:' section: 'subtype' says what the check produces
+# ('basic', 'topology' or 'other'), 'kinds' which kinds of object it can be asked
+# of, 'format' and 'formatOptions' how the object reaches it, as for a
+# simulation, 'timeout' how long a run may take, and 'cache' whether its verdict
+# is a property of the object and its parameters alone (see
+# 'partcad.qual.plugin'). None is a parameter of the check.
+QUAL_KEYS = frozenset({"subtype", "kinds", "format", "formatOptions", "timeout", "cache"})
 
 # The same, for the two sections that write a file *of an object*: 'filter' says
 # which of that object's links the file is of (see 'partcad_utils.assy_filter'),
@@ -672,6 +693,8 @@ class Implementation:
         """The fields of this configuration that are not parameters."""
         if self.section == SIMULATE:
             return RESERVED_KEYS | SIMULATION_KEYS
+        if self.section == QUAL:
+            return RESERVED_KEYS | QUAL_KEYS
         if self.section == IMPORT:
             return RESERVED_KEYS | IMPORT_KEYS
         if self.section in ANALYSIS_SECTIONS:
@@ -1005,7 +1028,7 @@ def config_sections(section: str) -> tuple:
     'export:' request never falls back to a 'render:' implementation for a
     format that 'render:' owns.
     """
-    if section in (CAE, CAM, SIMULATE, IMPORT, OPEN):
+    if section in (CAE, CAM, SIMULATE, QUAL, IMPORT, OPEN):
         return (section,)
     return (RENDER, EXPORT) if section == EXPORT else (EXPORT, RENDER)
 

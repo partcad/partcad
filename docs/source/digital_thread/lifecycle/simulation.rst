@@ -179,7 +179,7 @@ the simulation again with its pictures taken from there, because the viewpoint
 is part of the question a run is cached under.
 
 The tab is disabled for anything that declares no simulation; Validation itself
-never is, for its :doc:`Test tab </digital_thread/lifecycle/testing>`.
+never is, for its :doc:`Test tab </digital_thread/lifecycle/qualification_tests>`.
 ``pc ide view --validation-simulation`` opens it from a terminal, and
 ``--scenario <name>`` selects one simulation by name.
 

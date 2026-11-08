@@ -5,10 +5,10 @@
 #
 
 from ..assembly import Assembly
-from .test import Test
+from ..qual.qualification import BasicQualification, Test
 
 
-class ConnectTest(Test):
+class ConnectTest(BasicQualification):
     """Check that an assembly's connection instructions are ones that can be followed.
 
     The instructions in the 'how' section of a 'connect'/'connectPorts' node are

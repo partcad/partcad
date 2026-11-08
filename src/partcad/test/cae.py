@@ -45,8 +45,8 @@ from .. import cae as pc_cae
 from .. import output
 from .. import runtime as pc_runtime
 from ..part import Part
+from ..qual.qualification import Test
 from .implementation import ImplementationTest
-from .test import Test
 
 
 class CaeTest(ImplementationTest):

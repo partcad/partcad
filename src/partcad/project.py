@@ -3182,6 +3182,56 @@ class Project(project_config.Configuration):
 
         return True
 
+    def add_qual_config(self, kind: str, object_name: str, subtype: str, name: str, entry: dict) -> bool:
+        """Write one entry of an object's 'qual:' section into this package's 'partcad.yaml'.
+
+        '<object>.qual.<subtype>.<name>' becomes 'entry': a plugin's check (with
+        'path:'), a simulation, or the parameters of a built-in check, which is
+        what 'pc qual add' writes (see 'partcad.qual.config'). An entry of that
+        name is replaced. Refused, with the reason logged and False returned, for
+        an object the file does not declare -- one a plugin supplies, or one
+        another file holds -- since there is nowhere here to write it.
+        """
+        from .qual import config as qual_config
+
+        if subtype not in qual_config.SUBTYPES:
+            pc_logging.error("'%s' is not a subtype of qualification (%s)" % (subtype, ", ".join(qual_config.SUBTYPES)))
+            return False
+        section = OBJECT_KIND_SECTIONS.get(kind)
+        if section is None:
+            pc_logging.error("A %s does not declare 'qual:'" % kind)
+            return False
+
+        yaml = ruamel.yaml.YAML()
+        yaml.preserve_quotes = True
+        yaml.width = 4096
+        with open(self.config_path) as fp:
+            config = yaml.load(fp)
+        if config is None:
+            config = {}
+        declarations = config.get(section)
+        declaration = declarations.get(object_name) if isinstance(declarations, dict) else None
+        if not isinstance(declaration, dict):
+            pc_logging.error(
+                "The %s '%s' is not declared in '%s', so there is nowhere to add its qualification"
+                % (kind, object_name, self.config_path)
+            )
+            return False
+
+        qual = declaration.get(qual_config.SECTION)
+        if not isinstance(qual, dict):
+            qual = {}
+            declaration[qual_config.SECTION] = qual
+        entries = qual.get(subtype)
+        if not isinstance(entries, dict):
+            entries = {}
+            qual[subtype] = entries
+        entries[name] = entry
+
+        with open(self.config_path, "w") as fp:
+            yaml.dump(config, fp)
+        return True
+
     def add_sketch(self, kind: str, path: str, config={}) -> bool:
         pc_logging.info("Adding the sketch %s of type %s" % (self.rel_path(path), kind))
         return self._add_component(
@@ -3296,9 +3346,20 @@ class Project(project_config.Configuration):
                     yaml.dump(config, fp)
                     fp.close()
 
-    async def _run_test_async(self, ctx, tests: list, use_wrapper: bool = False, fast_only: bool = False) -> bool:
+    async def _run_test_async(
+        self, ctx, tests: list, use_wrapper: bool = False, fast_only: bool = False, subtypes=None, prefix=None
+    ) -> bool:
+        """Qualify every object of this package: the built-in checks 'tests', and what each object declares.
+
+        'subtypes' are the subtypes of qualification asked for (all of them for
+        none), which is also which of the checks plugins supply that an object
+        declares are asked of it ('partcad.qual.registry.for_shape'), and
+        'prefix' the start of the name of the ones asked for ('-f').
+        """
+        from .qual import registry as qual_registry
+
         if tests is None:
-            tests = ctx.get_all_tests()
+            tests = qual_registry.select(ctx.get_all_tests(), subtypes, prefix)
 
         tasks = []
         test_method = "test_log_wrapper" if use_wrapper else "test_cached"
@@ -3322,25 +3383,35 @@ class Project(project_config.Configuration):
             (self.assembly_configs, self.get_assembly),
             (self.scene_configs, self.get_scene),
         ]:
+            # Each check is handed the built-in list as what "the suite" is,
+            # and is asked of the object beside the checks it declares itself.
             tasks.extend(
                 asyncio.create_task(getattr(t, test_method)(tests, ctx, obj))
                 for obj in get_objects(config_dict, getter)
-                for t in tests
+                for t in qual_registry.for_shape(tests, obj, subtypes, prefix)
             )
 
         return all(await asyncio.gather(*tasks))
 
-    async def test_async(self, ctx, tests=None, fast_only: bool = False) -> bool:
-        return await self._run_test_async(ctx, tests, use_wrapper=False, fast_only=fast_only)
+    async def test_async(self, ctx, tests=None, fast_only: bool = False, subtypes=None, prefix=None) -> bool:
+        return await self._run_test_async(
+            ctx, tests, use_wrapper=False, fast_only=fast_only, subtypes=subtypes, prefix=prefix
+        )
 
-    def test(self, ctx, tests=None, fast_only: bool = False) -> bool:
-        return asyncio.run(self.test_async(ctx, tests, fast_only=fast_only))
+    def test(self, ctx, tests=None, fast_only: bool = False, subtypes=None, prefix=None) -> bool:
+        return asyncio.run(self.test_async(ctx, tests, fast_only=fast_only, subtypes=subtypes, prefix=prefix))
 
-    async def test_log_wrapper_async(self, ctx, tests=None, fast_only: bool = False) -> bool:
-        return await self._run_test_async(ctx, tests, use_wrapper=True, fast_only=fast_only)
+    async def test_log_wrapper_async(
+        self, ctx, tests=None, fast_only: bool = False, subtypes=None, prefix=None
+    ) -> bool:
+        return await self._run_test_async(
+            ctx, tests, use_wrapper=True, fast_only=fast_only, subtypes=subtypes, prefix=prefix
+        )
 
-    def test_log_wrapper(self, ctx, tests=None, fast_only: bool = False) -> bool:
-        return asyncio.run(self.test_log_wrapper_async(ctx, tests, fast_only=fast_only))
+    def test_log_wrapper(self, ctx, tests=None, fast_only: bool = False, subtypes=None, prefix=None) -> bool:
+        return asyncio.run(
+            self.test_log_wrapper_async(ctx, tests, fast_only=fast_only, subtypes=subtypes, prefix=prefix)
+        )
 
     def _output_cfg(self, shape, options_project=None) -> dict:
         """Which output file types are configured for a shape, and how.

@@ -3,9 +3,16 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Simulating a part, an assembly or a scene: what ``simulate:`` declares and how it runs.
+"""Simulating a part, an assembly or a scene: what ``qual: sim:`` declares and how it runs.
 
-A part says what it *is*. ``simulate:`` is where it says what it is supposed to
+A simulation is the ``sim`` subtype of qualification (see 'partcad.qual'): an
+object declares its simulations under ``qual: sim:``, one named entry each, and
+``pc qual test --simulation`` (or ``pc sim``) runs them. The section used to be
+``simulate:``, naming its plugin as ``simulation:``, and is still read that way
+(see 'partcad.qual.config.simulations'); everything below describes an entry
+either way, with ``path`` the newer name of ``simulation``.
+
+A part says what it *is*. ``qual: sim:`` is where it says what it is supposed to
 *do* -- or, more often, what it is supposed not to do: not fall over, not slide
 off, not come apart. That is a claim about the part in a world, so a simulation
 is never of a part alone. A scene declares one the same way -- a stack of blocks
@@ -22,7 +29,8 @@ link:
                 is stated here rather than in the scene because it is a fact
                 about *this* object -- where its origin sits relative to the
                 floor it is meant to stand on -- and the scene is shared.
-    simulation  which simulation plugin runs it, by full path. A plugin is
+    path        which simulation plugin runs it, by full path (``simulation``
+                in the older ``simulate:`` spelling). A plugin is
                 declared exactly as an export or a render implementation is
                 (see 'partcad.output'), in a ``simulation:`` section: a scene
                 goes in as a file, JSON carrying ``before`` and ``after`` comes
@@ -94,6 +102,7 @@ from . import cache_artifacts
 from . import logging as pc_logging
 from . import output, shape_envelope, source_key, wrapper
 from .process_crash import describe_exit_code
+from .qual import config as qual_config
 
 # By name rather than as 'from . import render': the package exports a function
 # called 'render' too, and which of the two 'partcad.render' is depends on what
@@ -321,9 +330,11 @@ class SimulationDeclaration:
         self.desc = self.config.get("desc")
         self.scene = self.config.get("scene") or DEFAULT_SCENE
         # No default: see 'KNOWN_SIMULATION'. 'run_async' is what reports it,
-        # so that a package listing an object with a broken 'simulate:' still
-        # lists it.
-        self.simulation = self.config.get("simulation") or None
+        # so that a package listing an object with a broken declaration still
+        # lists it. 'path' under 'qual: sim:', 'simulation' in a 'simulate:'
+        # (which 'qual_config.simulations' has already renamed, but a mapping
+        # handed here directly may not have been).
+        self.simulation = self.config.get(qual_config.PATH) or self.config.get(qual_config.LEGACY_SIM_PATH) or None
         self.validation = self.config.get("validation")
         self.offset = normalize_offset(self.config.get("offset"), name)
         # Parameter overrides handed to the plugin, on top of what its own
@@ -464,13 +475,7 @@ def declared(config: dict) -> list:
     ceremony - it is what '-f' selects, what the report prints beside the
     verdict, and what names the directory a run's scene is written to.
     """
-    section = (config or {}).get(SECTION)
-    if not section:
-        return []
-    if not isinstance(section, dict):
-        pc_logging.error("The '%s' section must be a mapping of simulation names" % SECTION)
-        return []
-    return [SimulationDeclaration(name, value or {}) for name, value in section.items()]
+    return [SimulationDeclaration(name, value or {}) for name, value in qual_config.simulations(config or {})]
 
 
 def of_shape(shape) -> list:
@@ -1006,7 +1011,7 @@ def _resolve_plugin_of(ctx, shape, declaration: SimulationDeclaration):
     """
     if not declaration.simulation:
         raise SimulationConfigError(
-            "the simulation '%s' names no 'simulation:' plugin to run it. PartCAD implements no "
+            "the simulation '%s' names no plugin to run it ('path:'). PartCAD implements no "
             "simulator itself; import one and name it, e.g. '%s' for MuJoCo" % (declaration.name, KNOWN_SIMULATION)
         )
     return resolve_plugin(ctx, shape.project_name, declaration.simulation)

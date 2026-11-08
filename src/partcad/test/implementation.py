@@ -28,10 +28,10 @@ a test file -- see the note at the top of `test/cae.py`.
 import typing
 
 from .. import runtime as pc_runtime
-from .test import Test
+from ..qual.qualification import BasicQualification
 
 
-class ImplementationTest(Test):
+class ImplementationTest(BasicQualification):
     """A check whose answer comes from an implementation another package supplies."""
 
     def _a_container_was_available(self, ctx) -> bool:

@@ -521,7 +521,7 @@ Object commands
   whether the object has the ports, interfaces and physical properties its ``requirements:`` say it has to
   (``requirements``; see :ref:`requirements`). Those last seven apply only to an object that declares the
   matching section, so a package that declares none pays nothing for them. Every check is listed, with when it
-  applies and what to do when it fails, in :doc:`/digital_thread/lifecycle/testing`. ``requirements`` fails a
+  applies and what to do when it fails, in :doc:`/digital_thread/lifecycle/qualification_tests`. ``requirements`` fails a
   requirement on something it cannot find out -- a mass with no material to work it out from -- rather than
   passing it, and says, for each requirement not met, what it found instead. The features a section lists are
   prose, and are for the ``/pc:validate`` agent skill to judge.

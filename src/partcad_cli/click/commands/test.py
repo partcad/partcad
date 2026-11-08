@@ -18,7 +18,8 @@ from ..service import run
 
 @click.command(
     help=(
-        "Run tests on a part, assembly, or scene. "
+        "Run every qualification test of a part, assembly, or scene: the older spelling of 'pc qual test', "
+        "which can also run one subtype at a time. "
         "OBJECT may be written '...:<name>' to mean every object of that name in this "
         "package and in every package below it. " + object_kind.LOOKED_UP
     ),

@@ -35,8 +35,8 @@ from .part import Part
 from .plugin_provider_data_cart import *
 from .plugin_request_provider_quote import ProviderRequestQuote
 from .project import Project
+from .qual.registry import builtin as all_tests
 from .sync_threads import threadpool_manager
-from .test.all import tests as all_tests
 from .user_config import UserConfig
 from .utils import *
 

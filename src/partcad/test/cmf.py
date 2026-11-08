@@ -23,21 +23,27 @@ unless the object, or its package, says 'cmf: {require: true}'.
 
 from .. import cmf as pc_cmf
 from ..assembly import Assembly
+from ..qual import config as qual_config
+from ..qual.qualification import BasicQualification, Test
 from ..sketch import Sketch
-from .test import Test
 
 # The key of an object's (or a package's) configuration of this check.
 CONFIG_KEY = "cmf"
 
 
 def _required(ctx, shape) -> bool:
-    """Whether 'cmf: {require: true}' is set on the object or on its package."""
-    project = ctx.get_project(shape.project_name) if ctx is not None else None
-    for config in (getattr(shape, "config", None), getattr(project, "config_obj", None)):
-        section = config.get(CONFIG_KEY) if isinstance(config, dict) else None
-        if isinstance(section, dict) and section.get("require") is True:
+    """Whether 'require: true' is set for this check, on the object or on its package.
+
+    On the object it is 'qual: basic: cmf: require:', or the 'cmf: require:' it
+    was declared as before 'qual:'; on the package, 'cmf: require:'.
+    """
+    if isinstance(getattr(shape, "config", None), dict):
+        if qual_config.params(shape.config, qual_config.BASIC, CONFIG_KEY, legacy=CONFIG_KEY).get("require") is True:
             return True
-    return False
+    project = ctx.get_project(shape.project_name) if ctx is not None else None
+    config = getattr(project, "config_obj", None)
+    section = config.get(CONFIG_KEY) if isinstance(config, dict) else None
+    return isinstance(section, dict) and section.get("require") is True
 
 
 def _purchasable(shape) -> bool:
@@ -107,11 +113,18 @@ def assembly_findings(ctx, shape) -> list:
     ]
 
 
-class CmfTest(Test):
+class CmfTest(BasicQualification):
     """Fail what is to be made without its colour, material and finish specified."""
+
+    LEGACY_KEY = CONFIG_KEY
 
     def __init__(self) -> None:
         super().__init__("cmf")
+
+    async def cache_key_suffix(self, ctx, shape) -> str:
+        # 'require' is read from the object's 'qual:', which is outside the
+        # shape's hash, and from its package, which always was.
+        return ",require=%d" % int(_required(ctx, shape))
 
     def inapplicable(self, shape, forced=False):
         """Why this check has nothing to say of 'shape', or None.

@@ -37,8 +37,8 @@ from .. import logging as pc_logging
 from ..part import Part
 from ..part_config import PartConfiguration
 from ..part_config_manufacturing import METHOD_SHEET_METAL
+from ..qual.qualification import BasicQualification, Test
 from .manufacturability_reference import resolve_reference
-from .test import Test
 
 # The annotation keys a bend line has to carry, and what each has to be.
 #
@@ -152,7 +152,7 @@ def _describe(annotation: dict) -> str:
     return described
 
 
-class ManufacturabilitySheetMetalTest(Test):
+class ManufacturabilitySheetMetalTest(BasicQualification):
     WRAPPERS = ("manufacturability.py",)
 
     def __init__(self) -> None:

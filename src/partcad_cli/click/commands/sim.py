@@ -5,6 +5,12 @@
 #
 """`pc sim` -- run the simulations a part, an assembly or a scene declares.
 
+Simulations are the `sim` subtype of qualification (see `partcad.qual`),
+declared under `qual: sim:` with the plugin as `path:` -- or under the older
+`simulate:`, with the plugin as `simulation:`. `pc qual test --simulation` runs
+them as checks; this command is still the one that prints what a plugin
+reported and saves the states and the video.
+
 A part says what it is; `simulate:` is where it says what it is supposed to do.
 This takes that section of a part, an assembly or a scene, places the object in
 the scene the section names, runs it through the simulation plugin the section

@@ -83,8 +83,8 @@ import uuid
 from .. import cae as pc_cae
 from .. import runtime as pc_runtime
 from .. import simulation as pc_simulation
+from ..qual.qualification import SIM, Test
 from .implementation import ImplementationTest
-from .test import Test
 
 # What 'force_manufacturing' is spelt as on a 'test_ctx': set by the
 # manufacturability checks when they test what another object is made from.
@@ -92,15 +92,19 @@ FORCE_MANUFACTURING = "force_manufacturing"
 
 
 class SimTest(ImplementationTest):
+    # What it produces is runs, which the Simulation tab plays: it is the
+    # built-in check of the 'sim' subtype, and the only one.
+    SUBTYPE = SIM
+
     def __init__(self) -> None:
         """Named "sim", after `pc sim`: `pc test -f sim` selects it, and nothing else starts with it."""
         super().__init__("sim")
 
     def inapplicable(self, shape):
         if pc_simulation.subject_kind(shape) is None:
-            return "only a part, an assembly or a scene declares 'simulate:'"
+            return "only a part, an assembly or a scene declares simulations ('qual: sim:')"
         if not pc_simulation.of_shape(shape):
-            return "it declares no simulation ('simulate:')"
+            return "it declares no simulation ('qual: sim:')"
         return None
 
     def _declarations(self, shape) -> list:

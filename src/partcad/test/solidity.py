@@ -6,11 +6,11 @@
 
 from .. import surface as pc_surface
 from ..assembly import Assembly
+from ..qual.qualification import BasicQualification, Test
 from ..sketch import Sketch
-from .test import Test
 
 
-class SolidityTest(Test):
+class SolidityTest(BasicQualification):
     """Fail a part that is inside out.
 
     A solid's faces are oriented: outward for material on the inside of them,
