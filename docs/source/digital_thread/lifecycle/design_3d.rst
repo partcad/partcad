@@ -42,14 +42,24 @@ Down the right is the **view panel**, folded away until the side bar button at
 the top of that edge brings it out -- and then out on every tab at once. From
 the top: an **orientation gizmo** to drag the view round, or click an axis to
 look along it; a button per axis (**X**, **-X**, **Y**, **-Y**, **Z**, **-Z**),
-which are the views ``pc render --view`` names; a two-ended **section** slider
-per axis, starting at the faces of the bounding box, which cuts the exact
-geometry before it is drawn rather than clipping the picture; the **viewpoint**
-as ``viewport_origin``, ``viewport_up`` and a target, ready to be copied into a
-``render:`` section or onto ``pc render --viewport-origin``, with **Fit** and
-**Reset** beside it; and **Animate**, **Auto-fit** and **Opacity**. Animate
-turns the model on its own, and is on from the start (but see below for a window
-with no graphics card); Opacity makes it see-through.
+which are the views ``pc render --view`` names; the **viewpoint** as
+``viewport_origin``, ``viewport_up`` and a target, ready to be copied into a
+``render:`` section or onto ``pc render --viewport-origin``, with the
+**projection** right after its title and **Fit** and **Reset** beside it; a
+two-ended **section** slider per axis, starting at the faces of the bounding
+box, which cuts the exact geometry before it is drawn rather than clipping the
+picture; and **Animate**, **Auto-fit** and **Opacity**. Animate turns the model
+on its own, and is on from the start (but see below for a window with no
+graphics card); Opacity makes it see-through.
+
+The projection is how the model is drawn. **Perspective**, the default, draws
+what is nearer larger, as an eye sees it; **Orthographic** draws it without
+perspective, so that a length is the same size however far away it is, as in a
+drawing; **Isometric** is that, looked at from the nearest corner, where all
+three axes are foreshortened alike. Choosing Isometric turns the view to that
+corner and holds it still there; turning the view off the corner leaves it
+drawn without perspective, and the projection then says Orthographic. Without
+perspective, zooming in shows less of the model rather than going into it.
 
 **Fit** brings the camera in or out, over a second and from where it is looking,
 until the whole model fits however it turns; **Reset** goes back to the view the

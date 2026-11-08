@@ -97,8 +97,8 @@ Each has a chapter of its own:
 
 The panel is driven by whatever is selected in the PartCAD Explorer, and the
 :ref:`view panel <dt-design-3d>` down its right -- the orientation gizmo, the
-axis views, the sections and the viewpoint -- is shared by the three that draw
-the object: a section set on the 3D tab is the section the 2D and Draft tabs
+axis views, the viewpoint and its projection, and the sections -- is shared by
+the three that draw the object: a section set on the 3D tab is the section the 2D and Draft tabs
 draw.
 
 The editing loop runs through this group. **Edit** in the Explorer opens the
