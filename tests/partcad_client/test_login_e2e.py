@@ -106,7 +106,8 @@ def site():
     server.shutdown()
 
 
-def _pc(workspace, home, *args, wait=True):
+def _pc(workspace, home, *args, output=None):
+    """'pc' as a user in 'home' runs it in 'workspace': run to the end, or - with 'output', a file - started."""
     environment = dict(os.environ, HOME=str(home))
     # A DevTools port beside the pipe 'pc login' holds, for the test to say yes
     # on the extension's confirmation page; Chromium writes which port it took
@@ -123,14 +124,20 @@ def _pc(workspace, home, *args, wait=True):
     # The 'pc' beside this interpreter: the one this checkout installed.
     pc = os.path.join(os.path.dirname(sys.executable), "pc.exe" if os.name == "nt" else "pc")
     command = [pc if os.path.exists(pc) else "pc", "--no-ansi", *args]
-    if not wait:
-        return subprocess.Popen(
-            command, cwd=workspace, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-        )
+    if output is not None:
+        # To a file and not to a pipe: nothing reads a pipe while the test waits
+        # for the browser, and a 'pc' that has said more than a pipe holds (64
+        # KiB on Linux) blocks on its next write - before it opens the browser
+        # the test is waiting for.
+        return subprocess.Popen(command, cwd=workspace, env=environment, stdout=output, stderr=subprocess.STDOUT)
     return subprocess.run(command, cwd=workspace, env=environment, capture_output=True, text=True, timeout=900)
 
 
-async def _press_continue(profile, timeout):
+class _LoginEnded(Exception):
+    """'pc login' ended before its confirmation page was found: no page is coming."""
+
+
+async def _press_continue(profile, running, timeout):
     """Find the extension's confirmation page over the browser's DevTools port, and press Continue once armed."""
     import aiohttp
 
@@ -140,6 +147,13 @@ async def _press_continue(profile, timeout):
     async with aiohttp.ClientSession(trust_env=False) as http:
         page = None
         while page is None:
+            # A 'pc login' that has ended - failed before it opened a browser, or
+            # gave up on one - opens no page, and waiting the rest of 'timeout'
+            # for it only hides why.
+            if running.poll() is not None:
+                raise _LoginEnded(
+                    "'pc login' ended (exit status %s) before its confirmation page opened" % running.poll()
+                )
             assert time.monotonic() < deadline, "the confirmation page never opened"
             await asyncio.sleep(0.2)
             if not port_file.exists():
@@ -170,15 +184,31 @@ async def _press_continue(profile, timeout):
 
 def _login_confirming(workspace, home, *args):
     """'pc login', with Continue pressed on the extension's confirmation page as a user would."""
-    running = _pc(workspace, home, *args, wait=False)
-    try:
-        asyncio.run(_press_continue(home / "login-browser" / "profile", timeout=300))
-        output, _ = running.communicate(timeout=600)
-    finally:
-        if running.poll() is None:
-            running.kill()
-            running.communicate()
-    return subprocess.CompletedProcess(running.args, running.returncode, output, "")
+    log = home / "pc-login.log"
+    with open(log, "wb") as output:
+        running = _pc(workspace, home, *args, output=output)
+        try:
+            try:
+                asyncio.run(_press_continue(home / "login-browser" / "profile", running, timeout=300))
+                running.wait(timeout=600)
+            except _LoginEnded:
+                # Not a failure of its own: what 'pc login' said and exited with,
+                # which the caller's assertions report, is the failure.
+                pass
+            except Exception as e:
+                # What 'pc login' said is the only account of why no page
+                # opened, or why it did not finish.
+                if running.poll() is None:
+                    running.kill()
+                running.wait()
+                said = log.read_text(encoding="utf-8", errors="replace")
+                raise AssertionError("%s; 'pc login' said:\n%s" % (str(e) or type(e).__name__, said)) from e
+        finally:
+            if running.poll() is None:
+                running.kill()
+                running.wait()
+    said = log.read_text(encoding="utf-8", errors="replace")
+    return subprocess.CompletedProcess(running.args, running.returncode, said, "")
 
 
 def test_pc_login_signs_in_in_the_browser_and_keeps_what_the_extension_brought(tmp_path, site):
