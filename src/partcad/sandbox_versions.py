@@ -94,6 +94,18 @@ MIN_PYTHON_VERSION_ZSTD_STDLIB = "3.14"
 # package that never mentions URDF grows a dependency on the ROS stack.
 URDF_PARSER_PY = "urdf-parser-py==0.0.4"
 
+# What decodes a glTF primitive compressed with 'KHR_draco_mesh_compression':
+# Python bindings to Google's own Draco decoder (github.com/seung-lab/DracoPy).
+# 2.2.0 publishes wheels for CPython 3.10 to 3.13 on Linux (x86_64 and aarch64,
+# glibc and musl), macOS (Intel and Apple silicon) and Windows, which is every
+# platform a sandbox runs on at DEFAULT_PYTHON_VERSION.
+#
+# Installed only for a glTF file that uses the extension (see
+# 'part_factory_gltf'), so a part read from any other file never needs it. The
+# other compression of the web's glTF, meshoptimizer's, has no such package for
+# every platform, and is decoded by PartCAD itself ('wrappers/meshopt_decode.py').
+DRACOPY = "DracoPy==2.2.0"
+
 # Only needed by the sandboxes that rasterize or export 2D formats.
 #
 # Deliberately held at the versions this repo already shipped, not bumped to the

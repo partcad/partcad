@@ -254,6 +254,7 @@ def test_builtin_requirements_match_the_pinned_cad_stack():
         "ezdxf": sandbox_versions.EZDXF,
         "pillow": sandbox_versions.PILLOW,
         "urdf-parser-py": sandbox_versions.URDF_PARSER_PY,
+        "dracopy": sandbox_versions.DRACOPY,
     }
     seen = set()
     for section, where, requirements in _builtin_requirements():
@@ -273,7 +274,9 @@ def _builtin_requirements():
     against one of those scripts gets (see '//builtin/render'). Both are
     installed into the sandbox, so both are pins that can drift.
     """
-    for section in output.SECTIONS:
+    # And the readers: an 'import:' type's requirements are installed into the
+    # sandbox the same way (see 'AssemblyFactoryImported._read_async').
+    for section in output.SECTIONS + (output.IMPORT,):
         config = yaml.safe_load(open(os.path.join(BUILTIN_DIR, section, "partcad.yaml")))
         yield section, section, config.get("pythonRequirements") or []
         for format_name, format_config in config[section].items():

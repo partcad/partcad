@@ -8,10 +8,14 @@
 An import reads a foreign file and leaves the package holding *PartCAD's own*
 objects - parts it can render on their own and an ``.assy`` that places them -
 rather than a declaration that points back at the foreign file. (Declaring one
-is what ``pc add assembly`` is for.) Both supported formats work that way:
+is what ``pc add assembly`` is for.) Every supported format works that way:
 
   * **STEP** - the file is split into one zeroed STEP part per solid and an
     ``.assy`` that places them.
+  * **glTF** (``.gltf``, ``.glb``) - the file is split into one ``gltf`` part
+    per mesh, a ``.glb`` each holding that mesh and its materials, by the
+    reader the ``gltf`` assembly type uses (``builtin/import/import_gltf.py``),
+    and an ``.assy`` that places them.
   * **URDF** - each link becomes an ``stl`` part carrying the physical
     properties the URDF stated, each joint becomes a pair of interfaces, and
     the ``.assy`` connects the parts through them.
@@ -109,6 +113,34 @@ def import_urdf_action(project: Project, assembly_file: str, config: dict) -> st
     return name
 
 
+def _read_gltf_tree(project: Project, assembly_file: str, name: str) -> dict:
+    """The tree the 'gltf' assembly type reads 'assembly_file' as: a part per mesh, each a '.glb' it wrote.
+
+    The file is declared as a 'gltf' assembly of the package for the length of
+    the read and dropped again, as 'import_urdf_action' does with a URDF, so the
+    very reader the type uses - in its sandbox, with its requirements - is the
+    one that reads it here.
+    """
+    if project.get_assembly_config(name) is not None:
+        raise ValueError(
+            "The package already has an assembly named '%s'; rename the glTF file or remove it first" % name
+        )
+    known = project.object_configs("assembly")
+    known[name] = {"type": "gltf", "path": str(Path(assembly_file).resolve())}
+    try:
+        assembly = project.get_assembly(name)
+        factory = getattr(assembly, "import_factory", None)
+        if factory is None:
+            raise ValueError("'%s' could not be read as a glTF assembly" % assembly_file)
+        result = asyncio.run(factory.read_async())
+    finally:
+        # Whatever happened, the package must not be left declaring an assembly
+        # that 'partcad.yaml' knows nothing about.
+        known.pop(name, None)
+        project.assemblies.pop(name, None)
+    return result["root"]
+
+
 def import_assy_action(
     project: Project,
     file_type: str,
@@ -126,6 +158,7 @@ def import_assy_action(
 
     Supported formats:
       - STEP (.step, .stp)
+      - glTF (.gltf, .glb), whose tree the 'gltf' assembly type's reader gives
       - URDF (.urdf), which takes the path through 'import_urdf_action'
     """
     config = config or {}
@@ -143,18 +176,23 @@ def import_assy_action(
     project_root = Path(project.config_dir).resolve()
     output_folder = project_root / assembly_name
 
-    root = asyncio.run(
-        read_assembly_tree(
-            project.ctx,
-            str(file_path.resolve()),
-            str(output_folder),
-            file_type=file_type,
-            precision=5,
+    if file_type == "gltf":
+        root = _read_gltf_tree(project, assembly_file, assembly_name)
+        part_kind = "gltf"
+    else:
+        root = asyncio.run(
+            read_assembly_tree(
+                project.ctx,
+                str(file_path.resolve()),
+                str(output_folder),
+                file_type=file_type,
+                precision=5,
+            )
         )
-    )
+        part_kind = "step"
 
-    # Register each unique part exactly once. The wrapper deduplicates by
-    # geometry, so distinct nodes may point at the same STEP file; they share one
+    # Register each unique part exactly once. The reader deduplicates by
+    # geometry, so distinct nodes may point at the same part file; they share one
     # registered part and differ only by their location.
     registered: dict = {}
 
@@ -162,8 +200,14 @@ def import_assy_action(
         part_file = str(Path(part_file).resolve())
         if part_file in registered:
             return registered[part_file]
-        name = Path(part_file).with_suffix("").relative_to(project_root).as_posix()
-        import_part_action(project, "step", name, part_file, config)
+        try:
+            # Written into the package already (a STEP import's parts).
+            name = Path(part_file).with_suffix("").relative_to(project_root).as_posix()
+        except ValueError:
+            # Written where the reader keeps what it generates (a glTF's), and
+            # copied into the assembly's folder by the import.
+            name = "%s/%s" % (assembly_name, Path(part_file).stem)
+        import_part_action(project, part_kind, name, part_file, config)
         registered[part_file] = name
         return name
 
@@ -187,6 +231,7 @@ def import_assy_action(
             link["params"] = params
         return link
 
+    output_folder.mkdir(parents=True, exist_ok=True)
     top_data = build(root)
     assy_name = Path(top_data["name"]).name
     assy_file_path = output_folder / f"{assy_name}.assy"

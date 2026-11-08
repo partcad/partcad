@@ -215,6 +215,28 @@ import:
     requireSolid: true
     pythonRequirements:
       - cadquery-ocp-novtk==7.9.3.1.1
+  # glTF as an assembly: the file's node tree, a part per mesh. Each mesh is
+  # written out as a '.glb' of its own and read by the 'gltf' part type, so it
+  # is read exactly as a glTF part is (see 'import_gltf.py'). A glTF scene is
+  # usually a model rather than a world, which is why it is an assembly only.
+  gltf:
+    desc: |
+      glTF 2.0 (`.gltf` with its buffers, or `.glb`) as an assembly: a part per
+      mesh, placed where the file's nodes place it, a sub-assembly per node with
+      children. Each part is read as a `gltf` part is: a solid per closed piece
+      of its mesh, each face in its material's colour. What compresses the
+      web's glTF -- Draco, meshoptimizer, quantization, GPU instancing -- is
+      decoded. Animations, skins and morph targets are not read: the assembly
+      is the scene as its nodes place it.
+    path: import_gltf.py
+    extension: [gltf, glb]
+    kinds: [assembly]
+    binary: true
+    noun: model
+    # DracoPy decodes a Draco-compressed mesh, and brings NumPy, which the
+    # reader does all its arithmetic in.
+    pythonRequirements:
+      - DracoPy==2.2.0
   urdf:
     desc: |
       Unified Robot Description Format: a robot as a tree of links joined by

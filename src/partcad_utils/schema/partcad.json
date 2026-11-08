@@ -556,7 +556,13 @@
         "desc": { "type": "string", "maxLength": 1000 },
         "path": { "type": "string", "minLength": 1, "description": "The reader script, relative to the package that declares it" },
         "package": { "type": "string", "minLength": 1, "description": "The package holding 'path', when it is not this one" },
-        "extension": { "type": "string", "minLength": 1, "description": "The source file's extension" },
+        "extension": {
+          "description": "The source file's extension. A list for a format stored under more than one (glTF's 'gltf' and 'glb'): an object with no 'path' is the first of them whose file is there",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+          ]
+        },
         "kinds": {
           "description": "Which object kinds this type may be declared as. Both, where the file itself does not say which it is",
           "oneOf": [
@@ -2282,8 +2288,8 @@
               "properties": {
                 "type": {
                   "type": "string",
-                  "enum": ["assy", "step", "f3d", "pvz", "urdf", "alias", "enrich"],
-                  "description": "'assy' is an Assembly YAML file, 'step' a STEP assembly, 'f3d' an Autodesk Fusion design, 'pvz' a Creo View package, 'urdf' a URDF robot description. A format an engine's plugin package implements is not in this list and is named through that package - 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
+                  "enum": ["assy", "step", "f3d", "pvz", "gltf", "urdf", "alias", "enrich"],
+                  "description": "'assy' is an Assembly YAML file, 'step' a STEP assembly, 'f3d' an Autodesk Fusion design, 'pvz' a Creo View package, 'gltf' a glTF scene ('.gltf' or '.glb') with a part per mesh, 'urdf' a URDF robot description. A format an engine's plugin package implements is not in this list and is named through that package - 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "images": {

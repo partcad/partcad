@@ -476,14 +476,15 @@ Object commands
 
   ``pc add part <type> <file>`` takes the part's type first: a script (``cadquery``, ``build123d``,
   ``sdf``, ``scad``, ``chili3d``), a file PartCAD reads itself (``step``, ``brep``, ``stl``, ``3mf``,
-  ``obj``, ``gltf``), or one of the CAD file formats PartCAD ships as declarations (``fcstd``,
+  ``obj``, ``gltf`` -- compressed web assets included, see :ref:`gltf-files`), or one of the CAD file formats
+  PartCAD ships as declarations (``fcstd``,
   ``f3d``, ``sldprt``, ``ipt``, ``catpart``, ``sat``, ``pvz`` -- read through cadmpeg -- ``iges``, read
   by OpenCASCADE, and ``usd``, an OpenUSD stage, read by usd-core; see :ref:`cad-files`). The part
   is named after the file, without its extension. Where the file is ``<name>.<extension>`` with the
   extension spelled as the type declares it -- ``design.FCStd``, ``bracket.SLDPRT``, ``bracket.CATPart`` --
   the declaration names no ``path``; any other spelling of it keeps one: another case (``design.fcstd``), or
   another extension of the same format (``plate.igs`` for ``iges``, ``body.sab``, ``.smt`` or ``.smb`` for
-  ``sat``, ``part.stp`` for ``step``). Adding a part reads nothing: a file that does not hold what its type
+  ``sat``, ``part.stp`` for ``step``, ``model.glb`` for ``gltf``). Adding a part reads nothing: a file that does not hold what its type
   says -- for the native formats, one that does not read into a whole solid -- is added, and fails when the
   part is built.
 
@@ -494,14 +495,15 @@ Object commands
 
 ``pc import``
   Import an existing object into a package. Subcommands: ``part`` (import an existing part and optionally
-  convert its format), ``assembly`` (import an assembly from a file, creating the parts and an Assembly
-  YAML file), and ``scene`` (import an arrangement file -- a Gazebo world, an MJCF model -- creating the
+  convert its format), ``assembly`` (import an assembly from a STEP, glTF or URDF file, creating the parts
+  and an Assembly YAML file: a glTF file becomes a ``gltf`` part per mesh, in its materials' colours), and
+  ``scene`` (import an arrangement file -- a Gazebo world, an MJCF model -- creating the
   parts and an Assembly YAML scene). ``pc import scene -t`` names the format where the file's extension does
   not say, or says the wrong thing, and is how a format a *package* reads is named: ``sim-gazebo:world``,
   ``sim-mujoco:mjcf``.
   ``pc import`` is a one-shot conversion; to keep reading the source file itself,
-  declare it as an assembly of the ``step`` type or a scene of that reader's type instead (see
-  :ref:`assembly_step` and :ref:`scenes`).
+  declare it as an assembly of the ``step`` or ``gltf`` type or a scene of that reader's type instead (see
+  :ref:`assembly_step`, :ref:`assembly-gltf` and :ref:`scenes`).
 
 ``pc test``
   Run tests on a part, assembly, or scene. Name the package as ``-P <package>...`` to test the packages

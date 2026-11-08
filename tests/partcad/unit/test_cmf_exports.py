@@ -565,6 +565,32 @@ def test_a_part_exported_to_3mf_reads_back_in_its_colours(exported):
     assert colors == {"#C91A09", "#808080"}
 
 
+@pytest.mark.parametrize("extension", ["glb", "gltf"])
+def test_a_part_exported_to_gltf_reads_back_with_its_references(exported, extension):
+    """The references the glTF export keeps in each material's 'extras' are what the 'gltf' part reads back.
+
+    A face of the box is two triangles in the file, and a face of the part read
+    from it, so every set comes back on twice the faces, and nothing else changes.
+    """
+    ctx, root = exported
+    box = ctx.get_part("//src:box")
+    asyncio.run(box.render_async(ctx, "gltf", filepath=str(root / "out" / ("box." + extension))))
+    asyncio.run(box.get_wrapped(ctx))
+    config = yaml.safe_load((root / "partcad.yaml").read_text())
+    config["parts"]["from_gltf"] = {"type": "gltf", "path": "out/box." + extension}
+    (root / "partcad.yaml").write_text(yaml.safe_dump(config, sort_keys=False))
+    ctx = pc.Context(str(root))
+
+    again = ctx.get_part("//src:from_gltf")
+    assert asyncio.run(again.get_wrapped(ctx)) is not None, again.errors
+
+    before = [
+        (color, material, finish, faces * 2) for color, material, finish, faces in _rows(cmf.summary_of(box)["sets"])
+    ]
+    assert _rows(cmf.summary_of(again)["sets"]) == before
+    assert cmf.summary_of(again)["unspecified"] == {}
+
+
 def test_a_part_exported_to_urdf_is_a_visual_per_set(exported):
     ctx, root = exported
     box = ctx.get_part("//src:box")
