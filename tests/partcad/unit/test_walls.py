@@ -183,11 +183,16 @@ def test_the_builtin_wall_is_a_parametric_wall_in_its_own_colour(context):
 
 
 def test_an_alias_of_a_wall_is_a_wall(context):
-    """It states no properties and no type of its own, and is one-sided and a surface all the same."""
+    """It states no properties and no type of its own, and is one-sided and a surface all the same.
+
+    And it reports the colour of the wall it points at, which an alias inherits
+    with everything else its source says about itself (see
+    'PartFactoryAlias._shape_properties').
+    """
     alias, envelope = _built(context, "curved")
     assert envelope is not None and alias.errors == []
     assert surface.surface_type(alias) == "wall"
-    assert alias._shape_properties() == {"oneSided": True}
+    assert alias._shape_properties() == {"color": "#9C9284", "oneSided": True}
 
 
 @pytest.mark.parametrize("check", [ShellTest, DegenerateTest, SolidityTest, ValidityTest])

@@ -907,6 +907,17 @@ instance belongs to the package declaring the source, and one instance serves
 every enrich, in any package, that asks for the same values. An ``alias``
 resolves to the object itself.
 
+What a reference reports about itself -- its ``properties:``, the material it
+is made of and any ``physics:`` it states -- is what its source reports, with
+whatever the reference writes in its own ``properties:`` on top, key by key. So
+an alias of a bought part whose declaration states its mass weighs that much
+wherever it is aliased to, and a ``material:`` the source names as
+``:steel`` is that package's steel, whichever package the alias is in. A
+reference that moves its source with ``offset`` does not inherit a stated
+``centerOfMass`` or ``inertia``, which are tied to the frame they were stated
+in, and one that ``scale``\ s it does not inherit the ``mass`` either; what is
+dropped is worked out again from the material.
+
 That is also what the shape cache is keyed on: a reference takes the key of
 what it points at, so the geometry is stored once however many references lead
 to it rather than once per reference. A reference that moves or scales what it

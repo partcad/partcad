@@ -285,6 +285,16 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             described = cmf.key_of(self.ctx, item)
             if described:
                 assembly.hash.add_dict({"cmf": described})
+            # And what the item reports about itself, for the same reason: its
+            # 'properties:' - the material it is made of, a mass it states - are
+            # left out of its own key on purpose (see 'Shape._shape_properties'),
+            # and stamped into this assembly's tree as it is built. Without them
+            # here, a part changed from one material to another went on weighing
+            # what it used to inside every assembly already cached, while 'pc
+            # info' of the part on its own said the new figure.
+            properties = item._shape_properties()
+            if properties:
+                assembly.hash.add_dict({"properties": properties})
             if interfaces is not None:
                 declared = interfaces.get(id(item))
                 if declared is None:

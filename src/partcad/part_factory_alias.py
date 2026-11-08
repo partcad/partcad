@@ -15,8 +15,15 @@ from . import cmf
 from . import logging as pc_logging
 from . import part_factory as pf
 from . import reference, telemetry
+from .shape import Shape
+from .shape_config import TRANSFORM_KEYS
 from .shape_config_store import resolve_store_properties
-from .utils import format_parameterized_name
+from .utils import format_parameterized_name, resolve_resource_path
+
+# What a stated 'physics:' says that is tied to the frame and the size of the
+# geometry it was stated for. A reference that moves or scales that geometry
+# cannot inherit them as written; see 'PartFactoryAlias._shape_properties'.
+FRAME_BOUND_PHYSICS = ("centerOfMass", "inertia", "inertiaOrientation")
 
 # What a reference may say about the object it points at, each section replacing
 # the source's whole: how it is made, and the scenarios each analysis of it is
@@ -40,6 +47,7 @@ class PartFactoryAlias(pf.PartFactory):
             self.part.get_final_config = self.get_final_config
             self.part.get_cacheable = self.get_cacheable
             self.part.get_tolerance = self.get_tolerance
+            self.part._shape_properties = self._shape_properties
 
             # A reference has no cache key of its own until it has taken the
             # one of the object it points at (see 'prepare_async'), and is not
@@ -198,6 +206,59 @@ class PartFactoryAlias(pf.PartFactory):
         if not source:
             return None
         return await source.get_tolerance()
+
+    def _shape_properties(self):
+        """What this reference reports about its shape: its own 'properties:', over its source's.
+
+        A reference has no file and no object-type parameters, so the only
+        'properties:' it has are the ones written on it - and most references
+        write none, because what the shape is made of and what it weighs are
+        facts about the thing it points at. Read as they stood, an alias of a
+        bought actuator whose declaration states its mass and an alias of a
+        bearing made of a catalogued steel both weighed nothing: 'pc info'
+        said "the part states no density and names no material" about each, and
+        an assembly made of such aliases - which is what a package that
+        catalogues its purchased parts in one place and aliases them into its
+        products consists of - was weighed without them.
+
+        So the source's properties are inherited, key by key, and anything the
+        reference states itself wins: a reference may recolour what it points
+        at. Two things are adjusted on the way:
+
+        * A material reference is made absolute against the package that wrote
+          it. ':steel' in the source's package means *that* package's steel, and
+          resolved against the reference's own package it means another one or
+          nothing.
+        * A stated centre of mass and inertia are tied to the frame of the
+          geometry they were stated for, and a reference that 'offset's that
+          geometry does not inherit them; one that 'scale's it does not inherit
+          the mass either. What is dropped is worked out again from the material,
+          which the transform does not change.
+        """
+        own = Shape._shape_properties(self.part)
+        source = self.ctx._get_part(self.source)
+        inherited = source._shape_properties() if source is not None else None
+        if not inherited:
+            return own
+        inherited = dict(inherited)
+
+        material = inherited.get("material")
+        if isinstance(material, str) and material:
+            inherited["material"] = "%s:%s" % resolve_resource_path(source.project_name, material)
+
+        physics = inherited.get("physics")
+        config = self.part.config if isinstance(self.part.config, dict) else {}
+        transforms = [key for key in TRANSFORM_KEYS if config.get(key) not in (None, {}, [], "")]
+        if isinstance(physics, dict) and transforms:
+            dropped = FRAME_BOUND_PHYSICS + (("mass",) if "scale" in transforms else ())
+            physics = {key: value for key, value in physics.items() if key not in dropped}
+            if physics:
+                inherited["physics"] = physics
+            else:
+                inherited.pop("physics")
+
+        inherited.update(own or {})
+        return inherited or None
 
     def get_cacheable(self) -> bool:
         # Cacheable once it knows which entry it shares: a reference keys on
