@@ -608,6 +608,12 @@ class JsonRpcBackend implements PartcadBackend {
         reg('partcad.manufacturingTree', (a) =>
             this.send('manufacturing.tree', { package: a.pkg, object: a.name, kind: a.kind }, a.cancellation),
         );
+        // The Design tab's CMF tab: what each item of an object is in, or what a
+        // colour, a material or a finish is - which only 'kind' can say, since a
+        // declaration's name is no object's.
+        reg('partcad.cmfInfo', (a) =>
+            this.send('cmf.info', { package: a.pkg, object: a.name, kind: a.kind }, a.cancellation),
+        );
         reg('partcad.manufacturingDetails', (a) =>
             this.send(
                 'manufacturing.details',
@@ -745,6 +751,22 @@ class JsonRpcBackend implements PartcadBackend {
                     with_internals: a.withInternals,
                     // Which ports, where the panel narrowed it to some of them.
                     ports: a.ports,
+                    // The callout boxes under the panel's tree: 'pc render
+                    // --with-component-names'/'--with-component-prices'/
+                    // '--with-materials', and
+                    // '--without-port-names'/'--without-interface-names' as a
+                    // false. Undefined is left out of the request, and means the
+                    // default.
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    with_component_names: a.withComponentNames,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    with_component_prices: a.withComponentPrices,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    with_materials: a.withMaterials,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    with_port_names: a.withPortNames,
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    with_interface_names: a.withInterfaceNames,
                     // The view panel beside it: where the picture is looked at from
                     // ('pc render --viewport-origin/--viewport-up'), and what the
                     // object is cut to before it is drawn.
@@ -758,6 +780,38 @@ class JsonRpcBackend implements PartcadBackend {
             ),
         );
         reg('partcad.renderFormats', (a) => this.send('render.formats', { package: a.package }));
+        // What each component of an object costs, for the 3D view's "Component
+        // prices" callouts: the Buy tab's quote, shared out over the components
+        // ('partcad.component_prices'). The quote goes out to the suppliers, so it
+        // can be cancelled like a tab's request.
+        reg('partcad.componentPrices', (a) =>
+            this.send(
+                'supply.prices',
+                {
+                    package: a.pkg,
+                    object: a.name,
+                    kind: a.kind,
+                },
+                a.cancellation,
+            ),
+        );
+        // Where each material of an object is, cluster by cluster, for the 3D
+        // view's "Materials" callouts: worked out in a sandbox from the object's
+        // tree ('cmf.clusters'), as close as the user configuration says one
+        // cluster is, and cut to the section the view is cut to. It can take a
+        // while on a large object, so it can be cancelled like a tab's request.
+        reg('partcad.materialClusters', (a) =>
+            this.send(
+                'cmf.clusters',
+                {
+                    package: a.pkg,
+                    object: a.name,
+                    kind: a.kind,
+                    section: a.section,
+                },
+                a.cancellation,
+            ),
+        );
         reg('partcad.exportPart', (type, path, pkg, name, params) =>
             this.send('export.part', { type, path, package: pkg, name, params }),
         );

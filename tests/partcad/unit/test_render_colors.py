@@ -396,7 +396,11 @@ def test_pc_render_draws_each_part_in_its_colour(context, tmp_path, file_type):
     assert assembly is not None
     path = str(tmp_path / ("pair." + file_type))
 
-    assembly.render(context, file_type, filepath=path, reproducible=True, **resolve_viewport("front"))
+    # No margin, for the PNG: drawn edge to edge, its lines are a pixel wide and
+    # some pixels of each are its colour itself, which is what is looked for.
+    # Padded, they are 85% of one and every pixel of them is blended.
+    margin = {"margin": 0} if file_type == "png" else {}
+    assembly.render(context, file_type, filepath=path, reproducible=True, **resolve_viewport("front"), **margin)
 
     if file_type == "svg":
         with open(path, encoding="utf-8") as f:
@@ -412,3 +416,23 @@ def test_pc_render_draws_each_part_in_its_colour(context, tmp_path, file_type):
     # Anti-aliased, so not only the two colours themselves; but both of them.
     assert (218, 165, 32) in colors
     assert (255, 0, 0) in colors
+
+
+def test_a_colour_too_light_to_see_on_white_is_drawn_darker(real_svg):
+    """A white face - what a STEP file paints a part as often as not - is drawn in grey lines, not invisible ones."""
+    assert real_svg.legible("#FFFFFF") == (188, 188, 188, 1.0)
+    # Goldenrod, every default drawing, and anything darker are drawn exactly as they are.
+    assert real_svg.legible("#DAA520") == "#DAA520"
+    assert real_svg.legible("#0D0D0D") == "#0D0D0D"
+    # A light colour keeps its hue: a pale blue is still bluer than it is red.
+    red, _green, blue, _alpha = real_svg.legible("#C0D8FF")
+    assert blue > red
+
+
+def test_a_light_colour_drawn_darker_is_as_see_through_as_it_was(real_svg):
+    """A translucent white face's lines are grey and still translucent, not opaque."""
+    darker = real_svg.legible("#FFFFFF80")
+    assert darker[:3] == (188, 188, 188)
+    assert darker[3] == pytest.approx(128 / 255, abs=0.01)
+    assert real_svg.legible((255, 255, 255, 0.5)) == (188, 188, 188, 0.5)
+    assert list(real_svg.line_color(darker))[3] == pytest.approx(darker[3])

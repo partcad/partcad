@@ -34,6 +34,7 @@ from . import (
 from . import assembly_factory_alias as afa
 from . import (
     assembly_guide,
+    cmf,
 )
 from . import config as pc_config
 from . import document as pc_document
@@ -76,6 +77,7 @@ from . import tags as pc_tags
 from . import (
     telemetry,
 )
+from .config import Configuration
 from .dependency_pin import plain_reads_back
 from .document_pdf import render_pdf_async
 from .enrich import enriched_source_name
@@ -84,6 +86,7 @@ from .part import Part
 from .render import render_cfg_merge
 from .shape_config import NO_DEFAULT
 from .utils import (
+    escape_name,
     format_parameterized_name,
     normalize_resource_path,
     parse_parameterized_name,
@@ -100,6 +103,8 @@ if TYPE_CHECKING:
 # new kind of object does not require touching the per-kind accessor plumbing.
 OBJECT_KINDS = (
     "material",
+    "color",
+    "finish",
     "interface",
     "sketch",
     "part",
@@ -114,6 +119,10 @@ OBJECT_KIND_SECTIONS = {
     # What a part is made of, rather than a part: a 'Material' is not a shape
     # and nothing constructs it, so it has neither a factory nor a 'type'.
     "material": "materials",
+    # The other two kinds of CMF declaration (see 'partcad.cmf'): data like a
+    # material, each in a namespace of its own.
+    "color": "colors",
+    "finish": "finishes",
     "interface": "interfaces",
     "sketch": "sketches",
     "part": "parts",
@@ -227,7 +236,7 @@ def _has_running_loop() -> bool:
 # segment of a URL, and two copies of these would name one file two ways.
 SECTION_EXTENSIONS = {
     "sketches": {"cadquery": "py", "build123d": "py", "basic": None},
-    "parts": {"cadquery": "py", "build123d": "py", "chili3d": "chili", "sdf": "py"},
+    "parts": {"cadquery": "py", "build123d": "py", "chili3d": "chili", "sdf": "py", "basic": None},
     "assemblies": {},
 }
 
@@ -305,11 +314,18 @@ class Project(project_config.Configuration):
     software: dict[str, pc_software.Software]
 
     class MaterialLock(object):
-        def __init__(self, prj, material_name: str):
+        """The lock of one CMF declaration ('partcad.cmf'): materials, colours and finishes alike.
+
+        Keyed by kind and name, since the three kinds have namespaces of their
+        own and a colour may well share its name with a material.
+        """
+
+        def __init__(self, prj, material_name: str, kind: str = "material"):
             prj.material_locks_lock.acquire()
-            if material_name not in prj.material_locks:
-                prj.material_locks[material_name] = threading.Lock()
-            self.lock = prj.material_locks[material_name]
+            key = (kind, material_name)
+            if key not in prj.material_locks:
+                prj.material_locks[key] = threading.Lock()
+            self.lock = prj.material_locks[key]
             prj.material_locks_lock.release()
 
         def __enter__(self, *_args):
@@ -513,6 +529,8 @@ class Project(project_config.Configuration):
         self.materials = {}
         self.material_locks = {}
         self.material_locks_lock = threading.Lock()
+        self.colors = {}
+        self.finishes = {}
 
         self.interfaces = {}
         self.interface_locks = {}
@@ -561,6 +579,11 @@ class Project(project_config.Configuration):
         self._implicit_aliases: dict[str, set] = {}
         # The declarations already normalized, per kind. See '_normalized'.
         self._normalized_configs: dict[str, set] = {}
+        # What each declaration states of the shape it produces, as the package
+        # states it, per kind: '{name: (declaration, its properties dictionary,
+        # a copy of it)}'. See '_remember_declared_properties'.
+        self._declared_properties: dict[str, dict] = {}
+        self._declared_properties_lock = threading.Lock()
 
         self.providers = {}
         self.provider_locks = {}
@@ -749,8 +772,71 @@ class Project(project_config.Configuration):
             # new dictionary rather than in place, and the package should hold
             # the one every reader is handed.
             configs[name] = normalized
+        self._remember_declared_properties(kind, name, normalized)
         done.add(name)
         return normalized
+
+    def _remember_declared_properties(self, kind: str, name: str, declaration) -> None:
+        """Keep what 'declaration' states under 'properties:' as the package states it, before anything is made.
+
+        The declaration is the config of the object made out of it, and making
+        one records more there: what a part was asked to be made of and drawn
+        in, from its 'material' and 'color' parameters
+        ('PartFactory.record_object_type_properties'). An instance named with
+        parameters is a copy of the declaration, so without this it started
+        from what making the object *without* them had recorded - and as what
+        is recorded already outranks a parameter (a reader that found the
+        material in the file knows better than the request), 'box;color=:red'
+        went on reporting the colour 'box' was drawn in, once 'box' had been
+        asked for. See '_restore_declared_properties'.
+
+        Taken once per declaration, the first time it is normalized - which is
+        before it is made into anything, since every object is made from the
+        normalized declaration - and again only for a declaration that states
+        its properties afresh. A package that hands the same dictionary back
+        keeps what it said the first time; so does a plugin-backed one that
+        hands back a new copy of it each time with the same 'properties:'
+        inside, which is where making the object recorded into
+        ('ProjectExternalRepository._augment'); and one whose every answer is
+        new throughout says it again.
+
+        Under a lock of its own, the look and the copy together: lookups run on
+        several threads, and one switched out between finding nothing
+        remembered and copying would otherwise copy what another had since
+        made the object from and recorded.
+        """
+        if not isinstance(declaration, dict):
+            return
+        from . import shape_envelope
+
+        properties = declaration.get(shape_envelope.KEY_PROPERTIES)
+        with self._declared_properties_lock:
+            remembered = self._declared_properties.setdefault(kind, {})
+            known = remembered.get(name)
+            if known is not None and (known[0] is declaration or (properties is not None and known[1] is properties)):
+                return
+            remembered[name] = (declaration, properties, copy.deepcopy(properties))
+
+    def _restore_declared_properties(self, kind: str, name: str, config: dict) -> None:
+        """Give 'config', a copy of the declaration 'name', back the 'properties:' the declaration states itself.
+
+        What an instance named with parameters is made from: everything the
+        declaration says, its own 'properties:' included, and nothing that
+        making another object out of it recorded since. The instance records
+        what its own parameters ask for as it is made, as the object without
+        them did. A declaration nothing remembered - a kind with no
+        normalization here - is left as it is.
+        """
+        known = self._declared_properties.get(kind, {}).get(name)
+        if known is None:
+            return
+        from . import shape_envelope
+
+        declared = known[2]
+        if declared is None:
+            config.pop(shape_envelope.KEY_PROPERTIES, None)
+        else:
+            config[shape_envelope.KEY_PROPERTIES] = copy.deepcopy(declared)
 
     def object_config(self, kind: str, name: str):
         """The config of a single object, fetched individually when possible.
@@ -1042,6 +1128,30 @@ class Project(project_config.Configuration):
     def _fetch_object_config(self, kind: str, name: str):
         return None
 
+    def resolves_instances(self, kind: str) -> bool:
+        """Whether this package resolves the parametrized instances of 'kind' itself.
+
+        Every package derives an instance ('<base>;<param>=<value>,...') from
+        its base declaration, with the parameters' defaults set to the values
+        the name gives - unless it says otherwise. A package served by a
+        repository plugin can (see 'ProjectExternalRepository'), because what
+        it serves may differ by more than the parameter values: another file,
+        in another format.
+        """
+        return False
+
+    def _fetch_object_instance_config(self, kind: str, name: str):
+        """The declaration of the instance 'name', for a package that 'resolves_instances(kind)', or None."""
+        return None
+
+    def searches(self, kind: str) -> bool:
+        """Whether this package answers a search for 'kind' itself, rather than being matched locally."""
+        return False
+
+    def search(self, kind: str, text: str, limit: typing.Optional[int] = None) -> list:
+        """The objects of 'kind' this package finds for 'text', when it 'searches()' that kind."""
+        return []
+
     def dependencies(self) -> dict:
         """The declared child-package dependencies of this package.
 
@@ -1265,16 +1375,45 @@ class Project(project_config.Configuration):
         return self.object_config("interface", interface_name)
 
     def init_materials(self):
-        for material_name in self.object_names("material"):
-            # Per object, exactly as 'init_objects' does it and for the same
-            # reason: an unreadable declaration costs the user that one
-            # material rather than every material declared after it.
-            try:
-                self.init_material_by_config(self.get_material_config(material_name), material_name)
-            except Exception as e:
-                self.record_broken_object("material", material_name, e)
+        """Build every CMF declaration of this package: its colours, materials and finishes."""
+        for kind in cmf.KINDS:
+            for name in self.object_names(kind):
+                # Per object, exactly as 'init_objects' does it and for the same
+                # reason: an unreadable declaration costs the user that one
+                # declaration rather than every one declared after it.
+                try:
+                    self.init_cmf_by_config(kind, self.object_config(kind, name), name)
+                except Exception as e:
+                    self.record_broken_object(kind, name, e)
 
-    def init_material_by_config(self, config, material_name=None, source_project=None):
+    def init_cmf_by_config(self, kind: str, config, name: str, parameter_values=None):
+        """Build one CMF declaration - or an instance of a parametric one - and put it in this package."""
+        if kind == "material":
+            return self.init_material_by_config(config, name, parameter_values=parameter_values)
+        object_name = "%s:%s" % (self.name, name)
+        # With the caller's configuration, as a material is: a daemon builds
+        # each context from its caller's, and the parameter overrides are there.
+        config = Configuration.normalize(
+            name, copy.deepcopy(cmf.normalize(kind, config)), object_name, self.ctx.user_config
+        )
+        # A parametric declaration named without values is its defaults: its
+        # fields rendered with them, as a reference that gives some renders the
+        # rest ('//builtin/color:rgba' is drawn in its default colour).
+        if parameter_values or config.get("parameters"):
+            config = cmf.with_parameters(config, parameter_values or {}, object_name)
+        instance_name = cmf.instance_key(name, parameter_values)
+        declaration = (cmf.Color if kind == "color" else cmf.Finish)(
+            instance_name,
+            self.name,
+            config,
+            base_name=name,
+            parameter_values=parameter_values,
+            config_dir=self.config_dir,
+        )
+        self.register_object(kind, instance_name, declaration)
+        return declaration
+
+    def init_material_by_config(self, config, material_name=None, source_project=None, parameter_values=None):
         """Build one material and put it in this package.
 
         Built here rather than through 'init_object_by_config' because that
@@ -1289,13 +1428,71 @@ class Project(project_config.Configuration):
         if material_name is None:
             material_name = config["name"]
         config = material_config.MaterialConfiguration.normalize(
-            material_name, config, "%s:%s" % (self.name, material_name), self.ctx.user_config
+            material_name, copy.deepcopy(config), "%s:%s" % (self.name, material_name), self.ctx.user_config
         )
-        self.register_object(
-            "material",
-            material_name,
-            material.Material(material_name, source_project.name, config),
+        # Its defaults where it is named without values (see 'init_cmf_by_config').
+        if parameter_values or config.get("parameters"):
+            config = cmf.with_parameters(config, parameter_values or {}, "%s:%s" % (self.name, material_name))
+        instance_name = cmf.instance_key(material_name, parameter_values)
+        found = material.Material(
+            instance_name, source_project.name, config, base_name=material_name, parameter_values=parameter_values
         )
+        self.register_object("material", instance_name, found)
+        return found
+
+    def get_cmf(self, kind: str, name: str, quiet: bool = False):
+        """The colour, material or finish of this package called 'name', or None.
+
+        'name' may give parameter values ('rgba;color=C91A09FF'), which makes an
+        instance of a parametric declaration, kept under that name like every
+        parametrized object. A name the package declares as one of a
+        declaration's 'aliases' is that declaration.
+        """
+        base, values = parse_parameterized_name(name)
+        instance_name = cmf.instance_key(base, values)
+        objects = self.objects(kind)
+        with self.lock:
+            existing = objects.get(instance_name)
+        if existing is not None:
+            return existing
+
+        with Project.MaterialLock(self, instance_name, kind):
+            if objects.get(instance_name) is not None:
+                return objects[instance_name]
+            config = self.object_config(kind, base)
+            if config is None:
+                owner = self._cmf_alias_owner(kind, base)
+                if owner is not None:
+                    # Asked for by reference, which spells a reserved character escaped.
+                    return self.get_cmf(
+                        kind, cmf.instance_key(owner, values) if values else escape_name(owner), quiet=quiet
+                    )
+                if not quiet:
+                    pc_logging.error("The %s '%s' is not found in '%s'" % (kind, base, self.name))
+                return None
+            try:
+                return self.init_cmf_by_config(kind, config, base, parameter_values=values or None)
+            except Exception as e:
+                if not quiet:
+                    pc_logging.error("%s: %s '%s': %s" % (self.name, kind, instance_name, e))
+                return None
+
+    def _cmf_alias_owner(self, kind: str, name: str):
+        """The declaration of 'kind' that lists 'name' among its 'aliases', or None."""
+        for candidate in self.object_names(kind):
+            config = self.object_config(kind, candidate)
+            aliases = config.get("aliases") if isinstance(config, dict) else None
+            if isinstance(aliases, str):
+                aliases = [aliases]
+            if isinstance(aliases, list) and name in [str(alias) for alias in aliases]:
+                return candidate
+        return None
+
+    def get_color(self, name: str, quiet: bool = False):
+        return self.get_cmf("color", name, quiet=quiet)
+
+    def get_finish(self, name: str, quiet: bool = False):
+        return self.get_cmf("finish", name, quiet=quiet)
 
     def get_material(self, material_name, quiet=False) -> Optional[material.Material]:
         """The material of this package called 'material_name', or None.
@@ -1861,9 +2058,40 @@ class Project(project_config.Configuration):
                     # of a kind gains its 'name' whether or not anything is ever
                     # made out of it (see '_normalized').
                     config = get_config(name)
+                    if self._enriches_a_package_not_loaded(factory_name, config):
+                        continue
                     self.init_object_by_config(factory_name, config_class, alias_class, config)
             except Exception as e:
                 self.record_broken_object(factory_name, name, e)
+
+    def _enriches_a_package_not_loaded(self, factory_name: str, config) -> bool:
+        """Whether 'config' is an enrich of a plugin in a package that is not loaded yet.
+
+        A plugin enrich is made from its source's declaration, so it needs the
+        source's package - and a package's own plugins are made while it loads,
+        before any package it imports: an enrich of a plugin of a dependency
+        ('//pub/universe/makerworld:makerworld_repo', with 'with:' values of
+        the user's own) could never be made then. It is left to be made when it
+        is first asked for, by 'get_object', when that package can be loaded.
+        Not every enrich, so that one whose source is at hand is still there to
+        be listed ('pc list providers') from the start.
+        """
+        if factory_name not in ("repository", "provider") or not isinstance(config, dict):
+            return False
+        if config.get("type") != "enrich":
+            return False
+        package = config.get("project") or config.get("package")
+        if not package:
+            source = config.get("source") or ""
+            if ":" not in source:
+                return False
+            try:
+                package, _ = self.resolve(source)
+            except Exception:
+                return False
+        if package in ("this", "", self.name):
+            return False
+        return package not in self.ctx.projects
 
     def init_sketch_by_config(self, config, source_project=None):
         self.init_object_by_config(
@@ -2041,11 +2269,11 @@ class Project(project_config.Configuration):
         the declaration - looking a declared part up is otherwise synchronous.
         The declaration is awaited first because in a package a plugin serves,
         reading it is a fetch, and the synchronous lookup would wait for that
-        fetch with this loop stopped (see 'Context._warm_project_async').
+        fetch with this loop stopped (see 'Context._warm_project_async'). So
+        is an instance's, where the package resolves instances itself.
         """
         await self._materialize_derived_part_async(part_name)
-        base_name, _ = parse_parameterized_name(part_name)
-        await self._warm_object_config_async("part", base_name)
+        await self._warm_object_async("part", self.get_part_config, part_name, func_params)
         return self._part_object(part_name, func_params, quiet=quiet)
 
     async def _warm_object_config_async(self, kind: str, name: str) -> None:
@@ -2054,6 +2282,29 @@ class Project(project_config.Configuration):
         A package that read its declarations from a file has them already.
         """
         return None
+
+    async def _warm_object_instance_config_async(self, kind: str, name: str) -> None:
+        """Have the declaration '_fetch_object_instance_config(kind, name)' reads at hand, on the caller's loop.
+
+        Only a package that resolves instances itself reads one (see
+        'resolves_instances'), and only one a plugin serves has to fetch it.
+        """
+        return None
+
+    async def _warm_object_async(self, kind: str, get_config: callable, object_name: str, func_params=None) -> None:
+        """Fetch, on the caller's loop, every declaration that looking 'object_name' up will read.
+
+        The object's own, which 'get_object' reads to name an instance as well
+        as to make one; and, for an instance, the instance's, where the package
+        resolves instances itself. Each is then found memoized by the
+        synchronous lookup, which would otherwise wait for the fetch with this
+        loop stopped (see 'Context._warm_project_async').
+        """
+        base_name, _ = parse_parameterized_name(object_name)
+        await self._warm_object_config_async(kind, base_name)
+        _base, _params, instance_name = self._instance_of(kind, get_config, object_name, func_params)
+        if instance_name is not None:
+            await self._warm_object_instance_config_async(kind, instance_name)
 
     def _derived_part_owner(self, part_name: str) -> Optional[tuple]:
         """The object whose parts are named '<that object>/<something>'.
@@ -2263,6 +2514,16 @@ class Project(project_config.Configuration):
             quiet=quiet,
         )
 
+    async def get_assembly_async(self, assembly_name, func_params=None, quiet=False) -> Optional[assembly.Assembly]:
+        """'get_assembly()' for callers that are already running on a loop.
+
+        The declarations it reads - the assembly's, and an instance's where the
+        package resolves instances itself - are awaited first, for the reason
+        'get_part_async' gives.
+        """
+        await self._warm_object_async("assembly", self.get_assembly_config, assembly_name, func_params)
+        return self.get_assembly(assembly_name, func_params, quiet=quiet)
+
     def get_scene(self, scene_name, func_params=None, quiet=False) -> Optional[scene.Scene]:
         return self.get_object(
             "scene",
@@ -2330,6 +2591,60 @@ class Project(project_config.Configuration):
             declarations.update(declared)
         return pc_config.normalized_array_values(declarations, params, f"{self.name}:{base_object_name}")
 
+    def _instance_of(self, factory_name: str, get_config: callable, object_name: str, func_params=None):
+        """(base name, parameter values, instance name) that asking for 'object_name' means.
+
+        The instance name is None when no value is given, in the name or in
+        'func_params': that is the declared object itself. Otherwise it is the
+        name the instance is registered under, and the key a package that
+        resolves instances itself is asked for (see 'resolves_instances'): the
+        values the name gives with 'func_params' on top, every array value read
+        into the list it is first, so that one set of values is one instance
+        however it was handed over.
+
+        One derivation for 'get_object' and for the warm-up that fetches what it
+        will read ('_warm_object_async'), so that the two cannot come to ask a
+        repository for different keys.
+        """
+        base_object_name, params = parse_parameterized_name(object_name)
+        if func_params:
+            params = {**params, **func_params}
+        if not params:
+            return base_object_name, params, None
+        params = self._normalized_array_values(factory_name, get_config, base_object_name, params)
+        return base_object_name, params, format_parameterized_name(base_object_name, params)
+
+    def _instantiate_resolved_instance(
+        self, factory_name: str, objects, config_class, base_object_name: str, result_name: str, instance: dict
+    ):
+        """Create the instance 'result_name' from the declaration the package resolved it to.
+
+        Called with the object's lock held (see 'get_object'). The declaration
+        is the instance's own: its parameters, if it declares any, already
+        carry the values the name asks for, so nothing is applied to it here.
+        It is normalized the way any declaration is, and is not added to the
+        package's enumeration - an instance is reached by its name, and a
+        listing of the package is not made longer by having asked for one.
+        """
+        if self._skipped_by(factory_name, result_name, instance) is not None:
+            return None
+        pc_logging.debug("Initializing an instance the package resolved itself: %s" % result_name)
+        try:
+            config = config_class.normalize(
+                result_name, copy.deepcopy(instance), f"{self.name}:{result_name}", self.ctx.user_config
+            )
+            config["orig_name"] = base_object_name
+            if factory_name in LAZY_OBJECT_KINDS and "manufacturable" not in config:
+                config["manufacturable"] = self.is_manufacturable
+            factory.instantiate(factory_name, config["type"], self.ctx, self, self, config)
+        except Exception as e:
+            self.record_broken_object(factory_name, result_name, e)
+            return None
+        if result_name not in objects:
+            self.record_broken_object(factory_name, result_name, "the factory produced no object")
+            return None
+        return objects[result_name]
+
     def get_object(
         self,
         factory_name: str,
@@ -2342,26 +2657,9 @@ class Project(project_config.Configuration):
         func_params=None,
         quiet=False,
     ):
-        if func_params is None or not func_params:
-            has_func_params = False
-        else:
-            has_func_params = True
-
-        base_object_name, params = parse_parameterized_name(object_name)
-        has_name_params = bool(params)
-
-        if has_func_params:
-            params = {**params, **func_params}
-            has_name_params = True
-
-        if not has_name_params:
-            result_name = object_name
-        else:
-            # Determine the name we want this parameterized object to have:
-            # with every array value read into the list it is first, so that
-            # one set of list values is one instance however it was handed over.
-            params = self._normalized_array_values(factory_name, get_config, base_object_name, params)
-            result_name = format_parameterized_name(base_object_name, params)
+        base_object_name, params, instance_name = self._instance_of(factory_name, get_config, object_name, func_params)
+        has_name_params = instance_name is not None
+        result_name = object_name if instance_name is None else instance_name
 
         # The package lock is released before the object's own lock is taken,
         # never held across it. Creating an object registers it, and
@@ -2478,6 +2776,27 @@ class Project(project_config.Configuration):
             # carries. Taking the mapping instead meant every named lookup
             # materialized it, and a plugin-backed package answered 'get_part'
             # with a round trip for its entire catalog.
+            #
+            # Unless the package resolves the instance itself. A repository
+            # plugin may say so (see 'ProjectExternalRepository'), and then
+            # what it hands back for the whole name is the object: another
+            # file, in another format, is as much a property of the instance
+            # as a parameter's value is, and nothing derived from the base
+            # declaration could say which.
+            #
+            # Such a package resolves every instance of the kind, and one it
+            # has no answer for does not exist. Falling back to the base would
+            # be worse than failing: 'model;file=<a typo>' would build the
+            # model's default file under a name that says it is another one.
+            if not self.skipped and self.resolves_instances(factory_name):
+                instance = self._fetch_object_instance_config(factory_name, result_name)
+                if instance is None:
+                    if not quiet:
+                        pc_logging.error("Object '%s' not found in '%s'", result_name, self.name)
+                    return None
+                return self._instantiate_resolved_instance(
+                    factory_name, objects, config_class, base_object_name, result_name, instance
+                )
             config = get_config(base_object_name)
             if config is None:
                 reason = self._refused_names.get(factory_name, {}).get(base_object_name)
@@ -2519,6 +2838,9 @@ class Project(project_config.Configuration):
 
             # Now we have the original assembly name and the complete set of parameters
             config = copy.deepcopy(config)
+            # As the package declares it, not as making the object without
+            # these parameters left it (see '_remember_declared_properties').
+            self._restore_declared_properties(factory_name, base_object_name, config)
             declare_object_type_parameters(factory_name, config, params)
             if ("parameters" not in config or config["parameters"] is None) and (
                 config["type"] not in PARAMETER_PASSING_TYPES
@@ -2730,7 +3052,7 @@ class Project(project_config.Configuration):
         if kind in ext_by_kind:
             ext = ext_by_kind[kind]
         else:
-            ext = kind
+            ext = self._part_type_extension(section, kind) or kind
 
         if ext:
             # This is a file type.
@@ -2738,6 +3060,15 @@ class Project(project_config.Configuration):
             valid, path, name = self._validate_path(path, ext)
             if not valid:
                 return False
+            if name == path:
+                # Not in the extension the type is named by, but perhaps in
+                # another spelling of it ('plate.igs' for 'iges', 'body.sab' for
+                # 'sat'): such an object is named after the file without its
+                # extension, as one in the type's own would be, and the path
+                # below says which file it is.
+                stem, own = os.path.splitext(path)
+                if own[1:].lower() in self.other_extensions(section, kind):
+                    name = stem
         else:
             # This is not a file type.
             # The user provided value is not a path. It's just the name itself.
@@ -2745,19 +3076,68 @@ class Project(project_config.Configuration):
             path = None
 
         obj = {"type": kind, **component_config}
-        if name == path:
+        # The path is left out only where it is the one the object would be
+        # found at without it, '<name>.<extension>' exactly: the extension is
+        # matched without regard to case above, and a file system that tells
+        # case apart finds no 'part.STEP' where it looks for 'part.step'.
+        if name == path or (path is not None and path != "%s.%s" % (name, ext)):
             obj["path"] = path
 
         return self.add_object_config(section, name, obj)
+
+    def _part_type_extension(self, section: str, kind: str):
+        """The extension a built-in 'partType' declares, for a part of one; None for anything else.
+
+        'fcstd' parts are stored in '.FCStd' files, not '.fcstd' ones: the type
+        is a declaration in '//builtin/import' rather than a factory, and the
+        declaration says what its files are called.
+        """
+        if section != "parts":
+            return None
+        from .output import builtin_part_type_extension
+
+        return builtin_part_type_extension(self.ctx, kind)
 
     def extension_for(self, section: str, kind: str):
         """The file extension objects of this kind are written to.
 
         'None' where the kind is not file-backed; the kind's own name where
         nothing says otherwise, which is the common case ('step' -> '.step').
+        A built-in 'partType' says otherwise in its declaration ('fcstd' ->
+        '.FCStd').
         """
         by_kind = SECTION_EXTENSIONS.get(section, {})
-        return by_kind[kind] if kind in by_kind else kind
+        if kind in by_kind:
+            return by_kind[kind]
+        return self._part_type_extension(section, kind) or kind
+
+    def other_extensions(self, section: str, kind: str) -> tuple:
+        """The other spellings of the extension objects of this kind are stored in, lowercased.
+
+        'igs' for an 'iges' part, 'sab', 'smb' and 'smt' for a 'sat' one: what
+        a file of the type is called by whatever wrote it, beside the one
+        'extension_for' names (see 'shape.PART_EXTENSION_ALIASES'). For an
+        assembly or a scene of an 'import:' type, the extensions its declaration
+        lists after its first ('glb' for a 'gltf' assembly). Empty for every
+        other section and kind.
+        """
+        if section in ("assemblies", "scenes"):
+            from . import output
+
+            implementation = output.import_declaration(self.ctx, self, kind)
+            declared = implementation.config.get("extension") if implementation is not None else None
+            if not isinstance(declared, list) or not declared:
+                return ()
+            own = str(declared[0]).lstrip(".").lower()
+            return tuple(sorted({str(each).lstrip(".").lower() for each in declared} - {own}))
+        if section != "parts":
+            return ()
+        from .shape import PART_EXTENSION_ALIASES
+
+        own = (self.extension_for(section, kind) or "").lower()
+        return tuple(
+            sorted(alias for alias, aliased in PART_EXTENSION_ALIASES.items() if aliased == kind and alias != own)
+        )
 
     def add_object_config(self, section: str, name: str, obj: dict) -> bool:
         """Write one object declaration into this package's 'partcad.yaml'.

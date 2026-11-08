@@ -40,8 +40,11 @@ WRAPPERS = os.path.join(os.path.dirname(pc.__file__), "wrappers")
 sys.path.append(WRAPPERS)
 import ocp_serialize  # noqa: E402
 
-BRICK = b"\x28\xb5\x2f\xfd" + os.urandom(4096)
-CONE = b"\x28\xb5\x2f\xfd" + os.urandom(4096)
+# Real zstd frames of bytes that do not compress, as a part's payload is: a
+# payload is named by the digest of what it decompresses to (see
+# 'shape_envelope.payload_digest'), which the JSON table names it by.
+BRICK = shape_envelope.brep_compressed(os.urandom(4096))
+CONE = shape_envelope.brep_compressed(os.urandom(4096))
 
 
 def _leaf(payload, label, **extra):
@@ -271,6 +274,21 @@ def test_an_error_answer_is_read_in_either_form(form):
 
 def test_a_frame_cut_off_says_so():
     frame = ocp_serialize.serialize({"shape": _leaf(BRICK, "brick")})
+
+    with pytest.raises(ValueError, match="did not arrive whole"):
+        shape_envelope.deserialize(frame[:-100])
+
+
+def test_a_frame_cut_off_where_its_last_line_parses_still_says_so():
+    """What is left of a frame ends in an attachment, any bytes at all, and its last line can be valid JSON.
+
+    The test above cuts a random payload, and about once in 700 the line its
+    tail ended in was a lone digit - which came back as the answer, 'DID NOT
+    RAISE'. This is that case on purpose.
+    """
+    tail = b"\x01" * 100
+    frame = ocp_serialize.serialize({"shape": _leaf(b"\x01" * 64 + b"\n7" + tail, "brick")})
+    assert frame.endswith(b"\n7" + tail)
 
     with pytest.raises(ValueError, match="did not arrive whole"):
         shape_envelope.deserialize(frame[:-100])

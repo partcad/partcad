@@ -304,6 +304,37 @@ suite('The tab strips', () => {
         assert.strictEqual(tabs.current, 'cfd');
     });
 
+    test('a strip shown in passing leaves the next object on the tab that was open before it', () => {
+        // A colour opened from the explorer gives the Design strip one tab, which
+        // it opens on for want of another; the part after it is not a part the
+        // user asked to see that tab of.
+        const { tabs, panes, opened } = strip();
+        tabs.setTabs(specs(panes, { fea: true, cfd: true }));
+        assert.strictEqual(tabs.current, 'fea');
+
+        tabs.setTabs([{ id: 'cfd', label: 'CFD', pane: panes.cfd as unknown as HTMLElement }], { transient: true });
+        assert.strictEqual(tabs.current, 'cfd');
+        // Two in a row are still in passing, and still remember the one before.
+        tabs.setTabs([{ id: 'cfd', label: 'CFD', pane: panes.cfd as unknown as HTMLElement }], { transient: true });
+
+        tabs.setTabs(specs(panes, { fea: true, cfd: true }));
+        assert.strictEqual(tabs.current, 'fea');
+        // Every rebuild announces what it opens: each is a new object.
+        assert.deepStrictEqual(opened, ['fea', 'cfd', 'cfd', 'fea']);
+    });
+
+    test('a tab clicked before something shown in passing is still the one opened after it', () => {
+        const { tabs, bar, panes } = strip();
+        tabs.setTabs(specs(panes, { fea: true, cfd: true }));
+        button(bar, 'CFD').click();
+
+        tabs.setTabs([{ id: 'fea', label: 'FEA', pane: panes.fea as unknown as HTMLElement }], { transient: true });
+        assert.strictEqual(tabs.current, 'fea');
+
+        tabs.setTabs(specs(panes, { fea: true, cfd: true }));
+        assert.strictEqual(tabs.current, 'cfd');
+    });
+
     test('the Analysis strip is FEA, Dynamic FEA, Heat Transfer and CFD, in that order', () => {
         // The id is what 'pc cae' and 'cae.analyze' call the analysis; the label
         // is what the tab, and the field over its model, call it.

@@ -28,6 +28,10 @@ What a repository is for
   length of a profile: the plugin answers for the one that was asked for.
 - **A format that is already a table.** A CSV, a spreadsheet, a JSON dump: one
   short script turns it into a package.
+- **A model site.** Thingiverse, GrabCAD, MakerWorld: a catalog nobody lists,
+  searched with the site's own search and fetched one model at a time. Such a
+  package serves no enumeration at all -- it answers a search, and the names the
+  search hands back.
 
 Using one
 =========
@@ -75,10 +79,33 @@ with the input in the global ``request`` and the output in the global
 ``output``. ``enrich`` repositories are references to another repository with
 some parameters fixed, which is how one script serves several packages.
 
+The repository an ``enrich`` points at may be another package's -- which is how a user sets a plugin's
+parameters in a package of their own, without touching the package that declares it:
+
+.. code-block:: yaml
+
+  repositories:
+    meshes_repo:
+      type: enrich
+      source: //pub/universe/makerworld:makerworld_repo
+      with:
+        formats: stl,3mf
+  dependencies:
+    makerworld_meshes:
+      type: external
+      plugin: :meshes_repo
+
+It runs as that package's plugin -- its script, the ``pythonRequirements`` its sandbox is prepared with, its
+directory -- with the parameters the ``enrich`` gives it, and it is made when it is first asked for, once that
+package can be loaded. The other way to set them is the user's own ``~/.partcad/config.yaml``, under
+``parameters``, by the plugin's name; PartCAD keys what it caches of a plugin's answers on those overrides, so a
+change to one is not answered from what was cached before it.
+
 **A repository script answers one generic key/value request.** There is no
 method per kind of object:
 
 - ``request["api"] == "get"``, ``request["key"]`` is the key being asked for
+- ``request["query"]`` is the same key taken apart, so a script need not parse it (see below)
 - ``output["result"]`` is the value, or ``null`` when the key is unknown
 
 The keys address every kind of data uniformly, which is why serving a new kind
@@ -107,9 +134,81 @@ of object or a new piece of metadata needs no new API:
   fetched from the plugin and materialized into the package's cache directory
   when the object is built.
 
+``search/<kind>?q=<text>&limit=<n>``
+  The objects the repository finds for a search, ``{name: config, ...}`` best
+  first, for a package whose ``meta`` lists the kind under ``searchKinds``.
+  ``pc search parts`` then asks the plugin rather than matching what it lists,
+  which is what makes a catalog nobody can list searchable at all.
+
+``objects/<kind>/<name>;<param>=<value>,...``
+  One parametrized instance, for a package whose ``meta`` lists the kind under
+  ``instanceKinds``: the plugin resolves it itself, so a parameter can choose
+  another file or another format rather than only another value.
+
+A repository script may also answer ``login`` -- the api ``pc login`` asks, and
+every kind of plugin may answer -- to get the user's credentials for the service
+it is a client of. See :ref:`plugin-login`.
+
 For a hierarchy, a child package's requests are **prefixed with its
 subfolder**: a child in ``motors`` asks for ``motors/objects/part``,
 ``motors/deps`` and so on, all served by the same script.
+
+**PartCAD takes the key apart for the script**, in ``request["query"]``, the
+way it reads a name everywhere else -- so a value a name carries
+percent-encoded (``%2C`` for a ``,`` that would split it, ``%3B`` for a ``;``)
+arrives decoded, and a script has no parser of its own to get that wrong:
+
+.. code-block:: python
+
+  {"what": "object", "kind": "part", "name": "763622",
+   "parameters": {"file": "clip;v2.stl"}, "subfolder": ""}   # objects/part/763622;file=clip%3Bv2.stl
+  {"what": "search", "kind": "part", "text": "hinge", "limit": 20, "subfolder": ""}
+  {"what": "objects", "kind": "part", "subfolder": "motors"}  # motors/objects/part
+  {"what": "file", "path": "models/clip.stl", "subfolder": ""}
+  {"what": "meta", "subfolder": ""}                           # and "deps", the same way
+
+``request["key"]`` is still there, and a script written before ``query``
+existed goes on reading it. A name a script *writes* -- a search hit's -- has
+to be spelled the way PartCAD spells one, which escapes only what would be
+misread: a ``,`` in a value that also holds an ``=`` (``%2C``), and every ``%``
+of a value holding something that reads as an escape (``%25``).
+
+Model sites
+===========
+
+A repository for a website of downloadable models -- Thingiverse, Printables,
+Sketchfab and the like -- answers for a name rather than listing a catalog, and
+picks one of a model's files to build. PartCAD gives such a script a toolkit,
+``plugin_models``, which it imports like any module wherever PartCAD runs it:
+
+.. code-block:: python
+
+  import plugin_models
+
+  class Site(plugin_models.Site):
+      NAME, TITLE = "example", "Example"
+
+      def model(self, model_id): ...           # a plugin_models.Model: its title and its files
+      def download(self, model, file): ...     # a file's bytes, with the user's credentials
+      def search(self, text, limit): ...       # the Models the site finds, best first
+      def login_spec(self): ...                # what pc login opens, or None
+
+  if __name__ == "get":
+      output = {"result": plugin_models.serve(Site(request), request["key"])}
+  elif __name__ == "login":
+      output = {"result": plugin_models.login(Site(request), partcad_login)}
+
+The script says how its site is asked; ``plugin_models`` says what PartCAD is
+answered. It names a model ``763622``, its files ``763622;file=<id or name>``,
+``763622;format=stl`` and ``763622;source=preview``; it picks a file by the
+formats PartCAD builds from, an exact format before a mesh, which the user
+orders with the plugin's ``formats`` parameter; it serves the geometry as
+``files/<path>``, because the plugin is where the user's credentials are; and it
+answers ``login`` (:ref:`plugin-login`). Its formats are PartCAD's own part
+types, and a test fails when PartCAD reads a format the toolkit does not offer.
+The ``partcad-repo-*`` plugins under `github.com/partcad
+<https://github.com/partcad>`_ are written this way; see the module's docstring
+for the rest.
 
 Examples
 ========
@@ -120,12 +219,14 @@ Three example packages, in increasing order of realism.
   A flat package of parts read from a CSV file. The whole plugin is one short
   script, ``csv.py``, and the data is ``example.csv`` beside it. It declares the
   repository twice -- a ``basic`` one taking a ``filename`` parameter, and an
-  ``enrich`` of it with the filename fixed -- which is the pattern to copy.
+  ``enrich`` of it with the filename fixed -- which is the pattern to copy. It
+  also answers ``search/part``, so ``pc search`` asks it.
 
   .. code-block:: shell
 
     cd examples/plugin_repository_basic
     pc list parts example
+    pc search parts -P example -k bolt
     pc ide view example:bolt
 
   The part it serves is an ordinary part in the Digital Thread -- the package it

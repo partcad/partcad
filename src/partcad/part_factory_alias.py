@@ -11,6 +11,7 @@ import copy
 import typing
 
 from . import cae as pc_cae
+from . import cmf
 from . import logging as pc_logging
 from . import part_factory as pf
 from . import reference, telemetry
@@ -62,7 +63,10 @@ class PartFactoryAlias(pf.PartFactory):
             # object that declares them ('Project.get_object' puts them in
             # 'with' when it parametrizes a reference).
             if config.get("with"):
-                self.source_part_name = format_parameterized_name(self.source_part_name, config["with"])
+                self.source_part_name = format_parameterized_name(
+                    self.source_part_name,
+                    cmf.canonical_parameters(ctx, config["with"], getattr(source_project, "name", "")),
+                )
                 self.source = self.source_project_name + ":" + self.source_part_name
             config["source_resolved"] = self.source
 

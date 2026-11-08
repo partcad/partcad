@@ -38,7 +38,7 @@ authorship.
 The skills PartCAD ships
 ========================
 
-Fourteen of them. The name in each heading is what you type in Claude Code; under
+Fifteen of them. The name in each heading is what you type in Claude Code; under
 Cursor the same skill is ``pc-<name>``, and an agent that chooses skills by their
 description will reach for the right one without being told.
 
@@ -71,10 +71,10 @@ Generating geometry
 
 ``/pc:gen``
   The one to use when it does not matter which kind of object the request is.
-  It decides whether what was asked for is a single part, a multi-part assembly
-  or a 2D sketch, and then follows the matching skill below. "Model me a shelf
-  bracket" is a part; "model me a gearbox" is an assembly; "draw me the profile"
-  is a sketch.
+  It decides whether what was asked for is a single part, a multi-part assembly,
+  a scene or a 2D sketch, and then follows the matching skill below. "Model me a
+  shelf bracket" is a part; "model me a gearbox" is an assembly; "lay out my
+  living room" is a scene; "draw me the profile" is a sketch.
 
 ``/pc:gen-part``
   Models one part from a description, and the order it works in is the point:
@@ -86,10 +86,21 @@ Generating geometry
      ("four M3 holes on a 40 mm square") rather than in terms of the model it is
      about to build. Requirements written afterwards describe the design, and
      then everything meets them.
-  3. It authors and registers the script, then validates it with ``pc test``.
-  4. It renders the part **from several angles and compares each view against
-     the description**, because a single projection hides whatever is behind it
-     -- then iterates on what the comparison found.
+  3. **It settles the dimensions in 2D before any geometry**: it runs
+     ``/pc:gen-sketch`` on a temporary sketch of each view that carries
+     dimensions, and iterates each until its measured dimensions match the ones
+     stated, derived or measured from the reference. A part that is one constant
+     profile is then simply an extrusion of the sketch that was validated.
+  4. It authors and registers the script from those numbers, then validates it
+     with ``pc test``.
+  5. It renders the part **from several angles and compares each view against
+     the description**, because a single projection hides whatever is behind it,
+     and **measures the same dimensions again on the part's own projections** --
+     then iterates on what the comparison found. A part made to reproduce a 3D
+     file is also read against that file itself with ``pc compare
+     --surface-distance`` (see :ref:`compare`): how their volumes and masses
+     differ, and how far the part's surface is from the reference's along the
+     reference's normals, point by point.
 
   When the PartCAD IDE (or VS Code with the PartCAD extension) is running beside
   the agent, every version of the part that builds and renders is also shown in
@@ -103,7 +114,10 @@ Generating geometry
   Models an assembly, and is the longest of the skills because putting things
   together is where the hard-won rules live. It decomposes the request, takes an
   inventory of parts that already exist and generates only what is missing,
-  authors the ``.assy``, and groups whatever repeats into sub-assemblies.
+  settles the placements on temporary layout sketches (a footprint and an
+  elevation, measured like any other sketch), authors the ``.assy`` from them,
+  and groups whatever repeats into sub-assemblies. The finished assembly's
+  projections are measured against the same layout.
 
   Its last step is the valuable one: it **replaces the coordinates it started
   with by connections**, so the assembly ends up saying what holds each item
@@ -120,11 +134,69 @@ Generating geometry
   generates as it takes shape, then every version of the assembly that builds
   and renders, all on one continuous turn of the 3D view.
 
+``/pc:gen-scene``
+  Lays out a :ref:`scene <scenes>`: an arrangement of objects rather than a
+  product -- a room, a building inside or out, a workcell, a world to simulate
+  something in. It says where things are, and nothing about putting them
+  together, and what it has to get right is the surfaces that are seen or that
+  something in the scene touches, and its physical conditions -- not the inside
+  of a volume nothing interacts with. So the rules it follows are not the
+  assembly's:
+
+  - Every object is a ``basic`` cuboid or cylinder at its real size, unless more
+    detail can reasonably be expected: you asked for it, the catalog already has
+    the object, it is what the scene is about, or something in the scene
+    interacts with its shape.
+  - Everything is placed with ``location:``, and is ``fixed: true`` -- welded to
+    the world -- unless it is said to move or obviously does.
+  - The scene stands on a bottom surface whose underside is at z = 0 or above,
+    where every simulator writes its ground plane, unless it is in space, where
+    there is none and the gravity is ``[0, 0, 0]``.
+  - A building whose inside only is wanted stands on floor plans:
+    :ref:`walls scenes <scenes-walls>`, whose walls are see-through from
+    outside, nested in the scene -- a single one where one outline can hold the
+    space. A ``walls`` scene cuts no openings, so a room with doors or windows is
+    the same walls placed by hand, by the ``walls`` scene's own rule.
+  - A building whose outside is modelled too gets solid walls instead, modelled
+    first: each one an extrusion of its elevation sketch with the doors and
+    windows as holes, placed side by side along the building's outline.
+
+  It settles the placements on a layout sketch the way ``/pc:gen-assembly`` does,
+  renders four views and measures the distances again on the scene's
+  projections. Since a scene is not manufacturable, ``pc test`` only warns when
+  two of its objects overlap, and the skill judges each warning by what the
+  overlap touches: walls sharing a corner are left alone, a mobile object inside
+  another never is.
+
 ``/pc:gen-sketch``
-  Authors a 2D sketch -- build123d, CadQuery, DXF, SVG or a basic outline -- and
-  validates it by rendering it to SVG and comparing that against the
-  description. Sketches are what parts are extruded and swept from, and what a
-  port's boundary is drawn with.
+  Authors a 2D sketch -- build123d, CadQuery, DXF, SVG or a basic outline --
+  whose dimensions are **measured rather than estimated**. Whatever it is given
+  becomes a 2D drawing it can measure: a description is written down as a table
+  of target dimensions; a DXF or SVG file is re-rendered the way PartCAD reads
+  it; a 3D description becomes a throwaway part that ``pc adhoc render``
+  projects, and so does a 3D file; a drawing or a photo is measured in pixels,
+  with the projection it was drawn in -- orthographic in first or third angle,
+  isometric, oblique, perspective -- taken into account.
+
+  Then it draws a candidate, renders it, and measures the same dimensions on the
+  rendering with the helper it ships beside itself, ``measure.py``, which reads
+  a PartCAD SVG render as the millimetres it is made of (and fits the polygons
+  the default projection draws curves as). Every dimension is compared, as a
+  number, with its target and tolerance, and the sketch is corrected from the
+  error until none is out.
+
+  Every size is read off **both** of PartCAD's projections -- ``reproducible:``
+  true and false -- because they draw the same geometry as different shapes and
+  different numbers of them: one arc where the other has several, an arc where
+  the other has a run of short lines, an edge whole or broken. ``measure.py
+  compare`` reads the two against each other, and a reading only one of them
+  supports is resolved before it is trusted. Its 3D counterpart, for two parts
+  or assemblies rather than two drawings, is ``pc compare``.
+
+  ``/pc:gen-part`` and ``/pc:gen-assembly`` run the same loop first, on
+  temporary sketches, to settle a part's dimensions and an assembly's placements
+  before they model anything. Sketches are also what parts are extruded and
+  swept from, and what a port's boundary is drawn with.
 
 ``/pc:add-interfaces``
   Adds ``interfaces``, ports and ``implements:`` to a part that has none, so that

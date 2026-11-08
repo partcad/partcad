@@ -15,7 +15,13 @@ type ItemData = {
     pkg: string;
     name: string;
     itemPath: string | undefined;
-    config?: { type?: string; parameters?: Record<string, Record<string, unknown>> };
+    config?: {
+        type?: string;
+        parameters?: Record<string, Record<string, unknown>>;
+        desc?: string;
+        display?: string;
+        manufacturable?: boolean;
+    };
 };
 
 /** What the Inspector last showed, kept here so that `pc ide state` can say so without the webview. */
@@ -143,6 +149,21 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
         this.shownItem = '';
         this.shown = { kind: 'software', item: software, params: {} };
         await this._view?.webview.postMessage({ type: 'software', obj: software, params: {} });
+    }
+
+    /**
+     * Show what a colour, a material or a finish is, and render nothing.
+     *
+     * A CMF declaration has no shape, so there is no render to wait for; what
+     * the Inspector says is what the explorer row says of it, and the Digital
+     * Thread says the rest. Forgotten as the shown item for the reason software
+     * is (see 'inspectSoftware').
+     */
+    public async inspectCmf(declaration: ItemData & { kind?: string }) {
+        this.shownPackage = '';
+        this.shownItem = '';
+        this.shown = { kind: declaration.kind ?? 'cmf', item: declaration, params: {} };
+        await this._view?.webview.postMessage({ type: 'cmf', obj: declaration, params: {} });
     }
 
     /**

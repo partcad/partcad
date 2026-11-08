@@ -16,6 +16,7 @@ import yaml
 
 from partcad_utils import assy_filter
 
+from . import cmf
 from . import joint as pc_joint
 from . import logging as pc_logging
 from . import telemetry
@@ -63,7 +64,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
     # view pulls apart (see 'Assembly.exploded'). Off unless declared, and the
     # default is never written into the declaration, so an assembly that does
     # not mention it keeps the cache key it had (see 'object_type_parameter').
-    ACCEPTED_OBJECT_TYPE_PARAMETERS = {"exploded": False}
+    ACCEPTED_OBJECT_TYPE_PARAMETERS = {**AssemblyFactoryFile.ACCEPTED_OBJECT_TYPE_PARAMETERS, "exploded": False}
 
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitASSY", source_project.name, config["name"]):
@@ -130,12 +131,64 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         return description.strip() or None
 
     def node_params(self, node) -> dict:
-        """The parameter overrides a link carries, if any."""
+        """The parameter overrides a link carries, if any.
+
+        A CMF parameter among them names a declaration as this file's package
+        sees it, and is handed on as the canonical reference it resolves to
+        (see 'partcad.cmf.canonical'): the item it names is the same item
+        whichever alias of the colour the file used.
+        """
         params = {}
         if "params" in node:
             for param_name in node["params"]:
                 params[param_name] = node["params"][param_name]
-        return params
+        return cmf.canonical_parameters(self.ctx, params, self.project.name)
+
+    def node_cmf_parameters(self, node) -> tuple:
+        """The CMF components a link's own 'params:' set, in the order colour, material, finish.
+
+        Recorded on the child it places (see 'AssemblyChild.cmf_parameters'):
+        setting one draws the item in an assembly-specific way, which costs the
+        assembly its manufacturability unless it is bought whole (see
+        'partcad.test.cmf').
+        """
+        params = node.get("params") if isinstance(node, dict) else None
+        if not isinstance(params, dict):
+            return ()
+        return tuple(kind for kind in cmf.KINDS if params.get(kind) not in (None, ""))
+
+    def with_propagated_cmf(self, item, params: dict) -> dict:
+        """'params' and the colour, material and finish this assembly states, for those nothing else does.
+
+        An assembly's CMF parameters pass to its links (docs/design/cmf.md,
+        section 5), each for a link whose 'params:' do not set it and whose item
+        does not state it already: an item's own CMF is its own - a variant an
+        'enrich' fixes stays the variant it is - and an assembly fills in what
+        is left. Recursively, because the sub-assembly a link names is then
+        named with the values too. 'params' itself is returned when nothing is
+        added, so that a caller can tell.
+        """
+        inherited = cmf.own_parameters(self.assembly, self.ctx)
+        if not inherited or item is None:
+            return params
+        stated = cmf.own_parameters(item, self.ctx)
+        added = {kind: value for kind, value in inherited.items() if kind not in params and kind not in stated}
+        return {**params, **added} if added else params
+
+    def linked_item(self, kind: str, name: str, params: dict):
+        """The assembly or scene a link names, with the CMF this assembly passes on (see 'with_propagated_cmf')."""
+        getter = self.ctx._get_assembly if kind == "assembly" else self.ctx._get_scene
+        item = getter(name, params)
+        propagated = self.with_propagated_cmf(item, params)
+        return item if propagated is params else getter(name, propagated)
+
+    async def linked_item_async(self, kind: str, name: str, params: dict):
+        """'linked_item' for any kind, parts included, which resolve on the caller's loop."""
+        if kind != "part":
+            return self.linked_item(kind, name, params)
+        item = await self.ctx._get_part_async(name, params)
+        propagated = self.with_propagated_cmf(item, params)
+        return item if propagated is params else await self.ctx._get_part_async(name, propagated)
 
     async def prepare_async(self, assembly) -> None:
         """Resolve every part and assembly this one links to, without building.
@@ -189,17 +242,17 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
 
         if "assembly" in node:
             name = self.node_object_name(node, "assembly")
-            item = self.ctx._get_assembly(name, self.node_params(node))
+            item = self.linked_item("assembly", name, self.node_params(node))
         elif "part" in node:
             name = self.node_object_name(node, "part")
-            item = await self.ctx._get_part_async(name, self.node_params(node))
+            item = await self.linked_item_async("part", name, self.node_params(node))
         elif "scene" in node:
             # Resolved and keyed even where it is refused (an assembly places no
             # scene, see 'handle_node'): this walk fetches what the file names,
             # and a key that left a named object out would be the stale-entry
             # bug the paragraph below describes, one refusal away.
             name = self.node_object_name(node, "scene")
-            item = self.ctx._get_scene(name, self.node_params(node))
+            item = self.linked_item("scene", name, self.node_params(node))
         else:
             return
 
@@ -226,7 +279,13 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         for name, item in linked:
             if not await assembly.add_cache_key_of(item):
                 unkeyed.append(name)
-            elif interfaces is not None:
+                continue
+            # And what the item's CMF comes to, which its own key leaves out
+            # (see 'cmf.key_of'): this assembly's tree holds the item as read.
+            described = cmf.key_of(self.ctx, item)
+            if described:
+                assembly.hash.add_dict({"cmf": described})
+            if interfaces is not None:
                 declared = interfaces.get(id(item))
                 if declared is None:
                     unkeyed.append(name)
@@ -354,11 +413,11 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             return
 
         if "assembly" in node:
-            item = self.ctx._get_assembly(self.node_object_name(node, "assembly"), self.node_params(node))
+            item = self.linked_item("assembly", self.node_object_name(node, "assembly"), self.node_params(node))
         elif "scene" in node and self.IS_SCENE:
             # Only where it is placed: an assembly refuses a scene, and building
             # one first for it would be work towards nothing.
-            item = self.ctx._get_scene(self.node_object_name(node, "scene"), self.node_params(node))
+            item = self.linked_item("scene", self.node_object_name(node, "scene"), self.node_params(node))
         else:
             return
         if item is not None:
@@ -996,21 +1055,21 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         "objects it arranges here instead; it is left out" % (self.name, name, node["scene"])
                     )
                     return None
-                item = self.ctx._get_scene(self.node_object_name(node, "scene"), params)
+                item = self.linked_item("scene", self.node_object_name(node, "scene"), params)
                 if item is None:
                     pc_logging.error("Scene not found: %s in %s" % (name, self.name))
                     raise Exception("Scene not found: %s in %s" % (name, self.name))
             elif "assembly" in node:
                 if name is None:
                     name = node["assembly"]
-                item = self.ctx._get_assembly(self.node_object_name(node, "assembly"), params)
+                item = self.linked_item("assembly", self.node_object_name(node, "assembly"), params)
                 if item is None:
                     pc_logging.error("Assembly not found: %s" % name)
                     raise Exception("Assembly not found")
             elif "part" in node:
                 if name is None:
                     name = node["part"]
-                item = await self.ctx._get_part_async(self.node_object_name(node, "part"), params)
+                item = await self.linked_item_async("part", self.node_object_name(node, "part"), params)
                 if item is None:
                     pc_logging.error("Part not found: %s in %s" % (name, self.name))
                     raise Exception("Part not found: %s in %s" % (name, self.name))
@@ -1603,6 +1662,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 fixed=fixed,
                 attached=attached,
                 also=self.node_also(node),
+                cmf_parameters=self.node_cmf_parameters(node),
             )
             if joint is not None:
                 # One list, so that what is found about the joint after this -

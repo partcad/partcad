@@ -106,3 +106,9 @@ def test_where_a_part_is_bought_does_not_move_the_key():
     assert _key(base) == _key({**base, "vendor": "gobilda", "sku": "2803-0004-0002", "count_per_sku": 25})
     # And two pack sizes of one part are one shape, however they are sold.
     assert _key({**base, "count_per_sku": 25}) == _key({**base, "count_per_sku": 100})
+
+
+def test_what_the_cmf_check_requires_does_not_move_the_key():
+    """'cmf: {require: true}' says whether a finding fails or warns, not what is built."""
+    base = {"name": "part", "type": "step", "path": "a.step"}
+    assert _key(base) == _key({**base, "cmf": {"require": True}})

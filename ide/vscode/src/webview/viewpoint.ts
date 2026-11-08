@@ -33,6 +33,11 @@
 // up vector says it (the top view's up is +Y because the camera came from -Y),
 // and the camera is put a hair's breadth off the pole that way when it is drawn.
 //
+// How a view is drawn - in perspective, or without it ('Projection') - is not a
+// part of where it is looked at from, with one exception: an isometric view is
+// an orthographic one from a diagonal, and so it is a corner as well
+// ('isometricView').
+//
 // No three.js here: this is arithmetic the panel, the gizmo, the 2D tab and the
 // tests all share, and 'scene.ts' cannot be imported outside a browser.
 //
@@ -73,6 +78,26 @@ export const AXIS_DIRECTIONS: Readonly<Record<AxisView, { origin: Vec3; up: Vec3
 
 /** The corner a part is looked at from when nothing says otherwise: 'render.VIEWS["iso"]'. */
 export const DEFAULT_VIEWPOINT: Viewpoint = { origin: [100, -100, 100], up: [0, 0, 1], target: [0, 0, 0] };
+
+/**
+ * How a view is drawn, as the view panel offers it.
+ *
+ *   * 'perspective': what is nearer is drawn larger, as an eye sees it - the 3D
+ *     view's camera, with three's 50 degrees from top to bottom;
+ *   * 'orthographic': without perspective, every line of sight parallel, so that
+ *     a length is drawn the same size however far away it is - the projection
+ *     a drawing is made in, from wherever the view looks;
+ *   * 'isometric': orthographic, looking along a diagonal of the frame, which
+ *     foreshortens all three axes alike - the corner 'render.VIEWS["iso"]' is.
+ *
+ * Isometric is a viewpoint as much as a projection: choosing it turns the view
+ * to the nearest such corner ('isometricView'), and a view turned off it is
+ * orthographic again ('isIsometric').
+ */
+export type Projection = 'orthographic' | 'isometric' | 'perspective';
+
+/** The three, in the order the view panel offers them. */
+export const PROJECTIONS: readonly Projection[] = ['orthographic', 'isometric', 'perspective'];
 
 /**
  * What a turntable turns about: its pole, and the direction in its equator the
@@ -143,6 +168,37 @@ export function axisView(axis: AxisView, current?: Viewpoint): Viewpoint {
         up: [...up] as Vec3,
         target: current !== undefined ? ([...current.target] as Vec3) : [0, 0, 0],
     };
+}
+
+/**
+ * The isometric view nearest 'current': looking along the diagonal of the
+ * octant it looks from, at the distance it is at and at what it looks at, the
+ * picture upright about 'pole' as the turntable holds it. An axis the view is
+ * square to - an axis view looks along one and is square to the other two -
+ * says nothing about which side of it to look from, and the side the opening
+ * view ('DEFAULT_VIEWPOINT') is on is taken.
+ */
+export function isometricView(current?: Viewpoint, pole: Pole = Z_POLE): Viewpoint {
+    const from = current ?? DEFAULT_VIEWPOINT;
+    const distance = length(from.origin) > EPSILON ? length(from.origin) : length(DEFAULT_VIEWPOINT.origin);
+    // A component that is only a rounding error of the rest - the front view
+    // read back off a camera - is square to that axis, not on one side of it.
+    const corner = from.origin.map((component, axis) =>
+        Math.abs(component) > 1e-6 * distance ? Math.sign(component) : Math.sign(DEFAULT_VIEWPOINT.origin[axis]),
+    ) as Vec3;
+    const origin = scale(normalize(corner)!, distance);
+    return fromTurntable(toTurntable({ origin, up: pole.axis, target: from.target }, pole), from.target, pole);
+}
+
+/**
+ * Whether 'viewpoint' is an isometric one: looking along a diagonal of the
+ * frame, at the same angle to all three axes - to a part in ten thousand, so
+ * that a view read back off a camera put there still is one.
+ */
+export function isIsometric(viewpoint: Viewpoint): boolean {
+    const back = normalize(viewpoint.origin);
+    const third = 1 / Math.sqrt(3);
+    return back !== undefined && back.every((component) => Math.abs(Math.abs(component) - third) < 1e-4);
 }
 
 /** The axis view 'viewpoint' is, if it is one: looking along an axis, with that view's up. */

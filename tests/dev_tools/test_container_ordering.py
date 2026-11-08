@@ -103,7 +103,7 @@ def test_the_tag_it_publishes_is_the_tag_the_runtime_pulls():
     # builds the reference in Python. The client's copy is an `open:` declaration
     # -- `//builtin/open` is where the applications `pc ide open` launches are
     # described, as data -- so the repository holds the image name and
-    # `external.py` holds the substitution that resolves its `{version}`. Both
+    # `container_image.expand` the substitution that resolves its `{version}`. Both
     # halves are checked, because either one alone can drift into naming a tag
     # nobody pulls.
     kicad_image = "partcad-container-kicad"
@@ -121,13 +121,19 @@ def test_the_tag_it_publishes_is_the_tag_the_runtime_pulls():
 
     declaration = (REPO_ROOT / "src/partcad/builtin/open/partcad.yaml").read_text()
     assert kicad_image + ":{version}" in declaration
+    # The client resolves it through `container_image.expand`, which a
+    # `dockerImage` of an implementation is resolved through too (the video
+    # file types of `//builtin/render` name PartCAD's GStreamer image that way):
+    # one substitution, so the two cannot come to resolve `{version}` apart.
     client = (REPO_ROOT / "src/partcad_client/external.py").read_text()
-    assert "image_tag(" in client
-    assert '"{version}"' in client
+    assert "expand(" in client
+    expand = (REPO_ROOT / "src/partcad_utils/container_image.py").read_text()
+    assert "image_tag(" in expand
+    assert '"{version}"' in expand
     # And the owner, for the same reason as the factory above: two readers of
     # one image, one following the owner and one not, is a `pc ide open` reaching
     # for a tag nobody published.
-    assert "image_name(" in client
+    assert "image_name(" in expand
 
 
 def test_whether_it_publishes_is_the_callers_answer_and_not_a_second_one():

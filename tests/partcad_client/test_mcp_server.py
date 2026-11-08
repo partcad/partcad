@@ -106,6 +106,7 @@ def requests(daemon, method):
 
 
 def test_the_tools_are_the_curated_set_and_the_escape_hatch(tmp_path):
+    """The curated tools and 'execute' are all that is served, each with a schema, a title and a description."""
     _, server = serve(tmp_path)
     tools = using(server, lambda client: client.list_tools()).tools
     assert sorted(tool.name for tool in tools) == sorted(
@@ -118,7 +119,9 @@ def test_the_tools_are_the_curated_set_and_the_escape_hatch(tmp_path):
             "lint",
             "bom",
             "search",
+            "login",
             "instructions",
+            "compare",
             "version",
             "list_methods",
             "execute",
@@ -131,15 +134,17 @@ def test_the_tools_are_the_curated_set_and_the_escape_hatch(tmp_path):
 
 
 def test_the_annotations_do_not_claim_less_than_the_truth(tmp_path):
+    """A tool that only reads says so; one that writes, logs in or runs anything does not claim to be read-only."""
     _, server = serve(tmp_path)
     tools = {tool.name: tool.annotations for tool in using(server, lambda client: client.list_tools()).tools}
-    for name in ("list_objects", "info", "render", "test", "lint", "bom", "search", "instructions"):
+    for name in ("list_objects", "info", "render", "test", "lint", "bom", "search", "instructions", "compare"):
         assert tools[name].read_only_hint is True, name
     assert tools["export"].read_only_hint is False
     assert tools["export"].destructive_hint is True
     assert tools["execute"].read_only_hint is False
     assert tools["execute"].destructive_hint is True
     assert tools["execute"].idempotent_hint is False
+    assert tools["login"].read_only_hint is False
 
 
 def test_the_instructions_name_only_real_tools(tmp_path):
@@ -206,6 +211,44 @@ def test_every_tool_naming_an_object_takes_its_parameter_values(tmp_path, tool, 
     (request,) = requests(daemon, method)
     assert request["object"] == "box"
     assert request["params"] == ["width=10"]
+
+
+def test_compare_sends_what_pc_compare_json_sends(tmp_path):
+    """The 'compare' tool sends the request 'pc compare --json' sends."""
+    daemon, server = serve(tmp_path, {"compare.objects": lambda params, emit: {"passed": None}})
+    result = call(server, "compare", {"reference": "bracket-v1", "current": "bracket-v2", "surface_distance": 0.5})
+    assert not result.is_error
+    (request,) = requests(daemon, "compare.objects")
+    assert request["object"] == "bracket-v1"
+    assert request["current"] == "bracket-v2"
+    assert request["surface_distance"] == 0.5
+    assert request["max_volume_difference"] is None
+    assert request["displacement"] is False
+    assert request["max_displacement_difference"] is None
+    assert request["worst"] == 10
+    assert request["json"] is True
+
+
+def test_compare_asks_for_the_displacements_as_pc_compare_displacement_does(tmp_path):
+    """'displacement' and its limit reach the daemon as the options of 'pc compare' send them."""
+    daemon, server = serve(tmp_path, {"compare.objects": lambda params, emit: {"passed": True}})
+    arguments = {"reference": "a", "current": "b", "displacement": True, "max_displacement_difference": 2}
+    result = call(server, "compare", arguments)
+    assert not result.is_error
+    (request,) = requests(daemon, "compare.objects")
+    assert request["displacement"] is True
+    assert request["max_displacement_difference"] == 2
+
+
+def test_a_comparison_that_does_not_hold_is_a_failed_result(tmp_path):
+    """'passed: false' is a failed tool result, with the report kept in it."""
+    _, server = serve(tmp_path, {"compare.objects": lambda params, emit: {"passed": False}})
+    result = call(server, "compare", {"reference": "a", "current": "b", "max_mass_difference": 2})
+    assert result.is_error
+    reply = body(result)
+    assert reply["ok"] is False
+    assert reply["error"] == "b does not hold to a"
+    assert reply["result"] == {"passed": False}
 
 
 def test_assembly_instructions_carry_this_machines_build_vs_buy_choices(tmp_path, monkeypatch):
@@ -335,6 +378,65 @@ def test_render_sends_the_kind_it_is_told(tmp_path):
     assert requests(daemon, "render.inline") == [
         {"package": None, "object": "box", "format": "png", "kind": "assembly", "context": "ctx-1"}
     ]
+
+
+@pytest.mark.parametrize(
+    "tool, arguments",
+    [("render", {}), ("export", {"format": "svg", "path": "out/box.svg"})],
+)
+def test_the_overlays_and_callouts_are_asked_for_as_pc_render_asks(tmp_path, tool, arguments):
+    """Each under the name `pc render` sends it, and each name switch only when it is off."""
+    daemon, server = serve(tmp_path, {"render.inline": rendered("svg", b"<svg/>")})
+    call(
+        server,
+        tool,
+        {
+            "object": "box",
+            "with_ports": True,
+            "with_interfaces": True,
+            "with_internals": True,
+            "with_component_names": True,
+            "with_component_prices": True,
+            "with_materials": True,
+            "with_port_names": False,
+            "with_interface_names": False,
+            **arguments,
+        },
+    )
+    (request,) = requests(daemon, "render.inline")
+    assert {key: value for key, value in request.items() if key.startswith("with_")} == {
+        "with_ports": True,
+        "with_interfaces": True,
+        "with_internals": True,
+        "with_component_names": True,
+        "with_component_prices": True,
+        "with_materials": True,
+        "with_port_names": False,
+        "with_interface_names": False,
+    }
+
+
+def test_a_picture_asked_for_nothing_extra_is_the_request_it_always_was(tmp_path):
+    """The defaults are not sent: the daemon keeps its cached picture, and an older daemon is asked what it knows."""
+    daemon, server = serve(tmp_path, {"render.inline": rendered("png", PNG)})
+    call(server, "render", {"object": "box", "with_port_names": True, "with_component_names": False})
+    (request,) = requests(daemon, "render.inline")
+    assert not [key for key in request if key.startswith("with_")]
+
+
+def test_the_overlay_and_callout_switches_are_the_ones_pc_render_has(tmp_path):
+    """A switch the tool offers is one `pc render` sends, so the two cannot come to mean different things."""
+    import inspect
+
+    from partcad_cli.click.commands import render as pc_render
+
+    sent = set(re.findall(r'"(with_[a-z_]+)"', inspect.getsource(pc_render)))
+    _, server = serve(tmp_path)
+    tools = {tool.name: tool for tool in using(server, lambda client: client.list_tools()).tools}
+    for name in ("render", "export"):
+        offered = {key for key in tools[name].input_schema["properties"] if key.startswith("with_")}
+        assert offered, name
+        assert offered <= sent, (name, offered - sent)
 
 
 @DAEMONS
@@ -583,3 +685,112 @@ def test_a_request_without_a_context_that_does_something_is_not_sent_again(tmp_p
     assert result.is_error
     assert "may or may not have finished" in body(result)["error"]
     assert len(requests(daemon, "adhoc.convert")) == 1
+
+
+# --- Logging in ----------------------------------------------------------------
+
+
+LOGIN_SPEC = {
+    "url": "https://example.com/login",
+    "title": "Example",
+    "capture": [{"name": "token", "cookie": {"url": "https://example.com/", "name": "t"}}],
+    "require": "all",
+    "instructions": "An API key from https://example.com/keys does as well.",
+}
+
+
+def _login_daemon(params, emit):
+    if params.get("values"):
+        if params["values"].get("token") != "good":
+            return {"plugin": "//p:repo", "status": "failed", "message": "the site does not take it"}
+        return {"plugin": "//p:repo", "status": "done", "parameters": {"token": "good"}, "message": "Logged in"}
+    return {"plugin": "//p:repo", "status": "instructions", "spec": LOGIN_SPEC}
+
+
+def test_login_asks_for_nobody_at_the_screen_and_says_what_the_user_is_to_do(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    daemon, server = serve(tmp_path, {"plugin.login": _login_daemon})
+    answer = body(call(server, "login", {"plugin": "//p:repo"}))
+    assert answer["ok"] is True
+    assert requests(daemon, "plugin.login")[0]["non_interactive"] is True
+    result = answer["result"]
+    assert result["status"] == "instructions" and result["names"] == ["token"]
+    assert "https://example.com/login" in result["instructions"]
+    assert "An API key from https://example.com/keys" in result["instructions"]
+    assert "values {'token': '...'}" in result["instructions"]
+    assert not (tmp_path / ".partcad" / "config.yaml").exists()
+
+
+def test_login_hands_the_values_over_and_keeps_what_works_without_repeating_it(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    daemon, server = serve(tmp_path, {"plugin.login": _login_daemon})
+    answer = body(call(server, "login", {"plugin": "//p:repo", "values": {"token": "good"}}))
+    assert answer["ok"] is True, answer
+    assert requests(daemon, "plugin.login")[0]["values"] == {"token": "good"}
+    assert answer["result"]["saved"] == ["token"]
+    assert "good" not in json.dumps(answer["result"])
+    import yaml
+
+    assert yaml.safe_load((tmp_path / ".partcad" / "config.yaml").read_text())["parameters"] == {
+        "//p:repo": {"token": "good"}
+    }
+
+
+def test_login_that_the_site_refuses_is_a_failed_result(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, server = serve(tmp_path, {"plugin.login": _login_daemon})
+    result = call(server, "login", {"plugin": "//p:repo", "values": {"token": "bad"}})
+    assert result.is_error and "the site does not take it" in body(result)["error"]
+    assert not (tmp_path / ".partcad" / "config.yaml").exists()
+
+
+class ConfigWithParameters:
+    """A configuration whose parameter overrides are sent, as the CLI's is."""
+
+    def __init__(self):
+        self.parameter_config = {"//p:repo": {"formats": "stl"}}
+
+    def to_dict(self):
+        return {"parameters": {name: dict(values) for name, values in self.parameter_config.items()}}
+
+
+def test_what_login_saved_is_sent_with_every_request_after_it(tmp_path, monkeypatch):
+    """The server read the configuration file once; what it saved must not wait for a restart."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    daemon = FakeDaemon({"plugin.login": _login_daemon, "list.objects": lambda params, emit: None})
+    bridge = Bridge(str(tmp_path), connect=daemon.connect, user_config=ConfigWithParameters())
+    server = build_server(bridge, PathScope([bridge.root]))
+
+    assert body(call(server, "login", {"plugin": "//p:repo", "values": {"token": "good"}}))["ok"] is True
+    call(server, "list_objects", {})
+    sent = [params["userConfig"] for name, params in daemon.calls if name == "context.create"][-1]
+    assert sent["parameters"]["//p:repo"] == {"formats": "stl", "token": "good"}
+
+
+def test_login_asked_to_be_interactive_with_no_browser_to_open_answers_with_instructions(tmp_path, monkeypatch):
+    """Nothing to open means nobody to send to it: the instructions now, not a wait on a page nobody sees."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from partcad_client import browser as pc_browser
+
+    monkeypatch.setattr(pc_browser, "choose", lambda name=None: None)
+    daemon, server = serve(tmp_path, {"plugin.login": _login_daemon})
+    answer = body(call(server, "login", {"plugin": "//p:repo", "interactive": True}))
+    assert answer["ok"] is True and answer["result"]["status"] == "instructions"
+    assert requests(daemon, "plugin.login")[0]["non_interactive"] is True
+
+
+def test_login_with_a_browser_that_will_not_start_says_so_rather_than_wait(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from partcad_client import browser as pc_browser
+
+    def browser_step(params, emit):
+        return {"plugin": "//p:repo", "status": "browser", "spec": LOGIN_SPEC}
+
+    def will_not_start(url, chosen):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(pc_browser, "choose", lambda name=None: pc_browser.Browser("chrome", ["/x/chrome"]))
+    monkeypatch.setattr(pc_browser, "open_browser", will_not_start)
+    _, server = serve(tmp_path, {"plugin.login": browser_step})
+    result = call(server, "login", {"plugin": "//p:repo", "interactive": True})
+    assert result.is_error and "could not start Google Chrome" in body(result)["error"]

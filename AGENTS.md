@@ -76,6 +76,12 @@ a CAD addon, or documentation.
   where it is written -- and a rule with a copy per reader is a rule whose copies disagree about which object a
   name is.
 
+  `part_kinds` is the same kind of rule for `pc add part`: the types a part is added from a file as. The CLI
+  refuses any other before it starts a daemon, and the daemon's `add.object` refuses it too, because the editor
+  extension and an agent's `execute` reach that method without the CLI. Only PartCAD's own factory types are
+  listed there; the native formats are its `//builtin/import` `partTypes`, which a client reads from
+  `partcad_client.object_types`, and a test holds the two halves together.
+
   `assy_lint` checks an ASSY file or a `partcad.yaml` *as it renders*, and rendering is the other thing both
   ends do: PartCAD as it loads a package, and every client as it lints the file an editor has open. So what a
   template may name (`config_template`) and what a parameter declaration means (`parameters`) are here, with
@@ -196,11 +202,26 @@ Package-specific commands: `src/partcad/AGENTS.md`, `src/partcad_cli/AGENTS.md`,
 `ide/vscode/AGENTS.md`, `ide/standalone/AGENTS.md`, `cad/freecad/AGENTS.md`.
 
 **Every pull request targets `devel`; nothing merges to `main`**, which only moves by fast-forward from `devel`
-and is the release (PyPI publishes from it). The same holds for `partcad/partcad-index`. A change that breaks
-packages in the index -- a key PartCAD stops accepting, a field read with a new meaning -- is made in the order
-"Branches, releases and breaking changes" in `docs/source/contributing.rst` gives: additive first, released, the
-index's packages migrated through the index's `devel`, the old form retired last. `examples/partcad.yaml` tracks
-the index unpinned on purpose, so that it breaks as soon as the two disagree; do not pin it.
+and is the release (PyPI publishes from it). The same holds for `partcad/partcad-index`.
+
+**Moving PartCAD's `main` starts the release; it does not finish it, and the index's `main` waits for it to.**
+The fast-forward only triggers the `Deployment` workflow (`.github/workflows/deploy.yml`), which builds the
+bundles, the IDE, the `.vsix` and the plugin before `Publish to PyPI` uploads anything -- and on `main` that job
+enters the `pypi` environment, which has a required reviewer, so it waits for a maintainer however long that
+takes, and the Marketplace, MCP Registry and `plugin-dist` publishes come after it. So the two `main` branches
+move **in order, with a wait between them**: fast-forward PartCAD's `main`, let that run finish, confirm the
+version is on PyPI, and only then fast-forward the index's `main`. Doing the two together publishes an index
+whose packages require a PartCAD nobody can install yet: the index's `main` is what an *installed* PartCAD
+reads, so `pc update` would hand every package created by `pc init` a `partcad:` floor above the newest release
+on PyPI, and they would fail with `Incompatible PartCAD version!` until the upload landed -- or for good, if the
+run failed or its approval never came. `docs/source/contributing.rst` has the step-by-step order, under
+"Releasing the two repositories, in order".
+
+A change that breaks packages in the index -- a key PartCAD stops accepting, a field read with a new meaning --
+is made in the order "Branches, releases and breaking changes" in `docs/source/contributing.rst` gives: additive
+first, released, the index's packages migrated through the index's `devel`, the old form retired last.
+`examples/partcad.yaml` tracks the index unpinned on purpose, so that it breaks as soon as the two disagree; do
+not pin it.
 
 **PartCAD running from its sources reads the index's `devel`, not its `main`.** `develIndex` defaults to on for an
 editable install (`is_editable_install`, so `poetry install`, `pip install -e`, the dev container, CI-Dev, and
@@ -397,8 +418,9 @@ changes with the number of workers. So a test may not:
   where a bound has to sit below some other timeout to mean anything, lengthen that timeout in the test.
 
 The suites that cannot be parallel run in jobs of their own, one file each and in one process:
-`tests/ide/test_ide_e2e.py` (`PC_TEST_IDE_E2E=1`) and `tests/partcad/unit/test_docker_sandbox_live.py`
-(`PC_TEST_SANDBOX_IMAGE`). Both skip in the parallel run.
+`tests/ide/test_ide_e2e.py` (`PC_TEST_IDE_E2E=1`), `tests/ide/test_viewer_render.py` (`PC_TEST_IDE_RENDER=1`, a
+browser drawing the 3D view's finishes; Linux, in the same job) and `tests/partcad/unit/test_docker_sandbox_live.py`
+(`PC_TEST_SANDBOX_IMAGE`). All three skip in the parallel run.
 
 **A warm daemon outlives a checkout, and one test says so.** `pc version` reports the version of the
 `partcad` the *daemon* loaded, which is the useful answer and not this process's — so after anything that moves

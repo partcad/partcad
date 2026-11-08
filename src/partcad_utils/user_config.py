@@ -20,6 +20,7 @@ import vyper
 
 from . import conda as pc_conda
 from . import logging as pc_logging
+from . import user_locale
 from .booleans import to_bool
 from .utils import is_editable_install
 
@@ -319,6 +320,31 @@ def _positive_seconds(value):
     return value if math.isfinite(value) and value > 0 else None
 
 
+def _length_or(value, default):
+    """'value' as a finite, non-negative length in millimetres, or 'default' if it is not one.
+
+    Read the way '_seconds_or' reads a duration: text from the environment that
+    is a number is one, a boolean is not, and nought is a setting.
+    """
+    return _seconds_or(value, default)
+
+
+def _seconds_or(value, default):
+    """'value' as a finite, non-negative number of seconds, or 'default' if it is not one.
+
+    Read the way '_positive_seconds' reads one - text from the environment that
+    is a number is one, a boolean is not - except that nought is a setting here:
+    'store everything, however quickly it was built'.
+    """
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return default
+    return value if math.isfinite(value) and value >= 0 else default
+
+
 # The options a user configuration resolves to, by their configuration-file
 # names. This is what travels when one process hands its configuration to
 # another; a new option belongs here, or the daemon will keep resolving it from
@@ -329,6 +355,7 @@ OPTION_KEYS = (
     "cacheFiles",
     "cacheFilesMaxEntrySize",
     "cacheFilesMinEntrySize",
+    "cacheFilesMinBuildTime",
     "cacheMemoryMaxEntrySize",
     "cacheMemoryDoubleCacheMaxEntrySize",
     "cacheRemote",
@@ -337,6 +364,7 @@ OPTION_KEYS = (
     "cacheRemoteExpiration",
     "cacheRemoteMaxEntrySize",
     "cacheRemoteMinEntrySize",
+    "cacheRemoteMinBuildTime",
     "cacheS3",
     "cacheS3Bucket",
     "cacheS3Prefix",
@@ -344,6 +372,7 @@ OPTION_KEYS = (
     "cacheS3EndpointUrl",
     "cacheS3MaxEntrySize",
     "cacheS3MinEntrySize",
+    "cacheS3MinBuildTime",
     "cacheDependenciesIgnore",
     "cacheBypass",
     "pythonSandbox",
@@ -356,6 +385,10 @@ OPTION_KEYS = (
     "forceUpdate",
     "develIndex",
     "offline",
+    "country",
+    "language",
+    "currency",
+    "location",
     "git.clone.timeout",
     "git.clone.retry.max",
     "git.clone.retry.patience",
@@ -371,6 +404,7 @@ OPTION_KEYS = (
     "caeThermalImplementation",
     "caeCfdImplementation",
     "camImplementation",
+    "materialClusterDistance",
     "tags",
 )
 
@@ -421,6 +455,10 @@ DEFAULT_CAE_IMPLEMENTATIONS = {
     "thermal": "//pub/feature/cae/elmer:thermal",
     "cfd": "//pub/feature/cae/openfoam:cfd",
 }
+
+# How close two surfaces of one material are for the "Materials" callout to
+# count them as one cluster, in millimetres: see 'materialClusterDistance'.
+DEFAULT_MATERIAL_CLUSTER_DISTANCE = 10.0
 
 # Which implementation produces a route when nothing says otherwise. Unlike the
 # two above this one *is* built into 'partcad': a route is arithmetic on the
@@ -699,6 +737,42 @@ class UserConfig(vyper.Vyper):
         data["pythonSandboxDeclared"] = self._python_sandbox_declared
         return data
 
+    def address(self) -> dict:
+        """The user's address, as the 'user' section says it: its street, city, state, ZIP code and country.
+
+        The section's own fields, falling back on its 'shippingAddress', which
+        is where an address that is only for deliveries is kept. Personally
+        identifiable: never handed to a plugin (see 'user_info').
+        """
+        section = self.pii_config.to_dict() if hasattr(self, "pii_config") else {}
+        shipping = section.get("shippingAddress") or {}
+        fields = ("line1", "line2", "city", "stateCode", "zipCode", "countryCode")
+        return {
+            field: section.get(field) or shipping.get(field)
+            for field in fields
+            if section.get(field) or shipping.get(field)
+        }
+
+    def user_info(self) -> dict:
+        """What a plugin is told about the user: the country, state and city, the language and the currency.
+
+        A sanitised subset, and deliberately coarse: enough for a store to know
+        which country's range and prices to answer with and which of its shops
+        might be near, and nothing that identifies the user - no name, no
+        street, no ZIP code, no location. A plugin that needs to know which of
+        its shops is nearest asks PartCAD, which knows the location and answers
+        with a shop rather than with where the user is (see 'partcad.locality').
+        """
+        address = self.address()
+        info = {
+            "country": self.country,
+            "state": address.get("stateCode"),
+            "city": address.get("city"),
+            "language": self.language,
+            "currency": self.currency,
+        }
+        return {key: value for key, value in info.items() if value}
+
     @classmethod
     def from_dict(cls, data: dict) -> "UserConfig":
         """Rebuild a configuration from what :meth:`to_dict` produced."""
@@ -770,6 +844,13 @@ class UserConfig(vyper.Vyper):
         # again from its sub-assemblies on every run.
         self.set_default("cacheFilesMaxEntrySize", 50 * 1024 * 1024)
         self.set_default("cacheFilesMinEntrySize", 100)
+        # How long a shape has to have taken to build before a tier keeps it,
+        # in seconds (see 'Shape.get_wrapped', 'CacheBackend.min_build_seconds').
+        # Below it, reading the entry back costs about what building it again
+        # does - a file read is milliseconds, a memcached or S3 round trip tens
+        # of them - so the entry is kept in this process's memory instead, and
+        # a shared tier is spared an entry nobody gains by fetching.
+        self.set_default("cacheFilesMinBuildTime", 0.01)
         self.set_default("cacheRemote", False)
         self.set_default("cacheRemoteServer", "")
         self.set_default("cacheRemoteNamespace", "partcad")
@@ -778,6 +859,7 @@ class UserConfig(vyper.Vyper):
         # rejection, so a server raised above it has to say so here.
         self.set_default("cacheRemoteMaxEntrySize", 1024 * 1024)
         self.set_default("cacheRemoteMinEntrySize", 100)
+        self.set_default("cacheRemoteMinBuildTime", 0.05)
         self.set_default("cacheS3", False)
         self.set_default("cacheS3Bucket", "")
         self.set_default("cacheS3Prefix", "partcad/")
@@ -787,6 +869,7 @@ class UserConfig(vyper.Vyper):
         # slower to fetch than to rebuild, which is not a cache hit worth having.
         self.set_default("cacheS3MaxEntrySize", 100 * 1024 * 1024)
         self.set_default("cacheS3MinEntrySize", 100)
+        self.set_default("cacheS3MinBuildTime", 0.05)
         self.set_default("cacheDependenciesIgnore", False)
         self.set_default("cacheBypass", False)
 
@@ -957,6 +1040,16 @@ class UserConfig(vyper.Vyper):
         self.bind_env("cacheFilesMinEntrySize", "PC_CACHE_FILES_MIN_ENTRY_SIZE")
         self.cache_min_entry_size = self.get_int("cacheFilesMinEntrySize")
 
+        # option: cacheFilesMinBuildTime
+        # description: how long a shape has to have taken to build, in seconds,
+        #              for the file cache to keep it. A shape built faster is
+        #              kept in memory instead: reading the file back would cost
+        #              about what building it again does.
+        # values: >=0, 0 means every shape
+        # default: 0.01 (10ms)
+        self.bind_env("cacheFilesMinBuildTime", "PC_CACHE_FILES_MIN_BUILD_TIME")
+        self.cache_files_min_build_time = _seconds_or(self.get("cacheFilesMinBuildTime"), 0.01)
+
         # option: cacheMemoryMaxEntrySize
         # description: the maximum size of a single memory cache entry in bytes
         # values: >=0, 0 means no limit
@@ -1022,6 +1115,15 @@ class UserConfig(vyper.Vyper):
         self.bind_env("cacheRemoteMinEntrySize", "PC_CACHE_REMOTE_MIN_ENTRY_SIZE")
         self.cache_remote_min_entry_size = self.get_int("cacheRemoteMinEntrySize")
 
+        # option: cacheRemoteMinBuildTime
+        # description: how long a shape has to have taken to build, in seconds,
+        #              for the remote (memcached) cache to keep it. A round trip
+        #              to the server costs about what building one faster does.
+        # values: >=0, 0 means every shape
+        # default: 0.05 (50ms)
+        self.bind_env("cacheRemoteMinBuildTime", "PC_CACHE_REMOTE_MIN_BUILD_TIME")
+        self.cache_remote_min_build_time = _seconds_or(self.get("cacheRemoteMinBuildTime"), 0.05)
+
         # option: cacheS3
         # description: enable the object store cache. Requires the 'aws' extra:
         #              pip install 'partcad[aws]'
@@ -1073,6 +1175,15 @@ class UserConfig(vyper.Vyper):
         # default: 100
         self.bind_env("cacheS3MinEntrySize", "PC_CACHE_S3_MIN_ENTRY_SIZE")
         self.cache_s3_min_entry_size = self.get_int("cacheS3MinEntrySize")
+
+        # option: cacheS3MinBuildTime
+        # description: how long a shape has to have taken to build, in seconds,
+        #              for the object store cache to keep it. A request to the
+        #              store costs about what building one faster does.
+        # values: >=0, 0 means every shape
+        # default: 0.05 (50ms)
+        self.bind_env("cacheS3MinBuildTime", "PC_CACHE_S3_MIN_BUILD_TIME")
+        self.cache_s3_min_build_time = _seconds_or(self.get("cacheS3MinBuildTime"), 0.05)
 
         # option: cacheDependenciesIgnore
         # description: ignore broken dependencies and cache at your own risk
@@ -1313,6 +1424,68 @@ class UserConfig(vyper.Vyper):
         # default: {}
         self.parameter_config = ParametersConfig(self)
 
+        # option: country
+        # description: the country the user is in, as an ISO 3166-1 alpha-2 code
+        #              ('NL'): what a store or a catalog a plugin serves is asked
+        #              for. The country of the user's address ('user.countryCode')
+        #              unless this says otherwise.
+        # values: <string>
+        # default: worked out from the locale (see below)
+        # option: language
+        # description: the language the user reads, as an ISO 639-1 code ('en')
+        # values: <string>
+        # default: worked out from the locale (see below)
+        # option: currency
+        # description: what the user pays in, as an ISO 4217 code ('EUR')
+        # values: <string>
+        # default: the currency of 'country'
+        # option: location
+        # description: where the user is on Earth: '{latitude: .., longitude: ..}'
+        #              in degrees, or "52.37,4.89" (PC_LOCATION). Never worked out
+        #              and never handed to a plugin: PartCAD answers a plugin's
+        #              question about it instead (which of these shops is
+        #              nearest), see 'partcad.locality'. 'user.location' says the
+        #              same.
+        # values: <dict>
+        # default: none
+        #
+        # The first three are worked out here, from the locale this process was
+        # started with ('nl_NL.UTF-8'), when nothing configures them - and only
+        # when this process is resolving its own configuration. A daemon
+        # rebuilding a client's ('from_dict') takes all four from what the
+        # client sent and from nothing of its own - not its file, not its
+        # environment, not its locale - so a command is answered for where
+        # whoever typed it is, not for where the daemon was started (which can
+        # be another machine). What is worked out is written back, so that
+        # 'to_dict' hands it to the daemon like anything else.
+        # See 'partcad_utils.user_locale'.
+        for key, env in (("country", "PC_COUNTRY"), ("language", "PC_LANGUAGE"), ("currency", "PC_CURRENCY")):
+            self.bind_env(key, env)
+        self.bind_env("location", "PC_LOCATION")
+
+        def _locale_option(key):
+            return self.get(key) if settings is None else settings.get(key)
+
+        address = self.address()
+        self.country = user_locale.country_code(_locale_option("country")) or user_locale.country_code(
+            address.get("countryCode")
+        )
+        self.language = user_locale.language_code(_locale_option("language"))
+        self.currency = user_locale.currency_code(_locale_option("currency"))
+        if settings is None:
+            detected_country, detected_language = user_locale.detect()
+            self.country = self.country or detected_country
+            self.language = self.language or detected_language
+        self.currency = self.currency or user_locale.currency_of(self.country)
+        self.location = user_locale.location(_locale_option("location")) or user_locale.location(
+            self.pii_config.location
+        )
+        for key in ("country", "language", "currency", "location"):
+            # What was resolved, or emptied of whatever this process's own
+            # layers said: an empty string, as a vyper override of None falls
+            # through to the environment.
+            self.set(key, getattr(self, key) or "")
+
         # option: offline
         # description: offline mode
         # values: [True | False]
@@ -1470,6 +1643,25 @@ class UserConfig(vyper.Vyper):
         self.bind_env("camImplementation", "PC_CAM_IMPLEMENTATION")
         self.cam_implementation = self.get_string("camImplementation") or DEFAULT_CAM_IMPLEMENTATION
 
+        # option: materialClusterDistance
+        # description: how far apart, in millimetres, two surfaces of one
+        #              material may be and still be one cluster of it, for the
+        #              "Materials" callout: the IDE's 3D and 2D tabs, and
+        #              "pc render --with-materials". Surfaces that touch are one
+        #              cluster whatever this says; nought counts only those. A
+        #              cluster is the faces of one material, of one part or of
+        #              several, each of which touches or is closer than this to
+        #              another of them, and it gets one callout naming the
+        #              material. Anything that is not a number of millimetres,
+        #              or is negative, is no setting at all.
+        # values: <float>
+        # default: 10
+        self.set_default("materialClusterDistance", DEFAULT_MATERIAL_CLUSTER_DISTANCE)
+        self.bind_env("materialClusterDistance", "PC_MATERIAL_CLUSTER_DISTANCE")
+        self.material_cluster_distance = _length_or(
+            self.get("materialClusterDistance"), DEFAULT_MATERIAL_CLUSTER_DISTANCE
+        )
+
     def cae_implementation(self, analysis: str) -> str:
         """Which implementation runs one analysis, by its name ("fea", "cfd", ...).
 
@@ -1481,6 +1673,86 @@ class UserConfig(vyper.Vyper):
         if not hasattr(self, attribute):
             raise ValueError("PartCAD does not run a '%s' analysis" % analysis)
         return getattr(self, attribute)
+
+
+# How long a write of the configuration file waits for another one to finish.
+# Each holds the lock for one read and one write of a small file.
+CONFIG_LOCK_TIMEOUT = 60
+
+
+def save_parameter_overrides(object_name: str, values: dict, path: str = None) -> str:
+    """Write 'values' into the user's configuration file as overrides of the parameters of 'object_name'.
+
+    The file's 'parameters' section is what '--extra-param' and every object's
+    parameter overrides are read from (see 'ParametersConfig'), so what is
+    written here reaches the object - a plugin, once 'pc login' has signed in to
+    what it is a client of - in every command run afterwards, the way a value
+    typed into the file by hand does. Nothing else in the file is touched, its
+    comments included: it is round-tripped, not regenerated.
+
+    The values are often credentials. So the file is replaced in one step, and
+    readable by its owner only.
+
+    Two logins can finish at once -- two 'pc login's, or an agent's parallel
+    'login' calls through 'pc mcp' -- and each reads the file, adds its own
+    plugin's values and replaces it: unguarded, the later replace drops what
+    the earlier one wrote. So reading, merging and replacing happen under one
+    lock beside the file, which every caller of this function takes.
+
+    Returns the path written.
+    """
+    from filelock import FileLock
+
+    path = path or UserConfig.get_config_path()
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with FileLock(path + ".lock", timeout=CONFIG_LOCK_TIMEOUT, mode=0o600):
+        _merge_parameter_overrides(path, object_name, values)
+    return path
+
+
+def _merge_parameter_overrides(path: str, object_name: str, values: dict) -> None:
+    from ruamel.yaml import YAML
+    from ruamel.yaml.comments import CommentedMap
+
+    yaml = YAML()
+    yaml.preserve_quotes = True
+    document = None
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            document = yaml.load(f)
+    if document is None:
+        document = CommentedMap()
+    if not isinstance(document, dict):
+        raise ValueError("%s is not a mapping, so there is nowhere to put 'parameters' in it" % path)
+    section = document.get("parameters")
+    if section is None:
+        section = document["parameters"] = CommentedMap()
+    if not isinstance(section, dict):
+        raise ValueError("'parameters' in %s is not a mapping" % path)
+    entry = section.get(object_name)
+    if entry is None:
+        entry = section[object_name] = CommentedMap()
+    if not isinstance(entry, dict):
+        raise ValueError("'parameters: %s' in %s is not a mapping" % (object_name, path))
+    for name, value in values.items():
+        entry[name] = value
+
+    temporary = "%s.%d.tmp" % (path, os.getpid())
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as f:
+            yaml.dump(document, f)
+        try:
+            os.chmod(temporary, 0o600)
+        except OSError:
+            pass  # a filesystem that has no modes; the replace still happens
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.remove(temporary)
+        except OSError:
+            pass
+        raise
 
 
 user_config = UserConfig()

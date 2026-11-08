@@ -423,7 +423,7 @@ declared using the following syntax:
 
   Both ``vendor`` and ``sku`` must be set for the part to be considered
   purchasable. If either is missing, the part has to be manufactured instead,
-  which relies on the MCFTT parameters described above.
+  which relies on the MCFT parameters described above.
 
 - ``count_per_sku``
 
@@ -576,6 +576,10 @@ can do applies to it. What it is, is a set of facts about a substance:
       viscosity: <(optional) dynamic viscosity in Pa*s>
       mu: <(optional) coefficient of sliding friction, dimensionless>
       tags: <(optional) a list of free-form tags, or a single tag>
+
+A material is one of the three kinds of CMF declaration, and takes the fields they share -- ``display``,
+``manufacturable``, ``ids``, ``aliases``, ``parameters``, ``type: alias`` -- and a ``color`` it claims for its natural
+surface: see :ref:`cmf-declarations`.
 
 The short form gives the full name and nothing else:
 
@@ -905,6 +909,76 @@ global objects.
 The input is passed as the dictionary ``request``.
 The output is extracted from the dictionary ``output``
 
+What a provider is told about the user
+--------------------------------------
+
+Every provider is run with ``request["userInfo"]``: where the user is, as far as it takes to answer with the
+right country's range, in the right language and money, and nothing finer.
+
+.. code-block:: python
+
+  request["userInfo"] == {
+      "country": "NL",      # ISO 3166-1 alpha-2
+      "state": "NH",        # the 'stateCode' of the user's address
+      "city": "Amsterdam",  # the 'city' of the user's address
+      "language": "en",     # ISO 639-1
+      "currency": "EUR",    # ISO 4217
+  }
+
+What is not known is absent. All of it is the configuration of whoever ran the command, worked out on their
+machine (see :ref:`user-location`), whichever machine the provider runs on. There is no name, no street, no ZIP
+code and no location in it: the whole ``user`` section, ``request["user"]``, is handed to a ``manufacturer``
+alone, which ships what it makes to an address.
+
+A provider with several places to choose between -- a store's shops in that state or city -- asks PartCAD which
+one is nearest the user, with ``partcad_user``, which is in every provider's globals:
+
+.. code-block:: python
+
+  store = partcad_user.choose_place(
+      [
+          {"id": "088", "name": "Amsterdam", "latitude": 52.30, "longitude": 4.95, "city": "Amsterdam", "state": "NH"},
+          {"id": "151", "name": "Delft", "latitude": 52.01, "longitude": 4.38, "city": "Delft", "state": "ZH"},
+      ],
+      what="store",
+  )
+
+The answer is the ``id`` of the place nearest the user's ``location``, as the crow flies; without one, the first
+place whose ``zip``, ``city`` or ``state`` (tried in that order) is that of the user's address; and otherwise
+``None``, when the provider decides for itself and should say what it decided. The provider learns which of its
+own places was chosen, never where the user is. A place is an ``id`` and any of ``name``, ``latitude`` and
+``longitude`` (or ``lat`` and ``lng``), ``zip``, ``city`` and ``state``; anything else is left out of what PartCAD
+is handed, and at most 1000 places are considered.
+
+The call is a replay, the way ``partcad_login.open_browser`` is (see :doc:`/plugins/login`): the first time, the
+script stops, PartCAD chooses, and the script is run again from the top with the answer to hand. So a script has
+to do the same up to each call -- which reading a list of shops is -- and must not catch ``BaseException``
+around it.
+
+Parameters the user sets
+------------------------
+
+Any parameter a provider declares can be set by its user, in ``~/.partcad/config.yaml``, by the provider's full
+name:
+
+.. code-block:: yaml
+
+  # ~/.partcad/config.yaml
+  parameters:
+    //pub/svc/commerce/ikea:ikea-store:
+      store: "088"
+
+That is how a provider that would otherwise choose for itself -- a store, its shop -- is told what to use
+instead. A provider's own ``currency`` parameter is no such choice: it says what the provider quotes in.
+
+What a quote is in
+------------------
+
+A price is a number, and a number is not a price without its currency. So every quote PartCAD takes says one:
+``output["currency"]``, an ISO 4217 code, when the provider says it; else its ``currency`` parameter; and a quote
+that says neither is taken to be in US dollars, with a warning naming the provider. A provider that quotes in
+more than one currency -- a store in several countries -- says it in every answer.
+
 Store
 -----
 
@@ -953,6 +1027,7 @@ Store
       would otherwise be bought once for each of them.
     - `request["cart"]["skus"][<n>]["parts"]`: the parts that SKU is for
     - `output["price"]`: the total price of the cart
+    - `output["currency"]`: what the price is in, an ISO 4217 code (see "What a quote is in" above)
     - `output["cartId"]`: the id of the cart (to be used for the order later)
 
   - `request["api"] == "order"`
@@ -996,7 +1071,9 @@ Manufacturer
     - `request["cart"]["parts"]`: the dictionary of parts
     - `request["cart"]["parts"][<id>]["format"]`: the format of the binary (e.g. `"step"`)
     - `request["cart"]["parts"][<id>]["binary"]`: the geometry data
+    - `request["user"]`: the ``user`` section of the user's configuration, with the addresses to ship and bill to
     - `output["price"]`: the total price of the cart
+    - `output["currency"]`: what the price is in, an ISO 4217 code (see "What a quote is in" above)
     - `output["cartId"]`: the id of the cart (to be used for the order later)
 
   - `request["api"] == "order"`

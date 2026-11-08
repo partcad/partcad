@@ -1,0 +1,41 @@
+# The colours PartCAD ships with itself.
+#
+# One colour, and it is a picture, not a claim: 'rgba' names any colour by its
+# value ('//builtin/color:rgba;color=C91A09FF'). It is what a hex or CSS colour
+# written where a colour declaration belongs is read as, and what a converter
+# makes of a colour in a part's source (a STEP face's RGB) that nothing in scope
+# claims (see 'partcad.cmf.RGBA' and docs/design/cmf.md).
+#
+# It is PartCAD's, and here rather than in the public index, because PartCAD
+# writes it: a reference the core produces for any package has to resolve in
+# any context, with or without the index at hand, and in the version of PartCAD
+# that produced it. A reference states its colour in full as well
+# ('cmf.rgba_of_reference'), so that much of it needs no package at all; this
+# one is what it resolves to - its 'manufacturable: false' and its default.
+#
+# Not a colour standard, and none belongs here. No colour system ships with
+# PartCAD, for licensing reasons, and a vendor declares its own colours in its
+# own package, under the names it sells them by (see 'config_cmf' in the
+# documentation).
+
+name: //builtin/color
+desc: |
+  Colours for drawing with. 'rgba' is any colour, written as its value
+  ('//builtin/color:rgba;color=C91A09FF'): a picture of how something looks,
+  not a claim that it can be had in that colour. It declares
+  'manufacturable: false': a part coloured with it is not specified for
+  manufacturing until a colour that can be had is named instead.
+
+colors:
+  rgba:
+    desc: >-
+      Any colour, as its sRGB value and alpha in hexadecimal ('RRGGBBAA'). For
+      drawing only: it claims nothing about what can be sourced or made, and so
+      it does not count as a colour for manufacturing.
+    parameters:
+      color:
+        type: string
+        default: DAA520FF
+        desc: The colour as 'RRGGBBAA' (or 'RRGGBB').
+    display: "#%color%"
+    manufacturable: false

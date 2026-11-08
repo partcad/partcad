@@ -10,7 +10,9 @@
 import copy
 import typing
 
+from . import assembly_explode
 from . import assembly_factory as pf
+from . import cmf
 from . import logging as pc_logging
 from . import reference, telemetry
 from .shape_config_store import resolve_store_properties
@@ -52,9 +54,20 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
             # object that declares them ('Project.get_object' puts them in
             # 'with' when it parametrizes a reference).
             if config.get("with"):
-                self.source_assembly_name = format_parameterized_name(self.source_assembly_name, config["with"])
+                self.source_assembly_name = format_parameterized_name(
+                    self.source_assembly_name,
+                    cmf.canonical_parameters(ctx, config["with"], getattr(source_project, "name", "")),
+                )
                 self.source = self.source_project_name + ":" + self.source_assembly_name
             config["source_resolved"] = self.source
+
+            # A name for an exploded view ('with: {exploded: true}', or a
+            # source written 'logo;exploded=true') is that view, cache key and
+            # all, and is no more manufacturable than the view is (see
+            # 'assembly_explode.names_exploded_view'). On the object only, for
+            # the reason 'AssemblyFactory._create' gives.
+            if assembly_explode.names_exploded_view(self.source_assembly_name):
+                self.assembly.is_manufacturable = False
 
             self.assembly.desc = config.get("desc") or reference.describe(
                 config["type"], target_project.name, self.source

@@ -1,0 +1,118 @@
+#usda 1.0
+(
+    doc = """Every way a face's look is said, for PartCAD's 'usd' part type's tests.
+
+    Three squares in a row, 10 mm each: the first two in a material whose colour
+    is an image (halves.bmp, red on its left half, blue on its right) laid by
+    their UVs, the third a subset of them in a smooth metal; a cube coloured by
+    its 'displayColor' alone; and a pane in an MDL preset that calls OmniPBR
+    (brushed.mdl)."""
+    defaultPrim = "Looks"
+    metersPerUnit = 0.001
+    upAxis = "Z"
+)
+
+def Xform "Looks" (
+    kind = "component"
+)
+{
+    def Mesh "Tiles" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [4, 4, 4]
+        int[] faceVertexIndices = [0, 1, 5, 4, 1, 2, 6, 5, 2, 3, 7, 6]
+        point3f[] points = [(0, 0, 0), (10, 0, 0), (20, 0, 0), (30, 0, 0), (0, 10, 0), (10, 10, 0), (20, 10, 0), (30, 10, 0)]
+        texCoord2f[] primvars:st = [(0.1, 0.1), (0.4, 0.1), (0.4, 0.9), (0.1, 0.9), (0.6, 0.1), (0.9, 0.1), (0.9, 0.9), (0.6, 0.9), (0.1, 0.1), (0.4, 0.1), (0.4, 0.9), (0.1, 0.9)] (
+            interpolation = "faceVarying"
+        )
+        rel material:binding = </Looks/Materials/Painted>
+
+        def GeomSubset "Steel" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            uniform token elementType = "face"
+            uniform token familyName = "materialBind"
+            int[] indices = [2]
+            rel material:binding = </Looks/Materials/Steel>
+        }
+    }
+
+    def Cube "Marker"
+    {
+        double size = 5
+        color3f[] primvars:displayColor = [(1, 1, 0)]
+        double3 xformOp:translate = (5, 20, 2.5)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Mesh "Pane" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(20, 20, 0), (30, 20, 0), (30, 30, 0), (20, 30, 0)]
+        rel material:binding = </Looks/Materials/Brushed>
+    }
+
+    def Scope "Materials"
+    {
+        def Material "Painted"
+        {
+            token outputs:surface.connect = </Looks/Materials/Painted/Surface.outputs:surface>
+
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </Looks/Materials/Painted/Image.outputs:rgb>
+                float inputs:roughness = 0.8
+                token outputs:surface
+            }
+
+            def Shader "Image"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @halves.bmp@
+                float2 inputs:st.connect = </Looks/Materials/Painted/Coordinates.outputs:result>
+                token inputs:sourceColorSpace = "sRGB"
+                float3 outputs:rgb
+            }
+
+            def Shader "Coordinates"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                string inputs:varname = "st"
+                float2 outputs:result
+            }
+        }
+
+        def Material "Steel"
+        {
+            token outputs:surface.connect = </Looks/Materials/Steel/Surface.outputs:surface>
+
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.5, 0.5, 0.5)
+                float inputs:metallic = 1
+                float inputs:roughness = 0.2
+                token outputs:surface
+            }
+        }
+
+        def Material "Brushed"
+        {
+            token outputs:mdl:surface.connect = </Looks/Materials/Brushed/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @brushed.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "Brushed"
+                token outputs:out
+            }
+        }
+    }
+}

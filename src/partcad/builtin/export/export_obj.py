@@ -9,13 +9,14 @@ import os
 import sys
 
 sys.path.append(os.path.dirname(__file__))
+import cmf_export
 import wrapper_common
 from utils_ocp import tessellate
 
 # What this implementation reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
-# before is produced again.
-CACHE_VERSION = 1
+# before is produced again. 2: says that the CMF of what it writes is not in the file.
+CACHE_VERSION = 2
 
 # How this implementation meshes what it is handed, so that the files of one
 # object written together can share one decoding of it and one mesh (see
@@ -47,7 +48,11 @@ def process(path, request):
                 f.write("\n")
             f.flush()
 
-        return {"success": True, "exception": None, "files": []}
+        # The format has no colour, material or finish to write, and whoever
+        # exported a part that states them is told so, once (see
+        # 'cmf_export.dropped').
+        dropped = cmf_export.dropped(request, "OBJ")
+        return {"success": True, "exception": None, "files": [], "warnings": [dropped] if dropped else []}
     except Exception as e:
         wrapper_common.handle_exception(e)
         return {"success": False, "exception": wrapper_common.exception_to_str(e)}

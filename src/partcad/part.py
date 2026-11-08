@@ -31,4 +31,7 @@ class Part(Shape):
             self.url = config["url"]
 
     async def get_shape(self, ctx):
+        if self.built_in_place:
+            # Quicker to build than to hand to a thread (see 'Shape.built_in_place').
+            return await self.instantiate(self)
         return await threadpool_manager.run_async(self.instantiate, self)

@@ -37,6 +37,9 @@ from .sandbox import OutsideScope, PathScope
 _READS = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=True)
 _LOCAL = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
 _WRITES = ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=True)
+# Logging in writes the credentials it was given into the user's PartCAD
+# configuration, which it is for; the same ones again change nothing.
+_LOGS_IN = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=True)
 _ANYTHING = ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=True)
 
 # Daemon methods `execute` refuses, and why. Each would act on something that
@@ -118,17 +121,64 @@ Parameters = Annotated[
     Field(description="Values for the object's declared parameters, by name ('-p name=value' on the command line)."),
 ]
 
+# What a picture draws besides the geometry: the overlays and callouts of
+# `pc render`, under the parameter names `pc render` sends. Ports and interfaces
+# are not geometry, so a picture shows them only when asked; the callouts are the
+# boxes the IDE's Design 3D and 2D tabs offer under the component tree.
+WithPorts = Annotated[bool, Field(description="Draw a labelled coordinate frame at every port ('--with-ports').")]
+WithInterfaces = Annotated[
+    bool,
+    Field(description="Draw the boundary of every port, labelled with its interface ('--with-interfaces')."),
+]
+WithInternals = Annotated[
+    bool,
+    Field(
+        description="With with_ports or with_interfaces, draw the ports of everything inside an assembly too, "
+        "not only the ones it externalizes ('--with-internals')."
+    ),
+]
+WithComponentNames = Annotated[
+    bool, Field(description="Put a callout on every component with its name ('--with-component-names').")
+]
+WithComponentPrices = Annotated[
+    bool,
+    Field(
+        description="Put a callout on every component with its price: its share of the object's cheapest supply "
+        "quote, which asks the suppliers ('--with-component-prices'). With with_component_names, the price is the "
+        "second row of the same callout."
+    ),
+]
+WithMaterials = Annotated[
+    bool,
+    Field(
+        description="Put a callout on every cluster of a material, naming it: the faces of one material that touch "
+        "or are closer than the user's materialClusterDistance, 10 mm by default ('--with-materials')."
+    ),
+]
+WithPortNames = Annotated[
+    bool, Field(description="Write the name of every port with_ports draws; false draws the frames alone.")
+]
+WithInterfaceNames = Annotated[
+    bool,
+    Field(description="Write the name of every interface with_interfaces draws; false draws the boundaries alone."),
+]
+
 
 def instructions(bridge: Bridge, scope: PathScope) -> str:
     return (
         "PartCAD documents manufacturable products as code. A package is a directory with a partcad.yaml that "
         "declares parts, sketches, assemblies (ASSY files), scenes and interfaces, each made by a script "
         "(build123d, CadQuery, OpenSCAD, ...) or read from a file (STEP, STL, ...), and imports other packages. "
+        "A native CAD file -- FreeCAD, Fusion, SolidWorks, Inventor, CATIA V5, ACIS, Creo View, IGES -- is read as "
+        "it is: add it as a part by running add.object with execute ({kind: <its type>, path: <the file>}) rather than "
+        "converting it to STEP first. A type add.object does not take is refused with the list of those it does. "
         "Objects are named '//package/path:name'; a bare name is in the workspace's own package. An object that "
         "declares parameters is asked for with particular values through a tool's params ({name: value}), which "
         "is the same as naming it 'name;param=value,...'. "
         "Start with list_objects (kind=packages for the package tree) and info; look at an object with render, "
-        "which returns an image; check it against its declared requirements with test; write STEP, STL, 3MF and "
+        "which returns an image; check it against its declared requirements with test; read it against another "
+        "object -- volume, displacement, mass, and how far apart their surfaces are -- with compare; write STEP, "
+        "STL, 3MF and "
         "the rest with export. To create or change an object, edit partcad.yaml and its script with your own file "
         "tools -- the daemon reloads what changed -- then render and test again. Everything else PartCAD does "
         "(bom, instructions, cae, cam, simulations, add, import, convert, install) is a daemon method: "
@@ -139,6 +189,9 @@ def instructions(bridge: Bridge, scope: PathScope) -> str:
 
 
 def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
+    """The MCP server for one workspace: the curated tools, 'execute' and two resources, calling the daemon through
+    'bridge' within 'scope'.
+    """
     # 'MCPServer()' calls 'logging.basicConfig()', which configures the root
     # logger -- this process's, not the SDK's -- with a Rich handler, and every
     # library's warnings then come out of `pc mcp` drawn as boxed tables. The
@@ -227,16 +280,37 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             Field(description="A package whose 'render:' section implements the file type, such as a drawing style."),
         ] = None,
         params: Parameters = None,
+        with_ports: WithPorts = False,
+        with_interfaces: WithInterfaces = False,
+        with_internals: WithInternals = False,
+        with_component_names: WithComponentNames = False,
+        with_component_prices: WithComponentPrices = False,
+        with_materials: WithMaterials = False,
+        with_port_names: WithPortNames = True,
+        with_interface_names: WithInterfaceNames = True,
     ) -> CallToolResult:
         """Render one part, assembly, scene or sketch and return the picture.
 
         `pc render`, returned instead of written. The first render of an object builds it, which can take minutes.
+        Ports, interfaces and callouts are drawn only when asked for.
         """
         request = {"package": package, "object": object, "format": format, **_kind(kind)}
         if options_package:
             request["options_package"] = options_package
         if params:
             request["params"] = _assignments(params)
+        request.update(
+            _drawn(
+                with_ports,
+                with_interfaces,
+                with_internals,
+                with_component_names,
+                with_component_prices,
+                with_materials,
+                with_port_names,
+                with_interface_names,
+            )
+        )
         try:
             outcome = _produced_a_file(await call(ctx, "render.inline", request), object, format)
         except CallFailed as e:
@@ -247,7 +321,9 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
     async def export(
         ctx: Context,
         object: ObjectName,
-        format: Annotated[str, Field(description="The file type: step, stl, 3mf, obj, gltf, brep, png, svg, ...")],
+        format: Annotated[
+            str, Field(description="The file type: step, stl, 3mf, obj, gltf, brep, png, svg, mp4, webm, ...")
+        ],
         path: Annotated[
             str,
             Field(
@@ -262,10 +338,19 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             Field(description="A package whose 'export:' or 'render:' section implements the file type."),
         ] = None,
         params: Parameters = None,
+        with_ports: WithPorts = False,
+        with_interfaces: WithInterfaces = False,
+        with_internals: WithInternals = False,
+        with_component_names: WithComponentNames = False,
+        with_component_prices: WithComponentPrices = False,
+        with_materials: WithMaterials = False,
+        with_port_names: WithPortNames = True,
+        with_interface_names: WithInterfaceNames = True,
     ) -> CallToolResult:
         """Export or render one object to a file in the workspace.
 
-        `pc export` / `pc render` for one object, written where the agent says.
+        `pc export` / `pc render` for one object, written where the agent says. The ports, interfaces and
+        callouts are drawn on a picture (png, svg, ...) and mean nothing to a model format such as step.
         """
         try:
             target = scope.check(path)
@@ -276,6 +361,18 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             request["options_package"] = options_package
         if params:
             request["params"] = _assignments(params)
+        request.update(
+            _drawn(
+                with_ports,
+                with_interfaces,
+                with_internals,
+                with_component_names,
+                with_component_prices,
+                with_materials,
+                with_port_names,
+                with_interface_names,
+            )
+        )
         try:
             outcome = _produced_a_file(await call(ctx, "render.inline", request), object, format)
         except CallFailed as e:
@@ -353,6 +450,14 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             Optional[str],
             Field(description="Only objects that implement this interface, or one derived from it."),
         ] = None,
+        limit: Annotated[
+            Optional[int],
+            Field(
+                description="At most this many from each package that searches a remote catalog itself "
+                "(a repository plugin for a model site). Its matches are names to instantiate, parameters and all.",
+                ge=1,
+            ),
+        ] = None,
     ) -> CallToolResult:
         """Find parts, sketches, assemblies, scenes, interfaces or packages by keyword or by interface.
 
@@ -361,7 +466,111 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         request = {"kind": kind, "package": package, "recursive": recursive, "keyword": keyword}
         if interface:
             request["interface"] = interface
+        if limit:
+            request["limit"] = limit
         return await run(ctx, "search.objects", request)
+
+    @server.tool(title="Log in to a model site or a supplier", annotations=_LOGS_IN)
+    async def login(
+        ctx: Context,
+        plugin: Annotated[
+            str,
+            Field(
+                description="The repository or provider, as '<package>:<name>', such as "
+                "'//pub/universe/printables:printables_repo'."
+            ),
+        ],
+        values: Annotated[
+            Optional[dict[str, str]],
+            Field(
+                description="What the user found, by the names an earlier call listed, such as {'token': '...'}. "
+                "Checked with the site, and kept in the user's PartCAD configuration when it works."
+            ),
+        ] = None,
+        check: Annotated[bool, Field(description="Only say whether the saved credentials still work.")] = False,
+        interactive: Annotated[
+            bool,
+            Field(
+                description="Open a browser on this machine for the user to sign in, and wait for them. Only when "
+                "the user says they are at its screen."
+            ),
+        ] = False,
+    ) -> CallToolResult:
+        """Log in to what a repository or provider plugin is a client of: a model site, a supplier.
+
+        `pc login --agent`. Credentials that still work are kept. Otherwise the result's 'instructions' say
+        what the user has to do -- where to sign in, what to copy -- and the names to hand it over by: call
+        this again with those 'values'.
+        """
+        from partcad_client import browser as pc_browser
+        from partcad_client import login as pc_login
+        from partcad_utils.user_config import save_parameter_overrides
+
+        outcomes = []
+        said = []
+        chosen = pc_browser.choose(None) if interactive and not check else None
+        # With no browser to open, nobody can be sent to one: the instructions
+        # are the answer. Waiting on the manual page instead would keep its
+        # address in this call until the wait was over.
+        non_interactive = not interactive or (chosen is None and not check)
+
+        def ask(results):
+            request = {"plugin": plugin, "browser": results, "check": check, "non_interactive": non_interactive}
+            if values:
+                request["values"] = dict(values)
+            outcome = bridge.call("plugin.login", request, True, None)
+            outcomes.append(outcome)
+            return outcome.result
+
+        def open_browser(url, spec):
+            if chosen is None:
+                return None
+            try:
+                return pc_browser.open_browser(url, chosen)
+            except OSError as e:
+                # Not the manual page: its address would only come back when
+                # the wait on it was over.
+                raise RuntimeError("could not start %s: %s" % (chosen.name, e))
+
+        def log_in():
+            return pc_login.login(ask, open_browser, said.append, manual=chosen is None)
+
+        try:
+            answer = await anyio.to_thread.run_sync(log_in)
+        except CallFailed as e:
+            return report(e.outcome, failure=e)
+        except (RuntimeError, pc_login.LoginCancelled, pc_login.LoginTimedOut) as e:
+            outcome = outcomes[-1] if outcomes else Outcome(method="plugin.login")
+            return report(outcome, failure=CallFailed(str(e), outcome))
+        outcome = outcomes[-1]
+        name = answer.get("plugin") or plugin
+        if answer.get("status") == "instructions":
+
+            def hand_over(names):
+                return "Hand %s over by calling the login tool again with plugin '%s' and values {%s}." % (
+                    "it" if len(names) == 1 else "them",
+                    name,
+                    ", ".join("'%s': '...'" % n for n in names),
+                )
+
+            outcome.result = {
+                "status": "instructions",
+                "plugin": name,
+                "instructions": pc_login.instructions_text(name, answer.get("spec") or {}, hand_over),
+                "names": [item["name"] for item in (answer.get("spec") or {}).get("capture") or []],
+            }
+            return report(outcome)
+        result = {"status": "done", "plugin": name, "message": answer.get("message") or ""}
+        parameters = answer.get("parameters") or {}
+        if parameters and not check:
+            # Named, never repeated: they are secrets, and the result is the agent's to keep.
+            result["saved"] = sorted(parameters)
+            result["config"] = await anyio.to_thread.run_sync(lambda: save_parameter_overrides(name, parameters))
+            bridge.remember_parameters(name, parameters)
+        if said:
+            result["said"] = said
+        outcome.result = result
+        return report(outcome)
 
     @server.tool(name="instructions", title="Assembly instructions", annotations=_READS)
     async def assembly_instructions(
@@ -379,6 +588,71 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         if params:
             request["params"] = _assignments(params)
         return await run(ctx, "assembly.guide", request)
+
+    @server.tool(title="Compare two objects", annotations=_READS)
+    async def compare(
+        ctx: Context,
+        reference: Annotated[str, Field(description=_OBJECT + " The object compared with: what is held to.")],
+        current: Annotated[str, Field(description=_OBJECT + " The object held to the reference.")],
+        package: PackageName = None,
+        surface_distance: Annotated[
+            Optional[float],
+            Field(
+                gt=0,
+                description="Also measure how far the current object's surface is from the reference's, at points "
+                "this many millimetres apart on the reference, along its normals. Slower the smaller it is.",
+            ),
+        ] = None,
+        displacement: Annotated[
+            bool,
+            Field(
+                description="Also compare the displacements: what each would push aside if submerged, its volume "
+                "and every void sealed inside it, not a hole right through it. Measured in a sandbox.",
+            ),
+        ] = False,
+        max_volume_difference: Annotated[
+            Optional[float],
+            Field(ge=0, description="Fail unless the volumes differ by at most this many percent of the reference's."),
+        ] = None,
+        max_displacement_difference: Annotated[
+            Optional[float],
+            Field(
+                ge=0,
+                description="Fail unless the displacements differ by at most this many percent of the reference's. "
+                "Measures them, as displacement does.",
+            ),
+        ] = None,
+        max_mass_difference: Annotated[
+            Optional[float],
+            Field(ge=0, description="Fail unless the masses differ by at most this many percent of the reference's."),
+        ] = None,
+        worst: Annotated[int, Field(ge=0, description="How many of the points furthest apart to list.")] = 10,
+    ) -> CallToolResult:
+        """Read one part or assembly against another: volume, mass, tolerances and, optionally, displacement and surface.
+
+        `pc compare --json`. Differences are the current object's less the reference's, percentages are of the
+        reference's. ok is false when something it was held to does not hold: the surface, when measured, against
+        the two tolerances added up, and any max_..._difference given.
+        """
+        request = {
+            "package": package,
+            "object": reference,
+            "current": current,
+            "surface_distance": surface_distance,
+            "displacement": displacement,
+            "max_volume_difference": max_volume_difference,
+            "max_displacement_difference": max_displacement_difference,
+            "max_mass_difference": max_mass_difference,
+            "worst": worst,
+            "json": True,
+        }
+        try:
+            outcome = await call(ctx, "compare.objects", request)
+        except CallFailed as e:
+            return report(e.outcome, failure=e)
+        if isinstance(outcome.result, dict) and outcome.result.get("passed") is False:
+            return report(outcome, failure=CallFailed("%s does not hold to %s" % (current, reference), outcome))
+        return report(outcome)
 
     @server.tool(title="PartCAD version", annotations=_LOCAL)
     async def version(ctx: Context) -> CallToolResult:
@@ -650,3 +924,36 @@ def _kind_flag(kind: Optional[str]) -> dict:
 def _kind(kind: Optional[str]) -> dict:
     """``kind`` for a method that takes it by that name, or nothing to have it looked up."""
     return {} if kind is None else {"kind": kind}
+
+
+def _drawn(
+    with_ports: bool,
+    with_interfaces: bool,
+    with_internals: bool,
+    with_component_names: bool,
+    with_component_prices: bool,
+    with_materials: bool,
+    with_port_names: bool,
+    with_interface_names: bool,
+) -> dict:
+    """The overlays and callouts a picture is asked for, as `pc render` sends them.
+
+    Only what differs from the default is sent, the way `pc render` sends the two
+    name switches only when they are off: a render that asks for none of these
+    is the request it always was -- which keeps the daemon's cached picture of
+    it, and is all a daemon from before these existed understands.
+    """
+    drawn = {
+        "with_ports": with_ports,
+        "with_interfaces": with_interfaces,
+        "with_internals": with_internals,
+        "with_component_names": with_component_names,
+        "with_component_prices": with_component_prices,
+        "with_materials": with_materials,
+    }
+    request = {key: True for key, value in drawn.items() if value}
+    if not with_port_names:
+        request["with_port_names"] = False
+    if not with_interface_names:
+        request["with_interface_names"] = False
+    return request

@@ -42,6 +42,15 @@ def test_a_name_a_port_can_have_is_drawable():
         assert char.upper() in stroke_text._GLYPHS or char in stroke_text._GLYPHS
 
 
+def test_a_price_in_dollars_is_drawable():
+    """What a component's price is written with on a picture ('render_overlay.price_label')."""
+    for char in "$0123456789.,":
+        assert char in stroke_text._GLYPHS
+    # Within the cap height, so a row of prices is spaced as any other row.
+    ys = [y for _x, y in _points("$")]
+    assert min(ys) >= 0.0 and max(ys) <= 1.0
+
+
 def test_unknown_characters_still_take_up_space():
     """Something a caller can see, rather than a silent gap."""
     assert stroke_text.polylines("é")

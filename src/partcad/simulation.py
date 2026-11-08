@@ -659,14 +659,32 @@ def snapshot_request(ctx, scene, viewport: typing.Optional[dict] = None) -> dict
         )
         viewport = resolve_viewport(view=SNAPSHOT_DEFAULT_VIEW)
 
+    width, height = _picture_size(options)
     return {
         "format": SNAPSHOT_FORMAT,
         "files": dict(SNAPSHOT_FILES),
-        "width": _size(options.get("width")),
-        "height": _size(options.get("height")),
+        "width": _size(width),
+        "height": _size(height),
         "viewport_origin": viewport["viewport_origin"],
         "viewport_up": viewport["viewport_up"],
     }
+
+
+def _picture_size(options):
+    """The PNG's 'width' and 'height', each overriding its side of its 'size' when that is '<w>x<h>' or [w, h].
+
+    A 'size' that names a place ('reels', 'square') is the render's to resolve
+    ('//builtin/render/render_raster.py'), and a snapshot is the default size.
+    """
+    width, height = None, None
+    size = options.get("size")
+    if isinstance(size, str) and "x" in size.lower():
+        parts = size.lower().split("x")
+        if len(parts) == 2:
+            width, height = parts
+    elif isinstance(size, (list, tuple)) and len(size) == 2:
+        width, height = size
+    return options.get("width", width), options.get("height", height)
 
 
 def _size(value) -> int:

@@ -4,6 +4,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from .. import surface as pc_surface
 from ..assembly import Assembly
 from ..sketch import Sketch
 from .test import Test
@@ -53,7 +54,9 @@ class ValidityTest(Test):
             return "a sketch is not a body"
         if isinstance(shape, Assembly):
             return "an assembly is checked through its parts, each of which is tested in its own right"
-        return None
+        # A part that is a surface by its type - a wall - has no solid to be
+        # well formed: see 'partcad.surface'.
+        return pc_surface.not_a_body(shape)
 
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         # A sketch is edges, wires and faces; 'well formed solid' is not a
@@ -63,6 +66,10 @@ class ValidityTest(Test):
 
         # An assembly is checked through its parts, each in its own right.
         if isinstance(shape, Assembly):
+            return self.not_applicable(shape, self.inapplicable(shape))
+
+        # Nor is a wall, which is a skin by its type (see 'partcad.surface').
+        if pc_surface.is_surface(shape):
             return self.not_applicable(shape, self.inapplicable(shape))
 
         try:

@@ -1,6 +1,6 @@
 ---
 name: gen-part
-description: Generate a PartCAD part from a natural-language description (and optional reference images/requirements) by writing down what it is required to be, authoring a CAD script, and validating it with the PartCAD CLI. Use for /pc:gen-part or when the user asks to generate, create, or model a single mechanical part.
+description: Generate a PartCAD part from a natural-language description (and optional reference images, drawings, 3D files or requirements) by writing down what it is required to be, settling its dimensions on temporary sketches that /pc:gen-sketch measures and validates, authoring a CAD script (or extruding a validated sketch), and validating it with the PartCAD CLI - including measuring the same dimensions again on the part's own projections. Use for /pc:gen-part or when the user asks to generate, create, or model a single mechanical part.
 ---
 
 # pc:gen-part
@@ -11,10 +11,13 @@ it works with the PartCAD CLI; do not use any built-in `ai-*` part type or
 generation pipeline. Hard requirement: the finished part **passes `pc test`** (its
 geometry instantiates cleanly).
 
-Steps 4–7 are the reference flow — the same shape the legacy `pc add part --ai`
-pipeline used (plan geometry → write script → validate → compare → refine). Treat
-it as a strong default, not a script: skip, reorder, or replace steps as the part
-warrants, but always finish by validating.
+Steps 4–7 are the reference flow — the shape the legacy `pc add part --ai`
+pipeline used (plan geometry → write script → validate → compare → refine), with
+the dimensions settled first and measured last: settle the dimensions on
+sketches → plan → write the script → validate → measure and compare → refine.
+Treat it as a strong default, not a script: skip, reorder, or replace steps as
+the part warrants, but always finish by validating, and never let a stated or
+shown dimension reach the model without having been measured.
 
 ## 1. Understand the request
 
@@ -62,18 +65,84 @@ Pick the script kind that best fits the part — you decide:
 | `cadquery` | fluent / CSG-style modeling |
 | `scad` (OpenSCAD) | simple constructive geometry, no Python |
 | `sdf` | organic / implicit shapes |
+| `extrude` / `sweep` | a constant profile, straight or along a path: built from the sketch §4 validated, with no script at all |
 
-## 4. (Optional) Plan the geometry
+A part that is nothing but one box or one cylinder needs no script at all:
+declare it as `type: basic` with a `cuboid:` (a number for a cube, or
+`[x, y, z]` sizes) or a `cylinder:` (`radius`, `height`, standing along Z).
+Both are centred on the origin; move them with `offset:`. PartCAD writes the
+geometry itself, without a sandbox. There is no file to write
+and nothing for `pc add part`; put the declaration in `partcad.yaml` as §5 shows
+and go on from there.
 
-For anything non-trivial, sketch the constructive-solid-geometry plan first —
+## 4. Settle the dimensions on sketches, then plan the geometry
+
+A dimension is decided in 2D before it is spent in 3D. In 2D it is measured
+exactly and cheaply, on one projection; in 3D a wrong number hides behind other
+faces, and finding it costs a rebuild and a set of renders that still only
+*show* it. So before any geometry, run `/pc:gen-sketch` §3–§8 as a **dimension
+study** (its §9): whenever the description, a reference image, a drawing or an
+object to reproduce gives the part any dimension at all — which is nearly
+always — and even when none of the sketches will be used to build it.
+
+1. **Normalize the input to 2D** the way `/pc:gen-sketch` §4 says: a 3D
+   description is materialized as a temporary part and projected with
+   `pc adhoc render part --input build123d`; a 3D file is projected with
+   `pc adhoc render part`; a drawing, a photo or an isometric is measured with
+   its projection method taken into account.
+2. **Write the dimension table** (`/pc:gen-sketch` §3): every dimension stated,
+   derived or measured, with its tolerance, its source and the two features it
+   is measured between. It is a design input, not a requirement; the
+   requirements of §5 say what the user asked for in their words.
+3. **Draw a temporary sketch per view that carries dimensions** —
+   `<name>/dims-front`, `<name>/dims-top`, `<name>/dims-right`, each in that
+   view's picture coordinates — render each with both projections, reconcile
+   them and measure with `measure.py` (`/pc:gen-sketch` §5.2, §7), and iterate
+   until every row of the table is within tolerance.
+
+What comes out is the validated table: the source of every number the part is
+built from (§5), and what its own projections are measured against (§7).
+
+**Build from the sketch where that is the most efficient way.** A part that is
+one constant profile is an extrusion of the validated sketch, and needs no
+script:
+
+```yaml
+parts:
+  <name>:
+    type: extrude
+    sketch: <name>/dims-top        # the validated profile
+    depth: 10
+    desc: <the description>
+    manufacturable: false
+    parameters:
+      material:
+        type: string
+        default: //pub/std/manufacturing/material/plastic:pla
+```
+
+`type: extrude` extrudes along the sketch's +Z from z = 0, so the profile is the
+part's `top` view and its base is on the floor. A part whose constant profile
+belongs to its front or side view comes out lying on that face: take that only
+where its orientation does not matter, and otherwise write the script.
+`type: sweep` takes a section along a path (`axis:`). Neither has a script for
+`pc add part` to register, so write the declaration by hand; the sketch it is
+built from stops being temporary.
+
+Then, for anything non-trivial, plan the constructive solid geometry —
 coordinate system, primitives with dimensions/positions/orientations, then
-unions/differences/intersections and fillets/chamfers. This mirrors the legacy
-"CSG" step and usually cuts iterations. Skip it for simple parts.
+unions/differences/intersections and fillets/chamfers — with every dimension
+taken from the table. This mirrors the legacy "CSG" step and usually cuts
+iterations.
 
 ## 5. Author, register, and mark it
 
 Write the script file **first** from `$ARGUMENTS` (plain type — never `ai-*`),
-then register it — `pc add part` requires the file to already exist:
+taking every dimension from the table §4 validated — the same constants under
+the same names, placed from the same datums — then register it; `pc add part`
+requires the file to already exist (an `extrude` or `sweep` part has no file, and
+is declared by hand as §4 shows; nor has a `basic` part, which is declared by
+hand as shown below and skips the script and `pc add part` altogether):
 
 ```sh
 pc --no-ansi add part --desc "<the description>" <kind> <name>.<ext>   # e.g. build123d bracket.py
@@ -99,13 +168,27 @@ parts:
     manufacturable: false
 ```
 
+A `basic` part has its solid where a script part has its `path:`, and is placed
+by its `offset:` (it is built centred on the origin):
+
+```yaml
+parts:
+  <name>:
+    type: basic
+    cuboid: [<size x>, <size y>, <size z>]   # or a number for a cube, or
+    # cylinder: {radius: <r>, height: <h>}   # standing along Z
+    offset: [[<x>, <y>, <z>], [0, 0, 1], 0]  # optional
+    desc: <the description>
+    manufacturable: false
+```
+
 ### Write down what it is required to be
 
 Then add `requirements:` to the same declaration — what the description asked
 for, in the description's own terms, *not* the design you chose. `pc test`
-checks the model against what it can measure — the `ports:`, `interfaces:` and
-`physics:` — and `/pc:validate` judges the `features:`, which are prose; the
-IDE shows both as the part's Requirements tab:
+checks the model against what it can measure — the `ports:`, `interfaces:`,
+`physics:` and `match:` — and `/pc:validate` judges the `features:`, which are
+prose; the IDE shows both as the part's Requirements tab:
 
 ```yaml
     requirements:
@@ -140,6 +223,22 @@ IDE shows both as the part's Requirements tab:
   The middle element is the way the port *faces* (its Z axis), not the axis its
   location is rotated about. Write these only when the description says how the
   part connects; `/pc:add-interfaces` then adds the ports that meet them.
+- **`match:`** is for a part asked for *relative to another object* —
+  "like the old bracket, but no more than 5% heavier", "a replacement within
+  2% of the original's volume". Key it by the other object's name (`:sibling`
+  or `//package:name`), with `volume`, `displacement` and `mass` (or `weight`)
+  as a percentage of that object's, either way. `displacement` is the volume
+  and every void sealed inside it — what the part takes up rather than what it
+  is made of — for a part that has to fill the space the other one did:
+
+  ```yaml
+      match:
+        :bracket-v1:
+          mass: 5%                      # within 5% of what bracket-v1 weighs
+  ```
+
+  `pc test` reads it by the numbers `pc compare :bracket-v1 <name>` reports
+  (§7). A mass needs a material with a density on both objects, as above.
 - If the part declares a `simulate:` entry that demonstrates one of the
   features, say which with `feature: <name>` on that entry.
 
@@ -249,8 +348,8 @@ Then view all four — `/tmp/pc-render/<view>/<name>.png` — and compare them
 against the description and any reference images:
 
 - the overall form and the bounding size, in all three axes;
-- every dimension the description states — each is measurable in one of the
-  orthographic views, and a dimension no view confirms is one still assumed;
+- every dimension in the table — measured, below, not judged from the picture;
+  a dimension no view confirms is one still assumed;
 - every feature that was asked for, on the face it was asked for, and nothing
   present that was not — the `features:` you wrote down in §5 are the list to
   go through.
@@ -261,9 +360,89 @@ not seen is a face you are guessing about. When no named view shows the feature
 you need to check, `--viewport-origin X,Y,Z` and `--viewport-up X,Y,Z` look from
 an arbitrary direction. `/pc:render` covers these options in full.
 
-Fix any error or mismatch, then re-test and re-render. Iterate until every view
-matches — no fixed retry count. If the part is right and the numbers are what
-need checking, `/pc:describe` renders a dimensioned drawing of it.
+### Measure the dimensions on the part
+
+The PNGs show the shape. The numbers are measured the way the sketches' were:
+render the views the study covered as SVG with **both** of PartCAD's
+projections, and measure them with `measure.py`, which is in the
+`/pc:gen-sketch` skill's directory. The two draw one part as different shapes
+and different numbers of them — an arc as one curve or as a run of short lines,
+an edge whole or broken — so a reading only one supports is not a reading of
+the part (`/pc:gen-sketch` §5.2 says how to read `compare`). Say which on
+every render — `--reproducible` and `--no-reproducible` — since left unsaid, the
+package's file type decides:
+
+```sh
+for view in front top right; do
+  D=/tmp/pc-render/svg/$view
+  mkdir -p $D/polygonal $D/exact
+  pc --no-ansi render -t svg --view $view --no-reproducible -O $D/polygonal <name>
+  pc --no-ansi render -t svg --view $view --reproducible -O $D/exact <name>
+  python3 <the /pc:gen-sketch skill's directory>/measure.py compare $D/exact/<name>.svg $D/polygonal/<name>.svg
+  python3 <the /pc:gen-sketch skill's directory>/measure.py svg $D/exact/<name>.svg
+done
+pc --no-ansi info <name> 2>&1      # BoundingBox: the overall size, from the kernel
+```
+
+Each view of the part must measure what that view's sketch did: put both in the
+table — target, measured on the part, error, tolerance — and every row has to be
+within its tolerance. A projection draws only what can be seen, so measure a
+feature in the view that sees it (a hole's diameter along its axis, a step's
+height from the side); an extent is checked against `pc info` too.
+
+A row out of tolerance is a defect of the script, and the error says what to
+change, the way `/pc:gen-sketch` §8 reads it: in proportion is a scale, a
+common offset is a datum, one dimension is its constant. Correct it from the
+error rather than by eye.
+
+Fix any error or mismatch, then re-test, re-render and measure again. Iterate
+until every view matches and every dimension is in tolerance — no fixed retry
+count. `/pc:describe` renders a dimensioned drawing of the finished part, for a
+person to read.
+
+### Compare it with the 3D reference, when there is one
+
+A part made to reproduce a 3D file — a STEP model, a scan as STL, a part from
+another package — has a better check than any projection: read the candidate
+against the reference itself. `pc compare` is the 3D counterpart of
+`measure.py compare`: the first object is the reference, the second the
+candidate, and every difference is the candidate's less the reference's.
+Declare the reference as a part of its own first (`pc add part step <file>`,
+or name the other package's part), then:
+
+```sh
+pc --no-ansi compare --json --surface-distance 1 <reference> <name> 2>/dev/null
+```
+
+`--surface-distance 1` measures at points 1 mm apart over the whole reference
+— every vertex, then along every edge, then over every face — how far the
+candidate's surface is along the reference's normal there: positive where the
+candidate stands outside the reference, negative inside. Pick the spacing from
+the size of the smallest feature that has to be right (half of it is a good
+start); it is refused, saying which spacing would do, when it would take too
+many points. Read, in the JSON:
+
+- `volume` and `mass`: `percent` is how far off the candidate is as a whole. A
+  large difference with a small surface distance is a missing or extra
+  feature the points fell beside; look at `surface.worst`. A volume that is off
+  while the surface is not can be a void sealed inside one of the two, which
+  the surface points never reach: add `--displacement`, and compare
+  `displacement` and each side's `cavities`.
+- `surface.distance`: `min` and `max` (signed), `rms`, and the `p95` of the
+  distance's size. A consistent sign is a scale or an offset — a `mean` close to
+  `max` on every face says a dimension is too large by that much; a distance
+  that is large only at `surface.worst` points says where a feature is
+  wrong.
+- `surface.beyond`: how many points are further apart than the two
+  tolerances added up (`tolerance.allowance`). Give the candidate the
+  `tolerance:` it is to be made to, where its type takes one, so that this is a
+  verdict rather than a count of every non-zero distance.
+
+Correct the script from the numbers, the way §7 corrects a dimension from its
+error, and compare again until the surface is within the allowance. The two
+are compared where they are, so a candidate whose origin is not the
+reference's measures as far off as its origin is: put the origin where the
+reference has it.
 
 ### Show each version that renders
 
@@ -298,10 +477,15 @@ warns that no IDE was detected, the window has been closed, so stop showing.
 
 ## 8. Finalize
 
-Summarize what you built — key dimensions, material and mass, and assumptions —
-and how to view it: `pc ide view <name>`, which under an IDE is what is already
+Summarize what you built — the dimension table (target, measured on the part,
+error), material and mass, how far it is from its 3D reference if it had one
+(`pc compare`'s volume, mass and surface distance), and assumptions — and how to view it: `pc ide view <name>`, which under an IDE is what is already
 on screen (§7). Offer `/pc:validate <name>` for a verdict on every requirement,
 the features included.
+
+Remove the temporary sketches the part is not built from — their declarations
+and their files (`/pc:gen-sketch` §9) — unless the user wants them kept; keep,
+and describe, the sketch an `extrude` or `sweep` part is built from.
 
 If the description claims something physical of the part on its own — it rests
 without rolling, it floats — declare that claim as a `simulate:` and check it

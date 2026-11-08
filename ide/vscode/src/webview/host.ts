@@ -24,6 +24,7 @@
 //
 
 import {
+    CancelTabMessage,
     FetchDetailsMessage,
     FetchFormatsMessage,
     FetchTabMessage,
@@ -47,6 +48,11 @@ export function ready(): void {
 
 /** Ask the host to fill a tab in; it answers with a 'tabData' message. */
 export function fetchTab(message: FetchTabMessage): void {
+    vscode.postMessage(message);
+}
+
+/** Tell the host the last 'fetchTab' for this tab will not be read; see 'CancelTabMessage'. */
+export function cancelTab(message: CancelTabMessage): void {
     vscode.postMessage(message);
 }
 

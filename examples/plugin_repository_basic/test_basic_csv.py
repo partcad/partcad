@@ -39,3 +39,14 @@ def test_no_children_and_has_metadata():
 def test_unknown_key_is_none():
     assert _get("objects/sketch") is None
     assert _get("objects/part/missing") is None
+
+
+def test_searches_its_parts():
+    assert "part" in _get("meta")["searchKinds"]
+    assert list(_get("search/part?q=bolt")) == ["bolt"]
+    assert list(_get("search/part?q=a+cube")) == ["cube"]
+    assert _get("search/part?q=nothing+here") == {}
+
+
+def test_a_search_says_at_most_as_many_as_asked():
+    assert len(_get("search/part?q=a&limit=1")) == 1

@@ -66,6 +66,11 @@ export:
       - cadquery-ocp-novtk==7.9.3.1.1
     write_pcurves: true
     precision_mode: 0
+    # Hand the exporter what the CMF declarations the shapes name say about
+    # themselves - a material's description and density - which it writes on
+    # each product beside the material's reference. A declaration is the core's
+    # to read; this asks for the table it resolves (see 'output.CMF_KEY').
+    cmf: true
     # See the header of this file. Declared so that it is stated rather than
     # implied; this exporter writes the same bytes either way. A STEP header
     # carries the moment the file was written, so this is the first place the

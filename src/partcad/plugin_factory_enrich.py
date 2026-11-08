@@ -52,11 +52,17 @@ class PluginFactoryEnrich(PluginFactory):
 
             # TODO(clairbee): Delay de-referencing until plugin's initialization
 
-            # Get the config of the plugin the 'enrich' points to
+            # Get the config of the plugin the 'enrich' points to. The package
+            # it is declared in is kept too: that is where its script is, what
+            # its sandbox is prepared with ('pythonRequirements') and the
+            # directory it runs in - none of which an enrich in another
+            # package changes (see 'init_source_by_config').
+            self.plugin_package = source_project
             if self.source_project_name == source_project.name:
                 augmented_config = self.get_source_config(self.source_plugin_name)
             else:
                 source_project = ctx.get_project(self.source_project_name)
+                self.plugin_package = source_project
                 if source_project is None:
                     pc_logging.debug("Available projects: %s" % str(sorted(list(ctx.projects.keys()))))
                     raise Exception("Package not found: %s" % self.source_project_name)

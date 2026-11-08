@@ -58,6 +58,7 @@ class MemcacheCacheBackend(RemoteCacheBackend):
             data_type,
             min_entry_size=user_config.cache_remote_min_entry_size,
             max_entry_size=user_config.cache_remote_max_entry_size,
+            min_build_seconds=getattr(user_config, "cache_remote_min_build_time", 0.0),
         )
         try:
             import aiomcache

@@ -47,7 +47,7 @@ def _measured(project, name):
 
     ctx = project.ctx
     envelope = asyncio.run(project.get_sketch(name).get_wrapped(ctx))
-    # Binary, as every Python wrapper writes a payload; 'shape_from_brep' reads either format.
+    # ASCII, as 'basic_shapes' writes a payload without a kernel; 'shape_from_brep' reads either format.
     shape = ocp_serialize.shape_from_brep(shape_envelope.brep_plain(envelope[shape_envelope.KEY_BREP]))
 
     properties = GProp_GProps()

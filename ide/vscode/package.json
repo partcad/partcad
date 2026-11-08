@@ -4,7 +4,7 @@
   "description": "Build system and package manager for CAD files, and assembly modeling framework",
   "markdown": "github",
   "icon": "resources/logo_128x128.png",
-  "version": "0.8.273",
+  "version": "0.9.22",
   "serverInfo": {
     "name": "PartCAD",
     "module": "partcad"
@@ -670,6 +670,13 @@
         "enablement": "!partcad.editingExternally"
       },
       {
+        "command": "partcad.inspectCmf",
+        "category": "PartCAD",
+        "title": "Display",
+        "icon": "$(eye)",
+        "enablement": "!partcad.editingExternally"
+      },
+      {
         "command": "partcad.test",
         "category": "PartCAD",
         "title": "Test",
@@ -917,6 +924,11 @@
           "command": "partcad.inspectInterface",
           "group": "navigation",
           "when": "view == partcadExplorer && (viewItem == interface || viewItem == interfaceWithCode)"
+        },
+        {
+          "command": "partcad.inspectCmf",
+          "group": "navigation",
+          "when": "view == partcadExplorer && viewItem == cmf"
         },
         {
           "command": "partcad.inspectPart",
@@ -1264,7 +1276,7 @@
   "dependencies": {
     "@videojs/html": "^10.2.0",
     "fs-extra": "^11.4.0",
-    "three": "^0.185.1",
+    "three": "^0.187.0",
     "vscode-jsonrpc": "^8.2.0"
   },
   "devDependencies": {
@@ -1272,7 +1284,7 @@
     "@types/jest": "^30.0.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "18.x",
-    "@types/three": "^0.185.4",
+    "@types/three": "^0.187.0",
     "@types/vscode": "1.101.0",
     "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.65.0",

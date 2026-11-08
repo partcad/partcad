@@ -38,12 +38,18 @@ WORKFLOWS = REPO_ROOT / ".github" / "workflows"
 # cheap ones -- the extension's "npm test", the ".vsix" and the plugin builds,
 # the version bump itself -- are not here: they run one job on one image, and
 # two of them have no push trigger at all.
+#
+# "browsers.yml" has no matrix and is here all the same: it has a push trigger
+# of its own and publishes to the browser stores from "main", so a gate written
+# the wrong way round would either build every merge twice or -- the quiet
+# failure -- never run on a release at all.
 GATED = [
     "test.yml",
     "build.yml",
     "test-dev.yml",
     "build-standalone.yml",
     "build-ide-standalone.yml",
+    "browsers.yml",
 ]
 
 

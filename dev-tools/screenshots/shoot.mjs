@@ -325,7 +325,8 @@ const SHOTS = {
     },
 
     // The 3D tab with the view panel out: the gizmo, the axis views, the
-    // section sliders and the viewpoint, which is what that page is about.
+    // viewpoint with its projection and the section sliders, which is what
+    // that page is about.
     async 'dt-design-3d'() {
         await inVSCode(EXAMPLES, async (page) => {
             await partcadView(page, ['Explorer']);

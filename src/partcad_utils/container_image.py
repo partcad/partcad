@@ -37,6 +37,8 @@ to simulate.
 
 import os
 
+from . import __version__
+
 # The variable CI exports when the images under test are not the release's. It
 # is unset everywhere else, and nothing but CI is expected to set it.
 ENV_VAR = "PC_CONTAINER_IMAGE_TAG"
@@ -105,3 +107,45 @@ def image_name(default: str) -> str:
         return default
     parts[1] = owner
     return "/".join(parts)
+
+
+# What a declared image reference may leave for PartCAD to fill in, so that a
+# declaration naming one of PartCAD's own images does not have to be edited for
+# every release. '{version}' is the release -- through `image_tag`, so that a CI
+# run that rebuilt the images reaches those -- and '{python}' the interpreter the
+# declaration's sandbox runs, for an image published once per Python version.
+PLACEHOLDERS = ("{version}", "{python}")
+
+
+def expand(reference: str, python: str = "", release: str = __version__) -> str:
+    """An image reference as a declaration wrote it, with its placeholders filled in.
+
+    `pc ide open` reads `{version}` in an `open:` entry's `container:` image, and
+    an implementation's `dockerImage` reads it and `{python}` (see
+    'PLACEHOLDERS'). Then `image_name` for the owner, which only ever rewrites
+    PartCAD's own images.
+
+    What is keyed on a declaration keys on what was declared, not on this: a
+    cached answer must not move with every release (see
+    'partcad.output.Implementation.environment_cache_key').
+    """
+    value = str(reference).replace("{version}", image_tag(release))
+    if "{python}" in value:
+        value = value.replace("{python}", str(python))
+    return image_name(value)
+
+
+# What every image PartCAD publishes is called, after the owner: the Python
+# sandbox bases and their flavours, and the KiCad sandbox.
+PARTCAD_IMAGE_PREFIX = "partcad-container-"
+
+
+def is_partcad_image(reference: str) -> bool:
+    """Whether 'reference' names one of PartCAD's own images, whoever's copy of it this run reads.
+
+    By the image's own name rather than by its owner, because `image_name`
+    moves the owner to a fork's on a fork's CI run, and the image is still
+    PartCAD's there.
+    """
+    parts = str(reference or "").split("/")
+    return len(parts) == 3 and parts[2].startswith(PARTCAD_IMAGE_PREFIX)

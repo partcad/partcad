@@ -103,7 +103,44 @@ def _write_render_script(source_path, call_line):
     return tmp_path
 
 
-def _build_render_args(scad_executable, stl_path, source_path, config):
+# Which OpenSCAD releases write a model's 'color()' into a 3MF: the 2021.01
+# release exports 3MF without colours, the development snapshots since 2024 with
+# them (their Manifold backend). Asked once per executable (see
+# '_writes_colors'), and only a release that writes them is asked for a 3MF: the
+# STL a part was always read from stays what every other release produces.
+FIRST_YEAR_WITH_COLORS = 2024
+_COLORS_BY_EXECUTABLE = {}
+
+
+def _version_year(text: str):
+    """The year of an OpenSCAD version string ('OpenSCAD version 2021.01'), or None."""
+    match = re.search(r"version\s+(\d{4})\.", text or "")
+    return int(match.group(1)) if match else None
+
+
+async def _writes_colors(scad_executable) -> bool:
+    """Whether the OpenSCAD at 'scad_executable' writes colours into the 3MF it exports."""
+    if scad_executable in _COLORS_BY_EXECUTABLE:
+        return _COLORS_BY_EXECUTABLE[scad_executable]
+    answer = False
+    try:
+        process = await asyncio.create_subprocess_exec(
+            scad_executable,
+            "--version",
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        out, err = await asyncio.wait_for(process.communicate(), timeout=60)
+        year = _version_year(decode_output(out) + decode_output(err))
+        answer = year is not None and year >= FIRST_YEAR_WITH_COLORS
+    except Exception as e:  # pylint: disable=broad-except
+        pc_logging.debug("Could not ask '%s' its version: %s" % (scad_executable, e))
+    _COLORS_BY_EXECUTABLE[scad_executable] = answer
+    return answer
+
+
+def _build_render_args(scad_executable, stl_path, source_path, config, export_format="binstl"):
     """Assemble the OpenSCAD command line for a part.
 
     Returns ``(args, tmp_scad_path)``. When the config names a ``method``, the
@@ -128,7 +165,7 @@ def _build_render_args(scad_executable, stl_path, source_path, config):
     args = [
         scad_executable,
         "--export-format",
-        "binstl",
+        export_format,
         "-o",
         stl_path,
         *define_args,
@@ -164,7 +201,7 @@ class PartFactoryScad(PartFactoryHomogen, PartFactoryFile):
 
             self.runtime = None  # Lazy initialization for subprocess runtime
 
-    def _keep_generated(self, part, produced_path: str) -> str:
+    def _keep_generated(self, part, produced_path: str, extension: str = ".stl") -> str:
         """Move what OpenSCAD produced into the package, and remember where.
 
         Returns the path to hand a wrapper. It is inside the package rather
@@ -192,7 +229,7 @@ class PartFactoryScad(PartFactoryHomogen, PartFactoryFile):
         qualified_name = "%s:%s" % (part.project_name, part.name)
         safe_name = re.sub(r"[^A-Za-z0-9_.-]", "_", part.name)
         digest = hashlib.sha256(qualified_name.encode("utf-8")).hexdigest()[:8]
-        generated_path = os.path.join(generated_dir, "%s-%s.stl" % (safe_name, digest))
+        generated_path = os.path.join(generated_dir, "%s-%s%s" % (safe_name, digest, extension))
 
         # 'move', not 'copy': the temporary file has no reader left once this
         # returns, and moving it means there is never a moment where the mesh
@@ -228,7 +265,11 @@ class PartFactoryScad(PartFactoryHomogen, PartFactoryFile):
             # and belongs to this call: it exists because '-o' needs a path, and
             # it is gone before this method returns. What outlives it is the copy
             # made below, once there is something worth keeping.
-            fd, stl_path = tempfile.mkstemp(suffix=".stl")
+            # A 3MF where the OpenSCAD in use writes the model's colours into
+            # one, and the binary STL a part was always read from otherwise.
+            export_format = "3mf" if await _writes_colors(scad_path) else "binstl"
+            extension = ".3mf" if export_format == "3mf" else ".stl"
+            fd, stl_path = tempfile.mkstemp(suffix=extension)
             os.close(fd)  # OpenSCAD writes to the path itself via '-o'
             try:
                 with telemetry.start_as_current_span(
@@ -238,7 +279,7 @@ class PartFactoryScad(PartFactoryHomogen, PartFactoryFile):
                     # ('-D name=value') or, when a module is named via 'method', are
                     # passed to a call to that module appended to a throwaway copy of
                     # the script (the source file is never modified).
-                    args, tmp_scad_path = _build_render_args(scad_path, stl_path, part.path, self.config)
+                    args, tmp_scad_path = _build_render_args(scad_path, stl_path, part.path, self.config, export_format)
                     span.set_attribute("cmd", " ".join(args))
                     try:
                         p = await asyncio.create_subprocess_exec(
@@ -284,7 +325,7 @@ class PartFactoryScad(PartFactoryHomogen, PartFactoryFile):
                 # their sources without being mistaken for one, and the name is
                 # already in this repository's '.gitignore', so a generated mesh
                 # cannot turn up as a change somebody has to explain.
-                generated_path = self._keep_generated(part, stl_path)
+                generated_path = self._keep_generated(part, stl_path, extension)
 
                 # The mesh is imported by a wrapper script executed in a sandboxed
                 # python runtime, so that build123d is not needed in this process.
@@ -295,7 +336,7 @@ class PartFactoryScad(PartFactoryHomogen, PartFactoryFile):
 
                 wrapper_path = wrapper.get("import_mesh.py")
 
-                request = {"fallback_import_stl": True}
+                request = {"fallback_import_stl": True, "cmfConvention": "openscad"}
                 request["name"] = "%s:%s" % (part.project_name, part.name)
                 request["label"] = part.name
                 # Validated and moved by the wrapper, while the shape is live (see 'Shape.finish_request').

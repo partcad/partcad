@@ -199,11 +199,20 @@ def accepted_object_type_parameters(kind: str, t) -> dict:
     'Project.get_object', which is where that is put to use, and
     'PartFactory.ACCEPTED_OBJECT_TYPE_PARAMETERS' for what the mapping means.
 
-    Empty for a type nothing is registered for, and for one whose factory
-    contributes none. A partType or an imported reader resolves to no registered
-    factory here, which is the same answer: its parameters are its own.
+    Empty for a factory that contributes none. A type nothing is registered
+    for is answered for by the factory that builds it (see 'instantiate'): a
+    partType by the generic wrapper factory, and an imported assembly or scene
+    by the imported one. What those contribute is what every type does - the
+    CMF parameters, 'color', 'material', 'finish' and the two that say how a
+    source's CMF is read (docs/design/cmf.md) - and nothing a partType's script
+    declares for itself, which is still the script's own.
     """
     factory_class = all.get(kind, {}).get(t)
+    if factory_class is None and isinstance(t, str):
+        if kind == "part":
+            factory_class = all.get(kind, {}).get("wrapper")
+        elif kind in IMPORTED_KINDS:
+            factory_class = all.get(kind, {}).get(IMPORTED_KINDS[kind])
     if factory_class is None:
         return {}
     return getattr(factory_class, "ACCEPTED_OBJECT_TYPE_PARAMETERS", None) or {}

@@ -78,6 +78,22 @@ runs:
       shell: powershell
       run: .github/actions/setup-test/openscad.ps1
 
+    #################################################  GSTREAMER  ###################################################
+
+    # What the video file types of '//builtin/render' encode with. Their tests
+    # call the implementation in this process, so without it they skip, and the
+    # encoding and appending they cover is measured nowhere. One OS is enough:
+    # the coverage merge is a union. The list is the 'gstreamer' target's in
+    # 'tools/containers/python/Dockerfile', which says what each package is for.
+    - name: Install GStreamer (Linux)
+      if: runner.os == 'Linux' && inputs.job == 'pytest'
+      uses: awalsh128/cache-apt-pkgs-action@latest
+      with:
+        packages: >-
+          fonts-dejavu-core gstreamer1.0-libav gstreamer1.0-plugins-bad gstreamer1.0-plugins-base
+          gstreamer1.0-plugins-base-apps gstreamer1.0-plugins-good gstreamer1.0-plugins-ugly
+          gstreamer1.0-tools gstreamer1.0-x
+
     - name: Run Healthcheck
       shell: bash -el {0}
       run: |

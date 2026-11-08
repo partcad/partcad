@@ -104,6 +104,14 @@ object -- ``info``, ``render``, ``export``, ``test``, ``bom`` and ``instructions
 the object's own parameters by name, which is ``-p <name>=<value>`` on the command line (see
 :ref:`parameter-values`).
 
+``render`` and ``export`` also take what ``pc render`` draws besides the geometry, under the names it sends
+them: ``with_ports``, ``with_interfaces`` and ``with_internals`` for the ports and the interfaces;
+``with_component_names`` and ``with_component_prices`` for a callout on every component;
+``with_materials`` for one on every cluster of a material; and
+``with_port_names`` and ``with_interface_names``, both true unless set false, for whether those two overlays
+write their names. Each is the ``--with-...`` option of the same name (see ``pc render`` in :doc:`/cli`). A
+price asks the suppliers for a quote, so it is the one of them that goes out to the market.
+
 .. list-table::
    :header-rows: 1
    :widths: 18 18 64
@@ -135,9 +143,17 @@ the object's own parameters by name, which is ``-p <name>=<value>`` on the comma
    * - ``search``
      - ``pc search``
      - Finds objects or packages by keyword or by the interface they implement.
+   * - ``login``
+     - ``pc login --agent``
+     - Logs in to a model site or a supplier a plugin is a client of: keeps credentials that work, and otherwise
+       says what the user has to do and takes back what they found as ``values``.
    * - ``instructions``
      - ``pc instructions``
      - The step-by-step build of an assembly, with this machine's Build vs Buy choices applied.
+   * - ``compare``
+     - ``pc compare --json``
+     - Reads one part or assembly against another: volume, mass, tolerances, with ``displacement`` what each
+       would push aside if submerged, and with ``surface_distance`` how far apart their surfaces are. ``ok`` is false when something it was held to does not hold.
    * - ``version``
      - ``pc version``
      - The version of the server and of the daemon serving the workspace.
@@ -152,6 +168,12 @@ the object's own parameters by name, which is ``-p <name>=<value>`` on the comma
 it. It refuses the few methods that act on something that is not the agent's: resetting, stopping or
 reconfiguring the daemon every client of the workspace shares, and changing the user's own settings
 (``list_methods`` marks them). A healthcheck that fixes the host is refused too.
+
+``login`` is the one tool that does more than ask the daemon, because what it does has to happen on this
+machine: what works is saved in the user's ``~/.partcad/config.yaml``, as ``pc login`` saves it, and its result
+names what was saved and never repeats it. It opens no browser unless the agent passes ``interactive`` -- which
+it should only when the user says they are at the screen -- and otherwise answers with ``instructions`` for the
+user: where to sign in, what to copy, and the ``names`` to hand it back under (see :ref:`plugin-login`).
 
 Two resources are served as well: ``partcad://workspace`` (where the workspace is, which files the agent may
 use, and its package tree) and ``partcad://methods`` (what ``list_methods`` returns).

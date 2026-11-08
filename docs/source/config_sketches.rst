@@ -89,6 +89,15 @@ The basic sketches are defined using the following syntax:
 There must be only one field ``circle``, ``square``, ``rectangle`` or ``slot`` at the top level of the sketch.
 Inside ``inner`` each shape may be given once by its own name, and several at a time in the plural list beside it.
 
+A basic sketch is built without a CAD kernel: PartCAD writes the face's BREP
+itself, in the process that asks for it, rather than starting a CAD sandbox to
+build it. The face is the one OCCT builds from the same outlines -- lying in the
+XY plane, facing +Z when its outer shape is drawn counter-clockwise (a circle) and
+-Z when it is drawn clockwise (a square, a rectangle, a slot), with each hole
+running the other way round -- so a tool path or an extrusion made from it does
+not depend on which of the two built it. :ref:`basic_parts` are built the same
+way.
+
 A **slot** is a rectangle with semicircular ends -- two arcs and two lines --
 which is what a slotted hole is. ``length`` is measured over those ends, the way
 a drawing dimensions it, so a slot as long as it is wide is a circle rather than

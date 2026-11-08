@@ -27,6 +27,11 @@
 // what is bought, and a reader who was on Buy has to land on Buy again when
 // that answer arrives rather than on whatever the strip fell back to.
 //
+// Nor is something shown in passing. A colour opened from the explorer gives
+// the Design strip one tab, CMF, which it then opens on for want of any other;
+// the part opened after it should come up on the tab that was open before the
+// colour, not on CMF because a colour was looked at in between ('transient').
+//
 
 import { el, empty } from './dom';
 import { TabId } from './messages';
@@ -67,6 +72,12 @@ export class Tabs {
      * anything the user does first: a click, or a change on the tab they are on.
      */
     private requested: TabId | undefined;
+    /**
+     * While the strip shows something in passing ('transient'): the tab that
+     * was on screen before it, which the next ordinary rebuild goes back to in
+     * place of the one on screen. Undefined while nothing is passing.
+     */
+    private passing: { before: TabId | undefined } | undefined;
     /**
      * Every pane this strip has ever been given.
      *
@@ -112,9 +123,16 @@ export class Tabs {
      * something the strip depends on - and keeps the tab on screen while it can
      * be opened, 'secondary' or not: a strip must not walk away from the tab the
      * user is working in.
+     *
+     * 'transient' is a rebuild for something shown in passing, whose tab is not
+     * one anybody chose: the next rebuild that is not one chooses as if the tab
+     * on screen were still the one before it.
      */
-    public setTabs(specs: TabSpec[], options: { keepCurrent?: boolean } = {}): void {
+    public setTabs(specs: TabSpec[], options: { keepCurrent?: boolean; transient?: boolean } = {}): void {
         this.specs = specs;
+        if (options.transient === true && this.passing === undefined) {
+            this.passing = { before: this.selected };
+        }
         for (const spec of specs) {
             this.known.add(spec.pane);
         }
@@ -129,6 +147,9 @@ export class Tabs {
             this.requested = undefined;
         }
         const keep = keepCurrent ? this.selected : this.choose();
+        if (options.transient !== true) {
+            this.passing = undefined;
+        }
 
         empty(this.bar);
         // One tab is not a choice; the strip would be a title bar for a view
@@ -209,9 +230,12 @@ export class Tabs {
             return asked;
         }
         const usable = (id: TabId | undefined) => open.find((spec) => spec.id === id && !spec.secondary)?.id;
+        // What was on screen before something shown in passing, rather than
+        // what that left on screen.
+        const onScreen = this.passing !== undefined ? this.passing.before : this.selected;
         return (
             usable(this.preferred) ??
-            usable(this.selected) ??
+            usable(onScreen) ??
             open.find((spec) => !spec.secondary)?.id ??
             open.find((spec) => spec.id === this.preferred)?.id ??
             open[0]?.id

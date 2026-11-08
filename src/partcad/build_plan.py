@@ -58,7 +58,7 @@ from typing import Optional
 
 from partcad_utils.garage import BUILD, BUY, CHOICES
 
-from . import procurement
+from . import cmf, procurement
 from .assembly import Assembly
 
 # How deep a chain of stock is followed: the cycle guard 'procurement' uses.
@@ -267,6 +267,9 @@ async def _assembly_node_async(ctx, assembly, node_id, link, parent_name, index,
         "vendor": store.vendor,
         "sku": store.sku,
         "material": _material(assembly),
+        # What it is in, for the table's Color, Material and Finish columns:
+        # read off what it declares, nothing built (see 'cmf.own_info').
+        "cmf": None if embedded else cmf.own_info(ctx, assembly),
         "source": None if embedded else (_source(assembly) or _source(target)),
     }
     if embedded:
@@ -314,6 +317,7 @@ async def _part_node_async(ctx, part, node_id, link, index, depth, forced=False)
         "vendor": store.vendor,
         "sku": store.sku,
         "material": _material(part),
+        "cmf": cmf.own_info(ctx, part),
         "source": _source(part),
     }
     # Followed whenever it says how it is made, problems or not: the stock is a
@@ -338,6 +342,7 @@ async def _part_node_async(ctx, part, node_id, link, index, depth, forced=False)
                 "vendor": None,
                 "sku": None,
                 "material": None,
+                "cmf": None,
                 "missing": True,
             }
         else:

@@ -21,7 +21,10 @@
 //     software fallback adapter. The same scene, lit the same way. Its build of
 //     three shares this one's core ('three.core.js'), so the meshes and
 //     materials a pane makes are the ones it draws. Loaded only when it is
-//     needed, and given up on - for the canvas - if it does not start.
+//     needed, and given up on - for the canvas - if it does not start. On a
+//     window that cannot present a WebGPU canvas - the software adapter cannot
+//     - it draws off the screen and copies each frame onto a 2D canvas
+//     ('offscreenSurface').
 //   * The canvas painter ('painter.ts'): the scene projected on the CPU and its
 //     triangles filled far to near, flat-shaded. No GPU at all, and slower for
 //     it - so a big model is drawn as boxes while the camera is being moved
@@ -41,11 +44,20 @@ import { DEFAULT_COLOR } from './appearance';
 import { el } from './dom';
 import { noWebGL, reportError } from './host';
 import { CanvasPainter } from './painter';
+import { copyPixels } from './readback';
 
 export type Backend = 'webgl' | 'webgpu' | 'software';
 
 export interface Surface {
     readonly backend: Backend;
+    /**
+     * Drawn by the CPU rather than a graphics card: the canvas painter, and WebGPU
+     * on Chromium's software adapter. A pane says so, and leaves the model still
+     * until it is turned (see 'softwareNotice').
+     */
+    readonly onCpu?: boolean;
+    /** Drawn off the screen and copied onto it, a frame at a time (see 'offscreenSurface'). */
+    readonly readsBack?: boolean;
     readonly domElement: HTMLElement;
     setSize(width: number, height: number): void;
     render(scene: THREE.Scene, camera: THREE.Camera): void;
@@ -187,7 +199,7 @@ function watchDevice(device: Device): () => string | undefined {
  *
  * An adapter and a renderer that initialised do not make a renderer that draws.
  * three's WebGPU build is written against the specification as it is now, and a
- * Chromium older than a change to it rejects what three sends - r185 names a
+ * Chromium older than a change to it rejects what three sends - three (since r185) names a
  * texture view's swizzle as a string, which a Chromium that still took it as a
  * dictionary refuses with a 'TypeError' from every 'createView'. That fails on
  * the first frame and every frame after, and a 3D view that accepted WebGPU on
@@ -239,34 +251,78 @@ async function probe(renderer: WebGPURenderer, device: Device, lost: () => strin
     }
 }
 
+/** A WebGPU renderer, started and set up as every pane draws; with the device under it, watched. */
+interface Started {
+    renderer: WebGPURenderer;
+    device: Device;
+    lost: () => string | undefined;
+}
+
+async function startWebGPU(webgpu: WebGPUModule, options: SurfaceOptions): Promise<Started> {
+    const renderer = new webgpu.WebGPURenderer({ antialias: true, alpha: true });
+    try {
+        await renderer.init();
+    } catch (error: unknown) {
+        renderer.dispose();
+        throw error;
+    }
+    const device = (renderer.backend as unknown as { device: Device }).device;
+    const lost = watchDevice(device);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setClearColor(0x000000, 0);
+    renderer.toneMapping = options.toneMapping ?? THREE.NoToneMapping;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    return { renderer, device, lost };
+}
+
+/** Whether 'adapter' is the CPU's - SwiftShader - rather than a graphics card's. */
+function onTheCpu(adapter: unknown): boolean {
+    const info = (adapter as { info?: Record<string, unknown>; isFallbackAdapter?: boolean }).info ?? {};
+    if (info.isFallbackAdapter === true || (adapter as { isFallbackAdapter?: boolean }).isFallbackAdapter === true) {
+        return true;
+    }
+    return /swiftshader/i.test(`${info.architecture ?? ''} ${info.description ?? ''} ${info.device ?? ''}`);
+}
+
 async function webgpuSurface(what: string, options: SurfaceOptions): Promise<Surface | undefined> {
     const gpu = (navigator as Navigator & { gpu?: { requestAdapter(options?: object): Promise<unknown> } }).gpu;
     if (gpu === undefined) {
         return undefined;
     }
-    let renderer: WebGPURenderer | undefined;
+    let started: Started | undefined;
+    let adapter: unknown;
     try {
         // Asked before three is: 'WebGPURenderer' falls back to WebGL 2 by itself
         // when there is no adapter, and there is no WebGL here - so a renderer it
         // made would fail later rather than now.
-        const adapter = (await gpu.requestAdapter()) ?? (await gpu.requestAdapter({ forceFallbackAdapter: true }));
+        adapter = (await gpu.requestAdapter()) ?? (await gpu.requestAdapter({ forceFallbackAdapter: true }));
         if (!adapter) {
             return undefined;
         }
         const WEBGPU = await import(/* webpackMode: "eager" */ 'three/webgpu');
-        const gpuRenderer = new WEBGPU.WebGPURenderer({ antialias: true, alpha: true });
-        renderer = gpuRenderer;
-        await gpuRenderer.init();
-        const device = (gpuRenderer.backend as unknown as { device: Device }).device;
-        const lost = watchDevice(device);
-        gpuRenderer.setPixelRatio(window.devicePixelRatio);
-        gpuRenderer.setClearColor(0x000000, 0);
-        gpuRenderer.toneMapping = options.toneMapping ?? THREE.NoToneMapping;
-        gpuRenderer.outputColorSpace = THREE.SRGBColorSpace;
-        if (!webgpuProven) {
-            await probe(gpuRenderer, device, lost);
-            webgpuProven = true;
+        started = await startWebGPU(WEBGPU, options);
+        try {
+            if (!webgpuProven) {
+                await probe(started.renderer, started.device, started.lost);
+                webgpuProven = true;
+            }
+        } catch (error: unknown) {
+            // A device lost on its first frame to the screen is a window that
+            // cannot present a WebGPU canvas - Chromium's software adapter does
+            // that, in a virtual machine or over a remote desktop - and not one
+            // that cannot draw: it is asked again, to draw off the screen.
+            if (started.lost() === undefined || offscreenRefused) {
+                throw error;
+            }
+            started.renderer.dispose();
+            started = undefined;
+            const offscreen = await offscreenSurface(WEBGPU, what, options, onTheCpu(adapter));
+            if (offscreen !== undefined) {
+                return offscreen;
+            }
+            throw error;
         }
+        const gpuRenderer = started.renderer;
         // Proven is not promised: a frame that throws after all is said once,
         // not sixty times a second for as long as the panel is open.
         let broken = false;
@@ -294,8 +350,123 @@ async function webgpuSurface(what: string, options: SurfaceOptions): Promise<Sur
         };
     } catch (error: unknown) {
         // Reported, and not fatal: the canvas is still there to draw with.
-        renderer?.dispose();
+        started?.renderer.dispose();
         reportError(`${what} could not use WebGPU, and draws without the GPU: ${error}`);
+        return undefined;
+    }
+}
+
+/** Whether drawing off the screen failed in this window, which the next pane then does not try. */
+let offscreenRefused = false;
+
+/**
+ * WebGPU that draws, on a window that cannot show what it draws: each frame drawn
+ * into a texture and copied into a 2D canvas.
+ *
+ * Chromium's software adapter - SwiftShader, which is what a window with no GPU
+ * WebGL can use has for WebGPU - draws into a texture as well as any GPU does,
+ * and loses its device the moment a canvas asks it for a frame to present,
+ * attached to the page or not. Rather than give such a window the canvas
+ * painter, which is flat-shaded and draws no image and no reflection, it is
+ * drawn by the same renderer as on a GPU: into a render target that three
+ * treats as the screen ('setOutputRenderTarget', so that tone mapping and the
+ * colour space are applied as they are to a canvas), read back, and put into a
+ * 2D canvas. One frame is read back at a time; a frame asked for meanwhile is
+ * drawn when that one is in, with whatever is on the stage by then.
+ *
+ * The readback is what a frame costs over a GPU's, which is why 'onCpu' - the
+ * adapter is the CPU's - marks the surface as drawn on the CPU, as the painter
+ * is: the pane says so, and does not turn the model on its own.
+ */
+async function offscreenSurface(
+    webgpu: WebGPUModule,
+    what: string,
+    options: SurfaceOptions,
+    onCpu: boolean,
+): Promise<Surface | undefined> {
+    let started: Started | undefined;
+    try {
+        started = await startWebGPU(webgpu, options);
+        const renderer = started.renderer;
+        // One target for the life of the surface, resized with the canvas: three
+        // keeps what it set up for the first output target it draws into, and
+        // a second one set in its place is never drawn into.
+        const target = new webgpu.RenderTarget(1, 1, { type: THREE.UnsignedByteType, depthBuffer: true });
+        renderer.setOutputRenderTarget(target);
+        await probe(renderer, started.device, started.lost);
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d') as CanvasRenderingContext2D;
+        let image: ImageData | undefined;
+        let broken = false;
+        let drawing = false;
+        let next: [THREE.Scene, THREE.Camera] | undefined;
+
+        const draw = async (scene: THREE.Scene, camera: THREE.Camera): Promise<void> => {
+            const width = canvas.width;
+            const height = canvas.height;
+            if (target.width !== width || target.height !== height) {
+                target.setSize(width, height);
+            }
+            renderer.render(scene, camera);
+            const pixels = (await renderer.readRenderTargetPixelsAsync(target, 0, 0, width, height)) as Uint8Array;
+            if (canvas.width !== width || canvas.height !== height) {
+                // Resized while it was read: the next frame is the one to show.
+                return;
+            }
+            if (image === undefined || image.width !== width || image.height !== height) {
+                image = context.createImageData(width, height);
+            }
+            copyPixels(pixels, width, height, image.data);
+            context.putImageData(image, 0, 0);
+        };
+
+        const render = (scene: THREE.Scene, camera: THREE.Camera): void => {
+            if (broken) {
+                return;
+            }
+            if (drawing) {
+                next = [scene, camera];
+                return;
+            }
+            drawing = true;
+            draw(scene, camera)
+                .catch((error: unknown) => {
+                    broken = true;
+                    reportError(`${what} stopped drawing with WebGPU: ${started?.lost() ?? error}`);
+                })
+                .finally(() => {
+                    drawing = false;
+                    const waiting = next;
+                    next = undefined;
+                    if (waiting !== undefined) {
+                        render(...waiting);
+                    }
+                });
+        };
+
+        return {
+            backend: 'webgpu',
+            onCpu,
+            readsBack: true,
+            domElement: canvas,
+            setSize: (width, height) => {
+                const ratio = window.devicePixelRatio;
+                canvas.width = Math.max(1, Math.round(width * ratio));
+                canvas.height = Math.max(1, Math.round(height * ratio));
+                renderer.setSize(width, height, false);
+            },
+            render,
+            info: renderer.info as unknown as Surface['info'],
+            dispose: () => {
+                broken = true;
+                target.dispose();
+                renderer.dispose();
+            },
+        };
+    } catch (error: unknown) {
+        offscreenRefused = true;
+        started?.renderer.dispose();
+        reportError(`${what} could not draw with WebGPU off the screen either: ${started?.lost() ?? error}`);
         return undefined;
     }
 }
@@ -305,6 +476,7 @@ function softwareSurface(): Surface {
     painter.setPixelRatio(window.devicePixelRatio);
     return {
         backend: 'software',
+        onCpu: true,
         domElement: painter.domElement,
         setSize: (width, height) => painter.setSize(width, height),
         render: (scene, camera) => painter.render(scene, camera),

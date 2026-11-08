@@ -955,3 +955,50 @@ def test_built_in_files_written_together_are_the_files_written_alone(tmp_path, m
     assert names == sorted(os.listdir(together)) and len(names) == len(formats)
     for name in names:
         assert _contents(str(together / name)) == _contents(str(alone / name)), name
+
+
+WITH_LOGO = THREE.rstrip(" ").replace("say: alpha}", "say: alpha, text: media/logo.png}") + (
+    "    delta: {path: write.py, extension: delta, say: delta, logo: media/logo.png, packageFiles: [logo]}\n"
+)
+
+
+def test_a_sandbox_that_exchanges_files_is_sent_the_package_a_field_names_a_file_of(batch, monkeypatch):
+    """A logo by a relative path is in the object's package, which such a sandbox sees only if it is an argument.
+
+    One group, '--package-dir <index> <directory>', for the file type whose
+    declared field ('packageFiles') names a file there and for no other - not
+    for one whose undeclared field happens to say the same name - and none at
+    all for a sandbox that shares this machine's files.
+    """
+    from partcad import output
+
+    make, sandbox, out = batch
+    ctx = make(WITH_LOGO)
+    package = os.path.abspath(str(out.parent / "package"))
+    os.makedirs(os.path.join(package, "media"))
+    with open(os.path.join(package, "media", "logo.png"), "wb") as f:
+        f.write(b"png")
+
+    class Exchanging(_Sandbox):
+        EXCHANGES_FILES = True
+
+        async def run_async(self, cmd, stdin="", session=None, output_files=None, **kwargs):
+            return await super().run_async(cmd, stdin, session=session, **kwargs)
+
+    exchanging = Exchanging()
+    monkeypatch.setattr(ctx, "get_python_runtime", lambda version=None, image=None: exchanging)
+    _render(ctx, out)
+
+    (call,) = exchanging.calls
+    groups = [call[index : index + 3] for index, part in enumerate(call) if part == output.PACKAGE_DIR_ARGUMENT]
+    files = [os.path.basename(part) for part in call if part.startswith(str(out))]
+    assert groups == [[output.PACKAGE_DIR_ARGUMENT, str(files.index("bracket.delta")), package]]
+    # Every file is still written, the one with the group too.
+    assert _read(out, "bracket.delta").startswith("delta in package")
+
+    # Another question, so that it is drawn again rather than put back.
+    sharing_ctx = make(WITH_LOGO.replace("say: delta", "say: shared"))
+    _render(sharing_ctx, out)
+    (call,) = sandbox.calls
+    assert "bracket.delta" in [os.path.basename(part) for part in call]
+    assert output.PACKAGE_DIR_ARGUMENT not in call

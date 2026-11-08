@@ -198,7 +198,7 @@ env:
   # is the interpreter PartCAD itself runs on. 'test-pub-repo', which renders
   # the public index, uses PYTHONS_SANDBOX instead.
   PYTHONS_SLIM: '["3.10", "3.14"]'
-  VERSION: 0.8.273
+  VERSION: 0.9.22
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
   PC_TELEMETRY_PERFORMANCE: false
@@ -397,6 +397,11 @@ jobs:
           # A run that built a tag of its own. Not the same question as PUSH,
           # which is also true for the version bump.
           OWN_TAG: ${{ needs.set-matrix.outputs.image-override != '' }}
+          # The interpreter the GStreamer flavour is built for:
+          # "sandbox_versions.DEFAULT_PYTHON_VERSION", which every file type of
+          # "//builtin/render" runs in. "tests/partcad/unit/test_render_video.py"
+          # holds the two to one value.
+          GSTREAMER_PYTHON: "3.11"
         run: |
           # arm64 goes through QEMU and costs minutes per version, so a pull
           # request builds amd64 alone and a deep run covers both. That is a real
@@ -437,6 +442,23 @@ jobs:
               PC_CACHE_FROM="${IMAGE}:py${PY}-${ARCH}" \
                 dev-tools/ci/build-sandbox-image.sh
               echo "::endgroup::"
+              # The GStreamer flavour the video file types of
+              # "//builtin/render" name as their "dockerImage": the same build
+              # one stage further, so the base's layers are this one's cache.
+              # Only for the interpreter "//builtin/render" runs in, which is
+              # the only one anything asks for it in.
+              if [ "${PY}" = "${GSTREAMER_PYTHON}" ]; then
+                echo "::group::python ${PY} (${ARCH}), GStreamer"
+                PC_IMAGE_REF="${IMAGE}:${IMAGE_TAG}-py${PY}-gstreamer-${ARCH}" \
+                PC_PYTHON_VERSION="${PY}" \
+                PC_PARTCAD_VERSION="${PC_VERSION}" \
+                PC_PLATFORM="linux/${ARCH}" \
+                PC_PUSH="${PUSH}" \
+                PC_TARGET=gstreamer \
+                PC_CACHE_FROM="${IMAGE}:py${PY}-gstreamer-${ARCH}" \
+                  dev-tools/ci/build-sandbox-image.sh
+                echo "::endgroup::"
+              fi
             done
           done
 
@@ -463,6 +485,8 @@ jobs:
           PYTHONS: ${{ env.PYTHONS }}
           IMAGE: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-python
           PC_VERSION: ${{ env.VERSION }}
+          # See "Build the Python sandbox images".
+          GSTREAMER_PYTHON: "3.11"
         run: |
           set -euo pipefail
           # Both architectures, always: what reaches "main" was published by a
@@ -476,6 +500,15 @@ jobs:
                 "${IMAGE}:${PC_VERSION}-py${PY}-${ARCH}"
               echo "::endgroup::"
             done
+          done
+          # And the GStreamer flavour's moving tag, which is what the next
+          # build of it takes its cache from. Only one interpreter has one.
+          for ARCH in amd64 arm64; do
+            echo "::group::python ${GSTREAMER_PYTHON} (${ARCH}), GStreamer: ${PC_VERSION} -> latest"
+            docker buildx imagetools create \
+              --tag "${IMAGE}:py${GSTREAMER_PYTHON}-gstreamer-${ARCH}" \
+              "${IMAGE}:${PC_VERSION}-py${GSTREAMER_PYTHON}-gstreamer-${ARCH}"
+            echo "::endgroup::"
           done
 
   # The one job that runs the "docker" sandbox rather than reasoning about it.
@@ -586,6 +619,7 @@ jobs:
       matrix-slim: ${{ steps.set-matrix.outputs.matrix-slim }}
       matrix-behave: ${{ steps.set-matrix.outputs.matrix-behave }}
       matrix-ide-e2e: ${{ steps.set-matrix.outputs.matrix-ide-e2e }}
+      matrix-login-e2e: ${{ steps.set-matrix.outputs.matrix-login-e2e }}
       # Which of the jobs below this change can say anything about. Every one of
       # them reads its own name here; see ".github/actions/changed-scopes".
       deep: ${{ steps.depth.outputs.deep }}
@@ -721,6 +755,9 @@ jobs:
           fi
           echo "Operating systems (IDE end to end): ${OSES_IDE_E2E}"
           echo 'matrix-ide-e2e={"os": '"${OSES_IDE_E2E}"', "python-version": ['"$(jq -c '.[-1]' <<< '${{ env.PYTHONS }}')"']}' >> "${GITHUB_OUTPUT}"
+          # 'pc login' end to end: Linux only, where the runner's Google Chrome
+          # takes the extension over its DevTools pipe; one interpreter, the newest.
+          echo 'matrix-login-e2e={"os": ["ubuntu-latest"], "python-version": ['"$(jq -c '.[-1]' <<< '${{ env.PYTHONS }}')"']}' >> "${GITHUB_OUTPUT}"
 
   # What this run is going to reach for, checked before it reaches for it.
   #
@@ -1198,6 +1235,41 @@ jobs:
         working-directory: ide/vscode
         run: npm ci
 
+      # The 3D view's finishes against the shaded render's, pixel by pixel, in
+      # the runner's Chrome: WebGL and WebGPU on SwiftShader, which is what a
+      # Linux runner has without a GPU (see "tests/ide/test_viewer_render.py").
+      # And a pane with no WebGL at all, which draws with WebGPU off the screen
+      # where SwiftShader cannot present a canvas. Seconds, beside the minutes
+      # below. A WebGPU the browser cannot give is a skip that says so, not a
+      # failure: WebGL is still checked.
+      - name: Test the 3D view's finishes in a browser
+        if: runner.os == 'Linux'
+        shell: bash -el {0}
+        env:
+          PC_TEST_IDE_RENDER: "1"
+        run: |
+          . ~/.bashrc
+          . ~/.bash_profile
+          mamba activate ${{ format('env-test-ide-e2e-{0}', matrix.python-version) }}
+
+          mkdir -pv ide-e2e-test-results
+          # The session's verdict rather than the exit code, as below.
+          marker="ide-e2e-test-results/render-verdict-$$"
+          export PYTEST_RESULT_MARKER="${marker}"
+          rm -f "${marker}"
+
+          rc=0
+          pytest tests/ide/test_viewer_render.py \
+            --junitxml=ide-e2e-test-results/render-junit.xml --no-cov -s \
+            -p no:error-for-skips -p no:warnings --dist no || rc=$?
+
+          verdict="$(cat "${marker}" 2>/dev/null || true)"
+          rm -f "${marker}"
+          if [ "${verdict}" != "success" ]; then
+            echo "::error::pytest recorded '${verdict:-no verdict}' (process exit code ${rc})"
+            exit "$(( rc != 0 ? rc : 1 ))"
+          fi
+
       # A display for the editor's window. The test starts an Xvfb of its own
       # where there is none; it only has to be installed.
       - name: Xvfb
@@ -1244,6 +1316,80 @@ jobs:
         with:
           name: ide-e2e-test-results-${{ matrix.os }}-${{ matrix.python-version }}
           path: ide-e2e-test-results/
+          retention-days: 7
+
+  # 'pc login' end to end: the command, the daemon, a plugin's 'login' in its
+  # sandbox, the runner's Google Chrome with PartCAD's extension in it (loaded
+  # over the DevTools pipe, which is how Chrome takes it since it stopped
+  # honouring '--load-extension'), and a local site to sign in to. See
+  # "tests/partcad_client/test_login_e2e.py". One process, like the IDE's: it
+  # starts a browser, a daemon and a sandbox, which the parallel suite must not.
+  # The extension on its own, in every browser it is built for, is
+  # "browsers.yml"'s.
+  test-login-e2e:
+    name: "Login (end to end)"
+    needs:
+      - set-matrix
+      - build-containers
+    if: ${{ needs.set-matrix.outputs.pytest == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix-login-e2e) }}
+    runs-on: ${{ matrix.os }}
+    # A cold sandbox is most of it.
+    timeout-minutes: 45
+    env:
+      PC_CONTAINER_IMAGE_TAG: ${{ needs.set-matrix.outputs.image-override }}
+      PC_CONTAINER_IMAGE_OWNER: ${{ needs.set-matrix.outputs.image-owner }}
+      PC_TEST_LOGIN_E2E: "1"
+      PC_LOGIN_BROWSER: google-chrome
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-all
+        with:
+          job: login-e2e
+      - uses: ./.github/actions/setup-test
+        with:
+          job: login-e2e
+
+      - name: Test pc login end to end
+        shell: bash -el {0}
+        run: |
+          . ~/.bashrc
+          . ~/.bash_profile
+          mamba activate ${{ format('env-test-login-e2e-{0}', matrix.python-version) }}
+
+          mkdir -pv login-e2e-test-results
+          # The session's verdict rather than the exit code, as in "Pytest" --
+          # see the note there and the root "conftest.py".
+          marker="login-e2e-test-results/session-verdict-$$"
+          export PYTEST_RESULT_MARKER="${marker}"
+          rm -f "${marker}"
+
+          rc=0
+          pytest tests/partcad_client/test_login_e2e.py \
+            --junitxml=login-e2e-test-results/junit.xml --no-cov -s \
+            -p no:error-for-skips -p no:warnings --dist no || rc=$?
+
+          verdict="$(cat "${marker}" 2>/dev/null || true)"
+          rm -f "${marker}"
+          if [ "${verdict}" != "success" ]; then
+            echo "::error::pytest recorded '${verdict:-no verdict}' (process exit code ${rc})"
+            exit "$(( rc != 0 ? rc : 1 ))"
+          fi
+          # A skip is not a pass here: the job exists to run this one test.
+          if grep -q '<skipped' login-e2e-test-results/junit.xml; then
+            echo "::error::the login end-to-end test was skipped"
+            grep -o '<skipped[^>]*>' login-e2e-test-results/junit.xml
+            exit 1
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: login-e2e-test-results-${{ matrix.os }}-${{ matrix.python-version }}
+          path: login-e2e-test-results/
           retention-days: 7
 
   test-behave:
@@ -2271,6 +2417,9 @@ jobs:
           for py in $(echo "${PYTHONS}" | jq -r '.[]'); do
             for arch in amd64 arm64; do
               wanted="${wanted} ${IMAGE_TAG}-py${py}-${arch}"
+              # The GStreamer flavour, built for one interpreter; asking for
+              # it under the others costs nothing, for the reason above.
+              wanted="${wanted} ${IMAGE_TAG}-py${py}-gstreamer-${arch}"
             done
           done
           echo "looking for:${wanted}"

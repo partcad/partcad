@@ -150,6 +150,18 @@ Feature: `pc render` command
       |      --with-ports |      Ports | Interfaces |
       | --with-interfaces | Interfaces |      Ports |
 
+  # Two aluminium blocks, one standing on the other: they touch, so they are one
+  # cluster of the one material, and the picture names it once, on a layer of
+  # its own.
+  @type-image
+  Scenario: `pc render --with-materials` names each cluster of a material
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package //feature_simulate -t svg -O ./ -S --with-materials stable"
+    Then the command should exit with a status code of "0"
+    Then a file named "stable.svg" should be created
+    Then a file named "stable.svg" should contain "Visible"
+    Then a file named "stable.svg" should contain "Materials"
+    Then a file named "stable.svg" should not contain "Components"
+
   # Naming one object renders that object. The package holds four assemblies,
   # three more parts and three sketches, none of which was asked for.
   @type-image
@@ -185,6 +197,18 @@ Feature: `pc render` command
     Then a file named "cylinder.svg" should be created
     Given a file named "partcad.yaml" does not exist
     Then STDERR should contain "DONE: Render: //pub/examples/partcad/feature_render:"
+
+  # `--reproducible` and `--no-reproducible` pick the hidden-line algorithm for
+  # one run, over what the file type declares. `feature_render` declares the
+  # exact one, as every example does, and draws the cylinder end on -- the one
+  # shape whose drawing says which algorithm drew it: a circle from the exact
+  # one, segments from the polygonal one.
+  @type-image
+  Scenario: `pc render --no-reproducible` overrides the file type's own setting
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package //feature_render -t svg --no-reproducible -O ./ :cylinder"
+    Then the command should exit with a status code of "0"
+    Then a file named "cylinder.svg" should not contain "<circle"
+    Given a file named "partcad.yaml" does not exist
 
   # A request that cannot be aimed is refused before anything is rendered,
   # rather than producing a picture of something else.

@@ -1,0 +1,29 @@
+desc: |
+  A partType that declares 'requireSolid', and the same script declared without
+  it: what the one fails, the other builds with a warning.
+
+partTypes:
+  # A script that hands back one face of a box: what a converter that lost the
+  # rest of a body would hand back.
+  skin:
+    path: face.py
+  strict_skin:
+    path: face.py
+    requireSolid: true
+  # And one that builds the box itself, which is a solid either way.
+  strict_box:
+    path: box.py
+    requireSolid: true
+
+# Never from the cache: what is tested is the judgement made as a part is built,
+# and a part served from an earlier run's cache is not built at all.
+parts:
+  lenient:
+    type: ":skin"
+    cache: false
+  strict:
+    type: ":strict_skin"
+    cache: false
+  whole:
+    type: ":strict_box"
+    cache: false

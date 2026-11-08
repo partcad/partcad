@@ -72,6 +72,15 @@ const TAB_COMMANDS: Record<string, string> = {
     // for all four tabs, under the id of the group they are in, because which
     // of them apply is what decides whether the group does.
     analysis: 'partcad.caeList',
+    // What each component of the object costs, for the 3D view's "Component
+    // prices" callouts: asked under the Design group's id for the same reason,
+    // since it is a question about the object the group shows rather than a tab.
+    design: 'partcad.componentPrices',
+    // Where each material of the object is, cluster by cluster, for the 3D
+    // view's "Materials" callouts: asked under the 3D tab's own id, since only
+    // it asks - the 2D tab's picture finds its own - and nothing else is.
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '3d': 'partcad.materialClusters',
     // Running one scenario of one analysis. Every analysis is the one
     // operation; which of them is asked for travels as an argument, exactly as
     // every 'pc cae <analysis>' is one operation with the analysis in the
@@ -85,6 +94,10 @@ const TAB_COMMANDS: Record<string, string> = {
     // eslint-disable-next-line @typescript-eslint/naming-convention
     '2d': 'partcad.renderInline',
     draft: 'partcad.renderInline',
+    // What each item of the object is in - its colour, material and finish, as
+    // 'pc info' says them and the 'cmf' check judges them - or, for a colour, a
+    // material or a finish the explorer opened, what that declaration is.
+    cmf: 'partcad.cmfInfo',
     // What the object declares under 'simulate:', read rather than run; a
     // request naming one of them runs it instead (see 'SIMULATION_RUN').
     simulation: 'partcad.simulateList',
@@ -109,6 +122,11 @@ const INSPECT_COMMANDS: Record<string, string> = {
     scene: 'partcad.inspectScene',
     sketch: 'partcad.inspectSketch',
     interface: 'partcad.inspectInterface',
+    // What an object is in, which has nothing to render: opened as the
+    // explorer opens one (see 'showDeclaration').
+    color: 'partcad.inspectCmf',
+    material: 'partcad.inspectCmf',
+    finish: 'partcad.inspectCmf',
 };
 
 /** The tabs whose answer carries a file to keep for Save: the render tabs, and the assembly instructions. */
@@ -269,6 +287,22 @@ export class PartcadViewer implements vscode.Disposable {
     public restore(panel: vscode.WebviewPanel): void {
         this.panel?.dispose();
         this.attach(panel);
+    }
+
+    /**
+     * Show a colour, a material or a finish: what the explorer does with one.
+     *
+     * Not through PartCAD as everything else that is shown is, because there is
+     * nothing to draw: a declaration is what an object is in, and has no shape
+     * to tessellate or send over the viewer protocol. So the show is made here,
+     * with no object in it, and the panel asks the daemon what the declaration
+     * is when its CMF tab opens ('cmf.info'), as it asks about anything else -
+     * which is why the show carries the package and the kind: a declaration's
+     * name is no object's, and only the kind says which of the three to look in.
+     * No tab is asked for: a declaration's panel has the one.
+     */
+    public showDeclaration(pkg: string, name: string, kind: string): void {
+        this.handle({ type: MSG_SHOW, name, kind, package: pkg, object: null });
     }
 
     /** Route a protocol message from a connected PartCAD to the webview. */
@@ -450,6 +484,13 @@ export class PartcadViewer implements vscode.Disposable {
                 args.withInterfaces = render?.withInterfaces;
                 args.withInternals = render?.withInternals;
                 args.ports = render?.ports;
+                // And the callout boxes under it, on the 2D tab: each sent only
+                // when it says something a render would not do anyway.
+                args.withComponentNames = render?.withComponentNames;
+                args.withComponentPrices = render?.withComponentPrices;
+                args.withMaterials = render?.withMaterials;
+                args.withPortNames = render?.withPortNames;
+                args.withInterfaceNames = render?.withInterfaceNames;
                 // What the view panel beside it says: where the picture is looked
                 // at from, and what the object is cut to first.
                 args.viewportOrigin = message.viewportOrigin;
@@ -470,6 +511,23 @@ export class PartcadViewer implements vscode.Disposable {
                 // the viewer was shown under, is what the choices are kept by.
                 const object = data?.object ?? `${target.package}:${target.name}`;
                 post({ data: data ? { ...data, choices: readChoices(object) } : data });
+                return;
+            }
+            if (tab === 'design' || tab === '3d') {
+                args.kind = target.kind ?? 'part';
+                if (tab === '3d') {
+                    // What the 3D view is cut to, so that a material is called
+                    // out only where something is drawn.
+                    args.section = message.section;
+                }
+                post({ data: await vscode.commands.executeCommand(command, args) });
+                return;
+            }
+            if (tab === 'cmf') {
+                // Said rather than defaulted to a part: a declaration's name is
+                // found only by its kind, and an object's is looked up.
+                args.kind = target.kind ?? undefined;
+                post({ data: await vscode.commands.executeCommand(command, args) });
                 return;
             }
             if (tab === 'requirements' || tab === 'test') {
@@ -694,7 +752,9 @@ export class PartcadViewer implements vscode.Disposable {
             return;
         }
         try {
-            await vscode.commands.executeCommand(command, { name, pkg }, {}, true);
+            // The kind travels too: it is what finds a colour, a material or a
+            // finish, whose name is no object's (see 'showDeclaration').
+            await vscode.commands.executeCommand(command, { name, pkg, kind }, {}, true);
         } catch (error: any) {
             void vscode.window.showErrorMessage(`PartCAD could not show ${pkg}:${name}: ${error?.message ?? error}`);
         }
@@ -913,6 +973,12 @@ export class PartcadViewer implements vscode.Disposable {
                     }
                 } else if (message.type === 'fetchTab') {
                     void this.fetchTab({ ...message, tab: message.tab ?? '', token: message.token ?? 0 });
+                } else if (message.type === 'cancelTab') {
+                    // The renderer will not read the answer: stop the request
+                    // rather than keep the daemon on it (see 'CancelTabMessage').
+                    if (message.tab) {
+                        this.inFlight.cancel(message.tab);
+                    }
                 } else if (message.type === 'fetchDetails') {
                     void this.fetchDetails(message.token ?? 0, message.objects ?? [], message.width, message.height);
                 } else if (message.type === 'openSource') {
@@ -1094,16 +1160,20 @@ export class PartcadViewer implements vscode.Disposable {
         const styleUri = webview.asWebviewUri(utils.joinPath(this.extensionUri, 'resources', 'css', 'viewer.css'));
         const nonce = getNonce();
 
-        // No 'connect-src': the geometry arrives over postMessage and is parsed
-        // from memory, so the viewer never issues a network request. Nothing
-        // here may be relaxed to load an asset from a CDN. 'media-src blob:' is
-        // the video of a simulation run, which arrives the same way and is
-        // played from memory too.
+        // No network: the geometry arrives over postMessage and is parsed from
+        // memory, so the viewer never issues a network request. Nothing here may
+        // be relaxed to load an asset from a CDN. 'media-src blob:' is the video
+        // of a simulation run, which arrives the same way and is played from
+        // memory too. 'connect-src blob:' is the image a textured face is drawn
+        // with: it is inside the glTF, and three's loader hands it to the
+        // browser's decoder by fetching a 'blob:' URL it made of those bytes
+        // itself - which reaches nothing outside this page, and without which
+        // the face is drawn with no image at all.
         return `<!DOCTYPE html>
 			<html lang="en">
 			<head>
 				<meta charset="UTF-8">
-				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data: blob:; media-src blob:; script-src 'nonce-${nonce}';">
+				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data: blob:; media-src blob:; connect-src blob:; script-src 'nonce-${nonce}';">
 				<meta name="viewport" content="width=device-width, initial-scale=1.0">
 				<link href="${styleUri}" rel="stylesheet">
 				<title>${PartcadViewer.title}</title>
@@ -1119,6 +1189,7 @@ export class PartcadViewer implements vscode.Disposable {
 						<div id="pane-3d" class="pane pane-3d">
 							<div class="controls" hidden>
 								<div id="tree" class="tree" role="tree"></div>
+								<div id="labels-3d"></div>
 								<div class="viewer-controls" id="metadata-control" hidden>
 									<label class="control-label"><input type="checkbox" id="metadata-checkbox" checked> Metadata</label>
 								</div>
@@ -1129,6 +1200,7 @@ export class PartcadViewer implements vscode.Disposable {
 						</div>
 						<div id="pane-2d" class="pane" hidden></div>
 						<div id="pane-draft" class="pane" hidden></div>
+						<div id="pane-cmf" class="pane" hidden></div>
 						</div>
 						</div>
 						<div id="pane-analysis" class="pane pane-group" hidden>
@@ -1211,6 +1283,17 @@ interface RenderRequest {
     withInternals?: boolean;
     /** Which ports to draw, by the name PartCAD reports each under. */
     ports?: string[];
+    /**
+     * The 2D tab's callout boxes: '--with-component-names',
+     * '--with-component-prices', '--with-materials', and
+     * '--without-port-names'/'--without-interface-names' as a false. Absent
+     * says nothing.
+     */
+    withComponentNames?: boolean;
+    withComponentPrices?: boolean;
+    withMaterials?: boolean;
+    withPortNames?: boolean;
+    withInterfaceNames?: boolean;
 }
 
 /** What 'render.inline' answers with; see 'RenderData' in 'webview/messages.ts'. */

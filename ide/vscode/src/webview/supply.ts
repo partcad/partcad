@@ -230,16 +230,23 @@ function addProperty(list: HTMLElement, label: string, value: string): void {
  * A quote carries the price as a bare number; the currency comes from the
  * provider's configuration, and a provider that does not declare one leaves the
  * number to speak for itself rather than being labelled with a guess.
+ *
+ * Dollars are written '$1,234.50' whatever the editor's locale - which would
+ * otherwise make them 'US$1,234.50' or '1.234,50 $' - because that is what a
+ * reader looks for, and what the 2D tab's picture writes on a component too
+ * ('price_label' in 'partcad/render_overlay.py'). Any other currency is written
+ * the locale's way. Only what is shown is: the log and 'pc' keep the code.
  */
 export function formatPrice(price: number | null | undefined, currency: string | null | undefined): string {
     if (price === null || price === undefined) {
         return '';
     }
     if (currency && /^[A-Za-z]{3}$/.test(currency)) {
+        const code = currency.toUpperCase();
         try {
-            return new Intl.NumberFormat(undefined, {
+            return new Intl.NumberFormat(code === 'USD' ? 'en-US' : undefined, {
                 style: 'currency',
-                currency: currency.toUpperCase(),
+                currency: code,
             }).format(price);
         } catch {
             // Three letters that are not a currency code after all.

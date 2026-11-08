@@ -15,6 +15,7 @@ Plugins
    simulations.rst
    applications.rst
    repositories.rst
+   login.rst
 
 
 Most of what PartCAD can do, PartCAD does not hard-code. A **plugin** is a declaration in somebody's

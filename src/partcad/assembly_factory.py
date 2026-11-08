@@ -9,8 +9,9 @@
 
 import typing
 
-from . import factory, telemetry
+from . import cmf, factory, telemetry
 from .assembly import Assembly
+from .shape_config import NO_DEFAULT
 from .shape_factory import ShapeFactory
 
 
@@ -42,12 +43,17 @@ class AssemblyFactory(ShapeFactory):
     # the same arrangement a part has (see 'PartFactory.ACCEPTED_OBJECT_TYPE_PARAMETERS',
     # which says why a name outside this registry stays free, forever).
     #
-    # 'exploded' is the one there is: the assembly drawn with its items pulled
-    # apart (see 'Assembly.exploded'). Only a type that knows what its items are
-    # joined to can do that, which is 'assy'; an assembly read from a STEP file
-    # holds geometry, not connections.
-    POLICED_OBJECT_TYPE_PARAMETERS: typing.FrozenSet[str] = frozenset({"exploded"})
-    ACCEPTED_OBJECT_TYPE_PARAMETERS: typing.Dict[str, typing.Any] = {}
+    # 'exploded' is the assembly drawn with its items pulled apart (see
+    # 'Assembly.exploded'). Only a type that knows what its items are joined to
+    # can do that, which is 'assy'; an assembly read from a STEP file holds
+    # geometry, not connections.
+    #
+    # The CMF parameters (see 'partcad.cmf') every assembly type accepts, as
+    # every part type does. An assembly's are passed on to its links as their
+    # parameters (docs/design/cmf.md), and are its own claim only when it is
+    # bought whole - when it declares a 'vendor' and an 'sku'.
+    POLICED_OBJECT_TYPE_PARAMETERS: typing.FrozenSet[str] = frozenset({"exploded", *cmf.TYPE_PARAMETERS})
+    ACCEPTED_OBJECT_TYPE_PARAMETERS: typing.Dict[str, typing.Any] = {name: NO_DEFAULT for name in cmf.TYPE_PARAMETERS}
 
     def __init__(self, ctx, source_project, target_project, config, extension=""):
         super().__init__(ctx, source_project, config)
@@ -79,6 +85,15 @@ class AssemblyFactory(ShapeFactory):
         # What this type contributes, so reading one of them off the assembly
         # applies the type's default (see 'ShapeConfiguration.get_object_type_parameter').
         self.assembly.object_type_parameters = self.ACCEPTED_OBJECT_TYPE_PARAMETERS
+        # An exploded view is a picture of the assembly with every item pulled
+        # out of what holds it, not one more thing to make: it drops the
+        # 'manufacturable' it was declared with or inherited (see
+        # 'assembly_explode'). On the object only, never in 'config': that is
+        # the declaration a parameterized instance is copied from
+        # ('Project.get_object'), so writing it there would leave
+        # 'logo;exploded=false' unmanufacturable when 'logo' defaults to true.
+        if self.assembly.exploded:
+            self.assembly.is_manufacturable = False
         self.assembly.instantiate = lambda assembly_self: self.instantiate(assembly_self)
         self.assembly._prepare = lambda shape_self: self.prepare_async(shape_self)
         self.assembly._subassemblies = lambda assembly_self: self.subassemblies_async(assembly_self)

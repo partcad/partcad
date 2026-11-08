@@ -11,9 +11,15 @@ the lazy object-access layer is exercised without a runtime or a CAD kernel.
 """
 
 import asyncio
+import json
+import os
 import shutil
+import textwrap
 import threading
 import time
+import uuid
+
+import pytest
 
 import partcad as pc
 from partcad import context as pc_context
@@ -149,6 +155,33 @@ def test_a_parametrized_lookup_reads_a_normalized_base(tmp_path):
     assert base["manufacturable"] is True
 
 
+def test_an_instance_of_a_plugin_part_records_its_own_material_after_the_part(tmp_path):
+    """'block;material=...' reports its own material once 'block' was made, for a plugin-backed part too.
+
+    Fetched by name, the declaration is a new copy each time ('_augment' tags a
+    file-backed one), but the 'properties:' it states are the plugin's own
+    dictionary in every copy - which is where making 'block' records the
+    material it was asked for. So the second copy, which the instance is made
+    from, already said 'block''s material (see 'Project._remember_declared_properties').
+    """
+    data = {
+        "objects/part/block": {
+            "type": "step",
+            "path": "block.step",
+            "parameters": {"material": {"type": "string", "default": "//cat:pla"}},
+            "properties": {"physics": {"mass": 1.0}},
+        }
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    repo._repository = FakeRepository(data)
+
+    assert repo.get_part("block")._shape_properties() == {"physics": {"mass": 1.0}, "material": "//cat:pla"}
+    instance = repo.get_part("block;material=//cat:abs")
+
+    assert instance._shape_properties() == {"physics": {"mass": 1.0}, "material": "//cat:abs"}
+
+
 def test_ensure_enumerated_async_warms_the_sync_accessors():
     """After the async warm-up, the sync accessors never bridge to async."""
     ctx = pc.Context("examples")
@@ -184,6 +217,36 @@ def test_on_disk_cache_persists_across_instances():
         # The entries have to go, or the next run is served from them and never
         # queries the repository at all. Only the local tier writes a directory;
         # a developer who has a remote tier switched on gets nothing extra here.
+        for backend in cache.backends:
+            if isinstance(backend, FilesCacheBackend):
+                shutil.rmtree(backend.cache_dir, ignore_errors=True)
+
+
+def test_the_users_overrides_of_the_plugin_are_part_of_the_cache_key(monkeypatch):
+    """Logging in, or changing a preference, is not answered from what was cached before it."""
+    from partcad import project_external_repository as per
+
+    ctx = pc.Context("examples")
+    cache = Cache("external/test_overrides", ctx.user_config)
+    overrides = {}
+    monkeypatch.setattr(per, "parameter_overrides", lambda user_config=None: overrides)
+    try:
+
+        def package(data):
+            repo = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", plugin_ref="//site:site_repo", cache=cache)
+            repo._repository = FakeRepository(data)
+            return repo
+
+        assert package({"objects/part": {"preview": {"type": "gltf"}}}).object_names("part") == ["preview"]
+        overrides["//site:site_repo"] = {"token": "t"}
+        signed_in = package({"objects/part": {"original": {"type": "step"}}})
+        assert signed_in.object_names("part") == ["original"]
+        assert signed_in._repository.keys == ["objects/part"]
+        # Another plugin's overrides are not this one's business.
+        overrides["//other:repo"] = {"token": "u"}
+        again = package({})
+        assert again.object_names("part") == ["original"] and again._repository.keys == []
+    finally:
         for backend in cache.backends:
             if isinstance(backend, FilesCacheBackend):
                 shutil.rmtree(backend.cache_dir, ignore_errors=True)
@@ -919,3 +982,453 @@ def test_a_package_still_loading_resolves_its_plugin_from_itself(tmp_path):
     ctx, ext, fake = _plugin_package_under_a_root(tmp_path, {"deps": []})
     del ctx.projects[ext.name]  # not registered yet: still being loaded
     assert ext._get_repository() is fake
+
+
+# --- What a repository may do beyond serving declarations ---------------------
+
+
+def test_an_instance_the_repository_resolves_is_its_own_declaration(tmp_path):
+    """A repository that says it resolves instances is asked for the instance by its whole name.
+
+    What comes back is the instance - here another file, in another format,
+    which no parameter value applied to the base could have said.
+    """
+    data = {
+        "meta": {"instanceKinds": ["part"]},
+        "objects/part/thing": {
+            "type": "stl",
+            "path": "thing/1.stl",
+            "parameters": {"format": {"type": "string", "default": "stl"}},
+        },
+        "objects/part/thing;format=step": {
+            "type": "step",
+            "path": "thing/2.step",
+            "parameters": {"format": {"type": "string", "default": "step"}},
+        },
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(data)
+    repo._repository = fake
+
+    part = repo.get_part("thing;format=step", quiet=True)
+
+    assert part is not None
+    assert "objects/part/thing;format=step" in fake.keys
+    assert part.config["type"] == "step"
+    assert part.config["orig_name"] == "thing"
+    # Normalized like any declaration, and fetched from the plugin like any of its files.
+    assert part.config["fileFrom"] == "plugin"
+    assert part.config["manufacturable"] is True
+    # Reached by its name, and not added to what the package lists.
+    assert "thing;format=step" not in (repo._object_configs.get("part") or {})
+
+
+def test_an_instance_is_named_the_way_partcad_spells_it(tmp_path):
+    """The parameters sorted, so one instance is one key however it was asked for."""
+    data = {
+        "meta": {"instanceKinds": ["part"]},
+        "objects/part/thing": {
+            "type": "stl",
+            "path": "thing/1.stl",
+            "parameters": {"file": {"type": "string", "default": "1"}, "format": {"type": "string", "default": ""}},
+        },
+        "objects/part/thing;file=2,format=step": {"type": "step", "path": "thing/2.step"},
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    repo._repository = FakeRepository(data)
+
+    part = repo.get_part("thing;format=step,file=2", quiet=True)
+
+    assert part is not None and part.config["type"] == "step"
+
+
+def _stopped_loops(monkeypatch):
+    """The fetches a synchronous call waited for with its loop stopped, by name, as they happen."""
+    stopped = []
+    original = ProjectExternalRepository._run_elsewhere
+
+    def waited_for(coroutine):
+        stopped.append(coroutine.__qualname__)
+        return original(coroutine)
+
+    monkeypatch.setattr(ProjectExternalRepository, "_run_elsewhere", staticmethod(waited_for))
+    return stopped
+
+
+# A repository that resolves the instances of parts and of assemblies itself.
+INSTANCES = {
+    "meta": {"instanceKinds": ["part", "assembly"]},
+    "objects/part/thing": {
+        "type": "stl",
+        "path": "thing/1.stl",
+        "parameters": {"format": {"type": "string", "default": "stl"}},
+    },
+    "objects/part/thing;format=step": {"type": "step", "path": "thing/2.step"},
+    "objects/assembly/frame": {
+        "type": "assy",
+        "path": "frame.assy",
+        "parameters": {"size": {"type": "int", "default": 1}},
+    },
+    "objects/assembly/frame;size=2": {"type": "assy", "path": "frame-2.assy"},
+}
+
+
+def _instance_repo(tmp_path):
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(INSTANCES)
+    repo._repository = fake
+    return repo, fake
+
+
+def test_a_part_instance_the_repository_resolves_is_fetched_without_stopping_the_loop(tmp_path, monkeypatch):
+    """The instance's declaration, and the metadata that says to ask for one, are awaited rather than waited for.
+
+    'get_part_async' used to await the base declaration and nothing else, and
+    the synchronous lookup that followed fetched the instance - and before
+    that the metadata - with the loop stopped, which is what 'pc test' over
+    //pub once hung on (see the test above about a cold plugin part).
+    """
+    repo, fake = _instance_repo(tmp_path)
+    stopped = _stopped_loops(monkeypatch)
+
+    part = asyncio.run(repo.get_part_async("thing;format=step", quiet=True))
+
+    assert part is not None and part.config["type"] == "step"
+    assert stopped == []
+    assert "objects/part/thing;format=step" in fake.keys
+
+
+def test_an_instance_asked_for_by_its_parameters_is_the_one_fetched(tmp_path, monkeypatch):
+    """Values handed over apart from the name make the same key the lookup asks for."""
+    repo, fake = _instance_repo(tmp_path)
+    stopped = _stopped_loops(monkeypatch)
+
+    part = asyncio.run(repo.get_part_async("thing", {"format": "step"}, quiet=True))
+
+    assert part is not None and part.config["type"] == "step"
+    assert stopped == []
+    assert "objects/part/thing;format=step" in fake.keys
+
+
+def test_an_assembly_instance_the_repository_resolves_is_fetched_without_stopping_the_loop(tmp_path, monkeypatch):
+    """'get_assembly_async' is to an assembly what 'get_part_async' is to a part."""
+    repo, fake = _instance_repo(tmp_path)
+    stopped = _stopped_loops(monkeypatch)
+
+    assembly = asyncio.run(repo.get_assembly_async("frame;size=2", quiet=True))
+
+    assert assembly is not None and assembly.config["path"] == "frame-2.assy"
+    assert stopped == []
+    assert "objects/assembly/frame;size=2" in fake.keys
+
+
+def test_a_package_that_resolves_no_instances_is_asked_for_none_by_the_warm_up(tmp_path, monkeypatch):
+    """The metadata says so, and nothing is fetched for an instance the parameters are applied to instead."""
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(
+        {
+            "meta": {},
+            "objects/part/widget": {"type": "step", "path": "w.step", "parameters": {"width": {"default": 2.0}}},
+        }
+    )
+    repo._repository = fake
+    stopped = _stopped_loops(monkeypatch)
+
+    part = asyncio.run(repo.get_part_async("widget;width=3", quiet=True))
+
+    assert part is not None and part.config["parameters"]["width"]["default"] == 3.0
+    assert stopped == []
+    assert not any(";" in key for key in fake.keys)
+
+
+def test_the_context_resolves_an_assembly_instance_of_a_cold_plugin_package_without_stopping_its_loop(
+    tmp_path, monkeypatch
+):
+    """Through 'Context.get_assembly_async': the packages above it warmed first, then its declarations."""
+    data = {"deps": ["motors"]}
+    data.update({"motors/" + key: value for key, value in INSTANCES.items()})
+    ctx, _, fake = _plugin_package_under_a_root(tmp_path, data)
+    monkeypatch.setattr(ctx.user_config, "internal_state_dir", str(tmp_path / "state"))
+    stopped = _stopped_loops(monkeypatch)
+
+    assembly = asyncio.run(ctx.get_assembly_async("//test/ext/motors:frame;size=2"))
+
+    assert assembly is not None and assembly.config["path"] == "frame-2.assy"
+    assert stopped == []
+    assert "motors/objects/assembly/frame;size=2" in fake.keys
+
+
+def test_a_repository_that_does_not_resolve_instances_is_never_asked_for_one(tmp_path):
+    """Without 'instanceKinds' the parameters are applied to the base, as they always were."""
+    data = {
+        "meta": {},
+        "objects/part/widget": {"type": "step", "path": "w.step", "parameters": {"width": {"default": 2.0}}},
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(data)
+    repo._repository = fake
+
+    part = repo.get_part("widget;width=3", quiet=True)
+
+    assert part is not None
+    assert not any(";" in key for key in fake.keys)
+    assert part.config["parameters"]["width"]["default"] == 3.0
+
+
+def test_an_instance_the_repository_has_no_answer_for_does_not_exist(tmp_path):
+    """A repository that resolves instances resolves all of them; one it has no answer for is not there.
+
+    Falling back to the base would build the model's default file under a name
+    that says it is another one.
+    """
+    data = {
+        "meta": {"instanceKinds": ["part"]},
+        "objects/part/widget": {"type": "step", "path": "w.step", "parameters": {"file": {"type": "string"}}},
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(data)
+    repo._repository = fake
+
+    assert repo.get_part("widget;file=typo", quiet=True) is None
+    assert "objects/part/widget;file=typo" in fake.keys
+
+
+def test_a_hit_that_is_not_a_declaration_is_listed_and_not_remembered(tmp_path):
+    """A repository may find what it cannot serve; that is a hit, not an object."""
+    data = {
+        "meta": {"searchKinds": ["part"]},
+        "search/part?q=clip": {"elsewhere-1": {"desc": "Found on a site nobody serves", "url": "https://x/1"}},
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    repo._repository = FakeRepository(data)
+
+    hits = repo.search("part", "clip")
+
+    assert [hit.desc for hit in hits] == ["Found on a site nobody serves"]
+    assert "objects/part/elsewhere-1" not in repo._request_cache
+
+
+def test_a_repository_that_searches_is_asked_with_a_query_string(tmp_path):
+    data = {
+        "meta": {"searchKinds": ["part"]},
+        "search/part?q=cable+clip&limit=2": {
+            "763622;file=1": {"type": "stl", "path": "a.stl", "desc": "Cable clip", "url": "https://x/1"},
+            "763623": {"type": "stl", "path": "b.stl", "desc": "Another clip"},
+        },
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(data)
+    repo._repository = fake
+
+    assert repo.searches("part")
+    assert not repo.searches("assembly")
+    hits = repo.search("part", "cable clip", 2)
+
+    assert [hit.name for hit in hits] == ["763622;file=1", "763623"]
+    assert hits[0].desc == "Cable clip" and hits[0].url == "https://x/1"
+    assert hits[0].project_name == "//ext" and hits[0].is_search_hit
+    # What the search said about each hit is what instantiating it reads, so
+    # the plugin is not asked about it again.
+    asked = list(fake.keys)
+    assert repo.object_config("part", "763623")["desc"] == "Another clip"
+    assert fake.keys == asked
+
+
+def test_a_search_is_never_kept_on_disk(tmp_path):
+    """A catalog moves on, so the same search asked again is asked again."""
+    data = {"meta": {"searchKinds": ["part"]}, "search/part?q=clip": {"a": {"type": "stl", "path": "a.stl"}}}
+    ctx = pc.Context("examples")
+    cache = Cache("external/test-search", ctx.user_config)
+    first = ProjectExternalRepository(ctx, "//ext", str(tmp_path), cache=cache, config_obj={})
+    first._repository = FakeRepository(data)
+    assert [hit.name for hit in first.search("part", "clip")] == ["a"]
+
+    second = ProjectExternalRepository(ctx, "//ext", str(tmp_path), cache=cache, config_obj={})
+    fake = FakeRepository(data)
+    second._repository = fake
+    assert [hit.name for hit in second.search("part", "clip")] == ["a"]
+    assert "search/part?q=clip" in fake.keys
+
+
+def test_a_search_is_scoped_to_the_subfolder(tmp_path):
+    data = {"meta": {"searchKinds": ["part"]}, "motors/meta": {"searchKinds": ["part"]}}
+    data["motors/search/part?q=nema"] = {"nema17": {"type": "step", "path": "n.step"}}
+    ctx = pc.Context("examples")
+    child = ProjectExternalRepository(ctx, "//ext/motors", str(tmp_path), subfolder="motors", config_obj={})
+    child._repository = FakeRepository(data)
+
+    assert [hit.name for hit in child.search("part", "nema")] == ["nema17"]
+
+
+def test_a_repository_that_does_not_search_is_not_asked_to(tmp_path):
+    data = {"meta": {"objectKinds": ["part"]}}
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(data)
+    repo._repository = fake
+
+    assert not repo.searches("part")
+    assert repo.search("part", "clip") == []
+    assert not any(key.startswith("search/") for key in fake.keys)
+
+
+def test_a_malformed_search_answer_is_reported_rather_than_listed(tmp_path, caplog):
+    data = {"meta": {"searchKinds": ["part"]}, "search/part?q=clip": "not a mapping"}
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    repo._repository = FakeRepository(data)
+
+    assert repo.search("part", "clip") == []
+
+
+def test_the_search_action_asks_a_repository_that_searches(tmp_path, monkeypatch):
+    """'pc search parts' hands the keyword to the repository rather than matching what it lists."""
+    from partcad.actions.shape import search_parts
+
+    data = {
+        "meta": {"searchKinds": ["part"], "objectKinds": ["part"]},
+        "objects/part": {},
+        "search/part?q=clip&limit=3": {"763622": {"type": "stl", "path": "a.stl", "desc": "Cable clip"}},
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(data)
+    repo._repository = fake
+    monkeypatch.setattr(ctx, "get_project", lambda name: repo if name == "//ext" else None)
+
+    found = search_parts(ctx, "//ext", False, "clip", None, 3)
+
+    assert [hit.name for hit in found] == ["763622"]
+    assert "objects/part" not in fake.keys
+
+
+def test_a_limit_that_is_not_a_positive_number_is_no_limit(tmp_path):
+    """A JSON-RPC caller can send anything; it is not an error, and not one hit either."""
+    data = {"meta": {"searchKinds": ["part"]}, "search/part?q=clip": {"a": {"type": "stl"}, "b": {"type": "stl"}}}
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    repo._repository = FakeRepository(data)
+    for limit in ("abc", -1, 0, None):
+        assert [hit.name for hit in repo.search("part", "clip", limit)] == ["a", "b"], limit
+    assert all("limit" not in key for key in repo._repository.keys)
+
+
+# --- the key taken apart, for the plugin -------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "key, query",
+    [
+        ("meta", {"what": "meta"}),
+        ("deps", {"what": "deps"}),
+        ("objects/part", {"what": "objects", "kind": "part"}),
+        ("objects/part/763622", {"what": "object", "kind": "part", "name": "763622", "parameters": {}}),
+        (
+            "objects/part/763622;file=a%3Bb.stl,format=stl",
+            {"what": "object", "kind": "part", "name": "763622", "parameters": {"file": "a;b.stl", "format": "stl"}},
+        ),
+        # A comma with no '=' continues the value, as 'parse_parameterized_name' reads it.
+        (
+            "objects/part/x;include=A,B",
+            {"what": "object", "kind": "part", "name": "x", "parameters": {"include": "A,B"}},
+        ),
+        ("search/part?q=cable+clip&limit=5", {"what": "search", "kind": "part", "text": "cable clip", "limit": 5}),
+        ("search/part?q=a%2Fb&limit=x", {"what": "search", "kind": "part", "text": "a/b"}),
+        ("search/part?limit=0", {"what": "search", "kind": "part", "text": ""}),
+        ("files/models/763622/a b.stl", {"what": "file", "path": "models/763622/a b.stl"}),
+    ],
+)
+def test_a_key_is_taken_apart_the_way_partcad_spells_it(key, query):
+    from partcad.project_external_repository import query_of
+
+    assert query_of(key) == query
+
+
+@pytest.fixture
+def served_by(tmp_path):
+    """'served_by(script)': the package '//models' of a package in 'tmp_path', served by the plugin 'script'.
+
+    A real 'basic' plugin, run in the sandbox like any other. PartCAD keeps a
+    plugin's answers on disk keyed on the plugin's name, so each one gets a name
+    of its own - what a test sees is what its plugin answered, not what an
+    earlier run's did - and is forgotten afterwards. The state directory stays
+    where it is: moving it would move the sandbox too, and build a whole new one
+    beside the one every other test shares.
+    """
+    made = []
+
+    def serve(script):
+        name = "plugin_" + uuid.uuid4().hex[:12]
+        (tmp_path / (name + ".py")).write_text(textwrap.dedent(script))
+        (tmp_path / "partcad.yaml").write_text(
+            "dependencies:\n  models:\n    type: external\n    plugin: :%s\n"
+            "repositories:\n  %s:\n    type: basic\n    path: %s.py\n" % (name, name, name)
+        )
+        ctx = pc.Context(str(tmp_path))
+        models = ctx.get_project("//models")
+        made.append((ctx.user_config.internal_state_dir, models.path))
+        return models
+
+    yield serve
+    for state, path in made:
+        shutil.rmtree(path, ignore_errors=True)
+        shutil.rmtree(os.path.join(state, "cache", "external", os.path.basename(path)), ignore_errors=True)
+
+
+def test_a_plugin_is_handed_the_key_taken_apart_and_the_key_as_well(served_by):
+    models = served_by("""
+        import json
+
+        if __name__ == "get":
+            key = request["key"]
+            if key == "meta":
+                output = {"result": {"instanceKinds": ["part"]}}
+            elif key.startswith("objects/part/"):
+                said = {"key": key, "query": request.get("query")}
+                output = {"result": {"type": "step", "path": "x.step", "desc": json.dumps(said)}}
+            else:
+                output = {"result": None}
+        else:
+            output = {}
+        """)
+    config = models._fetch_object_instance_config("part", "763622;file=a%3Bb.stl,format=stl")
+    said = json.loads(config["desc"])
+    assert said["key"] == "objects/part/763622;file=a%3Bb.stl,format=stl"
+    assert said["query"] == {
+        "what": "object",
+        "kind": "part",
+        "name": "763622",
+        "parameters": {"file": "a;b.stl", "format": "stl"},
+        "subfolder": "",
+    }
+
+
+def test_a_plugin_imports_partcads_model_site_toolkit_wherever_it_runs(served_by):
+    """'import plugin_models' is how a model-site plugin gets the toolkit: it is a wrapper, on the sandbox's path."""
+    models = served_by("""
+        import plugin_models
+
+        if __name__ == "get":
+            key = request["key"]
+            if key == "meta":
+                output = {"result": {"instanceKinds": ["part"]}}
+            elif key.startswith("objects/part/"):
+                q = request["query"]
+                name = plugin_models.format_name(q["name"], q["parameters"])
+                output = {"result": {"type": "step", "path": "x.step", "desc": name}}
+            else:
+                output = {"result": None}
+        else:
+            output = {}
+        """)
+    config = models._fetch_object_instance_config("part", "1;file=a%2Cb=c.stl")
+    # Decoded by PartCAD on the way in, spelled the way PartCAD spells it on the way out.
+    assert config["desc"] == "1;file=a%2Cb=c.stl"

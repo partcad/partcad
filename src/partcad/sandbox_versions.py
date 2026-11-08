@@ -94,6 +94,18 @@ MIN_PYTHON_VERSION_ZSTD_STDLIB = "3.14"
 # package that never mentions URDF grows a dependency on the ROS stack.
 URDF_PARSER_PY = "urdf-parser-py==0.0.4"
 
+# What decodes a glTF primitive compressed with 'KHR_draco_mesh_compression':
+# Python bindings to Google's own Draco decoder (github.com/seung-lab/DracoPy).
+# 2.2.0 publishes wheels for CPython 3.10 to 3.13 on Linux (x86_64 and aarch64,
+# glibc and musl), macOS (Intel and Apple silicon) and Windows, which is every
+# platform a sandbox runs on at DEFAULT_PYTHON_VERSION.
+#
+# Installed only for a glTF file that uses the extension (see
+# 'part_factory_gltf'), so a part read from any other file never needs it. The
+# other compression of the web's glTF, meshoptimizer's, has no such package for
+# every platform, and is decoded by PartCAD itself ('wrappers/meshopt_decode.py').
+DRACOPY = "DracoPy==2.2.0"
+
 # Only needed by the sandboxes that rasterize or export 2D formats.
 #
 # Deliberately held at the versions this repo already shipped, not bumped to the
@@ -114,6 +126,13 @@ REPORTLAB = "reportlab==4.4.3"
 RLPYCAIRO = "rlpycairo==0.3.0"
 SVGPATHTOOLS = "svgpathtools==1.7.2"
 EZDXF = "ezdxf==1.4.4"
+
+# What decodes the image a colour is drawn with (a texture, see
+# 'partcad.cmf_texture') where a shaded picture is drawn: every frame of a video
+# (the video file types of '//builtin/render' declare it). A PNG and a JPEG get
+# it through reportlab already. The version PartCAD itself is locked to, which
+# is the one that read the image's size and mean colour in the first place.
+PILLOW = "pillow==12.2.0"
 
 # Installing a package on the left overwrites files owned by the packages on
 # the right, so those have to be installed again afterwards -- forcibly, since
@@ -352,6 +371,10 @@ def zstd_requirement(python_version: str) -> str | None:
     Installing the backport where 'compression.zstd' exists would be harmless
     but pointless: the backport declares Python < 3.14, so pip would fail to
     resolve it and take the whole sandbox initialization down with it.
+
+    'python_version' is the sandbox interpreter's, which is not always the one
+    asked for: the 'venv' sandbox runs whatever the host has (see
+    'PythonRuntime.interpreter_version').
 
     Decided from the version alone, deliberately. A 3.14 interpreter built
     without libzstd would have no 'compression.zstd' either, but probing for it

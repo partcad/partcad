@@ -15,6 +15,7 @@ def _search(
     get_items: Callable[[Project], list[Union[Project, Shape]]],
     kind: Optional[str] = None,
     interface: Optional[str] = None,
+    limit: Optional[int] = None,
 ) -> list[Union[Project, Shape]]:
     """The objects of a package (and, recursively, of those below it) that match.
 
@@ -23,6 +24,15 @@ def _search(
     that interface or anything derived from it, read from the declarations
     through 'shape_ports.interface_index' rather than by instantiating anything.
     Both may be given, and then both have to hold.
+
+    A package whose repository plugin searches 'kind' itself (see
+    'ProjectExternalRepository.searches') is asked for 'keyword' instead, and
+    what it answers are 'SearchHit's - names to instantiate, best first, at
+    most 'limit' of them from each such package - rather than objects. Such a
+    catalog is usually one nobody can list, so there is nothing local to match.
+    An interface is not something a search of a remote catalog can be asked
+    about, so a search by interface matches what the package declares, as
+    before.
     """
     project = ctx.get_project(package)
     if project is None or project.broken:
@@ -49,6 +59,10 @@ def _search(
 
         if package is None or package.broken:
             pc_logging.warning("Skipping unavailable or broken package: %s" % package_name)
+            continue
+
+        if kind and keyword and not interface and package.searches(kind):
+            result.extend(package.search(kind, keyword, limit))
             continue
 
         items = shape_ports.implementers(ctx, package, kind, interface) if interface else get_items(package)

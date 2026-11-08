@@ -1340,6 +1340,71 @@ if "show_object" in locals():
 `,
     },
     // eslint-disable-next-line @typescript-eslint/naming-convention
+    SDF: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        'Example 1: Cube': `# Once PartCAD reloads the package after this example is added,
+# press "Save" to have the result inspected.
+
+from sdf import box
+
+result = box(5)
+
+if "show_object" in locals():
+    show_object(result, name="cube")
+`,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        'Example 2: CSG': `# Once PartCAD reloads the package after this example is added,
+# press "Save" to have the result inspected.
+#
+# The example the 'sdf' library opens its README with
+# (https://github.com/fogleman/sdf, MIT): a sphere cut down to a box, with a
+# hole through it along each axis.
+
+from sdf import X, Y, Z, box, cylinder, sphere
+
+result = sphere(10) & box(15)
+hole = cylinder(5)
+result -= hole.orient(X) | hole.orient(Y) | hole.orient(Z)
+
+if "show_object" in locals():
+    show_object(result, name="csg")
+`,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        'Example 3: Smooth blend': `# Once PartCAD reloads the package after this example is added,
+# press "Save" to have the result inspected.
+#
+# What a signed distance field does that a B-rep kernel does not: a union with
+# 'k' blends the two shapes into each other over that distance, with no fillet
+# to model.
+
+from sdf import Z, rounded_box, sphere, union
+
+base = rounded_box((20, 20, 6), 2)
+knob = sphere(6).translate(Z * 5)
+result = union(base, knob, k=3)
+
+if "show_object" in locals():
+    show_object(result, name="blend")
+`,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        'Example 4: Gear': `# Once PartCAD reloads the package after this example is added,
+# press "Save" to have the result inspected.
+
+from sdf import cylinder, slab, sphere
+
+sphere_radius = 20
+hole_radius = 10
+teeth = 16
+
+result = sphere(sphere_radius) & slab(z0=-5, z1=5).k(1)
+result -= cylinder(hole_radius).k(1)
+result -= cylinder(2.5).circular_array(teeth, 20).k(1)
+
+if "show_object" in locals():
+    show_object(result, name="gear")
+`,
+    },
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     OpenSCAD: {
         // eslint-disable-next-line @typescript-eslint/naming-convention
         'Example 1: CSG': `// Once PartCAD reloads the package after this example is added,

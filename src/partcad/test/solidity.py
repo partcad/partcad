@@ -4,6 +4,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from .. import surface as pc_surface
 from ..assembly import Assembly
 from ..sketch import Sketch
 from .test import Test
@@ -32,8 +33,10 @@ class SolidityTest(Test):
     it would condemn an entire library that works. That is reported and passed.
 
     A shape holding no solid at all - a sketch, a shell, a wire - is not inside
-    out and is passed over. That is decided on what the shape *is*, not on what
-    it asks for: there is no way for a part to turn this check off. A solid of
+    out and is passed over, and so, without asking, is a part whose type builds
+    a surface on purpose, a wall (see 'partcad.surface'). That is decided on
+    what the shape *is*, not on what it asks for: there is no way for a part to
+    turn this check off. A solid of
     negative volume is broken whatever it was meant to be, and a check an object
     can exclude itself from is a check that reports on the objects that did not
     need checking.
@@ -49,7 +52,9 @@ class SolidityTest(Test):
             return "a sketch has no solid"
         if isinstance(shape, Assembly):
             return "an assembly is checked through its parts, each of which is tested in its own right"
-        return None
+        # A part that is a surface by its type - a wall - is one on purpose, and
+        # is passed over on what it is, the way a sketch is: see 'partcad.surface'.
+        return pc_surface.not_a_body(shape)
 
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         # A sketch has no solid to be the wrong way out, and asking costs a
@@ -60,6 +65,10 @@ class SolidityTest(Test):
         # An assembly is checked through its parts, each tested in its own
         # right; the compound of a set of parts says nothing they do not.
         if isinstance(shape, Assembly):
+            return self.not_applicable(shape, self.inapplicable(shape))
+
+        # A wall is a skin with no body to it, by its type: see 'partcad.surface'.
+        if pc_surface.is_surface(shape):
             return self.not_applicable(shape, self.inapplicable(shape))
 
         try:

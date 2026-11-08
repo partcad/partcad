@@ -142,11 +142,18 @@ class CQModel(object):
         try:
             self.set_param_values(build_parameters)
             collector = ScriptCallback()
+            # What a part's script says its shapes are made of and look like, in
+            # PartCAD's own terms (see 'cmf_capture'). Imported here, where a
+            # script is about to run, rather than with this module, which is
+            # also read for its parameters alone.
+            import cmf_capture
+
             env = (
                 EnvironmentBuilder()
                 .with_real_builtins()
                 .add_entry("__name__", "__cqgi__")
                 .add_entry("show_object", collector.show_object)
+                .add_entry("set_cmf", cmf_capture.set_cmf)
                 .add_entry("debug", collector.debug)
                 .add_entry("describe_parameter", collector.describe_parameter)
                 .build()

@@ -31,6 +31,12 @@ class ShapeFactory(factory.Factory):
     # that.
     WRAPPERS: tuple[str, ...] = ()
 
+    # The versions of the code that produces the shape in *this* process, for a
+    # factory that produces it without any wrapper: '(name, version)' pairs,
+    # keyed exactly as a wrapper's 'CACHE_VERSION' is (see 'code_versions').
+    # Only 'basic' sketches and parts are built that way (see 'basic_shapes').
+    CODE_VERSIONS: tuple[tuple[str, int], ...] = ()
+
     def __init__(self, ctx, project, config) -> None:
         super().__init__()
 
@@ -93,7 +99,8 @@ class ShapeFactory(factory.Factory):
         A shape belongs to the code that made it as much as to what it is made
         of, and the code says when what it makes has changed by raising the
         'CACHE_VERSION' it states (see 'code_version'). Here that is every
-        wrapper the factory runs, 'transform.py' too when the shape is moved or
+        wrapper the factory runs (or the code in this process that stands in for
+        one, 'CODE_VERSIONS'), 'transform.py' too when the shape is moved or
         scaled on the way out ('Shape.get_wrapped'), and the repository plugin
         that serves the package, for every object a plugin serves: it built
         them, or said how. None when none of them states a version, which keeps
@@ -106,6 +113,7 @@ class ShapeFactory(factory.Factory):
         if "offset" in self.config or "scale" in self.config:
             names.append("transform.py")
         versions = [(name, code_version.wrapper(name)) for name in names]
+        versions += list(self.CODE_VERSIONS)
         plugin_version = getattr(self.project, "plugin_cache_version", 0)
         if plugin_version:
             versions.append((self.project.plugin_ref, plugin_version))

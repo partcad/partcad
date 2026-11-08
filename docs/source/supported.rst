@@ -62,15 +62,21 @@ Using CAD files:
 
 - STEP
 - BREP
+- IGES
 - STL
 - 3MF
 - OBJ
-- glTF (``.gltf`` with its buffers, or ``.glb``)
-
-Using file formats of third-party tools:
-
-- `KiCad EDA`_ (PCB)
-- FreeCAD documents (``.FCStd``), without FreeCAD: read with `cadmpeg`_, downloaded on first use
+- glTF (``.gltf`` with its buffers, or ``.glb``), compressed web assets included: Draco, meshoptimizer
+  (``EXT_meshopt_compression``, ``KHR_meshopt_compression``), quantized and GPU-instanced meshes
+- FreeCAD (``.FCStd``)
+- Autodesk Fusion (``.f3d``)
+- SolidWorks parts (``.SLDPRT``)
+- Autodesk Inventor parts (``.ipt``)
+- CATIA V5 parts (``.CATPart``)
+- ACIS and ShapeManager (``.sat``, ``.sab``, ``.smt``, ``.smb``)
+- Creo View (``.pvz``)
+- OpenUSD (``.usd``, ``.usda``, ``.usdc``, ``.usdz``), as the meshes a stage shows
+- `KiCad EDA`_ PCBs
 
 Using a part type the package defines itself (``partTypes``), including one that reads a file format of its
 own:
@@ -102,7 +108,8 @@ Assembly models (3D)
   - Generating user-friendly visual assembly instructions (PDF and HTML instruction books)
 
 - Using URDF, with links, joints and physics
-- Using a STEP file that stays the source
+- Using a CAD file that stays the source: STEP, Autodesk Fusion (``.f3d``) or Creo View (``.pvz``)
+- Using a glTF scene (``.gltf``, ``.glb``), a part per mesh, placed as its nodes place them
 - ``pc filter`` declares a second assembly made of some of the links of an existing one: a sub-assembly
   carved out of a big one without editing it by hand
 
@@ -193,7 +200,11 @@ Tooling for AI agents doing mechanical design. See :doc:`/ai_agents/mcp`.
   ``pc init``, and distributed as the ``pc`` plugin for Claude Code (see :ref:`claude-plugin`)
 
   - Generate a part, an assembly or a 2D sketch (``/pc:gen``, ``/pc:gen-part``, ``/pc:gen-assembly``,
-    ``/pc:gen-sketch``): the agent authors the CAD script and validates it by rendering
+    ``/pc:gen-sketch``): the agent settles every dimension on a sketch it measures and iterates, authors the CAD
+    script from those numbers, and validates it by rendering it and measuring its projections
+  - Lay out a scene (``/pc:gen-scene``): a room on its floor plan, a building with solid walls, doors and windows, a
+    workcell or a world to simulate in, with every object a ``basic`` primitive unless it needs more detail, placed
+    by ``location:`` and fixed to the world unless it is mobile
   - Describe an existing object (``/pc:describe``), search the catalog (``/pc:search``), add interfaces
     (``/pc:add-interfaces``)
   - Validate an object against its ``requirements:`` (``/pc:validate``): ``pc test`` for the ports,
@@ -265,7 +276,6 @@ Output types a package implements itself, for both ``render:`` and ``export:``. 
 .. _OpenSCAD: https://openscad.org/
 .. _SDF: https://github.com/fogleman/sdf
 .. _KiCad EDA: https://www.kicad.org/
-.. _cadmpeg: https://github.com/cadmpeg/cadmpeg
 .. _SolidCraft: https://github.com/bherbruck/solidcraft
 .. _partcad-solidcraft: https://github.com/partcad/partcad-solidcraft
 .. _partcad-sim-gazebo: https://github.com/partcad/partcad-sim-gazebo

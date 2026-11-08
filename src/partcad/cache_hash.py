@@ -129,7 +129,12 @@ from . import logging as pc_logging
 #      BREP payload ('ocp_serialize._holds_lone_polygon'). Under 15 it was
 #      written without one, and an entry written then would go on being
 #      served with an edge of nothing at all.
-VERSION = 16
+#  17: a payload's digest ('shape_envelope.payload_digest') is of its plain bytes, not
+#      of the zstd frame it is carried in, so that machines whose compressors
+#      write different frames key the same geometry alike. An assembly's tree
+#      names its payloads by that digest, and so does every tessellation and
+#      every request keyed by content; under 16 they were named by the frame.
+VERSION = 17
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.
@@ -570,6 +575,20 @@ class CacheHash:
 
     def set_dependencies(self, dependencies: list[str]) -> None:
         self.dependencies = dependencies
+
+    def snapshot(self) -> "CacheHash":
+        """This hash as 'get()' would finish it, as a hash of its own: this one is left as it is.
+
+        The copy has the files this one depends on hashed into it when it is
+        read, and can be continued (see 'partcad.discovered_dependencies'),
+        while this one can still be added to.
+        """
+        if self.hasher is None:
+            return CacheHash(self.name)
+        copy = CacheHash(self.name, hasher=self.hasher, cache=True)
+        copy.is_empty = self.is_empty
+        copy.set_dependencies(list(self.dependencies))
+        return copy
 
     def get(self) -> str | None:
         if not self.is_used:

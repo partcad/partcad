@@ -64,13 +64,15 @@ the graphics card back.
 Every tab that shows the object - 3D, 2D and Draft, each analysis, and Simulation - has a **view panel** down its
 right, folded away until the side bar button at the top of that edge brings it out (it stays out, or folded, on
 every tab). From the top: an **orientation gizmo** to drag the view round or click an axis to look along; buttons
-for **X**, **-X**, **Y**, **-Y**, **Z** and **-Z**, the views `pc render --view` names; a two-ended **section**
-slider per axis, starting at the faces of the object's bounding box, which PartCAD cuts the exact geometry to
-before it is drawn - the 3D view is shown again cut, and the 2D and Draft tabs draw the cut object; the
+for **X**, **-X**, **Y**, **-Y**, **Z** and **-Z**, the views `pc render --view` names; the
 **viewpoint** as editable `viewport_origin`, `viewport_up` and target fields, ready to copy into a `render:` section
 or onto `pc render --viewport-origin`, with the 3D view's **Fit** beside it - which brings the camera in or out, over
-a second, until the whole model fits however it turns, and is what showing another object does too; and the 3D
-view's **Animate**, **Auto-fit** (whether showing the same object again, after an edit, fits it as well - on by
+a second, until the whole model fits however it turns, and is what showing another object does too - and, right
+after its title, the **projection**: **Orthographic** (no perspective), **Isometric** (no perspective, from the
+nearest corner, which choosing it turns the view to) or **Perspective** (the default), on the 3D view and an
+analysis's model; a two-ended **section** slider per axis, starting at the faces of the object's bounding box, which
+PartCAD cuts the exact geometry to before it is drawn - the 3D view is shown again cut, and the 2D and Draft tabs
+draw the cut object; and the 3D view's **Animate**, **Auto-fit** (whether showing the same object again, after an edit, fits it as well - on by
 default, and off for someone zoomed in on a detail) and **Opacity**. What does not apply on a tab is disabled and says why. On the Simulation tab the viewpoint is where the plugin takes its pictures from, so choosing
 one runs the simulation again.
 

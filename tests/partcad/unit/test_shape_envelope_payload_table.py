@@ -18,6 +18,7 @@ in JSON answers. A frame ('serialize()') attaches each distinct payload once
 instead, which 'test_wrapper_frames.py' holds.
 """
 
+import hashlib
 import json
 import os
 import sys
@@ -30,10 +31,23 @@ from partcad import shape_envelope
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 import ocp_serialize  # noqa: E402
 
+
+def _payload(name: bytes, size: int = 3000) -> bytes:
+    """A real zstd frame of 'size' bytes that do not compress, as a part's payload is.
+
+    Real, because a payload is named by the digest of what it decompresses to
+    ('shape_envelope.payload_digest'), so a frame that does not decompress has no
+    name; incompressible, so that it stays kilobytes and a table of it is worth
+    writing.
+    """
+    plain = b"".join(hashlib.sha256(b"%s %d" % (name, i)).digest() for i in range(size // 32))
+    return shape_envelope.brep_compressed(plain)
+
+
 # A part's payload is kilobytes; a table of payloads shorter than their digests
 # would be larger than the document it replaces, and is not written.
-BRICK = b"\x28\xb5\x2f\xfd" + b"brick geometry " * 200
-CONE = b"\x28\xb5\x2f\xfd" + b"cone geometry " * 200
+BRICK = _payload(b"brick")
+CONE = _payload(b"cone")
 
 
 def _leaf(payload, label):
@@ -95,7 +109,7 @@ def test_nothing_repeated_is_the_document_it_always_was():
 
 def test_a_table_larger_than_what_it_replaces_is_not_written():
     """Payloads shorter than their digests: naming them would cost more than carrying them."""
-    tiny = b"\x28\xb5\x2f\xfd tiny"
+    tiny = shape_envelope.brep_compressed(b" tiny")
     tree = {"name": "x", shape_envelope.KEY_ASSEMBLY: [_leaf(tiny, "a"), _leaf(tiny, "b")]}
 
     assert shape_envelope.dumps({"wrapped": tree}, share=True) == shape_envelope.dumps({"wrapped": tree})

@@ -7,6 +7,8 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import math
+
 
 # Merge render configs (to override project's config with the part's config)
 def render_cfg_merge(a: dict, b: dict, path=[]):
@@ -94,7 +96,22 @@ def _viewport_vector(name: str, value):
     return vector
 
 
-def resolve_viewport(view=None, viewport_origin=None, viewport_up=None) -> dict:
+def _turn_vector(value):
+    """A turn, as three floats: '[x, y, z]' degrees, or one number, which is a turn about Z."""
+    if isinstance(value, bool) or isinstance(value, (str, bytes)):
+        raise ValueError("turn must be three numbers (X, Y, Z) or one, about Z - not %r" % (value,))
+    if isinstance(value, (int, float)):
+        value = [0.0, 0.0, value]
+    try:
+        vector = [float(component) for component in value]
+    except (TypeError, ValueError):
+        raise ValueError("turn must be three numbers (X, Y, Z) or one, about Z - not %r" % (value,)) from None
+    if len(vector) != 3 or not all(math.isfinite(component) for component in vector):
+        raise ValueError("turn must be three finite numbers (X, Y, Z) or one, about Z - not %r" % (value,))
+    return vector
+
+
+def resolve_viewport(view=None, viewport_origin=None, viewport_up=None, turn=None) -> dict:
     """The viewport overrides one render request asks for, as export parameters.
 
     'view' names a direction from 'VIEWS'; the two vectors say it outright, and
@@ -103,10 +120,19 @@ def resolve_viewport(view=None, viewport_origin=None, viewport_up=None) -> dict:
     request the implementation is handed, on top of the configuration - so an
     empty dict, which is what no arguments produce, changes nothing.
 
+    'turn' is how the object stands in front of that camera: turned by '[x, y,
+    z]' degrees about its own X, then Y, then Z, through its middle - the way the
+    3D view's Animate turns it, which is about Z, and the way a video's frames
+    turn it ('turn' in '//builtin/render'). It goes with any viewport: '--view
+    front --turn 0,0,45' is the front view of the object turned an eighth of a
+    turn.
+
     Raises:
         ValueError: an unknown view name, or a vector that is not three numbers.
     """
     overrides = {}
+    if turn is not None:
+        overrides["turn"] = _turn_vector(turn)
     if view is not None:
         # Checked before the lookup: an unhashable value would raise TypeError
         # there, and only ValueError is turned into a usage error by the

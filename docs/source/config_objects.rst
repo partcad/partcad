@@ -190,6 +190,11 @@ manufacturing, say -- but those are not part of this section.
           //pub/std/metric/m3:m3-thru: null
         physics:
           mass: "<0.05"
+        match:
+          :bracket-v1:        # the bracket this one replaces
+            volume: 10%       # within 10% of its volume
+            displacement: 2%  # within 2% of what it displaces
+            mass: 5%          # and within 5% of what it weighs
 
 ``features``
   What the object has to have or do: a name for each, and a sentence saying
@@ -225,7 +230,22 @@ manufacturing, say -- but those are not part of this section.
   an assembly one of whose parts weighs nothing PartCAD knows, since what the
   others add up to is not what it weighs.
 
-``pc test`` checks the last three against the model -- its ``requirements``
+``match``
+  How closely the object's volume, displacement and mass have to match another
+  object's, in percent of that object's, either way: "no more than 5% heavier or
+  lighter than the bracket it replaces". Keyed by the other object's name,
+  resolved from this object's package the way any reference is (``:bracket-v1``
+  is a sibling); each is a mapping of ``volume``, ``displacement`` and ``mass``
+  -- ``weight`` is accepted for ``mass`` -- to a percentage, written ``5`` or
+  ``"5%"``. The numbers are the ones ``pc compare <that object> <this one>``
+  reports (see :ref:`compare`): the volume in mm³, an assembly's its parts' added
+  up; the displacement in mm³, the volume and every void sealed inside it; and
+  the mass as ``physics`` resolves it. Only a part or an assembly has them, so
+  naming a sketch fails the requirement, and so does an amount PartCAD cannot
+  find out -- of either object. The displacement is measured in a sandbox, and
+  only of the objects a ``displacement`` names.
+
+``pc test`` checks the last four against the model -- its ``requirements``
 check, ``pc test -f requirements`` to run it alone -- and says, for each one
 that is not met, what it found instead.
 
@@ -296,7 +316,7 @@ Earlier spellings
 
 The section used to be free-form text, and that is still read -- as features: a
 paragraph is the feature ``general``, a list is one feature per item, and a key
-of the mapping that is not one of the four above is a feature named after it.
+of the mapping that is not one of the five above is a feature named after it.
 
 .. code-block:: yaml
 
@@ -508,6 +528,12 @@ gives it a name of its own:
       source: :logo
       with:
         exploded: true
+
+An exploded assembly is never manufacturable, whatever it or its package says:
+it is a picture of the assembly, with every item where nothing holds it, not one
+more thing to make. So ``logo;exploded=true`` and ``logo_exploded`` above drop
+``manufacturable``, and ``pc test`` treats them as it treats anything marked
+``manufacturable: false``. ``logo`` itself keeps its own.
 
 Only the ``assy`` type accepts it, because only an ASSY file says what each item
 is connected to; declaring ``exploded`` on an assembly read from a STEP file is

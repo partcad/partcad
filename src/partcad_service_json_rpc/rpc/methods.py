@@ -59,6 +59,15 @@ _OPERATIONS = {
     "manufacturing.details": operations.manufacturing_details,
     "manufacturing.plan": operations.manufacturing_plan,
     "supply.quote": operations.supply_quote,
+    "supply.prices": operations.supply_prices,
+    # Not a CLI command: what the IDE's CMF tab is drawn from -- an object's
+    # colour, material and finish as 'pc info' says them, item by item, and
+    # what a colour, a material or a finish the explorer lists is.
+    "cmf.info": operations.cmf_info,
+    # Not a CLI command: where each material of an object is, cluster by
+    # cluster -- what the IDE's 3D view writes when "Materials" is ticked, and
+    # what 'pc render --with-materials' writes on a picture.
+    "cmf.clusters": operations.cmf_clusters,
     # Not a CLI command: what the IDE's Requirements tab is drawn from. Its
     # verdicts are 'pc test -f requirements', by the same code.
     "requirements.check": operations.requirements_check,
@@ -72,6 +81,9 @@ _OPERATIONS = {
     "cae.list": operations.cae_list,
     "cam.route": operations.cam_route,
     "search.objects": operations.search_objects,
+    # 'pc login': one step of a plugin's login. The browser it may ask for is
+    # opened by the client, never here (see 'operations.plugin_login').
+    "plugin.login": operations.plugin_login,
     "render.objects": operations.render_objects,
     # Not CLI commands: one object to one file, returned as bytes, and the file
     # types a package declares -- the IDE's 2D and Draft tabs, which show a file
@@ -105,6 +117,10 @@ _OPERATIONS = {
     "test": operations.test,
     "info": operations.info,
     "info.object": operations.info_object,
+    # 'pc compare <reference> <current>': one part or assembly read against
+    # another. Not 'info.object' with a second argument: it can drive a CAD
+    # wrapper (the surface distance), and it answers with a verdict.
+    "compare.objects": operations.compare_objects,
     "context.create": operations.context_create,
     "activate": operations.activate,
     "version": operations.version,

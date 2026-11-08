@@ -20,6 +20,10 @@
 // object - what it asked for and will now drop is cancelled, not left running
 // on the daemon.
 //
+// And when a colour, a material or a finish is opened: there is nothing for
+// PartCAD to draw, so the host shows it itself, and its CMF tab asks the daemon
+// by the kind, which is the only thing that finds a declaration.
+//
 
 import * as assert from 'assert';
 import * as vscode from 'vscode';
@@ -63,6 +67,139 @@ suite('The Digital Thread host, asked to render', () => {
         assert.deepStrictEqual(sent[0].filter, { head_half_1: {} });
         assert.strictEqual(sent[0].withPorts, true);
         assert.deepStrictEqual(sent[0].ports, ['hold']);
+        // No callout box said anything a render does not do anyway.
+        assert.strictEqual(sent[0].withComponentNames, undefined);
+        assert.strictEqual(sent[0].withPortNames, undefined);
+        viewer.dispose();
+    });
+
+    test('passes the callout boxes on to the daemon', async () => {
+        const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
+        const host = viewer as unknown as {
+            lastShow: unknown;
+            fetchTab(message: Record<string, unknown>): Promise<void>;
+        };
+        host.lastShow = { type: 'show', name: 'logo', kind: 'assembly', package: '//pkg' };
+        sent.length = 0;
+
+        await host.fetchTab({
+            tab: '2d',
+            token: 2,
+            format: 'svg',
+            withPorts: true,
+            withComponentNames: true,
+            withComponentPrices: true,
+            withMaterials: true,
+            withPortNames: false,
+            withInterfaceNames: false,
+        });
+
+        assert.strictEqual(sent.length, 1);
+        assert.strictEqual(sent[0].withComponentNames, true);
+        assert.strictEqual(sent[0].withComponentPrices, true);
+        assert.strictEqual(sent[0].withMaterials, true);
+        assert.strictEqual(sent[0].withPortNames, false);
+        assert.strictEqual(sent[0].withInterfaceNames, false);
+        viewer.dispose();
+    });
+});
+
+suite('The Digital Thread host, asked what the components cost', () => {
+    const asked: Record<string, unknown>[] = [];
+    let registration: vscode.Disposable | undefined;
+
+    suiteSetup(() => {
+        registration = vscode.commands.registerCommand('partcad.componentPrices', (args: Record<string, unknown>) => {
+            asked.push(args);
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            return { object: '//pkg:logo', prices: { '//pkg:bolt': { price: 0.25, currency: 'USD' } } };
+        });
+    });
+
+    suiteTeardown(() => registration?.dispose());
+
+    test("asks under the Design group's id, about the object on screen, and posts the answer back", async () => {
+        const posted: Record<string, unknown>[] = [];
+        const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
+        const host = viewer as unknown as {
+            lastShow: unknown;
+            panel: unknown;
+            fetchTab(message: Record<string, unknown>): Promise<void>;
+        };
+        host.lastShow = { type: 'show', name: 'logo', kind: 'assembly', package: '//pkg' };
+        host.panel = {
+            webview: {
+                postMessage: (message: Record<string, unknown>) => {
+                    posted.push(message);
+                    return Promise.resolve(true);
+                },
+            },
+            dispose: () => undefined,
+        };
+
+        await host.fetchTab({ tab: 'design', token: 7 });
+
+        assert.strictEqual(asked.length, 1);
+        assert.strictEqual(asked[0].pkg, '//pkg');
+        assert.strictEqual(asked[0].name, 'logo');
+        assert.strictEqual(asked[0].kind, 'assembly');
+        const answer = posted.find((message) => message.type === 'tabData');
+        assert.strictEqual(answer?.tab, 'design');
+        assert.strictEqual(answer?.token, 7);
+        assert.deepStrictEqual(answer?.data, {
+            object: '//pkg:logo',
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            prices: { '//pkg:bolt': { price: 0.25, currency: 'USD' } },
+        });
+        viewer.dispose();
+    });
+});
+
+suite('The Digital Thread host, asked where each material is', () => {
+    const asked: Record<string, unknown>[] = [];
+    let registration: vscode.Disposable | undefined;
+    const cluster = { material: '//pkg:abs', name: 'abs', at: [5, 0, 0], nodes: [[0], [1]], faces: 12 };
+
+    suiteSetup(() => {
+        registration = vscode.commands.registerCommand('partcad.materialClusters', (args: Record<string, unknown>) => {
+            asked.push(args);
+            return { object: '//pkg:logo', distance: 10, clusters: [cluster] };
+        });
+    });
+
+    suiteTeardown(() => registration?.dispose());
+
+    test("asks under the 3D tab's id, about the object on screen, and posts the answer back", async () => {
+        const posted: Record<string, unknown>[] = [];
+        const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
+        const host = viewer as unknown as {
+            lastShow: unknown;
+            panel: unknown;
+            fetchTab(message: Record<string, unknown>): Promise<void>;
+        };
+        host.lastShow = { type: 'show', name: 'logo', kind: 'assembly', package: '//pkg' };
+        host.panel = {
+            webview: {
+                postMessage: (message: Record<string, unknown>) => {
+                    posted.push(message);
+                    return Promise.resolve(true);
+                },
+            },
+            dispose: () => undefined,
+        };
+
+        await host.fetchTab({ tab: '3d', token: 9, section: { z: [0, 5] } });
+
+        assert.strictEqual(asked.length, 1);
+        assert.strictEqual(asked[0].pkg, '//pkg');
+        assert.strictEqual(asked[0].name, 'logo');
+        assert.strictEqual(asked[0].kind, 'assembly');
+        // What the view is cut to, so that only what is drawn is called out.
+        assert.deepStrictEqual(asked[0].section, { z: [0, 5] });
+        const answer = posted.find((message) => message.type === 'tabData');
+        assert.strictEqual(answer?.tab, '3d');
+        assert.strictEqual(answer?.token, 9);
+        assert.deepStrictEqual(answer?.data, { object: '//pkg:logo', distance: 10, clusters: [cluster] });
         viewer.dispose();
     });
 });
@@ -495,6 +632,90 @@ suite('The Digital Thread host, moving on', () => {
         );
         asked.forEach((call) => call.answer());
         await Promise.all(pending);
+        viewer.dispose();
+    });
+});
+
+suite('The Digital Thread host, and CMF', () => {
+    const sent: Record<string, unknown>[] = [];
+    let registration: vscode.Disposable | undefined;
+
+    suiteSetup(() => {
+        registration = vscode.commands.registerCommand('partcad.cmfInfo', (args: Record<string, unknown>) => {
+            sent.push(args);
+            return { object: `${args.pkg}:${args.name}`, kind: args.kind, items: [] };
+        });
+    });
+
+    suiteTeardown(() => registration?.dispose());
+
+    /** A host whose webview records what it is posted. */
+    function host(): {
+        viewer: PartcadViewer;
+        internals: { lastShow: unknown; fetchTab(message: Record<string, unknown>): Promise<void> };
+        posted: Record<string, unknown>[];
+    } {
+        const posted: Record<string, unknown>[] = [];
+        const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
+        const internals = viewer as unknown as {
+            lastShow: unknown;
+            panel: unknown;
+            fetchTab(message: Record<string, unknown>): Promise<void>;
+        };
+        internals.panel = {
+            webview: {
+                postMessage: (message: Record<string, unknown>) => {
+                    posted.push(message);
+                    return Promise.resolve(true);
+                },
+            },
+            dispose: () => undefined,
+        };
+        return { viewer, internals, posted };
+    }
+
+    test('a declaration is shown with no object, its package and its kind, and asks for no tab', () => {
+        const { viewer, posted } = host();
+
+        viewer.showDeclaration('//pkg', 'Medium Stone Grey', 'color');
+
+        assert.strictEqual(posted.length, 1);
+        const { type, name, kind, package: pkg, object, tab } = posted[0];
+        assert.deepStrictEqual(
+            { type, name, kind, pkg, object, tab },
+            { type: 'show', name: 'Medium Stone Grey', kind: 'color', pkg: '//pkg', object: null, tab: null },
+        );
+        viewer.dispose();
+    });
+
+    test("the CMF tab asks about what is shown by its kind: a declaration's, or an object's", async () => {
+        const { viewer, internals, posted } = host();
+
+        viewer.showDeclaration('//pkg', 'satin', 'finish');
+        await internals.fetchTab({ tab: 'cmf', token: 1 });
+        internals.lastShow = { type: 'show', name: 'housing', kind: 'part', package: '//pkg' };
+        await internals.fetchTab({ tab: 'cmf', token: 2 });
+        // Shown by a PartCAD that did not say what it is: the daemon looks it up.
+        internals.lastShow = { type: 'show', name: 'housing', package: '//pkg' };
+        await internals.fetchTab({ tab: 'cmf', token: 3 });
+
+        assert.deepStrictEqual(
+            sent.map((args) => [args.pkg, args.name, args.kind]),
+            [
+                ['//pkg', 'satin', 'finish'],
+                ['//pkg', 'housing', 'part'],
+                ['//pkg', 'housing', undefined],
+            ],
+        );
+        const answers = posted.filter((message) => message.type === 'tabData');
+        assert.deepStrictEqual(
+            answers.map((message) => [message.tab, message.token]),
+            [
+                ['cmf', 1],
+                ['cmf', 2],
+                ['cmf', 3],
+            ],
+        );
         viewer.dispose();
     });
 });

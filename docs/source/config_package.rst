@@ -559,7 +559,14 @@ or a new piece of metadata needs no new API:
   the whole repository
 - ``deps`` -- the names of the child packages
 - ``meta`` -- package-level properties (``desc``, ``render``, ``manufacturable``,
-  ``suppliers``, ...), and ``objectKinds`` (see below)
+  ``suppliers``, ...), and ``objectKinds``, ``searchKinds`` and ``instanceKinds``
+  (see below)
+- ``search/<kind>?q=<text>&limit=<n>`` -- the objects of a kind the repository
+  finds for a search, as ``{name: config, ...}``, best first. Asked only of a
+  package whose ``meta`` lists the kind under ``searchKinds``
+- ``objects/<kind>/<name>;<param>=<value>,...`` -- one parametrized instance,
+  resolved by the repository itself. Asked only of a package whose ``meta``
+  lists the kind under ``instanceKinds``
 - ``files/<path>`` -- the base64-encoded content of a file an object references
   by ``path``. A plugin-backed package has no source tree, so a file-backed
   object's file is fetched from the plugin and materialized into the package's
@@ -591,6 +598,70 @@ plugin that says nothing is asked about everything, as before. It is read out
 of the metadata PartCAD has already fetched and is never worth a request of its
 own, so a package reached on its own -- rather than through a traversal, which
 reads ``meta`` for every package as it goes -- is queried exactly as it was.
+
+Search a catalog nobody can list
+--------------------------------
+
+``pc search parts -k bolt`` matches the keyword against what each package
+declares. A repository whose catalog is a model site's, or anything else too
+large to enumerate, declares nothing to match -- so it may search its catalog
+itself. A package's ``meta`` says which kinds it searches:
+
+.. code-block:: json
+
+  {"desc": "Things on Thingiverse", "objectKinds": ["part"], "searchKinds": ["part"]}
+
+and the search is then asked of the repository, as a query string:
+
+.. code-block:: text
+
+  search/part?q=cable+clip&limit=20
+
+The answer has the shape of an enumeration, ``{name: config, ...}``, in the
+order the repository ranks the hits, and at most ``limit`` of them when one is
+given. A name the package resolves is a hit with a declaration, and ``pc inspect
+<package>:<name>`` of it is the hit. A repository may also report what it found
+and cannot serve -- a config with a ``desc`` and a ``url`` and no ``type`` -- which
+is listed, and is not an object. A name may carry parameters
+(``763622;file=1234567``), which is how a hit that is one file of a model says
+which, so a hit is the complete instruction for getting its geometry. Parameters
+are written as PartCAD writes them: sorted by name, separated by commas.
+
+A search is never cached on disk -- a catalog moves on, and the queries are
+whatever anyone typed -- but each declaration it returned is kept for the rest of
+the process, so instantiating a hit asks the repository nothing more. A search by
+``--interface`` is matched against what the package declares, as before.
+
+Resolve an instance
+-------------------
+
+A parametrized name -- ``bolt;length=20`` -- is ordinarily the base declaration
+with the parameters' defaults set to the values the name gives. That cannot
+express an instance that differs in more than its values: another file of a
+model, or the same model in another format, is a different ``path`` and a
+different ``type``. A package's ``meta`` may therefore list the kinds whose
+instances the repository resolves itself:
+
+.. code-block:: json
+
+  {"objectKinds": ["part"], "instanceKinds": ["part"]}
+
+PartCAD then asks for the instance by its whole name before deriving anything
+from the base:
+
+.. code-block:: text
+
+  objects/part/763622;file=1234567,format=stl
+
+and a declaration that comes back is the instance, created as it is: its
+parameters, if it declares any, should already carry the values the name gives,
+which also makes them part of its cache key. A repository that resolves the
+instances of a kind resolves all of them, and one it has no answer for does not
+exist: falling back to the base would build ``model;file=<a typo>`` as the
+model's default file, under a name that says it is another one. The base
+declaration is still asked for, and should declare the parameters an instance
+may be given, so that ``pc info`` and the canonical spelling of a name both know
+them.
 
 Responses are cached per key (in memory and on disk), so a repository that is
 slow or remote is queried as little as possible. See

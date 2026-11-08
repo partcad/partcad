@@ -10,11 +10,15 @@ from pathlib import Path
 import rich_click as click
 
 import partcad_utils.logging as pc_logging
+from partcad_client import object_types
 
 from ...commands.convert.part import SUPPORTED_CONVERT_FORMATS
 from ...service import run
 
-# part_type: [file_extensions]
+# part_type: [file_extensions], lowercased: the extension of the file given is
+# compared lowercased. The native CAD formats come from the one table the
+# client keeps of the part types PartCAD ships as declarations
+# (`partcad_client.object_types`), each with its other spellings ('.igs').
 SUPPORTED_IMPORT_FORMATS_WITH_EXT = {
     "step": ["step", "stp"],
     "brep": ["brep"],
@@ -28,6 +32,10 @@ SUPPORTED_IMPORT_FORMATS_WITH_EXT = {
     "build123d": ["py"],
     "sdf": ["py"],
     "chili3d": ["chili"],
+    **{
+        part_type: list(object_types.part_type_extensions(part_type))
+        for part_type in object_types.BUILTIN_PART_TYPE_EXTENSION
+    },
 }
 
 

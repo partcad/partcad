@@ -256,6 +256,41 @@ Host commands
 ``pc config``
   Show the current user configuration.
 
+``pc login <package>:<plugin>``
+  Sign in to what a plugin is a client of -- a model site a repository plugin serves, a store a provider
+  orders from -- and keep the credentials. The plugin's own ``login`` (see :ref:`plugin-login`) checks the
+  credentials it has first; when the site no longer takes them it asks for your browser, and ``pc login`` opens
+  your default one, in a profile of PartCAD's own (``~/.partcad/browser/<browser>``) with PartCAD's extension in
+  it. The extension first asks, on a page of its own, whether you want this login -- naming the site, what it
+  would take and where it would go -- and opens the site's sign-in once you press **Continue**. Sign in there: the
+  extension picks up what that leaves behind -- a cookie, a token, an API key on a page, pointing at what to click
+  where the plugin says -- hands it to a listener ``pc login`` runs on ``127.0.0.1``, and closes the window.
+
+  .. code-block:: shell
+
+    pc login //pub/universe/grabcad:grabcad_repo
+    pc login --check //pub/universe/grabcad:grabcad_repo   # only check; exits non-zero if they do not work
+    pc login --agent //pub/universe/grabcad:grabcad_repo   # nobody at the screen: print what to do instead
+    pc login --agent --set session=... //pub/universe/grabcad:grabcad_repo
+
+  The credentials are saved in your configuration file (``~/.partcad/config.yaml``, made readable by you only)
+  under ``parameters``, as your overrides of the plugin's parameters -- the same place ``--extra-param`` and a hand
+  written override go -- so every later command hands them to the plugin. ``--browser`` (``PC_LOGIN_BROWSER``)
+  picks another browser by path or by name (``chrome``, ``edge``, ``brave``, ``chromium``, ``firefox``), and
+  ``--manual`` opens none: it prints the address of a page where what the site gave you is pasted by hand, which
+  is also where a browser without the extension ends up. A default browser the extension cannot go into is
+  passed over for an installed one it can.
+
+  ``--agent`` (or ``--non-interactive``; ``--interactive`` is the default) is for an AI agent or a script with
+  nobody at the screen: no browser is opened, and what a person would do in it -- where to sign in, what to copy,
+  any other way in the plugin knows of, and the ``pc login --agent ... --set NAME=VALUE`` command that hands it
+  over -- is printed instead, with exit status 3. ``--set`` hands values over in either mode; the plugin checks
+  them with the site before anything is saved. ``pc mcp``'s ``login`` tool works this way by default.
+
+  The browser, the listener and the configuration file are this machine's, so they are the client's; the plugin
+  runs on the daemon, like every plugin, and is asked one step of its login at a time (``plugin.login``). There is
+  no daemon method that opens a browser.
+
 ``pc system``
   Manage PartCAD's system-wide state and settings:
 
@@ -439,16 +474,36 @@ Object commands
   it when it is first needed. A fetch that fails adds nothing, because a declaration written without the hash
   is the unpinned one this exists to avoid.
 
+  ``pc add part <type> <file>`` takes the part's type first: a script (``cadquery``, ``build123d``,
+  ``sdf``, ``scad``, ``chili3d``), a file PartCAD reads itself (``step``, ``brep``, ``stl``, ``3mf``,
+  ``obj``, ``gltf`` -- compressed web assets included, see :ref:`gltf-files`), or one of the CAD file formats
+  PartCAD ships as declarations (``fcstd``,
+  ``f3d``, ``sldprt``, ``ipt``, ``catpart``, ``sat``, ``pvz`` -- read through cadmpeg -- ``iges``, read
+  by OpenCASCADE, and ``usd``, an OpenUSD stage, read by usd-core; see :ref:`cad-files`). The part
+  is named after the file, without its extension. Where the file is ``<name>.<extension>`` with the
+  extension spelled as the type declares it -- ``design.FCStd``, ``bracket.SLDPRT``, ``bracket.CATPart`` --
+  the declaration names no ``path``; any other spelling of it keeps one: another case (``design.fcstd``), or
+  another extension of the same format (``plate.igs`` for ``iges``, ``body.sab``, ``.smt`` or ``.smb`` for
+  ``sat``, ``part.stp`` for ``step``, ``model.glb`` for ``gltf``). Adding a part reads nothing: a file that does not hold what its type
+  says -- for the native formats, one that does not read into a whole solid -- is added, and fails when the
+  part is built.
+
+  .. code-block:: shell
+
+    pc add part f3d controller.f3d       # parts: {controller: {type: f3d}}
+    pc add part iges plate.igs           # parts: {plate: {type: iges, path: plate.igs}}
+
 ``pc import``
   Import an existing object into a package. Subcommands: ``part`` (import an existing part and optionally
-  convert its format), ``assembly`` (import an assembly from a file, creating the parts and an Assembly
-  YAML file), and ``scene`` (import an arrangement file -- a Gazebo world, an MJCF model -- creating the
+  convert its format), ``assembly`` (import an assembly from a STEP, glTF or URDF file, creating the parts
+  and an Assembly YAML file: a glTF file becomes a ``gltf`` part per mesh, in its materials' colours), and
+  ``scene`` (import an arrangement file -- a Gazebo world, an MJCF model -- creating the
   parts and an Assembly YAML scene). ``pc import scene -t`` names the format where the file's extension does
   not say, or says the wrong thing, and is how a format a *package* reads is named: ``sim-gazebo:world``,
   ``sim-mujoco:mjcf``.
   ``pc import`` is a one-shot conversion; to keep reading the source file itself,
-  declare it as an assembly of the ``step`` type or a scene of that reader's type instead (see
-  :ref:`assembly_step` and :ref:`scenes`).
+  declare it as an assembly of the ``step`` or ``gltf`` type or a scene of that reader's type instead (see
+  :ref:`assembly_step`, :ref:`assembly-gltf` and :ref:`scenes`).
 
 ``pc test``
   Run tests on a part, assembly, or scene. Name the package as ``-P <package>...`` to test the packages
@@ -584,6 +639,68 @@ Object commands
   Reporting every layer rather than only the ones a sketch reads is deliberate: a layer filter that matched
   nothing and a layer that is not in the file both produce a sketch with nothing in it, and this is what
   tells them apart.
+
+.. _compare:
+
+``pc compare <reference> <current>``
+  Read one part or assembly against another: the second, the *current* object, against the first, the
+  *reference* it is held to -- a redesign against the part it replaces, a generated part against the STEP file it
+  was asked to reproduce, a printed part's scan against its model. Each name is resolved the way any object's is
+  (``-P`` selects the package of a bare one), and an object with parameters is named with its values,
+  ``'bolt;length=10'``::
+
+      pc compare bracket-v1 bracket-v2
+      pc compare //pub/std/metric/cqwarehouse:fastener/hexhead-iso4017 :my-bolt --surface-distance 0.5
+      pc compare :bracket-v1 :bracket-v2 --max-mass-difference 2 --json
+      pc compare :housing-v1 :housing-v2 --max-displacement-difference 1
+
+  It reports, for each of the two and then the difference (the current one's less the reference's, and as a
+  percentage of the reference's):
+
+  - the **volume**, in mm³ -- a part's measured solid, an assembly's parts added up, as ``pc info`` reports it;
+  - with ``--displacement``, the **displacement**, in mm³ -- what the object would push aside if it were
+    submerged: its volume and every void sealed inside it, which a hole right through it is not, since water
+    reaches that. Each solid displaces what its outer shell encloses, and an assembly what its parts' solids
+    each do, added up -- a space only several of them close off together is not in any one of them. Two
+    objects of the same material and different voids have the same volume and different displacements, and it
+    is the displacement that says whether one fits where the other did. It is measured in a sandbox, so only
+    when it is asked for; the JSON says how many sealed voids each holds (``cavities``);
+  - the **mass**, in kg -- stated, or worked out from the volume and the material's density (see
+    :ref:`properties`). A mass that cannot be known is said to be, with the reason, rather than given one; an
+    assembly some of whose parts weigh nothing known has none here, because the total of the others held
+    against another object's would be a difference that is not there;
+  - the **tolerance** each is to be made to (its ``tolerance:``, or what its STEP file states), and the two
+    added up: the **allowance**, how far apart two surfaces each made within its own tolerance can be. A
+    tolerance nobody stated counts as nothing; a STEP file that tolerances each feature differently states no
+    one number, and there is then no allowance.
+
+  ``--surface-distance <mm>`` also measures how far the current object's **surface** is from the reference's.
+  Points are chosen on the reference no two of them closer than that many millimetres: every vertex, whatever
+  the spacing; then points along every edge, each at least that far from every point already taken; then points
+  over every face, the same way. Each is measured along the reference's normal there, out of its material: the
+  distance is how far along that line the current object's surface is -- positive where the current object
+  stands outside the reference, negative where it stands inside. A vertex or a point of an edge is on several
+  faces and is measured along each of their normals, the nearest answer counting, so a box grown by a millimetre
+  is a millimetre away at its corners too. A point none of whose normals meets the current object -- the rim of
+  a reference larger than it -- is measured to its nearest point instead, and counted apart. The report gives
+  how many points were measured where, the signed minimum and maximum, the mean and the RMS, the median, 95th and
+  99th percentiles of the distance, how many points are further apart than the allowance, and where the furthest
+  ``--worst`` of them are (ten by default).
+
+  Choosing the points is linear in the number of candidates (a spatial hash answers "is anything closer than
+  the spacing" for each), and every point is one intersection in the sandbox, so the spacing is what decides how
+  long it takes: about the surface's area over the spacing squared points. A spacing that would need more than
+  200,000 points is refused, and the message says which spacing would do. The two objects are compared where
+  they are: nothing moves one onto the other, so two of the same shape whose origins differ are as far apart
+  as their origins are.
+
+  It exits non-zero when something it was held to does not hold: the surface, whenever it was measured, against
+  the allowance -- every point within it, and none with nothing to measure to -- and ``--max-volume-difference``,
+  ``--max-displacement-difference`` (which measures the displacements, as ``--displacement`` does) and
+  ``--max-mass-difference`` (in percent of the reference's) when they are given. Held to nothing, it is a
+  report and exits zero. ``--json`` prints the whole comparison as one JSON object on standard output. The same
+  limits can be written into the current object's declaration, as a ``match:`` requirement that ``pc test``
+  checks -- see :ref:`requirements`.
 
 ``pc bom``
   Print the bill of materials of a part, an assembly or a scene: what has to be procured to have it, with how
@@ -1070,6 +1187,40 @@ Object commands
   frames that should have met and did not. On its own it asks for nothing; it says how deep the three options
   above reach.
 
+  ``--with-component-names`` and ``--with-component-prices`` put a callout on every *component* -- every part,
+  wherever the object places it -- joined by a line to the middle of it and laid out around the object with the
+  port and interface names. The name is what the assembly calls that link (the row the VS Code viewer lists it
+  as), and the price is the component's share of what the object costs to buy: the cheapest quote of each thing
+  to order, as ``pc supply quote`` and the viewer's Buy tab find it, divided over the components it is for -- a
+  box of a hundred bolts for an assembly of eight is an eighth of a box each, and a part cut from stock costs
+  its piece of the stock. An assembly sold assembled is priced as one thing to order, so it gets a callout of its
+  own with its price, in the middle of everything it holds, and the parts inside it get none. Asking for both
+  writes the name over the price in one callout. A price in dollars is
+  written ``$12.50`` on the picture, as the VS Code viewer writes it, and any other currency by its code
+  (``12.50 EUR``). A component nobody quoted has no price rather than a price of nought, and the log lists every
+  price drawn, each with its currency's code. Asking for prices is asking every supplier for a quote, so it takes
+  as long as ``pc supply quote`` does.
+
+  .. code-block:: shell
+
+    pc render -t png --with-component-names --with-component-prices -O ./ logo
+
+  ``--with-materials`` puts a callout on every *cluster* of a material, naming it: the faces of one material, of
+  one part or of several, each of which touches another of them or is closer to it than
+  ``materialClusterDistance`` in the user configuration (``PC_MATERIAL_CLUSTER_DISTANCE``, 10 millimetres unless it
+  says otherwise; ``0`` gathers only what touches). One callout per cluster rather than one per face or per part,
+  so a frame of twelve welded steel tubes says "steel" once, pinned to the frame where it is nearest the middle of
+  it. What a face is made of is what its part's CMF says (see :doc:`/config_cmf`) - its solid's material, else its
+  own (a wall is a sheet with no solid) - and a face that states none is in no cluster.
+
+  .. code-block:: shell
+
+    pc render -t png --with-materials -O ./ logo
+
+  ``--without-port-names`` and ``--without-interface-names`` draw the ports and the interfaces without their
+  names, for a picture that has too many of them to read; the names are written by default. With ``--filter``,
+  every callout is on what the filter keeps and nothing else.
+
   The options apply to whichever format is being written — the projection is the same one underneath ``svg``,
   ``png``, ``jpeg`` and ``dxf`` — and a package can ask for the same thing permanently, by declaring
   ``with_ports:``, ``with_interfaces:`` or ``with_internals:`` on a file type of its own (see
@@ -1101,6 +1252,32 @@ Object commands
   the package and the object configured, and a file type that does not project (``step``, ``readme``, an
   assembly instruction book) never reads them. PartCAD is Z-up with ``+Y`` pointing away from the front view,
   which is what puts ``+X`` on the right of it.
+
+  ``--turn`` turns the object in front of that camera instead of moving the camera: by ``X,Y,Z`` degrees about
+  the object's own axes, through its middle, or by one number about Z — the way the 3D view's Animate turns it.
+  It goes with any of the three above, and is the ``turn`` of the file type:
+
+  .. code-block:: shell
+
+    pc render -t svg --view front --turn 0,0,45 -O ./ bracket
+
+  ``--style shaded`` draws a ``png`` or a ``jpeg`` lit and in perspective, as the Digital Thread's 3D view draws
+  it, instead of as the projection's lines; ``--size`` (``512x512`` for a picture, or a name such as ``square``
+  or ``reels``) and ``--background`` go with it. That is also how every frame of a video is drawn, so a frame is
+  a picture of its own — see :ref:`shaded-pictures` and :ref:`videos`.
+
+  ``--reproducible`` and ``--no-reproducible`` are the file type's ``reproducible`` passed the same way: which
+  hidden-line algorithm draws the projection for this one run. The exact one works from the surfaces and draws a
+  curve as itself; the polygonal one -- the default, unless the package says otherwise -- works from a
+  triangulation and draws a curve as a run of short lines, in seconds on a model the exact one takes minutes over.
+  Left off, the file type decides. The two draw one geometry as different shapes and different numbers of them,
+  which is why a drawing that will be measured is drawn both ways and the two read against each other (the
+  ``gen-sketch`` skill's ``measure.py compare`` does that).
+
+  .. code-block:: shell
+
+    pc render -t svg --view top --reproducible -O ./exact bracket
+    pc render -t svg --view top --no-reproducible -O ./polygonal bracket
 
   A rendered file is named after the object, so several views of one object go into directories of their own
   rather than over each other:
@@ -1212,10 +1389,10 @@ instead.
   one, and ``-p <name>=<value>`` to set parameters.
 
   One flag per tab of the viewer opens it on that tab, named ``--<group>-<tab>`` the way the viewer's two strips
-  read: ``--design-3d``, ``--design-2d``, ``--design-draft``; ``--analysis-fea``, ``--analysis-dynamic``,
-  ``--analysis-thermal``, ``--analysis-cfd``; ``--manufacturing-bvb``, ``--manufacturing-build``,
-  ``--manufacturing-buy``, ``--manufacturing-bom``, ``--manufacturing-assembly``; ``--validation-test``,
-  ``--validation-simulation``. With none, the viewer stays on whichever tab it is on. The analysis tabs and the
+  read: ``--design-3d``, ``--design-2d``, ``--design-draft``, ``--design-cmf``; ``--analysis-fea``,
+  ``--analysis-dynamic``, ``--analysis-thermal``, ``--analysis-cfd``; ``--manufacturing-bvb``,
+  ``--manufacturing-build``, ``--manufacturing-buy``, ``--manufacturing-bom``, ``--manufacturing-assembly``;
+  ``--validation-test``, ``--validation-simulation``. With none, the viewer stays on whichever tab it is on. The analysis tabs and the
   Simulation tab list what the object declares -- its scenarios of that analysis, its simulations -- and select
   the first; ``--scenario <name>`` selects the one of that name instead, and is refused with any other tab. The tab travels with the
   shape, so it is the window that draws the object that switches; a tab that does not apply to the object (FEA
@@ -1447,6 +1624,17 @@ Workflow commands
   sub-assembly is ordered as one item instead of being taken apart. Pass ``--recursive`` (``-r``) to walk all
   the way down to the parts regardless, and order those.
 
+  A scene is never ordered as one item -- nobody sells an arrangement -- and what nobody supplies in it, its
+  walls and its floor among them, is left out of the quote and listed under "Left out, as nobody supplies them"
+  rather than failing it: a room is priced by what can be bought for it. Anything else is quoted whole or reported
+  as unsupplied, unless ``--ignore-missing`` is given, which treats the parts and assemblies asked for, and what
+  they are made of, the way a scene's contents are treated. An item that a scene and an assembly both need is the
+  assembly's to fail over.
+
+  Every price is printed in the currency it is in. A provider that does not say which is taken to quote in its
+  ``currency`` parameter, and one that does not declare that either in US dollars, with a warning (see
+  :ref:`providers`).
+
 **************
 Other commands
 **************
@@ -1459,16 +1647,48 @@ Other commands
   - ``pc adhoc convert`` — write the file back out as another format
     (``pc adhoc convert part bracket.step bracket.stl``).
   - ``pc adhoc render`` — write a 2D projection of it: ``svg``, ``png``, ``jpeg`` or ``dxf``
-    (``pc adhoc render part --view top bracket.step bracket.png``).
+    (``pc adhoc render part --view top bracket.step bracket.png``), or a file type a package implements.
 
-  Both infer the types from the file names, and take ``--input``/``--output`` to say them outright. ``pc adhoc
-  render`` takes the same ``--view``, ``--viewport-origin`` and ``--viewport-up`` as ``pc render`` — and with no
-  ``partcad.yaml`` to configure a viewport in, they are the only way to aim one. The output file name may be
-  left off when ``--output`` names the type: the file is then named after the input.
+  Both infer the types from the file names, and take ``--input``/``--output`` to say them outright. A ``.py`` is
+  read as ``sdf`` unless told otherwise: a build123d or CadQuery script takes ``--input build123d`` or
+  ``--input cadquery``.
+
+  ``pc adhoc render`` takes what ``pc render`` takes wherever that means something for a file in no package —
+  and with no ``partcad.yaml`` to configure anything in, these are the only way to say any of it:
+
+  - ``--view``, ``--viewport-origin``, ``--viewport-up`` and ``--turn`` aim the projection, and
+    ``--reproducible`` / ``--no-reproducible`` pick the algorithm, exactly as for ``pc render``;
+  - ``--style``, ``--size``, ``--background`` and ``--quality`` say how a ``png`` or a ``jpeg`` is drawn, also as
+    for ``pc render``: ``--style shaded`` is the 3D view's picture of the file;
+  - ``-t``/``--format`` is another spelling of ``--output``, and ``-O``/``--output-dir`` writes into a directory
+    when no output file is named: the file is then named after the input;
+  - ``-p``/``--param <name>=<value>`` sets a parameter of a script (a build123d or CadQuery script's parameters
+    are its top-level assignments). The value is declared with the type it is written in -- ``true``/``false``,
+    a whole number, a number, or text -- and goes into the name of a file named after the input, as ``pc
+    render`` writes an instance's (``bracket_depth_12.svg``);
+  - ``-e``/``--options-package`` reads the file type from a package: one in the public index (``//pub/...``),
+    which the throwaway package then imports, or the directory of a package on this machine. The output may then
+    be any type that package declares. A name starting with ``//`` is always a package, and is never looked for on
+    disk or on the network, so a directory is named by its path without it: ``/srv/drawing`` rather than
+    ``//srv/drawing``, and a network share on Windows with backslashes, ``\\server\share\drawing``.
+
+  .. code-block:: shell
+
+    pc adhoc render part --input build123d -t svg -O ./out -p depth=12 bracket.py   # ./out/bracket_depth_12.svg
+    pc adhoc render part --reproducible --view top bracket.step bracket.svg
+    pc adhoc render part --style shaded --turn 30 --size square bracket.step bracket.png
+    pc adhoc render part -e ./drawing-style -t svg-thin -O ./out bracket.step
+
+  The rest of ``pc render``'s options have nothing to act on here: there is no package to walk (``-P``, ``-r``,
+  ``--fast-only``, ``--exclude``), the subcommand says what the file holds (``-s``, ``-i``, ``-a``, ``-S``), a
+  file in no package has no ports or interfaces (``--with-*``, ``--port``) and a part or a sketch no links
+  (``--filter``), no instruction book is rendered ad hoc (``--ignore-manufacturability``), and no video either
+  (``--fps``, ``--duration``, ``--speed``, ``--append``, ``--preset``).
 
   Which of the two to use is which kind of file is wanted, and it is the same distinction as between
-  ``pc export`` and ``pc render``: geometry another CAD tool can go on working with, or a picture. A file type a
-  package implements itself is available to neither, since there is no package here to declare it in.
+  ``pc export`` and ``pc render``: geometry another CAD tool can go on working with, or a picture. ``pc adhoc
+  convert`` writes only the formats PartCAD itself does; a file type a package implements is ``pc adhoc render
+  -e``'s, or ``pc export``'s on a package that imports it.
 
   The assembly formats ``assy`` and ``urdf`` are refused by both: an ASSY file is a set of references to the
   parts of a package and a URDF becomes a part per link, so neither means anything without one. Declare it in a
@@ -1500,3 +1720,16 @@ Other commands
   built and nothing is instantiated to produce it; the interfaces named in those declarations are resolved
   once per package and kept for the rest of the run. ``--keyword`` and ``--interface`` may be given together,
   and then both have to hold.
+
+  A package served by a repository plugin that searches its own catalog -- a model site's, which nobody can
+  list -- is asked for the keyword instead of being matched locally (see :ref:`repositories`). What it finds
+  is printed as names to instantiate, parameters and all, with the page each came from under it::
+
+    $ pc search parts -P //pub/universe/thingiverse/models -k "cable clip" --limit 2
+    PartCAD parts with 'cable clip' keyword:
+        //pub/universe/thingiverse/models 763622;file=1234567       Cable clip: cable_clip.stl
+                                                                    https://www.thingiverse.com/thing:763622
+        ...
+
+  ``pc search parts`` takes ``-n``/``--limit``, the most to ask each such package for. A package matched
+  locally reports every match, as before.

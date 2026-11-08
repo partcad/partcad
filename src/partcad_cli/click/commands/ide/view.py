@@ -23,6 +23,7 @@ _TAB_HELP = {
     "3d": "the 3D view",
     "2d": "the 2D tab: the object rendered to a picture",
     "draft": "the Draft tab: a dimensioned drawing",
+    "cmf": "the CMF tab: the colour, material and finish of each item",
     "fea": "the FEA tab, which runs the first (or the '--scenario') of the part's structural analyses",
     "dynamic": "the Dynamic FEA tab, which finds the part's natural frequencies in its first (or '--scenario') scenario",
     "thermal": "the Heat Transfer tab, which runs the first (or the '--scenario') of the part's thermal analyses",

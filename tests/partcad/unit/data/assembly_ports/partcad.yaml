@@ -184,6 +184,37 @@ assemblies:
       not_a_tuple: lower
 
   # An assembly under a name of its own, renaming what its source externalizes.
+  # The mount as it is, under a name of its own - as an assembly in a colour of
+  # its own is: joined by the ports its source's 'map:' gives the source.
+  mount-again:
+    type: enrich
+    source: mount
+
+  # And under a name of its own again: an enrich of an enrich is joined by
+  # the ports the first one's source's 'map:' gives it.
+  mount-again-again:
+    type: enrich
+    source: mount-again
+
+  # One that declares a port of its own is joined by that, as a part is.
+  mount-own-port:
+    type: enrich
+    source: mount
+    ports:
+      own: [[0.0, 0.0, 9.0], [0.0, 0.0, 1.0], 0.0]
+
+  # One that moves its source is not joined by the source's ports, which are
+  # where the source is: it would have to say where its own are.
+  mount-moved:
+    type: enrich
+    source: mount
+    offset: [[0.0, 0.0, 30.0], [0.0, 0.0, 1.0], 0.0]
+
+  # The parametric one under a name of its own, for an override to say which.
+  parametric-again:
+    type: enrich
+    source: parametric
+
   mount-renamed:
     type: enrich
     source: mount

@@ -5,10 +5,12 @@
 #
 """The viewing angle options, shared by every command that writes a projection.
 
-`pc render` and `pc adhoc render` offer the same three, and have to: a viewport
+`pc render` and `pc adhoc render` offer the same four, and have to: a viewport
 is a property of the projection, not of where the shape came from, and a user
 who has learned `--view top` in one should not find it spelled differently in
-the other.
+the other. The fourth, `--turn`, is how the object stands in front of the
+camera the other three place: turned about its own axes, the way the 3D view's
+Animate turns it and a video's frames do.
 
 Only the *names* of the views live here, for `--help` and for rejecting a typo
 without a round trip to the daemon - the same reason `adhoc/convert/part.py`
@@ -45,6 +47,25 @@ def viewport_vector(ctx, param, value):
     return vector
 
 
+def turn_vector(ctx, param, value):
+    """Parse 'X,Y,Z' degrees into three floats; one number is a turn about Z alone.
+
+    Also what '--speed' of a video is read with: degrees a second about the same
+    three axes.
+    """
+    if value is None:
+        return None
+    try:
+        vector = [float(component) for component in value.replace(",", " ").split()]
+    except ValueError:
+        raise click.BadParameter("expected 'X,Y,Z' or one number, got: %s" % value, ctx=ctx, param=param) from None
+    if len(vector) == 1:
+        return [0.0, 0.0, vector[0]]
+    if len(vector) != 3:
+        raise click.BadParameter("expected 'X,Y,Z' or one number, got: %s" % value, ctx=ctx, param=param)
+    return vector
+
+
 _OPTIONS = (
     click.option(
         "--view",
@@ -71,11 +92,22 @@ _OPTIONS = (
         callback=viewport_vector,
         show_envvar=True,
     ),
+    click.option(
+        "--turn",
+        help=(
+            "Turn the object in front of the camera by 'X,Y,Z' degrees about its own axes, through its "
+            "middle - or by one number, about Z, as the 3D view's Animate turns it. Goes with any view: "
+            "'--view front --turn 0,0,45'. A video's frame at a given moment is the picture of that turn"
+        ),
+        type=str,
+        callback=turn_vector,
+        show_envvar=True,
+    ),
 )
 
 
 def viewport_options(command):
-    """Add '--view', '--viewport-origin' and '--viewport-up' to a command.
+    """Add '--view', '--viewport-origin', '--viewport-up' and '--turn' to a command.
 
     Applied in reverse because click reverses the parameters it collected, which
     is what makes them read in this order in '--help'.
@@ -85,10 +117,11 @@ def viewport_options(command):
     return command
 
 
-def viewport_params(view, viewport_origin, viewport_up):
-    """The three as JSON-RPC params, so every caller sends the same names."""
+def viewport_params(view, viewport_origin, viewport_up, turn=None):
+    """The four as JSON-RPC params, so every caller sends the same names."""
     return {
         "view": view,
         "viewport_origin": viewport_origin,
         "viewport_up": viewport_up,
+        "turn": turn,
     }

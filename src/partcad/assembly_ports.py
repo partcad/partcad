@@ -88,6 +88,7 @@ from . import shape_ports
 from .geom import Location
 from .interface import InterfacePort, port_location
 from .interface_inherit import InterfaceInherits
+from .shape_config import transform_of
 
 # The section this module is about.
 MAP = "map"
@@ -533,7 +534,7 @@ def _own_placement(shape) -> Location:
     """
     if not is_reference(shape):
         return Location()
-    offset = _declaration(shape).get("offset")
+    offset = transform_of(_declaration(shape), "offset", getattr(shape, "name", ""))
     return Location() if offset is None else Location(offset)
 
 

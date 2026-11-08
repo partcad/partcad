@@ -262,6 +262,9 @@ KEY_METADATA = "metadata"
 METADATA_MEASUREMENTS = "measurements"
 METADATA_ANNOTATIONS = "annotations"
 METADATA_SECTIONS = "sections"
+# The twin of 'shape_envelope.METADATA_CMF': the summary of the CMF section a
+# payload carries after its BREP (see 'cmf_section').
+METADATA_CMF = "cmf"
 # What a part's request asks the wrapper building it to do to it on its way
 # out, and the section of that wrapper's answer that says how far it got.
 # Written by 'wrapper_common.finished()'; the core's twins, and what each one
@@ -540,6 +543,87 @@ def compressed_brep(shape) -> bytes:
     return _compress(shape_to_brep(shape))
 
 
+def compress_payload(data: bytes) -> bytes:
+    """An uncompressed payload - a BREP, and the CMF section after it - as a node carries it."""
+    return _compress(data)
+
+
+def decompress_payload(value) -> bytes:
+    """The uncompressed bytes of a node's payload, however it travelled."""
+    return _decompress(_brep_payload(value))
+
+
+def cmf_of_payload(value):
+    """The CMF section a node's payload carries after its BREP, or None (see 'cmf_section')."""
+    import cmf_section
+
+    return cmf_section.split(decompress_payload(value))[1]
+
+
+def cmf_section_for(shape, faces=None, solids=None, own=None):
+    """The CMF section of 'shape', from CMF keyed by its sub-shapes, or None if it says nothing.
+
+    'faces' and 'solids' map sub-shapes of 'shape' (any 'TopoDS_Shape' that is
+    one of them) to a 'cmf_section.CmfSet'; 'own' is the part's own set. A
+    face's set is completed by its solid's here, where the shape is at hand, so
+    that a reader of the section needs no kernel to find which solid a face is
+    in. Indices are the sub-shapes' places in 'TopExp::MapShapes', the order
+    PartCAD's codec keeps (see docs/design/cmf.md, section 6).
+    """
+    import cmf_section
+
+    _ensure_ocp()
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_SOLID
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape, TopTools_IndexedMapOfShape
+
+    faces, solids = faces or {}, solids or {}
+    if not faces and not solids and own is None:
+        return None
+    section = cmf_section.Section()
+    section.default = section.index_of(own)
+
+    solid_map = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(shape, TopAbs_SOLID, solid_map)
+    by_solid = {}
+    if solids:
+        found = [cmf_section.NONE] * solid_map.Extent()
+        for sub, cmf_set in solids.items():
+            index = solid_map.FindIndex(sub)
+            if index > 0:
+                found[index - 1] = section.index_of(cmf_set)
+                by_solid[index] = cmf_set
+        section.solids = found
+
+    face_map = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(shape, TopAbs_FACE, face_map)
+    by_face = {}
+    for sub, cmf_set in faces.items():
+        index = face_map.FindIndex(sub)
+        if index > 0:
+            by_face[index] = cmf_set
+    parents = None
+    if by_solid:
+        parents = TopTools_IndexedDataMapOfShapeListOfShape()
+        TopExp.MapShapesAndAncestors_s(shape, TopAbs_FACE, TopAbs_SOLID, parents)
+    found = [cmf_section.NONE] * face_map.Extent()
+    for index in range(1, face_map.Extent() + 1):
+        cmf_set = by_face.get(index)
+        if parents is not None:
+            face = face_map.FindKey(index)
+            if parents.Contains(face):
+                for solid in parents.FindFromKey(face):
+                    lent = by_solid.get(solid_map.FindIndex(solid))
+                    if lent is not None:
+                        cmf_set = cmf_set.filled_from(lent) if cmf_set is not None else lent
+                        break
+        if cmf_set is not None:
+            found[index - 1] = section.index_of(cmf_set)
+    if any(i != cmf_section.NONE for i in found):
+        section.faces = found
+    return section.compacted()
+
+
 def _brep_payload(value) -> bytes:
     """The compressed payload of a "brep" field, base64-encoded or raw.
 
@@ -558,17 +642,22 @@ def _shape_from_b64(brep_b64):
 
 
 def payload_digest(value) -> str:
-    """A stable name for one piece of exact geometry: a digest of its bytes.
+    """A stable name for one piece of exact geometry: a digest of its payload, before compression.
 
-    Of the compressed BREP as it arrived, not of anything derived from it, so that
-    two nodes built from one cached shape are recognised as one geometry without
-    either of them being decoded first - which is the whole point, since decoding
-    and tessellating are what the sharing is meant to avoid.
+    Of the BREP bytes and the CMF section after them, if any ('cmf_section'),
+    decompressed from the payload as it arrived - never of the
+    zstd frame, which two compressors need not write alike for the same bytes, while
+    what is keyed by this is shared between machines (see the core's
+    'shape_envelope.payload_digest', which this has to agree with digit for digit).
+    Not of anything decoded either: two nodes built from one cached shape are
+    recognised as one geometry without either being turned into a shape first -
+    which is the whole point, since decoding and tessellating are what the sharing
+    is meant to avoid.
 
     Content and not identity: nodes arrive as separately deserialized dicts, so the
     same geometry is the same bytes and never the same object.
     """
-    return hashlib.sha256(_brep_payload(value)).hexdigest()
+    return hashlib.sha256(_decompress(_brep_payload(value))).hexdigest()
 
 
 def shape_from_payload(value):
@@ -612,7 +701,7 @@ def make_metadata(measurements=None, annotations=None, sections=None):
     return metadata
 
 
-def encode_shape(shape, name=None, label=None, metadata=None, measurer=None) -> dict:
+def encode_shape(shape, name=None, label=None, metadata=None, measurer=None, cmf=None) -> dict:
     """Represent a single shape as {"name", "label", "brep", "metadata"}, ready for JSON.
 
     The shape is measured on the way through, and the numbers go into the
@@ -643,7 +732,16 @@ def encode_shape(shape, name=None, label=None, metadata=None, measurer=None) -> 
     if measured:
         combined[METADATA_MEASUREMENTS] = measured
 
-    encoded = {"name": name, "label": label, KEY_BREP: compressed_brep(shape)}
+    if cmf is not None and not cmf.is_empty():
+        # 'cmf' is the shape's CMF section ('cmf_section_for'): written after
+        # its BREP in the one payload, with its summary beside it.
+        import cmf_section
+
+        combined[METADATA_CMF] = cmf.summary()
+        payload = _compress(cmf_section.join(shape_to_brep(shape), cmf))
+    else:
+        payload = compressed_brep(shape)
+    encoded = {"name": name, "label": label, KEY_BREP: payload}
     if combined:
         encoded[KEY_METADATA] = combined
     return encoded
@@ -657,7 +755,7 @@ def encode_assembly(children, name=None, label=None) -> dict:
     return {"name": name, "label": label, KEY_ASSEMBLY: list(children)}
 
 
-def encode_combined(compound, components, name=None, label=None, metadata=None):
+def encode_combined(compound, components, name=None, label=None, metadata=None, cmf=None):
     """'compound' encoded, and 'components' as references into it: '(shape object, components)'.
 
     What 'wrapper_common.combine()' hands back is a compound and the shapes it
@@ -683,7 +781,7 @@ def encode_combined(compound, components, name=None, label=None, metadata=None):
 
     _ensure_ocp()
     measurer = shape_measure.Measurer()
-    shape = encode_shape(compound, name=name, label=label, metadata=metadata, measurer=measurer)
+    shape = encode_shape(compound, name=name, label=label, metadata=metadata, measurer=measurer, cmf=cmf)
 
     # Where each child sits in the compound, by what OCP hashes a shape by (its
     # 'TShape' and location); 'IsEqual()' then adds the orientation.

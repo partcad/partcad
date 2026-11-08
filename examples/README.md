@@ -16,6 +16,10 @@ There are many ways to produce a PartCAD model that can be consumed by others.
   - [Subtractive: parts cut out of stock, on a router, a laser and a drill](./produce_part_subtractive/)
   - [Sheet metal: one blank, and the drawing that says where each part is bent](./produce_part_sheet_metal/)
 
+- Declare parts by their dimensions alone:
+
+  - [Cuboids and cylinders](./produce_part_basic/)
+
 - Import parts defined using Python CAD frameworks:
 
   - [Primitive shapes using CadQuery](./produce_part_cadquery_primitive/)
@@ -42,6 +46,7 @@ There are many ways to produce a PartCAD model that can be consumed by others.
 
 - Place objects into scenes (where things are, not how they got there):
   - [Assembly YAML (ASSY) files read as a scene](./produce_scene_assy/)
+  - [Walls standing on a floor plan, seen into from outside](./produce_scene_walls/)
 
 - Ship software with the hardware:
   - [Firmware images and other files a product ships with](./produce_software/)

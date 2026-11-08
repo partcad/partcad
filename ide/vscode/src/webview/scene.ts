@@ -15,7 +15,8 @@
 // 'src/components/Part.js'), which is the viewer PartCAD already ships on the
 // web, so that a part looks the same in the IDE as it does on partcad.org:
 //
-//   * an auto-rotating orbit camera, framed on the model;
+//   * an auto-rotating orbit camera, framed on the model - in perspective, or
+//     without it where the view panel says so (see 'flatCamera');
 //   * drei's <Stage> lighting - an environment's light plus an ambient/spot/point
 //     trio scaled from the model's size;
 //   * the hemisphere and point lights Part.js adds on top of Stage (the
@@ -45,7 +46,10 @@
 // colour OCCT draws an uncoloured shape in, and the colour PartCAD's own 2D
 // projections draw one in, so that the 3D tab and the 2D tab beside it show the
 // same part (see 'appearance.ts'). A coloured light would turn every one of those
-// colours into another, so the hemisphere light is white.
+// colours into another, so the hemisphere light is white. A part whose faces
+// are in colours of their own arrives as a mesh per colour, each with its own
+// glTF material, and each mesh is drawn in its own colour - with this view's
+// material, not the file's (see 'paint', and 'appearance.ts').
 //
 // A third difference is not a choice. Part.js loads OBJ, a format with no scene
 // graph and no units, so it has to rotate the model by -90 degrees about X
@@ -57,27 +61,53 @@
 // location and a port's - so those are converted; see 'frames.ts'.
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
-import { Appearance, DEFAULT_APPEARANCE, appearanceKey, appearanceOf, edgeColor } from './appearance';
-import { calloutsOf } from './callouts';
+import {
+    Appearance,
+    DEFAULT_APPEARANCE,
+    OWN_APPEARANCE,
+    OwnAppearance,
+    appearanceKey,
+    appearanceOf,
+    edgeColor,
+    ownAppearance,
+    primitiveAppearance,
+} from './appearance';
+import { assemblyRows, calloutsOf, componentName, componentRows, isComponent } from './callouts';
+import { CmfChoice, chosen, setsOf } from './choice';
 import {
     SceneFrame,
     enclosingRadius,
     fitDistance,
     fitProgress,
     fromStage,
+    matchOrthographic,
     placeCamera as aimCamera,
     readViewpoint,
 } from './cameraView';
-import { el } from './dom';
+import { el, empty } from './dom';
+import { applyFinish, setFinishShown } from './finish';
 import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
 import { GeometryCache, geometryCache } from './geometryCache';
 import { geometryMissing, reportError } from './host';
-import { ShowMessage, ShowNode } from './messages';
-import { ItemId, PORT_COLOR, PORT_OPACITY, flickerOn, nodeId, portId, totalSize } from './nodes';
+import { MaterialCluster, ShowMessage, ShowNode } from './messages';
+import { LABEL_DEFAULTS, LabelChoices } from './labels';
+import {
+    ItemId,
+    PORT_COLOR,
+    PORT_OPACITY,
+    flickerOn,
+    groupPorts,
+    interfaceId,
+    interfaceLabel,
+    nodeId,
+    portId,
+    portLabel,
+    totalSize,
+} from './nodes';
 import { Bounds } from './section';
 import { Navigable, onScreen, spaceMouse } from './spacemouse';
 import {
@@ -140,17 +170,31 @@ export const backend = surface.backend;
 
 /** Whether the 3D view is drawn without a GPU at all, by the canvas painter. */
 export const software = surface.backend === 'software';
+/**
+ * Whether the 3D view is drawn by the CPU: the painter, or WebGPU on Chromium's
+ * software adapter (see 'offscreenSurface'). The pane says so, and the model
+ * does not turn on its own: a frame every 16 ms is what neither can afford.
+ */
+export const onCpu = surface.onCpu === true;
+/**
+ * How a finished face is made where the window draws with WebGPU, whose node
+ * materials take no shader patch (see 'finishNode.ts'); undefined everywhere
+ * else. Bundled with the rest ('eager'): three's WebGPU build is already in the
+ * bundle for 'surface.ts', and a chunk of its own would need a script the
+ * panel's policy does not allow.
+ */
+const finishNodes = surface.backend === 'webgpu' ? await import(/* webpackMode: "eager" */ './finishNode') : undefined;
 
 surface.domElement.classList.add('surface');
 container.appendChild(surface.domElement);
 
-if (software) {
+if (onCpu) {
     container.appendChild(softwareNotice());
 }
 
 /** Draw the stage once. */
 function drawStage(): void {
-    surface.render(scene, camera);
+    surface.render(scene, drawingCamera());
 }
 
 /**
@@ -197,11 +241,37 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 10000);
 camera.position.set(0, 0, 5);
 
+/**
+ * What draws the stage while the view panel says to draw it without
+ * perspective - orthographic, or isometric, which is that from a corner.
+ *
+ * Only ever a copy of 'camera' ('matchOrthographic'): everything that moves the
+ * view - the orbit controls, a fit, the SpaceMouse, the panel's viewpoint - goes
+ * on moving 'camera', and on reading it, whichever of the two draws. So nothing
+ * about how the view is navigated, framed or reported has two versions, and
+ * switching between the two keeps the model where it is and the size it is.
+ */
+const flatCamera = new THREE.OrthographicCamera();
+
+/** Whether the stage is drawn in perspective, as the view panel says: it is until it says otherwise. */
+let perspective = true;
+
+/** The camera the stage is drawn with now: 'camera', or 'flatCamera' following it. */
+function drawingCamera(): THREE.Camera {
+    if (perspective) {
+        return camera;
+    }
+    // As far out as the model reaches from what the camera looks at, wherever
+    // a pan has taken that.
+    matchOrthographic(flatCamera, camera, controls.target, controls.target.distanceTo(framedCentre) + framedRadius);
+    return flatCamera;
+}
+
 const controls = new OrbitControls(camera, surface.domElement);
 controls.enableDamping = true;
 // Turning on its own is a frame every 16 ms for as long as the panel is open,
-// which the software renderer cannot afford: off there until it is asked for.
-controls.autoRotate = !software;
+// which a CPU drawing the frames cannot afford: off there until it is asked for.
+controls.autoRotate = !onCpu;
 controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
 
 /**
@@ -268,6 +338,13 @@ const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x000000, 0.7);
 const partPointLight = new THREE.PointLight(0xffffff, 1, 0, 0);
 scene.add(ambientLight, spotLight, stagePointLight, hemisphereLight, partPointLight);
 
+/**
+ * What of the rig a finished face reflects beyond the lights that reach it one at
+ * a time, for the WebGPU renderer's lighting model (see 'finishNode.ts'); the
+ * WebGL shader reads the same lights from three's own uniforms.
+ */
+const ROOM_RIG = { probe: roomLight, ambient: ambientLight, hemisphere: hemisphereLight };
+
 // Drawn without a GPU, the model is lit differently: the software renderer
 // knows ambient, directional and point lights and nothing else, and a flat face
 // takes one colour, so the rig above - a spot, a hemisphere, point lights tuned
@@ -290,15 +367,191 @@ if (software) {
 }
 
 /**
+ * The callouts one show pinned to the model, by the box that switches them.
+ *
+ * Every one is a child of what it is about - a component's of its geometry, a
+ * port's of its triad, an element's of its node - so the tree's boxes, which
+ * switch those on and off, take the callout with them: three's 'CSS2DRenderer'
+ * hides a callout under anything hidden. What is left to these switches is a
+ * callout's own 'visible', which nothing else touches. An interface's is the
+ * exception, being on the node rather than on any one port: see
+ * 'refreshInterfaceCallouts'.
+ *
+ * Made per show and put in place only once the show is ('showGeometry'), so that
+ * a box changed while a show is still decoding applies to what is on screen.
+ */
+interface Callouts {
+    /** What a shape's metadata says about its elements: the Metadata box. */
+    metadata: CSS2DObject[];
+    /**
+     * One per component, its rows written by 'refreshComponentCallouts' - and one
+     * per node that holds others ('holds'), which writes something only when it
+     * is priced as a whole (see 'assemblyRows').
+     */
+    components: {
+        object: CSS2DObject;
+        box: HTMLElement;
+        name: string;
+        objectName: string | undefined;
+        holds: boolean;
+    }[];
+    /** One per port, at the tip of its +Z axis. */
+    ports: CSS2DObject[];
+    /** One per interface instance, in the middle of its ports, and the items it is drawn with. */
+    interfaces: { object: CSS2DObject; item: ItemId; ports: ItemId[] }[];
+}
+
+function noCallouts(): Callouts {
+    return { metadata: [], components: [], ports: [], interfaces: [] };
+}
+
+let callouts: Callouts = noCallouts();
+
+/** What the Metadata box says; kept across shows. */
+let showMetadata = true;
+
+/** What the callout boxes under the tree say ('labels.ts'); kept across shows. */
+let labelChoices: LabelChoices = { ...LABEL_DEFAULTS };
+
+/** The price of each component, as text, by the object it is ('<package>:<name>'). */
+let priceTexts: Readonly<Record<string, string>> = {};
+
+/**
+ * One callout per cluster of a material, naming it, and the items of the tree
+ * whose faces it is: the "Materials" box. Of the show on stage only - a cluster
+ * names the nodes of one tree by where they are in it - and empty until its
+ * answer arrives ('setMaterialClusters').
+ */
+let materialCallouts: { object: CSS2DObject; nodes: ItemId[] }[] = [];
+
+/**
+ * Where a point in the frame of the whole tree - every placement composed, the
+ * root's own included - is in the frame of the group the show is framed by:
+ * that group as it was built, undone. Taken before it is framed: framing moves
+ * the group, and a callout under it moves with it.
+ */
+let treeFrame: THREE.Matrix4 | undefined;
+
+/**
  * Whether what a shape's metadata says about its elements is pinned to them.
  *
- * The "Show metadata" box. One switch over the whole layer rather than a flag per
- * callout, so that it holds for every show that follows without each of them
- * having to be told.
+ * The "Metadata" box. Held here rather than set on each callout once, so that it
+ * holds for every show that follows without each of them having to be told.
  */
 export function setShowMetadata(enabled: boolean): void {
-    labelRenderer.domElement.style.display = enabled ? '' : 'none';
+    showMetadata = enabled;
+    callouts.metadata.forEach((object) => (object.visible = enabled));
     invalidate();
+}
+
+/** What the callout boxes say: which of the four kinds of callout are written. */
+export function setLabels(choices: LabelChoices): void {
+    labelChoices = { ...choices };
+    refreshComponentCallouts();
+    callouts.ports.forEach((object) => (object.visible = labelChoices.portNames));
+    refreshInterfaceCallouts();
+    refreshMaterialCallouts();
+    invalidate();
+}
+
+/**
+ * Pin a callout naming its material on every cluster of one, where the
+ * cluster is nearest the middle of itself (see 'cmf.clusters'), replacing the
+ * ones pinned before - or none, while they are being asked and when there are
+ * none. For the show on stage: a show that follows drops them.
+ */
+export function setMaterialClusters(clusters: readonly MaterialCluster[]): void {
+    for (const { object } of materialCallouts) {
+        object.removeFromParent();
+    }
+    materialCallouts = [];
+    if (content !== undefined && treeFrame !== undefined) {
+        for (const cluster of clusters) {
+            const callout = calloutObject('callout-material', [cluster.name]);
+            // PartCAD's frame - millimetres, Z up - is glTF's on the stage.
+            callout.object.position
+                .set(...cluster.at)
+                .applyMatrix4(TO_GLTF)
+                .applyMatrix4(treeFrame);
+            content.add(callout.object);
+            materialCallouts.push({ object: callout.object, nodes: cluster.nodes.map((path) => nodeId(path)) });
+        }
+    }
+    refreshMaterialCallouts();
+    invalidate();
+}
+
+/**
+ * Show each material's callout where the box asks and the tree draws any of
+ * the nodes its cluster is of: a cluster drawn in part is still that material,
+ * and one with none of it drawn names nothing.
+ */
+function refreshMaterialCallouts(): void {
+    for (const callout of materialCallouts) {
+        callout.object.visible = labelChoices.materials && callout.nodes.some(itemShown);
+    }
+}
+
+/**
+ * What each component costs, as the text its callout writes, by the object it
+ * is - or nothing, while it is being asked and when nobody quoted it. Kept for
+ * the shows that follow, which are told it as they are drawn.
+ */
+export function setComponentPrices(prices: Readonly<Record<string, string>>): void {
+    priceTexts = { ...prices };
+    refreshComponentCallouts();
+    invalidate();
+}
+
+/** Write every component's callout over, as the boxes and the prices now say; none where it has nothing to say. */
+function refreshComponentCallouts(made: Callouts = callouts): void {
+    for (const callout of made.components) {
+        const price = callout.objectName !== undefined ? priceTexts[callout.objectName] : undefined;
+        const rows = (callout.holds ? assemblyRows : componentRows)(callout.name, price, labelChoices);
+        empty(callout.box);
+        rows.forEach((row) => callout.box.appendChild(el('div', 'callout-line', row)));
+        callout.object.visible = rows.length > 0;
+    }
+}
+
+/** Whether the tree draws an item. */
+function itemShown(id: ItemId): boolean {
+    return visibleItems === undefined || visibleItems.has(id);
+}
+
+/**
+ * Show each interface's name where the tree draws that interface and at least
+ * one of its ports: the name is pinned in the middle of the ports, which are
+ * the only thing of it that is drawn, so with none of them drawn it would name
+ * nothing - which is also what the 2D tab's picture does, writing an interface's
+ * name only beside ports it draws.
+ */
+function refreshInterfaceCallouts(made: Callouts = callouts): void {
+    for (const callout of made.interfaces) {
+        callout.object.visible =
+            labelChoices.interfaceNames && itemShown(callout.item) && callout.ports.some(itemShown);
+    }
+}
+
+/**
+ * One callout: rows of text in a box, pinned by its bottom-left corner - where
+ * its leader line starts - so the text sits above and to the right of what it
+ * is about rather than over it. Built node by node through 'dom.ts': what it
+ * says is text out of a package, and must not become markup.
+ */
+function calloutObject(kind: string, rows: string[], title?: string): { object: CSS2DObject; box: HTMLElement } {
+    const box = el('div', 'callout-box');
+    if (title !== undefined) {
+        box.appendChild(el('div', 'callout-title', title));
+    }
+    for (const row of rows) {
+        box.appendChild(el('div', 'callout-line', row));
+    }
+    const element = el('div', `callout ${kind}`);
+    element.appendChild(box);
+    const object = new CSS2DObject(element);
+    object.center.set(0, 1);
+    return { object, box };
 }
 
 /** Everything the current show put on the stage; replaced wholesale by the next. */
@@ -427,6 +680,78 @@ let flickering: ReadonlySet<ItemId> | undefined;
 let flickeringSince = 0;
 
 /**
+ * The geometry of every node on the stage, with the names of that node and of
+ * every node above it: what an item chosen in the CMF tab is found by (see
+ * 'choice.ts'). A node's geometry is its own and none of its children's.
+ */
+let shownNodes: { names: string[]; drawn: THREE.Object3D }[] = [];
+
+/** What the CMF tab chose to show, kept across shows of the same object; see 'showChoice'. */
+let cmfChoice: CmfChoice | undefined;
+
+/**
+ * Every mesh and line drawn faint while a choice is shown, with the material it
+ * is drawn with otherwise - which the Opacity slider goes on setting meanwhile,
+ * so that taking the choice away puts back the model the slider says.
+ */
+const faded = new Map<THREE.Object3D, THREE.Material>();
+
+/**
+ * How opaque what a choice leaves out is drawn: enough to say where the chosen
+ * faces are on the part, and little enough not to be taken for them.
+ */
+const FADED_OPACITY = 0.12;
+
+/**
+ * Single out an item of the CMF tab, or one of its sets, or nothing: what it is
+ * drawn as it always is, and the rest faint (see 'choice.ts'). Answers how many
+ * meshes are what was chosen - none when nothing of it is on the stage.
+ *
+ * Kept until it is taken away, or the panel shows another object: a show of the
+ * same one again - an edit saved - is shown with it too.
+ */
+export function showChoice(choice: CmfChoice | undefined): number {
+    cmfChoice = choice;
+    const shown = applyChoice();
+    invalidate();
+    return shown;
+}
+
+/** Draw what is on the stage as 'cmfChoice' says; how many meshes are what it chose. */
+function applyChoice(): number {
+    for (const [drawable, material] of faded) {
+        (drawable as THREE.Mesh).material = material;
+    }
+    faded.clear();
+    const choice = cmfChoice;
+    const geometry = shownGeometry;
+    if (choice === undefined || geometry === undefined) {
+        return 0;
+    }
+    let shown = 0;
+    for (const { names, drawn } of shownNodes) {
+        drawn.traverse((child) => {
+            const drawable = child as THREE.Mesh | THREE.Line;
+            const isMesh = (drawable as THREE.Mesh).isMesh === true;
+            if (!isMesh && (drawable as THREE.Line).isLine !== true) {
+                return;
+            }
+            // A line is in what was chosen with the faces of its node; a set is
+            // faces, and has none.
+            const inside = chosen(choice, names, isMesh ? setsOf(drawable.userData) : undefined);
+            if (inside && (isMesh || choice.set === undefined)) {
+                shown += isMesh ? 1 : 0;
+                return;
+            }
+            const material = drawable.material as THREE.Material;
+            faded.set(drawable, material);
+            drawable.material = geometry.fadedMaterial(material);
+        });
+    }
+    return shown;
+}
+
+/**
  * Single these items out, or nothing.
  *
  * Only what is already drawn flickers: an item switched off in the pane stays off,
@@ -484,6 +809,8 @@ export function showItems(visible: ReadonlySet<string>): void {
             object.visible = visible.has(id);
         }
     }
+    refreshInterfaceCallouts();
+    refreshMaterialCallouts();
     invalidate();
 }
 
@@ -522,9 +849,56 @@ function parseGltf(buffer: ArrayBuffer): Promise<THREE.Group> {
     return new Promise((resolve, reject) => {
         // parse(), not load(): the bytes are already here, and load() would mean
         // a URL and therefore a network request the CSP forbids.
-        loader.parse(buffer, '', (gltf) => resolve(gltf.scene), reject);
+        loader.parse(
+            buffer,
+            '',
+            (gltf) => {
+                keepOwnColors(gltf);
+                resolve(gltf.scene);
+            },
+            reject,
+        );
     });
 }
+
+/**
+ * Note on each primitive the colour its file gives it, before anything takes
+ * the file's materials away (see 'ownAppearance').
+ *
+ * Kept in 'userData' because that is what a clone copies: every instance of a
+ * cached shape is a clone of its template, and is painted as it is handed out.
+ * Which materials the file declares is the loader's to say ('associations'),
+ * since three gives a primitive with none a default material indistinguishable
+ * from a white one.
+ */
+function keepOwnColors(gltf: GLTF): void {
+    gltf.scene.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (!mesh.isMesh) {
+            return;
+        }
+        const material = mesh.material as THREE.Material;
+        const own = ownAppearance(material, gltf.parser.associations.get(material)?.materials !== undefined);
+        if (own !== undefined) {
+            const { map, ...plain } = own as OwnAppearance & { map?: THREE.Texture };
+            mesh.userData[OWN_APPEARANCE] = plain;
+            if (map !== undefined) {
+                // Not in 'userData', which a clone copies through JSON and a
+                // texture does not survive: by the geometry, which every clone
+                // of the template shares. The template's to free, not a show's.
+                map.userData.cached = true;
+                ownTextures.set(mesh.geometry, map);
+            }
+        }
+    });
+}
+
+/**
+ * The image each primitive of a parsed shape is drawn with, where its colour is
+ * drawn with one (see 'ownAppearance'), by the primitive's geometry: what every
+ * clone of a template shares. Freed with the template ('releaseTemplate').
+ */
+const ownTextures = new WeakMap<THREE.BufferGeometry, THREE.Texture>();
 
 /**
  * The materials a cached shape carries while nothing draws it. Never drawn with:
@@ -569,10 +943,44 @@ async function parseTemplate(buffer: ArrayBuffer): Promise<THREE.Group> {
     return group;
 }
 
+/**
+ * Free the images the primitives of a parsed glTF are drawn with (see
+ * 'keepOwnColors'), once nothing draws any of them: the GPU texture, and the
+ * decoded image under it. three's GLTFLoader decodes an embedded image into an
+ * 'ImageBitmap', which 'Texture.dispose()' leaves alone and which is not given
+ * back until it is closed (see the note at the top of 'GLTFLoader.js').
+ *
+ * 'geometries' are every primitive of one parsed file, which are all that hold
+ * its images - each parse makes images of its own, and the primitives of one
+ * file drawn with one image share it - so each is freed once, after all of them
+ * have let go.
+ */
+function releaseOwnTextures(geometries: Iterable<THREE.BufferGeometry>): void {
+    const textures = new Set<THREE.Texture>();
+    for (const geometry of geometries) {
+        const texture = ownTextures.get(geometry);
+        if (texture !== undefined) {
+            textures.add(texture);
+            ownTextures.delete(geometry);
+        }
+    }
+    for (const texture of textures) {
+        texture.dispose();
+        const image = texture.image as unknown;
+        if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) {
+            image.close();
+        }
+    }
+}
+
 /** Free a template the cache let go of, once nothing on the stage draws it. */
 function releaseTemplate(group: THREE.Group): void {
+    const geometries: THREE.BufferGeometry[] = [];
     group.traverse((child) => {
         const drawable = child as THREE.Mesh;
+        if (drawable.geometry !== undefined) {
+            geometries.push(drawable.geometry);
+        }
         drawable.geometry?.dispose();
         for (const material of [drawable.material ?? []].flat()) {
             if (material !== TEMPLATE_FACES && material !== TEMPLATE_LINES) {
@@ -580,6 +988,7 @@ function releaseTemplate(group: THREE.Group): void {
             }
         }
     });
+    releaseOwnTextures(geometries);
 }
 
 /**
@@ -595,7 +1004,9 @@ function releaseTemplate(group: THREE.Group): void {
 function disposeMaterial(material: THREE.Material): void {
     for (const value of Object.values(material)) {
         const texture = value as THREE.Texture | undefined;
-        if (texture?.isTexture) {
+        // An image a primitive is drawn with is its template's, and goes with
+        // the template (see 'keepOwnColors'), not with a show that drew it.
+        if (texture?.isTexture && !texture.userData.cached) {
             texture.dispose();
         }
     }
@@ -617,6 +1028,10 @@ function disposeMaterials(material: THREE.Material | THREE.Material[] | undefine
  * included, and goes when the cache lets go of it ('releaseTemplate').
  */
 function disposeTree(root: THREE.Object3D): void {
+    // The geometry a show parsed for itself goes here, and with it the images
+    // its primitives are drawn with, which nothing else frees: they are marked
+    // as a template's are ('keepOwnColors'), and there is no template.
+    const local: THREE.BufferGeometry[] = [];
     root.traverse((node) => {
         // A callout is an element in the DOM, not in the scene, and three removes
         // it only when the callout itself is what was removed - not when, as
@@ -628,6 +1043,7 @@ function disposeTree(root: THREE.Object3D): void {
         const mesh = node as THREE.Mesh;
         if (mesh.geometry && !mesh.geometry.userData.cached) {
             mesh.geometry.dispose();
+            local.push(mesh.geometry);
         }
         for (const material of [mesh.material ?? []].flat()) {
             if (material !== TEMPLATE_FACES && material !== TEMPLATE_LINES && !material.userData.cached) {
@@ -635,6 +1051,7 @@ function disposeTree(root: THREE.Object3D): void {
             }
         }
     });
+    releaseOwnTextures(local);
 }
 
 export function clearGeometry(): void {
@@ -650,6 +1067,11 @@ export function clearGeometry(): void {
     shownCut = false;
     fitting = undefined;
     drawnBy.clear();
+    shownNodes = [];
+    faded.clear();
+    callouts = noCallouts();
+    materialCallouts = [];
+    treeFrame = undefined;
     visibleItems = undefined;
     flickering = undefined;
     dropProxies();
@@ -853,6 +1275,7 @@ function addPorts(
     sketches: Map<string, THREE.Group>,
     material: THREE.Material,
     lineMaterial: THREE.Material,
+    made: Callouts,
 ): void {
     const ports = node.ports ?? [];
     if (ports.length === 0) {
@@ -861,6 +1284,28 @@ function addPorts(
 
     const frame = transformed(TO_GLTF);
     parent.add(frame);
+
+    // Each interface instance's name, in the middle of the ports it is made of:
+    // one name for a bolt pattern of four holes, as the 2D tab's picture writes
+    // it, rather than the same name four times. On the node rather than on a
+    // port, so whether it shows is worked out from the rows of the instance and
+    // of its ports ('refreshInterfaceCallouts').
+    groupPorts(node).interfaces.forEach((entry, index) => {
+        if (entry.ports.length === 0) {
+            return;
+        }
+        const middle = [0, 1, 2].map(
+            (axis) => entry.ports.reduce((sum, port) => sum + ports[port].location[0][axis], 0) / entry.ports.length,
+        );
+        const { object } = calloutObject('callout-interface', [interfaceLabel(entry.interface)]);
+        object.position.set(middle[0], middle[1], middle[2]);
+        frame.add(object);
+        made.interfaces.push({
+            object,
+            item: interfaceId(path, index),
+            ports: entry.ports.map((port) => portId(path, port)),
+        });
+    });
 
     ports.forEach((port, index) => {
         const item = portId(path, index);
@@ -875,6 +1320,18 @@ function addPorts(
         axes.name = port.name ?? 'port';
         frame.add(axes);
         drawnByItem(item, axes);
+
+        // Its name, at the tip of the +Z axis - the end of the triad that says
+        // which way the port faces, and where the 2D tab's picture joins a
+        // port's name to it. A child of the triad, so the port's own box hides it.
+        const name = portLabel(port);
+        if (name) {
+            const { object } = calloutObject('callout-port', [name]);
+            object.position.set(0, 0, size);
+            object.visible = labelChoices.portNames;
+            axes.add(object);
+            made.ports.push(object);
+        }
 
         const sketch = port.sketch ? sketches.get(port.sketch) : undefined;
         if (sketch === undefined) {
@@ -912,41 +1369,92 @@ function addPorts(
  * Every element is built node by node through 'dom.ts': what a callout says is
  * text out of the drawing a package ships, and must not become markup.
  */
-function addCallouts(parent: THREE.Group, node: ShowNode, path: number[]): void {
-    const callouts = calloutsOf(node);
-    if (callouts.length === 0) {
+function addCallouts(parent: THREE.Group, node: ShowNode, path: number[], made: Callouts): void {
+    const said = calloutsOf(node);
+    if (said.length === 0) {
         return;
     }
     const frame = transformed(TO_GLTF);
-    for (const callout of callouts) {
-        const box = el('div', 'callout-box');
-        if (callout.title !== undefined) {
-            box.appendChild(el('div', 'callout-title', callout.title));
-        }
-        for (const line of callout.lines) {
-            box.appendChild(el('div', 'callout-line', line));
-        }
-        const element = el('div', 'callout');
-        element.appendChild(box);
-        const label = new CSS2DObject(element);
-        // Pinned by its bottom-left corner, where the leader line starts: the text
-        // sits above and to the right of the element rather than over it.
-        label.center.set(0, 1);
-        label.position.set(callout.position[0], callout.position[1], callout.position[2]);
-        frame.add(label);
+    for (const callout of said) {
+        const { object } = calloutObject('callout-metadata', callout.lines, callout.title);
+        object.position.set(callout.position[0], callout.position[1], callout.position[2]);
+        object.visible = showMetadata;
+        frame.add(object);
+        made.metadata.push(object);
     }
     parent.add(frame);
     drawnByItem(nodeId(path), frame);
 }
 
 /**
+ * One component's callout: its name and its price, in the middle of its shape.
+ *
+ * A child of the shape itself, so the box that hides the component - and the
+ * flicker that singles it out - takes its callout with it. Written by
+ * 'refreshComponentCallouts', which is what the boxes and the prices arriving
+ * call again; a component with nothing to say has its callout hidden.
+ *
+ * The middle is of the shape's box, measured in the shape's own frame: the
+ * whole tree has had its placements composed before this is called, and the
+ * box is taken back out of them.
+ */
+function addComponentCallout(node: ShowNode, drawn: THREE.Object3D, box: THREE.Box3, made: Callouts): void {
+    if (box.isEmpty()) {
+        return;
+    }
+    const middle = drawn.worldToLocal(box.getCenter(new THREE.Vector3()));
+    const callout = calloutObject('callout-component', []);
+    callout.object.position.copy(middle);
+    drawn.add(callout.object);
+    made.components.push({
+        object: callout.object,
+        box: callout.box,
+        name: componentName(node),
+        objectName: node.name ?? undefined,
+        holds: false,
+    });
+}
+
+/**
+ * The callout of a node that holds others: its price, in the middle of
+ * everything inside it, for an assembly sold assembled (see 'assemblyRows').
+ *
+ * It has no shape of its own to be a child of, so it hangs from a group of its
+ * own under the node, registered under the node's item: the box that hides the
+ * sub-assembly hides its price, and the callout's own 'visible' stays
+ * 'refreshComponentCallouts''s to set.
+ */
+function addAssemblyCallout(node: ShowNode, path: number[], into: THREE.Group, box: THREE.Box3, made: Callouts): void {
+    if (box.isEmpty()) {
+        return;
+    }
+    const holder = new THREE.Group();
+    into.add(holder);
+    const callout = calloutObject('callout-component', []);
+    callout.object.position.copy(into.worldToLocal(box.getCenter(new THREE.Vector3())));
+    holder.add(callout.object);
+    drawnByItem(nodeId(path), holder);
+    made.components.push({
+        object: callout.object,
+        box: callout.box,
+        name: componentName(node),
+        objectName: node.name ?? undefined,
+        holds: true,
+    });
+}
+
+/**
  * Give what a glTF draws the materials this viewer draws everything with, in the
- * colour 'appearance' says.
+ * colour 'appearance' says - or, for a face primitive that brought a colour of
+ * its own, in that.
  *
  * Part.js replaces whatever material the file carries with a plain
  * MeshPhongMaterial, which is what gives every PartCAD model the same look
  * regardless of how it was authored; the colour is the one thing a shape gets a
- * say in, through its properties rather than through its file. Lines get one of
+ * say in, through its properties or, face by face, through the colour of each
+ * primitive of its file (see 'keepOwnColors'). The material is still this
+ * viewer's either way, from 'geometry's one per colour, so a coloured face is
+ * shaded, faded and singled out as every other face is. Lines get one of
  * their own: an edge that bounds no face - the bend lines of a sheet metal drawing
  * - arrives as glTF line segments, and a lit material means nothing to a line.
  *
@@ -959,7 +1467,11 @@ function paint(group: THREE.Object3D, geometry: Geometry, appearance: Appearance
         const drawable = child as THREE.Mesh | THREE.Line;
         let material: THREE.Material;
         if ((drawable as THREE.Mesh).isMesh) {
-            material = geometry.faceMaterial(appearance);
+            const own = drawable.userData[OWN_APPEARANCE] as OwnAppearance | undefined;
+            const map = ownTextures.get(drawable.geometry);
+            material = geometry.faceMaterial(
+                primitiveAppearance(own?.color !== undefined && map !== undefined ? { ...own, map } : own, appearance),
+            );
         } else if ((drawable as THREE.Line).isLine) {
             material = geometry.lineMaterial(appearance);
         } else {
@@ -1009,6 +1521,8 @@ class Geometry {
     private readonly lines = new Map<string, THREE.LineBasicMaterial>();
     /** Any other material the show made, to be freed with these. */
     private readonly owned: THREE.Material[] = [];
+    /** What each material is drawn as while a choice leaves it out, by that material ('fadedMaterial'). */
+    private readonly faded = new Map<THREE.Material, THREE.Material>();
 
     /**
      * 'side' is which sides of a face are drawn: both, unless the painter draws a
@@ -1026,18 +1540,50 @@ class Geometry {
      * A see-through colour is drawn transparent at its own opacity, and remembers
      * that opacity in 'userData.alpha' so the Opacity slider can take it as the
      * part's full strength rather than replacing it (see 'setOpacity').
+     *
+     * A one-sided shape - a wall - is drawn from the front of its faces only,
+     * whatever this show draws everything else with: from behind it is not there,
+     * which is the whole of what it is for (see 'appearance.ts').
+     *
+     * A colour drawn with an image is drawn with it, white under it - three
+     * multiplies the two - and remembers the colour it is drawn as where an
+     * image cannot be in 'userData.flatColor' (see 'painter.ts').
+     *
+     * A colour drawn with a finish - a face whose CMF set says how rough or how
+     * metallic it is - is drawn as a shaded 'pc render' draws it ('finish.ts'):
+     * the same Phong material, with its diffuse colour, specular colour and
+     * shininess from the finish and the room's reflection added. On an image,
+     * the image is its colour, white under it, as the render takes it.
      */
     faceMaterial(appearance: Appearance): THREE.Material {
         const key = appearanceKey(appearance);
         let material = this.faces.get(key);
         if (material === undefined) {
-            material = new THREE.MeshPhongMaterial({
-                color: appearance.color,
-                side: this.side,
+            // White under an image: three multiplies the two.
+            const albedo = appearance.map === undefined ? appearance.color : 0xffffff;
+            const parameters: THREE.MeshPhongMaterialParameters = {
+                color: albedo,
+                map: appearance.map ?? null,
+                side: appearance.oneSided ? THREE.FrontSide : this.side,
                 transparent: appearance.opacity < 1,
                 opacity: appearance.opacity,
-            });
+            };
+            if (appearance.finish !== undefined && finishNodes !== undefined) {
+                material = finishNodes.finishedNodeMaterial(
+                    parameters,
+                    albedo,
+                    appearance.finish,
+                    appearance.color,
+                    ROOM_RIG,
+                );
+            } else {
+                material = new THREE.MeshPhongMaterial(parameters);
+                if (appearance.finish !== undefined) {
+                    applyFinish(material, albedo, appearance.finish, appearance.color);
+                }
+            }
             material.userData.alpha = appearance.opacity;
+            material.userData.flatColor = appearance.color;
             this.faces.set(key, material);
         }
         return material;
@@ -1169,12 +1715,38 @@ class Geometry {
         this.owned.forEach((material) => material.dispose());
         this.faces.clear();
         this.lines.clear();
+        this.faded.clear();
         this.owned.length = 0;
     }
 
     /** Free 'material' with the rest of this show's (see 'disposeMaterials'). */
     own(material: THREE.Material): void {
         this.owned.push(material);
+    }
+
+    /**
+     * What something drawn with 'material' is drawn with while a choice in the
+     * CMF tab leaves it out (see 'choice.ts'): faint, in the colour it is drawn
+     * as where an image cannot be, plain - no image and no finish - and never in
+     * front of what was chosen, which it does not hide. One per material.
+     */
+    fadedMaterial(material: THREE.Material): THREE.Material {
+        let made = this.faded.get(material);
+        if (made === undefined) {
+            const phong = material as THREE.MeshPhongMaterial;
+            const flat = material.userData.flatColor;
+            const color = typeof flat === 'number' ? new THREE.Color().setHex(flat, THREE.SRGBColorSpace) : phong.color;
+            made = (material as THREE.LineBasicMaterial).isLineBasicMaterial
+                ? new THREE.LineBasicMaterial({ color: phong.color, toneMapped: false })
+                : new THREE.MeshPhongMaterial({ color, side: phong.side });
+            made.transparent = true;
+            made.opacity = FADED_OPACITY;
+            made.depthWrite = false;
+            made.userData.faded = true;
+            this.faded.set(material, made);
+            this.own(made);
+        }
+        return made;
     }
 }
 
@@ -1228,7 +1800,7 @@ interface Loaded {
      * matching groups back to nodes by position is exactly the kind of agreement
      * that stops holding the day a node gains a child of another sort.
      */
-    built: { node: ShowNode; path: number[]; group: THREE.Group }[];
+    built: { node: ShowNode; path: number[]; group: THREE.Group; drawn?: THREE.Group }[];
 }
 
 /**
@@ -1304,8 +1876,33 @@ async function buildNode(
         group.add(child);
     }
 
-    loaded.built.push({ node, path, group });
+    loaded.built.push({ node, path, group, drawn });
     return group;
+}
+
+/** Every node's geometry with the names of that node and the nodes above it (see 'shownNodes'). */
+function namedGeometry(built: Loaded['built']): { names: string[]; drawn: THREE.Object3D }[] {
+    const nameAt = new Map<string, string>();
+    for (const { node, path } of built) {
+        if (node.name) {
+            nameAt.set(path.join('.'), node.name);
+        }
+    }
+    const named: { names: string[]; drawn: THREE.Object3D }[] = [];
+    for (const { path, drawn } of built) {
+        if (drawn === undefined) {
+            continue;
+        }
+        const names: string[] = [];
+        for (let depth = 0; depth <= path.length; depth++) {
+            const name = nameAt.get(path.slice(0, depth).join('.'));
+            if (name !== undefined) {
+                names.push(name);
+            }
+        }
+        named.push({ names, drawn });
+    }
+    return named;
 }
 
 export async function showGeometry(message: ShowMessage): Promise<void> {
@@ -1407,10 +2004,41 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // out to draw with is freed with the rest of the show's materials.
     geometry.own(boundaryMaterial);
     geometry.own(boundaryLineMaterial);
-    for (const { node, path, group: into } of loaded.built) {
-        addPorts(into, node, path, size, sketches, boundaryMaterial, boundaryLineMaterial);
-        addCallouts(into, node, path);
+    // Every placement composed once, so that each component's box below is
+    // measured where the tree puts it and taken back out of it consistently.
+    group.updateMatrixWorld(true);
+    // And the frame the whole tree is in, for the materials' callouts that
+    // arrive later: this group's, before 'frame()' moves it.
+    const frameOfTree = group.matrix.clone().invert();
+    // The box of what each node holds, on the stage: its own shape's and its
+    // children's, measured before any port is added under it. 'built' lists the
+    // children before the node that holds them, so one pass does it.
+    const held = new Map<string, THREE.Box3>();
+    for (const { node, path, drawn } of loaded.built) {
+        const box = drawn !== undefined ? new THREE.Box3().setFromObject(drawn) : new THREE.Box3();
+        (node.assembly ?? []).forEach((_child, index) => {
+            const inner = held.get([...path, index].join('.'));
+            if (inner !== undefined) {
+                box.union(inner);
+            }
+        });
+        held.set(path.join('.'), box);
     }
+    const made = noCallouts();
+    for (const { node, path, group: into, drawn } of loaded.built) {
+        const box = held.get(path.join('.')) ?? new THREE.Box3();
+        addPorts(into, node, path, size, sketches, boundaryMaterial, boundaryLineMaterial, made);
+        addCallouts(into, node, path, made);
+        if (isComponent(node)) {
+            if (drawn !== undefined) {
+                addComponentCallout(node, drawn, box, made);
+            }
+        } else {
+            addAssemblyCallout(node, path, into, box, made);
+        }
+    }
+    refreshComponentCallouts(made);
+    refreshInterfaceCallouts(made);
 
     if (superseded()) {
         disposeTree(group);
@@ -1437,6 +2065,15 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     shownGeometry?.disposeMaterials();
     shownGeometry = geometry;
     content = group;
+    callouts = made;
+    // What a choice in the CMF tab finds an item's geometry by, and the choice
+    // drawn again on what has just arrived.
+    faded.clear();
+    shownNodes = namedGeometry(loaded.built);
+    applyChoice();
+    // A cluster names the nodes of one tree: this show's are asked again.
+    materialCallouts = [];
+    treeFrame = frameOfTree;
     shownCut = cut;
     scene.add(group);
     // Framed on every shape the show carries, whether or not it is switched on:
@@ -1627,7 +2264,7 @@ export function screenshot(): string {
     if (!(canvas instanceof HTMLCanvasElement)) {
         throw new Error('the 3D view is not drawn on a canvas');
     }
-    surface.render(scene, camera);
+    surface.render(scene, drawingCamera());
     return canvas.toDataURL('image/png');
 }
 
@@ -1708,6 +2345,16 @@ export function modelBounds(): Bounds | undefined {
     };
 }
 
+/**
+ * Draw the stage in perspective, or without it - the view panel's projection.
+ * Where it is looked from does not move: an isometric view is the panel's to
+ * turn to, as any other viewpoint is.
+ */
+export function setPerspective(enabled: boolean): void {
+    perspective = enabled;
+    invalidate();
+}
+
 export function setAutoRotate(enabled: boolean): void {
     autoRotate = enabled;
     controls.autoRotate = enabled;
@@ -1732,19 +2379,28 @@ export function setAutoFit(enabled: boolean): void {
  * A part that states a see-through colour ("#RRGGBBAA") is a part whose full
  * strength is that, and the slider scales it rather than replacing it: at 100% it
  * is as see-through as it says, and at 50% half as opaque again.
+ *
+ * Below 100%, a face with a finish is drawn as the plain material of its colour,
+ * on every renderer: the slider is for seeing into the model, and a half-clear
+ * metal is black where it should let the inside show (see 'finish.ts'). At 100%
+ * the finish is back, and a see-through colour keeps its own.
  */
 export function setOpacity(opacity: number): void {
     if (content === undefined) {
         return;
     }
     const apply = (material: THREE.Material) => {
-        if (material.userData.annotation === true) {
+        // A port's boundary has its own opacity, and what a choice in the CMF
+        // tab leaves out its own faintness.
+        if (material.userData.annotation === true || material.userData.faded === true) {
             return;
         }
         const alpha = typeof material.userData.alpha === 'number' ? material.userData.alpha : 1;
         material.transparent = true;
         material.opacity = opacity * alpha;
         material.needsUpdate = true;
+        // A see-through model is drawn plain, finishes and all (see 'finish.ts').
+        setFinishShown(material, opacity >= 1);
     };
     content.traverse((node) => {
         const mesh = node as THREE.Mesh;
@@ -1758,6 +2414,8 @@ export function setOpacity(opacity: number): void {
             apply(material);
         }
     });
+    // And what is drawn faint meanwhile, as it will be drawn once it is not.
+    faded.forEach(apply);
     invalidate();
 }
 
@@ -1794,7 +2452,7 @@ function animate(): void {
         dirty = false;
         const started = performance.now();
         drawStage();
-        labelRenderer.render(scene, camera);
+        labelRenderer.render(scene, drawingCamera());
         drawTime = performance.now() - started;
     }
     reportFrameRate(now, draws, drawTime);

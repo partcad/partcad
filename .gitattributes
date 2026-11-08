@@ -26,7 +26,9 @@
 # drawing that puts a CR inside a stream loses a byte on checkout, silently --
 # measured: re-render with one CRLF in it and `auto` alone hands back 60710
 # bytes where 60711 went in. `.3mf` is a zip container and the sniff does catch
-# it; named here too, so that neither rests on the heuristic.
+# it; named here too, so that neither rests on the heuristic. So are the two
+# native CAD documents the tests read through cadmpeg, FreeCAD's `.FCStd` and
+# Fusion's `.f3d`, which are zip archives as well.
 #
 # `.pdf` is also in LFS, below, and both lines are kept on purpose. Either one
 # alone stops the sniff -- `binary` and the `-text` on the LFS line each do it
@@ -52,7 +54,14 @@
 # in `.github/workflows` asks for LFS -- so every published extension until now
 # carried a 130-byte pointer file where its icon should be, and showed none in
 # the marketplace or in the Extensions view. Named on its own rather than by
-# extension: the rest of the `.png`s in the tree really are rendered output.
+# extension: the rest of the `.png`s in the tree really are rendered output, but for
+# the extension's below.
+#
+# The browser extension's icons, `/browsers/*/icons/*.png`, are the same rule
+# once more, and twice over: `browsers/build.py` packs them into what goes to the
+# Chrome Web Store, Microsoft Edge Add-ons and addons.mozilla.org, and `pc login`
+# loads the directories unpacked, as they are checked out. A pointer file there
+# is an extension the browser refuses to load, for an icon it cannot decode.
 #
 # `.svg` is here for the same reason the `.png`s are, and with the same
 # exceptions for the same reason. Nearly every SVG in this tree is a *drawing* --
@@ -107,6 +116,8 @@
 *.step binary
 *.stl binary
 *.3mf binary
+*.FCStd binary
+*.f3d binary
 *.pdf binary
 *.ico binary
 *.bmp binary
@@ -115,6 +126,7 @@
 **/*.svg filter=lfs diff=lfs merge=lfs -text
 **/*.pdf filter=lfs diff=lfs merge=lfs -text
 /ide/vscode/resources/logo_128x128.png -filter binary
+/browsers/*/icons/*.png -filter binary
 /ide/vscode/resources/**/*.svg -filter binary
 /cad/freecad/resources/icons/*.svg -filter binary
 /apache20.svg -filter binary

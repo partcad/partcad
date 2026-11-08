@@ -127,9 +127,10 @@ option_groups = [
 command_groups = [
     {
         # `version` and `upgrade` are about this installation of PartCAD;
-        # `config`, `system` and `daemon` about the host it runs on.
+        # `config`, `system` and `daemon` about the host it runs on, and `login`
+        # writes the credentials of a plugin into that host's configuration.
         "name": "Host commands",
-        "commands": ["version", "upgrade", "config", "system", "daemon"],
+        "commands": ["version", "upgrade", "config", "login", "system", "daemon"],
     },
     {
         "name": "Package commands",
@@ -149,6 +150,10 @@ command_groups = [
             "test",
             "sim",
             "info",
+            # Beside `info`: `info` says what one object is, and `compare`
+            # reads one against another -- the 3D counterpart of the gen-sketch
+            # skill's `measure.py compare`, which reads two drawings.
+            "compare",
             "bom",
             "convert",
             # Beside `convert`: both leave the package holding something it did

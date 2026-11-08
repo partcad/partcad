@@ -202,12 +202,17 @@ The plugin folder is named `claude`, but the command namespace comes from
   package's imports and needs PartCAD to already be here. This skill is what
   puts it here.
 - **`/pc:gen <description>`** — decides whether the request is a part, an
-  assembly, or a 2D sketch and follows the matching flow below.
+  assembly, a scene, or a 2D sketch and follows the matching flow below.
 - **`/pc:gen-part <description>`** — generates a single part: the agent picks a
   representation (build123d / cadquery / openscad / sdf), authors the CAD script
   itself, and validates it by rendering **four views** (`front`, `top`, `right`,
   `iso`) and checking each against the description — `pc test` only proves the
   geometry instantiates, and one projection hides whatever is behind it.
+  Before any of that it settles the part's dimensions on temporary sketches
+  (`/pc:gen-sketch`, below), so every number in the script is one that was
+  measured on a sketch first — and measured again on the part's own SVG
+  projections at the end; a part that is a constant profile is an `extrude` of
+  the validated sketch, with no script at all.
   Supersedes the legacy `pc add part --ai` pipeline (the agent is the model; no
   provider/API key). It names the material the part is made of and checks the
   mass `pc info` derives from it, so the part is ready to simulate. When an IDE
@@ -215,8 +220,10 @@ The plugin folder is named `claude`, but the command namespace comes from
   builds and renders in the Digital Thread's 3D view (`pc ide view`), so the
   part can be watched taking shape on one continuous turn.
 - **`/pc:gen-assembly <description>`** — generates an assembly: reuses or
-  generates the component parts, authors the `.assy` (explicit placement or
-  interface mates), and validates the same four ways — a component offset along
+  generates the component parts, settles the placements on temporary layout
+  sketches (`/pc:gen-sketch`), authors the `.assy` (explicit placement or
+  interface mates) from them, measures the result against the same layout, and
+  validates the same four ways — a component offset along
   the viewing direction sits perfectly in the one view that hides the offset. New
   capability — PartCAD had no AI assembly path. Where the description makes a
   physical claim (it stands, it floats, it holds a load) it also declares that
@@ -224,9 +231,49 @@ The plugin folder is named `claude`, but the command namespace comes from
   checks it with `pc sim`. Beside an IDE it shows its progress the way
   `/pc:gen-part` does: each part as it takes shape, then each version of the
   assembly that builds and renders.
-- **`/pc:gen-sketch <description>`** — generates a 2D sketch: the agent picks a
-  representation (build123d / cadquery / dxf / svg), authors the sketch, and
-  validates by rendering to SVG.
+- **`/pc:gen-scene <description>`** — generates a scene: an arrangement of
+  objects rather than a product (a room, a building inside or out, a workcell,
+  a world to simulate in), which says where things are and nothing about
+  putting them together. What it has to get right is the surfaces that are seen
+  or that something in the scene touches, and its physical conditions; the
+  inside of a volume nothing interacts with need not be right. Every object is a
+  `basic` cuboid or cylinder at its real size unless more detail can reasonably
+  be expected (asked for, in the catalog already, the subject of the scene, or a
+  shape something in it interacts with). Every object is placed with
+  `location:` and is `fixed: true` unless it is mobile. The scene stands on a
+  bottom surface whose underside is at or above z = 0, where every simulator
+  writes its ground plane, except in space, which has none and
+  `gravity: [0, 0, 0]`. A building whose inside only is wanted stands on floor
+  plans, `walls` scenes whose walls are see-through from outside: a single one
+  where one outline can hold the space, and a room with doors or windows as the
+  same walls placed by hand, since a `walls` scene cuts no openings. A building
+  whose outside is modelled too gets solid walls first, each an extrusion of its
+  elevation sketch with the doors and windows as holes, placed side by side
+  along its outline. `pc test` only *warns* about overlaps in a scene, and the
+  skill judges each warning by what the overlap touches rather than treating it
+  as a defect: walls sharing a corner are left alone, a mobile object inside
+  another never is.
+- **`/pc:gen-sketch <description>`** — generates a 2D sketch whose dimensions
+  are measured rather than estimated. The input is normalized to 2D first — a
+  description is a table of targets, a DXF or SVG is re-rendered, a 3D
+  description is a throwaway part projected with `pc adhoc render`, a 3D file is
+  projected, a drawing or photo is measured in pixels with its projection
+  (orthographic first/third angle, isometric, perspective) taken into account —
+  then a candidate is drawn, rendered, measured with the bundled `measure.py`
+  (which reads PartCAD's SVG renders as the millimetres they are made of, and
+  raster pictures along scan lines), and corrected from the error until every
+  dimension is within tolerance. Every size is read off both of PartCAD's
+  projections — `reproducible:` true and false, which draw one geometry as
+  different shapes and different numbers of them (one arc or several, an arc or
+  a run of short lines) — asked for on each render with `--reproducible` and
+  `--no-reproducible`, and `measure.py compare` reads the two against each
+  other. Its 3D counterpart is `pc compare`, which `/pc:gen-part` uses to read a
+  part against the 3D file it reproduces: volume, mass, and the surface distance
+  along the reference's normals. A 3D description is studied as a bare script with `pc adhoc render`,
+  which takes `pc render`'s options. `/pc:gen-part` and `/pc:gen-assembly` run the
+  same loop first, on temporary sketches. `measure.py` is the second helper the
+  library ships beside a `SKILL.md`, after `part_loads.py`;
+  `tests/partcad/unit/test_skill_measure.py` holds it to hand-worked drawings.
 - **`/pc:export <object> <format>`** — writes a 3D/CAD file out of an object a
   package declares (`pc export`) and changes nothing in `partcad.yaml`. This is
   what "export it as STEP" almost always means. It reaches more formats than
@@ -240,7 +287,11 @@ The plugin folder is named `claude`, but the command namespace comes from
   package's own `render:` options apply, and `pc adhoc render` for a bare file.
   The viewing angle is `--view front|top|iso|…`, or `--viewport-origin` /
   `--viewport-up` for an arbitrary one — the same two keys a `render:` file type
-  is configured with in `partcad.yaml`. `--with-ports` / `--with-interfaces` /
+  is configured with in `partcad.yaml` — and `--reproducible` /
+  `--no-reproducible` its `reproducible`, the hidden-line algorithm. `pc adhoc
+  render` takes `pc render`'s options wherever they mean something for a bare
+  file: `-t`, `-O`, `-p` for a script's parameters, and `-e` for a file type a
+  package implements. `--with-ports` / `--with-interfaces` /
   `--with-all` draw the connection metadata on top of the projection, which is
   the only way any of it becomes visible.
 

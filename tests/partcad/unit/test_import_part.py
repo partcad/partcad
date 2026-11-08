@@ -89,3 +89,50 @@ def test_import_copy_error(tmp_path: Path):
     with patch("shutil.copy2", side_effect=shutil.Error("Copy failed")):
         with pytest.raises(ValueError, match="Failed to copy"):
             import_part_action(project, "step", "fake_part", str(source_path))
+
+
+FCSTD = Path("tests/partcad/unit/data/import_fcstd/design_history.FCStd").resolve()
+
+
+def _empty_project(tmp_path: Path):
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    (project_dir / "partcad.yaml").write_text("parts: {}\n")
+    return project_dir
+
+
+@pytest.mark.parametrize("source_name", ["design_history.FCStd", "design_history.fcstd"])
+def test_a_freecad_document_is_imported_under_the_name_its_type_looks_for(tmp_path: Path, source_name: str):
+    """'fcstd' parts are '.FCStd' files, whatever the file handed over was called.
+
+    The type is a declaration in '//builtin/import' and not a factory, and its
+    parts are found at '<name>.FCStd' -- so a file copied in as '<name>.fcstd'
+    was a part nothing could find on a file system that tells case apart.
+    """
+    source = tmp_path / source_name
+    shutil.copyfile(FCSTD, source)
+    project_dir = _empty_project(tmp_path)
+
+    import_part_action(Context(str(project_dir)).get_project(""), "fcstd", "body", str(source))
+
+    assert (project_dir / "body.FCStd").is_file()
+    project = Context(str(project_dir)).get_project("")
+    config = project.get_part_config("body")
+    assert config["type"] == "fcstd"
+    # The default it is found at is the file, so the declaration names no path.
+    assert "path" not in config
+    part = Context(str(project_dir)).get_part(":body")
+    assert Path(part.path) == (project_dir / "body.FCStd")
+
+
+def test_a_file_whose_extension_is_another_case_keeps_its_path(tmp_path: Path):
+    """'part.STEP' is not where a 'step' part named 'part' is looked for: '<name>.step' is."""
+    project_dir = _empty_project(tmp_path)
+    (project_dir / "bracket.STEP").write_text("ISO-10303-21;\n")
+    project = Context(str(project_dir)).get_project("")
+
+    assert project.add_part("step", str(project_dir / "bracket.STEP"))
+
+    config = Context(str(project_dir)).get_project("").get_part_config("bracket")
+    assert config["type"] == "step"
+    assert config["path"] == "bracket.STEP"

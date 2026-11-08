@@ -71,7 +71,6 @@ class ProviderCartItem:
     material: str = None
     color: str = None
     finish: str = None
-    # TODO(clairbee): add texture
     # TODO(clairbee): add tolerance
 
     format: str = None
@@ -91,11 +90,19 @@ class ProviderCartItem:
     # heard of that store. Not part of what a provider is handed.
     suppliers: dict
 
+    # Whether a quote may go without this item when nobody supplies it: what a
+    # scene holds always may - a scene is an arrangement, and its walls, its
+    # floor and whatever else nobody sells are no reason to price none of the
+    # rest - and what anything else holds may when the cart was made with
+    # 'ignore_missing'. Not part of what a provider is handed.
+    optional: bool = False
+
     def __init__(self):
         self.name = "none"
         self.count = 0
         self.format = "none"
         self.suppliers = {}
+        self.optional = False
 
     def _set_store_data(self, object):
         store_data = object.get_store_data()
@@ -127,9 +134,9 @@ class ProviderCartItem:
             raise ValueError(f"Part or assembly '{self.name}' not found")
         self._set_store_data(object)
 
-        self.material = await object.get_mcftt("material")
-        self.color = await object.get_mcftt("color")
-        self.finish = await object.get_mcftt("finish")
+        self.material = await object.get_mcft("material")
+        self.color = await object.get_mcft("color")
+        self.finish = await object.get_mcft("finish")
 
     def compose(self):
         result = {
@@ -168,10 +175,15 @@ class ProviderCart:
 
     parts: dict[str, ProviderCartItem]
     qos: str = None
+    # Whether an item nobody supplies is left out of a quote rather than failing
+    # it, for what is not in a scene too: '--ignore-missing'. See
+    # 'ProviderCartItem.optional'.
+    ignore_missing: bool = False
 
-    def __init__(self, qos: str = None):
+    def __init__(self, qos: str = None, ignore_missing: bool = False):
         self.parts = {}
         self.qos = qos
+        self.ignore_missing = bool(ignore_missing)
 
     async def add_objects(self, ctx, objects: list[str], recursive: bool = False):
         """Add parts or assemblies"""
@@ -204,6 +216,10 @@ class ProviderCart:
 
         Pass 'recursive=True' to break every assembly down to its parts,
         including the ones that could have been ordered assembled.
+
+        What a scene holds is optional (see 'ProviderCartItem.optional'): a
+        quote goes without what nobody supplies. What anything else holds is
+        optional only in a cart made with 'ignore_missing'.
         """
         name, count = resolve_cart_item(object)
         project_name, object_name = resolve_resource_path(
@@ -228,6 +244,7 @@ class ProviderCart:
                 pc_logging.debug(f"Adding '{procured}' to the cart for part '{object_name}'")
                 item = ProviderCartItem()
                 await item.set_spec(ctx, procured)
+                item.optional = self.ignore_missing
                 self.add_item(item, count)
         else:
             # Quietly, both of them: a name that is one is not the other, and
@@ -244,6 +261,7 @@ class ProviderCart:
                     pc_logging.debug(f"Adding assembly '{object_name}' to the cart as is")
                     item = ProviderCartItem()
                     await item.set_spec(ctx, name)
+                    item.optional = self.ignore_missing
                     self.add_item(item, count)
                     return
 
@@ -253,20 +271,24 @@ class ProviderCart:
                 else:
                     bom = await holder.get_supply_bom(ctx)
                 suppliers = await prj.get_suppliers_async()
+                optional = scene is not None or self.ignore_missing
                 tasks = []
                 for item_name, item_count in bom.items():
                     pc_logging.debug(f"Adding '{item_name}' to the cart")
                     item_spec = item_name + "#" + str(item_count)
-                    tasks.append(asyncio.create_task(self.add_item_from_spec(ctx, item_spec, count, suppliers)))
+                    tasks.append(
+                        asyncio.create_task(self.add_item_from_spec(ctx, item_spec, count, suppliers, optional))
+                    )
                 await asyncio.gather(*tasks)
             else:
                 # TODO(clairbee): turn it into an error() and recover nicely
                 raise Exception(f"Part, assembly or scene '{object_name}' not found in project '{project_name}'")
 
-    async def add_item_from_spec(self, ctx, part_spec: str, count=1, suppliers: dict = None):
+    async def add_item_from_spec(self, ctx, part_spec: str, count=1, suppliers: dict = None, optional=False):
         part_item = ProviderCartItem()
         await part_item.set_spec(ctx, part_spec)
         part_item.suppliers = dict(suppliers or {})
+        part_item.optional = bool(optional)
         self.add_item(part_item, count)
 
     async def add_part_specs(self, ctx, part_specs: list[str]):
@@ -293,6 +315,10 @@ class ProviderCart:
         if item.name in self.parts:
             existing = self.parts[item.name]
             existing.count += item.count
+            # Optional only while everything that asked for it may go without
+            # it: the same chair in a scene and in an assembly is the
+            # assembly's to fail over.
+            existing.optional = bool(getattr(existing, "optional", False) and getattr(item, "optional", False))
             # The same part reached through assemblies of two packages can be
             # bought where either of them says; the first to name a store keeps
             # its place, and what it said about it.

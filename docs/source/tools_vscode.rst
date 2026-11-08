@@ -74,7 +74,14 @@ Packages
 Objects
 =======
 
-- **Add** a part, assembly, scene, sketch, or interface.
+- **Add** a part, assembly, scene, sketch, or interface. **Add part** asks for the part's type and then its
+  file: a script (OpenSCAD, CadQuery, build123d, SDF, Chili3D), which may be a new file started from a template; a
+  file PartCAD reads itself (STEP, BREP, IGES, STL, 3MF, OBJ, glTF); or a CAD application's own file, read
+  without the application (FreeCAD ``.FCStd``, Autodesk Fusion ``.f3d``, SolidWorks ``.SLDPRT``, Inventor
+  ``.ipt``, CATIA V5 ``.CATPart``, ACIS/ShapeManager ``.sat``/``.sab``/``.smt``/``.smb`` and Creo View
+  ``.pvz``; see :ref:`cad-files`), or an OpenUSD stage (``.usd``, ``.usda``, ``.usdc``, ``.usdz``). The file dialog offers every extension of the type, in either case. It
+  adds the part the way ``pc add part`` does (see :doc:`/cli`): nothing is read until the part is built, and
+  one of the native formats that does not read into a whole solid fails then.
 - **Import** a part, assembly, scene, or sketch from an existing file.
 - **Display** (inspect) a part, assembly, scene, sketch, or interface in the ``Digital Thread``; parts can
   also be opened for display and editing together, or their source edited directly.
@@ -94,6 +101,11 @@ The Explorer also lists the ``software`` a package ships. Selecting one shows it
 in the Inspector and leaves the ``Digital Thread`` as it is: software is a file, not geometry, so there is
 nothing to render.
 
+And it lists the colours, materials and finishes a package declares (see :doc:`/digital_thread/lifecycle/design_cmf`),
+after its objects, each with the colour it is drawn in and marked when it is only a picture. **Display** shows one in
+the ``Digital Thread`` on its own: there is nothing of it to turn, so the panel is its **CMF** tab alone, saying what it
+is.
+
 Digital Thread
 ==============
 
@@ -102,7 +114,7 @@ a bare canvas: groups of tabs, each with tabs of its own -- **Design**, **Analys
 **Validation**, followed by **Operations**, which has nothing in it yet and is always disabled. Design
 is always the first (see :doc:`/digital_thread/introduction` for what each group is for):
 
-- **Design** — the object itself, three ways, in tabs of its own:
+- **Design** — the object itself, three ways, and what it is in, in tabs of its own:
 
   - **3D** — the shape, tessellated by PartCAD and drawn here, to turn and zoom. Always present.
   - **2D** — the object rendered to a picture, as ``pc render`` renders it: PNG, JPEG or SVG,
@@ -111,6 +123,10 @@ is always the first (see :doc:`/digital_thread/introduction` for what each group
     ``pc render -e`` uses one. **Drawn by** names it: ``//pub/feature/render/draftwright`` unless you choose or
     type another, and the formats are whatever it declares (PDF, SVG and DXF). The first drawing takes a few
     minutes while PartCAD installs draftwright.
+
+  - **CMF** — for a part, an assembly or a scene: the colour, material and finish of each item it is made of,
+    set by set with a swatch of each colour, what is unspecified, and what keeps it from being made -- the items
+    ``pc test``'s ``cmf`` check finds incomplete first (see :doc:`/digital_thread/lifecycle/design_cmf`).
 
   2D and Draft each have a **Save…** button that saves the file on screen wherever you choose. A picture is
   shown on the tab, and can be zoomed with the mouse wheel, dragged, and put back with a double-click; a PDF or
@@ -122,14 +138,15 @@ is always the first (see :doc:`/digital_thread/introduction` for what each group
 - **Manufacturing** — what making it takes:
 
   - **Build vs Buy** — for a part or an assembly: every part, piece of stock and sub-assembly it is made of,
-    with a picture, a count, its size, weight and material, and a switch saying whether it is built or bought.
+    with a picture, a count, its size, weight, colour, material and finish, and a switch saying whether it is built
+    or bought.
     A line that can be only one of the two has its switch fixed, and one that can be neither is marked
     **Incomplete**. The choices are kept on your machine, and ``pc instructions`` reads them too.
   - **Build** — for whatever is built: the order to make it in, with the instructions for the selected step.
   - **Buy** — for whatever is bought: what it can be bought from, and a quote per supplier.
   - **Bill of Materials** — for a part or an assembly: what has to be procured to have it, as ``pc bom``
-    lists it. A made part is the stock it is made from, and a sub-assembly that declares a vendor and an SKU
-    is one item ordered whole.
+    lists it, with the colour, material and finish of each line. A made part is the stock it is made from, and a
+    sub-assembly that declares a vendor and an SKU is one item ordered whole.
   - **Assembly** — for an assembly: the assembly instructions, as PDF or HTML, to read and save
     (``pc instructions``).
 
@@ -190,17 +207,22 @@ out; it stays out, or folded, on every tab at once. From the top:
 - a button per axis, **X**, **-X**, **Y**, **-Y**, **Z** and **-Z**, each looking along that axis from that end.
   They are the views ``pc render --view`` names -- X is ``right``, -Y is ``front``, Z is ``top`` with +Y up -- so
   the 2D tab's picture after one of them is the picture that command draws;
-- a **section** slider per axis, each with two ends, which start at the two faces of the object's bounding box:
-  moving an end inwards cuts that much off from that side, and the three together keep a box. The cut is made by
-  PartCAD, on the exact geometry, before it is drawn -- the 3D view is shown again cut, and the 2D and Draft tabs
-  draw the cut object -- so it is a section of the solid and not a clipping of the picture. It is one section for
-  the 3D, 2D and Draft tabs, kept for as long as the object is on screen;
 - the **viewpoint**: where the view is looked at from (**Origin**), which way is up (**Up**) and, in a 3D view,
   the point it looks at (**Target**), in millimetres in the object's frame. They are the ``viewport_origin`` and
   ``viewport_up`` a ``render:`` section takes, so they can be copied out into one, or onto
   ``pc render --viewport-origin``, and typed or pasted in -- ``1, 2, 3``, ``[1, 2, 3]`` and ``1 2 3`` all read.
   **Reset** goes back to the view the tab starts out with, and on the 3D tab **Fit** brings the camera in or out, over a
-  second and from where it is looking, until the whole object fits however it turns;
+  second and from where it is looking, until the whole object fits however it turns. Right after its title is the
+  **projection**: **Perspective**, the default, draws what is nearer larger, as an eye sees it; **Orthographic** draws without perspective, a length the same size however far away it is, as a drawing does;
+  and **Isometric** draws without perspective from the nearest corner, where all three axes are foreshortened alike.
+  Choosing Isometric turns the view to that corner; turning the view off it leaves it drawn without perspective, and
+  the projection then says Orthographic. The 3D view and an analysis's model offer it; the 2D tab's picture is drawn
+  in the projection its ``render:`` section gives it;
+- a **section** slider per axis, each with two ends, which start at the two faces of the object's bounding box:
+  moving an end inwards cuts that much off from that side, and the three together keep a box. The cut is made by
+  PartCAD, on the exact geometry, before it is drawn -- the 3D view is shown again cut, and the 2D and Draft tabs
+  draw the cut object -- so it is a section of the solid and not a clipping of the picture. It is one section for
+  the 3D, 2D and Draft tabs, kept for as long as the object is on screen;
 - **Animate**, **Auto-fit** and **Opacity**. Animate turns the 3D view's model on its own, and is on from the start
   wherever the view has a graphics card to draw with; Auto-fit is explained below; Opacity makes the model
   see-through.

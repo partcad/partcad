@@ -423,7 +423,24 @@ class ShapeCache(Cache):
         """
         return _sizes_naming({key: _named_by(data) for key, data in entries.items()}, entries)
 
-    async def write_async(self, hash: CacheHash, items: dict[str, object]) -> dict[str, bool]:
+    async def write_async(
+        self, hash: CacheHash, items: dict[str, object], build_seconds: float = None
+    ) -> dict[str, bool]:
+        """Store a shape's entries, and say which of them to keep in this process's memory too.
+
+        'build_seconds' is how long the shape took to build (see
+        'Cache.write_data_async'): a tier that would not gain from an entry that
+        fast leaves it to memory. Except where memory will not hold it - too big
+        for 'cacheMemoryMaxEntrySize', or memory caching switched off - since a
+        shape that is in neither has to be built every time it is asked for,
+        and an assembly that a daemon is told to build first would never come to
+        count as built (see 'Assembly.get_uncached_subassemblies_async'). Then
+        it is offered to every tier on size alone, as it always was.
+        """
+        if build_seconds is not None and not all(
+            self._keep_in_memory(total_size(value), False) for value in items.values()
+        ):
+            build_seconds = None
         stored = {}
         if self.enabled:
             # The geometry written in this write, which components that are
@@ -439,7 +456,9 @@ class ShapeCache(Cache):
             # Asked only of what can name anything, so that an assembly's tree,
             # which names nothing, is not parsed back as it is written.
             named = {key: _named_by(serialized[key]) for key, value in items.items() if _holds_pieces(value)}
-            stored = await self.write_data_async(hash, serialized, _sizes_naming(named, serialized))
+            stored = await self.write_data_async(
+                hash, serialized, _sizes_naming(named, serialized), build_seconds=build_seconds
+            )
 
         results = {}
         for key, value in items.items():

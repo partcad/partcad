@@ -35,7 +35,7 @@ import wrapper_common
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 
 def relocate(shape, offset):
@@ -75,7 +75,11 @@ def relocate(shape, offset):
         import build123d as b3d
 
         transformation = b3d.Location(*offset).wrapped.Transformation()
-    transform = BRepBuilderAPI_Transform(shape, transformation, True)
+    # Copying the mesh as well as the geometry ('theCopyMesh'): a part read from
+    # an ASCII STL is a face holding a triangulation and no surface, which a
+    # copy of the geometry alone hands back exactly where it was - an 'offset'
+    # or a 'scale' that silently did nothing.
+    transform = BRepBuilderAPI_Transform(shape, transformation, True, True)
     return transform.Shape()
 
 
@@ -93,7 +97,8 @@ def scale(shape, factor):
 
         transformation = gp_Trsf()
         transformation.SetScale(gp_Pnt(shape.Location().Transformation().TranslationPart()), float(factor))
-        return ocp_serialize.downcast(BRepBuilderAPI_Transform(shape, transformation, True).Shape())
+        # The mesh too, for the reason 'relocate' gives.
+        return ocp_serialize.downcast(BRepBuilderAPI_Transform(shape, transformation, True, True).Shape())
 
     import build123d as b3d
 

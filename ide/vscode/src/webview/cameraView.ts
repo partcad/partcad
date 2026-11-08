@@ -126,6 +126,44 @@ export function fitProgress(elapsed: number): number {
     return t * t * (3 - 2 * t);
 }
 
+/**
+ * Make 'drawn' draw without perspective what 'camera' draws with it: the same
+ * line of sight, and at 'target' the same width and height of the stage - so
+ * that switching between the two keeps what is looked at the size it was there,
+ * and whatever moves 'camera' (the orbit controls, a fit, the SpaceMouse) moves
+ * this one too. Coming nearer is zooming in, as it is in perspective.
+ *
+ * 'reach' is how far from 'target' anything worth drawing is. Without
+ * perspective, nearer is not larger, so nothing has to be behind the camera
+ * either: 'drawn' stands back along the line of sight until all of that is in
+ * front of it, and a camera zoomed in on a detail does not cut through the
+ * model the way 'camera', at that distance, would.
+ */
+export function matchOrthographic(
+    drawn: THREE.OrthographicCamera,
+    camera: THREE.PerspectiveCamera,
+    target: THREE.Vector3,
+    reach: number,
+): void {
+    const back = camera.position.clone().sub(target);
+    const distance = Math.max(back.length(), 1e-9);
+    const halfHeight = (distance * Math.tan((camera.fov * Math.PI) / 360)) / camera.zoom;
+    const halfWidth = halfHeight * camera.aspect;
+    const standoff = Math.max(distance, reach);
+    drawn.left = -halfWidth;
+    drawn.right = halfWidth;
+    drawn.top = halfHeight;
+    drawn.bottom = -halfHeight;
+    drawn.near = 0;
+    // As far beyond the target as 'camera' sees, and never short of 'reach'.
+    drawn.far = standoff + Math.max(reach, camera.far - distance);
+    drawn.up.copy(camera.up);
+    drawn.position.copy(target).addScaledVector(back.divideScalar(distance), standoff);
+    drawn.quaternion.copy(camera.quaternion);
+    drawn.updateProjectionMatrix();
+    drawn.updateMatrixWorld();
+}
+
 /** Where 'camera' is looking from, at 'target', in PartCAD's frame. */
 export function readViewpoint(camera: THREE.Camera, target: THREE.Vector3, frame: SceneFrame): Viewpoint {
     const offset = camera.position.clone().sub(target);

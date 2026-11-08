@@ -323,6 +323,8 @@ Whether everything an assembly places is placed once, on a port that takes it, a
 
 An assembly that is to be made (``manufacturable``) is held to more: no item may be placed by coordinates, and every item after the first has to connect to something.
 
+An assembly bought whole (one declaring ``vendor`` and ``sku``) is its vendor's to put together: the coordinates in its file draw it, so nothing in it has to connect to anything, and an assembly holding it does not look inside it for that. The same part twice in one place, and two items on one port, are still reported.
+
 When it does not apply
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -345,16 +347,16 @@ On the assembly: ``connectivity: allowDuplicates: true`` to allow the same part 
 ``requirements``: Meets its requirements
 ----------------------------------------
 
-**Applies to** objects whose ``requirements:`` require ports, interfaces or physical properties. ``pc test -f requirements <object>`` runs it alone.
+**Applies to** objects whose ``requirements:`` require ports, interfaces, physical properties or a match with another object. ``pc test -f requirements <object>`` runs it alone.
 
-Whether the model is what its ``requirements:`` say it has to be, as far as that can be measured: each required port is there, facing where it has to; each required interface is implemented, its instances where they have to be; and each required physical property - its mass, its centre of mass, its inertia, its friction - has a value that meets the requirement. Asked again every time, never read from the cache.
+Whether the model is what its ``requirements:`` say it has to be, as far as that can be measured: each required port is there, facing where it has to; each required interface is implemented, its instances where they have to be; and each required physical property - its mass, its centre of mass, its inertia, its friction - has a value that meets the requirement; and its volume, its displacement and its mass are within the percentage ``match:`` allows of each object it names - the numbers ``pc compare <that object> <this one>`` reports. Asked again every time, never read from the cache.
 
 The ``features:`` are sentences rather than measurements, and are judged by the ``/pc:validate`` agent skill. What this check asks of them is only that a ``simulate:`` entry or an analysis scenario naming one (``feature:``) names one that is declared.
 
 When it does not apply
 ^^^^^^^^^^^^^^^^^^^^^^
 
-An object that requires no port, interface or physical property, and whose simulations and analysis scenarios name no feature.
+An object that requires no port, interface, physical property or match with another object, and whose simulations and analysis scenarios name no feature.
 
 When it fails
 ^^^^^^^^^^^^^
@@ -363,7 +365,38 @@ Each failure is ``<section>: <name>: <required>: <found>`` - what was asked for 
 
 * A port or an interface instance that is missing, or faces the wrong way: move it in the model, or correct the requirement if the requirement is what is wrong.
 * ``not known: ...``: PartCAD could not find out the value - a mass with no density to work it out from. State the value in a ``physics:`` section, or give the part a ``material:`` with a density. "Not known" is not "met".
+* ``match: <amount> of <object>: within N%: ... more than N%``: the volume, the displacement or the mass is further from the other object's than the requirement allows. Run ``pc compare --displacement <object> <this one>`` for the whole comparison, and change the model or the limit, whichever is wrong.
 * ``unreadable``: the requirement itself cannot be read; the detail says why.
+
+.. _test-cmf:
+
+``cmf``: Colour, material and finish are specified
+--------------------------------------------------
+
+**Applies to** parts and assemblies that are to be made. ``pc test -f cmf <object>`` runs it alone.
+
+Whether what is to be made says what it is made of and what it looks like: for a part, a material on every solid and a colour on every face - the colour its material claims counts - each a declaration that claims it can be had (``manufacturable: true``), and a finish that is one too where a finish is stated (none stated is as produced). Where each comes from - the part's source, its ``color``, ``material`` and ``finish`` parameters - is in "CMF" of the configuration documentation.
+
+An assembly that sets CMF itself - its own CMF parameters, a link's ``params:`` naming a colour, a material or a finish, a ``properties: color:`` - is drawing what it holds rather than specifying it, and is manufacturable only if it is bought whole: if it declares ``vendor`` and ``sku``. An assembly bought whole is judged by its own CMF, and nothing inside it is.
+
+It warns rather than fails, unless the object or its package says ``cmf: require: true``.
+
+When it does not apply
+^^^^^^^^^^^^^^^^^^^^^^
+
+A sketch; an object that is not to be made (``manufacturable: false``); a part that is bought (``vendor`` and ``sku``), in whatever its vendor sells it in.
+
+When it fails
+^^^^^^^^^^^^^
+
+* ``no colour on N face(s)`` or ``no material on N solid(s)``: state the missing component as the part's ``color`` or ``material`` parameter, or in its source.
+* ``the color '...' is display-only``: name a colour declaration that claims it can be had, instead of an ``rgba`` or a ``manufacturable: false`` one.
+* ``it sets CMF itself (...)``: declare the variant as a part - an ``enrich`` that fixes ``color`` - and link that, or declare ``vendor`` and ``sku`` on the assembly if it is bought as it is.
+
+Settings
+^^^^^^^^
+
+On the object or its package: ``cmf: require: true`` to fail on what it finds rather than warn.
 
 .. _test-degenerate:
 

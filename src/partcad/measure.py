@@ -27,7 +27,7 @@ from .process_crash import describe_exit_code
 _DEPENDENCIES = (sandbox_versions.OCP,)
 
 
-async def _run(ctx, request, cacheable: bool = True):
+async def _run(ctx, request, cacheable: bool = True, script: str = "measure.py"):
     if ctx is None:
         raise ValueError("A context is required to run the '%s' measurement" % request.get("operation"))
 
@@ -36,8 +36,8 @@ async def _run(ctx, request, cacheable: bool = True):
 
     cache = getattr(ctx, "cache_artifacts", None)
     artifact = cache_artifacts.wrapper_hash(
-        "measure#%s" % operation,
-        "measure.py",
+        "%s#%s" % (script.rsplit(".", 1)[0], operation),
+        script,
         cache_artifacts.request_key(request) if cacheable else None,
         _DEPENDENCIES,
     )
@@ -48,7 +48,7 @@ async def _run(ctx, request, cacheable: bool = True):
         for dep in _DEPENDENCIES:
             await runtime.ensure_async(dep)
 
-        command = [wrapper.get("measure.py"), operation]
+        command = [wrapper.get(script), operation]
         exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
         if exitcode != 0 and not errors:
             errors = "measure '%s' failed: %s" % (operation, describe_exit_code(exitcode))
@@ -104,9 +104,65 @@ async def measurements(ctx, shape, cacheable: bool = True):
     return await _run(ctx, {"operation": "measurements", "shape": shape}, cacheable)
 
 
+async def displacement(ctx, shape, cacheable: bool = True):
+    """How much 'shape' would push aside if it were submerged, in one sandbox trip.
+
+    ``{"displacement": float | None, "solids": int, "cavities": int}``: the
+    volume each solid's outer shell encloses, added up - its material and every
+    void sealed inside it - in mm^3, and None for a shape holding no solid.
+    'shape' is what 'Shape.get_wrapped' answers, a part's envelope or an
+    assembly's tree; an assembly's solids are its parts'. See
+    'shape_measure.displacement' among the wrappers.
+
+    Measured when asked rather than as every shape is built: only 'pc compare'
+    and a 'match:' requirement ask, and only of the objects they compare.
+    """
+    return await _run(ctx, {"operation": "displacement", "shape": shape}, cacheable)
+
+
 async def extent_z(ctx, shape, frame: Location = None, cacheable: bool = True):
     """The length of 'shape' along the Z axis of 'frame', or None if unmeasurable."""
     box = await bbox(ctx, shape, frame, cacheable)
     if box is None:
         return None
     return box[5] - box[2]
+
+
+async def surface_distance(
+    ctx, reference, current, spacing: float, allowance=None, worst: int = 10, cacheable: bool = True
+):
+    """How far the surface of 'current' is from the surface of 'reference', point by point.
+
+    Both are what 'Shape.get_wrapped' answers - a part's envelope or an
+    assembly's tree - and are compared where they are: neither is moved onto
+    the other. 'spacing' is how far apart the points measured on the reference
+    are, in millimetres; 'allowance' how far apart the two surfaces may be
+    anywhere, for the answer to count the points further apart than that; and
+    'worst' how many of the furthest points are listed. What comes back, and how
+    each point is chosen and measured, is 'wrapper_compare.surface_distance'.
+    Remembered like any other measurement, by both models and every argument.
+    """
+    request = {
+        "operation": "surface",
+        "reference": reference,
+        "current": current,
+        "spacing": float(spacing),
+        "allowance": None if allowance is None else float(allowance),
+        "worst": int(worst),
+    }
+    return await _run(ctx, request, cacheable, "compare.py")
+
+
+async def material_clusters(ctx, tree, distance: float, cacheable: bool = True):
+    """Where each material of 'tree' is: its clusters, as the "Materials" callout writes them.
+
+    'tree' is a shape tree as 'Shape.get_wrapped' answers it, and 'distance' how
+    far apart two surfaces of one material may be and still be one cluster, in
+    millimetres. Each cluster is '{"material", "name", "at", "nodes", "faces"}'
+    (see 'material_clusters.clusters' among the wrappers): what it is made of,
+    what a person reads that as, the point of it a callout is pinned to in the
+    frame of the tree, the path of every node with a face in it, and how many
+    faces it is. Remembered like a measurement, by the tree and the distance.
+    """
+    request = {"operation": "clusters", "shape": tree, "distance": float(distance)}
+    return await _run(ctx, request, cacheable, "materials.py")

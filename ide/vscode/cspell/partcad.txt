@@ -31,6 +31,9 @@ cache
 cadquery
 cae
 cam
+case
+catalogs
+catpart
 center
 cfd
 cfm
@@ -39,10 +42,12 @@ circle
 circles
 climb
 cm
+cmf
 cnc
 collide
 collision
 color
+colors
 comment
 companions
 compound
@@ -54,12 +59,15 @@ container
 continuous
 convection
 conventional
+conventions
 count
 cover
+cuboid
 currency
 cut
 cuts
 cwd
+cylinder
 cylindrical
 dam
 damper
@@ -73,6 +81,7 @@ description
 diameter
 dir
 direction
+displacement
 display
 distance
 dm
@@ -104,6 +113,7 @@ exclude
 executable
 exploded
 export
+extends
 extension
 extensions
 external
@@ -118,12 +128,14 @@ feed
 feedback
 file
 filter
+finishes
 fix
 fixed
 flatpak
 flip
 float
 floating
+fold
 force
 formal
 format
@@ -148,6 +160,7 @@ hm
 hold
 how
 id
+ids
 iges
 ignore
 image
@@ -170,6 +183,7 @@ interfaces
 interference
 interferes
 intro
+ipt
 item
 ixx
 ixy
@@ -187,6 +201,7 @@ kind
 kinds
 km
 laser
+ldraw
 lead
 length
 limits
@@ -202,6 +217,7 @@ manufacturer
 manufacturing
 map
 mass
+match
 material
 materials
 mates
@@ -209,6 +225,7 @@ max
 medium
 mesh
 metal
+metallic
 method
 mf
 mi
@@ -231,8 +248,10 @@ obj
 object
 of
 offset
+one
 only
 open
+openings
 openscad
 operation
 optimize
@@ -279,6 +298,7 @@ properties
 provide
 providers
 push
+pvz
 python
 quality
 radius
@@ -291,6 +311,7 @@ ref
 reference
 rel
 render
+reports
 repositories
 reproducible
 require
@@ -299,7 +320,9 @@ restitution
 revision
 revolute
 root
+roughness
 safe
+sat
 scad
 scene
 scenes
@@ -310,16 +333,20 @@ self
 sheet
 show
 side
+sided
 simulate
 simulation
+size
 sketch
 sketches
 sku
+sldprt
 slot
 slots
 snap
 soft
 software
+solid
 source
 speed
 spring
@@ -368,6 +395,7 @@ urdf
 url
 us
 usage
+usd
 use
 validation
 velocity
@@ -377,6 +405,9 @@ via
 viscosity
 visibility
 volume
+wall
+walls
+weight
 width
 windows
 wires
