@@ -202,11 +202,26 @@ Package-specific commands: `src/partcad/AGENTS.md`, `src/partcad_cli/AGENTS.md`,
 `ide/vscode/AGENTS.md`, `ide/standalone/AGENTS.md`, `cad/freecad/AGENTS.md`.
 
 **Every pull request targets `devel`; nothing merges to `main`**, which only moves by fast-forward from `devel`
-and is the release (PyPI publishes from it). The same holds for `partcad/partcad-index`. A change that breaks
-packages in the index -- a key PartCAD stops accepting, a field read with a new meaning -- is made in the order
-"Branches, releases and breaking changes" in `docs/source/contributing.rst` gives: additive first, released, the
-index's packages migrated through the index's `devel`, the old form retired last. `examples/partcad.yaml` tracks
-the index unpinned on purpose, so that it breaks as soon as the two disagree; do not pin it.
+and is the release (PyPI publishes from it). The same holds for `partcad/partcad-index`.
+
+**Moving PartCAD's `main` starts the release; it does not finish it, and the index's `main` waits for it to.**
+The fast-forward only triggers the `Deployment` workflow (`.github/workflows/deploy.yml`), which builds the
+bundles, the IDE, the `.vsix` and the plugin before `Publish to PyPI` uploads anything -- and on `main` that job
+enters the `pypi` environment, which has a required reviewer, so it waits for a maintainer however long that
+takes, and the Marketplace, MCP Registry and `plugin-dist` publishes come after it. So the two `main` branches
+move **in order, with a wait between them**: fast-forward PartCAD's `main`, let that run finish, confirm the
+version is on PyPI, and only then fast-forward the index's `main`. Doing the two together publishes an index
+whose packages require a PartCAD nobody can install yet: the index's `main` is what an *installed* PartCAD
+reads, so `pc update` would hand every package created by `pc init` a `partcad:` floor above the newest release
+on PyPI, and they would fail with `Incompatible PartCAD version!` until the upload landed -- or for good, if the
+run failed or its approval never came. `docs/source/contributing.rst` has the step-by-step order, under
+"Releasing the two repositories, in order".
+
+A change that breaks packages in the index -- a key PartCAD stops accepting, a field read with a new meaning --
+is made in the order "Branches, releases and breaking changes" in `docs/source/contributing.rst` gives: additive
+first, released, the index's packages migrated through the index's `devel`, the old form retired last.
+`examples/partcad.yaml` tracks the index unpinned on purpose, so that it breaks as soon as the two disagree; do
+not pin it.
 
 **PartCAD running from its sources reads the index's `devel`, not its `main`.** `develIndex` defaults to on for an
 editable install (`is_editable_install`, so `poetry install`, `pip install -e`, the dev container, CI-Dev, and
