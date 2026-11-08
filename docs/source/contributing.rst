@@ -1279,8 +1279,12 @@ to the other. Both follow these rules:
 #. **Every pull request merges to** ``devel``. Nothing merges to ``main``, in either repository.
 #. ``main`` **only moves by fast-forward from** ``devel``, and that fast-forward is the release. Every merge to
    PartCAD's ``devel`` is followed by a ``Version updated from X to Y`` commit, tagged and published to TestPyPI;
-   moving ``main`` to one of those commits publishes that version to PyPI. The index's ``main`` is what every
-   package created by ``pc init`` tracks, so moving it is what ``pc update`` delivers to them.
+   moving ``main`` to one of those commits is what publishes that version to PyPI. The index's ``main`` is what
+   every package created by ``pc init`` tracks, so moving it is what ``pc update`` delivers to them.
+#. **The two** ``main`` **branches move in order, and the index's waits for PartCAD's release to finish.**
+   PartCAD's ``main`` first; then, once its ``Deployment`` run has completed and the version is on PyPI, the
+   index's. See :ref:`release-order` -- the fast-forward starts that run, it does not finish it, and an index
+   released ahead of it points installed PartCADs at packages they cannot use.
 #. **The index always pins an exact revision**: a commit id, under the ``track:`` of the branch it follows (see
    :ref:`pinning-dependencies`). A dependency of the index changes only when a pull request to the index's
    ``devel`` changes its ``revision:``.
@@ -1320,6 +1324,48 @@ so that what it is built against is always the newest of whichever branch is in 
 on purpose, as soon as PartCAD and the index stop agreeing. The ``Repo //pub`` job (a deep run; see
 :ref:`deep-test`) does the same for a sample of the index's packages. Which branch that is depends on how PartCAD
 is installed; see the next section.
+
+.. _release-order:
+
+Releasing the two repositories, in order
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Fast-forwarding PartCAD's** ``main`` **starts the release; it does not finish it.** The push only triggers the
+``Deployment`` workflow (``.github/workflows/deploy.yml``), and that run has a good deal to do before anything is
+published: the standalone bundles for every supported OS version, the IDE that carries them, the ``.vsix`` and the
+Claude Code plugin are all built first, and ``Publish to PyPI`` is deliberately blocked on every one of them, so
+that a release cannot exist with the wheels on it but not the bundles ``install.sh`` downloads. On ``main`` that
+job then enters the ``pypi`` environment, which has a **required reviewer** -- so it waits for a maintainer to
+approve it, however long that takes -- and the GitHub release, the VS Code Marketplace, the MCP Registry and the
+``plugin-dist`` branch are all published after it.
+
+So the version is released when that run has **finished**, not when ``main`` moved. Until then PyPI still has the
+previous one, and the run can also fail outright or sit unapproved indefinitely.
+
+**That is why the index's** ``main`` **is fast-forwarded only after PartCAD's** ``Deployment`` **run has completed
+and the version is on PyPI**, and never in the same sitting as a matter of course. The index's ``main`` is what an
+*installed* PartCAD reads, and what every package created by ``pc init`` tracks, so releasing it first hands those
+packages, on their next ``pc update``, pins whose ``partcad:`` floor is above the newest release on PyPI. They fail
+with ``Incompatible PartCAD version!`` -- until the upload lands, or permanently if it never does, with the only
+way back a second release of the index moving the pins down again. The order costs a wait; getting it wrong breaks
+every consumer of the index at once.
+
+In order, then:
+
+#. **Fast-forward PartCAD's** ``main`` to the tested ``Version updated`` commit of its ``devel``.
+#. **Watch the** ``Deployment`` **run for that commit** to completion, approving the ``pypi`` environment when it
+   asks. It is red, or still waiting, until every publish job has passed.
+#. **Confirm the version is installable** -- ``pip index versions partcad``, or the project page on PyPI. This is
+   the check that matters, because it is what an installed PartCAD and the index's consumers see.
+#. **Only then fast-forward the index's** ``main``, by the process in its own
+   `CONTRIBUTING.md <https://github.com/partcad/partcad-index/blob/devel/CONTRIBUTING.md>`_.
+
+Nothing enforces this ordering mechanically: both pushes are fast-forwards that git will accept at any time, and
+the index's CI cannot see PartCAD's release run. It is a rule the maintainers keep.
+
+If the index's ``main`` has already moved too early, do not try to move it back -- consumers may have fetched it.
+Finish PartCAD's release instead: that is what makes the pins valid, and the window closes as soon as the upload
+lands.
 
 .. _devel-index-from-sources:
 
@@ -1393,10 +1439,14 @@ the end:
    N exists on PartCAD's ``devel``. Open them yourself, or an issue with each package that needs one, and link
    them from your PartCAD pull request.
 #. **Release PartCAD.** A maintainer fast-forwards PartCAD's ``main`` to the bump that named N, or a later one,
-   which publishes it.
-#. **Release the index**, only then: an index maintainer fast-forwards its ``main`` once N is on PyPI, and once
-   its ``devel`` works with N -- which a source checkout of PartCAD at N, or ``pc --devel-index`` with N
-   installed, shows.
+   and sees the ``Deployment`` run for it through to completion -- the fast-forward starts that run rather than
+   finishing it, and ``Publish to PyPI`` waits for a maintainer to approve the ``pypi`` environment. N is
+   released when that run has passed and N is on PyPI, not when ``main`` moved. See :ref:`release-order`.
+#. **Release the index**, only then: an index maintainer fast-forwards its ``main`` once N is **on PyPI** -- not
+   merely once PartCAD's ``main`` points at it -- and once its ``devel`` works with N, which a source checkout of
+   PartCAD at N, or ``pc --devel-index`` with N installed, shows. Released any earlier, the index pins packages
+   requiring an N that nobody can install, and every package tracking the index's ``main`` fails on its next
+   ``pc update``.
 #. **Retire the old form, if at all, last** -- as a PartCAD change of its own, and only once no commit the
    index's ``main`` pins uses it any more. This is the step that breaks packages nobody migrated, outside the
    index included, so give the warning from step 1 time to be seen first, and say in the pull request what stops
