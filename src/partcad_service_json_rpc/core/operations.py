@@ -4514,6 +4514,10 @@ async def _supply_option(pc, ctx, cart_item, provider_name, qos):
     result = request.result or {}
     option.update(
         {
+            # What the quote says it is in, which PartCAD makes sure it says
+            # ('plugin_provider.with_currency'); the configuration's only
+            # where there was no quote to say it.
+            "currency": result.get("currency") or option["currency"],
             "price": _as_price(result.get("price")),
             "cartId": result.get("cartId"),
             "expire": result.get("expire"),
@@ -4692,13 +4696,9 @@ def _provider_currency(provider):
     somewhere else; a store declares it as a parameter (see
     ``examples/provider_store``).
     """
-    config = getattr(provider, "config", None) or {}
-    currency = (config.get("parameters") or {}).get("currency")
-    if isinstance(currency, dict):
-        currency = currency.get("default")
-    if not isinstance(currency, str):
-        currency = (config.get("with") or {}).get("currency")
-    return currency if isinstance(currency, str) else None
+    from partcad.plugin_provider import declared_currency
+
+    return declared_currency(getattr(provider, "config", None))
 
 
 def plugin_login(session, params):

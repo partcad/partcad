@@ -12,11 +12,16 @@ import os
 import sys
 import typing
 
+from . import locality
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, telemetry, wrapper
 from .plugin import Plugin
 from .plugin_factory_file import PluginFactoryFile
 from .runtime_python import PythonRuntime, shape_docker_image
+
+# How many times one call of a plugin may ask which of its places is nearest
+# the user before PartCAD stops answering: a plugin chooses a shop, not a route.
+MAX_PLACE_QUESTIONS = 8
 
 
 async def query_with_deadline(plugin: Plugin, run, timeout: int, subject: typing.Optional[str] = None):
@@ -126,6 +131,28 @@ class PluginFactoryPython(PluginFactoryFile):
         return await super().prepare_script(plugin)
 
     async def query_script(self, plugin: Plugin, script_name: str, request):
+        """Run 'script_name' of the script with 'request', and answer the questions it asks PartCAD on the way.
+
+        A plugin may ask which of its places is nearest the user
+        ('partcad_user.choose_place', see 'wrappers/plugin_callbacks.py'). That
+        comes back as '{"place": ...}' rather than as an answer: PartCAD
+        chooses, from this context's configuration - the client's - and runs the
+        script again from the top with the choice to hand. The plugin is told
+        the place it named, never where the user is.
+        """
+        while True:
+            result = await self._query_script_once(plugin, script_name, request)
+            if not (isinstance(result, dict) and isinstance(result.get("place"), dict)):
+                return result
+            answers = request.setdefault("callbacks", {}).setdefault("places", [])
+            if len(answers) >= MAX_PLACE_QUESTIONS:
+                plugin.error(
+                    "%s: asked which place is nearest more than %d times in one call" % (plugin.name, len(answers))
+                )
+                return None
+            answers.append(locality.choose(self.ctx.user_config, result["place"]))
+
+    async def _query_script_once(self, plugin: Plugin, script_name: str, request):
         extra = ""
         if script_name == "avail":
             vendor = request.get("vendor", None)
@@ -179,7 +206,14 @@ class PluginFactoryPython(PluginFactoryFile):
             request["partcad_version"] = sys.modules["partcad"].__version__
             request["verbose"] = pc_logging.getLevel() <= pc_logging.DEBUG
             request["api"] = script_name
-            request["user"] = self.ctx.user_config.pii_config.to_dict()
+            # What every plugin is told about the user: the country, state and
+            # city, the language and the currency, and nothing that identifies
+            # them (see 'UserConfig.user_info'). The whole of the 'user' section -
+            # names, addresses - goes to a manufacturer alone, which ships what it
+            # makes and is asked for a quote to an address.
+            request["userInfo"] = self.ctx.user_config.user_info()
+            if self.config.get("type") == "manufacturer":
+                request["user"] = self.ctx.user_config.pii_config.to_dict()
             request["parameters"] = {}
             if "parameters" in self.config:
                 for param_name, param in self.config["parameters"].items():

@@ -1622,6 +1622,17 @@ Workflow commands
   sub-assembly is ordered as one item instead of being taken apart. Pass ``--recursive`` (``-r``) to walk all
   the way down to the parts regardless, and order those.
 
+  A scene is never ordered as one item -- nobody sells an arrangement -- and what nobody supplies in it, its
+  walls and its floor among them, is left out of the quote and listed under "Left out, as nobody supplies them"
+  rather than failing it: a room is priced by what can be bought for it. Anything else is quoted whole or reported
+  as unsupplied, unless ``--ignore-missing`` is given, which treats the parts and assemblies asked for, and what
+  they are made of, the way a scene's contents are treated. An item that a scene and an assembly both need is the
+  assembly's to fail over.
+
+  Every price is printed in the currency it is in. A provider that does not say which is taken to quote in its
+  ``currency`` parameter, and one that does not declare that either in US dollars, with a warning (see
+  :ref:`providers`).
+
 **************
 Other commands
 **************
