@@ -316,6 +316,13 @@ Host commands
     convention, which has to be removed by hand. ``--stale`` narrows it to what is out of date: images built
     for another PartCAD release, and containers nothing is using.
   - ``pc system set`` — Set system-wide settings, such as the telemetry type, environment, and Sentry DSN.
+  - ``pc system locale`` — Where you are, for ordering manufacturing or handling manufacturing orders (see
+    :ref:`user-location-access`). ``show`` prints the country, language, currency, address and location this
+    computer's configuration says, and what PartCAD works out where it says nothing; ``set`` writes any of them
+    (an empty value removes one) together with ``--manufacturing-orders`` and ``--location-access``; ``locate``
+    asks this computer's location service -- Windows' location service, Core Location, GeoClue -- and with
+    ``--save`` keeps the answer, rounded to about a kilometre; ``settings`` opens the system's location privacy
+    settings. Each takes ``--json``, which is how the PartCAD IDE and the VS Code extension run them.
   - ``pc system telemetry`` — Inspect or clear locally stored telemetry data (``info``, ``clear``).
 
 ``pc upgrade``

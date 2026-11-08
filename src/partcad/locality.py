@@ -26,15 +26,13 @@ Nothing here asks anything of the network: an address is matched as it is
 written, not looked up.
 """
 
-import math
+from partcad_utils.user_locale import EARTH_RADIUS_KM, distance_km  # noqa: F401 - re-exported
 
 from . import logging as pc_logging
 
 # How many places a plugin may hand over to choose between: a country's shops,
 # not a gazetteer.
 MAX_PLACES = 1000
-
-EARTH_RADIUS_KM = 6371.0088
 
 
 def _coordinates(place):
@@ -47,13 +45,6 @@ def _coordinates(place):
     if not (-90.0 <= latitude <= 90.0 and -180.0 <= longitude <= 180.0):
         return None
     return latitude, longitude
-
-
-def distance_km(a, b):
-    """The great-circle distance between two (latitude, longitude) pairs in degrees, in kilometres."""
-    (lat1, lng1), (lat2, lng2) = [(math.radians(x), math.radians(y)) for x, y in (a, b)]
-    h = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lng2 - lng1) / 2) ** 2
-    return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(min(1.0, h)))
 
 
 def _same(a, b, key=None):

@@ -41,6 +41,15 @@ before using PartCAD, or install the :ref:`Desktop Application <partcad-ide>`, w
   ``PartCAD.partcad-official``, so an existing installation updates into the new one by itself and there is
   nothing to do by hand.
 
+The first time the extension (or the PartCAD IDE) starts, once PartCAD is installed, it asks one question:
+**will you use PartCAD to order the manufacturing of parts and assemblies, or to handle manufacturing orders
+yourself?** If so, a form asks for your region (country, language, currency), your address and your location,
+and whether PartCAD may ask this computer's location service for it -- Windows' location service, Core
+Location on macOS, GeoClue on Linux, each of which asks for its own permission. If you only design, choose
+**Leave Blank**: nothing else needs any of it. The answers go into ``~/.partcad/config.yaml``, so the question
+is asked once per computer, not once per editor, and **PartCAD: Region, Address and Location** in the command
+palette (or in the menu of the PartCAD view) changes them later. See :ref:`user-location-access`.
+
 ===============
 What it does
 ===============

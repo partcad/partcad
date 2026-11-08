@@ -168,8 +168,13 @@ the ``user`` section as ``user.location``.
 None of them has to be written down. ``country`` is the ``countryCode`` of the
 user's address, else the country of the locale PartCAD was started in
 (``nl_NL.UTF-8`` is the Netherlands); ``language`` is the locale's language; and
-``currency`` is the country's. ``location`` is never worked out: it is the user's
-to give, or not.
+``currency`` is the country's. A process started with no locale in its
+environment -- an editor opened from the Dock or the Start menu -- asks the
+operating system instead: the language and region chosen in Windows' or macOS'
+settings, so English with the region set to the Netherlands is ``en_NL``.
+``location`` is never worked out from any of that: it is the user's to give, or
+not -- typed in, or asked of this computer's location service when the user has
+allowed it (below).
 
 They are worked out by the client -- ``pc``, ``pc mcp`` -- on the machine of
 whoever runs the command, and handed to the daemon with the rest of the
@@ -183,3 +188,69 @@ and the currency (see :ref:`providers`), never the name, the street, the ZIP cod
 or the location. A store choosing between its shops asks PartCAD which is
 nearest, and PartCAD answers with a shop. ``pc config`` and
 ``pc system status env`` report whether a location is set, not where it is.
+
+.. _user-location-access:
+
+Whether any of it is wanted
+---------------------------
+
+Where the user is matters for two things only: ordering the manufacturing of
+parts and assemblies, and handling manufacturing orders yourself. Two more
+options say whether either is wanted:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    manufacturingOrders: [place, handle]   # or [] -- or PC_MANUFACTURING_ORDERS=place,handle
+    locationAccess: false                  # or PC_LOCATION_ACCESS
+
+``manufacturingOrders`` is what the user said they use PartCAD for: ``place``
+(ordering manufacturing), ``handle`` (handling orders), both, or an empty list
+(or ``none``) for "neither, I design". The option missing altogether means
+nobody has asked yet.
+
+``locationAccess`` says whether PartCAD may ask this computer's operating system
+where it is. It is off unless the user turns it on, and with it off PartCAD never
+asks. Each system has its own location service, and each asks the user for its
+own permission the first time:
+
+- **Windows**: the Windows location service (Settings > Privacy & security >
+  Location, "Let desktop apps access your location"), through Windows
+  PowerShell.
+- **macOS**: Core Location (System Settings > Privacy & Security > Location
+  Services), through ``CoreLocationCLI`` where one is installed and otherwise
+  through ``osascript``, which macOS attributes to the application that started
+  it -- the PartCAD IDE, the editor, the terminal.
+- **Linux**: GeoClue, which most desktops carry (GNOME: Settings > Privacy >
+  Location); the desktop's GeoClue agent asks the user.
+
+What is kept of an answer is rounded to two decimals, about a kilometre: enough
+to tell which shop is nearest, and not enough to find a front door. With
+``locationAccess`` on, the IDE asks again once a day, when it starts, and writes
+the ``location`` only when it has moved further than the service says its answer
+can be off by -- a location service never gives the same answer twice, and
+rewriting the file restarts the daemon that read it.
+
+The PartCAD IDE and the VS Code extension ask all of this the first time they
+start on a computer whose configuration has no ``manufacturingOrders``: a dialog
+asks whether the user will order manufacturing or handle manufacturing orders,
+and recommends leaving everything blank and off otherwise. The answers open a
+form for the region, the address and the location, and are written into
+``~/.partcad/config.yaml``. Because the question is asked of the file rather than
+of the editor, one answer serves the IDE and every editor on the computer; the
+form is "PartCAD: Region, Address and Location" in the command palette, any time
+after.
+
+The same, from a terminal:
+
+  .. code-block:: shell
+
+    pc system locale show                       # what is configured, and what is worked out
+    pc system locale set --manufacturing-orders place --country NL --city Amsterdam
+    pc system locale set --city ""              # an empty value removes the option
+    pc system locale locate --save              # ask the location service, and keep the answer
+    pc system locale settings                   # open this computer's location privacy settings
+
+Every one of them runs on the computer it is typed on and never asks a daemon:
+the configuration file, the location service and the user are all here.
+

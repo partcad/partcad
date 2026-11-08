@@ -719,6 +719,48 @@ itself while it is executing, and is required on Windows, where deleting a runni
 No superseded bundle is left behind: the idle ones go immediately, and the one the updater is running out of is
 removed by a detached reaper once that process exits.
 
+## Where the user is: the first-run question
+
+The first time a window starts PartCAD on a machine whose `~/.partcad/config.yaml` has no `manufacturingOrders`,
+the extension asks one modal question -- will you order the manufacturing of parts and assemblies, or handle
+manufacturing orders yourself? -- and recommends **Leave Blank** otherwise, because nothing else needs where the
+user is. Either "yes" opens a form (`src/locale.ts`, a webview with one inline script) for the region, the address,
+the location and `locationAccess`; "Leave Blank" writes `manufacturingOrders: []` and nothing else. The form is
+also `partcad.configureLocale` ("PartCAD: Region, Address and Location"), from the palette or the PartCAD view's
+menu, any time.
+
+Four things about it are load-bearing:
+
+- **The extension reads and writes nothing itself.** It runs `pc system locale show|set|locate|settings --json`,
+  from the `pc` beside the service (`toolsDirectory`), in the home directory -- the same rule as `pc upgrade` and
+  `pc ide open`. The file is round-tripped, comments and all, under the same lock `pc login` takes
+  (`partcad_utils.user_config.update_config_file`), and asking where the computer is is three different things on
+  three systems (`partcad_client.location`). None of it goes over the daemon connection: a daemon can be on another
+  machine, which is neither where the user is nor where their file is. `setArguments` builds the `set` command line,
+  and `tests/partcad_cli/unit/test_system_locale.py` runs that exact list through the real `pc`.
+- **"The first time" is the file's, not the editor's.** The question is asked while the file has no
+  `manufacturingOrders` (`show --json` says `asked`), so the PartCAD IDE and a VS Code on the same machine ask it
+  once between them. Closing the dialog, or closing a form it opened without saving, is not an answer and writes
+  nothing; it is remembered in this installation's `globalState` instead, so that the window does not ask on every
+  start.
+- **It is asked after the backend has started, and only in a window with a folder.** On a new machine `pc` is
+  what the backend's own download dialog provides, and that dialog comes first rather than on top of this one. The
+  PartCAD IDE's first window is empty and is replaced a moment later by one on its starter package, which would
+  close a dialog shown in it, unanswered.
+- **`PARTCAD_EXTENSION_NO_PROMPTS=1` skips it**, as it skips the download dialog: the test run is a window nobody
+  answers.
+
+With `locationAccess` on, a window asks the location service again once a day (`refreshDue`, timed in
+`globalState`) with `pc system locale locate --save`, which writes only when the computer has moved further than
+the service says it can be off by (`partcad_utils.user_locale.moved`). That is not a nicety: no two answers of a
+location service are the same -- GeoClue blurs a neighbourhood-level one by kilometres on purpose -- and every write
+of the file restarts the daemon that read it.
+
+The form's lists of countries, languages and currencies are not shipped: the webview's own `Intl` names every code,
+in the user's language, and `Intl.getCanonicalLocales` drops the ones the standard has replaced (`UK`, `YU`, `iw`).
+"the form's script is a script" in `src/test/suite/locale.test.ts` compiles the inline script, because to the
+TypeScript compiler it is a string.
+
 ## The tools on the terminal PATH
 
 `src/common/terminalPath.ts` prepends the directory holding `pc`/`partcad` to `PATH` for terminals opened in

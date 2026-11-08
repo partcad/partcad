@@ -25,6 +25,9 @@ machine and its own installation**, from the process running out of it.
 * :mod:`~partcad_client.mcp_server` -- `pc mcp`, the Model Context Protocol
   server an AI agent on this machine starts on stdio and drives the workspace's
   daemon through.
+* :mod:`~partcad_client.location` -- asking this machine's location service
+  where it is, when the user has said PartCAD may, and opening the system's
+  settings where that is allowed.
 
 None of it belongs to a daemon. A daemon can be remote, where "update PartCAD"
 would mean updating somebody else's installation and "stop the local daemons"
@@ -35,7 +38,9 @@ before an update a sane thing to do rather than a distributed algorithm. Checkin
 a file joins them for the same reason: it is the client's file, sometimes not
 even on disk, and it needs nothing a daemon has. So does opening one in FreeCAD:
 the window belongs on the screen of whoever ran the command, and a remote daemon
-has neither that screen nor that file.
+has neither that screen nor that file. Asking where the machine is joins them
+too: the answer is about wherever the user is sitting, which a remote daemon is
+not.
 
 Converting one is the counter-example, and it is why `external` takes a callback
 rather than doing it: making a mesh out of a solid so that Blender can open it

@@ -95,6 +95,14 @@ IN_PROCESS = {
     "system/set/telemetry/detail.py": "writes the client's own user configuration",
     "system/set/telemetry/env.py": "writes the client's own user configuration",
     "system/set/telemetry/sentryDsn.py": "writes the client's own user configuration",
+    # Where the user is: their country, address and location, in their own
+    # file, and this machine's location service. None of it imports `partcad`,
+    # and none of it may go to a daemon, which can be on another machine -- not
+    # where the user is, and not where their file is.
+    "system/locale/show.py": "reports where the user is, from the client's own user configuration",
+    "system/locale/set.py": "writes the client's own user configuration",
+    "system/locale/locate.py": "asks the location service of the machine the user is at",
+    "system/locale/settings.py": "opens the location settings of the machine the user is at",
 }
 
 # The one thing an in-process command may ask the daemon for, and what it may

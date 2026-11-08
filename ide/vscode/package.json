@@ -481,6 +481,13 @@
         "enablement": "!partcad.editingExternally"
       },
       {
+        "title": "Region, Address and Location",
+        "category": "PartCAD",
+        "command": "partcad.configureLocale",
+        "icon": "$(location)",
+        "enablement": "!partcad.editingExternally"
+      },
+      {
         "title": "Show Terminal",
         "category": "PartCAD",
         "command": "partcad.showTerminal",
@@ -882,6 +889,11 @@
           "command": "partcad.restart",
           "when": "view == partcadContext",
           "group": "navigation"
+        },
+        {
+          "command": "partcad.configureLocale",
+          "when": "view == partcadContext",
+          "group": "settings"
         },
         {
           "submenu": "partcad.submenu.add",

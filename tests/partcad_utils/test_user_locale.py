@@ -29,6 +29,11 @@ def home(tmp_path, monkeypatch):
     # What Python itself thinks the locale is, which the variables above do not
     # always decide: a test states the whole locale it is about.
     monkeypatch.setattr(user_locale.locale, "getlocale", lambda *_: (None, None))
+    # And what the operating system's settings say, which on Windows and macOS
+    # is asked when the environment says nothing.
+    monkeypatch.setattr(user_locale, "_os_locale_name", lambda: "")
+    for name in ("PC_LOCATION_ACCESS", "PC_MANUFACTURING_ORDERS"):
+        monkeypatch.delenv(name, raising=False)
     return tmp_path
 
 
@@ -224,3 +229,160 @@ def test_a_report_says_whether_a_location_is_set_and_not_where(home, monkeypatch
 
     environment = dict(config_report.environment({"PC_LOCATION": "52.37,4.89", "PC_COUNTRY": "NL"}))
     assert environment == {"PC_COUNTRY": "NL", "PC_LOCATION": config_report.SCRUBBED}
+
+
+# ---- what the operating system says, when the environment does not -----------
+
+
+def test_the_system_s_own_locale_is_asked_when_the_environment_says_nothing(home, monkeypatch):
+    """A process started from the Dock or the Start menu has no LANG; the system's settings still say."""
+    monkeypatch.setattr(user_locale, "_os_locale_name", lambda: "en_NL")
+    assert user_locale.detect() == ("NL", "en")
+
+
+def test_the_environment_comes_before_the_system_s_settings(home, monkeypatch):
+    monkeypatch.setattr(user_locale, "_os_locale_name", lambda: "en_NL")
+    monkeypatch.setenv("LANG", "de_DE.UTF-8")
+    assert user_locale.detect() == ("DE", "de")
+
+
+def test_the_system_fills_in_only_what_the_environment_left_unsaid(home, monkeypatch):
+    """'LANGUAGE' names a language and no country; the region comes from the system."""
+    monkeypatch.setattr(user_locale, "_os_locale_name", lambda: "en_NL")
+    monkeypatch.setenv("LANGUAGE", "fr")
+    assert user_locale.detect() == ("NL", "fr")
+
+
+def test_a_script_subtag_is_not_taken_for_a_region(monkeypatch):
+    monkeypatch.setattr(user_locale.sys, "platform", "win32")
+    monkeypatch.setattr(user_locale, "_windows_locale_name", lambda: "zh-Hans_CN")
+    assert user_locale._os_locale_name() == "zh_CN"
+
+
+def test_a_system_that_will_not_say_says_nothing(monkeypatch):
+    def broken():
+        raise OSError("no such library")
+
+    monkeypatch.setattr(user_locale.sys, "platform", "darwin")
+    monkeypatch.setattr(user_locale, "_macos_locale_name", broken)
+    assert user_locale._os_locale_name() == ""
+
+
+def test_linux_has_no_settings_beside_its_environment(monkeypatch):
+    monkeypatch.setattr(user_locale.sys, "platform", "linux")
+    assert user_locale._os_locale_name() == ""
+
+
+# ---- whether any of it is wanted: locationAccess and manufacturingOrders ------
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (None, None),
+        ("", None),
+        ([], []),
+        ("none", []),
+        (["place"], ["place"]),
+        (["handle", "place"], ["place", "handle"]),
+        ("place, handle", ["place", "handle"]),
+        ("HANDLE", ["handle"]),
+        (["place", "sell"], ["place"]),
+        (42, None),
+    ],
+)
+def test_what_the_user_uses_partcad_for(value, expected):
+    assert user_locale.manufacturing_orders(value) == expected
+
+
+@pytest.mark.parametrize("value, expected", [(None, False), ("", False), (True, True), ("on", True), ("0", False)])
+def test_location_access_is_only_on_when_somebody_said_so(value, expected):
+    assert user_locale.location_access(value) is expected
+
+
+def test_a_location_asked_of_the_system_is_kept_to_about_a_kilometre():
+    assert user_locale.rounded_location({"latitude": 52.373091, "longitude": 4.892341}) == {
+        "latitude": 52.37,
+        "longitude": 4.89,
+    }
+    assert user_locale.rounded_location("north") is None
+
+
+def test_nobody_has_been_asked_and_nothing_is_allowed_by_default(home):
+    config = UserConfig()
+    assert config.location_access is False
+    assert config.manufacturing_orders is None
+
+
+def test_the_answers_are_read_from_the_file_and_the_environment(home, monkeypatch):
+    _write_config(home, "locationAccess: true\nmanufacturingOrders: [handle]\n")
+    config = UserConfig()
+    assert (config.location_access, config.manufacturing_orders) == (True, ["handle"])
+
+    monkeypatch.setenv("PC_LOCATION_ACCESS", "off")
+    monkeypatch.setenv("PC_MANUFACTURING_ORDERS", "none")
+    config = UserConfig()
+    assert (config.location_access, config.manufacturing_orders) == (False, [])
+
+
+def test_the_answers_travel_to_the_daemon_and_never_asked_stays_never_asked(home, monkeypatch):
+    sent = UserConfig().to_dict()
+    assert sent["locationAccess"] is False and sent["manufacturingOrders"] == ""
+
+    # The daemon's own file says otherwise, and is not where the user is.
+    _write_config(home, "locationAccess: true\nmanufacturingOrders: [place]\n")
+    daemon = UserConfig.from_dict(sent)
+    assert (daemon.location_access, daemon.manufacturing_orders) == (False, None)
+
+    answered = UserConfig.from_dict({**sent, "manufacturingOrders": [], "locationAccess": True})
+    assert (answered.location_access, answered.manufacturing_orders) == (True, [])
+
+
+def test_save_options_writes_the_user_s_answers_and_leaves_the_rest_of_the_file(home):
+    from partcad_utils.user_config import save_options
+
+    _write_config(home, "# mine\nthreadsMax: 8  # keep\nuser:\n  firstName: Ann\n")
+    path = save_options(
+        {"country": "NL", "locationAccess": True, "manufacturingOrders": ["place"]},
+        {"line1": "Damrak 1", "city": "Amsterdam"},
+    )
+    text = (home / ".partcad" / "config.yaml").read_text()
+    assert path == str(home / ".partcad" / "config.yaml")
+    assert "# mine" in text and "threadsMax: 8  # keep" in text
+    config = UserConfig()
+    assert (config.country, config.location_access, config.manufacturing_orders) == ("NL", True, ["place"])
+    assert config.address() == {"line1": "Damrak 1", "city": "Amsterdam"}
+    assert config.pii_config.firstName == "Ann"
+
+
+def test_none_removes_an_option_and_an_emptied_user_section_goes_with_it(home):
+    import yaml
+
+    from partcad_utils.user_config import save_options
+
+    save_options({"country": "NL", "currency": "EUR"}, {"city": "Amsterdam"})
+    save_options({"country": None, "manufacturingOrders": []}, {"city": None, "zipCode": None})
+    assert yaml.safe_load((home / ".partcad" / "config.yaml").read_text()) == {
+        "currency": "EUR",
+        "manufacturingOrders": [],
+    }
+
+
+def test_a_location_has_moved_only_when_it_is_further_than_the_service_can_be_off_by():
+    amsterdam = {"latitude": 52.37, "longitude": 4.89}
+    # GeoClue's answers for one unmoved computer, at neighbourhood accuracy:
+    # 52.36, 52.39 and 52.40 were three of them, a few minutes apart.
+    assert not user_locale.moved({"latitude": 52.36, "longitude": 4.89}, {"latitude": 52.40, "longitude": 4.89}, 3050)
+    assert not user_locale.moved(amsterdam, {"latitude": 52.38, "longitude": 4.89})
+    # Utrecht is 35 km away.
+    assert user_locale.moved(amsterdam, {"latitude": 52.09, "longitude": 5.12}, 3050)
+    # Nothing saved yet: anything found is somewhere.
+    assert user_locale.moved(None, amsterdam)
+    assert not user_locale.moved(amsterdam, None)
+
+
+def test_the_distance_is_the_one_partcad_chooses_shops_by():
+    from partcad import locality
+
+    assert locality.distance_km is user_locale.distance_km
+    assert user_locale.distance_km((52.37, 4.89), (53.22, 6.57)) == pytest.approx(146, abs=3)

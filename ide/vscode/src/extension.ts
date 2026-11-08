@@ -36,6 +36,7 @@ import { PartcadViewerServer } from './viewer/PartcadViewerServer';
 import { ExplorerItemLike, collectIdeState } from './ideState';
 import * as PartcadItem from './PartcadItem';
 import { examples } from './examples';
+import { LocaleSetup } from './locale';
 import { PART_TYPE_CHOICES, partTypeChoice, partTypeDescription, partTypeFilters } from './partTypes';
 import { PartcadTerminals, setTerminalWriter, TERMINAL_PROFILE_ID, writeTerminal } from './terminal';
 import * as utils from './utils';
@@ -171,6 +172,11 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
         vscode.window.onDidOpenTerminal((terminal) => warnIfShellIntegrationOff(terminal, serverId)),
     );
+
+    // Where the user is: the first-run question, and the form that answers
+    // it whenever the user asks for it (see `locale.ts`).
+    const localeSetup = new LocaleSetup(context, serverId, outputChannel);
+    context.subscriptions.push(localeSetup);
 
     // Log Server information
     traceLog(`Name: ${serverInfo.name}`);
@@ -1322,6 +1328,14 @@ location: [[100, 0, 0], [0, 0, 1], 0]
 
     setImmediate(async () => {
         await runServer();
+        // Asked once the backend has started, so that on a new machine the
+        // download PartCAD needs comes first and `pc` is there to answer. And
+        // only in a window with a folder open: the PartCAD IDE's first window
+        // is empty, and is replaced by one on its starter package a moment
+        // later -- a dialog in it would be closed by that, unanswered.
+        if (vscode.workspace.workspaceFolders?.length) {
+            await localeSetup.afterStart();
+        }
     });
 }
 

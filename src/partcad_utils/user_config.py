@@ -389,6 +389,8 @@ OPTION_KEYS = (
     "language",
     "currency",
     "location",
+    "locationAccess",
+    "manufacturingOrders",
     "git.clone.timeout",
     "git.clone.retry.max",
     "git.clone.retry.patience",
@@ -437,6 +439,10 @@ SECTION_PATHS = (
     "parameters",
     "user",
 )
+
+# The fields of the 'user' section that make up an address, in the order they
+# are written: what 'UserConfig.address' reads, and what 'save_options' may set.
+ADDRESS_FIELDS = ("line1", "line2", "city", "stateCode", "zipCode", "countryCode")
 
 
 # Which implementation each CAE analysis is run by when nothing says otherwise.
@@ -746,10 +752,9 @@ class UserConfig(vyper.Vyper):
         """
         section = self.pii_config.to_dict() if hasattr(self, "pii_config") else {}
         shipping = section.get("shippingAddress") or {}
-        fields = ("line1", "line2", "city", "stateCode", "zipCode", "countryCode")
         return {
             field: section.get(field) or shipping.get(field)
-            for field in fields
+            for field in ADDRESS_FIELDS
             if section.get(field) or shipping.get(field)
         }
 
@@ -1486,6 +1491,47 @@ class UserConfig(vyper.Vyper):
             # through to the environment.
             self.set(key, getattr(self, key) or "")
 
+        # option: locationAccess
+        # description: whether PartCAD may ask this machine's operating system
+        #              where it is - Windows' location service, macOS' Core
+        #              Location, GeoClue on Linux - each of which asks the user
+        #              for its own permission the first time. With it on, the
+        #              IDE keeps 'location' up to date from there when it
+        #              starts, and 'pc system locale locate --save' does it on
+        #              demand. With it off, PartCAD never asks: 'location' is
+        #              what was typed in, or nothing. See
+        #              'partcad_client.location'.
+        # values: [True | False]
+        # default: False
+        #
+        # option: manufacturingOrders
+        # description: what the user uses PartCAD for, of the two things that
+        #              need the options above: 'place' (ordering the
+        #              manufacturing of parts and assemblies) and 'handle'
+        #              (handling such orders themselves). A list, or
+        #              "place,handle" (PC_MANUFACTURING_ORDERS); an empty list,
+        #              or 'none', is "neither, I design". It is what the IDE's
+        #              first-run question writes, and the question is asked
+        #              while the option is missing - once per user, whether in
+        #              the IDE or in another editor carrying the extension.
+        # values: <list>
+        # default: none (never asked)
+        #
+        # Read the way the four above are: from what the caller sent when this
+        # is a daemon rebuilding a client's configuration, and from nothing of
+        # the daemon's own. Neither is used by a daemon - asking an operating
+        # system where it is is a client's to do - but a configuration that
+        # travels has to arrive whole. "Never asked" travels as an empty
+        # string, as an unset location does, so that it is not filled in from
+        # the daemon's own file on the way.
+        self.set_default("locationAccess", False)
+        self.bind_env("locationAccess", "PC_LOCATION_ACCESS")
+        self.bind_env("manufacturingOrders", "PC_MANUFACTURING_ORDERS")
+        self.location_access = user_locale.location_access(_locale_option("locationAccess"))
+        self.manufacturing_orders = user_locale.manufacturing_orders(_locale_option("manufacturingOrders"))
+        self.set("locationAccess", self.location_access)
+        self.set("manufacturingOrders", "" if self.manufacturing_orders is None else self.manufacturing_orders)
+
         # option: offline
         # description: offline mode
         # values: [True | False]
@@ -1690,14 +1736,96 @@ def save_parameter_overrides(object_name: str, values: dict, path: str = None) -
     typed into the file by hand does. Nothing else in the file is touched, its
     comments included: it is round-tripped, not regenerated.
 
-    The values are often credentials. So the file is replaced in one step, and
-    readable by its owner only.
+    The values are often credentials, which is why 'update_config_file' leaves
+    the file readable by its owner only.
 
-    Two logins can finish at once -- two 'pc login's, or an agent's parallel
-    'login' calls through 'pc mcp' -- and each reads the file, adds its own
-    plugin's values and replaces it: unguarded, the later replace drops what
-    the earlier one wrote. So reading, merging and replacing happen under one
-    lock beside the file, which every caller of this function takes.
+    Returns the path written.
+    """
+    from ruamel.yaml.comments import CommentedMap
+
+    path = path or UserConfig.get_config_path()
+
+    def merge(document):
+        section = document.get("parameters")
+        if section is None:
+            section = document["parameters"] = CommentedMap()
+        if not isinstance(section, dict):
+            raise ValueError("'parameters' in %s is not a mapping" % path)
+        entry = section.get(object_name)
+        if entry is None:
+            entry = section[object_name] = CommentedMap()
+        if not isinstance(entry, dict):
+            raise ValueError("'parameters: %s' in %s is not a mapping" % (object_name, path))
+        for name, value in values.items():
+            entry[name] = value
+
+    return update_config_file(merge, path)
+
+
+def save_options(options: dict = None, user: dict = None, path: str = None) -> str:
+    """Set or remove top-level options, and fields of the 'user' section, in the user's configuration file.
+
+    ``options`` maps option names ('country', 'locationAccess', ...) to their
+    new values; ``user`` does the same for the fields of the 'user' section
+    (see 'ADDRESS_FIELDS'). A value of None removes the key - which is how
+    "leave it blank" is written, so that the option goes back to whatever
+    PartCAD works out for itself rather than to an empty one - and a 'user'
+    section left with nothing in it is removed with its last field.
+
+    This is how 'pc system locale set' writes, and through it the IDE's
+    first-run question: the file is the user's, so everything else in it -
+    every other option, every comment - is left as it was. Writing it makes a
+    daemon that read the file restart itself, as any edit does (see
+    'partcad_service_json_rpc.config_restart').
+
+    Returns the path written.
+    """
+    from ruamel.yaml.comments import CommentedMap
+
+    path = path or UserConfig.get_config_path()
+
+    def merge(document):
+        for key, value in (options or {}).items():
+            if value is None:
+                document.pop(key, None)
+            else:
+                document[key] = value
+        if user:
+            section = document.get("user")
+            if section is None:
+                section = CommentedMap()
+            if not isinstance(section, dict):
+                raise ValueError("'user' in %s is not a mapping" % path)
+            for key, value in user.items():
+                if value is None:
+                    section.pop(key, None)
+                else:
+                    section[key] = value
+            if section:
+                document["user"] = section
+            else:
+                document.pop("user", None)
+
+    return update_config_file(merge, path)
+
+
+def update_config_file(change, path: str = None) -> str:
+    """Change the user's configuration file in place: read it, hand it to 'change', and replace it.
+
+    'change' is given the file's content as a mapping it may alter - read and
+    written back with ruamel, so the comments, the order and the quoting of
+    everything it does not touch survive - and an empty one when there is no
+    file yet.
+
+    Two writers can finish at once -- two 'pc login's, an agent's parallel
+    'login' calls through 'pc mcp', the IDE saving where the user is while a
+    terminal does either -- and each reads the file, changes its part and
+    replaces it: unguarded, the later replace drops what the earlier one wrote.
+    So reading, changing and replacing happen under one lock beside the file,
+    which every caller of this function takes.
+
+    The file is replaced in one step, and readable by its owner only: it holds
+    credentials and the user's address.
 
     Returns the path written.
     """
@@ -1706,11 +1834,11 @@ def save_parameter_overrides(object_name: str, values: dict, path: str = None) -
     path = path or UserConfig.get_config_path()
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with FileLock(path + ".lock", timeout=CONFIG_LOCK_TIMEOUT, mode=0o600):
-        _merge_parameter_overrides(path, object_name, values)
+        _rewrite_config_file(path, change)
     return path
 
 
-def _merge_parameter_overrides(path: str, object_name: str, values: dict) -> None:
+def _rewrite_config_file(path: str, change) -> None:
     from ruamel.yaml import YAML
     from ruamel.yaml.comments import CommentedMap
 
@@ -1723,19 +1851,8 @@ def _merge_parameter_overrides(path: str, object_name: str, values: dict) -> Non
     if document is None:
         document = CommentedMap()
     if not isinstance(document, dict):
-        raise ValueError("%s is not a mapping, so there is nowhere to put 'parameters' in it" % path)
-    section = document.get("parameters")
-    if section is None:
-        section = document["parameters"] = CommentedMap()
-    if not isinstance(section, dict):
-        raise ValueError("'parameters' in %s is not a mapping" % path)
-    entry = section.get(object_name)
-    if entry is None:
-        entry = section[object_name] = CommentedMap()
-    if not isinstance(entry, dict):
-        raise ValueError("'parameters: %s' in %s is not a mapping" % (object_name, path))
-    for name, value in values.items():
-        entry[name] = value
+        raise ValueError("%s is not a mapping, so there is nowhere to put an option in it" % path)
+    change(document)
 
     temporary = "%s.%d.tmp" % (path, os.getpid())
     descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)

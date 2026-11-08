@@ -938,7 +938,7 @@ function utf8Env(env?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
  * characters into the very line this parses; it also routes logging to stderr,
  * leaving stdout to the command's own output.
  */
-function runCli(
+export function runCli(
     cliPath: string | undefined,
     args: string[],
     cwd: string,

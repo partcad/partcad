@@ -76,6 +76,17 @@ def brand_product(product_path: pathlib.Path, overlay_path: pathlib.Path, versio
     return branded
 
 
+# What macOS shows when the IDE asks where the computer is. Core Location
+# attributes a request from a process the IDE started -- `pc system locale
+# locate`, which the PartCAD extension runs when the user allowed it (see
+# 'partcad_client.location') -- to the IDE itself, and refuses an application
+# that does not say why it asks, without ever asking the user.
+LOCATION_USAGE = (
+    "PartCAD uses your location to find the manufacturing shops nearest to you, when you have allowed it to. "
+    "It is kept on this computer and never given to anyone."
+)
+
+
 def brand_plist(plist_path: pathlib.Path, name: str, identifier: str, version: str, icon: str | None) -> None:
     with open(plist_path, "rb") as handle:
         info = plistlib.load(handle)
@@ -87,6 +98,8 @@ def brand_plist(plist_path: pathlib.Path, name: str, identifier: str, version: s
     info["CFBundleVersion"] = version
     if icon:
         info["CFBundleIconFile"] = icon
+    info["NSLocationUsageDescription"] = LOCATION_USAGE
+    info["NSLocationWhenInUseUsageDescription"] = LOCATION_USAGE
 
     # The document types and the URL scheme carry the old application's name and
     # bundle identifier, which is how a file association or a `vscodium://` link

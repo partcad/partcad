@@ -35,10 +35,11 @@ const MANIFEST_NAME = 'platforms.json';
 /**
  * Set to "1" in a window that cannot answer a dialog -- the extension test run.
  *
- * There is one dialog in this extension that a window with no PartCAD always
- * gets, and a test run is always such a window.
+ * There are two dialogs in this extension that open on their own: the one a
+ * window with no PartCAD always gets, and the first-run question about where
+ * the user is (`locale.ts`). A test run is always a window that would get both.
  */
-const NO_PROMPTS_ENV = 'PARTCAD_EXTENSION_NO_PROMPTS';
+export const NO_PROMPTS_ENV = 'PARTCAD_EXTENSION_NO_PROMPTS';
 
 /**
  * The release manifest: `{version, bundle: {os: {arch: [platform, ...]}}, ide: ...}`,

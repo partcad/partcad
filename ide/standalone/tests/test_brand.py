@@ -157,3 +157,7 @@ def test_the_macos_bundle_is_rebranded(tmp_path):
     # A `vscodium://` link must not open the PartCAD IDE, and the other way
     # around.
     assert info["CFBundleURLTypes"][0]["CFBundleURLSchemes"] == ["partcad-ide"]
+    # Without a reason given, macOS refuses Core Location to the IDE -- and to
+    # the `pc` it starts -- without asking the user at all.
+    assert info["NSLocationUsageDescription"] == brand.LOCATION_USAGE
+    assert info["NSLocationWhenInUseUsageDescription"] == brand.LOCATION_USAGE

@@ -121,6 +121,16 @@ marks such a terminal and will show you which extension changed the environment.
 the extension activates keep the environment they started with; reopen one to pick the tools up. Set
 `partcad.addToolsToTerminalPath` to `false` to keep a PartCAD of your own on the `PATH` instead.
 
+## Where you are
+
+The first time PartCAD starts, the extension asks whether you will use it to order the manufacturing of parts
+and assemblies, or to handle manufacturing orders yourself. If so, a form takes your region (country, language,
+currency), your address and your location -- typed in, or asked of this computer's location service (Windows'
+location service, Core Location on macOS, GeoClue on Linux), which asks for its own permission. If you only
+design, choose **Leave Blank**: nothing else needs any of it. The answers are kept in `~/.partcad/config.yaml`,
+so the question is asked once per computer, and **PartCAD: Region, Address and Location** changes them later;
+`pc system locale` does the same from a terminal.
+
 ## Creating PartCAD packages
 
 After this extension is installed, the PartCAD workbench becomes available.

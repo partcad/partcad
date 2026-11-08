@@ -180,7 +180,11 @@ does the same, so both entry points leave the same repository behind), `config` 
 `user_config` with its `--threads-max`/`PC_*` overrides), `healthcheck` (diagnoses this host), and **all of
 `pc system ...`** — `system status`, `system reset` and `system set telemetry ...` act on the machine the CLI
 runs on, by definition: its internal state directory, its user configuration — and `upgrade`, which replaces
-that machine's installation. Still unmigrated: `supply/*`,
+that machine's installation. `system locale show|set|locate|settings` is the same rule for where the *user* is:
+their country, address and location in their own file, and the location service of the computer they sit at
+(`partcad_client.location`). None of the four imports `partcad`; the editor extension's first-run question runs
+them with `--json` (see "Where the user is" in `ide/vscode/AGENTS.md`), and their shared reading of the file is
+`click/locale_state.py` -- not beside them, where the loader would take it for a command. Still unmigrated: `supply/*`,
 `add sketch`, `add dep`.
 
 `pc daemon ...` is the other side of that pair, command for command: `daemon start|stop` manage the process,
