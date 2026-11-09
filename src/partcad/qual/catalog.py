@@ -611,10 +611,11 @@ the pieces that are the reason, and leaves them behind to look at:
 - faces and edges the kernel finds fault with on their own - a wire that crosses
   itself, a curve that leaves its surface - by the kernel's own name for it.
 
-The faces and the edges (as tubes along them) are left behind in an assembly of
-the part and, in a sub-assembly named `focus`, the pieces, drawn in red and
-orange. The IDE's Topology tab shows them with the rest of the part faded and a
-callout on each (**Show**). Like `validity`, it reports and never fails.
+The faces and the edges (as tubes along them, or a ball on an edge too short for
+a tube, which a sliver usually is) are left behind in an assembly of the part
+and, in a sub-assembly named `focus`, the pieces, drawn in red and orange. The
+IDE's Topology tab shows them with the rest of the part faded and a callout on
+each (**Show**). Like `validity`, it reports and never fails.
 
 ### When it does not apply
 
@@ -625,8 +626,10 @@ reports that), and an assembly or a scene, which is checked through its parts.
 
 It does not fail. When it reports `K of its N faces ... are defective`, rebuild
 those pieces in the part's source - join the free edges, merge or remove the
-slivers - or re-export it from its tool. When every face is defective, nothing
-is drawn: that is the whole part, and `validity` says the same of it.
+slivers - or re-export it from its tool. When every face is defective, the faces
+are not drawn (`every face is, which is all of it`), and when every face and
+every edge is, nothing is (`that is all of it`): that is the whole part, and
+`validity` says the same of it.
 
 ### Settings
 

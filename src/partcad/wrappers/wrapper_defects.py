@@ -27,9 +27,11 @@ purpose, and are none of these.
 
 Answers the counts, a description of each piece found (up to 'MAX_DESCRIBED'),
 and the geometry to show them by: the faces themselves, and each edge as a thin
-tube along it. Only the pieces: when every face is defective the faces are the
-whole part, and showing them singles nothing out, so they are counted and
-described and not drawn -- and the same for the edges.
+tube along it, or as a ball on it when it is too short for a tube -- which a
+sliver usually is. Only the pieces: when every face is defective the faces are
+the whole part, and showing them singles nothing out, so they are counted and
+described and not drawn -- and the same for the edges ('whole_faces',
+'whole_edges').
 """
 
 import os
@@ -45,11 +47,13 @@ import wrapper_tolerance
 
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
-# before is produced again.
-CACHE_VERSION = 1
+# before is produced again. Raised to 2 when an edge too short for a tube came
+# to be drawn as a ball ('wrapper_tolerance._marker') rather than as nothing,
+# which the verdict then said was "all of it".
+CACHE_VERSION = 2
 
 # How many defective pieces are described one by one, and how many edges get a
-# tube. A mesh import can have thousands of free edges, and a description of
+# marker. A mesh import can have thousands of free edges, and a description of
 # each says nothing the count does not.
 MAX_DESCRIBED = 50
 MAX_TUBES = 400
@@ -223,10 +227,10 @@ def find(request):
         radius = max(wrapper_tolerance._diagonal(shape) * 0.004, 0.05)
         found = []
         for index in sorted(edge_problems):
-            tube = wrapper_tolerance._tube(edges[index], radius) if tubes < MAX_TUBES else None
-            if tube is not None:
+            marker = wrapper_tolerance._marker(edges[index], radius) if tubes < MAX_TUBES else None
+            if marker is not None:
                 tubes += 1
-                found.append(tube)
+                found.append(marker)
         if found:
             pieces.append({"kind": "edge", "shape": wrapper_tolerance._compound(found)})
 

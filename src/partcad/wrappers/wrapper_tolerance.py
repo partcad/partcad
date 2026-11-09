@@ -42,13 +42,14 @@ import wrapper_common
 
 # Raised to 2 when the verdict made of it stopped drawing a finding that is the
 # whole part (see 'partcad.qual.highlight.covers_all'): a verdict cached before
-# that carries such a drawing.
-CACHE_VERSION = 2
+# that carries such a drawing. Raised to 3 when an edge too short for a tube
+# came to be drawn as a ball ('_marker') rather than as nothing.
+CACHE_VERSION = 3
 
 # How many untoleranced features are described one by one in the answer, and
-# how many edges get a tube. A part that tolerances nothing has every one of its
-# features untoleranced, and a description of each of two thousand edges says
-# nothing the count does not.
+# how many edges get a marker. A part that tolerances nothing has every one of
+# its features untoleranced, and a description of each of two thousand edges
+# says nothing the count does not.
 MAX_DESCRIBED = 50
 MAX_TUBES = 400
 
@@ -282,6 +283,46 @@ def _tube(edge, radius):
         return None
 
 
+def _ball(edge, radius):
+    """A solid ball of 'radius' on the middle of 'edge', or None if there is no point to put it on."""
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeSphere
+    from OCP.TopExp import TopExp
+
+    try:
+        curve = BRepAdaptor_Curve(edge)
+        point = curve.Value(0.5 * (curve.FirstParameter() + curve.LastParameter()))
+    except Exception:  # pylint: disable=broad-except
+        # An edge with no curve of its own still has its ends.
+        try:
+            point = BRep_Tool.Pnt_s(TopExp.FirstVertex_s(edge))
+        except Exception:  # pylint: disable=broad-except
+            return None
+    try:
+        return BRepPrimAPI_MakeSphere(point, radius).Shape()
+    except Exception:  # pylint: disable=broad-except
+        return None
+
+
+def _marker(edge, radius):
+    """What an edge is drawn as: a tube of 'radius' along it, or a ball on it when it is too short for one.
+
+    A tube along an edge shorter than the tube is wide is a coin seen edge on,
+    and along one shorter than OCCT's own tolerance (a ten-millionth of a
+    millimetre) there is none at all: the sweep fails. Those are the slivers,
+    which is what the 'defects' check finds most of in a part made from a mesh,
+    and they were drawn as nothing -- a finding with nothing to see. Such an
+    edge is a ball twice the tube's radius where it is, and so is a longer one
+    OCCT will not sweep a tube along.
+    """
+    if _signature(edge, "edge")[1] >= 2.0 * radius:
+        tube = _tube(edge, radius)
+        if tube is not None:
+            return tube
+    return _ball(edge, 2.0 * radius)
+
+
 def _compound(shapes):
     from OCP.BRep import BRep_Builder
     from OCP.TopoDS import TopoDS_Compound
@@ -360,10 +401,10 @@ def untoleranced(request):
             radius = max(_diagonal(shape) * 0.004, 0.05)
             pieces = []
             for index in missing:
-                tube = _tube(features[index], radius) if tubes < MAX_TUBES else None
-                if tube is not None:
+                marker = _marker(features[index], radius) if tubes < MAX_TUBES else None
+                if marker is not None:
                     tubes += 1
-                    pieces.append(tube)
+                    pieces.append(marker)
             highlight = _compound(pieces) if pieces else None
 
     return {

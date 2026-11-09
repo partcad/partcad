@@ -83,3 +83,65 @@ def test_a_threshold_below_the_slivers_lets_them_pass(ctx):
     result = _defects(ctx, "sliver_tolerated")
     assert result.status == report.PASSED
     assert result.artifacts == []
+
+
+def _found(**overrides):
+    """What the wrapper answers, for a part of 100 faces and 2000 edges with nothing wrong, changed by 'overrides'."""
+    found = {
+        "success": True,
+        "valid": True,
+        "faces": 100,
+        "edges": 2000,
+        "defective_faces": 0,
+        "defective_edges": 0,
+        "free": 0,
+        "slivers": 0,
+        "whole": [],
+        "whole_faces": False,
+        "whole_edges": False,
+        "described": [],
+        "pieces": [],
+    }
+    found.update(overrides)
+    return found
+
+
+def _said(ctx, monkeypatch, found):
+    """What 'defects' says of the sound part when the wrapper answers 'found'."""
+    from partcad.qual.topology.defects import DefectsTest
+
+    async def answer(self, ctx, envelope, min_length):
+        return found
+
+    monkeypatch.setattr(DefectsTest, "_find", answer)
+    result = _defects(ctx, "sound")
+    assert result.status == report.WARNED
+    return result.findings[0]["text"]
+
+
+def test_one_sliver_that_could_not_be_drawn_is_not_all_of_it(ctx, monkeypatch):
+    # What two LEGO parts said in CI: one edge in two thousand, drawn as
+    # nothing, and then called the whole part.
+    text = _said(ctx, monkeypatch, _found(defective_edges=1, slivers=1))
+    assert "1 of its 2000 edges is defective" in text
+    assert "all of it" not in text
+    assert "none of them could be drawn" in text
+
+
+def test_every_piece_defective_is_all_of_it(ctx, monkeypatch):
+    text = _said(
+        ctx,
+        monkeypatch,
+        _found(defective_faces=100, defective_edges=2000, slivers=2100, whole_faces=True, whole_edges=True),
+    )
+    assert "that is all of it, so there is nothing in particular to point at" in text
+
+
+def test_every_face_defective_is_said_beside_the_edges_drawn(ctx, monkeypatch):
+    text = _said(
+        ctx,
+        monkeypatch,
+        _found(defective_faces=100, defective_edges=3, slivers=103, whole_faces=True, pieces=[{"kind": "edge"}]),
+    )
+    assert "every face is, which is all of it and is not drawn" in text
+    assert "nothing in particular" not in text

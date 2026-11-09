@@ -153,8 +153,18 @@ class DefectsTest(TopologyQualification):
 
         sentence = self._sentence(found, min_length)
         pieces = [piece for piece in found.get("pieces") or [] if isinstance(piece, dict)]
-        if not pieces:
+        # What is left undrawn because it is all of the part is what the wrapper
+        # says is ('whole_faces', 'whole_edges'), and nothing else: an edge that
+        # could not be drawn is not every edge, and saying "all of it" of one
+        # sliver among two thousand edges was wrong.
+        whole_faces = bool(found.get("whole_faces"))
+        whole_edges = bool(found.get("whole_edges"))
+        if (faces == 0 or whole_faces) and (edges == 0 or whole_edges):
             sentence += " -- that is all of it, so there is nothing in particular to point at"
+        elif not pieces:
+            sentence += " -- none of them could be drawn, so this is all there is to see of them"
+        elif whole_faces or whole_edges:
+            sentence += " -- every %s is, which is all of it and is not drawn" % ("face" if whole_faces else "edge")
         verdict = self.warned(shape, "%s", sentence)
 
         geometry = []
