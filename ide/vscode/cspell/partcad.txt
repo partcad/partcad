@@ -95,6 +95,7 @@ dxf
 dynamic
 effort
 elif
+end
 endautoescape
 endblock
 endcall
@@ -113,6 +114,7 @@ exclude
 executable
 exploded
 export
+extend
 extends
 extension
 extensions
@@ -353,6 +355,7 @@ spring
 square
 squares
 stage
+start
 step
 stepover
 stiffness
@@ -372,6 +375,7 @@ tar
 target
 temperature
 thermal
+thickness
 thread
 threejs
 timeout
@@ -404,6 +408,8 @@ version
 via
 viscosity
 visibility
+visual
+visuals
 volume
 wall
 walls
