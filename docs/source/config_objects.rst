@@ -266,10 +266,14 @@ manufacturing, say -- but those are not part of this section.
 
   Of an assembly, each is required of every part in it, inside the
   sub-assemblies it holds too, bought whole or not; ``has_weight`` of what the
-  whole of it weighs. They are what holds a part that is bought to having been
-  specified: the ``cmf`` check (see :ref:`cmf-check`) leaves a bought part alone,
-  since its vendor decides what it is in, while a package of a vendor's parts
-  may still require each of them to say what that is.
+  whole of it weighs.
+
+  None of them is required unless the object says so: they are for a package's
+  maintainer to opt into, object by object, and a package that declares none is
+  tested exactly as it was. What they are for is a package of parts that are
+  bought: the ``cmf`` check (see :ref:`cmf-check`) leaves a bought part alone,
+  since its vendor decides what it is in, and a maintainer who wants each of
+  them to say what that is requires it here.
 
 ``pc test`` checks every one of these but ``features`` against the model -- its
 ``requirements`` check, ``pc test -f requirements`` to run it alone -- and says,

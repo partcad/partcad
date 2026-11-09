@@ -50,8 +50,10 @@ which are checked two ways:
   Whether the object is specified: every face in a colour and in a finish, every
   solid in a material -- each a CMF declaration that claims it can be had -- and
   a mass PartCAD knows. Each is ``true`` or ``false``, and of an assembly, of
-  every part in it. A part that is bought is held to them as any other is, which
-  is how a package of a vendor's parts makes sure each says what it is made of.
+  every part in it. They are opt-in: nothing is held to them but an object that
+  declares them. A part that is bought may declare them as any other may, which
+  is how the maintainer of a package of a vendor's parts can make sure each says
+  what it is made of.
 
 A ``simulate:`` entry names the feature it demonstrates with ``feature:``, which
 is how a simulation becomes evidence for a requirement rather than a test that
