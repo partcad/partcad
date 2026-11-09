@@ -1541,7 +1541,7 @@ class Shape(ShapeConfiguration):
 
         applied, after = pc_cmf.apply_declared(ctx, self, envelope, recorded)
         if applied is envelope:
-            return self._with_source_cmf(envelope, recorded)
+            return self._with_source_cmf(ctx, envelope, recorded)
         if after:
             applied = dict(applied)
             applied[shape_envelope.KEY_METADATA] = after
@@ -1550,14 +1550,18 @@ class Shape(ShapeConfiguration):
     # The part types that are another name for a part, and hand out its geometry.
     REFERENCE_TYPES = ("alias", "enrich")
 
-    def _with_source_cmf(self, envelope, recorded):
-        """'(envelope, recorded)' with what a reference is in recorded, as its source's is.
+    def _with_source_cmf(self, ctx, envelope, recorded, seen=None):
+        """'(envelope, recorded)' with what a reference is in applied, as its source applies it.
 
         A reference states no CMF of its own, and hands out the geometry of the
-        part it stands for, CMF section and all: it is in what that part is in.
-        What the section comes to is recorded as the part's own is, with its
-        geometry ('cmf.apply_declared'), so that 'pc info', 'pc test' and the
-        IDE's CMF tab read it off the reference as they read it off the part.
+        part it stands for: it is in what that part is in. That geometry comes
+        from the entry it shares with the part in the cache - as it was built,
+        before any CMF was applied to it (see 'Shape.get_wrapped') - so the
+        part's own CMF is applied to it here, by the rule that applies it to the
+        part ('cmf.apply_declared'), and recorded with it. 'pc info', 'pc test',
+        the IDE's CMF tab and an export then read it off the reference as they
+        read it off the part. A reference to a reference follows it down.
+
         Only for a reference: any other part with no CMF of its own pays nothing
         for it, not even a look at its payload.
         """
@@ -1567,14 +1571,19 @@ class Shape(ShapeConfiguration):
             return envelope, recorded
         if (recorded or {}).get(shape_envelope.METADATA_CMF) is not None:
             return envelope, recorded
-        section = pc_cmf.payload_section(envelope)
-        if section is None:
+        seen = set() if seen is None else seen
+        seen.add(id(self))
+        source_name = (self.config or {}).get("source_resolved")
+        source = ctx.get_part(source_name) if ctx is not None and isinstance(source_name, str) else None
+        if source is None or id(source) in seen:
             return envelope, recorded
-        recorded = dict(recorded or {})
-        recorded[shape_envelope.METADATA_CMF] = section.summary()
-        envelope = dict(envelope)
-        envelope[shape_envelope.KEY_METADATA] = recorded
-        return envelope, recorded
+        applied, after = pc_cmf.apply_declared(ctx, source, envelope, recorded)
+        if applied is envelope:
+            return source._with_source_cmf(ctx, envelope, recorded, seen)
+        if after:
+            applied = dict(applied)
+            applied[shape_envelope.KEY_METADATA] = after
+        return applied, after
 
     def _shape_properties(self):
         """What this shape reports about itself, or None if it reports nothing.
