@@ -298,6 +298,15 @@ def _same(solid, other) -> bool:
     return all(abs(a - b) <= tolerance for a, b in zip(*boxes))
 
 
+def _tight_box(shape):
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+
+    box = Bnd_Box()
+    BRepBndLib.AddOptimal_s(shape, box, False, False)
+    return box
+
+
 def inside(solid, other_solids) -> bool:
     """Whether 'solid' lies wholly inside the part whose solids are 'other_solids'.
 
@@ -322,9 +331,24 @@ def inside(solid, other_solids) -> bool:
             near.append(other)
     if not near:
         return False
+    # Two things a solid wholly inside others cannot be, each cheaper to ask
+    # than a boolean, and exact: outside the box around them, or larger than
+    # all of them together. They also spare OCCT a question it may not answer:
+    # the common volume of a worm and the set screws threaded into it. The
+    # boxes are the tight ones: the quick ones above are built from a curved
+    # surface's control points, and can stick out past the solid they bound.
+    tight, around = _tight_box(solid), Bnd_Box()
+    for other in near:
+        around.Add(_tight_box(other))
+    around.Enlarge(INSIDE_ABSOLUTE)
+    if around.IsOut(tight.CornerMin()) or around.IsOut(tight.CornerMax()):
+        return False
     volume = _volume(solid)
+    tolerance = max(INSIDE_ABSOLUTE, INSIDE_RELATIVE * volume)
+    if volume > sum(_volume(other) for other in near) + tolerance:
+        return False
     common = _run(BRepAlgoAPI_Common, solid, ocp_serialize.compound_of(near)).Shape()
-    return _volume(common) >= volume - max(INSIDE_ABSOLUTE, INSIDE_RELATIVE * volume)
+    return _volume(common) >= volume - tolerance
 
 
 def by_whole_solids(operation: str, first: Operand, second: Operand):
