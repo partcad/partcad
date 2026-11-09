@@ -38,7 +38,7 @@ from . import surface as pc_surface
 from . import sync_threads, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
-from .shape_config import TRANSFORM_KEYS, ShapeConfiguration
+from .shape_config import TRANSFORM_KEYS, ShapeConfiguration, final_config
 from .utils import resolve_resource_path, total_size
 
 if TYPE_CHECKING:
@@ -1568,6 +1568,17 @@ class Shape(ShapeConfiguration):
         properties = self.config.get(shape_envelope.KEY_PROPERTIES)
         if not isinstance(properties, dict):
             properties = {}
+        # A reference - an alias, an enrich - is the geometry of what it points
+        # at, and so is what that turned out to be: the colour it is drawn in,
+        # the material it is weighed as, the mass it states. What the reference
+        # states itself wins. Without this an alias of a coloured part was
+        # drawn in goldenrod and weighed nothing: the source's factory recorded
+        # them on the source's configuration, and the reference's own has none.
+        resolved = final_config(self)
+        if resolved is not self.config and isinstance(resolved, dict):
+            lent = resolved.get(shape_envelope.KEY_PROPERTIES)
+            if isinstance(lent, dict):
+                properties = {**lent, **properties}
         properties = {key: value for key, value in properties.items() if value not in (None, {}, [], "")}
         # The one thing a shape reports by what it *is*: a part that resolves to
         # a surface type - a wall, or an alias of one, which states no

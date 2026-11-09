@@ -109,6 +109,12 @@ parts:
     path: box.step
     parameters:
       material: {type: string, default: ":plastic"}
+  alu-box-again:
+    type: alias
+    source: alu-box
+  red-box-again:
+    type: alias
+    source: red-box
   brick:
     type: stl
     path: box.stl
@@ -372,6 +378,13 @@ def test_a_material_s_claim_is_read_in_the_material_s_own_package(ctx):
 
 def test_a_material_that_claims_no_colour_draws_nothing(ctx):
     assert ctx.get_part(":plastic-box").config.get("properties", {}).get("color") is None
+
+
+def test_an_alias_is_drawn_in_its_source_s_colour_and_made_of_its_material(ctx):
+    assert ctx.get_part(":red-box-again")._shape_properties()["color"] == "#C91A09"
+    alias = ctx.get_part(":alu-box-again")._shape_properties()
+    assert alias["color"] == "#A8A9AD"
+    assert alias["material"] == ":alu"
 
 
 def test_a_part_named_with_a_material_is_drawn_in_its_claim(ctx):
