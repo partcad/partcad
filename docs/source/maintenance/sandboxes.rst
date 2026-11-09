@@ -147,7 +147,7 @@ in a Docker volume on the daemon's side, built once and reused. What is sent is
 what the object names: its file's directory, its package and any directory it
 lists. A file found by looking anywhere else is not there -- a URDF's
 ``package://`` mesh found by searching the directories above the URDF is one --
-so name its directory in the object's ``searchPaths``. It applies to
+so name the directory of that package in the object's ``searchPaths``. It applies to
 every container PartCAD starts -- the ``docker`` sandbox, KiCad imports, a
 plugin's ``container:`` and an application ``pc ide open`` runs in a container
 alike -- and off by default, because sending a package

@@ -278,8 +278,21 @@ def test_the_urdf_reader_says_what_to_declare_when_it_was_sent_files(carried):
     carried.append(("/here/1", "/there/pkg"))
     note = import_urdf.sent_note("package://arm/meshes/a.stl")
     assert "'arm'" in note and "'searchPaths'" in note
+    # The package's own directory, which is sent alone: the one above it may be
+    # the home directory, which is never sent.
+    assert "the directory of 'arm' itself" in note
     # A plain path is relative to the URDF, whose directory was sent.
     assert import_urdf.sent_note("meshes/a.stl") == ""
+
+
+def test_a_urdf_with_no_link_built_says_what_kept_each_one_out(carried):
+    """The warnings reach PartCAD with a tree, and a URDF with no geometry has none to send."""
+    carried.append(("/here/1", "/there/pkg"))
+    warning = "Mesh file not found for link 'arm': package://arm/a.stl%s" % import_urdf.sent_note("package://arm/a.stl")
+    message = import_urdf.no_geometry("/here/1/robot.urdf", [warning])
+    assert message.startswith("No geometry found in /here/1/robot.urdf\n")
+    assert "'searchPaths'" in message
+    assert import_urdf.no_geometry("/here/1/robot.urdf", []) == "No geometry found in /here/1/robot.urdf"
 
 
 # --------------------------------------------------------------------------- #

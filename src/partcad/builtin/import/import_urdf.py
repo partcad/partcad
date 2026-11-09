@@ -182,10 +182,24 @@ def sent_note(filename):
     if not wrapper_common.files_were_sent():
         return ""
     package = filename[len("package://") :].partition("/")[0]
+    # The package's own directory, which is a root a reference is resolved
+    # against too: the one above it may be one that is never sent (the home
+    # directory is not), and would send everything beside the package.
     return (
         " (this sandbox is sent the directories the assembly names, and none above its file: "
-        "to find '%s' there, name the directory holding it in 'searchPaths')" % package
+        "to find '%s' there, name the directory of '%s' itself in 'searchPaths')" % (package, package)
     )
+
+
+def no_geometry(urdf_file, warnings):
+    """Why nothing could be built from 'urdf_file': what kept each link out is the reason, and is said with it.
+
+    A link whose mesh is missing is a warning, and the warnings reach PartCAD
+    with the tree - which a URDF none of whose links were built does not
+    produce. So what was found missing, and what to declare for it (see
+    'sent_note'), would otherwise be read nowhere.
+    """
+    return "No geometry found in %s%s" % (urdf_file, "".join("\n" + warning for warning in warnings))
 
 
 def mesh_scale_factor(mesh, warnings):
@@ -1136,7 +1150,7 @@ def process(path, request):  # pylint: disable=unused-argument
 
     walk_link(robot, root_name, IDENTITY, IDENTITY, context, frozenset(), None)
     if not context["nodes"]:
-        raise ValueError("No geometry found in %s" % urdf_file)
+        raise ValueError(no_geometry(urdf_file, warnings))
 
     # Before the 'dropped' tally is taken: reading a joint is what notices the
     # Gazebo settings attached to it, and a calibration block.
