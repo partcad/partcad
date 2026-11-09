@@ -79,6 +79,10 @@ sketches:
   too-wide:
     type: basic
     rectangle: {x: 3900, y: 1050, side-x: 900, side-y: 2100}
+  kept-door:
+    type: basic
+    private: true
+    rectangle: {x: 1450, y: 1050, side-x: 900, side-y: 2100}
   ell:
     type: build123d
     path: ell.py
@@ -118,6 +122,18 @@ parts:
   surface-alias:
     type: alias
     source: //builtin/building:wall-surface
+  own-kept-door:
+    type: wall
+    length: 4000
+    height: 2700
+    openings: kept-door
+  builtin-kept-door:
+    type: enrich
+    source: //builtin/building:wall
+    with:
+      length: 4000
+      height: 2700
+      openings: //:kept-door
 
 scenes:
   living:
@@ -500,6 +516,23 @@ def test_the_surface_of_a_wall_is_private_to_the_building_package(context, caplo
     # A command names it to look at it, and is not a reference.
     assert context.get_part("//builtin/building:wall-surface") is not None
     assert context.get_part("//builtin/building:wall-surface", referrer=context.get_project("//").name) is None
+
+
+def test_a_private_sketch_cuts_this_package_s_walls_and_no_other_package_s(context, caplog):
+    """The openings of a 'type: wall' part of the sketch's own package, but not of an enrich of PartCAD's wall.
+
+    That instance is '//builtin/building''s, which any package may ask for by
+    name: the reference to the sketch is written there, and is refused.
+    """
+    own, envelope = _built(context, "own-kept-door")
+    assert envelope is not None and own.errors == []
+    caplog.clear()
+    _borrowed, envelope = _built(context, "builtin-kept-door")
+    assert envelope is None
+    assert (
+        "A sketch '//:kept-door' is private to //, and a reference written in //builtin/building cannot name it"
+        in caplog.text
+    )
 
 
 def _corners_closed(context, name, thickness, height, ring):

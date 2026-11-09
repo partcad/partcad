@@ -512,7 +512,11 @@ script of §4.3 goes with `/tmp/pc-sketch`.
 
 **Keep to the package what is the package's own working.** A study sketch the
 user wants kept, a profile that only one part of this package is extruded from,
-a wall's openings: declare each `private: true`.
+the openings of a `type: wall` part this package declares: declare each
+`private: true`. A sketch handed to **another** package's object stays public:
+the openings of an `enrich` of `//builtin/building:wall`, the plan of
+`//builtin/building:room`. That instance (`//builtin/building:wall;openings=...`)
+is the other package's, so the reference is written there, and it is refused.
 
 ```yaml
 sketches:

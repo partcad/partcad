@@ -90,6 +90,13 @@ A public object built on a private one is usable everywhere: another package pla
 ``//builtin/building:wall`` and gets the private ``wall-surface`` drawn as its visual, because that reference
 was written in ``//builtin/building``.
 
+The same rule decides the other way round. A value a package hands to another package's parametrized object --
+the ``openings:`` of an ``enrich`` of ``//builtin/building:wall``, the ``sketch:`` of ``//builtin/building:room``
+-- is resolved by that object, in its own package: ``//builtin/building:wall;openings=//my/house:door`` is an
+instance of ``//builtin/building``, which any package can ask for by name. So a sketch handed over that way has to
+be public; a private one is refused, naming ``//builtin/building`` as the package the reference is in. A
+``type: wall`` part or a ``walls`` scene declared in the sketch's own package builds on a private one.
+
 A private object's parametrized instances (``wall-surface;length=4200``) are as private as it is, and so is every
 name its ``aliases:`` give it. An alias the package declares under a name of its own, without ``private:``, is
 public: that is the package choosing to publish the object under that name, which only it can do.
