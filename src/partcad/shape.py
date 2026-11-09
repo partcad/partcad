@@ -38,7 +38,7 @@ from . import surface as pc_surface
 from . import sync_threads, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
-from .shape_config import TRANSFORM_KEYS, ShapeConfiguration
+from .shape_config import TRANSFORM_KEYS, ShapeConfiguration, final_config
 from .utils import resolve_resource_path, total_size
 
 if TYPE_CHECKING:
@@ -1548,7 +1548,45 @@ class Shape(ShapeConfiguration):
 
         applied, after = pc_cmf.apply_declared(ctx, self, envelope, recorded)
         if applied is envelope:
+            return self._with_source_cmf(ctx, envelope, recorded)
+        if after:
+            applied = dict(applied)
+            applied[shape_envelope.KEY_METADATA] = after
+        return applied, after
+
+    # The part types that are another name for a part, and hand out its geometry.
+    REFERENCE_TYPES = ("alias", "enrich")
+
+    def _with_source_cmf(self, ctx, envelope, recorded, seen=None):
+        """'(envelope, recorded)' with what a reference is in applied, as its source applies it.
+
+        A reference states no CMF of its own, and hands out the geometry of the
+        part it stands for: it is in what that part is in. That geometry comes
+        from the entry it shares with the part in the cache - as it was built,
+        before any CMF was applied to it (see 'Shape.get_wrapped') - so the
+        part's own CMF is applied to it here, by the rule that applies it to the
+        part ('cmf.apply_declared'), and recorded with it. 'pc info', 'pc test',
+        the IDE's CMF tab and an export then read it off the reference as they
+        read it off the part. A reference to a reference follows it down.
+
+        Only for a reference: any other part with no CMF of its own pays nothing
+        for it, not even a look at its payload.
+        """
+        from . import cmf as pc_cmf
+
+        if (self.config or {}).get("type") not in self.REFERENCE_TYPES:
             return envelope, recorded
+        if (recorded or {}).get(shape_envelope.METADATA_CMF) is not None:
+            return envelope, recorded
+        seen = set() if seen is None else seen
+        seen.add(id(self))
+        source_name = (self.config or {}).get("source_resolved")
+        source = ctx.get_part(source_name) if ctx is not None and isinstance(source_name, str) else None
+        if source is None or id(source) in seen:
+            return envelope, recorded
+        applied, after = pc_cmf.apply_declared(ctx, source, envelope, recorded)
+        if applied is envelope:
+            return source._with_source_cmf(ctx, envelope, recorded, seen)
         if after:
             applied = dict(applied)
             applied[shape_envelope.KEY_METADATA] = after
@@ -1575,6 +1613,17 @@ class Shape(ShapeConfiguration):
         properties = self.config.get(shape_envelope.KEY_PROPERTIES)
         if not isinstance(properties, dict):
             properties = {}
+        # A reference - an alias, an enrich - is the geometry of what it points
+        # at, and so is what that turned out to be: the colour it is drawn in,
+        # the material it is weighed as, the mass it states. What the reference
+        # states itself wins. Without this an alias of a coloured part was
+        # drawn in goldenrod and weighed nothing: the source's factory recorded
+        # them on the source's configuration, and the reference's own has none.
+        resolved = final_config(self)
+        if resolved is not self.config and isinstance(resolved, dict):
+            lent = resolved.get(shape_envelope.KEY_PROPERTIES)
+            if isinstance(lent, dict):
+                properties = {**lent, **properties}
         properties = {key: value for key, value in properties.items() if value not in (None, {}, [], "")}
         # The one thing a shape reports by what it *is*: a part that resolves to
         # a surface type - a wall, or an alias of one, which states no

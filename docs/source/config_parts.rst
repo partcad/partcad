@@ -1365,8 +1365,10 @@ pane that draws the shape in 3D. An assembly that states one colours everything
 inside it that states none, and a part inside it that states its own keeps it.
 A shape that states no colour -- most of them -- is drawn in goldenrod,
 ``#DAA520``, which is the colour OCCT draws a shape nobody coloured. A
-``material`` says nothing about how a part looks, so a part made of one and
-stating no colour is goldenrod too.
+``material`` written here says nothing about how a part looks, so a part made of
+one and stating no colour is goldenrod too. A part whose ``material`` parameter
+names a CMF material that claims a colour (see :ref:`cmf-declarations`), and
+whose ``color`` parameter names none, is drawn in that colour.
 
 ``oneSided`` is how a shape is drawn too, by the same three and by the IDE: from
 the front of its faces only -- the side their normals point to -- and not at all
