@@ -1541,11 +1541,40 @@ class Shape(ShapeConfiguration):
 
         applied, after = pc_cmf.apply_declared(ctx, self, envelope, recorded)
         if applied is envelope:
-            return envelope, recorded
+            return self._with_source_cmf(envelope, recorded)
         if after:
             applied = dict(applied)
             applied[shape_envelope.KEY_METADATA] = after
         return applied, after
+
+    # The part types that are another name for a part, and hand out its geometry.
+    REFERENCE_TYPES = ("alias", "enrich")
+
+    def _with_source_cmf(self, envelope, recorded):
+        """'(envelope, recorded)' with what a reference is in recorded, as its source's is.
+
+        A reference states no CMF of its own, and hands out the geometry of the
+        part it stands for, CMF section and all: it is in what that part is in.
+        What the section comes to is recorded as the part's own is, with its
+        geometry ('cmf.apply_declared'), so that 'pc info', 'pc test' and the
+        IDE's CMF tab read it off the reference as they read it off the part.
+        Only for a reference: any other part with no CMF of its own pays nothing
+        for it, not even a look at its payload.
+        """
+        from . import cmf as pc_cmf
+
+        if (self.config or {}).get("type") not in self.REFERENCE_TYPES:
+            return envelope, recorded
+        if (recorded or {}).get(shape_envelope.METADATA_CMF) is not None:
+            return envelope, recorded
+        section = pc_cmf.payload_section(envelope)
+        if section is None:
+            return envelope, recorded
+        recorded = dict(recorded or {})
+        recorded[shape_envelope.METADATA_CMF] = section.summary()
+        envelope = dict(envelope)
+        envelope[shape_envelope.KEY_METADATA] = recorded
+        return envelope, recorded
 
     def _shape_properties(self):
         """What this shape reports about itself, or None if it reports nothing.

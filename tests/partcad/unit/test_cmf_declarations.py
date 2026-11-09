@@ -24,7 +24,7 @@ import pytest
 import yaml
 
 import partcad as pc
-from partcad import cmf, factory
+from partcad import cmf, factory, shape_envelope
 from partcad.lint.all import get_partcad_schema
 from partcad_utils.utils import escape_name, format_parameterized_name, parse_parameterized_name, unescape_name
 
@@ -556,3 +556,27 @@ def test_an_alias_naming_nothing_is_listed_as_broken(tmp_path):
     assert rows["orphan"].startswith("<broken>")
     assert rows["red"].startswith("#C91A09")
     assert cmf.lookup(ctx, "color", None, quiet=True) is None
+
+
+def test_an_alias_is_in_what_its_source_is_in(tmp_path):
+    """Built, it records the CMF of the part it stands for, as 'pc info' and 'pc test' read it."""
+    (tmp_path / "partcad.yaml").write_text(textwrap.dedent("""
+            colors:
+              natural: "#A8A9AD"
+            materials:
+              alu: {density: 2700, color: ":natural"}
+            parts:
+              block:
+                type: basic
+                cuboid: 10
+                parameters:
+                  material: {type: string, default: ":alu"}
+              block-again:
+                type: alias
+                source: block
+            """))
+    ctx = pc.Context(str(tmp_path))
+    alias = ctx.get_part(":block-again")
+    assert asyncio.run(alias.get_wrapped(ctx)) is not None
+    summary = asyncio.run(alias.get_metadata_async(ctx))[shape_envelope.METADATA_CMF]
+    assert [(entry["material"], entry["color"]) for entry in summary["sets"]] == [("//:alu", "//:natural")]
