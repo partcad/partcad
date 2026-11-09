@@ -90,19 +90,19 @@ Feature: A package name ending in '...' means that package and everything below 
   Scenario: A named object is looked for in every package of the subtree
     # '-f' selects no check at all, so this resolves the objects and runs
     # nothing: what is under test is which packages the name reached.
-    When I run "pc --no-ansi test -s -f nosuchcheck ...:shared"
+    When I run "pc --no-ansi qual test -s -f nosuchcheck ...:shared"
     Then the command should exit with a status code of "0"
     And STDERR should not contain "is not found"
 
   @success
   Scenario: A package of the subtree that declares no such object is passed over
-    When I run "pc --no-ansi test -s -f nosuchcheck ...:circle_a"
+    When I run "pc --no-ansi qual test -s -f nosuchcheck ...:circle_a"
     Then the command should exit with a status code of "0"
     And STDERR should not contain "is not found"
 
   @failure
   Scenario: Finding the object nowhere in the subtree is the one failure
-    When I run "pc --no-ansi test -s -f nosuchcheck ...:nosuchsketch"
+    When I run "pc --no-ansi qual test -s -f nosuchcheck ...:nosuchsketch"
     Then the command should exit with a non-zero status code
     And STDERR should contain "nosuchsketch is not found in // or in any package below it"
 

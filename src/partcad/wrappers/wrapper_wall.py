@@ -69,7 +69,7 @@ CACHE_VERSION = 1
 
 # How far, in millimetres, an opening may stray past the edge of the wall before
 # it counts as reaching beyond it: a thousandth of a millimetre, the tolerance
-# 'partcad.test.degenerate' measures flatness to. Enough for a drawing whose
+# 'partcad.qual.basic.degenerate' measures flatness to. Enough for a drawing whose
 # door was drawn to the floor through a chain of floating-point arithmetic, and
 # nothing anybody could see.
 TOLERANCE = 1e-3

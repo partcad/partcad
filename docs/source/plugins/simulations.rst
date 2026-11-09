@@ -10,10 +10,10 @@ third kind of implementation declared in the same form as
 that script needs, and the parameters it is handed -- and it is what turns an
 object's claim about its *behaviour* into something that can be checked.
 
-A part says what it **is**. ``simulate:`` is where a part, an assembly or a
+A part says what it **is**. ``qual: sim:`` is where a part, an assembly or a
 scene says what it is supposed to **do** once it is placed in a world and the
 world is switched on -- or, more often, what it is supposed *not* to do: not
-fall over, not slide off, not come apart. ``pc sim`` runs those, and ``pc test``
+fall over, not slide off, not come apart. ``pc qual test --simulation`` runs those, and ``pc qual test``
 holds the object to them every time it runs, as its ``sim`` check.
 
 **PartCAD ships no simulator.** It ships the concept -- this section, the
@@ -23,13 +23,13 @@ sandbox a plugin runs in, and the export a scene reaches the simulator through
 What a simulation plugin is for
 ===============================
 
-- **Proving a behavioural requirement.** A ``simulate:`` entry that names a
+- **Proving a behavioural requirement.** A ``qual: sim:`` entry that names a
   ``feature:`` of the object's ``requirements:`` becomes the evidence for that
   feature, which is otherwise a sentence no program can measure.
 - **Catching what geometry cannot show.** A stack that stands, a gripper that
   holds, a robot that does not tip on a slope: nothing about the shapes says any
   of it.
-- **Regression-testing motion.** The simulations run in ``pc test``, through the
+- **Regression-testing motion.** The simulations run in ``pc qual test``, through the
   cache, so a change that makes a mechanism bind is a failed check rather than a
   discovery.
 - **Wrapping one engine once.** A plugin brings the engine, the scene format it
@@ -45,14 +45,15 @@ Declare the simulation on the object, naming the plugin by full path:
 
   parts:            # or assemblies:, or scenes:
     <name>:
-      simulate:
-        <simulation name>:
-          desc: <(optional) what this simulation is about>
-          scene: <(optional) the scene to place this object in, by full path>
-          offset: <(optional) OCCT Location object: where in that scene it goes>
-          simulation: <the simulation plugin, by full path; there is no default>
-          validation: <(optional) a Python expression that is true when it went as it should>
-          params: <(optional) parameter values handed to the plugin>
+      qual:
+        sim:
+          <simulation name>:
+            desc: <(optional) what this simulation is about>
+            scene: <(optional) the scene to place this object in, by full path>
+            offset: <(optional) OCCT Location object: where in that scene it goes>
+            path: <the simulation plugin, by full path; there is no default>
+            validation: <(optional) a Python expression that is true when it went as it should>
+            params: <(optional) parameter values handed to the plugin>
 
 What each key means is in :ref:`sim-declaring`, the scene an object is placed in
 and how to write one in :ref:`sim-scenes`, and what a ``validation:`` is
@@ -67,10 +68,10 @@ Then:
 
 .. code-block:: shell
 
-  pc sim :bracket                # every simulation the object declares
-  pc sim -f holds-the-shelf :bracket   # one of them
-  pc sim --json :bracket         # everything the simulator reported, not just the verdict
-  pc test -f sim :bracket        # the same runs, as a check
+  pc qual test --simulation :bracket                # every simulation the object declares
+  pc qual test --simulation -f holds-the-shelf :bracket   # one of them
+  pc qual test --simulation --json :bracket         # everything the simulator reported, not just the verdict
+  pc qual test -f sim :bracket        # the same runs, as a check
 
 Every run is also asked for a picture of the scene before and after, taken from
 where the scene is rendered from: the ``viewport_origin`` and ``viewport_up`` of
@@ -160,7 +161,7 @@ simulation plugin that runs it:
      - ``sim-gazebo:gazebo``
 
 ``examples/feature_simulate`` is the worked example. Its scenes are arrangements
-of blocks that each declare a ``simulate:`` entry with a ``validation:`` over how
+of blocks that each declare a ``qual: sim:`` entry with a ``validation:`` over how
 far anything moved: ``stable`` is supposed to stand, ``unstable``, ``slippery``
 and ``tilted`` are supposed not to, and ``tank`` is filled with water so that
 buoyancy and drag are exercised too.
@@ -168,9 +169,9 @@ buoyancy and drag are exercised too.
 .. code-block:: shell
 
   cd examples/feature_simulate
-  pc sim :stable                 # the stack that stands
-  pc sim --json :stable          # the body positions before and after
-  pc test -f sim                 # all of them, as checks
+  pc qual test --simulation :stable                 # the stack that stands
+  pc qual test --simulation --json :stable          # the body positions before and after
+  pc qual test -f sim                 # all of them, as checks
 
 :ref:`sim-engines` says what each engine models and what it does not, and
 :ref:`sim-validation` the vocabulary the two PartCAD maintains report in -- a

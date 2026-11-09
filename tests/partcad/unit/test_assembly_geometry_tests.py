@@ -21,8 +21,8 @@ import asyncio
 import pytest
 
 from partcad import shape_envelope
-from partcad.test.degenerate import DegenerateTest
-from partcad.test.interference import InterferenceTest, _is_expected, _within
+from partcad.qual.basic.degenerate import DegenerateTest
+from partcad.qual.topology.interference import InterferenceTest, _is_expected, _within
 
 
 class _Shape:
@@ -74,9 +74,9 @@ class _Sketch(_Shape):
 @pytest.fixture(autouse=True)
 def _assembly_is_an_assembly(monkeypatch):
     """Both tests branch on isinstance(); the stubs stand in for the real classes."""
-    monkeypatch.setattr("partcad.test.interference.Assembly", _Assembly)
-    monkeypatch.setattr("partcad.test.degenerate.Assembly", _Assembly)
-    monkeypatch.setattr("partcad.test.degenerate.Sketch", _Sketch)
+    monkeypatch.setattr("partcad.qual.topology.interference.Assembly", _Assembly)
+    monkeypatch.setattr("partcad.qual.basic.degenerate.Assembly", _Assembly)
+    monkeypatch.setattr("partcad.qual.basic.degenerate.Sketch", _Sketch)
 
 
 def _run(test, shape):
@@ -162,7 +162,9 @@ def test_a_part_is_not_checked_against_itself_or_anything_else():
 def test_the_thresholds_reach_the_measurement():
     """They are what separates a design fault from a design that fits together,
     so a package that sets them has to have them honoured."""
-    shape = _Assembly(config={"interference": {"minVolume": 0.5, "minFraction": 0.01}}, overlaps=[])
+    shape = _Assembly(
+        config={"qual": {"topology": {"interference": {"minVolume": 0.5, "minFraction": 0.01}}}}, overlaps=[]
+    )
     _run(InterferenceTest(), shape)
     assert shape.asked_with == (0.5, 0.01)
 
@@ -177,7 +179,7 @@ def test_a_pair_meant_to_interfere_is_not_declared_against_the_pair():
     checked, cannot be reused by anything else, and goes on excusing a pair
     whose names were reused for something else entirely.
     """
-    config = {"interference": {"ignore": [["shaft", "hub"]]}}
+    config = {"qual": {"topology": {"interference": {"ignore": [["shaft", "hub"]]}}}}
     overlaps = [{"a": "shaft", "b": "hub", "volume": 90.0}]
     assert not _run(InterferenceTest(), _Assembly(config=config, overlaps=overlaps))
 
@@ -241,10 +243,16 @@ def test_a_pair_names_subtrees_by_their_path_from_the_assembly_checked():
 def test_the_cache_key_moves_when_the_thresholds_do():
     """A verdict reached under one threshold must not be read back under another."""
     test = InterferenceTest()
-    loose = asyncio.run(test.cache_key_suffix(None, _Assembly(config={"interference": {"minVolume": 1.0}})))
-    strict = asyncio.run(test.cache_key_suffix(None, _Assembly(config={"interference": {"minVolume": 0.1}})))
+    loose = asyncio.run(
+        test.cache_key_suffix(None, _Assembly(config={"qual": {"topology": {"interference": {"minVolume": 1.0}}}}))
+    )
+    strict = asyncio.run(
+        test.cache_key_suffix(None, _Assembly(config={"qual": {"topology": {"interference": {"minVolume": 0.1}}}}))
+    )
     assert loose != strict
-    fraction = asyncio.run(test.cache_key_suffix(None, _Assembly(config={"interference": {"minFraction": 0.01}})))
+    fraction = asyncio.run(
+        test.cache_key_suffix(None, _Assembly(config={"qual": {"topology": {"interference": {"minFraction": 0.01}}}}))
+    )
     assert fraction != asyncio.run(test.cache_key_suffix(None, _Assembly()))
 
 
@@ -436,7 +444,7 @@ def test_the_default_floor_is_there_for_arithmetic_and_nothing_else():
     tessellated faces answers with a sliver rather than zero. The floor is set
     just above that noise - not high enough to absorb an overlap anyone meant,
     which belongs to the joint that describes it."""
-    from partcad.test.interference import DEFAULT_MIN_VOLUME
+    from partcad.qual.topology.interference import DEFAULT_MIN_VOLUME
 
     assert DEFAULT_MIN_VOLUME == 0.05
 
@@ -446,7 +454,7 @@ def test_the_default_floor_is_there_for_arithmetic_and_nothing_else():
 
 
 def test_an_assembly_may_ask_for_a_tighter_floor():
-    shape = _Assembly(config={"interference": {"minVolume": 0.001}}, overlaps=[])
+    shape = _Assembly(config={"qual": {"topology": {"interference": {"minVolume": 0.001}}}}, overlaps=[])
     _run(InterferenceTest(), shape)
     assert shape.asked_with[0] == 0.001
 
@@ -640,7 +648,7 @@ def test_naming_a_further_item_is_enough_on_its_own():
 
 def test_the_pairs_the_joints_account_for_are_handed_to_the_check(monkeypatch):
     """So that the wrapper can skip measuring them, rather than measure and discard."""
-    import partcad.test.interference as interference
+    import partcad.qual.topology.interference as interference
 
     async def _planned(ctx, shape):
         plan = interference._Plan()

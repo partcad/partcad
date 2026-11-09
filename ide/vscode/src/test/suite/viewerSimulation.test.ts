@@ -3,7 +3,7 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// The Validation group's Simulation tab: which simulation is on screen, when one
+// The Qualification group's Simulation tab: which simulation is on screen, when one
 // is run, which side of the arrow each picture is on, and that a run with a
 // video is played -- the pictures its still -- by the player the panel hands in.
 //
@@ -657,8 +657,9 @@ suite('Digital Thread Simulation tab', () => {
         assert.strictEqual(view.current, 'falls');
     });
 
-    test("'pc ide view --validation-simulation' opens the Validation group on Simulation", () => {
-        assert.strictEqual(groupOf('simulation'), 'validation');
+    test("'pc ide view --qualification-simulation' opens the Qualification group on Simulation", () => {
+        assert.strictEqual(groupOf('simulation'), 'qualification');
+        assert.strictEqual(groupOf('topology'), 'qualification');
         // Process Emulation holds nothing, so nothing can ask for it.
         assert.strictEqual(groupOf('emulation'), undefined);
     });

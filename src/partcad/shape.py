@@ -201,9 +201,8 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         "cache",
         "cache_dependencies_ignore",
         "category",
-        # What the 'cmf' check holds the object to ('require'), not what it is:
-        # whether a finding fails or warns. Hashed, turning it on rebuilt the
-        # part and every assembly holding it, to the same geometry.
+        # The old spelling of 'qual: basic: cmf:', still read (see
+        # 'partcad.qual.config.LEGACY') and no more geometry than 'qual' below.
         "cmf",
         # How the thing is packaged for sale, not what it is. The third of the
         # (vendor, SKU, pack size) record, and the only one of the three that
@@ -231,15 +230,23 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         # Outputs, not inputs. A part that gains a material has not become a
         # different shape (see test_shape_properties.py).
         "properties",
-        # What the object is supposed to do once it is placed in a world, not
-        # what it is. A simulation's own answer is cached under a key of its
-        # own that covers what decides it -- the scene, the plugin, its
-        # options, its 'params' -- and deliberately not the 'validation:', so
-        # that editing the claim re-judges the run rather than repeating it
-        # (see 'simulation.run_async'). Hashed here, every such edit rebuilt the
+        # How the object is qualified, not what it is: the parameters of the
+        # built-in checks -- whether the 'cmf' check fails or warns, say, which
+        # hashed rebuilt the part and every assembly holding it, to the same
+        # geometry -- the checks plugins supply, and the simulations (see
+        # 'partcad.qual.config'). Each check folds into its own verdict's key
+        # what of this it reads ('Qualification.cache_key_suffix()'). A
+        # simulation -- what the object is supposed to do once it is placed in
+        # a world -- is cached under a key of its own that covers what decides
+        # it: the scene, the plugin, its options, its 'params', and
+        # deliberately not the 'validation:', so that editing the claim
+        # re-judges the run rather than repeating it (see
+        # 'simulation.run_async'). Hashed here, every such edit rebuilt the
         # object, moved the key of the scene it is placed in and ran the
         # simulator again: the opposite of what that leaves out, and the one
         # edit somebody writing the claim first makes over and over.
+        "qual",
+        # The old spelling of 'qual: sim:', for the same reason.
         "simulate",
         "sku",
         # Which package wrote the software references beside it: whom a private
@@ -646,7 +653,7 @@ class Shape(ShapeConfiguration):
 
     # Made by PartCAD for somebody to look at, rather than declared by the
     # package it is registered in: what a check leaves behind (see
-    # 'test/interference_artifact.py'). It is found by name like any other
+    # 'qual/topology/interference_artifact.py'). It is found by name like any other
     # object, and left out of what lists the package's declarations.
     artifact = False
 
@@ -1018,7 +1025,7 @@ class Shape(ShapeConfiguration):
         process lives.
 
         'wait' is for every caller about to read the key - 'get_cache_key_async()',
-        'get_wrapped()', 'Test.test_cached()' - and it returns only once the
+        'get_wrapped()', 'Qualification.test_cached()' - and it returns only once the
         preparation is over: one begun elsewhere is waited for, and if it
         failed, the shape is prepared here instead. Where waiting could never
         end, it raises 'PreparationInFlight' rather than wait, and the caller
@@ -2493,7 +2500,7 @@ class Shape(ShapeConfiguration):
         if container:
             # Raises SandboxUnavailable when there is no container runtime.
             # A failure like any other, and the type is what earns the reader
-            # both remedies rather than one (see 'partcad.test.cae').
+            # both remedies rather than one (see 'partcad.qual.basic.cae').
             runtime = await ctx.get_container_runtime(container)
             # The wrapper and the implementing package both go in whole. Sending
             # only the files the command names would leave both unable to start:
@@ -3326,7 +3333,7 @@ class Shape(ShapeConfiguration):
         # With the implementing package, which the export path fills in later
         # (in '_materialize_output_script') because that is the first moment it
         # needs one. Here it is known already -- the caller resolved it to get
-        # 'options_project' -- and something asks earlier: 'pc test' reads
+        # 'options_project' -- and something asks earlier: 'pc qual test' reads
         # 'container'/'dockerImage' off this to tell a machine that cannot run
         # the implementation from an implementation that does not work. Without
         # a project those read as "declared nothing", which is the same answer a
@@ -3503,7 +3510,7 @@ class Shape(ShapeConfiguration):
         a package's own YAML means the 'calculix' that package imported, and has
         to resolve against *that* package -- otherwise the same declaration
         resolves differently depending on which directory the command was run
-        from, and 'pc test -r' over a tree of packages (which runs with the tree
+        from, and 'pc qual test -r' over a tree of packages (which runs with the tree
         root current, not each package) cannot resolve any of them.
 
         The file type need not be called after the analysis. What decides the
@@ -3684,7 +3691,7 @@ class Shape(ShapeConfiguration):
             # Everything else is "asked, and no answer", and every caller says
             # so the same way. Written here rather than by each of them because
             # this is where the implementation's name is known, and because a
-            # user who ran `pc cae fea` and then `pc test -f fea` must be told
+            # user who ran `pc cae fea` and then `pc qual test -f fea` must be told
             # the same thing about the same machine both times.
             raise pc_cae.CaeFailed(
                 pc_cae.dysfunction_report(
@@ -4072,8 +4079,8 @@ class Shape(ShapeConfiguration):
         from the part that simply named none -- and a part that named none
         routes as CNC. (`cam.declared_config` refuses first for the same reason,
         which makes this the backstop; the sentence is the same either way.) So a part whose `laser:` subsection has a typo in it
-        would be handed a *router* program, silently. `pc test` reporting it too
-        is not enough, because nothing makes `pc cam` wait for `pc test`.
+        would be handed a *router* program, silently. `pc qual test` reporting it too
+        is not enough, because nothing makes `pc cam` wait for `pc qual test`.
         """
         try:
             from .part_config import PartConfiguration
@@ -4390,7 +4397,7 @@ class Shape(ShapeConfiguration):
             return self._solidity
 
         # Held across the question, and the answer remembered, for the reason
-        # 'get_bounding_box_async' gives: 'pc test' runs the 'solidity' and the
+        # 'get_bounding_box_async' gives: 'pc qual test' runs the 'solidity' and the
         # 'validity' tests of one part at once, and both ask exactly this.
         async with self.locked():
             if self._solidity is not None:
@@ -4589,7 +4596,7 @@ class Shape(ShapeConfiguration):
         OpenSCAD or KiCad export, an SDF, an extrusion, a partType plugin such
         as the LDraw library. Before this, only the script and plugin wrappers
         turned a closed shell into the solid it bounds, and nothing at all
-        judged the result until somebody ran 'pc test': a STEP file's closed
+        judged the result until somebody ran 'pc qual test': a STEP file's closed
         shell stayed a shell where the same shell from a script became a solid.
 
         Two things happen, in the sandbox, in one call. A closed shell becomes

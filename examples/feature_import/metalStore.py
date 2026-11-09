@@ -6,7 +6,7 @@
 # out of a table what a real stockist would answer over the wire.
 #
 # It exists because a made part is only as obtainable as what it is made from.
-# 'pc test' asks nobody to supply a part with manufacturing instructions - the
+# 'pc qual test' asks nobody to supply a part with manufacturing instructions - the
 # shop is taken at its word that it can mill one - but it does ask whether the
 # billet it is milled from can be had, by asking a supplier that carries the
 # billet's vendor and SKU. So every billet in 'partcad.yaml' names both, and

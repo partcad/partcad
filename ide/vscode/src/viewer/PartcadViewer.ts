@@ -55,10 +55,14 @@ interface WebviewNode extends Omit<ViewerNode, 'gltf' | 'assembly' | 'sketches' 
  */
 const TAB_COMMANDS: Record<string, string> = {
     // What the object is required to be, and with 'verify' whether the model is
-    // it - the verdicts 'pc test -f requirements' reaches.
+    // it - the verdicts 'pc qual test -f requirements' reaches.
     requirements: 'partcad.requirements',
-    // Every check 'pc test' runs on the object, and with 'verify' its verdict.
-    test: 'partcad.testReport',
+    // Every test of one subtype of qualification 'pc qual test' runs on the
+    // object, and with 'verify' its verdict: the subtype is the tab's (see
+    // 'QUAL_TEST_TABS').
+    basic: 'partcad.qualReport',
+    topology: 'partcad.qualReport',
+    other: 'partcad.qualReport',
     // What the object is made of and what each part of it declares; the user's
     // choices are added here, from this machine (see 'common/garage.ts').
     bvb: 'partcad.manufacturingTree',
@@ -98,12 +102,12 @@ const TAB_COMMANDS: Record<string, string> = {
     // 'pc info' says them and the 'cmf' check judges them - or, for a colour, a
     // material or a finish the explorer opened, what that declaration is.
     cmf: 'partcad.cmfInfo',
-    // What the object declares under 'simulate:', read rather than run; a
+    // What the object declares under 'qual: sim:', read rather than run; a
     // request naming one of them runs it instead (see 'SIMULATION_RUN').
     simulation: 'partcad.simulateList',
 };
 
-/** What the Simulation tab asks when it names a simulation: run it, 'pc sim -f <name>'. */
+/** What the Simulation tab asks when it names a simulation: run it, 'pc qual test --simulation -f <name>'. */
 const SIMULATION_RUN = 'partcad.simulateRun';
 
 /** What the view panel's section sliders ask, on the 3D tab: show the object again, cut. */
@@ -172,6 +176,17 @@ interface RenderedFile {
  * 'ANALYSIS_TABS' is the same list, in the order it draws the strip in.
  */
 const ANALYSIS_TABS = new Set(['fea', 'dynamic', 'thermal', 'cfd']);
+
+/**
+ * The Qualification tabs drawn from 'qual.report', and the subtype of
+ * qualification each asks for: the host's copy of 'QUAL_TEST_TABS' in
+ * 'webview/messages.ts', which it does not import.
+ */
+const QUAL_TEST_TABS: Record<string, string> = { basic: 'basic', topology: 'topology', other: 'other' };
+
+function isQualTestTab(tab: string): boolean {
+    return Object.prototype.hasOwnProperty.call(QUAL_TEST_TABS, tab);
+}
 
 /**
  * The "Digital Thread" editor tab.
@@ -535,9 +550,13 @@ export class PartcadViewer implements vscode.Disposable {
                 post({ data: await vscode.commands.executeCommand(command, args) });
                 return;
             }
-            if (tab === 'requirements' || tab === 'test') {
+            if (tab === 'requirements' || isQualTestTab(tab)) {
                 args.kind = target.kind ?? 'part';
                 args.verify = message.verify === true;
+                if (isQualTestTab(tab)) {
+                    // One tab per subtype of qualification, each asking for its own.
+                    args.subtypes = [QUAL_TEST_TABS[tab]];
+                }
                 post({ data: await vscode.commands.executeCommand(command, args) });
                 return;
             }
@@ -556,7 +575,7 @@ export class PartcadViewer implements vscode.Disposable {
                 // A run carries its pictures back as bytes, for the reason a
                 // render does: the daemon may be on another machine.
                 args.scenario = message.scenario;
-                // Another plugin than the simulation names: 'pc sim --plugin'.
+                // Another plugin than the simulation names: 'pc qual test --simulation --plugin'.
                 args.plugin = message.plugin;
                 // And where its pictures are taken from, when the view panel says.
                 args.viewportOrigin = message.viewportOrigin;
@@ -738,7 +757,7 @@ export class PartcadViewer implements vscode.Disposable {
     }
 
     /**
-     * Show another object in the panel, as the explorer would: what a Test tab
+     * Show another object in the panel, as the explorer would: what a Qualification tab
      * artifact opens with (an interference's two parts and what they share).
      *
      * Through the explorer's own command, so that it is shown the one way
@@ -1227,11 +1246,13 @@ export class PartcadViewer implements vscode.Disposable {
 						<div id="pane-assembly" class="pane" hidden></div>
 						</div>
 						</div>
-						<div id="pane-validation" class="pane pane-group" hidden>
-						<div id="validation-tabs" class="tabs sub-tabs" hidden></div>
+						<div id="pane-qualification" class="pane pane-group" hidden>
+						<div id="qualification-tabs" class="tabs sub-tabs" hidden></div>
 						<div class="panes">
-						<div id="pane-test" class="pane" hidden></div>
+						<div id="pane-basic" class="pane" hidden></div>
+						<div id="pane-topology" class="pane" hidden></div>
 						<div id="pane-simulation" class="pane" hidden></div>
+						<div id="pane-other" class="pane" hidden></div>
 						<div id="pane-emulation" class="pane" hidden></div>
 						</div>
 						</div>

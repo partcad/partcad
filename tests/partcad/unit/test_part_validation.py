@@ -8,7 +8,7 @@
 Before it, a closed shell became the solid it bounds only when a cadquery or
 build123d script or a partType plugin produced it; a STEP file, a mesh import
 or an extrusion handed the same shell on as it was, and nothing at all judged
-any part until somebody ran 'pc test'. Now the core asks the same question of
+any part until somebody ran 'pc qual test'. Now the core asks the same question of
 every part as it is built: the sandbox half ('wrapper_solidity') is asked here
 in-process, and the core half - that every part reaches it, and what it does
 with the answer - is asked with that answer stubbed.

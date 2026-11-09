@@ -28,10 +28,11 @@ which are checked two ways:
           m3-thru: null                 # implemented, anywhere
         physics:
           mass: "<0.05"                 # kg
-      simulate:
-        holds-the-shelf:
-          feature: shelf-load           # the feature this simulation demonstrates
-          ...
+      qual:
+        sim:
+          holds-the-shelf:
+            feature: shelf-load           # the feature this simulation demonstrates
+            ...
 
 ``features``
   What the object has to have or do, in the words of whoever asked. A feature is
@@ -44,9 +45,9 @@ which are checked two ways:
   an interface that has to be implemented and where, a physical property that
   has to have a value. Any part of each may be ``null`` -- no requirement -- and
   a value may be a constant, a comparison (``>0``, ``<=1``, ``!0``) or several
-  of them. ``pc test`` checks every one of them, every time.
+  of them. ``pc qual test`` checks every one of them, every time.
 
-A ``simulate:`` entry names the feature it demonstrates with ``feature:``, which
+A ``qual: sim:`` entry names the feature it demonstrates with ``feature:``, which
 is how a simulation becomes evidence for a requirement rather than a test that
 happens to exist.
 
@@ -71,7 +72,7 @@ the others. It is the one tab with no strip of its own -- there is nothing to
 divide it into, because a requirement is one thing either met or not.
 
 It lists every port, interface and physical property required, each with a green
-or a red mark from the same check ``pc test`` runs, and then a table of the
+or a red mark from the same check ``pc qual test`` runs, and then a table of the
 features. Each feature carries its description and a banner per thing that
 validates it: one for every simulation that names it with ``feature:``, one for
 every analysis scenario that does (**FEA: loaded**), and an **LLM** banner --
@@ -90,14 +91,14 @@ every other object, so there is nothing to ask for.
 On the command line
 ===================
 
-- ``pc test`` runs the ``requirements`` check (see :ref:`test-requirements`):
+- ``pc qual test`` runs the ``requirements`` check (see :ref:`test-requirements`):
   every measured requirement, with what was found instead of each one not met. A
   value PartCAD cannot find out -- a mass with no density to work it out from --
   fails as "not known" rather than passing.
-- ``pc sim`` runs every simulation, including those that name a feature.
+- ``pc qual test --simulation`` runs every simulation, including those that name a feature.
 - ``/pc:validate`` gathers the rest of the evidence -- renders from every angle
   that matters, the bill of materials and the assembly instructions -- and gives
-  each requirement a verdict. See :doc:`/digital_thread/lifecycle/validation`.
+  each requirement a verdict. See :doc:`/digital_thread/lifecycle/qualification`.
 
 ``pc info`` prints the section as it is read, which is how to see what a template
 or an :ref:`enrich <part-types>` left behind. ``pc lint`` reports a ``requirements:``

@@ -1145,7 +1145,7 @@ jobs:
           cd examples
           for package in ${packages}; do
             pc --no-ansi list all -r --fast-only "${package}"
-            pc --no-ansi --threads-max 4 test -r --fast-only --package "${package}"
+            pc --no-ansi --threads-max 4 qual test -r --fast-only --package "${package}"
             if [ "${{ matrix.render }}" = "true" ]; then
               pc --no-ansi --threads-max 4 render -r --fast-only --package "${package}"
             fi

@@ -24,8 +24,8 @@ import pytest
 import partcad as pc
 from partcad.file_factory import FileHashError, declared_hash, is_package_file, unreproducible_reason
 from partcad.file_factory_plugin import FileFactoryPlugin
-from partcad.test import manufacturability
-from partcad.test.test import Test
+from partcad.qual.basic import manufacturability
+from partcad.qual.qualification import Qualification
 
 DATA = "tests/partcad/unit/data/cam_reproducibility"
 
@@ -84,20 +84,20 @@ def test_a_carried_file_is_reproducible(ctx):
     """The package's revision identifies it; there is nothing left to say."""
     test, part, result = _run(ctx, "carried")
     assert test.reproducibility_failure(part) is None
-    assert result == Test.TEST_PASSED
+    assert result == Qualification.TEST_PASSED
 
 
 def test_a_pinned_download_is_reproducible(ctx):
     """Fetched, but the bytes are stated in advance."""
     test, part, result = _run(ctx, "fetched-pinned")
     assert test.reproducibility_failure(part) is None
-    assert result == Test.TEST_PASSED
+    assert result == Qualification.TEST_PASSED
 
 
 def test_an_unpinned_download_is_not_manufacturable(ctx):
     """The whole point: available is not the same as identified."""
     test, part, result = _run(ctx, "fetched-unpinned")
-    assert result == Test.TEST_FAILED
+    assert result == Qualification.TEST_FAILED
 
     failure = test.reproducibility_failure(part)
     assert failure is not None
@@ -110,7 +110,7 @@ def test_an_unpinned_download_is_not_manufacturable(ctx):
 def test_an_unpinned_assembly_is_not_manufacturable(ctx):
     """An ASSY file pulled from a URL is no more repeatable than a part is."""
     test, assembly, result = _run(ctx, "fetched-unpinned-assembly", "assembly")
-    assert result == Test.TEST_FAILED
+    assert result == Qualification.TEST_FAILED
     assert "not reproducible" in test.reproducibility_failure(assembly)
 
 
@@ -123,13 +123,13 @@ def test_a_part_that_is_bought_is_reproducible_without_a_hash(ctx):
     """A vendor and an SKU are their own answer to "the same again"."""
     test, part, result = _run(ctx, "fetched-purchasable")
     assert test.reproducibility_failure(part) is None
-    assert result == Test.TEST_PASSED
+    assert result == Qualification.TEST_PASSED
 
 
 def test_half_a_purchase_is_not_a_purchase(ctx):
     """A vendor without an SKU does not say what to order."""
     test, part, result = _run(ctx, "fetched-vendor-only")
-    assert result == Test.TEST_FAILED
+    assert result == Qualification.TEST_FAILED
     failure = test.reproducibility_failure(part)
     assert failure is not None and "vendor and SKU" in failure
 
@@ -142,7 +142,7 @@ def test_half_a_purchase_is_not_a_purchase(ctx):
 def test_a_carried_sketch_is_reproducible(ctx):
     test, sketch, result = _run(ctx, "outline", "sketch")
     assert test.reproducibility_failure(sketch) is None
-    assert result == Test.TEST_PASSED
+    assert result == Qualification.TEST_PASSED
 
 
 def test_an_unpinned_sketch_is_not_reproducible(ctx):
@@ -152,7 +152,7 @@ def test_an_unpinned_sketch_is_not_reproducible(ctx):
     repeatable than the drawing was, and this is where that is worth saying.
     """
     test, sketch, result = _run(ctx, "fetched-outline", "sketch")
-    assert result == Test.TEST_FAILED
+    assert result == Qualification.TEST_FAILED
     assert "not reproducible" in test.reproducibility_failure(sketch)
 
 
@@ -161,7 +161,7 @@ def test_a_sketch_is_asked_nothing_else(ctx):
     test, sketch, result = _run(ctx, "outline", "sketch")
     # No vendor, no SKU, no manufacturing method, no tolerance - and it passes.
     assert sketch.get_store_data().is_purchasable is False
-    assert result == Test.TEST_PASSED
+    assert result == Qualification.TEST_PASSED
 
 
 def test_a_part_that_is_not_manufacturable_is_not_asked(ctx):
@@ -169,7 +169,7 @@ def test_a_part_that_is_not_manufacturable_is_not_asked(ctx):
     part = ctx.get_part("//:fetched-unpinned")
     part.is_manufacturable = False
     test = manufacturability.ManufacturabilityTest()
-    assert asyncio.run(test.test([test], ctx, part)) == Test.TEST_PASSED
+    assert asyncio.run(test.test([test], ctx, part)) == Qualification.TEST_PASSED
 
 
 #

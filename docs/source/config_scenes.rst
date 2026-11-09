@@ -58,7 +58,8 @@ Declare scenes
       manufacturable: <(optional) false by default; a scene is not a product to be made>
       gravity: <(optional) [x, y, z] in m/s^2; the engine's own, Earth's along -Z, by default>
       medium: <(optional) the material the scene is filled with; a vacuum by default>
-      simulate: <(optional) what the scene is supposed to do once the world is switched on; see "Simulate a scene" below>
+      qual:  # (optional) how the scene is qualified, as any object is; see "Simulating a scene" below
+        sim: <(optional) what the scene is supposed to do once the world is switched on>
 
       # 'sim-gazebo:world' only -- the reader's own parameters, declared by the
       # package that implements it and passed straight through to it
@@ -170,7 +171,7 @@ outline, and its thickness goes back from there, outside it: the outline is the
 inside of the room, at the size it was drawn.
 
 Each wall is ``//builtin/building:wall`` unless the scene says otherwise, and that
-is a **solid** -- a physical wall, which ``pc test`` checks, a simulation collides
+is a **solid** -- a physical wall, which ``pc qual test`` checks, a simulation collides
 with and an export writes -- whose :ref:`visual <part-visual>` is the one-sided
 surface of its face. So a picture of the room taken from outside, in the 3D view
 or by ``pc render``, is taken *through* the walls nearest the camera, and shows
@@ -253,7 +254,8 @@ walls anything collides with: give it a thickness, and the surface as its
 ``visual:``, the way ``//builtin/building:wall`` does. ``//builtin/building:wall-surface``
 itself is :ref:`private <private-objects>`, and a room cannot be built of it.
 
-A room is a scene, so it is not manufacturable, and its walls are not either.
+A room is a scene, so it is not manufacturable, and its walls are not either:
+see :ref:`walls` for what that excuses them from in ``pc qual test``.
 
 Scene types a plugin adds
 =========================
@@ -279,9 +281,9 @@ Simulating a scene
 ==================
 A scene can be the thing a claim is about, not only the world another object is
 tested in: a stack of blocks that stands, a pile that does not slide. It
-declares ``simulate:`` exactly as a part or an assembly does, and ``pc sim`` and
-``pc test`` hold it to it. See
-:ref:`Simulating a scene <validating-a-scene>` in the Validation phase.
+declares ``qual: sim:`` exactly as a part or an assembly does, and ``pc qual test --simulation`` and
+``pc qual test`` hold it to it. See
+:ref:`Simulating a scene <qualifying-a-scene>` in the Qualification phase.
 
 Agent skills
 ============

@@ -4,7 +4,7 @@
 # good description of where two blocks are, and every static thing PartCAD does
 # with it -- rendering it, exporting it, listing what it is made of -- gives the
 # same kind of answer it gives for `stable`. What separates the two is what
-# happens when the world is switched on, which is what `pc sim` is for: the
+# happens when the world is switched on, which is what `pc qual test --simulation` is for: the
 # centre of mass of the top block is 8 mm beyond the edge it is resting on, so
 # it topples off and ends up on the floor.
 links:

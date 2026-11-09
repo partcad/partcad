@@ -6,7 +6,7 @@
 #
 # A wall is two parts, because it is two things. What it *is* is `wall`: a
 # solid, its elevation extruded straight back through its thickness from the
-# face a room sees - a physical object, which `pc test` measures, a simulation
+# face a room sees - a physical object, which `pc qual test` measures, a simulation
 # collides with and an export writes. What a picture of a floor plan *draws* is
 # `wall-surface`: that face alone, one-sided, drawn from the side it faces and
 # see-through from the other, so that a room seen from outside is seen *into*

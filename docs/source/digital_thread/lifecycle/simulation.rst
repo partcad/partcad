@@ -5,7 +5,7 @@ Simulation
 A part, an assembly or a scene can say what it is supposed to *do* once it is
 placed in a world and the world is switched on -- stand, stay stacked, sink, float, turn its
 heavy side down -- and PartCAD can check that claim by simulating it, the same
-way ``pc test`` checks that it can be made. This page is how to use that:
+way ``pc qual test`` checks that it can be made. This page is how to use that:
 declaring a simulation, the world it runs in, the physical properties it reads,
 running it, the engines that do the physics, writing the condition that decides
 whether it passed, and the robot description formats -- URDF, SDFormat, MJCF --
@@ -34,17 +34,17 @@ rises, a hull that turns its keel down. None of that can be read off the
 geometry, and a claim that nobody checks is one readers learn to trust and
 should not.
 
-So a part, an assembly or a scene states the claim, in a ``simulate:`` section -- the
+So a part, an assembly or a scene states the claim, under ``qual: sim:`` -- the
 world it is placed in, where it goes, the engine that runs it, and a condition
 over what happened -- and PartCAD runs it and judges it:
 
-- ``pc sim`` runs the simulations an object declares and reports what each
+- ``pc qual test --simulation`` runs the simulations an object declares and reports what each
   engine said;
-- ``pc test`` holds every object to them, as its ``sim`` check, every time it
+- ``pc qual test`` holds every object to them, as its ``sim`` check, every time it
   runs.
 
 The second is what makes it worth writing the claim *first*. Declare what the
-part has to do, watch ``pc test`` fail, and change the design until it passes:
+part has to do, watch ``pc qual test`` fail, and change the design until it passes:
 test-driven development, for a physical product. Once it passes it stays
 checked, and an edit that breaks the claim -- a heavier part, a slipperier
 material, a centre of mass moved -- fails the next test run rather than the
@@ -70,18 +70,18 @@ checked, run in MuJoCo through `partcad-sim-mujoco`_. From that directory:
 
 .. code-block:: shell
 
-  pc sim stable         # two aluminium blocks, squarely stacked: nothing moves
-  pc sim unstable       # the top block 18 mm off the edge: it falls off
-  pc sim slippery       # 'stable' in PTFE, in a tilted world: the top block slides off
-  pc sim block          # an aluminium cube rests on the floor, and sinks in water
-  pc sim float          # a sealed 3 g cube rises in water, and falls in a vacuum
-  pc sim buoy           # the float with its weight low down rights itself
-  pc test -f sim        # every one of them, as the check pc test runs
+  pc qual test --simulation stable         # two aluminium blocks, squarely stacked: nothing moves
+  pc qual test --simulation unstable       # the top block 18 mm off the edge: it falls off
+  pc qual test --simulation slippery       # 'stable' in PTFE, in a tilted world: the top block slides off
+  pc qual test --simulation block          # an aluminium cube rests on the floor, and sinks in water
+  pc qual test --simulation float          # a sealed 3 g cube rises in water, and falls in a vacuum
+  pc qual test --simulation buoy           # the float with its weight low down rights itself
+  pc qual test -f sim        # every one of them, as the check pc qual test runs
 
 Nothing has to be installed first. The MuJoCo plugin is a dependency of the
 package, and PartCAD installs MuJoCo into the sandbox it runs the plugin in.
 
-A declaration is a dependency on an engine and one entry under ``simulate:``.
+A declaration is a dependency on an engine and one entry under ``qual: sim:``.
 This is ``stable``:
 
 .. code-block:: yaml
@@ -95,20 +95,21 @@ This is ``stable``:
   scenes:
     stable:
       type: assy
-      simulate:
-        stands:
-          desc: Nothing moves, even pulled sideways by a quarter of its weight
-          simulation: sim-mujoco:mujoco        # the engine, from the package above
-          scene: :tilted                       # a world of this package's own
-          offset: [[0, 0, 10], [0, 0, 1], 0]   # stand the stack's bottom face on its floor
-          validation: |
-            max(
-                sum((a - b) ** 2 for a, b in zip(after["bodies"][name]["pos"], before["bodies"][name]["pos"])) ** 0.5
-                for name in before["bodies"]
-            ) < 5.0
+      qual:
+        sim:
+          stands:
+            desc: Nothing moves, even pulled sideways by a quarter of its weight
+            path: sim-mujoco:mujoco              # the engine, from the package above
+            scene: :tilted                       # a world of this package's own
+            offset: [[0, 0, 10], [0, 0, 1], 0]   # stand the stack's bottom face on its floor
+            validation: |
+              max(
+                  sum((a - b) ** 2 for a, b in zip(after["bodies"][name]["pos"], before["bodies"][name]["pos"])) ** 0.5
+                  for name in before["bodies"]
+              ) < 5.0
 
-The validation says that no block moved 5 mm in any direction. ``pc sim
-stable`` says whether it held; ``pc sim --json stable`` prints everything
+The validation says that no block moved 5 mm in any direction. ``pc qual test --simulation
+stable`` says whether it held; ``pc qual test --simulation --json stable`` prints everything
 the engine reported as well, which is where to look before writing a validation
 of your own.
 
@@ -137,14 +138,14 @@ See :ref:`sim-mechanisms`.
 In the UI
 =========
 
-**Validation → Simulation** is this page as a tab, for a part, an assembly or a
-scene that declares ``simulate:``.
+**Qualification → Simulation** is this page as a tab, for a part, an assembly or a
+scene that declares simulations under ``qual: sim:``.
 
 The simulations are listed down the left in the order they are declared, with
 the first selected and a mark before each name saying how its last run went: a
 green tick passed, a red cross failed, a red exclamation could not run, and a
 dot ran with nothing to check. Selecting one **runs** it, exactly as
-``pc sim -f <name>`` runs it and through the same cache, so the tab and the
+``pc qual test --simulation -f <name>`` runs it and through the same cache, so the tab and the
 command line give the same verdict.
 
 What is shown is the run. The video the plugin recorded plays in a player with
@@ -161,7 +162,7 @@ viewpoint the scene is rendered from (see :ref:`sim-snapshots` and
 Over the player, as on the Draft tab, **Simulated by** names the plugin --
 filled in with the one the simulation names, offering the ones PartCAD knows of,
 and taking any other name typed into it, which runs it with that one the way
-``pc sim --plugin`` does -- and **Simulate** runs it afresh. Under the player,
+``pc qual test --simulation --plugin`` does -- and **Simulate** runs it afresh. Under the player,
 **Criteria**, **Before** and **After** open on a click: the ``validation:``
 expression, and the ``before`` and ``after`` the plugin reported, which are
 exactly what that expression is evaluated over. A validation that passed for the
@@ -170,7 +171,7 @@ wrong reason is found here.
 .. image:: /images/dt-validation-simulation.png
   :width: 100%
   :align: center
-  :alt: The Validation group's Simulation tab: the simulation that was run, the scene before and after it, and the criteria
+  :alt: The Qualification group's Simulation tab: the simulation that was run, the scene before and after it, and the criteria
 
 The video's size is this machine's to say rather than the package's --
 ``simulation.videoResolution``, HD unless it says otherwise -- and the
@@ -178,9 +179,9 @@ The video's size is this machine's to say rather than the package's --
 the simulation again with its pictures taken from there, because the viewpoint
 is part of the question a run is cached under.
 
-The tab is disabled for anything that declares no simulation; Validation itself
-never is, for its :doc:`Test tab </digital_thread/lifecycle/testing>`.
-``pc ide view --validation-simulation`` opens it from a terminal, and
+The tab is disabled for anything that declares no simulation; Qualification itself
+never is, for its :doc:`Basic tab </digital_thread/lifecycle/qualification_tests>`.
+``pc ide view --qualification-simulation`` opens it from a terminal, and
 ``--scenario <name>`` selects one simulation by name.
 
 .. _sim-commands:
@@ -191,18 +192,18 @@ On the command line
 
 .. code-block:: shell
 
-  pc sim :bracket                      # every simulation the object declares
-  pc sim -f holds-the-shelf :bracket   # one of them, by name
-  pc sim -S stable                     # a scene rather than a part
-  pc sim --json -a arm                 # everything the plugin reported, not only the verdict
-  pc sim --plugin //pub/feature/simulate/gazebo:gazebo :bracket   # with another engine
-  pc test -f sim :bracket              # the same runs, as the check pc test makes of them
-  pc ide view --validation-simulation :bracket                    # shown in the panel instead
+  pc qual test --simulation :bracket                      # every simulation the object declares
+  pc qual test --simulation -f holds-the-shelf :bracket   # one of them, by name
+  pc qual test --simulation -S stable                     # a scene rather than a part
+  pc qual test --simulation --json -a arm                 # everything the plugin reported, not only the verdict
+  pc qual test --simulation --plugin //pub/feature/simulate/gazebo:gazebo :bracket   # with another engine
+  pc qual test -f sim :bracket              # the same runs, as the check pc qual test makes of them
+  pc ide view --qualification-simulation :bracket                    # shown in the panel instead
 
-``pc sim`` is this page in one command, and ``pc test``'s ``sim`` check is the
+``pc qual test --simulation`` is this page in one command, and ``pc qual test``'s ``sim`` check is the
 same runs with a pass or a fail on the end. `Running a simulation`_ below is the
 full account -- every option, what a run costs, what is cached, and what happens
-when one hangs or crashes -- and ``pc sim`` in :doc:`/cli` is the command
+when one hangs or crashes -- and ``pc qual test --simulation`` in :doc:`/cli` is the command
 reference.
 
 .. _sim-declaring:
@@ -211,9 +212,11 @@ reference.
 Declaring a simulation
 ======================
 
-``simulate:`` is an optional section of a part, an assembly or a scene. Each entry is one
-simulation under a name of its own -- the name is what ``-f`` selects and what a
-report prints beside the verdict -- and states:
+``qual: sim:`` is an optional section of a part, an assembly or a scene: simulations
+are the ``sim`` subtype of qualification test (see
+:doc:`/digital_thread/lifecycle/qualification`). Each entry is one simulation under a
+name of its own -- the name is what ``-f`` selects and what a report prints beside
+the verdict -- and states:
 
 ``scene``
   The world the object is placed in, by full path. It may be left out: the
@@ -231,7 +234,7 @@ report prints beside the verdict -- and states:
   their own centres, so each stack is lifted 10 mm to stand on the floor;
   ``buoy`` is also turned 60 degrees, to be released tilted.
 
-``simulation``
+``path``
   The engine plugin that runs it, by full path: ``sim-mujoco:mujoco`` is the
   ``mujoco`` simulation of the package this one imported as ``sim-mujoco``.
   There is no default, since PartCAD implements no simulator; see
@@ -254,7 +257,7 @@ report prints beside the verdict -- and states:
   demonstrates, by name, or a list of them. Nothing that runs the simulation
   reads it: it is what lets a reader of the requirements -- the IDE's
   Requirements tab, an agent running ``/pc:validate`` -- see which features a
-  simulation stands behind. ``pc test`` fails an object one of whose simulations
+  simulation stands behind. ``pc qual test`` fails an object one of whose simulations
   names a feature its requirements do not declare.
 
 An object may declare as many simulations as it likes, and two of them can
@@ -263,12 +266,16 @@ and falls in the default scene, which is a vacuum.
 
 Relative names in a declaration -- ``sim-mujoco:mujoco``, ``:tilted`` --
 resolve from the package the object is in, not from where the command was run,
-so ``pc test -P //...`` run at the root of a tree resolves each of them the way
-``pc sim`` in that package would.
+so ``pc qual test -P //...`` run at the root of a tree resolves each of them the way
+``pc qual test --simulation`` in that package would.
 
-``simulate:`` is not part of what the object is built from: declaring or
+``qual: sim:`` is not part of what the object is built from: declaring or
 editing a simulation does not rebuild the object. The section's schema is under
 :ref:`simulate`.
+
+A ``simulate:`` section, naming each plugin ``simulation:``, is how this used to be
+written. It is still read, with a warning to write ``qual: sim:`` with ``path:``
+instead, until the packages of the index have moved to that.
 
 .. _sim-scenes:
 
@@ -375,7 +382,7 @@ them out is what every engine assumes: its own gravity, in a vacuum. The keys,
 their units and what is refused are in :ref:`scenes`; what each engine makes of
 a medium is in :ref:`sim-engines`.
 
-A ``simulate:`` cannot ask the default scene for water. The fluid a part is
+A simulation cannot ask the default scene for water. The fluid a part is
 simulated in is a fact about the world, like the fixture it stands on, so a
 package that wants its part under water writes a scene that is under water, as
 ``tank`` is. A medium parameter on the built-in scene would be a second way of
@@ -450,9 +457,9 @@ states where things are.
       location: [[400, 0, 800], [0, 0, 1], 0]
 
 A scene that is itself the claim -- a stack that stands, a pile that does not
-slide -- declares ``simulate:`` the way a part does, and the world it is
+slide -- declares ``qual: sim:`` the way a part does, and the world it is
 simulated in places it with a ``scene:`` link, which ``subject_kind`` asks for.
-``pc sim`` and ``pc test`` find one by its name, as they find a part. The ASSY keys are under
+``pc qual test --simulation`` and ``pc qual test`` find one by its name, as they find a part. The ASSY keys are under
 :ref:`assy-scenes`.
 
 The rule is PartCAD's one copy of it, in the module the engine plugins import
@@ -479,8 +486,8 @@ kind of joint, checked against theirs (its ``README.md`` has the table):
 
 .. code-block:: shell
 
-  pc sim pendulum      # released horizontal, it passes the bottom at sqrt(2 g d / (I/m))
-  pc sim nudged        # swinging 5 degrees, its period is 2 pi sqrt((I/m) / (g d))
+  pc qual test --simulation pendulum      # released horizontal, it passes the bottom at sqrt(2 g d / (I/m))
+  pc qual test --simulation nudged        # swinging 5 degrees, its period is 2 pi sqrt((I/m) / (g d))
 
 Three things make one, and each is a declaration PartCAD already reads:
 
@@ -640,17 +647,17 @@ accepted.
 Running a simulation
 ====================
 
-``pc sim``
-==========
+``pc qual test --simulation``
+=============================
 
 .. code-block:: shell
 
-  pc sim block                # every simulation the part 'block' declares
-  pc sim stable               # a scene, found by its name like a part
-  pc sim -f sinks block       # one simulation, by name
-  pc sim                      # everything this package declares
-  pc sim -P ...               # and everything in the packages below it
-  pc sim --json -S slippery   # and the whole of what the engine reported
+  pc qual test --simulation block                # every simulation the part 'block' declares
+  pc qual test --simulation stable               # a scene, found by its name like a part
+  pc qual test --simulation -f sinks block       # one simulation, by name
+  pc qual test --simulation                      # everything this package declares
+  pc qual test --simulation -P ...               # and everything in the packages below it
+  pc qual test --simulation --json -S slippery   # and the whole of what the engine reported
 
 It exits non-zero when a validation does not hold or a run cannot be made. A
 declaration with no ``validation:`` is run and reported as having run, which is
@@ -658,18 +665,18 @@ how to look at what a plugin reports before writing the condition. Each run
 gets a directory of its own under PartCAD's state directory, one per object and
 simulation and emptied by the next run, holding the scene file the engine was
 handed, its meshes, whatever the plugin wrote and the pictures it took (see
-:ref:`sim-snapshots`). See ``pc sim`` in :doc:`/cli` for every option.
+:ref:`sim-snapshots`). See ``pc qual test --simulation`` in :doc:`/cli` for every option.
 
 Three of those options are about what is asked and what is kept:
 
 .. code-block:: shell
 
   # The same claim, with Gazebo instead of the engine the declaration names
-  pc sim stable --plugin //pub/feature/simulate/gazebo:gazebo
+  pc qual test --simulation stable --plugin //pub/feature/simulate/gazebo:gazebo
   # The state the run started from and ended in, as files
-  pc sim -f sinks block --before before.yaml --after after.json
+  pc qual test --simulation -f sinks block --before before.yaml --after after.json
   # And the video of the run
-  pc sim -f sinks block --video sinks.webm
+  pc qual test --simulation -f sinks block --video sinks.webm
 
 ``--plugin`` runs a simulation with another plugin than the one it names;
 everything else the declaration says -- the scene, the offset, the parameters,
@@ -683,16 +690,16 @@ machine the command runs on, whichever machine ran the simulation.
 
 .. _sim-test:
 
-``pc test``'s ``sim`` check
-===========================
+``pc qual test``'s ``sim`` check
+================================
 
-``pc test`` holds an object to the same claims every time it runs, as its
-``sim`` check -- ``pc test -f sim`` runs that check alone -- so a ``simulate:``
+``pc qual test`` holds an object to the same claims every time it runs, as its
+``sim`` check -- ``pc qual test --simulation`` runs that check alone -- so a simulation
 is checked whenever the package is tested rather than whenever somebody
-remembers to ask. It runs a simulation through the same code ``pc sim`` does,
+remembers to ask. It runs a simulation through the same code ``pc qual test --simulation`` does,
 and shares its cache.
 
-It applies to a part, an assembly or a scene that declares ``simulate:`` and to
+It applies to a part, an assembly or a scene that declares ``qual: sim:`` and to
 nothing else, so a package of bolts pays nothing for it. The verdicts:
 
 .. list-table::
@@ -735,7 +742,7 @@ A declaration with no ``validation:`` has nothing to be judged by, so ``pc
 test`` does not run it, and what that costs depends on what was asked. Testing a
 package, it is skipped with a ``WARNING`` saying why: the claim may be one
 somebody is still writing, and the rest of the package deserves its verdict.
-Testing the object by name -- ``pc test stable`` -- it fails: somebody asked
+Testing the object by name -- ``pc qual test stable`` -- it fails: somebody asked
 whether this object does what it says, and it says nothing.
 
 ``--fast-only`` passes over an object that declares a ``timeout:``, as it does
@@ -768,16 +775,17 @@ can be moved and never switched off.
 
 .. code-block:: yaml
 
-  simulate:
-    settles:
-      simulation: sim-gazebo:gazebo
-      params:
-        duration: 120.0
-        timeout: 1800        # half an hour of wall clock for two minutes simulated
+  qual:
+    sim:
+      settles:
+        path: sim-gazebo:gazebo
+        params:
+          duration: 120.0
+          timeout: 1800        # half an hour of wall clock for two minutes simulated
 
 .. code-block:: shell
 
-  PC_SIMULATION_TIMEOUT=3600 pc test -f sim   # every run on this machine gets an hour
+  PC_SIMULATION_TIMEOUT=3600 pc qual test -f sim   # every run on this machine gets an hour
 
 When the budget is spent the run is **stopped, with everything it started** --
 the engine's server and whatever is watching it -- and fails, saying which
@@ -811,7 +819,7 @@ Whatever a plugin leaves running when it returns is stopped too, since a
 process that outlives the run holds its output open and the run would last as
 long as it does.
 
-Neither a timeout nor a crash is cached, and ``pc test`` remembers no verdict
+Neither a timeout nor a crash is cached, and ``pc qual test`` remembers no verdict
 reached on one, so the next run tries again. The engine plugins add nets of
 their own and stop a little before the budget is spent, to say how far they got:
 the MuJoCo plugin stops a run whose state has diverged and names where, and the
@@ -824,7 +832,7 @@ Pictures of a run
 =================
 
 Every run is also asked for two pictures of the scene: one before anything
-moved and one when the run is over. They are what the IDE's **Validation →
+moved and one when the run is over. They are what the IDE's **Qualification →
 Simulation** tab shows, with an arrow between them -- as the still of the video
 of the run (see :ref:`sim-video`), or side by side where there is none -- and
 the one thing a reader can check a verdict against without reading numbers -- a
@@ -868,7 +876,7 @@ which it drew in its result:
 
 Pictures are optional. A plugin that cannot draw on the machine it runs on, or
 that predates them, reports none and the run is exactly as good: no verdict
-depends on a picture. ``pc sim`` says where the pictures of each run were
+depends on a picture. ``pc qual test --simulation`` says where the pictures of each run were
 written, and ``--json`` lists them under ``snapshots``. Both plugins draw them
 from their engine's own geometry at the engine's own poses, on the CPU, so a
 picture needs no GPU in the sandbox.
@@ -881,7 +889,7 @@ A video of a run
 Every run is asked for a video of the whole of it as well: from the same
 viewpoint as the pictures, 25 frames for every second of *simulated* time, from
 the start of the run to its end -- so that it plays the run in real time, 251
-frames for ten seconds. It is what the IDE's **Validation → Simulation** tab
+frames for ten seconds. It is what the IDE's **Qualification → Simulation** tab
 plays, in a player with the usual controls -- play and pause, replay, a
 position to drag, the speed, full screen -- with the before and after pictures,
 and an arrow between them, as the still it shows until it is played. A run
@@ -900,7 +908,7 @@ otherwise:
                               # a height alone, sixteen by nine; 1600x900; or none
 
 ``none`` records no video at all, which is the setting for a machine that only
-runs ``pc test`` and has no use for one: drawing the frames is most of what a
+runs ``pc qual test`` and has no use for one: drawing the frames is most of what a
 short run of a small scene costs.
 
 The plugin is handed this in the request as ``video`` -- the format (WebM, with
@@ -913,7 +921,7 @@ and the viewpoint -- and says whether it recorded it in its result:
    output = {..., "video": "video.webm"}
 
 Like the pictures it is optional, and part of the question the run is cached
-under: a video wanted at another size is another run. ``pc sim`` says where it
+under: a video wanted at another size is another run. ``pc qual test --simulation`` says where it
 was written, ``--json`` names it under ``video``, and ``--video <path>`` saves a
 copy where you say. Both plugins draw its frames the way they draw the
 pictures, from the poses their engine reported at each frame's instant, and
@@ -943,7 +951,7 @@ pictures come back with a cached run like any other file it wrote, and a scene
 looked at from somewhere else is a different question, which runs again.
 
 A ``validation:`` is not part of the question: editing one re-judges the cached
-run rather than repeating it, in ``pc sim`` and in ``pc test`` alike. ``pc
+run rather than repeating it, in ``pc qual test --simulation`` and in ``pc qual test`` alike. ``pc
 test``'s verdict is cached too, keyed on the declarations as written,
 ``validation:`` included, and on the key of every run it was judged on, so
 nothing else changes it. A skip, a run that did not deliver, a declaration that
@@ -1133,7 +1141,7 @@ What the two engines make of a scene's world:
      - not modelled
    * - acting at the centre of buoyancy, so that a body with its weight low down
        rights itself
-     - modelled, in ``pc sim``
+     - modelled, in ``pc qual test --simulation``
      - not modelled
    * - a free surface: floating at a waterline, partly submerged
      - not modelled
@@ -1433,7 +1441,7 @@ Reading one
 joint at zero, but for a joint whose limits leave zero out: a legged robot's
 knee that cannot straighten, a gripper that cannot close to nought. Such a joint
 starts at the bound nearest zero, where the robot can stand, rather than against
-its own stop, which would fail ``pc test``'s ``connect`` check; and the links
+its own stop, which would fail ``pc qual test``'s ``connect`` check; and the links
 below it are placed with it there. A link's ``<inertial>``, the friction and contact settings of its
 ``<gazebo>`` block and its ``<material>`` become named properties of its part,
 in PartCAD's units, and are written back on export. URDF that PartCAD has no
@@ -1868,10 +1876,10 @@ asked anything. ``sink``, ``float`` and ``buoy`` are the same cube in water.
 .. code-block:: shell
 
   cd examples/feature_simulate
-  pc sim -S stable        # nothing moves
-  pc sim -S unstable      # the top block falls off, and that validation passes too
-  pc sim -S slippery      # the material is what decides it
-  pc test -f sim          # all of them, as the check pc test runs
+  pc qual test --simulation -S stable        # nothing moves
+  pc qual test --simulation -S unstable      # the top block falls off, and that validation passes too
+  pc qual test --simulation -S slippery      # the material is what decides it
+  pc qual test -f sim          # all of them, as the check pc qual test runs
 
 .. image:: /images/dt-validation-simulation.png
   :width: 100%
@@ -1899,10 +1907,10 @@ cancels out of every answer.
 .. code-block:: shell
 
   cd examples/feature_simulate_joints
-  pc sim -a pendulum        # released level, it passes the bottom at the speed its fall gives it
-  pc sim -a nut             # a nut runs down its screw as slowly as its turn says, 36 degrees a millimetre
-  pc sim --json -a nudged   # what each engine reported: joints.swing, in degrees and deg/s
-  pc test -f sim            # every one of them
+  pc qual test --simulation -a pendulum        # released level, it passes the bottom at the speed its fall gives it
+  pc qual test --simulation -a nut             # a nut runs down its screw as slowly as its turn says, 36 degrees a millimetre
+  pc qual test --simulation --json -a nudged   # what each engine reported: joints.swing, in degrees and deg/s
+  pc qual test -f sim            # every one of them
 
 .. image:: /images/sim-example-pendulum.png
   :width: 100%
@@ -1928,9 +1936,9 @@ the upper arm level, and letting go drops the upper arm onto the worm's give.
 .. code-block:: shell
 
   cd examples/feature_simulate_fea
-  pc sim -a arm --json              # the run, and what acts on every body at its end
+  pc qual test --simulation -a arm --json              # the run, and what acts on every body at its end
   pc cae fea -f dropped :knee-gear  # the gear under what the worm holds it with
-  pc test                           # both, as checks
+  pc qual test                           # both, as checks
 
 .. image:: /images/sim-example-arm.png
   :width: 100%
@@ -1953,7 +1961,7 @@ Agent skills
   simulation is the only kind of evidence that can settle a claim about
   behaviour.
 
-No skill writes a ``simulate:`` section from a description. What a thing is
+No skill writes a ``qual: sim:`` section from a description. What a thing is
 supposed to do, and the condition that decides whether it did, are claims
 somebody has to mean.
 

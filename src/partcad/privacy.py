@@ -32,10 +32,10 @@ one says which package wrote it, as the 'referrer' of the lookup
 ('Project.get_part', 'Context.get_part' and their siblings), and the lookup
 refuses the object there.
 
-A *command* is not a reference. 'pc render', 'pc test', 'pc info', the IDE's
+A *command* is not a reference. 'pc render', 'pc qual test', 'pc info', the IDE's
 Explorer and an agent's MCP tools name an object to look at it, not to build
 something else out of it, and they reach a private object as they reach any
-other - which is how the package's own author develops it, and what 'pc test
+other - which is how the package's own author develops it, and what 'pc qual test
 -r' and 'pc render -r' need to go on covering everything a package declares.
 That is the line Bazel's visibility draws too, and PartCAD's '//package:object'
 names are Bazel's: a private target is still built by naming it on the command

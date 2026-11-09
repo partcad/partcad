@@ -126,7 +126,7 @@ Depending on the type of the part, the configuration may have different options.
 ``multiConnect`` says whether one instance of an interface may take more than
 one object. It is ``false`` by default, because most joints are made once: a
 stud takes one brick, a bolt hole takes one bolt, and two objects connected to
-the same instance is a mistake ``pc test`` reports. Set it on the joints that
+the same instance is a mistake ``pc qual test`` reports. Set it on the joints that
 are not made once - a shaft carrying several parts along its length, a rail, a
 bus bar:
 
@@ -163,7 +163,7 @@ See :ref:`location` for more information on the OCCT Location object.
 Visual
 ------
 
-A part is what it is: the body ``pc test`` measures, a simulation collides with, an analysis meshes and an export
+A part is what it is: the body ``pc qual test`` measures, a simulation collides with, an analysis meshes and an export
 writes. Sometimes the right **picture** of it is something else, and ``visual:`` names the part a picture draws in
 its place:
 
@@ -198,7 +198,7 @@ alias, or a ``visual:`` of its own.
 
 **Everywhere else the part is itself, and its visual leaves no trace**: in every export, in a DXF, in a
 dimensioned drawing -- the IDE's Draft tab asks its drawing package for one of the parts as they are, whoever
-implements it -- in every check ``pc test`` runs, in manufacturability, in an analysis, in a route, in a bill of
+implements it -- in every check ``pc qual test`` runs, in manufacturability, in an analysis, in a route, in a bill of
 materials and in a simulation. The substitution is made on the way to a picture and kept nowhere else; a picture
 is cached under the visuals it drew, so a picture of a part whose visual changed is drawn again.
 
@@ -829,7 +829,7 @@ that is depends on its ``thickness``:
   geometry for a picture.
 - With a **thickness** it is a **solid**: the elevation extruded straight back
   through the thickness from the side it is seen from -- a prism of it for a
-  straight wall, and along the radius for an arc wall. A physical wall: ``pc
+  straight wall, and along the radius for an arc wall. A physical wall: ``pc qual
   test`` measures it like any part, a simulation collides with it and an export
   writes it.
 
@@ -905,7 +905,7 @@ A room is the walls standing on the outline of a sketch, each looking in: see
 
 Whatever its thickness, a wall is **never manufacturable**, and has to say so. A
 ``type: wall`` part that does not state ``manufacturable: false`` -- itself, or
-through its package -- is refused with a message saying what to add. ``pc
+through its package -- is refused with a message saying what to add. ``pc qual
 test``'s manufacturability check passes over it, and fails an assembly that is to
 be made with a wall in it: put walls in a scene.
 
@@ -1263,7 +1263,7 @@ did declare keys the cache like any other input, because it is one.
 
 A tolerance of ``0.0`` means nobody said. It reads as a demand for perfect
 precision, which is not something a manufacturer can be asked for, so
-:doc:`pc test </cli>` fails a part that is going to be *made* and has no
+:doc:`pc qual test </cli>` fails a part that is going to be *made* and has no
 tolerance - including a part reached through an assembly in the package. A part
 that is bought rather than made is not asked: it comes as it comes.
 
@@ -1328,7 +1328,7 @@ visualization, simulation calculations and, if applicable, manufacturing
 
   An object-type parameter as well, and the one with a default: omitting it is
   the same as writing ``0.0``, which is a claim to perfect precision and is
-  what ``pc test`` rejects on a part that is to be manufactured. Give it a real
+  what ``pc qual test`` rejects on a part that is to be manufactured. Give it a real
   value on anything you intend to have made.
 
   ``step`` and ``kicad`` parts state this as a ``tolerance:`` field instead of
@@ -1357,7 +1357,7 @@ Tolerance on the types that state it in the file
 
 ``step`` and ``kicad`` reject the ``tolerance`` *parameter*, for the reason
 above, which would leave them with no way to say how precisely a part has to be
-made and nothing to answer :doc:`pc test </cli>` with. They have one, because a
+made and nothing to answer :doc:`pc qual test </cli>` with. They have one, because a
 STEP file has somewhere of its own to say it: AP242 carries the whole of GD&T -
 a plus/minus tolerance on a dimension, a flatness or a position tolerance on a
 feature - so PartCAD reads the file.
@@ -1398,11 +1398,11 @@ A file that tolerances several features differently has no single tolerance, and
 PartCAD does not invent one: the tightest overstates what most of the part
 needs, the loosest understates what one of its features does, and an average is
 true of nothing. It reads back as ``NaN`` instead, which means *tolerated,
-feature by feature* - and ``pc test`` accepts it. Such a part does say how
+feature by feature* - and ``pc qual test`` accepts it. Such a part does say how
 precisely it has to be made, in more detail than one number holds, and the file
 is what goes to the manufacturer.
 
-What ``pc test`` rejects is still only a part that could have said and did not:
+What ``pc qual test`` rejects is still only a part that could have said and did not:
 ``0.0`` on a type that takes the field or the parameter. A part whose type takes
 neither and whose file states nothing is reported differently again, naming the
 type - that is a fact about the part type rather than about the declaration.

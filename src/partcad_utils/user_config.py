@@ -1344,7 +1344,7 @@ class UserConfig(vyper.Vyper):
         # description: how long one simulation run may take on this machine,
         #              in wall-clock seconds, over whatever the simulation and
         #              its plugin declare. Unset, a run is given the 'timeout'
-        #              its 'simulate:' passes in 'params', else its plugin's,
+        #              its 'qual: sim:' passes in 'params', else its plugin's,
         #              else the larger of five minutes and ten times the
         #              simulated 'duration' (see 'partcad.simulation.run_budget').
         #              It is the one knob for somebody who cannot edit the

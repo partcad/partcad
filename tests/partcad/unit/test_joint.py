@@ -804,7 +804,7 @@ def test_a_link_placed_twice_is_refused_the_second_time(tmp_path):
 
 
 def test_a_refusal_is_logged_as_the_assembly_is_built(tmp_path, caplog):
-    """Not only kept for 'pc test': a link placed twice was otherwise silent at build time."""
+    """Not only kept for 'pc qual test': a link placed twice was otherwise silent at build time."""
     links = """
     links:
       - part: base

@@ -347,7 +347,7 @@ def _shell_to_solid(shell):
 
     The solid is oriented after it is built. A closed shell whose faces point
     inward bounds the space *outside* it, and the solid made from it measures a
-    negative volume - the failure 'partcad.test.solidity' exists to report. So
+    negative volume - the failure 'partcad.qual.basic.solidity' exists to report. So
     converting without orienting would turn a shell nothing computed from into a
     solid everything computes from wrongly; 'BRepLib.OrientClosedSolid_s'
     reverses it when needed and is what makes this conversion safe.

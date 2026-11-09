@@ -204,7 +204,7 @@ which wins:
   joint's `mimic` points at. It is not `name`, which is the link this one is
   connected to. Without it the joint is `<this link>-<that link>` - `upper_arm-base`
   above - and since link names need not be unique, a second joint of one name is
-  `<name>-2`, a third `<name>-3`, in link order, and `pc test` asks for a `joint:`
+  `<name>-2`, a third `<name>-3`, in link order, and `pc qual test` asks for a `joint:`
   on each.
 
 `toParams` and `withParams` place the joint where it **starts**, and a
@@ -226,7 +226,7 @@ and which parameter and which declaration it came from - and its physics.
 A link is placed once, against a link already placed, so a closed chain - a
 four-bar linkage - cannot be *placed* by its connections: closing it takes a
 connection whose target is placed after it, or a second placement of a link
-already placed. Both are refused, and `pc test` says so. What closes the chain is
+already placed. Both are refused, and `pc qual test` says so. What closes the chain is
 stated instead, as a further joint (see "Further joints" below).
 
 .. _assy-also:
@@ -253,7 +253,7 @@ states them, in the words of `connectPorts`:
 
 It places nothing. Once every link of the list is placed, the two ports have to
 be in one place, facing each other - which is what makes a joint of them - and
-`pc test` fails the assembly where they are not: a frame whose sizes do not
+`pc qual test` fails the assembly where they are not: a frame whose sizes do not
 close the loop, or a port named on the wrong face. It is stated on the later of
 the two links, once both are there, and the assembly instruction book says so at
 the step that places it.
@@ -266,7 +266,7 @@ docs/design/simulation.md, section 8.9).
 Expected overlaps
 -----------------
 
-`pc test` checks that the parts of an assembly do not share space - except where
+`pc qual test` checks that the parts of an assembly do not share space - except where
 a joint says they must. A pin snapped into its hole, a screw cutting its own
 thread: the joint is made by occupying the material, and a model that holds no
 springs holds it overlapping. Two things say so, and both are read from
@@ -565,7 +565,7 @@ thread without repeating it.
 
 A connection inherits `threadStep` from the two interfaces it mates. They have
 to agree on it: two different threads cannot be screwed together, and a
-connection whose ends disagree is reported and fails ``pc test``. Unless, that
+connection whose ends disagree is reported and fails ``pc qual test``. Unless, that
 is, one of them declares `selfScrew` - a self-tapping screw, or the plain hole
 one goes into. Then the thread of the end that does have to match one is the
 thread that gets cut, and failing that the one the self-tapping end brings with
@@ -642,7 +642,7 @@ Testing the instructions
 
 Everything above is resolved leniently: a field that is missing takes its
 default, and one that contradicts itself is reported and replaced with a
-default, so that an assembly always builds. ``pc test`` is what looks past that
+default, so that an assembly always builds. ``pc qual test`` is what looks past that
 leniency. Its ``connect`` test fails an assembly whose instructions had to be
 repaired to be usable, and passes one that is sound - **including one that says
 nothing at all** and takes every default.
@@ -672,24 +672,24 @@ What it rejects today:
 * a screw motion with no `threadStep` to advance by.
 * a connection that would close a loop, or that places a link already placed.
 
-It is `pc test` rather than `pc lint` because each of these is a finding about
+It is `pc qual test` rather than `pc lint` because each of these is a finding about
 what a connection *resolved* to: which interfaces and which mating it matched,
 which parameters they inherit from other packages, which ones a `motion:` brought
 along. `pc lint` checks a file as it is written, and caches its verdict on that
 file - a verdict about interfaces declared in another package would go stale
-there the moment that package changed. `pc test` keys its verdict on the
+there the moment that package changed. `pc qual test` keys its verdict on the
 assembly, whose key covers the interfaces it connects.
 
 .. code-block:: shell
 
-    pc test connect-instructions
+    pc qual test connect-instructions
 
 Steps that can be followed
 --------------------------
 
 Defaults are enough for an assembly to build, and they are not enough for a
 person to put it together. So an assembly that is meant to be made
-(``manufacturable: true``) is held to more by ``pc test``: every item after the
+(``manufacturable: true``) is held to more by ``pc qual test``: every item after the
 first of each list of links has to be connected (``connect`` or
 ``connectPorts``), and something has to say **how** it goes into place - pushed,
 snapped or screwed in. That is said by any of:
@@ -1016,7 +1016,7 @@ or ``connectPorts:``; the first item of a list is the one the others hang
 from. The document's own top-level ``location:`` beside its ``links:`` -- the
 frame the whole assembly sits in -- is allowed; a file that is a single
 ``part:`` or ``assembly:`` with no ``links:`` is that one item, and may not.
-This is the rule ``pc test`` holds a manufacturable assembly to (the
+This is the rule ``pc qual test`` holds a manufacturable assembly to (the
 ``connectivity`` test), reported where it is written, and like that test it
 stands down for an assembly whose declaration says ``connectivity:`` with
 ``requireAnchored: false`` or ``skip: true``.

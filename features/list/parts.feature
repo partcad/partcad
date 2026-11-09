@@ -66,7 +66,7 @@ Feature: `pc list parts` command
     Then the command should exit with a status code of "0"
     # Every declaration, including the one whose file is missing: a listing no
     # longer creates the objects, so it does not find out (that is what
-    # `pc test` is for) and does not fail the command over it.
+    # `pc qual test` is for) and does not fail the command over it.
     And STDERR should contain "cube"
     And STDERR should contain "gone"
     And STDERR should not contain "must exist"

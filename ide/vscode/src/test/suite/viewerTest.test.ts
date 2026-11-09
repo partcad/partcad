@@ -3,24 +3,39 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// The Test tab, Validation's first: every check 'pc test' runs, with a mark,
-// and the one selected - what it found, what it left behind, what it is.
+// The Qualification tabs drawn from 'qual.report' - Basic, Topology and Other:
+// every test of the tab's subtype, with a mark, and the one selected - what it
+// found, where it is (a topology finding), what its tool reported (an 'other'
+// one), what it is.
 //
-// The verdicts and the text are the daemon's ('partcad.test.report' and
-// 'partcad.test.catalog'). What is pinned here is that this side draws them as
+// The verdicts and the text are the daemon's ('partcad.qual.report' and
+// 'partcad.qual.catalog'). What is pinned here is that this side draws them as
 // they are - a check still running is neither passed nor failed, one that does
-// not apply says so - opens on the check worth reading, and hands an artifact
-// to whoever shows objects. And that the host asks the daemon what the tab asked.
+// not apply says so - opens on the check worth reading, hands an artifact to
+// whoever shows objects with what to single out in it, and draws a report as a
+// table. And that the host asks the daemon what the tab asked, for its subtype.
 //
 
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 
 import { TestArtifact, TestData, TestResult } from '../../webview/messages';
-import { TestView, defaultSelection, inline, markOf, summaryOf } from '../../webview/test';
+import { FindingCard } from '../../webview/finding';
+import {
+    TestView,
+    columnsOf,
+    commandOf,
+    defaultSelection,
+    findingOf,
+    focusOf,
+    inline,
+    markOf,
+    severityOf,
+    summaryOf,
+} from '../../webview/test';
 import { PartcadViewer } from '../../viewer/PartcadViewer';
 
-/** Just enough of an element for 'dom.ts' and the Test tab. */
+/** Just enough of an element for 'dom.ts' and the Qualification tabs. */
 class FakeElement {
     public readonly children: (FakeElement | string)[] = [];
     public className = '';
@@ -34,6 +49,7 @@ class FakeElement {
     public readonly classList = {
         add: (...names: string[]) => names.forEach((name) => this.toggleClass(name, true)),
         toggle: (name: string, on: boolean) => this.toggleClass(name, on),
+        contains: (name: string) => this.className.split(' ').includes(name),
     };
 
     constructor(public readonly tagName: string) {}
@@ -124,6 +140,7 @@ const OVERLAP: TestArtifact = {
     name: 'gearbox/interference/a+b',
     title: "'a' and 'b'",
     desc: 'Where they overlap',
+    focus: 'interference',
 };
 
 function data(running = false): TestData {
@@ -142,7 +159,7 @@ function data(running = false): TestData {
     };
 }
 
-suite('The Test tab', () => {
+suite('The Qualification tabs', () => {
     suiteSetup(() => {
         (globalThis as unknown as { document: unknown }).document = {
             createElement: (tagName: string) => new FakeElement(tagName),
@@ -179,10 +196,21 @@ suite('The Test tab', () => {
         assert.strictEqual(nodes[2], ' lower.');
     });
 
-    test('every check is listed, the failure is opened, and its artifact is offered', () => {
+    test('every check is listed, the failure is opened, and where it is is offered', () => {
         const shown: TestArtifact[] = [];
+        const of: string[] = [];
         const root = new FakeElement('div');
-        const view = new TestView(root as unknown as HTMLElement, { onRun: () => {}, onShow: (a) => shown.push(a) });
+        const view = new TestView(
+            root as unknown as HTMLElement,
+            {
+                onRun: () => {},
+                onShow: (a, r) => {
+                    shown.push(a);
+                    of.push(r.name);
+                },
+            },
+            { subtype: 'topology' },
+        );
 
         view.show(data(), false);
 
@@ -194,14 +222,161 @@ suite('The Test tab', () => {
         assert.strictEqual(view.selected, 'interference');
         const page = find(root, 'test-page')[0];
         assert.ok(page.text.includes("'a' and 'b' share 5.000 mm^3"));
-        assert.ok(page.text.includes('pc test -f interference'));
+        assert.ok(page.text.includes('pc qual test --topology -f interference'));
         assert.ok(page.text.includes('When it fails'));
+        assert.ok(page.text.includes('Where it is'));
 
         const button = find(root, 'test-artifact')[0].children.find(
             (child) => typeof child !== 'string' && child.tagName === 'button',
         ) as FakeElement;
+        assert.strictEqual(button.textContent, 'Show');
         button.click();
         assert.deepStrictEqual(shown, [OVERLAP]);
+        // With the check that left it, whose words go on being shown with it.
+        assert.deepStrictEqual(of, ['interference']);
+    });
+
+    test('a finding shown in 3D keeps what the check said, where its pieces are, and the way back', () => {
+        const check = result('interference', 'failed', {
+            findings: [{ level: 'error', text: "'a' and 'b' share 5.000 mm^3" }],
+        });
+        const artifact: TestArtifact = {
+            ...OVERLAP,
+            features: [
+                { at: [1, 2, 3], label: 'volume 1: 5.000 mm^3' },
+                { at: [1, Number.NaN, 3], label: 'nowhere' },
+            ],
+        };
+        const subject = { package: '//pkg', name: 'gearbox', kind: 'assembly' };
+        const finding = findingOf(artifact, check, 'topology', subject);
+        assert.ok(finding !== undefined);
+        assert.strictEqual(finding.title, 'The interference check');
+        assert.strictEqual(finding.check, 'interference');
+        assert.strictEqual(finding.status, 'failed');
+        assert.deepStrictEqual(finding.findings, check.findings);
+        assert.deepStrictEqual(finding.features, [{ at: [1, 2, 3], label: 'volume 1: 5.000 mm^3' }]);
+        assert.deepStrictEqual(finding.subject, subject);
+        assert.strictEqual(findingOf({ ...OVERLAP, focus: undefined }, check, 'topology', subject), undefined);
+
+        const host = new FakeElement('div');
+        const backs: string[] = [];
+        let closed = 0;
+        const card = new FindingCard(host as unknown as HTMLElement, {
+            onClose: () => (closed += 1),
+            onBack: (shown) => backs.push(shown.check),
+        });
+        const root = find(host, 'finding-card')[0];
+        assert.strictEqual(root.hidden, true);
+
+        card.show(finding);
+        assert.strictEqual(root.hidden, false);
+        // The words the Topology tab said, said over the view.
+        assert.ok(root.text.includes("'a' and 'b' share 5.000 mm^3"));
+        assert.ok(root.text.includes('The interference check'));
+        assert.ok(root.text.includes('pc qual test --topology -f interference'));
+        assert.ok(root.text.includes('Where they overlap'));
+        assert.strictEqual(find(root, 'finding-mark')[0].className, 'finding-mark failed');
+
+        // Folded to its title, and back.
+        const body = find(root, 'finding-body')[0];
+        find(root, 'finding-fold')[0].click();
+        assert.strictEqual(body.hidden, true);
+        find(root, 'finding-fold')[0].click();
+        assert.strictEqual(body.hidden, false);
+
+        find(root, 'finding-back')[0].click();
+        assert.deepStrictEqual(backs, ['interference']);
+        find(root, 'finding-close')[0].click();
+        assert.strictEqual(closed, 1);
+        card.hide();
+        assert.strictEqual(root.hidden, true);
+        assert.strictEqual(card.finding, undefined);
+    });
+
+    test('"Back" opens the check the finding was of, once the object it is on is listed again', () => {
+        const root = new FakeElement('div');
+        const view = new TestView(
+            root as unknown as HTMLElement,
+            { onRun: () => {}, onShow: () => {} },
+            { subtype: 'topology' },
+        );
+        view.prefer('cad');
+        // The show of the object comes first, and takes every choice back - but not this one.
+        view.setBusy('Select this tab to run the tests.');
+        view.show(data(), false);
+        assert.strictEqual(view.selected, 'cad');
+        // Once: the next object opens on what is worth reading, as ever.
+        view.setBusy('Select this tab to run the tests.');
+        view.show(data(), false);
+        assert.strictEqual(view.selected, 'interference');
+    });
+
+    test('a topology finding is singled out by the node its focus names', () => {
+        assert.deepStrictEqual(focusOf(OVERLAP), {
+            object: '//pkg:gearbox/interference/a+b',
+            item: '//pkg:gearbox/interference/a+b/interference',
+            label: "'a' and 'b'",
+        });
+        assert.strictEqual(focusOf({ ...OVERLAP, focus: undefined }), undefined);
+    });
+
+    test('a test is run alone with its subtype selected', () => {
+        assert.strictEqual(commandOf('basic', 'cad'), 'pc qual test --basic -f cad');
+        assert.strictEqual(commandOf('sim', 'sim'), 'pc qual test --simulation -f sim');
+    });
+
+    test("an 'other' test's report is drawn as a table, its rows marked by severity", () => {
+        const root = new FakeElement('div');
+        const view = new TestView(
+            root as unknown as HTMLElement,
+            { onRun: () => {}, onShow: () => {} },
+            { subtype: 'other' },
+        );
+        const report = {
+            title: 'Lockwire',
+            verdict: 'NO-GO',
+            columns: [
+                { key: 'severity', title: 'Severity' },
+                { key: 'quantity', title: 'What' },
+            ],
+            rows: [
+                { severity: 'violation', quantity: 'budgets/bud.power.servo-5v' },
+                { severity: 'not_scored', quantity: 'budgets/bud.mass' },
+            ],
+        };
+        view.show(
+            {
+                object: '//pkg:rover',
+                kind: 'assembly',
+                verified: true,
+                tests: [result('budgets', 'failed', { subtype: 'other', reports: [report] })],
+            },
+            false,
+        );
+        const table = find(root, 'test-report-table')[0];
+        assert.ok(table.text.includes('Severity'));
+        assert.ok(table.text.includes('budgets/bud.power.servo-5v'));
+        assert.deepStrictEqual(
+            find(root, 'test-report').map((node) => node.text.includes('NO-GO')),
+            [true],
+        );
+        assert.strictEqual(severityOf(report.rows[0]), 'error');
+        assert.strictEqual(severityOf(report.rows[1]), 'warning');
+        assert.deepStrictEqual(
+            columnsOf({ rows: [{ a: 1 }, { b: 2, a: 3 }] }).map((column) => column.key),
+            ['a', 'b'],
+        );
+    });
+
+    test('a tab with no test of its subtype says how to declare one', () => {
+        const root = new FakeElement('div');
+        const view = new TestView(
+            root as unknown as HTMLElement,
+            { onRun: () => {}, onShow: () => {} },
+            { subtype: 'other', none: 'This declares no tests of other tools.' },
+        );
+        view.show({ object: '//pkg:rover', kind: 'assembly', verified: true, tests: [] }, false);
+        assert.ok(root.text.includes('This declares no tests of other tools.'));
     });
 
     test('while the checks run, the reader keeps the check they chose', () => {
@@ -257,12 +432,12 @@ suite('The Test tab', () => {
     });
 });
 
-suite('The Digital Thread host, asked for the Test tab', () => {
+suite('The Digital Thread host, asked for a Qualification tab', () => {
     const sent: Record<string, unknown>[] = [];
     let registration: vscode.Disposable | undefined;
 
     suiteSetup(() => {
-        registration = vscode.commands.registerCommand('partcad.testReport', (args: Record<string, unknown>) => {
+        registration = vscode.commands.registerCommand('partcad.qualReport', (args: Record<string, unknown>) => {
             sent.push(args);
             return { object: '//pkg:gearbox', kind: 'assembly', verified: args.verify, tests: [] };
         });
@@ -270,7 +445,7 @@ suite('The Digital Thread host, asked for the Test tab', () => {
 
     suiteTeardown(() => registration?.dispose());
 
-    test('asks the daemon about the object on screen, and whether to run the checks', async () => {
+    test('asks the daemon about the object on screen, for the subtype of the tab, and whether to run the checks', async () => {
         const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
         const host = viewer as unknown as {
             lastShow: unknown;
@@ -278,14 +453,16 @@ suite('The Digital Thread host, asked for the Test tab', () => {
         };
         host.lastShow = { type: 'show', name: 'gearbox', kind: 'assembly', package: '//pkg' };
 
-        await host.fetchTab({ tab: 'test', token: 1, verify: false });
-        await host.fetchTab({ tab: 'test', token: 2, verify: true });
+        await host.fetchTab({ tab: 'basic', token: 1, verify: false });
+        await host.fetchTab({ tab: 'topology', token: 2, verify: true });
+        await host.fetchTab({ tab: 'other', token: 3, verify: true });
 
         assert.deepStrictEqual(
-            sent.map((args) => [args.pkg, args.name, args.kind, args.verify]),
+            sent.map((args) => [args.pkg, args.name, args.kind, args.verify, args.subtypes]),
             [
-                ['//pkg', 'gearbox', 'assembly', false],
-                ['//pkg', 'gearbox', 'assembly', true],
+                ['//pkg', 'gearbox', 'assembly', false, ['basic']],
+                ['//pkg', 'gearbox', 'assembly', true, ['topology']],
+                ['//pkg', 'gearbox', 'assembly', true, ['other']],
             ],
         );
         viewer.dispose();

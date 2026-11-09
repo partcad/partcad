@@ -42,7 +42,7 @@ best judgment and state which you picked — the user can redirect.
 A physical claim in the description — it stands, it does not tip, it floats, it
 holds a load, it works under water or on the Moon — is part of the request, not
 decoration: carry it into the part, assembly or scene flow, which makes the
-result ready to simulate and checks the claim with `pc sim`.
+result ready to simulate and checks the claim with `pc qual test --simulation`.
 
 ## Then
 

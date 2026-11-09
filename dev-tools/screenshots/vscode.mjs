@@ -466,7 +466,7 @@ export async function resetView(page) {
  * whatever stayed open.
  *
  * `settle` is how long to wait after the last one: a tab that runs something
- * when it is opened (`Validation`, which runs the checks) needs longer than one
+ * when it is opened (`Qualification`, which runs the tests) needs longer than one
  * that only draws.
  */
 export async function tab(page, ...ids) {

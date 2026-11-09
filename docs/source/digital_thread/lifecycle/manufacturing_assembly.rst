@@ -52,7 +52,7 @@ How the steps are decided
 See :ref:`how an assembly is manufactured <assembly-manufacturing>` and
 :doc:`/assy` for what each ``connect:`` says about the joining -- the mating,
 the ``how:``, the torque and the thread -- and
-:doc:`/digital_thread/lifecycle/testing` for the ``connect`` check, which is
+:doc:`/digital_thread/lifecycle/qualification_tests` for the ``connect`` check, which is
 what reports a step the declaration says nothing about.
 
 Agent skills

@@ -261,7 +261,7 @@ asked for (`output.FILES_KEY`), which is what the paragraphs below left exports 
 
 `pc render` draws every picture every time, even when nothing it is drawn from has changed: only the IDE's thumbnails
 are cached (`thumbnail.py`, `ctx.cache_renders`). The machinery for caching an output already exists and is used by
-`pc cae`, `pc cam` and `pc sim` (`cache_artifacts.py`): a key made of the subject's cache key, the implementation, the
+`pc cae`, `pc cam` and `pc qual test --simulation` (`cache_artifacts.py`): a key made of the subject's cache key, the implementation, the
 content of its script and of the wrapper, the code versions, and the request less the geometry; an entry holding the
 result and the files the run wrote.
 

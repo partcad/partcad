@@ -543,7 +543,7 @@ are downloaded Poetry will also install current package in editable mode, and yo
 
 .. code-block::
 
-  Installing the current project: partcad (0.9.24)
+  Installing the current project: partcad (0.10.0)
 
 .. warning::
 
@@ -1278,8 +1278,11 @@ to the other. Both follow these rules:
 
 #. **Every pull request merges to** ``devel``. Nothing merges to ``main``, in either repository.
 #. ``main`` **only moves by fast-forward from** ``devel``, and that fast-forward is the release. Every merge to
-   PartCAD's ``devel`` is followed by a ``Version updated from X to Y`` commit, tagged and published to TestPyPI;
-   moving ``main`` to one of those commits is what publishes that version to PyPI. The index's ``main`` is what
+   PartCAD's ``devel`` is followed by a ``Version updated from X to Y`` commit, tagged and published to TestPyPI
+   as soon as its wheel is built, whether or not its standalone bundles build; moving ``main`` to one of those
+   commits is what publishes that version to PyPI. A package that has to keep up with ``devel`` tests against
+   TestPyPI: ``partcad`` from there by exact version, and its dependencies from PyPI, as
+   ``partcad-ldraw-examples``' CI does. The index's ``main`` is what
    every package created by ``pc init`` tracks, so moving it is what ``pc update`` delivers to them.
 #. **The two** ``main`` **branches move in order, and the index's waits for PartCAD's release to finish.**
    PartCAD's ``main`` first; then, once its ``Deployment`` run has completed and the version is on PyPI, the

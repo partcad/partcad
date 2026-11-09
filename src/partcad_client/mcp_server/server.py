@@ -16,7 +16,7 @@ wrote meanwhile, and an image instead of base64 wherever there is one.
 import base64
 import json
 import logging
-from typing import Annotated, Any, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 
 import anyio
 import anyio.from_thread
@@ -176,11 +176,12 @@ def instructions(bridge: Bridge, scope: PathScope) -> str:
         "declares parameters is asked for with particular values through a tool's params ({name: value}), which "
         "is the same as naming it 'name;param=value,...'. "
         "Start with list_objects (kind=packages for the package tree) and info; look at an object with render, "
-        "which returns an image; check it against its declared requirements with test; read it against another "
+        "which returns an image; qualify it -- its requirements, its tests, its simulations -- with qual_test, and "
+        "declare a test of it with qual_add; read it against another "
         "object -- volume, displacement, mass, and how far apart their surfaces are -- with compare; write STEP, "
         "STL, 3MF and "
         "the rest with export. To create or change an object, edit partcad.yaml and its script with your own file "
-        "tools -- the daemon reloads what changed -- then render and test again. Everything else PartCAD does "
+        "tools -- the daemon reloads what changed -- then render and qual_test again. Everything else PartCAD does "
         "(bom, instructions, cae, cam, simulations, add, import, convert, install) is a daemon method: "
         "list_methods names them and execute runs one. Results carry the daemon's log; when ok is false, the "
         "errors say why. "
@@ -201,7 +202,7 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
     server = MCPServer(
         name="partcad",
         title="PartCAD",
-        description="Inspect, render, test and export the parts and assemblies of a PartCAD workspace",
+        description="Inspect, render, qualify and export the parts and assemblies of a PartCAD workspace",
         instructions=instructions(bridge, scope),
         website_url="https://partcad.org",
         version=__version__,
@@ -397,25 +398,85 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         outcome.result["bytes"] = len(data)
         return report(outcome)
 
-    @server.tool(title="Test objects", annotations=_READS)
-    async def test(
+    @server.tool(title="Qualify objects", annotations=_READS)
+    async def qual_test(
         ctx: Context,
         object: Annotated[
-            Optional[str], Field(description="The object to test; every object of the package when left out.")
+            Optional[str], Field(description="The object to qualify; every object of the package when left out.")
         ] = None,
         kind: Annotated[Optional[TestKind], Field(description=_KIND)] = None,
         package: PackageName = None,
-        recursive: Annotated[bool, Field(description="Also test the packages below this one.")] = False,
+        recursive: Annotated[bool, Field(description="Also qualify the packages below this one.")] = False,
         params: Parameters = None,
+        subtypes: Annotated[
+            Optional[List[Literal["basic", "topology", "sim", "other"]]],
+            Field(
+                description="The subtypes of qualification test to run: basic (findings in words), topology "
+                "(places on the object), sim (the simulations it declares), other (plugins' tests). All when left out."
+            ),
+        ] = None,
+        filter: Annotated[
+            Optional[str], Field(description="Only the tests whose names start with this ('requirements', 'cad').")
+        ] = None,
     ) -> CallToolResult:
-        """Check objects against the requirements and tests they declare.
+        """Qualify objects: run the qualification tests they are held to and the ones they declare.
 
-        `pc test`. ok is false when any check failed, and the errors say which.
+        `pc qual test`. ok is false when any test failed, and the errors say which.
         """
         request = {"package": package, "object": object, "recursive": recursive, **_kind_flag(kind)}
         if params:
             request["params"] = _assignments(params)
-        return await run(ctx, "test.run", request)
+        if subtypes:
+            request["subtypes"] = list(subtypes)
+        if filter:
+            request["filter"] = filter
+        return await run(ctx, "qual.run", request)
+
+    @server.tool(title="Declare a qualification test", annotations=_WRITES)
+    async def qual_add(
+        ctx: Context,
+        object: Annotated[str, Field(description="The object the test is of.")],
+        name: Annotated[
+            str,
+            Field(
+                description="The test's name: a built-in test's (to set its parameters), or one of the object's "
+                "own choosing for a plugin's test or a simulation."
+            ),
+        ],
+        subtype: Annotated[
+            Literal["basic", "topology", "sim", "other"], Field(description="Which subtype of test it is.")
+        ] = "other",
+        path: Annotated[
+            Optional[str],
+            Field(
+                description="The plugin that runs it, as '<package>:<name>': a package's 'qual:' entry, or its "
+                "'simulation:' entry for a simulation. Left out for a built-in test."
+            ),
+        ] = None,
+        entry: Annotated[
+            Optional[Dict[str, Any]],
+            Field(
+                description="Every other key of the declaration: a built-in test's parameters, a plugin test's "
+                "parameters, or a simulation's 'scene', 'offset', 'validation', 'params' and 'feature'."
+            ),
+        ] = None,
+        kind: Annotated[Optional[ObjectKind], Field(description=_KIND)] = None,
+        package: PackageName = None,
+    ) -> CallToolResult:
+        """Declare a qualification test of an object, in its package's partcad.yaml: '<object>.qual.<subtype>.<name>'.
+
+        `pc qual add`. A plugin's test is resolved before anything is written.
+        """
+        request = {
+            "package": package,
+            "object": object,
+            "subtype": subtype,
+            "name": name,
+            "path": path,
+            "entry": dict(entry or {}),
+            **_kind_flag(kind),
+        }
+        return await run(ctx, "qual.add", request)
 
     @server.tool(title="Lint a package", annotations=_READS)
     async def lint(

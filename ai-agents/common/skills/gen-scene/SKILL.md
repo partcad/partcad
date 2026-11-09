@@ -9,7 +9,7 @@ Generate a PartCAD **scene**: a placed arrangement of objects, such as a living
 room, a house in its garden, a workcell, a table with things laid out on it, or a
 world for a simulation. The text after the command (`$ARGUMENTS`) is the
 description. *You* author the scene, and the parts it places, and prove the
-whole of it **passes `pc test`**.
+whole of it **passes `pc qual test`**.
 
 A scene uses the same ASSY file format as an assembly, and most of
 `/pc:gen-assembly` carries over. What changes is the intent: a scene says
@@ -24,7 +24,7 @@ volume nothing sees or touches may be overlapping, rough or not manufacturable,
 and the effort goes into the surfaces instead.
 
 Every object in a scene is a **physical object**: a solid that a simulation
-collides with, `pc test` checks for overlaps and an export writes. Where what
+collides with, `pc qual test` checks for overlaps and an export writes. Where what
 should be *seen* is something else, that is a part's `visual:` - another part,
 drawn in its place in the IDE's 3D view and in `pc render`'s pictures, and
 nowhere else - and never a reason to model the object as less than it is. A
@@ -43,7 +43,7 @@ floor plan's walls are the case PartCAD ships (§4).
 | `fixed:` | ignored, with an error | welds what the link places to the world |
 | In a simulation | attached: one rigid body, plus its joints | every element is a body of its own, and falls unless it is `fixed` |
 | `gravity:`, `medium:` | no | yes |
-| Overlaps (`pc test`'s `interference`) | a defect in the product | judged by what they touch (§6) |
+| Overlaps (`pc qual test`'s `interference`) | a defect in the product | judged by what they touch (§6) |
 | Manufacturable | when it is to be made | not a product: `manufacturable: false` by default |
 
 So: a product, something that is *made* (a desk, a robot, a shelving unit),
@@ -90,7 +90,7 @@ link. Generate it with `/pc:gen-assembly` first, or reuse one that exists.
 - **What the scene is required to be**: "seats six", "a 1 m clear path from the
   door to the window", "the ball rolls down the ramp". It is written down in §5
   as the scene's `requirements:`, and a physical claim also becomes a
-  `simulate:` (§7).
+  `qual: sim:` (§7).
 
 Clarify only the ambiguities that matter. Otherwise proceed, and state your
 assumptions.
@@ -240,7 +240,7 @@ is `//builtin/building:wall`, a **solid**: its face on the outline, its
 `thickness` (114.3 mm, 4.5 in: a 2x4 stud between two half-inch drywall
 boards, unless the scene says otherwise) going back from there,
 *outside* the plan, so the plan stays the room's clear inside. A simulation
-collides with it, `pc test` checks things against it, an export writes it. What
+collides with it, `pc qual test` checks things against it, an export writes it. What
 a picture draws is its `visual:`, `//builtin/building:wall-surface`: the face
 alone, drawn from inside the room and see-through from outside, so the room can
 be looked into from any side without taking anything away. That surface is
@@ -409,7 +409,7 @@ parts:
   `x = length - x_outside`.
 - **Stand every wall on z = 0, through the floor**, and draw its openings from
   the floor's top (its thickness, 20 above). A door that reached the bottom edge of
-  the sketch would make a solid OCCT does not certify (`pc test` says so under
+  the sketch would make a solid OCCT does not certify (`pc qual test` says so under
   `validity`). Drawn this way the door is a hole, and the strip under it is inside
   the floor slab, where nothing sees it.
 - **Let the walls overlap at the corners.** Placed end to end on the outline,
@@ -555,13 +555,13 @@ scene is not manufacturable and needs no `manufacturing:`.
 ## 6. Validate, render it from several angles, iterate
 
 ```sh
-pc --no-ansi test -S <scene>
+pc --no-ansi qual test -S <scene>
 ```
 
 ### Read the overlap warnings, and judge each one
 
 A scene is not manufacturable, so its `interference` check **warns** rather than
-fails, and `pc test` exits 0 over
+fails, and `pc qual test` exits 0 over
 `interference: 'table' and 'sofa' share 600000000.000 mm^3`. A warning is
 information, not a verdict. Judge each one by the principle at the top: does the
 overlap change a surface that is seen, or one that something placed in the scene
@@ -662,7 +662,7 @@ elevation sketches the same way, `/pc:gen-sketch` §7.
 
 ### Show each version that renders
 
-Under an IDE (§3), show the scene in its 3D view each time it passes `pc test`
+Under an IDE (§3), show the scene in its 3D view each time it passes `pc qual test`
 and its four views rendered, as `/pc:gen-assembly` §6 says, adding `--design-3d`
 to the first show of the run:
 
@@ -676,28 +676,29 @@ Then correct, re-test, and re-render until every view matches the description.
 
 Where the description says something physical about the scene (everything
 settles where it is put, the stack of boxes topples, the ball rolls down the
-ramp), declare it as a `simulate:` on the scene and check it with `pc sim`,
+ramp), declare it as a `qual: sim:` on the scene and check it with `pc qual test --simulation`,
 the way `/pc:gen-assembly` §7 does for an assembly, with the same `sim-mujoco`
 dependency (`pc add dep sim-mujoco https://github.com/partcad/partcad-sim-mujoco.git`):
 
 ```yaml
 scenes:
   <scene>:
-    simulate:
-      settles:
-        desc: Switched on, nothing fixed moves and every loose object comes to rest where it was put
-        feature: <the feature of its requirements this demonstrates>
-        simulation: sim-mujoco:mujoco
-        params: { samples: 20 }
-        validation: |
-          all(
-              max(abs(a - b) for a, b in zip(after["bodies"][n]["pos"], before["bodies"][n]["pos"])) < 5.0
-              and abs(sum(a * b for a, b in zip(after["bodies"][n]["quat"], before["bodies"][n]["quat"]))) > 0.996
-              and max(abs(a - b) for a, b in zip(result["samples"][-1]["bodies"][n]["pos"],
-                                                  result["samples"][-2]["bodies"][n]["pos"])) < 1.0
-              and max(abs(w) for w in after["bodies"][n]["angvel"]) < 1.0
-              for n in before["bodies"]
-          )
+    qual:
+      sim:
+        settles:
+          desc: Switched on, nothing fixed moves and every loose object comes to rest where it was put
+          feature: <the feature of its requirements this demonstrates>
+          path: sim-mujoco:mujoco
+          params: { samples: 20 }
+          validation: |
+            all(
+                max(abs(a - b) for a, b in zip(after["bodies"][n]["pos"], before["bodies"][n]["pos"])) < 5.0
+                and abs(sum(a * b for a, b in zip(after["bodies"][n]["quat"], before["bodies"][n]["quat"]))) > 0.996
+                and max(abs(a - b) for a, b in zip(result["samples"][-1]["bodies"][n]["pos"],
+                                                    result["samples"][-2]["bodies"][n]["pos"])) < 1.0
+                and max(abs(w) for w in after["bodies"][n]["angvel"]) < 1.0
+                for n in before["bodies"]
+            )
 ```
 
 No body moved more than 5 mm or turned more than 10° (`|q₀·q₁| > cos 5°`, as in
@@ -730,7 +731,7 @@ alone one that is still rocking.
   something placed in the scene has to pass through or rest there. In that
   case, build that wall or floor of convex pieces: `basic` cuboids either side
   of an opening and above it, and a floor as rectangles.
-- `pc --no-ansi sim --json -S <scene>` prints every body by name, before and
+- `pc --no-ansi qual test --simulation --json -S <scene>` prints every body by name, before and
   after, which is what a claim about one object is written against.
 
 When a claim fails, fix the scene, not the threshold.
@@ -748,7 +749,7 @@ Summarize the scene:
   detail and why;
 - which objects are mobile;
 - the layout's table (target, measured, error);
-- what `pc test` and `pc sim` found, and each overlap warning left as it is, with
+- what `pc qual test` and `pc qual test --simulation` found, and each overlap warning left as it is, with
   the reason;
 - every size and every placement you assumed;
 - how to view it: `pc ide view -S <scene>`, which under an IDE is what is already

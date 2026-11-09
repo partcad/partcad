@@ -522,7 +522,7 @@ sketches:
 ```
 
 Every object of the same package still uses it - an `extrude` of it, a wall's
-`openings:`, a port's `sketch:` - and `pc render`, `pc test` and `pc ide view`
+`openings:`, a port's `sketch:` - and `pc render`, `pc qual test` and `pc ide view`
 still reach it by name. A reference from another package is refused, naming the
 package it is private to; that is the point: a sketch nobody outside depends on
 is a sketch you can change. A sketch meant to be reused - a standard profile, a

@@ -5,7 +5,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-__version__: str = "0.9.24"
+__version__: str = "0.10.0"
 
 # Must come before anything that spawns a process: everything PartCAD executes
 # in a Python sandbox inherits this environment, so this is where the sandbox
@@ -99,7 +99,7 @@ from . import plugin  # noqa: F401
 
 # Imported for the binding as well: 'partcad.cae' is what the daemon's
 # 'cae.analyze'/'cae.defaults' operations reach the analyses through, and it is
-# what 'partcad.test.cae' and 'Shape.analyze_async()' read. It resolves
+# what 'partcad.qual.basic.cae' and 'Shape.analyze_async()' read. It resolves
 # anyway because 'shape' imports it, and that is exactly the dependency the
 # 'plugin' line above exists not to have.
 from . import cae  # noqa: F401

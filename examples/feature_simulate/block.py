@@ -6,7 +6,7 @@
 #
 # A 20 mm cube, centred on the origin -- which is what `box()` produces and
 # what the two assemblies beside it are written against: each states where the
-# *centre* of a block goes, and the `offset:` of a `simulate:` then lifts the
+# *centre* of a block goes, and the `offset:` of a `qual: sim:` entry then lifts the
 # whole stack so that the bottom face sits on the floor of the scene.
 
 import cadquery as cq

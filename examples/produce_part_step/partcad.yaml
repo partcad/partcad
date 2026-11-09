@@ -4,7 +4,7 @@ docs:
   intro: |
     ## Tolerance, and what it has to do with buying
 
-    A `step` part takes no `tolerance` parameter, and `pc test` says so in as
+    A `step` part takes no `tolerance` parameter, and `pc qual test` says so in as
     many words: *the part type 'step' does not accept one*. That is about the
     file format rather than about the part. A STEP file has a place of its own
     to carry tolerance, so a second one in `partcad.yaml` would be a second

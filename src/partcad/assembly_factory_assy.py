@@ -150,7 +150,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         Recorded on the child it places (see 'AssemblyChild.cmf_parameters'):
         setting one draws the item in an assembly-specific way, which costs the
         assembly its manufacturability unless it is bought whole (see
-        'partcad.test.cmf').
+        'partcad.qual.basic.cmf').
         """
         params = node.get("params") if isinstance(node, dict) else None
         if not isinstance(params, dict):
@@ -511,7 +511,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             )
 
     def report_joint_problem(self, child, problem) -> None:
-        """Log one problem with a child's placement or joint, and keep it for 'pc test'.
+        """Log one problem with a child's placement or joint, and keep it for 'pc qual test'.
 
         Both, the way 'compose_connection' does with what it finds: the log is
         what a build shows, and 'joint_problems' is what the 'connect' check
@@ -744,7 +744,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         ports have to be in one place, facing each other, which is what makes a
         joint of them - and a frame whose sizes do not add up, or a port named
         on the wrong side, is found here rather than on the bench. What fails is
-        a problem of the link's for 'pc test' (see 'report_joint_problem'); what
+        a problem of the link's for 'pc qual test' (see 'report_joint_problem'); what
         holds is recorded on it ('AssemblyChild.also'), for the instruction book
         to say at the step that makes it.
         """
@@ -1860,7 +1860,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             #              every one of them can be named (see
             #              'Assembly.link_name'). An assembly named excuses
             #              every overlap between it and this node. Read by
-            #              'partcad.test.interference'.
+            #              'partcad.qual.topology.interference'.
             # values: a node name, or a list of them
             # default: none
             "interferes": _as_names(connect.get("interferes", None), self.name),

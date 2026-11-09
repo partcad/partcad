@@ -35,8 +35,8 @@ from .part import Part
 from .plugin_provider_data_cart import *
 from .plugin_request_provider_quote import ProviderRequestQuote
 from .project import Project
+from .qual.registry import builtin as all_tests
 from .sync_threads import threadpool_manager
-from .test.all import tests as all_tests
 from .user_config import UserConfig
 from .utils import *
 
@@ -65,7 +65,7 @@ def _is_within(name: str, parent_name: Optional[str]) -> bool:
 def is_excluded(name: str, exclude) -> bool:
     """Whether a package is one of 'exclude', or sits underneath one of them.
 
-    What a walk over a subtree leaves out when it is told to ('pc test -x'):
+    What a walk over a subtree leaves out when it is told to ('pc qual test -x'):
     excluding a package excludes everything below it, by the same rule that
     puts a package below its parent.
     """
@@ -1717,7 +1717,7 @@ class Context:
         whose input this loop is still writing, and the environment lock and
         process slot that process's task holds. The fetch runs the plugin in a
         sandbox, so it can need exactly those, and then neither side ever moves.
-        'pc test' over //pub stopped that way on macOS with #704's cycle gone.
+        'pc qual test' over //pub stopped that way on macOS with #704's cycle gone.
 
         So the plugin-backed packages above the one wanted are warmed here, top
         down, by awaiting their fetches; the walk 'get_project()' then makes

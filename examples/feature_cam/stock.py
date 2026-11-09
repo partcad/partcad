@@ -6,7 +6,7 @@ import build123d as bd
 # Oversized in X and Y and the same thickness in Z, which is what sheet stock
 # is: a router takes material away around the outline and leaves the faces it
 # was given. It has to *enclose* what is cut from it, because that is what
-# `pc test -f manufacturability` checks -- a part bigger than its stock is one
+# `pc qual test -f manufacturability` checks -- a part bigger than its stock is one
 # nobody can make, and saying so needs a stock that is a different shape from
 # the part. Pointing `source:` at a copy of the part itself would remove
 # nothing and be reported as such.

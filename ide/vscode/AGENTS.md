@@ -185,7 +185,7 @@ send (`PartcadViewer`). `src/webview/` is what runs *inside* that webview: `view
 because the show is what decides which tabs apply, and because two windows sharing the viewer port share it
 by connection. The renderer hands it to the strips as a *request* (`Tabs.request`) before they are rebuilt for
 the object: a request is opened even when the tab is `secondary`, waits through a rebuild that does not offer
-it yet (Build and Buy, until Build vs Buy has answered; Simulation, until `simulate.list` has; an analysis, until `cae.list` has), and is forgotten once opened or when the next show
+it yet (Build and Buy, until Build vs Buy has answered; Simulation, until `qual.simulations` has; an analysis, until `cae.list` has), and is forgotten once opened or when the next show
 asks for nothing. The user also withdraws it, by clicking a tab or by a change on the tab they are on that
 rebuilds the strip (`keepCurrent`, a Build vs Buy switch): what they did wins over what a command line asked for
 earlier, so a request waiting for Buy does not pull them off the tab they are working in. `TAB_GROUPS` in `src/webview/messages.ts` is the list of what can be asked for, and a Python
@@ -207,13 +207,23 @@ show's `kind`, which is the one thing that finds a declaration: its name is no o
 
 **The panel is a strip of tabs over one object, not a canvas.** 3D first, then FEA, Dynamic FEA, Heat Transfer and
 CFD for a part, then Manufacturing: what is built and what is bought, how to build it, the bill of materials, where
-to buy it and the assembly instructions; then Validation: every check `pc test` runs, check by check (Test, first),
-and the simulations the object's `simulate:` section declares, each run and shown as the scene before and after. In
+to buy it and the assembly instructions; then Qualification, a tab per subtype of qualification test: Basic (first)
+and Topology, every test of theirs `pc qual test` runs, test by test, a topology finding with the place on the
+object it is about; Simulation, the simulations the object declares under `qual: sim:`, each run and shown as the
+scene before and after; and Other, the tests plugins supply, with what each tool reported. In
 front of all of them, for an object that declares `requirements:`, a Requirements tab: asked about on every show
-(`requirements.check`, a declaration read) and verified when opened, by the same code as `pc test -f
-requirements`. Validation's Test tab is `test.report`, listed and then run by the same checks and cache as `pc
-test`, beside the text of `partcad/test/catalog.py`, which is also what the documentation lists the checks with --
-edit a check's text there, never in TypeScript. Only the 3D
+(`requirements.check`, a declaration read) and verified when opened, by the same code as `pc qual test -f
+requirements`. The Basic, Topology and Other tabs are `qual.report`, each asking for its own `subtypes` (the
+host's `QUAL_TEST_TABS`), listed and then run by the same tests and cache as `pc qual test`, beside the text of
+`partcad/qual/catalog.py`, which is also what the documentation lists the tests with -- edit a test's text there,
+never in TypeScript. A topology finding's **Show** shows the object the test left behind and, once its show
+arrives, singles out the link its `focus` names with the CMF tab's choice (`chooseInDesign`): the finding drawn,
+the rest faint. What the tab said about it goes along (`findingOf` in `test.ts`): `finding.ts` draws it as a card
+over the 3D view -- the test, its verdict, every finding, what is drawn, and **Back to the Topology tab**, which
+shows the object again with the test open (`TestView.prefer`) -- and the scene pins a callout to each of the
+artifact's `features` (`setFindingCallouts`), points in the object's frame like a material cluster's. The card
+replaces the CMF chip while it is up; the words were the finding, and a chip has room for a title. An 'other'
+test's report is drawn as a table by `test.ts`. Only the 3D
 view comes over the viewer protocol; every other tab is a question about `<package>:<name>` that the renderer
 cannot ask itself -- the CSP forbids network access and the daemon is behind the host's JSON-RPC connection --
 so it asks the host (`fetchTab`) and the host answers (`tabData`), on first look. Which is why the show
@@ -335,8 +345,8 @@ the first show of a panel, and Reset, place the camera at the opening view outri
 "The first show places the camera" in [docs/partcad-viewer.md](./docs/partcad-viewer.md).
 
 None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote`, `cae.analyze` and
-`simulate.run` (with `cae.list` and `simulate.list`, which read what they would run) are the CLI's own operations (`pc bom`, the book `pc render -t html` writes, the cart
-`pc supply quote` fills, the analysis `pc cae <analysis>` runs, the simulation `pc sim` runs), asked for
+`qual.simulate` (with `cae.list` and `qual.simulations`, which read what they would run) are the CLI's own operations (`pc bom`, the book `pc render -t html` writes, the cart
+`pc supply quote` fills, the analysis `pc cae <analysis>` runs, the simulation `pc qual test --simulation` runs), asked for
 as data rather
 than as a file -- the same rule as everywhere else in this extension: extend the one backend, do not
 reimplement it in TypeScript.
@@ -345,7 +355,7 @@ The Analysis tabs -- FEA, Dynamic FEA, Heat Transfer and CFD -- are the ones tha
 selecting a scenario runs a solver. Each is named after its analysis on the command line (`fea`, `dynamic`,
 `thermal`, `cfd`), which is the id the host asks `cae.analyze` for; the label a person reads is
 `ANALYSIS_LABELS` in `src/webview/messages.ts`, and it is never derived from the id -- "DYNAMIC" is not what
-anybody calls a modal analysis. A part's section for an analysis is a map of named scenarios, as `simulate:` is a
+anybody calls a modal analysis. A part's section for an analysis is a map of named scenarios, as `qual: sim:` is a
 map of simulations, so each tab is a list of them, laid out and run like the Simulation tab
 (`src/webview/analysis.ts`, `AnalysisView`). What a part declares for all four is asked once per show
 (`partcad.caeList` -> `cae.list`, fetched under the group's own id, `analysis`, beside the `partcad.cae` runs the
@@ -385,26 +395,26 @@ know. `VIEWER_TABS` in `src/partcad_ide_client/protocol.py` is the third place, 
 and is what gives `pc ide view` its `--analysis-<id>` flags. See
 [docs/partcad-viewer.md](./docs/partcad-viewer.md).
 
-The Simulation tab acts too. It sits in the Validation group after Test, which is always enabled -- every
-object has checks -- so the group always is, and opens on Test; Process Emulation, after Simulation, is a
-placeholder and always disabled. Its list is `src/webview/scenarioList.ts`, which the Analysis tabs list their
+The Simulation tab acts too. It sits in the Qualification group after Basic and Topology, which are always
+enabled -- every object has tests -- so the group always is, and opens on Basic; Other comes after Simulation, and
+Process Emulation, last, is a placeholder and always disabled. Its list is `src/webview/scenarioList.ts`, which the Analysis tabs list their
 scenarios with as well: one widget, so that the rows, the verdict marks and the keyboard cannot come to differ
 between them. Three things about Simulation are load-bearing:
 
-- **Whether Simulation applies is asked on every show.** `simulate.list` reads the object's `simulate:`
-  section and runs nothing, so it is as cheap as `manufacturing.tree`, and it is asked for the same reason:
+- **Whether Simulation applies is asked on every show.** `qual.simulations` reads the simulations the object
+  declares (`qual: sim:`) and runs nothing, so it is as cheap as `manufacturing.tree`, and it is asked for the same reason:
   the tab is enabled only once the daemon has said there is at least one simulation. When it arrives the
-  panel's *own* strip is rebuilt -- without `keepCurrent`, so a reader who was on Validation for the last
+  panel's *own* strip is rebuilt -- without `keepCurrent`, so a reader who was on Qualification for the last
   object lands on it again -- which no other answer does.
 - **A run has a token of its own, not the tab's** (`simulationRuns` in `viewer.ts`). A reader who selects one
   simulation and then the next has asked for two runs, and each answer belongs to the simulation it is of; the
   tab's single token would drop the first. The token also carries the plugin it was asked with ("Simulated
-  by", `pc sim --plugin`), because answers are kept by the pane per simulation *and* plugin for as long as the
+  by", `pc qual test --simulation --plugin`), because answers are kept by the pane per simulation *and* plugin for as long as the
   object is on screen, so going back to one does not start a simulator again; **Simulate** is how one is
   asked for afresh.
 - **The pictures and the video are the plugin's, not this extension's.** PartCAD asks every run for a picture
   of the scene before and after, from the scene's own `render: png:` viewpoint, and for a video of the whole run
-  from there; the plugin draws them; `simulate.run` sends them back as bytes (`inline`: `images`, `recording`),
+  from there; the plugin draws them; `qual.simulate` sends them back as bytes (`inline`: `images`, `recording`),
   because the daemon may be on another machine. Before is always on the left and after on the right, and a
   picture the plugin did not take is said to be missing in its place, so the two never swap sides. A run with
   a video is played in `videoPlayer.ts` (Video.js 10, fed through Media Source Extensions, full screen through
@@ -1178,7 +1188,7 @@ It is off unless `PC_TEST_IDE_E2E=1`; `PC_TEST_IDE_EDITOR` and `PC_TEST_IDE_VSIX
 or VSCodium is downloaded (Linux, macOS or Windows) and the package built from this directory. It starts an
 `Xvfb` on Linux where there is no display. The FEA step needs the CalculiX solver: from the plugin's image where a
 container runtime is running, or `ccx` on the `PATH` (`apt install calculix-ccx`) where it is not. Where there is
-neither and no runtime could have run the image, the test accepts the excuse `pc test` accepts
+neither and no runtime could have run the image, the test accepts the excuse `pc qual test` accepts
 (`CaeTest._verdict`) and checks the rest of the tab.
 
 CI runs it as `IDE (end to end)` in `.github/workflows/test.yml`, gated on the `ide-e2e` output of

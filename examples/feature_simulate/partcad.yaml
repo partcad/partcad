@@ -2,13 +2,13 @@ desc: PartCAD example project which demonstrates simulating a part or a scene.
 
 docs:
   usage: |
-    A part says what it *is*. `simulate:` is where it says what it is supposed
+    A part says what it *is*. `qual: sim:` is where it says what it is supposed
     to **do** -- or, as here, what it is supposed not to do:
 
     ```shell
-    pc sim -S stable      # the stack stands; the validation passes
-    pc sim -S unstable    # the top block falls off; that validation passes too
-    pc sim                # every simulation this package declares
+    pc qual test --simulation -S stable      # the stack stands; the validation passes
+    pc qual test --simulation -S unstable    # the top block falls off; that validation passes too
+    pc qual test --simulation                # every simulation this package declares
     ```
 
     `stable` and `unstable` are the same two blocks. In `stable` the upper one
@@ -23,20 +23,20 @@ docs:
     arrangement -- each block is where it is, and nothing holds it there -- so
     each block is a rigid body of its own, free to slide and to fall. That is
     the rule PartCAD decides what becomes a body by. A scene declares
-    `simulate:` exactly as a part does, and is placed in the world it is
+    `qual: sim:` exactly as a part does, and is placed in the world it is
     simulated in by that world's `scene:` link.
 
-    Each `simulate:` states five things: the `scene:` the object is placed in
+    Each `qual: sim:` states five things: the `scene:` the object is placed in
     (here the default, `//builtin/scene:subject`, an empty world holding the
     subject and nothing else), the `offset:` that puts it there -- the blocks
     are drawn about their own centres, so the stack is lifted 10 mm to stand its
-    bottom face on the floor -- the `simulation:` plugin that runs it, the
+    bottom face on the floor -- the `path:` of the plugin that runs it, the
     `validation:` expression that says whether what happened is what was
     supposed to happen, and a `desc:` for whoever reads the result.
 
     ### The simulator is somebody else's package
 
-    PartCAD implements no simulator. It ships the *concept* -- the `simulate:`
+    PartCAD implements no simulator. It ships the *concept* -- the `qual: sim:`
     section, the `simulation:` section a plugin is declared in, the sandbox the
     plugin runs in, and the MJCF export a scene reaches it through -- and a
     package supplies the physics. This one names
@@ -53,8 +53,8 @@ docs:
     simulation -- and the top block ends up on the floor.
 
     ```shell
-    pc sim -S stable      # nothing moves
-    pc sim -S slippery    # the top block slides off
+    pc qual test --simulation -S stable      # nothing moves
+    pc qual test --simulation -S slippery    # the top block slides off
     ```
 
     The scene both run in is `tilted`, whose gravity leans 15 degrees off
@@ -89,7 +89,7 @@ docs:
     every body was before and after:
 
     ```shell
-    pc sim --json -S slippery
+    pc qual test --simulation --json -S slippery
     ```
 
     The scene reaches the simulator as the MJCF PartCAD writes. That is an
@@ -109,12 +109,12 @@ docs:
     simulated in it 100 mm above its floor.
 
     ```shell
-    pc sim -f sinks block    # the aluminium block sinks to the bottom of the tank
-    pc sim float             # the float rises -- and, in the default scene, falls
+    pc qual test --simulation -f sinks block    # the aluminium block sinks to the bottom of the tank
+    pc qual test --simulation float             # the float rises -- and, in the default scene, falls
     ```
 
     `float` is the same 20 mm cube as `block`, standing for a sealed float that
-    weighs 3 g: less than the 8 g of water it displaces. Its `simulate:` runs it
+    weighs 3 g: less than the 8 g of water it displaces. Its `qual: sim:` runs it
     twice, in the tank and in the default scene, and the two validations are
     opposite claims about the same part. The default scene is a vacuum, as every
     scene that states no `medium:` is, so there the float falls like anything
@@ -137,7 +137,7 @@ docs:
     side down. Released tilted 60 degrees, it is upright within a second.
 
     ```shell
-    pc sim buoy           # the ballasted float rights itself as it rises
+    pc qual test --simulation buoy           # the ballasted float rights itself as it rises
     ```
 
     `water` is declared below so that this example stays self-contained; the
@@ -208,33 +208,34 @@ parts:
       material:
         type: string
         default: ":aluminium"
-    simulate:
-      # A part declares these exactly as a scene does. One block on a floor
-      # has nowhere to fall, which is the point: it is the control the three
-      # stacks below are read against.
-      rests:
-        desc: A block set down on the floor stays where it was put
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        offset: [[0, 0, 10], [0, 0, 1], 0]
-        validation: |
-          max(
-              abs(after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2])
-              for name in before["bodies"]
-          ) < 5.0
-      sinks:
-        desc: Aluminium is denser than water, so the block goes to the bottom of the tank
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        # A scene of this package's own, filled with water, and the block
-        # released 100 mm above its floor.
-        scene: :tank
-        offset: [[0, 0, 100], [0, 0, 1], 0]
-        # Released at 100 mm, it ends with its centre 10 mm above the floor:
-        # 90 mm down. Water slows it; it does not stop it.
-        validation: |
-          max(
-              after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2]
-              for name in before["bodies"]
-          ) < -50.0
+    qual:
+      sim:
+        # A part declares these exactly as a scene does. One block on a floor
+        # has nowhere to fall, which is the point: it is the control the three
+        # stacks below are read against.
+        rests:
+          desc: A block set down on the floor stays where it was put
+          path: //pub/feature/simulate/mujoco:mujoco
+          offset: [[0, 0, 10], [0, 0, 1], 0]
+          validation: |
+            max(
+                abs(after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2])
+                for name in before["bodies"]
+            ) < 5.0
+        sinks:
+          desc: Aluminium is denser than water, so the block goes to the bottom of the tank
+          path: //pub/feature/simulate/mujoco:mujoco
+          # A scene of this package's own, filled with water, and the block
+          # released 100 mm above its floor.
+          scene: :tank
+          offset: [[0, 0, 100], [0, 0, 1], 0]
+          # Released at 100 mm, it ends with its centre 10 mm above the floor:
+          # 90 mm down. Water slows it; it does not stop it.
+          validation: |
+            max(
+                after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2]
+                for name in before["bodies"]
+            ) < -50.0
 
   float:
     desc: A sealed float - a 20 mm cube that weighs 3 g, less than the 8 g of water it displaces
@@ -248,31 +249,32 @@ parts:
         # does not say so: 3 g in kg, the unit 'mass' is in. Its inertia is
         # the solid's, scaled to this, and is not stated.
         mass: 0.003
-    simulate:
-      floats:
-        desc: Lighter than the water it displaces, the float rises through the tank
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :tank
-        offset: [[0, 0, 100], [0, 0, 1], 0]
-        # The water has no surface, so a float rises for as long as the run
-        # lasts. A tenth of a metre is far below where it gets to in ten
-        # seconds, and something that sank could not get there.
-        validation: |
-          min(
-              after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2]
-              for name in before["bodies"]
-          ) > 100.0
-      falls:
-        desc: The same float in the default scene, which is a vacuum, falls like anything else
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        # Released at the height the tank releases it at, so the two runs differ
-        # in the medium and in nothing else.
-        offset: [[0, 0, 100], [0, 0, 1], 0]
-        validation: |
-          max(
-              after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2]
-              for name in before["bodies"]
-          ) < -50.0
+    qual:
+      sim:
+        floats:
+          desc: Lighter than the water it displaces, the float rises through the tank
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :tank
+          offset: [[0, 0, 100], [0, 0, 1], 0]
+          # The water has no surface, so a float rises for as long as the run
+          # lasts. A tenth of a metre is far below where it gets to in ten
+          # seconds, and something that sank could not get there.
+          validation: |
+            min(
+                after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2]
+                for name in before["bodies"]
+            ) > 100.0
+        falls:
+          desc: The same float in the default scene, which is a vacuum, falls like anything else
+          path: //pub/feature/simulate/mujoco:mujoco
+          # Released at the height the tank releases it at, so the two runs differ
+          # in the medium and in nothing else.
+          offset: [[0, 0, 100], [0, 0, 1], 0]
+          validation: |
+            max(
+                after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2]
+                for name in before["bodies"]
+            ) < -50.0
 
   buoy:
     desc: The float again, with its 4 g of weight low down - a ballasted float, which rights itself
@@ -289,27 +291,28 @@ parts:
         # that turns the heavy side down, whichever way it was released.
         mass: 0.004
         centerOfMass: [0, 0, -6]
-    simulate:
-      rights_itself:
-        desc: Released tilted 60 degrees in the tank, the ballasted float turns its heavy side down
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :tank
-        # 100 mm above the floor and turned 60 degrees about X, so its own Z
-        # axis starts half-way to horizontal.
-        offset: [[0, 0, 100], [1, 0, 0], 60]
-        # How upright it is: the world Z component of its own Z axis, from the
-        # orientation the plugin reports (w, x, y, z) - 1 is upright, 0.5 is the
-        # 60 degrees it was released at. It swings a little either side of
-        # upright as it goes on rising, so "upright" is within 25 degrees.
-        # 'all()' of nothing is true, so a run that reported no body at all
-        # would pass without anything having been looked at: the buoy has to
-        # be there for its turning upright to count.
-        validation: |
-          len(before["bodies"]) > 0 and all(
-              1 - 2 * (before["bodies"][name]["quat"][1] ** 2 + before["bodies"][name]["quat"][2] ** 2) < 0.6
-              and 1 - 2 * (after["bodies"][name]["quat"][1] ** 2 + after["bodies"][name]["quat"][2] ** 2) > 0.9
-              for name in before["bodies"]
-          )
+    qual:
+      sim:
+        rights_itself:
+          desc: Released tilted 60 degrees in the tank, the ballasted float turns its heavy side down
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :tank
+          # 100 mm above the floor and turned 60 degrees about X, so its own Z
+          # axis starts half-way to horizontal.
+          offset: [[0, 0, 100], [1, 0, 0], 60]
+          # How upright it is: the world Z component of its own Z axis, from the
+          # orientation the plugin reports (w, x, y, z) - 1 is upright, 0.5 is the
+          # 60 degrees it was released at. It swings a little either side of
+          # upright as it goes on rising, so "upright" is within 25 degrees.
+          # 'all()' of nothing is true, so a run that reported no body at all
+          # would pass without anything having been looked at: the buoy has to
+          # be there for its turning upright to count.
+          validation: |
+            len(before["bodies"]) > 0 and all(
+                1 - 2 * (before["bodies"][name]["quat"][1] ** 2 + before["bodies"][name]["quat"][2] ** 2) < 0.6
+                and 1 - 2 * (after["bodies"][name]["quat"][1] ** 2 + after["bodies"][name]["quat"][2] ** 2) > 0.9
+                for name in before["bodies"]
+            )
 
   block_ptfe:
     desc: The same 20 mm cube, in PTFE
@@ -333,9 +336,9 @@ scenes:
   # whole of what these three are about. See "What becomes a body" in
   # docs/source/simulation.rst.
   #
-  # A scene declares 'simulate:' exactly as a part does, and is placed in the
+  # A scene declares 'qual: sim:' exactly as a part does, and is placed in the
   # world it is simulated in -- 'tilted' below, or the scene PartCAD ships -- by
-  # that world's 'scene:' link, which 'pc sim' asks for with 'subject_kind'.
+  # that world's 'scene:' link, which 'pc qual test --simulation' asks for with 'subject_kind'.
   stable:
     desc: Two aluminium blocks, the upper one squarely on top of the lower one
     type: assy
@@ -350,68 +353,71 @@ scenes:
     # On the scene rather than on 'stands', because 'unless' selects
     # declarations -- the choice the cantilever in feature_cae makes too.
     unless: [[macos, x86_64]]
-    simulate:
-      stands:
-        desc: |
-          Nothing moves, even pulled sideways by a quarter of its weight:
-          aluminium grips with four times the friction it takes to hold.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        # A world tilted by 15 degrees, so that something pushes the top block
-        # sideways and its friction is asked what it can hold.
-        scene: :tilted
-        # The blocks are drawn about their own centres, so the stack spans z
-        # from -10 to 30. Lift it by 10 to stand its bottom face on the floor of
-        # the scene: this is what an 'offset:' is for -- reconciling the frame
-        # the object is drawn in with the frame the scene places things in.
-        offset: [[0, 0, 10], [0, 0, 1], 0]
-        # 'before' and 'after' are what the MuJoCo plugin reported: where every
-        # body was when the world started, and where it was ten seconds later,
-        # in millimetres. Half a millimetre of creep and settling is contact
-        # softness, not motion; a block that comes off the stack moves seventy
-        # along and twenty down. So: no block moved 5 mm in any direction.
-        validation: |
-          max(
-              sum((a - b) ** 2 for a, b in zip(after["bodies"][name]["pos"], before["bodies"][name]["pos"])) ** 0.5
-              for name in before["bodies"]
-          ) < 5.0
+    qual:
+      sim:
+        stands:
+          desc: |
+            Nothing moves, even pulled sideways by a quarter of its weight:
+            aluminium grips with four times the friction it takes to hold.
+          path: //pub/feature/simulate/mujoco:mujoco
+          # A world tilted by 15 degrees, so that something pushes the top block
+          # sideways and its friction is asked what it can hold.
+          scene: :tilted
+          # The blocks are drawn about their own centres, so the stack spans z
+          # from -10 to 30. Lift it by 10 to stand its bottom face on the floor of
+          # the scene: this is what an 'offset:' is for -- reconciling the frame
+          # the object is drawn in with the frame the scene places things in.
+          offset: [[0, 0, 10], [0, 0, 1], 0]
+          # 'before' and 'after' are what the MuJoCo plugin reported: where every
+          # body was when the world started, and where it was ten seconds later,
+          # in millimetres. Half a millimetre of creep and settling is contact
+          # softness, not motion; a block that comes off the stack moves seventy
+          # along and twenty down. So: no block moved 5 mm in any direction.
+          validation: |
+            max(
+                sum((a - b) ** 2 for a, b in zip(after["bodies"][name]["pos"], before["bodies"][name]["pos"])) ** 0.5
+                for name in before["bodies"]
+            ) < 5.0
 
   unstable:
     desc: The same two blocks, with the upper one 18 mm out of 20 off the edge
     type: assy
-    simulate:
-      falls:
-        desc: The top block topples off and ends up on the floor
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        offset: [[0, 0, 10], [0, 0, 1], 0]
-        # The opposite condition, on the very same simulation: something ended
-        # up markedly lower than it started. The top block falls a whole block's
-        # height, so 5 mm is far below what happens and far above the settling
-        # the stable stack shows.
-        validation: |
-          max(
-              before["bodies"][name]["pos"][2] - after["bodies"][name]["pos"][2]
-              for name in before["bodies"]
-          ) > 5.0
+    qual:
+      sim:
+        falls:
+          desc: The top block topples off and ends up on the floor
+          path: //pub/feature/simulate/mujoco:mujoco
+          offset: [[0, 0, 10], [0, 0, 1], 0]
+          # The opposite condition, on the very same simulation: something ended
+          # up markedly lower than it started. The top block falls a whole block's
+          # height, so 5 mm is far below what happens and far above the settling
+          # the stable stack shows.
+          validation: |
+            max(
+                before["bodies"][name]["pos"][2] - after["bodies"][name]["pos"][2]
+                for name in before["bodies"]
+            ) > 5.0
 
   slippery:
     desc: The stable stack again, in PTFE, which does not stay stacked
     type: assy
-    simulate:
-      slides_off:
-        desc: |
-          The same geometry as 'stable', in the same tilted world, and the
-          opposite outcome, because the material is the other one.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :tilted
-        offset: [[0, 0, 10], [0, 0, 1], 0]
-        # The top block slides off the bottom one and falls its full height, 20
-        # mm, onto the floor; 5 mm is far below that and far above the settling
-        # of a stack that holds.
-        validation: |
-          max(
-              before["bodies"][name]["pos"][2] - after["bodies"][name]["pos"][2]
-              for name in before["bodies"]
-          ) > 5.0
+    qual:
+      sim:
+        slides_off:
+          desc: |
+            The same geometry as 'stable', in the same tilted world, and the
+            opposite outcome, because the material is the other one.
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :tilted
+          offset: [[0, 0, 10], [0, 0, 1], 0]
+          # The top block slides off the bottom one and falls its full height, 20
+          # mm, onto the floor; 5 mm is far below that and far above the settling
+          # of a stack that holds.
+          validation: |
+            max(
+                before["bodies"][name]["pos"][2] - after["bodies"][name]["pos"][2]
+                for name in before["bodies"]
+            ) > 5.0
 
   tilted:
     desc: An empty world whose gravity leans 15 degrees off vertical, towards +X - a ramp with no edge
@@ -423,7 +429,7 @@ scenes:
     # tan(15 deg) = 0.268.
     gravity: [2.539, 0, -9.476]
     parameters:
-      # The same three the scene PartCAD ships takes, assigned by 'pc sim'. The
+      # The same three the scene PartCAD ships takes, assigned by 'pc qual test --simulation'. The
       # PTFE stack by default, so the scene on its own holds something: the
       # same geometry as 'stable', and so the same picture, but declared
       # everywhere -- 'stable' is left out on Intel macOS (see it), and a scene
@@ -452,7 +458,7 @@ scenes:
     # the scene, and in m/s^2, the units every reader of 9.81 already knows.
     gravity: [0, 0, -9.81]
     parameters:
-      # The object being simulated, assigned by 'pc sim' as a full path. The
+      # The object being simulated, assigned by 'pc qual test --simulation' as a full path. The
       # float by default, so that the tank on its own holds something to draw.
       subject:
         type: string

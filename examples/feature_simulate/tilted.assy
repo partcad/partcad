@@ -3,7 +3,7 @@
 #
 # The lean is not in this file: a scene's 'gravity:' is declared beside it in
 # partcad.yaml. What is here is only where the subject goes, which the
-# 'simulate:' that names this scene says with its 'offset:' -- the same seven
+# 'qual: sim:' that names this scene says with its 'offset:' -- the same seven
 # numbers, written the same way, as the scene PartCAD ships
 # ('//builtin/scene:subject'). See the note beside 'subject_offset' there for
 # why they arrive without brackets or commas.

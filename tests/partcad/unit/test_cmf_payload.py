@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""A part's CMF in its payload, through assemblies, in 'pc test' and in a drawing (docs/design/cmf.md).
+"""A part's CMF in its payload, through assemblies, in 'pc qual test' and in a drawing (docs/design/cmf.md).
 
 Pinned here:
 
@@ -27,7 +27,7 @@ import yaml
 
 import partcad as pc
 from partcad import cmf, shape_envelope
-from partcad.test import cmf as cmf_check
+from partcad.qual.basic import cmf as cmf_check
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 import cmf_section  # noqa: E402
@@ -336,10 +336,9 @@ def test_a_part_an_assembly_is_made_of_is_held_to_its_cmf_whatever_it_says_of_it
 
 
 def test_the_check_is_registered_and_catalogued():
-    from partcad.test import all as all_tests
-    from partcad.test import catalog
+    from partcad.qual import catalog, registry
 
-    assert "cmf" in [test.name for test in all_tests.tests(4)]
+    assert "cmf" in [test.name for test in registry.builtin(4)]
     assert catalog.describe("cmf")["title"]
 
 
@@ -647,7 +646,7 @@ def test_an_edge_that_bounds_no_face_is_drawn_in_the_node_s_colour():
 
 
 def test_an_assembly_that_will_not_instantiate_fails_the_check_rather_than_the_run(tmp_path, monkeypatch):
-    """A broken link fails the 'cmf' check for that assembly; it does not stop 'pc test'."""
+    """A broken link fails the 'cmf' check for that assembly; it does not stop 'pc qual test'."""
     ctx = _walls(tmp_path)
     assembly = ctx.get_assembly("//cmf:wall")
 

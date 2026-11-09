@@ -453,7 +453,7 @@ def start_within(lower, upper):
     where a joint can be: a legged robot's knee bends between -2.7 and -0.08
     rad, and a gripper's closed position is often not its zero. A joint that
     starts outside its own bounds is one an engine starts against its stop,
-    and fails 'pc test''s 'connect' check (docs/design/simulation.md, 8.13.10),
+    and fails 'pc qual test''s 'connect' check (docs/design/simulation.md, 8.13.10),
     so such a joint starts at the bound nearest zero instead, and the robot is
     read - and drawn - there. Either bound may be None, for a side left open.
     """
