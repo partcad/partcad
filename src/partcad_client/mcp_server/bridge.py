@@ -207,7 +207,7 @@ class Bridge:
             self._user_config = user_config
         return self._user_config
 
-    def remember_parameters(self, object_name: str, values: dict) -> None:
+    def remember_parameters(self, object_name: str, values: dict, package_name: str = None, shared=()) -> None:
         """Send 'values' as the user's overrides of 'object_name' from now on.
 
         What the 'login' tool saves goes into the configuration file, and this
@@ -216,17 +216,28 @@ class Bridge:
         on top of whatever else the user overrides of the same object - or the
         daemon would go on building contexts without it until the server
         restarted, and the login would seem not to have happened.
+
+        Put where the file has it: a parameter in 'shared' under the package,
+        with the package's object entries cleared of it, exactly as
+        'save_parameter_overrides' writes it ('place_saved_overrides').
         """
+        from partcad_utils.parameters import place_saved_overrides
+
         parameters = getattr(self._loaded_config(), "parameter_config", None)
         if parameters is None:
             return
-        try:
-            # Not '.get': the user configuration's sections answer '[]' from
-            # what they hold, and '.get' from the empty dict beneath it.
-            current = parameters[object_name] or {}
-        except KeyError:
-            current = {}
-        parameters[object_name] = {**current, **values}
+        # A plain copy to rearrange: the user configuration's sections are
+        # dictionaries only in name, and answer '.get' and '.keys' from the
+        # empty dict beneath what they hold.
+        before = {key: dict(entry) if isinstance(entry, dict) else entry for key, entry in parameters.to_dict().items()}
+        after = {key: dict(entry) if isinstance(entry, dict) else entry for key, entry in before.items()}
+        place_saved_overrides(after, object_name, values, package_name, shared)
+        for key in before:
+            if key not in after:
+                del parameters[key]
+        for key, entry in after.items():
+            if before.get(key) != entry:
+                parameters[key] = entry
 
     def _drop(self) -> None:
         if self._conn is not None:

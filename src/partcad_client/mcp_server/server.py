@@ -626,8 +626,13 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         if parameters and not check:
             # Named, never repeated: they are secrets, and the result is the agent's to keep.
             result["saved"] = sorted(parameters)
-            result["config"] = await anyio.to_thread.run_sync(lambda: save_parameter_overrides(name, parameters))
-            bridge.remember_parameters(name, parameters)
+            package_name, shared = answer.get("package"), answer.get("shared") or ()
+            result["config"] = await anyio.to_thread.run_sync(
+                lambda: save_parameter_overrides(name, parameters, package_name=package_name, shared=shared)
+            )
+            if shared:
+                result["shared"] = sorted(shared)
+            bridge.remember_parameters(name, parameters, package_name=package_name, shared=shared)
         if said:
             result["said"] = said
         outcome.result = result
