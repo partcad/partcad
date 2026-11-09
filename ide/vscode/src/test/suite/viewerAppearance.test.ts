@@ -229,7 +229,7 @@ suite('What colour a shape is drawn in', () => {
 
     test('a primitive drawn with an image keeps the image, and the colour it is drawn as elsewhere', () => {
         // What a part's glb carries for faces in a colour drawn with an image (see
-        // 'wrapper_gltf._with_textures'): the image as the base colour texture,
+        // 'wrapper_gltf._with_looks'): the image as the base colour texture,
         // white under it, and the colour in the material's extras.
         const map = new THREE.Texture();
         const material = new THREE.MeshStandardMaterial({ color: 0xffffff, map });

@@ -43,7 +43,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { CaeResultView } from './analysis';
 import { DEFAULT_COLOR } from './appearance';
-import { SceneFrame, placeCamera, poleOf, readViewpoint } from './cameraView';
+import { SceneFrame, matchOrthographic, placeCamera, poleOf, readViewpoint } from './cameraView';
 import { el, empty, placeholder } from './dom';
 import { IMAGE_TYPES, ImageView } from './image';
 import { ANALYSIS_LABELS, AnalysisTabId, CaeData, CaeFinding } from './messages';
@@ -96,6 +96,16 @@ class MeshView {
     private readonly ready: Promise<Surface | undefined>;
     private readonly scene = new THREE.Scene();
     private readonly camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100000);
+    /**
+     * What draws the mesh without perspective, as a copy of 'camera' - which is
+     * the one the controls and the view panel move either way, as in the 3D
+     * view (see 'flatCamera' there).
+     */
+    private readonly flatCamera = new THREE.OrthographicCamera();
+    /** Whether the mesh is drawn in perspective, as the view panel says. */
+    private perspective = true;
+    /** The sphere about the model, as it was framed: how far the flat camera has to stand back. */
+    private readonly sphere = new THREE.Sphere();
     private controls: OrbitControls | undefined;
     /** This view as the SpaceMouse moves it, for as long as the view exists. */
     private navigable: Navigable | undefined;
@@ -176,9 +186,11 @@ class MeshView {
         this.scene.add(new THREE.AmbientLight(0xffffff, AMBIENT_INTENSITY * scale));
         this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, HEMISPHERE_INTENSITY * scale));
 
-        if (this.software) {
+        if (this.surface?.onCpu === true) {
             this.notice = softwareNotice();
             this.host.appendChild(this.notice);
+        }
+        if (this.software) {
             controls.addEventListener('start', () => {
                 if (this.boxes !== undefined && this.model !== undefined) {
                     this.model.visible = false;
@@ -257,6 +269,23 @@ class MeshView {
         }
     }
 
+    /** Draw in perspective, or without it: the view panel's projection. */
+    public setPerspective(perspective: boolean): void {
+        this.perspective = perspective;
+        this.dirty = true;
+    }
+
+    /** The camera the mesh is drawn with now: 'camera', or 'flatCamera' following it. */
+    private drawingCamera(): THREE.Camera {
+        if (this.perspective || this.model === undefined || this.controls === undefined) {
+            return this.camera;
+        }
+        const target = this.controls.target;
+        const reach = target.distanceTo(this.sphere.center) + this.sphere.radius;
+        matchOrthographic(this.flatCamera, this.camera, target, reach);
+        return this.flatCamera;
+    }
+
     /** Put the whole model in view, whatever units and origin it came in. */
     private frame(object: THREE.Object3D): void {
         const box = new THREE.Box3().setFromObject(object);
@@ -267,6 +296,7 @@ class MeshView {
         const center = box.getCenter(new THREE.Vector3());
         const extent = Math.max(size.x, size.y, size.z) || 1;
         const distance = extent * 2.2;
+        box.getBoundingSphere(this.sphere);
 
         this.camera.near = extent / 1000;
         this.camera.far = extent * 100;
@@ -295,7 +325,7 @@ class MeshView {
                 return;
             }
             this.dirty = false;
-            this.surface.render(this.scene, this.camera);
+            this.surface.render(this.scene, this.drawingCamera());
         };
         this.frameRequest = requestAnimationFrame(tick);
     }
@@ -509,6 +539,8 @@ export class CaeResult implements CaeResultView {
     private readonly findings = el('div', 'cae-findings');
     private imageView: ImageView | undefined;
     private meshView: MeshView | undefined;
+    /** Whether a mesh is drawn in perspective, as the view panel beside it says. */
+    private perspective = true;
     /**
      * Which contents the model band is showing, counted up on every change.
      *
@@ -570,6 +602,7 @@ export class CaeResult implements CaeResultView {
 
         if (MESH_TYPES.has(extension)) {
             const view = new MeshView(this.model);
+            view.setPerspective(this.perspective);
             view.onViewChange = () => this.onViewChange?.();
             this.meshView = view;
             void view.show(data.content, extension).catch((error: unknown) => {
@@ -617,6 +650,16 @@ export class CaeResult implements CaeResultView {
 
     public setViewpoint(viewpoint: Viewpoint): void {
         this.meshView?.setViewpoint(viewpoint);
+    }
+
+    /**
+     * Draw the mesh in perspective, or without it. Kept here as well as passed
+     * on, because every result is drawn by a new mesh view, and the next one is
+     * drawn the way the panel says too.
+     */
+    public setPerspective(perspective: boolean): void {
+        this.perspective = perspective;
+        this.meshView?.setPerspective(perspective);
     }
 
     /** Back to the view the mesh was first shown in. */

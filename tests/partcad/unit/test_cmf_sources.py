@@ -531,6 +531,51 @@ def test_a_3mf_is_every_object_in_it_each_in_its_colour(tmp_path):
     assert {cmf_set.origin for cmf_set in section.sets} == {"raw:openscad"}
 
 
+def _colour_group_3mf(path, color):
+    """A 3MF of one box whose object takes its colour from a materials-extension colour group, as many slicers write one."""
+    import build123d as bd
+
+    mesher = bd.Mesher()
+    mesher.add_shape(bd.Box(10, 10, 10))
+    plain = str(path) + ".plain.3mf"
+    mesher.write(plain)
+    with zipfile.ZipFile(plain) as source:
+        model = [name for name in source.namelist() if name.endswith(".model")][0]
+        xml = source.read(model).decode()
+        material = "http://schemas.microsoft.com/3dmanufacturing/material/2015/02"
+        if 'xmlns:m="%s"' % material not in xml:
+            xml = re.sub(r"<model ", '<model xmlns:m="%s" ' % material, xml, count=1)
+        xml = xml.replace(
+            "<resources>", '<resources><m:colorgroup id="900"><m:color color="%s"/></m:colorgroup>' % color, 1
+        )
+        xml = re.sub(r'<object id="(\d+)" type="model"', r'<object id="\1" type="model" pid="900" pindex="0"', xml, 1)
+        with zipfile.ZipFile(str(path), "w") as out:
+            for name in source.namelist():
+                out.writestr(name, xml if name == model else source.read(name))
+
+
+def test_a_3mf_coloured_by_a_colour_group_is_read_in_its_colour(tmp_path):
+    """lib3mf refuses an object whose colour is a materials-extension colour group; it is read as base materials."""
+    pytest.importorskip("build123d")
+    import build123d as bd
+    import cmf_3mf
+    import cmf_capture
+
+    path = tmp_path / "grouped.3mf"
+    _colour_group_3mf(path, "#FF0000FF")
+    with pytest.raises(Exception):
+        bd.Mesher().read(str(path))
+
+    shape, section = cmf_capture.read_mesh(str(path), "3mf")
+
+    assert len(bd.Compound(shape).solids()) == 1
+    assert section.solid_set(0).color == "#FF0000"
+    # The file is left as it was, and the copy that was read is gone.
+    with zipfile.ZipFile(str(path)) as source:
+        assert b"colorgroup" in source.read([n for n in source.namelist() if n.endswith(".model")][0])
+    assert cmf_3mf.readable_copy(str(tmp_path / "missing.3mf")) is None
+
+
 def test_a_3mf_that_cannot_be_read_in_colour_is_read_without_it(tmp_path, monkeypatch):
     """The STL fallback is for an STL: a 3MF is read again as Mesher reads it, and never handed to 'import_stl'."""
     pytest.importorskip("build123d")
@@ -772,6 +817,45 @@ def test_a_part_type_s_rgba_is_read_as_numbers_whatever_it_is_written_as(tmp_pat
     assert "//builtin/color:rgba;color=C91A09FF" in colors
 
 
+USD_PART_TYPE = """
+from build123d import Box
+
+if __name__ == "__partcad_part__":
+    box = Box(10, 10, 10).wrapped
+    glaze = {"color": "Ceramic", "rgba": [250, 250, 245, 1.0], "roughness": 0.15, "metallic": 0}
+    steel = {"color": "Steel", "rgba": [188, 188, 188, 1.0], "roughness": "0.3", "metallic": 1.0}
+    wrong = {"color": "Odd", "roughness": "rough", "metallic": float("nan")}
+    output = {"shape": box, "cmf": {"convention": "usd", "faces": [glaze, glaze, steel, steel, wrong, None]}}
+"""
+
+
+def test_a_part_type_says_how_rough_and_how_metallic_its_faces_look(tmp_path):
+    """'roughness' and 'metallic' are carried beside a colour, read as numbers; what is no number says nothing."""
+    pytest.importorskip("build123d")
+    root = _package(
+        tmp_path / "pkg",
+        parts={"vase": {"type": ":looked"}},
+        partTypes={"looked": {"kind": "wrapper", "path": "looked.py"}},
+        colors={"Glaze": {"display": "#FAFAF5", "ids": {"usd": "Ceramic"}}},
+    )
+    (root / "looked.py").write_text(USD_PART_TYPE)
+    ctx = pc.Context(str(root))
+    part = ctx.get_part("//src:vase")
+    asyncio.run(part.get_wrapped(ctx))
+
+    by_color = {entry.get("color"): entry for entry in cmf.summary_of(part)["sets"]}
+    # The 'usd' convention: a package's colour claims a USD material by its name.
+    assert by_color["//src:Glaze"]["faces"] == 2
+    # A finish's values are kept a byte each: within 1/255 of what was said.
+    byte = pytest.approx
+    assert by_color["//src:Glaze"]["roughness"] == byte(0.15, abs=1 / 255)
+    assert by_color["//src:Glaze"]["metallic"] == 0.0
+    steel = by_color["//builtin/color:rgba;color=BCBCBCFF"]
+    assert (steel["roughness"], steel["metallic"]) == (byte(0.3, abs=1 / 255), 1.0)
+    odd = [entry for entry in by_color.values() if entry.get("faces") == 1]
+    assert all("roughness" not in entry and "metallic" not in entry for entry in odd)
+
+
 def _run_wrapper(monkeypatch, name, path, request):
     """Run the wrapper script 'name' in this process on 'request', as its sandbox does: (the module, what it wrote)."""
     import wrapper_common
@@ -828,6 +912,11 @@ def test_a_part_type_s_cmf_rides_on_the_shape_it_builds(tmp_path, monkeypatch, c
     assert module._rgba([-5, 0, 0, -1]) == (0, 0, 0, 0.0)
     for bad in ([1, 2, 3], "rgba", ["x", 0, 0, 1], [0, 0, 0, float("nan")], [float("inf"), 0, 0, 1]):
         assert module._rgba(bad) is None, bad
+
+    # A finish's roughness and metallic are fractions, clamped; anything else says nothing.
+    assert [module._fraction(v) for v in (0.25, "0.5", -1, 7)] == [0.25, 0.5, 0.0, 1.0]
+    for bad in (True, None, "rough", float("nan"), [0.5]):
+        assert module._fraction(bad) is None, bad
 
 
 def test_a_step_file_the_colour_reader_refuses_is_read_as_it_always_was(tmp_path, monkeypatch, capsys):

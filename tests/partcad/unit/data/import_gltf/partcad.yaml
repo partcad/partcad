@@ -1,7 +1,9 @@
 desc: |
   Parts read from glTF files: a 10 x 20 x 30 mm box centred at (100, 0, 0),
   as written by build123d's 'export_gltf' -- once as '.gltf' with its buffer
-  in 'box.bin' beside it, once as a single '.glb'.
+  in 'box.bin' beside it, once as a single '.glb' -- and the same box stored the
+  ways the web's glTF is made small (see 'make_fixtures.py'); and a scene of
+  several meshes, read as one part and as an assembly.
 
 parts:
   box:
@@ -9,3 +11,19 @@ parts:
   box_binary:
     type: gltf
     path: box.glb
+  # No 'path': each of these is '<name>.glb', there being no '<name>.gltf'.
+  box_draco:
+    type: gltf
+  box_quantized:
+    type: gltf
+  box_meshopt:
+    type: gltf
+  box_meshopt_khr:
+    type: gltf
+  scene:
+    type: gltf
+
+assemblies:
+  scene_assembly:
+    type: gltf
+    path: scene.glb

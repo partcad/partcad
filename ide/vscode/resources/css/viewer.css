@@ -444,6 +444,73 @@ body {
     cursor: help;
 }
 
+/* What the CMF tab singled out in the 3D view, said in its top-left corner
+   with a way to take it away (see 'choice.ts'). */
+.cmf-choice {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    max-width: calc(100% - 1rem);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.15rem 0.2rem 0.15rem 0.6rem;
+    border: 1px solid var(--vscode-focusBorder, transparent);
+    border-radius: 3px;
+    background: var(--vscode-editorWidget-background, rgba(0, 0, 0, 0.4));
+    color: var(--vscode-foreground);
+    font-size: 0.9em;
+}
+
+.cmf-choice[hidden] {
+    display: none;
+}
+
+.cmf-choice-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cmf-choice-close {
+    flex: none;
+    width: auto;
+    padding: 0 0.4rem;
+    border: none;
+    border-radius: 2px;
+    font: inherit;
+    cursor: pointer;
+    color: var(--vscode-foreground);
+    background: transparent;
+}
+
+.cmf-choice-close:hover {
+    background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+}
+
+/* An item's or a set's "Show in 3D" on the CMF tab. */
+.cmf-show {
+    width: auto;
+    padding: 0.1rem 0.5rem;
+    border: none;
+    border-radius: 2px;
+    font-family: inherit;
+    font-size: 0.9em;
+    cursor: pointer;
+    color: var(--vscode-button-secondaryForeground);
+    background: var(--vscode-button-secondaryBackground);
+    white-space: nowrap;
+}
+
+.cmf-show:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.cmf-show-column {
+    width: 1%;
+    text-align: right;
+}
+
 /* The loading readout, centered over the canvas the way drei's <Html center> is. */
 .overlay {
     position: absolute;
@@ -2210,8 +2277,9 @@ input.switch:focus-visible {
 
 /*
  * The view panel ('viewPanel.ts'): the gizmo at the top in the middle, the axis
- * buttons under it, then the section sliders, the viewpoint and how the model
- * is drawn, each a group under a heading in the editor's own side bar style.
+ * buttons under it, then the viewpoint with its projection, the section sliders
+ * and how the model is drawn, each a group under a heading in the editor's own
+ * side bar style.
  */
 .view-panel {
     display: flex;
@@ -2333,10 +2401,41 @@ input.switch:focus-visible {
     justify-content: space-between;
 }
 
+/* The title of a heading, and what goes right after it: the viewpoint's projection. */
+.view-heading-start {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
 /* The buttons at the end of a heading: Fit and Reset beside the viewpoint. */
 .view-buttons {
     display: flex;
     gap: 0.3rem;
+}
+
+/* How the view is drawn, as compact as the buttons across from it: the panel is narrow. */
+.view-projection {
+    min-width: 0;
+    padding: 0 0.1em;
+    border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border, transparent));
+    border-radius: 2px;
+    background: var(--vscode-dropdown-background);
+    color: var(--vscode-dropdown-foreground);
+    font-family: inherit;
+    font-size: 0.9em;
+    cursor: pointer;
+}
+
+.view-projection:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.view-projection:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
 }
 
 .view-title {

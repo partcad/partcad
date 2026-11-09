@@ -572,6 +572,50 @@ def test_a_box_is_drawn_in_goldenrod_on_the_background():
     assert middle[0] > middle[1] > middle[2] and middle[0] > 150
 
 
+def _sphere_frame(*groups):
+    import build123d as b3d
+
+    sphere = b3d.Sphere(10).wrapped
+    scene = raster_scene.Scene([group[:2] + (sphere,) + group[2:] for group in groups], 200)
+    camera = raster_scene.Camera(distance=raster_scene.frame_distance(scene.sphere, 1.0))
+    return scene, raster_scene.Painter(scene, camera, 96, 96, (0x1F, 0x1F, 0x1F)).draw(np.eye(3)).astype(int)
+
+
+def test_a_finish_of_the_default_roughness_and_no_metal_is_drawn_as_no_finish_is():
+    """A Phong highlight of shininess 30 is the one a roughness of 0.5 gives, and a scene with no finish is unchanged."""
+    assert float(raster_scene.shininess_of(0.5)) == pytest.approx(raster_scene.SHININESS)
+    plain_scene, plain = _sphere_frame(("#3080C0", False, None))
+    assert not plain_scene.finished.any()
+    four_tuple_scene, four_tuple = _sphere_frame(("#3080C0", False))
+    assert np.array_equal(plain, four_tuple)
+    finished_scene, finished = _sphere_frame(("#3080C0", False, None, (0.5, 0.0)))
+    assert finished_scene.finished.all()
+    # The same diffuse light and highlight shape; what differs is the reflection of the room and the
+    # dielectric's highlight strength (0.04 rather than three's #111111), which only lighten it.
+    assert np.abs(finished - plain).mean() < 12
+    assert (finished >= plain - 2).all()
+
+
+def test_a_shape_with_no_tree_is_drawn_whole_in_the_default_colour_and_no_finish():
+    whole = object()
+    assert render_svg.by_look_and_side({"wrapped": whole}, []) == [
+        (render_svg.appearance.DEFAULT_COLOR, False, whole, None, None)
+    ]
+
+
+def test_a_metal_is_drawn_in_its_own_colour_s_reflection_and_a_smooth_surface_s_highlight_is_sharper():
+    _, matte = _sphere_frame(("#C08030", False, None, (1.0, 0.0)))
+    _, metal = _sphere_frame(("#C08030", False, None, (0.3, 1.0)))
+    _, glossy = _sphere_frame(("#C08030", False, None, (0.05, 0.0)))
+    middle = (slice(30, 66), slice(30, 66))
+    # A metal reflects in its colour: its light is tinted as the colour is, red over green over blue.
+    tint = metal[middle].reshape(-1, 3).mean(axis=0)
+    assert tint[0] > tint[1] > tint[2]
+    assert not np.array_equal(matte, metal)
+    # The brightest pixel of a smooth surface is brighter than any of a rough one.
+    assert glossy[middle].sum(axis=2).max() > matte[middle].sum(axis=2).max()
+
+
 def test_every_box_normal_points_out():
     points, normals, corners = raster_scene.triangles(_box(), 0.1)
     centroids = points[corners].mean(axis=1)

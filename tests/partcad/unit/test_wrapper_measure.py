@@ -21,14 +21,16 @@ shape holding no solid at all has no volume rather than one of nought, because a
 sketch and a box of zero height are not the same answer.
 """
 
+import math
 import os
 import sys
 
 import pytest
 from OCP.BRep import BRep_Builder
+from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
 from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
-from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
-from OCP.gp import gp_Trsf, gp_Vec
+from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder
+from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
 from OCP.TopAbs import TopAbs_SHELL
 from OCP.TopExp import TopExp_Explorer
 from OCP.TopoDS import TopoDS_Compound
@@ -160,16 +162,71 @@ def test_a_shape_that_encloses_nothing_has_no_volume_rather_than_nought():
 
 
 #
+# The displacement: the material and every void sealed inside it
+#
+
+
+def _hollow():
+    """A 10 mm cube with a 2 mm cube of nothing sealed inside it: 992 mm^3 of material, 1000 displaced."""
+    void = BRepPrimAPI_MakeBox(gp_Pnt(4.0, 4.0, 4.0), 2.0, 2.0, 2.0).Shape()
+    return BRepAlgoAPI_Cut(_box((10.0, 10.0, 10.0)), void).Shape()
+
+
+def _drilled():
+    """A 10 mm cube with a hole of radius 1 mm right through it."""
+    hole = BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(5.0, 5.0, -1.0), gp_Dir(0.0, 0.0, 1.0)), 1.0, 12.0).Shape()
+    return BRepAlgoAPI_Cut(_box((10.0, 10.0, 10.0)), hole).Shape()
+
+
+def test_a_sealed_void_is_displaced_and_is_not_material():
+    """The void is inside the outer shell, so it is pushed aside with the rest; it is still not volume."""
+    hollow = _hollow()
+
+    assert wrapper_measure._measurements(hollow)["volume"] == pytest.approx(992.0)
+    assert wrapper_measure._displacement(hollow) == {"displacement": pytest.approx(1000.0), "solids": 1, "cavities": 1}
+
+
+def test_a_hole_right_through_is_not_displaced():
+    """Water reaches a hole that goes through, so a drilled cube displaces only its material."""
+    drilled = _drilled()
+    volume = wrapper_measure._measurements(drilled)["volume"]
+
+    # The 10 mm of the hole that is inside the cube, at a radius of 1 mm.
+    assert volume == pytest.approx(1000.0 - math.pi * 10.0)
+    assert wrapper_measure._displacement(drilled) == {"displacement": pytest.approx(volume), "solids": 1, "cavities": 0}
+
+
+def test_a_solid_with_no_void_displaces_exactly_its_volume():
+    """Integrated the way the volume is, so the two cannot differ in the last digit."""
+    assert wrapper_measure._displacement(_box())["displacement"] == wrapper_measure._measurements(_box())["volume"]
+
+
+def test_several_solids_each_displace_their_own():
+    """Added up the way their volumes are, wherever each of them is."""
+    displaced = wrapper_measure._displacement(_compound(_hollow(), _moved(_box())))
+
+    assert displaced == {"displacement": pytest.approx(1000.0 + BOX_VOLUME), "solids": 2, "cavities": 1}
+
+
+def test_a_shape_with_no_solid_in_it_displaces_nothing_rather_than_nought():
+    """A skin bounds something without being it, as it has no volume."""
+    shell = TopExp_Explorer(_box(), TopAbs_SHELL).Current()
+
+    assert wrapper_measure._displacement(shell) == {"displacement": None, "solids": 0, "cavities": 0}
+
+
+#
 # What the sandbox is actually asked
 #
 
 
-def test_the_operation_names_are_the_two_the_core_calls():
-    """'bbox' on its own predates this and still has callers of its own."""
+def test_the_operation_names_are_the_ones_the_core_calls():
+    """'bbox' on its own predates 'measurements', and still has callers of its own."""
     assert wrapper_measure.process({"operation": "bbox", "shape": _box()}) == pytest.approx(
         [0.0, 0.0, 0.0, 10.0, 20.0, 30.0], abs=PRECISE
     )
     assert wrapper_measure.process({"operation": "measurements", "shape": _box()})["solids"] == 1
+    assert wrapper_measure.process({"operation": "displacement", "shape": _hollow()})["cavities"] == 1
 
 
 def test_an_operation_nobody_implements_is_refused_by_name():

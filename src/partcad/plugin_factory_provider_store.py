@@ -11,6 +11,7 @@
 from . import logging as pc_logging
 from . import telemetry
 from .plugin_factory_provider import PluginFactoryProvider
+from .plugin_provider import with_currency
 from .plugin_provider_data_cart import *
 from .plugin_request_provider_avail import ProviderRequestAvail
 from .plugin_request_provider_order import ProviderRequestOrder
@@ -64,7 +65,9 @@ class PluginFactoryProviderStore(PluginFactoryProvider):
         # return await pc_thread.run_async(
         #   self.query_script, self.plugin, "quote", request.compose(),
         # )
-        return await self.query_script(self.plugin, "quote", request.compose())
+        quote = await self.query_script(self.plugin, "quote", request.compose())
+        # Never a price without its currency (see 'plugin_provider.with_currency').
+        return with_currency(self.plugin.name, self.config, quote)
 
     async def query_order(self, request: ProviderRequestOrder):
         # TODO(clairbee): does it make sense to run this in a separate thread?

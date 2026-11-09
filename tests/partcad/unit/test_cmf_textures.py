@@ -503,6 +503,41 @@ def test_a_shaded_picture_draws_the_image():
     assert right[0] > right[2] + 50, right
 
 
+def test_a_shaded_picture_draws_an_image_on_a_metal_in_the_image_s_own_colours():
+    """A surface drawn with an image and said to be a metal reflects in the image's colours, not in the mean's.
+
+    A metal has no diffuse colour: all it shows is what it reflects, tinted by its own colour. Tinted by the
+    colour the surface is drawn in elsewhere - the image's mean - the image would not show at all.
+    """
+    import appearance
+    import numpy as np
+    import ocp_serialize
+    import raster_scene
+
+    wood = _wood_set()
+    metal = CmfSet(color="//c:wood", rgba=wood.rgba, texture=wood.texture, roughness=0.3, metallic=1.0)
+    whole, tree = ocp_serialize.decode_tree(_textured_envelope(Section([metal], 0)))
+    looks = appearance.split_by_look(tree, whole, finishes=True)
+    ((_color, _sided, _shape, texture, finish),) = looks
+    assert texture == wood.texture and finish == pytest.approx((0.3, 1.0), abs=1 / 255)
+    # Asked for no finishes, the same tree splits into the four-tuples every other caller gets.
+    assert [len(look) for look in appearance.split_by_look(tree, whole)] == [4]
+
+    scene = raster_scene.Scene(looks, 128)
+    assert scene.finished.all() and (scene.texture >= 0).all()
+    camera = raster_scene.Camera(
+        direction=(0, 0, 1), up=(0, 1, 0), distance=raster_scene.frame_distance(scene.sphere, 1.0), fov=0, height=25
+    )
+    picture = raster_scene.draw(scene, camera, np.eye(3), 128, 128).astype(int)
+    plain = raster_scene.draw(raster_scene.Scene([looks[0][:4]], 128), camera, np.eye(3), 128, 128).astype(int)
+    assert not np.array_equal(picture, plain)
+    # The image, as in 'test_a_shaded_picture_draws_the_image': blue on the left, red on the right.
+    row = picture[64]
+    left, right = row[40], row[88]
+    assert left[2] > left[0] + 100, left
+    assert right[0] > right[2] + 100, right
+
+
 def _seen_from(scene, direction):
     """How many pixels of 'scene' are drawn, seen from 'direction' without perspective: anything not background."""
     import numpy as np

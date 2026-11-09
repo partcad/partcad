@@ -360,6 +360,29 @@ def base_requirements(version: str) -> list:
     ]
 
 
+def provisioning_flags(version: str) -> list:
+    """The interpreter flags provisioning ("-m venv", "-m pip") runs with on 'version'.
+
+    "-I" below 3.11, where PYTHONSAFEPATH does not exist; see the note in
+    'PythonRuntime.__init__' for why it is confined to provisioning.
+
+    'version' is the version of the interpreter that runs the command, which is
+    the one asked for in every sandbox but 'venv' (see
+    'PythonRuntime.interpreter_version').
+    """
+    try:
+        has_safe_path = sandbox_versions.is_at_least(version, sandbox_versions.MIN_PYTHON_VERSION_SAFE_PATH)
+    except ValueError:
+        # A 'pythonVersion' the schema permits but neither this nor the
+        # sandbox naming can read -- ">=3.12", which 'pc init' writes into
+        # every new package (see Context.get_python_runtime). Unreadable
+        # means "cannot be shown to have PYTHONSAFEPATH", so it isolates the
+        # way an old interpreter does rather than trusting a variable that
+        # may be ignored.
+        has_safe_path = False
+    return ["-sOOu"] if has_safe_path else ["-sOOIu"]
+
+
 class PythonRuntime(runtime.Runtime):
     # Whether a wrapper this sandbox runs may be forked from a zygote of its
     # environment instead of starting an interpreter of its own (see
@@ -430,18 +453,8 @@ class PythonRuntime(runtime.Runtime):
         # Carried by the wrapper runs as well -- as it was until this split --
         # it cost every sandbox below 3.11 its reproducibility, and bought
         # protection for a directory that was never on sys.path to begin with.
-        try:
-            has_safe_path = sandbox_versions.is_at_least(self.version, sandbox_versions.MIN_PYTHON_VERSION_SAFE_PATH)
-        except ValueError:
-            # A 'pythonVersion' the schema permits but neither this nor the
-            # sandbox naming can read -- ">=3.12", which 'pc init' writes into
-            # every new package (see Context.get_python_runtime). Unreadable
-            # means "cannot be shown to have PYTHONSAFEPATH", so it isolates the
-            # way an old interpreter does rather than trusting a variable that
-            # may be ignored.
-            has_safe_path = False
         self.python_flags = ["-sOOu"]
-        self.python_provisioning_flags = ["-sOOu"] if has_safe_path else ["-sOOIu"]
+        self.python_provisioning_flags = provisioning_flags(self.version)
 
         # TODO(clairbee): To improve portability, warn about uses of default encoding
         # self.python_flags += ["-X", "warn_default_encoding=1"]
@@ -482,6 +495,19 @@ class PythonRuntime(runtime.Runtime):
         covers both.
         """
         return self.python_provisioning_flags if cmd and cmd[0] == "-m" else self.python_flags
+
+    def interpreter_version(self) -> str:
+        """The 'major.minor' of the interpreter this sandbox really runs.
+
+        What a sandbox installs is decided from this rather than from the
+        version asked for, because it is the interpreter pip resolves against:
+        asked for 3.11 and handed 3.14, the backport of 'compression.zstd' has
+        no release that installs.
+
+        The version asked for, here: 'conda' and 'docker' provision exactly
+        that interpreter. 'venv' cannot, and says what it got instead.
+        """
+        return self.version
 
     def get_constraints_flags(self):
         """Return the pip flags that apply PIP_CONSTRAINTS to an install.
@@ -658,13 +684,13 @@ class PythonRuntime(runtime.Runtime):
 
         The install guard makes this a single stat() once it has run.
         """
-        zstd = sandbox_versions.zstd_requirement(self.version)
+        zstd = sandbox_versions.zstd_requirement(self.interpreter_version())
         if zstd:
             self.ensure_onced_locked(zstd)
 
     async def ensure_zstd_onced_locked_async(self):
         """Asynchronous counterpart of ensure_zstd_onced_locked()."""
-        zstd = sandbox_versions.zstd_requirement(self.version)
+        zstd = sandbox_versions.zstd_requirement(self.interpreter_version())
         if zstd:
             await self.ensure_async_onced_locked(zstd)
 
@@ -680,7 +706,7 @@ class PythonRuntime(runtime.Runtime):
                 # is completed by the next process to use it -- rather than
                 # left short of part of its base, which every layer over it
                 # would then install a copy of.
-                for requirement in base_requirements(self.version):
+                for requirement in base_requirements(self.interpreter_version()):
                     self.ensure_onced_locked(requirement)
                 self.initialized = True
         self.provisioned = True
@@ -692,7 +718,7 @@ class PythonRuntime(runtime.Runtime):
             async with self.async_lock_install():
                 await self.ensure_zstd_onced_locked_async()
                 # See the note beside the same lines in 'once'.
-                for requirement in base_requirements(self.version):
+                for requirement in base_requirements(self.interpreter_version()):
                     await self.ensure_async_onced_locked(requirement)
                 self.initialized = True
         self.provisioned = True

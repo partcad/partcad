@@ -279,24 +279,44 @@ def read_mesh(path, convention="3mf"):
     read a face per triangle, each face in its triangle's. What this process
     noted before is not this file's, and is forgotten first.
     """
+    import os
+
     import build123d as b3d
 
     import ocp_serialize
 
-    meshed = b3d.Mesher().read(path)
-    if len(meshed) == 1:
-        shape = meshed[0].wrapped
-    else:
-        shape = ocp_serialize.compound_of([mesh.wrapped for mesh in meshed])
-    reset()
-    origin = "raw:" + convention
-    per_triangle = None
-    if str(path).lower().endswith(".3mf"):
-        import cmf_3mf
+    is_3mf = str(path).lower().endswith(".3mf")
+    copy = None
+    try:
+        try:
+            meshed = b3d.Mesher().read(path)
+        except Exception:
+            # A 3MF lib3mf refuses as another tool wrote it - a colour group of
+            # the materials extension as an object's colour, most often - can be
+            # one it reads once that is said the way the core specification says
+            # it, and the copy is then what is read, colours and all.
+            import cmf_3mf
 
-        per_triangle = cmf_3mf.read(path)
-        if per_triangle is not None and len(per_triangle) != len(meshed):
-            per_triangle = None
+            copy = cmf_3mf.readable_copy(path) if is_3mf else None
+            if copy is None:
+                raise
+            meshed = b3d.Mesher().read(copy)
+        if len(meshed) == 1:
+            shape = meshed[0].wrapped
+        else:
+            shape = ocp_serialize.compound_of([mesh.wrapped for mesh in meshed])
+        reset()
+        origin = "raw:" + convention
+        per_triangle = None
+        if is_3mf:
+            import cmf_3mf
+
+            per_triangle = cmf_3mf.read(copy or path)
+            if per_triangle is not None and len(per_triangle) != len(meshed):
+                per_triangle = None
+    finally:
+        if copy is not None:
+            os.remove(copy)
     for index, mesh in enumerate(meshed):
         bases = per_triangle[index][2] if per_triangle is not None else []
         if len(set(bases)) > 1:

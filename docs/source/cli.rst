@@ -261,9 +261,10 @@ Host commands
   orders from -- and keep the credentials. The plugin's own ``login`` (see :ref:`plugin-login`) checks the
   credentials it has first; when the site no longer takes them it asks for your browser, and ``pc login`` opens
   your default one, in a profile of PartCAD's own (``~/.partcad/browser/<browser>``) with PartCAD's extension in
-  it, on the site's sign-in. Sign in there: the extension picks up what that leaves behind -- a cookie, a token, an
-  API key on a page, pointing at what to click where the plugin says -- hands it to a listener ``pc login`` runs
-  on ``127.0.0.1``, and closes the window.
+  it. The extension first asks, on a page of its own, whether you want this login -- naming the site, what it
+  would take and where it would go -- and opens the site's sign-in once you press **Continue**. Sign in there: the
+  extension picks up what that leaves behind -- a cookie, a token, an API key on a page, pointing at what to click
+  where the plugin says -- hands it to a listener ``pc login`` runs on ``127.0.0.1``, and closes the window.
 
   .. code-block:: shell
 
@@ -475,14 +476,15 @@ Object commands
 
   ``pc add part <type> <file>`` takes the part's type first: a script (``cadquery``, ``build123d``,
   ``sdf``, ``scad``, ``chili3d``), a file PartCAD reads itself (``step``, ``brep``, ``stl``, ``3mf``,
-  ``obj``, ``gltf``), or one of the CAD file formats PartCAD ships as declarations (``fcstd``,
-  ``f3d``, ``sldprt``, ``ipt``, ``catpart``, ``sat``, ``pvz`` -- read through cadmpeg -- and ``iges``, read
-  by OpenCASCADE; see :ref:`cad-files`). The part
+  ``obj``, ``gltf`` -- compressed web assets included, see :ref:`gltf-files`), or one of the CAD file formats
+  PartCAD ships as declarations (``fcstd``,
+  ``f3d``, ``sldprt``, ``ipt``, ``catpart``, ``sat``, ``pvz`` -- read through cadmpeg -- ``iges``, read
+  by OpenCASCADE, and ``usd``, an OpenUSD stage, read by usd-core; see :ref:`cad-files`). The part
   is named after the file, without its extension. Where the file is ``<name>.<extension>`` with the
   extension spelled as the type declares it -- ``design.FCStd``, ``bracket.SLDPRT``, ``bracket.CATPart`` --
   the declaration names no ``path``; any other spelling of it keeps one: another case (``design.fcstd``), or
   another extension of the same format (``plate.igs`` for ``iges``, ``body.sab``, ``.smt`` or ``.smb`` for
-  ``sat``, ``part.stp`` for ``step``). Adding a part reads nothing: a file that does not hold what its type
+  ``sat``, ``part.stp`` for ``step``, ``model.glb`` for ``gltf``). Adding a part reads nothing: a file that does not hold what its type
   says -- for the native formats, one that does not read into a whole solid -- is added, and fails when the
   part is built.
 
@@ -493,14 +495,15 @@ Object commands
 
 ``pc import``
   Import an existing object into a package. Subcommands: ``part`` (import an existing part and optionally
-  convert its format), ``assembly`` (import an assembly from a file, creating the parts and an Assembly
-  YAML file), and ``scene`` (import an arrangement file -- a Gazebo world, an MJCF model -- creating the
+  convert its format), ``assembly`` (import an assembly from a STEP, glTF or URDF file, creating the parts
+  and an Assembly YAML file: a glTF file becomes a ``gltf`` part per mesh, in its materials' colours), and
+  ``scene`` (import an arrangement file -- a Gazebo world, an MJCF model -- creating the
   parts and an Assembly YAML scene). ``pc import scene -t`` names the format where the file's extension does
   not say, or says the wrong thing, and is how a format a *package* reads is named: ``sim-gazebo:world``,
   ``sim-mujoco:mjcf``.
   ``pc import`` is a one-shot conversion; to keep reading the source file itself,
-  declare it as an assembly of the ``step`` type or a scene of that reader's type instead (see
-  :ref:`assembly_step` and :ref:`scenes`).
+  declare it as an assembly of the ``step`` or ``gltf`` type or a scene of that reader's type instead (see
+  :ref:`assembly_step`, :ref:`assembly-gltf` and :ref:`scenes`).
 
 ``pc test``
   Run tests on a part, assembly, or scene. Name the package as ``-P <package>...`` to test the packages
@@ -636,6 +639,68 @@ Object commands
   Reporting every layer rather than only the ones a sketch reads is deliberate: a layer filter that matched
   nothing and a layer that is not in the file both produce a sketch with nothing in it, and this is what
   tells them apart.
+
+.. _compare:
+
+``pc compare <reference> <current>``
+  Read one part or assembly against another: the second, the *current* object, against the first, the
+  *reference* it is held to -- a redesign against the part it replaces, a generated part against the STEP file it
+  was asked to reproduce, a printed part's scan against its model. Each name is resolved the way any object's is
+  (``-P`` selects the package of a bare one), and an object with parameters is named with its values,
+  ``'bolt;length=10'``::
+
+      pc compare bracket-v1 bracket-v2
+      pc compare //pub/std/metric/cqwarehouse:fastener/hexhead-iso4017 :my-bolt --surface-distance 0.5
+      pc compare :bracket-v1 :bracket-v2 --max-mass-difference 2 --json
+      pc compare :housing-v1 :housing-v2 --max-displacement-difference 1
+
+  It reports, for each of the two and then the difference (the current one's less the reference's, and as a
+  percentage of the reference's):
+
+  - the **volume**, in mm³ -- a part's measured solid, an assembly's parts added up, as ``pc info`` reports it;
+  - with ``--displacement``, the **displacement**, in mm³ -- what the object would push aside if it were
+    submerged: its volume and every void sealed inside it, which a hole right through it is not, since water
+    reaches that. Each solid displaces what its outer shell encloses, and an assembly what its parts' solids
+    each do, added up -- a space only several of them close off together is not in any one of them. Two
+    objects of the same material and different voids have the same volume and different displacements, and it
+    is the displacement that says whether one fits where the other did. It is measured in a sandbox, so only
+    when it is asked for; the JSON says how many sealed voids each holds (``cavities``);
+  - the **mass**, in kg -- stated, or worked out from the volume and the material's density (see
+    :ref:`properties`). A mass that cannot be known is said to be, with the reason, rather than given one; an
+    assembly some of whose parts weigh nothing known has none here, because the total of the others held
+    against another object's would be a difference that is not there;
+  - the **tolerance** each is to be made to (its ``tolerance:``, or what its STEP file states), and the two
+    added up: the **allowance**, how far apart two surfaces each made within its own tolerance can be. A
+    tolerance nobody stated counts as nothing; a STEP file that tolerances each feature differently states no
+    one number, and there is then no allowance.
+
+  ``--surface-distance <mm>`` also measures how far the current object's **surface** is from the reference's.
+  Points are chosen on the reference no two of them closer than that many millimetres: every vertex, whatever
+  the spacing; then points along every edge, each at least that far from every point already taken; then points
+  over every face, the same way. Each is measured along the reference's normal there, out of its material: the
+  distance is how far along that line the current object's surface is -- positive where the current object
+  stands outside the reference, negative where it stands inside. A vertex or a point of an edge is on several
+  faces and is measured along each of their normals, the nearest answer counting, so a box grown by a millimetre
+  is a millimetre away at its corners too. A point none of whose normals meets the current object -- the rim of
+  a reference larger than it -- is measured to its nearest point instead, and counted apart. The report gives
+  how many points were measured where, the signed minimum and maximum, the mean and the RMS, the median, 95th and
+  99th percentiles of the distance, how many points are further apart than the allowance, and where the furthest
+  ``--worst`` of them are (ten by default).
+
+  Choosing the points is linear in the number of candidates (a spatial hash answers "is anything closer than
+  the spacing" for each), and every point is one intersection in the sandbox, so the spacing is what decides how
+  long it takes: about the surface's area over the spacing squared points. A spacing that would need more than
+  200,000 points is refused, and the message says which spacing would do. The two objects are compared where
+  they are: nothing moves one onto the other, so two of the same shape whose origins differ are as far apart
+  as their origins are.
+
+  It exits non-zero when something it was held to does not hold: the surface, whenever it was measured, against
+  the allowance -- every point within it, and none with nothing to measure to -- and ``--max-volume-difference``,
+  ``--max-displacement-difference`` (which measures the displacements, as ``--displacement`` does) and
+  ``--max-mass-difference`` (in percent of the reference's) when they are given. Held to nothing, it is a
+  report and exits zero. ``--json`` prints the whole comparison as one JSON object on standard output. The same
+  limits can be written into the current object's declaration, as a ``match:`` requirement that ``pc test``
+  checks -- see :ref:`requirements`.
 
 ``pc bom``
   Print the bill of materials of a part, an assembly or a scene: what has to be procured to have it, with how
@@ -1568,6 +1633,17 @@ Workflow commands
   sub-assembly is ordered as one item instead of being taken apart. Pass ``--recursive`` (``-r``) to walk all
   the way down to the parts regardless, and order those.
 
+  A scene is never ordered as one item -- nobody sells an arrangement -- and what nobody supplies in it, its
+  walls and its floor among them, is left out of the quote and listed under "Left out, as nobody supplies them"
+  rather than failing it: a room is priced by what can be bought for it. Anything else is quoted whole or reported
+  as unsupplied, unless ``--ignore-missing`` is given, which treats the parts and assemblies asked for, and what
+  they are made of, the way a scene's contents are treated. An item that a scene and an assembly both need is the
+  assembly's to fail over.
+
+  Every price is printed in the currency it is in. A provider that does not say which is taken to quote in its
+  ``currency`` parameter, and one that does not declare that either in US dollars, with a warning (see
+  :ref:`providers`).
+
 **************
 Other commands
 **************
@@ -1601,7 +1677,9 @@ Other commands
     render`` writes an instance's (``bracket_depth_12.svg``);
   - ``-e``/``--options-package`` reads the file type from a package: one in the public index (``//pub/...``),
     which the throwaway package then imports, or the directory of a package on this machine. The output may then
-    be any type that package declares.
+    be any type that package declares. A name starting with ``//`` is always a package, and is never looked for on
+    disk or on the network, so a directory is named by its path without it: ``/srv/drawing`` rather than
+    ``//srv/drawing``, and a network share on Windows with backslashes, ``\\server\share\drawing``.
 
   .. code-block:: shell
 

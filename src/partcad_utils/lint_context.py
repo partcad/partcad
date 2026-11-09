@@ -147,15 +147,16 @@ def _describe(target: str, package_name: str, include_paths: list, parameter_ove
     manufacturable = False
     for name, declaration, configs_from_its_package in chosen:
         overrides = _overrides_for(name, package_name, parameter_overrides)
-        renders.append(
-            assy_lint.Render(_template_params(name, declaration, overrides), [directory] + include_paths, label=name)
-        )
+        params = _template_params(name, declaration, overrides)
+        renders.append(assy_lint.Render(params, [directory] + include_paths, label=name))
         mark = declaration.get("manufacturable")
         if mark is None and flavor == assy_lint.FLAVOR_ASSEMBLY:
             # A scene is not a product to be made unless it says so itself; an
             # assembly is what its package marks it (see 'partcad.scene_config').
             mark = _marked(configs_from_its_package)
-        manufacturable = manufacturable or (mark is True and _held_to_connectivity(declaration))
+        manufacturable = manufacturable or (
+            mark is True and _held_to_connectivity(declaration) and not _exploded(declaration, params)
+        )
     return FileContext(flavor=flavor, renders=renders, manufacturable=manufacturable)
 
 
@@ -170,6 +171,28 @@ def _held_to_connectivity(declaration: dict) -> bool:
     if not isinstance(connectivity, dict):
         return True
     return connectivity.get("requireAnchored", True) is not False and connectivity.get("skip") is not True
+
+
+# The object-type parameter of the 'assy' type that draws an assembly pulled
+# apart ('partcad.assembly_explode.PARAMETER').
+EXPLODED = "exploded"
+
+
+def _exploded(declaration: dict, params: dict) -> bool:
+    """Whether this declaration is an exploded view, which PartCAD never holds to being made.
+
+    An exploded 'assy' assembly drops 'manufacturable' whatever it is marked
+    (see 'partcad.assembly_explode'), so the editor does not hold its file to
+    the rules for one that is to be made. Read off what the file is rendered
+    with, so the user's overrides of the declared default count, as they do in
+    PartCAD; spelled as PartCAD reads a flag ('partcad.output.as_flag').
+    """
+    if declaration.get("type") != "assy":
+        return False
+    value = params.get("param_" + EXPLODED)
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "yes", "on", "1")
+    return value is True
 
 
 def _template_params(name: str, declaration: dict, overrides: dict = None) -> dict:

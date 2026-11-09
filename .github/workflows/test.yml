@@ -198,7 +198,7 @@ env:
   # is the interpreter PartCAD itself runs on. 'test-pub-repo', which renders
   # the public index, uses PYTHONS_SANDBOX instead.
   PYTHONS_SLIM: '["3.10", "3.14"]'
-  VERSION: 0.9.5
+  VERSION: 0.9.24
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
   PC_TELEMETRY_PERFORMANCE: false
@@ -1234,6 +1234,41 @@ jobs:
       - name: Install the extension's dependencies
         working-directory: ide/vscode
         run: npm ci
+
+      # The 3D view's finishes against the shaded render's, pixel by pixel, in
+      # the runner's Chrome: WebGL and WebGPU on SwiftShader, which is what a
+      # Linux runner has without a GPU (see "tests/ide/test_viewer_render.py").
+      # And a pane with no WebGL at all, which draws with WebGPU off the screen
+      # where SwiftShader cannot present a canvas. Seconds, beside the minutes
+      # below. A WebGPU the browser cannot give is a skip that says so, not a
+      # failure: WebGL is still checked.
+      - name: Test the 3D view's finishes in a browser
+        if: runner.os == 'Linux'
+        shell: bash -el {0}
+        env:
+          PC_TEST_IDE_RENDER: "1"
+        run: |
+          . ~/.bashrc
+          . ~/.bash_profile
+          mamba activate ${{ format('env-test-ide-e2e-{0}', matrix.python-version) }}
+
+          mkdir -pv ide-e2e-test-results
+          # The session's verdict rather than the exit code, as below.
+          marker="ide-e2e-test-results/render-verdict-$$"
+          export PYTEST_RESULT_MARKER="${marker}"
+          rm -f "${marker}"
+
+          rc=0
+          pytest tests/ide/test_viewer_render.py \
+            --junitxml=ide-e2e-test-results/render-junit.xml --no-cov -s \
+            -p no:error-for-skips -p no:warnings --dist no || rc=$?
+
+          verdict="$(cat "${marker}" 2>/dev/null || true)"
+          rm -f "${marker}"
+          if [ "${verdict}" != "success" ]; then
+            echo "::error::pytest recorded '${verdict:-no verdict}' (process exit code ${rc})"
+            exit "$(( rc != 0 ? rc : 1 ))"
+          fi
 
       # A display for the editor's window. The test starts an Xvfb of its own
       # where there is none; it only has to be installed.

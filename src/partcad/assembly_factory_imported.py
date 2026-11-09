@@ -140,7 +140,13 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
         # part is one it read wrongly (see 'Shape._accepted_as_solid').
         self.solid_required = output.as_flag(self.impl.config.get(output.REQUIRE_SOLID_KEY), output.REQUIRE_SOLID_KEY)
 
-        extension = "." + self.impl.extension(self.impl.format_name)
+        # One extension, or several for a format stored under more than one
+        # (glTF's '.gltf' and '.glb'): see 'SourceFile.locate_source'.
+        declared = self.impl.extension(self.impl.format_name)
+        if isinstance(declared, (list, tuple)):
+            extension = tuple("." + str(each).lstrip(".") for each in declared)
+        else:
+            extension = "." + str(declared).lstrip(".")
         with pc_logging.Action("Init:" + self.impl.format_name, source_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config, extension=extension)
             self._create(config)

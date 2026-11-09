@@ -47,6 +47,7 @@ export const PART_TYPE_CHOICES: PartTypeChoice[] = [
     { label: 'CATIA V5', kind: 'catpart', extensions: ['CATPart'] },
     { label: 'ACIS / ShapeManager', kind: 'sat', extensions: ['sat', 'sab', 'smb', 'smt'] },
     { label: 'Creo View', kind: 'pvz', extensions: ['pvz'] },
+    { label: 'OpenUSD', kind: 'usd', extensions: ['usd', 'usda', 'usdc', 'usdz'] },
     { label: 'OpenSCAD', kind: 'scad', extensions: ['scad'], template: true },
     { label: 'CadQuery', kind: 'cadquery', extensions: ['py'], template: true },
     { label: 'build123d', kind: 'build123d', extensions: ['py'], template: true },

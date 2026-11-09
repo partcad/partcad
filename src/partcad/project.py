@@ -2308,11 +2308,11 @@ class Project(project_config.Configuration):
         the declaration - looking a declared part up is otherwise synchronous.
         The declaration is awaited first because in a package a plugin serves,
         reading it is a fetch, and the synchronous lookup would wait for that
-        fetch with this loop stopped (see 'Context._warm_project_async').
+        fetch with this loop stopped (see 'Context._warm_project_async'). So
+        is an instance's, where the package resolves instances itself.
         """
         await self._materialize_derived_part_async(part_name)
-        base_name, _ = parse_parameterized_name(part_name)
-        await self._warm_object_config_async("part", base_name)
+        await self._warm_object_async("part", self.get_part_config, part_name, func_params)
         return self.visible_to("part", self._part_object(part_name, func_params, quiet=quiet), referrer, part_name)
 
     async def _warm_object_config_async(self, kind: str, name: str) -> None:
@@ -2321,6 +2321,29 @@ class Project(project_config.Configuration):
         A package that read its declarations from a file has them already.
         """
         return None
+
+    async def _warm_object_instance_config_async(self, kind: str, name: str) -> None:
+        """Have the declaration '_fetch_object_instance_config(kind, name)' reads at hand, on the caller's loop.
+
+        Only a package that resolves instances itself reads one (see
+        'resolves_instances'), and only one a plugin serves has to fetch it.
+        """
+        return None
+
+    async def _warm_object_async(self, kind: str, get_config: callable, object_name: str, func_params=None) -> None:
+        """Fetch, on the caller's loop, every declaration that looking 'object_name' up will read.
+
+        The object's own, which 'get_object' reads to name an instance as well
+        as to make one; and, for an instance, the instance's, where the package
+        resolves instances itself. Each is then found memoized by the
+        synchronous lookup, which would otherwise wait for the fetch with this
+        loop stopped (see 'Context._warm_project_async').
+        """
+        base_name, _ = parse_parameterized_name(object_name)
+        await self._warm_object_config_async(kind, base_name)
+        _base, _params, instance_name = self._instance_of(kind, get_config, object_name, func_params)
+        if instance_name is not None:
+            await self._warm_object_instance_config_async(kind, instance_name)
 
     def _derived_part_owner(self, part_name: str) -> Optional[tuple]:
         """The object whose parts are named '<that object>/<something>'.
@@ -2537,6 +2560,18 @@ class Project(project_config.Configuration):
             quiet=quiet,
         )
 
+    async def get_assembly_async(
+        self, assembly_name, func_params=None, quiet=False, referrer=None
+    ) -> Optional[assembly.Assembly]:
+        """'get_assembly()' for callers that are already running on a loop.
+
+        The declarations it reads - the assembly's, and an instance's where the
+        package resolves instances itself - are awaited first, for the reason
+        'get_part_async' gives.
+        """
+        await self._warm_object_async("assembly", self.get_assembly_config, assembly_name, func_params)
+        return self.get_assembly(assembly_name, func_params, quiet=quiet, referrer=referrer)
+
     def get_scene(self, scene_name, func_params=None, quiet=False, referrer=None) -> Optional[scene.Scene]:
         """The declared scene, or None; 'referrer' as 'get_interface' takes it."""
         return self.visible_to("scene", self._scene_object(scene_name, func_params, quiet), referrer, scene_name)
@@ -2618,6 +2653,29 @@ class Project(project_config.Configuration):
             declarations.update(declared)
         return pc_config.normalized_array_values(declarations, params, f"{self.name}:{base_object_name}")
 
+    def _instance_of(self, factory_name: str, get_config: callable, object_name: str, func_params=None):
+        """(base name, parameter values, instance name) that asking for 'object_name' means.
+
+        The instance name is None when no value is given, in the name or in
+        'func_params': that is the declared object itself. Otherwise it is the
+        name the instance is registered under, and the key a package that
+        resolves instances itself is asked for (see 'resolves_instances'): the
+        values the name gives with 'func_params' on top, every array value read
+        into the list it is first, so that one set of values is one instance
+        however it was handed over.
+
+        One derivation for 'get_object' and for the warm-up that fetches what it
+        will read ('_warm_object_async'), so that the two cannot come to ask a
+        repository for different keys.
+        """
+        base_object_name, params = parse_parameterized_name(object_name)
+        if func_params:
+            params = {**params, **func_params}
+        if not params:
+            return base_object_name, params, None
+        params = self._normalized_array_values(factory_name, get_config, base_object_name, params)
+        return base_object_name, params, format_parameterized_name(base_object_name, params)
+
     def _instantiate_resolved_instance(
         self, factory_name: str, objects, config_class, base_object_name: str, result_name: str, instance: dict
     ):
@@ -2661,26 +2719,9 @@ class Project(project_config.Configuration):
         func_params=None,
         quiet=False,
     ):
-        if func_params is None or not func_params:
-            has_func_params = False
-        else:
-            has_func_params = True
-
-        base_object_name, params = parse_parameterized_name(object_name)
-        has_name_params = bool(params)
-
-        if has_func_params:
-            params = {**params, **func_params}
-            has_name_params = True
-
-        if not has_name_params:
-            result_name = object_name
-        else:
-            # Determine the name we want this parameterized object to have:
-            # with every array value read into the list it is first, so that
-            # one set of list values is one instance however it was handed over.
-            params = self._normalized_array_values(factory_name, get_config, base_object_name, params)
-            result_name = format_parameterized_name(base_object_name, params)
+        base_object_name, params, instance_name = self._instance_of(factory_name, get_config, object_name, func_params)
+        has_name_params = instance_name is not None
+        result_name = object_name if instance_name is None else instance_name
 
         # The package lock is released before the object's own lock is taken,
         # never held across it. Creating an object registers it, and
@@ -3137,9 +3178,20 @@ class Project(project_config.Configuration):
 
         'igs' for an 'iges' part, 'sab', 'smb' and 'smt' for a 'sat' one: what
         a file of the type is called by whatever wrote it, beside the one
-        'extension_for' names (see 'shape.PART_EXTENSION_ALIASES'). Empty for
-        every other section and kind.
+        'extension_for' names (see 'shape.PART_EXTENSION_ALIASES'). For an
+        assembly or a scene of an 'import:' type, the extensions its declaration
+        lists after its first ('glb' for a 'gltf' assembly). Empty for every
+        other section and kind.
         """
+        if section in ("assemblies", "scenes"):
+            from . import output
+
+            implementation = output.import_declaration(self.ctx, self, kind)
+            declared = implementation.config.get("extension") if implementation is not None else None
+            if not isinstance(declared, list) or not declared:
+                return ()
+            own = str(declared[0]).lstrip(".").lower()
+            return tuple(sorted({str(each).lstrip(".").lower() for each in declared} - {own}))
         if section != "parts":
             return ()
         from .shape import PART_EXTENSION_ALIASES

@@ -3670,7 +3670,10 @@ def test_adhoc_render_reports_a_failed_render(monkeypatch, tmp_path):
 # reads as.
 
 
-def _requirements_session(monkeypatch, kind="part", name="plate", physics=()):
+def _requirements_session(monkeypatch, kind="part", name="plate", physics=(), match=()):
+    """A session whose 'partcad.requirements' records what it is asked, declaring the physics and match requirements
+    given.
+    """
     asked = []
 
     class Report:
@@ -3686,10 +3689,30 @@ def _requirements_session(monkeypatch, kind="part", name="plate", physics=()):
         return Report(shape, verify)
 
     def of_shape(shape):
-        return types.SimpleNamespace(physics=list(physics))
+        """A declaration with the physics and match requirements the session was set up with."""
+        return types.SimpleNamespace(
+            physics=list(physics),
+            match=[types.SimpleNamespace(reference=reference) for reference in match],
+        )
+
+    async def matched_object_async(ctx, shape, reference):
+        """The part or assembly a reference names among the session's shapes."""
+        package, name = FakeUtils.resolve_resource_path(shape.project_name, reference)
+        for kind in ("part", "assembly"):
+            found = ctx.shapes.get((kind, "%s:%s" % (package, name)))
+            if found is not None:
+                return found, None
+        return None, "there is no object"
 
     install_fake_partcad_modules(
-        monkeypatch, {"partcad.requirements": {"check_async": check_async, "of_shape": of_shape}}
+        monkeypatch,
+        {
+            "partcad.requirements": {
+                "check_async": check_async,
+                "of_shape": of_shape,
+                "matched_object_async": matched_object_async,
+            }
+        },
     )
     session, _ = make_session()
     shape = FakeObject(name, project_name="//")
@@ -3745,6 +3768,35 @@ def test_requirements_check_builds_nothing_it_does_not_need(monkeypatch):
     assert [verify for _, verify in asked] == [True]
     assert asked[0][0] is robot
     assert [verify for _, verify in asked_declared] == [False]
+
+
+def test_requirements_check_builds_an_assembly_a_match_names_first_to_weigh_it(monkeypatch):
+    """A 'match:' requirement weighs the other object too, so an assembly named there is staged as well."""
+    session, _, asked = _requirements_session(monkeypatch, name="bracket", match=[":frame", ":frame"])
+    _assembly_with(session, "//:frame", uncached=[("//", "rail")])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.requirements_check(session, {"package": "//", "object": "bracket", "kind": "part", "verify": True})
+
+    assert [entry["name"] for entry in _retry_error(caught)] == ["rail"]
+    assert asked == []
+
+
+def test_requirements_check_reports_a_match_whose_object_cannot_be_looked_up_rather_than_failing(monkeypatch):
+    """Staging is an optimisation: a lookup that raises is left to the check, which reports it as one failure."""
+    session, bracket, asked = _requirements_session(monkeypatch, name="bracket", match=[":frame"])
+
+    async def broken(ctx, shape, reference):
+        raise RuntimeError("the repository did not answer")
+
+    monkeypatch.setattr(sys.modules["partcad.requirements"], "matched_object_async", broken)
+
+    report = operations.requirements_check(
+        session, {"package": "//", "object": "bracket", "kind": "part", "verify": True}
+    )
+
+    assert report == {"object": "//:bracket", "verified": True}
+    assert asked == [(bracket, True)]
 
 
 def test_requirements_check_refuses_what_declares_none(monkeypatch):
@@ -5560,3 +5612,154 @@ def test_a_plugin_with_no_login_is_a_failed_step_not_an_error(monkeypatch):
         "status": "failed",
         "message": "//:auth has no login method",
     }
+
+
+# ---- compare.objects ---------------------------------------------------------
+#
+# 'pc compare <reference> <current>'. What the comparison finds is
+# 'partcad.compare', tested beside it; what is pinned here is which two objects
+# are read against each other and in which order, what is refused before
+# anything is built, and that the report is printed unless JSON was asked for.
+
+
+def _percent_limit(raw):
+    """'partcad.compare.percent_limit', as far as these tests need it."""
+    try:
+        value = float(str(raw).strip().rstrip("%"))
+    except ValueError:
+        return None
+    return value if value >= 0 else None
+
+
+def _compare_session(answer=None, fails=None):
+    """A session with the parts 'old' and 'new' and a sketch, whose 'partcad.compare' records each comparison asked for."""
+    session, _ = make_session()
+    asked = []
+
+    async def compare_async(ctx, reference, current, spacing=None, limits=None, worst=10, displacement=False):
+        """Record the comparison, and answer with 'answer' or raise 'fails'."""
+        asked.append(
+            {
+                "reference": reference,
+                "current": current,
+                "spacing": spacing,
+                "limits": limits,
+                "worst": worst,
+                "displacement": displacement,
+            }
+        )
+        if fails is not None:
+            raise fails
+        return dict(answer or {"passed": None})
+
+    session.partcad.compare = types.SimpleNamespace(
+        KINDS=("part", "assembly"),
+        WORST=10,
+        percent_limit=_percent_limit,
+        compare_async=compare_async,
+        format_report=lambda report: ["reference: ...", "the current object passes"],
+    )
+    project = session.partcad_ctx.projects["//"]
+    for name in ("old", "new"):
+        project.parts[name] = FakeObject(name, project_name="//")
+        session.partcad_ctx.shapes[("part", "//:" + name)] = project.parts[name]
+    project.sketches["outline"] = FakeObject("outline", project_name="//")
+    return session, asked
+
+
+def test_compare_reads_the_current_object_against_the_reference():
+    """The two objects in the order named, the options as given, and the report printed."""
+    session, asked = _compare_session({"passed": False})
+
+    report = operations.compare_objects(
+        session,
+        {
+            "object": "old",
+            "current": "new",
+            "surface_distance": 0.5,
+            "displacement": True,
+            "max_volume_difference": "5%",
+            "max_displacement_difference": 1,
+            "max_mass_difference": 2,
+            "worst": 3,
+        },
+    )
+
+    assert report == {"passed": False}
+    ((call,),) = [asked]
+    assert call["reference"].name == "old"
+    assert call["current"].name == "new"
+    assert call["spacing"] == 0.5
+    assert call["limits"] == {"volume": 5.0, "displacement": 1.0, "mass": 2.0}
+    assert call["worst"] == 3
+    assert call["displacement"] is True
+    infos = [message for level, message in session.partcad.logging.records if level == "info"]
+    assert infos == ["reference: ...", "the current object passes"]
+
+
+def test_compare_prints_nothing_when_asked_for_json():
+    """With 'json' the report is only returned, for the client to print."""
+    session, asked = _compare_session()
+    operations.compare_objects(session, {"object": "old", "current": "new", "json": True})
+    assert len(asked) == 1
+    assert asked[0]["spacing"] is None
+    assert asked[0]["limits"] == {}
+    assert asked[0]["displacement"] is False
+    assert [record for record in session.partcad.logging.records if record[0] == "info"] == []
+
+
+@pytest.mark.parametrize(
+    "params, words",
+    [
+        ({"object": "old"}, "No current object is given"),
+        ({"current": "new"}, "No reference object is given"),
+        ({"object": "old", "current": "gone"}, "The current object //:gone is not found"),
+        ({"object": "outline", "current": "new"}, "the reference object //:outline is a sketch"),
+        ({"object": "...:old", "current": "new"}, "Name the reference object without the '...'"),
+        ({"object": "old", "current": "new", "surface_distance": 0}, "has to be more than 0"),
+        ({"object": "old", "current": "new", "surface_distance": "far"}, "has to be a number"),
+        ({"object": "old", "current": "new", "max_mass_difference": "-1"}, "The mass limit has to be"),
+        ({"object": "old", "current": "new", "max_displacement_difference": "x"}, "The displacement limit has to be"),
+        ({"object": "old", "current": "new", "worst": -1}, "'worst' has to be a whole number"),
+    ],
+)
+def test_compare_refuses_what_it_cannot_read_before_anything_is_built(params, words):
+    """Every request it cannot read is a usage error, before anything is compared."""
+    session, asked = _compare_session()
+    with pytest.raises(JsonRpcError) as caught:
+        operations.compare_objects(session, params)
+    assert caught.value.code == operations.USAGE_ERROR
+    assert words in str(caught.value)
+    assert asked == []
+
+
+def test_compare_builds_an_assembly_s_sub_assemblies_first():
+    """An assembly is staged first, as for every request that builds one."""
+    session, asked = _compare_session()
+    session.partcad_ctx.projects["//"].assemblies["frame"] = FakeObject("frame", project_name="//")
+    _assembly_with(session, "//:frame", uncached=[("//", "rail")])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.compare_objects(session, {"object": "old", "current": "frame"})
+
+    assert [entry["name"] for entry in _retry_error(caught)] == ["rail"]
+    assert asked == []
+
+
+def test_compare_says_what_the_sandbox_refused_to_measure_as_a_usage_error():
+    """The sandbox's refusal to measure is a usage error that keeps its message."""
+    session, _ = _compare_session(fails=ValueError("measure them at least 0.5 mm apart"))
+    with pytest.raises(JsonRpcError) as caught:
+        operations.compare_objects(session, {"object": "old", "current": "new", "surface_distance": 0.01})
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "at least 0.5 mm apart" in str(caught.value)
+
+
+def test_compare_reloads_the_package_of_either_object():
+    """A hand-edited 'partcad.yaml' of either object's package is read again."""
+    session, _ = _compare_session()
+    targets, recursive = operations._config_check_targets(
+        session.partcad_ctx, {"object": "//a:old", "current": "//b:new"}
+    )
+    assert targets == ["//a", "//b"]
+    assert recursive is False

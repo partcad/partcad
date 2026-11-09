@@ -93,7 +93,10 @@ first time a container needs it — but a container that has it reads those file
 without a network. It is the release PartCAD pins and nothing else: it is installed by
 `_common/cadmpeg_tool.py`, a byte-for-byte copy of `src/partcad/builtin/import/cadmpeg_tool.py` that a test
 keeps one, and PartCAD uses a cadmpeg on `PATH` only when it reports that release. A derived image that
-installs another cadmpeg gets the download rather than its own copy.
+installs another cadmpeg gets the download rather than its own copy. The image carries the release every native
+format is read with (`VERSION`), and not the one the `usd` part type reads OpenUSD with when a part asks for
+cadmpeg (`USD_VERSION`): that one is downloaded into the cache when it is first needed, as on a machine with no
+image.
 
 ## Why the wrappers are mounted and not baked in
 

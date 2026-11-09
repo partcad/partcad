@@ -60,8 +60,15 @@ class SourceFile:
         to the object's name with the type's extension. Without 'fileFrom' the
         file must exist, unless the type can create it ('can_create'); with or
         without, a path that exists and is not a file is a broken declaration.
+
+        'extension' may be a sequence, for a format stored under more than one:
+        glTF is '.gltf', or '.glb' for the same thing in one binary file. The
+        default is then the first of them whose file is there, the first if
+        none is, or - for a file 'fileFrom' fetches - the one its URL ends in.
         """
         noun = getattr(self, "OBJECT_KIND", None) or self.SOURCE_NOUN
+        if not isinstance(extension, str):
+            extension = self._default_extension(source_project, config, tuple(extension))
         self.extension = extension
 
         if "path" in config:
@@ -83,6 +90,19 @@ class SourceFile:
         # but is a directory is a broken configuration either way.
         if os.path.exists(self.path) and not os.path.isfile(self.path):
             raise Exception("ERROR: The %s path (%s) must be a file" % (noun, self.path))
+
+    def _default_extension(self, source_project, config, extensions) -> str:
+        """Which of 'extensions' the object's file has when 'path' does not say (see 'locate_source')."""
+        if not extensions:
+            return ""
+        url = str(config.get("fileUrl") or "").split("?", 1)[0].split("#", 1)[0].lower()
+        for extension in extensions:
+            if url.endswith(extension.lower()):
+                return extension
+        for extension in extensions:
+            if os.path.exists(os.path.join(source_project.config_dir, self.orig_name + extension)):
+                return extension
+        return extensions[0]
 
     def rendered_source(self) -> str:
         """The path of the file whatever reads this object is handed: here, the file itself."""

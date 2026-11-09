@@ -303,6 +303,15 @@ polygon it could not fit. It exits 1 when they disagree. Read what it reports:
   have it: in the view that looks along its axis, which is where a hole's
   diameter is measured anyway.
 
+`measure.py compare` reads two *drawings* of one object. Two *solids* — a
+part and the 3D file it reproduces, a redesign and the part it replaces — are
+read against each other by `pc compare <reference> <current>`: their volumes,
+masses and tolerances, and with `--surface-distance <mm>` how far the current
+one's surface is from the reference's, point by point along the reference's
+normals (`/pc:gen-part` §7 says how to read it). It exits 1 when they disagree
+too: past the two tolerances added up, or past a `--max-volume-difference`,
+`--max-displacement-difference` or `--max-mass-difference` given in percent.
+
 The exact projection costs more and can fail on a large model (that is why it
 is not the default). What makes a model large is how many edges it has, not
 what kind of object it is: a sketch or a simple part is quick, but a detailed

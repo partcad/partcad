@@ -1,0 +1,11 @@
+mdl 1.4;
+
+// A preset of NVIDIA's OmniPBR, as SimReady writes its materials: what the
+// 'usd' part type reads off it is its colour, its roughness and its metalness.
+using ::OmniPBR import OmniPBR;
+
+export material Brushed(*)
+ = OmniPBR(
+	diffuse_color_constant: color(0.1, 0.2, 0.3),
+	metallic_constant: 1.0,
+	reflection_roughness_constant: 0.3);

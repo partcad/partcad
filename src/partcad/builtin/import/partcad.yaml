@@ -45,8 +45,9 @@ desc: |
   `partTypes:` section.
 
 # Part types read by a script that runs in the sandbox rather than by a factory
-# of PartCAD's: through a converter PartCAD downloads on first use, or through
-# OpenCASCADE itself. A part names one by its bare name (`type: fcstd`) as if
+# of PartCAD's: through a converter PartCAD downloads on first use, through
+# OpenCASCADE itself, or through a library the type installs into the sandbox
+# (`usd`, Pixar's usd-core). A part names one by its bare name (`type: fcstd`) as if
 # it were built in; it is a `partType` like any a package declares, so a
 # plugin package that reads another format looks exactly like this.
 #
@@ -69,9 +70,10 @@ desc: |
 # cadmpeg reads IGES too, but 0.6.7 loses most of the faces of the IGES files
 # OpenCASCADE writes, and all of a solid written as one.
 #
-# Every other type below but `fcstd` is read the same way -- cadmpeg converts
-# the file to STEP and the part is what that file shows -- so they share one
-# script, 'part_cadmpeg.py', and differ only in the file they are stored in.
+# Every other type below but `fcstd` and `usd` is read the same way -- cadmpeg
+# converts the file to STEP and the part is what that file shows -- so they
+# share one script, 'part_cadmpeg.py', and differ only in the file they are
+# stored in.
 # Which format a file is, cadmpeg decides from its content; the extension is
 # what a part's file is called when its declaration names none, written the way
 # the format's own application writes it.
@@ -147,6 +149,34 @@ partTypes:
     path: part_cadmpeg.py
     extension: pvz
     requireSolid: true
+  # OpenUSD is not a CAD format and is read for what it shows, which is meshes:
+  # with Pixar's usd-core (installed into the sandbox for this type alone), or
+  # with cadmpeg 0.6.8, the first release that reads it, when a part says
+  # `reader: cadmpeg` (see 'part_usd.py' for what each route reads). Not
+  # `requireSolid`: what a renderer draws need not close, and a stage that is
+  # no solid is a legitimate part, built and reported. Pillow reads the
+  # textures a face's colour, roughness and metalness are read off (see
+  # 'usd_look.py'), at the version the render types pin it at. usd-core 26.11
+  # is Python 3.11 and newer; a package that asks for 3.10 gets 25.11, the
+  # last release that has it.
+  usd:
+    desc: |
+      An OpenUSD stage (`.usd`, `.usda`, `.usdc`, or a `.usdz` package): the
+      meshes its default prim shows, or the prim a part's `prim` names, in
+      millimetres with Z up, each face in the colour, roughness and metalness
+      its material - or its display colour - gives, textures included. Read
+      with Pixar's usd-core by default, or with cadmpeg (`reader: cadmpeg`).
+      A surface: a solid only where a mesh closes.
+    path: part_usd.py
+    extension: usd
+    # A stage of loose layers is read from more files than the one a part
+    # names: the script reports them as it builds the part, and the part is
+    # rebuilt when one of them changes.
+    reportsDependencies: true
+    pythonRequirements:
+      - usd-core==26.11; python_version >= "3.11"
+      - usd-core==25.11; python_version < "3.11"
+      - pillow==12.2.0
 
 import:
   # A native CAD document read as an assembly, through cadmpeg: every format
@@ -185,6 +215,28 @@ import:
     requireSolid: true
     pythonRequirements:
       - cadquery-ocp-novtk==7.9.3.1.1
+  # glTF as an assembly: the file's node tree, a part per mesh. Each mesh is
+  # written out as a '.glb' of its own and read by the 'gltf' part type, so it
+  # is read exactly as a glTF part is (see 'import_gltf.py'). A glTF scene is
+  # usually a model rather than a world, which is why it is an assembly only.
+  gltf:
+    desc: |
+      glTF 2.0 (`.gltf` with its buffers, or `.glb`) as an assembly: a part per
+      mesh, placed where the file's nodes place it, a sub-assembly per node with
+      children. Each part is read as a `gltf` part is: a solid per closed piece
+      of its mesh, each face in its material's colour. What compresses the
+      web's glTF -- Draco, meshoptimizer, quantization, GPU instancing -- is
+      decoded. Animations, skins and morph targets are not read: the assembly
+      is the scene as its nodes place it.
+    path: import_gltf.py
+    extension: [gltf, glb]
+    kinds: [assembly]
+    binary: true
+    noun: model
+    # DracoPy decodes a Draco-compressed mesh, and brings NumPy, which the
+    # reader does all its arithmetic in.
+    pythonRequirements:
+      - DracoPy==2.2.0
   urdf:
     desc: |
       Unified Robot Description Format: a robot as a tree of links joined by

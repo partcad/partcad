@@ -11,9 +11,17 @@ from typing import Optional
 
 from ... import logging as pc_logging
 from ...adhoc.convert import convert_cad_file
-from ...part_factory_gltf import gltf_companions
+from ...part_factory_gltf import GLB_MAGIC, gltf_companions
 from ...project import Project
 from .add import add_part_action
+
+
+def _is_glb(source_path: Path) -> bool:
+    try:
+        with open(source_path, "rb") as f:
+            return f.read(len(GLB_MAGIC)) == GLB_MAGIC
+    except OSError:
+        return False
 
 
 def _companions_to_copy(source_path: Path, target_path: Path) -> list:
@@ -69,7 +77,12 @@ def import_part_action(
 
     # Under the name the type looks for a file under: 'fcstd' parts are
     # '.FCStd' files, and a CadQuery script is a '.py' one.
-    target_path = (Path(project.path) / f"{name}.{project.extension_for('parts', kind)}").resolve()
+    extension = project.extension_for("parts", kind)
+    if kind == "gltf" and _is_glb(source_path):
+        # A binary glTF keeps its own extension: '<name>.glb' is what the type
+        # finds by default too (see 'part_factory_gltf').
+        extension = "glb"
+    target_path = (Path(project.path) / f"{name}.{extension}").resolve()
     if not target_path.exists() or not source_path.samefile(target_path):
         # Checked before anything is copied, so a refusal leaves nothing behind.
         companions = _companions_to_copy(source_path, target_path) if kind == "gltf" else []

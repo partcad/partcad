@@ -419,7 +419,7 @@ Define parts with CAD files using the following syntax:
 
   parts:
     <part name>:
-      type: <step|brep|iges|stl|3mf|obj|gltf|fcstd|f3d|sldprt|ipt|catpart|sat|pvz>
+      type: <step|brep|iges|stl|3mf|obj|gltf|fcstd|f3d|sldprt|ipt|catpart|sat|pvz|usd>
       binary: <(stl only) use the binary format>
 
 .. list-table::
@@ -447,8 +447,8 @@ Define parts with CAD files using the following syntax:
      - Wavefront OBJ
      - ``<name>.obj``
    * - ``gltf``
-     - glTF: a ``.gltf`` with its buffers, or a ``.glb``
-     - ``<name>.gltf``
+     - glTF: a ``.gltf`` with its buffers, or a ``.glb`` (see :ref:`gltf-files`)
+     - ``<name>.gltf``, or ``<name>.glb`` where that is the file there is
    * - ``fcstd``
      - FreeCAD document
      - ``<name>.FCStd``
@@ -470,8 +470,11 @@ Define parts with CAD files using the following syntax:
    * - ``pvz``
      - Creo View package, every component's bodies as one part
      - ``<name>.pvz``
+   * - ``usd``
+     - OpenUSD stage: a ``.usd``, ``.usda`` or ``.usdc`` layer, or a ``.usdz`` package; the meshes it shows
+     - ``<name>.usd``
 
-A file of another name or extension -- a ``.stp``, a ``.glb``, a binary ACIS
+A file of another name or extension -- a ``.stp``, an ``.igs``, a binary ACIS
 ``.sab`` -- is named with ``path``:
 
 .. code-block:: yaml
@@ -487,13 +490,8 @@ A CAD file published elsewhere (in a vendor's catalog, for example) does not
 have to be committed to the package: see :ref:`files` for how to have PartCAD
 download it on demand.
 
-``gltf`` reads every mesh in a `glTF <https://www.khronos.org/gltf/>`_ file,
-placed by the node tree, with glTF's metres and Y-up restated as millimetres and
-Z-up, and the triangles meshed into the faces of a solid, as an STL part's are --
-so what ``pc export -t gltf`` writes reads back where it was. A ``.gltf``'s
-buffers and images are part of its cache key, and ``pc import part`` copies them
-along with it -- refusing one that would replace a different file of the same
-name already in the package.
+``gltf`` reads every mesh a `glTF <https://www.khronos.org/gltf/>`_ file draws,
+including the compressed glTF made for the web -- see :ref:`gltf-files`.
 
 A CAD application's own file -- ``fcstd`` to ``pvz`` in the table -- is read
 without the application that wrote it, and the part is what the file shows: the
@@ -519,6 +517,91 @@ pinned one. Each is a :ref:`partType <part-types>` PartCAD declares in
 ``//builtin/import``, which is also what a package does to teach PartCAD a format
 of its own. Rhino ``.3dm`` and the two ``.prt`` formats, Siemens NX's and Creo
 Parametric's, are not read yet: cadmpeg does not read their bodies into solids.
+
+.. _usd-files:
+
+A ``usd`` part is an `OpenUSD <https://openusd.org>`_ stage, and the part is the
+meshes it shows. USD describes what a renderer draws rather than what is made, so
+this is a surface and not necessarily a solid: it is built either way, and
+PartCAD says when it is not one. What is read:
+
+- **What.** The stage's default prim -- what a reference to the asset brings in --
+  and not what sits beside it, such as the studio a thumbnail was rendered in;
+  ``prim: /Path/To/Prim`` builds another, and ``prim: /`` the whole stage. Every
+  mesh under it that is visible and of the purpose asked for (``purpose``:
+  ``render``, the default, ``proxy`` or ``all``), through native instancing and
+  point instancers. A subdivision surface is its control mesh; a cube, sphere,
+  cylinder, cone or capsule is meshed; curves, points and volumes are left out,
+  and counted.
+- **Where.** In millimetres, by the stage's ``metersPerUnit``, with Z up: a Y-up
+  stage is turned onto Z, as a glTF is.
+- **When.** At the time a viewer opens the stage -- its start time code, or its
+  earliest sample -- unless ``time`` names one, which also poses a skinned
+  character.
+- **As what.** Up to 20 000 triangles, each triangle is a face and two that share
+  an edge share it: the part is drawn as lines, written to STEP, and made the
+  solid it bounds where the mesh closes. Past that, the triangles of each look
+  are one face that is only a triangulation: fast at any size, drawn by ``pc
+  render --style shaded`` and written as STL, 3MF or glTF. ``surface`` chooses
+  (``faces``, ``mesh`` or ``auto``), and ``maxTriangles`` (5 000 000) refuses a
+  scene too large to build.
+- **In what.** Each face's look, as the part's CMF (see :doc:`config_cmf`):
+  the colour, roughness and metalness of the material bound to it - to its mesh,
+  or to the subset of its faces a ``GeomSubset`` binds - and how see-through it
+  is. A colour given by a texture is read off the image where the face lies on
+  it, by its UVs, and one a primvar reader names off the primvar; each
+  material's colours are its palette, by median cut, so that a part is drawn in
+  at most 1024 looks. The shaders read are ``UsdPreviewSurface``, MaterialX's
+  ``standard_surface``, OpenPBR and glTF PBR surfaces - in the stage, or in a
+  MaterialX document (``.mtlx``) it references, which ``usd-core`` as published
+  does not compose and the type reads itself - and NVIDIA's OmniPBR, OmniGlass
+  and OmniSurface, or an MDL preset in the package that calls one; where no
+  material is bound, or none of those, the face is in its
+  ``displayColor`` and ``displayOpacity``, as USD says a renderer that cannot
+  read a material draws it. A SimReady material's name
+  (``opaque__metal__aluminium``) says what the face is made of. A shaded
+  ``pc render`` draws the roughness and metalness too.
+
+Each look is stated under the ``usd`` convention, named as the material is, so
+a package's colour, material or finish claims a USD material by its name
+(``ids: {usd: Ceramic}``) and is drawn as its own declaration says; a name
+nothing claims is drawn as the stage says it looks, and is display-only. A face
+with no material is named ``displayColor``.
+
+The stage is read with Pixar's own USD library, ``usd-core``, which the type
+installs into the sandbox that builds the part and nowhere else, with Pillow to
+read its images (PNG, JPEG, BMP, TGA, TIFF, DDS: not EXR or Ptex). A part may say
+``reader: cadmpeg`` instead: `cadmpeg <https://github.com/cadmpeg/cadmpeg>`_
+reads OpenUSD from 0.6.8 on, a release PartCAD fetches for this type alone, and
+composes the stage itself. It reads what a render shows at the stage's static
+values, and nothing of a point instancer; a cube or a sphere it reads as a
+B-rep, which is left out and counted. Its looks are an appearance's name and
+colour - a texture's mean, where one gives it - and no finish. Each parameter is
+a part's own, declared under ``parameters`` like any other:
+
+.. code-block:: yaml
+
+  parts:
+    kitchen:
+      type: usd
+      path: vendor/Kitchen_set.usdz
+      parameters:
+        prim:
+          type: string
+          default: /Kitchen_set/Props_grp
+        reader:
+          type: string
+          default: usd-core   # or cadmpeg
+
+A built part is kept, and built again when what it was read from changes: its
+file, and every other file the stage was read from - the layers it composes
+(sublayers, references, payloads), and the images, MaterialX documents and MDL
+modules its looks come from - and every one of those the stage names that is not
+there, so that one turning up builds the part again too. The type reports them as
+it builds the part (it says ``reportsDependencies``, see :ref:`part-types`), by
+``usd-core``'s own walk of the stage and what reading its looks opened, so a
+stage of loose layers needs nothing listed for it. A stage that cannot be walked
+is built every time rather than cached.
 
 An ``iges`` part is read with `OpenCASCADE <https://dev.opencascade.org/>`_,
 whose IGES reader is the counterpart of the writer ``pc export -t iges`` uses, so
@@ -552,6 +635,122 @@ IGES surface model whose faces bound no solid is not an ``iges`` part.
 |                                                                                      |       # type: 3mf         |                                                                                                                         |
 |                                                                                      |       # type: obj         |                                                                                                                         |
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
+
+.. _gltf-files:
+
+glTF and compressed web assets
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A ``gltf`` part is everything a `glTF 2.0 <https://www.khronos.org/gltf/>`_ file
+draws: a ``.gltf`` with the buffers it names beside it, or one binary ``.glb``.
+With no ``path`` the part is ``<name>.gltf``, or ``<name>.glb`` where that is the
+file the package has (and, for a file ``fileFrom`` fetches, whichever its URL
+ends in):
+
+.. code-block:: yaml
+
+  parts:
+    bracket:
+      type: gltf             # reads bracket.gltf, or bracket.glb
+    pirate:
+      type: gltf
+      path: assets/pirate.glb
+    chair:
+      type: gltf
+      fileFrom: url
+      fileUrl: https://example.com/models/chair.glb
+
+**Where it is.** The scene the file shows is read node by node, each mesh placed
+by the transforms of the nodes above it, and glTF's metres and +Y up are restated
+as PartCAD's millimetres and +Z up -- so what ``pc export -t gltf`` writes reads
+back where it was. A node's scale, a non-uniform one included, is made into the
+mesh it scales.
+
+**What it is made of.** A mesh file states only triangles, and a part is a body,
+so the triangles are made into bodies:
+
+- vertices at the very same place are made one, so a mesh drawn with a vertex
+  per corner of each face -- as a mesh with hard edges always is -- is joined up
+  again;
+- a triangle with no area (two corners at one place, or all three on one line)
+  is dropped, and counted;
+- triangles that share an edge are one piece, so a file that draws three boxes in
+  one mesh is three solids;
+- a piece every edge of which has a triangle on both sides is a solid, its
+  triangles turned to face out of it; any other piece is a surface (a shell),
+  which the part keeps with a warning, as it does any part that is not a solid.
+
+A body a file draws as several meshes -- a mesh per colour, which is how PartCAD's
+own export and OpenCASCADE's writer draw one -- is one solid again: the pieces
+that do not close on their own are put together before they are made into
+bodies, while two closed bodies that merely touch stay two. Each triangle is a
+planar face of the B-rep, and coplanar faces are not merged. A mesh the scene
+draws many times is built once and placed many times.
+
+**Colours.** Each face is in the colour of its triangle's material, stated in the
+part's CMF in glTF's own terms -- the material's name, its base colour, its
+roughness and metallic -- for the ``gltf`` convention to convert, and a package
+claims a material by its name with ``ids: {gltf: <name>}``. A material PartCAD's
+own export wrote is read as the references it keeps, so a part exported to glTF
+and read back is in the colours, material and finish it had. See
+:ref:`cmf-sources`.
+
+**Compressed web assets.** glTF made for delivery over the web is usually made
+smaller by the tools that prepare it -- ``gltfpack``, ``gltf-transform``, the
+exporters of Blender and three.js, 3D asset stores -- with one of these
+extensions, and a file made that way is read like any other:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 35 35
+
+   * - Extension
+     - What it does to the file
+     - How PartCAD reads it
+   * - ``KHR_draco_mesh_compression``
+     - Compresses each primitive with Google's `Draco <https://google.github.io/draco/>`_
+     - Decoded by `DracoPy <https://github.com/seung-lab/DracoPy>`_, Python bindings
+       to Draco's own decoder, which the sandbox installs the first time a
+       Draco-compressed file is read, and never for any other
+   * - ``EXT_meshopt_compression``, ``KHR_meshopt_compression``
+     - Compresses buffer views with `meshoptimizer <https://meshoptimizer.org/>`_'s
+       codecs: vertex data (both versions of the codec), triangle lists, index
+       sequences, and the octahedral, quaternion, exponential and colour filters
+     - Decoded by PartCAD itself, which is checked against meshoptimizer's own
+       encoder and decoder
+   * - ``KHR_mesh_quantization``
+     - Stores positions as 8- or 16-bit integers, with the node's scale undoing it
+     - Read as the numbers they stand for
+   * - ``EXT_mesh_gpu_instancing``
+     - Draws a node's mesh many times, a translation, rotation and scale per copy
+     - Each copy is a body where its row puts it
+
+Draco and quantization are lossy: what is read is what the file holds, which is
+the model rounded to the precision it was compressed at. A file that *requires*
+(``extensionsRequired``) any other extension is refused, and the error names it
+-- unless the extension changes only how the file looks, which a shape does not
+carry: its materials (``KHR_materials_*``), textures (``KHR_texture_transform``,
+``KHR_texture_basisu``, ``EXT_texture_webp``, ``EXT_texture_avif``) and lights.
+
+**What is not read.** Points and lines, animations, morph targets, nodes
+``KHR_node_visibility`` hides, cameras and lights, textures and vertex colours.
+A skinned mesh is read as it is bound, not in any pose a skeleton would put it
+in. Each of these is reported once, as a warning, when the file has it.
+
+**Size.** A face per triangle makes a large B-rep of a dense mesh: tens of
+thousands of triangles build in a second or two, a few hundred thousand in tens of
+seconds, and whatever is done to the faces afterwards -- a boolean, a section, a
+STEP export -- is as slow as that many faces make it. A scanned or sculpted model
+is best simplified before it is made a part.
+
+A ``.gltf``'s buffers and images are part of its cache key, and ``pc import part``
+copies them along with it -- refusing one that would replace a different file of
+the same name already in the package. A buffer the ``.gltf`` names outside its own
+directory -- an absolute path, or one that climbs out with ``..`` -- is not read,
+and the part fails saying so. A ``.glb`` is imported as a ``.glb``.
+
+A glTF file can also be declared as an :ref:`assembly <assembly-gltf>`, which
+keeps its meshes apart, a part each, placed as its nodes place them.
 
 .. _extrude:
 
@@ -927,6 +1126,26 @@ declares the type: ``path`` is relative to the part's package, it defaults to
 ``<part name>.<extension>``, ``fileFrom`` fetches it, and it is what the part's
 cache entry depends on, so editing it rebuilds the part. The script finds it as
 ``request["path"]``, an absolute path.
+
+A format whose files name other files -- an OpenUSD stage that composes layers
+and names textures -- is read from more than the one a part names, and those
+are not known until the file is read. A ``partType`` whose script says which it
+read declares ``reportsDependencies: true``; the script lists them as it builds
+the part, absolute or relative to the directory of ``request["path"]``:
+
+.. code-block:: python
+
+  output["dependencies"] = ["layers/geometry.usda", "textures/wood.png"]
+
+PartCAD keeps that list beside the part in its cache, and keys the part on the
+content of every file in it from then on, so editing one of them builds the part
+again, and that build reports the list afresh. Nothing has to be listed in the
+part's configuration. The first build has no list to go by, which is no loss:
+there is nothing cached for it to be read back from yet. A file the script looked
+for and did not find belongs in the list too: it is keyed on as missing, so its
+appearing builds the part again. A script that cannot tell what it read says
+``output["dependencies"] = None``, and the part is then not cached at all. A
+part's ``dependencies:`` is still read too, for the files a script does not report.
 
 The script is a converter more often than not, and a converter is often a
 program pip cannot install. Two things serve that. ``request["cache_dir"]`` is a

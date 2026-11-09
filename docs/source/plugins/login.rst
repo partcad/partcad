@@ -163,8 +163,13 @@ passed over for an installed one that can, and with none, ``pc login`` prints th
 values are pasted by hand.
 
 The browser starts on a page ``pc login``'s listener serves on ``127.0.0.1``, which hands the extension what the
-plugin asked for; the extension reports back to that listener alone, and closes the window. The listener only
-answers its own address, and only for the random token each step is given.
+plugin asked for. Before anything is captured, the extension asks on a page of its own -- **Sign in to ... for
+PartCAD?** -- naming the site, every value the plugin asked for and where it comes from, and where it would be sent;
+nothing happens until the user presses **Continue**, and **Cancel** ends ``pc login`` with nothing taken. That
+question is there because a page on ``127.0.0.1`` proves nothing about who served it: any program on the computer
+can, and without it one could have the extension capture a session of its choosing in a window the user opened.
+The extension then reports back to that listener alone, and closes the window. The listener only answers its own
+address, and only for the random token each step is given.
 
 Some sites put a check that a person is there -- "Verify you are human" -- in front of their sign-in. The
 extension's bar says so on such a page, and that is all it does there: the person answers it, nothing clicks it

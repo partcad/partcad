@@ -85,6 +85,15 @@ class AssemblyFactory(ShapeFactory):
         # What this type contributes, so reading one of them off the assembly
         # applies the type's default (see 'ShapeConfiguration.get_object_type_parameter').
         self.assembly.object_type_parameters = self.ACCEPTED_OBJECT_TYPE_PARAMETERS
+        # An exploded view is a picture of the assembly with every item pulled
+        # out of what holds it, not one more thing to make: it drops the
+        # 'manufacturable' it was declared with or inherited (see
+        # 'assembly_explode'). On the object only, never in 'config': that is
+        # the declaration a parameterized instance is copied from
+        # ('Project.get_object'), so writing it there would leave
+        # 'logo;exploded=false' unmanufacturable when 'logo' defaults to true.
+        if self.assembly.exploded:
+            self.assembly.is_manufacturable = False
         self.assembly.instantiate = lambda assembly_self: self.instantiate(assembly_self)
         self.assembly._prepare = lambda shape_self: self.prepare_async(shape_self)
         self.assembly._subassemblies = lambda assembly_self: self.subassemblies_async(assembly_self)

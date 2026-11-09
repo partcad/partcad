@@ -25,8 +25,10 @@ one, so that "the window the login ran in is closed" can be told apart from
 "the browser went away".
 """
 
+import json
 import os
 import time
+import urllib.parse
 
 import pytest
 
@@ -119,6 +121,31 @@ def log_in(tab, site):
     wait_for(lambda: tab.url() == site.url + "/account", "the login did not land on the account page")
 
 
+CONFIRM_PAGE = "/confirm.html"
+
+
+def on_confirm_page(tab):
+    """The tab is at the extension's confirmation page, showing a request."""
+    url = tab.url() or ""
+    if not (url.startswith("chrome-extension://") and url.split("#")[0].endswith(CONFIRM_PAGE)):
+        return False
+    return tab.evaluate("!document.getElementById('request').hidden")
+
+
+def confirm(tab):
+    """Say yes on the confirmation page the start page handed the tab to, as a user does: a real click."""
+    wait_for(lambda: on_confirm_page(tab), "the start page did not hand over to the confirmation page")
+    # Continue is armed a moment after the page is in view.
+    wait_for(lambda: tab.evaluate("!document.getElementById('continue').disabled"), "Continue was never armed")
+    tab.click("#continue")
+    return tab
+
+
+def start_login(browser, start_url):
+    """Open `pc login`'s start page in a window of its own and confirm the login it asks for."""
+    return confirm(browser.open_window(start_url))
+
+
 def test_every_source_is_captured_and_sent(browser, listeners, site, closed_port, screenshots):
     """The whole contract in one login: six sources, `match`, `done_when.fetch`, the guide, the callback."""
     spec = {
@@ -156,7 +183,7 @@ def test_every_source_is_captured_and_sent(browser, listeners, site, closed_port
         "timeout": TIMEOUT,
     }
     listener = listeners(spec)
-    tab = browser.open_window(listener.start_url)
+    tab = start_login(browser, listener.start_url)
 
     # The start page hands the spec over and the tab goes to the site.
     wait_for(lambda: tab.url() == site.url + "/", "the start page did not send the tab to the site")
@@ -263,7 +290,7 @@ def test_done_button_sends_when_there_is_no_done_when(browser, listeners, site, 
         "timeout": TIMEOUT,
     }
     listener = listeners(spec)
-    tab = browser.open_window(listener.start_url)
+    tab = start_login(browser, listener.start_url)
     banner = wait_for(banner_shows(tab), "no banner")
     assert banner["asks"] == {"code": "text"}
     assert banner["doneDisabled"] is True
@@ -297,7 +324,7 @@ def test_done_when_holds_back_until_it_holds(browser, listeners, site, done_when
         "timeout": TIMEOUT,
     }
     listener = listeners(spec)
-    tab = browser.open_window(listener.start_url)
+    tab = start_login(browser, listener.start_url)
     captured(tab, "lang")
     stays_false(lambda: listener.done)
 
@@ -330,7 +357,7 @@ def test_contains_picks_an_element_out_by_its_text(browser, listeners, site, scr
         "timeout": TIMEOUT,
     }
     listener = listeners(spec)
-    tab = browser.open_window(listener.start_url)
+    tab = start_login(browser, listener.start_url)
     guide = wait_for(lambda: spot_on(tab, "#b-login"), "the guide did not pick the button by its text")
     assert guide["label"] == "Click 'Log In'"
     tab.screenshot(screenshots / "contains.png")
@@ -365,7 +392,7 @@ def test_a_bot_check_is_named_and_left_alone(browser, listeners, site, screensho
         "timeout": TIMEOUT,
     }
     listener = listeners(spec)
-    tab = browser.open_window(listener.start_url)
+    tab = start_login(browser, listener.start_url)
     banner = wait_for(banner_shows(tab, lambda b: b["challenge"]), "the bot check was not recognised")
     assert banner["guide"] == CHALLENGE_TEXT
     assert tab.guide() is None, "the guide spotlit something on a bot check"
@@ -384,7 +411,7 @@ def test_cloudflares_script_on_an_ordinary_page_is_not_a_bot_check(browser, list
         "guide": [{"url": site.url + "/*", "selector": "h1", "text": "Look here"}],
         "timeout": TIMEOUT,
     }
-    tab = browser.open_window(listeners(spec).start_url)
+    tab = start_login(browser, listeners(spec).start_url)
     wait_for(banner_shows(tab, lambda b: b["guide"] == "Look here"), "the guide gave way to a check that is not there")
     assert not tab.banner()["challenge"]
     wait_for(lambda: spot_on(tab, "h1"), "no spotlight")
@@ -392,7 +419,7 @@ def test_cloudflares_script_on_an_ordinary_page_is_not_a_bot_check(browser, list
 
 def test_cancel_tells_pc_login_and_closes_the_window(browser, listeners, site):
     listener = listeners({"url": site.url + "/", "capture": [{"name": "x", "ask": {}}], "timeout": TIMEOUT})
-    tab = browser.open_window(listener.start_url)
+    tab = start_login(browser, listener.start_url)
     wait_for(banner_shows(tab), "no banner")
     tab.click_in_shadow("partcad-login-banner", "button.cancel")
     wait_for(lambda: listener.cancelled, "Cancel did not reach the listener")
@@ -414,7 +441,7 @@ def test_nothing_is_taken_from_an_origin_the_spec_does_not_name(browser, listene
         "timeout": TIMEOUT,
     }
     listener = listeners(spec)
-    tab = browser.open_window(listener.start_url)
+    tab = start_login(browser, listener.start_url)
     wait_for(banner_shows(tab), "no banner on the named site")
 
     # Sign in to the look-alike, which serves every value under the same names.
@@ -481,7 +508,7 @@ def test_a_spec_is_refused_unless_it_is_safe(browser, listeners, site):
 
 def test_a_session_expires_after_its_timeout(browser, listeners, site):
     listener = listeners({"url": site.url + "/", "capture": [{"name": "x", "ask": {}}], "timeout": 3})
-    tab = browser.open_window(listener.start_url)
+    tab = start_login(browser, listener.start_url)
     wait_for(banner_shows(tab), "no banner")
     wait_for(lambda: tab.banner() is None, "the banner outlived the session's timeout", timeout=10)
     assert browser.session_state() is None
@@ -493,7 +520,7 @@ def test_one_session_at_a_time(browser, listeners, site):
     first = listeners({"url": site.url + "/", "title": "First", "capture": [{"name": "x", "ask": {}}]})
     second = listeners({"url": site.url + "/welcome", "title": "Second", "capture": [{"name": "y", "ask": {}}]})
 
-    one = browser.open_window(first.start_url)
+    one = start_login(browser, first.start_url)
     wait_for(banner_shows(one), "no banner for the first login")
 
     two = browser.open_window(second.start_url)
@@ -505,6 +532,7 @@ def test_one_session_at_a_time(browser, listeners, site):
     # one can now have the browser.
     first.close()
     two.reload()
+    confirm(two)
     wait_for(lambda: two.url() == site.url + "/welcome", "the second login did not start")
     assert browser.session_state()["spec"]["title"] == "Second"
     # The first login's page is on the same site, so it now shows the second
@@ -516,7 +544,7 @@ def test_a_refused_callback_is_shown_and_tried_again(browser, listeners, site):
     """`pc login` answering anything but 200 is said on the banner, and the values are sent again."""
     listener = listeners({"url": site.url + "/", "capture": [{"name": "x", "ask": {}}], "timeout": TIMEOUT})
     listener.done_status = 500
-    tab = browser.open_window(listener.start_url)
+    tab = start_login(browser, listener.start_url)
     wait_for(banner_shows(tab), "no banner")
     tab.in_shadow("partcad-login-banner", "function () { this.querySelector('input[data-name=x]').focus(); }")
     tab.type("value")
@@ -541,8 +569,143 @@ def test_a_start_page_the_browser_opens_with_is_taken(launch, listeners, site, f
     """
     listener = listeners({"url": site.url + "/", "capture": [{"name": "x", "ask": {}}], "timeout": TIMEOUT})
     browser = launch(start_url=listener.start_url, flags=flags)
-    target = wait_for(
-        lambda: [t for t in browser.targets("page") if t["url"] == site.url + "/"],
+    asked = wait_for(
+        lambda: [t for t in browser.targets("page") if t["url"].split("#")[0].endswith(CONFIRM_PAGE)],
         "the start page the browser opened with did not hand its spec over",
     )[0]
-    wait_for(banner_shows(browser.tab(target["targetId"])), "no banner")
+    tab = confirm(browser.tab(asked["targetId"]))
+    wait_for(lambda: tab.url() == site.url + "/", "the confirmed login did not open the site")
+    wait_for(banner_shows(tab), "no banner")
+
+
+# --- The confirmation ---------------------------------------------------------------
+#
+# A start page is any page on the loopback interface at `pc login`'s path, and
+# nothing proves `pc login` served it. So nothing is captured until the user
+# has said yes on the extension's own page, which says what would be taken and
+# where it would go.
+
+
+def page_text(tab):
+    return tab.evaluate("document.getElementById('request').innerText")
+
+
+def test_nothing_is_taken_until_the_login_is_confirmed(browser, listeners, site, screenshots):
+    # Signed in to the site already: a capture would be complete the moment it began.
+    signed_in = browser.open_window(site.url + "/login")
+    log_in(signed_in, site)
+    spec = {
+        "url": site.url + "/",
+        "title": "Already signed in",
+        "capture": [
+            {"name": "token", "cookie": {"url": site.url + "/", "name": "access_token"}, "match": "^eyJ"},
+            {"name": "key", "ask": {"label": "Your API key"}},
+        ],
+        "require": "any",
+        "done_when": {"url": site.url + "/*"},
+        "timeout": TIMEOUT,
+    }
+    listener = listeners(spec)
+    tab = browser.open_window(listener.start_url)
+    wait_for(lambda: on_confirm_page(tab), "the start page did not hand over to the confirmation page")
+
+    # What would be taken, from where, and where it would go -- before any of it is.
+    text = page_text(tab)
+    assert "Already signed in" in text
+    assert site.url in text
+    assert "token: the cookie “access_token” of %s/" % site.url in text
+    assert "key: what you type in for “Your API key”" in text
+    assert "http://" + urllib.parse.urlsplit(listener.base).netloc in text
+    tab.screenshot(screenshots / "confirm.png")
+    stays_false(lambda: listener.done, seconds=3)
+    assert browser.session_state() is None
+
+    confirm(tab)
+    wait_for(lambda: listener.done, "the confirmed login did not send what was already there")
+    assert listener.done[0]["values"] == {"token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhbm4ifQ.c2lnbmF0dXJl"}
+
+
+def test_a_login_said_no_to_tells_pc_login_and_takes_nothing(browser, listeners, site):
+    signed_in = browser.open_window(site.url + "/login")
+    log_in(signed_in, site)
+    spec = {
+        "url": site.url + "/",
+        "capture": [{"name": "token", "cookie": {"url": site.url + "/", "name": "access_token"}}],
+        "done_when": {"url": site.url + "/*"},
+        "timeout": TIMEOUT,
+    }
+    listener = listeners(spec)
+    tab = browser.open_window(listener.start_url)
+    wait_for(lambda: on_confirm_page(tab), "the start page did not hand over to the confirmation page")
+    # Cancel is what Enter presses: it has the focus.
+    assert tab.evaluate("document.activeElement.id") == "cancel"
+    tab.click("#cancel")
+    wait_for(lambda: listener.cancelled, "Cancel did not reach the listener")
+    wait_for(lambda: not browser.has_target(tab.target_id), "the declined login's tab was not closed")
+    stays_false(lambda: listener.done)
+    assert browser.session_state() is None
+    # And the request is gone: the same page asked again is asked afresh.
+    assert json.loads(browser.background("chrome.storage.session.get('pending').then((s) => JSON.stringify(s))")) == {}
+
+
+def test_only_the_confirmation_page_can_say_yes(browser, listeners, site):
+    """A yes from anywhere but confirm.html in a tab -- a content script, from a web page -- starts nothing."""
+    listener = listeners({"url": site.url + "/", "capture": [{"name": "x", "ask": {}}], "timeout": TIMEOUT})
+    tab = browser.open_window(listener.start_url)
+    wait_for(lambda: on_confirm_page(tab), "the start page did not hand over to the confirmation page")
+    token = tab.evaluate("location.hash.slice(1)")
+
+    # The background's own handler, asked as a content script in the site's
+    # page would ask it, and as something with the right URL but no tab.
+    for sender in ({"tab": {"id": -1}, "url": site.url + "/"}, {"url": tab.url()}):
+        answer = browser.background(
+            "HANDLERS.confirm({ type: 'confirm', token: %s }, %s).then((a) => JSON.stringify(a))"
+            % (json.dumps(token), json.dumps(sender))
+        )
+        assert json.loads(answer) == {"ok": False, "error": "Only the extension's own page can confirm a login."}
+    assert browser.session_state() is None
+
+    # The request is still there for the user to answer.
+    confirm(tab)
+    wait_for(lambda: tab.url() == site.url + "/", "the confirmed login did not open the site")
+
+
+def test_a_confirmation_page_cannot_say_yes_to_what_it_was_not_showing(browser, listeners, site):
+    """The same start page asking for something else is a new request: the page still showing the old one is stale."""
+    listener = listeners(
+        {"url": site.url + "/", "title": "Shown", "capture": [{"name": "x", "ask": {}}], "timeout": TIMEOUT}
+    )
+    shown = browser.open_window(listener.start_url)
+    wait_for(lambda: on_confirm_page(shown), "the start page did not hand over to the confirmation page")
+    assert "Shown" in page_text(shown)
+
+    # The same start page, now asking for a cookie the first page never named.
+    listener.spec["title"] = "Swapped"
+    listener.spec["capture"] = [{"name": "token", "cookie": {"url": site.url + "/", "name": "access_token"}}]
+    swapped = browser.open_window(listener.start_url)
+    wait_for(lambda: on_confirm_page(swapped), "the changed request was not asked about")
+    assert "Swapped" in page_text(swapped) and "access_token" in page_text(swapped)
+    assert shown.evaluate("location.hash") != swapped.evaluate("location.hash")
+
+    # Continue on the page that showed the first request starts nothing.
+    wait_for(lambda: shown.evaluate("!document.getElementById('continue').disabled"), "Continue was never armed")
+    shown.click("#continue")
+    wait_for(lambda: shown.evaluate("!document.getElementById('gone').hidden"), "the stale page was not told")
+    assert browser.session_state() is None
+
+    # The one that shows it can.
+    confirm(swapped)
+    wait_for(lambda: browser.session_state(), "the shown request did not start")
+    assert browser.session_state()["spec"]["title"] == "Swapped"
+
+
+def test_the_same_request_again_keeps_its_page(browser, listeners, site):
+    """The start page reloaded, asking for the same thing, is the same request: the page already open still answers it."""
+    listener = listeners({"url": site.url + "/", "capture": [{"name": "x", "ask": {}}], "timeout": TIMEOUT})
+    first = browser.open_window(listener.start_url)
+    wait_for(lambda: on_confirm_page(first), "the start page did not hand over to the confirmation page")
+    again = browser.open_window(listener.start_url)
+    wait_for(lambda: on_confirm_page(again), "the same request was not asked about again")
+    assert first.evaluate("location.hash") == again.evaluate("location.hash")
+    confirm(first)
+    wait_for(lambda: first.url() == site.url + "/", "the request did not start from the page first opened")

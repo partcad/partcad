@@ -19,6 +19,7 @@ import asyncio
 import json
 import re
 import shutil
+import stat
 import tempfile
 from pathlib import Path
 
@@ -104,6 +105,29 @@ PUBLIC_INDEX_DEPENDENCY = {
 # The name a package directory named with '-e' is imported under.
 OPTIONS_DEPENDENCY = "options"
 
+# What every refusal of an '-e' ends with: the two things that can be named.
+_NAME_ONE = "name a package in the public index ('//pub/...') or the directory of a package"
+
+
+def _is(path: Path, kind) -> bool:
+    """Whether 'path' is there and is of 'kind' ('stat.S_ISDIR', 'stat.S_ISREG'); any other answer is raised.
+
+    'Path.stat' and not 'Path.is_dir' or 'Path.is_file', because only the first
+    says the same thing on every Python this runs on: from 3.14 those two answer
+    False for any error at all, so a directory the user may not read, or a share
+    that dropped the connection, would read as "there is nothing there" and be
+    refused without its reason - which up to 3.13 they raise. Asked this way,
+    nothing being there is the one answer that is not an error, on every
+    version: 'FileNotFoundError' (a missing host or share on Windows included,
+    which Python maps to it) or 'NotADirectoryError' (a file where a directory
+    on the way should be).
+    """
+    try:
+        found = path.stat()
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    return kind(found.st_mode)
+
 
 def options_dependency(options_package):
     """What the throwaway package imports to read file types from 'options_package', and its name there.
@@ -113,18 +137,53 @@ def options_dependency(options_package):
     directory on this machine that holds a 'partcad.yaml' is imported as it is.
     Anything else names nothing an ad-hoc render can reach -- there is no
     workspace around it whose packages a name could mean.
+
+    Which of the two 'options_package' is, is decided by how it is spelled and
+    by nothing else: a name starting with '//' is a package, as everywhere in
+    PartCAD (and as the CLI already sends it: as written, where a directory is
+    sent absolute), and it is never looked for on disk. The same text is a path
+    too, on every system, and looking for it is not a question about packages:
+    POSIX leaves a leading '//' to the implementation, and Linux and macOS read
+    '//srv/pkg' as the directory '/srv/pkg'; on Windows '//elsewhere/render' is
+    the share 'render' of a server called 'elsewhere', so looking is a trip to
+    the network -- which can take an SMB timeout, can fail with an error nobody
+    asked about (WinError 64 has), or can find a share by that name and import
+    whatever is in it. So a package outside the public index is refused, here,
+    without any of that.
+
+    A directory is named by its path, then, and a network share on Windows with
+    the backslashes Windows writes it with ('\\\\server\\share\\pkg', which is
+    also what 'os.path.abspath' makes of a relative path in a working directory
+    on a share). The forward-slash spelling of the same share is a package
+    name. A directory that cannot be looked at -- one the user may not read, a
+    share that drops the connection -- is refused for that reason, which is
+    given, rather than failing the render with a traceback.
     """
     if not options_package:
         return None, None
-    if options_package == "//" + PUBLIC_INDEX or options_package.startswith("//%s/" % PUBLIC_INDEX):
-        return (PUBLIC_INDEX, PUBLIC_INDEX_DEPENDENCY), options_package
+    if options_package.startswith(consts.ROOT):
+        if options_package == "//" + PUBLIC_INDEX or options_package.startswith("//%s/" % PUBLIC_INDEX):
+            return (PUBLIC_INDEX, PUBLIC_INDEX_DEPENDENCY), options_package
+        raise AdhocUsageError(
+            "Cannot read file types from '%s' ad-hoc: a name starting with '//' is a package, and an ad-hoc render "
+            "has no workspace around it to find one outside the public index in; %s, by its path without the '//' "
+            "(a network share on Windows as '\\\\server\\share\\...')" % (options_package, _NAME_ONE)
+        )
     directory = Path(options_package)
-    if directory.is_dir() and (directory / consts.DEFAULT_PACKAGE_CONFIG).is_file():
-        return (OPTIONS_DEPENDENCY, {"type": "local", "path": str(directory.resolve())}), "//" + OPTIONS_DEPENDENCY
-    raise AdhocUsageError(
-        "Cannot read file types from '%s' ad-hoc: name a package in the public index ('//pub/...') "
-        "or the directory of a package" % options_package
-    )
+    try:
+        found = _is(directory, stat.S_ISDIR) and _is(directory / consts.DEFAULT_PACKAGE_CONFIG, stat.S_ISREG)
+        resolved = str(directory.resolve()) if found else None
+    except (OSError, RuntimeError) as e:
+        # 'RuntimeError' is how 'Path.resolve' says "symlink loop" up to Python
+        # 3.12. A loop there would have stopped 'stat' first, unless one was
+        # made between the two -- which is still no reason for a traceback.
+        raise AdhocUsageError(
+            "Cannot read file types from '%s' ad-hoc: it could not be looked at (%s); %s"
+            % (options_package, e, _NAME_ONE)
+        ) from e
+    if found:
+        return (OPTIONS_DEPENDENCY, {"type": "local", "path": resolved}), "//" + OPTIONS_DEPENDENCY
+    raise AdhocUsageError("Cannot read file types from '%s' ad-hoc: %s" % (options_package, _NAME_ONE))
 
 
 def generate_partcad_config(

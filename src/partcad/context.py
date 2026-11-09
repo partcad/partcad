@@ -1473,7 +1473,12 @@ class Context:
             suppliers_per_part = await self.find_part_suppliers(part_spec, cart)
 
             if not suppliers_per_part:
-                pc_logging.error(f"No supplier found for {name}")
+                # What a quote may go without - what a scene holds, or anything
+                # with '--ignore-missing' - is said, and is no failure.
+                if getattr(part_spec, "optional", False):
+                    pc_logging.info(f"No supplier found for {name}: it is left out")
+                else:
+                    pc_logging.error(f"No supplier found for {name}")
 
             suppliers[str(part_spec)] = suppliers_per_part
 
@@ -1513,7 +1518,10 @@ class Context:
         for supplier, extra in (await prj.get_suppliers_async()).items():
             part_suppliers.setdefault(supplier, extra)
         if len(part_suppliers) == 0:
-            pc_logging.error("No suppliers found for %s in %s" % (part_name, project_name))
+            if getattr(part_item, "optional", False):
+                pc_logging.debug("No suppliers found for %s in %s" % (part_name, project_name))
+            else:
+                pc_logging.error("No suppliers found for %s in %s" % (part_name, project_name))
             return {}
         else:
             pc_logging.debug("Part suppliers: %s" % str(part_suppliers))
@@ -1568,7 +1576,10 @@ class Context:
 
         async def _set_supplier(name, cart_item):
             if not await provider.is_part_available(cart_item):
-                pc_logging.error("Part %s is not available from %s" % (name, provider.name))
+                if getattr(cart_item, "optional", False):
+                    pc_logging.info("Part %s is not available from %s: it is left out" % (name, provider.name))
+                else:
+                    pc_logging.error("Part %s is not available from %s" % (name, provider.name))
                 suppliers[str(cart_item)] = ""
             else:
                 pc_logging.debug("Cart item: %s" % str(cart_item))
@@ -1579,6 +1590,23 @@ class Context:
         await asyncio.gather(*tasks)
 
         return suppliers
+
+    def drop_unsupplied_optional(self, cart: ProviderCart, preferred_suppliers: dict[str, str]):
+        """'(preferred_suppliers, left_out)': the optional items nobody supplies taken out, and their names.
+
+        An optional item (see 'ProviderCartItem.optional') that no supplier has
+        is not quoted at all - not even under "no provider" - so that a scene's
+        walls, or anything '--ignore-missing' covers, leave the quote for the
+        rest of it whole. 'left_out' is what the caller says it went without.
+        """
+        optional = {str(item): name for name, item in cart.parts.items() if getattr(item, "optional", False)}
+        kept, left_out = {}, []
+        for spec, supplier in preferred_suppliers.items():
+            if not supplier and spec in optional:
+                left_out.append(optional[spec])
+            else:
+                kept[spec] = supplier
+        return kept, sorted(left_out)
 
     async def prepare_supplier_carts(self, preferred_suppliers: dict[str, str]) -> dict[str, ProviderCart]:
         """Given the list of preferred suppliers, prepare the supplier carts.
@@ -1713,6 +1741,16 @@ class Context:
             if warm is not None:
                 await warm()
 
+    async def get_project_async(self, project_path: str) -> Optional[Project]:
+        """'get_project()' for a caller already running on a loop.
+
+        The plugin-backed packages above it are warmed on the caller's loop
+        first, for the reason '_warm_project_async()' gives, so that the walk
+        'get_project()' makes finds each of them memoized.
+        """
+        await self._warm_project_async(project_path)
+        return self.get_project(project_path)
+
     def get_part(self, part_spec, params=None, referrer=None) -> Optional[Part]:
         """The part '<package>:<name>' names, or None; 'referrer' as 'get_sketch' takes it."""
         return self._get_part(part_spec, params, referrer=referrer)
@@ -1757,6 +1795,21 @@ class Context:
     def get_assembly(self, assembly_spec, params=None, referrer=None):
         """The assembly '<package>:<name>' names, or None; 'referrer' as 'get_sketch' takes it."""
         return self._get_assembly(assembly_spec, params, referrer=referrer)
+
+    async def get_assembly_async(self, assembly_spec, params=None, referrer=None):
+        """'get_assembly()' for a caller already running on a loop.
+
+        The packages above it are warmed on the caller's loop, and then the
+        assembly's declarations, for the reasons '_get_part_async' gives.
+        """
+        project_name, assembly_name = resolve_resource_path(self.current_project_path, assembly_spec)
+        await self._warm_project_async(project_name)
+        prj = self.get_project(project_name)
+        if prj is None:
+            pc_logging.error("Package %s not found" % project_name)
+            return None
+        pc_logging.debug("Retrieving %s from %s" % (assembly_name, project_name))
+        return await prj.get_assembly_async(assembly_name, params, referrer=referrer)
 
     def get_assembly_shape(self, assembly_spec, params=None):
         return asyncio.run(self._get_assembly(assembly_spec, params).get_wrapped(self))

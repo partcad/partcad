@@ -320,6 +320,15 @@ at all).
   changes a file it has declared settled waits for the file system's clock to move first. `code_version`
   remembers a script's `CACHE_VERSION` by the same rule, and `source_key` goes by the same `RACY_NS`.
 
+- **A file a part was read from that nothing declared is keyed on once a build has reported it**
+  (`discovered_dependencies`). A part's key has to be known before it is built, and the layers an OpenUSD stage
+  composes are not known until it is read. So a `partType` that says `reportsDependencies` has its script list the
+  other files it read (`output["dependencies"]`); `PartFactoryWrapper` keeps that list in the shape cache under the
+  part's *declared* key (`<key>.deps`, taken with `CacheHash.snapshot()` as the last step of `prepare_async`), and
+  every later lookup reads it back and continues that key with the content of each file in it. The build that wrote
+  the list re-keys the part at once, which is why `Shape._get_wrapped` writes under `self.hash` as it stands after
+  the build rather than the hash it read under. A part whose type says nothing pays nothing: no list is read.
+
 - **Location/coordinate format**: 3D locations (OpenCASCADE `TopLoc_Location`) are represented as
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.
@@ -339,7 +348,7 @@ at all).
   that a verdict read back puts them back.
 
 - **What an object is required to be is one module** (`requirements.py`): the `requirements:` section of a
-  part, an assembly, a scene or a sketch -- `features` in words, and `ports`, `interfaces` and `physics` where
+  part, an assembly, a scene or a sketch -- `features` in words, `ports`, `interfaces` and `physics` where
   any part of each may be null and the rest is a constant or a comparison (`>0`, `!0`, joined with commas). Its
   `check_async()` is what `pc test`'s `requirements` check runs *and* what the daemon's `requirements.check`
   answers the IDE's Requirements tab with, so the two cannot disagree; nothing else reads the section. Two rules
@@ -353,7 +362,25 @@ at all).
   read off the schema (`requirement-physics`, which a test holds to `physics` less a connection's properties),
   so a field added there needs nothing here. The check is never cached: what it reads -- the requirements, the
   ports and interfaces, which can live in other packages, the material -- is mostly not what a shape's cache key
-  is made of.
+  is made of. The fifth section, `match`, holds the volume, the displacement and the mass to within a percentage of
+  another object's, and reads both by `compare.py`'s rules (`within()`), so `pc test` and `pc compare` cannot disagree
+  about what "within 5%" means.
+
+- **Two objects read against each other is one module** (`compare.py`, with `wrappers/wrapper_compare.py` for the
+  surface): what `pc compare <reference> <current>` reports -- the volumes and masses (`physics.amounts_async()`,
+  the numbers `pc info` reports, in full), the tolerances (`get_tolerance()`) and their sum, the *allowance*,
+  optionally the displacements -- what each solid's outer shell encloses, its volume and every void sealed inside
+  it (`wrappers/shape_measure.displacement()`, the measure wrapper's `displacement` operation, asked only when a
+  comparison or a `match:` names it, never put in the measurements every shape carries) -- and optionally the
+  surface distance. That last is measured in the sandbox, one-sided from the reference: points
+  no two closer than the spacing asked for -- every vertex, then the edges, then the faces, each candidate kept
+  only when a spatial hash finds nothing within the spacing -- and each measured along the reference's normals to
+  the current object's surface (OCCT's line/face intersector for faces with a surface, a ray cast through a grid
+  of triangles for faces that are only a mesh), or to its nearest point when no normal meets it. A face's
+  candidates are points of its triangulation evaluated on the surface at their (u, v), so the triangles only say
+  where to look. Nothing moves one object onto the other: they are compared where they are. A comparison
+  passes or fails only on what it was held to -- a limit given with a volume or a mass, the allowance whenever
+  the surface is measured -- and is a report, `passed: null`, otherwise.
 
 - **A basic shape is written, not built** (`basic_shapes.py`, `brep_ascii.py`, `sketch_factory_basic.py`,
   `part_factory_basic.py`): a `basic` sketch -- a circle, square, rectangle or slot, with holes of the same -- and a
@@ -1300,10 +1327,25 @@ at all).
   `assembly_factory_imported.py` is one factory for every such type, and the reader it runs is named by the
   declaration. Everything below the reader — sandbox, tree walk, part registration, the report of what was
   dropped — was identical in the three factories that used to exist, so only the reader knows XML and only
-  the reader is a plugin. `//builtin/import` ships `urdf` and nothing else; `mjcf` and `world` belong to the
-  two engine plugins, beside the exporter, the `open:` entry and the simulator that share their knowledge of
+  the reader is a plugin. `//builtin/import` ships the assembly types `urdf`, `gltf`, `f3d` and `pvz`;
+  `mjcf` and `world` belong to the two engine plugins, beside the exporter, the `open:` entry and the simulator that share their knowledge of
   the format. The wheel carries no copy of either, so `type: world` resolves to nothing and says which
   package to name: the spelling is the full path, `type: sim-gazebo:world`.
+
+  **glTF is read by PartCAD's own reader, not OCCT's** (`wrappers/gltf_document.py`), for the part type and the
+  assembly type alike. OCCT 7.9's `RWGltf_CafReader`, as `cadquery-ocp-novtk` builds it, reads no Draco ("Draco
+  library missing"), no quantized positions and no meshopt -- which is most of the glTF the web delivers -- and
+  answered a Draco file with "holds no triangles". So the reader is plain Python and NumPy: Draco through DracoPy
+  (for a part, installed into the sandbox only for a file whose `extensionsUsed` names it, see `part_factory_gltf`;
+  the assembly type declares it in `pythonRequirements` and has it on every read, since it also brings NumPy), meshopt
+  through `wrappers/meshopt_decode.py`, written from the two extensions' appendices because no Python decoder
+  reaches every platform the sandbox runs on, and held to meshoptimizer's own encoder and decoder by
+  `tests/partcad/unit/data/import_gltf/meshopt_vectors.json`. Triangles become bodies in `wrappers/mesh_brep.py`
+  (weld, split by shared edges, orient, `BRepBuilderAPI_MakeShapeOnMesh`), some thirty times faster than
+  build123d's `Mesher`, which the part used to go through via an STL. Only `wrapper_import_gltf.py` states a
+  `CACHE_VERSION`: a change to what any of those three modules reads or builds is a change to it. The assembly
+  reader (`builtin/import/import_gltf.py`) writes a `.glb` per distinct mesh and names it as a `gltf` part, so a
+  part of a glTF assembly is read exactly as a glTF part is.
 
   **A type named by its full path is resolved from the package that declared the object, not from the root.**
   `Context.get_project_from()`, not `get_project()`: a package's objects are created as part of loading it,
@@ -1456,6 +1498,15 @@ at all).
   Assemblies police their object-type parameters the way parts and sketches do
   (`AssemblyFactory.POLICED_OBJECT_TYPE_PARAMETERS`): only `assy` can say what is joined to what, so any other
   type declaring it is refused; an alias and an enrich pass it on to their source.
+
+  **An exploded assembly is never manufacturable**, whatever it or its package marks: it is a picture with
+  every item where nothing holds it. `AssemblyFactory._create` drops `is_manufacturable` as the object is
+  created, and `AssemblyFactoryAlias` does the same for an alias or an enrich that names the view
+  (`assembly_explode.names_exploded_view`), since it is that view, cache key and all. Only on the object,
+  **never in `config`**: the config is the declaration a parameterized instance is deep-copied from, so
+  writing `manufacturable: false` there would leave `logo;exploded=false` unmanufacturable when `logo`
+  defaults to exploded. `partcad_utils.lint_context` makes the same call for the editor, from what the file
+  is rendered with, so an exploded declaration's ASSY file is not held to the rules for one that is made.
 
   Which way and how far an item backs out is **one rule shared with the instruction book**
   (`counterpart`, `separation_async`): the joint's direction or the line between the two centers, by the
@@ -1895,6 +1946,12 @@ at all).
   path, so its `sys.path[0]` is PartCAD's own `wrappers/` directory rather than anything a user writes to;
   giving it `-I` would buy no isolation and would cost it `PYTHONHASHSEED`, since `-I` implies `-E`. So do not
   collapse the two lists back into one, and do not hand `-I` to anything but a `-m` command.
+  Which list a `-m` command gets, and every other version-dependent choice of what a sandbox installs (the
+  `backports.zstd` that only an interpreter below 3.14 needs), is decided from
+  `PythonRuntime.interpreter_version()`, not from the version asked for. They are the same everywhere but
+  `venv`, which is built from whatever interpreter the host has and asks it: deciding from the request installed
+  the 3.11 backport into a 3.14 environment, where it has no release, and failed the command on pip after its
+  work was done. The sandbox keeps the requested version in its name.
   `tests/partcad/unit/test_python_env.py` asserts the outcomes (a `venv.py`/`pip.py` beside the interpreter
   never wins; a wrapper's sibling import is never shadowed by a file in PartCAD's working directory; the hash
   seed is honored on every version) on whichever version is running, so both branches are covered by the CI

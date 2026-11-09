@@ -255,6 +255,66 @@ def volumes(shape):
     return sorted((volume for volume, _centre, _tensor in solids), reverse=True)
 
 
+def displacement(shape):
+    """How much 'shape' would push aside if it were submerged: what its solids' outer shells enclose.
+
+    ``{"displacement": float | None, "solids": int, "cavities": int}``, in mm^3.
+
+    A solid's volume is its material. Its displacement is that and every void
+    sealed inside it as well: water reaches a hole that goes through a part, and
+    not a cavity closed off within it. OCCT bounds a solid with a void in it by
+    more than one shell - the outer one, and one around each void - so a solid
+    displaces what its outer shell alone encloses ('BRepClass3d::OuterShell'),
+    and a solid of one shell displaces exactly its volume. 'cavities' is how
+    many inner shells there were.
+
+    Per solid and then added up, the way 'volume' is: a space that only several
+    solids enclose together - the inside of a box made of six plates - is not in
+    any one of them, and is not counted.
+
+    None, like the volume, for a shape that holds no solid at all. A solid whose
+    faces are turned inward has a negative volume, and displaces that as it
+    stands: the defect is worth seeing here too.
+    """
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeSolid
+    from OCP.BRepClass3d import BRepClass3d
+    from OCP.TopAbs import TopAbs_SHELL, TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS, TopoDS_Iterator
+
+    result = {"displacement": None, "solids": 0, "cavities": 0}
+    if shape is None or shape.IsNull():
+        return result
+    measurer = Measurer()
+    total = 0.0
+    explorer = TopExp_Explorer(shape, TopAbs_SOLID)
+    while explorer.More():
+        solid = TopoDS.Solid_s(explorer.Current())
+        explorer.Next()
+        # Integrated the way 'volume' integrates it, so that a solid with no
+        # void displaces exactly the volume reported beside it.
+        volume = measurer._solid(solid)[0]
+        result["solids"] += 1
+        shells = 0
+        children = TopoDS_Iterator(solid)
+        while children.More():
+            if children.Value().ShapeType() == TopAbs_SHELL:
+                shells += 1
+            children.Next()
+        displaced = volume
+        if shells > 1 and volume > 0.0:
+            outer = BRepClass3d.OuterShell_s(solid)
+            if not outer.IsNull():
+                # Whichever way the shell's faces turn as a solid of its own,
+                # what it encloses is the size of that solid.
+                displaced = abs(_integrated(BRepBuilderAPI_MakeSolid(outer).Solid())[0])
+            result["cavities"] += shells - 1
+        total += displaced
+    if result["solids"]:
+        result["displacement"] = total
+    return result
+
+
 def free_shells(shape):
     """How many shells in 'shape' no solid bounds itself with.
 

@@ -81,6 +81,7 @@ description
 diameter
 dir
 direction
+displacement
 display
 distance
 dm
@@ -216,6 +217,7 @@ manufacturer
 manufacturing
 map
 mass
+match
 material
 materials
 mates
@@ -309,6 +311,7 @@ ref
 reference
 rel
 render
+reports
 repositories
 reproducible
 require
@@ -392,6 +395,7 @@ urdf
 url
 us
 usage
+usd
 use
 validation
 velocity
@@ -403,6 +407,7 @@ visibility
 volume
 wall
 walls
+weight
 width
 windows
 wires

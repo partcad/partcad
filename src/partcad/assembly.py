@@ -410,11 +410,15 @@ class Assembly(Shape):
         declared under 'parameters:' or set on a reference -
         'logo;exploded=true' is an object of its own, with a cache key of its
         own, and everything drawn of it is cached like anything else.
+
+        An exploded assembly is not manufacturable: it is a picture of the
+        assembly, not a thing to make (see 'AssemblyFactory._create', which
+        drops the flag, and 'assembly_explode').
         """
         from .output import as_flag
 
         try:
-            return as_flag(self.get_object_type_parameter("exploded"), "exploded")
+            return as_flag(self.get_object_type_parameter(assembly_explode.PARAMETER), assembly_explode.PARAMETER)
         except ValueError as e:
             pc_logging.error("%s:%s: %s" % (self.project_name, self.name, e))
             return False

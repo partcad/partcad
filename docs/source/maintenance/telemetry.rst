@@ -144,3 +144,42 @@ by specifying shippingAddress and billingAddress separately.
 
 This setup allows full customization of shipping and billing details,
 supporting scenarios where items need to be sent to different recipients or addresses.
+
+.. _user-location:
+
+Country, Language, Currency and Location
+========================================
+
+A store, a catalog or anything else a plugin is a client of is a different thing
+in different places: another range, other prices in other money, pages in
+another language, the shop round the corner. Four options say where the user is:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    country: NL              # ISO 3166-1 alpha-2, or PC_COUNTRY
+    language: en             # ISO 639-1, or PC_LANGUAGE
+    currency: EUR            # ISO 4217, or PC_CURRENCY
+    location: "52.37,4.89"   # latitude,longitude in degrees, or PC_LOCATION
+
+``location`` can also be written ``{latitude: 52.37, longitude: 4.89}``, and in
+the ``user`` section as ``user.location``.
+
+None of them has to be written down. ``country`` is the ``countryCode`` of the
+user's address, else the country of the locale PartCAD was started in
+(``nl_NL.UTF-8`` is the Netherlands); ``language`` is the locale's language; and
+``currency`` is the country's. ``location`` is never worked out: it is the user's
+to give, or not.
+
+They are worked out by the client -- ``pc``, ``pc mcp`` -- on the machine of
+whoever runs the command, and handed to the daemon with the rest of the
+configuration. The daemon uses what it is handed and nothing of its own, so a
+command is answered for where its user is, wherever the daemon was started. (The
+editor extension sends no configuration: the daemon it starts on the user's own
+machine works them out there.)
+
+A plugin is told the country, the state and city of the address, the language
+and the currency (see :ref:`providers`), never the name, the street, the ZIP code
+or the location. A store choosing between its shops asks PartCAD which is
+nearest, and PartCAD answers with a shop. ``pc config`` and
+``pc system status env`` report whether a location is set, not where it is.

@@ -105,6 +105,7 @@ change to one is not answered from what was cached before it.
 method per kind of object:
 
 - ``request["api"] == "get"``, ``request["key"]`` is the key being asked for
+- ``request["query"]`` is the same key taken apart, so a script need not parse it (see below)
 - ``output["result"]`` is the value, or ``null`` when the key is unknown
 
 The keys address every kind of data uniformly, which is why serving a new kind
@@ -151,6 +152,63 @@ it is a client of. See :ref:`plugin-login`.
 For a hierarchy, a child package's requests are **prefixed with its
 subfolder**: a child in ``motors`` asks for ``motors/objects/part``,
 ``motors/deps`` and so on, all served by the same script.
+
+**PartCAD takes the key apart for the script**, in ``request["query"]``, the
+way it reads a name everywhere else -- so a value a name carries
+percent-encoded (``%2C`` for a ``,`` that would split it, ``%3B`` for a ``;``)
+arrives decoded, and a script has no parser of its own to get that wrong:
+
+.. code-block:: python
+
+  {"what": "object", "kind": "part", "name": "763622",
+   "parameters": {"file": "clip;v2.stl"}, "subfolder": ""}   # objects/part/763622;file=clip%3Bv2.stl
+  {"what": "search", "kind": "part", "text": "hinge", "limit": 20, "subfolder": ""}
+  {"what": "objects", "kind": "part", "subfolder": "motors"}  # motors/objects/part
+  {"what": "file", "path": "models/clip.stl", "subfolder": ""}
+  {"what": "meta", "subfolder": ""}                           # and "deps", the same way
+
+``request["key"]`` is still there, and a script written before ``query``
+existed goes on reading it. A name a script *writes* -- a search hit's -- has
+to be spelled the way PartCAD spells one, which escapes only what would be
+misread: a ``,`` in a value that also holds an ``=`` (``%2C``), and every ``%``
+of a value holding something that reads as an escape (``%25``).
+
+Model sites
+===========
+
+A repository for a website of downloadable models -- Thingiverse, Printables,
+Sketchfab and the like -- answers for a name rather than listing a catalog, and
+picks one of a model's files to build. PartCAD gives such a script a toolkit,
+``plugin_models``, which it imports like any module wherever PartCAD runs it:
+
+.. code-block:: python
+
+  import plugin_models
+
+  class Site(plugin_models.Site):
+      NAME, TITLE = "example", "Example"
+
+      def model(self, model_id): ...           # a plugin_models.Model: its title and its files
+      def download(self, model, file): ...     # a file's bytes, with the user's credentials
+      def search(self, text, limit): ...       # the Models the site finds, best first
+      def login_spec(self): ...                # what pc login opens, or None
+
+  if __name__ == "get":
+      output = {"result": plugin_models.serve(Site(request), request["key"])}
+  elif __name__ == "login":
+      output = {"result": plugin_models.login(Site(request), partcad_login)}
+
+The script says how its site is asked; ``plugin_models`` says what PartCAD is
+answered. It names a model ``763622``, its files ``763622;file=<id or name>``,
+``763622;format=stl`` and ``763622;source=preview``; it picks a file by the
+formats PartCAD builds from, an exact format before a mesh, which the user
+orders with the plugin's ``formats`` parameter; it serves the geometry as
+``files/<path>``, because the plugin is where the user's credentials are; and it
+answers ``login`` (:ref:`plugin-login`). Its formats are PartCAD's own part
+types, and a test fails when PartCAD reads a format the toolkit does not offer.
+The ``partcad-repo-*`` plugins under `github.com/partcad
+<https://github.com/partcad>`_ are written this way; see the module's docstring
+for the rest.
 
 Examples
 ========

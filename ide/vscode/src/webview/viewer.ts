@@ -87,6 +87,7 @@ import { BuildView } from './build';
 import { BvbResult, BvbView, THUMBNAIL_SIZE, visibleRows } from './bvb';
 import { hasCallouts } from './callouts';
 import { CaeResult } from './cae';
+import type { CmfChoice } from './choice';
 import { CmfView } from './cmf';
 import { el, empty, placeholder } from './dom';
 import { geometryCache } from './geometryCache';
@@ -194,7 +195,40 @@ const panes: Record<TabId, HTMLElement> = {
 const DATA_TABS: TabId[] = ['bom', 'supply'];
 
 const supplyView = new SupplyView(panes.supply);
-const cmfView = new CmfView(panes.cmf);
+const cmfView = new CmfView(panes.cmf, (choice) => showInDesign(choice));
+
+/**
+ * What the CMF tab singled out in the 3D view, said over the view with a way to
+ * take it away (see 'choice.ts'). Hidden while nothing is.
+ */
+const choiceChip = el('div', 'cmf-choice');
+choiceChip.hidden = true;
+const choiceText = choiceChip.appendChild(el('span', 'cmf-choice-text'));
+const choiceClose = choiceChip.appendChild(el('button', 'cmf-choice-close', '×')) as HTMLButtonElement;
+choiceClose.type = 'button';
+choiceClose.title = 'Show all of it again';
+choiceClose.setAttribute('aria-label', 'Show all of it again');
+choiceClose.addEventListener('click', () => chooseInDesign(undefined));
+byId('viewer').appendChild(choiceChip);
+
+/**
+ * Single out what the CMF tab chose, or nothing, in the 3D view - now if it has
+ * loaded, and in what it shows next if not: the choice is the scene's to keep
+ * across shows of the same object, and 'show' takes it away for another one.
+ */
+function chooseInDesign(choice: CmfChoice | undefined): void {
+    choiceChip.hidden = choice === undefined;
+    choiceText.textContent = choice === undefined ? '' : `Showing ${choice.label}`;
+    choiceChip.title = choice === undefined ? '' : `${choice.label}, and everything else faint`;
+    void sceneLoaded.then((view) => view?.showChoice(choice));
+}
+
+/** A CMF tab's "Show in 3D": the 3D view, with that singled out. */
+function showInDesign(choice: CmfChoice): void {
+    chooseInDesign(choice);
+    tabs.click('design');
+    designTabs.click('3d');
+}
 // The three Manufacturing panes that hold controls of their own - switches, a
 // checkbox, a format - own their panes for the life of the panel, as the
 // analyses do: rebuilding one on every show would take back what the user set.
@@ -277,9 +311,11 @@ const sceneLoaded: Promise<Scene | undefined> = import(/* webpackMode: "eager" *
         scene.setComponentPrices(prices?.texts ?? {});
         // What the box says, should it have been changed while this loaded.
         scene.setAutoFit(view3d.autoFitting);
-        if (module.software) {
-            // Drawn without a GPU, the model does not turn on its own: a frame
-            // every 16 ms is what the software renderer cannot afford. The box
+        // And the projection, should it have been chosen while this loaded.
+        scene.setPerspective(view3d.projection === 'perspective');
+        if (module.onCpu) {
+            // Drawn by the CPU, the model does not turn on its own: a frame
+            // every 16 ms is what the CPU cannot afford. The box
             // says so, and ticking it turns it on regardless.
             view3d.setAnimate(false);
         }
@@ -665,8 +701,9 @@ function onMaterials(data: MaterialClustersData | undefined, error: string | und
 
 /*
  * The view panel down the right of every tab that shows the object: how it is
- * looked at - the gizmo, the axis buttons, the viewpoint - what it is cut to,
- * and, on the 3D tab, Animate, Auto-fit and Opacity (see 'viewPanel.ts').
+ * looked at - the gizmo, the axis buttons, the viewpoint and its projection -
+ * what it is cut to, and, on the 3D tab, Animate, Auto-fit and Opacity (see
+ * 'viewPanel.ts').
  *
  * One per tab, because each tab looks at the object its own way: the 3D view
  * turns a camera, the 2D tab asks PartCAD for a picture from where the panel
@@ -691,6 +728,9 @@ const view3d = new ViewPanel(
         onResetView: () => scene?.resetView(),
         // Gradually, and from where it is looking: Animate goes on turning it.
         onFit: () => scene?.fit(),
+        // Drawn with or without perspective from where it is: Isometric's
+        // corner comes as a viewpoint, which holds the model still there.
+        onProjection: (projection) => scene?.setPerspective(projection === 'perspective'),
         onSection: (section) => onSectionChanged(section),
         onAnimate: (animate) => scene?.setAutoRotate(animate),
         onAutoFit: (autoFit) => scene?.setAutoFit(autoFit),
@@ -701,12 +741,14 @@ const view3d = new ViewPanel(
         target: true,
         animate: true,
         autoFit: true,
+        projection: 'perspective',
         ids: {
             animate: 'animate-checkbox',
             autoFit: 'autofit-checkbox',
             opacity: 'opacity-slider',
             opacityValue: 'opacity-value',
             reset: 'view-reset-button',
+            projection: 'projection-select',
         },
     },
 );
@@ -735,11 +777,15 @@ viewPanels['2d'] = new ViewPanel(
         },
         onSection: (section) => onSectionChanged(section),
     },
-    { target: false },
+    // PartCAD draws the picture, in the projection its 'render:' section gives
+    // it: its edges - what a PNG is unless it says 'style: shaded', and what an
+    // SVG always is - without perspective.
+    { target: false, projection: 'orthographic' },
 );
 viewPanels.draft = new ViewPanel(
     { onViewpoint: () => {}, onResetView: () => {}, onSection: onSectionChanged },
-    { target: false },
+    // A drawing's views are projections without perspective.
+    { target: false, projection: 'orthographic' },
 );
 
 for (const tab of ANALYSIS_TABS) {
@@ -748,9 +794,10 @@ for (const tab of ANALYSIS_TABS) {
         {
             onViewpoint: (viewpoint) => result?.setViewpoint(viewpoint),
             onResetView: () => result?.fit(),
+            onProjection: (projection) => result?.setPerspective(projection === 'perspective'),
             onSection: () => {},
         },
-        { target: true },
+        { target: true, projection: 'perspective' },
     );
     if (result !== undefined) {
         result.onViewChange = throttled(() => updateAnalysisPanel(tab));
@@ -769,7 +816,8 @@ viewPanels.simulation = new ViewPanel(
         onResetView: () => simulationView.setViewpoint(undefined),
         onSection: () => {},
     },
-    { target: false },
+    // The plugin's camera, which is an eye's.
+    { target: false, projection: 'perspective' },
 );
 
 for (const [tab, panel] of Object.entries(viewPanels) as [TabId, ViewPanel][]) {
@@ -867,6 +915,11 @@ function updateAnalysisPanel(tab: AnalysisTabId): void {
 /** Why a picture PartCAD renders cannot be animated, or made see-through. */
 const STILL_PICTURE = 'A picture PartCAD renders holds still, and is drawn as it is';
 
+/** Why the 2D tab's picture is drawn in the projection it is, whatever the view panel says. */
+const RENDERED_PROJECTION =
+    "PartCAD draws the picture in the projection the file type's 'render:' section gives it: " +
+    "its edges without perspective, a shaded picture ('style: shaded') in perspective unless it says 'perspective: 0'";
+
 /** What each part of a tab's view panel can do there; what cannot says why. */
 function capabilitiesOf(tab: TabId): ViewCapabilities {
     const nothing = 'Nothing is shown';
@@ -887,20 +940,26 @@ function capabilitiesOf(tab: TabId): ViewCapabilities {
         const failed = sceneFailed ? 'The 3D view could not start' : undefined;
         const viewing: Capability =
             failed ?? (scene === undefined ? 'The 3D view is starting' : shown ? true : nothing);
-        return { viewpoint: viewing, section, animate: failed ?? true, opacity: failed ?? true };
+        // Drawn with or without perspective whether or not anything is shown:
+        // the next object is drawn the way it says.
+        const projection: Capability = failed ?? (scene === undefined ? 'The 3D view is starting' : true);
+        return { viewpoint: viewing, projection, section, animate: failed ?? true, opacity: failed ?? true };
     }
     if (tab === '2d') {
         return {
             viewpoint:
                 shown === undefined ? nothing : known ? true : 'PartCAD did not say which package this belongs to',
+            projection: RENDERED_PROJECTION,
             section,
             animate: STILL_PICTURE,
             opacity: STILL_PICTURE,
         };
     }
     if (tab === 'draft') {
+        const layout = 'A drawing lays its views out itself: the drawing package decides where each is looked at from';
         return {
-            viewpoint: 'A drawing lays its views out itself: the drawing package decides where each is looked at from',
+            viewpoint: layout,
+            projection: layout,
             section,
             animate: STILL_PICTURE,
             opacity: STILL_PICTURE,
@@ -908,13 +967,15 @@ function capabilitiesOf(tab: TabId): ViewCapabilities {
     }
     if (isAnalysisTab(tab)) {
         const drawing = caeResults[tab]?.drawing ?? 'nothing';
+        const viewing =
+            drawing === 'mesh'
+                ? true
+                : drawing === 'picture'
+                  ? 'This result is a picture the solver drew, looked at from where it chose'
+                  : 'Nothing has been drawn yet: a scenario is drawn once it has run';
         return {
-            viewpoint:
-                drawing === 'mesh'
-                    ? true
-                    : drawing === 'picture'
-                      ? 'This result is a picture the solver drew, looked at from where it chose'
-                      : 'Nothing has been drawn yet: a scenario is drawn once it has run',
+            viewpoint: viewing,
+            projection: viewing,
             section: "An analysis's result is the solver's mesh, which PartCAD does not cut",
             animate: 'An analysis result holds still: its colours are the answer, to be read',
             opacity: 'An analysis result is drawn in the colours the solver gave it, which are the answer',
@@ -924,6 +985,7 @@ function capabilitiesOf(tab: TabId): ViewCapabilities {
     const pictures = "The pictures are the simulation plugin's, of the whole scene";
     return {
         viewpoint: simulated(shown) ? true : 'This declares no simulations',
+        projection: "The pictures are taken with the simulation plugin's own camera, in perspective",
         section: pictures,
         animate: pictures,
         opacity: pictures,
@@ -1520,7 +1582,9 @@ async function show(message: ShowMessage): Promise<void> {
         // A different object: what was ticked about the last one says nothing
         // about this one. Kept when the camera is, which is the same question -
         // "is this the same object again" - and a save and a re-render are.
+        // So is what the CMF tab singled out in it.
         selection.clear();
+        chooseInDesign(undefined);
     }
     if (message.object === null) {
         objectTree.clear();

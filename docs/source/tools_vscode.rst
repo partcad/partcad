@@ -79,7 +79,7 @@ Objects
   file PartCAD reads itself (STEP, BREP, IGES, STL, 3MF, OBJ, glTF); or a CAD application's own file, read
   without the application (FreeCAD ``.FCStd``, Autodesk Fusion ``.f3d``, SolidWorks ``.SLDPRT``, Inventor
   ``.ipt``, CATIA V5 ``.CATPart``, ACIS/ShapeManager ``.sat``/``.sab``/``.smt``/``.smb`` and Creo View
-  ``.pvz``; see :ref:`cad-files`). The file dialog offers every extension of the type, in either case. It
+  ``.pvz``; see :ref:`cad-files`), or an OpenUSD stage (``.usd``, ``.usda``, ``.usdc``, ``.usdz``). The file dialog offers every extension of the type, in either case. It
   adds the part the way ``pc add part`` does (see :doc:`/cli`): nothing is read until the part is built, and
   one of the native formats that does not read into a whole solid fails then.
 - **Import** a part, assembly, scene, or sketch from an existing file.
@@ -207,17 +207,22 @@ out; it stays out, or folded, on every tab at once. From the top:
 - a button per axis, **X**, **-X**, **Y**, **-Y**, **Z** and **-Z**, each looking along that axis from that end.
   They are the views ``pc render --view`` names -- X is ``right``, -Y is ``front``, Z is ``top`` with +Y up -- so
   the 2D tab's picture after one of them is the picture that command draws;
-- a **section** slider per axis, each with two ends, which start at the two faces of the object's bounding box:
-  moving an end inwards cuts that much off from that side, and the three together keep a box. The cut is made by
-  PartCAD, on the exact geometry, before it is drawn -- the 3D view is shown again cut, and the 2D and Draft tabs
-  draw the cut object -- so it is a section of the solid and not a clipping of the picture. It is one section for
-  the 3D, 2D and Draft tabs, kept for as long as the object is on screen;
 - the **viewpoint**: where the view is looked at from (**Origin**), which way is up (**Up**) and, in a 3D view,
   the point it looks at (**Target**), in millimetres in the object's frame. They are the ``viewport_origin`` and
   ``viewport_up`` a ``render:`` section takes, so they can be copied out into one, or onto
   ``pc render --viewport-origin``, and typed or pasted in -- ``1, 2, 3``, ``[1, 2, 3]`` and ``1 2 3`` all read.
   **Reset** goes back to the view the tab starts out with, and on the 3D tab **Fit** brings the camera in or out, over a
-  second and from where it is looking, until the whole object fits however it turns;
+  second and from where it is looking, until the whole object fits however it turns. Right after its title is the
+  **projection**: **Perspective**, the default, draws what is nearer larger, as an eye sees it; **Orthographic** draws without perspective, a length the same size however far away it is, as a drawing does;
+  and **Isometric** draws without perspective from the nearest corner, where all three axes are foreshortened alike.
+  Choosing Isometric turns the view to that corner; turning the view off it leaves it drawn without perspective, and
+  the projection then says Orthographic. The 3D view and an analysis's model offer it; the 2D tab's picture is drawn
+  in the projection its ``render:`` section gives it;
+- a **section** slider per axis, each with two ends, which start at the two faces of the object's bounding box:
+  moving an end inwards cuts that much off from that side, and the three together keep a box. The cut is made by
+  PartCAD, on the exact geometry, before it is drawn -- the 3D view is shown again cut, and the 2D and Draft tabs
+  draw the cut object -- so it is a section of the solid and not a clipping of the picture. It is one section for
+  the 3D, 2D and Draft tabs, kept for as long as the object is on screen;
 - **Animate**, **Auto-fit** and **Opacity**. Animate turns the 3D view's model on its own, and is on from the start
   wherever the view has a graphics card to draw with; Auto-fit is explained below; Opacity makes the model
   see-through.

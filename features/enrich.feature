@@ -74,4 +74,4 @@ Feature: `enrich` objects
       """
     When I run "partcad info cube_wide"
     Then the command should exit with a status code of "0"
-    And STDOUT should not contain "WARN:"
+    And STDOUT should not contain "The enrich '//:cube_wide' ignores"

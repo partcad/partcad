@@ -1032,6 +1032,24 @@ def stop_holders(files):
     return holders
 
 
+def _feed(stream, data):
+    """Write ``data`` to a command's stdin on a thread of its own, and close it after.
+
+    Nothing waits for this thread. A command that exits without reading ends the
+    write with a broken pipe; one that left something else holding its stdin
+    leaves the write waiting for that, beside the request and not in front of it.
+    """
+
+    def write():
+        try:
+            with stream:
+                stream.write(data)
+        except (OSError, ValueError):
+            pass
+
+    threading.Thread(target=write, name="pc-command-stdin", daemon=True).start()
+
+
 def communicate(process, input=None, grace=EXIT_GRACE, interval=WATCH_INTERVAL, wait_after_success=False):
     """``process.communicate(input)``, over when the process is over.
 
@@ -1063,16 +1081,21 @@ def communicate(process, input=None, grace=EXIT_GRACE, interval=WATCH_INTERVAL, 
     exited it has answered, or never will.
     """
     exited = None
-    pending = input
     stdout = stderr = None
+    if input and process.stdin is not None:
+        # Written here rather than handed to 'communicate', which will not take
+        # it twice and, before Python 3.13, does not go on writing it when it is
+        # called again after a timeout: what had not fitted in the pipe by the
+        # first `interval` was never sent, and a command that reads its stdin
+        # before it does anything else, and took longer than that to start,
+        # waited for the rest for ever.
+        stream, process.stdin = process.stdin, None
+        _feed(stream, input)
     while True:
         try:
-            out, err = process.communicate(input=pending, timeout=interval)
+            out, err = process.communicate(timeout=interval)
             return out, err, None
         except subprocess.TimeoutExpired as e:
-            # Passed once: 'communicate' remembers it, and refuses to be handed
-            # it again once it has started writing it.
-            pending = None
             # What has been read so far, which a timeout carries on POSIX and a
             # retry does not lose. Windows reads on threads of its own and
             # reports nothing until they finish.

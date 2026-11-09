@@ -556,7 +556,13 @@
         "desc": { "type": "string", "maxLength": 1000 },
         "path": { "type": "string", "minLength": 1, "description": "The reader script, relative to the package that declares it" },
         "package": { "type": "string", "minLength": 1, "description": "The package holding 'path', when it is not this one" },
-        "extension": { "type": "string", "minLength": 1, "description": "The source file's extension" },
+        "extension": {
+          "description": "The source file's extension. A list for a format stored under more than one (glTF's 'gltf' and 'glb'): an object with no 'path' is the first of them whose file is there",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+          ]
+        },
         "kinds": {
           "description": "Which object kinds this type may be declared as. Both, where the file itself does not say which it is",
           "oneOf": [
@@ -689,7 +695,7 @@
       "description": "The fluid that fills this scene, as a reference to a material ('//pub/std/manufacturing/material/fluid:water', or ':brine' for one this package catalogues). Its 'density' and 'viscosity' are what a simulation of the scene drags and buoys what moves through it with. Absent is vacuum, which is what every engine assumes"
     },
     "requirements": {
-      "description": "What this object is required to be, written before the design is: the features it has to have, in words, and the ports, interfaces and physical properties it has to have, which 'pc test' checks against the model (the 'requirements' test). Any part of a port, an interface or a physical property may be null, and most of it should be: null is no requirement. A required value is a constant (a number, a string or a boolean) or a comparison ('>0', '>=1', '<10', '<=1', '!0'), and several are joined with commas: constants are alternatives ('1,2,4'), comparisons all have to hold ('>0,<=1'). A paragraph, a list of paragraphs, or a mapping of headings to paragraphs is also accepted and read as features, which is the shape this section had before it had structure.",
+      "description": "What this object is required to be, written before the design is: the features it has to have, in words, and the ports, interfaces and physical properties it has to have, and how closely its volume and mass have to match another object's, which 'pc test' checks against the model (the 'requirements' test). Any part of a port, an interface or a physical property may be null, and most of it should be: null is no requirement. A required value is a constant (a number, a string or a boolean) or a comparison ('>0', '>=1', '<10', '<=1', '!0'), and several are joined with commas: constants are alternatives ('1,2,4'), comparisons all have to hold ('>0,<=1'). A paragraph, a list of paragraphs, or a mapping of headings to paragraphs is also accepted and read as features, which is the shape this section had before it had structure.",
       "oneOf": [
         { "type": "string", "minLength": 1 },
         { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
@@ -699,7 +705,8 @@
             "features": { "$ref": "#/definitions/requirement-features" },
             "ports": { "$ref": "#/definitions/requirement-ports" },
             "interfaces": { "$ref": "#/definitions/requirement-interfaces" },
-            "physics": { "$ref": "#/definitions/requirement-physics" }
+            "physics": { "$ref": "#/definitions/requirement-physics" },
+            "match": { "$ref": "#/definitions/requirement-match" }
           },
           "additionalProperties": { "type": "string", "minLength": 1 }
         }
@@ -800,6 +807,33 @@
         }
       },
       "additionalProperties": false
+    },
+    "requirement-match": {
+      "type": ["object", "null"],
+      "description": "How closely this object's volume, displacement and mass have to match another object's: keyed by the other object's name (resolved from this object's package, so ':bracket' is a sibling), each a mapping of 'volume', 'displacement' and 'mass' to how many percent of the other object's they may differ by, either way -- 5 or '5%'. The displacement is what the object would push aside if submerged: its volume and every void sealed inside it, not a hole right through it. 'weight' is accepted for 'mass'. Read by the rules 'pc compare <other> <this>' reads the two by; an amount PartCAD cannot find out fails the requirement",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "null" },
+          {
+            "type": "object",
+            "properties": {
+              "volume": { "$ref": "#/definitions/requirement-percent" },
+              "displacement": { "$ref": "#/definitions/requirement-percent" },
+              "mass": { "$ref": "#/definitions/requirement-percent" },
+              "weight": { "$ref": "#/definitions/requirement-percent" }
+            },
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "requirement-percent": {
+      "description": "How many percent a value may differ by, either way: a number of 0 or more, or the same written with a '%' after it ('5%'); null is no requirement",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "number", "minimum": 0 },
+        { "type": "string", "pattern": "^\\s*[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?\\s*%?\\s*$" }
+      ]
     },
     "requirement-physics": {
       "type": ["object", "null"],
@@ -1849,7 +1883,7 @@
     },
     "cmf": { "$ref": "#/definitions/check-cmf" },
     "cmfConventions": {
-      "description": "How other tools' colours, materials and finishes are read in this package, beside PartCAD's builtin conventions (partcad, step, build123d, cadquery, openscad, 3mf, gltf, ldraw). A part names one in its 'cmfConvention' parameter. See docs/design/cmf.md, section 7.",
+      "description": "How other tools' colours, materials and finishes are read in this package, beside PartCAD's builtin conventions (partcad, step, build123d, cadquery, openscad, 3mf, gltf, ldraw, usd). A part names one in its 'cmfConvention' parameter. See docs/design/cmf.md, section 7.",
       "type": "object",
       "patternProperties": {
         "^[a-zA-Z0-9_.-]+$": {
@@ -1859,7 +1893,7 @@
             "extends": {
               "description": "The builtin convention whose facts it reads: what a source of that kind states. Its own name if that is a builtin, and 'step' otherwise.",
               "type": "string",
-              "enum": ["partcad", "step", "build123d", "cadquery", "openscad", "3mf", "gltf", "ldraw"]
+              "enum": ["partcad", "step", "build123d", "cadquery", "openscad", "3mf", "gltf", "ldraw", "usd"]
             },
             "ids": {
               "description": "The key of a declaration's 'ids' that holds what this tool calls it. Its own name by default.",
@@ -2026,7 +2060,7 @@
                     "basic", "cadquery", "build123d", "chili3d", "sdf", "svg", "dxf", "extrude",
                     "sweep", "stl", "step", "scad", "3mf", "enrich", "alias", "brep",
                     "obj", "gltf", "kicad", "compound", "fcstd", "wall", "iges", "f3d",
-                    "sldprt", "ipt", "catpart", "sat", "pvz"
+                    "sldprt", "ipt", "catpart", "sat", "pvz", "usd"
                   ]
                 },
                 "aliases": {
@@ -2274,8 +2308,8 @@
               "properties": {
                 "type": {
                   "type": "string",
-                  "enum": ["assy", "step", "f3d", "pvz", "urdf", "alias", "enrich"],
-                  "description": "'assy' is an Assembly YAML file, 'step' a STEP assembly, 'f3d' an Autodesk Fusion design, 'pvz' a Creo View package, 'urdf' a URDF robot description. A format an engine's plugin package implements is not in this list and is named through that package - 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
+                  "enum": ["assy", "step", "f3d", "pvz", "gltf", "urdf", "alias", "enrich"],
+                  "description": "'assy' is an Assembly YAML file, 'step' a STEP assembly, 'f3d' an Autodesk Fusion design, 'pvz' a Creo View package, 'gltf' a glTF scene ('.gltf' or '.glb') with a part per mesh, 'urdf' a URDF robot description. A format an engine's plugin package implements is not in this list and is named through that package - 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "images": {
@@ -2851,6 +2885,7 @@
             "extension": { "type": "string", "minLength": 1, "description": "The extension of the file each part of this type is read from. Declaring one makes the part file-backed: its 'path' is relative to the part's own package and defaults to '<name>.<extension>', 'fileFrom' fetches it, and the script finds it as request['path']" },
             "dockerImage": { "type": "string", "minLength": 1, "description": "The image the 'docker' sandbox runs this partType's script in, where it can be pulled. Defaults to the declaring package's own" },
             "requireSolid": { "type": "boolean", "default": false, "description": "Whether every part of this type is a solid, so that one that is not - no solid in it, faces that bound nothing, an open or invalid solid, one with no volume - fails to build instead of being built with a warning. Declare it for a type that reads or generates bodies, such as a converter from a native CAD format, where such a part is one it read wrongly" },
+            "reportsDependencies": { "type": "boolean", "default": false, "description": "Whether the script reports, in output[\"dependencies\"], the other files it read as it built a part - the layers an OpenUSD stage composes, the textures it names - so that the part is built again when one of them changes, with nothing to list under dependencies" },
             "pythonRequirements": { "type": "array", "items": { "type": "string" } }
           },
           "additionalProperties": false

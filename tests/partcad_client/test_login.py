@@ -144,7 +144,7 @@ def test_a_login_that_needs_the_browser_goes_round_once(monkeypatch):
     assert answer["parameters"] == {"token": "abc"}
     assert asked == [[], [{"token": "abc", "key": "k"}]]
     assert opened[0].closed
-    assert "sign in there" in said[0]
+    assert "press Continue on PartCAD's page there, then sign in" in said[0]
 
 
 def test_a_window_that_may_lack_the_extension_puts_the_manual_page_first(monkeypatch):

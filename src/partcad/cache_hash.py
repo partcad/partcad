@@ -576,6 +576,20 @@ class CacheHash:
     def set_dependencies(self, dependencies: list[str]) -> None:
         self.dependencies = dependencies
 
+    def snapshot(self) -> "CacheHash":
+        """This hash as 'get()' would finish it, as a hash of its own: this one is left as it is.
+
+        The copy has the files this one depends on hashed into it when it is
+        read, and can be continued (see 'partcad.discovered_dependencies'),
+        while this one can still be added to.
+        """
+        if self.hasher is None:
+            return CacheHash(self.name)
+        copy = CacheHash(self.name, hasher=self.hasher, cache=True)
+        copy.is_empty = self.is_empty
+        copy.set_dependencies(list(self.dependencies))
+        return copy
+
     def get(self) -> str | None:
         if not self.is_used:
             # TODO(clairbee): make I/O asynchronous and parallel, but maintain the order of hashing

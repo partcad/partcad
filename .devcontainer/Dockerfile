@@ -1,6 +1,6 @@
 FROM mcr.microsoft.com/devcontainers/base:bookworm
 
-ARG IMAGE_VERSION=0.9.5
+ARG IMAGE_VERSION=0.9.24
 
 # https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#labelling-container-images
 # https://github.com/opencontainers/image-spec/blob/main/annotations.md
