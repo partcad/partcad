@@ -86,12 +86,14 @@ test is that test's **parameters** -- ``<object>.qual.basic.<test>.<param>: <val
 declared: ``path:`` names the plugin, and every other key is handed to it. Under
 ``sim:`` every entry is a simulation, whose ``path:`` names the simulation plugin.
 
-The keys this section replaced -- ``qual: sim:`` (whose entries named their plugin
+The keys this section replaced -- ``simulate:`` (whose entries named their plugin
 ``simulation:``), and the ``interference:``, ``connectivity:`` and ``cmf:`` a few
-built-in tests took their parameters from on the object -- are no longer read. An
-object that still has one is told what to write instead, as an error, rather than
-having the setting quietly ignored. (A package's own ``cmf: require: true``, which
-says it for every object of the package, is not one of them.)
+built-in tests took their parameters from on the object -- are the old spellings.
+They are still read, as what ``qual:`` would say where it says nothing itself, and
+an object that has one is warned what to write instead. They go once the packages
+of the index have moved to ``qual:``, which is the order PartCAD retires anything a
+package says in (see :ref:`release-process`). (A package's own ``cmf: require:
+true``, which says it for every object of the package, is not one of them.)
 
 None of this is part of what the object *is*: editing ``qual:`` does not rebuild
 the object, and each test folds what it reads of it into its own verdict's key.

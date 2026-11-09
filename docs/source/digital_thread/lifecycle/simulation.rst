@@ -273,9 +273,9 @@ so ``pc qual test -P //...`` run at the root of a tree resolves each of them the
 editing a simulation does not rebuild the object. The section's schema is under
 :ref:`simulate`.
 
-A ``qual: sim:`` section, naming each plugin ``simulation:``, is how this used to be
-written, and is no longer read: an object that still has one is told to write
-``qual: sim:`` with ``path:`` instead.
+A ``simulate:`` section, naming each plugin ``simulation:``, is how this used to be
+written. It is still read, with a warning to write ``qual: sim:`` with ``path:``
+instead, until the packages of the index have moved to that.
 
 .. _sim-scenes:
 

@@ -47,9 +47,12 @@ Under 'sim:' every entry is a simulation, whose plugin 'path:' names a package's
 Before this section existed, three checks read their parameters from a key of
 their own on the object -- 'interference:', 'connectivity:' and 'cmf:' -- and
 simulations were declared in 'simulate:', naming their plugin as 'simulation:'.
-None of those is read any more. An object that still says one is told what to
-write instead ('RETIRED'), rather than having its setting, or its simulations,
-quietly ignored.
+Those are the old spellings ('LEGACY'), and they are still read, as what the
+section would say where it says nothing itself, with a warning naming what to
+write instead. They stay until the index's packages have moved to 'qual:' and a
+release that reads it is out -- PartCAD's order for retiring anything packages
+say (see "Branches, releases and breaking changes" in the contributing guide) --
+and then go, the warning with them.
 """
 
 import typing
@@ -87,15 +90,20 @@ PATH = "path"
 # parameters handed to the plugin.
 RESERVED = (PATH, "desc", "feature")
 
-# The keys of an object's declaration that 'qual:' replaced, and what each is now.
-# Not read: said, so that a package still written the old way is told how to say
-# it now rather than losing the setting without a word.
-RETIRED = {
-    "simulate": "'qual: sim:', each simulation naming its plugin as 'path:' rather than 'simulation:'",
-    "interference": "'qual: topology: interference:'",
-    "connectivity": "'qual: basic: connectivity:'",
-    "cmf": "'qual: basic: cmf:'",
+# The keys of an object's declaration that 'qual:' replaced, and where each lives
+# now: (subtype, the check's name), or the whole subtype for 'simulate:', whose
+# entries are simulations. Read as what 'qual:' says where it says nothing
+# itself, with a warning naming what to write instead (see the module's
+# docstring for how long).
+LEGACY = {
+    "simulate": (SIM, None),
+    "interference": (TOPOLOGY, "interference"),
+    "connectivity": (BASIC, "connectivity"),
+    "cmf": (BASIC, "cmf"),
 }
+
+# What a simulation named its plugin as, under 'simulate:'.
+LEGACY_SIMULATION = "simulation"
 
 
 # What has been said about a declaration's mistakes in this command: every check
@@ -105,7 +113,7 @@ RETIRED = {
 _reported: set = set()
 
 
-def _error(message: str) -> None:
+def _say(message: str, log) -> None:
     from ..plugin import command_generation
 
     key = (command_generation(), message)
@@ -114,7 +122,15 @@ def _error(message: str) -> None:
     if len(_reported) > 4096:
         _reported.clear()
     _reported.add(key)
-    pc_logging.error(message)
+    log(message)
+
+
+def _error(message: str) -> None:
+    _say(message, pc_logging.error)
+
+
+def _warn(message: str) -> None:
+    _say(message, pc_logging.warning)
 
 
 def _final(shape_or_config) -> dict:
@@ -129,30 +145,79 @@ def _final(shape_or_config) -> dict:
     return config if isinstance(config, dict) else {}
 
 
-def retired(config: dict) -> typing.List[str]:
+def _spelled_now(key: str) -> str:
+    subtype, name = LEGACY[key]
+    if name is None:
+        return "'%s: %s:', each simulation naming its plugin as '%s:' rather than '%s:'" % (
+            SECTION,
+            subtype,
+            PATH,
+            LEGACY_SIMULATION,
+        )
+    return "'%s: %s: %s:'" % (SECTION, subtype, name)
+
+
+def legacy(config: dict) -> typing.List[str]:
     """What an object's declaration still says the way it was said before 'qual:', as sentences saying what to write."""
     return [
-        "'%s:' is no longer read: it is %s" % (key, replacement)
-        for key, replacement in RETIRED.items()
+        "'%s:' is the old spelling of %s, and is read for now: write that instead, since the old one is going away"
+        % (key, _spelled_now(key))
+        for key in LEGACY
         if isinstance(config, dict) and config.get(key) is not None
     ]
 
 
+def _with_legacy(value: dict, config: dict) -> dict:
+    """'value', the 'qual:' section, with what the old spellings say wherever it says nothing itself."""
+    merged = dict(value)
+    for key, (subtype, name) in LEGACY.items():
+        old = config.get(key)
+        if old is None:
+            continue
+        target = merged.get(subtype)
+        if target is None:
+            target = {}
+        elif not isinstance(target, dict):
+            # Wrong as it is, and said so by 'subtype_section()'.
+            continue
+        else:
+            target = dict(target)
+        if name is not None:
+            target.setdefault(name, old)
+        elif isinstance(old, dict):
+            for simulation, entry in old.items():
+                if simulation in target:
+                    continue
+                if isinstance(entry, dict) and LEGACY_SIMULATION in entry and PATH not in entry:
+                    entry = dict(entry)
+                    entry[PATH] = entry.pop(LEGACY_SIMULATION)
+                target[simulation] = entry
+        merged[subtype] = target
+    return merged
+
+
 def section(shape_or_config) -> dict:
-    """The object's 'qual:' section; empty when it declares none, or something that is not a mapping."""
+    """The object's 'qual:' section; empty when it declares none, or something that is not a mapping.
+
+    With what the old spellings ('LEGACY') say, where it says nothing itself.
+    """
     config = _final(shape_or_config)
     name = config.get("name") if isinstance(config, dict) else None
-    for sentence in retired(config):
-        _error("%s%s" % ("%s: " % name if name else "", sentence))
     value = config.get(SECTION)
     if value is None:
-        return {}
-    if not isinstance(value, dict):
+        value = {}
+    elif not isinstance(value, dict):
         _error("'%s' must be a mapping of subtypes (%s)" % (SECTION, ", ".join(SUBTYPES)))
-        return {}
-    unknown = [key for key in value if key not in SUBTYPES]
-    for key in unknown:
-        _error("'%s: %s:' is not a subtype of qualification (%s)" % (SECTION, key, ", ".join(SUBTYPES)))
+        value = {}
+    else:
+        unknown = [key for key in value if key not in SUBTYPES]
+        for key in unknown:
+            _error("'%s: %s:' is not a subtype of qualification (%s)" % (SECTION, key, ", ".join(SUBTYPES)))
+    sentences = legacy(config)
+    if sentences:
+        for sentence in sentences:
+            _warn("%s%s" % ("%s: " % name if name else "", sentence))
+        value = _with_legacy(value, config)
     return value
 
 

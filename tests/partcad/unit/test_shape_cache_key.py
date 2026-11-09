@@ -112,3 +112,5 @@ def test_what_the_cmf_check_requires_does_not_move_the_key():
     """'qual: basic: cmf: {require: true}' says whether a finding fails or warns, not what is built."""
     base = {"name": "part", "type": "step", "path": "a.step"}
     assert _key(base) == _key({**base, "qual": {"basic": {"cmf": {"require": True}}}})
+    # Nor its old spelling, which is still read (see 'partcad.qual.config.LEGACY').
+    assert _key(base) == _key({**base, "cmf": {"require": True}})

@@ -26,13 +26,34 @@ def test_a_built_in_checks_parameters_are_read_under_its_subtype():
         ("simulate", {"stands": {"simulation": "x:y"}}, "'qual: sim:'"),
     ],
 )
-def test_the_keys_qual_replaced_are_not_read_and_say_what_to_write(caplog, key, value, said):
+def test_the_keys_qual_replaced_are_still_read_and_say_what_to_write(caplog, key, value, said):
+    """Until the index's packages have moved to 'qual:' (see 'qual_config.LEGACY')."""
     qual_config._reported.clear()
     config = {"name": "bracket", key: value}
-    assert qual_config.params(config, "topology", "interference") == {}
-    assert qual_config.params(config, "basic", "connectivity") == {}
-    assert qual_config.simulations(config) == []
-    assert "bracket: '%s:' is no longer read: it is %s" % (key, said) in caplog.text
+    subtype, name = qual_config.LEGACY[key]
+    if name is not None:
+        assert qual_config.params(config, subtype, name) == value
+    else:
+        # A simulation names its plugin as 'path:' now, whichever way it was written.
+        assert qual_config.simulations(config) == [("stands", {"path": "x:y"})]
+    assert "bracket: '%s:' is the old spelling of %s" % (key, said) in caplog.text
+    # A warning, not an error: nothing an old package says fails a command for being said that way.
+    assert all(record.levelname == "WARNING" for record in caplog.records if "old spelling" in record.message)
+
+
+def test_what_qual_says_wins_over_the_old_spelling():
+    config = {
+        "connectivity": {"requireAnchored": False},
+        "simulate": {"stands": {"simulation": "old:one"}, "slides": {"simulation": "old:two"}},
+        "qual": {
+            "basic": {"connectivity": {"requireAnchored": True}},
+            "sim": {"stands": {"path": "new:one"}},
+        },
+    }
+    assert qual_config.params(config, "basic", "connectivity") == {"requireAnchored": True}
+    assert qual_config.simulations(config) == [("stands", {"path": "new:one"}), ("slides", {"path": "old:two"})]
+    # Nothing written back into the declaration it was read from.
+    assert config["qual"]["sim"] == {"stands": {"path": "new:one"}}
 
 
 def test_an_entry_that_names_a_plugin_is_a_declaration_not_parameters():
@@ -180,8 +201,10 @@ def test_an_entry_is_written_into_the_objects_qual_section(tmp_path):
         ({}, True),
         ({"qual": {"basic": {"connectivity": {"requireAnchored": False}}}}, False),
         ({"qual": {"basic": {"connectivity": {"requireAnchored": True}}}}, True),
-        # Where the check no longer reads it, neither does the editor.
-        ({"connectivity": {"requireAnchored": False}}, True),
+        # The old spelling, which the check still reads, and so does the editor.
+        ({"connectivity": {"requireAnchored": False}}, False),
+        # And what 'qual:' says wins over it, there as in the check.
+        ({"connectivity": {"requireAnchored": False}, "qual": {"basic": {"connectivity": {}}}}, True),
     ],
 )
 def test_the_editor_reads_connectivity_where_the_check_does(declaration, held):

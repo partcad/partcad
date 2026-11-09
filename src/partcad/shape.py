@@ -201,6 +201,9 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         "cache",
         "cache_dependencies_ignore",
         "category",
+        # The old spelling of 'qual: basic: cmf:', still read (see
+        # 'partcad.qual.config.LEGACY') and no more geometry than 'qual' below.
+        "cmf",
         # How the thing is packaged for sale, not what it is. The third of the
         # (vendor, SKU, pack size) record, and the only one of the three that
         # was missing here - so the same geometry sold in bags of 25 keyed
@@ -241,6 +244,8 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         # simulator again: the opposite of what that leaves out, and the one
         # edit somebody writing the claim first makes over and over.
         "qual",
+        # The old spelling of 'qual: sim:', for the same reason.
+        "simulate",
         "sku",
         "summary",
         "supplier",

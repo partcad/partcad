@@ -639,6 +639,49 @@
       },
       "additionalProperties": true
     },
+    "simulate": {
+      "type": ["object", "null"],
+      "description": "The simulations this object declares: what it is supposed to do, or not do, once it is placed in a world and the world is run. The old spelling of 'qual: sim:', each entry naming its plugin as 'simulation:' rather than 'path:'. Still read, with a warning, until the index's packages have moved to 'qual: sim:'; write that instead",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/simulate-entry" }
+      },
+      "additionalProperties": false
+    },
+    "simulate-entry": {
+      "type": "object",
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "scene": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The scene this object is simulated in, by full path. Its 'subject' parameter is assigned this object's own full path. Defaults to '//builtin/scene:subject', an empty world holding the subject and nothing else"
+        },
+        "offset": { "$ref": "#/definitions/OCCTLocation" },
+        "simulation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The simulation plugin that runs it, by full path, declared in that package's 'simulation:' section. Required: PartCAD implements no simulator, so a package imports one (e.g. github.com/partcad/partcad-sim-mujoco) and names it here"
+        },
+        "validation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A Python expression over 'before', 'after' and 'result' that is true when the simulation went as it should"
+        },
+        "params": {
+          "type": "object",
+          "description": "Parameter values handed to the simulation plugin, overriding what its own declaration defaults to (e.g. 'duration')"
+        },
+        "feature": {
+          "description": "The feature of this object's 'requirements:' that this simulation demonstrates, by name, or a list of them",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true }
+          ]
+        }
+      },
+      "required": ["simulation"],
+      "additionalProperties": false
+    },
     "qual": {
       "type": ["object", "null"],
       "description": "How this object is qualified: one mapping per subtype of qualification test. Under 'basic', 'topology' and 'other', an entry named after a built-in test is that test's parameters ('<object>.qual.basic.<test>.<param>'), and any other entry declares a test a plugin supplies, naming the plugin as 'path'. Under 'sim', every entry is a simulation. 'pc qual test' runs them, a subtype at a time with '--basic', '--topology', '--simulation' and '--other'",
@@ -2243,6 +2286,7 @@
                 "dynamic": { "$ref": "#/definitions/cae-dynamic" },
                 "thermal": { "$ref": "#/definitions/cae-thermal" },
                 "cfd": { "$ref": "#/definitions/cae-cfd" },
+                "simulate": { "$ref": "#/definitions/simulate" },
                 "qual": { "$ref": "#/definitions/qual" },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "vendor": { "type": "string", "minLength": 1 },
@@ -2337,6 +2381,7 @@
                 "implements": { "$ref": "#/definitions/implements" },
                 "ports": { "$ref": "#/definitions/ports-section" },
                 "manufacturable": { "type": "boolean" },
+                "cmf": { "$ref": "#/definitions/check-cmf" },
                 "tolerance": {
                   "type": "number",
                   "minimum": 0,
@@ -2457,11 +2502,15 @@
                   "minLength": 1
                 },
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
+                "interference": { "$ref": "#/definitions/check-interference" },
+                "connectivity": { "$ref": "#/definitions/check-connectivity" },
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
+                "simulate": { "$ref": "#/definitions/simulate" },
                 "qual": { "$ref": "#/definitions/qual" },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "manufacturable": { "type": "boolean" },
+                "cmf": { "$ref": "#/definitions/check-cmf" },
                 "timeout": {
                   "type": "integer",
                   "minimum": 1,
@@ -2498,11 +2547,15 @@
                   "uniqueItems": true
                 },
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
+                "interference": { "$ref": "#/definitions/check-interference" },
+                "connectivity": { "$ref": "#/definitions/check-connectivity" },
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
+                "simulate": { "$ref": "#/definitions/simulate" },
                 "qual": { "$ref": "#/definitions/qual" },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "manufacturable": { "type": "boolean" },
+                "cmf": { "$ref": "#/definitions/check-cmf" },
                 "timeout": {
                   "type": "integer",
                   "minimum": 1,
@@ -2581,6 +2634,7 @@
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
+                "simulate": { "$ref": "#/definitions/simulate" },
                 "qual": { "$ref": "#/definitions/qual" },
                 "manufacturable": {
                   "type": "boolean",
@@ -2589,6 +2643,8 @@
                 },
                 "gravity": { "$ref": "#/definitions/scene-gravity" },
                 "medium": { "$ref": "#/definitions/scene-medium" },
+                "interference": { "$ref": "#/definitions/check-interference" },
+                "connectivity": { "$ref": "#/definitions/check-connectivity" },
                 "timeout": {
                   "type": "integer",
                   "minimum": 1,
@@ -2622,11 +2678,14 @@
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
+                "simulate": { "$ref": "#/definitions/simulate" },
                 "qual": { "$ref": "#/definitions/qual" },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "manufacturable": { "type": "boolean", "default": false },
                 "gravity": { "$ref": "#/definitions/scene-gravity" },
                 "medium": { "$ref": "#/definitions/scene-medium" },
+                "interference": { "$ref": "#/definitions/check-interference" },
+                "connectivity": { "$ref": "#/definitions/check-connectivity" },
                 "timeout": {
                   "type": "integer",
                   "minimum": 1,

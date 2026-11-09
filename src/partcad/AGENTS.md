@@ -346,9 +346,11 @@ at all).
   a package's own `qual:` section (`qual/plugin.py`, `wrappers/wrapper_qual.py`) and run only where an object
   declares it (`registry.for_shape()`). `qual` is outside the shape's hash, so a check folds into
   `cache_key_suffix()` what of it it reads. Simulations are `qual: sim:` with the plugin as `path:`. The keys
-  `qual:` replaced on an object -- `simulate:`, `interference:`, `connectivity:`, `cmf:` -- are not read, and an
-  object that still says one is told what to write instead (`qual_config.RETIRED`); a package's own `cmf:
-  require:` is not one of them.
+  `qual:` replaced on an object -- `simulate:`, `interference:`, `connectivity:`, `cmf:` -- are still read, as
+  what `qual:` says where it says nothing, with a warning naming what to write (`qual_config.LEGACY`): they are
+  what the index's packages say until they move, and they go after that, in the order "Branches, releases and
+  breaking changes" in the contributing guide gives. Nothing in this repository writes them. A package's own
+  `cmf: require:` is not one of them.
 
 - **One object's qualification as data is `qual/report.py`, and what each check is, `qual/catalog.py`.** The
   report runs the checks `pc qual test <object>` runs -- of the subtypes asked for, then what the object declares
