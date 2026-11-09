@@ -42,6 +42,10 @@ colors:
       color: {type: string, default: "000000FF"}
     display: "#%color%"
     manufacturable: false
+materials:
+  steel:
+    density: 7850
+    color: ":Medium Stone Grey"
 """
 
 ROOT = """
@@ -73,6 +77,8 @@ materials:
     full: Aluminium 6061-T6
     density: 2700
     color: ":natural"
+  plastic:
+    density: 1200
 parts:
   box:
     type: step
@@ -82,6 +88,27 @@ parts:
     path: box.step
     parameters:
       color: {type: string, default: ":red"}
+  alu-box:
+    type: step
+    path: box.step
+    parameters:
+      material: {type: string, default: ":alu"}
+  red-alu-box:
+    type: step
+    path: box.step
+    parameters:
+      material: {type: string, default: ":alu"}
+      color: {type: string, default: ":red"}
+  steel-box:
+    type: step
+    path: box.step
+    parameters:
+      material: {type: string, default: "//vendor:steel"}
+  plastic-box:
+    type: step
+    path: box.step
+    parameters:
+      material: {type: string, default: ":plastic"}
   brick:
     type: stl
     path: box.stl
@@ -327,6 +354,28 @@ def test_a_part_in_a_colour_is_an_instance_of_its_own(ctx):
     grey = ctx.get_part(":box;color=:stone")
     assert grey is not None
     assert grey.config["properties"]["color"] == "#969696"
+    assert ctx.get_part(":box").config.get("properties", {}).get("color") is None
+
+
+def test_a_part_that_names_no_colour_is_drawn_in_the_one_its_material_claims(ctx):
+    assert ctx.get_part(":alu-box").config["properties"]["color"] == "#A8A9AD"
+
+
+def test_a_colour_the_part_names_wins_over_its_material_s(ctx):
+    assert ctx.get_part(":red-alu-box").config["properties"]["color"] == "#C91A09"
+
+
+def test_a_material_s_claim_is_read_in_the_material_s_own_package(ctx):
+    # ':Medium Stone Grey' is written in //vendor, where the material is.
+    assert ctx.get_part(":steel-box").config["properties"]["color"] == "#969696"
+
+
+def test_a_material_that_claims_no_colour_draws_nothing(ctx):
+    assert ctx.get_part(":plastic-box").config.get("properties", {}).get("color") is None
+
+
+def test_a_part_named_with_a_material_is_drawn_in_its_claim(ctx):
+    assert ctx.get_part(":box;material=:alu").config["properties"]["color"] == "#A8A9AD"
     assert ctx.get_part(":box").config.get("properties", {}).get("color") is None
 
 
