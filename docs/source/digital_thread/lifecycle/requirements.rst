@@ -46,6 +46,13 @@ which are checked two ways:
   a value may be a constant, a comparison (``>0``, ``<=1``, ``!0``) or several
   of them. ``pc test`` checks every one of them, every time.
 
+``has_color``, ``has_material``, ``has_finish`` and ``has_weight``
+  Whether the object is specified: every face in a colour and in a finish, every
+  solid in a material -- each a CMF declaration that claims it can be had -- and
+  a mass PartCAD knows. Each is ``true`` or ``false``, and of an assembly, of
+  every part in it. A part that is bought is held to them as any other is, which
+  is how a package of a vendor's parts makes sure each says what it is made of.
+
 A ``simulate:`` entry names the feature it demonstrates with ``feature:``, which
 is how a simulation becomes evidence for a requirement rather than a test that
 happens to exist.

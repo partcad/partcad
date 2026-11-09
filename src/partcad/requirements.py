@@ -35,8 +35,19 @@ terms whoever asked for the design thinks in:
                 object's package the way any reference is, and read by the rules
                 'pc compare' reads two objects by (see 'partcad.compare');
                 'weight' is accepted for 'mass'.
+    has_color, has_material, has_finish, has_weight
+                yes-or-no requirements on what the object is specified
+                with, each true (it has to be) or false (it must not be):
+                every face in a colour, every solid in a material, every face
+                in a finish - each a CMF declaration that claims it can be
+                had, not a picture (see 'partcad.cmf') - and a mass PartCAD
+                knows, stated or worked out from a material's density. Of an
+                assembly, true of every part in it. 'has_mass' is accepted for
+                'has_weight'. They are what holds a part that is bought - which
+                the 'cmf' check leaves alone, since its vendor decides what it
+                is in - to having been specified all the same.
 
-The last four are what ``pc test`` checks (the ``requirements`` test, see
+The last five are what ``pc test`` checks (the ``requirements`` test, see
 'test/requirements.py'), and this module is the one place that says what they
 mean -- the test, the daemon's ``requirements.check`` that the IDE's
 Requirements tab is drawn from, and anything else that asks, all go through
@@ -93,10 +104,28 @@ PORTS = "ports"
 INTERFACES = "interfaces"
 PHYSICS = "physics"
 MATCH = "match"
+# The yes-or-no requirements, listed under one heading: each is a key of the
+# section itself ('has_material: true'), not of a mapping of its own.
+HAS = "has"
 
 # The sections 'pc test' verifies against the model, in the order a report
 # lists them. 'features' is not one of them: a feature is prose.
-STRUCTURED = (PORTS, INTERFACES, PHYSICS, MATCH)
+STRUCTURED = (PORTS, INTERFACES, PHYSICS, MATCH, HAS)
+
+# Each yes-or-no requirement, by the key it is written with: the CMF component
+# it is about and whether that is said of faces or of solids, or None for the
+# mass. 'has_mass' is the same requirement as 'has_weight', as 'match:' takes
+# 'weight' for 'mass'.
+HAS_KEYS = {
+    "has_color": ("color", "face"),
+    "has_material": ("material", "solid"),
+    "has_finish": ("finish", "face"),
+    "has_weight": None,
+    "has_mass": None,
+}
+_HAS_NAMES = {"has_mass": "has_weight"}
+# How a report says each component.
+_WORDS = {"color": "colour", "material": "material", "finish": "finish"}
 
 # Where a feature reference that names nothing is reported: it is a mistake in
 # a 'simulate:' entry, not in the requirements. One an analysis scenario makes
@@ -526,6 +555,17 @@ class MatchRequirement:
         return "within %s%%" % _fmt(self.limit)
 
 
+class HasRequirement:
+    """A yes-or-no requirement: 'has_material: true' - the object has to have every solid in a material."""
+
+    def __init__(self, name: str, required: bool):
+        self.name = name
+        self.required = required
+
+    def describe(self) -> str:
+        return _fmt(self.required)
+
+
 class Problem:
     """A requirement that cannot be read, kept so that it fails rather than vanishes."""
 
@@ -544,12 +584,13 @@ class Declaration:
         self.interfaces: list = []
         self.physics: list = []
         self.match: list = []
+        self.has: list = []
         self.problems: list = []
 
     @property
     def structured(self) -> bool:
         """Whether anything here is for 'pc test' to check."""
-        return bool(self.ports or self.interfaces or self.physics or self.match or self.problems)
+        return bool(self.ports or self.interfaces or self.physics or self.match or self.has or self.problems)
 
     @property
     def empty(self) -> bool:
@@ -767,6 +808,20 @@ def _parse_features(raw, declaration: Declaration) -> None:
         declaration.features[str(name)] = "" if desc is None else str(desc).strip()
 
 
+def _parse_has(raw: dict, declaration: Declaration) -> None:
+    for key in HAS_KEYS:
+        value = raw.get(key)
+        if value is None:
+            continue
+        name = _HAS_NAMES.get(key, key)
+        if not isinstance(value, bool):
+            declaration.problems.append(Problem(HAS, key, "'%s' is true or false, not %s" % (key, _fmt(value))))
+        elif any(known.name == name for known in declaration.has):
+            declaration.problems.append(Problem(HAS, key, "'%s' says what '%s' says already" % (key, name)))
+        else:
+            declaration.has.append(HasRequirement(name, value))
+
+
 def parse(raw) -> typing.Optional[Declaration]:
     """The requirements a 'requirements:' section declares, or None when there is none.
 
@@ -792,7 +847,7 @@ def parse(raw) -> typing.Optional[Declaration]:
 
     _parse_features(raw.get(FEATURES), declaration)
     for key, value in raw.items():
-        if key in (FEATURES,) + STRUCTURED or value is None:
+        if key in (FEATURES,) + STRUCTURED or key in HAS_KEYS or value is None:
             continue
         # A free-form paragraph under a heading of its own: the mapping form of
         # the section before it had structure. A feature by another name, and
@@ -806,6 +861,7 @@ def parse(raw) -> typing.Optional[Declaration]:
         _parse_physics(raw[PHYSICS], declaration)
     if raw.get(MATCH) is not None:
         _parse_match(raw[MATCH], declaration)
+    _parse_has(raw, declaration)
     return declaration
 
 
@@ -1085,7 +1141,7 @@ def _feature_references(shape, declaration: typing.Optional[Declaration], report
 
 def _declared_checks(declaration: Declaration) -> dict:
     """{section: [(requirement, Check)]} with nothing verified yet."""
-    checks = {PORTS: [], INTERFACES: [], PHYSICS: [], MATCH: []}
+    checks = {PORTS: [], INTERFACES: [], PHYSICS: [], MATCH: [], HAS: []}
     for port in declaration.ports:
         checks[PORTS].append((port, Check(PORTS, port.name, port.describe())))
     for interface in declaration.interfaces:
@@ -1101,6 +1157,8 @@ def _declared_checks(declaration: Declaration) -> dict:
         checks[PHYSICS].append((physics, Check(PHYSICS, physics.path, physics.describe())))
     for matched in declaration.match:
         checks[MATCH].append((matched, Check(MATCH, matched.name, matched.describe())))
+    for has in declaration.has:
+        checks[HAS].append((has, Check(HAS, has.name, has.describe())))
     return checks
 
 
@@ -1376,6 +1434,110 @@ async def _verify_match(ctx, shape, entries) -> None:
         check.passed, check.detail = pc_compare.within(entry, requirement.limit)
 
 
+def _sets_of(summary: dict, where: str) -> list:
+    """The sets of a CMF summary that say something of faces ('face') or of solids ('solid')."""
+    key = "faces" if where == "face" else "solids"
+    return [entry for entry in (summary or {}).get("sets") or [] if entry.get(key) not in (0, None)]
+
+
+def _part_lacks(ctx, part, component: str, where: str) -> typing.Optional[str]:
+    """Why not every face (or solid) of a built 'part' is in a 'component' that is a claim; None when it is.
+
+    A face or a solid in nothing fails it, and so does one in a colour that is
+    only a picture - a source's colour no declaration claims, an 'rgba' - or in
+    a reference that resolves to nothing: the requirement is that what it is in
+    was specified, and could be had as specified (see 'partcad.cmf').
+    """
+    from . import cmf as pc_cmf
+    from .test import cmf as cmf_check
+
+    summary = pc_cmf.summary_of(part)
+    things = "%ss" % where
+    if not summary:
+        # A part that states no CMF records none: it is in nothing at all.
+        return "no %s on any of its %s" % (_WORDS[component], things)
+    sets = _sets_of(summary, where)
+    if component == "finish":
+        # A summary counts the faces with no colour and the solids with no
+        # material, and not the faces with no finish: none is as produced.
+        missing = 0
+        for entry in sets:
+            if not entry.get(component):
+                missing = "all" if entry.get("faces") == "all" else missing + entry.get("faces", 0)
+        if not sets:
+            missing = "all"
+    else:
+        missing = (summary.get("unspecified") or {}).get(component)
+    if missing:
+        return "no %s on %s %s" % (_WORDS[component], "any of its" if missing == "all" else missing, things)
+    # Every set that names one, whichever sub-shapes it is counted on: a
+    # part's own material is counted on its faces where only they are
+    # addressed one by one.
+    problems = []
+    named = {entry.get(component) for entry in summary.get("sets") or [] if entry.get(component)}
+    for reference in sorted(named):
+        problems.extend(cmf_check.claim_problems(ctx, component, reference, part.project_name))
+    return "; ".join(problems) or None
+
+
+async def _parts_async(ctx, shape) -> list:
+    """Every part 'shape' is - itself, for a part - or holds, each once, looking inside every sub-assembly."""
+    from .assembly import Assembly
+    from .assembly_guide import resolve_alias
+
+    if not isinstance(shape, Assembly):
+        return [shape]
+    found = {}
+
+    async def walk(assembly):
+        target = resolve_alias(ctx, assembly)
+        await target.do_instantiate()
+        for child in target.children:
+            if isinstance(child.item, Assembly):
+                await walk(child.item)
+            else:
+                found.setdefault("%s:%s" % (child.item.project_name, child.item.name), child.item)
+
+    await walk(shape)
+    return list(found.values())
+
+
+async def _verify_has(ctx, shape, entries) -> None:
+    """Hold the object to each yes-or-no requirement: of an assembly, of every part in it."""
+    kind = getattr(shape, "kind", None)
+    if kind not in ("part", "assembly"):
+        for _, check in entries:
+            check.passed = False
+            check.detail = "a %s is not made of anything, and has no mass" % kind
+        return
+    parts = await _parts_async(ctx, shape)
+    for requirement, check in entries:
+        if HAS_KEYS[requirement.name] is None:
+            value, source = (await resolve_physics_async(ctx, shape, ["mass"]))["mass"]
+            has = value is not None
+            detail = ("%s (%s)" % (_quantity("mass", value), source)) if has else "not known: %s" % source
+        else:
+            component, where = HAS_KEYS[requirement.name]
+            lacking = []
+            for part in parts:
+                if await part.get_wrapped(ctx) is None:
+                    lacking.append("%s:%s did not build" % (part.project_name, part.name))
+                    continue
+                why = _part_lacks(ctx, part, component, where)
+                if why is not None:
+                    lacking.append(why if part is shape else "%s:%s: %s" % (part.project_name, part.name, why))
+            has = not lacking
+            if has:
+                detail = "every %s is in a %s that is a claim" % (where, _WORDS[component])
+            else:
+                shown = lacking[:3] + (["and %d more" % (len(lacking) - 3)] if len(lacking) > 3 else [])
+                detail = "; ".join(shown)
+        check.passed = has == requirement.required
+        if has and not requirement.required:
+            detail = "it has one, and is required not to: %s" % detail
+        check.detail = detail
+
+
 def _declared(shape):
     """The report on 'shape' with nothing verified, and its checks by section.
 
@@ -1433,6 +1595,7 @@ async def check_async(ctx, shape, verify: bool = True) -> Report:
         INTERFACES: _verify_interfaces,
         PHYSICS: _verify_physics,
         MATCH: _verify_match,
+        HAS: _verify_has,
     }
     for section in STRUCTURED:
         entries = sections[section]

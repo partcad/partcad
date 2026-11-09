@@ -41,6 +41,8 @@ export const SECTIONS: [string, string][] = [
     ['interfaces', 'Interfaces'],
     ['physics', 'Physics'],
     ['match', 'Matches'],
+    // The yes-or-no requirements: has_color, has_material, has_finish, has_weight.
+    ['has', 'Specified'],
 ];
 
 /** Where a check of any other section - a requirement that could not be read, a dangling 'feature:' - is listed. */

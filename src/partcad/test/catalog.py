@@ -389,8 +389,9 @@ is declared.
 
 ### When it does not apply
 
-An object that requires no port, interface, physical property or match with
-another object, and whose simulations and analysis scenarios name no feature.
+An object that requires no port, interface, physical property, match with
+another object or `has_` fact (`has_color`, `has_material`, `has_finish`,
+`has_weight`), and whose simulations and analysis scenarios name no feature.
 
 ### When it fails
 
