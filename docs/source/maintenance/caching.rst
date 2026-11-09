@@ -127,8 +127,8 @@ compressed bytes it travels in, so machines whose compressors differ (Python
 those entries too.
 
 An object made out of others is keyed on theirs as well: an ``extrude`` or
-``sweep`` on its sketch, a ``compound`` part on its assembly, an ``assy``
-assembly on everything it links to. Editing a part rebuilds every assembly that
+``sweep`` on its sketch, a ``boolean`` part on its two parts, a ``compound``
+part on its assembly, an ``assy`` assembly on everything it links to. Editing a part rebuilds every assembly that
 uses it, and an object with ``cache: false`` makes everything built out of it
 uncached too.
 

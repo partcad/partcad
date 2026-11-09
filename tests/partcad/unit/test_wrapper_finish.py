@@ -189,6 +189,15 @@ def test_an_extrusion_is_finished(run, tmp_path):
     assert measured["bbox"] == pytest.approx([20.0, 0.0, 0.0, 40.0, 20.0, 10.0], abs=1e-6)
 
 
+def test_a_boolean_is_finished(run, tmp_path):
+    """Asked with its operands as they travel - not decoded - and answered finished all the same."""
+    operands = [_box(), BRepPrimAPI_MakeBox(5.0, 5.0, 5.0).Shape()]
+    claim, measured = _finished(run("boolean", "and", _request(_finish(), operation="and", operands=operands)))
+    assert list(claim) == ["validated", "offset", "scale"]
+    # The 5mm cube both occupy, moved 10 in X and scaled by two.
+    assert measured["bbox"] == pytest.approx([20.0, 0.0, 0.0, 30.0, 10.0, 10.0], abs=1e-6)
+
+
 def test_a_sweep_is_finished(run, tmp_path):
     request = _request(_finish(), sketch=_square(), axis=[[0, 0, 10]], ratio=None, accumulate=False)
     claim, measured = _finished(run("sweep", tmp_path / "unused", request))

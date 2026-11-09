@@ -67,6 +67,12 @@ Pick the script kind that best fits the part — you decide:
 | `sdf` | organic / implicit shapes |
 | `extrude` / `sweep` | a constant profile, straight or along a path: built from the sketch §4 validated, with no script at all |
 
+A part that is two existing parts combined - what both occupy, either, or
+only one - needs no script either: `type: boolean` with `operation: and|or|xor`
+and `parts: [first, second]`, and `whole: true` to take whole solids out of a
+model of several touching ones (a bolt out of a vendor's hub) rather than cut
+by volume. See `docs/source/config_parts.rst`, "Booleans".
+
 A part that is nothing but one box or one cylinder needs no script at all:
 declare it as `type: basic` with a `cuboid:` (a number for a cube, or
 `[x, y, z]` sizes) or a `cylinder:` (`radius`, `height`, standing along Z).

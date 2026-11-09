@@ -41,7 +41,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <basic|scad|cadquery|build123d|chili3d|sdf|extrude|sweep
+      type: <basic|scad|cadquery|build123d|chili3d|sdf|extrude|sweep|boolean
              |step|brep|iges|stl|3mf|obj|gltf|fcstd|f3d|sldprt|ipt|catpart|sat|pvz
              |kicad|compound|wall|alias|enrich|:<partType declared by this package>
              |<package>:<partType declared by that package>>
@@ -209,6 +209,81 @@ Neither a basic part nor a basic sketch (see :ref:`sketches`) is built with a CA
 kernel: PartCAD writes its BREP itself, in milliseconds and without starting a
 CAD sandbox. It is still the solid OCCT would have built from the same numbers,
 and it renders, exports, measures and takes part in a boolean like one.
+
+.. _boolean_parts:
+
+Booleans
+--------
+
+A part may be two other parts combined, by the material both occupy, the
+material either occupies, or the material only one of them occupies:
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      type: boolean
+      operation: <and|or|xor>
+      parts: [<the first part>, <the second part>]
+      whole: <(optional) true to combine them by their solids, not by their volume>
+
+Each of the two ``parts`` is a reference, resolved against the package the way
+any reference is (``bracket``, ``:bracket``, ``//pub/acme:bracket;size=4``), so
+either may be a part of another package, or one named with parameters.
+
+**By volume**, the default, the operation is what a CAD system means by a
+boolean: ``and`` is the material both parts occupy, ``or`` the material either
+occupies, fused into one solid where the two touch or overlap, and ``xor`` the
+material exactly one of them occupies -- each part with the other cut out of it,
+side by side.
+
+**By whole solids** (``whole: true``) each part is the set of its solids, and a
+solid of one is *in* the other when it lies wholly inside it. Nothing is cut:
+``and`` keeps the first part's solids that are in the second; ``or`` keeps all
+of the first's, and the second's that are not in it; ``xor`` keeps the first's
+that are not in the second, and the second's that are not in the first. That is
+how one piece of a model made of several touching pieces is taken out of it --
+a pinch bolt out of a hub's STEP file -- with a box around it, which by volume
+would cut a slice of the hub along with the bolt. ``xor`` with what was taken
+out is then the rest of the model, without it:
+
+.. code-block:: yaml
+
+  parts:
+    hub-as-modelled:     # the vendor's file: the hub's body and its two pinch bolts
+      type: step
+      path: hub.step
+    around-the-bolts:
+      type: basic
+      cuboid: [20, 12, 12]
+      offset: [[0, 18, -10], [0, 0, 1], 0]
+    pinch-bolts:
+      type: boolean
+      operation: and
+      parts: [hub-as-modelled, around-the-bolts]
+      whole: true
+      parameters:
+        material: {type: string, default: "//pub/std/manufacturing/material/metal:steel-1045"}
+    hub-body:
+      type: boolean
+      operation: xor
+      parts: [hub-as-modelled, pinch-bolts]
+      whole: true
+      parameters:
+        material: {type: string, default: "//pub/std/manufacturing/material/metal:al-6061-t6"}
+
+Every face and solid of the result is in the colour, material and finish it was
+in in the part it came from (see :ref:`cmf`), carried through OCCT's history of
+the operation. Where a solid of the result is a piece of both -- what ``and``
+and ``or`` make by volume -- it is made of what the first part is made of, and so
+is a face the two parts had in the same place. A face keeps its colour and finish
+but not a material: what a face is made of is the solid it bounds. The part's own
+``color``, ``material`` and ``finish`` parameters then complete what is left
+unset, as any part's do -- or, with ``sourceCmf``, replace what the two parts
+said. A boolean is not one homogeneous body, so it takes no ``tolerance``.
+
+The operation runs in the Python sandbox, as an extrusion does, and the result
+is cached under the two parts' own keys: editing either builds it again.
 
 CAD Scripts
 -----------

@@ -28,6 +28,7 @@ from .part import Part
 from .part_factory_3mf import PartFactory3mf
 from .part_factory_alias import PartFactoryAlias
 from .part_factory_basic import PartFactoryBasic
+from .part_factory_boolean import PartFactoryBoolean
 from .part_factory_brep import PartFactoryBrep
 from .part_factory_build123d import PartFactoryBuild123d
 from .part_factory_cadquery import PartFactoryCadquery
@@ -99,6 +100,8 @@ factory.register("part", "scad", PartFactoryScad)
 factory.register("part", "kicad", PartFactoryKicad)
 factory.register("part", "extrude", PartFactoryExtrude)
 factory.register("part", "sweep", PartFactorySweep)
+# Two other parts, combined: see 'part_factory_boolean'.
+factory.register("part", "boolean", PartFactoryBoolean)
 # A surface a room is drawn with, not a body: see 'partcad.surface'.
 factory.register("part", "wall", PartFactoryWall)
 factory.register("part", "alias", PartFactoryAlias)
