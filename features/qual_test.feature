@@ -558,7 +558,7 @@ Feature: `pc qual test` command
     # exercise all four.
     When I run command
       """
-      pc --no-ansi -p $PARTCAD_ROOT/examples test --package //produce_part_subtractive -f manufacturability
+      pc --no-ansi -p $PARTCAD_ROOT/examples qual test --package //produce_part_subtractive -f manufacturability
       """
     Then the command should exit with a status code of "0"
     And STDERR should not contain "ERROR:"
@@ -641,7 +641,7 @@ Feature: `pc qual test` command
     # and bottom. Three parts are folded from that one blank - at one bend line,
     # at the other, and at both - so this covers three readings of one drawing
     # being three sketches.
-    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples test --package //produce_part_sheet_metal -f manufacturability-sheet-metal"
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples qual test --package //produce_part_sheet_metal -f manufacturability-sheet-metal"
     Then the command should exit with a status code of "0"
     And STDERR should not contain "ERROR:"
 
