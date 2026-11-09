@@ -1057,6 +1057,11 @@ def import_object(session, params):
     plugin package does -- and ``--target-format`` converts through the same
     machinery. Those runtimes belong to the daemon's environment and need not
     exist on the client side at all.
+
+    ``compound``, for an assembly, imports it as one part -- its compound --
+    rather than as parts and an ASSY that places them (``pc import assembly
+    --compound``; see `partcad.actions.assembly.import_assy`). The answer then
+    names that part, and says so under ``kind``.
     """
     from pathlib import Path
 
@@ -1119,12 +1124,13 @@ def import_object(session, params):
 
         from partcad.actions.assembly import import_assy_action
 
+        compound = _compound(pc, params)
         try:
-            name = import_assy_action(package_obj, params["assembly_type"], source, config)
+            name = import_assy_action(package_obj, params["assembly_type"], source, config, compound=compound)
         except Exception as e:  # pylint: disable=broad-except
             pc.logging.exception("Error importing assembly")
             raise JsonRpcError(USAGE_ERROR, "Error importing assembly: %s" % e) from e
-        return {"name": name}
+        return {"name": name, "kind": "part" if compound else "assembly"}
     finally:
         _invalidate_context(session, params)
 
@@ -1534,11 +1540,18 @@ def adhoc_convert(session, params):
 
     A pure file operation: input/output paths are already absolute (resolved by
     the CLI against the user's cwd). Missing types are inferred from extensions.
+
+    ``compound``, for a part, reads the input as the assembly it holds and writes
+    its compound (``pc adhoc convert part --compound``; see
+    `partcad.adhoc.convert.convert_cad_file`).
     """
     from pathlib import Path
 
     pc = session.ensure_partcad()
     kind = params.get("kind", "part")
+    compound = _compound(pc, params)
+    if compound and kind != "part":
+        raise JsonRpcError(USAGE_ERROR, "Only an assembly file is converted as its compound, into a part")
     if kind == "part":
         from partcad.adhoc.convert import convert_cad_file as convert_fn
         from partcad.shape import PART_EXTENSION_MAPPING as mapping
@@ -1578,7 +1591,10 @@ def adhoc_convert(session, params):
 
     try:
         pc.logging.info("Converting %s (%s) to %s (%s)..." % (input_path, input_type, output_path, output_type))
-        convert_fn(str(input_path), input_type, str(output_path), output_type)
+        if compound:
+            convert_fn(str(input_path), input_type, str(output_path), output_type, compound=True)
+        else:
+            convert_fn(str(input_path), input_type, str(output_path), output_type)
         pc.logging.info("Conversion complete: %s" % output_path)
     except ValueError as e:
         # A format that only means anything inside a package ('.urdf', '.assy')
@@ -5115,11 +5131,18 @@ def render_objects(session, params):
 
     ``ports`` narrows the overlay to the ports it names, by the name each is
     reported under; see `partcad.render_overlay`.
+
+    ``compound`` writes every assembly and scene as its compound -- one part, every
+    item it places in it -- rather than as the tree of what it places (``pc export
+    --compound``; see `partcad.assembly_compound`). A part or a sketch is one shape
+    already and is written as it is. A file type that declares ``compound: true``
+    is written that way whether or not this asks.
     """
     ctx = _ctx(session, params)
     if ctx is None:
         return None
     pc = session.partcad
+    compound = _compound(pc, params)
     selected, object_name, recursive = _request(params)
     package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
@@ -5182,6 +5205,7 @@ def render_objects(session, params):
                 render_opts,
                 recursive,
                 link_filter,
+                compound,
             )
         except AssemblyDocumentError as e:
             # Asking for an assembly instruction book of something that has no
@@ -5249,7 +5273,8 @@ def render_inline(session, params):
     and video options of ``render.objects`` (`VIDEO_OPTIONS`) are taken too. ``section`` cuts the object
     by a box first -- ``{"x": [lo, hi], ...}`` in millimetres in the frame of the
     object's root, an axis left out not cut (see `partcad.shape_section`) --
-    which is what the panel's section sliders ask for.
+    which is what the panel's section sliders ask for. ``compound`` writes an
+    assembly or a scene as its compound, as ``render.objects`` does.
 
     The file is written into a temporary directory on the daemon's machine, read
     back, and the directory removed. A path would not do: the daemon may be on
@@ -5306,6 +5331,7 @@ def render_inline(session, params):
             "Only an assembly or a scene has links to filter; '%s' has none" % kind,
         )
     section = _section(params)
+    compound = _compound(pc, params)
     render_opts = {**_render_options(pc, params), **_video(params)}
 
     if kind in ("assembly", "scene"):
@@ -5330,6 +5356,7 @@ def render_inline(session, params):
                     overlay=overlay,
                     link_filter=link_filter,
                     section=section,
+                    compound=compound,
                     **render_opts,
                 )
             )
@@ -5360,6 +5387,22 @@ def render_inline(session, params):
         "viewport": viewport if isinstance(viewport, dict) else None,
         "section": section,
     }
+
+
+def _compound(pc, params) -> bool:
+    """Whether a request asks for assemblies and scenes as their compounds; refused when it is not a flag.
+
+    A boolean, or nothing, is the answer as it stands; text ("false" from a client
+    that is not JSON-typed) is read by 'output.as_flag', the one reader of the
+    protocol's flags.
+    """
+    value = params.get("compound")
+    if value is None or isinstance(value, bool):
+        return bool(value)
+    try:
+        return pc.output.as_flag(value, "compound")
+    except ValueError as e:
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
 
 
 def _section(params):
@@ -5444,6 +5487,7 @@ def _render_objects(
     render_opts=None,
     recursive=False,
     link_filter=None,
+    compound=False,
 ):
     """The body of 'render_objects', once the request has been made sense of."""
     import asyncio
@@ -5491,6 +5535,7 @@ def _render_objects(
             overlay,
             render_opts,
             link_filter,
+            compound,
         )
     )
 
@@ -5508,6 +5553,7 @@ async def _render_packages_async(
     overlay=None,
     render_opts=None,
     link_filter=None,
+    compound=False,
 ):
     """Render the given packages, several at a time.
 
@@ -5560,6 +5606,7 @@ async def _render_packages_async(
                     overlay=overlay,
                     render_opts=render_opts,
                     fast_only=fast_only,
+                    compound=compound,
                 )
             else:
                 sketches, interfaces, parts, assemblies, scenes = [], [], [], [], []
@@ -5595,6 +5642,7 @@ async def _render_packages_async(
                     render_opts=render_opts,
                     fast_only=fast_only,
                     link_filter=link_filter,
+                    compound=compound,
                 )
 
     results = await asyncio.gather(*[render_package(package) for package in packages], return_exceptions=True)

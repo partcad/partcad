@@ -46,6 +46,22 @@ Feature: `pc import assembly` command
           type: assy
       """
 
+  @step
+  Scenario: Import STEP assembly into the project as one part
+    When I run "pc import assembly --compound input_files/AeroAssembly.step"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "imported successfully as the part 'AeroAssembly'"
+    And a file named "AeroAssembly.step" should exist
+    And a file named "partcad.yaml" should have YAML content:
+      """
+      dependencies:
+      sketches:
+      parts:
+        AeroAssembly:
+          type: step
+      assemblies:
+      """
+
   @urdf
   Scenario: Import URDF assembly into the project
     Given I copy file "examples/feature_import/robot.urdf" to "input_files/robot.urdf" inside test workspace

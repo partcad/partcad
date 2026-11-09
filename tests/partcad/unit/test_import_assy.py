@@ -106,6 +106,33 @@ def test_import_assembly(setup_test_project, tmp_path):
         assert generated_yaml == reference_yaml_adjusted, f"Mismatch in YAML file: {generated_yaml_file}"
 
 
+def test_import_assembly_as_its_compound(setup_test_project):
+    """'pc import assembly --compound': the STEP file as one part of the package, as it is.
+
+    A STEP file read as a part is one shape holding every solid in it, which is
+    the compound of the assembly it holds - so the file is copied and declared
+    as a 'step' part, and nothing else is written: no part per solid, no ASSY.
+    """
+    project, project_dir = setup_test_project
+
+    name = import_assy_action(project, "step", str(ASSEMBLY_FILE), {}, compound=True)
+
+    assert name == "AeroAssembly"
+    assert (project_dir / "AeroAssembly.step").read_bytes() == ASSEMBLY_FILE.read_bytes()
+    config = load_yaml(project_dir / "partcad.yaml")
+    assert config["parts"] == {"AeroAssembly": {"type": "step"}}
+    assert not config.get("assemblies")
+    assert not (project_dir / "AeroAssembly").exists()
+
+
+def test_a_compound_import_refuses_a_part_name_in_use(setup_test_project):
+    project, _project_dir = setup_test_project
+    import_assy_action(project, "step", str(ASSEMBLY_FILE), {}, compound=True)
+
+    with pytest.raises(ValueError, match="already has a part named 'AeroAssembly'"):
+        import_assy_action(project, "step", str(ASSEMBLY_FILE), {}, compound=True)
+
+
 def test_import_invalid_file(setup_test_project):
     """Tests handling of an invalid/missing assembly file."""
     project, _ = setup_test_project

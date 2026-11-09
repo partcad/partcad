@@ -175,9 +175,10 @@ export:
       Unified Robot Description Format: a URDF file plus the mesh files it
       references, one link per rigid body and one joint per pair of bodies
       (see 'kinematics' in the wrappers). Unlike every other format here it is
-      handed the assembly *tree* itself rather than the geometry it decodes to
-      (`decode: false`), because which parts are one body, how the joints
-      between them move and what every link is called is what the tree says.
+      written from the assembly *tree* itself (`shape_tree`) and never from the
+      compound it decodes to (`wrapped`), because which parts are one body, how
+      the joints between them move and what every link is called is what the
+      tree says.
     path: export_urdf.py
     extension: urdf
     pythonRequirements:

@@ -112,6 +112,9 @@ them: ``with_ports``, ``with_interfaces`` and ``with_internals`` for the ports a
 write their names. Each is the ``--with-...`` option of the same name (see ``pc render`` in :doc:`/cli`). A
 price asks the suppliers for a quote, so it is the one of them that goes out to the market.
 
+``export`` takes ``compound`` as well, which is ``pc export --compound``: an assembly or a scene written as one part,
+its compound, rather than as the tree of what it places (see :ref:`part-compound`).
+
 .. list-table::
    :header-rows: 1
    :widths: 18 18 64

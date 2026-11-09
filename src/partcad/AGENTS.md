@@ -1470,6 +1470,24 @@ at all).
   what it is of it (see the artifact cache above), and it reads its source's object-type parameters, so a
   view of an exploded assembly is exploded.
 
+- **An assembly is a tree, and its compound is a part** (`./src/partcad/assembly_compound.py`,
+  `wrapper_transform.flatten`). The core never makes a `TopoDS_Compound` of an assembly: it builds, caches and
+  hands on the tree (`Assembly._get_shape_real`), and the flat compound exists only inside the sandbox of
+  whatever decodes that tree (`ocp_serialize.decode_tree`, which every export and render implementation goes
+  through in `wrapper_export`) -- made again on every such call, for well under a tenth of what decoding the
+  leaves costs, and never cached, because nothing outside that call reads it. Do not add a core-side compound
+  "for speed": every reader that matters reads the tree (the IDE a link at a time, a filter, STEP's products,
+  glTF's nodes, URDF's links), and the ones that need geometry are already handed it in the sandbox. Where
+  the compound is wanted *as an object* -- a `compound` part, `pc export --compound`, `pc import assembly
+  --compound`, `pc adhoc convert part --compound`, a file type that declares `compound: true`
+  (`output.COMPOUND_KEY`, reserved like `filter:`) -- it is a part, `CompoundView`, made in one sandbox by
+  `flatten`, which places every leaf and puts each one's CMF onto its own faces in the compound (through
+  `cmf_export.paired`, the walk the 3MF exporter colours an assembly with). It is keyed on the object's key
+  and `transform.py`'s version, so it is cached like any part; and it is never closed into solids
+  (`shape.COMPOSED_TYPES`), because every item in it was finished as a part of its own already. The
+  `compound` part type used to return the assembly's *tree* under the part's name -- not a part to anything
+  that asked -- and `transform.py` in its key is what keeps an entry cached in that form from being served.
+
 - **An exploded view is an object-type parameter of `assy`** (`./src/partcad/assembly_explode.py`,
   `Assembly.exploded`, `AssemblyFactoryAssy.ACCEPTED_OBJECT_TYPE_PARAMETERS`): `exploded: true` draws the
   assembly with every item backed out of what it is connected to. Being a parameter is the point: an

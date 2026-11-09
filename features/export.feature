@@ -54,6 +54,20 @@ Feature: `pc export` command
     |    type | filename              |
     |    urdf | logo_embedded.urdf    |
 
+  # '--compound': the assembly as one part. A STEP of the tree is a product per
+  # part and one per assembly, placed; the compound's is the one product,
+  # named after the assembly, holding every solid where the assembly put it.
+  @type-object
+  Scenario: `pc export --compound` writes an assembly as one part
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples export --package /produce_assembly_assy -t step -O ./ --compound -a :primitive"
+    Then the command should exit with a status code of "0"
+    And a file named "primitive.step" should be created
+    And a file named "primitive.step" should contain "PRODUCT('primitive'"
+    And a file named "primitive.step" should not contain "PRODUCT('cube'"
+    And a file named "primitive.step" should not contain "NEXT_ASSEMBLY_USAGE_OCCURRENCE"
+    And STDERR should contain "DONE: Export: //pub/examples/partcad/produce_assembly_assy:"
+    And STDERR should not contain "WARN:"
+
   # A name with a "/" in it is a file in a sub-directory of that name, created
   # on the way. `robot/wrist` is a part the URDF declares rather than
   # `partcad.yaml`, so it is also the case where nothing in the package could

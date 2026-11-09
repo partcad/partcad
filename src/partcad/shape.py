@@ -541,6 +541,18 @@ async def _together(batch, each, formats) -> None:
 # over as the file holds it: a closed shell in one is reported, not converted.
 FILE_AUTHORITY_TYPES = frozenset({"step", "brep"})
 
+# What a part made of an assembly is to the artifacts written of it (see
+# 'assembly_compound.IDENTITY', which a test holds this to: that module makes a
+# part, and so cannot be imported from here at the top).
+_COMPOUND_IDENTITY = "compound"
+
+# The part types made of other parts: the compound of an assembly or a scene
+# (see 'partcad.assembly_compound'). Every part in one was finished as itself
+# already, so a closed shell in it is what that part was handed over as - a
+# STEP part's reported shell among them - and closing it here would make the
+# part inside the compound something it is not outside it.
+COMPOSED_TYPES = frozenset({"compound"})
+
 # How often 'Shape.prepare_async(wait=True)' looks again at a preparation that
 # somebody else has begun and not finished, in seconds: from the first value,
 # doubling to the second. Polled rather than awaited for the reason
@@ -683,7 +695,6 @@ class Shape(ShapeConfiguration):
         self.lock = _ShapeLock()
         self.tls = threading.local()
         self.components = []
-        self.compound = None
         self.with_ports = None
 
         # Leave the svg path empty to get it created on demand
@@ -2712,7 +2723,9 @@ class Shape(ShapeConfiguration):
                     outcomes[indices[0]] = e
         return outcomes
 
-    async def _output_run_async(self, ctx, impl, script, request, final_filepath, view=None, section=None, batch=None):
+    async def _output_run_async(
+        self, ctx, impl, script, request, final_filepath, view=None, section=None, batch=None, compound=False
+    ):
         """'_run_implementation_async' for an export or a render file, asked of the cache first.
 
         The same file asked for again is a read, exactly as an analysis and a
@@ -2729,7 +2742,9 @@ class Shape(ShapeConfiguration):
         when the next path leaves nothing to name them by. A filtered view (see
         'partcad.assembly_filter') adds its filter: a view has no key of its
         own, so it is keyed as the assembly it is a view of and the links it
-        keeps - which is everything it is. A cross-section (see
+        keeps - which is everything it is. A file of the compound of an
+        assembly or a scene ('compound', see 'partcad.assembly_compound') adds
+        that it is one, the same way. A cross-section (see
         'partcad.shape_section') adds its box the same way, and for the same
         reason: the request's geometry is left out of the key, and the cut is the
         one thing about that geometry the shape's own key does not say.
@@ -2757,6 +2772,13 @@ class Shape(ShapeConfiguration):
         extra = {"tree": shape_envelope.description(request.get("wrapped"))}
         if view is not None:
             extra["view"] = view.key()
+        if compound:
+            # The code that flattened it, which the object's own key does not
+            # cover: a change to how a compound is made is a change to every
+            # file written of one.
+            from . import assembly_compound
+
+            extra["compound"] = assembly_compound.code_versions() or True
         if section is not None:
             extra["section"] = section
         artifact = await self._artifact_hash(
@@ -2863,7 +2885,7 @@ class Shape(ShapeConfiguration):
         )
         return self
 
-    async def _output_subject_async(self, ctx, obj, mask, views):
+    async def _output_subject_async(self, ctx, obj, mask, views, compound=False):
         """The shape one output file is of, and its tree.
 
         Itself and the tree the caller already built, unless a filter applies -
@@ -2872,16 +2894,34 @@ class Shape(ShapeConfiguration):
         one object may be written to several file types and a 'filter:' is
         declared per file type, so two of them asking for the same subset build
         it once.
+
+        'compound' asks for an assembly or a scene - after the filter, if one
+        applies - as its compound: one part, which is what the file is then
+        written of (see 'partcad.assembly_compound'). Anything else is already
+        one shape, and is what it is.
         """
         if mask is None or mask.keeps_all:
-            return self, obj, {}
-        key = mask.key()
+            subject, tree, ports = self, obj, {}
+        else:
+            key = mask.key()
+            if key not in views:
+                view = await self.filtered_view_async(mask)
+                tree = obj if view is self else await view.get_wrapped(ctx)
+                # A ports cache of its own: a view's ports are not the whole
+                # object's, and the two would otherwise answer for each other.
+                views[key] = (view, tree, {})
+            subject, tree, ports = views[key]
+        # Here and not at the top: it makes a part, and a part is a shape.
+        from . import assembly_compound
+
+        if not compound or not assembly_compound.applies(subject):
+            return subject, tree, ports
+        key = ("compound", mask.key() if mask is not None and not mask.keeps_all else None)
         if key not in views:
-            view = await self.filtered_view_async(mask)
-            tree = obj if view is self else await view.get_wrapped(ctx)
-            # A ports cache of its own: a view's ports are not the whole
-            # object's, and the two would otherwise answer for each other.
-            views[key] = (view, tree, {})
+            part = assembly_compound.view(subject)
+            # The ports drawn on a compound are none: a part made of an
+            # assembly is not declared with any, and the assembly's are its own.
+            views[key] = (part, await part.get_wrapped(ctx), {})
         return views[key]
 
     async def _render_one_async(
@@ -2901,6 +2941,7 @@ class Shape(ShapeConfiguration):
         defaults_only=False,
         section=None,
         batch=None,
+        compound=False,
     ):
         """Produce one output file, whatever its type.
 
@@ -2910,6 +2951,10 @@ class Shape(ShapeConfiguration):
 
         'batch' is the '_OutputBatch' it is written with, if it is one of
         several file types of this shape asked for together.
+
+        'compound' is this run's '--compound': an assembly or a scene written
+        as its compound whatever the file type says. A file type that declares
+        'compound: true' is written of the compound either way.
         """
         impl, final_filepath = self.output_getopts(
             ctx, format_name, project, filepath, options_project, output_dir, defaults_only=defaults_only
@@ -2934,12 +2979,19 @@ class Shape(ShapeConfiguration):
         # a declaration is permanent and a command line is about this picture.
         try:
             mask = link_filter if link_filter is not None else impl.link_filter
+            # Implied by a file type written for one shape, whatever the run
+            # asked; asked by the run of every file type otherwise.
+            compound = bool(compound) or impl.compound
         except ValueError as e:
             self.error("%s: %s" % (format_name, e))
             return None
         subject, obj, subject_ports = await self._output_subject_async(
-            ctx, obj, mask, views if views is not None else {}
+            ctx, obj, mask, views if views is not None else {}, compound
         )
+        of_compound = subject is not self and getattr(subject, "artifact_identity", None) == _COMPOUND_IDENTITY
+        if of_compound and obj is None:
+            self.error("%s: the compound of %s:%s is empty" % (format_name, self.project_name, self.name))
+            return None
         # Cut after the filter: a section is a box through what is kept, and the
         # links a filter drops have nothing left to cut. The ports drawn on top
         # are found on the subject itself, uncut - a port is where it is whether
@@ -2986,9 +3038,10 @@ class Shape(ShapeConfiguration):
             script,
             request,
             final_filepath,
-            view=mask if subject is not self else None,
+            view=mask if subject is not self and mask is not None and not mask.keeps_all else None,
             section=section,
             batch=batch,
+            compound=of_compound,
         )
         if result is None:
             return None
@@ -3037,6 +3090,7 @@ class Shape(ShapeConfiguration):
         link_filter=None,
         defaults_only: bool = False,
         section=None,
+        compound: bool = False,
         **kwargs,
     ) -> dict:
         """Write this shape out as one output file type, several, or all of them.
@@ -3070,6 +3124,12 @@ class Shape(ShapeConfiguration):
                 as a box in the frame of its root ('shape_section.normalize'),
                 or None for the whole shape. What the IDE's 2D and Draft tabs
                 send when their section sliders are moved.
+            compound: Write an assembly or a scene as its compound - one part,
+                every item it places in it - rather than as the tree of what it
+                places ('pc export --compound'; see 'partcad.assembly_compound').
+                Nothing for a part or a sketch, which are one shape already. A
+                file type that declares 'compound: true' is written that way
+                whether or not this asks.
             kwargs: Export parameters, overriding what the configuration says.
 
         Several file types - a list, or None - are written together: each is
@@ -3129,6 +3189,7 @@ class Shape(ShapeConfiguration):
                 defaults_only=defaults_only,
                 section=section,
                 batch=batch,
+                compound=compound,
             )
 
         if isinstance(format_name, (list, tuple)):
@@ -4401,9 +4462,11 @@ class Shape(ShapeConfiguration):
         converted: those hand over what the file holds, because the file is the
         authority on what the part is and 'pc convert' round-trips through them
         (see "A part is a body, not a skin" in AGENTS.md). A shell in one is
-        reported, not quietly changed.
+        reported, not quietly changed. Nor a compound of other parts
+        ('COMPOSED_TYPES'), each of which was finished as itself already.
         """
-        return (self.config or {}).get("type") not in FILE_AUTHORITY_TYPES
+        part_type = (self.config or {}).get("type")
+        return part_type not in FILE_AUTHORITY_TYPES and part_type not in COMPOSED_TYPES
 
     def _validates(self) -> bool:
         """Whether this part is held to being a body as it leaves its factory: all but a surface part.

@@ -53,6 +53,11 @@ KINDS = {
     # package and is refused below, and an engine's own format is implemented by
     # that engine's plugin package, which a throwaway package cannot reach.
     "scene": ("scenes", "input_scene"),
+    # An assembly is read from a file only to be written as its compound - one
+    # part (see 'compound' in 'write_output_file'): what a STEP or a glTF holds
+    # placed and coloured as the file has it, a URDF's links where its joints
+    # put them.
+    "assembly": ("assemblies", "input_assembly"),
 }
 
 # How the object of each kind is fetched out of the throwaway package.
@@ -60,6 +65,7 @@ GETTERS = {
     "part": "get_part",
     "sketch": "get_sketch",
     "scene": "get_scene",
+    "assembly": "get_assembly",
 }
 
 
@@ -308,6 +314,7 @@ def write_output_file(
     parameters: dict = None,
     options_package: str = None,
     output_dir: str = None,
+    compound: bool = False,
     **options,
 ) -> str:
     """Produce one output file from a CAD file that belongs to no package.
@@ -327,6 +334,9 @@ def write_output_file(
         options_package: A package to read the file type from: one in the
             public index, or a package directory (see 'options_dependency').
         output_dir: Where the file goes when 'output_filename' is None.
+        compound: Write the object as its compound, one part, when it is an
+            assembly or a scene (see 'partcad.assembly_compound'): what
+            'pc adhoc convert part --compound' reads an assembly file as.
         options: Export parameters handed to the implementation, overriding what
             it would otherwise default to. This is where a render's viewport
             arrives, and its 'reproducible'; a conversion passes none.
@@ -417,6 +427,10 @@ def write_output_file(
             obj = getattr(project, GETTERS[kind])(object_name)
             if not obj:
                 raise RuntimeError(f"Failed to load the input {kind}: no {kind} returned")
+            if compound:
+                from .. import assembly_compound
+
+                obj = assembly_compound.view(obj)
 
             shape = asyncio.run(obj.get_wrapped(ctx))
             # Errors first: when the factory failed - a missing module, a
