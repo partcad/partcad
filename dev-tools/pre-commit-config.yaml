@@ -18,11 +18,14 @@ repos:
       # lines and no final newline, so either hook would rewrite it into
       # something OCCT never produced - which is the one property the fixtures
       # have. (Files under 'examples/' are already covered by the path above.)
+      # The same for a STEP file 'STEPControl_Writer' wrote, such as the
+      # fixtures under 'tests/partcad/unit/data/qual_tolerance/': OCCT ends some
+      # of its lines with a space.
       - id: trailing-whitespace
-        exclude: "^examples/|_ai_.+\\.(py|scad)|\\.brep$"
+        exclude: "^examples/|_ai_.+\\.(py|scad)|\\.(brep|step)$"
         exclude_types: [svg]
       - id: end-of-file-fixer
-        exclude: "^examples/|_ai_.+\\.(py|scad)|\\.brep$"
+        exclude: "^examples/|_ai_.+\\.(py|scad)|\\.(brep|step)$"
         exclude_types: [svg]
       - id: check-yaml
         # Fixtures that are Jinja2 templates rather than YAML: a '{% ... %}' at

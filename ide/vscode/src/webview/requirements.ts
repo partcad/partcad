@@ -10,16 +10,16 @@
 //
 //   - what PartCAD can measure - the ports, the interfaces, the physical
 //     properties and how closely the volume, the displacement and the mass
-//     match another object's - listed with a mark beside each: green where 'pc test' finds
+//     match another object's - listed with a mark beside each: green where 'pc qual test' finds
 //     the model meets it, red where it does not;
 //   - the features, which are prose, in a table: what each is, and what it is
-//     validated by - the 'simulate:' entries that name it, the analysis
+//     validated by - the 'qual: sim:' entries that name it, the analysis
 //     scenarios that name it (an entry of a part's 'fea:', 'dynamic:',
 //     'thermal:' or 'cfd:'), and an LLM reading the evidence through the
 //     '/pc:validate' skill.
 //
 // None of it is worked out here. The daemon's 'requirements.check' answers with
-// what 'partcad.requirements' decided, which is the code 'pc test -f
+// what 'partcad.requirements' decided, which is the code 'pc qual test -f
 // requirements' runs; this file only draws the answer.
 //
 
@@ -104,7 +104,7 @@ export interface Banner {
 export function bannersOf(feature: RequirementFeature): Banner[] {
     const banners: Banner[] = (feature.simulations ?? []).map((name) => ({
         label: name,
-        title: `Demonstrated by the simulation '${name}' (pc sim)`,
+        title: `Demonstrated by the simulation '${name}' (pc qual test --simulation)`,
         kind: 'simulation',
     }));
     for (const { analysis, name } of feature.analyses ?? []) {
@@ -141,8 +141,8 @@ export function summary(data: RequirementsData, checking: boolean): string {
 
 const MARK_TEXT: Record<Mark, string> = { pass: '✓', fail: '✗', pending: '…' };
 const MARK_TITLE: Record<Mark, string> = {
-    pass: 'Met (pc test)',
-    fail: 'Not met (pc test)',
+    pass: 'Met (pc qual test)',
+    fail: 'Not met (pc qual test)',
     pending: 'Not checked yet',
 };
 

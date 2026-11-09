@@ -40,7 +40,7 @@ def test_a_process_a_request_starts_does_not_read_the_requests():
     """It inherits the null device as its standard input, not the client's pipe.
 
     On Windows a child on that pipe waited on it for as long as the reader did,
-    which hung every 'pc test' over this channel once requests were read while
+    which hung every 'pc qual test' over this channel once requests were read while
     one ran; anywhere, it would take the client's requests.
     """
     src_root = os.path.dirname(os.path.dirname(partcad_service_json_rpc.__file__))

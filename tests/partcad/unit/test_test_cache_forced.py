@@ -11,7 +11,7 @@ those objects say about themselves, they have to be had. A part that says
 'manufacturable: false' then answers the same question two ways - "not
 applicable" when it is tested on its own, "cannot be purchased or manufactured"
 when the assembly tests it - and both answers used to be remembered under one
-key. Whichever a package-wide 'pc test' reached first answered for both, so the
+key. Whichever a package-wide 'pc qual test' reached first answered for both, so the
 assembly could pass on its part's own "not applicable", or the part fail its
 own run with the assembly's failure. These hold the two apart in either order.
 """
@@ -19,8 +19,8 @@ own run with the assembly's failure. These hold the two apart in either order.
 import asyncio
 
 import partcad as pc
-from partcad.test.manufacturability import ManufacturabilityTest
-from partcad.test.test import Test
+from partcad.qual.basic.manufacturability import ManufacturabilityTest
+from partcad.qual.qualification import Qualification
 
 # Spelt as 'ManufacturabilityTest' sets it on what it tests.
 FORCE = "force_manufacturing"
@@ -65,7 +65,7 @@ class _Shape:
         return True
 
 
-class _Held(Test):
+class _Held(Qualification):
     """'ManufacturabilityTest''s rule, and nothing else: nothing to ask unless it is to be made."""
 
     def __init__(self):
@@ -80,27 +80,27 @@ class _Held(Test):
 
 
 def _verdict(check, ctx, shape, test_ctx):
-    Test.MAX_CONCURRENT_TESTS = 8
+    Qualification.MAX_CONCURRENT_TESTS = 8
     return asyncio.run(check.test_cached([check], ctx, shape, test_ctx))
 
 
 def test_the_key_is_the_one_the_manufacturability_check_sets():
-    assert Test.FORCE_MANUFACTURING == FORCE
+    assert Qualification.FORCE_MANUFACTURING == FORCE
 
 
 def test_a_forced_failure_is_not_hidden_by_the_pass_cached_first():
     check, ctx, shape = _Held(), _Ctx(), _Shape(manufacturable=False)
 
-    assert _verdict(check, ctx, shape, {}) is Test.TEST_PASSED
-    assert _verdict(check, ctx, shape, FORCED) is Test.TEST_FAILED
+    assert _verdict(check, ctx, shape, {}) is Qualification.TEST_PASSED
+    assert _verdict(check, ctx, shape, FORCED) is Qualification.TEST_FAILED
     assert check.runs == 2
 
 
 def test_an_unforced_pass_is_not_hidden_by_the_failure_cached_first():
     check, ctx, shape = _Held(), _Ctx(), _Shape(manufacturable=False)
 
-    assert _verdict(check, ctx, shape, FORCED) is Test.TEST_FAILED
-    assert _verdict(check, ctx, shape, {}) is Test.TEST_PASSED
+    assert _verdict(check, ctx, shape, FORCED) is Qualification.TEST_FAILED
+    assert _verdict(check, ctx, shape, {}) is Qualification.TEST_PASSED
     assert check.runs == 2
 
 
@@ -108,8 +108,8 @@ def test_each_is_still_remembered_under_its_own_key():
     check, ctx, shape = _Held(), _Ctx(), _Shape(manufacturable=False)
 
     for _ in range(2):
-        assert _verdict(check, ctx, shape, {}) is Test.TEST_PASSED
-        assert _verdict(check, ctx, shape, FORCED) is Test.TEST_FAILED
+        assert _verdict(check, ctx, shape, {}) is Qualification.TEST_PASSED
+        assert _verdict(check, ctx, shape, FORCED) is Qualification.TEST_FAILED
     assert check.runs == 2
 
 
@@ -117,17 +117,19 @@ def test_an_object_that_is_to_be_made_answers_once_for_both():
     """Forcing changes nothing there, so an assembly's walk reads what the package's own run left."""
     check, ctx, shape = _Held(), _Ctx(), _Shape(manufacturable=True)
 
-    assert _verdict(check, ctx, shape, {}) is Test.TEST_FAILED
-    assert _verdict(check, ctx, shape, FORCED) is Test.TEST_FAILED
+    assert _verdict(check, ctx, shape, {}) is Qualification.TEST_FAILED
+    assert _verdict(check, ctx, shape, FORCED) is Qualification.TEST_FAILED
     assert check.runs == 1
 
 
 def test_a_verdict_a_forced_run_left_under_the_shared_key_is_not_read_back():
     """What a cache filled before the keys were told apart holds: a forced failure under the plain key."""
     check, ctx, shape = _Held(), _Ctx(), _Shape(manufacturable=False)
-    ctx.cache_tests.entries[("geometry", "test.held.manufacturable=0")] = Test._record(Test.TEST_FAILED, ["old"])
+    ctx.cache_tests.entries[("geometry", "test.held.manufacturable=0")] = Qualification._record(
+        Qualification.TEST_FAILED, ["old"]
+    )
 
-    assert _verdict(check, ctx, shape, {}) is Test.TEST_PASSED
+    assert _verdict(check, ctx, shape, {}) is Qualification.TEST_PASSED
     assert check.runs == 1
 
 
@@ -165,9 +167,9 @@ def test_the_manufacturability_check_fails_a_forced_run_after_its_own_pass(tmp_p
     ctx, part = _bolt(tmp_path)
     check = ManufacturabilityTest()
 
-    assert _verdict(check, ctx, part, {}) is Test.TEST_PASSED
+    assert _verdict(check, ctx, part, {}) is Qualification.TEST_PASSED
     caplog.clear()
-    assert _verdict(check, ctx, part, FORCED) is Test.TEST_FAILED
+    assert _verdict(check, ctx, part, FORCED) is Qualification.TEST_FAILED
     assert any("Cannot be purchased or manufactured" in message for message in _errors(caplog))
     # Not the remembered verdict of the run before: this one was worked out.
     assert not any("remembered from an earlier run" in message for message in _errors(caplog))
@@ -177,7 +179,7 @@ def test_the_manufacturability_check_passes_its_own_run_after_a_forced_failure(t
     ctx, part = _bolt(tmp_path)
     check = ManufacturabilityTest()
 
-    assert _verdict(check, ctx, part, FORCED) is Test.TEST_FAILED
+    assert _verdict(check, ctx, part, FORCED) is Qualification.TEST_FAILED
     caplog.clear()
-    assert _verdict(check, ctx, part, {}) is Test.TEST_PASSED
+    assert _verdict(check, ctx, part, {}) is Qualification.TEST_PASSED
     assert _errors(caplog) == []

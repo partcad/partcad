@@ -492,7 +492,7 @@ class SandboxUnavailable(Exception):
     thing that can tell, since the implementation never gets to run and so
     cannot report it itself.
 
-    What `pc test` makes of it is not decided here but by the implementation:
+    What `pc qual test` makes of it is not decided here but by the implementation:
     one that declares a `container:` or a `dockerImage` is saying that a
     container is how its dependencies arrive, so a machine with no container
     runtime is a machine that could never have run it, and the verdict is a
@@ -500,7 +500,7 @@ class SandboxUnavailable(Exception):
     machine with a working sandbox is a machine it was supposed to work on, so
     the verdict is a failure. What the type buys either way is the message:
     `CaeTest` and `SimTest` read it to add both remedies, which no other
-    failure gets. See `partcad.test.implementation.ImplementationTest._verdict()`.
+    failure gets. See `partcad.qual.basic.implementation.ImplementationTest._verdict()`.
     """
 
 
@@ -508,7 +508,7 @@ def docker_available() -> bool:
     """Whether a container sandbox can be started here.
 
     Asked before an implementation that declares one is run, and again by
-    `pc test` to decide whether it is looking at an unavailable runtime or a
+    `pc qual test` to decide whether it is looking at an unavailable runtime or a
     failing implementation. Cached: this shells out to the daemon, and a run
     over a package tree would otherwise ask once per part.
 

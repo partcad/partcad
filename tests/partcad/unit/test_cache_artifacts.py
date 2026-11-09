@@ -7,7 +7,7 @@
 
 `partcad.cache_artifacts` on its own first - what goes into an entry, what comes
 back out, and what is refused - and then the places that use it: a second
-`pc cae`, `pc cam`, `pc sim`, `pc export` or `pc render` of an unchanged object
+`pc cae`, `pc cam`, `pc qual test --simulation`, `pc export` or `pc render` of an unchanged object
 must be a read, with the files back where the caller expects them, and anything
 that changes the question must be a run. And the same for PartCAD's own
 wrappers: the IDE's tessellation, an instruction book's PDF, a measurement.
@@ -589,7 +589,7 @@ def test_a_part_that_is_not_cached_is_analysed_every_time(analysed, monkeypatch)
 
 
 # --------------------------------------------------------------------------- #
-# `pc sim`                                                                    #
+# `pc qual test --simulation`                                                                    #
 # --------------------------------------------------------------------------- #
 
 
@@ -609,10 +609,11 @@ def simulated(tmp_path, monkeypatch):
         "  block:\n"
         "    type: step\n"
         "    path: cube.step\n"
-        "    simulate:\n"
-        "      stands:\n"
-        "        simulation: //sim:toy\n"
-        "        validation: after['z'] > 5.0\n",
+        "    qual:\n"
+        "      sim:\n"
+        "        stands:\n"
+        "          path: //sim:toy\n"
+        "          validation: after['z'] > 5.0\n",
         encoding="utf-8",
     )
     ctx = pc.Context(str(root))
@@ -676,9 +677,7 @@ def test_the_validation_is_judged_again_rather_than_remembered(simulated):
     (entry,) = simulation.of_shape(part)
     assert _run(simulation.run_async(ctx, part, "part", entry)).passed is True
 
-    stricter = simulation.SimulationDeclaration(
-        "stands", {"simulation": "//sim:toy", "validation": "after['z'] > 9.95"}
-    )
+    stricter = simulation.SimulationDeclaration("stands", {"path": "//sim:toy", "validation": "after['z'] > 9.95"})
     assert _run(simulation.run_async(ctx, part, "part", stricter)).passed is False
     assert len(runs) == 1
 
@@ -782,7 +781,7 @@ def test_another_simulation_question_is_another_run(simulated):
     _run(simulation.run_async(ctx, part, "part", entry))
 
     longer = simulation.SimulationDeclaration(
-        "stands", {"simulation": "//sim:toy", "validation": "True", "params": {"duration": 20.0}}
+        "stands", {"path": "//sim:toy", "validation": "True", "params": {"duration": 20.0}}
     )
     _run(simulation.run_async(ctx, part, "part", longer))
     assert len(runs) == 2

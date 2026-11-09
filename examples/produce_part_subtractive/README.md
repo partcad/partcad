@@ -1,6 +1,6 @@
 # //pub/examples/partcad/produce_part_subtractive
 
-This example demonstrates parts that are made by taking material away from a piece of stock. Each one names the stock it is cut from with `source:`, and each names the machine that cuts it -- a router, a laser, a drill or a saw -- which is what decides both the checks `pc test` applies to it and the program `pc cam` writes for it.
+This example demonstrates parts that are made by taking material away from a piece of stock. Each one names the stock it is cut from with `source:`, and each names the machine that cuts it -- a router, a laser, a drill or a saw -- which is what decides both the checks `pc qual test` applies to it and the program `pc cam` writes for it.
 
 ## Usage
 ```shell
@@ -10,7 +10,7 @@ pc ide view gasket
 pc ide view bearing_block
 pc ide view drilled_plate
 pc ide view rail
-pc test -f manufacturability
+pc qual test -f manufacturability
 ```
 
 Each part's route is written for the machine it declares -- the same file
@@ -70,7 +70,7 @@ pc cam -O ./routes -m cnc gasket     # writes gasket.cnc.nc
 <table><tr>
 <td valign=top><a href="gasket.py"><img src="././gasket.svg" alt="gasket" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>A part with features in it -- a rounded outline, a bore and six bolt holes -- all of them walls a beam can make. Curves cost a laser nothing; what it cannot do is tilt, which is what the chamfer on `bearing_block` needs.
-It is also the one part here that says it could be made *either* way. Those are alternatives rather than stages -- `pc cam -m laser gasket` and `pc cam -m cnc gasket` are two programs for the same part, and `pc test` answers for both claims. A part that really is machined in stages is a chain of parts, each naming the previous as its `source`.
+It is also the one part here that says it could be made *either* way. Those are alternatives rather than stages -- `pc cam -m laser gasket` and `pc cam -m cnc gasket` are two programs for the same part, and `pc qual test` answers for both claims. A part that really is machined in stages is a chain of parts, each naming the previous as its `source`.
 </td>
 <td valign=top>Parameters:<br/><ul>
 <li>tolerance: 0.1</li>

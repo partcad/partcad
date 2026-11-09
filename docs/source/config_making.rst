@@ -60,7 +60,7 @@ The stock it is cut from
         source: stock_plate
 
 Cutting can only ever remove material, so the part has to be what is left of the
-stock. ``pc test`` asks both halves of that, because each catches a different
+stock. ``pc qual test`` asks both halves of that, because each catches a different
 mistake and neither implies the other:
 
 - **Nothing of the part is outside the stock.** A part that pokes out of what it
@@ -123,7 +123,7 @@ other two can, so it is the answer that is never wrong -- and it is what every
 
 **Several may be named, and they are alternatives rather than stages.** A part
 that declares both ``laser:`` and ``cnc:`` is claiming it could be made either
-way, and ``pc test`` answers for both claims. ``pc cam`` then has to be told
+way, and ``pc qual test`` answers for both claims. ``pc cam`` then has to be told
 which one to write for -- ``pc cam -m laser :gasket`` -- because a default
 nobody picked is a program for the wrong machine; the file it writes is named
 after the machine (``gasket.laser.nc``), so the alternatives land beside each
@@ -152,8 +152,8 @@ one request, which is why they do not share a name. A laser also takes a ``kerf`
 which is a property of that machine and that material rather than of the job --
 which is why it is a property of the machine rather than of the cut.
 
-What ``pc test`` checks
-^^^^^^^^^^^^^^^^^^^^^^^
+What ``pc qual test`` checks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Beyond the stock, one question per limited machine, and each applies **only to a
 part that named that machine**:
@@ -267,7 +267,7 @@ parameter of that name, with a unit after it if it needs one (``$length in``).
 A part cut to length is nearly always parametric, and a cut written as a number
 would be right for one instance and wrong for every other.
 
-``pc test`` runs ``manufacturability-cut`` over it, which makes each cut in the
+``pc qual test`` runs ``manufacturability-cut`` over it, which makes each cut in the
 stock in turn and compares what is left with the part. Whatever the part has
 that the cut stock does not is a feature no saw made; whatever the cut stock has
 that the part does not is a notch, a hole or a cut in the wrong place; and a cut
@@ -346,14 +346,14 @@ put it on the process that cannot make it, and would leave the part with no
 declaration of the process that can.
 
 ``subtractive`` is the usual answer rather than a required one: what has to be
-true of a ``source`` is that it is flat, which is what ``pc test`` asks of it. A
+true of a ``source`` is that it is flat, which is what ``pc qual test`` asks of it. A
 blank that is bought in rather than made has no manufacturing method to declare,
 one sheared or punched to outline is ``forming``, and an ``alias`` or an
 ``enrich`` of a part declared elsewhere carries whatever that one says. All of
 them are blanks, and the check takes them.
 
-What ``pc test`` checks
-^^^^^^^^^^^^^^^^^^^^^^^
+What ``pc qual test`` checks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Two questions, one about each half of the declaration:
 
@@ -501,13 +501,13 @@ procured at all.
   parts to manufacture: each one, how many of it, what it is made from, and its
   manufacturing instructions written out in full.
 - **pc supply** puts the stock in the cart instead of the part.
-- **pc test** does not look for a supplier of a made part. It checks that its
+- **pc qual test** does not look for a supplier of a made part. It checks that its
   instructions are complete (a tolerance), and that its stock can be had -- by
   running the same tests over the stock, which for a bought one is a supplier
   that carries it.
 
 A part that has manufacturing instructions **and** a ``vendor`` and an ``sku``
-can be had either way. It is tried as bought first: ``pc test`` asks for a
+can be had either way. It is tried as bought first: ``pc qual test`` asks for a
 supplier, and only if no supplier confirms it does it check that the part can be
 made instead. The bills of materials and the cart list it as bought.
 
@@ -831,7 +831,7 @@ another:
 ``software`` is optional, and most parts declare none. A single one may be
 written on its own instead of as a list (``software: controller-firmware``).
 Declaring it is what puts the file into the bill of materials of every assembly
-the part ends up in, and what makes ``pc test`` insist the file be obtainable
+the part ends up in, and what makes ``pc qual test`` insist the file be obtainable
 (see `Manufacturability`_ below).
 
 The reference is resolved against the package that *wrote* it, so an ``alias``
@@ -919,7 +919,7 @@ Manufacturability
 -----------------
 
 A board nobody can flash is not a board anybody can make. So the manufacturing
-test (``pc test``, the ``manufacturability`` check) asks the same question of a part's
+test (``pc qual test``, the ``manufacturability`` check) asks the same question of a part's
 ``software`` that it asks of everything else the part needs, and the part fails
 unless all of it holds:
 

@@ -51,7 +51,7 @@ it. It answers with the same dict plus one key of its own:
 
 'findings' is a JSON array - strings or objects with a 'message' and, optionally,
 a 'severity' and a 'where'. An empty one means the analysis found nothing to
-report, which is what "pc test" requires of a part.
+report, which is what "pc qual test" requires of a part.
 
 A 'cam:' implementation is run through here as well, and is handed the job the
 object declared merged with the file type's own parameters - the tool, the

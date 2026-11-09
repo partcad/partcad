@@ -161,6 +161,77 @@ jobs:
           name: python-package-distributions-cli
           path: dev-tools/shim/dist/
 
+  # Every version bump on "devel" to TestPyPI: the wheel and sdist of
+  # `partcad` and of the `partcad-cli` shim, as soon as they are built and
+  # nothing else is waited for. A package that follows PartCAD's "devel" -- the
+  # index's packages through its own "devel", and their CI -- installs from
+  # there, so a version missing from TestPyPI is one nothing downstream can be
+  # tested against. This used to be the last step of the release rehearsal
+  # below, behind the standalone bundles, the IDE, the extension and the
+  # plugin, and a bump any one of those failed on (0.9.16, 0.9.22) was never
+  # uploaded at all.
+  #
+  # The rehearsal still runs on the tag and still fails over a missing bundle;
+  # it no longer uploads, so the two cannot be confused. Only on a tag: "main"
+  # is the release, and its upload to PyPI waits for everything.
+  publish-to-testpypi:
+    name: Publish to TestPyPI
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    # "testpypi" holds TEST_PYPI_KEY and, unlike "pypi", waits for nobody.
+    environment:
+      name: testpypi
+    steps:
+      # For "dev-tools/bumpversion.toml", which names the version the tag has
+      # to be and the four files have to carry.
+      - uses: actions/checkout@v7
+
+      - name: Download the wheel
+        uses: actions/download-artifact@v8
+        with:
+          name: python-package-distributions
+          path: dist
+
+      - name: Download the partcad-cli shim
+        uses: actions/download-artifact@v8
+        with:
+          name: python-package-distributions-cli
+          path: dist
+
+      # The same check the release makes: `skip-existing` below would quietly
+      # upload nothing, rather than fail, for a "dist" of a version that is
+      # already on TestPyPI.
+      - name: Check the distributions are this tag's
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^current_version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+            dev-tools/bumpversion.toml)"
+          if [ -z "${version}" ] || [ "${GITHUB_REF_NAME}" != "${version}" ]; then
+            echo "::error::this run is tagged ${GITHUB_REF_NAME} but its tree is '${version}'"
+            exit 1
+          fi
+          for name in \
+            "partcad-${version}-py3-none-any.whl" "partcad-${version}.tar.gz" \
+            "partcad_cli-${version}-py3-none-any.whl" "partcad_cli-${version}.tar.gz"; do
+            if [ ! -f "dist/${name}" ]; then
+              echo "::error::dist/${name} is missing -- this run mixed the artifacts of two builds"
+              ls -l dist
+              exit 1
+            fi
+          done
+          echo "Publishing ${version} to TestPyPI."
+
+      - name: Publish distribution to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A re-run of a run that got as far as one of the two distributions
+          # finishes the other rather than dying on "File already exists".
+          skip-existing: true
+          repository-url: https://test.pypi.org/legacy/
+          user: __token__
+          password: "${{ secrets.TEST_PYPI_KEY }}"
+
   publish-to-pypi:
     name: Publish to PyPI
     needs:
@@ -183,14 +254,15 @@ jobs:
     # Two environments, because a required reviewer is a rule on an environment
     # and not on a ref: every job that enters "pypi" waits for a maintainer,
     # whatever triggered it. Only the release -- a push to "main" -- should
-    # wait. The tag the version bump on "devel" pushes uploads to TestPyPI and
-    # publishes nothing else (the release step below and "publish-plugin-dist"
-    # are both gated on "main"), and while it shared "pypi" every bump queued a
+    # wait. The tag the version bump on "devel" pushes runs this job as a
+    # rehearsal of the release and publishes nothing (the release step and the
+    # upload below, and "publish-plugin-dist", are gated on "main"; TestPyPI is
+    # "publish-to-testpypi"'s), and while it shared "pypi" every bump queued a
     # run for an approval nobody gave, which sat there until it was cancelled.
     #
-    # An environment's secrets reach only the jobs that enter it, so each one
-    # holds the token its runs upload with: PYPI_KEY in "pypi", TEST_PYPI_KEY
-    # in "testpypi". Moving a run to another environment without its secret
+    # An environment's secrets reach only the jobs that enter it: PYPI_KEY is
+    # in "pypi", which is what the upload below runs with, and TEST_PYPI_KEY in
+    # "testpypi". Moving the release to another environment without its secret
     # leaves the upload below with an empty password.
     environment:
       name: ${{ github.ref == 'refs/heads/main' && 'pypi' || 'testpypi' }}
@@ -496,7 +568,10 @@ jobs:
             xargs -0 gh release upload "${TAG}" --clobber --repo "${REPO}"
           gh release edit "${TAG}" --repo "${REPO}" --draft=false
 
+      # The release only. A tag's version went to TestPyPI as soon as it was
+      # built ("publish-to-testpypi").
       - name: Publish distribution to PyPI
+        if: github.ref == 'refs/heads/main'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           # One call uploads everything in "dist". Without this, a call that
@@ -504,11 +579,9 @@ jobs:
           # and the retry dies on "File already exists" rather than finishing
           # the job.
           skip-existing: true
-          repository-url:
-            "${{ github.ref == 'refs/heads/main' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/'
-            }}"
+          repository-url: https://upload.pypi.org/legacy/
           user: __token__
-          password: "${{ github.ref == 'refs/heads/main' &&  secrets.PYPI_KEY || secrets.TEST_PYPI_KEY }}"
+          password: "${{ secrets.PYPI_KEY }}"
 
   # The VS Code extension on the Visual Studio Marketplace: the two ".vsix"
   # packages attached to the release above, extension first and then the

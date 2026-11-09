@@ -12,8 +12,8 @@ section's scenarios to run, who runs the analysis, where the model goes, how the
 findings are printed -- is the same for all of them, and has to be: a user who
 has learned one of them has learned the others.
 
-A section is a map of named scenarios, as `simulate:` is a map of simulations,
-and the command treats them the way `pc sim` treats those: every one is run,
+A section is a map of named scenarios, as `qual: sim:` is a map of simulations,
+and the command treats them the way `pc qual test --simulation` treats those: every one is run,
 unless `-f` names the one to run, and the command fails when any of them did not
 run or found anything.
 
@@ -41,7 +41,7 @@ _OPTIONS = (
         "-f",
         "--filter",
         "filter_name",
-        help="Only run the scenario declared under this name (as 'pc sim -f' runs one simulation)",
+        help="Only run the scenario declared under this name (as 'pc qual test --simulation -f' runs one simulation)",
         type=str,
         default=None,
         metavar="NAME",
@@ -129,6 +129,6 @@ def analysis_command(cli_ctx, analysis, package, filter_name, implementation, ou
         )
     # A finding is what the user asked about, so a run that produced one is a
     # run whose answer is "no": `pc cae fea && ...` has to stop there, the same
-    # way `pc test` exits non-zero on a failed test.
+    # way `pc qual test` exits non-zero on a failed test.
     if result and result.get("findings"):
         raise SystemExit(1)

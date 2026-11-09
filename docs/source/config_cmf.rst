@@ -423,7 +423,7 @@ it is drawn as where an image cannot be: no export carries the image yet.
 Checking it
 ===========
 
-``pc test`` runs the ``cmf`` check on what a package says is to be made (``manufacturable: true``): every solid of a
+``pc qual test`` runs the ``cmf`` check on what a package says is to be made (``manufacturable: true``): every solid of a
 part in a material and every face in a colour -- a material's colour claim counts -- each a declaration that claims it
 can be had, and a finish that is one too where one is stated. It also reports an assembly that sets CMF and is not
 bought whole. It warns, for now; an object or a package that says so fails instead:

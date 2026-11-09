@@ -228,8 +228,8 @@ Feature: `pc cam` command
     Then the command should exit with a status code of "1"
     And STDERR should contain "The package implementing 'cam' is not found"
 
-  @success @pc-cam @pc-test
-  Scenario: `pc test -f cam` is the route check and applies only where a cut is declared
+  @success @pc-cam @pc-qual-test
+  Scenario: `pc qual test -f cam` is the route check and applies only where a cut is declared
     # The check that used to answer to this name is `manufacturability` now.
     # This one produces the route and sees whether one comes back, so a package
     # that declares no `cam:` anywhere pays nothing for it -- which is what this
@@ -259,6 +259,6 @@ Feature: `pc cam` command
       if "show_object" in locals():
           show_object(result.part.wrapped, name="panel")
       """
-    When I run "pc --no-ansi test -f cam"
+    When I run "pc --no-ansi qual test -f cam"
     Then the command should exit with a status code of "1"
     And STDERR should contain "cam: 'cnc:' does not take toool"

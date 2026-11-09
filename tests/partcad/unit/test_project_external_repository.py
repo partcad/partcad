@@ -480,7 +480,7 @@ def test_hierarchy_forwards_under_a_subfolder():
 # that runs a loop - an assembly resolving its parts - the fetch is completed on
 # a worker thread while the asking thread waits. Resolving the plugin is a
 # 'get_project()' too, so a worker that did it waited for the lock the thread
-# waiting for it held: 'pc test' over //pub stopped, with no CPU spent, on the
+# waiting for it held: 'pc qual test' over //pub stopped, with no CPU spent, on the
 # first plugin-backed package it reached with nothing cached.
 
 
@@ -624,7 +624,7 @@ def test_an_assembly_resolving_a_cold_plugin_part_never_stops_its_loop(tmp_path,
     waiting: a synchronous fetch from a loop holds up every other task on it,
     including a sandbox process whose input the loop is writing, and the
     environment lock and process slot that process's task holds - which the
-    fetch, running the plugin in a sandbox, may need. 'pc test' over //pub
+    fetch, running the plugin in a sandbox, may need. 'pc qual test' over //pub
     stopped that way on macOS after #704's cycle was gone: the test's thread
     waiting in 'get_data' for a part's declaration, and a 'wrapper_bbox.py'
     waiting for the rest of its input.
@@ -1110,7 +1110,7 @@ def test_a_part_instance_the_repository_resolves_is_fetched_without_stopping_the
 
     'get_part_async' used to await the base declaration and nothing else, and
     the synchronous lookup that followed fetched the instance - and before
-    that the metadata - with the loop stopped, which is what 'pc test' over
+    that the metadata - with the loop stopped, which is what 'pc qual test' over
     //pub once hung on (see the test above about a cold plugin part).
     """
     repo, fake = _instance_repo(tmp_path)

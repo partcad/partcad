@@ -18,7 +18,7 @@ from OCP.gp import gp_Pnt
 
 import partcad as pc
 from partcad import shape_envelope
-from partcad.test import interference as core_rule
+from partcad.qual.topology import interference as core_rule
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 import ocp_serialize  # noqa: E402
@@ -204,3 +204,11 @@ def test_what_each_reported_pair_shares_is_handed_back_when_asked_for():
     for overlap in result["overlaps"]:
         assert len(overlap["solids"]) == 1
         assert abs(wrapper_interference._volume(overlap["solids"][0]) - 200.0) < 1e-6
+    # And where each is, and how big, for the IDE to pin a callout to: the
+    # middle of the slab two cubes 8 mm apart share, in the assembly's frame.
+    centres = sorted(overlap["pieces"][0]["at"][0] for overlap in result["overlaps"])
+    for overlap in result["overlaps"]:
+        (piece,) = overlap["pieces"]
+        assert abs(piece["volume"] - 200.0) < 1e-6
+        assert abs(piece["at"][1] - 5.0) < 1e-6 and abs(piece["at"][2] - 5.0) < 1e-6
+    assert [round(x, 6) for x in centres] == [9.0, 17.0]

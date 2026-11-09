@@ -34,7 +34,7 @@ angles, which are millimetres and degrees: a density is kg/m^3, a viscosity
 Pa*s, a mass kg, an inertia kg*m^2, a force N (see the 'how:' section of an
 ASSY file, which has always said so). An acceleration is not a length, so it is
 m/s^2 -- and that is also the unit of the other place a gravity is stated, which
-it has to be compared with. A 'simulate:' may pass its plugin a 'gravity' of
+it has to be compared with. A 'qual: sim:' may pass its plugin a 'gravity' of
 its own in 'params', and both simulation plugins have always taken that in
 m/s^2, because both engines do; two numbers where one replaces the other must
 not be a thousand apart for the same acceleration. It is the number everybody

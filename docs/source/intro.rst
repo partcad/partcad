@@ -30,7 +30,7 @@ What PartCAD works with
 * **Outputs**: STEP, BREP, IGES, STL, 3MF, OBJ, glTF and URDF, Gazebo and MuJoCo worlds, 2D projections,
   dimensioned drawings, Markdown documentation, and PDF or HTML instruction books.
 * **Engineering**: finite element, modal, thermal and fluid analysis (``pc cae``), simulation in MuJoCo or
-  Gazebo (``pc sim``), 2.5D toolpaths (``pc cam``), and materials and manufacturing methods that carry
+  Gazebo (``pc qual test --simulation``), 2.5D toolpaths (``pc cam``), and materials and manufacturing methods that carry
   through into the bill of materials.
 * **Supply chain**: a build-or-buy decision per line item, stock-based procurement for the parts that are
   made rather than bought, and ordering from the command line.

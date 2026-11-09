@@ -198,7 +198,7 @@ env:
   # is the interpreter PartCAD itself runs on. 'test-pub-repo', which renders
   # the public index, uses PYTHONS_SANDBOX instead.
   PYTHONS_SLIM: '["3.10", "3.14"]'
-  VERSION: 0.9.22
+  VERSION: 0.10.1
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
   PC_TELEMETRY_PERFORMANCE: false
@@ -1192,7 +1192,7 @@ jobs:
   #
   # The analysis is only *run* where a container runtime can run the solver's
   # Linux image: here, on Linux. On the other two the test accepts the one
-  # excuse "pc test" accepts for an analysis that came back with nothing (see
+  # excuse "pc qual test" accepts for an analysis that came back with nothing (see
   # "CaeTest._verdict"), and still checks everything else about the tab.
   test-ide-e2e:
     name: "IDE (end to end)"
@@ -1637,7 +1637,7 @@ jobs:
       # from source, and Windows has no package at all. On those the image is
       # the answer, and neither runner has a container runtime that can run a
       # Linux one -- Windows ships a daemon in Windows-container mode, which is
-      # not the same thing. So `pc test` skips those analyses there rather than
+      # not the same thing. So `pc qual test` skips those analyses there rather than
       # failing them, and says so -- the plugin names a `dockerImage`, which is
       # what earns it; see `ImplementationTest._verdict()` for why that is the
       # one excuse it accepts.
@@ -1662,7 +1662,7 @@ jobs:
           # Through 'bounded.sh', which aborts a command that stops making
           # progress and dumps every thread's stack -- see the file for why.
           #
-          # The hang this wrapper was written for is fixed: 'pc test' admitted
+          # The hang this wrapper was written for is fixed: 'pc qual test' admitted
           # its tests through a plain 'asyncio.Semaphore', and 'CamTest' runs the
           # whole suite over everything an assembly is procured from from inside
           # the call that semaphore had already admitted. Once as many callers as
@@ -1685,7 +1685,7 @@ jobs:
           # re-render it locally, where nothing is left out.
           ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r --fast-only //pub/examples/partcad
           # TODO(clairbee): Limit RAM usage by restricting the number of threads?
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --fast-only --package //pub/examples/partcad
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 qual test -r --fast-only --package //pub/examples/partcad
           ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi --threads-max 4 render -r --fast-only --package //pub/examples/partcad
           coverage combine
           # END PARTCAD EXAMPLES
@@ -1931,7 +1931,7 @@ jobs:
           for package in $(grep -v -e '^#' -e '^$' ../dev-tools/ci/examples-packages.txt); do
             n=$((n + 1))
             ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.list${n}" -m partcad_cli.click.command --no-ansi list all -r --fast-only "${package}"
-            ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.test${n}" -m partcad_cli.click.command --no-ansi test -r --fast-only --package "${package}"
+            ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.test${n}" -m partcad_cli.click.command --no-ansi qual test -r --fast-only --package "${package}"
           done
           coverage combine
           # END ALL EXAMPLES
@@ -2081,7 +2081,7 @@ jobs:
             ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.list${n}" -m partcad_cli.click.command --no-ansi list all -r --fast-only "${package}"
             rc=$?
             if [ "${rc}" -ne 0 ]; then sample_rc=${rc}; failed="${failed} list:${package}=${rc}"; fi
-            ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.test${n}" -m partcad_cli.click.command --no-ansi -v --threads-max 4 test --package "${package}" -a "${object}" 2>&1 |
+            ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.test${n}" -m partcad_cli.click.command --no-ansi -v --threads-max 4 qual test --package "${package}" -a "${object}" 2>&1 |
               tee -a "${sweep_log}" | grep --line-buffered -v " DEBUG:partcad:"
             rc=${PIPESTATUS[0]}
             if [ "${rc}" -ne 0 ]; then sample_rc=${rc}; failed="${failed} ${object}=${rc}"; fi

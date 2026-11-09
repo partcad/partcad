@@ -26,7 +26,7 @@ import math
 import yaml
 
 import partcad as pc
-from partcad.test.manufacturability import ManufacturabilityTest
+from partcad.qual.basic.manufacturability import ManufacturabilityTest
 
 
 def _record_errors(monkeypatch):

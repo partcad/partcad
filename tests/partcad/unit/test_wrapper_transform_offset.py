@@ -13,7 +13,7 @@ It did not, and the two errors cancelled in a picture. 'relocate()' gives a
 shape a new local frame and bakes the inverse into the geometry, so the shape
 does not move; the offset then existed only as a location, and exporting
 dropped it - seeing the compensating inverse, a part rotated by the opposite of
-what was asked - while 'partcad.test.interference' honoured it and saw a part
+what was asked - while 'partcad.qual.topology.interference' honoured it and saw a part
 that had not moved at all. 'feature_enrich:desk-enrich' rendered as a desk
 while the check was shown four legs lying across one another, and reported
 4.8 million mm^3 of overlap that is not there.

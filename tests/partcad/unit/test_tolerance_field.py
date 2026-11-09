@@ -12,7 +12,7 @@ each already stating what it is, so a single value declared beside the file is a
 claim about a part the file describes better. That reasoning holds for what a
 STEP file states -- and plenty of them state no tolerance at all, which leaves a
 part read from one of those with nothing to say about how precisely it has to be
-made, and 'pc test' rejecting it for saying nothing.
+made, and 'pc qual test' rejecting it for saying nothing.
 
 So the field: a way for the declaration to answer for a file that does not.
 'Part.get_tolerance()' is the one thing that reads it, along with the file and
@@ -157,7 +157,7 @@ def test_a_declared_tolerance_that_is_not_a_length_is_refused(tmp_path, declared
 
     YAML spells every one of them and 'float()' takes every one, so without a
     check a part could declare its way past the manufacturability test: NaN is
-    the answer that means "tolerated feature by feature", which 'pc test'
+    the answer that means "tolerated feature by feature", which 'pc qual test'
     accepts; an infinite or negative value is neither zero nor NaN and so reads
     as a real tolerance; and a boolean is an int in Python, so 'true' reads back
     as one millimetre. 'yes' is in here because YAML makes that the easiest of
@@ -306,7 +306,7 @@ def test_the_file_is_prepared_before_it_is_read(tmp_path):
     'Shape.prepare_async()' is where the factory hangs that download - it is
     "everything that has to happen before this shape's cache key means
     anything" - so reading the file before it has run would report that a file
-    nobody had fetched yet states nothing, and have 'pc test' cache that answer
+    nobody had fetched yet states nothing, and have 'pc qual test' cache that answer
     against the hash of a file that was never there.
     """
     ctx = _write_package(tmp_path, {"body": _part("step")})

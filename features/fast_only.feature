@@ -67,6 +67,6 @@ Feature: '--fast-only' leaves out what declares a 'timeout:'
 
   @success
   Scenario: A slow assembly named outright is passed over, and says so
-    When I run "pc --no-ansi test -f nosuchcheck --fast-only -a //package_a:slow"
+    When I run "pc --no-ansi qual test -f nosuchcheck --fast-only -a //package_a:slow"
     Then the command should exit with a status code of "0"
     And STDERR should contain "Skipping the assembly '//package_a:slow': it declares 'timeout: 1800'"

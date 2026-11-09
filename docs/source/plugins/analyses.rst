@@ -91,7 +91,7 @@ would put a name on a file whose contents are something else.
 
 **The implementation reports findings.** Beside ``success`` it returns
 ``findings``, a JSON array of what it has to say about the part. An empty one is
-a pass, and is what the analysis checks of ``pc test`` require.
+a pass, and is what the analysis checks of ``pc qual test`` require.
 
 A plugin that needs a solver ``pip`` cannot install names a ``dockerImage``
 carrying it, which is the one case where a check that could not run is excused
@@ -146,4 +146,4 @@ on three objects, and a fourth that declares nothing and is passed over.
 
   cd examples/feature_cae
   pc cae fea :cantilever       # against whatever caeFeaImplementation names
-  pc test -f fea               # the same scenarios, as a check
+  pc qual test -f fea               # the same scenarios, as a check

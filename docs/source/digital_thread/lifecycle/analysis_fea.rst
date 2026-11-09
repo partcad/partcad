@@ -89,10 +89,10 @@ On the command line
   pc cae fea -f loaded :bracket                         # one of them
   pc cae fea -i //pub/feature/cae/elmer:fea :bracket    # with another solver
   pc ide view --analysis-fea --scenario loaded :bracket # the same, shown in the panel
-  pc test -f fea :bracket                               # as the check pc test runs
+  pc qual test -f fea :bracket                               # as the check pc qual test runs
 
 What comes back is the model -- ``bracket.fea.loaded.glb``, in whichever format
-the implementation chose -- and the **findings**, which ``pc test`` reports as
+the implementation chose -- and the **findings**, which ``pc qual test`` reports as
 its ``fea`` check: a part any of whose scenarios found something fails.
 
 Who runs it

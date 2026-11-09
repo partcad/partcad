@@ -28,7 +28,7 @@ permissions:
   contents: read
 
 env:
-  VERSION: 0.9.22
+  VERSION: 0.10.1
   CONTAINER_REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}-devcontainer
   TOTAL_TIMEOUT: 900
@@ -431,7 +431,7 @@ jobs:
     # erode: a scenario that renders anything provisions a CAD sandbox of its
     # own from a throwaway $HOME, so each one costs minutes where a scenario
     # settled by its declaration costs under a second. Seven were added to
-    # "features/test.feature" alone between 0.8.90 and here.
+    # "features/qual_test.feature" alone between 0.8.90 and here.
     #
     # The failure this bump is for gives no reason of its own: a job at
     # "timeout-minutes" is cancelled with its log ending mid-sentence, which
@@ -815,7 +815,7 @@ jobs:
             pc="$(poetry run which pc)"
             for package in $(grep -v -e '^#' -e '^$' dev-tools/ci/examples-packages.txt); do
               poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run --append ${pc} --no-ansi list all -r --fast-only ${package})" || status=$?
-              poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run --append ${pc} --no-ansi test -r --fast-only --package ${package})" || status=$?
+              poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run --append ${pc} --no-ansi qual test -r --fast-only --package ${package})" || status=$?
               poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run --append ${pc} --no-ansi render -r --fast-only --package ${package})" || status=$?
             done
             poetry --no-ansi --no-interaction run coverage xml --data-file=examples/.coverage -o pc-test-results/coverage.xml || true

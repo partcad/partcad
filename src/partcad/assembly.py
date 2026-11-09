@@ -46,7 +46,7 @@ class AssemblyChild:
     against its target - and stays None for a rigid attachment: PartCAD has no
     fixed joints. A reader that knows its joints some other way (a URDF does)
     may fill 'joint' in directly. 'joint_problems' is what resolving the joint
-    found wrong with the declarations it read, which 'pc test' reports.
+    found wrong with the declarations it read, which 'pc qual test' reports.
 
     'fixed' is a scene's 'fixed: true': what this child places is welded to the
     world rather than free to fall (see docs/design/simulation.md, section 7).
@@ -592,7 +592,7 @@ class Assembly(Shape):
 
         Each entry is '(child name, problem)'. The instructions are repaired in
         place as they are resolved - an assembly still builds - so this is what
-        'pc test' looks at to tell a repaired one from a sound one. The joints
+        'pc qual test' looks at to tell a repaired one from a sound one. The joints
         are resolved the same lenient way, and what that found is here too: a
         'motion:' that contradicts itself, a 'dof' naming no parameter, two
         interfaces disagreeing about the physics of the joint they make, two
@@ -692,7 +692,7 @@ class Assembly(Shape):
         envelopes, and 'members', each of the two as {'object', 'location'} --
         the object placed there and where, in the frame the solids are in. That
         is what the interference test builds the assembly it leaves behind out
-        of (see 'test/interference_artifact.py').
+        of (see 'qual/topology/interference_artifact.py').
         """
         obj = await self.get_wrapped(ctx)
         if obj is None:

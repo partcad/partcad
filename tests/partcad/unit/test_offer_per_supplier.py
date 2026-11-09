@@ -152,8 +152,8 @@ def test_an_assembly_package_loads_the_stores_it_names(ctx, tmp_path):
 
 def test_a_part_cut_from_stock_only_the_stores_sell_can_be_made(ctx):
     """The desk's case: the stock names no SKU, and the package's suppliers publish aliases of it."""
-    from partcad.test import manufacturability
-    from partcad.test.test import Test
+    from partcad.qual.basic import manufacturability
+    from partcad.qual.qualification import Qualification as Test
 
     ctx.projects.pop("//east", None)
     ctx.projects.pop("//west", None)
@@ -165,8 +165,8 @@ def test_a_part_cut_from_stock_only_the_stores_sell_can_be_made(ctx):
 
 
 def test_a_part_cut_from_stock_nobody_sells_cannot_be_made(ctx):
-    from partcad.test import manufacturability
-    from partcad.test.test import Test
+    from partcad.qual.basic import manufacturability
+    from partcad.qual.qualification import Qualification as Test
 
     ctx.projects.pop("//east", None)
     ctx.projects.pop("//west", None)

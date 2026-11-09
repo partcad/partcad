@@ -634,7 +634,7 @@ def test_connect_how_thread_step_from_a_self_tapping_screw():
 
 
 def test_connect_how_hold_force_out_of_order_is_a_problem():
-    """The repaired range is reported so that 'pc test' can fail on it"""
+    """The repaired range is reported so that 'pc qual test' can fail on it"""
     how = ConnectHow({"holdWithForceMin": 9.0, "holdWithForceMax": 2.0}).resolve(_FakeItem(), _FakeItem())
     assert len(how.problems) == 1
     assert "holdWithForceMin" in how.problems[0]
@@ -833,7 +833,7 @@ def test_interface_thread_step_is_inherited():
 
 
 def test_assy_connect_problems_are_reported():
-    """A sound assembly has nothing for 'pc test' to report"""
+    """A sound assembly has nothing for 'pc qual test' to report"""
     ctx = pc.init(CONNECT_HOW_PACKAGE)
     assembly = ctx._get_assembly(":connect_how")
     assert asyncio.run(assembly.get_connect_problems()) == []
@@ -852,7 +852,7 @@ def test_assy_connect_problems_of_a_broken_assembly():
 
 def test_connect_test_passes_and_fails():
     """The 'connect' test follows those problems"""
-    from partcad.test.connect import ConnectTest
+    from partcad.qual.basic.connect import ConnectTest
 
     ctx = pc.init(CONNECT_HOW_PACKAGE)
     test = ConnectTest()

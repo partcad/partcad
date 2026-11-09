@@ -130,13 +130,13 @@ Simulation
 
 What an object is supposed to do once the world is switched on. See :doc:`/digital_thread/lifecycle/simulation`.
 
-- ``simulate:`` on a part, an assembly or a scene: a scene, where in it the object goes, and the condition
+- ``qual: sim:`` on a part, an assembly or a scene: a scene, where in it the object goes, and the condition
   that says whether it went as it should
 - What becomes a rigid body: every element of a scene, recursively, and everything inside an assembly
   attached to it, its connections that keep a degree of freedom joints; a scene element may be
   ``fixed: true`` to the world, and a scene may place a scene
-- ``pc sim``, which runs it and validates the result
-- ``pc test`` holds every object to it, as its ``sim`` check: write the claim first, then make it pass
+- ``pc qual test --simulation``, which runs it and validates the result
+- ``pc qual test`` holds every object to it, as its ``sim`` check: write the claim first, then make it pass
 - Simulation plugins, declared the way export and render implementations are: a scene goes in, ``before``
   and ``after`` come out. The simulator is a package, not part of the ``partcad`` wheel:
   `partcad-sim-mujoco`_ runs one in MuJoCo and `partcad-sim-gazebo`_ one in Gazebo
@@ -154,8 +154,8 @@ What the part does before anything is cut.
 - ``pc cae dynamic``, modal analysis: the natural frequencies of a part, held as it is
 - ``pc cae thermal``, heat transfer: what is held at a temperature, heated and cooled
 - ``pc cae cfd``, computational fluid dynamics: where the flow goes in and out, the rest a wall
-- Each a map of named scenarios, as ``simulate:`` is of simulations: ``pc cae fea`` runs them all, ``-f`` one,
-  and ``pc test`` holds the part to every one
+- Each a map of named scenarios, as ``qual: sim:`` is of simulations: ``pc cae fea`` runs them all, ``-f`` one,
+  and ``pc qual test`` holds the part to every one
 - The **FEA**, **Dynamic FEA**, **Heat Transfer** and **CFD** tabs of the Digital Thread list the scenarios of
   the object on screen, and run the one selected
 
@@ -207,7 +207,7 @@ Tooling for AI agents doing mechanical design. See :doc:`/ai_agents/mcp`.
     by ``location:`` and fixed to the world unless it is mobile
   - Describe an existing object (``/pc:describe``), search the catalog (``/pc:search``), add interfaces
     (``/pc:add-interfaces``)
-  - Validate an object against its ``requirements:`` (``/pc:validate``): ``pc test`` for the ports,
+  - Validate an object against its ``requirements:`` (``/pc:validate``): ``pc qual test`` for the ports,
     interfaces and physics it measures, and the agent's judgement of every feature from simulations,
     renders, the bill of materials and the assembly instructions
   - Set a project up (``/pc:init``, ``/pc:setup``)
@@ -225,7 +225,7 @@ The Digital Thread
 
 - Object-Oriented Programming approach to maintaining part interfaces and mating information
 - Live preview of 3D models while working in Visual Studio Code, with the requirements an object declares
-  and whether ``pc test`` finds them met, 2D renders, dimensioned drawings, engineering analysis, the
+  and whether ``pc qual test`` finds them met, 2D renders, dimensioned drawings, engineering analysis, the
   build-or-buy decision, the bill of materials, the assembly instructions and supplier quotes on tabs beside
   the 3D view, and a software fallback that still draws the model in a window with no WebGL, such as a
   virtual machine or a remote desktop (see :doc:`/tools_vscode`)

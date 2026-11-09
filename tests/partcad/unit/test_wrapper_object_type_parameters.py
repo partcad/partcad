@@ -10,7 +10,7 @@ CQGI is strict about build parameters: a name the script does not assign at top
 level is a name nobody will ever read, which is almost always a typo, so it
 raises. That is right for a parameter the author of the part invented, and wrong
 for one the part's *type* contributed - a part can be obliged to declare a
-tolerance ('pc test' requires one of anything manufactured) while the script
+tolerance ('pc qual test' requires one of anything manufactured) while the script
 that builds its geometry has no interest in it.
 
 So the factory tells the wrapper which names came from the type, and the wrapper

@@ -13,7 +13,7 @@ M8 tapped hole cuts nothing, and the same screw in a plain M8 opening cuts its
 own thread, so neither end can answer and only the pairing can. A connection's
 'how' knows when it is true of that joint alone.
 
-It matters because 'partcad.test.interference' expects the two solids to share
+It matters because 'partcad.qual.topology.interference' expects the two solids to share
 space exactly where a thread is being formed, and reports it everywhere else.
 """
 

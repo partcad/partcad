@@ -14,7 +14,7 @@
 #
 # And three that declare objects rather than ways of producing them:
 #
-#   - `//builtin/scene` -- the empty world a `simulate:` places its subject in
+#   - `//builtin/scene` -- the empty world a `qual: sim:` places its subject in
 #     when it names no scene of its own.
 #   - `//builtin/color` -- the display-only colour `rgba`, which PartCAD writes
 #     for a colour nothing declares (see `partcad.cmf.RGBA`).

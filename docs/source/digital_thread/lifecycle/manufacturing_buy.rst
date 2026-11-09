@@ -124,7 +124,7 @@ nothing of a particular store can still be quoted at that store:
       type: assy
 
 A part asked for on its own, rather than as part of an assembly, is looked for
-at its own package's suppliers only, and so is every part ``pc test`` checks.
+at its own package's suppliers only, and so is every part ``pc qual test`` checks.
 
 In the future PartCAD will be able to select providers based on the location and
 preferences of the requester, while leaving the possibility to enforce the use

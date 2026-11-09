@@ -178,7 +178,7 @@
       "additionalProperties": false
     },
     "alsoConnectPortsEntry": {
-      "description": "A further joint this object makes once it is placed: a port of it that meets a port of an object placed before it. It places nothing; 'pc test' checks that the two ports meet, and the instruction book says so at this step.",
+      "description": "A further joint this object makes once it is placed: a port of it that meets a port of an object placed before it. It places nothing; 'pc qual test' checks that the two ports meet, and the instruction book says so at this step.",
       "type": "object",
       "properties": {
         "with": { "type": "string", "minLength": 1 },

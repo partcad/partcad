@@ -30,7 +30,7 @@ import pytest
 
 import partcad as pc
 from partcad import cae, output
-from partcad.test.cae import CaeTest
+from partcad.qual.basic.cae import CaeTest
 
 EXAMPLES = "examples"
 
@@ -280,7 +280,7 @@ def test_analysing_what_declares_nothing_says_so(package):
 
 
 # --------------------------------------------------------------------------- #
-# The check `pc test` runs                                                    #
+# The check `pc qual test` runs                                                    #
 # --------------------------------------------------------------------------- #
 #
 # `CaeTest` has one verdict -- "did the analysis say anything?" -- and three
@@ -354,7 +354,7 @@ def test_the_check_fails_a_part_whose_analysis_reported_something(package, monke
 def test_a_part_that_declares_nothing_is_not_checked(package, monkeypatch):
     """`cfd:` is undeclared on this part, so the CFD check has nothing to say.
 
-    Passing rather than failing is the point: a `pc test -r` over a package tree
+    Passing rather than failing is the point: a `pc qual test -r` over a package tree
     would otherwise fail every bolt in it for not asking to be analysed.
     """
     import asyncio
@@ -493,7 +493,7 @@ def test_a_failure_that_may_be_the_machine_is_not_remembered(package, monkeypatc
 def test_a_real_verdict_is_remembered(package, monkeypatch):
     """The opt-out is for the unrun analysis alone: one that ran is cacheable.
 
-    Running a solver is the expensive thing `pc test`'s cache exists for, so a
+    Running a solver is the expensive thing `pc qual test`'s cache exists for, so a
     run that produced an answer -- pass or fail -- has to stay cacheable.
     """
     import asyncio
@@ -542,7 +542,7 @@ def test_a_plugin_that_says_nothing_about_its_output_fails_the_check(package, mo
     The package resolves, and declares a file type that does not say what file it
     writes. An analysis has no default extension to fall back on -- 3D field or
     2D plot is the implementation's decision -- so this is a bug in that package,
-    which is not something the machine running `pc test` can mend.
+    which is not something the machine running `pc qual test` can mend.
     """
     import asyncio
 
@@ -588,10 +588,10 @@ def test_the_command_line_still_outranks_the_part(package, monkeypatch):
 # A relative name belongs to whoever said it                                  #
 # --------------------------------------------------------------------------- #
 #
-# The tree below is the one `pc test -r` walks: a root package, a package under
+# The tree below is the one `pc qual test -r` walks: a root package, a package under
 # it holding the part, and the plugin that package imported. The context is
 # created for the root, so the *current* package is the root and not the part's
-# -- which is the whole point. `pc test -r --package //pub/examples/partcad` runs
+# -- which is the whole point. `pc qual test -r --package //pub/examples/partcad` runs
 # in exactly that arrangement, and a part deep in the tree that names its plugin
 # relatively has to resolve it from where it is rather than from where the
 # command was run.
@@ -655,7 +655,7 @@ def test_a_relative_plugin_resolves_against_the_package_that_named_it(nested):
 
     Resolving it against the current package instead makes the same declaration
     mean different things depending on which directory the command was run from,
-    and means nothing at all under 'pc test -r' over a tree -- which runs with
+    and means nothing at all under 'pc qual test -r' over a tree -- which runs with
     the tree's root current and every part one or more packages below it.
     """
     ctx, part = nested
@@ -667,7 +667,7 @@ def test_a_relative_plugin_resolves_against_the_package_that_named_it(nested):
 
 
 def test_the_check_resolves_a_relative_plugin_from_a_tree_root(nested, monkeypatch):
-    """The same thing through 'pc test', which is where it was found.
+    """The same thing through 'pc qual test', which is where it was found.
 
     A plugin that does not resolve is a failure now, so this is the difference
     between 'Examples (PartCAD)' green and 'Examples (PartCAD)' red.
@@ -766,7 +766,7 @@ def test_a_configuration_error_from_the_analysis_reads_as_one(package, monkeypat
 
 
 def test_a_malformed_section_fails_the_check_with_its_own_sentence(package, monkeypatch, caplog):
-    """A package that got the declaration wrong hears why, from `pc test` too."""
+    """A package that got the declaration wrong hears why, from `pc qual test` too."""
     import asyncio
 
     part = _bracket(package)
@@ -942,7 +942,7 @@ def _run_raises(part, monkeypatch, error):
 def test_the_command_is_told_what_the_check_is_told(package, monkeypatch):
     """One report, written where the implementation's name is known.
 
-    `pc test` used to compose this and `pc cae fea` did not, so a user who ran
+    `pc qual test` used to compose this and `pc cae fea` did not, so a user who ran
     the command instead of the check was told less about the same machine. It is
     written once now, in `analyze_async`, and both of them print it.
     """
@@ -964,7 +964,7 @@ def test_the_command_is_told_what_the_check_is_told(package, monkeypatch):
 
 
 def test_the_check_prints_that_report_rather_than_writing_its_own(package, monkeypatch, caplog):
-    """`pc test` reports what `analyze_async` wrote, and does not wrap it twice."""
+    """`pc qual test` reports what `analyze_async` wrote, and does not wrap it twice."""
     import asyncio
 
     part = _bracket(package)
@@ -1069,7 +1069,7 @@ def test_no_container_runtime_is_a_skip_for_an_implementation_that_names_an_imag
     with caplog.at_level("WARNING"):
         assert asyncio.run(CaeTest(cae.FEA).test([], containerised, part, test_ctx)) is CaeTest.TEST_PASSED
 
-    assert "Test skipped" in caplog.text
+    assert "Qualification skipped" in caplog.text
     assert "ccx: not found" in caplog.text
     assert "no container runtime on this machine" in caplog.text
     # Nothing about the machine belongs in the cache: starting a runtime changes
@@ -1093,12 +1093,12 @@ def test_no_container_runtime_is_no_excuse_for_an_implementation_that_names_none
 
     with caplog.at_level("WARNING"):
         assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_FAILED
-    assert "Test skipped" not in caplog.text
+    assert "Qualification skipped" not in caplog.text
     assert "ccx: not found" in caplog.text
 
 
 def test_a_skip_is_never_logged_as_an_error(containerised, monkeypatch, caplog):
-    """`pc test` exits non-zero on a logged error, and this run succeeded."""
+    """`pc qual test` exits non-zero on a logged error, and this run succeeded."""
     import asyncio
 
     part = _bracket(containerised)
