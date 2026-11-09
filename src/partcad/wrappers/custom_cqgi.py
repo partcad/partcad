@@ -312,6 +312,13 @@ class InputParameter:
         return p
 
     def set_value(self, new_value):
+        """
+        Override the parameter by rewriting its literal in the script's syntax tree.
+
+        :param new_value: the value the script will see instead of its own default
+        :raises InvalidParameterError: if the value is not one of the valid values,
+            or a number parameter is given a value that is not numeric
+        """
         if len(self.valid_values) > 0 and new_value not in self.valid_values:
             raise InvalidParameterError(
                 "Cannot set value '{0:s}' for parameter '{1:s}': not a valid value. Valid values are {2:s} ".format(
@@ -327,8 +334,10 @@ class InputParameter:
                 else:
                     f = float(new_value)
 
-                self.ast_node.n = f
-            except ValueError:
+                # '.value', not the '.n' alias: it was removed in Python 3.14,
+                # where assigning it only adds an attribute nobody reads.
+                self.ast_node.value = f
+            except (ValueError, TypeError):
                 raise InvalidParameterError(
                     "Cannot set value '{0:s}' for parameter '{1:s}': parameter must be numeric.".format(
                         str(new_value), self.name
@@ -336,21 +345,10 @@ class InputParameter:
                 )
 
         elif self.varType == StringParameterType:
-            self.ast_node.s = str(new_value)
+            self.ast_node.value = str(new_value)
         elif self.varType == BooleanParameterType:
-            if new_value:
-                if hasattr(ast, "NameConstant"):
-                    self.ast_node.value = True
-                else:
-                    self.ast_node.id = "True"
-            else:
-                if hasattr(ast, "NameConstant"):
-                    self.ast_node.value = False
-                else:
-                    self.ast_node.id = "False"
+            self.ast_node.value = bool(new_value)
         elif self.varType == TupleParameterType:
-            self.ast_node.n = new_value
-
             # Build the list of constants to set as the tuple value
             constants = []
             for nv in new_value:
@@ -507,7 +505,7 @@ class ParameterDescriptionFinder(ast.NodeTransformer):
                 # first parameter is the variable,
                 # second is the description
                 varname = node.args[0].id
-                desc = node.args[1].s
+                desc = node.args[1].value
                 self.cqModel.add_parameter_description(varname, desc)
 
         except:

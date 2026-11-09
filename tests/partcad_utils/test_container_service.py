@@ -19,6 +19,7 @@ import base64
 import json
 import os
 import shutil
+import subprocess
 import sys
 import threading
 
@@ -1086,6 +1087,55 @@ def framed(monkeypatch, tmp_path):
     yield client
     server.shutdown()
     server.server_close()
+
+
+def _echo(body):
+    """A command that runs 'body' with `sys` and `time` imported, with all three of its streams piped."""
+    return subprocess.Popen(
+        [sys.executable, "-c", "import sys, time\n" + body],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def test_a_command_slow_to_read_its_stdin_is_given_all_of_it():
+    """More than a pipe holds, to a command that has not begun to read when the first wait for it runs out.
+
+    A sandbox interpreter imports its CAD kernel before it reads its request.
+    Handed to `Popen.communicate`, whose retry before Python 3.13 does not go on
+    writing, the rest of a request like that was never sent, and the command
+    waited for it for as long as anybody let it.
+    """
+    payload = os.urandom(5 * 1024 * 1024 + 7)
+    process = _echo("time.sleep(0.5)\nsys.stdout.buffer.write(sys.stdin.buffer.read())")
+    # So that a command left waiting is a failure here rather than a hung suite.
+    stop = threading.Timer(15.0, process.kill)
+    stop.start()
+    try:
+        out, _err, left = service.communicate(process, payload, interval=0.05)
+    finally:
+        stop.cancel()
+
+    assert process.returncode == 0
+    assert len(out) == len(payload) and out == payload
+    assert left is None
+
+
+def test_a_command_that_exits_without_reading_its_stdin_is_not_an_error():
+    process = _echo("sys.stdout.write('done')")
+
+    out, _err, left = service.communicate(process, os.urandom(1024 * 1024), interval=0.05)
+
+    assert (process.returncode, out, left) == (0, b"done", None)
+
+
+def test_a_command_with_nothing_to_read_sees_its_stdin_end():
+    process = _echo("sys.stdout.write(repr(sys.stdin.buffer.read()))")
+
+    out, _err, _left = service.communicate(process, None, interval=0.05)
+
+    assert (process.returncode, out) == (0, b"b''")
 
 
 def test_frames_travel_over_http_and_come_back_as_they_went(framed):
