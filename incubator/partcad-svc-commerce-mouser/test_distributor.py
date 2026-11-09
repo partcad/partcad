@@ -20,7 +20,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 STEP = b"ISO-10303-21;\nHEADER;\nENDSEC;\nEND-ISO-10303-21;\n"
 
 
-def _resistor(sku, packaging, moq, breaks, stock):
+def _resistor(sku, packaging, moq, breaks, stock, pack=1):
     return d.Product(
         sku,
         mpn="RC0603FR-0710KL",
@@ -32,6 +32,7 @@ def _resistor(sku, packaging, moq, breaks, stock):
         breaks=breaks,
         stock=stock,
         currency="USD",
+        pack=pack,
         categories=["52"],
         specs=[("Resistance", "10 kOhms"), ("Package / Case", "0603 (1608 Metric)")],
         files=[d.File("m1", "RC0603.step", url="https://example.com/m1")],
@@ -52,13 +53,14 @@ class Fake(d.Distributor):
 
     RANGE = {
         "R-CT": _resistor("R-CT", "Cut Tape", 1, [(1, "0.10"), (10, "0.05"), (100, "0.02")], 5000),
-        "R-REEL": _resistor("R-REEL", "Tape & Reel", 5000, [(5000, "0.004")], 100000),
+        "R-REEL": _resistor("R-REEL", "Tape & Reel", 5000, [(5000, "0.004")], 100000, pack=5000),
         "SCREW-100": d.Product(
             "SCREW-100",
             mpn="91290A115",
             manufacturer="Fake Fasteners",
             title="Socket head screw M3 x 10 mm",
             pack=100,
+            per="pack",
             breaks=[(1, "9.85"), (5, "8.50")],
             stock=None,
             currency="USD",
@@ -414,3 +416,90 @@ def test_a_package_says_the_categories_below_it(fake):
     assert made.get("meta")["desc"].endswith("Categories: resistors, integrated-circuits-ics, integrated-circuits.")
     assert made.get("resistors/meta")["desc"].endswith("Categories: chip-resistor-surface-mount, through-hole.")
     assert "Categories" not in made.get("resistors/through-hole/meta")["desc"]
+
+
+def test_a_reel_is_ordered_whole_and_priced_by_the_item():
+    reel = d.Product("R-TR", pack=5000, moq=5000, breaks=[(5000, "0.004"), (25000, "0.003")])
+    assert reel.order(1) == (1, 5000, d.Decimal("20.000"))
+    assert reel.order(5001) == (2, 10000, d.Decimal("40.000"))
+    assert reel.order(30000) == (6, 30000, d.Decimal("90.000"))
+
+
+def test_a_pack_is_ordered_whole_and_priced_by_the_pack():
+    bag = d.Product("SCREW-100", pack=100, per="pack", breaks=[(1, "9.85"), (5, "8.50")])
+    assert bag.order(150) == (2, 200, d.Decimal("19.70"))
+    assert bag.order(450) == (5, 500, d.Decimal("42.50"))
+
+
+def test_a_quote_counts_items_by_what_the_part_declares_a_sku_is(fake):
+    """A part declaring the reel as one SKU of 5000 asks for reels; one declaring nothing, for items."""
+    reels = {
+        "parts": {"r": {"vendor": "fake", "sku": "R-REEL", "count": 6000, "count_per_sku": 5000}},
+        "skus": [{"vendor": "fake", "sku": "R-REEL", "count": 2, "parts": ["r"]}],
+    }
+    (line,) = fake().quote({"cart": reels})["lines"]
+    assert (line["count"], line["items"], line["quantity"]) == (2, 10000, 10000)
+    items = {"parts": {"r": {"vendor": "fake", "sku": "R-REEL", "count": 6000}}}
+    (line,) = fake().quote({"cart": items})["lines"]
+    # 6000 items are two whole reels.
+    assert (line["count"], line["items"], line["packs"], line["quantity"]) == (6000, 6000, 2, 10000)
+
+
+# --- a product's part, and its SKUs ----------------------------------------------
+
+
+class Based(Fake):
+    BASE_PARTS = True
+
+
+@pytest.fixture
+def based(tmp_path, monkeypatch):
+    monkeypatch.setenv("PARTCAD_FAKE_CACHE", str(tmp_path))
+    return lambda: Based({"parameters": {}})
+
+
+def test_a_product_is_a_part_bought_by_its_manufacturers_number(based):
+    config = based().get("objects/part/RC0603FR-0710KL~yageo")
+    assert config["type"] == "step"
+    assert (config["vendor"], config["sku"]) == ("YAGEO", "RC0603FR-0710KL")
+    assert "count_per_sku" not in config
+    assert "Sold by Fake as R-CT (Cut Tape), R-REEL (Tape & Reel, 5000 per SKU)" in config["desc"]
+
+
+def test_each_sku_is_an_alias_of_the_products_part_with_its_pack(based):
+    made = based()
+    cut = made.get("objects/part/R-CT")
+    assert (cut["type"], cut["source"]) == ("alias", ":RC0603FR-0710KL~yageo")
+    assert (cut["vendor"], cut["sku"]) == ("fake", "R-CT") and "count_per_sku" not in cut
+    reel = made.get("objects/part/R-REEL")
+    assert (reel["source"], reel["sku"], reel["count_per_sku"]) == (":RC0603FR-0710KL~yageo", "R-REEL", 5000)
+
+
+def test_a_search_answers_the_product_then_its_skus(based):
+    hits = based().get("search/part?q=RC0603")
+    assert list(hits) == ["RC0603FR-0710KL~yageo", "R-CT", "R-REEL"]
+    assert hits["RC0603FR-0710KL~yageo"]["type"] == "step"
+    assert hits["R-REEL"]["count_per_sku"] == 5000
+
+
+def test_a_product_with_no_model_is_found_and_neither_it_nor_its_skus_served(based):
+    hits = based().get("search/part?q=opamp")
+    assert list(hits) == ["LT1013CN8%23PBF~analog-devices-inc", "LT1013CN8%23PBF"]
+    assert all("type" not in hit for hit in hits.values())
+
+
+def test_the_products_part_is_quoted_in_its_cheapest_sku(based):
+    made = based()
+    assert made.avail({"vendor": "YAGEO", "sku": "RC0603FR-0710KL", "count": 12})["sku"] == "R-CT"
+    assert made.avail({"vendor": "YAGEO", "sku": "RC0603FR-0710KL", "count": 9000})["sku"] == "R-REEL"
+
+
+def test_the_products_model_is_served_under_its_name(based):
+    made = based()
+    config = made.get("objects/part/RC0603FR-0710KL~yageo")
+    assert d.base64.b64decode(made.get("files/" + config["path"])) == STEP
+
+
+def test_a_tilde_in_a_part_number_is_not_the_separator(based):
+    assert d.name_of("A~B") == "A%7EB"
+    assert based().base_name(d.Product("X", mpn="A~B", manufacturer="M")) == "A%7EB~m"

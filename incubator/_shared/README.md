@@ -10,7 +10,7 @@ command line, and writes the digest each package's own tests hold its copy to
 
 ```shell
 ./incubator/_shared/copy.sh ../partcad-svc-commerce-digikey ../partcad-svc-commerce-octopart \
-  ../partcad-svc-commerce-mscmaster-carrr
+  ../partcad-svc-commerce-mscmaster-carr
 ```
 
 It is the distributor counterpart of PartCAD's `plugin_models` (the toolkit for

@@ -89,14 +89,19 @@ QUOTE_TTL = timedelta(hours=1)
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 50
 
+# What separates a product's part number from its manufacturer in the name of
+# its base part: 'RC0603FR-0710KL~yageo'.
+SEPARATOR = "~"
+
 # What a part name may hold as it is; anything else in a part number is written
 # percent-encoded ('LT1013CN8#PBF-ND' is 'LT1013CN8%23PBF-ND').
-_NAME_SAFE = "-._~"
+_NAME_SAFE = "-._"
 
 
 def name_of(sku):
     """The part name of a part number: itself, with what a name cannot hold percent-encoded."""
-    return urllib.parse.quote(str(sku), safe=_NAME_SAFE)
+    # 'quote' never escapes '~', which separates a base part's MPN from its maker.
+    return urllib.parse.quote(str(sku), safe=_NAME_SAFE).replace("~", "%7E")
 
 
 def sku_of(name):
@@ -174,9 +179,12 @@ class Product:
 
     'sku' is the distributor's part number - what is ordered, and what the
     product's part is named by; 'mpn' and 'manufacturer' are whose part it is.
-    'breaks' are the price breaks, [(quantity, unit price)], in 'currency';
-    'moq' is the least that is sold and 'multiple' what an order is a multiple
-    of; 'pack' is how many items one SKU is (a bag of 100 screws is one SKU).
+    'pack' is how many items one SKU is: a bag of 100 screws, a full reel of
+    5000 resistors, one cut-tape resistor. 'per' says what the price breaks,
+    [(quantity, price)] in 'currency', count and price: an item ('item', which
+    DigiKey and Mouser quote by, a reel being 5000 of them) or a whole SKU
+    ('pack', which McMaster-Carr quotes by). 'moq' is the least that is sold and
+    'multiple' what an order is a multiple of, in the same units.
     'stock' is how many the distributor has, None when it did not say.
     'files' are the 3D models of it, as plugin_models.File, or None when what
     was read did not say (they are then asked for when the part is built).
@@ -196,6 +204,7 @@ class Product:
         self.moq = max(whole(fields.get("moq"), 1) or 1, 1)
         self.multiple = max(whole(fields.get("multiple"), 1) or 1, 1)
         self.pack = max(whole(fields.get("pack"), 1) or 1, 1)
+        self.per = "pack" if fields.get("per") == "pack" else "item"
         self.packaging = fields.get("packaging")
         self.lead_time = fields.get("lead_time")
         self.currency = (fields.get("currency") or "").upper() or None
@@ -237,6 +246,22 @@ class Product:
 
     def in_stock_for(self, quantity):
         return None if self.stock is None else self.stock >= quantity
+
+    def order(self, items):
+        """(SKUs, items, price) of the least order that has at least 'items': whole SKUs, the minimum, the multiple.
+
+        The price is at the break the order reaches; None when unpriced.
+        """
+        packs = -(-max(int(items), 1) // self.pack)
+        if self.per == "pack":
+            packs = self.order_quantity(packs)
+            unit = self.unit_price(packs)
+            return packs, packs * self.pack, (unit * packs if unit is not None else None)
+        count = self.order_quantity(packs * self.pack)
+        packs = -(-count // self.pack)
+        count = packs * self.pack
+        unit = self.unit_price(count)
+        return packs, count, (unit * count if unit is not None else None)
 
 
 # --- the distributor, as a plugin serves it --------------------------------------
@@ -371,6 +396,9 @@ class Distributor(pm.Site):
             "manufacturable": False,
             "objectKinds": ["part"],
             "searchKinds": ["part"],
+            # A search here answers for every category below: PartCAD asks the
+            # top of the tree it searches, not each of its categories.
+            "searchScope": "tree",
             "instanceKinds": ["part"],
             # Every product is bought from the package's own store.
             "suppliers": {self.provider_name: {}},
@@ -444,22 +472,59 @@ class Distributor(pm.Site):
     def valid_id(self, model_id):
         return bool(model_id) and len(model_id) <= 120 and not any(c in model_id for c in "\r\n\t")
 
-    def model(self, model_id):
-        """A product as plugin_models sees a model: its 3D models are its files."""
-        product = self.fetch_product(model_id)
-        return self.model_of(product)
+    # -- a product's base part, and its SKUs --
+    #
+    # A distributor that sells one product as several SKUs - cut tape and a
+    # full reel, a bag of 10 and a bag of 100 - serves it as one part with the
+    # geometry, its base part, named '<MPN>~<manufacturer>' and bought by its
+    # manufacturer and part number (any store quotes that, in whichever of its
+    # SKUs is cheapest), and as an alias of that part per SKU, bought by the
+    # SKU and saying how many items one is ('count_per_sku'). A distributor
+    # without SKUs of one product (McMaster-Carr, Octopart) serves one part.
+    BASE_PARTS = False
 
-    def model_of(self, product):
+    def base_name(self, product):
+        """The name of a product's base part, '<MPN>~<manufacturer>'; None where there is none."""
+        if not self.BASE_PARTS or not product.mpn or not product.manufacturer:
+            return None
+        return "%s%s%s" % (name_of(product.mpn), SEPARATOR, slug(product.manufacturer))
+
+    def family(self, key):
+        """The products a base part is, every SKU of it, best first: [] for none."""
+        mpn, _, maker = key.rpartition(SEPARATOR)
+        mpn = sku_of(mpn)
+        return [
+            p
+            for p in self.find_mpn(None, mpn)
+            if fold(p.mpn) == fold(mpn) and slug(p.manufacturer) == maker and self.why_not(p) is None
+        ] or [p for p in self.find_mpn(None, mpn) if fold(p.mpn) == fold(mpn) and slug(p.manufacturer) == maker]
+
+    def model(self, model_id):
+        """A product as plugin_models sees a model: its 3D models are its files. A base part is its first SKU's."""
+        if self.BASE_PARTS and SEPARATOR in model_id:
+            products = self.family(model_id)
+            if not products:
+                raise NotFound("%s: %s has no product %s" % (self.NAME, self.TITLE, model_id))
+            model = self.model_of(self.fetch_product(products[0].sku), model_id)
+            model.family = products
+            return model
+        return self.model_of(self.fetch_product(model_id))
+
+    def model_of(self, product, model_id=None):
         files = product.files
         if files is None:
             files = self.cad_files(product)
             product.files = files
-        model = Model(product.sku, title=self.title_of(product), url=product.url, files=files)
+        model = Model(model_id or product.sku, title=self.title_of(product), url=product.url, files=files)
         model.product = product
+        model.family = [product]
         return model
 
     def resolve(self, base, parameters):
-        sku = sku_of(base)
+        # A base part's name is read as it is: its '~' is the separator, and
+        # any other one was written percent-encoded.
+        is_base = self.BASE_PARTS and SEPARATOR in base
+        sku = base if is_base else sku_of(base)
         unknown = sorted(set(parameters) - {"file", "format"})
         if unknown:
             raise SiteError(
@@ -479,16 +544,20 @@ class Distributor(pm.Site):
         model = self.model(sku)
         if not any(f.format for f in model.files or []):
             source = self.alias_of(model)
-            if source:
-                return self.alias_config(model, source)
-            vendor, sku = self.vendor_sku(model.product)
-            raise NotFound(
-                "%s: %s has no 3D model at %s. It is still sold: a part of your own declared with "
-                "'vendor: %s' and 'sku: %s' is quoted by %s"
-                % (self.NAME, model.id, self.TITLE, vendor, sku, self.provider_name)
-            )
+            if source and (is_base or not self.base_name(model.product)):
+                return self.alias_config(model, source, base=is_base)
+            if not source:
+                vendor, number = self.vendor_sku(model.product)
+                raise NotFound(
+                    "%s: %s has no 3D model at %s. It is still sold: a part of your own declared with "
+                    "'vendor: %s' and 'sku: %s' is quoted by %s"
+                    % (self.NAME, model.id, self.TITLE, vendor, number, self.provider_name)
+                )
+        if not is_base and self.base_name(model.product):
+            # A SKU of a product: an alias of the product's part.
+            return self.sku_config(model.product)
         file = self.choose(model, parameters.get("file") or None, wanted_format, None)
-        return self.part_config(model, file)
+        return self.part_config(model, file, base=is_base)
 
     def parameters(self, file):
         return {
@@ -507,7 +576,7 @@ class Distributor(pm.Site):
             return "%s: %s" % (who, what)
         return what or who or "%s %s" % (self.TITLE, product.sku)
 
-    def describe(self, product, file=None):
+    def describe(self, product, file=None, family=None):
         """What 'pc list' and 'pc info' say of a product: what it is, its specifications, how it is sold."""
         sentences = [self.title_of(product)]
         if product.desc and product.title and fold(product.desc) not in fold(sentences[0]):
@@ -515,11 +584,20 @@ class Distributor(pm.Site):
         specs = ["%s: %s" % (name, value) for name, value in product.specs[:8] if name and value not in (None, "")]
         if specs:
             sentences.append("; ".join(specs))
-        sentences.append(self.sold(product))
+        if family:
+            sentences.append("Sold by %s as %s" % (self.TITLE, ", ".join(self.sku_said(p) for p in family)))
+        else:
+            sentences.append(self.sold(product))
         if file is not None:
             source = product.cad_source or self.CAD_SOURCE
             sentences.append("3D model: %s%s" % (file.name, " (from %s)" % source if source else ""))
         return " ".join(s.strip().rstrip(".") + "." for s in sentences if s and s.strip())
+
+    @staticmethod
+    def sku_said(product):
+        """A SKU, as a description lists it: '311-10.0KHRTR-ND (Tape & Reel, 5000 per SKU)'."""
+        said = [w for w in (product.packaging, "%d per SKU" % product.pack if product.pack > 1 else None) if w]
+        return "%s (%s)" % (product.sku, ", ".join(said)) if said else product.sku
 
     def sold(self, product):
         """How a product is sold, in a sentence of its description."""
@@ -539,21 +617,28 @@ class Distributor(pm.Site):
         """
         return self.VENDOR, product.sku
 
-    def part_config(self, model, file):
-        product = model.product
+    def bought_as(self, product, base):
+        """(vendor, SKU, items per SKU) a part says: a base part's are its manufacturer's and MPN, one item each."""
+        if base:
+            return product.manufacturer, product.mpn, 1
         vendor, sku = self.vendor_sku(product)
+        return vendor, sku, product.pack
+
+    def part_config(self, model, file, base=False):
+        product = model.product
+        vendor, sku, per_sku = self.bought_as(product, base)
         config = {
             "type": pm.part_type_of(file.format),
             "path": pm.file_path(model, file),
-            "desc": self.describe(product, file),
+            "desc": self.describe(product, file, family=model.family if base else None),
             "vendor": vendor,
             "sku": sku,
             "parameters": self.parameters(file),
         }
         if product.url:
             config["url"] = product.url
-        if product.pack > 1:
-            config["count_per_sku"] = product.pack
+        if per_sku > 1:
+            config["count_per_sku"] = per_sku
         return config
 
     def alias_of(self, model):
@@ -564,16 +649,34 @@ class Distributor(pm.Site):
         """
         return None
 
-    def alias_config(self, model, source):
+    def alias_config(self, model, source, base=False):
         """A product drawn with another package's part: an alias of it, still bought from this distributor."""
         product = model.product
-        vendor, sku = self.vendor_sku(product)
+        vendor, sku, per_sku = self.bought_as(product, base)
         config = {
             "type": "alias",
             "source": source,
-            "desc": "%s 3D model: %s." % (self.describe(product), source),
+            "desc": "%s 3D model: %s." % (self.describe(product, family=model.family if base else None), source),
             "vendor": vendor,
             "sku": sku,
+        }
+        if product.url:
+            config["url"] = product.url
+        if per_sku > 1:
+            config["count_per_sku"] = per_sku
+        return config
+
+    def sku_config(self, product):
+        """One SKU of a product: an alias of the product's base part, bought by the SKU, so many items to one."""
+        base = self.base_name(product)
+        said = ", ".join(w for w in (product.packaging, "%d per SKU" % product.pack if product.pack > 1 else "") if w)
+        config = {
+            "type": "alias",
+            "source": ":" + base,
+            "desc": "%s, sold by %s as %s%s. The product is :%s."
+            % (self.title_of(product), self.TITLE, product.sku, " (%s)" % said if said else "", base),
+            "vendor": self.VENDOR,
+            "sku": product.sku,
         }
         if product.url:
             config["url"] = product.url
@@ -586,7 +689,11 @@ class Distributor(pm.Site):
         return "no 3D model at %s; quote it as 'vendor: %s', 'sku: %s'" % (self.TITLE, vendor, sku)
 
     def find(self, text, limit=None, category=None):
-        """A search answered: {part name: config}, best first; a product with no 3D model listed with no 'type'."""
+        """A search answered: {part name: config}, best first; a product with no 3D model listed with no 'type'.
+
+        Where a distributor sells a product as several SKUs, the product's part
+        comes first, then an alias of it per SKU.
+        """
         text = (text or "").strip()
         if not text:
             return {}
@@ -603,26 +710,47 @@ class Distributor(pm.Site):
         products = self.find_products(text, category, limit)[:limit]
         with concurrent.futures.ThreadPoolExecutor(max_workers=pm.WORKERS) as pool:
             completed = list(pool.map(complete, products))
-        hits = {}
+        families = {}
+        for product, (model, error) in zip(products, completed):
+            base = self.base_name(product)
+            if base and model is not None:
+                families.setdefault(base, []).append(product)
+        hits, said = {}, set()
         for product, (model, error) in zip(products, completed):
             if error is not None:
                 warn(str(error))
                 continue
-            readable = [f for f in model.files or [] if f.format]
-            if not readable:
-                source = self.alias_of(model)
-                if source:
-                    hits[name_of(product.sku)] = self.alias_config(model, source)
-                else:
-                    hits[name_of(product.sku)] = self.unserved_hit(model, self.unserved(model))
-                continue
-            try:
-                file = self.choose(model)
-            except SiteError:
-                hits[name_of(product.sku)] = self.unserved_hit(model, self.unserved(model))
-                continue
-            hits[name_of(product.sku)] = self.part_config(model, file)
+            base = self.base_name(product)
+            served = self.served(model)
+            if base and base not in said:
+                said.add(base)
+                model.family = families.get(base) or [product]
+                hits[base] = served(model, base=True)
+            if base:
+                hits[name_of(product.sku)] = (
+                    self.sku_config(product) if "type" in hits[base] else self.unserved_hit(model, self.unserved(model))
+                )
+            else:
+                hits[self.name_for(product)] = served(model, base=False)
         return hits
+
+    def name_for(self, product):
+        """The name of a product's part, where it has no base part: its part number, written as a name."""
+        return name_of(product.sku)
+
+    def served(self, model):
+        """How a model is answered: a part of its file, an alias of a partner's, or found and not served."""
+        readable = [f for f in model.files or [] if f.format]
+        if not readable:
+            source = self.alias_of(model)
+            if source:
+                return lambda m, base: self.alias_config(m, source, base=base)
+            return lambda m, base: self.unserved_hit(m, self.unserved(m))
+        try:
+            file = self.choose(model)
+        except SiteError:
+            return lambda m, base: self.unserved_hit(m, self.unserved(m))
+        return lambda m, base: self.part_config(m, file, base=base)
 
     # -- what PartCAD is answered: the store --
 
@@ -673,10 +801,8 @@ class Distributor(pm.Site):
         """Of the listings of one part, the one to buy 'needed' of: sellable, then in stock, then cheapest."""
 
         def cost(product):
-            quantity = product.order_quantity(needed)
-            unit = product.unit_price(quantity)
-            total = unit * quantity if unit is not None else None
-            stocked = product.in_stock_for(quantity)
+            _, items, total = product.order(needed)
+            stocked = product.in_stock_for(items if product.per == "item" else -(-items // product.pack))
             return (
                 not (product.orderable and product.priced),
                 stocked is False,
@@ -706,6 +832,8 @@ class Distributor(pm.Site):
         }
         if product.multiple > 1:
             offer["multiple"] = product.multiple
+        if product.pack > 1:
+            offer["pack"] = product.pack
         if product.packaging:
             offer["packaging"] = product.packaging
         if product.lead_time:
@@ -716,10 +844,10 @@ class Distributor(pm.Site):
 
     def avail(self, request):
         vendor, sku = request.get("vendor"), request.get("sku")
+        # How many items are wanted: what a SKU is, the distributor says.
         needed = max(whole(request.get("count"), 1) or 1, 1)
-        per_sku = max(whole(request.get("count_per_sku"), 1) or 1, 1)
         try:
-            product, matched = self.offer(vendor, sku, -(-needed // per_sku))
+            product, matched = self.offer(vendor, sku, needed)
         except NeedsCredentials as e:
             return {"available": False, "reason": str(e)}
         if product is None:
@@ -732,20 +860,22 @@ class Distributor(pm.Site):
     def quote(self, request):
         cart = request.get("cart") or {}
         lines, total, currencies = [], Decimal(0), set()
-        for vendor, sku, count in order_lines(cart):
-            product, matched = self.offer(vendor, sku, count)
+        for vendor, sku, count, items in order_lines(cart):
+            product, matched = self.offer(vendor, sku, items)
             if product is None:
                 raise SiteError("%s: %s" % (self.NAME, matched))
             reason = self.why_not(product)
             if reason:
                 raise SiteError("%s: %s" % (self.NAME, reason))
-            quantity = product.order_quantity(count)
-            unit = product.unit_price(quantity)
-            price = unit * quantity
+            packs, quantity, price = product.order(items)
             total += price
             currencies.add(product.currency or self.currency)
-            line = dict(self.describe_offer(product, matched), vendor=vendor, count=count, quantity=quantity)
-            line.update(unitPrice=float(unit), price=float(price), inStock=product.in_stock_for(quantity))
+            line = dict(self.describe_offer(product, matched), vendor=vendor, count=count, items=items)
+            stocked = product.in_stock_for(quantity if product.per == "item" else packs)
+            line.update(packs=packs, quantity=quantity, price=float(price), inStock=stocked)
+            # The price of what the distributor prices: an item, or a pack.
+            line["unitPrice"] = float(price / (packs if product.per == "pack" else quantity))
+            line["per"] = product.per
             lines.append(line)
         currencies.discard(None)
         if len(currencies) > 1:
@@ -838,18 +968,34 @@ class Distributor(pm.Site):
 
 
 def order_lines(cart):
-    """(vendor, SKU, how many of it to order), one per SKU, as PartCAD worked it out."""
-    for name, part in (cart.get("parts") or {}).items():
+    """(vendor, SKU, how many of it, how many items that is), one per SKU, as PartCAD worked it out.
+
+    PartCAD counts SKUs by the 'count_per_sku' a part declares; a SKU's items
+    are that many times it. What a SKU of the distributor holds is the
+    distributor's to say, and an order is made of whole ones of those.
+    """
+    parts = cart.get("parts") or {}
+    for name, part in parts.items():
         if not part.get("vendor") or not part.get("sku"):
             raise SiteError("'%s' is not something a store sells: it has no vendor and SKU" % name)
+
+    def per_sku(names):
+        declared = [max(int(parts[n].get("count_per_sku") or 1), 1) for n in names if n in parts]
+        return max(declared) if declared else 1
+
     if "skus" in cart:
-        return [(line["vendor"], str(line["sku"]), int(line["count"])) for line in cart["skus"]]
+        lines = []
+        for line in cart["skus"]:
+            count = int(line["count"])
+            lines.append((line["vendor"], str(line["sku"]), count, count * per_sku(line.get("parts") or [])))
+        return lines
     needed = {}
-    for part in (cart.get("parts") or {}).values():
+    for name, part in parts.items():
         key = (part["vendor"], str(part["sku"]))
-        per_sku = max(int(part.get("count_per_sku") or 1), 1)
-        needed[key] = needed.get(key, 0) + -(-int(part["count"]) // per_sku)
-    return [(vendor, sku, count) for (vendor, sku), count in sorted(needed.items())]
+        size = max(int(part.get("count_per_sku") or 1), 1)
+        count, items = needed.get(key, (0, 0))
+        needed[key] = (count + -(-int(part["count"]) // size), items + int(part["count"]))
+    return [(vendor, sku, count, items) for (vendor, sku), (count, items) in sorted(needed.items())]
 
 
 # --- what a script's apis are -------------------------------------------------------

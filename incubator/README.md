@@ -73,7 +73,7 @@ have repositories of their own now; Mouser is still here.
 | --- | --- | --- | --- |
 | [`partcad-svc-commerce-digikey`](https://github.com/partcad/partcad-svc-commerce-digikey) | DigiKey numbers, and any manufacturer's part by MPN, in your currency | DigiKey's categories, searched | where DigiKey links a model file; else SnapMagic's, by an alias of its `snapmagic` package |
 | [`partcad-svc-commerce-octopart`](https://github.com/partcad/partcad-svc-commerce-octopart) | the cheapest authorized offer among every distributor | Octopart's categories, searched; parts are `<MPN>~<manufacturer>` | the STEP in the KiCad library |
-| [`partcad-svc-commerce-mscmaster-carrr`](https://github.com/partcad/partcad-svc-commerce-mscmaster-carrr) (McMaster-Carr) | McMaster-Carr numbers, by the pack | by part number | McMaster-Carr's STEP; a mock server to test against |
+| [`partcad-svc-commerce-mscmaster-carr`](https://github.com/partcad/partcad-svc-commerce-mscmaster-carr) (McMaster-Carr) | McMaster-Carr numbers, by the pack | by part number | McMaster-Carr's STEP; a mock server to test against |
 | [`partcad-svc-commerce-mouser`](partcad-svc-commerce-mouser/README.md) (here) | Mouser numbers, and any manufacturer's part by MPN | searched, nothing to build | none |
 
 What they have in common, and what is new about them:
@@ -82,6 +82,12 @@ What they have in common, and what is new about them:
   `count_per_sku` for a pack), and every category lists the package's own store as its
   supplier, so `pc supply quote` of a catalogue part, or of an assembly made of them, finds
   the store with nothing more to declare.
+* **One part, one alias per pack.** Where a distributor sells one manufacturer's part in
+  several packagings (DigiKey's cut tape, reel and Digi-Reel), the catalogue serves the part
+  once, as `<MPN>~<manufacturer>`, bought by its MPN from whoever has it, and each packaging as
+  an alias of it with its own SKU and `count_per_sku`. PartCAD treats a part as bought when an
+  alias of it that names a vendor and an SKU is loaded, and orders it by the alias whose pack
+  suits the quantity - so an assembly links the part, not a packaging of it.
 * **A store quotes more than its own catalogue.** A part declared anywhere with a
   manufacturer as its `vendor` and the manufacturer's part number as its `sku` is looked up by
   that MPN - the cheapest packaging (DigiKey, Mouser) or the cheapest authorized seller
@@ -160,8 +166,8 @@ pins it beside the other stores:
     revision: <commit>
 ```
 
-and the same for `octopart` and `mcmaster` (whose repository's name has a typo to fix first:
-`partcad-svc-commerce-mscmaster-carrr`), and later `mouser`.
+and the same for `octopart` and `mcmaster` (whose repository's name still has a typo to fix
+first: `partcad-svc-commerce-mscmaster-carr`), and later `mouser`.
 
 ## Testing
 
@@ -178,5 +184,5 @@ it. The shared files are edited in `_shared/` and copied out with `_shared/copy.
 
 ```shell
 incubator/_shared/copy.sh ../partcad-svc-commerce-digikey ../partcad-svc-commerce-octopart \
-  ../partcad-svc-commerce-mscmaster-carrr
+  ../partcad-svc-commerce-mscmaster-carr
 ```
