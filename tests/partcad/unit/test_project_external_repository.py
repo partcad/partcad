@@ -1391,6 +1391,17 @@ def test_a_recursive_search_asks_every_package_of_a_tree_that_does_not(tmp_path,
     assert "motors/search/part?q=nema" in fake.keys
 
 
+def test_each_package_asks_every_package_of_a_tree_that_covers_itself(tmp_path, monkeypatch):
+    """'--each-package': every category is asked, and each hit is named in the category it is in."""
+    from partcad.actions.shape import search_parts
+
+    ctx, fake = _searchable_tree(tmp_path, monkeypatch, "tree")
+    found = search_parts(ctx, "//ext", True, "nema", None, None, each_package=True)
+
+    assert [hit.project_name for hit in found] == ["//ext", "//ext/motors"]
+    assert "motors/search/part?q=nema" in fake.keys
+
+
 def test_a_search_started_below_the_top_asks_where_it_started(tmp_path, monkeypatch):
     """The covering package is the one the search starts in, or above it in the list - not one outside it."""
     from partcad.actions.shape import search_parts

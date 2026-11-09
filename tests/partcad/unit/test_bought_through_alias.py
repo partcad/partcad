@@ -113,25 +113,20 @@ def test_a_cart_item_on_its_own_is_ordered_by_its_own_count(ctx):
 
 
 def test_suppliers_of_the_alias_package_are_asked(ctx):
-    ctx.get_project("//catalog")
+    catalog = ctx.get_project("//catalog")
+    catalog.suppliers = {"store": {}}
     asked = []
 
-    class _Project:
-        def __init__(self, name):
-            self.name = name
-
-        async def get_suppliers_async(self):
-            asked.append(self.name)
-            return {"//catalog:store": {}} if self.name == "//catalog" else {}
+    def get_provider(name, extra=None):
+        asked.append(name)
+        return None
 
     item = ProviderCartItem()
     asyncio.run(item.set_spec(ctx, "//:washer#3"))
     assert item.via == "//catalog:washer-bag"
-    get_project = ctx.get_project
-    ctx.get_project = lambda name: _Project(name) if name in ("//", "//catalog") else get_project(name)
-    ctx.get_provider = lambda name, extra=None: None
+    ctx.get_provider = get_provider
     asyncio.run(ctx.find_part_suppliers(item))
-    assert asked == ["//catalog", "//"]
+    assert asked == ["//catalog:store"]
 
 
 def test_build_vs_buy_offers_to_buy_it(ctx):
@@ -143,3 +138,12 @@ def test_build_vs_buy_offers_to_buy_it(ctx):
     tree, _index = asyncio.run(build_plan.tree_async(ctx, _part(ctx, "bracket")))
     assert tree["buy"] is False
     assert "offers" not in tree
+
+
+def test_a_part_bought_through_an_alias_is_not_asked_what_it_is_made_of(ctx, caplog):
+    """A store's SKU is what it is: no "has no 'material'" for it, as for a part that names its own SKU."""
+    with caplog.at_level("WARNING"):
+        item = ProviderCartItem()
+        asyncio.run(item.set_spec(ctx, "//:resistor#10"))
+    assert item.sku == "R-CT"
+    assert "has no" not in caplog.text

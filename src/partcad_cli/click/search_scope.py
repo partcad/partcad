@@ -15,7 +15,9 @@ it always did.
 A package served by a repository plugin that searches a whole tree in one
 request (its metadata says `searchScope: tree`) is asked once, at the top of
 that tree, rather than once for every package in it (see `_search` in
-`partcad.actions.common`).
+`partcad.actions.common`). `--each-package` asks every package its own search
+all the same: slower, and what says which of a catalog's categories each hit
+is in.
 """
 
 import rich_click as click
@@ -36,4 +38,22 @@ def recursive_option(command):
         show_default=False,
         show_envvar=True,
         help=HELP,
+    )(command)
+
+
+EACH_PACKAGE_HELP = (
+    "Ask every package below its own search, even where a catalog's search at the top answers for the packages "
+    "below it (searchScope: tree): a request per category, and each hit under the category it is in"
+)
+
+
+def each_package_option(command):
+    """`--each-package` of a `pc search` command that finds shapes, off by default."""
+    return click.option(
+        "--each-package",
+        "each_package",
+        is_flag=True,
+        default=False,
+        show_envvar=True,
+        help=EACH_PACKAGE_HELP,
     )(command)

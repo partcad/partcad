@@ -244,13 +244,23 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
                 "something in it, rather than the sub-packages directly below."
             ),
         ] = False,
+        complete: Annotated[
+            bool,
+            Field(
+                description="For 'packages': the complete subtree, the package and every package below it, empty "
+                "ones included ('pc list packages --all'; implies recursive)."
+            ),
+        ] = False,
     ) -> CallToolResult:
         """List the packages, parts, sketches, assemblies, scenes, interfaces, materials or software of a package.
 
         `pc list <kind>`. The listing is in the log of the result.
         """
         if kind == "packages":
-            return await run(ctx, "list.packages", {"package": package, "recursive": recursive})
+            request = {"package": package, "recursive": recursive}
+            if complete:
+                request["all"] = True
+            return await run(ctx, "list.packages", request)
         return await run(ctx, "list.objects", {"kind": kind, "package": package, "recursive": recursive})
 
     @server.tool(title="Show an object's declaration", annotations=_READS)
@@ -453,6 +463,13 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
                 "search to the one package."
             ),
         ] = True,
+        each_package: Annotated[
+            bool,
+            Field(
+                description="Ask every package below its own search, even where a catalog's search at the top "
+                "answers for its categories ('pc search --each-package'): a request per category."
+            ),
+        ] = False,
         interface: Annotated[
             Optional[str],
             Field(description="Only objects that implement this interface, or one derived from it."),
@@ -471,6 +488,8 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         `pc search`. The matches are in the log of the result.
         """
         request = {"kind": kind, "package": package, "recursive": recursive, "keyword": keyword}
+        if each_package:
+            request["each_package"] = True
         if interface:
             request["interface"] = interface
         if limit:

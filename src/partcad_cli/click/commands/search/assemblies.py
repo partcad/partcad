@@ -1,12 +1,13 @@
 import rich_click as click
 
 from ... import fast_only
-from ...search_scope import recursive_option
+from ...search_scope import each_package_option, recursive_option
 from ...service import run
 
 
 @click.command(help="Search assemblies by keyword")
 @recursive_option
+@each_package_option
 @fast_only.option()
 @click.option(
     "--package",
@@ -37,7 +38,9 @@ from ...service import run
     show_envvar=True,
 )
 @click.pass_obj
-def cli(cli_ctx, recursive: bool, fast_only: bool, package: str, keyword: str, interface: str) -> None:
+def cli(
+    cli_ctx, recursive: bool, each_package: bool, fast_only: bool, package: str, keyword: str, interface: str
+) -> None:
     if not keyword and not interface:
         raise click.UsageError("Nothing to search for: pass --keyword, --interface, or both")
     run(
@@ -47,6 +50,7 @@ def cli(cli_ctx, recursive: bool, fast_only: bool, package: str, keyword: str, i
             "kind": "assemblies",
             "package": package,
             "recursive": recursive,
+            "each_package": each_package,
             "fast_only": fast_only,
             "keyword": keyword,
             "interface": interface,

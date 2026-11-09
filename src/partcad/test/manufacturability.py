@@ -37,6 +37,7 @@ import copy
 import hashlib
 import math
 
+from .. import procurement as pc_procurement
 from .. import software as pc_software
 from .. import surface as pc_surface
 from ..assembly import Assembly
@@ -237,23 +238,35 @@ class ManufacturabilityTest(Test):
             return None
         return "; ".join(failures)
 
-    async def supply_failure(self, ctx, shape) -> str | None:
+    # What 'test_ctx' carries down to what an object is made of: the suppliers
+    # of the package of the object that is to be made, as 'Project.get_suppliers'
+    # gives them, and as a cart carries them ('ProviderCartItem.suppliers').
+    SUPPLIERS = "suppliers"
+
+    async def supply_failure(self, ctx, shape, suppliers=None) -> str | None:
         """Why this object cannot be supplied, or None if it can.
 
         This is the question 'pc supply find' answers, asked about the very same
-        object: a part, or an assembly that is ordered assembled.
+        object: a part, or an assembly that is ordered assembled. 'suppliers'
+        are those of the package of what it is procured for, asked ahead of its
+        own, as a cart asks them.
         """
         spec = f"{shape.project_name}:{shape.name}"
         item = ProviderCartItem()
         await item.set_spec(ctx, spec)
+        item.suppliers = dict(suppliers or {})
 
-        suppliers = await ctx.find_part_suppliers(item)
-        if not suppliers:
+        found = await ctx.find_part_suppliers(item)
+        if not found:
             return "No suppliers found"
 
-        for provider_name in suppliers:
+        for provider_name in found:
             provider = ctx.get_provider(provider_name)
-            if await provider.is_part_available(item):
+            # The way this supplier was found to have it: its own SKU, or an
+            # alias's (see 'Context.offer_at').
+            trial = copy.deepcopy(item)
+            trial.use_offer_of(provider.name)
+            if await provider.is_part_available(trial):
                 return None
 
         return f"No suppliers provide the {shape.kind}"
@@ -315,8 +328,25 @@ class ManufacturabilityTest(Test):
 
         from .. import procurement
 
+        # The suppliers of the package this part belongs to, and of whatever
+        # it is being made for: their packages are loaded, so that the aliases
+        # they publish of what they sell count (see 'procurement.offers'), and
+        # they are asked for the part and for its stock as a cart asks them.
+        suppliers = dict(test_ctx.get(self.SUPPLIERS) or {})
+        project = ctx.get_project(part.project_name)
+        if project is not None:
+            for supplier, extra in (await project.get_suppliers_async()).items():
+                suppliers.setdefault(supplier, extra)
+        procurement.load_suppliers(ctx, suppliers)
+
         can_be_purchased = procurement.is_bought(part, ctx)
         can_be_manufactured = procurement.is_made(part)
+        if not part.get_store_data().is_purchasable and (can_be_purchased or not can_be_manufactured):
+            # Bought through what a store publishes, or had no way at all:
+            # either turns on which packages are loaded, which the cache key
+            # does not say, so the verdict is not kept. A part made from its
+            # stock is kept as it always was.
+            test_ctx[self.NOT_CACHEABLE] = True
         if not can_be_purchased and not can_be_manufactured:
             return self.failed(part, "Cannot be purchased or manufactured")
 
@@ -330,7 +360,7 @@ class ManufacturabilityTest(Test):
 
         if can_be_purchased:
             self.debug(part, "Can be purchased")
-            failure = await self.supply_failure(ctx, part)
+            failure = await self.supply_failure(ctx, part, suppliers)
             if failure is None:
                 return self.passed(part)
             if not can_be_manufactured:
@@ -346,7 +376,9 @@ class ManufacturabilityTest(Test):
         if failure:
             return self.failed(part, failure)
 
-        failure = await self.stock_failure(tests_to_run, ctx, part, test_ctx)
+        stock_ctx = dict(test_ctx)
+        stock_ctx[self.SUPPLIERS] = suppliers
+        failure = await self.stock_failure(tests_to_run, ctx, part, stock_ctx)
         if failure:
             return self.failed(part, failure)
 
@@ -430,6 +462,14 @@ class ManufacturabilityTest(Test):
             test_ctx = copy.deepcopy(test_ctx)
             test_ctx["force_manufacturing"] = True
             test_ctx["action_prefix"] = f"{assembly.project_name}:{assembly.name}"
+            # And buy them where this assembly's package says, as a cart would.
+            suppliers = dict(test_ctx.get(self.SUPPLIERS) or {})
+            project = ctx.get_project(assembly.project_name)
+            if project is not None:
+                for supplier, extra in (await project.get_suppliers_async()).items():
+                    suppliers.setdefault(supplier, extra)
+            pc_procurement.load_suppliers(ctx, suppliers)
+            test_ctx[self.SUPPLIERS] = suppliers
 
             # Now test everything this assembly is procured from: its parts, and
             # the sub-assemblies that are ordered assembled instead of being taken

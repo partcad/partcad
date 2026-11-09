@@ -16,7 +16,9 @@ default): the folders and dependencies directly below it, every one, so that the
 tree can be walked down a level at a time - a distributor's categories, the
 public index's sections. With recursion it shows every package below PACKAGE
 that has something in it: a sketch, a part, an assembly or a scene, whether the
-package lists them or finds them with its own search.
+package lists them or finds them with its own search. With --all it shows the
+complete subtree: PACKAGE and every package below it, whether or not it holds
+anything, sorted by name.
 """
 
 
@@ -32,13 +34,18 @@ package lists them or finds them with its own search.
     is_flag=True,
     help="Every package below PACKAGE with something in it, rather than its sub-packages (or '<package>...')",
 )
+@click.option(
+    "-a",
+    "--all",
+    "complete",
+    is_flag=True,
+    help="The complete subtree: PACKAGE and every package below it, empty ones included (implies -r)",
+)
 @exclude_option
 @click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'
 @click.pass_obj
-def cli(cli_ctx, recursive: bool, exclude, package: str):
-    run(
-        cli_ctx,
-        "list.packages",
-        {"package": package, "recursive": recursive, **exclude_params(exclude)},
-        needs_context=True,
-    )
+def cli(cli_ctx, recursive: bool, complete: bool, exclude, package: str):
+    params = {"package": package, "recursive": recursive, **exclude_params(exclude)}
+    if complete:
+        params["all"] = True
+    run(cli_ctx, "list.packages", params, needs_context=True)

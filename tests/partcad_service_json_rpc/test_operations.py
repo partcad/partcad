@@ -1517,6 +1517,24 @@ def test_list_packages_asks_a_plugin_package_for_its_description():
     assert output[1].endswith("Its categories, as the plugin says them")
 
 
+def test_list_packages_recursively_leaves_out_what_holds_nothing_unless_all_is_asked():
+    """'-r' is every package below with something in it; '--all' the complete subtree, sorted, and recursive."""
+    session, _ = make_session()
+    ctx = session.partcad_ctx
+    ctx.projects["//"] = FakeProject(name="//", desc="Root package")
+    ctx.projects["//shelf/b"] = FakeProject(name="//shelf/b", desc="Bolts").add("parts", FakeObject("bolt"))
+    ctx.projects["//shelf"] = FakeProject(name="//shelf", desc="Only sub-packages")
+
+    operations.list_packages(session, {"package": "//", "recursive": True})
+    output = session.partcad.logging.only("info")
+    assert "Bolts" in output and "Only sub-packages" not in output and "Root package" not in output
+
+    session.partcad.logging.records.clear()
+    operations.list_packages(session, {"package": "//", "all": True})
+    names = [line.split()[0] for line in lines_of(session.partcad.logging.only("info"))[1:]]
+    assert names == ["//", "//shelf", "//shelf/b"]
+
+
 def test_list_packages_of_a_package_with_none_below_says_none():
     session, _ = make_session()
     session.partcad_ctx.projects["//"] = FakeProject(name="//", desc="Root package")

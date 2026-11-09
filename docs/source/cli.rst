@@ -464,7 +464,9 @@ Object commands
   makes a tree walkable a level at a time -- ``pc list packages //pub``, then a section of it, then a
   distributor's catalog, then one of its categories -- including the packages that are nothing but more
   packages. ``pc list packages <package>...`` (or ``-r``) lists every package below it that has something in
-  it: a sketch, a part, an assembly or a scene, listed or found with its own search.
+  it: a sketch, a part, an assembly or a scene, listed or found with its own search. ``-a``/``--all`` lists
+  the complete subtree instead -- the package and every package below it, empty ones included, by name -- and
+  implies ``-r``.
 
 ``pc add``
   Add an object to a package. Subcommands: ``dep`` (a dependency), ``sketch``, ``part``, ``assembly``,
@@ -1622,7 +1624,9 @@ Workflow commands
 
   - ``pc supply caps`` — Show the capabilities of a provider.
   - ``pc supply find`` — Find suppliers.
-  - ``pc supply quote`` — Get a quote from suppliers.
+  - ``pc supply quote`` — Get a quote from suppliers. Each supplier is quoted the part the way it sells it --
+    its own SKU, or an alias's (see :ref:`bought-through-alias`). ``--cheapest`` prices every way each
+    supplier has each part, packs included, and orders the cheapest.
   - ``pc supply order`` — Place an order with suppliers.
 
   ``find`` and ``quote`` take parts and assemblies alike. A requested assembly that is sold assembled (one with
@@ -1746,5 +1750,6 @@ Other commands
 
   A catalog that searches its whole tree in one request -- a distributor's, whose categories are packages
   below it -- says so (``searchScope: tree``, see :ref:`repositories`) and is asked once, at the top, rather
-  than once for each of its categories. Search finds parts, not categories: to walk a catalog's categories,
-  use ``pc list packages``.
+  than once for each of its categories. ``--each-package`` asks every package its own search all the same: a
+  request per category, and each hit listed under the category it is in. Search finds parts, not categories:
+  to walk a catalog's categories, use ``pc list packages``.

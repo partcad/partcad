@@ -3158,13 +3158,17 @@ def list_packages(session, params):
     dependencies directly below it, every one, so that a package holding nothing
     but more packages is a step on the way down rather than a dead end. With it,
     it is every package below that has something to look at (a sketch, a part,
-    an assembly or a scene, listed or found by its own search).
+    an assembly or a scene, listed or found by its own search). With "all" it is
+    the complete subtree, the package itself and every package below it whether
+    or not it holds anything, by name; "all" implies recursion.
     """
     ctx = _ctx(session, params)
     if ctx is None:
         return None
     pc = session.partcad
     selected, _, recursive = _request(params)
+    complete = bool(params.get("all"))
+    recursive = recursive or complete
     package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
     if not package_obj:
@@ -3177,8 +3181,13 @@ def list_packages(session, params):
         if recursive:
             packages = [
                 p["name"]
-                for p in ctx.get_all_packages(parent_name=package, has_stuff=True, exclude=_excluded(ctx, params))
+                for p in ctx.get_all_packages(
+                    parent_name=package, has_stuff=not complete, exclude=_excluded(ctx, params)
+                )
             ]
+            if complete:
+                # A tree, read top down: a package before the ones below it.
+                packages.sort()
         else:
             packages = _sub_packages(ctx, package_obj, _excluded(ctx, params))
 
@@ -4442,17 +4451,19 @@ def supply_quote(session, params):
                 path,
                 qos=params.get("qos") or None,
                 recursive=bool(params.get("recursive")),
+                cheapest=bool(params.get("cheapest")),
             )
         )
     result["object"] = path
     return result
 
 
-async def _supply_quote_async(pc, ctx, path, qos, recursive):
+async def _supply_quote_async(pc, ctx, path, qos, recursive, cheapest=False):
     """The body of 'supply_quote', once the request has been made sense of."""
     from partcad.plugin_provider_data_cart import ProviderCart, resolve_cart_object
 
     cart = ProviderCart(qos=qos)
+    cart.cheapest = cheapest
     try:
         await cart.add_object(ctx, path, recursive=recursive)
     except Exception as e:
@@ -4519,12 +4530,18 @@ async def _supply_option(pc, ctx, cart_item, provider_name, qos):
 
     cart = ProviderCart(qos=qos)
     item = cart.add_item(cart_item)
+    # Ordered the way this supplier was found to have it: its own SKU, or the
+    # alias's it sells it as (see 'Context.offer_at').
+    if hasattr(item, "use_offer_of"):
+        item.use_offer_of(provider_name)
     option = {
         "name": provider_name,
         "desc": getattr(provider, "desc", None) or None,
         "url": getattr(provider, "url", None),
         "currency": _provider_currency(provider),
     }
+    if getattr(item, "via", None):
+        option.update({"via": item.via, "vendor": item.vendor, "sku": item.sku, "count_per_sku": item.count_per_sku})
 
     try:
         # Loading is what makes it a supplier cart rather than a plain one: a
@@ -4897,6 +4914,8 @@ def search_objects(session, params):
         pc.logging.error("Searching %s by interface is not supported" % kind)
         return None
 
+    # Passed only when asked for, so that a search function that predates it is called as it always was.
+    each_package = {"each_package": True} if params.get("each_package") else {}
     count = 0
     if interface and keyword:
         output = "PartCAD %s implementing '%s' with '%s' keyword:\n" % (kind, interface, keyword)
@@ -4906,7 +4925,7 @@ def search_objects(session, params):
         output = "PartCAD %s with '%s' keyword:\n" % (kind, keyword)
     with pc.logging.Process("Search " + kind.capitalize(), package):
         found = (
-            search_fn(ctx, package, recursive, keyword, interface, limit)
+            search_fn(ctx, package, recursive, keyword, interface, limit, **each_package)
             if takes_interface
             else search_fn(ctx, package, recursive, keyword)
         )

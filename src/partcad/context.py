@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 
 import asyncio
+import copy
 import os
 import socket
 import sys
@@ -1490,10 +1491,17 @@ class Context:
             cart (ProviderCart, optional): Use this cart for requirements and preferences. Defaults to None.
 
         The candidates are the suppliers of the package of the assembly the
-        item was procured for, first, then those of the package of the alias
-        the item is ordered as, if it is bought through one (see
-        'ProviderCartItem.via'), and then those of the package the item itself
-        is declared in (see 'ProviderCartItem.suppliers'), each asked once.
+        item was procured for, first, then those of the packages of the
+        aliases the item can be ordered as (see 'procurement.alternatives'),
+        and then those of the package the item itself is declared in (see
+        'ProviderCartItem.suppliers'), each asked once.
+
+        A supplier is asked about each way the item can be ordered, its own SKU
+        first and then each alias's, and has it if it has any of them: the
+        first it has is what it is handed (recorded in
+        'ProviderCartItem.offer_by_provider'). With 'cart.cheapest', every
+        way each supplier has it is priced, each supplier is handed its
+        cheapest, and the suppliers come cheapest first.
 
         Returns:
             list[str]: list of provider names that can supply the part, a
@@ -1513,15 +1521,26 @@ class Context:
         pc_logging.debug("Retrieving suppliers from %s" % project_name)
 
         part_suppliers = dict(getattr(part_item, "suppliers", None) or {})
+        own_suppliers = await prj.get_suppliers_async()
+        # The stores this package names publish aliases of what they sell,
+        # which count once their packages are loaded.
+        from . import procurement
+
+        procurement.load_suppliers(self, part_suppliers)
+        procurement.load_suppliers(self, own_suppliers)
+        if hasattr(part_item, "refresh_offers"):
+            part_item.refresh_offers(self)
         # A part bought through an alias of it is sold by whoever the alias's
         # package says sells what it names: a catalogue's packaging of a part
-        # another package draws (see 'procurement.offers').
-        via = getattr(part_item, "via", None)
-        via_project = self.get_project(via.partition(":")[0]) if via else None
-        if via_project is not None:
-            for supplier, extra in (await via_project.get_suppliers_async()).items():
-                part_suppliers.setdefault(supplier, extra)
-        for supplier, extra in (await prj.get_suppliers_async()).items():
+        # another package draws, a store's SKU of a standard size.
+        for offer_name, _record in getattr(part_item, "offers", None) or []:
+            if offer_name == part_item.name:
+                continue
+            via_project = self.get_project(offer_name.partition(":")[0])
+            if via_project is not None:
+                for supplier, extra in (await via_project.get_suppliers_async()).items():
+                    part_suppliers.setdefault(supplier, extra)
+        for supplier, extra in own_suppliers.items():
             part_suppliers.setdefault(supplier, extra)
         if len(part_suppliers) == 0:
             if getattr(part_item, "optional", False):
@@ -1533,6 +1552,8 @@ class Context:
             pc_logging.debug("Part suppliers: %s" % str(part_suppliers))
 
         pc_logging.debug("Part: %s" % str(part_item))
+        cheapest = bool(cart is not None and getattr(cart, "cheapest", False))
+        prices = {}
         for provider_name, provider_extra_config in part_suppliers.items():
             provider = self.get_provider(provider_name, provider_extra_config)
             if provider is None:
@@ -1540,9 +1561,10 @@ class Context:
                 # without the one that registers its stores - has been reported
                 # by 'get_provider', and has nothing to offer: ask the next.
                 continue
-            if not await provider.is_part_available(part_item):
-                continue
             if cart and cart.qos is not None and not provider.is_qos_available(cart.qos):
+                continue
+            found = await self.offer_at(provider, part_item, cart, price=cheapest)
+            if found is None:
                 continue
 
             # The name of the instance that was asked: a supplier named with
@@ -1550,8 +1572,72 @@ class Context:
             # carts and quotes made from this ask 'get_provider' for it by
             # name. Its bare name would be the provider with its defaults.
             providers.append(provider.name)
+            prices[provider.name] = found[1]
 
+        if cheapest:
+            # Cheapest first, which is the one 'select_preferred_supplier'
+            # takes; a supplier that would not say what it wants comes last.
+            providers.sort(key=lambda name: (prices[name] is None, prices[name] or 0.0))
         return providers
+
+    async def offer_at(self, provider, part_item, cart=None, price: bool = False):
+        """Which way of ordering 'part_item' 'provider' has, as '(offer name, price)'; None if it has none.
+
+        The offers are put to it in 'ProviderCartItem.candidates' order and the
+        first it has is the answer, unpriced. With 'price', every offer it has
+        is priced, when there is more than one way it could be ordered at all,
+        and the cheapest is the answer. An item with no offer to put - one a
+        manufacturer makes, with nothing to order it by - is asked about as it
+        is, and its offer name is None.
+
+        What is found is recorded on the item, by provider, so that the cart
+        this supplier is handed orders the item the same way (see
+        'prepare_supplier_carts').
+        """
+        candidates = part_item.candidates() if hasattr(part_item, "candidates") else []
+        if not candidates:
+            if not await provider.is_part_available(part_item):
+                return None
+            return (None, await self._price_at(provider, part_item, cart) if price else None)
+
+        available = []
+        for offer_name, _record in candidates:
+            trial = copy.deepcopy(part_item)
+            trial.use_offer(offer_name)
+            if await provider.is_part_available(trial):
+                available.append((offer_name, trial))
+                if not price:
+                    break
+        if not available:
+            return None
+
+        priced = [(name, None) for name, _trial in available]
+        if price and (len(available) > 1 or len(getattr(part_item, "offers", None) or []) > 1):
+            priced = [(name, await self._price_at(provider, trial, cart)) for name, trial in available]
+            with_price = [pair for pair in priced if pair[1] is not None]
+            if with_price:
+                priced = sorted(with_price, key=lambda pair: pair[1])
+        chosen, cost = priced[0]
+        part_item.offer_by_provider[provider.name] = chosen
+        part_item.price_by_provider[provider.name] = cost
+        return chosen, cost
+
+    async def _price_at(self, provider, part_item, cart=None):
+        """What 'provider' quotes for 'part_item' alone, or None when it will not say."""
+        one = ProviderCart(qos=getattr(cart, "qos", None))
+        item = one.add_item(part_item)
+        try:
+            await provider.load(item)
+            request = ProviderRequestQuote(one)
+            result = await provider.query_quote(request)
+        except Exception as e:  # pylint: disable=broad-except
+            pc_logging.debug("No price from %s for %s as %s: %s" % (provider.name, part_item.name, part_item.sku, e))
+            return None
+        value = result.get("price") if isinstance(result, dict) else None
+        try:
+            return float(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
 
     def select_preferred_supplier(self, suppliers: list[str]):
         """From a list of suppliers, select the preferred one, or '' if there is none.
@@ -1573,15 +1659,29 @@ class Context:
         return preferred_suppliers
 
     async def select_supplier(self, provider, cart: ProviderCart) -> dict[str, str]:
-        """Given a specific provider, confirm it can provide all the parts."""
+        """Given a specific provider, confirm it can provide all the parts.
+
+        Each part in whichever way the provider has it: its own SKU, or an
+        alias's (see 'offer_at').
+        """
         if cart.qos is not None and not provider.is_qos_available(cart.qos):
             pc_logging.error(f"QoS {cart.qos} is not available from {provider}")
             return
         suppliers = {}
         tasks = []
 
+        from . import procurement
+
+        # The provider's own package publishes what it sells as aliases, which
+        # count once it is loaded: refresh what each item can be ordered as.
+        procurement.load_suppliers(self, {provider.name: {}})
+        for cart_item in cart.parts.values():
+            procurement.load_suppliers(self, getattr(cart_item, "suppliers", None))
+            if hasattr(cart_item, "refresh_offers"):
+                cart_item.refresh_offers(self)
+
         async def _set_supplier(name, cart_item):
-            if not await provider.is_part_available(cart_item):
+            if await self.offer_at(provider, cart_item, cart, price=bool(getattr(cart, "cheapest", False))) is None:
                 if getattr(cart_item, "optional", False):
                     pc_logging.info("Part %s is not available from %s: it is left out" % (name, provider.name))
                 else:
@@ -1614,12 +1714,18 @@ class Context:
                 kept[spec] = supplier
         return kept, sorted(left_out)
 
-    async def prepare_supplier_carts(self, preferred_suppliers: dict[str, str]) -> dict[str, ProviderCart]:
+    async def prepare_supplier_carts(
+        self, preferred_suppliers: dict[str, str], cart: ProviderCart = None
+    ) -> dict[str, ProviderCart]:
         """Given the list of preferred suppliers, prepare the supplier carts.
 
         'preferred_suppliers' is keyed by cart item spec, '<name>#<count>', as
         'select_supplier()' and 'select_preferred_suppliers()' return it.
+        'cart' is the cart those were chosen for: each item is then ordered
+        from its supplier the way that supplier was found to have it, which a
+        spec alone does not say (see 'offer_at').
         """
+        originals = {str(item): item for item in cart.parts.values()} if cart is not None else {}
         supplier_carts: dict[str, ProviderCart] = {}
 
         # Create a supplier cart for each supplier
@@ -1632,6 +1738,10 @@ class Context:
             if provider_name not in supplier_carts:
                 supplier_carts[provider_name] = ProviderCart()
             cart_item = await supplier_carts[provider_name].add_part_spec(self, part_spec)
+            original = originals.get(part_spec)
+            if original is not None and provider_name:
+                cart_item.offer_by_provider = dict(getattr(original, "offer_by_provider", None) or {})
+                cart_item.use_offer_of(provider_name)
 
             # If it's not 'None' which means no provider found
             if provider_name:

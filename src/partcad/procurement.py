@@ -81,6 +81,55 @@ def offers(part, ctx=None) -> list:
     return alias_offers(ctx, name)
 
 
+def alternatives(part, ctx=None) -> list:
+    """Every way to order 'part' a supplier may take: its own record, if it has one, then each loaded alias of it.
+
+    What 'offers' answers is what the part is bought as when nobody has been
+    asked yet, and a part that names its own SKU is bought by it. A supplier
+    may not sell that SKU, though: a part Home Depot's package declares is
+    still a part Lowe's sells, under an alias of it with Lowe's SKU. So which
+    of these a supplier is handed is the supplier's question, asked of each in
+    turn (see 'Context.find_part_suppliers'). The aliases come fewest spare
+    items first for one of the part; a cart orders them again for its count.
+    """
+    name = "%s:%s" % (part.project_name, part.name)
+    own = part.get_store_data()
+    found = [(name, own)] if own.is_purchasable else []
+    if ctx is not None and hasattr(ctx, "projects"):
+        found += [offer for offer in alias_offers(ctx, name) if offer[0] != name]
+    return found
+
+
+def by_count(offers_: list, count=1) -> list:
+    """'offers_' in the order 'choose' prefers them for 'count' of the part: fewest spare items, then fewest SKUs."""
+    count = max(int(count or 1), 1)
+
+    def cost(offer):
+        per = max(int(offer[1].count_per_sku or 1), 1)
+        skus = -(-count // per)
+        return (skus * per - count, skus, offer[0])
+
+    return sorted(offers_, key=cost)
+
+
+def load_suppliers(ctx, suppliers) -> None:
+    """Load the packages of 'suppliers', '{provider: extra}' as 'Project.get_suppliers' gives them.
+
+    A store's package is where the aliases are that say what it sells, and an
+    alias counts once its package is loaded (see 'alias_offers'). So the stores
+    a package names as its suppliers are loaded before what it is made of is
+    procured: a desk that lists Home Depot and Lowe's is bought from either, by
+    the aliases each of them publishes of the lumber it is cut from.
+    """
+    for supplier in suppliers or ():
+        package_name, _ = resolve_resource_path(getattr(ctx, "current_project_path", "//"), supplier)
+        if package_name and package_name not in ctx.projects:
+            try:
+                ctx.get_project(package_name)
+            except Exception as e:  # pylint: disable=broad-except
+                pc_logging.debug("The supplier package '%s' did not load: %s" % (package_name, e))
+
+
 def choose(offers_: list, count=1):
     """Which of 'offers_' to order 'count' of the part by, or None when there are none.
 
@@ -92,14 +141,7 @@ def choose(offers_: list, count=1):
     """
     if not offers_:
         return None
-    count = max(int(count or 1), 1)
-
-    def cost(offer):
-        per = max(int(offer[1].count_per_sku or 1), 1)
-        skus = -(-count // per)
-        return (skus * per - count, skus, offer[0])
-
-    return min(offers_, key=cost)
+    return by_count(offers_, count)[0]
 
 
 def store_record(part, ctx=None, count=1) -> ShapeConfigStore:

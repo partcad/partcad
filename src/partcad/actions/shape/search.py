@@ -21,8 +21,11 @@ def search_parts(
     keyword: str,
     interface: Optional[str] = None,
     limit: Optional[int] = None,
+    each_package: bool = False,
 ) -> list[Part]:
-    return _search(ctx, package, recursive, keyword, lambda project: project.parts.values(), "part", interface, limit)
+    return _search(
+        ctx, package, recursive, keyword, lambda project: project.parts.values(), "part", interface, limit, each_package
+    )
 
 
 def search_sketches(
@@ -32,9 +35,18 @@ def search_sketches(
     keyword: str,
     interface: Optional[str] = None,
     limit: Optional[int] = None,
+    each_package: bool = False,
 ) -> list[Sketch]:
     return _search(
-        ctx, package, recursive, keyword, lambda project: project.sketches.values(), "sketch", interface, limit
+        ctx,
+        package,
+        recursive,
+        keyword,
+        lambda project: project.sketches.values(),
+        "sketch",
+        interface,
+        limit,
+        each_package,
     )
 
 
@@ -45,9 +57,18 @@ def search_assemblies(
     keyword: str,
     interface: Optional[str] = None,
     limit: Optional[int] = None,
+    each_package: bool = False,
 ) -> list[Assembly]:
     return _search(
-        ctx, package, recursive, keyword, lambda project: project.assemblies.values(), "assembly", interface, limit
+        ctx,
+        package,
+        recursive,
+        keyword,
+        lambda project: project.assemblies.values(),
+        "assembly",
+        interface,
+        limit,
+        each_package,
     )
 
 
@@ -58,8 +79,19 @@ def search_scenes(
     keyword: str,
     interface: Optional[str] = None,
     limit: Optional[int] = None,
+    each_package: bool = False,
 ) -> list[Scene]:
-    return _search(ctx, package, recursive, keyword, lambda project: project.scenes.values(), "scene", interface, limit)
+    return _search(
+        ctx,
+        package,
+        recursive,
+        keyword,
+        lambda project: project.scenes.values(),
+        "scene",
+        interface,
+        limit,
+        each_package,
+    )
 
 
 def search_interfaces(ctx: Context, package: str, recursive: bool, keyword: str) -> list[Interface]:
