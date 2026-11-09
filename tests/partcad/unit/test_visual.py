@@ -72,6 +72,10 @@ parts:
     type: alias
     source: box
     scale: 2
+  # Records the assembly it flattens as its 'source_resolved', as a reference does.
+  pair-compound:
+    type: compound
+    source: pair
   narcissus:
     type: basic
     cuboid: [1, 1, 1]
@@ -378,4 +382,12 @@ def test_another_packages_public_part_renders_with_its_private_visual_without_er
     tree = asyncio.run(assembly.get_representation(context, shape_envelope.FORM_GLTF, visuals=True))
     assert [node[visual.NODE_KEY] for node in tree[shape_envelope.KEY_ASSEMBLY]] == ["//kept:secret-look"] * 2
     assert pc.logging.had_errors is False
+    assert "ERROR" not in caplog.text
+
+
+def test_a_compound_of_an_assembly_is_drawn_as_itself_and_nothing_is_reported(context, caplog):
+    """Its source is an assembly, not a part a visual could come from: no lookup of it as a part, no error."""
+    compound = context.get_part("pair-compound")
+    assert asyncio.run(visual.visual_of_async(context, compound)) is None
+    assert "not found" not in caplog.text
     assert "ERROR" not in caplog.text

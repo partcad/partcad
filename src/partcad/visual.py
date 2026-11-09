@@ -187,15 +187,21 @@ async def _inherited_async(ctx, part, config, where) -> typing.Optional[Drawn]:
 
     Known by what it resolved to, 'source_resolved', rather than by its type:
     a prepared enrich reports the type of the instance it stands for (see
-    'enrich.adopt_source_config').
+    'enrich.adopt_source_config'). Only where that is a *part*: a 'compound'
+    records the assembly it flattens there too, and has no visual to inherit -
+    it is drawn as itself, and asking for its assembly as a part is not a
+    mistake to report.
     """
     source = config.get("source_resolved")
-    if not source:
+    if not source or config.get("scale") is not None:
         return None
-    if config.get("scale") is not None:
+    package, _, name = str(source).partition(":")
+    project = ctx.get_project(package) if package and name else None
+    if project is None:
         return None
-    # Resolved, and refused if it had to be, when the reference was prepared.
-    target = await ctx.get_part_async(source)
+    # Resolved, and refused if it had to be, when the reference was prepared;
+    # quietly, since a source that is not a part is no reference to one.
+    target = await project.get_part_async(name, quiet=True)
     if target is None or target is part:
         return None
     drawn = await visual_of_async(ctx, target)
