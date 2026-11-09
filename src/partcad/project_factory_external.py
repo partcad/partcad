@@ -74,6 +74,42 @@ def _locate_plugin_script(ctx, parent: Project, plugin_ref: str):
     return os.path.join(source.config_dir, config.get("path") or repository_name + ".py")
 
 
+# The full object path of each plugin reference, per context - see
+# 'plugin_object_path'. Memoized for the reason the cache version is: the root of
+# a hierarchy resolves it, and every child reads the root's answer.
+_plugin_paths: "weakref.WeakKeyDictionary[object, dict[str, str]]" = weakref.WeakKeyDictionary()
+
+
+def plugin_object_path(ctx, parent: Project, plugin_ref: str) -> str:
+    """The plugin's full object path: where the package that declares it is, and its name there.
+
+    What a plugin-backed package's answers are kept under. The reference alone
+    ('//:repo', '//parts:repo') names a plugin only within one project - every
+    project's root package is '//' - so two projects declaring a plugin of one
+    name shared one cache, and each was answered from the other's. The package's
+    directory is where that name is unique: '<directory>:<plugin>'.
+
+    Remembered per reference per context, so a hierarchy's children - which ask
+    with the plugin-backed package as their parent, and may not be able to load
+    the declaring package while it is loading - land in the root's namespace. A
+    reference that cannot be resolved is not remembered, and is its own path.
+    """
+    with _declared_versions_lock:
+        known = _plugin_paths.setdefault(ctx, {})
+        path = known.get(plugin_ref)
+    if path is not None:
+        return path
+    package_name, repository_name = resolve_resource_path(parent.name, plugin_ref)
+    source = parent if package_name == parent.name else ctx.get_project(package_name)
+    directory = getattr(source, "config_dir", None) if source is not None else None
+    if not directory:
+        pc_logging.debug("Cannot place the plugin's cache: package not loaded: %s" % package_name)
+        return plugin_ref
+    path = "%s:%s" % (os.path.normcase(os.path.realpath(directory)), repository_name)
+    with _declared_versions_lock:
+        return known.setdefault(plugin_ref, path)
+
+
 def _read_declared_cache_version(path: str) -> int:
     """The cache version the script states, or 0 if it states none.
 
@@ -160,13 +196,15 @@ class ProjectFactoryExternal(pf.ProjectFactory, ExternalImportConfiguration):
         self.plugin = parent.normalize(self.plugin)
 
         # Find a place to store all temporary artifacts if any. The hash of the
-        # resolved plugin reference identifies this repository instance, so two
-        # vendored copies backed by different plugins get separate caches. The
-        # version the plugin states in its own code is folded in too, so raising
-        # it moves this repository and every child of it to a fresh cache
-        # namespace at once.
+        # plugin's full object path identifies this repository instance: two
+        # vendored copies backed by different plugins get separate caches, and
+        # so do two projects whose plugins share a name (see
+        # 'plugin_object_path'). The version the plugin states in its own code
+        # is folded in too, so raising it moves this repository and every child
+        # of it to a fresh cache namespace at once.
         self.cache_version = declared_cache_version(ctx, parent, self.plugin)
-        repo_key = self.plugin if not self.cache_version else "%s@v%d" % (self.plugin, self.cache_version)
+        self.plugin_path = plugin_object_path(ctx, parent, self.plugin)
+        repo_key = self.plugin_path if not self.cache_version else "%s@v%d" % (self.plugin_path, self.cache_version)
         repo_hash = hashlib.sha256(repo_key.encode()).hexdigest()[:16]
         self.path = os.path.join(ctx.user_config.internal_state_dir, "external", repo_hash)
         # The package is served by a plugin and has no source tree of its own,
