@@ -241,11 +241,13 @@ class Substitution:
     """
 
     def __init__(self, tree, keys):
+        """'tree', as it is drawn, and '[[visual, cache key], ...]' for the visuals drawn in it."""
         self.tree = tree
         self.keys = keys
 
     @property
     def cacheable(self) -> bool:
+        """Whether a picture of the tree may be cached: every visual drawn in it has a key."""
         return all(key is not None for _name, key in self.keys)
 
 
@@ -266,6 +268,11 @@ async def substitute_async(ctx, shape, tree) -> Substitution:
     used: dict = {}
 
     async def visual_for(name, part=None):
+        """'(envelope, visual name, location)' the part called 'name' is drawn as, or None to draw it as itself.
+
+        Looked up once per name, however many nodes hold that part, and
+        reported once where it cannot be had.
+        """
         if name in looked_up:
             return looked_up[name]
         looked_up[name] = None
@@ -295,6 +302,7 @@ async def substitute_async(ctx, shape, tree) -> Substitution:
         return looked_up[name]
 
     async def walk(node, part=None):
+        """'node' with every part under it drawn as its visual: itself where nothing changed, a copy where it did."""
         if not isinstance(node, dict):
             return node
         children = node.get(shape_envelope.KEY_ASSEMBLY)
