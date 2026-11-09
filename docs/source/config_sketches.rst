@@ -33,6 +33,7 @@ Sketches are declared in ``partcad.yaml`` using the following syntax:
     <sketch-name>:
       type: <basic|dxf|svg|cadquery|build123d>
       desc: <(optional) textual description>
+      url: <(optional) where to read about it: a product page, a datasheet, a standard>
       path: <(optional) the source file path, "{sketch name}.{ext}" otherwise>
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
       fileUrl: <(fileFrom=url only) the URL to download the source file from>
@@ -49,6 +50,7 @@ The basic sketches are defined using the following syntax:
     <sketch-name>:
       type: basic
       desc: <(optional) textual description>
+      url: <(optional) where to read about it: a product page, a datasheet, a standard>
       # The below are mutually exclusive options
       circle: <(optional) radius>
       circle:  # alternative syntax
@@ -132,6 +134,7 @@ Such sketches are declared using the following syntax:
     <sketch-name>:
       type: dxf
       desc: <(optional) textual description>
+      url: <(optional) where to read about it: a product page, a datasheet, a standard>
       path: <(optional) filename> # otherwise "<sketch-name>.dxf"
       tolerance: <(optional) tolerance used for merging edges into wires>
       include: <(optional) a layer name or a list of layer names to import>
@@ -323,6 +326,7 @@ Such sketches are declared using the following syntax:
     <sketch-name>:
       type: svg
       desc: <(optional) textual description>
+      url: <(optional) where to read about it: a product page, a datasheet, a standard>
       path: <(optional) filename> # otherwise "<sketch-name>.svg"
       use-wires: <(optional) boolean>
       use-faces: <(optional) boolean>

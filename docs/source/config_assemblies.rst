@@ -73,6 +73,7 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
                               # Fusion design or a Creo View package. A format a plugin
                               # package implements is named through it: "sim-mujoco:mjcf".
       path: <(optional) the source file path>
+      url: <(optional) where to read about it: a product page, a datasheet, a standard>
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
       fileUrl: <(fileFrom=url only) the URL to download the source file from>
       parameters:  # (optional)

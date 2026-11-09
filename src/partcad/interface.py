@@ -1087,10 +1087,18 @@ class Interface:
         info = {
             "name": self.name,
             "desc": self.desc,
-            "ports": list(self.get_ports().values()),
-            "parameters": list(self.params.values()),
-            "inherits": self.get_parents(),
         }
+        url = self.config.get("url") if isinstance(getattr(self, "config", None), dict) else None
+        if url:
+            # Where to read about it: the standard it is a part of, say.
+            info["url"] = url
+        info.update(
+            {
+                "ports": list(self.get_ports().values()),
+                "parameters": list(self.params.values()),
+                "inherits": self.get_parents(),
+            }
+        )
         if self.construction_params:
             # What this instance was built from, not what could be asked for:
             # 'pc info -i m-thru;size=4' has to show the 4 it resolved. Reported

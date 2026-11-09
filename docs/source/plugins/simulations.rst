@@ -89,6 +89,7 @@ and the parameters it is handed:
   simulation:
     <name>:
       desc: <(optional) textual description>
+      url: <(optional) where to read about it: a product page, a datasheet, a standard>
       path: <the script that runs the simulation>
       package: <(optional) the package holding it, when it is not this one>
       format: <the file type the scene is exported to before the plugin starts>

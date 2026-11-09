@@ -362,7 +362,9 @@ IMPLEMENTATION_KEYS = frozenset(
     {"path", "package", "pythonRequirements", "pythonVersion", "dockerImage", "container", "packageFiles"}
 )
 OUTPUT_KEYS = frozenset({"extension", "prefix", "exclude", "output_dir"})
-RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
+# What a reader is told about the declaration, and not the implementation:
+# what it is, and where to read about it.
+RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc", "url"})
 
 # The same, for the 'simulation:' section. Both say how the scene reaches the
 # plugin rather than what the plugin is handed once it has it: 'format' is the
