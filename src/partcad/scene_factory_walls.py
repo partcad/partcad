@@ -65,10 +65,9 @@ import threading
 
 from . import cmf
 from . import config as pc_config
-from . import part_factory_wall
 from . import expr
 from . import logging as pc_logging
-from . import sandbox_versions, shape_envelope, sync_threads, telemetry, wrapper
+from . import part_factory_wall, sandbox_versions, shape_envelope, sync_threads, telemetry, wrapper
 from .assembly_factory import AssemblyFactory
 from .process_crash import describe_exit_code
 from .scene_factory import SceneFactoryAssy
