@@ -542,7 +542,7 @@ an error.
 .. _shared-parameters:
 
 Package-level parameters
-~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 A parameter is its object's own: two objects declaring ``size`` have a ``size``
 each. A declaration that says ``shared: true`` is the package's instead. Every
