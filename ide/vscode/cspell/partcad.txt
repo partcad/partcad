@@ -341,6 +341,7 @@ show
 side
 sided
 sim
+simulate
 simulation
 size
 sketch
