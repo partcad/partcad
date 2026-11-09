@@ -176,6 +176,8 @@ def _part_problems(part, made: bool, bought: bool) -> list:
     data = PartConfiguration.get_manufacturing_data(part)
     if data.machine_error:
         problems.append("The machine it is made on cannot be read: %s" % data.machine_error)
+    if data.process_error:
+        problems.append("How it is printed cannot be read: %s" % data.process_error)
     missing = data.missing_fields()
     if missing:
         problems.append("Its manufacturing instructions do not say: %s" % ", ".join(missing))

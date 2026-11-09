@@ -25,7 +25,10 @@ manufacturability test.
   part but what it is made *from*: the `source:` of its `manufacturing:`
   section, which is procured by this same rule in turn (a blank cut from a
   sheet is procured as the sheet). A part made from nothing it names -- printed,
-  formed -- needs nothing procured at all.
+  formed -- needs nothing procured at all. A printed part may name a `source:`
+  too, and it is not stock: it is the *design* the print is a print of, and
+  nothing of it goes into the printer but the material (see
+  'part_config_manufacturing.ADDITIVE_REQUIRED').
 * A part that says neither is procured as itself, so that whatever is asked of
   it afterwards fails where it can be seen rather than being dropped here.
 
@@ -44,6 +47,7 @@ import threading
 from . import logging as pc_logging
 from .part_config import PartConfiguration
 from .shape_config_store import STORE_PROPERTIES, ShapeConfigStore
+from .part_config_manufacturing import METHOD_ADDITIVE
 from .utils import resolve_resource_path
 
 # How many stock references are followed before giving up on a cycle -- a part
@@ -247,9 +251,12 @@ def stock_name(part) -> str | None:
 
     Resolved against the package the part is declared in, like every other
     reference a part makes (see 'test.manufacturability_reference').
+
+    None for a printed part whatever it names: its `source:` is its design, and
+    a design is not something anybody orders to print it.
     """
     data = PartConfiguration.get_manufacturing_data(part)
-    if not data.method or not data.source:
+    if not data.method or not data.source or data.method == METHOD_ADDITIVE:
         return None
     project_name, object_name = resolve_resource_path(part.project_name, data.source)
     return "%s:%s" % (project_name, object_name)
