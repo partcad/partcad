@@ -1685,7 +1685,7 @@ jobs:
           # re-render it locally, where nothing is left out.
           ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r --fast-only //pub/examples/partcad
           # TODO(clairbee): Limit RAM usage by restricting the number of threads?
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --fast-only --package //pub/examples/partcad
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 qual test -r --fast-only --package //pub/examples/partcad
           ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi --threads-max 4 render -r --fast-only --package //pub/examples/partcad
           coverage combine
           # END PARTCAD EXAMPLES
@@ -1931,7 +1931,7 @@ jobs:
           for package in $(grep -v -e '^#' -e '^$' ../dev-tools/ci/examples-packages.txt); do
             n=$((n + 1))
             ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.list${n}" -m partcad_cli.click.command --no-ansi list all -r --fast-only "${package}"
-            ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.test${n}" -m partcad_cli.click.command --no-ansi test -r --fast-only --package "${package}"
+            ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.test${n}" -m partcad_cli.click.command --no-ansi qual test -r --fast-only --package "${package}"
           done
           coverage combine
           # END ALL EXAMPLES
@@ -2081,7 +2081,7 @@ jobs:
             ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.list${n}" -m partcad_cli.click.command --no-ansi list all -r --fast-only "${package}"
             rc=$?
             if [ "${rc}" -ne 0 ]; then sample_rc=${rc}; failed="${failed} list:${package}=${rc}"; fi
-            ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.test${n}" -m partcad_cli.click.command --no-ansi -v --threads-max 4 test --package "${package}" -a "${object}" 2>&1 |
+            ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.test${n}" -m partcad_cli.click.command --no-ansi -v --threads-max 4 qual test --package "${package}" -a "${object}" 2>&1 |
               tee -a "${sweep_log}" | grep --line-buffered -v " DEBUG:partcad:"
             rc=${PIPESTATUS[0]}
             if [ "${rc}" -ne 0 ]; then sample_rc=${rc}; failed="${failed} ${object}=${rc}"; fi
