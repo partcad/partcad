@@ -43,11 +43,13 @@ Made
 
 A part that is made says how, in a ``manufacturing:`` section: the method
 (``additive``, ``subtractive``, ``forming``, ``sheet_metal``), the stock it is
-made from (``source:``), the machines it is cut on (``cnc:``, ``laser:``,
-``drill:``, ``cut:``) and what they are told, and the tolerance it is made to.
-See :ref:`made-from-stock`, :ref:`subtractive` and :ref:`sheet-metal`. What it is
-made of is its :ref:`material <materials>`; the firmware a board is flashed with
-is its :ref:`software <software>`.
+made from (``source:``) -- or, for a printed part, the design it is a print of --
+the machines it is cut on (``cnc:``, ``laser:``, ``drill:``, ``cut:``) or the
+process it is printed by (``fff:``) and what they are told, and the tolerance it
+is made to. See :ref:`made-from-stock`, :ref:`additive`, :ref:`subtractive` and
+:ref:`sheet-metal`. What it is made of is its :ref:`material <materials>`, never
+its manufacturing section; the firmware a board is flashed with is its
+:ref:`software <software>`.
 
 Put together
 ------------

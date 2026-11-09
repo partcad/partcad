@@ -94,6 +94,28 @@
       "required": ["cuts"],
       "additionalProperties": false
     },
+    "additive-fff": {
+      "description": "Fused filament fabrication -- ISO/ASTM 52900 material extrusion, what most people call FDM -- and the settings that decide the shape of what it prints: how thick the skin is and how full the inside. Speeds, temperatures and cooling decide whether a print succeeds rather than what shape it is, and are left to whoever prints it. A setting left out is the printer's default; PartCAD assumes the usual ones (a 0.4 mm nozzle, 0.2 mm layers, 0.45 mm lines, 2 walls, 4 top and 4 bottom layers, 15% grid infill) only where it has to work something out, such as a weight.",
+      "type": "object",
+      "properties": {
+        "nozzle": { "$ref": "#/definitions/cam-length", "description": "The diameter of the nozzle the filament comes out of" },
+        "layerHeight": { "$ref": "#/definitions/cam-length", "description": "How thick each layer is" },
+        "lineWidth": { "$ref": "#/definitions/cam-length", "description": "How wide each extruded line is" },
+        "walls": { "type": "integer", "minimum": 0, "description": "How many lines thick the sides are (a slicer's perimeters, or wall line count)" },
+        "topLayers": { "type": "integer", "minimum": 0, "description": "How many solid layers close the top of every region" },
+        "bottomLayers": { "type": "integer", "minimum": 0, "description": "How many solid layers close the bottom of every region" },
+        "infill": {
+          "oneOf": [
+            { "type": "number", "minimum": 0, "maximum": 1 },
+            { "type": "string", "pattern": "^\\s*[0-9]+(\\.[0-9]+)?\\s*%\\s*$" }
+          ],
+          "description": "How full the inside is: '20%', or 0.2. A bare number above 1 is refused rather than guessed at"
+        },
+        "infillPattern": { "type": "string", "minLength": 1, "description": "What the inside is filled with: 'grid', 'gyroid', 'honeycomb', 'cubic', 'lines'... as the slicer names it" },
+        "desc": { "type": "string", "maxLength": 1000 }
+      },
+      "additionalProperties": false
+    },
     "subtractive-cut-one": {
       "type": "object",
       "properties": {
@@ -2307,7 +2329,12 @@
                     "source": {
                       "type": "string",
                       "minLength": 1,
-                      "description": "The part that goes into the process, for a method that works on one rather than on stock. Required by 'sheet_metal', where it is the flat piece that is bent -- itself manufactured, and expected to be cut by a subtractive process that gives it its outline and its holes. A reference, resolved against this package like any other."
+                      "description": "The part that goes into the process, for a method that works on one rather than on stock. Required by 'sheet_metal', where it is the flat piece that is bent -- itself manufactured, and expected to be cut by a subtractive process that gives it its outline and its holes. Required by 'subtractive', where it is the stock the part is cut out of. Optional for 'additive', where it is the design -- the solid the designer had in mind, which is what is printed and what the part is drawn as -- rather than anything that goes into the printer; a printed part that names one needs no 'type:' of its own. A reference, resolved against this package like any other."
+                    },
+                    "visual": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "'additive' only: what a printed part with no 'type:' of its own is drawn, placed and exported as, where that is not its 'source:' design -- a mesh with the layer lines on it, a lighter model of a heavy one. A reference to a part."
                     },
                     "instructions": {
                       "type": "string",
@@ -2318,6 +2345,7 @@
                     "drill": { "$ref": "#/definitions/subtractive-drill" },
                     "laser": { "$ref": "#/definitions/subtractive-laser" },
                     "cut": { "$ref": "#/definitions/subtractive-cut" },
+                    "fff": { "$ref": "#/definitions/additive-fff" },
                     "diameter": { "$ref": "#/definitions/cam-length", "description": "Shared by every machine named below that reads one: the cutter on a router, the bit in a drill. A laser has none and ignores it" },
                     "depth": { "$ref": "#/definitions/cam-length", "description": "How far down from the top of the object the cut goes. An object that does not say is cut through" },
                     "depth_per_pass": { "$ref": "#/definitions/cam-length", "description": "How deep each pass goes" },
@@ -2374,6 +2402,19 @@
                           "desc": false
                         }
                       }
+                    },
+                    {
+                      "description": "A design, a visual and a print process describe building a part up. Only 'additive' does that.",
+                      "if": {
+                        "properties": { "method": { "not": { "const": "additive" } } },
+                        "required": ["method"]
+                      },
+                      "then": { "properties": { "visual": false, "fff": false } }
+                    },
+                    {
+                      "description": "A visual stands for a design, so it is said only beside one.",
+                      "if": { "required": ["visual"] },
+                      "then": { "required": ["source"] }
                     }
                   ]
                 },
@@ -2391,7 +2432,25 @@
                 "connect": { "$ref": "#/definitions/connect" },
                 "software": { "$ref": "#/definitions/software-refs" }
               },
-              "required": ["type"],
+              "anyOf": [
+                { "required": ["type"] },
+                {
+                  "description": "A printed part that names its design and no geometry of its own: it is that design, printed, and is drawn as 'manufacturing: visual:', or else as the design.",
+                  "required": ["manufacturing"],
+                  "not": { "required": ["source"] },
+                  "properties": {
+                    "manufacturing": {
+                      "required": ["method", "source"],
+                      "properties": { "method": { "const": "additive" } }
+                    }
+                  }
+                }
+              ],
+              "if": { "required": ["type"] },
+              "then": {
+                "description": "A part with a 'type:' is drawn as what it is, so it says no 'visual:' as well.",
+                "properties": { "manufacturing": { "properties": { "visual": false } } }
+              },
               "additionalProperties": false
             },
             {

@@ -67,6 +67,85 @@ SHEET_METAL_REQUIRED = ("source", "instructions")
 # is bought (`vendor`/`sku`), or it is `additive`, or `forming`.
 SUBTRACTIVE_REQUIRED = ("source",)
 
+# What an `additive` part may say beyond naming the method, and what each is.
+#
+# Printing is the one method whose `source:` is not something that goes into
+# the machine. A blank goes into a brake and stock goes onto a router, but
+# nothing goes into a printer except the material: what it is handed is a
+# *design*, and what comes out is that design as the process can make it --
+# walls a few lines thick, a top and a bottom a few layers deep, and the inside
+# filled at the density the print says. So the two are different objects, and
+# the declaration names both:
+#
+# * 'source' - the design: the solid the designer had in mind. It is what the
+#   print is measured against (its tolerance is the design's), what a slicer is
+#   handed, and what the printed part is drawn as. Optional: a part that names
+#   none is its own design, which is what every `additive` part written before
+#   this meant and still means.
+# * 'visual' - what the part is drawn as, where that is not the design: a mesh
+#   with the layer lines on it, a cheaper model of a heavy one. Only for a part
+#   with no geometry of its own; one with a `type:` is drawn as what it is.
+#
+# A part that names a `source:` needs no geometry of its own -- it is the design,
+# printed -- so it may leave `type:` out, and is then drawn, placed and exported
+# as its visual (see 'implied_type'). The process settings that turn the design
+# into the printed part (walls, infill...) are the process' own subsection, as a
+# subtractive machine's are (see 'PROCESSES').
+#
+# Neither is required: printing is defined by its material, not by anything a
+# part names.
+ADDITIVE_REQUIRED: tuple = ()
+
+# The keys an `additive` section holds besides a process' subsection.
+_ADDITIVE_SECTION_KEYS = ("method", "source", "visual")
+
+# The processes an `additive` part may be printed by, each named by adding its
+# own subsection -- the way a subtractive part names its machine, and for the
+# same reason: the processes do not take the same settings. Fused filament
+# fabrication (ISO/ASTM 52900 "material extrusion", what most people call FDM)
+# is the one PartCAD reads today; resin and powder processes take settings of
+# their own and get subsections of their own when something reads them.
+#
+# Several are alternatives, as machines are: a part that could be printed either
+# way says so, and whoever prints it picks.
+PROCESS_FFF = "fff"
+PROCESSES = (PROCESS_FFF,)
+
+# What each process' subsection may hold. Named after the settings every slicer
+# has, in PartCAD's camelCase rather than in any one slicer's spelling
+# (PrusaSlicer's `perimeters` is Cura's `wall_line_count` is `walls` here).
+#
+# Each is what decides the printed part's *geometry*: how thick its skin is and
+# how full its inside. Speeds, temperatures and cooling decide whether the print
+# succeeds, not what shape it is, and are left to whoever prints it.
+PROCESS_LENGTH_KEYS = ("layerHeight", "lineWidth", "nozzle")
+PROCESS_COUNT_KEYS = ("walls", "topLayers", "bottomLayers")
+PROCESS_KEYS: dict[str, tuple] = {
+    PROCESS_FFF: PROCESS_LENGTH_KEYS + PROCESS_COUNT_KEYS + ("infill", "infillPattern", "desc"),
+}
+
+# What a setting is taken to be where a process subsection does not say, for
+# whatever has to assume one (the weight of a print, the printed geometry). The
+# values most slicers ship for a 0.4 mm nozzle; a part that cares says its own.
+# Never applied where nothing is printed: a part that names no process has no
+# infill to assume, and is weighed as the solid it is.
+PROCESS_DEFAULTS: dict[str, dict] = {
+    PROCESS_FFF: {
+        "nozzle": 0.4,
+        "layerHeight": 0.2,
+        "lineWidth": 0.45,
+        "walls": 2,
+        "topLayers": 4,
+        "bottomLayers": 4,
+        "infill": 0.15,
+        "infillPattern": "grid",
+    },
+}
+
+# Every key that belongs in a process subsection, for telling a setting written
+# one level too high from a key nobody has heard of.
+_PROCESS_SETTING_KEYS = frozenset(key for keys in PROCESS_KEYS.values() for key in keys if key != "desc")
+
 # The machines a `subtractive` part may be made on, and which one a declaration
 # means.
 #
@@ -499,14 +578,185 @@ class MachineConfig:
         return "MachineConfig(kind=%s, toolAxis=%s)" % (self.kind, self.tool_axis)
 
 
+def parse_fraction(value, what: str) -> float:
+    """A share of something, from 0 to 1: '20%', or 0.2.
+
+    A bare number above 1 is refused rather than read as a percentage. '20' is
+    twenty percent to whoever wrote it and two thousand to the arithmetic, and
+    neither reading is safer than the other.
+
+    Raises:
+        ValueError: the value is not a fraction, or not between none and all.
+    """
+    if isinstance(value, bool):
+        raise ValueError("%s is not a fraction: %r" % (what, value))
+    if isinstance(value, str):
+        text = value.strip()
+        if text.endswith("%"):
+            try:
+                amount = float(text[:-1].strip()) / 100.0
+            except ValueError as e:
+                raise ValueError("%s is not a percentage: %r" % (what, value)) from e
+        else:
+            try:
+                amount = float(text)
+            except ValueError as e:
+                raise ValueError("%s is not a fraction: %r. Write '20%%' or 0.2" % (what, value)) from e
+            if amount > 1.0:
+                raise ValueError(
+                    "%s is %r, which is more than all of it. Write '%s%%' or %s" % (what, value, text, amount / 100.0)
+                )
+    elif isinstance(value, (int, float)):
+        amount = float(value)
+        if amount > 1.0:
+            raise ValueError(
+                "%s is %r, which is more than all of it. Write '%s%%' or %s" % (what, value, value, amount / 100.0)
+            )
+    else:
+        raise ValueError("%s is not a fraction: %r. Write '20%%' or 0.2" % (what, value))
+    if not 0.0 <= amount <= 1.0 or math.isnan(amount):
+        raise ValueError("%s is not between 0%% and 100%%: %r" % (what, value))
+    return amount
+
+
+def _parse_count(value, what: str) -> int:
+    """How many of something: a whole number, none or more."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or float(value) != int(value) or value < 0:
+        raise ValueError("%s is not a count: %r. Write a whole number, 0 or more" % (what, value))
+    return int(value)
+
+
+class PrintProcess:
+    """One additive process, as a part declares it: what turns the design into the print.
+
+    Attributes:
+        kind: which process, one of 'PROCESSES'.
+        options: what the subsection said, each value read into its unit --
+            millimetres for a length, a fraction for the infill, a whole number
+            for a count. Only what was said: 'settings()' fills in the rest.
+    """
+
+    def __init__(self, kind: str, config) -> None:
+        """Read one process subsection.
+
+        Raises:
+            ValueError: a key the process does not take, or a value that cannot
+                be read. Raised rather than recorded, as 'MachineConfig' does,
+                because the caller is what turns it into the 'process_error' a
+                check reports.
+        """
+        self.kind = kind
+        if config is not None and not isinstance(config, dict):
+            raise ValueError("'%s:' is not a section: %r" % (kind, config))
+        allowed = PROCESS_KEYS[kind]
+        unknown = [key for key in (config or {}) if key not in allowed]
+        if unknown:
+            raise ValueError(
+                "'%s:' does not take %s; it takes %s"
+                % (
+                    kind,
+                    ", ".join("'%s:'" % key for key in sorted(unknown)),
+                    ", ".join("'%s:'" % key for key in allowed),
+                )
+            )
+        self.options: dict = {}
+        for key, value in (config or {}).items():
+            if value is None:
+                continue
+            what = "'%s: %s:'" % (kind, key)
+            if key in PROCESS_LENGTH_KEYS:
+                self.options[key] = pc_cam.parse_length(value, what)
+            elif key in PROCESS_COUNT_KEYS:
+                self.options[key] = _parse_count(value, what)
+            elif key == "infill":
+                self.options[key] = parse_fraction(value, what)
+            elif key == "infillPattern":
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError("%s is not the name of a pattern: %r" % (what, value))
+                self.options[key] = value.strip().lower()
+            else:
+                self.options[key] = value
+
+    def get(self, key: str, default=None):
+        """One setting as the subsection said it, or 'default' where it did not."""
+        value = self.options.get(key)
+        return default if value is None else value
+
+    def settings(self) -> dict:
+        """Every setting that decides the printed geometry, the defaults filling what was not said.
+
+        What the weight of a print and its geometry are worked out from, so
+        that both assume the same thing about a setting nobody stated. 'desc'
+        is not one of them.
+        """
+        settings = dict(PROCESS_DEFAULTS.get(self.kind, {}))
+        settings.update({key: value for key, value in self.options.items() if key != "desc"})
+        return settings
+
+    def key(self) -> str:
+        """What distinguishes this process' claim from another, for a cache key."""
+        return json.dumps({"kind": self.kind, "settings": self.settings()}, sort_keys=True)
+
+    def to_data(self) -> dict:
+        """This process as the parameters an implementation is handed: the kind and every setting."""
+        data = {"process": self.kind}
+        data.update(self.settings())
+        return data
+
+    def __str__(self) -> str:
+        return "PrintProcess(kind=%s, %s)" % (
+            self.kind,
+            ", ".join("%s=%s" % (key, value) for key, value in sorted(self.options.items()) if key != "desc"),
+        )
+
+
+# The marker 'implied_type' leaves on a declaration it gave a type to: that the
+# `type: alias` it has was not written. What tells "drawn as its visual" from a
+# reference somebody wrote, which has a geometry of its own to be drawn as and so
+# takes no `visual:` (see 'manufacturability-additive').
+IMPLIED_TYPE_KEY = "implied_type"
+
+
+def implied_type(config) -> dict | None:
+    """What a printed part with no geometry of its own is, as the keys to add to its declaration; None otherwise.
+
+    A part that says `manufacturing: method: additive` and names a `source:`
+    design needs no `type:`: it is that design, printed. It is then drawn,
+    placed in an assembly and exported as its visual -- `visual:`, else the
+    design -- which is exactly what a reference to that object is: `type:
+    alias` pointing at it, with this part's own `manufacturing:` section, which
+    a reference restates rather than inherits (see 'PartFactoryAlias').
+
+    None for anything else, including a part that wrote a `type:` (its geometry
+    is its own) and one that wrote a top-level `source:` without one (an alias
+    missing its type, which is reported as it always was).
+    """
+    if not isinstance(config, dict) or config.get("type") is not None or config.get("source") is not None:
+        return None
+    section = config.get("manufacturing")
+    if not isinstance(section, dict) or section.get("method") != "additive":
+        return None
+    design = section.get("source")
+    visual = section.get("visual")
+    drawn_as = visual if isinstance(visual, str) and visual else design
+    if not isinstance(drawn_as, str) or not drawn_as or not isinstance(design, str) or not design:
+        return None
+    return {"type": "alias", "source": drawn_as, IMPLIED_TYPE_KEY: "additive"}
+
+
 class PartConfigManufacturing:
     method: int | None
 
     # The part that is worked on, and the sketch that says how, for the methods
     # that are defined in terms of another object. None for every other method,
     # which describes a part made from stock and has nothing to point at.
+    #
+    # For `additive` the source is the *design* instead -- what is printed,
+    # rather than what goes into the machine -- and `visual` what the part is
+    # drawn as where that is not the design (see 'ADDITIVE_REQUIRED').
     source: str | None
     instructions: str | None
+    visual: str | None
 
     def __init__(self, final_config: dict) -> None:
         """Read a part's 'manufacturing:' section, without refusing any of it.
@@ -535,7 +785,16 @@ class PartConfigManufacturing:
             )
         self.source = manufacturing_config.get("source", None)
         self.instructions = manufacturing_config.get("instructions", None)
+        self.visual = manufacturing_config.get("visual", None)
         self.machine_error: str | None = None
+        # The same for a printed part's process subsection: what in it could
+        # not be read, and the processes it could be printed by. Kept apart from
+        # the machines because nothing *routes* a print yet: 'pc cam' visits a
+        # part whose 'machine_error' is set, and a typo in an infill is not
+        # something it has anything to say about. 'pc qual test' is what reports
+        # it (see 'manufacturability-additive').
+        self.process_error: str | None = None
+        self.processes: dict[str, PrintProcess] = {}
         # Every machine this part could be made on, by kind. Several is not a
         # sequence: they are alternatives, and `pc cam` writes a program for the
         # one that is chosen. A part that really is machined in stages is a
@@ -551,6 +810,97 @@ class PartConfigManufacturing:
         # this instance of it was made with.
         self.parameters = parameter_values(final_config)
         self._read_machines(manufacturing_config)
+        if self.method == METHOD_ADDITIVE:
+            self._read_processes(manufacturing_config)
+
+    def _read_processes(self, manufacturing_config: dict) -> None:
+        """What a printed part says beyond its method: its design, its visual and its process.
+
+        Recorded rather than raised, for the reason '_read_machines' gives. The
+        keys a cut takes are not this method's to judge: '_read_machines'
+        refuses them already, in the words every other method hears.
+        """
+        misplaced = sorted(key for key in manufacturing_config if key in _PROCESS_SETTING_KEYS)
+        if misplaced:
+            # Written one level too high. Said as such rather than as an
+            # unknown key, because it is a known one: it is a process' setting,
+            # and the process is what decides what it means.
+            self.process_error = "%s is a setting of the process it is printed by; write it under %s" % (
+                ", ".join("'%s:'" % key for key in misplaced),
+                " or ".join("'%s:'" % kind for kind in PROCESSES),
+            )
+            return
+        unknown = sorted(
+            key
+            for key in manufacturing_config
+            if key not in _ADDITIVE_SECTION_KEYS
+            and key not in PROCESSES
+            and key not in SHARED_JOB_KEYS
+            and key not in MACHINES
+            and key not in _SECTION_KEYS
+        )
+        if unknown:
+            self.process_error = "'manufacturing:' does not take %s" % ", ".join("'%s:'" % key for key in unknown)
+            return
+        for field in ("source", "visual"):
+            value = manufacturing_config.get(field)
+            if value is not None and (not isinstance(value, str) or not value.strip()):
+                self.process_error = "'%s:' is not a reference to a part: %r" % (field, value)
+                return
+        if self.visual and not self.source:
+            # A part drawn as something with no design behind it: there is
+            # nothing for the visual to stand for.
+            self.process_error = "'visual:' says what the design is drawn as, and there is no 'source:' design"
+            return
+        for kind in PROCESSES:
+            if kind not in manufacturing_config:
+                continue
+            try:
+                self.processes[kind] = PrintProcess(kind, manufacturing_config.get(kind))
+            except ValueError as e:
+                self.processes = {}
+                self.process_error = str(e)
+                return
+
+    @property
+    def design(self) -> str | None:
+        """What a printed part is a print of, as written, or None where it is its own design.
+
+        Only for `additive`: every other method's `source:` is what goes into
+        the machine, which is not a design but a piece of material.
+        """
+        if self.method != METHOD_ADDITIVE:
+            return None
+        return self.source or None
+
+    def print_data(self) -> dict | None:
+        """What a print service is told about printing this part, or None for anything that is not printed.
+
+        The method, the design it is a print of where it names one, and each
+        process' settings *as the part states them*: a service fills in what is
+        left out with its own defaults, which are better than PartCAD's guess at
+        them (see 'PROCESS_DEFAULTS', which is for working out a weight). None
+        as well for a declaration that cannot be read, which is nothing to
+        quote: 'pc qual test' is what says why.
+        """
+        if self.method != METHOD_ADDITIVE or self.process_error:
+            return None
+        data: dict = {"method": "additive"}
+        if self.design:
+            data["design"] = self.design
+        if self.processes:
+            data["processes"] = {
+                kind: {key: value for key, value in process.options.items() if key != "desc"}
+                for kind, process in sorted(self.processes.items())
+            }
+        return data
+
+    @property
+    def process(self) -> PrintProcess | None:
+        """The process a printed part is printed by, where it names exactly one."""
+        if len(self.processes) == 1:
+            return next(iter(self.processes.values()))
+        return None
 
     def _read_machines(self, manufacturing_config: dict) -> None:
         """Which machines this part could be made on, and the job they share.
@@ -676,6 +1026,7 @@ class PartConfigManufacturing:
         Empty for every method that needs nothing beyond its own name.
         """
         required = {
+            METHOD_ADDITIVE: ADDITIVE_REQUIRED,
             METHOD_SHEET_METAL: SHEET_METAL_REQUIRED,
             METHOD_SUBTRACTIVE: SUBTRACTIVE_REQUIRED,
         }.get(self.method, ())

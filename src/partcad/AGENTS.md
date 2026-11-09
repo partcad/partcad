@@ -964,6 +964,28 @@ at all).
   manufacturing pages repeat each part's instructions as text (`manufacturing_instructions.py`) and draw its
   route from above where one can be produced (`cam_preview.py`).
 
+- **A printed part names its design, not its stock** (`part_config_manufacturing.py`,
+  `qual/basic/manufacturability_additive_solid.py`; design record `docs/design/additive.md`): `additive`'s
+  `source:` is the *design* -- what is printed, what the tolerance is measured against, what a print service is
+  sent -- and never stock, so `procurement.stock_name` is None for a printed part whatever it names. Optional: a
+  part naming none is its own design, as every printed part was before. `visual:` is what it is drawn as instead,
+  and the process settings that decide the print's shape live under the process' own subsection, `fff:`
+  (`PrintProcess`), as a machine's do under `cnc:`.
+
+  A printed part that names a design needs no `type:`: `PartConfiguration.normalize` makes it `type: alias` of its
+  visual (else the design), marked `implied_type`, so it is a reference in every respect and restates its own
+  `manufacturing:`. A part *with* a `type:` may name a design but not a `visual:` -- the check reads that off the
+  part's own declaration, because the configuration a reference resolves to is its source's.
+
+  An unreadable `fff:` is `process_error`, **not** `machine_error`: `cam.declares_job` visits any part whose
+  `machine_error` is set, and a typo in an infill is nothing a router has a program for. `PROCESS_DEFAULTS` is
+  for working something out (a weight); instructions and the cart carry only what the part states.
+
+  Material stays CMF: the manufacturing section takes none. `get_mcft` (the cart) now falls back to what a
+  reference resolves to, since a reference states no material of its own and a type-less printed part is one;
+  the manufacturer provider is sent the design's STEP, not the visual's. The printed geometry and its weight are
+  proposed in the design record, not built.
+
 - **Build vs Buy decides the build plan, and the plan decides the instruction book** (`build_plan.py`): the
   tree of an object's line items says what each can be (bought, built, both, neither); `effective_choice` is
   the user's choice where both are possible and "buy" until they make one, the same default `procurement`

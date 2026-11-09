@@ -11,7 +11,7 @@ The ``manufacturing.method`` field says how a part is made:
 +------------------+-----------------------------------------------------------+
 | Method           | Meaning                                                   |
 +==================+===========================================================+
-| ``additive``     | Built up, e.g. 3D printed                                 |
+| ``additive``     | Built up, e.g. 3D printed -- see :ref:`additive`          |
 +------------------+-----------------------------------------------------------+
 | ``subtractive``  | Cut away from stock -- see :ref:`subtractive`             |
 +------------------+-----------------------------------------------------------+
@@ -28,6 +28,124 @@ together rather than made, and has a single method of its own -- see
 
 A part that is bought rather than made carries ``vendor`` and ``sku`` instead of
 a method.
+
+.. _additive:
+
+Additive
+--------
+
+``additive`` is the method that builds a part up, layer by layer, out of nothing
+but its material: a 3D printer. It is the one method whose ``source`` is not
+something that goes into the machine. A brake is handed a blank and a router a
+piece of stock, but a printer is handed a **design** -- the solid the designer
+had in mind -- and what comes out is that design as the process can make it: a
+skin a few lines thick, a top and a bottom a few layers deep, and the inside
+filled at the density the print says. So a printed part may name the design
+apart from itself, and say how it is filled:
+
+.. code-block:: yaml
+
+  parts:
+    bracket:                  # the design: what the designer had in mind
+      type: build123d
+      path: bracket.py
+      manufacturable: false   # a design is not made on its own: its prints are
+      parameters:
+        material:
+          type: string
+          default: //pub/std/manufacturing/material/plastic:petg
+        tolerance:
+          type: float
+          default: 0.2
+
+    bracket-printed:          # the bracket, printed
+      manufacturing:
+        method: additive
+        source: bracket       # the design; also what it is drawn as
+        fff:                  # fused filament fabrication, and how it fills the design
+          layerHeight: 0.2 mm
+          walls: 3
+          topLayers: 5
+          bottomLayers: 4
+          infill: 20%
+          infillPattern: gyroid
+
+- ``source`` -- *optional*. The design the part is a print of. It is what the
+  print is measured against (the tolerance is the design's), what a print
+  service is sent to slice, and -- unless ``visual`` says otherwise -- what the
+  part is drawn, placed and exported as. A part that names none **is its own
+  design**, which is what every ``additive`` part written before this meant:
+
+  .. code-block:: yaml
+
+    knob:
+      type: cadquery
+      manufacturing:
+        method: additive      # printed, and the design is the knob itself
+
+- **No** ``type``. A part that names a ``source`` design needs no geometry of its
+  own -- it is the design, printed -- so it may leave ``type:`` out. It is then a
+  reference to its visual, exactly as ``type: alias`` would make it, with its own
+  ``manufacturing:`` section; ``with:`` passes parameters to the design as an
+  alias passes them to its source (``with: {color: ":orange"}`` is the bracket
+  printed in orange). A part that does write a ``type:`` is drawn as what it is,
+  and the design is still the one ``source`` names.
+- ``visual`` -- *optional*, and only for a part with no ``type:``. What the part
+  is drawn as where that is not the design: a mesh with the layer lines on it, a
+  lighter model of a heavy one. It is never what is printed.
+- ``fff`` -- the process, *optional*. Fused filament fabrication (ISO/ASTM 52900
+  "material extrusion", what most people call FDM) and the settings that decide
+  the *shape* of what it prints. Speeds, temperatures and cooling decide whether
+  a print succeeds rather than what shape it is, and are left to whoever prints
+  it. Every setting is optional; one left out is the printer's default:
+
+  +-------------------+--------------------------------------------+-------------------------------------+
+  | Key               | What it is                                 | PrusaSlicer / Cura                  |
+  +===================+============================================+=====================================+
+  | ``nozzle``        | The nozzle's diameter, a length            | ``nozzle_diameter`` /               |
+  |                   |                                            | ``machine_nozzle_size``             |
+  +-------------------+--------------------------------------------+-------------------------------------+
+  | ``layerHeight``   | How thick each layer is                    | ``layer_height``                    |
+  +-------------------+--------------------------------------------+-------------------------------------+
+  | ``lineWidth``     | How wide each extruded line is             | ``extrusion_width`` /               |
+  |                   |                                            | ``line_width``                      |
+  +-------------------+--------------------------------------------+-------------------------------------+
+  | ``walls``         | How many lines thick the sides are         | ``perimeters`` /                    |
+  |                   |                                            | ``wall_line_count``                 |
+  +-------------------+--------------------------------------------+-------------------------------------+
+  | ``topLayers``,    | How many solid layers close each region    | ``top_solid_layers`` /              |
+  | ``bottomLayers``  | from above and from below                  | ``top_layers`` (and ``bottom_``)    |
+  +-------------------+--------------------------------------------+-------------------------------------+
+  | ``infill``        | How full the inside is: ``20%`` or ``0.2``;| ``fill_density`` /                  |
+  |                   | a bare number above 1 is refused           | ``infill_sparse_density``           |
+  +-------------------+--------------------------------------------+-------------------------------------+
+  | ``infillPattern`` | What the inside is filled with, as the     | ``fill_pattern`` /                  |
+  |                   | slicer names it: ``grid``, ``gyroid``...   | ``infill_pattern``                  |
+  +-------------------+--------------------------------------------+-------------------------------------+
+
+  The settings are a process' own and are written under it: an ``infill:``
+  directly under ``manufacturing:`` is an error that says where it goes, the
+  way a router's ``diameter:`` is refused on a printed part.
+
+**What it is made of is its CMF, not its manufacturing section.** The filament
+is the part's ``material`` -- the CMF parameter every part type takes, stated on
+the design or passed to it with ``with:`` -- and its colour is the part's
+``color``. A ``manufacturing:`` section says how the part is made, and takes no
+``material:`` of its own: two places to say one thing are two answers that can
+disagree, and the material is what the rest of PartCAD -- weights, the CMF
+check, the exports, a supplier's cart -- already reads (see
+:ref:`colour, material and finish <cmf>`).
+
+**A design is not stock.** Nothing of it goes into the printer, so it is never
+procured: the bill of materials and ``pc supply`` count a printed part as made,
+from nothing it names, as before. A print service is sent the design's geometry
+and the print settings the part states (``request["cart"]`` item
+``manufacturing``), never its visual.
+
+``pc qual test`` checks that the declaration can be read and that the design is a
+closed solid (``manufacturability-additive``). See
+``docs/design/additive.md`` in the repository for how PartCAD is to work out the
+printed part itself -- its real weight, and its geometry as a model of its own.
 
 .. _subtractive:
 
@@ -486,7 +604,8 @@ to be procured is what it is made *from*: the ``source:`` of its
 ``manufacturing:`` section, which is procured by the same rule in turn -- a
 bracket bent from a blank that is cut from a sheet is procured as the sheet. A
 part made from nothing it names (``additive``, ``forming``) needs nothing
-procured at all.
+procured at all -- and a printed part's ``source:`` is its design, which is not
+stock (see :ref:`additive`).
 
 - **The bills of materials** list every part that goes into the assembly, and
   beside them a **Stock** section: what the made parts are made from, one piece

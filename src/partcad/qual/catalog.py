@@ -130,11 +130,14 @@ it says so). A sketch is checked for being reproducible and for nothing else.
 """,
     ),
     "manufacturability-additive": Entry(
-        "Additive: a closed solid",
+        "Additive: a closed solid to print",
         "a part with `manufacturing: method: additive`",
         """
-Whether a part to be printed is a closed solid: a body with no open edges, which
-is what a slicer needs to know what is inside it.
+Whether a part to be printed can be: its declaration can be read, and what is
+printed is a closed solid - a body with no open edges, which is what a slicer
+needs to know what is inside it. What is printed is the design the part names
+under `manufacturing: source:`, or the part itself where it names none; never
+its `visual:`, which may be a mesh nobody would slice.
 
 ### When it does not apply
 
@@ -142,10 +145,23 @@ Anything but a part, and a part made by any other method.
 
 ### When it fails
 
-- `The shape is not solid`: the part has open edges - faces that do not meet.
-  Close the model in the tool it comes from, or export it as a solid rather than
-  as a surface.
+- `The additive declaration says ...`: the `fff:` section has a key it does not
+  take or a value it cannot read, a print setting is written directly under
+  `manufacturing:` instead of under `fff:`, a `visual:` names no design to stand
+  for, or a part with a `type:` of its own says `visual:` as well; the sentence
+  names which.
+- `The design '...' it is printed from is not found`: fix the name under
+  `manufacturing: source:`.
+- `The design '...' is not solid` / `The shape is not solid`: what is printed
+  has open edges - faces that do not meet. Close the model in the tool it comes
+  from, or export it as a solid rather than as a surface.
 - `Failed to get the shape`: it did not build; see `cad`.
+
+### Settings
+
+`manufacturing:` - `source:` (the design), `visual:`, and `fff:` (the print
+process: `layerHeight`, `lineWidth`, `nozzle`, `walls`, `topLayers`,
+`bottomLayers`, `infill`, `infillPattern`).
 """,
     ),
     "manufacturability-subtractive": Entry(

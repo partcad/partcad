@@ -31,6 +31,20 @@ def resolve_cart_item(item_spec: str):
     return name, count
 
 
+def _print_data(object) -> dict | None:
+    """What a print service is told about printing 'object', or None (see 'PartConfigManufacturing.print_data')."""
+    from .part import Part
+    from .part_config import PartConfiguration
+
+    if not isinstance(object, Part):
+        return None
+    try:
+        return PartConfiguration.get_manufacturing_data(object).print_data()
+    except Exception as e:  # pylint: disable=broad-except
+        pc_logging.debug("No print data for %s: %s" % (getattr(object, "name", object), e))
+        return None
+
+
 def resolve_cart_object(ctx, name: str):
     """Resolve the name of a cart item to the object it refers to.
 
@@ -72,6 +86,13 @@ class ProviderCartItem:
     color: str = None
     finish: str = None
     # TODO(clairbee): add tolerance
+
+    # How a printed part is printed: the design it is a print of and the
+    # settings that decide what the inside of it is (see
+    # 'PartConfigManufacturing.print_data'). None for anything that is not
+    # printed. Beside the material rather than in it: the filament is the
+    # part's CMF, and the walls and the infill are the process'.
+    manufacturing: dict = None
 
     format: str = None
     binary: bytes = None
@@ -137,6 +158,7 @@ class ProviderCartItem:
         self.material = await object.get_mcft("material")
         self.color = await object.get_mcft("color")
         self.finish = await object.get_mcft("finish")
+        self.manufacturing = _print_data(object)
 
     def compose(self):
         result = {
@@ -147,6 +169,8 @@ class ProviderCartItem:
             "finish": self.finish,
             "format": self.format,
         }
+        if getattr(self, "manufacturing", None):
+            result["manufacturing"] = self.manufacturing
         if self.binary:
             result["binary"] = self.binary
         if self.vendor and self.sku:
