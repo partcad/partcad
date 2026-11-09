@@ -327,7 +327,10 @@ links:
   right-angle corner** the way the `walls` scene does: the wall arriving at a
   corner where the walk turns right (an outside corner) takes
   `extendEnd: <thickness>`, and one arriving where it turns left (an inside
-  corner) `extendEnd: -<thickness>`; corners at other angles take nothing. The
+  corner) `extendEnd: -<thickness>`. Only a straight wall moves: where the wall
+  arriving is an arc (the end of a bay or of a column), the straight wall leaving
+  the corner takes `extendStart` instead, with the same sign. Corners at other
+  angles, and two arcs meeting, take nothing. The
   face stays on the outline; only the solid goes on or stops short. For the
   4000 x 5000 room above, four outside corners:
 

@@ -82,6 +82,9 @@ sketches:
   ell:
     type: build123d
     path: ell.py
+  bayed:
+    type: build123d
+    path: bayed.py
 
 parts:
   north:
@@ -151,6 +154,10 @@ scenes:
     type: walls
     sketch: ell
     height: 2500
+  bayed-room:
+    type: walls
+    sketch: bayed
+    height: 2500
 """
 
 # An L from above: five outside corners and one inside one.
@@ -164,6 +171,27 @@ with bd.BuildSketch() as ell:
 
 if "show_object" in locals():
     show_object(ell.sketch)
+"""
+
+# A room with a bay bulging out of its east wall and a column cut into its south
+# one: four corners where an arc meets a straight wall at a right angle.
+BAYED = """
+import build123d as bd
+
+with bd.BuildSketch() as bayed:
+    with bd.BuildLine():
+        bd.Line((0, 0), (2000, 0))
+        bd.ThreePointArc((2000, 0), (2300, 300), (2600, 0))
+        bd.Line((2600, 0), (4000, 0))
+        bd.Line((4000, 0), (4000, 1000))
+        bd.ThreePointArc((4000, 1000), (5000, 2000), (4000, 3000))
+        bd.Line((4000, 3000), (4000, 4000))
+        bd.Line((4000, 4000), (0, 4000))
+        bd.Line((0, 4000), (0, 0))
+    bd.make_face()
+
+if "show_object" in locals():
+    show_object(bayed.sketch)
 """
 
 # A package that is manufacturable, as a package is unless it says otherwise.
@@ -186,6 +214,7 @@ def package(tmp_path_factory):
     root = tmp_path_factory.mktemp("walls_package")
     (root / "partcad.yaml").write_text(textwrap.dedent(CONFIG).lstrip())
     (root / "ell.py").write_text(textwrap.dedent(ELL).lstrip())
+    (root / "bayed.py").write_text(textwrap.dedent(BAYED).lstrip())
     return root
 
 
@@ -506,6 +535,35 @@ def test_the_walls_of_an_l_shaped_room_close_its_outside_corners_and_do_not_meet
     assert sorted(name.split("extendEnd=")[1].split(",")[0] for _l, name, _p, _q in walls) == ["-114.3"] + ["114.3"] * 5
     perimeter = 2 * (4000.0 + 4000.0)
     _corners_closed(context, "ell-room", t, 2500.0, perimeter * t + (5 - 1) * t * t)
+
+
+def test_where_a_bay_or_a_column_meets_a_wall_the_walls_neither_overlap_nor_leave_the_corner_open(context):
+    """The arcs stay as they are and the straight walls beside them move: nothing in both, the column's corners filled.
+
+    The bay's ends are inside corners, where its thickness and the straight
+    wall's would fill one square; the column's are outside corners, where they
+    would leave one open, below the south wall's line.
+    """
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+    from OCP.gp import gp_Pnt
+    from OCP.TopAbs import TopAbs_IN
+
+    t = 114.3
+    _scene, envelope = _built(context, "bayed-room", kind="scene")
+    solids = [ocp_serialize.decode_shape(node) for node in envelope[ocp_serialize.KEY_ASSEMBLY]]
+    assert len(solids) == 8
+    for i, first in enumerate(solids):
+        for second in solids[i + 1 :]:
+            assert _volume_of(BRepAlgoAPI_Common(first, second).Shape()) == pytest.approx(0.0, abs=1e-3)
+
+    def filled(x, y):
+        point = gp_Pnt(x, y, 1250.0)
+        return any(BRepClass3d_SolidClassifier(solid, point, 1e-6).State() == TopAbs_IN for solid in solids)
+
+    assert filled(2000.0 + t / 2, -t / 2) and filled(2600.0 - t / 2, -t / 2)
+    # And the bay's corners are still walled, by the arc's thickness.
+    assert filled(4000.0 + t / 2, 3000.0 + t / 4) and filled(4000.0 + t / 2, 1000.0 - t / 4)
 
 
 def test_a_picture_of_a_room_draws_its_surfaces_on_the_outline_whatever_its_corners_did(context):

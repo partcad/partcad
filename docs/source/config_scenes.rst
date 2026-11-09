@@ -179,17 +179,22 @@ flat; from straight above, every wall is seen edge-on, and the drawing is the
 plan. A STEP export of the same room, its simulation and its dimensioned drawing
 have walls with their thickness.
 
-Where two straight walls meet at a **right angle**, they meet the way they are
-built: with nothing missing and nothing in both. Their thickness is outside the
+Where two walls meet at a **right angle**, they meet the way they are built:
+with nothing missing and nothing in both. Their thickness is outside the
 outline, so at an outside corner of the room the two would leave a square of it
 open, and at an inside corner both would fill one. So the wall *arriving* at the
 corner, walking the outline clockwise, goes on past it by the thickness at an
 outside corner (``extendEnd``), and stops short of it by the thickness at an inside
 one -- or, if it is too short for that, the wall leaving the corner stops short of
-its start. The faces, and the surfaces a picture draws, stay on the outline:
-only the solids move. Walls that meet at any other angle, or along an arc, are
-left as they meet -- a gap outside an obtuse or acute outside corner, an overlap
-inside the walls at such an inside one.
+its start. Only a straight wall moves: where the wall arriving is an arc -- the
+end of a bay bulging out of the room, or of a column the room goes around -- the
+straight wall leaving the corner goes on past its start, or stops short of it,
+instead (``extendStart``). An arc's thickness follows its radius, so at an inside
+corner it parts from that square along the curve and leaves a sliver of it open
+outside both walls, where nothing overlaps. The faces, and the surfaces a picture
+draws, stay on the outline: only the solids move. Walls that meet at any other
+angle, and two arcs meeting, are left as they meet -- a gap outside an obtuse or
+acute outside corner, an overlap inside the walls at such an inside one.
 
 A sketch that is not such an outline is refused, with the reason, rather than
 approximated: two outlines (``has 2 faces``), a hole in one (a column nobody

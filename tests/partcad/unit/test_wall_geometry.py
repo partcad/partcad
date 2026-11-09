@@ -327,16 +327,75 @@ def test_a_wall_arriving_at_an_inside_corner_stops_short_of_it():
     assert covered == pytest.approx(perimeter * 100.0 + (5 - 1) * 100.0**2)
 
 
-def test_a_corner_at_another_angle_or_along_an_arc_is_left_as_it_is():
+def test_a_corner_at_another_angle_or_between_two_arcs_is_left_as_it_is():
     from partcad.scene_factory_walls import corner_extensions
 
     triangle = _segments(((0, 0), (4000, 0), (1000, 3000)))
     assert corner_extensions(triangle, 100.0) == [(0.0, 0.0)] * 3
-    arcs = [
-        {"kind": "arc", "heading": 90.0, "length": 1000.0, "radius": 500.0},
+    # An arc turning through 114.6 degrees, and a line: 45 degrees from the
+    # line into the arc, and 69.6 from the arc back into the line.
+    slanted = [
+        {"kind": "arc", "heading": 45.0, "length": 1000.0, "radius": 500.0},
         {"kind": "line", "heading": 0.0, "length": 1000.0, "radius": 0.0},
     ]
-    assert corner_extensions(arcs, 100.0) == [(0.0, 0.0)] * 2
+    assert corner_extensions(slanted, 100.0) == [(0.0, 0.0)] * 2
+    # Two quarter circles meeting at right angles: neither is straight, so
+    # neither can go on or stop short.
+    quarters = [{"kind": "arc", "heading": 0.0, "length": math.pi * 500.0, "radius": 1000.0}] * 2
+    assert corner_extensions(quarters, 100.0) == [(0.0, 0.0)] * 2
+
+
+def test_an_arc_ends_in_the_heading_it_has_turned_to():
+    from partcad.scene_factory_walls import heading_at_end
+
+    assert heading_at_end({"heading": 30.0, "length": 1000.0, "radius": 0.0}) == 30.0
+    # A half circle bending right turns half a turn clockwise, and one bending
+    # left half a turn anticlockwise.
+    assert heading_at_end({"heading": 0.0, "length": math.pi * 1000.0, "radius": 1000.0}) == pytest.approx(-180.0)
+    assert heading_at_end({"heading": 90.0, "length": math.pi * 300.0, "radius": -300.0}) == pytest.approx(270.0)
+
+
+def test_where_an_arc_meets_a_straight_wall_at_a_right_angle_the_straight_wall_moves():
+    """A bay bulging out of the east wall and a column the south wall goes around, read as the scene reads them.
+
+    Clockwise, the bay's two ends are inside corners and the column's two are
+    outside ones. An arc does not move, so at each the straight wall does: the
+    one arriving at the corner at its end, the one leaving it at its start.
+    """
+    from partcad.scene_factory_walls import corner_extensions
+
+    t = 114.3
+    plan = _wire(
+        _line((0, 0), (2000, 0)),
+        _arc((2000, 0), (2300, 300), (2600, 0)),
+        _line((2600, 0), (4000, 0)),
+        _line((4000, 0), (4000, 1000)),
+        _arc((4000, 1000), (5000, 2000), (4000, 3000)),
+        _line((4000, 3000), (4000, 4000)),
+        _line((4000, 4000), (0, 4000)),
+        _line((0, 4000), (0, 0)),
+    )
+    segments = wrapper_outline.outline(plan, "the plan")
+    extensions = {
+        (segment["kind"], tuple(round(value, 6) for value in segment["start"])): pair
+        for segment, pair in zip(segments, corner_extensions(segments, t))
+    }
+    assert extensions == {
+        # Four outside corners of the rectangle, each closed by the wall arriving.
+        ("line", (0.0, 0.0)): (0.0, t),
+        ("line", (0.0, 4000.0)): (0.0, t),
+        ("line", (4000.0, 0.0)): (0.0, t),
+        # Into the bay, an inside corner: the wall arriving stops short of it.
+        ("line", (4000.0, 4000.0)): (0.0, -t),
+        ("arc", (4000.0, 3000.0)): (0.0, 0.0),
+        # Out of the bay, another: the wall leaving stops short of its start,
+        # and goes on past its end into the rectangle's corner.
+        ("line", (4000.0, 1000.0)): (-t, t),
+        # Into and out of the column, two outside corners: past the end of the
+        # wall arriving, and past the start of the one leaving.
+        ("arc", (2600.0, 0.0)): (0.0, 0.0),
+        ("line", (2000.0, 0.0)): (t, t),
+    }
 
 
 def test_a_wall_too_short_to_stop_short_leaves_it_to_the_next_one():

@@ -29,14 +29,15 @@ in the 3D view and in PartCAD's pictures - as its 'visual:', the one-sided
 surface of its face (see 'partcad.visual'). So the room is seen into from outside
 through whichever walls are nearest, and is walled all the same.
 
-Where two straight walls meet at a right angle, they meet as a builder makes them
-meet, with nothing missing and nothing in both (see 'corner_extensions'). The
+Where two walls meet at a right angle, they meet as a builder makes them meet,
+with nothing missing and nothing in both (see 'corner_extensions'). The
 thickness of each goes outside the outline, so at an outside corner of the room
 the two leave a square of it open, and at an inside corner both fill one: the
 wall arriving at the corner goes on past it by the thickness at the first
-('extendEnd') and stops short of it by the thickness at the second. Its face,
-and the surface a picture draws, stay on the outline. Walls meeting at any other
-angle, or along an arc, are left as they meet.
+('extendEnd') and stops short of it by the thickness at the second - or, where
+that wall is an arc, the straight wall leaving the corner does at its start
+('extendStart'). Its face, and the surface a picture draws, stay on the outline.
+Walls meeting at any other angle, and two arcs meeting, are left as they meet.
 
 A sketch that is not such an outline - two of them, one with a hole in it, an
 open one, one with a spline in it, one that is not on the XY plane - is refused
@@ -61,6 +62,7 @@ the scene, as it is prepared.
 """
 
 import asyncio
+import math
 import threading
 
 from . import cmf
@@ -91,12 +93,26 @@ RIGHT_ANGLE_TOLERANCE = 1e-3
 EXTENSIONS = ("extendStart", "extendEnd")
 
 
+def heading_at_end(segment) -> float:
+    """The direction, in degrees anticlockwise from +X, that 'segment' finishes in.
+
+    A line's is the one it set off in; an arc's has turned through the arc's
+    angle on the way, to the right for a positive radius (see
+    'wrapper_outline.segment') and to the left for a negative one.
+    """
+    heading = float(segment["heading"])
+    radius = float(segment.get("radius") or 0.0)
+    if not radius:
+        return heading
+    return heading - math.degrees(float(segment["length"]) / radius)
+
+
 def corner_extensions(segments, thickness: float) -> list:
     """'[(extend_start, extend_end), ...]': how far each wall goes on past its ends, or stops short of them.
 
     One pair per segment of the outline, in order. The outline is walked
     clockwise and each wall's thickness lies to the left of the walk - outside
-    the room - so where two straight walls meet at a right angle:
+    the room - so where two walls meet at a right angle:
 
       * turning right, at an outside corner of the room, they leave a square of
         that thickness open between them; the wall arriving there goes on past
@@ -105,28 +121,43 @@ def corner_extensions(segments, thickness: float) -> list:
         arriving there stops short of its end by the thickness, unless it is too
         short to, and then the wall leaving it stops short of its start.
 
-    One wall moves at each corner and the other stays where the outline put it,
-    so two corners never move one end twice. Nothing else is changed: an arc,
-    a corner at any other angle, or no thickness at all.
+    Only a straight wall is moved, so where the wall arriving is an arc - a bay
+    bulging out of the room, a column the room goes around - the straight wall
+    leaving the corner moves at its start instead. An arc's thickness is
+    radial, so at an inside corner it parts from the square along the curve:
+    what it leaves open there is a sliver outside both faces, where nothing
+    overlaps. One wall moves at each corner and the other stays where the outline
+    put it, so two corners never move one end twice. Nothing else is changed: a
+    corner at any other angle, two arcs meeting, or no thickness at all.
     """
     extensions = [[0.0, 0.0] for _segment in segments]
     if not thickness > 0.0 or len(segments) < 2:
         return [tuple(pair) for pair in extensions]
     count = len(segments)
     for index in range(count):
-        arriving, leaving = segments[index], segments[(index + 1) % count]
-        if arriving.get("radius") or leaving.get("radius"):
+        following = (index + 1) % count
+        arriving, leaving = segments[index], segments[following]
+        arriving_straight, leaving_straight = not arriving.get("radius"), not leaving.get("radius")
+        if not (arriving_straight or leaving_straight):
             continue
-        turn = (float(leaving["heading"]) - float(arriving["heading"]) + 180.0) % 360.0 - 180.0
+        turn = (float(leaving["heading"]) - heading_at_end(arriving) + 180.0) % 360.0 - 180.0
         if abs(abs(turn) - 90.0) > RIGHT_ANGLE_TOLERANCE:
             continue
         if turn < 0.0:
-            extensions[index][1] += thickness
+            if arriving_straight:
+                extensions[index][1] += thickness
+            else:
+                extensions[following][0] += thickness
             continue
-        following = (index + 1) % count
-        if float(arriving["length"]) + extensions[index][0] - thickness > part_factory_wall.MINIMUM_LENGTH:
+        if (
+            arriving_straight
+            and float(arriving["length"]) + extensions[index][0] - thickness > part_factory_wall.MINIMUM_LENGTH
+        ):
             extensions[index][1] -= thickness
-        elif float(leaving["length"]) + extensions[following][1] - thickness > part_factory_wall.MINIMUM_LENGTH:
+        elif (
+            leaving_straight
+            and float(leaving["length"]) + extensions[following][1] - thickness > part_factory_wall.MINIMUM_LENGTH
+        ):
             extensions[following][0] -= thickness
     return [tuple(pair) for pair in extensions]
 
