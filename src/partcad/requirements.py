@@ -94,6 +94,7 @@ import re
 import typing
 
 from . import logging as pc_logging
+from . import shape_envelope
 from .geom import Location
 
 # The section of a part's, an assembly's, a scene's or a sketch's declaration.
@@ -1440,18 +1441,17 @@ def _sets_of(summary: dict, where: str) -> list:
     return [entry for entry in (summary or {}).get("sets") or [] if entry.get(key) not in (0, None)]
 
 
-def _part_lacks(ctx, part, component: str, where: str) -> typing.Optional[str]:
+def _part_lacks(ctx, part, summary, component: str, where: str) -> typing.Optional[str]:
     """Why not every face (or solid) of a built 'part' is in a 'component' that is a claim; None when it is.
 
-    A face or a solid in nothing fails it, and so does one in a colour that is
-    only a picture - a source's colour no declaration claims, an 'rgba' - or in
+    'summary' is the CMF summary recorded with the part's geometry. A face or
+    a solid in nothing fails it, and so does one in a colour that is only a
+    picture - a source's colour no declaration claims, an 'rgba' - or in
     a reference that resolves to nothing: the requirement is that what it is in
     was specified, and could be had as specified (see 'partcad.cmf').
     """
-    from . import cmf as pc_cmf
     from .test import cmf as cmf_check
 
-    summary = pc_cmf.summary_of(part)
     things = "%ss" % where
     if not summary:
         # A part that states no CMF records none: it is in nothing at all.
@@ -1523,7 +1523,11 @@ async def _verify_has(ctx, shape, entries) -> None:
                 if await part.get_wrapped(ctx) is None:
                     lacking.append("%s:%s did not build" % (part.project_name, part.name))
                     continue
-                why = _part_lacks(ctx, part, component, where)
+                # Asked as 'pc info' asks it: an alias records no summary of its
+                # own, and answers with the one of the part it stands for.
+                metadata = await part.get_metadata_async(ctx) or {}
+                summary = metadata.get(shape_envelope.METADATA_CMF)
+                why = _part_lacks(ctx, part, summary, component, where)
                 if why is not None:
                     lacking.append(why if part is shape else "%s:%s: %s" % (part.project_name, part.name, why))
             has = not lacking

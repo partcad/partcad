@@ -80,6 +80,12 @@ parts:
       material: {type: string, default: ":aluminium"}
     requirements:
       has_material: true
+  # Another name for 'specified', under which it is bought again.
+  specified-again:
+    type: alias
+    source: specified
+    vendor: acme
+    sku: "2"
   with-a-stated-weight:
     type: basic
     cuboid: 10
@@ -169,6 +175,16 @@ def test_a_bought_part_that_says_what_it_is_has_all_of_it(ctx):
     # The colour is the one its material claims.
     assert "colour" in _details(report)["has_color"]
     assert "0.0027 kg" in _details(report)["has_weight"]
+
+
+def test_an_alias_has_what_its_source_has(ctx):
+    """The requirements are its source's, and so is what it is made of: read as 'pc info' reads it."""
+    verdicts = _verdicts(_report(ctx, "specified-again"))
+    assert {name: verdicts[name] for name in ("has_color", "has_material", "has_finish")} == {
+        "has_color": True,
+        "has_material": True,
+        "has_finish": True,
+    }
 
 
 def test_one_required_not_to_have_any_meets_that(ctx):
