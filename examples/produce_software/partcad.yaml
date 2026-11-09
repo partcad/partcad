@@ -13,7 +13,7 @@ desc: |
   the bill of materials of every assembly the part ends up in, beside the parts
   themselves, with the revision of the package it came from: a firmware image,
   unlike a bracket, is a different thing once its package publishes again. It
-  also makes 'pc test' require the file to be obtainable and to be the one that
+  also makes 'pc qual test' require the file to be obtainable and to be the one that
   was meant before it will call the part manufacturable -- a board nobody can
   flash is not a board anybody can make.
 

@@ -36,7 +36,7 @@ import wrapper_common
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 
 
 def _box(shape):
@@ -68,6 +68,21 @@ def _solids(shape):
     return found or [shape]
 
 
+def _pieces(solids):
+    """Where each solid of what two parts share is, and how big: what the IDE pins a callout to.
+
+    The centre of its volume, in the frame the parts were sent in - the
+    assembly's, which the artifact places them in too - and that volume.
+    """
+    pieces = []
+    for solid in solids:
+        props = GProp_GProps()
+        BRepGProp.VolumeProperties_s(solid, props)
+        centre = props.CentreOfMass()
+        pieces.append({"at": [centre.X(), centre.Y(), centre.Z()], "volume": props.Mass()})
+    return pieces
+
+
 def _is_solid_enough_to_intersect(shape):
     """Whether a boolean against this shape would mean anything.
 
@@ -94,7 +109,7 @@ def _is_solid_enough_to_intersect(shape):
 def _within(path, root):
     """Whether 'path' is the node 'root' or a node anywhere under it.
 
-    The rule 'partcad.test.interference' names pairs by, repeated here: a
+    The rule 'partcad.qual.topology.interference' names pairs by, repeated here: a
     wrapper runs in a sandbox that cannot import PartCAD, so the two copies are
     held to each other by a test rather than by an import. Paths are exact -
     built from the tree's root down - so a pattern is a subtree, never a tail:
@@ -221,7 +236,7 @@ def process(path, request):
 
         # Whether to hand back what each reported pair shares, as solids: what
         # the interference test makes the parts of the assembly it leaves behind
-        # to look at (see 'test/interference.py'). Off unless asked for, since
+        # to look at (see 'qual/topology/interference.py'). Off unless asked for, since
         # it is geometry a verdict alone does not need.
         keep_common = bool(request.get("keep_common"))
 
@@ -320,6 +335,7 @@ def process(path, request):
                 # Encoded on the way out like every shape a wrapper returns
                 # (see 'ocp_serialize.encode'), so each arrives as BREP bytes.
                 overlap["solids"] = _solids(common.Shape())
+                overlap["pieces"] = _pieces(overlap["solids"])
             overlaps.append(overlap)
 
         overlaps.sort(key=lambda o: -o["volume"])

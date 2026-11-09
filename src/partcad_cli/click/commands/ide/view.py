@@ -34,6 +34,9 @@ _TAB_HELP = {
     "bom": "the Bill of Materials tab",
     "assembly": "the Assembly tab: the assembly instructions",
     "simulation": "the Simulation tab, which runs the first (or the '--scenario') of the object's simulations",
+    "basic": "the Basic tab: every basic qualification test, run",
+    "topology": "the Topology tab: every topology qualification test, run, and where each finding is",
+    "other": "the Other tab: the qualification tests plugins supply, and what each tool reported",
 }
 
 

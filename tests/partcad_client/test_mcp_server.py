@@ -115,7 +115,8 @@ def test_the_tools_are_the_curated_set_and_the_escape_hatch(tmp_path):
             "info",
             "render",
             "export",
-            "test",
+            "qual_test",
+            "qual_add",
             "lint",
             "bom",
             "search",
@@ -137,7 +138,7 @@ def test_the_annotations_do_not_claim_less_than_the_truth(tmp_path):
     """A tool that only reads says so; one that writes, logs in or runs anything does not claim to be read-only."""
     _, server = serve(tmp_path)
     tools = {tool.name: tool.annotations for tool in using(server, lambda client: client.list_tools()).tools}
-    for name in ("list_objects", "info", "render", "test", "lint", "bom", "search", "instructions", "compare"):
+    for name in ("list_objects", "info", "render", "qual_test", "lint", "bom", "search", "instructions", "compare"):
         assert tools[name].read_only_hint is True, name
     assert tools["export"].read_only_hint is False
     assert tools["export"].destructive_hint is True
@@ -154,7 +155,7 @@ def test_the_instructions_name_only_real_tools(tmp_path):
     text = mcp_server.instructions(Bridge(str(tmp_path)), PathScope([str(tmp_path)]))
     for word in re.findall(r"\b[a-z]+(?:_[a-z]+)+\b", text):
         assert word in names, word
-    for name in ("list_objects", "info", "render", "test", "export", "list_methods", "execute"):
+    for name in ("list_objects", "info", "render", "qual_test", "export", "list_methods", "execute"):
         assert re.search(r"\b%s\b" % name, text), name
 
 
@@ -199,7 +200,7 @@ def test_a_list_value_is_written_the_way_a_name_spells_it(tmp_path):
     [
         ("render", "render.inline", {}),
         ("export", "render.inline", {"format": "step", "path": "out/box.step"}),
-        ("test", "test.run", {}),
+        ("qual_test", "qual.run", {}),
         ("instructions", "assembly.guide", {}),
     ],
 )
@@ -283,8 +284,8 @@ def test_an_error_line_is_a_failed_result(tmp_path):
         emit("log", log(40, "Part //pkg:box failed to build"))
         return None
 
-    _, server = serve(tmp_path, {"test.run": failing})
-    result = call(server, "test", {"object": "box"})
+    _, server = serve(tmp_path, {"qual.run": failing})
+    result = call(server, "qual_test", {"object": "box"})
     assert result.is_error
     reply = body(result)
     assert reply["ok"] is False
@@ -327,13 +328,13 @@ def test_progress_reaches_a_client_that_asked_for_it(tmp_path):
         emit("log", {"kind": "action_end", "op": "Test", "package": "//pkg", "item": "box"})
         return None
 
-    _, server = serve(tmp_path, {"test.run": testing})
+    _, server = serve(tmp_path, {"qual.run": testing})
     seen = []
 
     async def progress(value, total, message):
         seen.append((value, message))
 
-    call(server, "test", progress_callback=progress)
+    call(server, "qual_test", progress_callback=progress)
     assert seen == [(1, "Test //pkg"), (2, "Test //pkg box")]
 
 
@@ -794,3 +795,35 @@ def test_login_with_a_browser_that_will_not_start_says_so_rather_than_wait(tmp_p
     _, server = serve(tmp_path, {"plugin.login": browser_step})
     result = call(server, "login", {"plugin": "//p:repo", "interactive": True})
     assert result.is_error and "could not start Google Chrome" in body(result)["error"]
+
+
+def test_qual_test_asks_for_the_subtypes_and_the_tests_named(tmp_path):
+    daemon, server = serve(tmp_path, {"qual.run": lambda params, emit: None})
+    call(server, "qual_test", {"object": "box", "subtypes": ["topology"], "filter": "tolerance"})
+    (request,) = requests(daemon, "qual.run")
+    assert (request["subtypes"], request["filter"]) == (["topology"], "tolerance")
+
+
+def test_qual_add_declares_a_test_as_pc_qual_add_does(tmp_path):
+    daemon, server = serve(tmp_path, {"qual.add": lambda params, emit: {"object": "//:rover"}})
+    call(
+        server,
+        "qual_add",
+        {
+            "object": "rover",
+            "name": "budgets",
+            "subtype": "other",
+            "path": "lockwire:lockwire",
+            "entry": {"lockfile": "rover.lockwire.yaml"},
+            "kind": "assembly",
+        },
+    )
+    (request,) = requests(daemon, "qual.add")
+    assert (request["object"], request["name"], request["subtype"], request["path"]) == (
+        "rover",
+        "budgets",
+        "other",
+        "lockwire:lockwire",
+    )
+    assert request["entry"] == {"lockfile": "rover.lockwire.yaml"}
+    assert request["assembly"] is True

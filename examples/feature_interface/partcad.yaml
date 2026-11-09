@@ -63,7 +63,7 @@ docs:
 
     # the same mount, with the instructions needed to actually assemble it
     pc info -a connect-instructions
-    pc test -a connect-instructions
+    pc qual test -a connect-instructions
 
     # placement == "inner"
     pc ide view -a -p placement=inner connect-ports
@@ -406,7 +406,7 @@ assemblies:
     desc: |
       The same motor mount, assembled rather than only placed: every connection
       carries the instructions needed to actually perform it.
-    # A product that can be built, so "pc test" holds it to that: the parts have
+    # A product that can be built, so "pc qual test" holds it to that: the parts have
     # to be obtainable and the connection instructions have to be followable.
     # The "assy" manufacturing method comes with the type.
     manufacturable: true

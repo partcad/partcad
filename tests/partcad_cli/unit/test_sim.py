@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Tests for `pc sim`'s own options: `--plugin`, `--before`/`--after` and `--video`.
+"""Tests for `pc qual test --simulation`'s own options: `--plugin`, `--before`/`--after` and `--video`.
 
 What is pinned is the wrapping rather than the simulation: what reaches the
 daemon, and the files this process writes from what comes back. Nothing here
@@ -20,7 +20,7 @@ import yaml
 from click.testing import CliRunner
 
 from partcad_cli.click.command import cli
-from partcad_cli.click.commands import sim as sim_module
+from partcad_cli.click.commands.qual import test as sim_module
 
 BEFORE = {"time": 0.0, "bodies": {"top": {"pos": [18.0, 0.0, 30.0], "quat": [1.0, 0.0, 0.0, 0.0]}}}
 AFTER = {"time": 10.0, "bodies": {"top": {"pos": [29.7, 0.0, 9.8], "quat": [0.7, 0.0, 0.7, 0.0]}}}
@@ -38,7 +38,7 @@ def _simulation(name="falls", passed=True, error=None, result=None):
 
 @pytest.fixture
 def simulated(monkeypatch):
-    """Record the request `pc sim` sends, and answer it however a test wants."""
+    """Record the request `pc qual test --simulation` sends, and answer it however a test wants."""
 
     class Recorder:
         def __init__(self):
@@ -55,7 +55,7 @@ def simulated(monkeypatch):
 
 
 def _invoke(*args):
-    return CliRunner().invoke(cli, ["--no-ansi", "sim", *args])
+    return CliRunner().invoke(cli, ["--no-ansi", "qual", "test", "--simulation", *args])
 
 
 def test_another_plugin_is_asked_for_by_name(simulated):
@@ -63,7 +63,7 @@ def test_another_plugin_is_asked_for_by_name(simulated):
 
     assert result.exit_code == 0, result.output
     (call,) = simulated.calls
-    assert call["method"] == "simulate.run"
+    assert call["method"] == "qual.simulate"
     assert call["params"]["plugin"] == "//pub/feature/simulate/gazebo:gazebo"
 
 

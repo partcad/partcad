@@ -2,8 +2,8 @@
 #
 # An ASSY file is a Jinja2 template (see 'AssemblyFactoryFile.render_template'),
 # which is the whole of how this scene works: the parameters declared beside it
-# in partcad.yaml reach it as 'param_<name>', and 'pc sim' sets them from the
-# object whose 'simulate:' is being run.
+# in partcad.yaml reach it as 'param_<name>', and 'pc qual test --simulation' sets them from the
+# object whose 'qual: sim:' is being run.
 #
 # With no subject the scene is empty rather than broken: this package is loaded
 # by any context that simulates anything, and a scene that failed to build

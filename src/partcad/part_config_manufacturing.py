@@ -75,7 +75,7 @@ SUBTRACTIVE_REQUIRED = ("source",)
 # interchangeable, and what they *cannot* do is the useful thing to know. A
 # router will cut any 2.5D shape; a laser cuts a sheet with a beam that does not
 # tilt; a drill makes round holes and nothing else. So the machine decides which
-# `pc test` check applies and what `pc cam` writes.
+# `pc qual test` check applies and what `pc cam` writes.
 #
 # It is named by adding that machine's own subsection rather than by a `machine:`
 # key, because the machines do not take the same options and a key would leave
@@ -516,7 +516,7 @@ class PartConfigManufacturing:
         'machine_error' -- because loading a package must not fail over one
         part's declaration, and a part whose manufacturing section is wrong is
         still a part that can be listed, rendered and exported. What is wrong
-        with it is 'pc test's to report, against the part it belongs to.
+        with it is 'pc qual test's to report, against the part it belongs to.
         """
         manufacturing_config = final_config.get("manufacturing", {}) or {}
         # Whether the object said anything at all, which is not the same as
@@ -668,7 +668,7 @@ class PartConfigManufacturing:
         """What this method needs that the declaration does not state.
 
         Read rather than raised on, because a declaration is judged where the
-        judging is done: 'pc test' reports it against the one part, while
+        judging is done: 'pc qual test' reports it against the one part, while
         loading a package must not fail over it - a part whose 'manufacturing:'
         section is incomplete is still a part, and everything that is not about
         making it goes on working.

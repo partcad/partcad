@@ -331,7 +331,7 @@ method with the type, so ``manufacturing`` never has to be spelled out:
       manufacturable: true
       # manufacturing: { method: assy } is implied by the type
 
-Whether an assembly is *held to* that -- whether ``pc test`` checks that its
+Whether an assembly is *held to* that -- whether ``pc qual test`` checks that its
 parts can be obtained and its connection instructions followed -- is what
 ``manufacturable`` says, exactly as for parts.
 
@@ -712,7 +712,7 @@ parts, with the assembly itself being what is ordered.
       sku: "3103-0001-0001"  # shipped assembled
 
 An assembly that has both ``vendor`` and ``sku`` set is considered purchasable,
-and is not required to declare how it is manufactured: ``pc test`` only checks
+and is not required to declare how it is manufactured: ``pc qual test`` only checks
 that a supplier carries it. An assembly without them is manufactured by producing
 its parts and putting them together, which requires everything it is procured
 from -- its parts, and the sub-assemblies that are sold assembled -- to be

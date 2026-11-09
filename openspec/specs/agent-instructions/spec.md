@@ -69,7 +69,7 @@ addition to the CLI's `pytest` suite.
 #### Scenario: Agent validates a CLI change
 - **WHEN** an agent has modified code under `partcad-cli/`
 - **THEN** `partcad-cli/AGENTS.md` tells it to `cd examples` and run commands such as
-  `pc list all -r //pub/examples/partcad`, `pc test -r --package //pub/examples/partcad`, and
+  `pc list all -r //pub/examples/partcad`, `pc qual test -r --package //pub/examples/partcad`, and
   `pc render -r --package //pub/examples/partcad` as a required end-to-end validation step, not only unit tests
 
 ### Requirement: Commit workflow instructions reference pre-commit hooks

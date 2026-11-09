@@ -5,14 +5,14 @@
 #
 """`--fast-only`, shared by every command that walks packages for assemblies.
 
-One definition, so that the flag reads the same in `pc render`, `pc test`,
+One definition, so that the flag reads the same in `pc render`, `pc qual test`,
 `pc list` and the rest. What it leaves out is decided on the daemon, from the
 declarations (see `partcad.fast_only` and `partcad_utils.timeouts`): every
 assembly and scene that declares a `timeout:`, which is how a package says an
 object is slow.
 
-`-f` is its short name wherever that is free. `pc test` and `pc sim` have had
-`-f` for `--filter` for a long time, and scripts say `pc test -f cad`, so there
+`-f` is its short name wherever that is free. `pc qual test` and `pc qual test --simulation` have had
+`-f` for `--filter` for a long time, and scripts say `pc qual test -f cad`, so there
 the flag is `--fast-only` and nothing shorter.
 """
 

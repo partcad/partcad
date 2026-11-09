@@ -64,7 +64,7 @@ def test_a_scene_is_an_assembly_with_a_kind_of_its_own(project):
 
 
 def test_a_scene_is_not_manufacturable_unless_it_says_so(tmp_path, project):
-    """A scene is not a product to be made, so 'pc test' does not ask.
+    """A scene is not a product to be made, so 'pc qual test' does not ask.
 
     The default is set as the declaration is normalized rather than left to the
     package-wide answer, which is about the products a package publishes - so a

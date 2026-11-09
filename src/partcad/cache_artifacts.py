@@ -12,7 +12,7 @@ cached the way a shape is: under a key that describes the question, in the
 same tiers ('Cache', 'ctx.cache_artifacts'), with the same switches
 ('cacheFiles', 'cacheRemote', 'cacheS3', '--cache-bypass'). A second
 `pc cae fea` of an unchanged part, the IDE's FEA tab opened again, a `pc cam`
-of an unchanged part, a `pc sim` of an unchanged assembly: each is a read.
+of an unchanged part, a `pc qual test --simulation` of an unchanged assembly: each is a read.
 
 So is everything else a sandbox makes out of a shape that is already built: a
 file `pc export` or `pc render` writes (see 'Shape._render_one_async'), the
@@ -84,7 +84,7 @@ dismissed - the run happens, as it would have without a cache.
 **Only an answer is stored.** A run that failed raised before anything here was
 asked, so the cache never holds "no solver on this machine"; installing one
 changes no key, and a remembered failure would outlive its reason. That is the
-same rule `pc test` has for its CAE verdict ('Test.NOT_CACHEABLE').
+same rule `pc qual test` has for its CAE verdict ('Qualification.NOT_CACHEABLE').
 
 A tier's size window applies to an entry from above and never from below (see
 'cache_backend.MAX_ONLY_KEYS'): no answer from a solver is too small to keep,

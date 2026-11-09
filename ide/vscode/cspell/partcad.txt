@@ -11,6 +11,7 @@ anchored
 angle
 angstrom
 apps
+area
 args
 array
 assemblies
@@ -73,6 +74,7 @@ dam
 damper
 damping
 default
+defects
 density
 dependencies
 depth
@@ -93,6 +95,7 @@ dropped
 duplicates
 dxf
 dynamic
+edges
 effort
 elif
 endautoescape
@@ -148,6 +151,7 @@ from
 ft
 fudge
 full
+general
 git
 globs
 gltf
@@ -257,6 +261,7 @@ operation
 optimize
 options
 orientation
+other
 outlet
 output
 own
@@ -300,6 +305,7 @@ providers
 push
 pvz
 python
+qual
 quality
 radius
 ratio
@@ -334,6 +340,7 @@ sheet
 show
 side
 sided
+sim
 simulate
 simulation
 size
@@ -364,7 +371,9 @@ string
 subfolder
 subsampling
 subtractive
+subtype
 suppliers
+surfaces
 svg
 sweep
 tags
@@ -379,6 +388,7 @@ to
 tojson
 tolerance
 tool
+topology
 torque
 track
 turn

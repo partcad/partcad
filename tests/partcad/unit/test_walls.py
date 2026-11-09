@@ -35,13 +35,13 @@ import pytest
 
 import partcad as pc
 from partcad import cmf, output, surface
+from partcad.qual.basic.degenerate import DegenerateTest
+from partcad.qual.basic.manufacturability import ManufacturabilityTest
+from partcad.qual.basic.shell import ShellTest
+from partcad.qual.basic.solidity import SolidityTest
+from partcad.qual.basic.validity import ValidityTest
+from partcad.qual.qualification import Qualification
 from partcad.scene_factory_walls import SceneFactoryWalls
-from partcad.test.degenerate import DegenerateTest
-from partcad.test.manufacturability import ManufacturabilityTest
-from partcad.test.shell import ShellTest
-from partcad.test.solidity import SolidityTest
-from partcad.test.test import Test
-from partcad.test.validity import ValidityTest
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 import ocp_serialize  # noqa: E402
@@ -198,7 +198,7 @@ def test_the_checks_that_ask_for_a_body_pass_a_wall_over_and_say_why(context, ch
 
     reason = test.inapplicable(wall)
     assert reason is not None and "surface by its type ('wall')" in reason
-    assert asyncio.run(test.test([], context, wall, {})) == Test.TEST_PASSED
+    assert asyncio.run(test.test([], context, wall, {})) == Qualification.TEST_PASSED
 
 
 def test_a_wall_has_to_say_it_is_not_manufacturable(tmp_path):
@@ -221,7 +221,7 @@ def test_nothing_manufacturable_can_be_made_of_a_wall(context):
     test = ManufacturabilityTest()
     assert test.inapplicable(wall) is not None
     verdict = asyncio.run(test.test([], context, wall, {"force_manufacturing": True}))
-    assert verdict == Test.TEST_FAILED
+    assert verdict == Qualification.TEST_FAILED
 
 
 def _walls(context, name):

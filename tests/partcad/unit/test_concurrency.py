@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""The admission gate that 'pc test' and 'pc lint' run behind.
+"""The admission gate that 'pc qual test' and 'pc lint' run behind.
 
 Every case here is written against a wall clock, because what is being tested is
 that something completes at all. A regression does not make these slow, it makes
@@ -16,7 +16,7 @@ import asyncio
 import pytest
 
 from partcad.concurrency import ReentrantGate
-from partcad.test.test import Test
+from partcad.qual.qualification import Qualification
 
 
 def test_nested_admission_does_not_deadlock():
@@ -26,7 +26,7 @@ def test_nested_admission_does_not_deadlock():
     runs the whole suite over every object an assembly is procured from, from
     inside the call the gate has already admitted. While the gate was a plain
     'asyncio.Semaphore', as many of those as the limit allowed would each hold a
-    permit while waiting for one, and 'pc test -r' stopped for good -- taking the
+    permit while waiting for one, and 'pc qual test -r' stopped for good -- taking the
     daemon's answer with it, so the CLI waited on a response that never came.
     """
     limit = 4
@@ -117,7 +117,7 @@ def test_each_loop_gets_its_own_semaphore():
         asyncio.run(asyncio.wait_for(contend(), timeout=30))
 
 
-class _RecursiveTest(Test):
+class _RecursiveTest(Qualification):
     """A stand-in for 'ManufacturabilityTest', which tests the objects an assembly is made of."""
 
     async def test(self, tests_to_run, ctx, shape, test_ctx={}):
@@ -138,8 +138,8 @@ class _NoCacheShape(dict):
 
 
 def test_recursive_test_cached_completes():
-    """The real 'Test.test_cached' wrapper, nested the way 'ManufacturabilityTest' nests it."""
-    Test.MAX_CONCURRENT_TESTS = 4
+    """The real 'Qualification.test_cached' wrapper, nested the way 'ManufacturabilityTest' nests it."""
+    Qualification.MAX_CONCURRENT_TESTS = 4
     suite = [_RecursiveTest("cam")]
 
     def assembly():
@@ -147,16 +147,16 @@ def test_recursive_test_cached_completes():
 
     async def main():
         return await asyncio.gather(
-            *(suite[0].test_cached(suite, None, assembly()) for _ in range(Test.MAX_CONCURRENT_TESTS))
+            *(suite[0].test_cached(suite, None, assembly()) for _ in range(Qualification.MAX_CONCURRENT_TESTS))
         )
 
     results = asyncio.run(asyncio.wait_for(main(), timeout=60))
-    assert results == [Test.TEST_PASSED] * Test.MAX_CONCURRENT_TESTS
+    assert results == [Qualification.TEST_PASSED] * Qualification.MAX_CONCURRENT_TESTS
 
 
 @pytest.mark.parametrize("limit", [None, 0])
 def test_an_unset_limit_still_admits(limit):
-    """'MAX_CONCURRENT_TESTS' is None until 'partcad.test.all.tests()' sets it."""
+    """'MAX_CONCURRENT_TESTS' is None until 'partcad.qual.registry.builtin()' sets it."""
     gate = ReentrantGate("test.unset")
 
     async def main():

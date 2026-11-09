@@ -16,8 +16,8 @@ import asyncio
 from types import SimpleNamespace
 
 from partcad.assembly import Assembly
-from partcad.test import interference
-from partcad.test.interference import InterferenceTest
+from partcad.qual.topology import interference
+from partcad.qual.topology.interference import InterferenceTest
 
 
 def _assembly(name, children=(), config=None, container=False):

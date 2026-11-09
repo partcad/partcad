@@ -20,7 +20,7 @@ import sys
 import pytest
 
 from partcad import brep_inspect, shape_envelope
-from partcad.test.shell import ShellTest
+from partcad.qual.basic.shell import ShellTest
 
 try:
     from compression.zstd import compress as zstd_compress

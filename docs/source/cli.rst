@@ -70,7 +70,7 @@ there is nothing to turn on and no command of your own to run.
 Naming an object
 ****************
 
-An object is named by its name and nothing else: ``pc render bolt``, ``pc test //pub/std/metric/m:m3-screw``,
+An object is named by its name and nothing else: ``pc render bolt``, ``pc qual test //pub/std/metric/m:m3-screw``,
 ``pc info firmware``. Within a package a name means **one object, whatever kind of object it is** -- a part, an
 interface, an assembly, a sketch, a scene or a piece of software -- so the name alone says which one it is, and
 ``pc`` finds out what kind it is rather than asking you.
@@ -104,7 +104,7 @@ A package name ending in ``...`` means **that package and every package below it
 
     pc list parts //pub/examples...      # the parts of that package and of everything it imports
     pc install -P //pub/examples...      # prepare all of them
-    pc test -P ...                       # test this package and everything below it
+    pc qual test -P ...                       # test this package and everything below it
 
 ``...`` on its own is the current package and everything below it, and ``//...`` is the whole workspace from
 the root down. The last path separator is optional, so ``//pub/examples/...`` is the same request as
@@ -131,14 +131,14 @@ kind.
 ``-x``/``--exclude`` leaves a package **and everything below it** out of the walk, and can be given more than
 once::
 
-    pc test -P //pub... -x //pub/universe/lego/ldraw    # all of //pub but the LDraw library's twenty thousand parts
+    pc qual test -P //pub... -x //pub/universe/lego/ldraw    # all of //pub but the LDraw library's twenty thousand parts
     pc list parts ... -x vendor -x experimental         # relative names are relative to the current package
 
 An excluded package is not loaded by the walk at all, which is what makes it worth having for a package served
 by a repository plugin: none of the requests its children would have cost are made. It does not make the package
 unreachable -- an assembly elsewhere in the tree can still use one of its parts -- only absent from the walk.
-Every command that walks a subtree takes it: ``pc test``, ``pc render``, ``pc export``, ``pc lint``, ``pc info``,
-``pc sim``, ``pc cam`` and the ``pc list`` commands.
+Every command that walks a subtree takes it: ``pc qual test``, ``pc render``, ``pc export``, ``pc lint``, ``pc info``,
+``pc qual test --simulation``, ``pc cam`` and the ``pc list`` commands.
 
 ``-r``/``--recursive`` is the older spelling of a ``...`` on the package name and still works everywhere it
 did. It cannot say where the walk starts, it is not available on every command that could use one (``pc info``
@@ -167,7 +167,7 @@ bolt;length=30`` unquoted renders the bolt at its default length and then sets a
     pc render "bolt;length=20" -p length=30       # a value given with -p wins over the name's
     pc render ...:bolt -p length=30               # every bolt from here down, each thirty long
 
-``pc render``, ``pc export``, ``pc test``, ``pc sim``, ``pc cam``, ``pc cae``, ``pc instructions``, ``pc info``,
+``pc render``, ``pc export``, ``pc qual test``, ``pc qual test --simulation``, ``pc cam``, ``pc cae``, ``pc instructions``, ``pc info``,
 ``pc bom`` and ``pc ide view`` take it. A list is written with commas, ``-p include=BEND_UP,BEND_DOWN``, and each
 value is read as the type its parameter declares. ``-p`` with no object to give the values to is refused.
 
@@ -218,12 +218,12 @@ Declaring a timeout is also saying the assembly is slow, and ``--fast-only`` (``
 and scene that says so::
 
     pc render --fast-only //pub...       # render everything quick in the whole public index
-    pc test -r --fast-only               # test this package and everything below it, the quick parts
+    pc qual test -r --fast-only               # test this package and everything below it, the quick parts
 
 It is read from the declaration alone, so leaving an object out builds nothing. An assembly that *places* a
 slow one is built by building that one, and is left out only if it declares a timeout of its own. The flag is
-offered by ``pc render``, ``pc export``, ``pc test``, ``pc sim``, ``pc list`` and ``pc search``; on ``pc test``
-and ``pc sim`` it is ``--fast-only`` alone, since ``-f`` is their ``--filter``. Every recursive run over
+offered by ``pc render``, ``pc export``, ``pc qual test``, ``pc qual test --simulation``, ``pc list`` and ``pc search``; on ``pc qual test``
+and ``pc qual test --simulation`` it is ``--fast-only`` alone, since ``-f`` is their ``--filter``. Every recursive run over
 ``//pub`` in PartCAD's own CI passes it.
 
 .. _sandbox-death:
@@ -505,8 +505,19 @@ Object commands
   declare it as an assembly of the ``step`` or ``gltf`` type or a scene of that reader's type instead (see
   :ref:`assembly_step`, :ref:`assembly-gltf` and :ref:`scenes`).
 
-``pc test``
-  Run tests on a part, assembly, or scene. Name the package as ``-P <package>...`` to test the packages
+``pc qual test``
+  Run the qualification tests of a part, an assembly, a scene or a sketch -- or of every object of a package
+  with ``-P <package>...`` (see :ref:`recursive-names`). Every test is of one of four subtypes, told apart by
+  what it produces (see :doc:`/digital_thread/lifecycle/qualification`): ``--basic`` (findings in words),
+  ``--topology`` (findings that are places on the object, left behind as geometry to look at: parts that
+  overlap, faces and edges of a part to be made that nothing tolerances), ``--simulation`` (the simulations the
+  object declares under ``qual: sim:``) and ``--other`` (tests other tools supply through plugins). The flags
+  combine; with none, every subtype is run. ``-f`` filters by name prefix, and the object is found by its name
+  as for ``pc qual test``. The built-in tests are always applied; a plugin's test runs only on an object that
+  declares it. The tests and what each takes are listed in
+  :doc:`/digital_thread/lifecycle/qualification_tests`.
+
+  Name the package as ``-P <package>...`` to test the packages
   below it too, or the object as ``...:<name>`` to test every object of that name from here down (see
   :ref:`recursive-names`). Use ``-f`` to filter
   by name prefix. The object is found by its name whatever its kind (see :ref:`object-names`), and
@@ -517,11 +528,11 @@ Object commands
   it with can be produced (``cam``; see :ref:`pc cam <cam>`), whether every scenario of the engineering
   analyses a part asks for comes back clean (``fea``, ``dynamic``, ``thermal`` and ``cfd``; see
   :ref:`pc cae <cae>`), whether a
-  part or an assembly does what its ``simulate:`` section says it does (``sim``; see ``pc sim`` below), and
+  part or an assembly does what its simulations say it does (``qual: sim:``; ``sim``; see ``pc qual test --simulation`` below), and
   whether the object has the ports, interfaces and physical properties its ``requirements:`` say it has to
   (``requirements``; see :ref:`requirements`). Those last seven apply only to an object that declares the
   matching section, so a package that declares none pays nothing for them. Every check is listed, with when it
-  applies and what to do when it fails, in :doc:`/digital_thread/lifecycle/testing`. ``requirements`` fails a
+  applies and what to do when it fails, in :doc:`/digital_thread/lifecycle/qualification_tests`. ``requirements`` fails a
   requirement on something it cannot find out -- a mass with no material to work it out from -- rather than
   passing it, and says, for each requirement not met, what it found instead. The features a section lists are
   prose, and are for the ``/pc:validate`` agent skill to judge.
@@ -560,8 +571,8 @@ Object commands
   :ref:`software` an object declares -- every reference has to resolve, and the file it resolves to has to be
   obtainable and be the one that was meant. A board nobody can flash is not a board anybody can make.
 
-``pc sim``
-  Run the simulations a part, an assembly or a scene declares in its ``simulate:`` section, and check the
+  ``--simulation`` on its own runs the simulations a part, an assembly or a scene declares under
+  ``qual: sim:``, and checks the
   ``validation:`` condition each of them states. The object is found by its name whether it is a part, an
   assembly or a scene -- a stack of blocks is an arrangement rather than a product, so it is a scene (see
   :ref:`sim-bodies`) -- and ``-a`` or ``-S`` says which instead of looking it up (see :ref:`object-names`). Use ``-P <package>...`` or ``...:<name>`` to run everything the packages below declare
@@ -585,11 +596,11 @@ Object commands
   evaluates the ``validation:`` expression over the ``before`` and ``after`` the plugin hands back. Nothing
   needs installing to run one -- the plugin runs in a PartCAD sandbox that installs whatever it needs.
 
-  ``pc test`` asks the same thing every time it runs, as its ``sim`` check: an object passes when every
+  ``pc qual test`` asks the same thing every time it runs, as its ``sim`` check: an object passes when every
   simulation it declares ran and every ``validation:`` held, and fails naming the simulation and the reason
   otherwise. A simulator that could not run is a failure there, with the one excuse the ``fea`` and ``cfd``
   checks have -- a plugin that names an image, on a machine with no container runtime -- and a plugin that
-  cannot be found is never excused. A declaration with no ``validation:`` is not run by ``pc test``: it is
+  cannot be found is never excused. A declaration with no ``validation:`` is not run by ``pc qual test``: it is
   skipped when a package is tested and fails when the object is tested by name. This command is for asking on
   purpose: one simulation by name, and everything the plugin reported, which is why it does run such a
   declaration and says it ran. See "Running a simulation" in :doc:`/digital_thread/lifecycle/simulation`.
@@ -600,6 +611,14 @@ Object commands
   the reader, the writer and the ``pc ide open`` entry for that engine's own scene format). The *scene* does
   have a built-in default -- an empty world holding the object -- so a simulation of a part standing on its
   own is a few lines. See :doc:`/digital_thread/lifecycle/simulation` and ``examples/feature_simulate``.
+
+``pc qual add``
+  Declare a qualification test of an object, writing ``<object>.qual.<subtype>.<name>`` into its package:
+  ``pc qual add --other --path <package>:<plugin> --set lockfile=rover.yaml rover budgets`` declares a test
+  a plugin supplies, resolved before anything is written; ``pc qual add --topology --set minArea=1.0 bracket
+  tolerance-surfaces`` sets a built-in test's parameters; ``pc qual add --simulation --path <package>:<plugin>
+  --set validation=... block stands`` declares a simulation. ``--set KEY=VALUE`` may be repeated, each value
+  read as YAML.
 
 ``pc info``
   Show detailed information about a part, assembly, scene, or software, including its parameters. Name the
@@ -699,7 +718,7 @@ Object commands
   ``--max-displacement-difference`` (which measures the displacements, as ``--displacement`` does) and
   ``--max-mass-difference`` (in percent of the reference's) when they are given. Held to nothing, it is a
   report and exits zero. ``--json`` prints the whole comparison as one JSON object on standard output. The same
-  limits can be written into the current object's declaration, as a ``match:`` requirement that ``pc test``
+  limits can be written into the current object's declaration, as a ``match:`` requirement that ``pc qual test``
   checks -- see :ref:`requirements`.
 
 ``pc bom``
@@ -738,7 +757,7 @@ Object commands
   - ``cfd`` — computational fluid dynamics: how does a fluid flow through it.
 
   Each takes one part, and runs every scenario of the analysis the part declares, one after another -- or with
-  ``-f <scenario>`` only the one of that name, as ``pc sim -f`` runs one simulation::
+  ``-f <scenario>`` only the one of that name, as ``pc qual test --simulation -f`` runs one simulation::
 
       pc cae fea :bracket                 # every FEA scenario of the bracket
       pc cae fea -f loaded :bracket       # one of them
@@ -747,7 +766,7 @@ Object commands
       pc cae cfd -i //pub/feature/cae/openfoam:cfd :duct
 
   The part declares its boundary conditions in a section named after the analysis, as a map of named
-  **scenarios** -- every question of that kind it is asked, each under a name of its own, the way ``simulate:``
+  **scenarios** -- every question of that kind it is asked, each under a name of its own, the way ``qual: sim:``
   holds simulations. The name is what ``-f`` selects, what a report prints beside the findings, what names the
   model file, and what the IDE lists on the analysis's tab. Each analysis reads its own keys. Every key names
   interface types the part implements, in one of two shapes. A *set* — ``fix:``,
@@ -790,7 +809,7 @@ Object commands
 
   Beside its conditions, every scenario takes ``desc:``; ``feature:``, the feature of the part's
   :ref:`requirements <requirements>` it demonstrates (a name or a list, which the IDE's Requirements tab lists
-  beside the simulations that name it, and which ``pc test`` fails when the requirements declare no such
+  beside the simulations that name it, and which ``pc qual test`` fails when the requirements declare no such
   feature); ``implementation:`` (see below); and ``params:``, the implementation's parameters for this scenario
   alone -- a finer ``mesh_size`` where the load is concentrated, say -- over what its configuration says, and
   under what ``-p`` says for one run. A scenario cannot be named after any of those keys or after a condition,
@@ -894,13 +913,13 @@ Object commands
   export or a render implementation is declared in its own (see :ref:`output-files`), and installed as a
   dependency.
 
-  An analysis that produces no answer is reported the same way by ``pc cae`` and by ``pc test``: which
+  An analysis that produces no answer is reported the same way by ``pc cae`` and by ``pc qual test``: which
   implementation was asked, what it said, and which platform it did not work on. The remedies differ — install a
   solver, use another machine, fix the part — and only the implementation's own sentence says which, so it is
   relayed as it stands rather than classified. The command and the check say it identically on purpose: a user
   who ran one of them and then the other must not be told two different things about the same machine.
 
-  ``pc test`` runs the same analyses. Its ``fea``, ``dynamic``, ``thermal`` and ``cfd`` tests apply to a part that declares the matching
+  ``pc qual test`` runs the same analyses. Its ``fea``, ``dynamic``, ``thermal`` and ``cfd`` tests apply to a part that declares the matching
   section — and to nothing else, so a package of bolts pays nothing for them — and run every scenario of it,
   failing the part on any of them and naming which. **One thing passes: every scenario ran and reported no
   findings.** A malformed section fails; a plugin that cannot be resolved fails (the
@@ -908,9 +927,9 @@ Object commands
   wherever the package is opened); a plugin that resolves and cannot run fails too, whether what is missing is
   the solver, the mesher, or a sandbox that will not build. That last one is not a skip on purpose: a part
   declaring ``fea:`` has asked a question, and a plugin that answered nothing has failed. So declaring ``fea:``
-  in a shared package does make ``pc test`` fail for everyone who has not installed what the implementation
+  in a shared package does make ``pc qual test`` fail for everyone who has not installed what the implementation
   needs — that is what declaring it means, and a package unwilling to ask that of its readers should not
-  declare the section. It is the one verdict ``pc test`` does not remember — installing a solver changes
+  declare the section. It is the one verdict ``pc qual test`` does not remember — installing a solver changes
   nothing a cache key is built from, so a remembered one would go on failing a part that now analyses perfectly
   well.
 
@@ -1033,7 +1052,7 @@ Object commands
   in the file is a timestamp, a host name or a version, so the same object and the same parameters produce the
   same bytes on any machine.
 
-  ``pc test`` runs this as its ``cam`` check, and it is the same code: the check produces the route and passes
+  ``pc qual test`` runs this as its ``cam`` check, and it is the same code: the check produces the route and passes
   the object only if one came back. It applies to an object that says how it is made and to nothing
   else, so a package of bolts pays nothing for it -- the same gate the analysis checks have, and
   the same cost model. There is one way to pass: a route was written. A malformed section fails, an
@@ -1397,7 +1416,7 @@ instead.
   the first; ``--scenario <name>`` selects the one of that name instead, and is refused with any other tab. The tab travels with the
   shape, so it is the window that draws the object that switches; a tab that does not apply to the object (FEA
   of an assembly) is not opened, and one that is not known yet (Build, until the viewer has worked out what is
-  built; Simulation, until it has read what the object declares under ``simulate:``) is opened as soon as it
+  built; Simulation, until it has read what the object declares under ``qual: sim:``) is opened as soon as it
   is. Opening an analysis tab runs the scenario it selects, and opening Simulation runs the simulation it
   selects, as clicking them does.
 

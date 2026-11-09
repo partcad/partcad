@@ -63,7 +63,7 @@ Feature: `pc import assembly` command
     When I run "pc --no-ansi list interfaces"
     Then STDERR should contain "robot/pan-socket"
     And STDERR should contain "robot/pan-plug"
-    When I run "pc --no-ansi test -f cad -a robot"
+    When I run "pc --no-ansi qual test -f cad -a robot"
     Then the command should exit with a status code of "0"
 
   @error

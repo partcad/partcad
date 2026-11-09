@@ -50,7 +50,7 @@ drift apart.
 the package graph and drives a CAD wrapper, which puts it squarely on the daemon's side; what stays in the
 client is that `pc cae fea` exits non-zero when one of the part's scenarios produced a finding or did not
 run, so it can be used as a gate in a script. Every scenario of the analysis is run, or the one `-f` names --
-the daemon's `cae.analyze` loops over them, as `simulate.run` does over simulations, and reports each. All
+the daemon's `cae.analyze` loops over them, as `qual.simulate` does over simulations, and reports each. All
 four subcommands are the same operation with the analysis as an argument -- `click/analysis.py` holds the
 options and the body, the way `click/viewport.py` holds the three that `pc render` and `pc adhoc render`
 share, so the commands are a name and a docstring each and cannot drift apart.
@@ -318,7 +318,7 @@ are not sufficient because CI also gates on the example run:
    ```bash
    cd examples
    pc list all -r --fast-only //pub/examples/partcad
-   pc test -r --fast-only --package //pub/examples/partcad
+   pc qual test -r --fast-only --package //pub/examples/partcad
    pc render -r --fast-only --package //pub/examples/partcad
    ```
 

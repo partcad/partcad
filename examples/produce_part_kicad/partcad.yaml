@@ -20,7 +20,7 @@ unless: [[arm, useDocker, useDockerKicad]]
 # branch or a tag for the same reason.
 #
 # 'fileHash' is not a software thing -- a part, a sketch or an assembly pins a
-# 'fileFrom' download exactly the same way, and 'pc test' requires it of
+# 'fileFrom' download exactly the same way, and 'pc qual test' requires it of
 # anything it is asked to call manufacturable: a file that may be a different
 # file tomorrow cannot be made again.
 #
@@ -45,7 +45,7 @@ parts:
    # What this part ships with, resolved to '//pub/examples/partcad/produce_part_kicad:arduino-cli-installer'.
    # It is optional -- most parts declare none -- and declaring it puts the
    # software into the bill of materials of every assembly this board ends up
-   # in, beside the board itself. `pc test` then requires the software to hold
+   # in, beside the board itself. `pc qual test` then requires the software to hold
    # up before it will call the board manufacturable.
    software:
      - arduino-cli-installer

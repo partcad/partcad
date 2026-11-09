@@ -93,7 +93,7 @@ import { applyFinish, setFinishShown } from './finish';
 import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
 import { GeometryCache, geometryCache } from './geometryCache';
 import { geometryMissing, reportError } from './host';
-import { MaterialCluster, ShowMessage, ShowNode } from './messages';
+import { MaterialCluster, ShowMessage, ShowNode, TopologyFeature } from './messages';
 import { LABEL_DEFAULTS, LabelChoices } from './labels';
 import {
     ItemId,
@@ -433,6 +433,16 @@ let materialCallouts: { object: CSS2DObject; nodes: ItemId[] }[] = [];
 let treeFrame: THREE.Matrix4 | undefined;
 
 /**
+ * Where the pieces of a topology finding are, said to the scene by the viewer
+ * when it shows the finding (see 'finding.ts'), and kept across shows until it
+ * is taken away - the geometry it is pinned to arrives after it does.
+ */
+let findingFeatures: readonly TopologyFeature[] = [];
+
+/** The callouts pinned to them, on the show on stage. */
+let findingCallouts: CSS2DObject[] = [];
+
+/**
  * Whether what a shape's metadata says about its elements is pinned to them.
  *
  * The "Metadata" box. Held here rather than set on each callout once, so that it
@@ -479,6 +489,40 @@ export function setMaterialClusters(clusters: readonly MaterialCluster[]): void 
     }
     refreshMaterialCallouts();
     invalidate();
+}
+
+/**
+ * Pin a callout on each piece of a topology finding, saying what it is ("face
+ * 3: a sliver"), or none. Kept for the shows that follow, and pinned again on
+ * each of them: the viewer says it before the finding's own geometry arrives,
+ * and takes it away when another object is shown.
+ */
+export function setFindingCallouts(features: readonly TopologyFeature[]): void {
+    findingFeatures = [...features];
+    pinFindingCallouts();
+    invalidate();
+}
+
+/** The callouts of 'findingFeatures', on what is on the stage now. */
+function pinFindingCallouts(): void {
+    for (const object of findingCallouts) {
+        object.removeFromParent();
+    }
+    findingCallouts = [];
+    if (content === undefined || treeFrame === undefined) {
+        return;
+    }
+    for (const feature of findingFeatures) {
+        const callout = calloutObject('callout-finding', [feature.label]);
+        // PartCAD's frame - millimetres, Z up - is glTF's on the stage, as a
+        // material cluster's point is.
+        callout.object.position
+            .set(...feature.at)
+            .applyMatrix4(TO_GLTF)
+            .applyMatrix4(treeFrame);
+        content.add(callout.object);
+        findingCallouts.push(callout.object);
+    }
 }
 
 /**
@@ -1071,6 +1115,7 @@ export function clearGeometry(): void {
     faded.clear();
     callouts = noCallouts();
     materialCallouts = [];
+    findingCallouts = [];
     treeFrame = undefined;
     visibleItems = undefined;
     flickering = undefined;
@@ -2074,6 +2119,10 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // A cluster names the nodes of one tree: this show's are asked again.
     materialCallouts = [];
     treeFrame = frameOfTree;
+    // A finding's callouts are pinned again, on what has just arrived: the
+    // ones on the show it replaces went with it.
+    findingCallouts = [];
+    pinFindingCallouts();
     shownCut = cut;
     scene.add(group);
     // Framed on every shape the show carries, whether or not it is switched on:

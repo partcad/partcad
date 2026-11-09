@@ -53,10 +53,10 @@ than a cone). So `collar`, `wall`, `stage` and `cone` have no Gazebo run.
 
 ## Usage
 ```shell
-pc sim -a pendulum       # released horizontal, it passes the bottom at the speed its fall gives it
-pc sim -a nut            # a nut runs down its screw as slowly as the turn it is given says
-pc test -f sim           # every one, as the check pc test runs
-pc sim --json -a nudged  # what each engine reports: joints.swing, in degrees and deg/s
+pc qual test --simulation -a pendulum       # released horizontal, it passes the bottom at the speed its fall gives it
+pc qual test --simulation -a nut            # a nut runs down its screw as slowly as the turn it is given says
+pc qual test -f sim           # every one, as the check pc qual test runs
+pc qual test --simulation --json -a nudged  # what each engine reports: joints.swing, in degrees and deg/s
 ```
 
 ### The closed forms

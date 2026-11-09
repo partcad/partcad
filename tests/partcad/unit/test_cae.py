@@ -782,7 +782,7 @@ def test_a_port_named_that_is_not_there_is_reported_as_neither():
 # --------------------------------------------------------------------------- #
 #
 # An analysis section is a map of scenarios, each under a name of its own, as
-# 'simulate:' is a map of simulations. The form a section had before -- the
+# 'qual: sim:' is a map of simulations. The form a section had before -- the
 # conditions themselves -- is still read, as one scenario named 'default'.
 
 

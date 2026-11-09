@@ -46,10 +46,10 @@ from partcad.part_config_manufacturing import (
     PartConfigManufacturing,
     tool_axis_vector,
 )
-from partcad.test import manufacturability_analysis
-from partcad.test.manufacturability_drill import ManufacturabilityDrillTest
-from partcad.test.manufacturability_laser import ManufacturabilityLaserTest
-from partcad.test.manufacturability_subtractive import ManufacturabilitySubtractiveTest
+from partcad.qual.basic import manufacturability_analysis
+from partcad.qual.basic.manufacturability_drill import ManufacturabilityDrillTest
+from partcad.qual.basic.manufacturability_laser import ManufacturabilityLaserTest
+from partcad.qual.basic.manufacturability_subtractive import ManufacturabilitySubtractiveTest
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 import wrapper_manufacturability  # noqa: E402

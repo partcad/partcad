@@ -166,10 +166,10 @@ Requirements
 A part, an assembly, a scene or a sketch may say what it is required to be.
 Requirements are written before the design is, from the point of view of
 whoever asked for it, and they are what the design is judged against: by
-``pc test``, by the simulations that name them, and by whoever reads the
+``pc qual test``, by the simulations that name them, and by whoever reads the
 evidence -- a person, or an AI agent running ``/pc:validate``. The PartCAD
 extension for Visual Studio Code shows them on a tab of their own, in front of
-the others, with a mark beside each that ``pc test`` checks.
+the others, with a mark beside each that ``pc qual test`` checks.
 
 They are from the user's perspective and serve to guide the design. Once the
 design is complete it may impose further requirements of its own -- on
@@ -199,7 +199,7 @@ manufacturing, say -- but those are not part of this section.
 ``features``
   What the object has to have or do: a name for each, and a sentence saying
   what. Most of what anybody asks of a product is said this way, and PartCAD
-  does not judge it. A ``simulate:`` entry may name the feature it demonstrates
+  does not judge it. A ``qual: sim:`` entry may name the feature it demonstrates
   (``feature:``, see :doc:`/digital_thread/lifecycle/simulation`); every feature, demonstrated or not, is
   for whoever reads the evidence to judge -- the renders, the simulations, the
   bill of materials and the assembly instructions. That is what the
@@ -245,8 +245,8 @@ manufacturing, say -- but those are not part of this section.
   find out -- of either object. The displacement is measured in a sandbox, and
   only of the objects a ``displacement`` names.
 
-``pc test`` checks the last four against the model -- its ``requirements``
-check, ``pc test -f requirements`` to run it alone -- and says, for each one
+``pc qual test`` checks the last four against the model -- its ``requirements``
+check, ``pc qual test -f requirements`` to run it alone -- and says, for each one
 that is not met, what it found instead.
 
 Required values
@@ -401,7 +401,7 @@ which is the form most vendors publish.
 required for reproducibility**. The schema never demands one, of any kind of
 object, and nothing refuses to load, build or lint an object that omits it.
 What such an object cannot do is promise that the next run produces the same
-thing, and manufacturing is repetition -- so ``pc test`` refuses to call it
+thing, and manufacturing is repetition -- so ``pc qual test`` refuses to call it
 manufacturable (see :ref:`reproducibility`). Pull a vendor's model down and
 never claim it can be made, and none of this touches you.
 
@@ -427,7 +427,7 @@ Reproducibility and manufacturability
 Manufacturing is repetition: the run after this one has to produce the same
 thing, so everything that goes into a product has to be gettable a second time
 and be the same thing. There are three ways an object can promise that, and the
-``manufacturability`` check of ``pc test`` fails one that offers none of them:
+``manufacturability`` check of ``pc qual test`` fails one that offers none of them:
 
 - **It is bought.** A ``vendor`` and an ``sku`` name a thing to order, and
   ordering it again is what "the same again" means for it -- whatever file the
@@ -445,7 +445,7 @@ materials that names it worthless.
 
 .. code-block:: text
 
-  Test failed: //robot:bracket: manufacturability: It is not reproducible: it is
+  Qualification failed: //robot:bracket: manufacturability: It is not reproducible: it is
   fetched with 'fileFrom: url', declares no 'fileHash', and names no vendor and
   SKU to order it by, so nothing says which one it is
 
@@ -532,7 +532,7 @@ gives it a name of its own:
 An exploded assembly is never manufacturable, whatever it or its package says:
 it is a picture of the assembly, with every item where nothing holds it, not one
 more thing to make. So ``logo;exploded=true`` and ``logo_exploded`` above drop
-``manufacturable``, and ``pc test`` treats them as it treats anything marked
+``manufacturable``, and ``pc qual test`` treats them as it treats anything marked
 ``manufacturable: false``. ``logo`` itself keeps its own.
 
 Only the ``assy`` type accepts it, because only an ASSY file says what each item

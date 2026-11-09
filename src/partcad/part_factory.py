@@ -77,7 +77,7 @@ class PartFactory(ShapeFactory):
     # and for 'material' and 'color' that is the end of it: the file answers. For
     # 'tolerance' it is not, because plenty of STEP files carry no GD&T at all,
     # and a part read from one of those has no way left to say how precisely it
-    # has to be made - which is what 'pc test' demands of anything that is going
+    # has to be made - which is what 'pc qual test' demands of anything that is going
     # to be manufactured.
     #
     # So the field. It is a field rather than a parameter because it is not a
@@ -189,7 +189,7 @@ class PartFactory(ShapeFactory):
         each of them would declare its way past the manufacturability check:
 
         * '.nan' is the answer that means "the file tolerances this feature by
-          feature", which 'pc test' accepts. NaN is
+          feature", which 'pc qual test' accepts. NaN is
           'tolerance_inspect.reduce()'s to produce, and nothing else's.
         * '.inf' and '-.inf' are neither zero nor NaN, so they pass as though
           they were a real tolerance.
@@ -234,7 +234,7 @@ class PartFactory(ShapeFactory):
         wrapper that runs a CadQuery/build123d script is otherwise strict about
         build parameters the script does not declare - rightly, since such a
         name is usually a typo - but a part may be obliged to declare an
-        object-type parameter its script has no use for ('pc test' requires a
+        object-type parameter its script has no use for ('pc qual test' requires a
         manufactured part to state a tolerance). Those names, and only those,
         are dropped there when the script does not want them; see
         'wrappers/custom_cqgi.filter_optional_params'.

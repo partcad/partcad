@@ -114,7 +114,7 @@ docs:
     pc ide view -a AeroAssembly_assy_example/AeroAssembly_connected
 
     # what each stage is held to
-    pc test -a AeroAssembly_assy_example/AeroAssembly_connected
+    pc qual test -a AeroAssembly_assy_example/AeroAssembly_connected
 
     # where the ports are, and which interface each belongs to
     pc render -t svg --with-all AeroAssembly_assy_example/AeroFrame_Plate
@@ -127,7 +127,7 @@ docs:
     pc ide view AeroAssembly_assy_example/AeroFrame_Plate
 
     # that this part is what is left of the stock it names
-    pc test -f manufacturability AeroAssembly_assy_example/AeroFrame_Plate
+    pc qual test -f manufacturability AeroAssembly_assy_example/AeroFrame_Plate
 
     # what a part is cut from, and what that costs: the cart holds the billet
     pc supply quote AeroAssembly_assy_example/AeroFrame_Plate#1
@@ -157,7 +157,7 @@ providers:
       A machine shop that mills and forms aluminium plate. A stand-in for a
       real supplier's API, exactly as the pseudo 3D printer in
       'examples/provider_manufacturer' is: it answers the one question
-      'pc test' asks of a supplier - can you make this - out of a table rather
+      'pc qual test' asks of a supplier - can you make this - out of a table rather
       than over the wire.
   metalStore:
     type: store
@@ -490,7 +490,7 @@ parts:
   # makes a part bought rather than nothing at all. One SKU per size, so the
   # billets of the two halves' matching parts are one SKU, and 'metalStore'
   # carries the four. Without them a billet could not be had, and a part cut
-  # from something that cannot be had cannot be made: 'pc test' holds every
+  # from something that cannot be had cannot be made: 'pc qual test' holds every
   # part a manufacturable assembly is made of to that, through its stock.
   AeroAssembly_assy_example/AeroFrameAssembly_solid1_stock:
     type: build123d
@@ -632,7 +632,7 @@ assemblies:
   # Stage 3 - connect.
   #
   # Somebody can build this one, which is what 'manufacturable: true' means and
-  # what 'pc test' then holds it to: every item connected rather than placed
+  # what 'pc qual test' then holds it to: every item connected rather than placed
   # (see 'partcad.test.connectivity'), no shared volume anywhere as a failure
   # rather than a note, instructions that resolve, and eight parts that a
   # supplier will make, seven of them out of billets a supplier sells. The
