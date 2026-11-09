@@ -42,14 +42,18 @@ pc search parts -k "<keyword>"          # search parts
 pc search assemblies -k "<keyword>"     # search assemblies
 ```
 
-Widen the scope when the local package has no match — a `...` suffix on the
-package walks every package below it (the public registry and any dependencies),
-which is where most catalog items live:
+A search walks every package below the one it starts in by default (the public
+registry and any dependencies), which is where most catalog items live. Narrow
+it with `-P`, or keep it to one package with `-R`:
 
 ```sh
-pc search parts -k "<keyword>" -P //...           # all imported packages
-pc search parts -k "<keyword>" -P //pub/std...    # scope to one package subtree
+pc search parts -k "<keyword>" -P //pub/std       # scope to one package subtree
+pc search parts -k "<keyword>" -R                 # this package only
 ```
+
+A search finds objects, not a catalog's categories: to browse those, walk down
+with `pc list packages <package>`, which lists the sub-packages one level at a
+time.
 
 Sibling commands share the same flags if the query is broader: `pc search all`
 (parts, sketches, interfaces, assemblies, and packages at once), plus

@@ -592,7 +592,9 @@ or a new piece of metadata needs no new API:
   (see below)
 - ``search/<kind>?q=<text>&limit=<n>`` -- the objects of a kind the repository
   finds for a search, as ``{name: config, ...}``, best first. Asked only of a
-  package whose ``meta`` lists the kind under ``searchKinds``
+  package whose ``meta`` lists the kind under ``searchKinds``. A ``meta`` that
+  also says ``"searchScope": "tree"`` answers for every package below it, which
+  a recursive search then does not ask again
 - ``objects/<kind>/<name>;<param>=<value>,...`` -- one parametrized instance,
   resolved by the repository itself. Asked only of a package whose ``meta``
   lists the kind under ``instanceKinds``

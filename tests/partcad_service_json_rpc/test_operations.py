@@ -1471,13 +1471,19 @@ def test_an_excluded_package_is_named_the_way_a_package_is():
     assert operations._excluded(ctx, {}) == []
 
 
-def test_list_packages_reports_the_package_with_its_url():
+def test_list_packages_reports_the_sub_packages_with_their_urls():
+    """Without recursion a package's sub-packages are listed - not the package itself - every one of them."""
     session, _ = make_session()
-    session.partcad_ctx.projects["//"] = FakeProject(
-        name="//",
+    root = FakeProject(name="//", desc="Root package")
+    root.children = ["//rpi", "//empty"]
+    session.partcad_ctx.projects["//"] = root
+    session.partcad_ctx.projects["//rpi"] = FakeProject(
+        name="//rpi",
         desc="Raspberry Pi",
         url="https://example.com/repo",
     )
+    # Nothing in it but what is below it: still a step on the way down.
+    session.partcad_ctx.projects["//empty"] = FakeProject(name="//empty", desc="Only sub-packages")
 
     operations.list_packages(session, {"package": "//"})
 
@@ -1485,9 +1491,39 @@ def test_list_packages_reports_the_package_with_its_url():
     assert log.processes == [("ListPackages", "//")]
     output = lines_of(log.only("info"))
     assert output[0] == "PartCAD packages:"
-    assert output[1].startswith("\t//")
+    assert output[1].startswith("\t//rpi")
     assert output[1].endswith("Raspberry Pi")
     assert output[2].strip() == "https://example.com/repo"
+    assert output[3].startswith("\t//empty") and output[3].endswith("Only sub-packages")
+    assert not any("Root package" in line for line in output)
+
+
+def test_list_packages_asks_a_plugin_package_for_its_description():
+    session, _ = make_session()
+    root = FakeProject(name="//", desc="Root package")
+    root.children = ["//shop"]
+    session.partcad_ctx.projects["//"] = root
+    shop = FakeProject(name="//shop", desc=None)
+
+    def load_metadata():
+        shop.desc = "Its categories, as the plugin says them"
+
+    shop.load_metadata = load_metadata
+    session.partcad_ctx.projects["//shop"] = shop
+
+    operations.list_packages(session, {"package": "//"})
+
+    output = lines_of(session.partcad.logging.only("info"))
+    assert output[1].endswith("Its categories, as the plugin says them")
+
+
+def test_list_packages_of_a_package_with_none_below_says_none():
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"] = FakeProject(name="//", desc="Root package")
+
+    operations.list_packages(session, {"package": "//"})
+
+    assert lines_of(session.partcad.logging.only("info"))[1].strip() == "<none>"
 
 
 # ---- info ------------------------------------------------------------------

@@ -3152,7 +3152,14 @@ def _cmf_items(session, project, kind: str) -> list:
 
 
 def list_packages(session, params):
-    """List imported packages that have at least one sketch, part, or assembly."""
+    """List the packages below a package: its sub-packages, or with recursion all with something in them.
+
+    Without recursion it is the package's own sub-packages - the folders and
+    dependencies directly below it, every one, so that a package holding nothing
+    but more packages is a step on the way down rather than a dead end. With it,
+    it is every package below that has something to look at (a sketch, a part,
+    an assembly or a scene, listed or found by its own search).
+    """
     ctx = _ctx(session, params)
     if ctx is None:
         return None
@@ -3173,11 +3180,15 @@ def list_packages(session, params):
                 for p in ctx.get_all_packages(parent_name=package, has_stuff=True, exclude=_excluded(ctx, params))
             ]
         else:
-            packages = [package]
+            packages = _sub_packages(ctx, package_obj, _excluded(ctx, params))
 
         output = "PartCAD packages:\n"
         for project_name in packages:
             project = ctx.projects[project_name]
+            # A package served by a repository plugin says what it is in its
+            # metadata, which a package reached by name has not asked for yet.
+            if hasattr(project, "load_metadata"):
+                project.load_metadata()
             line = "\t%s" % project_name
             padding_size = 60 - len(project_name)
             if padding_size < 4:
@@ -3195,6 +3206,24 @@ def list_packages(session, params):
             output += "\t<none>\n"
         pc.logging.info(output)
     return None
+
+
+def _sub_packages(ctx, package_obj, exclude=()) -> list:
+    """The names of the packages directly below a package - its folders and its dependencies - loaded.
+
+    Only what is directly below is loaded, so listing the top of a large tree
+    (the public index) costs its first level and no more.
+    """
+    from partcad.context import is_excluded
+
+    names = []
+    for child in package_obj.get_child_project_names() or []:
+        if exclude and is_excluded(child, exclude):
+            continue
+        project = ctx.get_project(child)
+        if project is not None and not getattr(project, "skipped", False):
+            names.append(project.name)
+    return names
 
 
 def list_providers(session, params):

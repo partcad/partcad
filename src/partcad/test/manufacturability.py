@@ -315,7 +315,7 @@ class ManufacturabilityTest(Test):
 
         from .. import procurement
 
-        can_be_purchased = procurement.is_bought(part)
+        can_be_purchased = procurement.is_bought(part, ctx)
         can_be_manufactured = procurement.is_made(part)
         if not can_be_purchased and not can_be_manufactured:
             return self.failed(part, "Cannot be purchased or manufactured")

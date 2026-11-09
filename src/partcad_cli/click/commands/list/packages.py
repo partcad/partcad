@@ -11,21 +11,26 @@ from ...service import run
 
 """List Packages command.
 
-It shows the packages that have at least one sketch, part, or assembly.
-The primary purpose of this interface is to feed user interfaces like IDEs with the list of packages that are worth
-showing.
-When no recursion in requested, it shows the current package if and only if it has any parts, sketches, or assemblies.
+Without recursion it shows the sub-packages of PACKAGE (the current package by
+default): the folders and dependencies directly below it, every one, so that the
+tree can be walked down a level at a time - a distributor's categories, the
+public index's sections. With recursion it shows every package below PACKAGE
+that has something in it: a sketch, a part, an assembly or a scene, whether the
+package lists them or finds them with its own search.
 """
 
 
 @click.command(
-    help="List imported packages. PACKAGE may end in '...' to reach every package below it",
+    help=(
+        "List the sub-packages of PACKAGE (the current package by default), or with -r every package below it "
+        "that has something in it. PACKAGE may end in '...' to mean the latter"
+    ),
 )
 @click.option(
     "-r",
     "--recursive",
     is_flag=True,
-    help="Recursively process all imported packages (older spelling of '<package>...')",
+    help="Every package below PACKAGE with something in it, rather than its sub-packages (or '<package>...')",
 )
 @exclude_option
 @click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'

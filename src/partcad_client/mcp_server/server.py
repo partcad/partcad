@@ -237,7 +237,13 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         ctx: Context,
         kind: Annotated[ListKind, Field(description="What to list.")] = "parts",
         package: PackageName = None,
-        recursive: Annotated[bool, Field(description="Also list the packages below this one.")] = False,
+        recursive: Annotated[
+            bool,
+            Field(
+                description="Also list the packages below this one. For 'packages': every package below with "
+                "something in it, rather than the sub-packages directly below."
+            ),
+        ] = False,
     ) -> CallToolResult:
         """List the packages, parts, sketches, assemblies, scenes, interfaces, materials or software of a package.
 
@@ -442,10 +448,11 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         recursive: Annotated[
             bool,
             Field(
-                description="Also look in the packages below. Below '//pub' that is the whole public catalog, "
-                "fetched over the network the first time."
+                description="Also look in the packages below, as 'pc search' does unless told '-R'. Below '//pub' "
+                "that is the whole public catalog, fetched over the network the first time; false keeps the "
+                "search to the one package."
             ),
-        ] = False,
+        ] = True,
         interface: Annotated[
             Optional[str],
             Field(description="Only objects that implement this interface, or one derived from it."),

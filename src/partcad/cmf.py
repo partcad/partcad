@@ -1172,7 +1172,7 @@ async def _item_async(ctx, shape, count: int) -> dict:
         # One item that cannot say costs its own row, not the tab.
         row.update({"cmf": None, "findings": [], "error": str(e) or type(e).__name__})
         return row
-    exempt = cmf_check.CmfTest().inapplicable(shape)
+    exempt = cmf_check.CmfTest().inapplicable(shape, ctx=ctx)
     if exempt is not None:
         # Said rather than left out: a part that is bought still has a colour
         # somebody looks at, it is just not this check's to require one.

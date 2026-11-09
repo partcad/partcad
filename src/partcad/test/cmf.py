@@ -40,11 +40,16 @@ def _required(ctx, shape) -> bool:
     return False
 
 
-def _purchasable(shape) -> bool:
+def _purchasable(shape, ctx=None) -> bool:
     if isinstance(shape, Assembly):
         return shape.is_declared_purchasable()
-    store = shape.get_store_data() if hasattr(shape, "get_store_data") else None
-    return bool(store is not None and store.is_purchasable)
+    if not hasattr(shape, "get_store_data"):
+        return False
+    # A part is bought by its own record or through an alias of it that names
+    # a vendor and an SKU (see 'procurement.offers').
+    from .. import procurement
+
+    return procurement.is_bought(shape, ctx)
 
 
 def claim_problems(ctx, kind: str, reference: str, relative_to: str):
@@ -92,7 +97,7 @@ def part_findings(ctx, shape) -> list:
 
 def assembly_findings(ctx, shape) -> list:
     """What CMF an assembly sets itself, if it is not bought whole; [] otherwise."""
-    if _purchasable(shape):
+    if _purchasable(shape, ctx):
         findings = []
         for kind, reference in pc_cmf.own_parameters(shape, ctx).items():
             findings.extend(claim_problems(ctx, kind, reference, shape.project_name))
@@ -113,7 +118,7 @@ class CmfTest(Test):
     def __init__(self) -> None:
         super().__init__("cmf")
 
-    def inapplicable(self, shape, forced=False):
+    def inapplicable(self, shape, forced=False, ctx=None):
         """Why this check has nothing to say of 'shape', or None.
 
         'forced' is a manufacturability check testing what another object is
@@ -124,7 +129,7 @@ class CmfTest(Test):
             return "a sketch is not made of anything"
         if not forced and not getattr(shape, "is_manufacturable", True):
             return "it is not to be made (manufacturable: false)"
-        if not isinstance(shape, Assembly) and _purchasable(shape):
+        if not isinstance(shape, Assembly) and _purchasable(shape, ctx):
             return "it is bought, in whatever its vendor sells it in"
         return None
 
@@ -135,13 +140,13 @@ class CmfTest(Test):
         # it reads is the summary recorded with the build, which is cached
         # already. A warning remembered as a pass would also go unsaid.
         test_ctx[self.NOT_CACHEABLE] = True
-        reason = self.inapplicable(shape, forced=bool(test_ctx.get(self.FORCE_MANUFACTURING)))
+        reason = self.inapplicable(shape, forced=bool(test_ctx.get(self.FORCE_MANUFACTURING)), ctx=ctx)
         if reason is not None:
             return self.not_applicable(shape, reason)
         if isinstance(shape, Assembly):
             # One bought whole is judged by its own CMF alone, and needs none
             # of its children; any other is judged by its links too.
-            if not _purchasable(shape):
+            if not _purchasable(shape, ctx):
                 try:
                     await shape.do_instantiate()
                 except Exception as e:

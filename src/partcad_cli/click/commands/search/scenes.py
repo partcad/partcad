@@ -7,18 +7,12 @@
 import rich_click as click
 
 from ... import fast_only
+from ...search_scope import recursive_option
 from ...service import run
 
 
 @click.command(help="Search scenes by keyword")
-@click.option(
-    "-r",
-    "--recursive",
-    "recursive",
-    is_flag=True,
-    help="Recursively search in all imported packages (older spelling of '<package>...')",
-    show_envvar=True,
-)
+@recursive_option
 @fast_only.option()
 @click.option(
     "--package",

@@ -97,21 +97,62 @@ class ProviderCartItem:
     # 'ignore_missing'. Not part of what a provider is handed.
     optional: bool = False
 
+    # What a part with no record of its own is ordered by, as
+    # 'procurement.offers' lists the aliases of it: the vendor, the SKU and the
+    # pack size above are the one of these the count settles on. Not part of
+    # what a provider is handed.
+    offers: list
+    # The alias of those the item is ordered as, whose package's suppliers are
+    # asked for it too (see 'Context.find_part_suppliers'); None otherwise.
+    via: str = None
+
     def __init__(self):
         self.name = "none"
         self.count = 0
         self.format = "none"
         self.suppliers = {}
         self.optional = False
+        self.offers = []
 
-    def _set_store_data(self, object):
+    def _set_store_data(self, object, ctx=None):
+        # What the object is ordered by: its own record, or - for a part that
+        # has none - one of the aliases of it that name a vendor and an SKU
+        # (see 'procurement.offers'), chosen again whenever the count changes
+        # ('settle'), since the right pack size depends on how many are needed.
+        from . import procurement
+
         store_data = object.get_store_data()
+        if getattr(store_data, "is_purchasable", False) or ctx is None or not hasattr(object, "project_name"):
+            self.offers = []
+        else:
+            self.offers = procurement.offers(object, ctx)
+        self._set_record(store_data)
+        self.settle()
+
+    def _set_record(self, store_data):
         self.vendor = store_data.vendor
         self.sku = store_data.sku
         self.count_per_sku = store_data.count_per_sku
         self.item_in_sku = getattr(store_data, "item_in_sku", None)
 
-    def set_shape(self, shape, count: int = 1):
+    def settle(self):
+        """Order this item by the offer that suits its count, where it is bought through an alias.
+
+        One part on cut tape and on a reel is two aliases of it, one SKU each
+        (see 'procurement.choose'): which of them a cart orders is a question
+        of how many it holds, so it is asked again each time that changes.
+        """
+        offers = getattr(self, "offers", None)
+        if not offers:
+            return
+        from . import procurement
+
+        chosen = procurement.choose(offers, self.count)
+        if chosen is not None:
+            self._set_record(chosen[1])
+            self.via = chosen[0]
+
+    def set_shape(self, shape, count: int = 1, ctx=None):
         """Populate the item from a shape object the caller already holds.
 
         'set_spec()' resolves a part by name through the context; this is for the
@@ -121,7 +162,7 @@ class ProviderCartItem:
         """
         self.name = "%s:%s" % (shape.project_name, shape.name)
         self.count = count
-        self._set_store_data(shape)
+        self._set_store_data(shape, ctx)
 
     async def set_spec(self, ctx, spec: str):
         self.name, self.count = resolve_cart_item(spec)
@@ -132,7 +173,7 @@ class ProviderCartItem:
             # nothing reaches here from a bill of materials, and an assertion
             # is neither a message for a user nor there at all under '-O'.
             raise ValueError(f"Part or assembly '{self.name}' not found")
-        self._set_store_data(object)
+        self._set_store_data(object, ctx)
 
         self.material = await object.get_mcft("material")
         self.color = await object.get_mcft("color")
@@ -315,6 +356,7 @@ class ProviderCart:
         if item.name in self.parts:
             existing = self.parts[item.name]
             existing.count += item.count
+            existing.settle()
             # Optional only while everything that asked for it may go without
             # it: the same chair in a scene and in an assembly is the
             # assembly's to fail over.
@@ -325,6 +367,7 @@ class ProviderCart:
             for supplier, extra in item.suppliers.items():
                 existing.suppliers.setdefault(supplier, extra)
         else:
+            item.settle()
             self.parts[item.name] = item
         return item
 

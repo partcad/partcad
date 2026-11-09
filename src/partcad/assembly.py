@@ -1106,7 +1106,7 @@ async def _bom_grouped_add_manufactured(grouped: dict, ctx, item):
     """
     from . import procurement
 
-    if ctx is None or procurement.is_bought(item) or not procurement.is_made(item):
+    if ctx is None or procurement.is_bought(item, ctx) or not procurement.is_made(item):
         return
     stock = procurement.stock_name(item)
     entries = grouped["manufactured"].setdefault(item.project_name, {})
@@ -1193,12 +1193,14 @@ def _bom_detailed_add(bom: dict, item, kind: str, ctx=None):
     geometry carries where it has been built, and what it declares otherwise.
     Nothing is built for it.
     """
-    from . import cmf
+    from . import cmf, procurement
 
     name = "%s:%s" % (item.project_name, item.name)
     entry = bom.get(name)
     if entry is None:
-        store_data = item.get_store_data()
+        # A part's own record, or the alias of it with the smallest pack (see
+        # 'procurement.offers'); an assembly's own.
+        store_data = procurement.store_record(item, ctx) if kind == "part" else item.get_store_data()
         entry = bom[name] = {
             "kind": kind,
             "count": 0,
@@ -1245,7 +1247,7 @@ async def _bom_detailed_add_stock_piece(bom: dict, ctx, name: str):
     entry = bom.get(name)
     if entry is None:
         resolved = await procurement.get_part_async(ctx, name)
-        store_data = resolved.get_store_data() if resolved is not None else None
+        store_data = procurement.store_record(resolved, ctx) if resolved is not None else None
         entry = bom[name] = {
             "kind": "stock",
             "count": 0,

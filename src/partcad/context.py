@@ -1225,8 +1225,12 @@ class Context:
             # Count via the object accessors (enumeration) rather than the
             # instantiated dicts, so a plugin-backed package - which enumerates
             # lazily and does not instantiate up front - is counted correctly.
+            # A package that searches its own catalogue has something in it,
+            # whether or not it lists any of it: every category of a
+            # distributor's catalogue is one.
             projects = filter(
-                lambda x: sum(x.object_count(kind) for kind in HAS_STUFF_KINDS) > 0,
+                lambda x: sum(x.object_count(kind) for kind in HAS_STUFF_KINDS) > 0
+                or any(x.searches(kind) for kind in HAS_STUFF_KINDS),
                 projects,
             )
         return list(
@@ -1486,9 +1490,10 @@ class Context:
             cart (ProviderCart, optional): Use this cart for requirements and preferences. Defaults to None.
 
         The candidates are the suppliers of the package of the assembly the
-        item was procured for, first, and then those of the package the item
-        itself is declared in (see 'ProviderCartItem.suppliers'), each asked
-        once.
+        item was procured for, first, then those of the package of the alias
+        the item is ordered as, if it is bought through one (see
+        'ProviderCartItem.via'), and then those of the package the item itself
+        is declared in (see 'ProviderCartItem.suppliers'), each asked once.
 
         Returns:
             list[str]: list of provider names that can supply the part, a
@@ -1508,6 +1513,14 @@ class Context:
         pc_logging.debug("Retrieving suppliers from %s" % project_name)
 
         part_suppliers = dict(getattr(part_item, "suppliers", None) or {})
+        # A part bought through an alias of it is sold by whoever the alias's
+        # package says sells what it names: a catalogue's packaging of a part
+        # another package draws (see 'procurement.offers').
+        via = getattr(part_item, "via", None)
+        via_project = self.get_project(via.partition(":")[0]) if via else None
+        if via_project is not None:
+            for supplier, extra in (await via_project.get_suppliers_async()).items():
+                part_suppliers.setdefault(supplier, extra)
         for supplier, extra in (await prj.get_suppliers_async()).items():
             part_suppliers.setdefault(supplier, extra)
         if len(part_suppliers) == 0:

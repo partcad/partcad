@@ -295,8 +295,12 @@ async def _assembly_node_async(ctx, assembly, node_id, link, parent_name, index,
 
 async def _part_node_async(ctx, part, node_id, link, index, depth, forced=False) -> dict:
     index.objects[node_id] = part
-    store = part.get_store_data()
-    bought = procurement.is_bought(part)
+    offers = procurement.offers(part, ctx)
+    bought = bool(offers)
+    # What one of it is ordered by: its own record, or the alias of it with the
+    # smallest pack (see 'procurement.choose'). The cart chooses again for the
+    # number it actually orders.
+    store = procurement.store_record(part, ctx)
     made = procurement.is_made(part)
     problems = _part_problems(part, made, bought)
     if made:
@@ -320,6 +324,14 @@ async def _part_node_async(ctx, part, node_id, link, index, depth, forced=False)
         "cmf": cmf.own_info(ctx, part),
         "source": _source(part),
     }
+    own = "%s:%s" % (part.project_name, part.name)
+    if offers and offers[0][0] != own:
+        # Bought through aliases of it, which a row can say: each is an SKU of
+        # its own, often of the same thing in another pack size.
+        node["offers"] = [
+            {"name": name, "vendor": record.vendor, "sku": record.sku, "count_per_sku": record.count_per_sku}
+            for name, record in offers
+        ]
     # Followed whenever it says how it is made, problems or not: the stock is a
     # line of its own, with problems of its own to show.
     stock = procurement.stock_name(part) if made else None

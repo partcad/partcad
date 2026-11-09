@@ -1,17 +1,11 @@
 import rich_click as click
 
+from ...search_scope import recursive_option
 from ...service import run
 
 
 @click.command(help="Search parts by keyword")
-@click.option(
-    "-r",
-    "--recursive",
-    "recursive",
-    is_flag=True,
-    help="Recursively search in all imported packages (older spelling of '<package>...')",
-    show_envvar=True,
-)
+@recursive_option
 @click.option(
     "--package",
     "-P",
