@@ -43,6 +43,13 @@
 #     the plan drew it and the room keeps the size it was drawn at. A straight
 #     wall is a prism of its elevation; an arc wall is extruded along the
 #     radius, every point of it straight back from where it is (see 'thick').
+#   * A straight wall with a thickness may go on past either end of its face, or
+#     stop short of it: 'extendStart' and 'extendEnd', in millimetres along the
+#     base, positive to go on and negative to stop short. That is how two walls
+#     meet at a corner with nothing missing and nothing in both (see
+#     'scene_factory_walls'): the solid is extended, and the face - where the
+#     plan drew it, and what a picture of a room shows - is not, since the
+#     surface a picture draws is a part of its own.
 
 import math
 import os
@@ -170,12 +177,15 @@ def check_openings(faces, length, height, where="the openings sketch"):
         )
 
 
-def developed(length, height, openings=None):
+def developed(length, height, openings=None, start=0.0, end=None):
     """The wall unrolled flat on the XY plane, with its openings cut out: a list of faces.
 
     Built on a plane whose own (u, v) are (x, y), so that every edge of the
     result has a curve in the plane's parameters that *is* its drawing - which
     is what an arc wall is wrapped from (see 'wrapped').
+
+    From X = 'start' to X = 'end' ('length' unless given): a straight wall's
+    solid extended past either end of its face, or stopped short of one.
 
     More than one face where the openings divide the wall: a door that is as
     tall as the wall leaves the wall either side of it, and nothing joins them.
@@ -187,7 +197,7 @@ def developed(length, height, openings=None):
     from OCP.TopoDS import TopoDS_Compound
 
     plane = gp_Pln(gp_Ax3(gp_Pnt(0.0, 0.0, 0.0), gp_Dir(0.0, 0.0, 1.0), gp_Dir(1.0, 0.0, 0.0)))
-    face = BRepBuilderAPI_MakeFace(plane, 0.0, length, 0.0, height).Face()
+    face = BRepBuilderAPI_MakeFace(plane, start, length if end is None else end, 0.0, height).Face()
     if not openings:
         return [face]
 
@@ -370,11 +380,21 @@ def thick(face, thickness):
     return solid
 
 
-def build(length, height, radius=0.0, openings=None, where="the openings sketch", thickness=0.0):
+def build(
+    length,
+    height,
+    radius=0.0,
+    openings=None,
+    where="the openings sketch",
+    thickness=0.0,
+    extend_start=0.0,
+    extend_end=0.0,
+):
     """The wall these dimensions describe, with the openings 'openings' (a sketch's shape, or None) cut out of it.
 
     A surface for no 'thickness'; for one, the solid that surface is the front
-    of (see 'thick').
+    of (see 'thick'), going on 'extend_start' past its start and 'extend_end'
+    past its end - or stopping short of either, for a negative one.
     """
     from OCP.BRep import BRep_Builder
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_Transform
@@ -385,8 +405,27 @@ def build(length, height, radius=0.0, openings=None, where="the openings sketch"
     height = float(height)
     radius = float(radius or 0.0)
     thickness = float(thickness or 0.0)
+    extend_start = float(extend_start or 0.0)
+    extend_end = float(extend_end or 0.0)
     if thickness < 0.0:
         raise WallError("a wall is no thinner than nothing: 'thickness' is %s" % thickness)
+    if extend_start or extend_end:
+        # The face is where the plan drew it; only the body behind it can go
+        # on past a corner, and only along a straight line.
+        if thickness == 0.0:
+            raise WallError(
+                "a wall with no thickness is a surface, drawn where its plan is, and is not extended past its ends: "
+                "'extendStart' and 'extendEnd' are for a wall with a 'thickness'"
+            )
+        if radius != 0.0:
+            raise WallError(
+                "an arc wall is not extended past its ends: 'extendStart' and 'extendEnd' are for a straight one"
+            )
+        if not length + extend_start + extend_end > 0.0:
+            raise WallError(
+                "a wall stopped short of both ends by more than its length is nothing: 'length' is %.6g mm, "
+                "'extendStart' %.6g mm and 'extendEnd' %.6g mm" % (length, extend_start, extend_end)
+            )
     if radius < 0.0 and thickness >= -radius:
         raise WallError(
             "an arc wall bending away from the side it is seen from, of radius %.6g mm, is thinner than that: "
@@ -418,7 +457,7 @@ def build(length, height, radius=0.0, openings=None, where="the openings sketch"
         check_openings(holes, length, height, where)
 
     if radius == 0.0:
-        faces = developed(length, height, holes)
+        faces = developed(length, height, holes, -extend_start, length + extend_end)
         # Stood up: the drawing's Y becomes the wall's Z, and its X stays where it is.
         turn = gp_Trsf()
         turn.SetRotation(gp_Ax1(gp_Pnt(0.0, 0.0, 0.0), gp_Dir(1.0, 0.0, 0.0)), math.pi / 2.0)
@@ -462,6 +501,8 @@ def process(request):
         request.get("openings"),
         "the openings sketch '%s'" % request.get("openingsName", ""),
         request.get("thickness", 0.0),
+        request.get("extendStart", 0.0),
+        request.get("extendEnd", 0.0),
     )
 
 

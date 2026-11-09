@@ -79,6 +79,9 @@ sketches:
   too-wide:
     type: basic
     rectangle: {x: 3900, y: 1050, side-x: 900, side-y: 2100}
+  ell:
+    type: build123d
+    path: ell.py
 
 parts:
   north:
@@ -144,6 +147,23 @@ scenes:
     sketch: plan
     height: 2500
     wall: //builtin/building:wall-surface
+  ell-room:
+    type: walls
+    sketch: ell
+    height: 2500
+"""
+
+# An L from above: five outside corners and one inside one.
+ELL = """
+import build123d as bd
+
+with bd.BuildSketch() as ell:
+    with bd.BuildLine():
+        bd.Polyline((0, 0), (4000, 0), (4000, 2000), (2000, 2000), (2000, 4000), (0, 4000), close=True)
+    bd.make_face()
+
+if "show_object" in locals():
+    show_object(ell.sketch)
 """
 
 # A package that is manufacturable, as a package is unless it says otherwise.
@@ -165,6 +185,7 @@ parts:
 def package(tmp_path_factory):
     root = tmp_path_factory.mktemp("walls_package")
     (root / "partcad.yaml").write_text(textwrap.dedent(CONFIG).lstrip())
+    (root / "ell.py").write_text(textwrap.dedent(ELL).lstrip())
     return root
 
 
@@ -210,13 +231,13 @@ def test_an_opening_beyond_the_wall_is_an_error_naming_the_sketch_and_the_overha
 
 
 def test_the_builtin_wall_is_a_parametric_wall_in_its_own_colour(context):
-    """A solid, 100 mm thick behind its face, which is on the XZ plane: what a room is walled with."""
+    """A solid, 4.5 in (114.3 mm) thick behind its face, which is on the XZ plane: what a room is walled with."""
     wall, _envelope = _built(context, "//builtin/building:wall;length=2000")
     assert wall.errors == []
     assert wall._shape_properties() == {"color": "#9C9284"}
     assert not surface.is_surface(wall)
     box = asyncio.run(wall.get_bounding_box_async(context))
-    assert box == pytest.approx((0.0, 0.0, 0.0, 2000.0, 100.0, 2700.0), abs=1e-6)
+    assert box == pytest.approx((0.0, 0.0, 0.0, 2000.0, 114.3, 2700.0), abs=1e-6)
 
 
 def _volume(envelope):
@@ -244,12 +265,12 @@ def test_a_thick_wall_is_its_elevation_extruded_back_through_its_thickness(conte
 
 
 def test_a_thick_arc_wall_is_extruded_along_its_radius(context):
-    """Bending away from its face, an arc wall's thickness is towards its axis: a ring sector, 100 thick."""
+    """Bending away from its face, an arc wall's thickness is towards its axis: a ring sector, 114.3 thick."""
     wall, envelope = _built(context, "thick-curved")
     assert wall.errors == [], wall.errors
     assert not surface.is_surface(wall)
-    # Half a turn of a ring between radii 900 and 1000, 2700 high.
-    assert _volume(envelope) == pytest.approx(math.pi * (1000.0**2 - 900.0**2) / 2.0 * 2700.0, rel=1e-4)
+    # Half a turn of a ring between radii 885.7 and 1000, 2700 high.
+    assert _volume(envelope) == pytest.approx(math.pi * (1000.0**2 - 885.7**2) / 2.0 * 2700.0, rel=1e-4)
 
 
 def test_an_arc_wall_thicker_than_its_radius_behind_its_face_is_refused(context):
@@ -323,7 +344,7 @@ def test_a_room_is_a_wall_per_edge_of_its_sketch_each_looking_in(context):
         assert name.startswith("//builtin/building:wall;")
         assert "height=2500" in name
         assert "radius=0.0" in name
-        # Asked for with no thickness: the wall's own, 100 mm, stands.
+        # Asked for with no thickness: the wall's own, 114.3 mm, stands.
         assert "thickness" not in name
         # Solids: the surface is what a picture draws, and no part of the scene.
         assert "oneSided" not in properties
@@ -447,6 +468,55 @@ def test_the_surface_of_a_wall_is_private_to_the_building_package(context, caplo
     # A command names it to look at it, and is not a reference.
     assert context.get_part("//builtin/building:wall-surface") is not None
     assert context.get_part("//builtin/building:wall-surface", referrer=context.get_project("//").name) is None
+
+
+def _corners_closed(context, name, thickness, height, ring):
+    """The walls of 'name' fill the ring of 'ring' square millimetres around its plan exactly: no gap, no overlap."""
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
+
+    _scene, envelope = _built(context, name, kind="scene")
+    solids = [ocp_serialize.decode_shape(node) for node in envelope[ocp_serialize.KEY_ASSEMBLY]]
+    assert sum(_volume_of(solid) for solid in solids) == pytest.approx(ring * height, rel=1e-6)
+    for i, first in enumerate(solids):
+        for second in solids[i + 1 :]:
+            assert _volume_of(BRepAlgoAPI_Common(first, second).Shape()) == pytest.approx(0.0, abs=1e-3)
+
+
+def _volume_of(shape):
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    props = GProp_GProps()
+    BRepGProp.VolumeProperties_s(shape, props)
+    return props.Mass()
+
+
+def test_the_walls_of_a_rectangular_room_meet_at_its_corners_with_nothing_missing_and_nothing_in_both(context):
+    """4000 x 3000, walls 250 thick outside it: the ring between it and the rectangle 250 bigger all round."""
+    walls = _walls(context, "thick-living")
+    for _label, name, _location, _properties in walls:
+        assert "extendEnd=250.0" in name and "extendStart" not in name
+    _corners_closed(context, "thick-living", 250.0, 2500.0, (4500.0 * 3500.0) - (4000.0 * 3000.0))
+
+
+def test_the_walls_of_an_l_shaped_room_close_its_outside_corners_and_do_not_meet_twice_inside(context):
+    """Five outside corners and an inside one, with PartCAD's own 114.3 mm: the outline grown by it, less the outline."""
+    t = 114.3
+    walls = _walls(context, "ell-room")
+    assert sorted(name.split("extendEnd=")[1].split(",")[0] for _l, name, _p, _q in walls) == ["-114.3"] + ["114.3"] * 5
+    perimeter = 2 * (4000.0 + 4000.0)
+    _corners_closed(context, "ell-room", t, 2500.0, perimeter * t + (5 - 1) * t * t)
+
+
+def test_a_picture_of_a_room_draws_its_surfaces_on_the_outline_whatever_its_corners_did(context):
+    """The extensions move the solids; the visual is asked for without them, the length of the edge it is on."""
+    from partcad import visual
+
+    scene, envelope = _built(context, "ell-room", kind="scene")
+    drawn = asyncio.run(visual.substitute_async(context, scene, envelope))
+    for node in drawn.tree[ocp_serialize.KEY_ASSEMBLY]:
+        assert "extend" not in node["visual"]
+        assert "length=%s" % node["name"].split("length=")[1].split(",")[0] in node["visual"]
 
 
 def _reader_of(read):

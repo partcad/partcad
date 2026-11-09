@@ -27,10 +27,16 @@ Each wall is '//builtin/building:wall' unless the scene says otherwise: a solid,
 a physical object a check measures and a simulation collides with, and drawn -
 in the 3D view and in PartCAD's pictures - as its 'visual:', the one-sided
 surface of its face (see 'partcad.visual'). So the room is seen into from outside
-through whichever walls are nearest, and is walled all the same. Two walls meet
-at an outside corner of the outline along the edge where their faces meet, with
-the square of their thickness outside them left open; at an inside corner they
-overlap by it, inside the walls, where nothing sees it.
+through whichever walls are nearest, and is walled all the same.
+
+Where two straight walls meet at a right angle, they meet as a builder makes them
+meet, with nothing missing and nothing in both (see 'corner_extensions'). The
+thickness of each goes outside the outline, so at an outside corner of the room
+the two leave a square of it open, and at an inside corner both fill one: the
+wall arriving at the corner goes on past it by the thickness at the first
+('extendEnd') and stops short of it by the thickness at the second. Its face,
+and the surface a picture draws, stay on the outline. Walls meeting at any other
+angle, or along an arc, are left as they meet.
 
 A sketch that is not such an outline - two of them, one with a hole in it, an
 open one, one with a spline in it, one that is not on the XY plane - is refused
@@ -59,6 +65,7 @@ import threading
 
 from . import cmf
 from . import config as pc_config
+from . import part_factory_wall
 from . import expr
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, sync_threads, telemetry, wrapper
@@ -74,6 +81,56 @@ DEFAULT_WALL = "//builtin/building:wall"
 # identity: two scenes on the same outline ask for the same walls, and a
 # nanometre of arithmetic noise in one of them would make them different walls.
 DIGITS = 6
+
+# How far from a right angle, in degrees, a turn of the outline may be and still be
+# a corner the walls are closed at. Far more than the arithmetic of reading an
+# outline drawn square can stray, and far less than any corner drawn otherwise.
+RIGHT_ANGLE_TOLERANCE = 1e-3
+
+# The parameters a wall part is extended with at a corner, and has to declare to
+# be: a wall part of somebody's own that takes neither is placed as it was.
+EXTENSIONS = ("extendStart", "extendEnd")
+
+
+def corner_extensions(segments, thickness: float) -> list:
+    """'[(extend_start, extend_end), ...]': how far each wall goes on past its ends, or stops short of them.
+
+    One pair per segment of the outline, in order. The outline is walked
+    clockwise and each wall's thickness lies to the left of the walk - outside
+    the room - so where two straight walls meet at a right angle:
+
+      * turning right, at an outside corner of the room, they leave a square of
+        that thickness open between them; the wall arriving there goes on past
+        its end by the thickness and fills it;
+      * turning left, at an inside corner, both fill the same square; the wall
+        arriving there stops short of its end by the thickness, unless it is too
+        short to, and then the wall leaving it stops short of its start.
+
+    One wall moves at each corner and the other stays where the outline put it,
+    so two corners never move one end twice. Nothing else is changed: an arc,
+    a corner at any other angle, or no thickness at all.
+    """
+    extensions = [[0.0, 0.0] for _segment in segments]
+    if not thickness > 0.0 or len(segments) < 2:
+        return [tuple(pair) for pair in extensions]
+    count = len(segments)
+    for index in range(count):
+        arriving, leaving = segments[index], segments[(index + 1) % count]
+        if arriving.get("radius") or leaving.get("radius"):
+            continue
+        turn = (float(leaving["heading"]) - float(arriving["heading"]) + 180.0) % 360.0 - 180.0
+        if abs(abs(turn) - 90.0) > RIGHT_ANGLE_TOLERANCE:
+            continue
+        if turn < 0.0:
+            extensions[index][1] += thickness
+            continue
+        following = (index + 1) % count
+        if float(arriving["length"]) + extensions[index][0] - thickness > part_factory_wall.MINIMUM_LENGTH:
+            extensions[index][1] -= thickness
+        elif float(leaving["length"]) + extensions[following][1] - thickness > part_factory_wall.MINIMUM_LENGTH:
+            extensions[following][0] -= thickness
+    return [tuple(pair) for pair in extensions]
+
 
 # How often a caller that finds the outline being read by another looks again,
 # in seconds: from the first value, doubling to the second. The values
@@ -254,9 +311,41 @@ class SceneFactoryWalls(SceneFactoryAssy):
         if not result.get("success"):
             raise WallsDeclarationError("%s: %s" % (name, result.get("exception")))
 
-        return [self._link(index, segment) for index, segment in enumerate(result["segments"], 1)]
+        segments = result["segments"]
+        thickness, extended = await self._wall_thickness_async()
+        extensions = corner_extensions(segments, thickness) if extended else [(0.0, 0.0)] * len(segments)
+        return [
+            self._link(index, segment, extension)
+            for index, (segment, extension) in enumerate(zip(segments, extensions), 1)
+        ]
 
-    def _link(self, index: int, segment: dict) -> dict:
+    async def _wall_thickness_async(self):
+        """'(thickness, extended)': how thick each wall will be, and whether it takes the corner extensions.
+
+        The scene's own 'thickness' where it states one, and otherwise the wall's:
+        read off the part each wall is, as a wall of the scene asks for it -
+        through an alias or an enrich to the declaration with its parameters (see
+        'part_factory_wall.thickness_of'). A wall part that cannot be had says so
+        when the walls are built; here it closes no corner.
+        """
+        from .shape_config import final_config
+
+        params = {"thickness": self.thickness} if self.thickness is not None else None
+        try:
+            # Named as a link names it, which is how every wall of the scene is.
+            name = self.node_object_name({"part": self.wall}, "part")
+            wall = await self.ctx._get_part_async(name, params, referrer=self.project.name)
+        except Exception as e:  # pylint: disable=broad-except
+            pc_logging.debug("%s:%s: corners left open: %s" % (self.target_project.name, self.name, e))
+            return 0.0, False
+        if wall is None:
+            return 0.0, False
+        config = final_config(wall)
+        declared = (config or {}).get("parameters") or {}
+        thickness = part_factory_wall.thickness_of(config) if self.thickness is None else self.thickness
+        return thickness, all(name in declared for name in EXTENSIONS)
+
+    def _link(self, index: int, segment: dict, extension=(0.0, 0.0)) -> dict:
         """The ASSY link that places the wall following one edge of the outline.
 
         With the room's own colour, material and finish, where it states any:
@@ -276,6 +365,12 @@ class SceneFactoryWalls(SceneFactoryAssy):
         }
         if self.thickness is not None:
             params["thickness"] = self.thickness
+        # Only where the corner moved it: a wall the outline left alone is the
+        # instance it was, and so is every wall of a scene whose wall part takes
+        # no extensions.
+        for name, value in zip(EXTENSIONS, extension):
+            if value:
+                params[name] = round(float(value), DIGITS)
         params.update(cmf.own_parameters(self.assembly, self.ctx))
         return {
             "part": self.wall,

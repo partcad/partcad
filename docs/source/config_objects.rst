@@ -86,6 +86,10 @@ tools reach a private object by name like any other, because that is how its own
 ``pc test -r`` and ``pc render -r`` go on covering everything a package declares. (This is where Bazel, whose
 ``//package:target`` names PartCAD's follow, draws the same line.)
 
+A public object built on a private one is usable everywhere: another package places
+``//builtin/building:wall`` and gets the private ``wall-surface`` drawn as its visual, because that reference
+was written in ``//builtin/building``.
+
 A private object's parametrized instances (``wall-surface;length=4200``) are as private as it is, and so is every
 name its ``aliases:`` give it. An alias the package declares under a name of its own, without ``private:``, is
 public: that is the package choosing to publish the object under that name, which only it can do.

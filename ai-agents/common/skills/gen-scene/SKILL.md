@@ -237,7 +237,8 @@ Which of the two §2 found decides how a building's walls are made.
 walls of one room, standing on the outline of a sketch of its plan (see "Rooms:
 the walls standing on a sketch" in `docs/source/config_scenes.rst`). Each wall
 is `//builtin/building:wall`, a **solid**: its face on the outline, its
-`thickness` (100 mm unless the scene says otherwise) going back from there,
+`thickness` (114.3 mm, 4.5 in: a 2x4 stud between two half-inch drywall
+boards, unless the scene says otherwise) going back from there,
 *outside* the plan, so the plan stays the room's clear inside. A simulation
 collides with it, `pc test` checks things against it, an export writes it. What
 a picture draws is its `visual:`, `//builtin/building:wall-surface`: the face
@@ -264,7 +265,7 @@ scenes:
     desc: The walls of the room, standing on its plan
     sketch: <scene>/plan
     height: 2700                               # from the floor to the ceiling
-    thickness: 150                             # (optional) outside the plan; 100 unless said
+    thickness: 152.4                           # (optional) outside the plan; 114.3 (4.5 in) unless said
 
   <scene>:
     type: assy
@@ -313,35 +314,41 @@ links:
   A shared wall is drawn twice, once facing each room, which is right for walls
   seen from one side.
 - **Doors and windows.** A `walls` scene cannot cut them: it asks each wall for
-  its `length`, `height`, `radius` and `thickness` and nothing else. Where they
+  its `length`, `height`, `radius`, `thickness` and corner extensions, and
+  nothing else. Where they
   are asked for, write *that room's* floor plan as an `assy` scene of
   `//builtin/building:wall` links instead. They are the same walls (solids with
   the openings cut through them, drawn as their surfaces with the same openings),
   placed by the `walls` scene's own rule. Give each the room's `thickness` in
-  its `params:` if it is not 100. Walk the outline **clockwise** as seen
+  its `params:` if it is not 114.3. Walk the outline **clockwise** as seen
   from above. The edge from P to Q is a wall at P, `length` |PQ| long, turned
   about Z by the edge's heading, `atan2(Qy - Py, Qx - Px)`. The wall's front is
-  on the right of the walk, which is the inside of the room. For the 4000 x 5000
-  room above:
+  on the right of the walk, which is the inside of the room. **Close every
+  right-angle corner** the way the `walls` scene does: the wall arriving at a
+  corner where the walk turns right (an outside corner) takes
+  `extendEnd: <thickness>`, and one arriving where it turns left (an inside
+  corner) `extendEnd: -<thickness>`; corners at other angles take nothing. The
+  face stays on the outline; only the solid goes on or stops short. For the
+  4000 x 5000 room above, four outside corners:
 
   ```yaml
   # <scene>/walls.assy, declared as `<scene>/walls: {type: assy, path: <scene>/walls.assy}`
   links:
     - part: //builtin/building:wall
       name: wall-1
-      params: { length: 5000, height: 2700, openings: "//<package>:<scene>/door" }
+      params: { length: 5000, height: 2700, extendEnd: 114.3, openings: "//<package>:<scene>/door" }
       location: [[0, 0, 0], [0, 0, 1], 90]
     - part: //builtin/building:wall
       name: wall-2
-      params: { length: 4000, height: 2700 }
+      params: { length: 4000, height: 2700, extendEnd: 114.3 }
       location: [[0, 5000, 0], [0, 0, 1], 0]
     - part: //builtin/building:wall
       name: wall-3
-      params: { length: 5000, height: 2700 }
+      params: { length: 5000, height: 2700, extendEnd: 114.3 }
       location: [[4000, 5000, 0], [0, 0, 1], -90]
     - part: //builtin/building:wall
       name: wall-4
-      params: { length: 4000, height: 2700 }
+      params: { length: 4000, height: 2700, extendEnd: 114.3 }
       location: [[4000, 0, 0], [0, 0, 1], 180]
   ```
 
@@ -411,7 +418,8 @@ parts:
   convex hull, so a door is solid to it. Where something has to pass through
   one in a simulation, build that wall of convex pieces instead (§7).
 - **Then the inside**, in the same frame: the walls between rooms are made the
-  same way, 100 thick, with their doors as holes; then the furnishing. A roof or
+  same way, 114.3 thick (4.5 in, a 2x4 stud wall), with their doors as holes;
+  then the furnishing. A roof or
   a ceiling, where the description has one, is a slab on top of the walls. Leave
   it out where the inside is meant to be seen from above.
 
@@ -572,9 +580,10 @@ Resting exactly on something bounds no volume, and is not reported. Report in
 
 Floor-plan walls are solids (§4), checked like anything else, so an object that
 pokes through a wall - outside the plan - is reported as an overlap with it, and
-one that stands clear of the plan is not. Expect, and leave, the overlaps the
-walls make with each other: at an inside corner of an outline, and where two
-rooms' walls fill one partition. A `type: wall` part with no thickness is a
+one that stands clear of the plan is not. A room's right-angle corners are
+closed with no overlap (§4); expect, and leave, the overlaps the walls make with
+each other elsewhere: at an inside corner at another angle, and where two rooms'
+walls fill one partition. A `type: wall` part with no thickness is a
 surface, and the check passes over it (`... are not valid solids and were not
 checked`).
 

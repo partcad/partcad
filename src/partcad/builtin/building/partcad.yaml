@@ -69,8 +69,12 @@ parts:
     radius: "%radius%"
     openings: "%openings%"
     thickness: "%thickness%"
+    extendStart: "%extendStart%"
+    extendEnd: "%extendEnd%"
     # What a picture draws in its place: the face of it, asked for with this
-    # wall's own length, height, radius, openings and colour.
+    # wall's own length, height, radius, openings and colour. Not its
+    # extensions, which the surface does not declare: they move the ends of the
+    # solid, and the face stays where the plan drew it.
     visual: wall-surface
     parameters:
       length:
@@ -100,11 +104,28 @@ parts:
           wall is an error.
       thickness:
         type: float
-        default: 100.0
+        # 4.5 inches: a 2x4 stud (3.5 in) with half an inch of drywall on
+        # either side, the interior wall of a framed house.
+        default: 114.3
         desc: |
           How thick the wall is, in millimetres, behind its face: the side it is
-          not seen from, outside a room. An arc wall bending away from its face
-          has to be thinner than its radius.
+          not seen from, outside a room. 114.3 (4.5 in, a 2x4 stud between two
+          half-inch drywall boards) unless it says. An arc wall bending away
+          from its face has to be thinner than its radius.
+      extendStart:
+        type: float
+        default: 0.0
+        desc: |
+          How far the solid goes on past the wall's start, in millimetres along
+          its base, or stops short of it where it is negative - so that two
+          walls meeting at a corner leave no gap and do not overlap. The face,
+          and the surface a picture draws, stay where they are. A straight wall
+          with a thickness only. A `walls` scene sets it at its right-angle
+          corners.
+      extendEnd:
+        type: float
+        default: 0.0
+        desc: As `extendStart`, past the wall's end.
       # The CMF parameter every part takes, given a default: the grey above.
       # `wall;color=//my/package:sage` paints it, and a room paints all of its
       # walls the same way.
@@ -176,5 +197,8 @@ scenes:
         desc: How high the walls are, in millimetres.
       thickness:
         type: float
-        default: 100.0
-        desc: How thick the walls are, in millimetres, outside the outline.
+        default: 114.3
+        desc: |
+          How thick the walls are, in millimetres, outside the outline: 114.3
+          (4.5 in, a 2x4 stud between two half-inch drywall boards) unless it
+          says.

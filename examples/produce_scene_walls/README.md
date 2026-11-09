@@ -25,7 +25,7 @@ one wall on its own - a `type: wall` part with no thickness, which is the
 surface alone - with a door and a window cut out of it by the sketch
 `openings`, drawn as if the wall were unrolled flat. `bay` is PartCAD's own
 wall asked for an arc, bending towards the side it is seen from, in the grey
-a wall is unless it is painted: a solid 100 mm thick, drawn as its surface.
+a wall is unless it is painted: a solid 4.5 in (114.3 mm) thick, drawn as its surface.
 
 A shaded picture, or a video of the room turning, is drawn the same way:
 
@@ -60,6 +60,17 @@ pc render -t png -S "//builtin/building:room;sketch=//pub/examples/partcad/produ
 <table><tr>
 <td valign=top><img src="././bay.svg" alt="bay" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></td>
 <td valign=top>An arc wall of radius 1500, bending towards the side it is seen from</td>
+<td valign=top>Parameters:<br/><ul>
+<li>length: 1178.097245</li>
+<li>height: 2700.0</li>
+<li>radius: 1500.0</li>
+<li>openings: </li>
+<li>thickness: 114.3</li>
+<li>extendStart: 0.0</li>
+<li>extendEnd: 0.0</li>
+<li>color: :wall</li>
+</ul>
+</td>
 </tr></table>
 
 ### entrance

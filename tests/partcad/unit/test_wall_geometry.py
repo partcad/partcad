@@ -273,6 +273,84 @@ def test_a_wall_is_no_thinner_than_nothing_and_an_arc_bent_away_no_thicker_than_
     assert BRepCheck_Analyzer(wrapper_wall.build(LENGTH, HEIGHT, 1000.0, thickness=1000.0)).IsValid()
 
 
+def test_a_thick_wall_goes_on_past_its_end_or_stops_short_of_its_start_and_its_face_does_not_move():
+    """What a corner asks of a wall: the solid moves along the base, by so much, at either end."""
+    wall = wrapper_wall.build(LENGTH, HEIGHT, thickness=114.3, extend_start=-114.3, extend_end=114.3)
+
+    assert BRepCheck_Analyzer(wall).IsValid()
+    assert _volume(wall) == pytest.approx(LENGTH * HEIGHT * 114.3, rel=1e-9)
+    x_min, y_min, _z_min, x_max, y_max, _z_max = wrapper_wall._bounds(wall)
+    assert (x_min, x_max, y_min, y_max) == pytest.approx((114.3, LENGTH + 114.3, 0.0, 114.3), abs=1e-6)
+
+
+def test_only_a_straight_wall_with_a_thickness_is_extended():
+    with pytest.raises(wrapper_wall.WallError, match="a wall with no thickness is a surface"):
+        wrapper_wall.build(LENGTH, HEIGHT, extend_end=100.0)
+    with pytest.raises(wrapper_wall.WallError, match="an arc wall is not extended"):
+        wrapper_wall.build(LENGTH, HEIGHT, 3000.0, thickness=100.0, extend_end=100.0)
+    with pytest.raises(wrapper_wall.WallError, match="stopped short of both ends by more than its length"):
+        wrapper_wall.build(100.0, HEIGHT, thickness=100.0, extend_start=-60.0, extend_end=-60.0)
+
+
+def _segments(points):
+    """The outline of the polygon through 'points', as 'wrapper_outline' reads it for a 'walls' scene."""
+    polygon = BRepBuilderAPI_MakePolygon()
+    for x, y in points:
+        polygon.Add(gp_Pnt(x, y, 0.0))
+    polygon.Close()
+    return wrapper_outline.outline(BRepBuilderAPI_MakeFace(polygon.Wire()).Face(), "the plan")
+
+
+def test_every_wall_arriving_at_an_outside_corner_goes_on_past_it():
+    """A rectangle is four outside corners: each wall fills the square its thickness leaves at its end."""
+    from partcad.scene_factory_walls import corner_extensions
+
+    segments = _segments(((0, 0), (4000, 0), (4000, 3000), (0, 3000)))
+    assert corner_extensions(segments, 114.3) == [(0.0, 114.3)] * 4
+    assert corner_extensions(segments, 0.0) == [(0.0, 0.0)] * 4
+
+
+def test_a_wall_arriving_at_an_inside_corner_stops_short_of_it():
+    """An L: five outside corners and one inside one, where the wall arriving stops short by the thickness."""
+    from partcad.scene_factory_walls import corner_extensions
+
+    segments = _segments(((0, 0), (4000, 0), (4000, 2000), (2000, 2000), (2000, 4000), (0, 4000)))
+    extensions = corner_extensions(segments, 100.0)
+    assert sorted(extensions) == [(0.0, -100.0)] + [(0.0, 100.0)] * 5
+    # The ring of walls around it is the outline grown by the thickness, less
+    # the outline: perimeter times thickness, and a square more per outside
+    # corner than per inside one - exactly what the walls cover.
+    covered = sum(
+        (float(segment["length"]) + start + end) * 100.0 for segment, (start, end) in zip(segments, extensions)
+    )
+    perimeter = sum(float(segment["length"]) for segment in segments)
+    assert covered == pytest.approx(perimeter * 100.0 + (5 - 1) * 100.0**2)
+
+
+def test_a_corner_at_another_angle_or_along_an_arc_is_left_as_it_is():
+    from partcad.scene_factory_walls import corner_extensions
+
+    triangle = _segments(((0, 0), (4000, 0), (1000, 3000)))
+    assert corner_extensions(triangle, 100.0) == [(0.0, 0.0)] * 3
+    arcs = [
+        {"kind": "arc", "heading": 90.0, "length": 1000.0, "radius": 500.0},
+        {"kind": "line", "heading": 0.0, "length": 1000.0, "radius": 0.0},
+    ]
+    assert corner_extensions(arcs, 100.0) == [(0.0, 0.0)] * 2
+
+
+def test_a_wall_too_short_to_stop_short_leaves_it_to_the_next_one():
+    from partcad.scene_factory_walls import corner_extensions
+
+    segments = [
+        {"kind": "line", "heading": 0.0, "length": 50.0, "radius": 0.0},
+        {"kind": "line", "heading": 90.0, "length": 3000.0, "radius": 0.0},
+    ]
+    # Turning left from the short one into the long one; the long one starts
+    # short, and goes on past its own end at the right turn back to the first.
+    assert corner_extensions(segments, 100.0) == [(0.0, 0.0), (-100.0, 100.0)]
+
+
 def test_a_wall_needs_a_size_and_something_left_of_it():
     with pytest.raises(wrapper_wall.WallError, match="'length' is 0.0"):
         wrapper_wall.build(0.0, HEIGHT)

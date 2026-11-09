@@ -33,8 +33,10 @@ See 'wrappers/wrapper_wall.py' for the geometry and the frame it is built in.
         radius: 0             # 0 is straight; + bends towards its front, - away
         openings: windows     # (optional) a sketch, drawn on the wall unrolled flat
         thickness: 100        # (optional) mm behind its face; 0, or none, is a surface
+        extendStart: 0        # (optional) mm the solid goes on past its start; negative stops short
+        extendEnd: 0          # (optional) the same, past its end
 
-Each of the five may be a '%...%' expression over the part's parameters (see
+Each of these may be a '%...%' expression over the part's parameters (see
 'partcad.expr'), which is how '//builtin/building:wall' is one declaration that
 builds every wall: 'wall;length=4200,height=2700'.
 
@@ -68,9 +70,15 @@ from .process_crash import describe_exit_code
 
 # What a wall is built from, and what each reads back as when it is not
 # declared. 'length' and 'height' have no default: a wall nobody gave a size to
-# is a mistake, not a default-sized wall. No 'thickness' is a surface.
+# is a mistake, not a default-sized wall. No 'thickness' is a surface. The two
+# extensions move the ends of a straight wall's solid along its base, and not its
+# face: how two walls meet at a corner (see 'scene_factory_walls').
 REQUIRED_FIELDS = ("length", "height")
-OPTIONAL_FIELDS = {"radius": 0.0, "openings": "", "thickness": 0.0}
+
+# What a wall's solid may be shortened to at a corner, at least, in millimetres:
+# a thousandth of a millimetre, the tolerance the wrapper measures to.
+MINIMUM_LENGTH = 1e-3
+OPTIONAL_FIELDS = {"radius": 0.0, "openings": "", "thickness": 0.0, "extendStart": 0.0, "extendEnd": 0.0}
 
 
 def thickness_of(config, where: str = "") -> float:
@@ -131,9 +139,12 @@ class PartFactoryWall(PartFactory):
                 self.height = float(resolved["height"])
                 self.radius = float(resolved["radius"] or 0.0)
                 self.thickness = float(resolved["thickness"] or 0.0)
+                self.extend_start = float(resolved["extendStart"] or 0.0)
+                self.extend_end = float(resolved["extendEnd"] or 0.0)
             except (TypeError, ValueError) as e:
                 raise WallDeclarationError(
-                    "%s: 'length', 'height', 'radius' and 'thickness' are numbers of millimetres: %s" % (where, e)
+                    "%s: 'length', 'height', 'radius', 'thickness', 'extendStart' and 'extendEnd' are numbers of "
+                    "millimetres: %s" % (where, e)
                 )
             if self.thickness < 0.0:
                 raise WallDeclarationError(
@@ -170,6 +181,10 @@ class PartFactoryWall(PartFactory):
             }
             if self.thickness > 0.0:
                 built["thickness"] = self.thickness
+            if self.extend_start:
+                built["extendStart"] = self.extend_start
+            if self.extend_end:
+                built["extendEnd"] = self.extend_end
             self.part.hash.add_dict({"wall": built})
             if self.openings_spec is not None:
                 self.part.cache_dependencies_broken = True
@@ -183,6 +198,8 @@ class PartFactoryWall(PartFactory):
             "radius": self.radius,
             "openings": self.openings_spec,
             "thickness": self.thickness,
+            "extendStart": self.extend_start,
+            "extendEnd": self.extend_end,
         }
         return info
 
@@ -232,6 +249,8 @@ class PartFactoryWall(PartFactory):
                     "height": self.height,
                     "radius": self.radius,
                     "thickness": self.thickness,
+                    "extendStart": self.extend_start,
+                    "extendEnd": self.extend_end,
                     "openingsName": self.openings_spec or "",
                     "name": "%s:%s" % (part.project_name, part.name),
                     "label": part.name,

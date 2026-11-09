@@ -179,10 +179,17 @@ flat; from straight above, every wall is seen edge-on, and the drawing is the
 plan. A STEP export of the same room, its simulation and its dimensioned drawing
 have walls with their thickness.
 
-At an outside corner of the outline two walls meet along the edge their faces
-share, and the square of their thickness outside it is left open; at an inside
-corner they overlap by it, inside the walls, where ``pc test``'s ``interference``
-check reports it and nothing sees it.
+Where two straight walls meet at a **right angle**, they meet the way they are
+built: with nothing missing and nothing in both. Their thickness is outside the
+outline, so at an outside corner of the room the two would leave a square of it
+open, and at an inside corner both would fill one. So the wall *arriving* at the
+corner, walking the outline clockwise, goes on past it by the thickness at an
+outside corner (``extendEnd``), and stops short of it by the thickness at an inside
+one -- or, if it is too short for that, the wall leaving the corner stops short of
+its start. The faces, and the surfaces a picture draws, stay on the outline:
+only the solids move. Walls that meet at any other angle, or along an arc, are
+left as they meet -- a gap outside an obtuse or acute outside corner, an overlap
+inside the walls at such an inside one.
 
 A sketch that is not such an outline is refused, with the reason, rather than
 approximated: two outlines (``has 2 faces``), a hole in one (a column nobody
@@ -191,7 +198,7 @@ one that is not on the XY plane.
 
 ``sketch:``, ``height:`` and ``thickness:`` may be ``%...%`` expressions over the
 scene's parameters, and PartCAD ships one such scene, ``//builtin/building:room``,
-with the parameters ``sketch``, ``height`` and ``thickness`` (100 mm unless it is
+with the parameters ``sketch``, ``height`` and ``thickness`` (114.3 mm, 4.5 in, unless it is
 told otherwise). Any package can use it without
 declaring a scene of its own -- by name, or through an ``enrich``. Name the
 sketch in full, because it belongs to your package and not to ``//builtin``:
@@ -232,8 +239,9 @@ nobody painted is drawn in one.
 
 ``wall:`` names the part each wall is, ``//builtin/building:wall`` unless it says
 otherwise. Whatever it names is asked for with the parameters ``length``,
-``height`` and ``radius`` (see :ref:`walls`) -- and ``thickness``, when the scene
-states one -- and with the room's CMF, so a wall of your own is an ``enrich`` of
+``height`` and ``radius`` (see :ref:`walls`) -- ``thickness``, when the scene
+states one, and ``extendStart``/``extendEnd`` at a corner, when it declares
+both -- and with the room's CMF, so a wall of your own is an ``enrich`` of
 that one, or a ``type: wall`` part declaring the same parameters. A wall of your
 own with no thickness is the one-sided surface alone, and a room of it has no
 walls anything collides with: give it a thickness, and the surface as its

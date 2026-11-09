@@ -2117,6 +2117,14 @@
                   "type": ["number", "string"],
                   "description": "'wall' only: how far the wall goes back from its face, in millimetres - away from the side it is seen from, outside a room traced clockwise. 0, or absent, is a one-sided surface with no body; anything more is the solid that surface is the face of: its elevation, the openings cut out, extruded through the thickness - straight back for a straight wall, along the radius for an arc wall. A number, or a '%...%' expression over the part's parameters."
                 },
+                "extendStart": {
+                  "type": ["number", "string"],
+                  "description": "'wall' with a 'thickness', straight, only: how far its solid goes on past its start, in millimetres along its base, or stops short of it where negative - how two walls meet at a corner with no gap and no overlap. The face stays where it is. A number, or a '%...%' expression over the part's parameters."
+                },
+                "extendEnd": {
+                  "type": ["number", "string"],
+                  "description": "'wall' with a 'thickness', straight, only: as 'extendStart', past its end."
+                },
                 "cache": { "type": "boolean", "default": true },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "with": { "$ref": "#/definitions/parameter-overrides" },

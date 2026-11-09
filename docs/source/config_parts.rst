@@ -184,6 +184,10 @@ A wall in a floor plan is a solid with a thickness, and a plan draws it as a sur
 model it stands in for. A ``visual:`` is a reference to a part, written as an ASSY link writes one -- a name of this
 package, ``:name``, ``//package:name``, with ``;parameter=value,...`` for an instance of it and ``%...%`` worked out
 over this part's parameters -- and it may name a :ref:`private <private-objects>` part of the same package.
+That is what lets every other package use the part: an assembly, an alias or an enrich in another package
+places the public part, and it is drawn as its visual, private or not, because the visual is a reference the
+part's own package wrote. What another package cannot do is name that private visual itself -- as a link, an
+alias, or a ``visual:`` of its own.
 
 **It is drawn only where a picture is drawn**, and only there:
 
@@ -846,6 +850,8 @@ walled, and is still seen into from outside in the 3D view and in every picture.
                otherwise: positive bends it towards its front, negative away from it>
       openings: <(optional) the sketch its doors and windows are cut out by>
       thickness: <(optional) mm behind its face; 0, the default, is a one-sided surface>
+      extendStart: <(optional) mm its solid goes on past its start; negative stops short of it>
+      extendEnd: <(optional) the same, past its end>
 
 The base of the wall starts at the origin and sets off along +X, and the wall
 rises along +Z. Its **front** faces -Y, the way ``pc render --view front`` looks
@@ -860,6 +866,13 @@ clockwise, so that the face is where the plan drew it and the room is the size i
 was drawn. An arc wall bending away from its front has to be thinner than its
 radius.
 
+``extendStart`` and ``extendEnd`` move the ends of a straight wall's solid along its
+base -- on past either end by so many millimetres, or short of it for a negative
+number -- and leave its face where it is. They are how two walls meet at a corner:
+see :ref:`scenes-walls`, which sets them at every right-angle corner of a room. A
+wall with no thickness, which is a face and nothing else, and an arc wall refuse
+them.
+
 The openings are a sketch drawn as if the wall were unrolled flat in front of
 you: X along its base from 0 to ``length``, Y up from 0 to ``height``, on the XY
 plane. Each face of the sketch, or each closed wire, is cut out of the wall; on an
@@ -872,7 +885,8 @@ off the XY plane, and one that does not close.
 
 Any of the five may be a ``%...%`` expression over the part's parameters, which is
 how PartCAD's own wall is declared: ``//builtin/building:wall`` takes ``length``,
-``height``, ``radius``, ``openings`` and ``thickness`` (100 mm unless it is told
+``height``, ``radius``, ``openings`` and ``thickness`` (114.3 mm -- 4.5 in, a 2x4 stud between two half-inch
+drywall boards -- unless it is told
 otherwise) as parameters, so any package can use a wall without declaring one:
 
 .. code-block:: yaml

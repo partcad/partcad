@@ -1234,10 +1234,17 @@ at all).
   claims - and a reference it writes has to resolve in any context, with or without the public index.
 
   `//builtin/building` declares objects too: `wall`, a `type: wall` part whose `length`, `height`, `radius`,
-  `openings` and `thickness` (100 mm by default) are `%...%` expressions over parameters of the same names -- a
+  `openings` and `thickness` (114.3 mm, 4.5 in -- a 2x4 stud and two half-inch drywall boards -- by default) are `%...%` expressions over parameters of the same names -- a
   solid, whose `visual:` is `wall-surface`, the same wall with no thickness, `private: true` -- and `room`, a
   `type: walls` scene over `sketch`, `height` and `thickness`. A `walls` scene passes `thickness` to its walls
-  only when it states one, so a wall part of somebody's own that takes none is asked for with none. The types are PartCAD's (`part_factory_wall.py`, `scene_factory_walls.py`), and
+  only when it states one, so a wall part of somebody's own that takes none is asked for with none. At a
+  right-angle corner between two straight walls it closes the corner (`scene_factory_walls.corner_extensions`):
+  the wall arriving at an outside corner goes on by the thickness (`extendEnd`), and one arriving at an inside
+  corner stops short by it, so the ring of walls is the outline grown by the thickness less the outline,
+  exactly. The thickness is the scene's or, failing that, the wall part's own, read through
+  `part_factory_wall.thickness_of`; a wall part that does not declare both `extendStart` and `extendEnd` is
+  placed unextended. The extensions move the solid only: `wall-surface` declares neither, so the visual is
+  asked for without them and stays on the outline. The types are PartCAD's (`part_factory_wall.py`, `scene_factory_walls.py`), and
   the package is how a package uses them without declaring anything: `room;sketch=//pkg:plan`. A sketch
   handed to either has to be named in full, because a bare name resolves in `//builtin/building`. It also
   declares one CMF colour, `wall`, display-only, which is the default of the wall's `color` parameter: a wall

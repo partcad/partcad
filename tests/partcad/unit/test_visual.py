@@ -84,6 +84,10 @@ parts:
     type: basic
     cuboid: [1, 1, 1]
     visual: //kept:secret-look
+  # A public part of another package, whose visual is private to that package.
+  their-thing:
+    type: alias
+    source: //kept:public-thing
 
 colors:
   red:
@@ -94,6 +98,9 @@ assemblies:
   pair:
     type: assy
     path: pair.assy
+  theirs:
+    type: assy
+    path: theirs.assy
 
 render:
   dump:
@@ -128,7 +135,21 @@ parts:
   secret-look:
     type: basic
     private: true
-    cuboid: [1, 1, 1]
+    cylinder: {radius: 2, height: 20}
+  public-thing:
+    type: basic
+    cuboid: [8, 8, 8]
+    visual: secret-look
+"""
+
+# Another package's public part, placed here twice.
+THEIRS = """
+links:
+  - part: //kept:public-thing
+    name: one
+  - part: //kept:public-thing
+    name: two
+    location: [[50, 0, 0], [0, 0, 1], 0]
 """
 
 # What every implementation below writes: what it was handed, node by node - the
@@ -171,6 +192,7 @@ def context(tmp_path_factory):
     root = tmp_path_factory.mktemp("visual")
     (root / "partcad.yaml").write_text(textwrap.dedent(CONFIG).lstrip() + "\ndependencies:\n  kept:\n    path: kept\n")
     (root / "pair.assy").write_text(textwrap.dedent(PAIR).lstrip())
+    (root / "theirs.assy").write_text(textwrap.dedent(THEIRS).lstrip())
     (root / "dump.py").write_text(textwrap.dedent(DUMP).lstrip())
     kept = root / "kept"
     kept.mkdir()
@@ -329,3 +351,31 @@ def test_what_a_part_is_drawn_as_is_no_part_of_its_key(context):
     asyncio.run(plain.prepare_async())
     asyncio.run(drawn.prepare_async())
     assert asyncio.run(drawn.get_cache_key_async()) == asyncio.run(plain.get_cache_key_async())
+
+
+def test_another_packages_public_part_is_drawn_as_the_visual_its_own_package_keeps_private(context, caplog):
+    """The visual is the reference its own package wrote, so it is allowed; naming it from here is not (see 'borrows')."""
+    _tree, drawn = _substituted(context, "theirs", kind="assembly")
+    assert [node[visual.NODE_KEY] for node in drawn.tree[shape_envelope.KEY_ASSEMBLY]] == ["//kept:secret-look"] * 2
+    assert [name for name, _key in drawn.keys] == ["//kept:secret-look"]
+
+    _tree, drawn = _substituted(context, "their-thing")
+    assert drawn.tree[visual.NODE_KEY] == "//kept:secret-look"
+
+    assert "is private to //kept" not in caplog.text
+    assert "ERROR" not in caplog.text
+
+
+def test_another_packages_public_part_renders_with_its_private_visual_without_errors(context, tmp_path, caplog):
+    """Through PartCAD's own SVG, as 'pc render' draws it, and through the 3D view's tree."""
+    pc.logging.reset_errors()
+    assembly = context.get_assembly("theirs")
+    results = asyncio.run(assembly.render_async(context, "svg", output_dir=str(tmp_path)))
+    assert results["svg"]["success"], results
+    assert (tmp_path / "theirs.svg").stat().st_size > 0
+    assert assembly.errors == []
+
+    tree = asyncio.run(assembly.get_representation(context, shape_envelope.FORM_GLTF, visuals=True))
+    assert [node[visual.NODE_KEY] for node in tree[shape_envelope.KEY_ASSEMBLY]] == ["//kept:secret-look"] * 2
+    assert pc.logging.had_errors is False
+    assert "ERROR" not in caplog.text
