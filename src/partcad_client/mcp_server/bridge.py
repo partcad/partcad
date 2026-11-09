@@ -229,7 +229,8 @@ class Bridge:
         # A plain copy to rearrange: the user configuration's sections are
         # dictionaries only in name, and answer '.get' and '.keys' from the
         # empty dict beneath what they hold.
-        before = {key: dict(entry) if isinstance(entry, dict) else entry for key, entry in parameters.to_dict().items()}
+        held = parameters.to_dict() if hasattr(parameters, "to_dict") else dict(parameters)
+        before = {key: dict(entry) if isinstance(entry, dict) else entry for key, entry in held.items()}
         after = {key: dict(entry) if isinstance(entry, dict) else entry for key, entry in before.items()}
         place_saved_overrides(after, object_name, values, package_name, shared)
         for key in before:
