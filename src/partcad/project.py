@@ -2112,6 +2112,11 @@ class Project(project_config.Configuration):
                     # of a kind gains its 'name' whether or not anything is ever
                     # made out of it (see '_normalized').
                     config = get_config(name)
+                    if config is None and name in self._refused_names.get(factory_name, ()):
+                        # Refused as it was normalized -- its shared parameter
+                        # disagrees with the package's -- and recorded with the
+                        # reason then, which making it would overwrite.
+                        continue
                     if self._enriches_a_package_not_loaded(factory_name, config):
                         continue
                     self.init_object_by_config(factory_name, config_class, alias_class, config)
