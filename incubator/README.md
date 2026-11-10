@@ -113,15 +113,12 @@ Mouser's `RawPrice`. Each package's README says what it cannot do yet.
 
 Two things PartCAD itself could do better, found on the way:
 
-* **A catalogue that is searched, not listed, is invisible to `pc list packages`.**
-  `Context.get_packages(has_stuff=True)` keeps a package only if it lists an object, so the
-  categories of DigiKey's and Octopart's catalogues are neither listed nor found by
-  `pc search packages` (and `pc list packages <one of them>` shows no description, since a
-  plugin's metadata is not applied before it is printed). A package that searches itself
-  (`searchKinds`) could count as having something to look at - with a recursive search then
-  asking only the top of a plugin's tree, which a distributor's search covers, rather than a
-  thousand categories one by one. Until then the categories are found by name, and each
-  package's description names the ones below it.
+* **A catalogue that is searched, not listed, was invisible to `pc list packages`.** Fixed in
+  PartCAD along with this work: `pc list packages <package>` lists a package's sub-packages
+  (a catalogue's categories among them) with the descriptions their plugin gives, a package
+  that searches itself counts as having something in it, and `-a/--all` lists a complete
+  subtree. A search is recursive by default, and a plugin whose search at the top covers its
+  tree (`searchScope: tree`) is asked once rather than once per category.
 * **A store and its catalogue keep their credentials apart.** `pc login` saves a plugin's
   keys under that plugin's name, so a package whose provider and repository use one API is
   logged in to twice. A package-level credential, or a provider that names the repository it
@@ -131,11 +128,11 @@ Two things PartCAD itself could do better, found on the way:
   puts it into the incubated packages and into the checkouts of the graduated ones named on
   its command line. Once these packages have proved themselves it belongs in PartCAD's
   wrappers as `plugin_distributors.py`, tested with the rest of PartCAD.
-* **A relative reference climbs one level only.** A catalogue's categories would name their
-  package's store relatively (`../..:digikey`), so that the package works wherever it is
-  imported; but `resolve_resource_path` collapses `..` in a single pass, and
-  `//a/b/c` + `../..` resolves to `//a/b/c/..`. So the plugins name their store by the
-  index's path, as IKEA's do.
+* **A relative reference climbed one level only.** Fixed in PartCAD along with this work:
+  `resolve_resource_path` resolves every `..` (`//a/b/c` + `../..` is `//a`), so a
+  catalogue's categories could name their package's store relatively (`../..:digikey`). The
+  plugins still name it by the index's path (`provider_name` in `distributor.py`) until a
+  PartCAD release that has the fix is the oldest one they support.
 
 ### Next
 

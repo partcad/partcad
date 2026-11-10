@@ -117,6 +117,11 @@ def slug(text, limit=60):
     return text[:limit].rstrip("-") or "category"
 
 
+# How long a manufacturer's name written run together has to be to match the
+# start of another ('onsemi', 'ON Semiconductor'): longer than an initialism.
+RUN_TOGETHER = 6
+
+
 def fold(text):
     """Lower case letters and digits only: what part numbers and manufacturer names are compared as."""
     text = unicodedata.normalize("NFKD", str(text or ""))
@@ -791,11 +796,30 @@ class Distributor(pm.Site):
 
     @staticmethod
     def same_maker(vendor, manufacturer):
-        """Whether a part's 'vendor' names the manufacturer a distributor lists: 'ti' is not, 'Texas Instruments' is."""
+        """Whether a part's 'vendor' names the manufacturer a distributor lists: 'ti' is not, 'Texas Instruments' is.
+
+        Compared word by word, not as one string: 'TE' is in 'texasinstruments'
+        as letters, and is TE Connectivity, not Texas Instruments - the very
+        case this is here to tell apart, since two makers of one part number
+        are what it decides between. So a name matches the same name spelled
+        another way, a name its words begin ('Analog Devices' and 'Analog
+        Devices Inc.'), one sharing its first word ('Microchip' and 'Microchip
+        Technology'), and a name run together that begins the other ('onsemi'
+        and 'ON Semiconductor'), when it is too long to be an initialism.
+        """
         a, b = fold(vendor), fold(manufacturer)
         if not a or not b:
             return False
-        return a in b or b in a or fold(str(vendor).split()[0]) == fold(str(manufacturer).split()[0])
+        if a == b:
+            return True
+        words_a = [w for w in (fold(w) for w in re.split(r"[\s,./-]+", str(vendor))) if w]
+        words_b = [w for w in (fold(w) for w in re.split(r"[\s,./-]+", str(manufacturer))) if w]
+        if words_a and words_b:
+            shorter, longer = sorted((words_a, words_b), key=len)
+            if longer[: len(shorter)] == shorter or words_a[0] == words_b[0]:
+                return True
+        short, long_ = sorted((a, b), key=len)
+        return len(short) >= RUN_TOGETHER and long_.startswith(short)
 
     def best(self, products, needed):
         """Of the listings of one part, the one to buy 'needed' of: sellable, then in stock, then cheapest."""

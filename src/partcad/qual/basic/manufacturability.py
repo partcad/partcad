@@ -427,6 +427,17 @@ class ManufacturabilityTest(BasicQualification):
         if failure:
             return self.failed(assembly, failure)
 
+        # The suppliers of this assembly's package, and of whatever it is being
+        # made for: their packages are loaded so that their aliases count, and
+        # they are asked for the assembly itself when it is bought whole and
+        # for everything it is made of otherwise, as a cart asks them.
+        suppliers = dict(test_ctx.get(self.SUPPLIERS) or {})
+        project = ctx.get_project(assembly.project_name)
+        if project is not None:
+            for supplier, extra in (await project.get_suppliers_async()).items():
+                suppliers.setdefault(supplier, extra)
+        pc_procurement.load_suppliers(ctx, suppliers)
+
         # Test if it can be purchased at a store
         can_be_purchased = False
         store_data = assembly.get_store_data()
@@ -441,7 +452,7 @@ class ManufacturabilityTest(BasicQualification):
             # It is ordered as a whole, so a supplier has to carry the assembly
             # itself. What is inside it is then somebody else's problem, exactly
             # as it is for 'pc supply'.
-            failure = await self.supply_failure(ctx, assembly)
+            failure = await self.supply_failure(ctx, assembly, suppliers)
             if failure:
                 return self.failed(assembly, failure)
         else:
@@ -465,12 +476,6 @@ class ManufacturabilityTest(BasicQualification):
             test_ctx["force_manufacturing"] = True
             test_ctx["action_prefix"] = f"{assembly.project_name}:{assembly.name}"
             # And buy them where this assembly's package says, as a cart would.
-            suppliers = dict(test_ctx.get(self.SUPPLIERS) or {})
-            project = ctx.get_project(assembly.project_name)
-            if project is not None:
-                for supplier, extra in (await project.get_suppliers_async()).items():
-                    suppliers.setdefault(supplier, extra)
-            pc_procurement.load_suppliers(ctx, suppliers)
             test_ctx[self.SUPPLIERS] = suppliers
 
             # Now test everything this assembly is procured from: its parts, and

@@ -20,10 +20,10 @@ new object, use `/pc:gen` instead.
   parse natural language and does not rank by relevance.
 - So distill the query into a few concrete terms — e.g. "M3 hex standoff" →
   `standoff`, `hex`, `m3` — search each, then union the results yourself.
-- Decide the scope. The default is the local/root package (`//`); the public
-  PartCAD registry and other imported packages are only reached by naming the
-  package with a `...` suffix, which means that package and every package
-  below it.
+- Decide the scope. A search starts at the root package (`//`) and walks every
+  package below it by default, imported packages and the public PartCAD
+  registry included. Use `-P <package>` to start lower, or `-R` to keep the
+  search to one package.
 
 ## 2. Make sure PartCAD is available
 
@@ -68,9 +68,8 @@ where the object lives, which you need in order to act on it.
 Collect the matches across all the keywords you tried, drop duplicates, and show
 the user a short list: the qualified name (`<package> <name>`) and its
 description, best-fit first (you judge fit from the description — the tool does
-not order results). If nothing matched, say so and suggest widening with
-`-P //...`,
-trying different terms, or generating it with `/pc:gen`.
+not order results). If nothing matched, say so and suggest trying different
+terms, or generating it with `/pc:gen`.
 
 ## 5. Act on a chosen result (optional)
 

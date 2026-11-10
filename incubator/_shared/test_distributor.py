@@ -503,3 +503,23 @@ def test_the_products_model_is_served_under_its_name(based):
 def test_a_tilde_in_a_part_number_is_not_the_separator(based):
     assert d.name_of("A~B") == "A%7EB"
     assert based().base_name(d.Product("X", mpn="A~B", manufacturer="M")) == "A%7EB~m"
+
+
+@pytest.mark.parametrize(
+    "vendor, manufacturer, same",
+    [
+        ("Texas Instruments", "texas-instruments", True),
+        ("Analog Devices", "Analog Devices Inc.", True),
+        ("Microchip", "Microchip Technology", True),
+        ("onsemi", "ON Semiconductor", True),
+        ("TE Connectivity", "TE", True),
+        # An initialism is not the name it abbreviates, nor another one that
+        # happens to begin with its letters.
+        ("ti", "Texas Instruments", False),
+        ("TE", "Texas Instruments", False),
+        ("Intel", "Intelligent Memory", False),
+        ("", "Texas Instruments", False),
+    ],
+)
+def test_same_maker_compares_whole_words(vendor, manufacturer, same):
+    assert d.Distributor.same_maker(vendor, manufacturer) is same

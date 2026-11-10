@@ -23,6 +23,11 @@ for package in "${targets[@]}"; do
 	for file in distributor.py conftest.py test_distributor.py; do
 		cp "${here}/${file}" "${package}/${file}"
 	done
-	(cd "${package}" && sha256sum distributor.py >distributor.sha256)
+	# sha256sum is GNU coreutils; macOS has shasum. Both write "<digest>  <file>".
+	if command -v sha256sum >/dev/null 2>&1; then
+		(cd "${package}" && sha256sum distributor.py >distributor.sha256)
+	else
+		(cd "${package}" && shasum -a 256 distributor.py >distributor.sha256)
+	fi
 	echo "$(basename "${package}"): $(cut -c1-12 "${package}/distributor.sha256")"
 done

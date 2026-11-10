@@ -604,8 +604,8 @@ an alias of it, and ``--provider`` picks the store rather than the SKU.
 
 **Buying the pack when it is cheaper.** ``pc supply quote --cheapest`` prices
 every way each supplier has the part, hands each supplier its cheapest, and
-orders from the cheapest supplier: ten resistors are bought as a reel of fifty
-when the reel costs less than ten off the tape. It asks each supplier for a
+orders from the cheapest supplier: a pack is bought rather than single parts
+when the pack costs less than the parts one by one. It asks each supplier for a
 quote per way of ordering, so it is slower, and off by default.
 
 **Loaded** means declared in a package PartCAD has loaded, or served by a

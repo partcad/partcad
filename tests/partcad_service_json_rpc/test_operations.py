@@ -1499,6 +1499,20 @@ def test_list_packages_reports_the_sub_packages_with_their_urls():
     assert not any("Root package" in line for line in output)
 
 
+def test_list_packages_names_a_folder_declared_as_a_dependency_once():
+    """A sub-folder may also be declared as a dependency: one row, not two."""
+    session, _ = make_session()
+    root = FakeProject(name="//", desc="Root package")
+    root.children = ["//rpi", "//rpi"]
+    session.partcad_ctx.projects["//"] = root
+    session.partcad_ctx.projects["//rpi"] = FakeProject(name="//rpi", desc="Raspberry Pi")
+
+    operations.list_packages(session, {"package": "//"})
+
+    output = lines_of(session.partcad.logging.only("info"))
+    assert [line for line in output if line.startswith("\t//rpi")] == [output[1]]
+
+
 def test_list_packages_asks_a_plugin_package_for_its_description():
     session, _ = make_session()
     root = FakeProject(name="//", desc="Root package")

@@ -3255,7 +3255,8 @@ def _sub_packages(ctx, package_obj, exclude=()) -> list:
         if exclude and is_excluded(child, exclude):
             continue
         project = ctx.get_project(child)
-        if project is not None and not getattr(project, "skipped", False):
+        # A folder may also be declared as a dependency, which names it twice.
+        if project is not None and not getattr(project, "skipped", False) and project.name not in names:
             names.append(project.name)
     return names
 
@@ -4622,7 +4623,10 @@ async def _item_suppliers(pc, ctx, cart_item, cart):
     project = ctx.get_project(project_name)
     if project is None:
         return []
-    if not getattr(cart_item, "suppliers", None) and not await project.get_suppliers_async():
+    # A part bought through an alias is sold by whoever the alias's package
+    # names, though nothing else names a supplier for it.
+    via_alias = any(name != cart_item.name for name, _record in getattr(cart_item, "offers", None) or [])
+    if not getattr(cart_item, "suppliers", None) and not await project.get_suppliers_async() and not via_alias:
         return []
     return await ctx.find_part_suppliers(cart_item, cart)
 
