@@ -1914,6 +1914,10 @@
       "items": { "type": "string", "pattern": "^[^,;=]*$" },
       "uniqueItems": true
     },
+    "parameter-shared": {
+      "description": "Whether this parameter is a package-level parameter: one value for every object of this package that declares a parameter of this name with 'shared: true', so that setting it through any of them sets it for all. Every declaration of the name in the package has to say the same here (absent is false), and shared declarations have to agree on everything but 'desc'.",
+      "type": "boolean"
+    },
     "shape-parameter-value": {
       "description": "One construction parameter of an object: the bare value it defaults to, or a declaration of its type, its default and what it may be. The same shape wherever an object is parametrized - a part, a sketch, an assembly, and the construction half of an interface's 'parameters:'.",
       "oneOf": [
@@ -1934,6 +1938,7 @@
             },
             "desc": { "type": "string", "maxLength": 1000 },
             "default": { "$ref": "#/definitions/parameter-default" },
+            "shared": { "$ref": "#/definitions/parameter-shared" },
             "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
             "material": { "type": "string", "minLength": 1 }
           },
@@ -1961,6 +1966,7 @@
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "default": { "$ref": "#/definitions/parameter-default" },
+                "shared": { "$ref": "#/definitions/parameter-shared" },
                 "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
                 "material": { "type": "string", "minLength": 1 }
               },

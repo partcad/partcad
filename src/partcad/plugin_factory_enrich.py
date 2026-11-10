@@ -11,10 +11,13 @@
 import copy
 import typing
 
+from partcad_utils.parameters import is_shared
+
 from . import logging as pc_logging
 from . import telemetry
 from .plugin_config import PluginConfiguration
 from .plugin_factory import PluginFactory
+from .shared_parameters import check_instance_value
 
 
 @telemetry.instrument()
@@ -79,10 +82,20 @@ class PluginFactoryEnrich(PluginFactory):
                 self.source_plugin_name, augmented_config, target_plugin_name, self.ctx.user_config
             )
 
+            # The enriched plugin is an object of the package the enrich is
+            # declared in, so what it shares, it shares with that package's
+            # objects (see 'partcad.shared_parameters').
+            self.target_project.bind_shared_parameters(self.name, augmented_config)
+
             # Fill in the parameter values using the simplified "with" option
             if "with" in config:
                 for param in config["with"]:
-                    augmented_config["parameters"][param]["default"] = config["with"][param]
+                    declared = augmented_config["parameters"][param]
+                    if is_shared(declared):
+                        # The package's value, which one enrich does not set.
+                        check_instance_value(declared, config["with"][param], param, target_plugin_name)
+                        continue
+                    declared["default"] = config["with"][param]
 
             # Recalling normalize to normalize data after replacing target parameters from with key.
             augmented_config = PluginConfiguration.normalize(

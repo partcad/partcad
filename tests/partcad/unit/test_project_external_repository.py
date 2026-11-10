@@ -1432,3 +1432,44 @@ def test_a_plugin_imports_partcads_model_site_toolkit_wherever_it_runs(served_by
     config = models._fetch_object_instance_config("part", "1;file=a%2Cb=c.stl")
     # Decoded by PartCAD on the way in, spelled the way PartCAD spells it on the way out.
     assert config["desc"] == "1;file=a%2Cb=c.stl"
+
+
+def test_two_projects_with_a_plugin_of_one_name_are_each_answered_by_their_own(tmp_path):
+    """The plugin's answers are kept by where it is declared, not by its name alone.
+
+    Every project's root package is '//', so a plugin ':name' in two projects is
+    '//:name' in both; kept under that, the second project was answered from the
+    first one's cache. The name is the same in both here - and new to this run,
+    so no earlier run's answers are in the way either.
+    """
+    name = "plugin_" + uuid.uuid4().hex[:12]
+    made = []
+    try:
+        for project in ("first", "second"):
+            directory = tmp_path / project
+            directory.mkdir()
+            (directory / (name + ".py")).write_text(textwrap.dedent("""
+                if __name__ == "get":
+                    key = request["key"]
+                    if key == "meta":
+                        output = {"result": {"instanceKinds": ["part"]}}
+                    elif key.startswith("objects/part/"):
+                        output = {"result": {"type": "step", "path": "x.step", "desc": "%s"}}
+                    else:
+                        output = {"result": None}
+                else:
+                    output = {}
+                """ % project))
+            (directory / "partcad.yaml").write_text(
+                "dependencies:\n  models:\n    type: external\n    plugin: :%s\n"
+                "repositories:\n  %s:\n    type: basic\n    path: %s.py\n" % (name, name, name)
+            )
+            ctx = pc.Context(str(directory))
+            models = ctx.get_project("//models")
+            made.append((ctx.user_config.internal_state_dir, models.path))
+            assert models._fetch_object_instance_config("part", "1;file=a")["desc"] == project
+        assert made[0][1] != made[1][1]
+    finally:
+        for state, path in made:
+            shutil.rmtree(path, ignore_errors=True)
+            shutil.rmtree(os.path.join(state, "cache", "external", os.path.basename(path)), ignore_errors=True)
