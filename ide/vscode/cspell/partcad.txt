@@ -8,6 +8,7 @@ allow
 along
 also
 anchored
+and
 angle
 angstrom
 apps
@@ -26,6 +27,7 @@ basic
 binaries
 binary
 bool
+boolean
 brep
 build
 cache
@@ -260,6 +262,7 @@ openscad
 operation
 optimize
 options
+or
 orientation
 other
 outlet
@@ -419,9 +422,11 @@ volume
 wall
 walls
 weight
+whole
 width
 windows
 wires
 with
 wrapper
+xor
 yd
