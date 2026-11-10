@@ -684,9 +684,15 @@ def test_schema_an_assembly_or_a_scene_may_declare_how_long_it_takes(section, de
     validate({section: {"tower": dict(declaration, timeout=1800)}})
 
 
-@pytest.mark.parametrize("check", [{"connectivity": {"requireAnchored": False}}, {"interference": {"minVolume": 1.0}}])
+@pytest.mark.parametrize(
+    "check",
+    [
+        {"qual": {"basic": {"connectivity": {"requireAnchored": False}}}},
+        {"qual": {"topology": {"interference": {"minVolume": 1.0}}}},
+    ],
+)
 def test_schema_a_scene_configures_the_checks_it_runs_as_an_assembly_does(check):
-    """A scene is an assembly to 'pc test', and its interference and connectivity
+    """A scene is an assembly to 'pc qual test', and its interference and connectivity
     checks read the same sections: a scene holding an assembly that places
     some of its items by coordinates has to be able to say so."""
     validate({"scenes": {"hung": dict({"type": "assy"}, **check)}})

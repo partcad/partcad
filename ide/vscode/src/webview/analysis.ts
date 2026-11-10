@@ -8,7 +8,7 @@
 // came back with.
 //
 // A part's 'fea:' section, like its 'dynamic:', 'thermal:' and 'cfd:', is a map
-// of named scenarios, the way 'simulate:' is a map of named simulations: one
+// of named scenarios, the way 'qual: sim:' is a map of named simulations: one
 // set of boundary conditions each - fixed here, loaded there - and the
 // requirement feature it demonstrates. So each tab is laid out and behaves like
 // the Simulation tab ('simulation.ts'), with the same list ('scenarioList.ts'):
@@ -564,7 +564,7 @@ function verdictOf(state: RunState | undefined): Verdict {
     const found = state.entry.findings?.length ?? 0;
     if (found > 0) {
         // A finding is what the analysis was asked about, so a run with one is a
-        // run whose answer is "no" - what 'pc test' fails a part on.
+        // run whose answer is "no" - what 'pc qual test' fails a part on.
         return { state: 'failed', mark: '✗', label: `Found ${found === 1 ? 'one thing' : `${found} things`}` };
     }
     return { state: 'passed', mark: '✓', label: 'Ran, and found nothing' };

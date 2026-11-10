@@ -41,7 +41,7 @@ section named after the analysis -- ``fea:`` for a finite element analysis,
 ``cfd:`` for computational fluid dynamics -- because the conditions are a
 property of the part rather than of the solver asked about it. Each section is a
 map of named scenarios, one per question of that kind the part is asked, the way
-``simulate:`` is a map of simulations. Each condition names an interface the
+``qual: sim:`` is a map of simulations. Each condition names an interface the
 part implements, so it lands where the part connects. ``pc cae fea``, ``pc cae
 dynamic``, ``pc cae thermal`` and ``pc cae cfd`` run the scenarios through the
 implementation configured -- all of them, or one with ``-f`` -- and report what
@@ -53,9 +53,9 @@ Simulations
 -----------
 
 A part, an assembly or a scene says what it is supposed to *do* in a
-``simulate:`` section: the scene it is placed in, the simulation plugin that runs
+``qual: sim:`` section: the scene it is placed in, the simulation plugin that runs
 it, and a ``validation:`` condition over what happened that holds when it went as
-it should -- "after ten seconds on a 10° slope it is still upright". ``pc sim``
+it should -- "after ten seconds on a 10° slope it is still upright". ``pc qual test --simulation``
 runs them. A simulation may name the feature of the requirements it demonstrates
 (``feature:``), which makes it evidence for that feature. See
 :doc:`/digital_thread/lifecycle/simulation` and :ref:`simulate`.
@@ -64,11 +64,11 @@ Analysis and validation
 =======================
 
 An analysis answers a question; validation asks whether the answer is the one
-that was needed. The same runs serve both: ``pc test`` runs every scenario of
-every ``fea:``, ``dynamic:``, ``thermal:`` and ``cfd:``, and every ``simulate:``
+that was needed. The same runs serve both: ``pc qual test`` runs every scenario of
+every ``fea:``, ``dynamic:``, ``thermal:`` and ``cfd:``, and every ``qual: sim:``
 entry, declared as its checks of the same names (``sim`` for a simulation), and
 fails an object any of whose scenarios finds a problem or whose simulation does
-not behave as it says (see :doc:`/digital_thread/lifecycle/validation`).
+not behave as it says (see :doc:`/digital_thread/lifecycle/qualification`).
 
 In the UI
 =========
@@ -105,9 +105,9 @@ it costs, what it needs installed and what its failure means are particular to
 the analysis.
 
 The simulations are not here. They are run from
-:ref:`Validation → Simulation <sim-in-the-ui>`, because what a simulation
+:ref:`Qualification → Simulation <sim-in-the-ui>`, because what a simulation
 answers is whether the object does what it says it does, which is a question of
-validation rather than of analysis.
+qualification rather than of analysis.
 
 
 On the command line
@@ -119,8 +119,8 @@ On the command line
   pc cae fea :bracket                  # every scenario of one analysis
   pc cae fea -f loaded :bracket        # one of them, by name
   pc cae thermal :heatsink             # another analysis
-  pc sim -a gearbox                    # the simulations, which are the other half of this phase
-  pc test -f fea :bracket              # an analysis as the check pc test makes of it
+  pc qual test --simulation -a gearbox                    # the simulations, which are the other half of this phase
+  pc qual test -f fea :bracket              # an analysis as the check pc qual test makes of it
 
 Each analysis has a chapter of its own above, with the keys its section takes
 and the packages that implement it. What follows here is what they have in
@@ -140,7 +140,7 @@ are a property of the part rather than of whoever analyses it -- a bracket is
 bolted down at the same holes whichever solver is asked about it. A part is
 asked more than one question of each kind -- a shelf bracket loaded, and the
 same bracket knocked sideways -- so the section is a map of named
-**scenarios**, the way ``simulate:`` is a map of named simulations:
+**scenarios**, the way ``qual: sim:`` is a map of named simulations:
 
 .. code-block:: yaml
 
@@ -178,7 +178,7 @@ same bracket knocked sideways -- so the section is a map of named
             hook: 2 W         # heat put in through the port's surface
 
 ``pc cae fea :bracket`` runs every scenario of the analysis and ``-f`` runs one
-(``pc cae fea -f loaded :bracket``); ``pc test`` holds the part to all of them.
+(``pc cae fea -f loaded :bracket``); ``pc qual test`` holds the part to all of them.
 Beside its conditions a scenario may say what it is (``desc:``), which feature
 of the part's :ref:`requirements <requirements>` it demonstrates
 (``feature:``, a name or a list -- the IDE's Requirements tab lists it there, as
@@ -267,14 +267,14 @@ A **relative** package name here -- ``calculix:fea`` rather than
 that name, and is resolved from the package the declaration is written in. That
 is not where a name a *user* types is resolved from: ``pc cae fea -i
 calculix:fea`` means the ``calculix`` beside the user, like every other name a
-command line carries. The difference matters under ``pc test -P //...`` over a tree of
+command line carries. The difference matters under ``pc qual test -P //...`` over a tree of
 packages, which runs with the tree's root current while every part in it sits one
 or more packages below.
 
 What comes back from each scenario is two things: the model, written to
 ``<part>.<analysis>.<scenario>.<extension>`` in whichever format the
 implementation chose (``bracket.fea.loaded.glb``), and the **findings** -- a
-JSON array of what the analysis has to say about the part. ``pc test`` gains a
+JSON array of what the analysis has to say about the part. ``pc qual test`` gains a
 check per analysis -- ``fea``, ``dynamic``, ``thermal``, ``cfd`` -- that runs
 every scenario of it and fails a part any of whose scenarios produced a finding,
 naming the scenario; they apply only to a part that declares the matching
@@ -288,7 +288,7 @@ something.
 Not running is deliberately not a skip. A skip says the question does not apply
 here; a part that declares ``fea:`` has asked, and a plugin that was asked and
 delivered nothing has failed. The consequence is the point: declaring ``fea:``
-in a shared package makes ``pc test`` fail for everyone who has not installed
+in a shared package makes ``pc qual test`` fail for everyone who has not installed
 what that implementation needs. A package that does not want that should not
 declare the section. What the failure carries is *why* -- the implementation's
 own sentence, plus which implementation was asked and which machine it did not
@@ -313,8 +313,8 @@ runtime for this, or for choosing a sandbox. Every image PartCAD builds, pulls o
 documents is a Linux image, and such a daemon answers a ping and then fails every
 pull with ``no matching manifest for windows/amd64``.
 
-The same policy, from the same code, decides ``pc test``'s ``sim`` check, which
-holds a part, an assembly or a scene to the ``simulate:`` claims it makes: a simulator
+The same policy, from the same code, decides ``pc qual test``'s ``sim`` check, which
+holds a part, an assembly or a scene to the ``qual: sim:`` claims it makes: a simulator
 that resolved and did not run is a failure, but for the one excuse, and a
 simulation plugin that cannot be found is never excused. See "Running a
 simulation" in :doc:`/digital_thread/lifecycle/simulation`.
@@ -334,7 +334,7 @@ Agent skills
 
 ``/pc:sim-assembly-fea``
   Turns what a simulation measured into a stress analysis of one part. It runs
-  the assembly's ``simulate:`` entry, reads the forces and moments acting on the
+  the assembly's ``qual: sim:`` entry, reads the forces and moments acting on the
   body the part is welded into at the end of the run, works out which of them
   load that part and where, and writes a new named scenario into the part's
   ``fea:`` section beside any already there. It is the bridge between the two

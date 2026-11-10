@@ -14,7 +14,7 @@ class SceneConfiguration(Configuration, ShapeConfiguration):
     The same shape of declaration as an assembly's, with one default of its
     own: a scene is not manufacturable unless it says so. A scene states where
     things are -- a workcell, a table, a simulation world -- and nothing in it
-    is a product to be made, so the manufacturability checks ('pc test') and
+    is a product to be made, so the manufacturability checks ('pc qual test') and
     the assembly instruction book have nothing to say about one. A scene that
     really is a deliverable declares 'manufacturable: true' and gets both back.
 

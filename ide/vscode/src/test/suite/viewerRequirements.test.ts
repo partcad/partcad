@@ -6,7 +6,7 @@
 // The Requirements tab: which mark each requirement gets, how the list is
 // grouped, and what each feature says it is validated by.
 //
-// The verdicts are the daemon's ('partcad.requirements', the code 'pc test -f
+// The verdicts are the daemon's ('partcad.requirements', the code 'pc qual test -f
 // requirements' runs). What is pinned here is that this side draws them as
 // they are - a requirement not yet measured is neither green nor red - and that
 // every feature offers the LLM, with the tooltip naming the skill.
@@ -96,7 +96,7 @@ function data(overrides: Partial<RequirementsData> = {}): RequirementsData {
         requirements: [
             check('physics', 'mass', true),
             check('ports', 'top', false),
-            check('simulate', 'upright', false),
+            check('sim', 'upright', false),
             check('interfaces', 'm3', true),
             check('fea', 'dropped', false),
         ],

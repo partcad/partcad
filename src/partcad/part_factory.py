@@ -77,7 +77,7 @@ class PartFactory(ShapeFactory):
     # and for 'material' and 'color' that is the end of it: the file answers. For
     # 'tolerance' it is not, because plenty of STEP files carry no GD&T at all,
     # and a part read from one of those has no way left to say how precisely it
-    # has to be made - which is what 'pc test' demands of anything that is going
+    # has to be made - which is what 'pc qual test' demands of anything that is going
     # to be manufactured.
     #
     # So the field. It is a field rather than a parameter because it is not a
@@ -189,7 +189,7 @@ class PartFactory(ShapeFactory):
         each of them would declare its way past the manufacturability check:
 
         * '.nan' is the answer that means "the file tolerances this feature by
-          feature", which 'pc test' accepts. NaN is
+          feature", which 'pc qual test' accepts. NaN is
           'tolerance_inspect.reduce()'s to produce, and nothing else's.
         * '.inf' and '-.inf' are neither zero nor NaN, so they pass as though
           they were a real tolerance.
@@ -234,7 +234,7 @@ class PartFactory(ShapeFactory):
         wrapper that runs a CadQuery/build123d script is otherwise strict about
         build parameters the script does not declare - rightly, since such a
         name is usually a typo - but a part may be obliged to declare an
-        object-type parameter its script has no use for ('pc test' requires a
+        object-type parameter its script has no use for ('pc qual test' requires a
         manufactured part to state a tolerance). Those names, and only those,
         are dropped there when the script does not want them; see
         'wrappers/custom_cqgi.filter_optional_params'.
@@ -303,18 +303,24 @@ class PartFactory(ShapeFactory):
         colour the source states per face is the payload's to say (see
         docs/design/cmf.md), and wins where it does; this is the part's own.
 
+        A part that names no colour is drawn in the one its material claims,
+        if it claims one: that is its colour (see 'cmf.declared_set'), and a
+        drawing that did not say so would draw what is specified as goldenrod.
+
         Only where nothing is recorded already, as for the material: a colour
         a reader found in the file outranks the declaration's.
         """
         declared = parameters.get("color")
         value = declared.get("default") if isinstance(declared, dict) else None
+        ctx = getattr(self, "ctx", None)
+        package = getattr(self.project, "name", "") if getattr(self, "project", None) is not None else ""
         if not isinstance(value, str) or not value.strip():
-            return
+            value, package = self._material_color_claim(ctx, parameters, package)
+            if value is None:
+                return
         properties = config.get(shape_envelope.KEY_PROPERTIES)
         if isinstance(properties, dict) and properties.get("color"):
             return
-        ctx = getattr(self, "ctx", None)
-        package = getattr(self.project, "name", "") if getattr(self, "project", None) is not None else ""
         reference = cmf.canonical(ctx, "color", value, package, quiet=False)
         rgba = cmf.rgba_of_reference(reference)
         if rgba is None:
@@ -326,6 +332,23 @@ class PartFactory(ShapeFactory):
             properties = {}
             config[shape_envelope.KEY_PROPERTIES] = properties
         properties["color"] = cmf.css_color.to_hex(rgba)
+
+    def _material_color_claim(self, ctx, parameters: dict, package: str) -> tuple:
+        """'(colour, package)': the colour the part's material claims, and the package it is written in; (None, None).
+
+        The claim is written in the material's own package (':natural' of
+        '//vendor:alu' is '//vendor:natural'), which is what it is resolved
+        against, as 'cmf.declared_set' resolves it.
+        """
+        declared = parameters.get("material")
+        value = declared.get("default") if isinstance(declared, dict) else None
+        if not isinstance(value, str) or not value.strip():
+            return None, None
+        material = cmf.lookup(ctx, "material", value, package, quiet=True)
+        claim = getattr(material, "color_claim", None)
+        if not claim:
+            return None, None
+        return claim, material.project_name
 
     def _create_part(self, config: object) -> Part:
         self.record_object_type_properties(config)

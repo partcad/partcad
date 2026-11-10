@@ -33,8 +33,8 @@ up to date.
 | `dt-manufacturing-buy.png` | Its **Manufacturing > Buy** tab for `provider_store:nut`, a part with a vendor and an SKU in a package that lists a supplier carrying it | `docs/source/digital_thread/lifecycle/manufacturing_buy.rst` | `shoot.mjs dt-manufacturing-buy` |
 | `dt-manufacturing-bom.png` | Its **Manufacturing > Bill of Materials** tab for `feature_interface:connect-mates`: a bracket, a motor and six screws of two sizes | `docs/source/digital_thread/lifecycle/manufacturing_bom.rst` | `shoot.mjs dt-manufacturing-bom` |
 | `dt-manufacturing-assembly.png` | Its **Manufacturing > Assembly** tab for `feature_interface:connect-mates`: the instruction book | `docs/source/digital_thread/lifecycle/manufacturing_assembly.rst` | `shoot.mjs dt-manufacturing-assembly` |
-| `dt-validation.png` | Its **Validation > Test** tab for `feature_interface:example-bracket`: every check `pc test` runs, with its verdict | `docs/source/digital_thread/lifecycle/validation.rst`, `testing.rst` | `shoot.mjs dt-validation` |
-| `dt-validation-simulation.png` | Its **Validation > Simulation** tab for `feature_simulate:stable`: the run, and the criteria it is judged by | `docs/source/digital_thread/lifecycle/simulation.rst` (twice: "In the UI" and "Examples") | `shoot.mjs dt-validation-simulation` |
+| `dt-validation.png` | Its **Qualification > Basic** tab for `feature_interface:example-bracket`: every basic test `pc qual test` runs, with its verdict. Retake after the rename: the picture still shows the group as Validation and the tab as Test | `docs/source/digital_thread/lifecycle/qualification.rst`, `qualification_tests.rst` | `shoot.mjs dt-validation` |
+| `dt-validation-simulation.png` | Its **Qualification > Simulation** tab for `feature_simulate:stable`: the run, and the criteria it is judged by | `docs/source/digital_thread/lifecycle/simulation.rst` (twice: "In the UI" and "Examples") | `shoot.mjs dt-validation-simulation` |
 | `sim-example-pendulum.png` | The same tab for `feature_simulate_joints:pendulum`, a mechanism held to its closed form | `docs/source/digital_thread/lifecycle/simulation.rst` | `shoot.mjs sim-example-pendulum` |
 | `sim-example-arm.png` | The same tab for `feature_simulate_fea:arm`, the run an FEA scenario is written from | `docs/source/digital_thread/lifecycle/simulation.rst` | `shoot.mjs sim-example-arm` |
 | `plugin-part-type.png` | `produce_part_wrapper:demo`, a part built by a `partTypes:` plugin | `docs/source/plugins/part_types.rst` | `shoot.mjs plugin-part-type` |
@@ -252,7 +252,7 @@ terminal does, and is retaken with the rest.
 ### The simulation examples: `sim-example-*.png`
 
 The "Examples" section of the Simulation chapter points at three packages under `examples/`, and shows each
-one's run on the **Validation > Simulation** tab. The first of the three is `dt-validation-simulation` above,
+one's run on the **Qualification > Simulation** tab. The first of the three is `dt-validation-simulation` above,
 which is that package's `stable`; the other two have a shot each.
 
 Opening the tab runs the simulation, so these three need the engine the package names -- MuJoCo, from

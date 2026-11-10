@@ -157,7 +157,22 @@ def cli(
 
     parameters = answer.get("parameters") or {}
     if parameters and not check:
-        path = save_parameter_overrides(answer["plugin"], parameters)
+        # The ones the plugin shares with its package go under the package,
+        # so that this login serves every plugin sharing them.
+        path = save_parameter_overrides(
+            answer["plugin"], parameters, package_name=answer.get("package"), shared=answer.get("shared") or ()
+        )
         click.echo("Saved the credentials of %s in %s." % (answer["plugin"], path))
+        if answer.get("shared"):
+            click.echo(
+                "%s %s shared by the package %s, and serve%s every object of it that shares %s."
+                % (
+                    ", ".join(answer["shared"]),
+                    "is" if len(answer["shared"]) == 1 else "are",
+                    answer.get("package"),
+                    "s" if len(answer["shared"]) == 1 else "",
+                    "it" if len(answer["shared"]) == 1 else "them",
+                )
+            )
     if answer.get("message"):
         click.echo(answer["message"])

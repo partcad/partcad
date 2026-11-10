@@ -5,7 +5,7 @@
 #
 """One name, one object: the rule a package's object names follow, as both ends read it.
 
-A command is handed an object by name -- ``pc render bolt``, ``pc test
+A command is handed an object by name -- ``pc render bolt``, ``pc qual test
 //pub/std:m3`` -- and used to be told separately what kind of object the name
 was, with ``-a``, ``-s``, ``-i``, ``-S`` or ``-w``, because a package kept a
 namespace per kind and ``bolt`` could be a part and an assembly at once. It no

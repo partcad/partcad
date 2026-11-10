@@ -164,6 +164,44 @@ def resolve_mesh_path(filename, urdf_dir, package_paths):
     return os.path.join(urdf_dir, filename)
 
 
+def sent_note(filename):
+    """What to add to "not found" for a 'package://' reference, when the sandbox was sent files rather than sharing them.
+
+    Such a reference is looked for in the search paths and then in every
+    directory above the URDF. A sandbox that is sent files - the 'remote' one,
+    'docker' with 'useDockerRemote' - holds the directories the object names and
+    none above them, so a package found only by looking up is found on PartCAD's
+    side and not in it; naming its directory in 'searchPaths' sends it.
+    """
+    if not filename.startswith("package://"):
+        return ""
+    try:
+        import wrapper_common
+    except ImportError:
+        return ""
+    if not wrapper_common.files_were_sent():
+        return ""
+    package = filename[len("package://") :].partition("/")[0]
+    # The package's own directory, which is a root a reference is resolved
+    # against too: the one above it may be one that is never sent (the home
+    # directory is not), and would send everything beside the package.
+    return (
+        " (this sandbox is sent the directories the assembly names, and none above its file: "
+        "to find '%s' there, name the directory of '%s' itself in 'searchPaths')" % (package, package)
+    )
+
+
+def no_geometry(urdf_file, warnings):
+    """Why nothing could be built from 'urdf_file': what kept each link out is the reason, and is said with it.
+
+    A link whose mesh is missing is a warning, and the warnings reach PartCAD
+    with the tree - which a URDF none of whose links were built does not
+    produce. So what was found missing, and what to declare for it (see
+    'sent_note'), would otherwise be read nowhere.
+    """
+    return "No geometry found in %s%s" % (urdf_file, "".join("\n" + warning for warning in warnings))
+
+
 def mesh_scale_factor(mesh, warnings):
     """The uniform scale, in PartCAD's millimetres, of a URDF mesh reference.
 
@@ -453,7 +491,7 @@ def start_within(lower, upper):
     where a joint can be: a legged robot's knee bends between -2.7 and -0.08
     rad, and a gripper's closed position is often not its zero. A joint that
     starts outside its own bounds is one an engine starts against its stop,
-    and fails 'pc test''s 'connect' check (docs/design/simulation.md, 8.13.10),
+    and fails 'pc qual test''s 'connect' check (docs/design/simulation.md, 8.13.10),
     so such a joint starts at the bound nearest zero instead, and the robot is
     read - and drawn - there. Either bound may be None, for a side left open.
     """
@@ -812,7 +850,9 @@ def geometry_node(element, name, link_name, context):
     if kind == "mesh":
         path = resolve_mesh_path(geometry.filename, context["urdf_dir"], context["package_paths"])
         if path is None or not os.path.isfile(path):
-            context["warnings"].append("Mesh file not found for link '%s': %s" % (link_name, geometry.filename))
+            context["warnings"].append(
+                "Mesh file not found for link '%s': %s%s" % (link_name, geometry.filename, sent_note(geometry.filename))
+            )
             return None
         extension = os.path.splitext(path)[1].lower()
         part_type = MESH_PART_TYPES.get(extension)
@@ -1110,7 +1150,7 @@ def process(path, request):  # pylint: disable=unused-argument
 
     walk_link(robot, root_name, IDENTITY, IDENTITY, context, frozenset(), None)
     if not context["nodes"]:
-        raise ValueError("No geometry found in %s" % urdf_file)
+        raise ValueError(no_geometry(urdf_file, warnings))
 
     # Before the 'dropped' tally is taken: reading a joint is what notices the
     # Gazebo settings attached to it, and a calibration block.

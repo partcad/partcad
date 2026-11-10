@@ -2,7 +2,7 @@
 # 'fixed', so the subject's root body - the pendulum's frame - is welded to the
 # world, and the joints inside it still move.
 #
-# Where it goes is what the 'simulate:' says with its 'offset:', in the same
+# Where it goes is what the 'qual: sim:' entry says with its 'offset:', in the same
 # seven numbers the scene PartCAD ships takes ('//builtin/scene:subject'; see
 # the note beside 'subject_offset' there for why they arrive without brackets
 # or commas).

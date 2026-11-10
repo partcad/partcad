@@ -25,7 +25,9 @@ from typing import TYPE_CHECKING, List, Optional
 import ruamel.yaml
 from ruamel.yaml.scalarstring import SingleQuotedScalarString
 
-from partcad_utils import assy_filter, object_names, pcignore
+from partcad_utils import assy_filter, object_names
+from partcad_utils import parameters as pc_parameters
+from partcad_utils import pcignore
 
 from . import (
     assembly,
@@ -85,6 +87,7 @@ from .exception import EmptyShapesError, NeedsUpdateException, ObjectNameTakenEr
 from .part import Part
 from .render import render_cfg_merge
 from .shape_config import NO_DEFAULT
+from .shared_parameters import SharedParameters
 from .utils import (
     escape_name,
     format_parameterized_name,
@@ -616,6 +619,12 @@ class Project(project_config.Configuration):
         # '_refuse_duplicate_names'.
         self._refused_names: dict[str, dict[str, str]] = {}
         self._refuse_duplicate_names()
+        # The package-level parameters: one value per name for every object
+        # declaring it 'shared: true', and the declarations refused for not
+        # agreeing about one. Before any object is made, for the same reason as
+        # the names above. See 'partcad.shared_parameters'.
+        self.shared_parameters = SharedParameters(self)
+        self._refuse_shared_parameter_disagreements()
 
         if (
             "desc" in self.config_obj
@@ -759,6 +768,16 @@ class Project(project_config.Configuration):
         if name in done and configs is not None and configs.get(name) is config:
             return config
         normalized = config_class.normalize(name, config, f"{self.name}:{name}", self.ctx.user_config)
+        try:
+            self.bind_shared_parameters(name, normalized)
+        except ValueError as e:
+            # A declaration the package's shared parameter refuses: the object
+            # is not served, and says why where it is looked for.
+            self._refused_names.setdefault(kind, {})[name] = str(e)
+            if configs is not None:
+                configs.pop(name, None)
+            self.record_broken_object(kind, name, e)
+            return None
         if kind in LAZY_OBJECT_KINDS and isinstance(normalized, dict) and "manufacturable" not in normalized:
             # What the package says about anything it produces, written onto the
             # declaration rather than only onto the object. 'ShapeFactory' puts
@@ -886,7 +905,7 @@ class Project(project_config.Configuration):
         point: 'pc list parts -r //pub' over a catalog of twenty thousand parts
         used to run a factory per row. What that also means is that a listing
         no longer reports a declaration PartCAD cannot use - it does not look
-        closely enough to find out. That is 'pc test's question, and it asks it
+        closely enough to find out. That is 'pc qual test's question, and it asks it
         of every object.
         """
         descriptions = {}
@@ -982,7 +1001,7 @@ class Project(project_config.Configuration):
         names: a name is one object of a package whatever its kind (see
         'NAMED_OBJECT_KINDS'), so the name is enough to find it, and the kind is
         looked up rather than asked for. 'kinds' narrows the search to what the
-        caller can do anything with -- 'pc sim' simulates parts, assemblies and
+        caller can do anything with -- 'pc qual test --simulation' simulates parts, assemblies and
         scenes, and a sketch called 'bolt' is not one -- and is searched in the
         order of 'NAMED_OBJECT_KINDS' whatever order it is given in.
 
@@ -1067,7 +1086,7 @@ class Project(project_config.Configuration):
         'NAMED_OBJECT_KINDS' keeps the name, which is also the object a bare
         name resolves to, and every other one is refused: dropped from the
         declarations this package serves, and recorded as broken with the
-        reason, so that the log, 'pc test' and the Explorer all say what is
+        reason, so that the log, 'pc qual test' and the Explorer all say what is
         wrong and what to do about it. Refusing it rather than letting one
         silently shadow the other is the point: otherwise a name would mean one
         object to 'pc render' and another to whatever named it with a flag.
@@ -1097,6 +1116,40 @@ class Project(project_config.Configuration):
         # Built out of the declarations, and built again without what was just
         # refused the next time a lookup misses (see 'alias_declared_by').
         self._alias_index.clear()
+
+    def _refuse_shared_parameter_disagreements(self) -> None:
+        """Refuse the declarations that disagree about a parameter the package shares.
+
+        Within one package every declaration of a parameter name says
+        'shared: true', or none of them does, and the shared ones agree on
+        everything but 'desc' (see 'partcad_utils.parameters', whose words these
+        are, and which 'pc lint' reads too). Which of them is the mistake is not
+        something PartCAD can tell, so every object declaring the name is
+        refused: dropped from the declarations this package serves and recorded
+        as broken with the reason, as '_refuse_duplicate_names' does with a name
+        two kinds of object claim.
+
+        Over what the package declares as it loads. A plugin-backed package
+        lists its objects later, one kind at a time; its shared declarations
+        are held to the first one of each name as they are bound instead (see
+        'SharedParameters.bind').
+        """
+        sections = {kind: self._object_configs.get(kind) for kind in pc_parameters.PARAMETERIZED_SECTIONS}
+        for problem in self.shared_parameters.load(sections):
+            for declaration in problem.declarations:
+                refused = self._refused_names.setdefault(declaration.kind, {})
+                if declaration.object in refused:
+                    continue
+                refused[declaration.object] = problem.message
+                configs = self._object_configs.get(declaration.kind)
+                if configs is not None:
+                    configs.pop(declaration.object, None)
+                self.record_broken_object(declaration.kind, declaration.object, problem.message)
+        self._alias_index.clear()
+
+    def bind_shared_parameters(self, name: str, config) -> None:
+        """Make the shared parameters 'config' declares the package's own (see 'SharedParameters.bind')."""
+        self.shared_parameters.bind(name, config)
 
     def name_taken(self, kind: str, name: str, config_obj=None) -> typing.Optional[str]:
         """Why 'name' cannot be given to a new object of 'kind' here, or None if it can.
@@ -1562,6 +1615,7 @@ class Project(project_config.Configuration):
             config = interface_config.InterfaceConfiguration.normalize(
                 interface_name, config, f"{self.name}:{interface_name}", self.ctx.user_config
             )
+            self.bind_shared_parameters(interface_name, config)
             return copy.deepcopy(config) if deep_copy else config
 
     def init_interface_by_config(self, config, source_project=None):
@@ -1665,7 +1719,7 @@ class Project(project_config.Configuration):
                 )
                 return None
             try:
-                pc_config.apply_parameter_values(construction, params, result_name)
+                pc_config.apply_parameter_values(construction, params, result_name, package_name=self.name)
             except Exception as e:
                 self.record_broken_object("interface", result_name, e)
                 return None
@@ -2058,6 +2112,11 @@ class Project(project_config.Configuration):
                     # of a kind gains its 'name' whether or not anything is ever
                     # made out of it (see '_normalized').
                     config = get_config(name)
+                    if config is None and name in self._refused_names.get(factory_name, ()):
+                        # Refused as it was normalized -- its shared parameter
+                        # disagrees with the package's -- and recorded with the
+                        # reason then, which making it would overwrite.
+                        continue
                     if self._enriches_a_package_not_loaded(factory_name, config):
                         continue
                     self.init_object_by_config(factory_name, config_class, alias_class, config)
@@ -2633,6 +2692,7 @@ class Project(project_config.Configuration):
             config = config_class.normalize(
                 result_name, copy.deepcopy(instance), f"{self.name}:{result_name}", self.ctx.user_config
             )
+            self.bind_shared_parameters(base_object_name, config)
             config["orig_name"] = base_object_name
             if factory_name in LAZY_OBJECT_KINDS and "manufacturable" not in config:
                 config["manufacturable"] = self.is_manufacturable
@@ -2861,7 +2921,7 @@ class Project(project_config.Configuration):
             # Fill in the parameter values
             if "parameters" in config and config["parameters"] is not None:
                 # Filling "parameters"
-                pc_config.apply_parameter_values(config["parameters"], params, result_name)
+                pc_config.apply_parameter_values(config["parameters"], params, result_name, package_name=self.name)
             else:
                 # Filling "with"
                 if "with" not in config:
@@ -3182,6 +3242,56 @@ class Project(project_config.Configuration):
 
         return True
 
+    def add_qual_config(self, kind: str, object_name: str, subtype: str, name: str, entry: dict) -> bool:
+        """Write one entry of an object's 'qual:' section into this package's 'partcad.yaml'.
+
+        '<object>.qual.<subtype>.<name>' becomes 'entry': a plugin's check (with
+        'path:'), a simulation, or the parameters of a built-in check, which is
+        what 'pc qual add' writes (see 'partcad.qual.config'). An entry of that
+        name is replaced. Refused, with the reason logged and False returned, for
+        an object the file does not declare -- one a plugin supplies, or one
+        another file holds -- since there is nowhere here to write it.
+        """
+        from .qual import config as qual_config
+
+        if subtype not in qual_config.SUBTYPES:
+            pc_logging.error("'%s' is not a subtype of qualification (%s)" % (subtype, ", ".join(qual_config.SUBTYPES)))
+            return False
+        section = OBJECT_KIND_SECTIONS.get(kind)
+        if section is None:
+            pc_logging.error("A %s does not declare 'qual:'" % kind)
+            return False
+
+        yaml = ruamel.yaml.YAML()
+        yaml.preserve_quotes = True
+        yaml.width = 4096
+        with open(self.config_path) as fp:
+            config = yaml.load(fp)
+        if config is None:
+            config = {}
+        declarations = config.get(section)
+        declaration = declarations.get(object_name) if isinstance(declarations, dict) else None
+        if not isinstance(declaration, dict):
+            pc_logging.error(
+                "The %s '%s' is not declared in '%s', so there is nowhere to add its qualification"
+                % (kind, object_name, self.config_path)
+            )
+            return False
+
+        qual = declaration.get(qual_config.SECTION)
+        if not isinstance(qual, dict):
+            qual = {}
+            declaration[qual_config.SECTION] = qual
+        entries = qual.get(subtype)
+        if not isinstance(entries, dict):
+            entries = {}
+            qual[subtype] = entries
+        entries[name] = entry
+
+        with open(self.config_path, "w") as fp:
+            yaml.dump(config, fp)
+        return True
+
     def add_sketch(self, kind: str, path: str, config={}) -> bool:
         pc_logging.info("Adding the sketch %s of type %s" % (self.rel_path(path), kind))
         return self._add_component(
@@ -3296,9 +3406,20 @@ class Project(project_config.Configuration):
                     yaml.dump(config, fp)
                     fp.close()
 
-    async def _run_test_async(self, ctx, tests: list, use_wrapper: bool = False, fast_only: bool = False) -> bool:
+    async def _run_test_async(
+        self, ctx, tests: list, use_wrapper: bool = False, fast_only: bool = False, subtypes=None, prefix=None
+    ) -> bool:
+        """Qualify every object of this package: the built-in checks 'tests', and what each object declares.
+
+        'subtypes' are the subtypes of qualification asked for (all of them for
+        none), which is also which of the checks plugins supply that an object
+        declares are asked of it ('partcad.qual.registry.for_shape'), and
+        'prefix' the start of the name of the ones asked for ('-f').
+        """
+        from .qual import registry as qual_registry
+
         if tests is None:
-            tests = ctx.get_all_tests()
+            tests = qual_registry.select(ctx.get_all_tests(), subtypes, prefix)
 
         tasks = []
         test_method = "test_log_wrapper" if use_wrapper else "test_cached"
@@ -3322,25 +3443,35 @@ class Project(project_config.Configuration):
             (self.assembly_configs, self.get_assembly),
             (self.scene_configs, self.get_scene),
         ]:
+            # Each check is handed the built-in list as what "the suite" is,
+            # and is asked of the object beside the checks it declares itself.
             tasks.extend(
                 asyncio.create_task(getattr(t, test_method)(tests, ctx, obj))
                 for obj in get_objects(config_dict, getter)
-                for t in tests
+                for t in qual_registry.for_shape(tests, obj, subtypes, prefix)
             )
 
         return all(await asyncio.gather(*tasks))
 
-    async def test_async(self, ctx, tests=None, fast_only: bool = False) -> bool:
-        return await self._run_test_async(ctx, tests, use_wrapper=False, fast_only=fast_only)
+    async def test_async(self, ctx, tests=None, fast_only: bool = False, subtypes=None, prefix=None) -> bool:
+        return await self._run_test_async(
+            ctx, tests, use_wrapper=False, fast_only=fast_only, subtypes=subtypes, prefix=prefix
+        )
 
-    def test(self, ctx, tests=None, fast_only: bool = False) -> bool:
-        return asyncio.run(self.test_async(ctx, tests, fast_only=fast_only))
+    def test(self, ctx, tests=None, fast_only: bool = False, subtypes=None, prefix=None) -> bool:
+        return asyncio.run(self.test_async(ctx, tests, fast_only=fast_only, subtypes=subtypes, prefix=prefix))
 
-    async def test_log_wrapper_async(self, ctx, tests=None, fast_only: bool = False) -> bool:
-        return await self._run_test_async(ctx, tests, use_wrapper=True, fast_only=fast_only)
+    async def test_log_wrapper_async(
+        self, ctx, tests=None, fast_only: bool = False, subtypes=None, prefix=None
+    ) -> bool:
+        return await self._run_test_async(
+            ctx, tests, use_wrapper=True, fast_only=fast_only, subtypes=subtypes, prefix=prefix
+        )
 
-    def test_log_wrapper(self, ctx, tests=None, fast_only: bool = False) -> bool:
-        return asyncio.run(self.test_log_wrapper_async(ctx, tests, fast_only=fast_only))
+    def test_log_wrapper(self, ctx, tests=None, fast_only: bool = False, subtypes=None, prefix=None) -> bool:
+        return asyncio.run(
+            self.test_log_wrapper_async(ctx, tests, fast_only=fast_only, subtypes=subtypes, prefix=prefix)
+        )
 
     def _output_cfg(self, shape, options_project=None) -> dict:
         """Which output file types are configured for a shape, and how.

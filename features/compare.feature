@@ -52,9 +52,9 @@ Feature: `pc compare` command
     And STDOUT should contain ""passed": true"
     And STDOUT should contain ""percent": 5.0"
 
-  @failure @pc-test
-  Scenario: A 'match:' requirement is checked by `pc test`
-    When I run "pc test -f requirements taller"
+  @failure @pc-qual-test
+  Scenario: A 'match:' requirement is checked by `pc qual test`
+    When I run "pc qual test -f requirements taller"
     Then the command should exit with a non-zero status code
     And STDOUT should contain "match: volume of :cube: within 4%"
     And STDOUT should not contain "mass of :cube"

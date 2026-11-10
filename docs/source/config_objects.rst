@@ -166,10 +166,10 @@ Requirements
 A part, an assembly, a scene or a sketch may say what it is required to be.
 Requirements are written before the design is, from the point of view of
 whoever asked for it, and they are what the design is judged against: by
-``pc test``, by the simulations that name them, and by whoever reads the
+``pc qual test``, by the simulations that name them, and by whoever reads the
 evidence -- a person, or an AI agent running ``/pc:validate``. The PartCAD
 extension for Visual Studio Code shows them on a tab of their own, in front of
-the others, with a mark beside each that ``pc test`` checks.
+the others, with a mark beside each that ``pc qual test`` checks.
 
 They are from the user's perspective and serve to guide the design. Once the
 design is complete it may impose further requirements of its own -- on
@@ -202,7 +202,7 @@ manufacturing, say -- but those are not part of this section.
 ``features``
   What the object has to have or do: a name for each, and a sentence saying
   what. Most of what anybody asks of a product is said this way, and PartCAD
-  does not judge it. A ``simulate:`` entry may name the feature it demonstrates
+  does not judge it. A ``qual: sim:`` entry may name the feature it demonstrates
   (``feature:``, see :doc:`/digital_thread/lifecycle/simulation`); every feature, demonstrated or not, is
   for whoever reads the evidence to judge -- the renders, the simulations, the
   bill of materials and the assembly instructions. That is what the
@@ -275,9 +275,9 @@ manufacturing, say -- but those are not part of this section.
   since its vendor decides what it is in, and a maintainer who wants each of
   them to say what that is requires it here.
 
-``pc test`` checks every one of these but ``features`` against the model -- its
-``requirements`` check, ``pc test -f requirements`` to run it alone -- and says,
-for each one that is not met, what it found instead.
+``pc qual test`` checks every one of these but ``features`` against the model --
+its ``requirements`` check, ``pc qual test -f requirements`` to run it alone --
+and says, for each one that is not met, what it found instead.
 
 Required values
 ^^^^^^^^^^^^^^^
@@ -431,7 +431,7 @@ which is the form most vendors publish.
 required for reproducibility**. The schema never demands one, of any kind of
 object, and nothing refuses to load, build or lint an object that omits it.
 What such an object cannot do is promise that the next run produces the same
-thing, and manufacturing is repetition -- so ``pc test`` refuses to call it
+thing, and manufacturing is repetition -- so ``pc qual test`` refuses to call it
 manufacturable (see :ref:`reproducibility`). Pull a vendor's model down and
 never claim it can be made, and none of this touches you.
 
@@ -457,7 +457,7 @@ Reproducibility and manufacturability
 Manufacturing is repetition: the run after this one has to produce the same
 thing, so everything that goes into a product has to be gettable a second time
 and be the same thing. There are three ways an object can promise that, and the
-``manufacturability`` check of ``pc test`` fails one that offers none of them:
+``manufacturability`` check of ``pc qual test`` fails one that offers none of them:
 
 - **It is bought.** A ``vendor`` and an ``sku`` name a thing to order, and
   ordering it again is what "the same again" means for it -- whatever file the
@@ -475,7 +475,7 @@ materials that names it worthless.
 
 .. code-block:: text
 
-  Test failed: //robot:bracket: manufacturability: It is not reproducible: it is
+  Qualification failed: //robot:bracket: manufacturability: It is not reproducible: it is
   fetched with 'fileFrom: url', declares no 'fileHash', and names no vendor and
   SKU to order it by, so nothing says which one it is
 
@@ -562,12 +562,105 @@ gives it a name of its own:
 An exploded assembly is never manufacturable, whatever it or its package says:
 it is a picture of the assembly, with every item where nothing holds it, not one
 more thing to make. So ``logo;exploded=true`` and ``logo_exploded`` above drop
-``manufacturable``, and ``pc test`` treats them as it treats anything marked
+``manufacturable``, and ``pc qual test`` treats them as it treats anything marked
 ``manufacturable: false``. ``logo`` itself keeps its own.
 
 Only the ``assy`` type accepts it, because only an ASSY file says what each item
 is connected to; declaring ``exploded`` on an assembly read from a STEP file is
 an error.
+
+.. _shared-parameters:
+
+Package-level parameters
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+A parameter is its object's own: two objects declaring ``size`` have a ``size``
+each. A declaration that says ``shared: true`` is the package's instead. Every
+object of the package that declares a parameter of that name with ``shared: true``
+has the one value, and setting it through any of them sets it for all of them.
+
+The case it is made for is plugins. A package of plugins for one website -- a
+repository serving its models and a provider ordering from it -- needs one API
+token for both, and logging in once has to serve both:
+
+.. code-block:: yaml
+
+  repositories:
+    site_repo:
+      type: basic
+      parameters:
+        token:
+          type: string
+          shared: true
+          desc: The token the repository signs its requests with
+  providers:
+    site_store:
+      type: store
+      parameters:
+        token:
+          type: string
+          shared: true
+          desc: The token the store signs its orders with
+
+Any kind of object may share a parameter -- a part, an assembly, a sketch, an
+interface (a construction parameter, never its freedom of movement), a scene,
+software, a provider or a repository -- and a name may be shared across kinds.
+
+**Every declaration of a name agrees.** Within one package, every declaration of
+a parameter name says ``shared: true``, or none of them does (absent is
+``false``): a name that is one value for some objects and a value of its own for
+others would mean two things depending on which object it was set through. The
+shared declarations of a name are one parameter, so they also agree on
+everything else -- ``type``, ``default``, ``enum`` and the rest -- and may differ
+only in ``desc``. PartCAD refuses every object declaring a name the package
+breaks this for, as it loads the package, and says why; ``pc lint`` and the
+editor report each of those declarations where it is written.
+
+**Where the value comes from.** The declared default, unless the user's
+configuration sets it. It does so in ``~/.partcad/config.yaml``, with
+``--extra-param`` on top, in either of two ways:
+
+.. code-block:: yaml
+
+  # ~/.partcad/config.yaml
+  parameters:
+    # For the package as a whole -- where 'pc login' saves a shared credential:
+    //pub/sites/example:
+      token: "..."
+    # Or through any one of the objects sharing it, as for any parameter:
+    //pub/sites/example:site_store:
+      token: "..."
+
+An object's entry is the more specific and wins over the package's, so
+``--extra-param //pub/sites/example:site_repo.token=...`` overrides what the file
+says for the package (``--extra-param //pub/sites/example.token=...`` sets the
+package's own). Two object entries that set the parameter to different values
+cannot both be the package's value: neither is used, PartCAD says so, and the
+package's entry or the declared default stands. Entries written before a
+parameter was shared keep working: an object's entry sets it for every object
+sharing it.
+
+``pc login`` saves a value the plugin shares under the package, and removes the
+parameter from the entries of the package's objects -- an older login through
+another plugin of the package would otherwise go on winning over it. Values the
+plugin does not share are saved under the plugin, as they always were.
+
+**A value for one instance is refused.** A shared parameter is package state,
+not a property of one instance. ``site_repo;token=...`` in a name, or a ``with:``
+of an alias or an enrich, describes one object: letting it set the package's
+value would make every other object's value depend on which object was asked for
+first, and letting it apply to that one instance would be exactly what
+``shared`` says cannot happen. So it is an error -- unless the value is the one the
+package already has, which changes nothing and is accepted, so that a client
+sending every parameter of an object back is not refused for it. Set the
+package's value in the configuration instead.
+
+An object an ``enrich`` makes belongs to the package the enrich is declared in,
+and shares with that package's objects.
+
+Every cache keyed on an object's parameters keys on the package's value: a
+changed shared value is a new key for every object sharing it, including the
+answers a plugin-backed package keeps of what its repository plugin served.
 
 Other
 -----

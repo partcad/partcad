@@ -112,7 +112,7 @@ pc ide view -a AeroAssembly_assy_example/AeroAssembly_corrected
 pc ide view -a AeroAssembly_assy_example/AeroAssembly_connected
 
 # what each stage is held to
-pc test -a AeroAssembly_assy_example/AeroAssembly_connected
+pc qual test -a AeroAssembly_assy_example/AeroAssembly_connected
 
 # where the ports are, and which interface each belongs to
 pc render -t svg --with-all AeroAssembly_assy_example/AeroFrame_Plate
@@ -125,7 +125,7 @@ pc ide view AeroAssembly_assy_example/AeroFrame_Plate_stock
 pc ide view AeroAssembly_assy_example/AeroFrame_Plate
 
 # that this part is what is left of the stock it names
-pc test -f manufacturability AeroAssembly_assy_example/AeroFrame_Plate
+pc qual test -f manufacturability AeroAssembly_assy_example/AeroFrame_Plate
 
 # what a part is cut from, and what that costs: the cart holds the billet
 pc supply quote AeroAssembly_assy_example/AeroFrame_Plate#1

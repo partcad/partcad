@@ -4,7 +4,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-"""'pc test' asks for the same objects 'pc supply' would order.
+"""'pc qual test' asks for the same objects 'pc supply' would order.
 
 The manufacturability test used to walk 'get_bom()', the flattened list of an
 assembly's parts, so the parts of a sub-assembly that is sold assembled had to
@@ -16,8 +16,8 @@ purchasable assembly has a supplier, the way it always has for a part.
 import asyncio
 
 import partcad as pc
-from partcad.test import manufacturability
-from partcad.test.test import Test
+from partcad.qual.basic import manufacturability
+from partcad.qual.qualification import Qualification
 
 # The same package the cart tests use: '//sub:unit' is a pair of cubes sold
 # assembled, '//sub:frame' is a cube plus an embedded assembly holding a bolt
@@ -27,7 +27,7 @@ SUPPLY_BOM_PACKAGE = "tests/partcad/unit/data/supply_bom/partcad.yaml"
 PROVIDER_NAME = "//sub:store"
 
 
-class _Recorder(Test):
+class _Recorder(Qualification):
     """A stand-in test that records what it is handed, and passes"""
 
     def __init__(self) -> None:
@@ -84,7 +84,7 @@ def test_purchasable_assembly_is_not_taken_apart():
 
     recorder = _Recorder()
     test = manufacturability.ManufacturabilityTest()
-    assert asyncio.run(test.test([test, recorder], ctx, unit)) == Test.TEST_PASSED
+    assert asyncio.run(test.test([test, recorder], ctx, unit)) == Qualification.TEST_PASSED
 
     # It has no 'manufacturing' section and its cubes were never asked about:
     # somebody sells it, so what is inside it is their problem.
@@ -98,7 +98,7 @@ def test_purchasable_assembly_without_a_supplier_fails():
     assert unit is not None
 
     test = manufacturability.ManufacturabilityTest()
-    assert asyncio.run(test.test([test], ctx, unit)) == Test.TEST_FAILED
+    assert asyncio.run(test.test([test], ctx, unit)) == Qualification.TEST_FAILED
 
 
 def test_purchasable_assembly_no_provider_carries_it():
@@ -108,7 +108,7 @@ def test_purchasable_assembly_no_provider_carries_it():
     assert unit is not None
 
     test = manufacturability.ManufacturabilityTest()
-    assert asyncio.run(test.test([test], ctx, unit)) == Test.TEST_FAILED
+    assert asyncio.run(test.test([test], ctx, unit)) == Qualification.TEST_FAILED
 
 
 def test_supply_failure_names_the_kind():

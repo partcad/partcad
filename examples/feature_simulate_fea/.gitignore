@@ -1,6 +1,6 @@
 # What the analysis writes, which is a result and not a checked-in artifact.
 #
-# `pc test` runs every scenario of the knee gear's `fea:`, and
+# `pc qual test` runs every scenario of the knee gear's `fea:`, and
 # `Shape.analyze_async()` writes the model each produced beside the package --
 # `knee-gear.fea.dropped.glb`. The `Examples
 # (PartCAD)` job then runs `pc render -r` and fails if anything under

@@ -1,0 +1,58 @@
+#
+# PartCAD, 2026
+#
+# Licensed under Apache License, Version 2.0.
+#
+
+from ... import requirements
+from ..qualification import BasicQualification, Qualification
+
+
+class RequirementsTest(BasicQualification):
+    """Check that the model is what the object's 'requirements:' say it has to be.
+
+    The ports, the interfaces, the physical properties, how closely its
+    volume and mass match another object's, and the yes-or-no 'has_color',
+    'has_material', 'has_finish' and 'has_weight' - the part of the requirements
+    PartCAD can measure (see 'partcad.requirements', which is the
+    whole of what each requirement means). A requirement on something PartCAD
+    cannot find out fails rather than passes: "not known" is not "met". The
+    features are prose and are not checked here, beyond a 'qual: sim:' entry
+    naming a feature the requirements do not declare, which is a mistake in the
+    declaration like any other.
+
+    Never cached. What it reads is mostly not the geometry the cache key is
+    made of - the requirements themselves, the ports and the interfaces, which
+    can live in other packages, and the material a mass is worked out from -
+    and asking again is a read of the declarations plus what the geometry's own
+    cache entry already measured.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("requirements")
+
+    def inapplicable(self, shape):
+        """Why this check does not apply to 'shape', or None when it does."""
+        if not requirements.anything_to_check(shape):
+            return (
+                "it requires no port, interface, physical property, match with another object or 'has_' fact "
+                "('requirements:'), and no simulation names a feature"
+            )
+        return None
+
+    async def test(self, tests_to_run: list[Qualification], ctx, shape, test_ctx: dict = {}) -> bool:
+        test_ctx[self.NOT_CACHEABLE] = True
+
+        report = await requirements.check_async(ctx, shape)
+        if not report.checks:
+            return self.not_applicable(shape, self.inapplicable(shape))
+
+        for check in report.checks:
+            if check.passed is False:
+                self.failed(shape, "%s: %s: %s: %s" % (check.section, check.name, check.requirement, check.detail))
+            else:
+                self.debug(shape, "%s: %s: %s: %s" % (check.section, check.name, check.requirement, check.detail))
+
+        if report.failed:
+            return self.TEST_FAILED
+        return self.passed(shape, "%d requirements met" % len(report.checks))

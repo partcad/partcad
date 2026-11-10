@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""What a walk over a subtree leaves out when it is told to ('pc test -x').
+"""What a walk over a subtree leaves out when it is told to ('pc qual test -x').
 
 The reason to have it is a package whose children are expensive to so much as
 load - the LDraw library is ninety-two categories served by a repository plugin,

@@ -111,7 +111,7 @@ the shared one. `nameplate` below uses both: its `speed:` is shared, everything
 about the cut is under `cnc:`.
 
 Naming several machines is naming **alternatives**, not stages: it says the
-object could be made either way, `pc test` answers for both claims, and `pc cam`
+object could be made either way, `pc qual test` answers for both claims, and `pc cam`
 has to be told which to write for —
 
 ```shell
@@ -143,7 +143,7 @@ so `nameplate` has to say how deep to score and is refused if it does not.
 out of anything — it is a path a machine follows — so `nameplate` declares the
 machine and the job and nothing else. A *part* that says `method: subtractive`
 does have to name the `source:` it is cut from, which is what `stock` is here
-for, and what `pc test -f manufacturability` checks the part actually fits
+for, and what `pc qual test -f manufacturability` checks the part actually fits
 inside.
 
 ## What comes out
@@ -284,10 +284,10 @@ daemon already running, anything you set in the environment to steer a run is
 silently ignored. `pc daemon stop` first. The same warning `feature_cae`'s
 README gives, for the same reason.
 
-## `pc test -f cam` is the same thing, as a check
+## `pc qual test -f cam` is the same thing, as a check
 
 ```shell
-pc test -f cam
+pc qual test -f cam
 ```
 
 The check produces the route and passes the object only if one came back. It is

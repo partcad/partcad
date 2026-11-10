@@ -135,14 +135,14 @@ uncached too.
 Exports, renders, analyses, routes and simulations
 ==================================================
 
-What ``pc export``, ``pc render``, ``pc cae``, ``pc cam`` and ``pc sim``
+What ``pc export``, ``pc render``, ``pc cae``, ``pc cam`` and ``pc qual test --simulation``
 produce is cached in the same tiers: the result (the warnings, the findings,
 what the route implementation counted, or what the simulator reported) together
 with the files the run wrote -- the exported file or the picture, the analysis
 model, the route program, or the whole run directory of a simulation, with the
 scene, its meshes and whatever the plugin left there. Asking the same question
 again puts the files back where that run asks for them and runs nothing. The
-analysis, ``cam`` and ``sim`` checks of ``pc test``, the IDE's analysis tabs,
+analysis, ``cam`` and ``sim`` checks of ``pc qual test``, the IDE's analysis tabs,
 and ``pc convert`` go through the same cache.
 
 An exported or rendered file is cached together with anything its
@@ -187,7 +187,7 @@ picture, is not part of the question, and neither is where the package is on
 disk or when its files were last touched. A simulation's ``validation:`` is not part
 of the question: it is evaluated again on every run, so editing it re-judges the
 cached run rather than repeating it. What a simulation's question is made of,
-and how ``pc test``'s verdict on one is kept, are in :ref:`sim-caching`.
+and how ``pc qual test``'s verdict on one is kept, are in :ref:`sim-caching`.
 
 Only answers are cached: an export, an analysis, a route or a simulation that failed is run again
 next time, since installing a missing solver changes no key. An object with
@@ -196,9 +196,9 @@ entry sizes apply as usual -- a model larger than ``cacheFilesMaxEntrySize`` is
 not kept in ``cacheFiles`` -- but their minimum sizes do not, because no
 solver's answer is too small to be worth keeping.
 
-``pc test`` also remembers each check's verdict on each object, and a failure it
+``pc qual test`` also remembers each check's verdict on each object, and a failure it
 remembers keeps what the check said about it: read back, it repeats the reason
-and says that it was remembered from an earlier run. ``pc --cache-bypass test``
+and says that it was remembered from an earlier run. ``pc --cache-bypass qual test``
 works every verdict out again.
 
 ``pc --cache-bypass <command>`` (or ``PC_CACHE_BYPASS=1``, or ``cacheBypass: True``)

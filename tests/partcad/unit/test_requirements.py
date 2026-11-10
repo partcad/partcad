@@ -26,9 +26,9 @@ from partcad import compare, requirements, simulation
 from partcad.assembly import Assembly
 from partcad.geom import Location
 from partcad.lint.all import get_partcad_schema
+from partcad.qual.basic.requirements import RequirementsTest
+from partcad.qual.qualification import Qualification
 from partcad.shape import Shape
-from partcad.test.requirements import RequirementsTest
-from partcad.test.test import Test
 
 PACKAGE = "tests/partcad/unit/data/requirements/partcad.yaml"
 
@@ -288,10 +288,10 @@ def test_every_kind_of_object_may_declare_requirements():
 
 def test_a_simulation_names_the_feature_it_demonstrates():
     config = copy.deepcopy(_package())
-    config["parts"]["plate"]["simulate"]["on-the-table"]["feature"] = ["flat", "holes"]
+    config["parts"]["plate"]["qual"]["sim"]["on-the-table"]["feature"] = ["flat", "holes"]
     jsonschema.validate(instance=config, schema=get_partcad_schema())
     assert simulation.declared(config["parts"]["plate"])[0].features == ["flat", "holes"]
-    assert simulation.declared({"simulate": {"x": {"simulation": "//a:b"}}})[0].features == []
+    assert simulation.declared({"qual": {"sim": {"x": {"path": "//a:b"}}}})[0].features == []
 
 
 def test_an_analysis_scenario_names_the_feature_it_demonstrates(ctx):
@@ -410,7 +410,7 @@ def test_what_is_required_and_not_met_fails_saying_what_was_found(ctx):
     verdicts = _verdicts(report)
     assert verdicts == {
         # A simulation naming a feature nobody declared.
-        ("simulate", "wobbles"): False,
+        ("sim", "wobbles"): False,
         # And an analysis scenario doing the same.
         ("dynamic", "ringing"): False,
         ("ports", "top"): False,
@@ -467,7 +467,7 @@ def test_an_object_that_requires_nothing_has_no_report(ctx):
     assert report.to_dict()["features"] == []
 
 
-# --- 'pc test' ------------------------------------------------------------------
+# --- 'pc qual test' ------------------------------------------------------------------
 
 
 def _run_test(ctx, name):
@@ -476,16 +476,16 @@ def _run_test(ctx, name):
 
 
 def test_pc_test_passes_an_object_that_meets_its_requirements(ctx):
-    assert _run_test(ctx, "plate") is Test.TEST_PASSED
+    assert _run_test(ctx, "plate") is Qualification.TEST_PASSED
 
 
 def test_pc_test_fails_an_object_that_does_not(ctx):
-    assert _run_test(ctx, "plate-wrong") is Test.TEST_FAILED
+    assert _run_test(ctx, "plate-wrong") is Qualification.TEST_FAILED
 
 
 def test_pc_test_has_nothing_to_say_about_features_alone(ctx):
-    assert _run_test(ctx, "legacy-headings") is Test.TEST_PASSED
-    assert _run_test(ctx, "plain") is Test.TEST_PASSED
+    assert _run_test(ctx, "legacy-headings") is Qualification.TEST_PASSED
+    assert _run_test(ctx, "plain") is Qualification.TEST_PASSED
 
 
 def test_pc_test_never_remembers_the_verdict(ctx):
@@ -493,7 +493,7 @@ def test_pc_test_never_remembers_the_verdict(ctx):
     test_ctx = {}
     shape = ctx.get_part("//:plate")
     asyncio.run(RequirementsTest().test([], ctx, shape, test_ctx))
-    assert test_ctx[Test.NOT_CACHEABLE] is True
+    assert test_ctx[Qualification.NOT_CACHEABLE] is True
 
 
 # --- 'match:': within a percentage of another object ----------------------------
@@ -653,8 +653,8 @@ def test_an_assembly_matched_against_is_looked_up_on_the_callers_loop(ctx, monke
 
 
 def test_pc_test_fails_an_object_further_from_another_than_it_may_be(ctx):
-    """A 'match:' requirement not met fails the 'requirements' check of 'pc test'."""
-    assert _run_test(ctx, "plate-copy") is Test.TEST_FAILED
+    """A 'match:' requirement not met fails the 'requirements' check of 'pc qual test'."""
+    assert _run_test(ctx, "plate-copy") is Qualification.TEST_FAILED
 
 
 def test_an_object_that_cannot_be_looked_up_fails_only_the_matches_that_name_it(ctx, monkeypatch):

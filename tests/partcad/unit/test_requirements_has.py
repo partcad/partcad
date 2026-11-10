@@ -224,8 +224,8 @@ def test_of_an_assembly_every_part_in_it_is_held_to_it(ctx):
     assert ":specified" not in _details(report)["has_material"]
 
 
-def test_pc_test_holds_a_bought_part_to_them(ctx):
-    from partcad.test.requirements import RequirementsTest
+def test_pc_qual_test_holds_a_bought_part_to_them(ctx):
+    from partcad.qual.basic.requirements import RequirementsTest
 
     shape = ctx.get_part(":bare-but-required")
     assert RequirementsTest().inapplicable(shape) is None

@@ -64,10 +64,11 @@ parts:
         centerOfMass: [0, 0, null]
         inertia:
           izz: ">0"
-    simulate:
-      on-the-table:
-        simulation: //nowhere:simulator
-        feature: flat
+    qual:
+      sim:
+        on-the-table:
+          path: //nowhere:simulator
+          feature: flat
     fea:
       bolted-down:
         desc: Held by its holes, and leaned on at the top
@@ -104,10 +105,11 @@ parts:
         mass: "<1"
         centerOfMass: [5, 0, null]
         restitution: "<0.5"
-    simulate:
-      wobbles:
-        simulation: //nowhere:simulator
-        feature: [holes, stable]
+    qual:
+      sim:
+        wobbles:
+          path: //nowhere:simulator
+          feature: [holes, stable]
     dynamic:
       ringing:
         feature: quiet

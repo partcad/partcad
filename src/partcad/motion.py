@@ -240,7 +240,7 @@ class Motion:
 
     Read leniently, the way the rest of a connection is: whatever is wrong is
     added to 'problems' and replaced by what it most plausibly meant, so that an
-    assembly always builds. 'pc test''s 'connect' check is what looks past that
+    assembly always builds. 'pc qual test''s 'connect' check is what looks past that
     (see 'Assembly.get_connect_problems').
     """
 

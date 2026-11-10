@@ -92,7 +92,7 @@ import jsonschema
 import jsonschema.exceptions
 import yaml
 
-from . import assy_filter, object_names, template_render
+from . import assy_filter, object_names, parameters, template_render
 
 SEVERITY_ERROR = "error"
 SEVERITY_WARNING = "warning"
@@ -119,6 +119,10 @@ CODE_DEPRECATED = "deprecated"
 # A name a package gives to two kinds of object, which it may not: a name is one
 # object of a package whatever its kind. See 'check_unique_names()'.
 CODE_NAMES = "names"
+# Declarations of one parameter name a package may not have together: some say
+# 'shared: true' and some do not, or shared ones disagree. See
+# 'check_shared_parameters()'.
+CODE_PARAMETERS = "parameters"
 
 # The 'motion.type' spellings that are deprecated, and what to write instead.
 # 'partcad.motion.DEPRECATED_KINDS' is what reads them; spelled out here because
@@ -255,7 +259,9 @@ ASSEMBLY_NO_FIXED = (
 #        it is rendered with are known; and the two rules for what is marked
 #        manufacturable.
 #   4 -- 'check_unique_names': one name given to two kinds of object.
-CHECKER_VERSION = 4
+#   5 -- 'check_shared_parameters': declarations of a parameter that disagree
+#        about 'shared: true', or shared ones that disagree about anything else.
+CHECKER_VERSION = 5
 
 # An upper bound on how many findings a single file reports. A file that is
 # mid-edit can cascade; an editor gains nothing from the thousandth squiggle.
@@ -949,7 +955,7 @@ def _all_link_names(node, found=None) -> set:
     What 'interferes:' is checked against. A connection names the further items
     one act of joining drives through, and those are matched by name across the
     assemblies an ASSY file embeds (see 'Assembly.connected_children()' and
-    'partcad.test.interference'), so the whole document is the scope rather than
+    'partcad.qual.topology.interference'), so the whole document is the scope rather than
     one 'links:' list.
     """
     if found is None:
@@ -1163,7 +1169,7 @@ def _check_connect(node, path, names, index, everywhere, report, templated) -> N
 #
 # Two rules for what is marked 'manufacturable: true' -- on the object, on its
 # package, or on a package above it. "Marked", not "is": PartCAD takes an
-# object as manufacturable unless something says otherwise, and 'pc test'
+# object as manufacturable unless something says otherwise, and 'pc qual test'
 # holds it to that, but a package nobody has said anything about yet is one
 # being sketched, and an editor that underlined every part of it would be
 # underlining work in progress. Saying 'manufacturable: true' -- which is what
@@ -1241,8 +1247,8 @@ def check_motion(data, root_node=None) -> list:
 def check_manufacturable_assembly(data, root_node=None) -> list:
     """Report an item of an assembly that is to be made that is not connected to anything.
 
-    The same rule 'partcad.test.connectivity' holds a manufacturable assembly
-    to, and in the same words, so that the editor and 'pc test' say one thing:
+    The same rule 'partcad.qual.basic.connectivity' holds a manufacturable assembly
+    to, and in the same words, so that the editor and 'pc qual test' say one thing:
     somebody has to physically put this together, and a coordinate does not
     tell them anything they can act on -- it says where a part ends up, not
     what holds it there. So no item of any 'links:' list may say 'location:',
@@ -1286,7 +1292,7 @@ def check_manufacturable_assembly(data, root_node=None) -> list:
         if data.get(assy_filter.LINKS) is None and "location" in data:
             # A file that is one part or one assembly and nothing else: its
             # root is not the frame of a list but the one item it places
-            # ('AssemblyFactoryAssy.instantiate_async'), and 'pc test' reports
+            # ('AssemblyFactoryAssy.instantiate_async'), and 'pc qual test' reports
             # it like any other.
             _report_at(
                 diagnostics,
@@ -1377,6 +1383,39 @@ def check_unique_names(data, root_node=None) -> list:
     return diagnostics
 
 
+def check_shared_parameters(data, root_node=None) -> list:
+    """Report the declarations of a parameter a ``partcad.yaml`` may not have together.
+
+    Within a package every declaration of a parameter name says
+    ``shared: true`` or none of them does, and shared declarations agree on
+    everything but ``desc``. The rule and its words are
+    'partcad_utils.parameters.shared_parameter_problems', which PartCAD reads
+    as it loads the package and refuses every object declaring the name; this
+    says so on each of those declarations, before anything loads them.
+
+    A declaration that says ``unless:`` is left out, as in
+    'check_unique_names': PartCAD compares only what applies where it runs.
+    """
+    diagnostics: list = []
+    if not isinstance(data, dict):
+        return diagnostics
+    sections = {}
+    for kind, section in parameters.PARAMETERIZED_SECTIONS.items():
+        declarations = data.get(section)
+        if isinstance(declarations, dict):
+            sections[kind] = {
+                name: config
+                for name, config in declarations.items()
+                if not (isinstance(config, dict) and "unless" in config)
+            }
+    found = parameters.parameter_declarations(sections)
+    for problem in parameters.shared_parameter_problems(found):
+        for declaration in problem.declarations:
+            path = [parameters.PARAMETERIZED_SECTIONS[declaration.kind], declaration.object, "parameters"]
+            _report_at(diagnostics, root_node, path, problem.name, problem.message, code=CODE_PARAMETERS)
+    return diagnostics
+
+
 # ---- entry points ----------------------------------------------------------
 
 
@@ -1464,6 +1503,7 @@ def _document_checks(data, schema, root_node, masked, manufacturable, inherited_
     elif _is_configuration_schema(schema):
         diagnostics.extend(check_manufacturable_parts(data, root_node, inherited_manufacturable))
         diagnostics.extend(check_unique_names(data, root_node))
+        diagnostics.extend(check_shared_parameters(data, root_node))
     return diagnostics
 
 

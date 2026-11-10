@@ -25,7 +25,7 @@ a bracket is bolted down at the same holes and carries the same load whichever
 solver is asked about it. So a part declares them in a section named after the
 analysis -- and, since a part is asked more than one question of each kind (a
 shelf bracket loaded, and the same bracket dropped on its side), the section is
-a map of **scenarios**, each under a name of its own, exactly as `simulate:` is a
+a map of **scenarios**, each under a name of its own, exactly as `qual: sim:` is a
 map of simulations::
 
     parts:
@@ -61,7 +61,7 @@ map of simulations::
             convection:
               fins: 10             # cooled by the air around it, in W/(m^2*K)
 
-The name is not ceremony, for the reason `simulate:` gives for its own: it is
+The name is not ceremony, for the reason `qual: sim:` gives for its own: it is
 what `pc cae fea -f` selects, what a report prints beside the findings, what
 names the model file a run writes (`bracket.fea.loaded.glb`), and what the IDE
 lists on the analysis's tab. Beside the conditions a scenario may say what it is
@@ -204,7 +204,7 @@ class CaeConfigError(ValueError):
     """A `fea:`/`cfd:` section, or one scenario of it, that cannot be made sense of.
 
     Carried rather than logged, because every caller has a different place to put
-    it: `pc cae` prints it, `pc test` fails the part with it, and the IDE's FEA
+    it: `pc cae` prints it, `pc qual test` fails the part with it, and the IDE's FEA
     tab shows it where the results would have been. "It is malformed" is the
     answer the user asked for in each case, so it has to survive as a sentence.
     """
@@ -217,7 +217,7 @@ class CaeFailed(Exception):
     `Shape.analyze_async()` around every way an implementation can fail to
     deliver -- no mesher, no solver, a sandbox that will not build, a crash. It
     exists so that the sentence is written once, where the implementation's name
-    is known, rather than by each caller: `pc cae` prints it, `pc test` fails
+    is known, rather than by each caller: `pc cae` prints it, `pc qual test` fails
     the part with it, and the IDE's tab shows it, and a user who saw one of
     those and then ran another must not be told two different things about the
     same machine.
@@ -585,7 +585,7 @@ SCENARIO_KEYS = (DESC, FEATURE, IMPLEMENTATION, PARAMS)
 # 'model_suffix').
 LEGACY_SCENARIO = "default"
 
-# What a scenario's name may be: the names 'simulate:' takes, which is what
+# What a scenario's name may be: the names 'qual: sim:' takes, which is what
 # every other named section of 'partcad.yaml' takes too.
 SCENARIO_NAME = re.compile(r"^[a-zA-Z0-9_/.-]+$")
 
@@ -877,7 +877,7 @@ class AnalysisConfig:
         for key, value in self.settings.items():
             data[key] = list(value) if isinstance(value, list) else value
         if self.implementation is not None:
-            # Carried so that `pc test`'s cache key changes when the part is
+            # Carried so that `pc qual test`'s cache key changes when the part is
             # re-pointed at another solver: two solvers are two answers, and the
             # verdict on one must not be handed back for the other.
             data["implementation"] = self.implementation
@@ -899,7 +899,7 @@ class Scenario:
     that a part one of whose scenarios is malformed still lists all of them and
     the IDE can offer each. The conditions are read by `conditions()`, which
     does raise: a malformed scenario is a mistake its own run reports, and the
-    others are run regardless (see `partcad.test.cae`).
+    others are run regardless (see `partcad.qual.basic.cae`).
 
     Attributes:
         analysis: one of `ANALYSES`.
@@ -963,7 +963,7 @@ class Scenario:
 def declared(analysis: str, section) -> list:
     """The scenarios one analysis section declares, in the order it declares them.
 
-    A mapping of names to scenarios, which is what 'simulate:' is and what every
+    A mapping of names to scenarios, which is what 'qual: sim:' is and what every
     other named section of 'partcad.yaml' is. A section whose keys are the
     conditions themselves -- 'fix:', 'load:', and the rest of 'section_keys' --
     is the form a section had before it had scenarios, and is read as one,
@@ -1303,7 +1303,7 @@ def normalize_findings(findings) -> list[dict]:
 
     An implementation may report a list of strings, a list of objects, or
     nothing. Everything becomes a list of objects carrying at least a `message`,
-    because that is what `pc cae` prints, what `pc test` fails on and what the
+    because that is what `pc cae` prints, what `pc qual test` fails on and what the
     IDE lists under the model -- and a reader of any of the three should not have
     to know which shape the implementation happened to choose.
     """

@@ -82,7 +82,7 @@ parts:
   # over it like `spacer` below.
   #
   # A blank of its own rather than another copy of `panel`: stock has to
-  # enclose what comes out of it, which is what `pc test -f manufacturability`
+  # enclose what comes out of it, which is what `pc qual test -f manufacturability`
   # checks, and a `source:` pointing back at the part's own shape removes
   # nothing at all.
   stock:

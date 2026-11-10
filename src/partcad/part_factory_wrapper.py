@@ -31,7 +31,7 @@ import os
 
 from . import code_version, discovered_dependencies
 from . import logging as pc_logging
-from . import output, sandbox_versions, shape_envelope, telemetry, transform, wrapper
+from . import output, request_paths, sandbox_versions, shape_envelope, telemetry, transform, wrapper
 from .cache_hash import CacheHash
 from .part_factory import PartFactory
 from .process_crash import describe_exit_code
@@ -373,11 +373,18 @@ class PartFactoryWrapper(PartFactory):
                 request["path"] = os.path.abspath(self.path)
             for param_name, param in (self.config.get("parameters") or {}).items():
                 request["parameters"][param_name] = param.get("default") if isinstance(param, dict) else param
+            # The file goes on the command line as well as in the request, which
+            # is what a sandbox that is sent files rather than sharing them sends
+            # and rewrites (see 'request_paths').
+            command = request_paths.carry(
+                [wrapper.get("part_type.py"), os.path.abspath(script_abs), os.path.abspath(pt_project.config_dir)],
+                request,
+                ("path",),
+            )
             request_serialized = shape_envelope.serialize(request)
 
-            meta_wrapper = wrapper.get("part_type.py")
             exitcode, response_serialized, errors = await self.runtime.run_async(
-                [meta_wrapper, os.path.abspath(script_abs), os.path.abspath(pt_project.config_dir)],
+                command,
                 request_serialized,
                 session=self.session,
             )

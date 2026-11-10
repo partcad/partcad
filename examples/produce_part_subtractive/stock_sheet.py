@@ -2,7 +2,7 @@
 # manufacturing method of its own because nobody makes it here.
 #
 # Every laser part in this package names it as its `source`, which is what lets
-# `pc test` check that the part actually fits what it is cut from.
+# `pc qual test` check that the part actually fits what it is cut from.
 
 import build123d as bd
 

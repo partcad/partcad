@@ -34,6 +34,16 @@ _response_fd = None
 # of an answer reads.
 _answer_framed = False
 
+# The request's record of which of its values are paths, and the command line
+# argument they follow: see 'adopt_paths()'. Twins of 'partcad.request_paths'
+# KEY and ARGUMENT.
+PATHS_KEY = "__paths__"
+PATHS_ARGUMENT = "--request-paths"
+
+# Each path the request carried that is somewhere else here, as '(here, there)':
+# where it is in this sandbox, and where PartCAD said it was. See 'to_host()'.
+_carried = []
+
 
 def protect_response_channel():
     """Give the response a file descriptor nothing else can write to.
@@ -100,6 +110,9 @@ def handle_input(decode=True):
             pass
 
     # Handle the input
+    # - The request's paths, as they are here: off the end of the command line
+    #   before anything reads it by position (see 'adopt_paths()')
+    here = take_paths_argument(sys.argv)
     # - Comand line parameters
     path = os.path.normpath(sys.argv[1])
     if len(sys.argv) > 2:
@@ -112,8 +125,165 @@ def handle_input(decode=True):
     input_str = _read_request()
     #   - Unpack the content received via stdin
     request = ocp_serialize.deserialize(input_str) if decode else ocp_serialize.deserialize_raw(input_str)
+    request = adopt_paths(request, here)
     remember_request(request)
     return path, request
+
+
+def take_paths_argument(argv):
+    """The paths after 'PATHS_ARGUMENT', taken off 'argv' with it; None when there is none.
+
+    They are the last thing on the command line ('partcad.request_paths.carry'),
+    so everything a wrapper reads by position - its 'path', where it runs, a
+    script - is where it always was once they are gone. Nothing before them is
+    the argument itself: a path a sandbox rewrote is absolute.
+    """
+    if PATHS_ARGUMENT not in argv[1:]:
+        return None
+    at = argv.index(PATHS_ARGUMENT, 1)
+    here = list(argv[at + 1 :])
+    del argv[at:]
+    return here
+
+
+def adopt_paths(request, here):
+    """'request' with the paths it names pointed at where they are here, both spellings kept for 'to_host()'.
+
+    A sandbox that is sent files rather than sharing them unpacks them where it
+    likes and rewrites every argument naming one, and never the request: it is
+    one opaque string on standard input, and a path in it is where the file is
+    on PartCAD's side. So PartCAD puts those paths on the command line too,
+    after everything else, and says in the request which of its values they are
+    ('PATHS_KEY': '[key, index]' each, the index None for a value that is a path
+    and a position for one in a list). 'here' is what followed 'PATHS_ARGUMENT',
+    in the same order, as the sandbox left it.
+
+    Where nothing was rewritten - a sandbox sharing the files - each value is
+    replaced with itself. A request and a command line that disagree about how
+    many paths there are is said, and the request is left as it came: its paths
+    are right wherever the files are shared.
+    """
+    places = request.pop(PATHS_KEY, None) if isinstance(request, dict) else None
+    if places is None and here is None:
+        return request
+    if not isinstance(places, list) or here is None or len(places) != len(here):
+        sys.stderr.write(
+            "wrapper_common: the request names %s paths and the command line carries %s; "
+            "the request's are used as they are\n"
+            % (len(places) if isinstance(places, list) else "no", len(here) if here is not None else "none")
+        )
+        return request
+    for place, local in zip(places, here):
+        if not isinstance(place, (list, tuple)) or len(place) != 2:
+            continue
+        key, index = place
+        value = request.get(key)
+        if index is None:
+            there = value
+        elif isinstance(value, list) and isinstance(index, int) and 0 <= index < len(value):
+            there = value[index]
+        else:
+            continue
+        if not isinstance(there, str):
+            continue
+        if index is None:
+            request[key] = local
+        else:
+            value[index] = local
+        if local == there:
+            continue
+        _remember(local, there)
+        # A file that kept its name was sent in its directory, which a sandbox
+        # unpacks whole, so that directory is the other's: what is beside the
+        # file - a layer a stage composes, a mesh a URDF names - is beside it
+        # over there too, and an answer naming it names a file in it.
+        here_dir, here_name = os.path.split(local)
+        there_dir, there_name = _split_any(there)
+        if here_name == there_name and here_dir and there_dir and here_dir != there_dir:
+            _remember(here_dir, there_dir)
+    return request
+
+
+def _remember(here, there):
+    if (here, there) not in _carried:
+        _carried.append((here, there))
+
+
+def _split_any(path):
+    """'(head, tail)' of a path spelled on either kind of machine: split at its last '/' or '\\'."""
+    at = max(path.rfind("/"), path.rfind("\\"))
+    return (path[:at], path[at + 1 :]) if at >= 0 else ("", path)
+
+
+def _host_separator(there):
+    """The separator of the machine a path is spelled for: Windows' for a drive or a share, '/' otherwise."""
+    if len(there) >= 2 and there[1] == ":" and there[0].isalpha():
+        return "\\"
+    if there.startswith("\\\\"):
+        return "\\"
+    return "/"
+
+
+def _path_to_host(text):
+    """'text', if it is a path the request carried or one below such a path, as PartCAD spells it; else 'text'."""
+    for here, there in sorted(_carried, key=lambda pair: len(pair[0]), reverse=True):
+        if text == here:
+            return there
+        rest = None
+        for separator in {os.sep, os.altsep or os.sep}:
+            if text.startswith(here.rstrip(separator) + separator):
+                rest = text[len(here.rstrip(separator)) + 1 :]
+                break
+        if rest is None:
+            continue
+        separator = _host_separator(there)
+        parts = rest.replace(os.altsep, os.sep).split(os.sep) if os.altsep else rest.split(os.sep)
+        return there.rstrip("/\\") + separator + separator.join(parts)
+    return text
+
+
+def to_host(model):
+    """'model' with every path in it that is in a directory the request carried spelled as PartCAD spells it.
+
+    What a wrapper answers with is read on PartCAD's side, and a path in it -
+    the file a reader's part is read from, a file a partType read - is where
+    the file is in this sandbox. Where the sandbox shares PartCAD's files that
+    is the same place; where it was sent them ('adopt_paths') it is not, and the
+    path is spelled again from the carried path it is in, which is where the
+    sandbox found it and, for a directory written into, where it is sent back.
+
+    In place, through dicts and lists, and only a string that is such a path as
+    a whole: a message that mentions one keeps the spelling it was written
+    with. Returns 'model'.
+    """
+    if not _carried:
+        return model
+    if isinstance(model, str):
+        return _path_to_host(model)
+    if isinstance(model, dict):
+        for key, value in model.items():
+            if isinstance(value, str):
+                model[key] = _path_to_host(value)
+            elif isinstance(value, (dict, list)):
+                to_host(value)
+    elif isinstance(model, list):
+        for index, value in enumerate(model):
+            if isinstance(value, str):
+                model[index] = _path_to_host(value)
+            elif isinstance(value, (dict, list)):
+                to_host(value)
+    return model
+
+
+def files_were_sent():
+    """Whether this sandbox was sent the files the request names rather than sharing them.
+
+    Then it holds the directories the command line named, and no others: a
+    reader looking for a file elsewhere - above its source file, say - finds
+    nothing, where on PartCAD's side it would. Said, so that such a reader can
+    say what to declare.
+    """
+    return bool(_carried)
 
 
 def remember_request(request):
@@ -169,6 +339,9 @@ def handle_output(model, end=""):
     'wrapper_export'). A frame says itself where it ends, and is followed by
     nothing.
     """
+    # The paths in it as PartCAD spells them, where this sandbox was sent the
+    # files rather than sharing them (see 'to_host()').
+    model = to_host(model)
     # Echoing the request's name/label onto the shape.
     out = None if _response_fd is not None else getattr(sys.stdout, "buffer", None)
     if _answer_framed and (_response_fd is not None or out is not None):
@@ -347,7 +520,7 @@ def _shell_to_solid(shell):
 
     The solid is oriented after it is built. A closed shell whose faces point
     inward bounds the space *outside* it, and the solid made from it measures a
-    negative volume - the failure 'partcad.test.solidity' exists to report. So
+    negative volume - the failure 'partcad.qual.basic.solidity' exists to report. So
     converting without orienting would turn a shell nothing computed from into a
     solid everything computes from wrongly; 'BRepLib.OrientClosedSolid_s'
     reverses it when needed and is what makes this conversion safe.

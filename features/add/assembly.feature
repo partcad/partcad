@@ -66,17 +66,17 @@ Feature: `pc add assembly` command
     # INFO:  Adding the assembly primitive.assy of type assy
     When I run command:
       """
-      pc test -f cad cube
+      pc qual test -f cad cube
       """
     Then the command should exit with a status code of "0"
     When I run command:
       """
-      pc test -f cad cylinder
+      pc qual test -f cad cylinder
       """
     Then the command should exit with a status code of "0"
     When I run command:
       """
-      pc test -f cad -a primitive
+      pc qual test -f cad -a primitive
       """
     Then the command should exit with a status code of "0"
 
@@ -115,12 +115,12 @@ Feature: `pc add assembly` command
     # become parts of the package as it is read.
     When I run command:
       """
-      pc --no-ansi test -f cad -a robot
+      pc --no-ansi qual test -f cad -a robot
       """
     Then the command should exit with a status code of "0"
     When I run command:
       """
-      pc --no-ansi test -f cad robot/arm
+      pc --no-ansi qual test -f cad robot/arm
       """
     Then the command should exit with a status code of "0"
 

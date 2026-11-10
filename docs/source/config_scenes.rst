@@ -58,7 +58,8 @@ Declare scenes
       manufacturable: <(optional) false by default; a scene is not a product to be made>
       gravity: <(optional) [x, y, z] in m/s^2; the engine's own, Earth's along -Z, by default>
       medium: <(optional) the material the scene is filled with; a vacuum by default>
-      simulate: <(optional) what the scene is supposed to do once the world is switched on; see "Simulate a scene" below>
+      qual:  # (optional) how the scene is qualified, as any object is; see "Simulating a scene" below
+        sim: <(optional) what the scene is supposed to do once the world is switched on>
 
       # 'sim-gazebo:world' only -- the reader's own parameters, declared by the
       # package that implements it and passed straight through to it
@@ -222,7 +223,7 @@ of your own is an ``enrich`` of that one, or a ``type: wall`` part declaring the
 same three parameters.
 
 A room is a scene, so it is not manufacturable, and its walls are not either:
-see :ref:`walls` for what that excuses them from in ``pc test``.
+see :ref:`walls` for what that excuses them from in ``pc qual test``.
 
 Scene types a plugin adds
 =========================
@@ -248,9 +249,9 @@ Simulating a scene
 ==================
 A scene can be the thing a claim is about, not only the world another object is
 tested in: a stack of blocks that stands, a pile that does not slide. It
-declares ``simulate:`` exactly as a part or an assembly does, and ``pc sim`` and
-``pc test`` hold it to it. See
-:ref:`Simulating a scene <validating-a-scene>` in the Validation phase.
+declares ``qual: sim:`` exactly as a part or an assembly does, and ``pc qual test --simulation`` and
+``pc qual test`` hold it to it. See
+:ref:`Simulating a scene <qualifying-a-scene>` in the Qualification phase.
 
 Agent skills
 ============

@@ -6,7 +6,7 @@
 // The "Simulation" tab: what the object is supposed to do, and what it did.
 //
 // A list on the left and the selected simulation on the right, laid out and
-// behaving like the Build tab's: the list is the object's 'simulate:' section,
+// behaving like the Build tab's: the list is the object's 'qual: sim:' section,
 // one row per simulation in the order it declares them, and the first is the
 // one selected when the tab opens (the list itself is 'scenarioList.ts', which
 // the Analysis tabs list their scenarios with too). Selecting one runs it - 'pc
@@ -43,7 +43,7 @@
 // the simulation names, offering the ones '//pub/feature/simulate' registers,
 // and taking any other name typed into it ('packagePicker.ts', which the Draft
 // and the Analysis tabs name their packages in too); another than its own is
-// 'pc sim --plugin' -- and choosing one runs it, the way choosing a drawing
+// 'pc qual test --simulation --plugin' -- and choosing one runs it, the way choosing a drawing
 // package draws again; "Simulate" runs it afresh.
 //
 // A run is minutes of daemon time the first time - the simulator is installed
@@ -360,7 +360,7 @@ export class SimulationView {
         this.drawList();
         if (this.selected === undefined) {
             this.toolbar.hidden = true;
-            this.showMain(placeholder("This declares no simulations: it has no 'simulate:' section."));
+            this.showMain(placeholder("This declares no simulations: it has no 'qual: sim:' section."));
             return;
         }
         this.showSelected();
@@ -377,7 +377,7 @@ export class SimulationView {
     }
 
     /**
-     * A run's answer: 'pc sim --json' for one simulation, run with 'plugin'
+     * A run's answer: 'pc qual test --simulation --json' for one simulation, run with 'plugin'
      * (undefined: its own) and its pictures taken from 'viewpoint' (undefined:
      * the scene's).
      */

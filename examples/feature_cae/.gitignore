@@ -1,6 +1,6 @@
 # What the analyses write, which is a result and not a checked-in artifact.
 #
-# `pc test` runs every scenario of every analysis, and `Shape.analyze_async()`
+# `pc qual test` runs every scenario of every analysis, and `Shape.analyze_async()`
 # writes the model each produced beside the part --
 # `cantilever.fea.tip-load.glb` here, and `<part>.<analysis>.glb` for a section
 # still written as one unnamed scenario. The `Examples (PartCAD)`

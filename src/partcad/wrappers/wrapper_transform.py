@@ -52,7 +52,7 @@ def relocate(shape, offset):
     That left the offset expressed only as a location, and the consumers did
     not agree about it. Exporting and rendering dropped it and so saw the
     compensating inverse - a part rotated by the opposite of what was asked -
-    while 'partcad.test.interference' honoured it and saw a part that had not
+    while 'partcad.qual.topology.interference' honoured it and saw a part that had not
     moved. Two errors that cancelled in a picture and did not in a check:
     'feature_enrich:desk-enrich' rendered as a desk while the check was shown
     four legs lying across each other, and reported 4.8 million mm^3 of

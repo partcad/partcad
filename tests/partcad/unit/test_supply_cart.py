@@ -60,7 +60,7 @@ def test_bom_still_flattens_everything():
 def test_supply_bom_matches_bom_where_nothing_is_sold_assembled():
     """The two walks agree on a package that has no purchasable assembly in it
 
-    This is what keeps 'pc supply' and 'pc test' behaving exactly as they used
+    This is what keeps 'pc supply' and 'pc qual test' behaving exactly as they used
     to for every package written before assemblies could be bought at all.
     """
     ctx = pc.Context("tests/partcad/unit/data/assembly_bom/partcad.yaml")

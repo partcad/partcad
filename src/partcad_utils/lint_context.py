@@ -161,13 +161,20 @@ def _describe(target: str, package_name: str, include_paths: list, parameter_ove
 
 
 def _held_to_connectivity(declaration: dict) -> bool:
-    """Whether 'pc test' holds this declaration to its 'connectivity' rules at all.
+    """Whether 'pc qual test' holds this declaration to its 'connectivity' rules at all.
 
-    'partcad.test.connectivity' stops before its manufacturable rule for an
+    'partcad.qual.basic.connectivity' stops before its manufacturable rule for an
     assembly that says 'requireAnchored: false', and does not run for one that
     says 'skip: true'; the editor says no more than the test would.
     """
-    connectivity = declaration.get("connectivity")
+    # 'qual: basic: connectivity:', where the check reads it -- or, where that
+    # says nothing, its old spelling 'connectivity:', which the check still
+    # reads too (see 'partcad.qual.config.LEGACY').
+    qual = declaration.get("qual")
+    basic = qual.get("basic") if isinstance(qual, dict) else None
+    connectivity = basic.get("connectivity") if isinstance(basic, dict) else None
+    if connectivity is None:
+        connectivity = declaration.get("connectivity")
     if not isinstance(connectivity, dict):
         return True
     return connectivity.get("requireAnchored", True) is not False and connectivity.get("skip") is not True

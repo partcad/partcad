@@ -40,8 +40,8 @@ from partcad import process_output
 from partcad import runtime as pc_runtime
 from partcad import simulation
 from partcad.cache import Cache
-from partcad.test.sim import SimTest
-from partcad.test.test import Test
+from partcad.qual.qualification import Qualification
+from partcad.qual.sim import SimTest
 from partcad_utils.user_config import UserConfig
 
 POSIX = os.name != "nt"
@@ -131,10 +131,11 @@ parts:
   block:
     type: step
     path: cube.step
-    simulate:
-      stays:
-        simulation: :stub
-        validation: after["bodies"]["block"]["pos"][2] > 5.0
+    qual:
+      sim:
+        stays:
+          path: :stub
+          validation: after["bodies"]["block"]["pos"][2] > 5.0
 """
 
 
@@ -358,8 +359,8 @@ def _keys(ctx, **params):
 def _declared(part, params):
     """The part, declaring its simulation with 'params', as an edit to 'partcad.yaml' would."""
     config = dict(part.config)
-    stays = dict(config["simulate"]["stays"], params=params)
-    config["simulate"] = {"stays": stays}
+    stays = dict(config["qual"]["sim"]["stays"], params=params)
+    config["qual"] = {"sim": {"stays": stays}}
     part.config = config
     return part
 
@@ -508,11 +509,13 @@ def test_neither_a_timeout_nor_a_crash_is_cached_and_an_answer_is(package, monke
 def test_pc_test_fails_a_run_that_did_not_deliver_and_says_why(package, monkeypatch, caplog, how, budget, kind):
     part = _part(package)
     config = dict(part.config)
-    config["simulate"] = {
-        "stays": {
-            "simulation": ":stub",
-            "params": {"how": how, "timeout": budget},
-            "validation": 'after["bodies"]["block"]["pos"][2] > 5.0',
+    config["qual"] = {
+        "sim": {
+            "stays": {
+                "path": ":stub",
+                "params": {"how": how, "timeout": budget},
+                "validation": 'after["bodies"]["block"]["pos"][2] > 5.0',
+            }
         }
     }
     monkeypatch.setattr(part, "config", config)
@@ -521,8 +524,8 @@ def test_pc_test_fails_a_run_that_did_not_deliver_and_says_why(package, monkeypa
     with caplog.at_level(logging.ERROR):
         verdict = asyncio.run(SimTest().test([], package, part, test_ctx))
 
-    assert verdict == Test.TEST_FAILED
-    assert test_ctx.get(Test.NOT_CACHEABLE) is True
+    assert verdict == Qualification.TEST_FAILED
+    assert test_ctx.get(Qualification.NOT_CACHEABLE) is True
     report = "\n".join(record.getMessage() for record in caplog.records if record.levelno >= logging.ERROR)
     assert "//sim:block" in report and "'stays'" in report and "//sim:stub" in report
     assert kind in report

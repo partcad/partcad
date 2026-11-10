@@ -35,9 +35,9 @@ docs:
 
   usage: |
     ```shell
-    pc sim -a arm --json              # both runs, and what acts on every body at their end
+    pc qual test --simulation -a arm --json              # both runs, and what acts on every body at their end
     pc cae fea -f dropped :knee-gear  # the gear under what the worm holds it with
-    pc test                           # both, as checks
+    pc qual test                           # both, as checks
     ```
 
 assemblies:
@@ -45,10 +45,6 @@ assemblies:
     type: assy
     path: arm.assy
     desc: OpenVMP Don1's lower and upper arm, joined at the knee, which the knee's worm drive holds
-    # Some of it is still placed by coordinates: the motors, their mounts and the
-    # hook, which Don1's arms place that way (see their own 'connectivity:').
-    connectivity:
-      requireAnchored: false
     parameters:
       # Where the knee starts and where its worm holds it: the turn of the upper
       # arm's hub on the knee shaft, in degrees from where Don1 draws it. At 90
@@ -56,58 +52,65 @@ assemblies:
       start:
         type: float
         default: 90
-    simulate:
-      dropped:
-        desc: |
-          Let go level, the upper arm drops onto the worm's give, swings, and
-          comes to rest where the worm holds it -- given exactly as much as the
-          moment of its weight about the knee bends the worm's stiffness.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :hung
-        # Upside down: the lower arm's knee above the end it would hang from,
-        # and the upper arm level from it.
-        offset: [[0, 0, 400], [1, 0, 0], 180]
-        params:
-          # The drive rings at about 24 Hz and is damped to a tenth of critical,
-          # so a second is long enough to come to rest many times over; a step
-          # of half a millisecond is eighty a cycle, and a reading every five
-          # sees the first swing.
-          duration: 1.0
-          timestep: 0.0005
-          samples: 199
-        # At rest, the worm holds the moment of the upper arm's weight about
-        # the knee: m g d, with m the 0.8644 kg it weighs (its parts name no
-        # material, so 2700 kg/m^3, as MuJoCo was handed it) and d the 305.5 mm
-        # its centre of mass is out from the knee's axis -- and gives as much as
-        # that moment turns its 2000 N*m/rad, under a tenth of a degree. On the way
-        # it swung past that: let go at once, a spring this lightly damped
-        # carries a load to three quarters as far again before it settles.
-        validation: &held |
-          (
-              abs(
-                  (90 - after["joints"]["knee"]["pos"]) * 3.14159265 / 180 * 2000
-                  / (0.8644 * 9.81 * 0.3055)
-                  - 1
-              ) < 0.01
-              and max(90 - s["joints"]["knee"]["pos"] for s in result["samples"])
-              > 1.4 * (90 - after["joints"]["knee"]["pos"])
-          )
-      dropped_in_gazebo:
-        desc: |
-          The same, in Gazebo. Gazebo reports what the knee passes and what
-          each body weighs, which is all the knee gear's analysis reads, and
-          says what it does not: the weld to the world.
-        simulation: //pub/feature/simulate/gazebo:gazebo
-        scene: :hung
-        offset: [[0, 0, 400], [1, 0, 0], 180]
-        # As many readings as MuJoCo takes: Gazebo publishes about sixty a second
-        # of the wall clock, and runs slower than real time to give more, which
-        # is what it takes to see the first swing of a 24 Hz ring.
-        params:
-          duration: 1.0
-          timestep: 0.0005
-          samples: 199
-        validation: *held
+    qual:
+      # Some of it is still placed by coordinates: the motors, their mounts and the
+      # hook, which Don1's arms place that way (see their own 'qual: basic:
+      # connectivity:').
+      basic:
+        connectivity:
+          requireAnchored: false
+      sim:
+        dropped:
+          desc: |
+            Let go level, the upper arm drops onto the worm's give, swings, and
+            comes to rest where the worm holds it -- given exactly as much as the
+            moment of its weight about the knee bends the worm's stiffness.
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :hung
+          # Upside down: the lower arm's knee above the end it would hang from,
+          # and the upper arm level from it.
+          offset: [[0, 0, 400], [1, 0, 0], 180]
+          params:
+            # The drive rings at about 24 Hz and is damped to a tenth of critical,
+            # so a second is long enough to come to rest many times over; a step
+            # of half a millisecond is eighty a cycle, and a reading every five
+            # sees the first swing.
+            duration: 1.0
+            timestep: 0.0005
+            samples: 199
+          # At rest, the worm holds the moment of the upper arm's weight about
+          # the knee: m g d, with m the 0.8644 kg it weighs (its parts name no
+          # material, so 2700 kg/m^3, as MuJoCo was handed it) and d the 305.5 mm
+          # its centre of mass is out from the knee's axis -- and gives as much as
+          # that moment turns its 2000 N*m/rad, under a tenth of a degree. On the way
+          # it swung past that: let go at once, a spring this lightly damped
+          # carries a load to three quarters as far again before it settles.
+          validation: &held |
+            (
+                abs(
+                    (90 - after["joints"]["knee"]["pos"]) * 3.14159265 / 180 * 2000
+                    / (0.8644 * 9.81 * 0.3055)
+                    - 1
+                ) < 0.01
+                and max(90 - s["joints"]["knee"]["pos"] for s in result["samples"])
+                > 1.4 * (90 - after["joints"]["knee"]["pos"])
+            )
+        dropped_in_gazebo:
+          desc: |
+            The same, in Gazebo. Gazebo reports what the knee passes and what
+            each body weighs, which is all the knee gear's analysis reads, and
+            says what it does not: the weld to the world.
+          path: //pub/feature/simulate/gazebo:gazebo
+          scene: :hung
+          offset: [[0, 0, 400], [1, 0, 0], 180]
+          # As many readings as MuJoCo takes: Gazebo publishes about sixty a second
+          # of the wall clock, and runs slower than real time to give more, which
+          # is what it takes to see the first swing of a 24 Hz ring.
+          params:
+            duration: 1.0
+            timestep: 0.0005
+            samples: 199
+          validation: *held
 
 scenes:
   hung:
@@ -116,10 +119,12 @@ scenes:
     path: hung.assy
     gravity: [0, 0, -9.81]
     # What it holds is the arm, and that is still partly placed by coordinates.
-    connectivity:
-      requireAnchored: false
+    qual:
+      basic:
+        connectivity:
+          requireAnchored: false
     parameters:
-      # The three the scene PartCAD ships takes, assigned by 'pc sim'. The arm
+      # The three the scene PartCAD ships takes, assigned by 'pc qual test --simulation'. The arm
       # by default, so the scene on its own holds something to draw.
       subject:
         type: string

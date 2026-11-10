@@ -25,7 +25,7 @@
 //     and being manufacturable. So is one that is not meant to be made at all
 //     ('manufacturable: false', which a manufacturable assembly it is used in
 //     overrides) and a stock reference that names nothing. "Built" is what
-//     'pc test -f manufacturability' would accept without looking at geometry
+//     'pc qual test -f manufacturability' would accept without looking at geometry
 //     or asking a supplier: the daemon says what fails, in 'problems';
 //   * what a line is made of - a sub-assembly's contents, a part's stock - is
 //     needed only while that line is built. A line nothing needs is not shown:

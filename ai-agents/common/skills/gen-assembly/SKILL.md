@@ -8,7 +8,7 @@ description: Generate a PartCAD assembly (an ASSY that composes parts with place
 Generate a PartCAD **assembly**: an `.assy` file that composes parts (and
 sub-assemblies) into one product. The text after the command (`$ARGUMENTS`) is
 the assembly description. *You* author both the ASSY and its component parts and
-prove the whole thing **passes `pc test`**. There is no legacy `ai` assembly
+prove the whole thing **passes `pc qual test`**. There is no legacy `ai` assembly
 pipeline — this capability is new.
 
 ## 1. Decompose
@@ -47,7 +47,7 @@ takes shape: each part it generates (`/pc:gen-part` §7), then the assembly
 (§6).
 
 Reuse existing parts; generate any missing component with the `/pc:gen-part`
-flow. Each part must pass `pc test` on its own before you compose it, and name
+flow. Each part must pass `pc qual test` on its own before you compose it, and name
 the material it is made of (`/pc:gen-part` §5): the assembly's mass is its
 parts' added up, and a part with none is simply left out of the sum.
 
@@ -189,7 +189,7 @@ interfaces:
 ```
 
 Two connected interfaces must agree on `threadStep` unless one declares
-`selfScrew`. Run `pc test <name>` to check that: it fails an assembly whose
+`selfScrew`. Run `pc qual test <name>` to check that: it fails an assembly whose
 instructions contradict themselves — a mismatched thread, or a `*Min` above its
 `*Max` — and passes one that takes every default.
 
@@ -214,7 +214,7 @@ log, under the `N port(s) drawn on the projection:` line, which is the list to
 copy from. `pc info <part>` reports the same names as text.
 
 Then mark the assembly **not manufacturable** in `partcad.yaml` (it is generated,
-not a catalog item) so `pc test` passes:
+not a catalog item) so `pc qual test` passes:
 
 ```yaml
 assemblies:
@@ -251,7 +251,7 @@ assemblies:
 - **`physics:`** — a mass requirement is checked against the sum of what the
   assembly holds, so every part in it has to state a mass or name a material
   with a density. Require only what the description bounds.
-- A `simulate:` entry that demonstrates a feature names it with
+- A `qual: sim:` entry that demonstrates a feature names it with
   `feature: <name>`.
 
 Leave out what nobody asked for: a requirement you invented is a design decision
@@ -260,7 +260,7 @@ written where nobody will question it.
 Do not add a `manufacturing:` section: `assy` is the only method an assembly has
 and it comes with the type. (`additive`/`subtractive`/`forming`/`sheet_metal`
 are ways of making a *part* and mean nothing here.) Marking it manufacturable
-instead makes `pc test` require that every part in it can be bought or made from
+instead makes `pc qual test` require that every part in it can be bought or made from
 a declared supplier — only do that when that is true.
 
 ## 4. Group what repeats into sub-assemblies
@@ -432,12 +432,12 @@ reasoning had each produced a different wrong answer.
 ## 6. Validate, render it from several angles, iterate
 
 ```sh
-pc --no-ansi test <name>             # build gate: geometry instantiates, and the requirements are met
+pc --no-ansi qual test <name>             # build gate: geometry instantiates, and the requirements are met
 ```
 
 Its `requirements` check holds the assembly to the `ports:`, `interfaces:` and
 `physics:` written down in §3 and says which one is not met and what it found;
-`pc --no-ansi -v test -f requirements <name>` lists every one. The features
+`pc --no-ansi -v qual test -f requirements <name>` lists every one. The features
 are yours to check, against the views below.
 
 ### Prove each step changed nothing
@@ -642,7 +642,7 @@ view matches. `pc ide view <name>` gives an interactive view.
 ### Show each version that renders
 
 Under an IDE (§2), show the assembly in its 3D view at every step where it
-passes the basic checks: it builds (`pc test` finds nothing wrong with its
+passes the basic checks: it builds (`pc qual test` finds nothing wrong with its
 geometry; a requirement not met yet does not count against it) and the four
 views above rendered without an error. That is the first ASSY that does, each
 regrouping into sub-assemblies (§4), each coordinate replaced by a connection
@@ -672,7 +672,7 @@ detected, the window has been closed, so stop showing.
 ## 7. Make it ready to simulate
 
 An assembly that looks right in every view can still tip over, slide apart or
-sink, and nothing above notices. `pc sim` places it in a world, runs a physics
+sink, and nothing above notices. `pc qual test --simulation` places it in a world, runs a physics
 engine and checks a claim about what happens; what it needs from you are the
 facts the engine cannot guess.
 
@@ -691,7 +691,7 @@ starts inside the floor.
 
 **State the claim the description makes.** When the user's intent is physical —
 it stands, it does not tip, it floats, it holds a load — write it as a
-`simulate:` with a `validation:`:
+`qual: sim:` with a `validation:`:
 
 ```yaml
 dependencies:
@@ -703,18 +703,19 @@ dependencies:
 
 assemblies:
   <name>:
-    simulate:
-      stands:
-        desc: Set down on the floor, nothing slides, sinks or tips over
-        feature: stable                        # the feature of its requirements (§3) this demonstrates
-        simulation: sim-mujoco:mujoco
-        offset: [[0, 0, 10], [0, 0, 1], 0]   # only if it reaches 10 mm below z = 0
-        validation: |
-          all(
-              max(abs(a - b) for a, b in zip(after["bodies"][n]["pos"], before["bodies"][n]["pos"])) < 5.0
-              and abs(sum(a * b for a, b in zip(after["bodies"][n]["quat"], before["bodies"][n]["quat"]))) > 0.996
-              for n in before["bodies"]
-          )
+    qual:
+      sim:
+        stands:
+          desc: Set down on the floor, nothing slides, sinks or tips over
+          feature: stable                        # the feature of its requirements (§3) this demonstrates
+          path: sim-mujoco:mujoco
+          offset: [[0, 0, 10], [0, 0, 1], 0]   # only if it reaches 10 mm below z = 0
+          validation: |
+            all(
+                max(abs(a - b) for a, b in zip(after["bodies"][n]["pos"], before["bodies"][n]["pos"])) < 5.0
+                and abs(sum(a * b for a, b in zip(after["bodies"][n]["quat"], before["bodies"][n]["quat"]))) > 0.996
+                for n in before["bodies"]
+            )
 ```
 
 Add the dependency with `pc add dep sim-mujoco https://github.com/partcad/partcad-sim-mujoco.git`
@@ -747,8 +748,8 @@ body of its own — only where a `motion:` keeps a freedom: on the interface
 revolute}`; `motion: fixed` locks one). So a cantilever stands, and a hinge swings
 only where it is declared. When what you were asked for is an arrangement rather
 than a product — a stack of blocks, a workcell — declare it under `scenes:`
-instead, where every element is a free body, with the same `simulate:`, and run
-it with `pc sim <name>`. `/pc:gen-scene` is the flow for that.
+instead, where every element is a free body, with the same `qual: sim:`, and run
+it with `pc qual test --simulation <name>`. `/pc:gen-scene` is the flow for that.
 
 **Name the joint the mechanism has.** One `type` per physical joint:
 
@@ -783,7 +784,7 @@ the parameter at zero is its zero: the assembly is drawn there, and a simulation
 starts the mechanism there.
 
 **Under water, in the air, off Earth.** The default scene is Earth's gravity in a
-vacuum. Anything else is a scene that says so, which the `simulate:` names with
+vacuum. Anything else is a scene that says so, which the `qual: sim:` names with
 `scene: :<scene>`:
 
 ```yaml
@@ -794,12 +795,12 @@ scenes:
     medium: //pub/std/manufacturing/material/fluid:seawater   # or fluid:water, fluid:air
     gravity: [0, 0, -9.81]   # m/s^2: Moon -1.62, Mars -3.72, orbit 0
     parameters:
-      subject: { type: string, default: <name> }      # pc sim sets this
+      subject: { type: string, default: <name> }      # pc qual test --simulation sets this
       subject_kind: { type: string, default: assembly } # or part, or scene
 ```
 
 ```yaml
-# underwater.assy -- it places the subject itself, so the simulate: has no offset:
+# underwater.assy -- it places the subject itself, so the qual: sim: entry has no offset:
 links:
   - {{ param_subject_kind }}: "{{ param_subject }}"
     name: subject
@@ -809,16 +810,16 @@ links:
 **Run it:**
 
 ```sh
-pc --no-ansi sim <name>             # every claim; exits non-zero when one fails
-pc --no-ansi sim --json <name>      # what the engine reported, before and after
-pc --no-ansi test <name>            # runs the same claims as its `sim` check
+pc --no-ansi qual test --simulation <name>             # every claim; exits non-zero when one fails
+pc --no-ansi qual test --simulation --json <name>      # what the engine reported, before and after
+pc --no-ansi qual test <name>            # runs the same claims as its `sim` check
 ```
 
 ## 8. Finalize
 
 Summarize the structure — parts, sub-assemblies, key placements with the
 layout's table (target, measured on the assembly, error), total mass and what
-`pc sim` found — and how to view it (`pc ide view <name>`, which under an
+`pc qual test --simulation` found — and how to view it (`pc ide view <name>`, which under an
 IDE is what is already on screen, or `pc render -t png --with-all <name>` for a
 picture with the connection metadata on it). Offer `/pc:validate <name>` (an
 assembly) for a verdict on every requirement, the features included: it reads

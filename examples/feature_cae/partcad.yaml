@@ -29,7 +29,7 @@ docs:
     pc cae fea -i //pub/feature/cae/elmer:fea :cantilever
 
     # All of them as checks that fail on any finding
-    pc test
+    pc qual test
 
     # Where the boundary conditions actually landed
     pc render -t svg --with-ports cantilever
@@ -97,14 +97,14 @@ parts:
     #
     # The exclusion is on the part rather than on its sections because `unless`
     # selects declarations, and a part that declares an analysis nothing can run
-    # is a part whose check fails: `pc test` does not excuse an implementation
+    # is a part whose check fails: `pc qual test` does not excuse an implementation
     # that was asked and did not answer where a container runtime is running,
     # which on a 64-bit ARM Linux machine it usually is.
     unless: [aarch64]
     implements:
       beam-root: [[-50, 0, 0], [0, 0, 1], 0]
       beam-tip: [[50, 0, 0], [0, 0, 1], 0]
-    # Each analysis is a map of named scenarios, as 'simulate:' is a map of
+    # Each analysis is a map of named scenarios, as 'qual: sim:' is a map of
     # simulations -- one each here, because each is the one textbook case
     # README.md compares the solver with; a part asked more than one question
     # of an analysis declares more than one. `pc cae fea -f tip-load
@@ -112,7 +112,7 @@ parts:
     # `cantilever.fea.tip-load.glb`.
     #
     # Each scenario names its implementation, so that what README.md says each
-    # one measured is what `pc test` runs here, whatever the user configuration
+    # one measured is what `pc qual test` runs here, whatever the user configuration
     # would otherwise pick. Leave one out and that scenario falls back to the
     # `cae*Implementation` option like any other part's.
     fea:

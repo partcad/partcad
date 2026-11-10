@@ -1,4 +1,9 @@
-from partcad_utils.parameters import array_item_type, coerce_parameter_value, normalize_parameters  # noqa: F401
+from partcad_utils.parameters import (  # noqa: F401
+    array_item_type,
+    coerce_parameter_value,
+    is_shared,
+    normalize_parameters,
+)
 
 from . import expr
 from . import logging as pc_logging
@@ -50,6 +55,12 @@ def apply_user_parameter_overrides(
         for param_name in parameter_config:
             if param_name in config[section]:
                 declared = config[section][param_name]
+                if is_shared(declared):
+                    # The package's value, not this object's: every object
+                    # sharing it reads the override set through any of them,
+                    # and the package's own entry, which is resolved once for
+                    # all of them ('partcad.shared_parameters').
+                    continue
                 try:
                     value = coerce_parameter_value(
                         declared_parameter_type(declared),
@@ -93,18 +104,29 @@ class Configuration:
         return apply_user_parameter_overrides(config, object_name, user_config=user_config)
 
 
-def apply_parameter_values(parameters: dict, values: dict, object_name: str) -> dict:
+def apply_parameter_values(parameters: dict, values: dict, object_name: str, package_name: str = None) -> dict:
     """Set the defaults of a parameter section from the values a reference names.
 
     Shared by every parametrizable kind: a part, a sketch and an assembly
     parametrized through 'Project.get_object', and an interface through
     'Project.get_interface'. One copy, because two would be two answers to what
     ';size=4' means.
+
+    A shared parameter is the package's (the one 'package_name' names), and a value for
+    one instance is refused unless it is the one the package has (see
+    'partcad.shared_parameters').
     """
     for param_name, param_value in values.items():
         declared = parameters.get(param_name)
         if declared is None:
             raise ValueError("The parameter '%s' is not declared in '%s'" % (param_name, object_name))
+        if is_shared(declared):
+            # The package's value, which one instance does not set: only the
+            # value it already is passes (see 'partcad.shared_parameters').
+            from .shared_parameters import check_instance_value
+
+            check_instance_value(declared, param_value, param_name, object_name, package_name=package_name)
+            continue
         declared["default"] = coerce_parameter_value(
             declared.get("type"), param_value, param_name, object_name, item_type=array_item_type(declared)
         )
