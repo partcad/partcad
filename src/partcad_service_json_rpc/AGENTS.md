@@ -19,10 +19,12 @@ The daemon owns two things its clients do not, and both decide what belongs on w
    operation on a context goes through, calls `Context.reload_changed_packages()` for the packages the request is
    about (`_config_check_targets`) and everything they declare as dependencies, transitively. A package whose
    configuration changed size or modification time is reloaded with the packages underneath it -- not the whole
-   context -- and each package is compared at most once per `CONFIG_CHECK_INTERVAL` (15 s). A package reached
-   without being declared is not checked; that is accepted. An edit to a file a part is built from reloads
-   nothing: a part hashes its files once, so a warm context that has already keyed it keeps that key until its
-   package is reloaded or the daemon is restarted.
+   context. The packages the request is about are compared on every request, so that an edit saved a moment before
+   is what the next command sees; their dependencies, and with `-r` everything underneath them, at most once per
+   `CONFIG_CHECK_INTERVAL` (15 s), so that a burst of commands over a large tree does not stat the same files again
+   and again. A package reached without being declared is not checked; that is accepted. An edit to a file a part is
+   built from reloads nothing: a part hashes its files once, so a warm context that has already keyed it keeps that
+   key until its package is reloaded or the daemon is restarted.
    A **failed** load is not kept either, for a reason of its own: the errors saying why are logged while the
    context is being built, so a cached one would be a single command reporting "configuration file is not
    found" and exiting non-zero followed by any number of commands answering with nothing and exiting zero --

@@ -73,7 +73,8 @@ def is_excluded(name: str, exclude) -> bool:
 
 
 # How long a package's 'partcad.yaml' is taken to be unchanged after it was
-# last checked (see 'Context.reload_changed_packages').
+# last checked, unless a command is about that package itself (see
+# 'Context.reload_changed_packages').
 CONFIG_CHECK_INTERVAL = 15.0
 
 
@@ -560,20 +561,26 @@ class Context:
         of them. A package something reaches without declaring it is not
         checked, and may be answered from the configuration read before.
 
-        Whether a configuration changed is its modification time and size: a
-        stat, no read, and at most once per 'CONFIG_CHECK_INTERVAL' seconds per
-        package, so that a burst of commands does not stat the same files over
-        and over. A changed package is dropped together with every package
-        underneath it, and is loaded again from disk the next time something
-        asks for it. Nothing else is: the packages beside it, the sandboxes, and
-        whatever the other packages have built stay as they are. The root's
-        children are every package, so a changed root reloads them all - in this
+        Whether a configuration changed is its modification time and size: a stat, no
+        read. The packages in 'packages' are stated every time: a file edited a moment
+        ago is what the next command about that package has to see, and an editor or an
+        agent runs that command within seconds of saving - inside any interval, which
+        then answered silently from the file as it was. What they declare, and with
+        'recursive' everything underneath them, is stated at most once per
+        'CONFIG_CHECK_INTERVAL' seconds per package, so that a burst of commands over a
+        large tree does not stat the same files over and over. A changed package is
+        dropped together with every package underneath it, and is loaded again from disk
+        the next time something asks for it. Nothing else is: the packages beside it,
+        the sandboxes, and whatever the other packages have built stay as they are. The
+        root's children are every package, so a changed root reloads them all - in this
         context, rather than in a new one.
 
         Returns the names of the packages dropped.
         """
         with self.lock:
             names = list(self.projects) if packages is None else self._config_check_scope(packages, recursive)
+            # Asked for by name: checked whenever asked (see above).
+            targets = set() if packages is None else set(packages)
             now = time.monotonic()
             changed = []
             for name in names:
@@ -581,7 +588,7 @@ class Context:
                 if project is None or not hasattr(project, "config_stat"):
                     continue
                 checked_at = self._config_checked_at.get(name)
-                if checked_at is not None and now - checked_at < CONFIG_CHECK_INTERVAL:
+                if name not in targets and checked_at is not None and now - checked_at < CONFIG_CHECK_INTERVAL:
                     continue
                 self._config_checked_at[name] = now
                 if file_stat(project.config_path) != project.config_stat:

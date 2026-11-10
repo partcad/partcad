@@ -156,20 +156,57 @@ def test_a_recursive_command_checks_every_package_underneath(ctx, workspace):
     assert ctx.reload_changed_packages(["//left"], recursive=True) == ["//left/deep"]
 
 
-def test_a_package_is_checked_at_most_once_per_interval(ctx, workspace, monkeypatch):
+def _frozen_clock(monkeypatch):
+    """A monotonic clock the test moves by hand, and the interval it is measured against."""
     import partcad.context as context_module
 
     now = [1000.0]
     monkeypatch.setattr(context_module.time, "monotonic", lambda: now[0])
+    return now, context_module.CONFIG_CHECK_INTERVAL
+
+
+def test_the_package_a_command_is_about_is_checked_every_time(ctx, workspace, monkeypatch):
+    # An editor or an agent saves a 'partcad.yaml' and runs the next command
+    # within a second: that command has to see the edit, however recently the
+    # package was checked. It once waited out the interval and answered from
+    # the configuration as it was.
+    _frozen_clock(monkeypatch)
 
     assert ctx.reload_changed_packages(["//right"]) == []
     _touch(workspace / "right" / "partcad.yaml")
 
-    now[0] += context_module.CONFIG_CHECK_INTERVAL - 1
-    assert ctx.reload_changed_packages(["//right"]) == []
+    assert ctx.reload_changed_packages(["//right"]) == ["//right"]
+
+
+def test_a_dependency_is_checked_at_most_once_per_interval(linked, monkeypatch):
+    workspace, ctx = linked
+    now, interval = _frozen_clock(monkeypatch)
+
+    assert ctx.reload_changed_packages(["//app"]) == []
+    _touch(workspace / "base" / "partcad.yaml")
+
+    now[0] += interval - 1
+    assert ctx.reload_changed_packages(["//app"]) == []
 
     now[0] += 2
-    assert ctx.reload_changed_packages(["//right"]) == ["//right"]
+    assert ctx.reload_changed_packages(["//app"]) == ["//app/lib/base"]
+
+
+def test_a_package_underneath_a_recursive_command_is_checked_at_most_once_per_interval(ctx, workspace, monkeypatch):
+    now, interval = _frozen_clock(monkeypatch)
+
+    assert ctx.reload_changed_packages(["//left"], recursive=True) == []
+    _touch(workspace / "left" / "deep" / "partcad.yaml")
+
+    now[0] += interval - 1
+    assert ctx.reload_changed_packages(["//left"], recursive=True) == []
+
+    now[0] += 2
+    assert ctx.reload_changed_packages(["//left"], recursive=True) == ["//left/deep"]
+    # ...and, loaded again, a command about that package itself sees an edit at once.
+    assert _part(ctx, "//left/deep:d") is not None
+    _touch(workspace / "left" / "deep" / "partcad.yaml")
+    assert ctx.reload_changed_packages(["//left/deep"]) == ["//left/deep"]
 
 
 def test_a_root_that_failed_to_reload_is_loaded_again_once_it_is_fixed(ctx, workspace):
