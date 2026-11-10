@@ -16,6 +16,7 @@ def _search(
     kind: Optional[str] = None,
     interface: Optional[str] = None,
     limit: Optional[int] = None,
+    each_package: bool = False,
 ) -> list[Union[Project, Shape]]:
     """The objects of a package (and, recursively, of those below it) that match.
 
@@ -33,6 +34,11 @@ def _search(
     An interface is not something a search of a remote catalog can be asked
     about, so a search by interface matches what the package declares, as
     before.
+
+    A catalog whose search at the top answers for its whole tree
+    ('searchScope: tree') is asked once, at the top. 'each_package' asks every
+    package of the tree its own search all the same, which is what says in
+    which of a catalog's categories each hit is.
     """
     project = ctx.get_project(package)
     if project is None or project.broken:
@@ -54,6 +60,23 @@ def _search(
         # in "Matches:") twice.
         packages += [p["name"] for p in child_packages if p["name"] != project.name]
 
+    # A package whose repository searches its whole tree in one request
+    # ('searchScope: tree') answers for every package of that tree below it:
+    # those are not asked again, which for a distributor's thousand categories
+    # is a thousand requests of its quota.
+    covering = []
+    if kind and keyword and not interface and len(packages) > 1 and not each_package:
+        for package_name in packages:
+            package = ctx.get_project(package_name)
+            if package is not None and not package.broken and package.searches_tree(kind):
+                covering.append((package_name, getattr(package, "plugin_ref", None)))
+
+    def covered(package):
+        ref = getattr(package, "plugin_ref", None)
+        return ref is not None and any(
+            package.name.startswith(top + "/") and top_ref == ref for top, top_ref in covering
+        )
+
     for package_name in packages:
         package = ctx.get_project(package_name)
 
@@ -62,7 +85,8 @@ def _search(
             continue
 
         if kind and keyword and not interface and package.searches(kind):
-            result.extend(package.search(kind, keyword, limit))
+            if not covered(package):
+                result.extend(package.search(kind, keyword, limit))
             continue
 
         items = shape_ports.implementers(ctx, package, kind, interface) if interface else get_items(package)

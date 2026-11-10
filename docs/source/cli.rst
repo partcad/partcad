@@ -461,6 +461,15 @@ Object commands
   Each takes the package to list as its argument, the current one by default. Name it as ``<package>...`` to
   list the packages below it too — ``pc list parts //pub/examples...`` (see :ref:`recursive-names`).
 
+  ``pc list packages <package>`` lists the **sub-packages** of the package, not the package itself: its
+  folders and its dependencies, every one of them, whether or not it holds anything of its own. That is what
+  makes a tree walkable a level at a time -- ``pc list packages //pub``, then a section of it, then a
+  distributor's catalog, then one of its categories -- including the packages that are nothing but more
+  packages. ``pc list packages <package>...`` (or ``-r``) lists every package below it that has something in
+  it: a sketch, a part, an assembly or a scene, listed or found with its own search. ``-a``/``--all`` lists
+  the complete subtree instead -- the package and every package below it, empty ones included, by name -- and
+  implies ``-r``.
+
 ``pc add``
   Add an object to a package. Subcommands: ``dep`` (a dependency), ``sketch``, ``part``, ``assembly``,
   ``scene``, and ``software``.
@@ -1645,7 +1654,9 @@ Workflow commands
 
   - ``pc supply caps`` — Show the capabilities of a provider.
   - ``pc supply find`` — Find suppliers.
-  - ``pc supply quote`` — Get a quote from suppliers.
+  - ``pc supply quote`` — Get a quote from suppliers. Each supplier is quoted the part the way it sells it --
+    its own SKU, or an alias's (see :ref:`bought-through-alias`). ``--cheapest`` prices every way each
+    supplier has each part, packs included, and orders the cheapest.
   - ``pc supply order`` — Place an order with suppliers.
 
   ``find`` and ``quote`` take parts and assemblies alike. A requested assembly that is sold assembled (one with
@@ -1737,7 +1748,10 @@ Other commands
 ``pc search``
   Search for objects by keyword. Subcommands: ``all``, ``parts``, ``sketches``, ``assemblies``,
   ``scenes``, ``interfaces``, and ``packages``. ``-P`` names the package to search, the root package by
-  default; ``-P <package>...`` searches the packages below it too (see :ref:`recursive-names`).
+  default. A search is **recursive by default**: it reaches every package below the one it starts in,
+  imported ones included, because what is looked for is usually somewhere below. ``-R``/``--no-recursive``
+  keeps it to the one package; ``-r`` and ``-P <package>...`` still say what they always did (see
+  :ref:`recursive-names`).
 
   ``pc search parts`` and ``pc search assemblies`` also take ``-i``/``--interface``, which searches by what
   an object *connects by* rather than by what its declaration says: ``pc search parts -i m4-thru`` finds
@@ -1763,3 +1777,9 @@ Other commands
 
   ``pc search parts`` takes ``-n``/``--limit``, the most to ask each such package for. A package matched
   locally reports every match, as before.
+
+  A catalog that searches its whole tree in one request -- a distributor's, whose categories are packages
+  below it -- says so (``searchScope: tree``, see :ref:`repositories`) and is asked once, at the top, rather
+  than once for each of its categories. ``--each-package`` asks every package its own search all the same: a
+  request per category, and each hit listed under the category it is in. Search finds parts, not categories:
+  to walk a catalog's categories, use ``pc list packages``.

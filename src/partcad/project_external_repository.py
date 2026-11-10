@@ -32,6 +32,10 @@ OBJECT_KINDS_KEY = "objectKinds"
 # instances it resolves itself. See 'searches()' and
 # 'resolves_instances()'.
 SEARCH_KINDS_KEY = "searchKinds"
+# 'tree' when the package's search answers for every package below it in the
+# same repository: a catalogue searched in one request, its categories being
+# only narrower searches of it.
+SEARCH_SCOPE_KEY = "searchScope"
 INSTANCE_KINDS_KEY = "instanceKinds"
 
 # The key a search is asked under: 'search/<kind>?q=<text>&limit=<n>'. A query
@@ -464,6 +468,25 @@ class ProjectExternalRepository(ProjectPlugin):
         """
         return kind in self._declared_kinds(SEARCH_KINDS_KEY)
 
+    def searches_tree(self, kind: str) -> bool:
+        """Whether this package's search for 'kind' answers for every package below it too.
+
+        Said by the package metadata, as 'searchScope: tree'. A distributor's
+        catalogue is searched in one request at its top, and each category is
+        only that search narrowed; asking each of a thousand categories the
+        same question one by one would be a thousand requests of a quota for
+        nothing. A catalogue whose categories hold what their parents do not -
+        IKEA's - does not say it, and each of its packages is asked.
+        """
+        if not self.searches(kind):
+            return False
+        meta = self.get_data("meta")
+        return isinstance(meta, dict) and meta.get(SEARCH_SCOPE_KEY) == "tree"
+
+    def load_metadata(self):
+        """The package metadata, applied: what 'pc list packages' prints of a package reached by name."""
+        self._materialize_meta()
+
     def search(self, kind: str, text: str, limit: typing.Optional[int] = None) -> list:
         """The objects of 'kind' the repository finds for 'text', as 'SearchHit's, best first.
 
@@ -538,6 +561,39 @@ class ProjectExternalRepository(ProjectPlugin):
             if limit and len(hits) >= limit:
                 break
         return hits
+
+    def known_object_configs(self, kind: str) -> list:
+        """What 'Project.known_object_configs' says, and every declaration of 'kind' fetched so far.
+
+        A search's hits and the objects asked for one by one are declarations
+        this package has been handed and kept (see 'search'), though nothing
+        has been made of them: they are known, and an alias among them - a
+        catalogue's packaging of one of its parts - is one a bill of materials
+        can see (see 'procurement.alias_offers').
+        """
+        known = dict(super().known_object_configs(kind))
+        prefix = self._scope("objects/%s/" % kind)
+        with self._request_lock:
+            fetched = [(key, value) for key, value in self._request_cache.items() if key.startswith(prefix)]
+        for key, config in fetched:
+            name = key[len(prefix) :]
+            if name and "/" not in name and isinstance(config, dict):
+                known.setdefault(name, config)
+        return list(known.items())
+
+    def known_object_count(self, kind: str) -> int:
+        # Only the declarations of 'kind' kept so far, as 'known_object_configs'
+        # reads them: a search, the metadata or a lookup that found nothing
+        # adds no object.
+        prefix = self._scope("objects/%s/" % kind)
+        with self._request_lock:
+            fetched = sum(
+                1
+                for key, value in self._request_cache.items()
+                if key.startswith(prefix) and key[len(prefix) :] and "/" not in key[len(prefix) :]
+                if isinstance(value, dict)
+            )
+        return super().known_object_count(kind) + fetched
 
     def _serves_kind(self, kind: str) -> bool:
         kinds = self._served_kinds()

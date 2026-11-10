@@ -220,6 +220,10 @@ def test_only_the_root_dependency_files_are_dependencies(tmp_path, path):
         (".devcontainer/AGENTS.md", "devcontainer"),
         (".claude/skills/steward/SKILL.md", "docs"),
         ("openspec/whatever.md", "docs"),
+        # Packages kept here until they have repositories of their own: nothing
+        # packages them and no job runs their tests.
+        ("incubator/partcad-svc-commerce-digikey/digikey.py", "docs"),
+        ("incubator/README.md", "docs"),
         ("docs/notes/screenshots.md", "docs"),
         # What retakes the screenshots in the documentation: a tool under
         # "dev-tools/" that nothing in CI runs, so not source.
@@ -464,6 +468,7 @@ def test_every_top_level_entry_is_classified_deliberately(tmp_path):
         "examples": {"code"},
         "features": {"code"},
         "ide": None,  # split between "vscode" and "ide"; covered above
+        "incubator": {"docs"},
         "install.sh": {"packaging"},
         "openspec": {"docs"},
         "poetry.lock": {"deps"},

@@ -1,0 +1,23 @@
+desc: The west store's products.
+parts:
+  board:
+    type: alias
+    source: //:board
+    vendor: west
+    sku: W-B
+  board-10:
+    type: alias
+    source: //:board
+    vendor: west
+    sku: W-B10
+    count_per_sku: 10
+  screw:
+    type: alias
+    source: //:screw
+    vendor: west
+    sku: W-SCREW
+  module:
+    type: alias
+    source: //:module
+    vendor: west
+    sku: W-M

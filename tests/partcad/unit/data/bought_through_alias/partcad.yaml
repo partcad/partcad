@@ -1,0 +1,83 @@
+desc: >
+  Parts that say nothing of how to buy them, bought through aliases of them
+  that do: a resistor on cut tape and on a reel, screws in bags of 25 and of
+  100, a nut bought through an alias of an alias, a washer that only a
+  sub-package sells, and a plate that says for itself and keeps saying it.
+
+dependencies:
+  catalog:
+    type: local
+    path: catalog
+
+parts:
+  resistor:
+    type: cadquery
+    path: cube.py
+    desc: A resistor
+  resistor-cut-tape:
+    type: alias
+    source: resistor
+    vendor: digikey
+    sku: R-CT
+  resistor-reel:
+    type: alias
+    source: resistor
+    vendor: digikey
+    sku: R-TR
+    count_per_sku: 5000
+
+  screw:
+    type: cadquery
+    path: cube.py
+    desc: A screw
+  screw-25:
+    type: alias
+    source: screw
+    vendor: acme
+    sku: S-25
+    count_per_sku: 25
+  screw-100:
+    type: alias
+    source: screw
+    vendor: acme
+    sku: S-100
+    count_per_sku: 100
+
+  nut:
+    type: cadquery
+    path: cube.py
+    desc: A nut
+  m3-nut:
+    type: alias
+    source: nut
+  m3-nut-bag:
+    type: alias
+    source: m3-nut
+    vendor: acme
+    sku: N-50
+    count_per_sku: 50
+
+  washer:
+    type: cadquery
+    path: cube.py
+    desc: A washer only the catalog sells
+
+  plate:
+    type: cadquery
+    path: cube.py
+    desc: A plate that says how to buy it
+    vendor: acme
+    sku: PLATE-1
+  plate-elsewhere:
+    type: alias
+    source: plate
+    vendor: other
+    sku: PLATE-2
+
+  bracket:
+    type: cadquery
+    path: cube.py
+    desc: A bracket nothing sells
+  bracket-named:
+    type: alias
+    source: bracket

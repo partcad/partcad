@@ -85,6 +85,49 @@ Feature: `pc search parts` command
     Then STDOUT should contain "cube in pkg2"
     Then STDOUT should contain "Matches: 2"
 
+  # Recursive is the default: what is looked for is usually in a package below.
+  # '-R' keeps the search to the one package.
+  Scenario: Search reaches every package below unless told not to
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+        part_05:
+          type: step
+          desc: cube at the top
+      """
+    And a file named "part_05.step" with content:
+      """
+      This is a STEP file for part_05
+      """
+    Given a directory named "pkg1" exists
+    And a file named "pkg1/partcad.yaml" with content:
+      """
+      parts:
+        part_06:
+          type: step
+          desc: cube in pkg1
+      """
+    And a file named "pkg1/part_06.step" with content:
+      """
+      This is a STEP file for part_06
+      """
+    When I run command:
+      """
+      pc search parts -k cube
+      """
+    Then the command should exit with a status code of "0"
+    Then STDOUT should contain "cube at the top"
+    Then STDOUT should contain "cube in pkg1"
+    Then STDOUT should contain "Matches: 2"
+    When I run command:
+      """
+      pc search parts -R -k cube
+      """
+    Then the command should exit with a status code of "0"
+    Then STDOUT should contain "cube at the top"
+    Then STDOUT should not contain "cube in pkg1"
+    Then STDOUT should contain "Matches: 1"
+
   # Not by what the declaration says but by what the part connects by: the
   # interface it implements, or anything that interface is derived from.
   Scenario: Search by interface

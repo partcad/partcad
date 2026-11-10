@@ -1,17 +1,12 @@
 import rich_click as click
 
+from ...search_scope import each_package_option, recursive_option
 from ...service import run
 
 
 @click.command(help="Search parts by keyword")
-@click.option(
-    "-r",
-    "--recursive",
-    "recursive",
-    is_flag=True,
-    help="Recursively search in all imported packages (older spelling of '<package>...')",
-    show_envvar=True,
-)
+@recursive_option
+@each_package_option
 @click.option(
     "--package",
     "-P",
@@ -52,7 +47,7 @@ from ...service import run
     show_envvar=True,
 )
 @click.pass_obj
-def cli(cli_ctx, recursive: bool, package: str, keyword: str, interface: str, limit: int) -> None:
+def cli(cli_ctx, recursive: bool, each_package: bool, package: str, keyword: str, interface: str, limit: int) -> None:
     if not keyword and not interface:
         raise click.UsageError("Nothing to search for: pass --keyword, --interface, or both")
     run(
@@ -62,6 +57,7 @@ def cli(cli_ctx, recursive: bool, package: str, keyword: str, interface: str, li
             "kind": "parts",
             "package": package,
             "recursive": recursive,
+            "each_package": each_package,
             "keyword": keyword,
             "interface": interface,
             "limit": limit,

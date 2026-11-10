@@ -238,14 +238,30 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         ctx: Context,
         kind: Annotated[ListKind, Field(description="What to list.")] = "parts",
         package: PackageName = None,
-        recursive: Annotated[bool, Field(description="Also list the packages below this one.")] = False,
+        recursive: Annotated[
+            bool,
+            Field(
+                description="Also list the packages below this one. For 'packages': every package below with "
+                "something in it, rather than the sub-packages directly below."
+            ),
+        ] = False,
+        complete: Annotated[
+            bool,
+            Field(
+                description="For 'packages': the complete subtree, the package and every package below it, empty "
+                "ones included ('pc list packages --all'; implies recursive)."
+            ),
+        ] = False,
     ) -> CallToolResult:
         """List the packages, parts, sketches, assemblies, scenes, interfaces, materials or software of a package.
 
         `pc list <kind>`. The listing is in the log of the result.
         """
         if kind == "packages":
-            return await run(ctx, "list.packages", {"package": package, "recursive": recursive})
+            request = {"package": package, "recursive": recursive}
+            if complete:
+                request["all"] = True
+            return await run(ctx, "list.packages", request)
         return await run(ctx, "list.objects", {"kind": kind, "package": package, "recursive": recursive})
 
     @server.tool(title="Show an object's declaration", annotations=_READS)
@@ -513,8 +529,16 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         recursive: Annotated[
             bool,
             Field(
-                description="Also look in the packages below. Below '//pub' that is the whole public catalog, "
-                "fetched over the network the first time."
+                description="Also look in the packages below, as 'pc search' does unless told '-R'. Below '//pub' "
+                "that is the whole public catalog, fetched over the network the first time; false keeps the "
+                "search to the one package."
+            ),
+        ] = True,
+        each_package: Annotated[
+            bool,
+            Field(
+                description="Ask every package below its own search, even where a catalog's search at the top "
+                "answers for its categories ('pc search --each-package'): a request per category."
             ),
         ] = False,
         interface: Annotated[
@@ -535,6 +559,8 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         `pc search`. The matches are in the log of the result.
         """
         request = {"kind": kind, "package": package, "recursive": recursive, "keyword": keyword}
+        if each_package:
+            request["each_package"] = True
         if interface:
             request["interface"] = interface
         if limit:

@@ -384,6 +384,28 @@ def test_a_supplier_is_resolved_against_the_package_that_names_it():
     assert repo.get_suppliers() == {"//ext:shop": {}}
 
 
+@pytest.mark.parametrize(
+    "package, supplier",
+    [
+        ("//x/digikey/products", "..:digikey"),
+        ("//x/digikey/products/resistors", "../..:digikey"),
+        ("//x/digikey/products/resistors/chip", "../../..:digikey"),
+    ],
+)
+def test_a_catalogue_names_its_own_store_relatively_from_any_depth(package, supplier):
+    """However deep the plugin serves a package, its suppliers are read from where it is.
+
+    A catalogue served as '<package>/products/<category>/<subcategory>' names
+    the store beside it at the top of its own package with one '..' per level,
+    so that it works wherever the package is imported rather than only at its
+    place in the public index. Every '..' after the first used to be lost.
+    """
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, package, "/tmp/ext", config_obj={})
+    repo._repository = FakeRepository({"meta": {"suppliers": {supplier: {}}}})
+    assert repo.get_suppliers() == {"//x/digikey:digikey": {}}
+
+
 def test_a_supplier_lookup_from_a_loop_never_stops_it(monkeypatch):
     """Who sells a part is asked from a loop, so the metadata is fetched on it.
 
@@ -1308,6 +1330,149 @@ def test_the_search_action_asks_a_repository_that_searches(tmp_path, monkeypatch
 
     assert [hit.name for hit in found] == ["763622"]
     assert "objects/part" not in fake.keys
+
+
+def test_a_repository_says_whether_its_search_covers_its_tree(tmp_path):
+    """'searchScope: tree' in the metadata, and only for a kind it searches."""
+    ctx = pc.Context("examples")
+    tree = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    tree._repository = FakeRepository({"meta": {"searchKinds": ["part"], "searchScope": "tree"}})
+    assert tree.searches_tree("part")
+    assert not tree.searches_tree("assembly")
+
+    each = ProjectExternalRepository(ctx, "//ext2", str(tmp_path), config_obj={})
+    each._repository = FakeRepository({"meta": {"searchKinds": ["part"]}})
+    assert each.searches("part") and not each.searches_tree("part")
+
+
+def _searchable_tree(tmp_path, monkeypatch, scope):
+    """'//ext' and its category '//ext/motors', one plugin, each asked what it finds for 'nema'."""
+    meta = {"searchKinds": ["part"], "objectKinds": ["part"]}
+    if scope:
+        meta["searchScope"] = scope
+    data = {
+        "meta": meta,
+        "motors/meta": meta,
+        "search/part?q=nema": {"nema17": {"type": "step", "path": "n.step"}},
+        "motors/search/part?q=nema": {"nema17": {"type": "step", "path": "n.step"}},
+    }
+    ctx = pc.Context("examples")
+    fake = FakeRepository(data)
+    top = ProjectExternalRepository(ctx, "//ext", str(tmp_path), plugin_ref="//:plugin", config_obj={})
+    child = ProjectExternalRepository(
+        ctx, "//ext/motors", str(tmp_path), plugin_ref="//:plugin", subfolder="motors", config_obj={}
+    )
+    top._repository = child._repository = fake
+    packages = {"//ext": top, "//ext/motors": child}
+    monkeypatch.setattr(ctx, "get_project", lambda name: packages.get(name))
+    monkeypatch.setattr(ctx, "get_all_packages", lambda parent_name=None, **kw: [{"name": n} for n in packages])
+    return ctx, fake
+
+
+def test_a_recursive_search_asks_a_tree_that_covers_itself_once(tmp_path, monkeypatch):
+    from partcad.actions.shape import search_parts
+
+    ctx, fake = _searchable_tree(tmp_path, monkeypatch, "tree")
+    found = search_parts(ctx, "//ext", True, "nema", None, None)
+
+    assert [hit.name for hit in found] == ["nema17"]
+    assert "search/part?q=nema" in fake.keys
+    assert "motors/search/part?q=nema" not in fake.keys
+
+
+def test_a_recursive_search_asks_every_package_of_a_tree_that_does_not(tmp_path, monkeypatch):
+    """IKEA's categories hold what their parents do not, so each of them is asked."""
+    from partcad.actions.shape import search_parts
+
+    ctx, fake = _searchable_tree(tmp_path, monkeypatch, None)
+    found = search_parts(ctx, "//ext", True, "nema", None, None)
+
+    assert [hit.project_name for hit in found] == ["//ext", "//ext/motors"]
+    assert "motors/search/part?q=nema" in fake.keys
+
+
+def test_each_package_asks_every_package_of_a_tree_that_covers_itself(tmp_path, monkeypatch):
+    """'--each-package': every category is asked, and each hit is named in the category it is in."""
+    from partcad.actions.shape import search_parts
+
+    ctx, fake = _searchable_tree(tmp_path, monkeypatch, "tree")
+    found = search_parts(ctx, "//ext", True, "nema", None, None, each_package=True)
+
+    assert [hit.project_name for hit in found] == ["//ext", "//ext/motors"]
+    assert "motors/search/part?q=nema" in fake.keys
+
+
+def test_a_search_started_below_the_top_asks_where_it_started(tmp_path, monkeypatch):
+    """The covering package is the one the search starts in, or above it in the list - not one outside it."""
+    from partcad.actions.shape import search_parts
+
+    ctx, fake = _searchable_tree(tmp_path, monkeypatch, "tree")
+    found = search_parts(ctx, "//ext/motors", False, "nema", None, None)
+
+    assert [hit.project_name for hit in found] == ["//ext/motors"]
+    assert "search/part?q=nema" not in fake.keys
+
+
+def test_a_catalogues_pack_aliases_count_once_a_search_has_found_them(tmp_path):
+    """A part a catalogue sells in several packs is bought through them, once they are loaded - by a search, say."""
+    from partcad import procurement
+
+    data = {
+        "meta": {"searchKinds": ["part"]},
+        "objects/part": {},
+        "search/part?q=10k": {
+            "RC0603~yageo": {"type": "step", "path": "r.step"},
+            "R-CT": {"type": "alias", "source": ":RC0603~yageo", "vendor": "digikey", "sku": "R-CT"},
+            "R-TR": {
+                "type": "alias",
+                "source": ":RC0603~yageo",
+                "vendor": "digikey",
+                "sku": "R-TR",
+                "count_per_sku": 5000,
+            },
+        },
+    }
+    ctx, repo, _fake = _listing_context(tmp_path, data)
+    assert procurement.alias_offers(ctx, "//test/ext:RC0603~yageo") == []
+
+    repo.search("part", "10k")
+
+    offers = procurement.alias_offers(ctx, "//test/ext:RC0603~yageo")
+    assert [(name, record.sku, record.count_per_sku) for name, record in offers] == [
+        ("//test/ext:R-CT", "R-CT", 1),
+        ("//test/ext:R-TR", "R-TR", 5000),
+    ]
+
+
+def test_only_a_kept_declaration_moves_the_count_the_alias_index_is_keyed_on(tmp_path):
+    """Fetching what is not an object of the kind - a search page, the metadata - does not rebuild the index."""
+    data = {
+        "meta": {"searchKinds": ["part"]},
+        "objects/part": {},
+        "search/part?q=10k": {
+            "RC0603~yageo": {"type": "step", "path": "r.step"},
+            "R-CT": {"type": "alias", "source": ":RC0603~yageo", "vendor": "digikey", "sku": "R-CT"},
+        },
+    }
+    ctx, repo, _fake = _listing_context(tmp_path, data)
+    count = repo.known_object_count("part")
+    with repo._request_lock:
+        repo._request_cache[repo._scope("search/part?q=nothing")] = {}
+        # A lookup that found nothing is kept too, as None.
+        repo._request_cache[repo._scope("objects/part/nowhere")] = None
+    assert repo.known_object_count("part") == count
+
+    repo.search("part", "10k")
+
+    assert repo.known_object_count("part") == count + 2
+
+
+def test_a_package_that_searches_has_something_in_it(tmp_path):
+    """Listed by 'pc list packages -r' though it lists nothing: a distributor's category is one."""
+    ctx, repo, _fake = _listing_context(tmp_path, {"meta": {"searchKinds": ["part"]}, "objects/part": {}})
+
+    names = [p["name"] for p in ctx.get_all_packages(has_stuff=True)]
+    assert "//test/ext" in names
 
 
 def test_a_limit_that_is_not_a_positive_number_is_no_limit(tmp_path):

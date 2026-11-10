@@ -31,6 +31,13 @@ def resolve_cart_item(item_spec: str):
     return name, count
 
 
+def _declared_parameter(object, name: str):
+    """The default of the parameter 'name' the object declares, or None: what 'get_mcft' reads of a bought part."""
+    parameters = (getattr(object, "config", None) or {}).get("parameters") or {}
+    parameter = parameters.get(name)
+    return parameter.get("default") if isinstance(parameter, dict) else None
+
+
 def resolve_cart_object(ctx, name: str):
     """Resolve the name of a cart item to the object it refers to.
 
@@ -97,21 +104,121 @@ class ProviderCartItem:
     # 'ignore_missing'. Not part of what a provider is handed.
     optional: bool = False
 
+    # Every way the item can be ordered, as 'procurement.alternatives' lists
+    # them: its own record, if it has one, then each loaded alias of it that
+    # names a vendor and an SKU. The vendor, the SKU and the pack size above
+    # are the one of these the item is ordered by: its own, or for a part that
+    # has none the alias that suits its count ('settle'), or whichever one the
+    # supplier it goes to sells ('use_offer'). Not part of what a provider is
+    # handed.
+    offers: list
+    # Whether the first of 'offers' is the item's own record.
+    has_own: bool = False
+    # The alias the item is ordered as, whose package's suppliers are asked for
+    # it too (see 'Context.find_part_suppliers'); None when it is its own.
+    via: str = None
+    # Which offer each supplier that has the item has it as, by provider name
+    # (see 'Context.find_part_suppliers'), and what it asked for it where it was
+    # priced to choose ('--cheapest').
+    offer_by_provider: dict
+    price_by_provider: dict
+    # Set once a supplier's offer is chosen ('use_offer'): a count that changes
+    # afterwards does not choose again.
+    pinned: bool = False
+
     def __init__(self):
         self.name = "none"
         self.count = 0
         self.format = "none"
         self.suppliers = {}
         self.optional = False
+        self.offers = []
+        self.offer_by_provider = {}
+        self.price_by_provider = {}
 
-    def _set_store_data(self, object):
+    def _set_store_data(self, object, ctx=None):
         store_data = object.get_store_data()
+        self.has_own = bool(getattr(store_data, "is_purchasable", False))
+        self._set_record(store_data)
+        self.refresh_offers(ctx, object)
+        self.settle()
+
+    def refresh_offers(self, ctx, object=None):
+        """Ask again what the item can be ordered as: a store's package loaded since adds its aliases.
+
+        Only a part can have aliases that sell it, and only a context knows
+        which are loaded; anything else keeps its own record alone.
+        """
+        if ctx is None:
+            return
+        from . import procurement
+
+        if object is None:
+            object = resolve_cart_object(ctx, self.name)
+        if object is None or not hasattr(object, "project_name"):
+            return
+        try:
+            self.offers = procurement.alternatives(object, ctx)
+        except AttributeError:
+            # A stand-in for a shape, with a record and nothing else to ask.
+            self.offers = []
+
+    def _set_record(self, store_data):
         self.vendor = store_data.vendor
         self.sku = store_data.sku
         self.count_per_sku = store_data.count_per_sku
         self.item_in_sku = getattr(store_data, "item_in_sku", None)
 
-    def set_shape(self, shape, count: int = 1):
+    def settle(self):
+        """Order this item by the offer that suits its count, where it is bought through an alias.
+
+        One part on cut tape and on a reel is two aliases of it, one SKU each
+        (see 'procurement.choose'): which of them a cart orders is a question
+        of how many it holds, so it is asked again each time that changes. A
+        part with a record of its own is ordered by it, and an item a supplier
+        has chosen the offer of stays with that offer.
+        """
+        offers = getattr(self, "offers", None)
+        if not offers or getattr(self, "has_own", False) or getattr(self, "pinned", False):
+            return
+        from . import procurement
+
+        chosen = procurement.choose(offers, self.count)
+        if chosen is not None:
+            self._set_record(chosen[1])
+            self.via = chosen[0]
+
+    def candidates(self) -> list:
+        """The offers to put to a supplier, in the order it is asked about them.
+
+        The item's own record first, where it has one, and then its aliases, the
+        one that suits the count best first; a manufacturer, which makes the
+        part rather than selling a SKU, is asked about the item as it is.
+        """
+        from . import procurement
+
+        offers = list(getattr(self, "offers", None) or [])
+        if getattr(self, "has_own", False) and offers:
+            return offers[:1] + procurement.by_count(offers[1:], self.count)
+        return procurement.by_count(offers, self.count)
+
+    def use_offer(self, name: str) -> bool:
+        """Order the item by the offer called 'name', and keep to it; False when it has none of that name."""
+        for offer_name, record in getattr(self, "offers", None) or []:
+            if offer_name == name:
+                self._set_record(record)
+                self.via = None if offer_name == self.name else offer_name
+                self.pinned = True
+                return True
+        return False
+
+    def use_offer_of(self, provider_name: str) -> None:
+        """Order the item by what 'provider_name' was found to have it as, if it was asked."""
+        chosen = (getattr(self, "offer_by_provider", None) or {}).get(provider_name)
+        if chosen:
+            self.use_offer(chosen)
+
+    def set_shape(self, shape, count: int = 1, ctx=None):
         """Populate the item from a shape object the caller already holds.
 
         'set_spec()' resolves a part by name through the context; this is for the
@@ -121,7 +228,7 @@ class ProviderCartItem:
         """
         self.name = "%s:%s" % (shape.project_name, shape.name)
         self.count = count
-        self._set_store_data(shape)
+        self._set_store_data(shape, ctx)
 
     async def set_spec(self, ctx, spec: str):
         self.name, self.count = resolve_cart_item(spec)
@@ -132,8 +239,17 @@ class ProviderCartItem:
             # nothing reaches here from a bill of materials, and an assertion
             # is neither a message for a user nor there at all under '-O'.
             raise ValueError(f"Part or assembly '{self.name}' not found")
-        self._set_store_data(object)
+        self._set_store_data(object, ctx)
 
+        if self.offers and not self.has_own:
+            # Bought, as a store's SKU, through an alias of it: what it is made
+            # of is the store's to say, as it is for a part that names its own
+            # SKU, so only what it declares is passed on and nothing is warned
+            # about (see 'ShapeConfiguration.get_mcft').
+            self.material = _declared_parameter(object, "material")
+            self.color = _declared_parameter(object, "color")
+            self.finish = _declared_parameter(object, "finish")
+            return
         self.material = await object.get_mcft("material")
         self.color = await object.get_mcft("color")
         self.finish = await object.get_mcft("finish")
@@ -179,11 +295,17 @@ class ProviderCart:
     # it, for what is not in a scene too: '--ignore-missing'. See
     # 'ProviderCartItem.optional'.
     ignore_missing: bool = False
+    # Whether an item that can be ordered more than one way - its own SKU and
+    # the packs or stores its aliases name - is priced each way at each
+    # supplier and ordered the cheapest, rather than the first way a supplier
+    # has it: '--cheapest'. See 'Context.find_part_suppliers'.
+    cheapest: bool = False
 
-    def __init__(self, qos: str = None, ignore_missing: bool = False):
+    def __init__(self, qos: str = None, ignore_missing: bool = False, cheapest: bool = False):
         self.parts = {}
         self.qos = qos
         self.ignore_missing = bool(ignore_missing)
+        self.cheapest = bool(cheapest)
 
     async def add_objects(self, ctx, objects: list[str], recursive: bool = False):
         """Add parts or assemblies"""
@@ -266,11 +388,18 @@ class ProviderCart:
                     return
 
                 pc_logging.debug(f"Adding the contents of assembly '{object_name}' to the cart")
+                # The stores this package buys from publish what they sell as
+                # aliases, which count once their packages are loaded - before
+                # the bill of materials, since being bought through one decides
+                # whether a part is procured as itself or as its stock.
+                from . import procurement
+
+                suppliers = await prj.get_suppliers_async()
+                procurement.load_suppliers(ctx, suppliers)
                 if recursive:
                     bom = await _procured(ctx, await holder.get_bom())
                 else:
                     bom = await holder.get_supply_bom(ctx)
-                suppliers = await prj.get_suppliers_async()
                 optional = scene is not None or self.ignore_missing
                 tasks = []
                 for item_name, item_count in bom.items():
@@ -315,6 +444,7 @@ class ProviderCart:
         if item.name in self.parts:
             existing = self.parts[item.name]
             existing.count += item.count
+            existing.settle()
             # Optional only while everything that asked for it may go without
             # it: the same chair in a scene and in an assembly is the
             # assembly's to fail over.
@@ -325,6 +455,7 @@ class ProviderCart:
             for supplier, extra in item.suppliers.items():
                 existing.suppliers.setdefault(supplier, extra)
         else:
+            item.settle()
             self.parts[item.name] = item
         return item
 

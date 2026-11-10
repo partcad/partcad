@@ -1,0 +1,9 @@
+desc: A catalog that sells the washer of the package above it.
+
+parts:
+  washer-bag:
+    type: alias
+    source: //:washer
+    vendor: acme
+    sku: W-100
+    count_per_sku: 100

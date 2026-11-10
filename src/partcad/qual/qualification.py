@@ -170,6 +170,17 @@ class Qualification(ABC):
         """
         return ""
 
+    def cache_key_context(self, test_ctx: dict) -> str:
+        """What this test reads from 'test_ctx' that changes its verdict, folded into the cache key.
+
+        '' by default: most tests answer the same however they were reached. One
+        whose verdict turns on what the caller hands down - the suppliers an
+        assembly buys what it is made of from, say - says so here, or the
+        verdict reached for one caller is read back for another (see
+        'ManufacturabilityTest.cache_key_context()').
+        """
+        return ""
+
     @semaphore_wrapper
     async def test_cached(self, tests_to_run: list["Qualification"], ctx, shape, test_ctx: dict = {}) -> bool:
         # Copied, because 'test()' may set 'NOT_CACHEABLE' on it below and the
@@ -208,7 +219,7 @@ class Qualification(ABC):
             # not part of shape.hash; fold it into the cache key so that flipping
             # the flag invalidates any previously cached result.
             manufacturable = int(bool(getattr(shape, "is_manufacturable", True)))
-            suffix = await self.cache_key_suffix(ctx, shape)
+            suffix = await self.cache_key_suffix(ctx, shape) + self.cache_key_context(test_ctx)
             cache_key = f"test.{self.name}.manufacturable={manufacturable}{suffix}"
             if not manufacturable:
                 # And, for an object that says it is not to be made, whether it

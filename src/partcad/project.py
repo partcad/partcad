@@ -1202,6 +1202,23 @@ class Project(project_config.Configuration):
         """Whether this package answers a search for 'kind' itself, rather than being matched locally."""
         return False
 
+    def searches_tree(self, kind: str) -> bool:
+        """Whether this package's own search for 'kind' answers for every package below it too.
+
+        A local package matches its own declarations only. A repository plugin
+        that searches a whole catalogue in one request says so (see
+        'ProjectExternalRepository.searches_tree'), and a recursive search then
+        asks it once rather than once per package of its tree.
+        """
+        return False
+
+    def load_metadata(self):
+        """Have everything this package says about itself - its 'desc' - in hand.
+
+        A local package read it with its 'partcad.yaml'; a plugin-backed one
+        asks its repository (see 'ProjectExternalRepository').
+        """
+
     def search(self, kind: str, text: str, limit: typing.Optional[int] = None) -> list:
         """The objects of 'kind' this package finds for 'text', when it 'searches()' that kind."""
         return []
@@ -1253,6 +1270,36 @@ class Project(project_config.Configuration):
         """
         configs = self._object_configs.get(kind)
         return len(configs) if configs else 0
+
+    def known_object_configs(self, kind: str) -> list:
+        """The '(name, config)' of every object of a kind known so far, without enumerating either.
+
+        Known in the sense of 'object_count_known': what the package declared,
+        for a local package, and what has been asked of it so far, for a
+        plugin-backed one - together with the objects created so far, which for
+        the latter include the ones fetched one by one and never listed. A
+        created object reports its own configuration, which is the declaration
+        it was made from and what making it recorded (an alias's
+        'source_resolved').
+        """
+        configs = dict(self._object_configs.get(kind) or {})
+        try:
+            objects = list(self.objects(kind).items())
+        except ValueError:
+            objects = []
+        for name, obj in objects:
+            config = getattr(obj, "config", None)
+            if config is not None:
+                configs[name] = config
+        return list(configs.items())
+
+    def known_object_count(self, kind: str) -> int:
+        """A number that changes whenever 'known_object_configs(kind)' gains an entry, and is cheap to ask."""
+        try:
+            created = len(self.objects(kind))
+        except ValueError:
+            created = 0
+        return self.object_count_known(kind) + created
 
     # Backward-compatible views onto the object-access layer. These keep the
     # historical 'self.<kind>_configs' attribute name working (now sourced

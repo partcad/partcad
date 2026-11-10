@@ -101,13 +101,55 @@ def filename_from_url(url: str, fallback: str = "download") -> str:
 BLACKLIST = type, ModuleType, FunctionType
 
 
+_PARENT_SEGMENT = ".."
+
+
+def resolve_parent_segments(path: str) -> str:
+    """'path' with every '..' taking away the segment before it, however many there are.
+
+    Segment by segment, left to right: '//a/b/c/../..' is '//a', and
+    '//a/b/../c' is '//a/c'. It used to be one 're.sub' of '/<segment>/..',
+    which does not look at its own output again - so a second '..' was left in
+    place ('//a/b/c/../..' came out as '//a/b/..'), and with a third the second
+    was taken for a segment called '..' that the third cancelled
+    ('//a/b/c/d/../../..' came out as '//a/b/c'). A relative reference
+    that climbs more than one level is what a package served at some depth
+    below its own root - a catalogue's '<package>/products/<category>/<sub>' -
+    writes to name something of that root, wherever the whole tree is imported.
+
+    A '..' is only ever a whole segment; '...' (the wildcard, '*' by the time
+    this is called) and a name that merely contains dots are names. The leading
+    '//' of an absolute path, or the deprecated single '/', is kept as written.
+
+    A '..' with nothing left before it to take away - one that climbs above the
+    root - stays where it is: '//a/../..' is '//..'. No package has that name, so
+    every lookup of it fails as "not found" under a name that shows why. Taking
+    it to mean the root instead, as a filesystem path would, quietly turns a
+    reference that miscounted its levels into a reference to some other package;
+    raising would turn it into the failure of whatever happened to resolve it -
+    a package being loaded, a walk over every reference - when it is a mistake
+    in one reference that only that reference's lookup has to report.
+    """
+    stripped = path.lstrip("/")
+    segments = stripped.split("/")
+    if _PARENT_SEGMENT not in segments:
+        return path
+    kept = []
+    for segment in segments:
+        if segment == _PARENT_SEGMENT and kept and kept[-1] != _PARENT_SEGMENT:
+            kept.pop()
+        else:
+            kept.append(segment)
+    return path[: len(path) - len(stripped)] + "/".join(kept)
+
+
 def get_child_project_path(parent_path, child_name):
     if parent_path.endswith("/"):
         result = parent_path + child_name
     else:
         result = parent_path + "/" + child_name
 
-    result = re.sub(r"/[^/]*/\.\.", "", result)
+    result = resolve_parent_segments(result)
     if result != "//":
         result = re.sub(r"/$", "", result)
     return result
@@ -350,7 +392,7 @@ def resolve_resource_path(current_project_name, pattern: str):
             project_pattern = current_project_name + project_pattern
         else:
             project_pattern = current_project_name + "/" + project_pattern
-    project_pattern = re.sub(r"/[^/]*/\.\.", "", project_pattern)
+    project_pattern = resolve_parent_segments(project_pattern)
     # '...' is a wildcard in an object's name, and not in its parameters, for
     # the reason ':' is not a separator there: a value is the user's text.
     name, separator, parameters = item_pattern.partition(";")

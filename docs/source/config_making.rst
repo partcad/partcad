@@ -548,6 +548,77 @@ This travels down a chain: an alias of an alias, and an enrich of an enrich,
 report what the reference in the middle declared rather than only what is at
 the end of the chain.
 
+.. _bought-through-alias:
+
+Bought through an alias
+-----------------------
+
+The geometry need not say how to buy it at all. A part with no ``vendor`` and
+``sku`` of its own is **bought** all the same when an ``alias`` of it that is
+loaded names a ``vendor`` and an ``sku``: each such alias is one way to order
+the part, with its own ``count_per_sku``. This is how one part sold in several
+pack sizes is written -- the part once, for what it is, and an alias per SKU:
+
+.. code-block:: yaml
+
+  parts:
+    resistor_10k_0603:
+      type: step
+      path: RC0603FR-0710KL.step
+
+    resistor_10k_0603_cut_tape:
+      type: alias
+      source: resistor_10k_0603
+      vendor: digikey
+      sku: 311-10.0KHRCT-ND
+
+    resistor_10k_0603_reel:
+      type: alias
+      source: resistor_10k_0603
+      vendor: digikey
+      sku: 311-10.0KHRTR-ND
+      count_per_sku: 5000
+
+An assembly links ``resistor_10k_0603``, and Build vs Buy, the bills of
+materials, ``pc supply find`` and ``pc supply quote`` treat it as bought:
+
+- The cart orders it by whichever alias buys the fewest parts beyond the number
+  needed, and of those the one with the fewest SKUs. Ten resistors come off cut
+  tape and five thousand come as the reel; 120 screws sold in bags of 25 and of
+  100 are five bags of 25.
+- The bills of materials and the Build vs Buy table name the alias with the
+  smallest pack, and the table lists every alias it can be bought as.
+- The suppliers of the alias's package are asked as well as those of the
+  part's: a catalogue that sells another package's part names the store that
+  sells it.
+
+A part that names a ``vendor`` and an ``sku`` itself is bought as it says when
+nothing else is asked -- in the bills of materials and in Build vs Buy.
+
+**Each supplier is handed the part the way it sells it.** ``pc supply find``,
+``pc supply quote`` and the manufacturability test put each way the part can be
+ordered to each supplier in turn -- its own SKU first, then its aliases' -- and
+a supplier that has any of them has the part, as the first it has. So a part
+whose own SKU is Home Depot's is still bought from Lowe's when Lowe's publishes
+an alias of it, and ``--provider`` picks the store rather than the SKU.
+
+**Buying the pack when it is cheaper.** ``pc supply quote --cheapest`` prices
+every way each supplier has the part, hands each supplier its cheapest, and
+orders from the cheapest supplier: a pack is bought rather than single parts
+when the pack costs less than the parts one by one. It asks each supplier for a
+quote per way of ordering, so it is slower, and off by default.
+
+**Loaded** means declared in a package PartCAD has loaded, or served by a
+repository plugin and already asked for (by a search, a listing, or an assembly
+that uses it). Nothing is fetched to find an alias, because finding out whether
+any of a catalogue's hundred thousand parts points at this one would mean
+listing all of them. An alias in a package that nothing has loaded yet does not
+count. The stores a package lists under ``suppliers:`` are loaded before what it
+is made of is procured or tested, so a package that names its stores can be cut
+from a standard size that only their aliases sell -- which is how the
+``//pub/furniture/workspace/basic`` desk is bought from Home Depot or Lowe's.
+Chains are followed: an alias of an alias of the part is a way to order it too.
+
 .. _materials:
 
 =========

@@ -59,10 +59,11 @@ Feature: Handle monorepo paths properly
     And STDERR should not contain "Package A"
     And STDERR should not contain "Package B"
     And STDERR should contain "DFRobot"
+    # Without recursion it is the sub-packages of the package, and this one has none
     When I run "pc --no-ansi list packages ///package_a"
     Then the command should exit with a status code of "0"
     And STDERR should not contain "Root Package"
-    And STDERR should contain "Package A"
+    And STDERR should not contain "Package A"
     And STDERR should not contain "Package B"
     And STDERR should not contain "DFRobot"
     When I run "pc --no-ansi list packages -r //nonexistent"
@@ -71,18 +72,20 @@ Feature: Handle monorepo paths properly
     And STDERR should not contain "Package A"
     And STDERR should not contain "Package B"
     And STDERR should not contain "DFRobot"
+    # The sub-packages of the root: its folders and its dependencies, each
+    # listed whether or not it has anything in it of its own
     When I run "pc --no-ansi list packages //"
     Then the command should exit with a status code of "0"
-    And STDERR should contain "Root Package"
-    And STDERR should not contain "Package A"
-    And STDERR should not contain "Package B"
-    And STDERR should not contain "DFRobot"
+    And STDERR should not contain "Root Package"
+    And STDERR should contain "Package A"
+    And STDERR should contain "Package B"
+    And STDERR should contain "DFRobot"
     When I run "pc --no-ansi list packages"
     Then the command should exit with a status code of "0"
-    And STDERR should contain "Root Package"
-    And STDERR should not contain "Package A"
-    And STDERR should not contain "Package B"
-    And STDERR should not contain "DFRobot"
+    And STDERR should not contain "Root Package"
+    And STDERR should contain "Package A"
+    And STDERR should contain "Package B"
+    And STDERR should contain "DFRobot"
 
 
   @pc-help
@@ -271,10 +274,11 @@ Feature: Handle monorepo paths properly
     And STDERR should not contain "Package A"
     And STDERR should not contain "Package B"
     And STDERR should contain "DFRobot"
+    # Without recursion it is the sub-packages of the package, and this one has none
     When I run "pc --no-ansi list packages //corp_x/project_y/package_a"
     Then the command should exit with a status code of "0"
     And STDERR should not contain "Root Package"
-    And STDERR should contain "Package A"
+    And STDERR should not contain "Package A"
     And STDERR should not contain "Package B"
     And STDERR should not contain "DFRobot"
     When I run "pc --no-ansi list packages -r //nonexistent"
@@ -283,18 +287,20 @@ Feature: Handle monorepo paths properly
     And STDERR should not contain "Package A"
     And STDERR should not contain "Package B"
     And STDERR should not contain "DFRobot"
+    # The sub-packages of the root: its folders and its dependencies, each
+    # listed whether or not it has anything in it of its own
     When I run "pc --no-ansi list packages //"
     Then the command should exit with a status code of "0"
-    And STDERR should contain "Root Package"
-    And STDERR should not contain "Package A"
-    And STDERR should not contain "Package B"
-    And STDERR should not contain "DFRobot"
+    And STDERR should not contain "Root Package"
+    And STDERR should contain "Package A"
+    And STDERR should contain "Package B"
+    And STDERR should contain "DFRobot"
     When I run "pc --no-ansi list packages"
     Then the command should exit with a status code of "0"
-    And STDERR should contain "Root Package"
-    And STDERR should not contain "Package A"
-    And STDERR should not contain "Package B"
-    And STDERR should not contain "DFRobot"
+    And STDERR should not contain "Root Package"
+    And STDERR should contain "Package A"
+    And STDERR should contain "Package B"
+    And STDERR should contain "DFRobot"
 
 
   @pc-help
