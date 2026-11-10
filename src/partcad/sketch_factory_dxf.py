@@ -10,7 +10,7 @@
 import os
 
 from . import logging as pc_logging
-from . import sandbox_versions, shape_envelope, telemetry, wrapper
+from . import request_paths, sandbox_versions, shape_envelope, telemetry, wrapper
 from .process_crash import command_failure
 from .shape_config import as_list, object_type_parameter
 from .sketch_factory_python import SketchFactoryPython
@@ -170,20 +170,23 @@ class SketchFactoryDxf(SketchFactoryPython):
                 }
                 request["name"] = "%s:%s" % (sketch.project_name, sketch.name)
                 request["label"] = sketch.name
-                request_serialized = shape_envelope.serialize(request)
 
                 # CadQuery reads the drawing, so this runs in the layer CadQuery
                 # parts run in, by way of the session (see 'runtime_python').
                 await self.runtime.ensure_async(sandbox_versions.CADQUERY_OCP, session=self.session)
                 await self.runtime.ensure_async(sandbox_versions.CADQUERY, session=self.session)
-                command = [
-                    wrapper_path,
-                    os.path.abspath(self.path),
-                    os.path.abspath(self.project.config_dir),
-                ]
+                # The drawing is read from the request's 'path', which goes on the
+                # command line again behind the others: what a sandbox that is
+                # sent files rather than sharing them rewrites (see
+                # 'request_paths').
+                command = request_paths.carry(
+                    [wrapper_path, os.path.abspath(self.path), os.path.abspath(self.project.config_dir)],
+                    request,
+                    ("path",),
+                )
                 exitcode, response_serialized, errors = await self.runtime.run_async(
                     command,
-                    request_serialized,
+                    shape_envelope.serialize(request),
                     session=self.session,
                 )
                 if exitcode != 0 and len(errors) == 0:
