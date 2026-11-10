@@ -128,18 +128,31 @@ def test_a_urdf_is_always_an_assembly(tmp_path):
     assert assembly_file.assembly_in(tmp_path / "robot.urdf", "urdf") == "a URDF describes an assembly"
 
 
+# Each case named, and its bytes made the same way every time: pytest-xdist has
+# every worker collect the suite and refuses to run one that collected
+# something else, and an id spelled from the bytes of a gzip stream - whose
+# header carries the moment it was compressed - differed between two workers
+# that collected a second apart.
 @pytest.mark.parametrize(
     "kind, content",
     [
-        ("step", b"\x1f\x8bnot gzip"),
+        pytest.param("step", b"\x1f\x8bnot gzip", id="step-not-gzip"),
         # A gzip header and then a deflate stream that is not one.
-        ("step", gzip.compress(b"NEXT_ASSEMBLY_USAGE_OCCURRENCE" * 4)[:10] + b"\xff" * 32),
-        ("gltf", b"glTF\x02\x00"),
-        ("gltf", b"{"),
+        pytest.param(
+            "step",
+            gzip.compress(b"NEXT_ASSEMBLY_USAGE_OCCURRENCE" * 4, mtime=0)[:10] + b"\xff" * 32,
+            id="step-corrupt-deflate",
+        ),
+        pytest.param("gltf", b"glTF\x02\x00", id="glb-cut-short"),
+        pytest.param("gltf", b"{", id="gltf-not-json"),
         # JSON, and not the structure glTF names.
-        ("gltf", json.dumps({"scenes": [1], "scene": 0}).encode()),
-        ("gltf", json.dumps({"nodes": ["a node"]}).encode()),
-        ("gltf", json.dumps({"nodes": [{"children": 3}], "scenes": [{"nodes": [0]}]}).encode()),
+        pytest.param("gltf", json.dumps({"scenes": [1], "scene": 0}).encode(), id="gltf-scene-not-an-object"),
+        pytest.param("gltf", json.dumps({"nodes": ["a node"]}).encode(), id="gltf-node-not-an-object"),
+        pytest.param(
+            "gltf",
+            json.dumps({"nodes": [{"children": 3}], "scenes": [{"nodes": [0]}]}).encode(),
+            id="gltf-children-not-a-list",
+        ),
     ],
 )
 def test_a_file_that_cannot_be_read_here_is_left_to_the_part_s_reader(tmp_path, kind, content):
