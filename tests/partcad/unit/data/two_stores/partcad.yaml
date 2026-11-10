@@ -27,6 +27,12 @@ parts:
     desc: A screw the east store sells
     vendor: east
     sku: E-SCREW
+  bolt:
+    type: cadquery
+    path: cube.py
+    desc: A bolt by its maker's SKU, which both stores carry
+    vendor: acme
+    sku: BOLT-1
   module:
     type: cadquery
     path: module.py

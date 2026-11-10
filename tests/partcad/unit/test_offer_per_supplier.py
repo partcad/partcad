@@ -25,13 +25,13 @@ PACKAGE = "tests/partcad/unit/data/two_stores/partcad.yaml"
 
 # What each store asks per SKU, in dollars.
 PRICES = {
-    "east": {"E-B": 4.0, "E-SCREW": 0.5, "E-M": 12.0},
-    "west": {"W-B": 5.0, "W-B10": 30.0, "W-SCREW": 0.4, "W-M": 11.0},
+    "east": {"E-B": 4.0, "E-SCREW": 0.5, "E-M": 12.0, "BOLT-1": 2.0},
+    "west": {"W-B": 5.0, "W-B10": 30.0, "W-SCREW": 0.4, "W-M": 11.0, "BOLT-1": 1.5},
 }
 
 
 class _Store:
-    """A store that sells its own vendor's SKUs, and prices a cart by them."""
+    """A store that sells its own vendor's SKUs, and the maker's SKUs it has a price for, and prices a cart by them."""
 
     def __init__(self, vendor, asked):
         self.vendor = vendor
@@ -40,7 +40,7 @@ class _Store:
 
     async def is_part_available(self, item):
         self.asked.append((self.vendor, item.sku))
-        return item.vendor == self.vendor and item.sku in PRICES[self.vendor]
+        return item.vendor in (self.vendor, "acme") and item.sku in PRICES[self.vendor]
 
     def is_qos_available(self, qos):
         return True
@@ -131,6 +131,14 @@ def test_cheapest_prices_every_way_and_orders_the_cheapest(ctx):
     assert item.price_by_provider == {"//east:store": 28.0, "//west:store": 30.0}
     assert found == ["//east:store", "//west:store"]
     assert ctx.select_preferred_supplier(found) == "//east:store"
+
+
+def test_cheapest_compares_the_suppliers_of_a_part_with_one_way_to_order_it(ctx):
+    """A maker's SKU both stores carry: no pack to choose between, but still two prices."""
+    item = _item(ctx, "//:bolt#4")
+    found = asyncio.run(ctx.find_part_suppliers(item, ProviderCart(cheapest=True)))
+    assert item.price_by_provider == {"//east:store": 8.0, "//west:store": 6.0}
+    assert found == ["//west:store", "//east:store"]
 
 
 def test_cheapest_buys_the_pack_where_it_is_cheaper(ctx):

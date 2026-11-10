@@ -1585,8 +1585,9 @@ class Context:
 
         The offers are put to it in 'ProviderCartItem.candidates' order and the
         first it has is the answer, unpriced. With 'price', every offer it has
-        is priced, when there is more than one way it could be ordered at all,
-        and the cheapest is the answer. An item with no offer to put - one a
+        is priced and the cheapest is the answer - one it has only one way of
+        ordering too, since the price is what the suppliers are compared by
+        (see 'find_part_suppliers'). An item with no offer to put - one a
         manufacturer makes, with nothing to order it by - is asked about as it
         is, and its offer name is None.
 
@@ -1612,7 +1613,7 @@ class Context:
             return None
 
         priced = [(name, None) for name, _trial in available]
-        if price and (len(available) > 1 or len(getattr(part_item, "offers", None) or []) > 1):
+        if price:
             priced = [(name, await self._price_at(provider, trial, cart)) for name, trial in available]
             with_price = [pair for pair in priced if pair[1] is not None]
             if with_price:
