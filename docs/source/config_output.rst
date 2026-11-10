@@ -30,6 +30,7 @@ are configured by a section of ``partcad.yaml`` named after the command --
       exclude: <(optional) kinds of object not to write this type for>
       reproducible: <(optional) true to require the same bytes every time>
       visuals: <(optional, render: only) true if the script draws pictures; see below>
+      compound: <(optional) true to be handed an assembly as one part>
       <parameter name>: <value> # anything else is an export parameter
 
   render:
@@ -311,6 +312,29 @@ is not what the part is. It is not handed to the script.
 
 The IDE's Draft tab goes further, and asks for its drawing with no visuals
 whatever the file type says: a dimensioned drawing is of the object as it is.
+
+.. _output-compound:
+
+``compound`` says that an implementation is written for **one shape**: an
+assembly or a scene is handed to it as its compound -- one part, every item in
+it, in the colours and materials each states (see :ref:`part-compound`) --
+rather than as the tree of what it places with the compound of it beside it. It
+is PartCAD's own, like ``filter:``: the implementation is handed another object
+and never sees the field. ``pc export --compound`` asks the same of every file
+type for one run.
+
+.. code-block:: yaml
+
+  export:
+    print-job:
+      path: slicer.py
+      compound: true    # one body to slice, whatever it is made of
+
+None of the built-in file types declares it, because each of them already reads
+the whole of what it is handed: the ones written from geometry (``brep``,
+``stl``, ``obj``, ...) from ``request["wrapped"]``, which is the compound of an
+assembly already, and the ones written from structure (``step``, ``gltf``,
+``urdf``) from ``request["shape_tree"]``, which is what they are for.
 
 Custom implementations
 ----------------------

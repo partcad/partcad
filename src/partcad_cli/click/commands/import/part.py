@@ -36,6 +36,9 @@ SUPPORTED_IMPORT_FORMATS_WITH_EXT = {
         part_type: list(object_types.part_type_extensions(part_type))
         for part_type in object_types.BUILTIN_PART_TYPE_EXTENSION
     },
+    # An assembly no part type reads: imported as a part only with '--compound',
+    # as its compound. The daemon says so to a request without it.
+    "urdf": ["urdf"],
 }
 
 
@@ -59,13 +62,25 @@ SUPPORTED_IMPORT_FORMATS_WITH_EXT = {
     type=str,
     default=".",
 )
+@click.option(
+    "--compound",
+    is_flag=True,
+    help=(
+        "Accept a file that holds an assembly - a STEP product structure, a glTF scene of several meshes, a URDF - "
+        "and import the whole of it as one part, its compound. Without it such a file is refused."
+    ),
+)
 @click.pass_obj
-def cli(cli_ctx, package: str, existing_part: str, target_format: str, desc: str):
+def cli(cli_ctx, package: str, existing_part: str, target_format: str, desc: str, compound: bool):
     """
     CLI command to import a part by copying and adding it to the project, with optional format conversion.
 
     Served by the daemon: `--target-format` converts through sandboxed wrappers,
     whose Python runtimes belong to the daemon's environment.
+
+    A file that holds an assembly is refused, because reading it as a part
+    throws away what it is made of; `--compound` imports it as one part, its
+    compound, and `pc import assembly` keeps its items and their placements.
     """
     file_path = Path(existing_part)
     if not file_path.exists():
@@ -95,6 +110,8 @@ def cli(cli_ctx, package: str, existing_part: str, target_format: str, desc: str
         params["target_format"] = target_format
     if desc:
         params["desc"] = desc
+    if compound:
+        params["compound"] = True
 
     result = run(cli_ctx, "import.object", params, span_name="import part", needs_context=True)
     click.echo(f"Part '{(result or {}).get('name', file_path.stem)}' imported successfully.")

@@ -407,7 +407,7 @@ def test_a_broken_world_fails_the_file_and_says_why(tmp_path, monkeypatch):
     ctx = package(tmp_path, {"tank": {"medium": "':nosuch'"}})
     tank = ctx.get_scene("//sim:tank")
     impl = types.SimpleNamespace(
-        parameters={"properties": True}, format_name="toy", link_filter=None, section=output.EXPORT
+        parameters={"properties": True}, format_name="toy", link_filter=None, compound=False, section=output.EXPORT
     )
     monkeypatch.setattr(tank, "output_getopts", lambda *args, **kwargs: (impl, str(tmp_path / "tank.toy")))
 

@@ -1123,6 +1123,41 @@ object it produces is the one it would have produced without it.
 Both are available for :ref:`sketches` and :ref:`assemblies` too, spelled the
 same way.
 
+.. _part-compound:
+
+Compound
+--------
+
+An assembly is kept as the tree of what it places -- a node per part, each with
+its name, its placement and what it says about itself -- and that is what every
+use of an assembly reads: the IDE shows and hides it a link at a time, a filter
+selects from it, and STEP, glTF and URDF are written from it as a product
+structure, a scene graph and a robot. A ``compound`` part is the other way to
+have an assembly: **one part**, every item of the assembly placed in it as the
+assembly places it, in the colours and materials each states.
+
+.. code-block:: yaml
+
+  parts:
+    primitive_compound:
+      type: compound
+      source: primitive        # an assembly, of this package or another
+      # parameters:            # if given, handed to the assembly as they are
+
+It is a part like any other: built in a sandbox once and cached, keyed on the
+assembly's own key, so an edit to anything inside the assembly builds it again.
+Every item in it was built as a part of its own already, so the compound is not
+closed into solids on the way out: a shell a STEP part was reported to be stays
+the shell it was.
+
+The same part can be had without declaring it: ``pc export --compound`` writes
+an assembly or a scene as its compound, ``pc import part --compound`` and ``pc
+import assembly --compound`` import an assembly file as one part, and ``pc adhoc
+convert part --compound`` converts one (see :doc:`cli`). ``pc import part``
+without it refuses a file that holds an assembly. A file type whose implementation is written for
+one shape says ``compound: true`` in its ``export:`` or ``render:`` declaration,
+and an assembly is handed to it as its compound whatever the run asks.
+
 .. _part-types:
 
 Part types the package defines itself

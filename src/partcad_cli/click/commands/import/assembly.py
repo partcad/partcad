@@ -23,6 +23,14 @@ SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT = {
 @click.argument("assembly_file", type=str, required=True)
 @click.option("--desc", type=str, help="Optional description for the imported assembly.")
 @click.option(
+    "--compound",
+    is_flag=True,
+    help=(
+        "Import the assembly as one part, its compound, instead of a part per item and an ASSY that places them. "
+        "A STEP or glTF file is imported as a part of that type, as it is; a URDF as the STEP of its compound."
+    ),
+)
+@click.option(
     "-P",
     "--package",
     help="Package to import the object to",
@@ -30,7 +38,7 @@ SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT = {
     default=".",
 )
 @click.pass_obj
-def cli(cli_ctx, package: str, assembly_file: str, desc: str):
+def cli(cli_ctx, package: str, assembly_file: str, desc: str, compound: bool):
     """
     CLI command to import an assembly from a file.
     Automatically creates multiple parts and an assembly.
@@ -41,6 +49,9 @@ def cli(cli_ctx, package: str, assembly_file: str, desc: str):
     instead of placing them by coordinates. Either way the package ends up
     holding PartCAD's own objects - `pc add assembly` is what declares a file
     where it lies instead.
+
+    `--compound` imports the whole assembly as one part instead: its compound,
+    every item in one shape, in the colours and materials each states.
 
     Served by the daemon: the reads run in sandboxed wrappers
     (`wrapper_import_assy`, `wrapper_import_urdf`), whose Python runtimes
@@ -71,6 +82,12 @@ def cli(cli_ctx, package: str, assembly_file: str, desc: str):
     }
     if desc:
         params["desc"] = desc
+    if compound:
+        params["compound"] = True
 
     result = run(cli_ctx, "import.object", params, span_name="import assembly", needs_context=True)
-    click.echo(f"Assembly '{(result or {}).get('name', file_path.stem)}' imported successfully.")
+    name = (result or {}).get("name", file_path.stem)
+    if compound:
+        click.echo(f"Assembly '{file_path.name}' imported successfully as the part '{name}'.")
+    else:
+        click.echo(f"Assembly '{name}' imported successfully.")

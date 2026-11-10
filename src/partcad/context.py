@@ -2004,6 +2004,7 @@ class Context:
         overlay=None,
         render_opts=None,
         fast_only=False,
+        compound=False,
     ):
         if project_path is None:
             project_path = self.get_current_project_path()
@@ -2017,6 +2018,7 @@ class Context:
             overlay=overlay,
             render_opts=render_opts,
             fast_only=fast_only,
+            compound=compound,
         )
 
     def render(
@@ -2029,6 +2031,7 @@ class Context:
         overlay=None,
         render_opts=None,
         fast_only=False,
+        compound=False,
     ):
         if project_path is None:
             project_path = self.get_current_project_path()
@@ -2042,6 +2045,7 @@ class Context:
             overlay=overlay,
             render_opts=render_opts,
             fast_only=fast_only,
+            compound=compound,
         )
 
     # TODO(clairbee): convert it into: ctx.get_runtime("python", "conda", {"version": "3.11"})

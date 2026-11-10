@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Run geometry transformations (offset, scale, compound) inside a sandbox.
+"""Run geometry transformations (offset, scale, compound, flatten) inside a sandbox.
 
 The core process carries shapes as BREP bytes and does not manipulate live OCP
 objects. The OCCT/build123d work that 'offset', 'scale' and 'compound' need
@@ -34,6 +34,7 @@ _DEPENDENCIES = {
     "offset": (sandbox_versions.BUILD123D, sandbox_versions.OCP),
     "scale": (sandbox_versions.BUILD123D, sandbox_versions.OCP),
     "compound": (sandbox_versions.OCP,),
+    "flatten": (sandbox_versions.OCP,),
 }
 
 
@@ -77,3 +78,18 @@ async def scale(ctx, shape, factor):
 async def compound(ctx, shapes):
     """Combine 'shapes' into a single compound."""
     return await _run(ctx, {"operation": "compound", "shapes": list(shapes)})
+
+
+async def flatten(ctx, tree, name=None, label=None, finish=None):
+    """'tree', an assembly or a scene, as one shape: the compound of everything it places.
+
+    Every leaf is placed where the tree puts it, and the colours and materials
+    each states go onto its faces in the compound (see 'wrapper_transform.flatten').
+    'name' and 'label' are what the shape that comes back is called, and
+    'finish' what the part it becomes asks to have done to it on the way out
+    ('Shape.finish_request()'), done while the compound is live.
+    """
+    request = {"operation": "flatten", "shape": tree, "name": name, "label": label}
+    if finish is not None:
+        request[shape_envelope.KEY_FINISH] = finish
+    return await _run(ctx, request)

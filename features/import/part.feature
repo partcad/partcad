@@ -110,3 +110,30 @@ Feature: `pc import` command
           type: 3mf
       assemblies:
       """
+
+  # A file that holds an assembly is not read as a part unasked: that would
+  # throw away its parts and where each is placed. '--compound' asks for exactly
+  # that - the whole assembly as one part - and 'pc import assembly' keeps it.
+  @step
+  Scenario: A STEP assembly is refused as a part
+    Given I copy file "examples/feature_import/AeroAssembly.step" to "input_files/AeroAssembly.step" inside test workspace
+    When I run "pc --no-ansi import part input_files/AeroAssembly.step"
+    Then the command should exit with a status code of "2"
+    And STDERR should contain "holds an assembly"
+    And a file named "AeroAssembly.step" should not exist
+
+  @step
+  Scenario: A STEP assembly imported as one part with --compound
+    Given I copy file "examples/feature_import/AeroAssembly.step" to "input_files/AeroAssembly.step" inside test workspace
+    When I run "pc --no-ansi import part --compound input_files/AeroAssembly.step"
+    Then the command should exit with a status code of "0"
+    And a file named "AeroAssembly.step" should exist
+    And a file named "partcad.yaml" should have YAML content:
+      """
+      dependencies:
+      sketches:
+      parts:
+        AeroAssembly:
+          type: step
+      assemblies:
+      """

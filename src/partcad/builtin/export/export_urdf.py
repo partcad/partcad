@@ -9,9 +9,11 @@ Writes a PartCAD shape, assembly or scene as a URDF file plus its mesh files:
 one ``<link>`` per rigid body and one ``<joint>`` per pair of bodies, so that a
 mechanism goes out as the mechanism it is.
 
-Unlike the other exporters, this one is handed the assembly *tree* itself
-rather than the geometry it decodes to - which is what 'decode: false' on this
-format's declaration asks for, see wrapper_export.DECODE_KEY. Which nodes of it
+Unlike the other exporters, this one is written from the assembly *tree* -
+'request["shape_tree"]', which every implementation is handed beside the
+geometry it decodes to (see 'wrapper_export') - and never from the compound
+under 'request["wrapped"]', which keeps the shapes and none of what the tree
+says about them. Which nodes of it
 are one rigid body, and how the joints between bodies move, is not decided here:
 it is PartCAD's body rule, 'kinematics.bodies()', and its classification of a
 joint's free steps, 'kinematics.classify()' - one copy shared with the MJCF and

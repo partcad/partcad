@@ -80,6 +80,14 @@ from ..service import run
     help=object_kind.flag_help("a scene"),
     is_flag=True,
 )
+@click.option(
+    "--compound",
+    help=(
+        "Export every assembly or scene as its compound: one part with every item it places in it, "
+        "rather than the tree of what it places (a STEP product per item, a glTF node per item, a URDF link per body)"
+    ),
+    is_flag=True,
+)
 @exclude_option
 @filter_option
 @param_option
@@ -97,6 +105,7 @@ def cli(
     interface,
     assembly,
     scene,
+    compound,
     exclude,
     link_filter,
     params,
@@ -119,6 +128,7 @@ def cli(
             "assembly": assembly,
             "scene": scene,
             "object": object,
+            **({"compound": True} if compound else {}),
             **param_params(params),
             **exclude_params(exclude),
             **filter_params(link_filter),
