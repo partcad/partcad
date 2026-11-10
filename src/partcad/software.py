@@ -217,6 +217,18 @@ class Software:
 # up being read.
 RESOLVED_KEY = "software_resolved"
 
+# Beside it, the package that wrote those references: what a private software is
+# checked against when one is looked up (see 'partcad.privacy'), since the list
+# travels with the configuration to wherever an alias or an enrich reads it.
+RESOLVED_BY_KEY = "software_resolved_by"
+
+
+def referrer_of(config) -> typing.Optional[str]:
+    """The package that wrote the software references 'resolved_software_refs' hands back, if it is known."""
+    if isinstance(config, dict) and config.get(RESOLVED_KEY):
+        return config.get(RESOLVED_BY_KEY)
+    return None
+
 
 def declared_software_refs(project_name: str, config) -> list[str]:
     """The software an object declares, as fully qualified '<package>:<name>'.
@@ -255,7 +267,7 @@ def resolved_software_refs(project_name: str, config) -> list[str]:
     return declared_software_refs(project_name, config)
 
 
-def lookup(ctx, ref: str, quiet: bool = False):
+def lookup(ctx, ref: str, quiet: bool = False, referrer: typing.Optional[str] = None):
     """The (package, software) a fully qualified reference points at.
 
     Both are None when the reference resolves to nothing. Reported here, once,
@@ -267,6 +279,9 @@ def lookup(ctx, ref: str, quiet: bool = False):
     what a cached test result is keyed on, say ('ManufacturabilityTest.cache_key_suffix'),
     which asks the same question moments before the caller that *will* report
     it and would otherwise say it twice.
+
+    'referrer' is the package the reference was written in ('referrer_of'):
+    software another package keeps private is refused to it.
     """
     package_name, name = resolve_resource_path("", ref)
     project = ctx.get_project(package_name) if ctx is not None else None
@@ -274,7 +289,7 @@ def lookup(ctx, ref: str, quiet: bool = False):
         if not quiet:
             pc_logging.error("The software '%s' is not found: no such package" % ref)
         return None, None
-    software = project.get_software(name, quiet=quiet)
+    software = project.get_software(name, quiet=quiet, referrer=referrer)
     if software is None:
         # 'get_software' has already said why, unless it was asked not to.
         return project, None

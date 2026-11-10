@@ -51,6 +51,18 @@ flow. Each part must pass `pc qual test` on its own before you compose it, and n
 the material it is made of (`/pc:gen-part` §5): the assembly's mass is its
 parts' added up, and a part with none is simply left out of the sum.
 
+Two properties of a part decide how it may be used here:
+
+- **`private: true`**: the part is its package's own. An assembly in *another*
+  package cannot link it, alias it or enrich it - the link is refused, naming
+  the package it is private to - so reuse what that package publishes instead.
+  Within one package, private parts are linked like any other.
+- **`visual:`**: what a *picture* of the part draws in its place (see
+  `/pc:gen-part` §5). It is placed, connected, tested, exported and simulated as
+  itself; only the IDE's 3D view and `pc render`'s pictures draw the visual. A
+  part whose visual is larger or smaller than it can look wrong in a render
+  while the assembly is right: judge placements on `--no-visuals` renders.
+
 ## 3. Author the ASSY
 
 ### First, lay the placements out on sketches
@@ -295,6 +307,11 @@ tidiness argument:
 Judge the split by what the design actually repeats, not by carving the model
 into even parts. A group that occurs once is not a piece; a group that occurs
 eight times is, even if it is three parts.
+
+A piece that exists only to build this product, and that nothing in another
+package should place on its own, may say `private: true`: the product still
+links it, and other packages build on the product rather than on how it happens
+to be grouped inside, which leaves you free to regroup it later.
 
 **Check the arithmetic**: the parts in each piece, multiplied by how many times
 the piece is used, plus whatever is left loose, has to come to what you started
@@ -556,6 +573,9 @@ for view in top front; do                          # the polygonal projection: a
   python3 <the /pc:gen-sketch skill's directory>/measure.py svg /tmp/pc-render/svg/$view/<name>.svg
 done
 ```
+
+Where a part declares a `visual:`, these SVGs draw the visual; add
+`--no-visuals` to measure the part itself, which is what the layout placed.
 
 A whole assembly is a crowded drawing. To measure between two components,
 render only those two — `--filter '[<a>, <b>]'` (`/pc:render` §8), into a
@@ -826,7 +846,9 @@ assembly) for a verdict on every requirement, the features included: it reads
 the bill of materials and the assembly instructions as well as the renders.
 
 Remove the layout sketches — their declarations and their files
-(`/pc:gen-sketch` §9) — unless the user wants them kept.
+(`/pc:gen-sketch` §9) — unless the user wants them kept, and then mark them
+`private: true`: they are this assembly's working, not something to build on.
+Say which parts are drawn as a `visual:`, and which objects are private.
 
 Say what is still placed by coordinates and why, one reason per case. "The rest
 use `location:`" tells the next reader nothing; "these four sit where nothing

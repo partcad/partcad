@@ -510,6 +510,28 @@ that a part *is* built from (`type: extrude`, `type: sweep`) is no longer
 temporary: keep it, and give it a `desc:` that says what it is. The study
 script of §4.3 goes with `/tmp/pc-sketch`.
 
+**Keep to the package what is the package's own working.** A study sketch the
+user wants kept, a profile that only one part of this package is extruded from,
+the openings of a `type: wall` part this package declares: declare each
+`private: true`. A sketch handed to **another** package's object stays public:
+the openings of an `enrich` of `//builtin/building:wall`, the plan of
+`//builtin/building:room`. That instance (`//builtin/building:wall;openings=...`)
+is the other package's, so the reference is written there, and it is refused.
+
+```yaml
+sketches:
+  bracket/dims-front:
+    type: build123d
+    private: true          # this package's own: no other package may build on it
+```
+
+Every object of the same package still uses it - an `extrude` of it, a wall's
+`openings:`, a port's `sketch:` - and `pc render`, `pc qual test` and `pc ide view`
+still reach it by name. A reference from another package is refused, naming the
+package it is private to; that is the point: a sketch nobody outside depends on
+is a sketch you can change. A sketch meant to be reused - a standard profile, a
+bolt pattern - stays public.
+
 ## 10. Finalize
 
 Report the sketch and the final dimension table — target, measured, error and tolerance for

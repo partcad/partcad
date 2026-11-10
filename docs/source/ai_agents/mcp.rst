@@ -110,7 +110,9 @@ them: ``with_ports``, ``with_interfaces`` and ``with_internals`` for the ports a
 ``with_materials`` for one on every cluster of a material; and
 ``with_port_names`` and ``with_interface_names``, both true unless set false, for whether those two overlays
 write their names. Each is the ``--with-...`` option of the same name (see ``pc render`` in :doc:`/cli`). A
-price asks the suppliers for a quote, so it is the one of them that goes out to the market.
+price asks the suppliers for a quote, so it is the one of them that goes out to the market. ``render`` also takes
+``visuals``, true unless set false, which is ``pc render --no-visuals`` when it is false: every part drawn as it
+is, rather than as the ``visual:`` it declares -- what an export, a test and a simulation see.
 
 .. list-table::
    :header-rows: 1

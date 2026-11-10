@@ -5133,6 +5133,9 @@ def render_objects(session, params):
 
     ``ports`` narrows the overlay to the ports it names, by the name each is
     reported under; see `partcad.render_overlay`.
+
+    ``visuals``, false, draws every part as it is, never as its ``visual:`` -- ``pc
+    render --no-visuals`` -- as ``render.inline`` takes it.
     """
     ctx = _ctx(session, params)
     if ctx is None:
@@ -5160,6 +5163,10 @@ def render_objects(session, params):
     # somewhere else.
     render_opts = _render_options(pc, params)
     render_opts.update(_video(params))
+    # Handed to every 'Shape.render_async' of the run with the rest of these,
+    # where it is a parameter of its own rather than an export parameter.
+    if _visuals(pc, params) is False:
+        render_opts["visuals"] = False
 
     from partcad.exception import AssemblyDocumentError
 
@@ -5281,6 +5288,13 @@ def render_inline(session, params):
     attachment to a client that reads them, and as base64 to any other (see
     ``partcad_utils.framing``).
 
+    ``visuals``, false, draws every part as itself whatever the file type: what
+    the Draft tab asks, because a dimensioned drawing is of the object as it is
+    and never of a part's ``visual:`` (see `partcad.visual`). Left out, or true,
+    a file type that draws pictures - PartCAD's own PNG, JPEG and SVG, which is
+    what the 2D tab shows - draws each part as its visual, and one that draws
+    geometry draws the geometry.
+
     An implementation that writes nothing has said why in the log, which the
     client is streaming; the error here says only that there is no file.
     """
@@ -5325,6 +5339,7 @@ def render_inline(session, params):
         )
     section = _section(params)
     render_opts = {**_render_options(pc, params), **_video(params)}
+    visuals = _visuals(pc, params)
 
     if kind in ("assembly", "scene"):
         # Phase one of an assembly build, as for every other request that ends
@@ -5348,6 +5363,7 @@ def render_inline(session, params):
                     overlay=overlay,
                     link_filter=link_filter,
                     section=section,
+                    visuals=visuals,
                     **render_opts,
                 )
             )
@@ -5378,6 +5394,22 @@ def render_inline(session, params):
         "viewport": viewport if isinstance(viewport, dict) else None,
         "section": section,
     }
+
+
+def _visuals(pc, params):
+    """What a request says about drawing parts as their visuals: False for never, None for as the file type says.
+
+    Read with 'output.as_flag', like every boolean of the protocol, so that a
+    "false" from a JSON-RPC client is false. True is None: a file type that
+    draws geometry is not made to draw pictures by being asked (see
+    'Shape.render_async').
+    """
+    if params.get("visuals") is None:
+        return None
+    try:
+        return None if pc.output.as_flag(params["visuals"], "visuals") else False
+    except ValueError as e:
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
 
 
 def _section(params):

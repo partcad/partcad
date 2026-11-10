@@ -14,11 +14,15 @@ one is reported. No object can switch any of that off for itself.
 A *kind* of object can be exempt, on what it is - a sketch is not measured for
 having size in every direction, because a drawing is flat - and this is the one
 other kind: a part whose type builds a surface because a surface is what it is
-for. A wall drawn to lay out a room is a sheet of faces seen from one side,
-with no thickness, nothing inside it and nothing anybody will make out of it;
-reporting it for being a skin would be reporting it for being a wall.
+for. A wall drawn to lay out a room, given no thickness, is a sheet of faces
+seen from one side, with nothing inside it and nothing anybody will make out
+of it; reporting it for being a skin would be reporting it for being a wall.
+Given a thickness it is the solid behind that face, and a body like any other.
 
-What such a part is, it is by its *type*, decided here and in no declaration:
+What such a part is, it is by its *type*, decided here and in no declaration -
+and by the one dimension of that type that says whether it has a body at all,
+a wall's 'thickness' ('part_factory_wall.thickness_of'). No field switches the
+checks off; a wall with no thickness simply is not a body:
 
   * it is never manufacturable, and says so - its declaration, or its package,
     states 'manufacturable: false', and a type in 'SURFACE_PART_TYPES' refuses a
@@ -35,6 +39,10 @@ What such a part is, it is by its *type*, decided here and in no declaration:
 
 The test is on the declaration a part *resolves to* ('shape_config
 .final_config'), so an alias of a wall, or an enrich of one, is a wall too.
+
+A solid wall drawn as its surface - '//builtin/building:wall', whose 'visual:'
+is the surface - is a solid here: what a part is drawn as is no part of what it
+is (see 'partcad.visual').
 """
 
 from .shape_config import final_config
@@ -57,7 +65,8 @@ def surface_type(shape):
 
     Asked of anything: a sketch, an assembly or a scene is never one, and a part
     is one when the declaration it resolves to - its own, or what an alias or an
-    enrich points at - names a type in 'SURFACE_PART_TYPES'.
+    enrich points at - names a type in 'SURFACE_PART_TYPES', and gives it no
+    thickness.
     """
     if getattr(shape, "kind", None) != "part":
         return None
@@ -65,7 +74,11 @@ def surface_type(shape):
     if not isinstance(config, dict):
         return None
     kind = config.get("type")
-    return kind if kind in SURFACE_PART_TYPES else None
+    if kind not in SURFACE_PART_TYPES:
+        return None
+    from .part_factory_wall import thickness_of
+
+    return None if thickness_of(config) > 0.0 else kind
 
 
 def is_surface(shape) -> bool:

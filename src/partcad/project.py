@@ -60,6 +60,7 @@ from . import (
     plugin_config,
     plugin_provider,
     plugin_repository,
+    privacy,
     project_config,
     reference,
     scene,
@@ -1625,8 +1626,12 @@ class Project(project_config.Configuration):
         interface_name: str = config["name"]
         self.register_object("interface", interface_name, interface.Interface(interface_name, source_project, config))
 
-    def get_interface(self, interface_name, func_params=None) -> interface.Interface:
+    def get_interface(self, interface_name, func_params=None, referrer=None) -> interface.Interface:
         """The interface of this package called 'interface_name', or None.
+
+        'referrer' is the package the name was written in, for a reference one
+        of its objects makes: a private interface is refused to any other (see
+        'partcad.privacy'). None for a command, which is never refused for it.
 
         The name may carry parameter values - 'm-thru;size=4,depth=3' - exactly
         as a part's or a sketch's does ('pc info -i m-thru -p size=4' asks for
@@ -1643,6 +1648,12 @@ class Project(project_config.Configuration):
         'format_parameterized_name' and 'apply_parameter_values' - rather than
         a second implementation of it.
         """
+        return self.visible_to(
+            "interface", self._interface_object(interface_name, func_params), referrer, interface_name
+        )
+
+    def _interface_object(self, interface_name, func_params=None) -> interface.Interface:
+        """'get_interface', short of whether the one asking may see it."""
         base_name, params = parse_parameterized_name(interface_name)
         if func_params:
             params = {**params, **func_params}
@@ -2239,6 +2250,11 @@ class Project(project_config.Configuration):
                     "name": alias,
                     "source": ":" + object_name,
                 }
+                # Another name for the same declaration, and as private as it
+                # is: an object a package keeps to itself does not become
+                # public by having two names (see 'partcad.privacy').
+                if privacy.is_private(config):
+                    alias_object_config[privacy.PRIVATE_KEY] = True
                 # User configuration may override the parameters of the alias
                 # itself, so the alias (with the parameters copied above, if
                 # any) is what the fully qualified name is built from - not the
@@ -2262,7 +2278,23 @@ class Project(project_config.Configuration):
                 except Exception as e:
                     self.record_broken_object(factory_name, alias, e)
 
-    def get_sketch(self, sketch_name, func_params=None, quiet=False) -> Optional[sketch.Sketch]:
+    def visible_to(self, kind: str, obj, referrer: Optional[str], name: str):
+        """'obj', unless it is private to this package and 'referrer' is another one (see 'partcad.privacy').
+
+        Reported where it is refused, whatever 'quiet' the lookup was asked
+        with: a caller that said it would report a *missing* object would
+        otherwise say "not found" about an object that is there, and send its
+        reader looking for a typo rather than at the package that keeps it.
+        """
+        if obj is None or not privacy.is_private(obj):
+            return obj
+        reason = privacy.refusal(kind, self.name, getattr(obj, "name", None) or name, referrer)
+        if reason is None:
+            return obj
+        pc_logging.error(reason)
+        return None
+
+    def get_sketch(self, sketch_name, func_params=None, quiet=False, referrer=None) -> Optional[sketch.Sketch]:
         """The declared sketch, or None.
 
         'quiet' suppresses the "not found" reporting for a caller that asks
@@ -2272,7 +2304,14 @@ class Project(project_config.Configuration):
         that resolves to nothing should be reported once, by the check, and not
         three times by the resolver underneath it. It is the same flag, for the
         same reason, that 'get_part' already takes.
+
+        'referrer' is the package the name was written in, as 'get_interface'
+        takes it.
         """
+        return self.visible_to("sketch", self._sketch_object(sketch_name, func_params, quiet), referrer, sketch_name)
+
+    def _sketch_object(self, sketch_name, func_params=None, quiet=False) -> Optional[sketch.Sketch]:
+        """'get_sketch', short of whether the one asking may see it."""
         return self.get_object(
             "sketch",
             Project.SketchLock,
@@ -2299,7 +2338,7 @@ class Project(project_config.Configuration):
             quiet=quiet,
         )
 
-    def get_part(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
+    def get_part(self, part_name, func_params=None, quiet=False, referrer=None) -> Optional[Part]:
         """The synchronous accessor, for callers that own no event loop.
 
         A coroutine must use 'get_part_async()'. Materializing a derived part
@@ -2316,9 +2355,9 @@ class Project(project_config.Configuration):
         # built. Build it now, rather than report a part that the package can
         # perfectly well produce as missing.
         self._materialize_derived_part(part_name)
-        return self._part_object(part_name, func_params, quiet=quiet)
+        return self.visible_to("part", self._part_object(part_name, func_params, quiet=quiet), referrer, part_name)
 
-    async def get_part_async(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
+    async def get_part_async(self, part_name, func_params=None, quiet=False, referrer=None) -> Optional[Part]:
         """'get_part()' for callers that are already running on a loop.
 
         The pair exists the way 'test()'/'test_async()' and
@@ -2333,7 +2372,7 @@ class Project(project_config.Configuration):
         """
         await self._materialize_derived_part_async(part_name)
         await self._warm_object_async("part", self.get_part_config, part_name, func_params)
-        return self._part_object(part_name, func_params, quiet=quiet)
+        return self.visible_to("part", self._part_object(part_name, func_params, quiet=quiet), referrer, part_name)
 
     async def _warm_object_config_async(self, kind: str, name: str) -> None:
         """Have the declaration 'object_config(kind, name)' reads at hand, on the caller's loop.
@@ -2560,7 +2599,14 @@ class Project(project_config.Configuration):
         finally:
             self._finish_derived_part(owner, done)
 
-    def get_assembly(self, assembly_name, func_params=None, quiet=False) -> Optional[assembly.Assembly]:
+    def get_assembly(self, assembly_name, func_params=None, quiet=False, referrer=None) -> Optional[assembly.Assembly]:
+        """The declared assembly, or None; 'referrer' as 'get_interface' takes it."""
+        return self.visible_to(
+            "assembly", self._assembly_object(assembly_name, func_params, quiet), referrer, assembly_name
+        )
+
+    def _assembly_object(self, assembly_name, func_params=None, quiet=False) -> Optional[assembly.Assembly]:
+        """'get_assembly', short of whether the one asking may see it."""
         return self.get_object(
             "assembly",
             Project.AssemblyLock,
@@ -2573,7 +2619,9 @@ class Project(project_config.Configuration):
             quiet=quiet,
         )
 
-    async def get_assembly_async(self, assembly_name, func_params=None, quiet=False) -> Optional[assembly.Assembly]:
+    async def get_assembly_async(
+        self, assembly_name, func_params=None, quiet=False, referrer=None
+    ) -> Optional[assembly.Assembly]:
         """'get_assembly()' for callers that are already running on a loop.
 
         The declarations it reads - the assembly's, and an instance's where the
@@ -2581,9 +2629,14 @@ class Project(project_config.Configuration):
         'get_part_async' gives.
         """
         await self._warm_object_async("assembly", self.get_assembly_config, assembly_name, func_params)
-        return self.get_assembly(assembly_name, func_params, quiet=quiet)
+        return self.get_assembly(assembly_name, func_params, quiet=quiet, referrer=referrer)
 
-    def get_scene(self, scene_name, func_params=None, quiet=False) -> Optional[scene.Scene]:
+    def get_scene(self, scene_name, func_params=None, quiet=False, referrer=None) -> Optional[scene.Scene]:
+        """The declared scene, or None; 'referrer' as 'get_interface' takes it."""
+        return self.visible_to("scene", self._scene_object(scene_name, func_params, quiet), referrer, scene_name)
+
+    def _scene_object(self, scene_name, func_params=None, quiet=False) -> Optional[scene.Scene]:
+        """'get_scene', short of whether the one asking may see it."""
         return self.get_object(
             "scene",
             Project.SceneLock,
@@ -2620,7 +2673,16 @@ class Project(project_config.Configuration):
             func_params,
         )
 
-    def get_software(self, software_name, func_params=None, quiet=False) -> Optional[pc_software.Software]:
+    def get_software(
+        self, software_name, func_params=None, quiet=False, referrer=None
+    ) -> Optional[pc_software.Software]:
+        """The declared software, or None; 'referrer' as 'get_interface' takes it."""
+        return self.visible_to(
+            "software", self._software_object(software_name, func_params, quiet), referrer, software_name
+        )
+
+    def _software_object(self, software_name, func_params=None, quiet=False) -> Optional[pc_software.Software]:
+        """'get_software', short of whether the one asking may see it."""
         return self.get_object(
             "software",
             Project.SoftwareLock,

@@ -490,6 +490,11 @@ export class PartcadViewer implements vscode.Disposable {
                 args.kind = target.kind ?? 'part';
                 args.format = format;
                 args.plugin = plugin;
+                // A dimensioned drawing is of the object as it is: never of a
+                // part's 'visual:', which only a picture draws in its place --
+                // whichever package draws it, and whatever its file type is
+                // called. The 2D tab leaves it to the file type.
+                args.visuals = tab === 'draft' ? false : undefined;
                 // What the control pane beside the drawing asked for: the links
                 // to keep, and which of the port overlays to draw. Passed on as
                 // it arrived -- the filter is a mask of link names, which this

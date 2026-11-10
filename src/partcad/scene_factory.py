@@ -50,7 +50,7 @@ class SceneFactoryMixin:
 
     def get_source_object(self, name, params=None):
         """A scene alias points at a scene, not at an assembly of the same name."""
-        return self.ctx._get_scene(name, params)
+        return self.ctx._get_scene(name, params, referrer=self.project.name)
 
 
 @telemetry.instrument()

@@ -289,6 +289,14 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         with_materials: WithMaterials = False,
         with_port_names: WithPortNames = True,
         with_interface_names: WithInterfaceNames = True,
+        visuals: Annotated[
+            bool,
+            Field(
+                description="Draw each part that declares a 'visual:' as that visual, as every picture does (the "
+                "default). False draws every part as it is - what an export, a test and a simulation see: "
+                "'pc render --no-visuals'."
+            ),
+        ] = True,
     ) -> CallToolResult:
         """Render one part, assembly, scene or sketch and return the picture.
 
@@ -296,6 +304,8 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         Ports, interfaces and callouts are drawn only when asked for.
         """
         request = {"package": package, "object": object, "format": format, **_kind(kind)}
+        if not visuals:
+            request["visuals"] = False
         if options_package:
             request["options_package"] = options_package
         if params:

@@ -4519,6 +4519,41 @@ def test_render_inline_aims_and_cuts_the_picture_it_is_asked_for():
 
 
 @pytest.mark.parametrize(
+    "visuals, passed",
+    [(None, None), (True, None), ("true", None), (False, False), ("false", False)],
+)
+def test_render_inline_draws_parts_as_themselves_when_the_draft_tab_says_so(visuals, passed):
+    """'visuals: false' is the Draft tab: never a part's 'visual:'. Anything else leaves it to the file type."""
+    from partcad import output
+
+    session = _inline_session()
+    session.partcad.output.as_flag = output.as_flag
+    part = FakeRenderable("cube", filename="cube.png")
+    session.partcad_ctx.shapes[("part", "//:cube")] = part
+
+    params = {"package": "//", "object": "cube", "format": "png"}
+    if visuals is not None:
+        params["visuals"] = visuals
+    operations.render_inline(session, params)
+
+    assert part.render_kwargs[0]["visuals"] is passed
+
+
+def test_render_inline_refuses_a_visuals_that_is_not_a_boolean():
+    from partcad import output
+
+    session = _inline_session()
+    session.partcad.output.as_flag = output.as_flag
+    part = FakeRenderable("cube", filename="cube.png")
+    session.partcad_ctx.shapes[("part", "//:cube")] = part
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_inline(session, {"package": "//", "object": "cube", "format": "png", "visuals": "maybe"})
+    assert caught.value.code == operations.USAGE_ERROR
+    assert part.render_calls == []
+
+
+@pytest.mark.parametrize(
     "extra",
     [
         {"section": {"x": [5, 1]}},

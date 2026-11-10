@@ -225,6 +225,8 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         # is built from reaches the key as the file's content, not as its name.
         "name",
         "orig_name",
+        # Who may build on the object, not what it is (see 'partcad.privacy').
+        "private",
         # Outputs, not inputs. A part that gains a material has not become a
         # different shape (see test_shape_properties.py).
         "properties",
@@ -247,6 +249,9 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         # The old spelling of 'qual: sim:', for the same reason.
         "simulate",
         "sku",
+        # Which package wrote the software references beside it: whom a private
+        # software is refused to, and no part of what the object ships with.
+        "software_resolved_by",
         "summary",
         "supplier",
         "tags",
@@ -257,6 +262,11 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         "title",
         "url",
         "vendor",
+        # What a picture draws in the object's place, which nothing the shape is
+        # built into ever sees (see 'partcad.visual'). A picture is keyed on the
+        # visual's own key instead ('_output_run_async'), so editing a visual
+        # redraws the pictures and rebuilds nothing.
+        "visual",
     }
 )
 
@@ -945,7 +955,7 @@ class Shape(ShapeConfiguration):
 
         return self.components
 
-    async def get_representation(self, ctx, form=shape_envelope.FORM_BREP, section=None):
+    async def get_representation(self, ctx, form=shape_envelope.FORM_BREP, section=None, visuals=False):
         """This shape as a tree of nodes, with the geometry at each in 'form'.
 
         The one way to ask a shape for itself as a whole. Every shape is such a
@@ -974,10 +984,21 @@ class Shape(ShapeConfiguration):
         whole shape. Only the nodes are cut: the port sketches are annotations of
         the object, and a port is where it is whether or not the solid around it
         is drawn.
+
+        'visuals' draws every part in the tree that declares a 'visual:' as that
+        visual (see 'partcad.visual'): for a caller that draws the tree for
+        somebody to look at, which is the 3D view and nothing else that asks
+        here. Off, the tree is the object as it is, which is what every caller
+        that computes with it needs.
         """
         from . import port_sketches, shape_gltf
 
-        tree = await port_sketches.attach_async(ctx, await self.get_wrapped(ctx))
+        tree = await self.get_wrapped(ctx)
+        if visuals:
+            from . import visual as pc_visual
+
+            tree = (await pc_visual.substitute_async(ctx, self, tree)).tree
+        tree = await port_sketches.attach_async(ctx, tree)
         return await shape_gltf.in_form_async(ctx, tree, form, cacheable=self.artifacts_cacheable(), section=section)
 
     def prepare(self):
@@ -1985,12 +2006,13 @@ class Shape(ShapeConfiguration):
             # glTF form is what it can draw (see 'shape_gltf'). Nothing about the
             # tree is built for the viewer - it is the same hierarchy, with the
             # same names, placements, ports and interfaces, that this shape
-            # answers with for every other purpose.
+            # answers with for every other purpose - except what each part with
+            # a 'visual:' is drawn as: this is a picture (see 'partcad.visual').
             tree = None
             # TODO(clairbee): consider removing this exception handler permanently
             # Comment out the below exception handler for easier troubleshooting in CLI
             try:
-                tree = await self.get_representation(ctx, shape_envelope.FORM_GLTF, section=section)
+                tree = await self.get_representation(ctx, shape_envelope.FORM_GLTF, section=section, visuals=True)
             except Exception as e:
                 pc_logging.exception(e)
 
@@ -2761,7 +2783,9 @@ class Shape(ShapeConfiguration):
                     outcomes[indices[0]] = e
         return outcomes
 
-    async def _output_run_async(self, ctx, impl, script, request, final_filepath, view=None, section=None, batch=None):
+    async def _output_run_async(
+        self, ctx, impl, script, request, final_filepath, view=None, section=None, batch=None, visuals=None
+    ):
         """'_run_implementation_async' for an export or a render file, asked of the cache first.
 
         The same file asked for again is a read, exactly as an analysis and a
@@ -2781,7 +2805,12 @@ class Shape(ShapeConfiguration):
         keeps - which is everything it is. A cross-section (see
         'partcad.shape_section') adds its box the same way, and for the same
         reason: the request's geometry is left out of the key, and the cut is the
-        one thing about that geometry the shape's own key does not say.
+        one thing about that geometry the shape's own key does not say. So do
+        the visuals a picture drew its parts as ('visuals', a
+        'visual.Substitution'), by their own keys: the geometry drawn there is
+        theirs and not the shape's, and a picture of a part whose visual was
+        edited is another picture. A visual with no key leaves the picture with
+        none either.
 
         And the tree the file is made of adds what it says about its shapes
         ('shape_envelope.description()'): the geometry is the shape's key, but
@@ -2808,6 +2837,8 @@ class Shape(ShapeConfiguration):
             extra["view"] = view.key()
         if section is not None:
             extra["section"] = section
+        if visuals is not None and visuals.keys:
+            extra["visuals"] = visuals.keys
         artifact = await self._artifact_hash(
             impl.section,
             impl.format_name,
@@ -2817,6 +2848,8 @@ class Shape(ShapeConfiguration):
             "%s:%s" % (impl.project.name, impl.format_name),
             extra,
         )
+        if visuals is not None and not visuals.cacheable:
+            artifact = None
 
         output_ = _Output(impl, script, request, final_filepath, artifact)
         if batch is not None:
@@ -2950,6 +2983,7 @@ class Shape(ShapeConfiguration):
         defaults_only=False,
         section=None,
         batch=None,
+        visuals=None,
     ):
         """Produce one output file, whatever its type.
 
@@ -2959,6 +2993,9 @@ class Shape(ShapeConfiguration):
 
         'batch' is the '_OutputBatch' it is written with, if it is one of
         several file types of this shape asked for together.
+
+        'visuals' is 'render_async''s: None to draw parts as their visuals
+        where the file type says it draws pictures, False never to.
         """
         impl, final_filepath = self.output_getopts(
             ctx, format_name, project, filepath, options_project, output_dir, defaults_only=defaults_only
@@ -2986,9 +3023,22 @@ class Shape(ShapeConfiguration):
         except ValueError as e:
             self.error("%s: %s" % (format_name, e))
             return None
-        subject, obj, subject_ports = await self._output_subject_async(
-            ctx, obj, mask, views if views is not None else {}
-        )
+        views = views if views is not None else {}
+        subject, obj, subject_ports = await self._output_subject_async(ctx, obj, mask, views)
+        # A picture draws each part as its 'visual:', where it declares one and
+        # the file type draws pictures (see 'partcad.visual'); after the filter,
+        # which keeps links whatever they are drawn as, and before the cut,
+        # which cuts what is drawn. Once per subset of the object, however many
+        # pictures of it this call writes.
+        drawn_as = None
+        if visuals is not False and getattr(impl, "visuals", False):
+            from . import visual as pc_visual
+
+            key = ("visuals", mask.key() if mask is not None and not mask.keeps_all else None)
+            if key not in views:
+                views[key] = await pc_visual.substitute_async(ctx, subject, obj)
+            drawn_as = views[key]
+            obj = drawn_as.tree
         # Cut after the filter: a section is a box through what is kept, and the
         # links a filter drops have nothing left to cut. The ports drawn on top
         # are found on the subject itself, uncut - a port is where it is whether
@@ -3038,6 +3088,7 @@ class Shape(ShapeConfiguration):
             view=mask if subject is not self else None,
             section=section,
             batch=batch,
+            visuals=drawn_as,
         )
         if result is None:
             return None
@@ -3086,6 +3137,7 @@ class Shape(ShapeConfiguration):
         link_filter=None,
         defaults_only: bool = False,
         section=None,
+        visuals: Optional[bool] = None,
         **kwargs,
     ) -> dict:
         """Write this shape out as one output file type, several, or all of them.
@@ -3119,6 +3171,13 @@ class Shape(ShapeConfiguration):
                 as a box in the frame of its root ('shape_section.normalize'),
                 or None for the whole shape. What the IDE's 2D and Draft tabs
                 send when their section sliders are moved.
+            visuals: None to draw each part that declares a 'visual:' as that
+                visual in a file type that draws pictures ('visuals: true' on
+                its implementation, see 'partcad.visual'), and as itself in
+                every other; False to draw every part as itself whatever the
+                file type, which is what the IDE's Draft tab asks: a drawing of
+                the object as it is. There is no True: a file type that draws
+                geometry is not made to draw pictures by being asked.
             kwargs: Export parameters, overriding what the configuration says.
 
         Several file types - a list, or None - are written together: each is
@@ -3178,6 +3237,7 @@ class Shape(ShapeConfiguration):
                 defaults_only=defaults_only,
                 section=section,
                 batch=batch,
+                visuals=visuals,
             )
 
         if isinstance(format_name, (list, tuple)):

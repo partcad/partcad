@@ -35,7 +35,14 @@ ENRICH_ONLY_PROPERTIES = frozenset({"type", "path", "orig_name", "source", "proj
 # happens to point at something that has one. The enrich publishes its own
 # aliases if it declares them - that is an ordinary property of the declaration,
 # and it is kept.
-SOURCE_ONLY_PROPERTIES = frozenset({"aliases"})
+#
+# So are 'visual' and 'private', for the same reason. A 'visual:' is a reference
+# written in the source's package, and read from the enrich's it names another
+# part, or none; the enrich is drawn as the source is drawn without it (see
+# 'partcad.visual'). And whether the source is kept to its package says nothing
+# about the enrich, which is public unless it says otherwise, as an alias is
+# (see 'partcad.privacy'). Either one the enrich declares itself is kept.
+SOURCE_ONLY_PROPERTIES = frozenset({"aliases", "visual", "private"})
 
 # What the object an enrich points at has already applied to itself by the time
 # it hands its geometry back: 'get_wrapped()' places and scales what a factory

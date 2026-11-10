@@ -1045,6 +1045,11 @@
               "default": false,
               "description": "Whether this file has to come out byte-for-byte the same every time it is written from the same object. Set to true for a drawing that is kept in a repository, so that a diff answers whether it changed: the built-in 2D projections then go through OpenCASCADE's exact hidden-line algorithm rather than the polygonal one, every number is rounded to the precision the file type claims, and a DXF gets fixed header metadata instead of the clock and a fresh pair of GUIDs. Off by default because the exact projection is much the slower of the two on a large assembly. Unlike the other fields here it is also handed to the implementation, so an implementation another package supplies reads it and means the same thing by it"
             },
+            "visuals": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether what this implementation writes is a picture of an object - what it looks like - so that every part with a 'visual:' is drawn as that visual. The implementing package's word, read from its own declaration of the file type and from no other layer, and only in a 'render:' section: PartCAD's own SVG, PNG and JPEG and its videos say it; its DXF, every export, and a file type another package implements without saying it draw each part as it is"
+            },
             "filter": {
               "$ref": "#/definitions/link-filter",
               "description": "Write this file type of only part of the object: the links of the assembly or scene to keep. Declared here it applies every time the file is written, so a package can keep a picture of one sub-assembly checked in beside the drawing of the whole of it; 'pc render --filter' and 'pc export --filter' ask for the same thing for one run and override it. PartCAD acts on it itself -- the implementation is handed the smaller shape -- so an implementation another package supplies needs to know nothing about it. A part and a sketch have no links, and a filter over one of them is reported rather than ignored"
@@ -1419,6 +1424,15 @@
       ],
       "minItems": 3,
       "maxItems": 3
+    },
+    "object-private": {
+      "description": "Whether this object is its package's own: 'true', and a reference written in another package - an ASSY link, an alias or an enrich, the sketch an extrusion names, a part's 'visual:' - cannot name it, while every object of its own package can. Commands (pc, the IDE, an agent's MCP tools) still reach it by name. Not the package's own top-level 'private:', which says the package does not track the public index.",
+      "type": "boolean",
+      "default": false
+    },
+    "part-visual": {
+      "description": "The part drawn in this part's place in a picture - the Digital Thread's 3D view, and a 'render:' file type whose implementation says 'visuals: true' (PartCAD's own SVG, PNG and JPEG, and its videos) - and nowhere else: never in an export, a DXF, a dimensioned drawing, a test, an analysis or a simulation, which all take the part as it is. A reference to a part, as a link names one; it is asked for with this part's own values of every parameter it declares too, and the ones it names on top.",
+      "$ref": "#/definitions/object-reference"
     },
     "object-reference": {
       "description": "A reference to another object: a name of this package ('m3-thru'), or one qualified with a package path ('//std/metric/m:m3-thru'), either of them carrying parameter values ('m-thru;size=4,depth=3'). A value may be a '%...%' expression over the parameters of the object the reference is written in ('m-thru;size=%size + 1%'), which is why a complete expression is allowed anywhere in the name - it is resolved before the reference is looked up.",
@@ -2258,6 +2272,18 @@
                   "type": "string",
                   "description": "'wall' only: the sketch the wall's doors and windows are cut out by, drawn on the XY plane as if the wall were unrolled flat - X along its base from 0 to 'length', Y up from 0 to 'height'. An opening reaching beyond the wall is an error. Empty, or absent, for none; a '%...%' expression over the part's parameters is resolved."
                 },
+                "thickness": {
+                  "type": ["number", "string"],
+                  "description": "'wall' only: how far the wall goes back from its face, in millimetres - away from the side it is seen from, outside a room traced clockwise. 0, or absent, is a one-sided surface with no body; anything more is the solid that surface is the face of: its elevation, the openings cut out, extruded through the thickness - straight back for a straight wall, along the radius for an arc wall. A number, or a '%...%' expression over the part's parameters."
+                },
+                "extendStart": {
+                  "type": ["number", "string"],
+                  "description": "'wall' with a 'thickness', straight, only: how far its solid goes on past its start, in millimetres along its base, or stops short of it where negative - how two walls meet at a corner with no gap and no overlap. The face stays where it is. A number, or a '%...%' expression over the part's parameters."
+                },
+                "extendEnd": {
+                  "type": ["number", "string"],
+                  "description": "'wall' with a 'thickness', straight, only: as 'extendStart', past its end."
+                },
                 "cache": { "type": "boolean", "default": true },
                 "requirements": { "$ref": "#/definitions/requirements" },
                 "with": { "$ref": "#/definitions/parameter-overrides" },
@@ -2398,6 +2424,8 @@
                   "minimum": 0,
                   "description": "How precisely this part has to be made, in millimetres. Only for the part types that take it -- 'step' and 'kicad' -- whose file may state a tolerance of its own; every other type states this as the 'tolerance' parameter instead. What is declared here is what is used; the file is read only when nothing is."
                 },
+                "private": { "$ref": "#/definitions/object-private" },
+                "visual": { "$ref": "#/definitions/part-visual" },
                 "unless": { "$ref": "#/definitions/unless" },
                 "connect": { "$ref": "#/definitions/connect" },
                 "software": { "$ref": "#/definitions/software-refs" }
@@ -2527,6 +2555,7 @@
                   "minimum": 1,
                   "description": "How many seconds working on this assembly may go without a word from the daemon before a client gives up on it, in place of the default of 300 (PC_DAEMON_IDLE_TIMEOUT). Declaring it also marks the assembly as slow: a command run with '--fast-only' passes over it"
                 },
+                "private": { "$ref": "#/definitions/object-private" },
                 "unless": { "$ref": "#/definitions/unless" },
                 "connect": { "$ref": "#/definitions/connect" },
                 "map": { "$ref": "#/definitions/port-map" },
@@ -2616,7 +2645,11 @@
                 "wall": {
                   "type": "string",
                   "minLength": 1,
-                  "description": "'walls' only: the part each wall is, asked for with the parameters 'length', 'height' and 'radius'. '//builtin/building:wall' unless this says otherwise."
+                  "description": "'walls' only: the part each wall is, asked for with the parameters 'length', 'height' and 'radius', and 'thickness' when the scene states one. '//builtin/building:wall' unless this says otherwise."
+                },
+                "thickness": {
+                  "type": ["number", "string"],
+                  "description": "'walls' only: how thick each wall is, in millimetres, outside the outline - passed to every wall as its 'thickness'. Absent, the wall part's own default stands. A number, or a '%...%' expression over the scene's parameters."
                 },
                 "ignoreCollision": {
                   "oneOf": [
@@ -2661,6 +2694,7 @@
                   "minimum": 1,
                   "description": "How many seconds working on this scene may go without a word from the daemon before a client gives up on it, in place of the default of 300 (PC_DAEMON_IDLE_TIMEOUT). Declaring it also marks the scene as slow: a command run with '--fast-only' passes over it"
                 },
+                "private": { "$ref": "#/definitions/object-private" },
                 "unless": { "$ref": "#/definitions/unless" },
                 "properties": { "$ref": "#/definitions/shape-properties" }
               },
@@ -2727,6 +2761,7 @@
               "items": { "type": "string", "minLength": 1 },
               "uniqueItems": true
             },
+            "private": { "$ref": "#/definitions/object-private" },
             "unless": { "$ref": "#/definitions/unless" },
             "path": { "type": "string", "minLength": 1 },
             "fileFrom": { "type": "string", "enum": ["url"] },
@@ -2870,6 +2905,7 @@
               "items": { "type": "string", "minLength": 1 },
               "uniqueItems": true
             },
+            "private": { "$ref": "#/definitions/object-private" },
             "unless": { "$ref": "#/definitions/unless" },
             "path": { "type": "string", "minLength": 1 },
             "alias": {
@@ -2999,6 +3035,7 @@
                   "allOf": [{ "$ref": "#/definitions/file-hash" }],
                   "description": "As elsewhere. Software is the one place a missing one is reported before anything is built: see the 'Software' lint check."
                 },
+                "private": { "$ref": "#/definitions/object-private" },
                 "unless": { "$ref": "#/definitions/unless" }
               },
               "additionalProperties": false

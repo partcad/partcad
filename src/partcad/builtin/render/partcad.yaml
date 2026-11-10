@@ -19,6 +19,15 @@
 # answers whether they changed, sets it to `true` on the file type; every example
 # in this repository does.
 #
+# `visuals` is said by every file type here that draws a *picture* - the SVG,
+# PNG and JPEG the IDE's 2D tab shows, and the videos - and by none other: each
+# of those draws a part that declares a `visual:` as that visual (see
+# `src/partcad/visual.py`), and the DXF, which is the projection a laser cuts
+# from and the drawing another CAD tool opens, draws every part as it is. It is
+# this package's word about its own scripts, read from here alone: a package
+# that only tunes one of these file types keeps it, and one that names a `path`
+# of its own says for itself.
+#
 # `turn` is the other field every file type here takes, and none declares:
 # `[x, y, z]` degrees -- or one number, about Z -- that the object is turned by
 # in front of the camera `viewport_origin` and `viewport_up` place, about its own
@@ -65,6 +74,7 @@ render:
     desc: A 2D projection of the shape, as SVG.
     path: render_svg.py
     extension: svg
+    visuals: true
     line_weight: 1.0
     # 'viewport_origin' and 'viewport_up' have no defaults here: the wrapper
     # picks them from the kind of shape it was handed (a sketch is looked at
@@ -97,6 +107,7 @@ render:
     desc: A picture of the object - the SVG projection rasterized, or shaded as the 3D view draws it.
     path: render_png.py
     extension: png
+    visuals: true
     pythonRequirements:
       - svglib==1.5.1
       - reportlab==4.4.3
@@ -149,6 +160,7 @@ render:
     desc: A picture of the object, as 'png' draws it, JPEG-compressed.
     path: render_jpeg.py
     extension: jpg
+    visuals: true
     pythonRequirements:
       - svglib==1.5.1
       - reportlab==4.4.3
@@ -302,6 +314,7 @@ render:
   mp4:
     desc: A video of the object turning, as H.264 in MP4 - what every social network takes.
     path: render_video.py
+    visuals: true
     # What decodes the image a colour is drawn with (see 'raster_scene.py').
     pythonRequirements:
       - pillow==12.2.0
@@ -321,6 +334,7 @@ render:
   m4v:
     desc: The MP4 video under the extension Apple's players file it under.
     path: render_video.py
+    visuals: true
     # What decodes the image a colour is drawn with (see 'raster_scene.py').
     pythonRequirements:
       - pillow==12.2.0
@@ -340,6 +354,7 @@ render:
   mov:
     desc: A video of the object turning, as H.264 in QuickTime.
     path: render_video.py
+    visuals: true
     # What decodes the image a colour is drawn with (see 'raster_scene.py').
     pythonRequirements:
       - pillow==12.2.0
@@ -359,6 +374,7 @@ render:
   qt:
     desc: The QuickTime video under its older extension.
     path: render_video.py
+    visuals: true
     # What decodes the image a colour is drawn with (see 'raster_scene.py').
     pythonRequirements:
       - pillow==12.2.0
@@ -378,6 +394,7 @@ render:
   mkv:
     desc: A video of the object turning, as H.264 in Matroska.
     path: render_video.py
+    visuals: true
     # What decodes the image a colour is drawn with (see 'raster_scene.py').
     pythonRequirements:
       - pillow==12.2.0
@@ -397,6 +414,7 @@ render:
   webm:
     desc: A video of the object turning, as VP9 in WebM - what a web page plays without a plugin.
     path: render_video.py
+    visuals: true
     # What decodes the image a colour is drawn with (see 'raster_scene.py').
     pythonRequirements:
       - pillow==12.2.0
@@ -416,6 +434,7 @@ render:
   avi:
     desc: A video of the object turning, as H.264 in AVI.
     path: render_video.py
+    visuals: true
     # What decodes the image a colour is drawn with (see 'raster_scene.py').
     pythonRequirements:
       - pillow==12.2.0
@@ -436,6 +455,7 @@ render:
     # Without a soundtrack: see 'CONTAINERS' in 'video_encode.py' for why.
     desc: A video of the object turning, as Windows Media Video in ASF.
     path: render_video.py
+    visuals: true
     # What decodes the image a colour is drawn with (see 'raster_scene.py').
     pythonRequirements:
       - pillow==12.2.0
@@ -455,6 +475,7 @@ render:
   asf:
     desc: The Windows Media video under the container's own extension.
     path: render_video.py
+    visuals: true
     # What decodes the image a colour is drawn with (see 'raster_scene.py').
     pythonRequirements:
       - pillow==12.2.0
@@ -478,6 +499,7 @@ render:
     # PARTCAD_FPS and TITLE (see 'video_encode.write_comments').
     desc: A video of the object turning, as Theora in Ogg - free of patents throughout.
     path: render_video.py
+    visuals: true
     # What decodes the image a colour is drawn with (see 'raster_scene.py').
     pythonRequirements:
       - pillow==12.2.0

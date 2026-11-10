@@ -86,7 +86,7 @@ class PartFactoryAlias(pf.PartFactory):
             # besides: they are its own, so it answers for its ports itself
             # (see 'assembly_ports.keeps_source_ports').
             if not any(key in config for key in ("implements", "ports", "map", "offset", "scale")):
-                self.part.with_ports = _SourcePorts(ctx, self.source)
+                self.part.with_ports = _SourcePorts(ctx, self.source, source_project.name)
 
             # pc_logging.debug("Initialized an alias to %s" % self.source)
 
@@ -96,7 +96,7 @@ class PartFactoryAlias(pf.PartFactory):
         Resolving is the point: the source may live in another package, and
         asking the context for it loads - and so downloads - that package.
         """
-        source = await self.ctx._get_part_async(self.source)
+        source = await self.ctx._get_part_async(self.source, referrer=self.project.name)
         if not source:
             raise Exception(f"The alias source {self.source} is not found")
         await source.prepare_async()
@@ -120,7 +120,7 @@ class PartFactoryAlias(pf.PartFactory):
     async def instantiate(self, obj):
         with pc_logging.Action("Alias", obj.project_name, f"{obj.name}:{self.source_part_name}"):
 
-            source = await self.ctx._get_part_async(self.source)
+            source = await self.ctx._get_part_async(self.source, referrer=self.project.name)
             if not source:
                 pc_logging.error(f"The alias source {self.source} is not found")
                 return None
@@ -172,7 +172,7 @@ class PartFactoryAlias(pf.PartFactory):
         geometry by the source's ports under its own conditions. Each section
         is one statement, so a reference that writes one replaces the source's.
         """
-        source = self.ctx._get_part(self.source)
+        source = self.ctx._get_part(self.source, referrer=self.project.name)
         if not source:
             raise Exception(f"The alias source {self.source} is not found")
         resolved = resolve_store_properties(source.get_final_config(), self.config)
@@ -194,7 +194,7 @@ class PartFactoryAlias(pf.PartFactory):
         None, which the manufacturability test reads as a part type that cannot
         say, and failed.
         """
-        source = await self.ctx._get_part_async(self.source)
+        source = await self.ctx._get_part_async(self.source, referrer=self.project.name)
         if not source:
             return None
         return await source.get_tolerance()
@@ -218,9 +218,11 @@ class _SourcePorts:
     one set of ports for the one piece of geometry, however many names it has.
     """
 
-    def __init__(self, ctx, source: str):
+    def __init__(self, ctx, source: str, referrer: typing.Optional[str] = None):
         self._ctx = ctx
         self._source = source
+        # The package the alias was declared in: the source is its reference.
+        self._referrer = referrer
         self._part = None
         self._empty = None
 
@@ -236,10 +238,10 @@ class _SourcePorts:
         a synchronous lookup is refused on a thread that is running a loop.
         """
         if self._part is None:
-            self._part = await self._ctx._get_part_async(self._source)
+            self._part = await self._ctx._get_part_async(self._source, referrer=self._referrer)
 
     def _target(self):
-        source = self._part if self._part is not None else self._ctx._get_part(self._source)
+        source = self._part if self._part is not None else self._ctx._get_part(self._source, referrer=self._referrer)
         if source is None:
             raise Exception(f"The alias source {self._source} is not found")
         if source.with_ports is None:

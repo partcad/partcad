@@ -1,6 +1,6 @@
 ---
 name: gen-scene
-description: Generate a PartCAD scene - a placed arrangement of objects such as a room, a building inside or out, a workcell, a desk laid out, an outdoor or underwater setting, or a world for a simulation - from a description. It gives the scene a bottom surface at or above z = 0 (none, and no gravity, in space), models each object as a `basic` primitive unless more detail is called for, places everything with `location:` and fixes it to the world unless it is mobile, stands a building's inside on floor plans (`walls` scenes) when only the inside is wanted and builds solid walls with their doors and windows when the outside is modelled too, and validates the result with the PartCAD CLI. Use for /pc:gen-scene or when the user asks to generate, create or lay out a scene, a room, an interior, a floor plan, a building, a workcell, an environment or a simulation world.
+description: Generate a PartCAD scene - a placed arrangement of objects such as a room, a building inside or out, a workcell, a desk laid out, an outdoor or underwater setting, or a world for a simulation - from a description. It gives the scene a bottom surface at or above z = 0 (none, and no gravity, in space), models each object as a `basic` primitive unless more detail is called for, places everything with `location:` and fixes it to the world unless it is mobile, stands a building's inside on floor plans (`walls` scenes, solid walls drawn as one-sided surfaces through their visual) when only the inside is wanted and builds opaque solid walls with their doors and windows when the outside is modelled too, marks what only the scene needs private, and validates the result with the PartCAD CLI. Use for /pc:gen-scene or when the user asks to generate, create or lay out a scene, a room, an interior, a floor plan, a building, a workcell, an environment or a simulation world.
 ---
 
 # pc:gen-scene
@@ -22,6 +22,13 @@ move through. It also has to get its physical conditions right: what is fixed an
 what is free, the gravity, the medium. It does not have to be right *inside*. A
 volume nothing sees or touches may be overlapping, rough or not manufacturable,
 and the effort goes into the surfaces instead.
+
+Every object in a scene is a **physical object**: a solid that a simulation
+collides with, `pc qual test` checks for overlaps and an export writes. Where what
+should be *seen* is something else, that is a part's `visual:` - another part,
+drawn in its place in the IDE's 3D view and in `pc render`'s pictures, and
+nowhere else - and never a reason to model the object as less than it is. A
+floor plan's walls are the case PartCAD ships (§4).
 
 ## 1. Scene or assembly?
 
@@ -168,6 +175,30 @@ Then, in increasing order of effort: a few `basic` parts in a small assembly
 (`/pc:gen-assembly`; a table is a top on four legs), or a part of its own
 (`/pc:gen-part`). Say, for each object, which it is and why.
 
+Where the detail is wanted only in the **picture** - the description wants the
+room to look furnished, but nothing rolls, nests or tips against the shape -
+keep the box as the part and draw the detailed model through it:
+
+```yaml
+parts:
+  <scene>/armchair:
+    type: basic                          # what the scene is: the room it takes
+    cuboid: [850, 900, 1000]
+    offset: [[0, 0, 500], [0, 0, 1], 0]
+    manufacturable: false
+    visual: <scene>/armchair-look        # what a picture draws in its place
+  <scene>/armchair-look:
+    type: alias                          # a catalog model, or a part of your own
+    source: //pub/<catalog>:<armchair>
+    private: true                        # only this scene draws it
+```
+
+The visual is drawn where the part is, as its own declaration builds it, so its
+origin has to be the part's: the centre of its footprint, on its base. Every
+check, overlap and simulation still sees the box. A part another package keeps
+`private: true` cannot be named, as a visual or as a link: reuse what that
+package publishes.
+
 ## 4. Lay it out
 
 ### The bottom surface
@@ -205,10 +236,18 @@ Which of the two §2 found decides how a building's walls are made.
 **The inside only: floor plans.** A floor plan is a scene of type `walls`: the
 walls of one room, standing on the outline of a sketch of its plan (see "Rooms:
 the walls standing on a sketch" in `docs/source/config_scenes.rst`). Each wall
-is drawn from inside the room and is see-through from outside, so the room can
-be looked into from any side without taking anything away. That is exactly what
-is wanted when nothing outside is modelled, and exactly what is not wanted when
-something is, so a floor plan is only for this case. Where it is possible, make
+is `//builtin/building:wall`, a **solid**: its face on the outline, its
+`thickness` (114.3 mm, 4.5 in: a 2x4 stud between two half-inch drywall
+boards, unless the scene says otherwise) going back from there,
+*outside* the plan, so the plan stays the room's clear inside. A simulation
+collides with it, `pc qual test` checks things against it, an export writes it. What
+a picture draws is its `visual:`, `//builtin/building:wall-surface`: the face
+alone, drawn from inside the room and see-through from outside, so the room can
+be looked into from any side without taking anything away. That surface is
+private to `//builtin/building`; do not try to build a room of it, a link to it
+is refused. The see-through look is exactly what is wanted when nothing outside
+is modelled, and exactly what is not wanted when something is, so a floor plan
+is only for this case. Where it is possible, make
 **a single floor plan**, one outline around the whole of the space, and place it
 in an `assy` scene with the floor and the furnishing (scenes may contain other
 scenes):
@@ -226,6 +265,7 @@ scenes:
     desc: The walls of the room, standing on its plan
     sketch: <scene>/plan
     height: 2700                               # from the floor to the ceiling
+    thickness: 152.4                           # (optional) outside the plan; 114.3 (4.5 in) unless said
 
   <scene>:
     type: assy
@@ -251,54 +291,74 @@ links:
 ```
 
 - **The plan is a sketch of one closed outline** of lines and arcs, drawn from
-  above, on XY. A rectangular room is a `basic` `rectangle:`, as above. Anything
-  else (an L, a bay window, a round corner) is drawn with `/pc:gen-sketch` from
-  the plan's dimensions. A `walls` scene refuses two outlines, a hole, an open
+  above, on XY. It is this scene's own working: declare it `private: true`. A
+  `walls` scene of this package still stands on it; `//builtin/building:room`,
+  which is another package's, could not. A rectangular room is a `basic`
+  `rectangle:`, as above. Anything else (an L, a bay window, a round corner) is
+  drawn with `/pc:gen-sketch` from the plan's dimensions. A `walls` scene refuses two outlines, a hole, an open
   outline and a spline, with the reason. A column in the room is an object
   standing in it, not a hole in the plan.
 - **The floor is the plan made solid.** A rectangle is a `basic` cuboid at the
   plan's size and position. Any other outline is the plan extruded, which grows
-  up from z = 0: `type: extrude`, `sketch: <scene>/plan`, `depth: 20`.
+  up from z = 0: `type: extrude`, `sketch: <scene>/plan`, `depth: 20`. The walls
+  stand on its top, their thickness outside it: they are fixed, so they need
+  nothing under that.
 - **One outline cannot draw a wall inside it.** Where the space is several rooms
   and the walls between them matter, make one floor plan per room,
   `<scene>/<room>` on `<scene>/<room>-plan`, all drawn in the one frame of the
-  whole space and so all placed at `[[0, 0, 20], ...]`. A wall two rooms share is
-  then drawn twice, once facing each room, which is right for walls seen from
-  one side.
+  whole space and so all placed at `[[0, 0, 20], ...]`. Draw each plan as that
+  room's clear inside, **the partition's thickness apart** from its neighbour's,
+  and give both rooms that `thickness`: each room's wall then fills the gap
+  between them, and the two coincide there (an overlap inside the walls, §6).
+  Two plans sharing an edge would put each room's wall *inside* the other room.
+  A shared wall is drawn twice, once facing each room, which is right for walls
+  seen from one side.
 - **Doors and windows.** A `walls` scene cannot cut them: it asks each wall for
-  its `length`, `height` and `radius` and nothing else. Where they are asked
-  for, write *that room's* floor plan as an `assy` scene of
-  `//builtin/building:wall` links instead. They are the same one-sided walls,
-  placed by the `walls` scene's own rule. Walk the outline **clockwise** as seen
+  its `length`, `height`, `radius`, `thickness` and corner extensions, and
+  nothing else. Where they
+  are asked for, write *that room's* floor plan as an `assy` scene of
+  `//builtin/building:wall` links instead. They are the same walls (solids with
+  the openings cut through them, drawn as their surfaces with the same openings),
+  placed by the `walls` scene's own rule. Give each the room's `thickness` in
+  its `params:` if it is not 114.3. Walk the outline **clockwise** as seen
   from above. The edge from P to Q is a wall at P, `length` |PQ| long, turned
   about Z by the edge's heading, `atan2(Qy - Py, Qx - Px)`. The wall's front is
-  on the right of the walk, which is the inside of the room. For the 4000 x 5000
-  room above:
+  on the right of the walk, which is the inside of the room. **Close every
+  right-angle corner** the way the `walls` scene does: the wall arriving at a
+  corner where the walk turns right (an outside corner) takes
+  `extendEnd: <thickness>`, and one arriving where it turns left (an inside
+  corner) `extendEnd: -<thickness>`. Only a straight wall moves: where the wall
+  arriving is an arc (the end of a bay or of a column), the straight wall leaving
+  the corner takes `extendStart` instead, with the same sign. Corners at other
+  angles, and two arcs meeting, take nothing. The
+  face stays on the outline; only the solid goes on or stops short. For the
+  4000 x 5000 room above, four outside corners:
 
   ```yaml
   # <scene>/walls.assy, declared as `<scene>/walls: {type: assy, path: <scene>/walls.assy}`
   links:
     - part: //builtin/building:wall
       name: wall-1
-      params: { length: 5000, height: 2700, openings: "//<package>:<scene>/door" }
+      params: { length: 5000, height: 2700, extendEnd: 114.3, openings: "//<package>:<scene>/door" }
       location: [[0, 0, 0], [0, 0, 1], 90]
     - part: //builtin/building:wall
       name: wall-2
-      params: { length: 4000, height: 2700 }
+      params: { length: 4000, height: 2700, extendEnd: 114.3 }
       location: [[0, 5000, 0], [0, 0, 1], 0]
     - part: //builtin/building:wall
       name: wall-3
-      params: { length: 5000, height: 2700 }
+      params: { length: 5000, height: 2700, extendEnd: 114.3 }
       location: [[4000, 5000, 0], [0, 0, 1], -90]
     - part: //builtin/building:wall
       name: wall-4
-      params: { length: 4000, height: 2700 }
+      params: { length: 4000, height: 2700, extendEnd: 114.3 }
       location: [[4000, 0, 0], [0, 0, 1], 180]
   ```
 
   `openings:` is a sketch, named in full (`pc list sketches` gives the
-  package's path), drawn as if the wall were unrolled in front of you, seen from
-  inside the room: X along it from its start, from 0 to `length`, and Y up from 0
+  package's path) - and so public: a sketch another package's wall cuts by
+  cannot be private - drawn as if the wall were unrolled in front of you, seen
+  from inside the room: X along it from its start, from 0 to `length`, and Y up from 0
   to `height`. One door is a `basic` `rectangle:` standing on y = 0. Several
   openings are a `/pc:gen-sketch` sketch. An arc wall is the same, with the arc's
   `radius`. Prove the hand-placed room is the room the `walls` scene would have
@@ -307,8 +367,10 @@ links:
   differently, so the names will not match.
 
 **The outside too: walls of their own.** When the building is seen from
-outside, its walls are what is seen, so they have to be solid and opaque from
-both sides, and floor plans are no help. Model the outside **first**, the doors
+outside, its walls are what is seen, so they have to be solid and *drawn*
+opaque from both sides, and floor plans are no help: `//builtin/building:wall`
+is a solid too, but it is drawn as its one-sided surface, so its outside is
+see-through in every picture. Model the outside **first**, the doors
 and windows cut through it included, and check it from outside (§6) before
 anything goes in. Each wall is a part of its own, an extrusion of the sketch of
 its elevation with the openings as holes in it, and the walls are placed next to
@@ -359,7 +421,8 @@ parts:
   convex hull, so a door is solid to it. Where something has to pass through
   one in a simulation, build that wall of convex pieces instead (§7).
 - **Then the inside**, in the same frame: the walls between rooms are made the
-  same way, 100 thick, with their doors as holes; then the furnishing. A roof or
+  same way, 114.3 thick (4.5 in, a 2x4 stud wall), with their doors as holes;
+  then the furnishing. A roof or
   a ceiling, where the description has one, is a slab on top of the walls. Leave
   it out where the inside is meant to be seen from above.
 
@@ -518,16 +581,20 @@ rests on, stands against or moves through?
 Resting exactly on something bounds no volume, and is not reported. Report in
 §8 which warnings were left and why.
 
-Floor-plan walls are surfaces rather than solids, so the check passes over
-them (`4 part(s) are not valid solids and were not checked: walls/wall-1, ...`),
-which is expected. It also means nothing checks that an object stays inside a
-room that is a floor plan. That is the top view's job, and the measurements',
-below. Solid walls (§4) are checked like anything else.
+Floor-plan walls are solids (§4), checked like anything else, so an object that
+pokes through a wall - outside the plan - is reported as an overlap with it, and
+one that stands clear of the plan is not. A room's right-angle corners are
+closed with no overlap (§4); expect, and leave, the overlaps the walls make with
+each other elsewhere: at an inside corner at another angle, and where two rooms'
+walls fill one partition. A `type: wall` part with no thickness is a
+surface, and the check passes over it (`... are not valid solids and were not
+checked`).
 
 ### Prove each regrouping changed nothing
 
 Moving objects into a sub-scene (§5), or replacing a `walls` floor plan by its
-walls placed by hand (§4), must leave every object where it was. Walk the scene
+walls placed by hand (§4), must leave every object where it was - and with the
+same thickness, for a wall. Walk the scene
 down to its parts before and after, and compare the two lists as multisets. The
 walk is `/pc:gen-assembly` §6's, with `ctx.get_scene("//<package>:<scene>")` in
 place of `ctx.get_assembly(...)`, and it walks through `scene:` links the same
@@ -550,10 +617,12 @@ sub-scenes. A name with a `/` in it is written into that subdirectory. Render a
 sub-scene by its own name when it is what went wrong.
 
 What a building looks like from outside depends on how it was built (§4).
-A floor plan's walls are drawn from the side they face and not at all from
-behind, so from outside the near walls are see-through and the far ones are seen
-from inside: in `iso`, expect two walls, not four. From `top`, every wall is
-edge-on and the picture is the plan. Solid walls are opaque: from outside you see
+A floor plan's walls are drawn as their visuals, from the side they face and not
+at all from behind, so from outside the near walls are see-through and the far
+ones are seen from inside: in `iso`, expect two walls, not four. From `top`,
+every wall is edge-on and the picture is the plan. Render `top` once more with
+`--no-visuals` to see what the scene *is*: every wall with its thickness, outside
+the plan, and every part as itself rather than as its visual. Solid walls are opaque: from outside you see
 the facades with their doors and windows, the elevations mirrored, and the
 inside only through the openings. Check the outside alone before anything goes
 in, from each side a facade faces.
@@ -585,7 +654,8 @@ python3 <the /pc:gen-sketch skill's directory>/measure.py svg $D/<scene>.svg
 ```
 
 Each colour is a layer of its own in the SVG (`Visible-5A6E8C`), which is one more
-reason to give each kind of object a colour. Every row of the table has to be
+reason to give each kind of object a colour. These SVGs draw every visual; where
+an object's visual differs from it in size, measure with `--no-visuals` too. Every row of the table has to be
 within its tolerance. One that is not is a `location:` to correct from the
 error, the way `/pc:gen-sketch` §8 reads it. Measure the openings on the
 elevation sketches the same way, `/pc:gen-sketch` §7.
@@ -654,8 +724,10 @@ alone one that is still rocking.
   world that is filled with it: write one, as the `underwater` scene of
   `/pc:gen-assembly` §7, and name it in `scene: :<scene>/world`.
 - **MuJoCo collides with convex hulls.** A part that is not convex is solid
-  across its hull, so a wall's door and windows are filled in, and so is the
-  notch of an L-shaped floor extruded from its plan. That only matters where
+  across its hull, so a wall's door and windows are filled in, an arc wall of a
+  floor plan fills the segment between its ends, and so does the notch of an
+  L-shaped floor extruded from its plan. A visual is never simulated: what
+  collides is the part. That only matters where
   something placed in the scene has to pass through or rest there. In that
   case, build that wall or floor of convex pieces: `basic` cuboids either side
   of an opening and above it, and a floor as rectangles.
@@ -670,7 +742,9 @@ Summarize the scene:
 
 - the setting, its bottom surface, its gravity and medium;
 - for a building, whether its outside is modelled, and so whether it stands on
-  floor plans or on walls of its own, with the doors and windows each has;
+  floor plans (and their walls' thickness) or on walls of its own, with the
+  doors and windows each has;
+- which objects are drawn as a `visual:`, and which are `private: true`;
 - every object, how many of each, which are `basic` stand-ins, and which have more
   detail and why;
 - which objects are mobile;
@@ -684,6 +758,8 @@ Summarize the scene:
 Offer `/pc:validate <scene>` (a scene) for a verdict on every requirement.
 
 Remove the layout sketches (their declarations and their files, as
-`/pc:gen-sketch` §9 says) unless the user wants them kept. Keep the plan, the
-elevation and the openings sketches: the floor plans stand on them, and the
-floors and walls are extruded from them.
+`/pc:gen-sketch` §9 says) unless the user wants them kept, and then mark them
+`private: true`. Keep the plan, the elevation and the openings sketches: the
+floor plans stand on them, and the floors and walls are extruded from them. The
+plan and the elevations are the scene's own (`private: true`); an openings
+sketch a `//builtin/building:wall` cuts by stays public (§4).

@@ -212,6 +212,204 @@ def test_an_opening_on_another_plane_or_open_is_refused():
         wrapper_wall.build(LENGTH, HEIGHT, 0.0, three_sides.Wire())
 
 
+def _volume(shape):
+    props = GProp_GProps()
+    BRepGProp.VolumeProperties_s(shape, props)
+    return props.Mass()
+
+
+def _solids(shape):
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+
+    found = []
+    explorer = TopExp_Explorer(shape, TopAbs_SOLID)
+    while explorer.More():
+        found.append(explorer.Current())
+        explorer.Next()
+    return found
+
+
+def test_a_thick_straight_wall_is_its_elevation_extruded_back_from_its_face():
+    """The face where the surface would be, the openings through it, and the thickness towards +Y behind it."""
+    wall = wrapper_wall.build(LENGTH, HEIGHT, 0.0, _openings(), thickness=150.0)
+
+    assert BRepCheck_Analyzer(wall).IsValid()
+    assert len(_solids(wall)) == 1
+    assert _volume(wall) == pytest.approx(OPENED * 150.0, rel=1e-9)
+    x_min, y_min, z_min, x_max, y_max, z_max = wrapper_wall._bounds(wall)
+    assert (x_min, y_min, z_min, x_max, y_max, z_max) == pytest.approx((0.0, 0.0, 0.0, LENGTH, 150.0, HEIGHT), abs=1e-6)
+
+
+def test_a_door_as_tall_as_a_thick_wall_leaves_two_solids():
+    wall = wrapper_wall.build(LENGTH, HEIGHT, 0.0, _compound(_rectangle(1000.0, 0.0, 2000.0, HEIGHT)), thickness=100.0)
+    assert len(_solids(wall)) == 2
+    assert _volume(wall) == pytest.approx((LENGTH - 1000.0) * HEIGHT * 100.0, rel=1e-9)
+
+
+@pytest.mark.parametrize("radius", [1500.0, -1500.0])
+def test_a_thick_arc_wall_is_extruded_along_its_radius_away_from_its_front(radius):
+    """Half a ring: outwards from its axis where it bends towards its front, inwards where it bends away."""
+    length = math.pi * abs(radius)
+    thickness = 200.0
+    wall = wrapper_wall.build(length, HEIGHT, radius, _openings(), thickness=thickness)
+
+    assert BRepCheck_Analyzer(wall).IsValid()
+    assert len(_solids(wall)) == 1
+    outer, inner = (abs(radius) + thickness, abs(radius)) if radius > 0 else (abs(radius), abs(radius) - thickness)
+    ring = math.pi * (outer**2 - inner**2) / 2.0 * HEIGHT
+    # The openings go through it radially, so each takes out its developed
+    # width at the mean radius of the ring.
+    openings = (900.0 * 2100.0 + 1200.0 * 1100.0) * thickness * ((outer + inner) / 2.0) / abs(radius)
+    assert _volume(wall) == pytest.approx(ring - openings, rel=1e-6)
+
+
+def test_a_wall_is_no_thinner_than_nothing_and_an_arc_bent_away_no_thicker_than_its_radius():
+    with pytest.raises(wrapper_wall.WallError, match="'thickness' is -1.0"):
+        wrapper_wall.build(LENGTH, HEIGHT, thickness=-1.0)
+    with pytest.raises(wrapper_wall.WallError, match="thinner than that: 'thickness' is 1000 mm"):
+        wrapper_wall.build(LENGTH, HEIGHT, -1000.0, thickness=1000.0)
+    # Bent towards its front, it goes back away from its axis, and has room.
+    assert BRepCheck_Analyzer(wrapper_wall.build(LENGTH, HEIGHT, 1000.0, thickness=1000.0)).IsValid()
+
+
+def test_a_thick_wall_goes_on_past_its_end_or_stops_short_of_its_start_and_its_face_does_not_move():
+    """What a corner asks of a wall: the solid moves along the base, by so much, at either end."""
+    wall = wrapper_wall.build(LENGTH, HEIGHT, thickness=114.3, extend_start=-114.3, extend_end=114.3)
+
+    assert BRepCheck_Analyzer(wall).IsValid()
+    assert _volume(wall) == pytest.approx(LENGTH * HEIGHT * 114.3, rel=1e-9)
+    x_min, y_min, _z_min, x_max, y_max, _z_max = wrapper_wall._bounds(wall)
+    assert (x_min, x_max, y_min, y_max) == pytest.approx((114.3, LENGTH + 114.3, 0.0, 114.3), abs=1e-6)
+
+
+def test_only_a_straight_wall_with_a_thickness_is_extended():
+    with pytest.raises(wrapper_wall.WallError, match="a wall with no thickness is a surface"):
+        wrapper_wall.build(LENGTH, HEIGHT, extend_end=100.0)
+    with pytest.raises(wrapper_wall.WallError, match="an arc wall is not extended"):
+        wrapper_wall.build(LENGTH, HEIGHT, 3000.0, thickness=100.0, extend_end=100.0)
+    with pytest.raises(wrapper_wall.WallError, match="stopped short of both ends by more than its length"):
+        wrapper_wall.build(100.0, HEIGHT, thickness=100.0, extend_start=-60.0, extend_end=-60.0)
+
+
+def _segments(points):
+    """The outline of the polygon through 'points', as 'wrapper_outline' reads it for a 'walls' scene."""
+    polygon = BRepBuilderAPI_MakePolygon()
+    for x, y in points:
+        polygon.Add(gp_Pnt(x, y, 0.0))
+    polygon.Close()
+    return wrapper_outline.outline(BRepBuilderAPI_MakeFace(polygon.Wire()).Face(), "the plan")
+
+
+def test_every_wall_arriving_at_an_outside_corner_goes_on_past_it():
+    """A rectangle is four outside corners: each wall fills the square its thickness leaves at its end."""
+    from partcad.scene_factory_walls import corner_extensions
+
+    segments = _segments(((0, 0), (4000, 0), (4000, 3000), (0, 3000)))
+    assert corner_extensions(segments, 114.3) == [(0.0, 114.3)] * 4
+    assert corner_extensions(segments, 0.0) == [(0.0, 0.0)] * 4
+
+
+def test_a_wall_arriving_at_an_inside_corner_stops_short_of_it():
+    """An L: five outside corners and one inside one, where the wall arriving stops short by the thickness."""
+    from partcad.scene_factory_walls import corner_extensions
+
+    segments = _segments(((0, 0), (4000, 0), (4000, 2000), (2000, 2000), (2000, 4000), (0, 4000)))
+    extensions = corner_extensions(segments, 100.0)
+    assert sorted(extensions) == [(0.0, -100.0)] + [(0.0, 100.0)] * 5
+    # The ring of walls around it is the outline grown by the thickness, less
+    # the outline: perimeter times thickness, and a square more per outside
+    # corner than per inside one - exactly what the walls cover.
+    covered = sum(
+        (float(segment["length"]) + start + end) * 100.0 for segment, (start, end) in zip(segments, extensions)
+    )
+    perimeter = sum(float(segment["length"]) for segment in segments)
+    assert covered == pytest.approx(perimeter * 100.0 + (5 - 1) * 100.0**2)
+
+
+def test_a_corner_at_another_angle_or_between_two_arcs_is_left_as_it_is():
+    from partcad.scene_factory_walls import corner_extensions
+
+    triangle = _segments(((0, 0), (4000, 0), (1000, 3000)))
+    assert corner_extensions(triangle, 100.0) == [(0.0, 0.0)] * 3
+    # An arc turning through 114.6 degrees, and a line: 45 degrees from the
+    # line into the arc, and 69.6 from the arc back into the line.
+    slanted = [
+        {"kind": "arc", "heading": 45.0, "length": 1000.0, "radius": 500.0},
+        {"kind": "line", "heading": 0.0, "length": 1000.0, "radius": 0.0},
+    ]
+    assert corner_extensions(slanted, 100.0) == [(0.0, 0.0)] * 2
+    # Two quarter circles meeting at right angles: neither is straight, so
+    # neither can go on or stop short.
+    quarters = [{"kind": "arc", "heading": 0.0, "length": math.pi * 500.0, "radius": 1000.0}] * 2
+    assert corner_extensions(quarters, 100.0) == [(0.0, 0.0)] * 2
+
+
+def test_an_arc_ends_in_the_heading_it_has_turned_to():
+    from partcad.scene_factory_walls import heading_at_end
+
+    assert heading_at_end({"heading": 30.0, "length": 1000.0, "radius": 0.0}) == 30.0
+    # A half circle bending right turns half a turn clockwise, and one bending
+    # left half a turn anticlockwise.
+    assert heading_at_end({"heading": 0.0, "length": math.pi * 1000.0, "radius": 1000.0}) == pytest.approx(-180.0)
+    assert heading_at_end({"heading": 90.0, "length": math.pi * 300.0, "radius": -300.0}) == pytest.approx(270.0)
+
+
+def test_where_an_arc_meets_a_straight_wall_at_a_right_angle_the_straight_wall_moves():
+    """A bay bulging out of the east wall and a column the south wall goes around, read as the scene reads them.
+
+    Clockwise, the bay's two ends are inside corners and the column's two are
+    outside ones. An arc does not move, so at each the straight wall does: the
+    one arriving at the corner at its end, the one leaving it at its start.
+    """
+    from partcad.scene_factory_walls import corner_extensions
+
+    t = 114.3
+    plan = _wire(
+        _line((0, 0), (2000, 0)),
+        _arc((2000, 0), (2300, 300), (2600, 0)),
+        _line((2600, 0), (4000, 0)),
+        _line((4000, 0), (4000, 1000)),
+        _arc((4000, 1000), (5000, 2000), (4000, 3000)),
+        _line((4000, 3000), (4000, 4000)),
+        _line((4000, 4000), (0, 4000)),
+        _line((0, 4000), (0, 0)),
+    )
+    segments = wrapper_outline.outline(plan, "the plan")
+    extensions = {
+        (segment["kind"], tuple(round(value, 6) for value in segment["start"])): pair
+        for segment, pair in zip(segments, corner_extensions(segments, t))
+    }
+    assert extensions == {
+        # Four outside corners of the rectangle, each closed by the wall arriving.
+        ("line", (0.0, 0.0)): (0.0, t),
+        ("line", (0.0, 4000.0)): (0.0, t),
+        ("line", (4000.0, 0.0)): (0.0, t),
+        # Into the bay, an inside corner: the wall arriving stops short of it.
+        ("line", (4000.0, 4000.0)): (0.0, -t),
+        ("arc", (4000.0, 3000.0)): (0.0, 0.0),
+        # Out of the bay, another: the wall leaving stops short of its start,
+        # and goes on past its end into the rectangle's corner.
+        ("line", (4000.0, 1000.0)): (-t, t),
+        # Into and out of the column, two outside corners: past the end of the
+        # wall arriving, and past the start of the one leaving.
+        ("arc", (2600.0, 0.0)): (0.0, 0.0),
+        ("line", (2000.0, 0.0)): (t, t),
+    }
+
+
+def test_a_wall_too_short_to_stop_short_leaves_it_to_the_next_one():
+    from partcad.scene_factory_walls import corner_extensions
+
+    segments = [
+        {"kind": "line", "heading": 0.0, "length": 50.0, "radius": 0.0},
+        {"kind": "line", "heading": 90.0, "length": 3000.0, "radius": 0.0},
+    ]
+    # Turning left from the short one into the long one; the long one starts
+    # short, and goes on past its own end at the right turn back to the first.
+    assert corner_extensions(segments, 100.0) == [(0.0, 0.0), (-100.0, 100.0)]
+
+
 def test_a_wall_needs_a_size_and_something_left_of_it():
     with pytest.raises(wrapper_wall.WallError, match="'length' is 0.0"):
         wrapper_wall.build(0.0, HEIGHT)

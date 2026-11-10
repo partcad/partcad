@@ -63,6 +63,7 @@ class ShapeFactory(factory.Factory):
             resolved = pc_software.declared_software_refs(project.name, config)
             if resolved:
                 config[pc_software.RESOLVED_KEY] = resolved
+                config[pc_software.RESOLVED_BY_KEY] = project.name
 
         self.with_ports = WithPorts(config["name"], project, config)
 

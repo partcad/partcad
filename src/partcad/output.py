@@ -370,9 +370,10 @@ def is_document_format(format_name: str, section_obj) -> bool:
 # What is left over is what the implementation is handed, so adding a field here
 # hides it from every implementation - including the ones packages write.
 # 'packageFiles' is the implementation's too: which of its fields name files of
-# the object's package (see 'Implementation.package_files').
+# the object's package (see 'Implementation.package_files'), and so is
+# 'visuals': whether what it writes is a picture (see VISUALS_KEY).
 IMPLEMENTATION_KEYS = frozenset(
-    {"path", "package", "pythonRequirements", "pythonVersion", "dockerImage", "container", "packageFiles"}
+    {"path", "package", "pythonRequirements", "pythonVersion", "dockerImage", "container", "packageFiles", "visuals"}
 )
 OUTPUT_KEYS = frozenset({"extension", "prefix", "exclude", "output_dir"})
 RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
@@ -534,6 +535,26 @@ WORLD_KEY = "world"
 # precisely because implementations are meant to see it.
 REPRODUCIBLE_KEY = "reproducible"
 
+# The file-type field that says what the implementation writes is a *picture* of
+# an object - what it looks like - rather than its geometry: 'true', and every
+# part in what it is handed that declares a 'visual:' is drawn as that visual
+# (see 'partcad.visual'). '//builtin/render' says it of its SVG, PNG and JPEG -
+# the pictures the IDE's 2D tab shows - and of its videos; not of its DXF, which
+# is the projection a laser cuts from.
+#
+# The implementing package's word, read from its own declaration and from no
+# other layer ('Implementation.visuals'), because it is a fact about what the
+# script draws and not an option of one run. That is what keeps a drawing
+# package's file type - the Draft tab's dimensioned drawing, an SVG that is a
+# drawing of the solid - from drawing visuals for having the name of one of
+# PartCAD's pictures, whose declaration is the layer underneath it: a layer that
+# names a 'path' of its own is another implementation, and says for itself.
+#
+# Only in a 'render:' section. An export is what another tool computes with,
+# and a visual is not what the part is, so an 'export:' file type that says it is
+# not listened to. Reserved, and so never handed to the script.
+VISUALS_KEY = "visuals"
+
 # The *result* key an export or render implementation says with what else it
 # wrote besides the file at 'path': a list of paths, relative to the directory
 # that file is in (or absolute, inside it). An empty list is the ordinary
@@ -688,6 +709,22 @@ class Implementation:
         See REPRODUCIBLE_KEY for what it costs and why 'False' is the default.
         """
         return as_flag(self.config.get(REPRODUCIBLE_KEY))
+
+    @property
+    def visuals(self) -> bool:
+        """Whether this file type draws each part with a 'visual:' as that visual: see VISUALS_KEY.
+
+        Requires 'project', which 'materialize_script()' fills in. A
+        declaration that is not a boolean is reported and taken as 'false': a
+        picture of the geometry is the one that cannot be wrong about the part.
+        """
+        if self.section != RENDER:
+            return False
+        try:
+            return as_flag(self._declared(VISUALS_KEY), VISUALS_KEY)
+        except ValueError as e:
+            pc_logging.error("The '%s' file type: %s" % (self.format_name, e))
+            return False
 
     @property
     def reserved(self) -> frozenset:
