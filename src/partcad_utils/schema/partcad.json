@@ -2224,7 +2224,7 @@
                     "basic", "cadquery", "build123d", "chili3d", "sdf", "svg", "dxf", "extrude",
                     "sweep", "stl", "step", "scad", "3mf", "enrich", "alias", "brep",
                     "obj", "gltf", "kicad", "compound", "fcstd", "wall", "iges", "f3d",
-                    "sldprt", "ipt", "catpart", "sat", "pvz", "usd"
+                    "sldprt", "ipt", "catpart", "sat", "pvz", "usd", "boolean"
                   ]
                 },
                 "aliases": {
@@ -2247,6 +2247,23 @@
                   "uniqueItems": true
                 },
                 "sketch": { "type": "string", "minLength": 1 },
+                "operation": {
+                  "type": "string",
+                  "enum": ["and", "or", "xor"],
+                  "description": "'boolean' only: how the two 'parts' are combined. 'and' is the material both occupy, 'or' the material either occupies, 'xor' the material exactly one of them occupies - or, with 'whole', the same of their solids, each kept whole."
+                },
+                "parts": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "description": "'boolean' only: the two parts the 'operation' combines, the first first: where a solid of the result is a piece of both, it is made of what the first is made of. References, resolved against this package like any other, and they may carry parameters."
+                },
+                "whole": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "'boolean' only: combine the two parts by their solids rather than by their volume. A solid of one part is in the other when it lies wholly inside it, and nothing is cut: 'and' keeps the solids of the first that lie inside the second, which is how one piece of a model of several touching pieces is taken out of it by a box around it."
+                },
                 "depth": { "type": "number" },
                 "cuboid": { "$ref": "#/definitions/part-cuboid" },
                 "cylinder": { "$ref": "#/definitions/part-cylinder" },
