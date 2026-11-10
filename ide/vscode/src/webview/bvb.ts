@@ -143,14 +143,36 @@ export function lockReason(node: TreeNode): string | undefined {
     }
     if (node.buy && !node.build) {
         const problems = node.problems ?? [];
-        return problems.length > 0
-            ? `Bought: its ${instructions} do not hold up.\n${listed(problems)}`
-            : `Bought: it declares a vendor and an SKU, and no ${instructions} to build it with.`;
+        if (problems.length > 0) {
+            return `Bought: its ${instructions} do not hold up.\n${listed(problems)}`;
+        }
+        const declares = node.offers?.length
+            ? 'an alias of it names a vendor and an SKU'
+            : 'it declares a vendor and an SKU';
+        return `Bought: ${declares}, and it has no ${instructions} to build it with.`;
     }
     if (node.build && !node.buy) {
         return `Built: it declares ${instructions}, and no vendor or SKU to order it by.`;
     }
     return undefined;
+}
+
+/**
+ * What a part bought through aliases of it is bought as, for its line: each
+ * alias's vendor and SKU, and its pack where one SKU is more than one of it.
+ * Undefined for a part that names its own SKU, which needs no saying.
+ */
+export function offersLine(node: TreeNode): string | undefined {
+    const offers = node.offers ?? [];
+    if (offers.length === 0) {
+        return undefined;
+    }
+    const each = offers.map((offer) => {
+        const sku = [offer.vendor, offer.sku].filter((part) => part).join(' ');
+        const pack = offer.count_per_sku && offer.count_per_sku > 1 ? ` (${offer.count_per_sku} per SKU)` : '';
+        return `${sku || offer.name}${pack}`;
+    });
+    return `Bought as ${each.join(', ')}`;
 }
 
 /**
@@ -477,6 +499,12 @@ export class BvbView {
         name.appendChild(el('span', 'badge', row.node.missing ? 'missing' : row.kind));
         if (row.node.desc) {
             name.appendChild(el('div', 'bvb-desc', row.node.desc));
+        }
+        const offers = offersLine(row.node);
+        if (offers !== undefined) {
+            // The aliases themselves by name, for whoever needs to find one.
+            const bought = name.appendChild(el('div', 'bvb-desc', offers));
+            bought.title = (row.node.offers ?? []).map((offer) => offer.name).join('\n');
         }
         line.appendChild(name);
 
