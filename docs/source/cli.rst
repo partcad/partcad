@@ -275,7 +275,9 @@ Host commands
 
   The credentials are saved in your configuration file (``~/.partcad/config.yaml``, made readable by you only)
   under ``parameters``, as your overrides of the plugin's parameters -- the same place ``--extra-param`` and a hand
-  written override go -- so every later command hands them to the plugin. ``--browser`` (``PC_LOGIN_BROWSER``)
+  written override go -- so every later command hands them to the plugin. A credential the plugin declares
+  ``shared: true`` is its package's (see :ref:`shared-parameters`), and is saved for the package instead, so one
+  login serves every plugin of the package sharing it. ``--browser`` (``PC_LOGIN_BROWSER``)
   picks another browser by path or by name (``chrome``, ``edge``, ``brave``, ``chromium``, ``firefox``), and
   ``--manual`` opens none: it prints the address of a page where what the site gave you is pasted by hand, which
   is also where a browser without the extension ends up. A default browser the extension cannot go into is

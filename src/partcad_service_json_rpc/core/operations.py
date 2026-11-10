@@ -2777,7 +2777,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.10.1"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.10.4"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -4782,6 +4782,11 @@ def cmf_clusters(session, params):
     shape = _getter(ctx, kind)(path)
     if shape is None:
         raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+    if kind in ("assembly", "scene"):
+        # The clusters are found from the object's tree, so an assembly is
+        # built for them: phase one of that build, as for every other request
+        # that ends in one (see '_stage_named_object').
+        _stage_subassemblies(session, ctx, shape)
 
     with pc.logging.Process("Materials", package, object_name):
         clusters = asyncio.run(_material_clusters_async(ctx, shape, float(distance), section))
@@ -4869,7 +4874,9 @@ def plugin_login(session, params):
     Answers {"plugin": "<package>:<plugin>", "status": ...}:
 
         "done"          logged in; 'parameters' are what to save as the user's
-                        overrides of the plugin, under 'plugin', and 'message' says so
+                        overrides of the plugin, under 'plugin', and 'message' says so;
+                        those named in 'shared' are the package's, and are saved
+                        under 'package' instead
         "browser"       'spec' is what the browser is to do
         "instructions"  'non_interactive' was asked for and the plugin needs
                         what only a person can get: 'spec' is what the browser
@@ -4930,7 +4937,18 @@ def plugin_login(session, params):
         return {"plugin": full_name, "status": "browser", "spec": step["browser"]}
     if "instructions" in step:
         return {"plugin": full_name, "status": "instructions", "spec": step["instructions"]}
-    return {"plugin": full_name, "status": "done", "parameters": step["parameters"], "message": step["message"]}
+    answer = {"plugin": full_name, "status": "done", "parameters": step["parameters"], "message": step["message"]}
+    # The parameters the plugin shares with the rest of its package are the
+    # package's to keep, not the plugin's: said here, because only the daemon
+    # has read the declarations, and saved by the client under the package
+    # ('partcad_utils.parameters.place_saved_overrides'), so that logging in
+    # through one plugin logs in every plugin sharing them.
+    declared = (getattr(plugin, "config", None) or {}).get("parameters") or {}
+    shared = sorted(name for name in step["parameters"] or {} if parameters.is_shared(declared.get(name)))
+    if shared:
+        answer["package"] = project.name
+        answer["shared"] = shared
+    return answer
 
 
 def _supply_totals(items):

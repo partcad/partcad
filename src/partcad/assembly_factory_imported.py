@@ -47,7 +47,7 @@ import os
 
 from . import joint as pc_joint
 from . import logging as pc_logging
-from . import output, shape_envelope, telemetry, wrapper
+from . import output, request_paths, shape_envelope, telemetry, wrapper
 from .assembly import AssemblyChild
 from .assembly_factory_file import AssemblyFactoryFile
 from .file_source import BinarySourceFile
@@ -252,12 +252,21 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
         for dep in self.impl.python_requirements:
             await runtime.ensure_async(dep, session=session)
 
-        command = [
-            wrapper.get("import.py"),
-            os.path.abspath(self.impl.project.config_dir),
-        ]
+        # Every path the request names goes on the command line too, which is
+        # what a sandbox that is sent files rather than sharing them sends and
+        # rewrites; the request it cannot rewrite (see 'request_paths'). The
+        # primitives a reader writes come back from the folder it writes them
+        # into, which the tree then names.
+        command = request_paths.carry(
+            [wrapper.get("import.py"), os.path.abspath(self.impl.project.config_dir)],
+            request,
+            ("source_file", "base_dir", "output_folder", "search_paths", output.SCRIPT_KEY),
+        )
         exitcode, response_serialized, errors = await runtime.run_async(
-            command, shape_envelope.serialize(request), session=session
+            command,
+            shape_envelope.serialize(request),
+            session=session,
+            **request_paths.written(runtime, request["output_folder"]),
         )
         # Only on a non-zero exit; see the note in 'partcad.simulation'. The
         # runtime clears stderr for a run it forgave, but decides that before

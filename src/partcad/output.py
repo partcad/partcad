@@ -432,11 +432,12 @@ IMPORT_BINARY_KEY = "binary"
 # checks an analysis against before asking, rather than a parameter of the run.
 ANALYSIS_KEYS = frozenset({"reads"})
 
-# The request key the implementation script's path travels under. It is passed
-# in the request rather than on the command line because the two positional
+# The request key an import reader's script travels under: the two positional
 # arguments of a wrapper are already spent on the output path and the working
-# directory (see wrappers/wrapper_export.py, which spells this out again -- a
-# wrapper runs in a sandbox and cannot import 'partcad').
+# directory. Like every path a request names, it is on the command line as well,
+# which is what a sandbox that is sent files rather than sharing them rewrites
+# (see 'request_paths'). Its twin is 'wrapper_import.SCRIPT_KEY' -- a wrapper
+# runs in a sandbox and cannot import 'partcad'.
 SCRIPT_KEY = "__script__"
 
 # The request key a file type sets to 'true' to be handed what the shapes it is

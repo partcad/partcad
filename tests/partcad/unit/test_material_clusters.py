@@ -210,3 +210,58 @@ def test_the_wrapper_answers_from_the_tree_as_it_travelled():
     assert _summary(found) == [("abs", [[0], [1]])]
     with pytest.raises(ValueError):
         wrapper_materials.process({"operation": "measure", "shape": tree})
+
+
+def _cut(tree, section):
+    """'tree' cut to 'section' as the 3D view's sliders cut it, before its clusters are found."""
+    import wrapper_section
+
+    errors = []
+    cut = wrapper_section.section_tree(tree, section, errors)
+    assert errors == []
+    return cut
+
+
+def test_a_cut_part_is_still_of_its_materials():
+    """A section rewrites the geometry of what it cuts, and what that geometry is made of goes with it."""
+    bd = _kernel()
+    import ocp_serialize
+
+    # Two cubes side by side, 0..10 and 10..20 along x, of two materials; the
+    # cut keeps y below 5, through both of them.
+    first, second = bd.Pos(5, 5, 5) * bd.Box(10, 10, 10), bd.Pos(15, 5, 5) * bd.Box(10, 10, 10)
+    shape = ocp_serialize.compound_of([first.wrapped, second.wrapped])
+    section = ocp_serialize.cmf_section_for(shape, solids={first.solid().wrapped: ABS, second.solid().wrapped: STEEL})
+    tree = _assembly(ocp_serialize.encode_shape(shape, name="//src:pair", label="pair", cmf=section))
+
+    found = _clusters(_cut(tree, {"y": [-1, 5]}))
+
+    assert _summary(found) == [("abs", [[0]]), ("steel, 1.4301", [[0]])]
+    # Each half-cube has six faces again, the face the cut leaves among them.
+    assert [cluster["faces"] for cluster in found] == [6, 6]
+
+
+def test_a_cut_face_keeps_its_own_colour_and_the_cut_face_is_of_its_solid():
+    bd = _kernel()
+    import cmf_export
+    import ocp_serialize
+
+    block = bd.Pos(5, 5, 5) * bd.Box(10, 10, 10)
+    top = block.faces().sort_by(bd.Axis.Z)[-1]
+    section = ocp_serialize.cmf_section_for(
+        block.wrapped, solids={block.solid().wrapped: ABS}, faces={top.wrapped: PAINT}
+    )
+    tree = ocp_serialize.encode_shape(block.wrapped, name="//src:block", label=None, cmf=section)
+
+    cut = _cut(tree, {"x": [-1, 5]})
+    _whole, decoded = ocp_serialize.decode_tree(cut)
+    ((leaf, _path),) = [(leaf, path) for leaf, path in __import__("material_clusters").shape_leaves(decoded)]
+    shape = leaf.definition
+    faces = cmf_export._mapped(shape, __import__("OCP.TopAbs", fromlist=["TopAbs_FACE"]).TopAbs_FACE)
+    sets = cmf_export.face_sets(leaf)
+    tops = [sets[i] for i in range(faces.Extent()) if bd.Face(faces.FindKey(i + 1)).center().Z > 9.9]
+
+    assert len(sets) == 6
+    assert [s.color for s in tops] == ["//src:red"]
+    # Every face is of the solid's material, the one the cut made among them.
+    assert {s.material for s in sets} == {"//src:abs"}

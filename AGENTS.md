@@ -587,6 +587,18 @@ machine, so a client asks its `GET /` which it speaks, and an older client's JSO
 `PC_USE_DOCKER_REMOTE=true poetry run pytest tests/partcad/unit/test_part.py::test_part_example_kicad` is the
 whole chain end to end.
 
+What `upload` mode sends is worked out from the **command line**, and the container rewrites the arguments
+naming what it unpacked -- never the request, which is one opaque string on standard input. So **every path a
+wrapper reads from its request has to be on its command line too**: `partcad.request_paths.carry` appends them
+behind `--request-paths` and records in the request which values they were, and `wrapper_common.handle_input`
+points the request at where they landed before the wrapper sees it; `handle_output` spells every path in the
+answer back the way PartCAD did, so a reader's `part_file` names the file on this side. A directory a wrapper
+writes into is named to the runtime besides (`request_paths.written`), or what it wrote stays in the container.
+A new wrapper whose request names a file uses this rather than a positional argument of its own; the older
+`SCRIPT_ARGUMENT` / `PACKAGE_DIR_ARGUMENT` conventions in `wrapper_export` and `wrapper_simulate` predate it.
+`tests/partcad/unit/test_request_paths.py` runs real wrappers through the real service with the caller's
+files deleted first.
+
 The packages under `examples/` are a third suite. The images and `README.md` files there are what
 `cd examples && pc render -r` produces, and they are checked in so that a change in how PartCAD renders is a
 diff someone has to look at rather than something a reader of the README discovers. If a change affects a

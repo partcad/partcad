@@ -2768,7 +2768,7 @@ def test_a_render_asks_for_the_prices_of_the_shape_it_draws(monkeypatch):
 CLUSTER = {"material": "//:abs", "name": "abs", "at": [5.0, 0.0, 0.0], "nodes": [[0], [1]], "faces": 12}
 
 
-def _clustered(monkeypatch, ctx, kind="assembly", name="top", configured=10.0):
+def _clustered(monkeypatch, ctx, kind="assembly", name="top", configured=10.0, uncached=()):
     """'cmf.clusters' over a session holding one object, with the sandbox stood in for.
 
     The rule is 'material_clusters' among the wrappers, which has tests of its
@@ -2798,7 +2798,11 @@ def _clustered(monkeypatch, ctx, kind="assembly", name="top", configured=10.0):
     async def get_wrapped(ctx):
         return {"name": "//:%s" % name, "assembly": []}
 
+    async def get_uncached_subassemblies_async(ctx):
+        return list(uncached)
+
     shape.get_wrapped = get_wrapped
+    shape.get_uncached_subassemblies_async = get_uncached_subassemblies_async
     shape.artifacts_cacheable = lambda: True
     ctx.shapes[(kind, "//:%s" % name)] = shape
     return asked
@@ -2844,6 +2848,20 @@ def test_the_clusters_are_of_what_the_3d_view_is_cut_to(monkeypatch):
 
     assert result["section"] == section
     assert asked[0][0] == {"name": "//:top", "assembly": [], "cut": section}
+
+
+@pytest.mark.parametrize("kind", ["assembly", "scene"])
+def test_the_sub_assemblies_are_built_first_one_request_each(monkeypatch, kind):
+    """Phase one of the build its tree needs, as for every request that ends in one: nothing is clustered yet."""
+    session, _ = make_session()
+    sub = FakeShape(name="arm", project_name="//", kind="assembly")
+    asked = _clustered(monkeypatch, session.partcad_ctx, kind=kind, uncached=[sub])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.cmf_clusters(session, {"package": "//", "object": "top", "kind": kind})
+
+    assert [staging.identity(item) for item in _retry_error(caught)] == ["//:arm"]
+    assert asked == []
 
 
 def test_only_what_is_made_has_materials(monkeypatch):

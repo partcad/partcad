@@ -621,7 +621,21 @@ class ProjectExternalRepository(ProjectPlugin):
             package_name, repository_name = self.resolve(self._plugin_ref)
         except Exception:  # an unresolvable reference is reported where it is used
             return ""
-        values = parameter_overrides(self.ctx.user_config).get("%s:%s" % (package_name, repository_name))
+        overrides = parameter_overrides(self.ctx.user_config)
+        values = dict(overrides.get("%s:%s" % (package_name, repository_name)) or {})
+        # A parameter the plugin shares with the rest of its package is set
+        # through any object sharing it, or for the package as a whole
+        # ('partcad.shared_parameters'), so the plugin's own entry does not
+        # say what it is: the package's value does. Read off the package's
+        # declarations, which needs the package loaded and the plugin not.
+        package = self.ctx.projects.get(package_name) if isinstance(getattr(self.ctx, "projects", None), dict) else None
+        shared = getattr(package, "shared_parameters", None)
+        if shared is not None:
+            for name, value in shared.values_for(repository_name).items():
+                values[name] = value
+        elif overrides.get(package_name):
+            # Not loaded: what is set for the package as a whole, at least.
+            values[""] = overrides[package_name]
         return json.dumps(values, sort_keys=True, default=str) if values else ""
 
     async def _read_cache(self, scoped_key: str):
