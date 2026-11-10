@@ -25,7 +25,9 @@ from typing import TYPE_CHECKING, List, Optional
 import ruamel.yaml
 from ruamel.yaml.scalarstring import SingleQuotedScalarString
 
-from partcad_utils import assy_filter, object_names, pcignore
+from partcad_utils import assy_filter, object_names
+from partcad_utils import parameters as pc_parameters
+from partcad_utils import pcignore
 
 from . import (
     assembly,
@@ -85,6 +87,7 @@ from .exception import EmptyShapesError, NeedsUpdateException, ObjectNameTakenEr
 from .part import Part
 from .render import render_cfg_merge
 from .shape_config import NO_DEFAULT
+from .shared_parameters import SharedParameters
 from .utils import (
     escape_name,
     format_parameterized_name,
@@ -616,6 +619,12 @@ class Project(project_config.Configuration):
         # '_refuse_duplicate_names'.
         self._refused_names: dict[str, dict[str, str]] = {}
         self._refuse_duplicate_names()
+        # The package-level parameters: one value per name for every object
+        # declaring it 'shared: true', and the declarations refused for not
+        # agreeing about one. Before any object is made, for the same reason as
+        # the names above. See 'partcad.shared_parameters'.
+        self.shared_parameters = SharedParameters(self)
+        self._refuse_shared_parameter_disagreements()
 
         if (
             "desc" in self.config_obj
@@ -759,6 +768,16 @@ class Project(project_config.Configuration):
         if name in done and configs is not None and configs.get(name) is config:
             return config
         normalized = config_class.normalize(name, config, f"{self.name}:{name}", self.ctx.user_config)
+        try:
+            self.bind_shared_parameters(name, normalized)
+        except ValueError as e:
+            # A declaration the package's shared parameter refuses: the object
+            # is not served, and says why where it is looked for.
+            self._refused_names.setdefault(kind, {})[name] = str(e)
+            if configs is not None:
+                configs.pop(name, None)
+            self.record_broken_object(kind, name, e)
+            return None
         if kind in LAZY_OBJECT_KINDS and isinstance(normalized, dict) and "manufacturable" not in normalized:
             # What the package says about anything it produces, written onto the
             # declaration rather than only onto the object. 'ShapeFactory' puts
@@ -1097,6 +1116,40 @@ class Project(project_config.Configuration):
         # Built out of the declarations, and built again without what was just
         # refused the next time a lookup misses (see 'alias_declared_by').
         self._alias_index.clear()
+
+    def _refuse_shared_parameter_disagreements(self) -> None:
+        """Refuse the declarations that disagree about a parameter the package shares.
+
+        Within one package every declaration of a parameter name says
+        'shared: true', or none of them does, and the shared ones agree on
+        everything but 'desc' (see 'partcad_utils.parameters', whose words these
+        are, and which 'pc lint' reads too). Which of them is the mistake is not
+        something PartCAD can tell, so every object declaring the name is
+        refused: dropped from the declarations this package serves and recorded
+        as broken with the reason, as '_refuse_duplicate_names' does with a name
+        two kinds of object claim.
+
+        Over what the package declares as it loads. A plugin-backed package
+        lists its objects later, one kind at a time; its shared declarations
+        are held to the first one of each name as they are bound instead (see
+        'SharedParameters.bind').
+        """
+        sections = {kind: self._object_configs.get(kind) for kind in pc_parameters.PARAMETERIZED_SECTIONS}
+        for problem in self.shared_parameters.load(sections):
+            for declaration in problem.declarations:
+                refused = self._refused_names.setdefault(declaration.kind, {})
+                if declaration.object in refused:
+                    continue
+                refused[declaration.object] = problem.message
+                configs = self._object_configs.get(declaration.kind)
+                if configs is not None:
+                    configs.pop(declaration.object, None)
+                self.record_broken_object(declaration.kind, declaration.object, problem.message)
+        self._alias_index.clear()
+
+    def bind_shared_parameters(self, name: str, config) -> None:
+        """Make the shared parameters 'config' declares the package's own (see 'SharedParameters.bind')."""
+        self.shared_parameters.bind(name, config)
 
     def name_taken(self, kind: str, name: str, config_obj=None) -> typing.Optional[str]:
         """Why 'name' cannot be given to a new object of 'kind' here, or None if it can.
@@ -1562,6 +1615,7 @@ class Project(project_config.Configuration):
             config = interface_config.InterfaceConfiguration.normalize(
                 interface_name, config, f"{self.name}:{interface_name}", self.ctx.user_config
             )
+            self.bind_shared_parameters(interface_name, config)
             return copy.deepcopy(config) if deep_copy else config
 
     def init_interface_by_config(self, config, source_project=None):
@@ -1665,7 +1719,7 @@ class Project(project_config.Configuration):
                 )
                 return None
             try:
-                pc_config.apply_parameter_values(construction, params, result_name)
+                pc_config.apply_parameter_values(construction, params, result_name, package_name=self.name)
             except Exception as e:
                 self.record_broken_object("interface", result_name, e)
                 return None
@@ -2058,6 +2112,11 @@ class Project(project_config.Configuration):
                     # of a kind gains its 'name' whether or not anything is ever
                     # made out of it (see '_normalized').
                     config = get_config(name)
+                    if config is None and name in self._refused_names.get(factory_name, ()):
+                        # Refused as it was normalized -- its shared parameter
+                        # disagrees with the package's -- and recorded with the
+                        # reason then, which making it would overwrite.
+                        continue
                     if self._enriches_a_package_not_loaded(factory_name, config):
                         continue
                     self.init_object_by_config(factory_name, config_class, alias_class, config)
@@ -2633,6 +2692,7 @@ class Project(project_config.Configuration):
             config = config_class.normalize(
                 result_name, copy.deepcopy(instance), f"{self.name}:{result_name}", self.ctx.user_config
             )
+            self.bind_shared_parameters(base_object_name, config)
             config["orig_name"] = base_object_name
             if factory_name in LAZY_OBJECT_KINDS and "manufacturable" not in config:
                 config["manufacturable"] = self.is_manufacturable
@@ -2861,7 +2921,7 @@ class Project(project_config.Configuration):
             # Fill in the parameter values
             if "parameters" in config and config["parameters"] is not None:
                 # Filling "parameters"
-                pc_config.apply_parameter_values(config["parameters"], params, result_name)
+                pc_config.apply_parameter_values(config["parameters"], params, result_name, package_name=self.name)
             else:
                 # Filling "with"
                 if "with" not in config:

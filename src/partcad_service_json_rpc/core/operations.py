@@ -4828,7 +4828,9 @@ def plugin_login(session, params):
     Answers {"plugin": "<package>:<plugin>", "status": ...}:
 
         "done"          logged in; 'parameters' are what to save as the user's
-                        overrides of the plugin, under 'plugin', and 'message' says so
+                        overrides of the plugin, under 'plugin', and 'message' says so;
+                        those named in 'shared' are the package's, and are saved
+                        under 'package' instead
         "browser"       'spec' is what the browser is to do
         "instructions"  'non_interactive' was asked for and the plugin needs
                         what only a person can get: 'spec' is what the browser
@@ -4889,7 +4891,18 @@ def plugin_login(session, params):
         return {"plugin": full_name, "status": "browser", "spec": step["browser"]}
     if "instructions" in step:
         return {"plugin": full_name, "status": "instructions", "spec": step["instructions"]}
-    return {"plugin": full_name, "status": "done", "parameters": step["parameters"], "message": step["message"]}
+    answer = {"plugin": full_name, "status": "done", "parameters": step["parameters"], "message": step["message"]}
+    # The parameters the plugin shares with the rest of its package are the
+    # package's to keep, not the plugin's: said here, because only the daemon
+    # has read the declarations, and saved by the client under the package
+    # ('partcad_utils.parameters.place_saved_overrides'), so that logging in
+    # through one plugin logs in every plugin sharing them.
+    declared = (getattr(plugin, "config", None) or {}).get("parameters") or {}
+    shared = sorted(name for name in step["parameters"] or {} if parameters.is_shared(declared.get(name)))
+    if shared:
+        answer["package"] = project.name
+        answer["shared"] = shared
+    return answer
 
 
 def _supply_totals(items):
