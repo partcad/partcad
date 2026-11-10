@@ -37,6 +37,8 @@ import shutil
 import socket
 import subprocess
 import tempfile
+import threading
+import time
 
 LAUNCH = "gst-launch-1.0"
 INSPECT = "gst-inspect-1.0"
@@ -155,9 +157,40 @@ KEYFRAME_SECONDS = 2
 # ones are handed to it over, at a time: it is checked for having died meanwhile.
 CONNECT_TIMEOUT = 5
 
+# How long GStreamer is given to exit once it has said it stopped on an error.
+#
+# 'gst-launch-1.0' prints "ERROR: ..." when an element of the pipeline fails,
+# and that is final: the file is not going to be written. It then shuts the
+# pipeline down and exits - and now and then, when the element that failed is
+# on a branch other than the frames' (a text's subtitle file 'subparse' could
+# not recognise), it does not: one run in three or so stayed up with nothing
+# left to do, and whoever was writing it frames or waiting for it to finish
+# waited for ever. So it is given this long after saying so, and then stopped.
+ERROR_GRACE = 10.0
+
+# How often the watch over a running GStreamer reads what it has said.
+ERROR_POLL = 0.25
+
 
 class GStreamerError(Exception):
     """GStreamer is missing, lacks what a file needs, or failed writing it."""
+
+
+# The debug categories a failed write reports on, as 'GST_DEBUG' takes them.
+#
+# The elements of the branch a text is drawn from: 'filesrc' reads the subtitle
+# file, 'subparse' works out what kind of file it is, and 'textoverlay' draws
+# it. A failure in that branch reads only "streaming stopped, reason
+# not-negotiated" in what GStreamer prints, which is the same few words for a
+# file it could not recognise ("File too small to be a subtitles file", in the
+# debug log) and for caps the overlay refused. Pytest's 3.14 cell on CI has
+# failed that way now and then, and nowhere else; the debug log is what says
+# which it was. Written to a file of its own (GST_DEBUG_FILE), so what
+# GStreamer prints is unchanged, and read only when the write fails.
+DIAGNOSTIC_DEBUG = "filesrc:5,subparse:5,basetextoverlay:4"
+
+# How much of that log a failure carries: its last lines, as many as fit.
+DIAGNOSTIC_TAIL = 3000
 
 
 def escape(value):
@@ -814,14 +847,24 @@ class Pipeline:
         if log is not None:
             log(" ".join(argv))
         errors_path = self.output + ".gstreamer.log"
+        debug_path = self.output + ".gstreamer-debug.log"
         written = [0, 0]
         broken = False
+        diagnosis = ""
         try:
             with open(errors_path, "wb") as errors:
                 # Its own output to files of its own, never to the pipes of the
                 # interpreter running this: whatever a sandbox interpreter starts
                 # inherits those, and keeps them open for as long as it lives.
-                process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=errors)
+                process = subprocess.Popen(
+                    argv,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.DEVNULL,
+                    stderr=errors,
+                    env=diagnostic_environment(debug_path),
+                )
+                watch = _ErrorWatch(process, errors_path)
+                watch.start()
                 try:
                     if server is not None:
                         broken = not self._send_prefix(server, process, prefix, written)
@@ -843,16 +886,25 @@ class Pipeline:
                     except (BrokenPipeError, OSError):
                         broken = True
                 status = process.wait()
+                watch.stop()
             with open(errors_path, "rb") as stream:
                 said = stream.read().decode("utf-8", "replace")
+            if watch.killed:
+                said += "\n(It did not exit within %gs of saying so, and was stopped.)" % ERROR_GRACE
+            if status != 0 or broken:
+                # Before the files it read are gone: the subtitle files live
+                # in a directory the caller removes once this returns.
+                diagnosis = diagnose(argv, debug_path)
         finally:
             if server is not None:
                 server.close()
-            if os.path.exists(errors_path):
-                os.remove(errors_path)
+            for path in (errors_path, debug_path):
+                if os.path.exists(path):
+                    os.remove(path)
         if status != 0 or broken:
             raise GStreamerError(
-                "GStreamer failed writing '%s' (exit status %s): %s" % (self.output, status, said.strip()[-2000:])
+                "GStreamer failed writing '%s' (exit status %s): %s%s"
+                % (self.output, status, said.strip()[-2000:], diagnosis)
             )
         return tuple(written)
 
@@ -884,6 +936,98 @@ class Pipeline:
             # The end of the stream, which is what moves 'concat' on to the new frames.
             connection.shutdown(socket.SHUT_WR)
         return True
+
+
+class _ErrorWatch:
+    """Stops a GStreamer that has said it failed and has not exited ERROR_GRACE seconds later.
+
+    A thread, because what waits on it may be the write of a frame it is no
+    longer reading as much as 'wait' (see 'ERROR_GRACE'). It reads the file
+    GStreamer's own output goes to, and does nothing else.
+    """
+
+    def __init__(self, process, errors_path, grace=None, poll=None):
+        self.process = process
+        self.errors_path = errors_path
+        self.grace = ERROR_GRACE if grace is None else grace
+        self.poll = ERROR_POLL if poll is None else poll
+        self.killed = False
+        self._done = threading.Event()
+        self._thread = threading.Thread(target=self._run, name="gstreamer-error-watch", daemon=True)
+
+    def start(self):
+        self._thread.start()
+
+    def stop(self):
+        self._done.set()
+        self._thread.join()
+
+    def _said_error(self):
+        try:
+            with open(self.errors_path, "rb") as stream:
+                return any(line.startswith(b"ERROR:") for line in stream)
+        except OSError:
+            return False
+
+    def _run(self):
+        since = None
+        while not self._done.wait(self.poll):
+            if self.process.poll() is not None:
+                return
+            if since is None:
+                if self._said_error():
+                    since = time.monotonic()
+            elif time.monotonic() - since >= self.grace:
+                self.killed = True
+                self.process.kill()
+                return
+
+
+def diagnostic_environment(debug_path, environ=None):
+    """The environment a write runs GStreamer in: this one, with 'DIAGNOSTIC_DEBUG' logged to 'debug_path'.
+
+    Unless 'GST_DEBUG' is set already: whoever set it is debugging GStreamer
+    themselves, and their categories and their file are left alone.
+    """
+    environ = dict(os.environ if environ is None else environ)
+    if not (environ.get("GST_DEBUG") or "").strip():
+        environ["GST_DEBUG"] = DIAGNOSTIC_DEBUG
+        environ["GST_DEBUG_FILE"] = debug_path
+        environ["GST_DEBUG_NO_COLOR"] = "1"
+    return environ
+
+
+def _locations(argv):
+    """The files the 'filesrc' elements of 'argv' read, as 'prop' wrote them."""
+    found = []
+    for index, token in enumerate(argv[:-1]):
+        following = argv[index + 1]
+        if token == "filesrc" and following.startswith('location="') and following.endswith('"'):
+            # 'escape' backslashes a backslash and a quote; one pass undoes it.
+            found.append(re.sub(r"\\(.)", r"\1", following[len('location="') : -1]))
+    return found
+
+
+def diagnose(argv, debug_path):
+    """What a failed write adds to GStreamer's own words: the files it read, and the end of its debug log."""
+    lines = []
+    for location in _locations(argv):
+        try:
+            size = "%d bytes" % os.path.getsize(location)
+        except OSError as e:
+            size = "unreadable (%s)" % (e.strerror or e)
+        lines.append("  %s: %s" % (location, size))
+    parts = []
+    if lines:
+        parts.append("The files it read, as they are now:\n" + "\n".join(lines))
+    try:
+        with open(debug_path, "rb") as stream:
+            debug = stream.read().decode("utf-8", "replace").strip()
+    except OSError:
+        debug = ""
+    if debug:
+        parts.append("The end of its debug log (%s):\n%s" % (DIAGNOSTIC_DEBUG, debug[-DIAGNOSTIC_TAIL:]))
+    return "".join("\n" + part for part in parts)
 
 
 def decode_frames(path, width, height, fps, limit=None):

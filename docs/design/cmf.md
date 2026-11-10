@@ -649,6 +649,10 @@ gives it, with the viewer's own material, and a primitive with no material in it
   colour, and the Opacity slider fades both.
 
 **Requirement: drawings and exports** as [section 9](#9-presentation) lists.
+- *Scenario:* a part whose only CMF is a material claiming a colour (`material: :al-6061`, which says
+  `color: :natural`) → every drawing draws it in `:natural`, as its CMF section says, whether it is one solid or
+  several and whether or not it has a finish: the colour it is drawn in where nothing addresses its faces one by one
+  (`properties: color:`) is its own colour, and its own colour is its material's claim when it names none.
 - *Scenario:* a part with per-face CMF exported to STEP and read back with the `partcad` convention → the same
   references on every face and solid. (Built; with any convention, since the attribute is PartCAD's own terms.)
 - *Scenario:* that STEP file's colour edited by another tool → read by value, with a message.

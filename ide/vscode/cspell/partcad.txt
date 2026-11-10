@@ -131,6 +131,7 @@ feed
 feedback
 file
 filter
+finish
 finishes
 fix
 fixed
@@ -157,6 +158,7 @@ globs
 gltf
 gm
 gravity
+has
 hash
 heat
 height
@@ -336,6 +338,7 @@ screw
 sdf
 selector
 self
+shared
 sheet
 show
 side

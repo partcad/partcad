@@ -853,6 +853,11 @@
             "ports": { "$ref": "#/definitions/requirement-ports" },
             "interfaces": { "$ref": "#/definitions/requirement-interfaces" },
             "physics": { "$ref": "#/definitions/requirement-physics" },
+            "has_color": { "type": "boolean", "description": "true: every face is in a colour that is a CMF declaration claiming it can be had - a material's colour claim counts, a colour only a picture does not (a source's colour no declaration claims, an 'rgba'). false: it must not be. Of an assembly, of every part in it." },
+            "has_material": { "type": "boolean", "description": "true: every solid is in a material that is a CMF declaration claiming it can be had. false: it must not be. Of an assembly, of every part in it." },
+            "has_finish": { "type": "boolean", "description": "true: every face is in a finish that is a CMF declaration claiming it can be had; no finish, which is as produced, does not count. false: it must not be. Of an assembly, of every part in it." },
+            "has_weight": { "type": "boolean", "description": "true: PartCAD knows what the object weighs - stated under 'properties: physics: mass:', or its solid at its material's density. false: it must not. Of an assembly, what all of it weighs." },
+            "has_mass": { "type": "boolean", "description": "The same requirement as 'has_weight'." },
             "match": { "$ref": "#/definitions/requirement-match" }
           },
           "additionalProperties": { "type": "string", "minLength": 1 }
@@ -1900,6 +1905,10 @@
       "items": { "type": "string", "pattern": "^[^,;=]*$" },
       "uniqueItems": true
     },
+    "parameter-shared": {
+      "description": "Whether this parameter is a package-level parameter: one value for every object of this package that declares a parameter of this name with 'shared: true', so that setting it through any of them sets it for all. Every declaration of the name in the package has to say the same here (absent is false), and shared declarations have to agree on everything but 'desc'.",
+      "type": "boolean"
+    },
     "shape-parameter-value": {
       "description": "One construction parameter of an object: the bare value it defaults to, or a declaration of its type, its default and what it may be. The same shape wherever an object is parametrized - a part, a sketch, an assembly, and the construction half of an interface's 'parameters:'.",
       "oneOf": [
@@ -1920,6 +1929,7 @@
             },
             "desc": { "type": "string", "maxLength": 1000 },
             "default": { "$ref": "#/definitions/parameter-default" },
+            "shared": { "$ref": "#/definitions/parameter-shared" },
             "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
             "material": { "type": "string", "minLength": 1 }
           },
@@ -1947,6 +1957,7 @@
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "default": { "$ref": "#/definitions/parameter-default" },
+                "shared": { "$ref": "#/definitions/parameter-shared" },
                 "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
                 "material": { "type": "string", "minLength": 1 }
               },

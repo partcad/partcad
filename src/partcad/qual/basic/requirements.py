@@ -11,8 +11,9 @@ from ..qualification import BasicQualification, Qualification
 class RequirementsTest(BasicQualification):
     """Check that the model is what the object's 'requirements:' say it has to be.
 
-    The ports, the interfaces, the physical properties and how closely its
-    volume and mass match another object's - the part of the requirements
+    The ports, the interfaces, the physical properties, how closely its
+    volume and mass match another object's, and the yes-or-no 'has_color',
+    'has_material', 'has_finish' and 'has_weight' - the part of the requirements
     PartCAD can measure (see 'partcad.requirements', which is the
     whole of what each requirement means). A requirement on something PartCAD
     cannot find out fails rather than passes: "not known" is not "met". The
@@ -34,8 +35,8 @@ class RequirementsTest(BasicQualification):
         """Why this check does not apply to 'shape', or None when it does."""
         if not requirements.anything_to_check(shape):
             return (
-                "it requires no port, interface, physical property or match with another object ('requirements:'), "
-                "and no simulation names a feature"
+                "it requires no port, interface, physical property, match with another object or 'has_' fact "
+                "('requirements:'), and no simulation names a feature"
             )
         return None
 

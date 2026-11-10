@@ -303,18 +303,24 @@ class PartFactory(ShapeFactory):
         colour the source states per face is the payload's to say (see
         docs/design/cmf.md), and wins where it does; this is the part's own.
 
+        A part that names no colour is drawn in the one its material claims,
+        if it claims one: that is its colour (see 'cmf.declared_set'), and a
+        drawing that did not say so would draw what is specified as goldenrod.
+
         Only where nothing is recorded already, as for the material: a colour
         a reader found in the file outranks the declaration's.
         """
         declared = parameters.get("color")
         value = declared.get("default") if isinstance(declared, dict) else None
+        ctx = getattr(self, "ctx", None)
+        package = getattr(self.project, "name", "") if getattr(self, "project", None) is not None else ""
         if not isinstance(value, str) or not value.strip():
-            return
+            value, package = self._material_color_claim(ctx, parameters, package)
+            if value is None:
+                return
         properties = config.get(shape_envelope.KEY_PROPERTIES)
         if isinstance(properties, dict) and properties.get("color"):
             return
-        ctx = getattr(self, "ctx", None)
-        package = getattr(self.project, "name", "") if getattr(self, "project", None) is not None else ""
         reference = cmf.canonical(ctx, "color", value, package, quiet=False)
         rgba = cmf.rgba_of_reference(reference)
         if rgba is None:
@@ -326,6 +332,23 @@ class PartFactory(ShapeFactory):
             properties = {}
             config[shape_envelope.KEY_PROPERTIES] = properties
         properties["color"] = cmf.css_color.to_hex(rgba)
+
+    def _material_color_claim(self, ctx, parameters: dict, package: str) -> tuple:
+        """'(colour, package)': the colour the part's material claims, and the package it is written in; (None, None).
+
+        The claim is written in the material's own package (':natural' of
+        '//vendor:alu' is '//vendor:natural'), which is what it is resolved
+        against, as 'cmf.declared_set' resolves it.
+        """
+        declared = parameters.get("material")
+        value = declared.get("default") if isinstance(declared, dict) else None
+        if not isinstance(value, str) or not value.strip():
+            return None, None
+        material = cmf.lookup(ctx, "material", value, package, quiet=True)
+        claim = getattr(material, "color_claim", None)
+        if not claim:
+            return None, None
+        return claim, material.project_name
 
     def _create_part(self, config: object) -> Part:
         self.record_object_type_properties(config)

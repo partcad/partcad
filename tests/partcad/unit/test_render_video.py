@@ -1038,3 +1038,113 @@ def test_find_tool_looks_where_it_is_told(tmp_path):
     assert video_encode.find_tool(video_encode.LAUNCH, environ=environ) == str(tool)
     environ = {video_encode.ENV_VAR: str(tool), "PATH": ""}
     assert video_encode.find_tool(video_encode.LAUNCH, environ=environ) == str(tool)
+
+
+# ---------------------------------------------------------------------------
+# What a failed write says
+# ---------------------------------------------------------------------------
+
+
+def test_a_write_logs_the_text_branch_to_a_file_of_its_own():
+    environ = video_encode.diagnostic_environment("/out/turn.mp4.gstreamer-debug.log", {"PATH": "/bin"})
+
+    assert environ["GST_DEBUG"] == video_encode.DIAGNOSTIC_DEBUG
+    assert environ["GST_DEBUG_FILE"] == "/out/turn.mp4.gstreamer-debug.log"
+    assert environ["PATH"] == "/bin"
+
+
+def test_a_gst_debug_already_set_is_left_alone():
+    """Whoever set it is debugging GStreamer themselves, to where they chose."""
+    environ = video_encode.diagnostic_environment("/out/x.log", {"GST_DEBUG": "*:6"})
+
+    assert environ == {"GST_DEBUG": "*:6"}
+
+
+@pytest.mark.parametrize("location", ["/work/text0.srt", "/a b/t.srt", 'c:\\x"y'])
+def test_the_files_a_pipeline_reads_are_read_back_from_its_command(location):
+    argv = ["gst-launch-1.0", "filesrc", video_encode.prop("location", location), "!", "subparse"]
+
+    assert video_encode._locations(argv) == [location]
+
+
+@needs_gstreamer
+def test_a_text_branch_that_fails_says_why(tmp_path, monkeypatch):
+    """The failure Pytest's 3.14 cell on CI has had, made on purpose: a subtitle file 'subparse' cannot recognise.
+
+    GStreamer's own words are only "streaming stopped, reason not-negotiated";
+    the size of the file and the debug log are what tell this cause apart.
+    """
+    monkeypatch.setenv("GST_DEBUG", "")
+    monkeypatch.setattr(video_encode, "srt", lambda cues: "1\n")
+    request = {
+        **{key: value for key, value in _builtin_render()["render"]["mp4"].items() if key not in output.RESERVED_KEYS},
+        "wrapped": _box(),
+        "size": "160x120",
+        "fps": 10,
+        "duration": 1,
+        "antialias": 1,
+        "text": "PartCAD",
+    }
+
+    result = render_video.process(str(tmp_path / "turn.mp4"), request)
+
+    assert not result["success"]
+    said = result["exception"]
+    assert "not-negotiated" in said
+    assert re.search(r"text0\.srt: 2 bytes", said)
+    assert "File too small to be a subtitles file" in said
+    # Nothing of it is left beside the video it did not write.
+    assert not [name for name in os.listdir(tmp_path) if "gstreamer" in name]
+
+
+@needs_gstreamer
+def test_a_write_that_succeeds_leaves_no_debug_log(tmp_path):
+    request = {
+        **{key: value for key, value in _builtin_render()["render"]["mp4"].items() if key not in output.RESERVED_KEYS},
+        "wrapped": _box(),
+        "size": "160x120",
+        "fps": 10,
+        "duration": 1,
+        "antialias": 1,
+        "text": "PartCAD",
+    }
+
+    assert render_video.process(str(tmp_path / "turn.mp4"), request)["success"]
+    assert sorted(os.listdir(tmp_path)) == ["turn.mp4"]
+
+
+def test_a_gstreamer_that_said_it_failed_and_stays_up_is_stopped(tmp_path):
+    """'gst-launch-1.0' prints its ERROR and now and then never exits: whoever waits on it would wait for ever."""
+    import subprocess
+    import time
+
+    said = tmp_path / "said.log"
+    said.write_bytes(b"ERROR: from element /GstPipeline:pipeline0/GstFileSrc:filesrc0: Internal data stream error.\n")
+    stays_up = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"])
+    watch = video_encode._ErrorWatch(stays_up, str(said), grace=0.5, poll=0.05)
+    started = time.monotonic()
+
+    watch.start()
+    status = stays_up.wait(timeout=60)
+    watch.stop()
+
+    assert watch.killed
+    assert status != 0
+    assert time.monotonic() - started < 30
+
+
+def test_a_gstreamer_still_working_is_left_alone(tmp_path):
+    """No ERROR said, however long it takes: a long video takes long."""
+    import subprocess
+
+    said = tmp_path / "said.log"
+    said.write_bytes(b"Setting pipeline to PLAYING ...\n")
+    working = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(2)"])
+    watch = video_encode._ErrorWatch(working, str(said), grace=0.1, poll=0.05)
+
+    watch.start()
+    status = working.wait(timeout=60)
+    watch.stop()
+
+    assert not watch.killed
+    assert status == 0

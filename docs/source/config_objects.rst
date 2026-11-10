@@ -195,6 +195,9 @@ manufacturing, say -- but those are not part of this section.
             volume: 10%       # within 10% of its volume
             displacement: 2%  # within 2% of what it displaces
             mass: 5%          # and within 5% of what it weighs
+        has_material: true    # every solid in a material that can be had
+        has_color: true       # every face in a colour that can be had
+        has_weight: true      # a mass PartCAD knows
 
 ``features``
   What the object has to have or do: a name for each, and a sentence saying
@@ -245,9 +248,36 @@ manufacturing, say -- but those are not part of this section.
   find out -- of either object. The displacement is measured in a sandbox, and
   only of the objects a ``displacement`` names.
 
-``pc qual test`` checks the last four against the model -- its ``requirements``
-check, ``pc qual test -f requirements`` to run it alone -- and says, for each one
-that is not met, what it found instead.
+``has_color``, ``has_material``, ``has_finish`` and ``has_weight``
+  Yes-or-no requirements on what the object is specified with, each ``true``
+  (it has to be) or ``false`` (it must not be):
+
+  * ``has_color``: every face is in a colour, ``has_material``: every solid is
+    in a material, ``has_finish``: every face is in a finish -- each one a CMF
+    declaration that claims it can be had (see :ref:`cmf`). A material's colour
+    claim counts as the colour of the faces of a part made of it; a colour that
+    is only a picture does not -- an ``rgba``, or a colour the part's source
+    file states that no declaration claims -- and neither does no finish, which
+    is as produced. So a part whose colour is required and whose file's colours
+    are dropped (``sourceCmf``) declares the colour it is in.
+  * ``has_weight`` (``has_mass`` is the same): PartCAD knows what the object
+    weighs -- stated in ``properties: physics:``, or its solid at its material's
+    density -- as ``physics`` above resolves it.
+
+  Of an assembly, each is required of every part in it, inside the
+  sub-assemblies it holds too, bought whole or not; ``has_weight`` of what the
+  whole of it weighs.
+
+  None of them is required unless the object says so: they are for a package's
+  maintainer to opt into, object by object, and a package that declares none is
+  tested exactly as it was. What they are for is a package of parts that are
+  bought: the ``cmf`` check (see :ref:`cmf-check`) leaves a bought part alone,
+  since its vendor decides what it is in, and a maintainer who wants each of
+  them to say what that is requires it here.
+
+``pc qual test`` checks every one of these but ``features`` against the model --
+its ``requirements`` check, ``pc qual test -f requirements`` to run it alone --
+and says, for each one that is not met, what it found instead.
 
 Required values
 ^^^^^^^^^^^^^^^
@@ -538,6 +568,99 @@ more thing to make. So ``logo;exploded=true`` and ``logo_exploded`` above drop
 Only the ``assy`` type accepts it, because only an ASSY file says what each item
 is connected to; declaring ``exploded`` on an assembly read from a STEP file is
 an error.
+
+.. _shared-parameters:
+
+Package-level parameters
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+A parameter is its object's own: two objects declaring ``size`` have a ``size``
+each. A declaration that says ``shared: true`` is the package's instead. Every
+object of the package that declares a parameter of that name with ``shared: true``
+has the one value, and setting it through any of them sets it for all of them.
+
+The case it is made for is plugins. A package of plugins for one website -- a
+repository serving its models and a provider ordering from it -- needs one API
+token for both, and logging in once has to serve both:
+
+.. code-block:: yaml
+
+  repositories:
+    site_repo:
+      type: basic
+      parameters:
+        token:
+          type: string
+          shared: true
+          desc: The token the repository signs its requests with
+  providers:
+    site_store:
+      type: store
+      parameters:
+        token:
+          type: string
+          shared: true
+          desc: The token the store signs its orders with
+
+Any kind of object may share a parameter -- a part, an assembly, a sketch, an
+interface (a construction parameter, never its freedom of movement), a scene,
+software, a provider or a repository -- and a name may be shared across kinds.
+
+**Every declaration of a name agrees.** Within one package, every declaration of
+a parameter name says ``shared: true``, or none of them does (absent is
+``false``): a name that is one value for some objects and a value of its own for
+others would mean two things depending on which object it was set through. The
+shared declarations of a name are one parameter, so they also agree on
+everything else -- ``type``, ``default``, ``enum`` and the rest -- and may differ
+only in ``desc``. PartCAD refuses every object declaring a name the package
+breaks this for, as it loads the package, and says why; ``pc lint`` and the
+editor report each of those declarations where it is written.
+
+**Where the value comes from.** The declared default, unless the user's
+configuration sets it. It does so in ``~/.partcad/config.yaml``, with
+``--extra-param`` on top, in either of two ways:
+
+.. code-block:: yaml
+
+  # ~/.partcad/config.yaml
+  parameters:
+    # For the package as a whole -- where 'pc login' saves a shared credential:
+    //pub/sites/example:
+      token: "..."
+    # Or through any one of the objects sharing it, as for any parameter:
+    //pub/sites/example:site_store:
+      token: "..."
+
+An object's entry is the more specific and wins over the package's, so
+``--extra-param //pub/sites/example:site_repo.token=...`` overrides what the file
+says for the package (``--extra-param //pub/sites/example.token=...`` sets the
+package's own). Two object entries that set the parameter to different values
+cannot both be the package's value: neither is used, PartCAD says so, and the
+package's entry or the declared default stands. Entries written before a
+parameter was shared keep working: an object's entry sets it for every object
+sharing it.
+
+``pc login`` saves a value the plugin shares under the package, and removes the
+parameter from the entries of the package's objects -- an older login through
+another plugin of the package would otherwise go on winning over it. Values the
+plugin does not share are saved under the plugin, as they always were.
+
+**A value for one instance is refused.** A shared parameter is package state,
+not a property of one instance. ``site_repo;token=...`` in a name, or a ``with:``
+of an alias or an enrich, describes one object: letting it set the package's
+value would make every other object's value depend on which object was asked for
+first, and letting it apply to that one instance would be exactly what
+``shared`` says cannot happen. So it is an error -- unless the value is the one the
+package already has, which changes nothing and is accepted, so that a client
+sending every parameter of an object back is not refused for it. Set the
+package's value in the configuration instead.
+
+An object an ``enrich`` makes belongs to the package the enrich is declared in,
+and shares with that package's objects.
+
+Every cache keyed on an object's parameters keys on the package's value: a
+changed shared value is a new key for every object sharing it, including the
+answers a plugin-backed package keeps of what its repository plugin served.
 
 Other
 -----

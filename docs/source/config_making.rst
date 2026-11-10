@@ -968,6 +968,9 @@ name:
     //pub/svc/commerce/ikea:ikea-store:
       store: "088"
 
+A parameter the provider declares ``shared: true`` -- an API token it has in common with a repository plugin of
+the same package -- is the package's, and is set once for all of them (see :ref:`shared-parameters`).
+
 That is how a provider that would otherwise choose for itself -- a store, its shop -- is told what to use
 instead. A provider's own ``currency`` parameter is no such choice: it says what the provider quotes in.
 

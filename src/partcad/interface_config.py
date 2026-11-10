@@ -38,23 +38,19 @@ declaration written before this existed keeps the meaning it had, and there is
 no shape that could be read as either.
 """
 
-from . import logging as pc_logging
-from .config import apply_user_parameter_overrides, normalize_parameters
-
-# The movement parameters that need no 'dir' because their axis is in their
-# name. Both spellings: an interface's own 'parameters:' uses 'moveX' and a
-# 'mates:' section uses 'move-x', and both have always been accepted.
-MOVEMENT_PARAMETER_NAMES = frozenset(
-    ["move%s" % axis for axis in "XYZ"]
-    + ["turn%s" % axis for axis in "XYZ"]
-    + ["move-%s" % axis for axis in "xyz"]
-    + ["turn-%s" % axis for axis in "xyz"]
+# What makes an entry of an interface's 'parameters:' freedom of movement rather
+# than a construction value is read by both ends -- here, and by the rule that a
+# package's shared parameters agree ('partcad_utils.parameters'), which the
+# linter runs too -- so it lives there.
+from partcad_utils.parameters import (  # noqa: F401
+    MOVEMENT_PARAMETER_KEYS,
+    MOVEMENT_PARAMETER_NAMES,
+    MOVEMENT_PARAMETER_TYPES,
+    is_movement_parameter,
 )
 
-# The keys that only a freedom-of-movement parameter has, and the two values of
-# 'type' that only it uses.
-MOVEMENT_PARAMETER_KEYS = ("min", "max", "dir")
-MOVEMENT_PARAMETER_TYPES = ("move", "turn")
+from . import logging as pc_logging
+from .config import apply_user_parameter_overrides, normalize_parameters
 
 # The name of the section both kinds are declared in - the same one a part and a
 # sketch use, which is the whole point.
@@ -62,23 +58,6 @@ PARAMETERS = "parameters"
 
 # An interface that is another interface under a different name.
 ALIAS = "alias"
-
-
-def is_movement_parameter(name: str, declaration) -> bool:
-    """Whether this 'parameters:' entry is freedom of movement rather than a value.
-
-    The rules in this module's docstring, in order.
-    """
-    if name in MOVEMENT_PARAMETER_NAMES:
-        return True
-    if isinstance(declaration, (list, tuple)):
-        return True
-    if isinstance(declaration, dict):
-        if any(key in declaration for key in MOVEMENT_PARAMETER_KEYS):
-            return True
-        if declaration.get("type") in MOVEMENT_PARAMETER_TYPES:
-            return True
-    return False
 
 
 def split_parameters(parameters: dict) -> tuple[dict, dict]:

@@ -1680,7 +1680,9 @@ class UserConfig(vyper.Vyper):
 CONFIG_LOCK_TIMEOUT = 60
 
 
-def save_parameter_overrides(object_name: str, values: dict, path: str = None) -> str:
+def save_parameter_overrides(
+    object_name: str, values: dict, path: str = None, package_name: str = None, shared=()
+) -> str:
     """Write 'values' into the user's configuration file as overrides of the parameters of 'object_name'.
 
     The file's 'parameters' section is what '--extra-param' and every object's
@@ -1699,6 +1701,12 @@ def save_parameter_overrides(object_name: str, values: dict, path: str = None) -
     the earlier one wrote. So reading, merging and replacing happen under one
     lock beside the file, which every caller of this function takes.
 
+    A value of a parameter named in 'shared' is the package's ('shared: true',
+    see 'partcad_utils.parameters'), and is written under 'package_name' rather
+    than under the object, with the entries of the package's objects that set it
+    cleared of it, so that it reaches every object sharing it
+    ('parameters.place_saved_overrides').
+
     Returns the path written.
     """
     from filelock import FileLock
@@ -1706,13 +1714,15 @@ def save_parameter_overrides(object_name: str, values: dict, path: str = None) -
     path = path or UserConfig.get_config_path()
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with FileLock(path + ".lock", timeout=CONFIG_LOCK_TIMEOUT, mode=0o600):
-        _merge_parameter_overrides(path, object_name, values)
+        _merge_parameter_overrides(path, object_name, values, package_name, shared)
     return path
 
 
-def _merge_parameter_overrides(path: str, object_name: str, values: dict) -> None:
+def _merge_parameter_overrides(path: str, object_name: str, values: dict, package_name=None, shared=()) -> None:
     from ruamel.yaml import YAML
     from ruamel.yaml.comments import CommentedMap
+
+    from .parameters import place_saved_overrides
 
     yaml = YAML()
     yaml.preserve_quotes = True
@@ -1729,13 +1739,10 @@ def _merge_parameter_overrides(path: str, object_name: str, values: dict) -> Non
         section = document["parameters"] = CommentedMap()
     if not isinstance(section, dict):
         raise ValueError("'parameters' in %s is not a mapping" % path)
-    entry = section.get(object_name)
-    if entry is None:
-        entry = section[object_name] = CommentedMap()
-    if not isinstance(entry, dict):
-        raise ValueError("'parameters: %s' in %s is not a mapping" % (object_name, path))
-    for name, value in values.items():
-        entry[name] = value
+    for key in (object_name, package_name):
+        if key is not None and section.get(key) is not None and not isinstance(section.get(key), dict):
+            raise ValueError("'parameters: %s' in %s is not a mapping" % (key, path))
+    place_saved_overrides(section, object_name, values, package_name, shared)
 
     temporary = "%s.%d.tmp" % (path, os.getpid())
     descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
