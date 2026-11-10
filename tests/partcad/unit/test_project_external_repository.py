@@ -1458,6 +1458,8 @@ def test_only_a_kept_declaration_moves_the_count_the_alias_index_is_keyed_on(tmp
     count = repo.known_object_count("part")
     with repo._request_lock:
         repo._request_cache[repo._scope("search/part?q=nothing")] = {}
+        # A lookup that found nothing is kept too, as None.
+        repo._request_cache[repo._scope("objects/part/nowhere")] = None
     assert repo.known_object_count("part") == count
 
     repo.search("part", "10k")

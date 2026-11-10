@@ -35,6 +35,7 @@ after the rename re-runs these checks once and then caches as before.
 import asyncio
 import copy
 import hashlib
+import json
 import math
 
 from ... import procurement as pc_procurement
@@ -71,6 +72,11 @@ async def tolerance_failure(part) -> str | None:
 async def tolerance_is_per_feature(part) -> bool:
     tolerance = await part.get_tolerance()
     return tolerance is not None and math.isnan(tolerance)
+
+
+def _suppliers_key(suppliers: dict) -> str:
+    """Suppliers and their parameters as text that does not depend on the order they are listed in."""
+    return json.dumps(sorted([str(name), extra] for name, extra in suppliers.items()), sort_keys=True, default=str)
 
 
 class ManufacturabilityTest(BasicQualification):
@@ -203,6 +209,13 @@ class ManufacturabilityTest(BasicQualification):
                 # would be handed back for a declaration that now passes. Line
                 # above folds it in for the shape's own file, for this reason.
                 declared.append("%s@%s@%s" % (ref, software.config.get("fileFrom"), software.declared_hash()))
+        project = ctx.get_project(shape.project_name)
+        own_suppliers = await project.get_suppliers_async() if project is not None else {}
+        if own_suppliers:
+            # Where its package buys it and what it is made of (see
+            # 'load_suppliers'): whether a supplier carries a line is part of
+            # the verdict, and a package's 'suppliers:' moves no shape's key.
+            declared.append("suppliers:%s" % _suppliers_key(own_suppliers))
         if isinstance(shape, Part) and unreproducible_reason(config) is not None:
             # Its verdict turns on whether an alias of it that names an SKU is
             # loaded (see 'test()'), and is never kept. This moves the key off
@@ -325,6 +338,20 @@ class ManufacturabilityTest(BasicQualification):
         if await tolerance_is_per_feature(part):
             self.debug(part, "Tolerated feature by feature by the file it is read from")
         return await tolerance_failure(part)
+
+    def cache_key_context(self, test_ctx: dict) -> str:
+        """The suppliers handed down by what this object is tested for, folded into the cache key.
+
+        An assembly that is made, or a part made from stock, tests what it is
+        made of with its own package's suppliers (see 'load_suppliers'), so the
+        same part can be asked about with different ones - and whether one of
+        them carries it is the verdict. Without this, the answer reached for
+        one assembly would be read back for the next.
+        """
+        suppliers = test_ctx.get(self.SUPPLIERS)
+        if not suppliers:
+            return ""
+        return ".suppliers=" + hashlib.sha256(_suppliers_key(suppliers).encode()).hexdigest()[:16]
 
     async def load_suppliers(self, ctx, shape, test_ctx) -> dict:
         """The suppliers this object is asked of, with their packages loaded.

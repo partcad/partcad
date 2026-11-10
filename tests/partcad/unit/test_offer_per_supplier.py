@@ -214,3 +214,31 @@ def test_a_part_nobody_sells_needs_its_file_pinned(ctx, caplog):
     assert verdict == Test.TEST_FAILED
     assert "It is not reproducible" in caplog.text
     assert test_ctx.get(Test.NOT_CACHEABLE)
+
+
+def test_a_verdict_is_kept_per_set_of_suppliers_it_was_reached_with(ctx):
+    """The same part asked about for two assemblies that buy from different stores is two questions."""
+    from partcad.qual.basic import manufacturability
+
+    check = manufacturability.ManufacturabilityTest()
+    east = check.cache_key_context({check.SUPPLIERS: {"//east:store": None}})
+    west = check.cache_key_context({check.SUPPLIERS: {"//west:store": None}})
+    both = check.cache_key_context({check.SUPPLIERS: {"//east:store": None, "//west:store": None}})
+    assert len({east, west, both}) == 3
+    # Listed in another order, the same suppliers.
+    assert both == check.cache_key_context({check.SUPPLIERS: {"//west:store": None, "//east:store": None}})
+    # Nothing handed down keys as it always did.
+    assert check.cache_key_context({}) == ""
+
+
+def test_a_packages_suppliers_are_in_its_objects_keys(ctx):
+    from partcad.qual.basic import manufacturability
+
+    check = manufacturability.ManufacturabilityTest()
+    screw = ctx._get_part("//:screw")
+    with_stores = asyncio.run(check.cache_key_suffix(ctx, screw))
+    ctx.get_project("//").suppliers = {"//east:store": {}}
+    only_east = asyncio.run(check.cache_key_suffix(ctx, screw))
+    ctx.get_project("//").suppliers = {}
+    without = asyncio.run(check.cache_key_suffix(ctx, screw))
+    assert len({with_stores, only_east, without}) == 3
