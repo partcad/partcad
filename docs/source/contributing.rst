@@ -543,7 +543,7 @@ are downloaded Poetry will also install current package in editable mode, and yo
 
 .. code-block::
 
-  Installing the current project: partcad (0.10.4)
+  Installing the current project: partcad (0.10.5)
 
 .. warning::
 
