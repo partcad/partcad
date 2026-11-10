@@ -25,8 +25,8 @@ PACKAGE = "tests/partcad/unit/data/two_stores/partcad.yaml"
 
 # What each store asks per SKU, in dollars.
 PRICES = {
-    "east": {"E-B": 4.0, "E-SCREW": 0.5},
-    "west": {"W-B": 5.0, "W-B10": 30.0, "W-SCREW": 0.4},
+    "east": {"E-B": 4.0, "E-SCREW": 0.5, "E-M": 12.0},
+    "west": {"W-B": 5.0, "W-B10": 30.0, "W-SCREW": 0.4, "W-M": 11.0},
 }
 
 
@@ -174,3 +174,35 @@ def test_a_part_cut_from_stock_nobody_sells_cannot_be_made(ctx):
     check = manufacturability.ManufacturabilityTest()
     verdict = asyncio.run(check.test_part([check], ctx, ctx._get_part("//:shelf"), {}))
     assert verdict == Test.TEST_FAILED
+
+
+def test_a_part_bought_through_an_alias_needs_no_pinned_file(ctx):
+    """Ordering the alias's SKU again is "the same again", as for a part that names its own SKU."""
+    from partcad.qual.basic import manufacturability
+    from partcad.qual.qualification import Qualification as Test
+
+    ctx.projects.pop("//east", None)
+    ctx.projects.pop("//west", None)
+    check = manufacturability.ManufacturabilityTest()
+    test_ctx = {}
+    verdict = asyncio.run(check.test([check], ctx, ctx._get_part("//:module"), test_ctx))
+    assert verdict == Test.TEST_PASSED
+    # It turned on which packages are loaded, which the cache key does not say.
+    assert test_ctx.get(Test.NOT_CACHEABLE)
+
+
+def test_a_part_nobody_sells_needs_its_file_pinned(ctx, caplog):
+    from partcad.qual.basic import manufacturability
+    from partcad.qual.qualification import Qualification as Test
+
+    ctx.projects.pop("//east", None)
+    ctx.projects.pop("//west", None)
+    ctx.get_project("//").suppliers = {}
+    check = manufacturability.ManufacturabilityTest()
+    test_ctx = {}
+    part = ctx._get_part("//:module")
+    with caplog.at_level("ERROR"):
+        verdict = asyncio.run(check.test([check], ctx, part, test_ctx))
+    assert verdict == Test.TEST_FAILED
+    assert "It is not reproducible" in caplog.text
+    assert test_ctx.get(Test.NOT_CACHEABLE)

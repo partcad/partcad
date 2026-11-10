@@ -1,6 +1,6 @@
 desc: >
   A board and a screw two stores sell: the board says nothing of how to buy
-  it, and each store publishes an alias of it with a SKU of its own (the west
+  it (nor does a module read from an unpinned URL), and each store publishes an alias of it with a SKU of its own (the west
   one in a pack of ten as well); the screw names the east store's SKU, and the
   west store sells it under an alias. The package buys from both.
 
@@ -27,6 +27,12 @@ parts:
     desc: A screw the east store sells
     vendor: east
     sku: E-SCREW
+  module:
+    type: cadquery
+    path: module.py
+    fileFrom: url
+    fileUrl: https://example.com/vendor/module.py
+    desc: A module read from its maker's URL, pinned by no fileHash, which only the stores' aliases sell
   shelf:
     type: cadquery
     path: cube.py

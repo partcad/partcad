@@ -107,6 +107,18 @@ class ManufacturabilityTest(BasicQualification):
         # from one is no more repeatable than the drawing it was extruded from,
         # and the sketch is where that is worth reporting.
         failure = self.reproducibility_failure(shape)
+        if failure and isinstance(shape, Part):
+            # A part can also be bought through an alias of it that names an
+            # SKU (see 'procurement.offers'), and ordering that SKU again is
+            # "the same again" exactly as ordering one the part names itself
+            # is: the file is then a drawing of what arrives. Whether such an
+            # alias is loaded is not in the cache key, so neither verdict is
+            # kept (see 'cache_key_suffix').
+            test_ctx[self.NOT_CACHEABLE] = True
+            await self.load_suppliers(ctx, shape, test_ctx)
+            if pc_procurement.is_bought(shape, ctx):
+                self.debug(shape, "Bought through an alias of it: %s" % failure)
+                failure = None
         if failure:
             return self.failed(shape, failure)
 
@@ -191,6 +203,12 @@ class ManufacturabilityTest(BasicQualification):
                 # would be handed back for a declaration that now passes. Line
                 # above folds it in for the shape's own file, for this reason.
                 declared.append("%s@%s@%s" % (ref, software.config.get("fileFrom"), software.declared_hash()))
+        if isinstance(shape, Part) and unreproducible_reason(config) is not None:
+            # Its verdict turns on whether an alias of it that names an SKU is
+            # loaded (see 'test()'), and is never kept. This moves the key off
+            # any verdict kept before that was so, which would otherwise be
+            # read back without the test running.
+            declared.append("bought-through-an-alias?")
         if isinstance(shape, Part):
             # What a made part is made from, whose own verdict this one now
             # depends on (see 'stock_failure') -- 'manufacturing:' is one of the
@@ -308,6 +326,22 @@ class ManufacturabilityTest(BasicQualification):
             self.debug(part, "Tolerated feature by feature by the file it is read from")
         return await tolerance_failure(part)
 
+    async def load_suppliers(self, ctx, shape, test_ctx) -> dict:
+        """The suppliers this object is asked of, with their packages loaded.
+
+        Those of the package the object belongs to, and of whatever it is being
+        made for: their packages are loaded so that the aliases they publish of
+        what they sell count (see 'procurement.offers'), and they are asked for
+        the object as a cart asks them.
+        """
+        suppliers = dict(test_ctx.get(self.SUPPLIERS) or {})
+        project = ctx.get_project(shape.project_name)
+        if project is not None:
+            for supplier, extra in (await project.get_suppliers_async()).items():
+                suppliers.setdefault(supplier, extra)
+        pc_procurement.load_suppliers(ctx, suppliers)
+        return suppliers
+
     async def test_part(self, tests_to_run: list[Qualification], ctx, part: Part, test_ctx: dict = {}) -> bool:
         """Whether this part can be had: bought, or made from what can be had.
 
@@ -328,16 +362,8 @@ class ManufacturabilityTest(BasicQualification):
 
         from ... import procurement
 
-        # The suppliers of the package this part belongs to, and of whatever
-        # it is being made for: their packages are loaded, so that the aliases
-        # they publish of what they sell count (see 'procurement.offers'), and
-        # they are asked for the part and for its stock as a cart asks them.
-        suppliers = dict(test_ctx.get(self.SUPPLIERS) or {})
-        project = ctx.get_project(part.project_name)
-        if project is not None:
-            for supplier, extra in (await project.get_suppliers_async()).items():
-                suppliers.setdefault(supplier, extra)
-        procurement.load_suppliers(ctx, suppliers)
+        # Asked for the part and for its stock alike.
+        suppliers = await self.load_suppliers(ctx, part, test_ctx)
 
         can_be_purchased = procurement.is_bought(part, ctx)
         can_be_manufactured = procurement.is_made(part)
@@ -427,16 +453,9 @@ class ManufacturabilityTest(BasicQualification):
         if failure:
             return self.failed(assembly, failure)
 
-        # The suppliers of this assembly's package, and of whatever it is being
-        # made for: their packages are loaded so that their aliases count, and
-        # they are asked for the assembly itself when it is bought whole and
-        # for everything it is made of otherwise, as a cart asks them.
-        suppliers = dict(test_ctx.get(self.SUPPLIERS) or {})
-        project = ctx.get_project(assembly.project_name)
-        if project is not None:
-            for supplier, extra in (await project.get_suppliers_async()).items():
-                suppliers.setdefault(supplier, extra)
-        pc_procurement.load_suppliers(ctx, suppliers)
+        # Asked for the assembly itself when it is bought whole, and for
+        # everything it is made of otherwise.
+        suppliers = await self.load_suppliers(ctx, assembly, test_ctx)
 
         # Test if it can be purchased at a store
         can_be_purchased = False

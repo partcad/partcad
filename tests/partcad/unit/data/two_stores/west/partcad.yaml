@@ -16,3 +16,8 @@ parts:
     source: //:screw
     vendor: west
     sku: W-SCREW
+  module:
+    type: alias
+    source: //:module
+    vendor: west
+    sku: W-M
