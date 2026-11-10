@@ -94,6 +94,13 @@ parts:
         mass: 0.002
     requirements:
       has_weight: true
+  # A file that is not what it says it is: the part does not build.
+  unreadable:
+    type: step
+    path: unreadable.step
+    requirements:
+      has_color: false
+      has_material: true
 assemblies:
   kit:
     type: assy
@@ -117,6 +124,7 @@ def ctx(tmp_path_factory):
     path = tmp_path_factory.mktemp("has")
     (path / "partcad.yaml").write_text(textwrap.dedent(PACKAGE))
     (path / "kit.assy").write_text(textwrap.dedent(KIT))
+    (path / "unreadable.step").write_text("This is not a STEP file.\n")
     return pc.Context(str(path))
 
 
@@ -230,3 +238,23 @@ def test_pc_qual_test_holds_a_bought_part_to_them(ctx):
     shape = ctx.get_part(":bare-but-required")
     assert RequirementsTest().inapplicable(shape) is None
     assert not asyncio.run(RequirementsTest().test([], ctx, shape, {}))
+
+
+def test_a_part_that_does_not_build_meets_none_of_them_either_way(ctx):
+    """Not known is not met: required not to be in a colour, it is not known not to be."""
+    report = _report(ctx, "unreadable")
+    assert _verdicts(report) == {"has_color": False, "has_material": False}
+    assert all(detail.startswith("not known: //:unreadable did not build") for detail in _details(report).values())
+
+
+def test_what_it_weighs_is_not_held_up_by_its_parts(ctx, monkeypatch):
+    """The parts are walked for what they are in, and only then: a weight is asked of the object itself."""
+
+    async def cannot_walk(_ctx, _shape):
+        raise RuntimeError("the walk failed")
+
+    monkeypatch.setattr(requirements, "_parts_async", cannot_walk)
+    assert _verdicts(_report(ctx, "with-a-stated-weight")) == {"has_weight": True}
+    report = _report(ctx, "kit", kind="assembly")
+    assert _verdicts(report)["has_material"] is False
+    assert _details(report)["has_material"] == "not known: its parts could not be listed: the walk failed"

@@ -1502,6 +1502,12 @@ async def _parts_async(ctx, shape) -> list:
     return list(found.values())
 
 
+def _first_few(reasons: list) -> str:
+    """The first three of 'reasons', and how many more there are."""
+    shown = reasons[:3] + (["and %d more" % (len(reasons) - 3)] if len(reasons) > 3 else [])
+    return "; ".join(shown)
+
+
 async def _verify_has(ctx, shape, entries) -> None:
     """Hold the object to each yes-or-no requirement: of an assembly, of every part in it."""
     kind = getattr(shape, "kind", None)
@@ -1510,18 +1516,37 @@ async def _verify_has(ctx, shape, entries) -> None:
             check.passed = False
             check.detail = "a %s is not made of anything, and has no mass" % kind
         return
-    parts = await _parts_async(ctx, shape)
+    # The parts, walked once and only for a requirement on what they are in:
+    # what an assembly weighs is asked of the assembly, and a walk that cannot
+    # be made is no reason for that to fail.
+    parts = None
     for requirement, check in entries:
         if HAS_KEYS[requirement.name] is None:
             value, source = (await resolve_physics_async(ctx, shape, ["mass"]))["mass"]
             has = value is not None
             detail = ("%s (%s)" % (_quantity("mass", value), source)) if has else "not known: %s" % source
         else:
+            if parts is None:
+                try:
+                    parts = await _parts_async(ctx, shape)
+                except Exception as e:
+                    parts = e
+            if isinstance(parts, Exception):
+                check.passed = False
+                check.detail = "not known: its parts could not be listed: %s" % parts
+                continue
             component, where = HAS_KEYS[requirement.name]
-            lacking = []
+            lacking, unknown = [], []
             for part in parts:
-                if await part.get_wrapped(ctx) is None:
-                    lacking.append("%s:%s did not build" % (part.project_name, part.name))
+                named = "%s:%s" % (part.project_name, part.name)
+                try:
+                    built = await part.get_wrapped(ctx)
+                except Exception as e:
+                    built, why = None, ": %s" % e
+                else:
+                    why = ""
+                if built is None:
+                    unknown.append("%s did not build%s" % (named, why))
                     continue
                 # Asked as 'pc info' asks it: an alias records no summary of its
                 # own, and answers with the one of the part it stands for.
@@ -1529,13 +1554,18 @@ async def _verify_has(ctx, shape, entries) -> None:
                 summary = metadata.get(shape_envelope.METADATA_CMF)
                 why = _part_lacks(ctx, part, summary, component, where)
                 if why is not None:
-                    lacking.append(why if part is shape else "%s:%s: %s" % (part.project_name, part.name, why))
+                    lacking.append(why if part is shape else "%s: %s" % (named, why))
+            if unknown:
+                # Not known is not met, whichever way it is required: a part
+                # that did not build is in nothing anybody can tell.
+                check.passed = False
+                check.detail = "not known: %s" % _first_few(unknown + lacking)
+                continue
             has = not lacking
             if has:
                 detail = "every %s is in a %s that is a claim" % (where, _WORDS[component])
             else:
-                shown = lacking[:3] + (["and %d more" % (len(lacking) - 3)] if len(lacking) > 3 else [])
-                detail = "; ".join(shown)
+                detail = _first_few(lacking)
         check.passed = has == requirement.required
         if has and not requirement.required:
             detail = "it has one, and is required not to: %s" % detail
