@@ -209,4 +209,7 @@ The daemon keeps packages loaded between commands. Before each command it
 compares the ``partcad.yaml`` of the packages the command is about, and of every
 package they declare as a dependency, with what it read, by modification time
 and size, and reloads a package that changed together with the packages
-underneath it. Each package is compared at most once every 15 seconds.
+underneath it. The packages the command is about are compared before every
+command, so an edit you just saved is what the next command sees; the packages
+they depend on, and in a recursive command the packages underneath them, at
+most once every 15 seconds.
