@@ -152,6 +152,22 @@ suite('The Requirements tab', () => {
         );
     });
 
+    test('the yes-or-no requirements are a measured section of their own, after the matches', () => {
+        const groups = groupChecks([
+            check('has', 'has_material', false),
+            check('match', 'mass of :bracket', true),
+            check('has', 'has_weight', true),
+        ]);
+
+        assert.deepStrictEqual(
+            groups.map((group) => [group.heading, group.checks.map((item) => item.name)]),
+            [
+                ['Matches', ['mass of :bracket']],
+                ['Specified', ['has_material', 'has_weight']],
+            ],
+        );
+    });
+
     test('a feature lists the simulations that name it, and always the LLM last, with the skill as its tooltip', () => {
         const [stands, pretty] = data().features;
 

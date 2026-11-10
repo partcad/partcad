@@ -195,6 +195,9 @@ manufacturing, say -- but those are not part of this section.
             volume: 10%       # within 10% of its volume
             displacement: 2%  # within 2% of what it displaces
             mass: 5%          # and within 5% of what it weighs
+        has_material: true    # every solid in a material that can be had
+        has_color: true       # every face in a colour that can be had
+        has_weight: true      # a mass PartCAD knows
 
 ``features``
   What the object has to have or do: a name for each, and a sentence saying
@@ -245,9 +248,36 @@ manufacturing, say -- but those are not part of this section.
   find out -- of either object. The displacement is measured in a sandbox, and
   only of the objects a ``displacement`` names.
 
-``pc qual test`` checks the last four against the model -- its ``requirements``
-check, ``pc qual test -f requirements`` to run it alone -- and says, for each one
-that is not met, what it found instead.
+``has_color``, ``has_material``, ``has_finish`` and ``has_weight``
+  Yes-or-no requirements on what the object is specified with, each ``true``
+  (it has to be) or ``false`` (it must not be):
+
+  * ``has_color``: every face is in a colour, ``has_material``: every solid is
+    in a material, ``has_finish``: every face is in a finish -- each one a CMF
+    declaration that claims it can be had (see :ref:`cmf`). A material's colour
+    claim counts as the colour of the faces of a part made of it; a colour that
+    is only a picture does not -- an ``rgba``, or a colour the part's source
+    file states that no declaration claims -- and neither does no finish, which
+    is as produced. So a part whose colour is required and whose file's colours
+    are dropped (``sourceCmf``) declares the colour it is in.
+  * ``has_weight`` (``has_mass`` is the same): PartCAD knows what the object
+    weighs -- stated in ``properties: physics:``, or its solid at its material's
+    density -- as ``physics`` above resolves it.
+
+  Of an assembly, each is required of every part in it, inside the
+  sub-assemblies it holds too, bought whole or not; ``has_weight`` of what the
+  whole of it weighs.
+
+  None of them is required unless the object says so: they are for a package's
+  maintainer to opt into, object by object, and a package that declares none is
+  tested exactly as it was. What they are for is a package of parts that are
+  bought: the ``cmf`` check (see :ref:`cmf-check`) leaves a bought part alone,
+  since its vendor decides what it is in, and a maintainer who wants each of
+  them to say what that is requires it here.
+
+``pc qual test`` checks every one of these but ``features`` against the model --
+its ``requirements`` check, ``pc qual test -f requirements`` to run it alone --
+and says, for each one that is not met, what it found instead.
 
 Required values
 ^^^^^^^^^^^^^^^

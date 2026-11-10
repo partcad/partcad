@@ -853,6 +853,11 @@
             "ports": { "$ref": "#/definitions/requirement-ports" },
             "interfaces": { "$ref": "#/definitions/requirement-interfaces" },
             "physics": { "$ref": "#/definitions/requirement-physics" },
+            "has_color": { "type": "boolean", "description": "true: every face is in a colour that is a CMF declaration claiming it can be had - a material's colour claim counts, a colour only a picture does not (a source's colour no declaration claims, an 'rgba'). false: it must not be. Of an assembly, of every part in it." },
+            "has_material": { "type": "boolean", "description": "true: every solid is in a material that is a CMF declaration claiming it can be had. false: it must not be. Of an assembly, of every part in it." },
+            "has_finish": { "type": "boolean", "description": "true: every face is in a finish that is a CMF declaration claiming it can be had; no finish, which is as produced, does not count. false: it must not be. Of an assembly, of every part in it." },
+            "has_weight": { "type": "boolean", "description": "true: PartCAD knows what the object weighs - stated under 'properties: physics: mass:', or its solid at its material's density. false: it must not. Of an assembly, what all of it weighs." },
+            "has_mass": { "type": "boolean", "description": "The same requirement as 'has_weight'." },
             "match": { "$ref": "#/definitions/requirement-match" }
           },
           "additionalProperties": { "type": "string", "minLength": 1 }
