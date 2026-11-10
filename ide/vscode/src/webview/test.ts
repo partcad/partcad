@@ -3,34 +3,65 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// The "Test" tab, the first of Validation.
+// The Qualification tabs drawn from 'qual.report': Basic, Topology and Other.
 //
-// What 'pc test' says of the object on screen, check by check. A list on the
-// left - every check 'pc test' runs, in the order it runs them, with a mark for
-// how each came out - and the check selected in the middle: what it found this
-// time, what it left behind to be looked at, and what it is, when it applies
-// and what to do when it fails.
+// What 'pc qual test' says of the object on screen, test by test, for one
+// subtype of qualification each. A list on the left - every test of the
+// subtype, in the order they run, with a mark for how each came out - and the
+// test selected in the middle: what it found this time, and what it is, when it
+// applies and what to do when it fails. What else is shown is what the subtype
+// produces:
 //
-// Nothing here decides anything. The daemon's 'test.report' runs the checks
-// 'pc test <object>' runs, through the same cache, and answers with each
-// verdict, what each check said, and its entry in 'partcad.test.catalog' - the
-// same text the documentation lists the checks with. This file draws the answer.
+// - Basic: nothing else. Its findings are words.
+// - Topology: where the finding is. A failure leaves an object behind - the two
+//   parts that overlap and what they share, the part and the faces nothing
+//   tolerances - and "Show" opens it in the 3D view with the finding in a colour
+//   of its own and the rest faded (see 'TopologyFocus').
+// - Other: the report the plugin's tool wrote, as a table.
+//
+// Nothing here decides anything. The daemon's 'qual.report' runs the tests 'pc
+// qual test --<subtype> <object>' runs, through the same cache, and answers with
+// each verdict, what each test said, and its entry in 'partcad.qual.catalog' -
+// the same text the documentation lists the tests with. This file draws the
+// answer.
 //
 // Asked for twice, in a row (see 'viewer.ts'): once without running anything,
-// which is a read of declarations and lists every check with the ones that do
+// which is a read of declarations and lists every test with the ones that do
 // not apply saying why, and once running them, which takes as long as the
-// slowest check. The list is on screen, every other mark pending, for as long as
+// slowest test. The list is on screen, every other mark pending, for as long as
 // that takes.
 //
 
 import { el, empty, placeholder } from './dom';
-import { TestArtifact, TestData, TestDoc, TestFinding, TestResult, TestStatus } from './messages';
+import {
+    TestArtifact,
+    TestData,
+    TestDoc,
+    TestFinding,
+    TestReport,
+    TestResult,
+    TestStatus,
+    TopologyFeature,
+    TopologyFocus,
+} from './messages';
 
 export interface TestCallbacks {
     /** "Run again" was pressed: the checks have to be asked for once more. */
     onRun: () => void;
-    /** An artifact's button was pressed: show that object in the panel. */
-    onShow: (artifact: TestArtifact) => void;
+    /**
+     * An artifact's button was pressed: show that object in the panel - with
+     * the check that left it, whose verdict and words go on being shown with it
+     * (see 'findingOf').
+     */
+    onShow: (artifact: TestArtifact, result: TestResult) => void;
+}
+
+/** Which subtype of qualification a view shows, and what it says where it has nothing to show. */
+export interface TestOptions {
+    /** 'basic', 'topology' or 'other', as 'pc qual test' takes it ('--basic'). */
+    subtype: string;
+    /** What the tab says when the object has no test of its subtype at all. */
+    none?: string;
 }
 
 /** How a check is marked: its verdict, or 'pending' while it is running, or 'unknown' when it never came back. */
@@ -44,7 +75,7 @@ export function markOf(result: TestResult, running: boolean): TestMark {
     return running ? 'pending' : 'unknown';
 }
 
-const MARK_TEXT: Record<TestMark, string> = {
+export const MARK_TEXT: Record<TestMark, string> = {
     passed: '✓',
     failed: '✗',
     warned: '!',
@@ -55,7 +86,7 @@ const MARK_TEXT: Record<TestMark, string> = {
     unknown: '?',
 };
 
-const MARK_TITLE: Record<TestMark, string> = {
+export const MARK_TITLE: Record<TestMark, string> = {
     passed: 'Passed',
     failed: 'Failed',
     warned: 'Passed, with a finding',
@@ -102,7 +133,7 @@ export function defaultSelection(tests: TestResult[]): string | undefined {
 
 /**
  * A line of the catalog's markup, as nodes: text, and code where it is between
- * backticks - the one thing 'partcad.test.catalog' marks up inside a line.
+ * backticks - the one thing 'partcad.qual.catalog' marks up inside a line.
  */
 export function inline(text: string): (string | HTMLElement)[] {
     const nodes: (string | HTMLElement)[] = [];
@@ -123,10 +154,10 @@ function paragraph(tag: 'p' | 'li' | 'h3', text: string, className?: string): HT
     return node;
 }
 
-const VERDICT: Record<TestStatus, string> = {
+export const VERDICT: Record<TestStatus, string> = {
     passed: 'Passed',
     failed: 'Failed',
-    warned: 'Passed, with findings: on an object nobody is going to make, what a check finds is reported rather than failed',
+    warned: 'Passed, with findings: what the check found is reported rather than failed - on an object nobody is going to make, or a caution rather than a fault',
     skipped: 'Skipped: the question could not be asked on this machine',
     // eslint-disable-next-line @typescript-eslint/naming-convention
     'not-applicable': 'Not applicable',
@@ -145,15 +176,22 @@ export class TestView {
     private chosen: string | undefined;
     /** Whether 'chosen' is the reader's, by a click, rather than this view's guess at what to open on. */
     private picked = false;
+    /**
+     * A check to open on the next time checks arrive, whatever object they are
+     * of: the one a finding shown in 3D was of, when "Back" takes the reader
+     * to it again (see 'prefer').
+     */
+    private preferred: string | undefined;
 
     constructor(
         root: HTMLElement,
         private readonly callbacks: TestCallbacks,
+        private readonly options: TestOptions = { subtype: 'basic' },
     ) {
-        root.classList.add('test');
+        root.classList.add('test', `test-${options.subtype}`);
         this.rows.setAttribute('role', 'listbox');
         this.rows.setAttribute('aria-label', 'Checks');
-        this.runButton.title = "Run every check again, as 'pc test' does";
+        this.runButton.title = `Run every test again, as 'pc qual test --${options.subtype}' does`;
         this.runButton.addEventListener('click', () => this.callbacks.onRun());
         this.list.append(this.summary, this.rows, this.runButton);
         root.append(this.list, this.main);
@@ -208,6 +246,11 @@ export class TestView {
         // The check the reader opened, while it is there - a re-run should not
         // move them - and otherwise the one most worth reading, worked out
         // again as the verdicts that decide which that is come in.
+        if (this.preferred !== undefined && names.has(this.preferred)) {
+            this.chosen = this.preferred;
+            this.picked = true;
+        }
+        this.preferred = undefined;
         if (!this.picked || this.chosen === undefined || !names.has(this.chosen)) {
             this.chosen = defaultSelection(data.tests);
             this.picked = false;
@@ -229,6 +272,15 @@ export class TestView {
             result.status === 'not-applicable' ? result : { ...result, status: null, findings: [], artifacts: [] },
         );
         this.show({ ...data, verified: false, tests: pending }, true);
+    }
+
+    /**
+     * Open on this check when the checks next arrive, as if it had been
+     * clicked: for an object that is about to be shown, whose checks have not
+     * been asked for yet. Kept through 'setBusy', which the show starts with.
+     */
+    public prefer(name: string): void {
+        this.preferred = name;
     }
 
     /** Open a check by name, as clicking it does. */
@@ -297,7 +349,14 @@ export class TestView {
     private showSelected(): void {
         const result = this.data?.tests.find((test) => test.name === this.chosen);
         if (result === undefined) {
-            this.showMain(placeholder('Select a check on the left.'));
+            const none = this.data !== undefined && this.data.tests.length === 0;
+            this.showMain(
+                placeholder(
+                    none
+                        ? (this.options.none ?? `This has no ${this.options.subtype} tests.`)
+                        : 'Select a check on the left.',
+                ),
+            );
             return;
         }
         const page = el('div', 'sheet test-page');
@@ -306,7 +365,7 @@ export class TestView {
         }
         page.appendChild(el('h2', undefined, result.doc?.title ?? result.name));
         const command = el('p', 'subtitle');
-        command.append(el('code', undefined, `pc test -f ${result.name}`));
+        command.append(el('code', undefined, commandOf(this.options.subtype, result.name)));
         if (result.doc?.applies) {
             command.append(' · applies to ', ...inline(result.doc.applies));
         }
@@ -337,24 +396,32 @@ export class TestView {
         if (result.findings.length > 0) {
             box.appendChild(findings(result.findings));
         }
+        for (const report of result.reports ?? []) {
+            box.appendChild(reportTable(report));
+        }
         if (result.artifacts.length > 0) {
-            box.appendChild(el('h3', undefined, 'Left behind to look at'));
+            const topology = result.artifacts.some((artifact) => artifact.focus);
+            box.appendChild(el('h3', undefined, topology ? 'Where it is' : 'Left behind to look at'));
             for (const artifact of result.artifacts) {
-                box.appendChild(this.artifact(artifact));
+                box.appendChild(this.artifact(artifact, result));
             }
         }
         return box;
     }
 
-    private artifact(artifact: TestArtifact): HTMLElement {
-        const node = el('div', 'test-artifact');
+    private artifact(artifact: TestArtifact, result: TestResult): HTMLElement {
+        const node = el('div', artifact.focus ? 'test-artifact topology' : 'test-artifact');
         node.appendChild(el('p', 'name', artifact.title ?? artifact.name));
         if (artifact.desc) {
             node.appendChild(el('p', 'description', artifact.desc));
         }
-        const button = el('button', undefined, 'Show in the Digital Thread');
-        button.title = `${artifact.package}:${artifact.name}`;
-        button.addEventListener('click', () => this.callbacks.onShow(artifact));
+        // A finding with a place on the object is shown there, with the rest
+        // faded; anything else is shown as the object it is.
+        const button = el('button', undefined, artifact.focus ? 'Show' : 'Show in the Digital Thread');
+        button.title = artifact.focus
+            ? `${artifact.package}:${artifact.name}: in the 3D view, with the finding singled out`
+            : `${artifact.package}:${artifact.name}`;
+        button.addEventListener('click', () => this.callbacks.onShow(artifact, result));
         node.appendChild(button);
         return node;
     }
@@ -365,7 +432,159 @@ export class TestView {
     }
 }
 
-function findings(found: TestFinding[]): HTMLElement {
+/**
+ * What the 3D view singles out of a topology artifact once it is shown: the node
+ * that is the finding, as the tree names nodes ('<package>:<name>/<focus>');
+ * undefined for an artifact that is not a topology finding.
+ */
+export function focusOf(artifact: TestArtifact): TopologyFocus | undefined {
+    if (!artifact.focus) {
+        return undefined;
+    }
+    return {
+        object: `${artifact.package}:${artifact.name}`,
+        item: `${artifact.package}:${artifact.name}/${artifact.focus}`,
+        label: artifact.title ?? artifact.focus,
+    };
+}
+
+/** The object a finding is on, to go back to: as 'ShowObjectMessage' names one. */
+export interface FindingSubject {
+    package: string;
+    name: string;
+    kind: string;
+}
+
+/**
+ * A topology finding as it is shown in 3D: what to single out, where to pin a
+ * callout, and everything the Topology tab said about it - the check, its
+ * verdict and its words - so that the 3D view can go on saying it (see
+ * 'finding.ts'), and the object to go back to.
+ */
+export interface Finding {
+    focus: TopologyFocus;
+    features: TopologyFeature[];
+    /** The check, by name, as 'pc qual test -f' takes it. */
+    check: string;
+    /** The check's title, from its entry of the catalog, or its name. */
+    title: string;
+    subtype: string;
+    status: TestStatus | null;
+    findings: TestFinding[];
+    /** What the artifact says it is. */
+    desc?: string;
+    subject?: FindingSubject;
+}
+
+/**
+ * What showing a topology artifact keeps on screen with it; undefined for an
+ * artifact that is not a topology finding.
+ */
+export function findingOf(
+    artifact: TestArtifact,
+    result: TestResult,
+    subtype: string,
+    subject: FindingSubject | undefined,
+): Finding | undefined {
+    const focus = focusOf(artifact);
+    if (focus === undefined) {
+        return undefined;
+    }
+    return {
+        focus,
+        features: (artifact.features ?? []).filter(
+            (feature) => Array.isArray(feature.at) && feature.at.length === 3 && feature.at.every(Number.isFinite),
+        ),
+        check: result.name,
+        title: result.doc?.title ?? result.name,
+        subtype,
+        status: result.status,
+        findings: result.findings,
+        desc: artifact.desc,
+        subject,
+    };
+}
+
+/** The command that runs one test alone, as the tab's subtype is selected on the command line. */
+export function commandOf(subtype: string, name: string): string {
+    return `pc qual test --${subtype === 'sim' ? 'simulation' : subtype} -f ${name}`;
+}
+
+/** The severity a report's row is marked with: 'error', 'warning' or 'info', from the tool's own word for it. */
+export function severityOf(row: Record<string, unknown>): 'error' | 'warning' | 'info' {
+    const said = String(row.severity ?? row.level ?? '').toLowerCase();
+    if (['error', 'violation', 'failed', 'fail', 'no-go', 'no_go', 'refused'].includes(said)) {
+        return 'error';
+    }
+    if (['warning', 'warn', 'note', 'notes', 'not_scored', 'not-scored'].includes(said)) {
+        return 'warning';
+    }
+    return 'info';
+}
+
+/** The columns of a report: what it declares, or else every key its rows use, in the order they first appear. */
+export function columnsOf(report: TestReport): { key: string; title: string }[] {
+    if (report.columns && report.columns.length > 0) {
+        return report.columns.map((column) => ({ key: column.key, title: column.title ?? column.key }));
+    }
+    const keys: string[] = [];
+    for (const row of report.rows ?? []) {
+        for (const key of Object.keys(row)) {
+            if (!keys.includes(key)) {
+                keys.push(key);
+            }
+        }
+    }
+    return keys.map((key) => ({ key, title: key }));
+}
+
+/** An 'other' test's report, as its tool wrote it: a heading, a summary and a table, row by row. */
+export function reportTable(report: TestReport): HTMLElement {
+    const node = el('div', 'test-report');
+    node.appendChild(el('h3', undefined, report.title ?? 'Report'));
+    if (report.verdict) {
+        node.appendChild(el('p', 'test-report-verdict', report.verdict));
+    }
+    if (report.summary) {
+        node.appendChild(el('p', 'test-report-summary', report.summary));
+    }
+    const rows = report.rows ?? [];
+    if (rows.length === 0) {
+        node.appendChild(el('p', 'description', 'Nothing to report.'));
+        return node;
+    }
+    const columns = columnsOf(report);
+    const table = el('table', 'test-report-table');
+    const head = el('tr');
+    for (const column of columns) {
+        head.appendChild(el('th', undefined, column.title));
+    }
+    table.appendChild(el('thead')).appendChild(head);
+    const body = table.appendChild(el('tbody'));
+    for (const row of rows) {
+        const line = el('tr', severityOf(row));
+        for (const column of columns) {
+            const value = row[column.key];
+            line.appendChild(
+                el(
+                    'td',
+                    undefined,
+                    value === undefined || value === null
+                        ? ''
+                        : typeof value === 'object'
+                          ? JSON.stringify(value)
+                          : String(value),
+                ),
+            );
+        }
+        body.appendChild(line);
+    }
+    node.appendChild(table);
+    return node;
+}
+
+/** What a check said, line by line, as the tab and the finding card over the 3D view both list it. */
+export function findings(found: TestFinding[]): HTMLElement {
     const list = el('ul', 'test-findings');
     for (const finding of found) {
         // Said as the check said it: a failure is often several lines - a
@@ -375,7 +594,7 @@ function findings(found: TestFinding[]): HTMLElement {
     return list;
 }
 
-/** A check's entry of 'partcad.test.catalog', as the documentation lists it. */
+/** A check's entry of 'partcad.qual.catalog', as the documentation lists it. */
 export function documentation(doc: TestDoc): HTMLElement {
     const node = el('div', 'test-doc');
     for (const block of doc.blocks) {

@@ -209,7 +209,7 @@ adds anything where nothing states CMF, so those keys are what they were. A payl
 section, and those components are drawn in the part's own set: their faces are the compound's to address.
 
 Whoever writes a section also records a **summary** in the node's `metadata` - the sets with their face and solid counts, and what
-is unspecified - cached with the geometry, for consumers that do not load the CAD kernel: `pc test`, the BOM views, the
+is unspecified - cached with the geometry, for consumers that do not load the CAD kernel: `pc qual test`, the BOM views, the
 IDE's CMF tab. A drawing reads it too, to open a payload's section only where it addresses faces one by one: nearly
 nothing does, and a drawing costs what it cost before.
 
@@ -298,7 +298,7 @@ overriding style into `params:` with `sourceCmf: [color]`); and real identifiers
 **Built:** the `cmf` check, as a warning, and `cmf: {require: true}` on an object or a package to make it fail; the
 connectivity exemption. **Decided:** making it an error by default.
 
-`pc test` gains a `cmf` check. It is a warning first, an error for packages that opt in next, and an error by default
+`pc qual test` gains a `cmf` check. It is a warning first, an error for packages that opt in next, and an error by default
 once the public index passes it - the path `tolerance` took.
 
 - **A part to be made** (manufacturable and not purchased) passes only if every solid has a material and every face a
@@ -348,8 +348,8 @@ where there is room.
   bought whole - the items the `cmf` check judges, once each with their count - each with its sets (colour, material,
   finish, each by name with a swatch and a display-only mark, then faces, solids and origin), what is unspecified, and
   what keeps it from being specified in the check's own words; the incomplete ones first, and above them what an
-  assembly sets itself. The daemon orders and judges them, by `partcad.test.cmf`; the tab draws. It builds what it
-  reports on, as `pc test` does, which the 3D view beside it has done already. The BOM and Build vs Buy views get Color,
+  assembly sets itself. The daemon orders and judges them, by `partcad.qual.basic.cmf`; the tab draws. It builds what it
+  reports on, as `pc qual test` does, which the 3D view beside it has done already. The BOM and Build vs Buy views get Color,
   Material and Finish columns (the Material column Build vs Buy had becomes the three), from a `cmf` on each line item
   and tree node: the summary recorded with the item's geometry where it has been built, and what it declares otherwise
   (`partcad.cmf.own_info`, marked `declared`) - nothing is built to fill a column. The 3D view keeps each primitive's
@@ -649,6 +649,10 @@ gives it, with the viewer's own material, and a primitive with no material in it
   colour, and the Opacity slider fades both.
 
 **Requirement: drawings and exports** as [section 9](#9-presentation) lists.
+- *Scenario:* a part whose only CMF is a material claiming a colour (`material: :al-6061`, which says
+  `color: :natural`) → every drawing draws it in `:natural`, as its CMF section says, whether it is one solid or
+  several and whether or not it has a finish: the colour it is drawn in where nothing addresses its faces one by one
+  (`properties: color:`) is its own colour, and its own colour is its material's claim when it names none.
 - *Scenario:* a part with per-face CMF exported to STEP and read back with the `partcad` convention → the same
   references on every face and solid. (Built; with any convention, since the attribute is PartCAD's own terms.)
 - *Scenario:* that STEP file's colour edited by another tool → read by value, with a message.

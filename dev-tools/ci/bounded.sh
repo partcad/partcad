@@ -10,7 +10,7 @@
 #     dev-tools/ci/bounded.sh coverage run ... -m partcad_cli.click.command ...
 #
 # Why this exists. On 2026-09-01 the "Examples (PartCAD)" job on
-# 'ubuntu-24.04-arm' stopped producing output two minutes into 'pc test' and
+# 'ubuntu-24.04-arm' stopped producing output two minutes into 'pc qual test' and
 # said nothing for the next seventy-one, until the job's own 'timeout-minutes'
 # killed it. A job killed that way is reported as *cancelled*, so the whole CI
 # run came out "cancelled" rather than "failure" -- indistinguishable, on the

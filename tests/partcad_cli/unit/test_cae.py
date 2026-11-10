@@ -13,7 +13,7 @@ daemon, and the two things this process does with what comes back.
 The exit status is the part worth being careful about. A finding is what the user
 asked about, so a run that produced one is a run whose answer is "no", and
 `pc cae fea && ...` has to stop there; so is a scenario that did not run at all.
-A run that found nothing is a pass and exits zero, the same way `pc test` does. Nothing here starts a solver: the daemon
+A run that found nothing is a pass and exits zero, the same way `pc qual test` does. Nothing here starts a solver: the daemon
 call is replaced, because which request is sent is the contract and what a solver
 would do with it is not this command's business.
 """
@@ -69,7 +69,7 @@ def test_cfd_is_the_same_command_with_the_other_word(analysed):
 
 
 def test_a_finding_makes_the_command_fail(analysed):
-    """`pc cae fea && ...` stops on a finding, as `pc test` stops on a failure."""
+    """`pc cae fea && ...` stops on a finding, as `pc qual test` stops on a failure."""
     analysed.result = {"findings": [{"message": "too thin", "severity": "error"}]}
     assert _invoke("fea", ":bracket").exit_code == 1
 
@@ -133,14 +133,14 @@ def test_no_output_directory_means_the_configuration_decides(analysed):
 
 
 def test_every_scenario_runs_unless_one_is_named(analysed):
-    """'pc cae fea :bracket' is every scenario, as 'pc sim' is every simulation."""
+    """'pc cae fea :bracket' is every scenario, as 'pc qual test --simulation' is every simulation."""
     assert _invoke("fea", ":bracket").exit_code == 0
     assert analysed.calls[0]["params"]["scenario"] is None
 
 
 @pytest.mark.parametrize("flag", ["-f", "--filter"])
 def test_a_scenario_is_named_with_filter(analysed, flag):
-    """The spelling 'pc sim' selects one simulation with."""
+    """The spelling 'pc qual test --simulation' selects one simulation with."""
     assert _invoke("thermal", flag, "in-use", ":heatsink").exit_code == 0
     assert analysed.calls[0]["params"]["scenario"] == "in-use"
     assert analysed.calls[0]["params"]["analysis"] == "thermal"

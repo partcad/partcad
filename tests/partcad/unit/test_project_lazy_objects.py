@@ -228,7 +228,7 @@ def test_a_part_being_made_is_not_handed_out_half_made(monkeypatch):
     """The second caller for a part waits for the first to finish making it.
 
     It used to be handed the part the moment '_create()' registered it, before
-    'post_create()' set its 'path': the instance a concurrent 'pc test -r' then
+    'post_create()' set its 'path': the instance a concurrent 'pc qual test -r' then
     instantiated was 'os.path.exists(None)'.
     """
     import threading

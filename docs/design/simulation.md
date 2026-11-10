@@ -29,8 +29,8 @@ and not built; **open** is not agreed.
 
 A part or an assembly should be able to state what it is supposed to *do* in the physical world -- stand, not tip,
 float level, hold a load, reach a pose within a time, keep a joint torque under its motor's rating -- and have
-PartCAD check that claim by simulating it, the same way `pc test` already checks that it can be made. The intended
-use is **test-driven development of physical products**: the claim is written first, `pc test` fails, and the design
+PartCAD check that claim by simulating it, the same way `pc qual test` already checks that it can be made. The intended
+use is **test-driven development of physical products**: the claim is written first, `pc qual test` fails, and the design
 changes until it passes. Robotics, underwater and aerospace projects are the target, and so is any electromechanical
 system whose correctness is a matter of dynamics rather than of shape.
 
@@ -95,12 +95,12 @@ fallback while simulation has no users to be compatible with.
 ```
  part / assembly / scene            scene (an ASSY template)             engine plugin package
  ───────────────────────            ────────────────────────             ─────────────────────
- simulate:                          parameters: subject,                 export:      writes the format
+ qual: sim:                         parameters: subject,                 export:      writes the format
    <name>:                            subject_kind, subject_offset       import:      reads it
      scene      ───────────────▶    gravity:, medium:          ──┐       simulation:  runs it
      offset                                                       │       open:        shows it
-     simulation ────────────┐                                     │
-     params                 │       pc sim / pc test              │
+     path       ────────────┐                                     │
+     params                 │       pc qual test [--simulation]   │
      validation             │       1. resolve plugin + scene     │
                             │       2. build the scene with the   │
                             │          subject in it              │
@@ -113,8 +113,8 @@ fallback while simulation has no users to be compatible with.
 ```
 
 **Built.** `src/partcad/simulation.py` holds the declaration, resolution, the run and the validation;
-`src/partcad/wrappers/wrapper_simulate.py` is the sandbox entry point; `pc sim` (`partcad_cli/click/commands/sim.py`)
-is the command, and the daemon's `simulate.run` does the work. `//builtin/scene:subject` is the default scene: an
+`src/partcad/wrappers/wrapper_simulate.py` is the sandbox entry point; `pc qual test --simulation` (`partcad_cli/click/commands/sim.py`)
+is the command, and the daemon's `qual.simulate` does the work. `//builtin/scene:subject` is the default scene: an
 empty world holding the subject at its offset.
 
 A simulation is never of an object alone. It is of an object *in a world*, which is why a declaration names a scene
@@ -123,7 +123,7 @@ nothing special is declared for it.
 
 ## 4. Contracts
 
-### 4.1 The `simulate:` declaration (built)
+### 4.1 The `qual: sim:` declaration (built)
 
 A named section of a part, an assembly or a scene (section 7). Each entry states:
 
@@ -135,7 +135,7 @@ A named section of a part, an assembly or a scene (section 7). Each entry states
 | `params` | Overrides of the plugin's parameters for this run (`duration`, `samples`, `gravity`, ...). |
 | `validation` | A Python expression over `before`, `after` and `result`. Evaluated with a fixed set of builtins and no modules -- not a security boundary (a package can declare a CadQuery part), but what keeps a validation readable as an assertion. |
 | `desc` | For whoever reads the report. |
-| `feature` | The feature (or features) of the object's `requirements:` this simulation demonstrates. Read by nothing that runs it: it is what the IDE's Requirements tab and the `/pc:validate` skill read to say which features a simulation stands behind, and `pc test`'s `requirements` check fails a name the requirements do not declare (`partcad/requirements.py`). |
+| `feature` | The feature (or features) of the object's `requirements:` this simulation demonstrates. Read by nothing that runs it: it is what the IDE's Requirements tab and the `/pc:validate` skill read to say which features a simulation stands behind, and `pc qual test`'s `requirements` check fails a name the requirements do not declare (`partcad/requirements.py`). |
 
 There is deliberately no unnamed short form: the name is what `-f` selects, what the report prints beside the verdict
 and what names the run directory.
@@ -486,7 +486,7 @@ What else belongs to a world, and is planned:
   material reference into a mapping to carry it.
 - **A body fixed to the world** is built (`fixed: true`, section 7); the initial pose of every object is not.
 - **Not the engine's step size, solver or iteration count.** Those belong to an engine rather than to a world; a
-  `simulate:` passes them to its plugin as `params`, and a plugin documents its defaults.
+  `qual: sim:` passes them to its plugin as `params`, and a plugin documents its defaults.
 
 This is SDFormat's `<world>`; a scene is where each of these belongs.
 
@@ -524,7 +524,7 @@ write it (steps 10 and 11, sections 8.8b and 8.8c); the SDFormat exporter is ste
 Consequences that came with building it:
 
 - The stacks in `examples/feature_simulate` are arrangements, not products, so they are **scenes**, and a scene
-  declares `simulate:` (it is simulated as the subject of the default world, or of another scene) (built).
+  declares `qual: sim:` (it is simulated as the subject of the default world, or of another scene) (built).
 - An ASSY link can place a **scene** (`scene:`), which is what a scene inside a scene, and the default world holding a
   scene, need (built).
 - The exporters' `flatten`/`static` switches go away: the tree says what is attached, and a scene element's `fixed`
@@ -552,7 +552,7 @@ Building the rule settled what the text above left open:
 - **What `fixed` fixes.** On a link that places an assembly it welds the assembly's root body, and the joints inside
   still move; on a link that places a scene, or on a `links:` list, every element inside.
 - **A scene as a subject.** `simulation.subject_kind()` accepts a scene, the default world places it with `scene:` from
-  `subject_kind: scene`, `pc sim -S` names one and a package walk includes scenes, and `pc test`, which already walked
+  `subject_kind: scene`, `pc qual test --simulation -S` names one and a package walk includes scenes, and `pc qual test`, which already walked
   scenes, now runs their `sim` check. A generated README lists a package's scenes beside its assemblies, so the
   stacks did not disappear from their example's page for becoming what they are.
 - **The helper** is `wrappers/kinematics.py`, beside `mass_properties` and importable in a sandbox the same way. Its
@@ -852,7 +852,7 @@ Building the model (`AssemblyChild.joint`, `pc info`'s "Joints", the checks) set
 - **Inheritance.** `motion` and `physics` are inherited from a single drop-in parent or an `alias:`, not from every
   `inherits:` instance -- an interface that inherits four hole patterns does not inherit four joints.
 - **Physics** is one record per joint; any disagreement between the two interfaces is reported (8.7).
-- **Where the findings are reported**: `pc test`'s `connect` check, not `pc lint`, because a lint verdict is cached per
+- **Where the findings are reported**: `pc qual test`'s `connect` check, not `pc lint`, because a lint verdict is cached per
   file and these findings depend on interfaces declared in other packages.
 - **Closed loops** in an ASSY file are refused in three forms: a link placed twice, a connection to a later link that
   connects back, and a link connected to itself. A connection to a target not yet placed used to crash.
@@ -1025,7 +1025,7 @@ assemblies:
 The keys are joint names (section 8.4) and the values are in the joints' units. A configuration overrides the
 `toParams` of the joints it names; it is a parameter of the assembly, hashed into its cache key like any other, so
 `pc ide view 'robot;configuration=stowed'` works through the parameter machinery an ASSY file already has. A
-`simulate:` names the configuration it starts from (`initial:`, section 13), and the URDF exporter has somewhere to
+`qual: sim:` names the configuration it starts from (`initial:`, section 13), and the URDF exporter has somewhere to
 write a starting pose at last -- an SRDF `group_state`. Everything that exists today, a tree of rigid placements, is
 what evaluating a configuration produces, so no consumer of the representation has to change.
 
@@ -1395,7 +1395,7 @@ checked against where the body would be without it, not to a fraction of a degre
 
 Building them settled these, and each example's `partcad.yaml` says the same where it applies:
 
-- **One validation holds in both engines**, stated once and given to both `simulate:` entries by a YAML anchor, with
+- **One validation holds in both engines**, stated once and given to both `qual: sim:` entries by a YAML anchor, with
   `samples` of each engine's own. Both read `before` at nought. A Gazebo reading is a pose message, and the scene
   broadcaster publishes those 60 times a second of the wall clock, so the plugin slows a run below real time to give
   more than that (`<real_time_factor>`, with a margin: past 48 a simulated second). A Gazebo run here asks for no
@@ -1608,8 +1608,8 @@ the text above left open. What the engine plugins build on is in `kinematics`' d
 
 ## 9. Simulations as tests
 
-`pc test` runs every `simulate:` declaration of every part, assembly and scene as its `sim` check (`pc test -f sim`), so the
-TDD loop is `pc test` -- red until the design does what it claims (built, #756). `pc sim` remains the command
+`pc qual test` runs every `qual: sim:` declaration of every part, assembly and scene as its `sim` check (`pc qual test -f sim`), so the
+TDD loop is `pc qual test` -- red until the design does what it claims (built, #756). `pc qual test --simulation` remains the command
 that runs and reports simulations; both go through one implementation.
 
 **Verdicts.**
@@ -1664,9 +1664,9 @@ Three kinds of derived data are cached in the existing tiers (`cacheFiles`, memc
   stored either. The budget a run was given is not in the key: it bounds the run and does not change its answer.
 
 A `validation:` is not part of a run's key: editing it re-judges the cached run rather than repeating it. The
-**verdict** `pc test` records is keyed on the run's key plus the validation expressions, so that nothing stale is served
+**verdict** `pc qual test` records is keyed on the run's key plus the validation expressions, so that nothing stale is served
 and a validation edit costs an evaluation, not a simulation -- 0.04 s on the example, with no engine started (built,
-  #756). Skips, failed runs and declarations without a `validation:` are not recorded. `simulate:` itself is not part
+  #756). Skips, failed runs and declarations without a `validation:` are not recorded. `qual: sim:` itself is not part
 of a shape's cache key: declaring or editing a simulation does not rebuild the object.
 
 **What an implementation runs has to be in the key.** #753 keys a run on the content of the implementation's script and
@@ -1684,7 +1684,7 @@ outside the key. No absolute path, mtime or sandbox detail enters it; each file 
 
 An engine plugin package declares four things about one format, because they are one body of knowledge: `import:` to
 read it, `export:` to write it, `simulation:` to run it and `open:` to show it. Importing the package is what makes the
-scene type, the exporter, `pc sim` and `pc ide open --with` all work at once.
+scene type, the exporter, `pc qual test --simulation` and `pc ide open --with` all work at once.
 
 | Engine | Package | Format | Where the engine comes from |
 |---|---|---|---|
@@ -1704,7 +1704,7 @@ Rules for plugins:
   the chain merges in order, one release each, and are corrected to the real release when it is known.
 - **Runs are isolated.** Two runs on one machine must not see each other: Gazebo runs get a per-run transport partition
   (`GZ_PARTITION`), because two worlds of the same name otherwise read each other's pose and joint messages -- which
-  `pc test` running several simulations at once makes routine. A partition the user set is kept as the parent
+  `pc qual test` running several simulations at once makes routine. A partition the user set is kept as the parent
   (`<theirs>:partcad-<id>`); using it as is would put every run back into one partition (built, sim-gazebo #7).
 - **Runs are bounded, from both sides of the sandbox** (built, #797). Every run has a wall-clock budget, the first of:
   `simulation.timeout` in the user configuration (`PC_SIMULATION_TIMEOUT`), which is the machine's and over
@@ -1828,13 +1828,13 @@ Each step is useful on its own, which is the test of whether the decomposition i
 
 | # | Step | State |
 |---|---|---|
-| 0 | `simulate:`, plugins, `pc sim`, the default scene; property tables; URDF read/write; MJCF and SDFormat in plugins | built |
+| 0 | `qual: sim:`, plugins, `pc qual test --simulation`, the default scene; property tables; URDF read/write; MJCF and SDFormat in plugins | built |
 | 1 | Cache analysis, route and simulation results across sandbox types | built (#753) |
 | 2 | Command names in the docs and plugins; the `pc ide open --with mujoco` text | built (#754, sim-mujoco #4, sim-gazebo #3) |
 | 3 | Mass properties from materials; kg/m³; one resolution, cached; shown in `pc info` | built (#755, sim-mujoco #5, sim-gazebo #4, the metal and plastic catalogs) |
 | 4 | Scenes state gravity and a medium; fluid materials; buoyancy | built (#757, sim-mujoco #7, sim-gazebo #6, partcad-index #17) |
 | 5 | Joint states in `before`/`after` | built (sim-mujoco #6, sim-gazebo #5) |
-| 6 | `pc test` runs simulations; verdicts and their cache | built (#756) |
+| 6 | `pc qual test` runs simulations; verdicts and their cache | built (#756) |
 | 7 | `slippery` in a tilted scene, and MuJoCo contact settings | built (#761, sim-mujoco #8) |
 | 7a | The friction table, measured | built (#762) |
 | 7b | Buoyancy at the centre of buoyancy | built (#763, sim-mujoco #9, sim-gazebo #8) |
@@ -1845,11 +1845,11 @@ Each step is useful on its own, which is the test of whether the decomposition i
 | 7g | The user documentation refactored to how to use it; this record for the design | built (#758, #764) |
 | 7h | Every run bounded, inside and outside the sandbox; crashes reported with their stderr; plugins detect divergence and a dead server | built (#797, sim-mujoco #14, sim-gazebo #12) |
 | 8 | **Joints, core model**: `motion` degrees of freedom (explicit and implied), combination, joint names, `AssemblyChild.joint`, `pc info` and the `connect` check | built (#766) |
-| 9 | **Bodies**: the assembly/scene rule, ASSY links that place a scene, `simulate:` on a scene, `fixed:`; the `feature_simulate` stacks become scenes; `wrappers/kinematics.py` | built (#784) |
+| 9 | **Bodies**: the assembly/scene rule, ASSY links that place a scene, `qual: sim:` on a scene, `fixed:`; the `feature_simulate` stacks become scenes; `wrappers/kinematics.py` | built (#784) |
 | 10 | **MJCF joints**, with a pendulum example checked against its closed form | built (#786, sim-mujoco #12) |
 | 11 | **URDF joints**, and the converter writing `dof:`; the round trip keeps the kinematics, but for chains the converter folds. Native types (8.13): what URDF has no type for refused, or written through massless links on request; PartCAD's zero kept | built (#788, #804) |
 | 12 | **SDFormat joints**: a link per body and a joint per pair. Native types (8.13): re-zeroed at the start, a floating child a model of its own, a cylindrical, planar or composite joint refused, no dummy links | built with dummy links (sim-gazebo #11); native types being built |
-| 13 | Inputs: `initial:` (a configuration) and `drive:` (position, velocity or effort targets over time) on `simulate:`; temporal helpers for validations | planned |
+| 13 | Inputs: `initial:` (a configuration) and `drive:` (position, velocity or effort targets over time) on `qual: sim:`; temporal helpers for validations | planned |
 | 14 | Devices: actuators (torque constant, gear ratio, rotor inertia as MJCF `armature`) and sensors (encoders, IMU, force-torque, contact; cameras later) attached to ports | planned |
 | 15 | Controller in the loop: a `software:` object, or a Python controller stepped by the plugin; ROS 2 through Gazebo | planned |
 | 16 | Collision geometry (section 5.4) | planned |
@@ -1860,8 +1860,8 @@ Each step is useful on its own, which is the test of whether the decomposition i
 
 ## 14. Open questions
 
-- **`pc sim` with no `validation:`.** `pc test` skips it in a package run and fails it when the object is named. `pc sim`
-  is unchanged for now, and the recommendation is to keep it so: `pc sim --json` on a declaration with no validation is
+- **`pc qual test --simulation` with no `validation:`.** `pc qual test` skips it in a package run and fails it when the object is named. `pc qual test --simulation`
+  is unchanged for now, and the recommendation is to keep it so: `pc qual test --simulation --json` on a declaration with no validation is
   how one sees what a plugin reports before writing the condition.
 - **Physics of a summed joint.** The proposal in 8.7 (agree or let the mating say) is not confirmed.
 - **The target-side sign convention** (8.3). It is today's placement behaviour; whether to keep it or change it before
@@ -1901,7 +1901,7 @@ where the design's boundaries are.
   `ports: {name:}` and `implements: {iface:}` with no value, and both crashed; nothing had written them until the URDF
   conversion generated interfaces programmatically, and it found both at once.
 - **A claim in an example is a test.** `slippery` said friction made a block slide off a level stack; nothing pushed it,
-  and nothing checked until `pc test` ran simulations. An example whose claim is not checked is one readers learn to
+  and nothing checked until `pc qual test` ran simulations. An example whose claim is not checked is one readers learn to
   trust and should not.
 - **A constraint is as stiff as the way it is written.** A screw's thread written as "the slide follows the hinge"
   and as "the hinge follows the slide" is one relation, and MuJoCo held only the second: it softens an equality by

@@ -206,7 +206,7 @@ The plugin folder is named `claude`, but the command namespace comes from
 - **`/pc:gen-part <description>`** — generates a single part: the agent picks a
   representation (build123d / cadquery / openscad / sdf), authors the CAD script
   itself, and validates it by rendering **four views** (`front`, `top`, `right`,
-  `iso`) and checking each against the description — `pc test` only proves the
+  `iso`) and checking each against the description — `pc qual test` only proves the
   geometry instantiates, and one projection hides whatever is behind it.
   Before any of that it settles the part's dimensions on temporary sketches
   (`/pc:gen-sketch`, below), so every number in the script is one that was
@@ -227,8 +227,8 @@ The plugin folder is named `claude`, but the command namespace comes from
   the viewing direction sits perfectly in the one view that hides the offset. New
   capability — PartCAD had no AI assembly path. Where the description makes a
   physical claim (it stands, it floats, it holds a load) it also declares that
-  claim as a `simulate:`, in a scene with the right gravity and medium, and
-  checks it with `pc sim`. Beside an IDE it shows its progress the way
+  claim as a `qual: sim:`, in a scene with the right gravity and medium, and
+  checks it with `pc qual test --simulation`. Beside an IDE it shows its progress the way
   `/pc:gen-part` does: each part as it takes shape, then each version of the
   assembly that builds and renders.
 - **`/pc:gen-scene <description>`** — generates a scene: an arrangement of
@@ -249,7 +249,7 @@ The plugin folder is named `claude`, but the command namespace comes from
   same walls placed by hand, since a `walls` scene cuts no openings. A building
   whose outside is modelled too gets solid walls first, each an extrusion of its
   elevation sketch with the doors and windows as holes, placed side by side
-  along its outline. `pc test` only *warns* about overlaps in a scene, and the
+  along its outline. `pc qual test` only *warns* about overlaps in a scene, and the
   skill judges each warning by what the overlap touches rather than treating it
   as a defect: walls sharing a corner are left alone, a mobile object inside
   another never is.
@@ -318,14 +318,14 @@ The plugin folder is named `claude`, but the command namespace comes from
   hand-placed coordinates. The agent works the port positions out of the
   geometry and then proves them twice: by drawing them on the part
   (`pc render --with-all`) and by mating two instances in a throwaway assembly
-  and rendering that. The part has to pass `pc test` and the validation assembly
+  and rendering that. The part has to pass `pc qual test` and the validation assembly
   has to come out correctly connected.
 - **`/pc:validate <object>`** — decides whether an object is what its
   `requirements:` say it has to be. The ports, interfaces and physical
-  properties are `pc test`'s verdict (its `requirements` check), reported as
+  properties are `pc qual test`'s verdict (its `requirements` check), reported as
   they are; the features are prose, and the agent judges each from evidence it
   gathers and names: every simulation and every engineering analysis scenario
-  (a `simulate:` entry or a scenario of `fea:`, `dynamic:`, `thermal:` or
+  (a `qual: sim:` entry or a scenario of `fea:`, `dynamic:`, `thermal:` or
   `cfd:` says which feature it demonstrates with `feature:`), renders from every angle a feature needs with
   the ports and interfaces drawn, and for an assembly the bill of materials and
   the assembly instructions. A feature nothing shows is "cannot tell", never
@@ -334,7 +334,7 @@ The plugin folder is named `claude`, but the command namespace comes from
   before they model anything.
 - **`/pc:sim-assembly-fea <assembly> <simulation> <part>`** — analyses one part
   of an assembly under what a simulation of the assembly measured. The agent
-  runs the `simulate:` entry, reads the loads on the body the part is welded
+  runs the `qual: sim:` entry, reads the loads on the body the part is welded
   into at the end of the run, in the part's own frame (`part_loads.py`, beside
   the skill, does that arithmetic), works out by statics which of them pass
   through the part and where they enter and leave it, and adds the part a new

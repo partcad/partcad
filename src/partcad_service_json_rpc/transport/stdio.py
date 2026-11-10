@@ -168,7 +168,7 @@ def _private_input() -> BinaryIO:
     unless told otherwise. On Windows that is the same pipe, and a synchronous
     read pending on a pipe holds up whatever else touches it: the child sat
     waiting on its own standard input for as long as this one waited for the
-    client's next request, which was forever (every `pc test` over this
+    client's next request, which was forever (every `pc qual test` over this
     channel). Anywhere, a child reading it would take the client's requests.
     Moved to a descriptor no child inherits, it is this reader's alone, as the
     detached daemon's is (`daemon._serve_detached`).

@@ -271,10 +271,11 @@ def test_a_package_above_that_cannot_be_read_does_not_stop_the_check(tmp_path):
 
 
 @pytest.mark.parametrize("connectivity", ["requireAnchored: false", "skip: true"])
-def test_an_assembly_pc_test_does_not_hold_to_connectivity_is_not_held_to_it_here(tmp_path, connectivity):
+def test_an_assembly_pc_qual_test_does_not_hold_to_connectivity_is_not_held_to_it_here(tmp_path, connectivity):
     root = package(
         tmp_path,
-        "manufacturable: true\nassemblies:\n  thing:\n    type: assy\n    connectivity:\n      %s\n" % connectivity,
+        "manufacturable: true\nassemblies:\n  thing:\n    type: assy\n    qual:\n      basic:\n"
+        "        connectivity:\n          %s\n" % connectivity,
         PLACED,
     )
     assert lint.check_file(str(root / "thing.assy")).diagnostics == []

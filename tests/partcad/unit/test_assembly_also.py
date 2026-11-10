@@ -23,7 +23,7 @@ import textwrap
 import pytest
 
 import partcad as pc
-from partcad.test.connectivity import ConnectivityTest
+from partcad.qual.basic.connectivity import ConnectivityTest
 
 CUBE = os.path.join("examples", "produce_part_stl", "cube.stl")
 

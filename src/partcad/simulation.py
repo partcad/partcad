@@ -3,9 +3,13 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Simulating a part, an assembly or a scene: what ``simulate:`` declares and how it runs.
+"""Simulating a part, an assembly or a scene: what ``qual: sim:`` declares and how it runs.
 
-A part says what it *is*. ``simulate:`` is where it says what it is supposed to
+A simulation is the ``sim`` subtype of qualification (see 'partcad.qual'): an
+object declares its simulations under ``qual: sim:``, one named entry each, and
+``pc qual test --simulation`` runs them.
+
+A part says what it *is*. ``qual: sim:`` is where it says what it is supposed to
 *do* -- or, more often, what it is supposed not to do: not fall over, not slide
 off, not come apart. That is a claim about the part in a world, so a simulation
 is never of a part alone. A scene declares one the same way -- a stack of blocks
@@ -22,7 +26,7 @@ link:
                 is stated here rather than in the scene because it is a fact
                 about *this* object -- where its origin sits relative to the
                 floor it is meant to stand on -- and the scene is shared.
-    simulation  which simulation plugin runs it, by full path. A plugin is
+    path        which simulation plugin runs it, by full path. A plugin is
                 declared exactly as an export or a render implementation is
                 (see 'partcad.output'), in a ``simulation:`` section: a scene
                 goes in as a file, JSON carrying ``before`` and ``after`` comes
@@ -94,6 +98,7 @@ from . import cache_artifacts
 from . import logging as pc_logging
 from . import output, shape_envelope, source_key, wrapper
 from .process_crash import describe_exit_code
+from .qual import config as qual_config
 
 # By name rather than as 'from . import render': the package exports a function
 # called 'render' too, and which of the two 'partcad.render' is depends on what
@@ -101,9 +106,9 @@ from .process_crash import describe_exit_code
 from .render import VIEWS, resolve_viewport
 from .utils import resolve_resource_path
 
-# The section of 'partcad.yaml' a part, an assembly or a scene declares its
-# simulations in.
-SECTION = "simulate"
+# Where in 'partcad.yaml' a part, an assembly or a scene declares its
+# simulations, as a reader of the declaration is told it.
+SECTION = "qual: sim:"
 
 # The key of a declaration that names the requirement feature it demonstrates.
 FEATURE = "feature"
@@ -233,7 +238,7 @@ class SimulationConfigError(Exception):
     cannot hold a subject, a plugin that names no format to hand the scene over
     in. Each of those is wrong on every machine the package is opened on, and no
     install mends it -- which is the whole of why it is a type of its own:
-    `partcad.test.sim` fails it whatever the machine, while a run that resolved
+    `partcad.qual.sim` fails it whatever the machine, while a run that resolved
     and then did not deliver may be the machine's fault (see
     `ImplementationTest._verdict`). The same split `CaeConfigError` and
     `CamConfigError` make for the analyses and the routes.
@@ -277,7 +282,7 @@ STDERR_TAIL_CHARACTERS = 4000
 class SimulationTimeout(Exception):
     """A run that did not finish within its budget, and was stopped.
 
-    A failure and not a skip (see `partcad.test.sim`): a run that hangs is a
+    A failure and not a skip (see `partcad.qual.sim`): a run that hangs is a
     defect -- in the plugin, in the model it was handed, or in how long the
     package says the run takes -- and calling it unanswered would report it as
     checked. The message names the plugin, the budget and where the budget came
@@ -303,7 +308,7 @@ class SimulationCrash(Exception):
 
 
 class SimulationDeclaration:
-    """One entry of an object's ``simulate:`` section, normalized."""
+    """One entry of an object's ``qual: sim:`` section, normalized."""
 
     def __init__(self, name: str, config: dict):
         self.name = name
@@ -321,13 +326,13 @@ class SimulationDeclaration:
         self.desc = self.config.get("desc")
         self.scene = self.config.get("scene") or DEFAULT_SCENE
         # No default: see 'KNOWN_SIMULATION'. 'run_async' is what reports it,
-        # so that a package listing an object with a broken 'simulate:' still
+        # so that a package listing an object with a broken declaration still
         # lists it.
-        self.simulation = self.config.get("simulation") or None
+        self.simulation = self.config.get(qual_config.PATH) or None
         self.validation = self.config.get("validation")
         self.offset = normalize_offset(self.config.get("offset"), name)
         # Parameter overrides handed to the plugin, on top of what its own
-        # declaration says. A 'simulate:' that wants a longer run says
+        # declaration says. A simulation that wants a longer run says
         # 'params: {duration: 30}' rather than needing a plugin of its own.
         self.params = self.config.get("params") or {}
         self.features = declared_features(self.config.get(FEATURE))
@@ -356,7 +361,7 @@ class SimulationResult:
         self.video: typing.Optional[str] = None
 
         # The four below are for a caller that has to say *why*, and are kept
-        # out of 'to_dict()' -- which is what 'pc sim --json' prints, and which
+        # out of 'to_dict()' -- which is what 'pc qual test --simulation --json' prints, and which
         # is unchanged by them.
         #
         # What the run raised, beside 'error', which is only its text: whether
@@ -372,7 +377,7 @@ class SimulationResult:
         self.problem: typing.Optional[str] = None
         # The key the run's answer was looked up and stored under in the
         # artifact cache, or None when it had none. A caller that remembers
-        # something derived from the run -- 'pc test''s verdict -- may only do
+        # something derived from the run -- 'pc qual test''s verdict -- may only do
         # so when there was one (see 'question_key_async').
         self.artifact_key: typing.Optional[str] = None
         # The pictures the run was asked for, and from where ('snapshot_request'),
@@ -464,13 +469,7 @@ def declared(config: dict) -> list:
     ceremony - it is what '-f' selects, what the report prints beside the
     verdict, and what names the directory a run's scene is written to.
     """
-    section = (config or {}).get(SECTION)
-    if not section:
-        return []
-    if not isinstance(section, dict):
-        pc_logging.error("The '%s' section must be a mapping of simulation names" % SECTION)
-        return []
-    return [SimulationDeclaration(name, value or {}) for name, value in section.items()]
+    return [SimulationDeclaration(name, value or {}) for name, value in qual_config.simulations(config or {})]
 
 
 def of_shape(shape) -> list:
@@ -864,7 +863,7 @@ def video_request(ctx, snapshot: dict) -> typing.Optional[dict]:
 # ---------------------------------------------------------------------------
 
 
-# What may be simulated: what may declare 'simulate:', and what a simulation
+# What may be simulated: what may declare 'qual: sim:', and what a simulation
 # scene's 'subject_kind' parameter may be told the subject is - which is also
 # the key the scene's ASSY link names it with ('part:', 'assembly:', 'scene:').
 SUBJECT_KINDS = ("part", "assembly", "scene")
@@ -873,7 +872,7 @@ SUBJECT_KINDS = ("part", "assembly", "scene")
 def subject_kind(shape) -> typing.Optional[str]:
     """What a shape is as the subject of a simulation, or None if it cannot be one.
 
-    A part, an assembly or a scene: those are what declare ``simulate:``. A
+    A part, an assembly or a scene: those are what declare ``qual: sim:``. A
     scene is a subject like the others -- a stack of blocks is an arrangement
     rather than a product, so it is a scene, and it is still a thing that can
     be claimed to stand -- and it is simulated as the subject *of* a scene, the
@@ -902,14 +901,14 @@ async def run_async(
 
     ``report`` is whether this says what came of the run, at the level the
     outcome deserves -- ``ERROR`` for a run that failed or did not validate.
-    ``pc sim`` asks it to, because those lines are its verdict. ``pc test`` does
+    ``pc qual test --simulation`` asks it to, because those lines are its verdict. ``pc qual test`` does
     not, because its verdict is the check's to write: a check that decides a
     failed run was the machine's fault and *skips* it cannot have had an
     ``ERROR`` logged in its name already, since any ``ERROR`` is what makes
     ``pc`` exit non-zero. Unreported, the same lines go to ``DEBUG``.
 
     ``plugin`` runs it with another simulation plugin than the one it names
-    ('pc sim --plugin', the IDE's "Simulated by"), as '<package>:<name>'
+    ('pc qual test --simulation --plugin', the IDE's "Simulated by"), as '<package>:<name>'
     resolved the way the declaration's own would be: everything else the
     declaration says -- the scene, the offset, the parameters, the validation
     -- is asked of that plugin instead. It is a different question, so it is
@@ -999,14 +998,14 @@ def _resolve_plugin_of(ctx, shape, declaration: SimulationDeclaration):
     """The plugin a declaration names, resolved from the package the object is in.
 
     Never against the current package: 'sim-mujoco:mujoco' means the
-    'sim-mujoco' *that* package imported. Which is what keeps 'pc test -P //...'
+    'sim-mujoco' *that* package imported. Which is what keeps 'pc qual test -P //...'
     -- run with the root of a tree current while every object in it sits one or
-    more packages down -- resolving each declaration the way 'pc sim' in its
+    more packages down -- resolving each declaration the way 'pc qual test --simulation' in its
     own package would.
     """
     if not declaration.simulation:
         raise SimulationConfigError(
-            "the simulation '%s' names no 'simulation:' plugin to run it. PartCAD implements no "
+            "the simulation '%s' names no plugin to run it ('path:'). PartCAD implements no "
             "simulator itself; import one and name it, e.g. '%s' for MuJoCo" % (declaration.name, KNOWN_SIMULATION)
         )
     return resolve_plugin(ctx, shape.project_name, declaration.simulation)
@@ -1040,7 +1039,7 @@ async def question_key_async(ctx, shape, kind: str, declaration: SimulationDecla
     run that drew it from where it used to be.
 
     For a caller that remembers something *derived* from a run, and has to be
-    told when the run it was derived from would be a different one: 'pc test'
+    told when the run it was derived from would be a different one: 'pc qual test'
     keys its 'sim' verdict on it (see 'SimTest.cache_key_suffix'). None for a
     declaration that does not resolve, and for a subject with no key
     ('cache: false') -- a run that has no key is one nothing may be remembered
@@ -1198,7 +1197,7 @@ def run_budget(ctx, impl, declaration) -> typing.Tuple[float, str]:
        It is about this machine rather than about the run, and it is the one
        knob for somebody who cannot edit the package -- a slow runner, or a CI
        job that would rather fail fast -- so it is over everything else.
-    2. ``params: {timeout: ...}`` of the ``simulate:`` declaration: this run is
+    2. ``params: {timeout: ...}`` of the ``qual: sim:`` declaration: this run is
        known to be slow, or known to be quick.
     3. ``timeout:`` in the plugin's own declaration: this engine is.
     4. The default, which grows with the run: the larger of ``DEFAULT_TIMEOUT``
@@ -1470,7 +1469,7 @@ def _evaluate(declaration: SimulationDeclaration, result: dict, object_name: str
     The second is None unless the expression would not compile or raised, and
     is then the sentence 'validate' logs. Returned rather than logged so that
     'run_async' can leave the saying of it to its caller (see its ``report``),
-    and so that 'pc test' can put it in the one line its verdict is.
+    and so that 'pc qual test' can put it in the one line its verdict is.
     """
     if not declaration.validation:
         return None, None
@@ -1541,7 +1540,7 @@ def validation_report(result: SimulationResult) -> str:
     The expression is quoted, because it is the claim that failed and the reader
     has to see which one -- an object can declare several, and the package may
     have been edited since anybody last read it. What the plugin reported is
-    not: it is the plugin's own vocabulary and often long, and ``pc sim --json``
+    not: it is the plugin's own vocabulary and often long, and ``pc qual test --simulation --json``
     prints the whole of it for the one run somebody wants to look into.
     """
     declaration = result.declaration
@@ -1555,7 +1554,7 @@ def validation_report(result: SimulationResult) -> str:
             declaration.name,
         )
     expression = str(declaration.validation or "").strip().replace("\n", "\n\t\t")
-    return "%s\n\tvalidation:\n\t\t%s\n\t'pc sim --json' prints what %s reported" % (
+    return "%s\n\tvalidation:\n\t\t%s\n\t'pc qual test --simulation --json' prints what %s reported" % (
         head,
         expression,
         result.plugin_name,

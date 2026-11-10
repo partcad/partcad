@@ -87,7 +87,7 @@ ANALYSIS_SECTIONS = (CAE,)
 #
 # Out of 'ANALYSIS_SECTIONS' too, and that one is not a technicality. An
 # analysis answers a question *about* an object -- and reports findings, which
-# 'pc test' fails on; a route says how to *make* one, and what it reports is how
+# 'pc qual test' fails on; a route says how to *make* one, and what it reports is how
 # long the job is. Nothing a caller does with the one is what it does with the
 # other, and the two are unalike even in their bottom layer: 'cae:' has no
 # built-in package and this one does (see BUILTIN_PACKAGES).
@@ -97,7 +97,7 @@ MANUFACTURING_SECTIONS = (CAM,)
 ALL_SECTIONS = SECTIONS + ANALYSIS_SECTIONS + MANUFACTURING_SECTIONS
 
 # Another section resolved the same way that produces no output file at all:
-# 'simulation:' declares the plugins 'pc sim' runs a scene through. Out of
+# 'simulation:' declares the plugins 'pc qual test --simulation' runs a scene through. Out of
 # 'SECTIONS' for the reason 'cae:' is, and out of 'ANALYSIS_SECTIONS' too -- a
 # simulation names no file type, so there is nothing for 'pc export -t' or
 # 'pc cae' to be offered. It is an 'Implementation' like any other: a script,
@@ -160,6 +160,19 @@ SIMULATE = "simulation"
 # knowing they exist.
 IMPORT = "import"
 
+# Another section resolved the same way that produces no file: 'qual:' declares
+# the qualification plugins a package supplies -- checks of an object that an
+# object asks for by naming the plugin under its own 'qual: <subtype>:' (see
+# 'partcad.qual.plugin'). Out of 'SECTIONS' for the reason 'simulation:' is, and
+# with no built-in package for the reason 'cae:' has none: a check that needs
+# a plugin is a check of somebody else's, with a release cycle of its own, and
+# the checks PartCAD does implement are built in ('partcad.qual.registry').
+#
+# On an object, 'qual:' is something else -- what the object declares about how
+# it is qualified ('partcad.qual.config') -- which is why this one is read only
+# from a package's own configuration.
+QUAL = "qual"
+
 # The fifth, and the only one whose implementation is not a script: 'open:'
 # declares the third-party applications 'pc ide open' can launch. An entry is data
 # and nothing else -- where the application is on each operating system, what to
@@ -197,7 +210,7 @@ BUILTIN_PACKAGES = {
     CAM: "//builtin/cam",
 }
 # The one built-in package that declares objects rather than implementations:
-# the scene a 'simulate:' that names no scene of its own is run in, whose
+# the scene a 'qual: sim:' that names no scene of its own is run in, whose
 # 'subject' parameter is whatever is being simulated. Unlike the simulator that
 # runs it, an empty world costs nothing to ship and depends on nothing.
 BUILTIN_SCENE_PACKAGE = "//builtin/scene"
@@ -374,6 +387,14 @@ RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc", "url"})
 # are held out of the plugin's request for the same reason 'path' is.
 SIMULATION_KEYS = frozenset({"format", "formatOptions"})
 
+# The same, for the 'qual:' section: 'subtype' says what the check produces
+# ('basic', 'topology' or 'other'), 'kinds' which kinds of object it can be asked
+# of, 'format' and 'formatOptions' how the object reaches it, as for a
+# simulation, 'timeout' how long a run may take, and 'cache' whether its verdict
+# is a property of the object and its parameters alone (see
+# 'partcad.qual.plugin'). None is a parameter of the check.
+QUAL_KEYS = frozenset({"subtype", "kinds", "format", "formatOptions", "timeout", "cache"})
+
 # The same, for the two sections that write a file *of an object*: 'filter' says
 # which of that object's links the file is of (see 'partcad_utils.assy_filter'),
 # which PartCAD acts on itself -- it hands the implementation a smaller shape
@@ -413,11 +434,12 @@ IMPORT_BINARY_KEY = "binary"
 # checks an analysis against before asking, rather than a parameter of the run.
 ANALYSIS_KEYS = frozenset({"reads"})
 
-# The request key the implementation script's path travels under. It is passed
-# in the request rather than on the command line because the two positional
+# The request key an import reader's script travels under: the two positional
 # arguments of a wrapper are already spent on the output path and the working
-# directory (see wrappers/wrapper_export.py, which spells this out again -- a
-# wrapper runs in a sandbox and cannot import 'partcad').
+# directory. Like every path a request names, it is on the command line as well,
+# which is what a sandbox that is sent files rather than sharing them rewrites
+# (see 'request_paths'). Its twin is 'wrapper_import.SCRIPT_KEY' -- a wrapper
+# runs in a sandbox and cannot import 'partcad'.
 SCRIPT_KEY = "__script__"
 
 # The request key a file type sets to 'true' to be handed what the shapes it is
@@ -500,7 +522,7 @@ WORLD_KEY = "world"
 #
 # Not to be confused with the other 'reproducible' in this package, which is
 # about whether an *object* can be made twice: 'file_factory.unreproducible_reason()'
-# asks whether what a part is built from is pinned, and 'pc test' fails a part
+# asks whether what a part is built from is pinned, and 'pc qual test' fails a part
 # that is not. That one is a property of a declaration; this one is a property of
 # a file somebody wrote.
 #
@@ -674,6 +696,8 @@ class Implementation:
         """The fields of this configuration that are not parameters."""
         if self.section == SIMULATE:
             return RESERVED_KEYS | SIMULATION_KEYS
+        if self.section == QUAL:
+            return RESERVED_KEYS | QUAL_KEYS
         if self.section == IMPORT:
             return RESERVED_KEYS | IMPORT_KEYS
         if self.section in ANALYSIS_SECTIONS:
@@ -1007,7 +1031,7 @@ def config_sections(section: str) -> tuple:
     'export:' request never falls back to a 'render:' implementation for a
     format that 'render:' owns.
     """
-    if section in (CAE, CAM, SIMULATE, IMPORT, OPEN):
+    if section in (CAE, CAM, SIMULATE, QUAL, IMPORT, OPEN):
         return (section,)
     return (RENDER, EXPORT) if section == EXPORT else (EXPORT, RENDER)
 

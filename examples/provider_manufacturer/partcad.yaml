@@ -82,7 +82,7 @@ parts:
         type: string
         default: //pub/std/manufacturing/material/plastic:pla
       # How precisely it has to be made. Without this the part is asking for
-      # perfect precision, which "pc test" reports as no tolerance at all.
+      # perfect precision, which "pc qual test" reports as no tolerance at all.
       tolerance:
         type: float
         default: 0.1

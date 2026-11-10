@@ -26,7 +26,7 @@ from unittest import mock
 import partcad as pc
 from partcad.interface import InterfacePort
 from partcad.port import port_info
-from partcad.test import interference
+from partcad.qual.topology import interference
 
 CUBE = os.path.join("examples", "produce_part_stl", "cube.stl")
 

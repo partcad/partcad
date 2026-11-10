@@ -20,7 +20,7 @@ import pytest
 import partcad as pc
 from partcad.assembly import placed_leaves
 from partcad.geom import Location
-from partcad.test import interference_artifact
+from partcad.qual.topology import interference_artifact
 
 PACKAGE = "tests/partcad/unit/data/requirements/partcad.yaml"
 
@@ -132,7 +132,7 @@ def test_what_cannot_be_shown_is_not_offered(ctx):
 
 
 def test_what_is_left_behind_is_not_listed_as_what_the_package_declares(ctx, tmp_path):
-    # 'pc test' then 'pc render' in one daemon: the README is written with the
+    # 'pc qual test' then 'pc render' in one daemon: the README is written with the
     # artifacts still registered, and it lists declarations, which they are not.
     pair = ctx.get_assembly("//:pair")
     artifact = asyncio.run(interference_artifact.make_async(ctx, pair, _overlap()))

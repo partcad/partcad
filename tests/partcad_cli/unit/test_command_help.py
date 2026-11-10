@@ -165,7 +165,7 @@ def test_no_command_spells_one_option_two_ways():
     'widget'.
 
     `fast_only.option(short=False)` exists for a command that owns `-f` for
-    something else, which is how `pc test` and `pc sim` keep theirs. This
+    something else, which is how `pc qual test` and `pc qual test --simulation` keep theirs. This
     asserts that nothing has to remember.
     """
     found = []

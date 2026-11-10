@@ -104,7 +104,7 @@ follows the bottom and says so as a warning naming how much the two ends differ
 by. A route produced from an outline nobody expected is the one failure that
 looks like a success all the way to the machine.
 
-``pc test`` runs the same thing as its ``cam`` check -- it produces the route
+``pc qual test`` runs the same thing as its ``cam`` check -- it produces the route
 and passes the object only if one came back -- and applies it to an object that
 declares the section and to nothing else, so a package of bolts pays nothing for
 it. Unlike the analyses it does not keep what it produced: a route a check wrote

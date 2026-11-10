@@ -5,7 +5,7 @@ Feature: `pc cae` command
   says what holds it and what it carries, in a section named after the analysis,
   because that is a property of the part rather than of whoever analyses it --
   as a map of named scenarios, one per question of that kind it is asked, the
-  way `simulate:` is a map of simulations.
+  way `qual: sim:` is a map of simulations.
   PartCAD ships no solver: the implementation is a package, declared in a `cae:`
   section exactly as an export or a render implementation is declared in its own.
 
@@ -326,9 +326,9 @@ Feature: `pc cae` command
     Then the command should exit with a status code of "2"
     And STDERR should contain "declares no FEA scenario 'heavier'. It declares: loaded, dropped"
 
-  @success @pc-cae @pc-test
-  Scenario: `pc test -f fea` applies only to a part that declares the section
-    # The gate is the whole cost model: a `pc test -r` over a package tree must
+  @success @pc-cae @pc-qual-test
+  Scenario: `pc qual test -f fea` applies only to a part that declares the section
+    # The gate is the whole cost model: a `pc qual test -r` over a package tree must
     # not start a solver for every bolt in it. This package declares no `fea:`
     # anywhere, so the check is not applicable, nothing is built, and the run is
     # seconds rather than minutes.
@@ -349,5 +349,5 @@ Feature: `pc cae` command
       if "show_object" in locals():
           show_object(result.part.wrapped, name="bracket")
       """
-    When I run "pc --no-ansi test -f fea"
+    When I run "pc --no-ansi qual test -f fea"
     Then the command should exit with a status code of "0"

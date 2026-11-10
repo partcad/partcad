@@ -27,6 +27,9 @@ parts:
   plain:
     type: basic
     cuboid: 10
+  gadget:
+    type: :widget
+    url: https://www.example.com/gadget
 assemblies:
   hub:
     type: assy
@@ -76,6 +79,11 @@ simulation:
   sim:
     path: sim.py
     url: https://www.example.com/sim
+qual:
+  inspect:
+    path: inspect.py
+    subtype: basic
+    url: https://www.example.com/inspect
 open:
   viewer:
     desc: A viewer
@@ -87,7 +95,10 @@ def test_the_schema_takes_it_on_every_kind_of_declaration():
     jsonschema.validate(yaml.safe_load(PACKAGE), get_partcad_schema())
 
 
-@pytest.mark.parametrize("kind, name", [("assemblies", "hub"), ("interfaces", "mount"), ("sketches", "ring")])
+@pytest.mark.parametrize(
+    "kind, name",
+    [("assemblies", "hub"), ("interfaces", "mount"), ("sketches", "ring"), ("parts", "gadget"), ("qual", "inspect")],
+)
 def test_the_schema_refuses_one_that_is_not_a_url(kind, name):
     document = yaml.safe_load(PACKAGE)
     document[kind][name]["url"] = "not a url"
@@ -95,8 +106,9 @@ def test_the_schema_refuses_one_that_is_not_a_url(kind, name):
         jsonschema.validate(document, get_partcad_schema())
 
 
-def test_a_plugin_is_never_handed_it():
-    implementation = output.Implementation("render", "pretty", {"path": "pretty.py", "url": PAGE, "size": 3})
+@pytest.mark.parametrize("section", ["render", output.QUAL])
+def test_a_plugin_is_never_handed_it(section):
+    implementation = output.Implementation(section, "pretty", {"path": "pretty.py", "url": PAGE, "size": 3})
     assert implementation.parameters == {"size": 3}
 
 

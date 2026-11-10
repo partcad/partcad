@@ -98,7 +98,7 @@ declaration.
 **A relative name is resolved from where it is written.** ``calculix:fea`` inside a package means the
 package *that* package imported under the name ``calculix``, however deep in a tree it sits. A name you type
 on the command line is resolved from where you are standing instead. The difference matters under
-``pc test -P //...``, which runs with the tree's root current while every object in it sits packages below.
+``pc qual test -P //...``, which runs with the tree's root current while every object in it sits packages below.
 
 **A plugin brings its own environment.** ``pythonVersion`` and ``pythonRequirements`` on the declaration
 describe the sandbox its script runs in, and they are read from the package that ships the script and from

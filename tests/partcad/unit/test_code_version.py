@@ -25,7 +25,7 @@ from partcad import code_version, shape_factory, wrapper
 from partcad.cache_hash import CacheHash
 from partcad.part_factory_wrapper import PartFactoryWrapper
 from partcad.project_external_repository import ProjectExternalRepository
-from partcad.test.test import Test
+from partcad.qual.qualification import Qualification
 
 _SRC = os.path.dirname(os.path.abspath(pc.__file__))
 
@@ -188,7 +188,7 @@ def test_every_factory_names_the_wrappers_it_runs():
 
 
 def test_every_test_names_the_wrappers_it_runs():
-    """The verdict cache is keyed on them; see 'Test.WRAPPERS'."""
+    """The verdict cache is keyed on them; see 'Qualification.WRAPPERS'."""
     import importlib
 
     reaches = {
@@ -196,21 +196,23 @@ def test_every_test_names_the_wrappers_it_runs():
         "get_interference_async": "interference.py",
         "manufacturability_analysis": "manufacturability.py",
     }
-    test_dir = os.path.join(_SRC, "test")
     checked = 0
-    for name in sorted(os.listdir(test_dir)):
-        if not name.endswith(".py"):
-            continue
-        with open(os.path.join(test_dir, name), encoding="utf-8") as f:
+    # Every module a check can be in: the subtypes' packages, and 'qual' itself.
+    modules = []
+    for package in ("qual", "qual/basic", "qual/topology"):
+        directory = os.path.join(_SRC, package)
+        modules.extend((package, name) for name in sorted(os.listdir(directory)) if name.endswith(".py"))
+    for package, name in modules:
+        with open(os.path.join(_SRC, package, name), encoding="utf-8") as f:
             text = f.read()
         needed = {wrapper_name for call, wrapper_name in reaches.items() if call in text}
         if not needed:
             continue
-        module = importlib.import_module("partcad.test." + name[: -len(".py")])
+        module = importlib.import_module("partcad.%s.%s" % (package.replace("/", "."), name[: -len(".py")]))
         classes = [
             value
             for value in vars(module).values()
-            if isinstance(value, type) and issubclass(value, Test) and value.__module__ == module.__name__
+            if isinstance(value, type) and issubclass(value, Qualification) and value.__module__ == module.__name__
         ]
         assert classes, name
         for cls in classes:
@@ -381,7 +383,7 @@ class _Shape:
         return True
 
 
-class _SolidTest(Test):
+class _SolidTest(Qualification):
     WRAPPERS = ("solidity.py",)
 
     async def test(self, tests_to_run, ctx, shape, test_ctx={}):

@@ -19,7 +19,7 @@ What comes back is plain data.
 import os
 
 from . import logging as pc_logging
-from . import sandbox_versions, shape_envelope, wrapper
+from . import request_paths, sandbox_versions, shape_envelope, wrapper
 from .process_crash import describe_exit_code
 
 
@@ -53,9 +53,16 @@ async def read_assembly_tree(ctx, assembly_file, output_folder, file_type="step"
         "precision": precision,
     }
 
-    wrapper_path = wrapper.get("import_assy.py")
-    command = [wrapper_path, "import_assy"]
-    exitcode, response_serialized, errors = await runtime.run_async(command, shape_envelope.serialize(request))
+    # The file and the folder go on the command line as well as in the request,
+    # which is what a sandbox that is sent files rather than sharing them sends
+    # and rewrites; the parts written into the folder come back from it (see
+    # 'request_paths').
+    command = request_paths.carry(
+        [wrapper.get("import_assy.py"), "import_assy"], request, ("assembly_file", "output_folder")
+    )
+    exitcode, response_serialized, errors = await runtime.run_async(
+        command, shape_envelope.serialize(request), **request_paths.written(runtime, output_folder)
+    )
     if exitcode != 0 and not errors:
         errors = "assembly import failed: %s" % describe_exit_code(exitcode)
     if errors:

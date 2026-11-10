@@ -35,7 +35,7 @@ declaration of the same object:
      - In the UI
    * - :doc:`Requirements </digital_thread/lifecycle/requirements>`
      - ``requirements:`` -- features, ports, interfaces, physical properties
-     - ``pc test``, ``/pc:validate``
+     - ``pc qual test``, ``/pc:validate``
      - **Requirements**
    * - :doc:`Design </digital_thread/lifecycle/design>`
      - the part's script or file, its parameters, ports and interfaces; an
@@ -44,18 +44,18 @@ declaration of the same object:
      - **Design**
    * - :doc:`Analysis </digital_thread/lifecycle/analysis>`
      - ``physics:``, materials, ``fea:``, ``dynamic:``, ``thermal:``, ``cfd:``,
-       ``simulate:``
-     - ``pc info``, ``pc cae``, ``pc sim``
+       ``qual: sim:``
+     - ``pc info``, ``pc cae``, ``pc qual test --simulation``
      - **Analysis**
    * - :doc:`Manufacturing </digital_thread/lifecycle/manufacturing>`
      - ``manufacturing:``, ``vendor:`` and ``sku:``, materials, tolerances,
        software, an assembly's instructions
      - ``pc bom``, ``pc supply``, ``pc instructions``, ``pc cam``
      - **Manufacturing**
-   * - :doc:`Validation </digital_thread/lifecycle/validation>`
+   * - :doc:`Qualification </digital_thread/lifecycle/qualification>`
      - the claims all of the above make, checked
-     - ``pc test``, ``pc sim``, ``/pc:validate``
-     - **Validation**
+     - ``pc qual test``, ``pc qual test --simulation``, ``/pc:validate``
+     - **Qualification**
 
 Because every phase is written into one declaration, nothing is copied from one
 phase to the next, and nothing can fall out of step: the mass a requirement is
@@ -87,9 +87,9 @@ Every claim can be checked
 
 A declaration states claims: this part is made by laser cutting, this assembly's
 parts do not overlap, this mass is under 50 grams, this robot does not tip over.
-``pc test`` checks every claim that can be measured, ``pc sim`` every claim about
+``pc qual test`` checks every claim that can be measured, ``pc qual test --simulation`` every claim about
 behaviour that a simulation can show, and the ``/pc:validate`` agent skill
-judges the rest from evidence it gathers and names. See :doc:`/digital_thread/lifecycle/validation`.
+judges the rest from evidence it gathers and names. See :doc:`/digital_thread/lifecycle/qualification`.
 
 Packages build on packages
 ==========================

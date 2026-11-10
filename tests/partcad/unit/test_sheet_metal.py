@@ -15,7 +15,7 @@ declaration names two things rather than describing one:
       source: blank                         # the part that is bent
       instructions: bends;include=BEND_UP   # the sketch that says where
 
-and 'pc test' asks one question of each of them: the blank has to be flat on top
+and 'pc qual test' asks one question of each of them: the blank has to be flat on top
 and bottom, and every bend line has to say what kind of bend it is.
 
 The flatness analysis is exercised against real OCCT geometry here, because it
@@ -39,8 +39,8 @@ from partcad.part_config_manufacturing import (
     METHOD_SUBTRACTIVE,
     PartConfigManufacturing,
 )
-from partcad.test import manufacturability_analysis
-from partcad.test.manufacturability_sheet_metal import ManufacturabilitySheetMetalTest, _describe, bend_failure
+from partcad.qual.basic import manufacturability_analysis
+from partcad.qual.basic.manufacturability_sheet_metal import ManufacturabilitySheetMetalTest, _describe, bend_failure
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 import wrapper_manufacturability  # noqa: E402
@@ -280,7 +280,7 @@ PACKAGE = {
         },
     },
     "sketches": {"bends": {"type": "dxf"}},
-    # An assembly, because 'pc test' runs over those too and they carry a
+    # An assembly, because 'pc qual test' runs over those too and they carry a
     # 'manufacturing:' of their own in the same spelling: AssemblyConfiguration
     # gives every 'type: assy' assembly 'method: assy'.
     "assemblies": {"rig": {"type": "assy"}},
@@ -465,7 +465,7 @@ def test_a_declaration_missing_a_reference_still_keys(ctx, monkeypatch):
 def test_the_check_itself_passes_over_an_assembly(ctx):
     """The other half of the question the key already asks.
 
-    'pc test' offers every shape to every check, and this one is about a part:
+    'pc qual test' offers every shape to every check, and this one is about a part:
     an assembly is not made by bending a blank, so it is not this check's to
     fail.
     """
@@ -508,13 +508,13 @@ def test_the_blank_is_resolved_with_the_accessor_a_coroutine_may_use(ctx, monkey
 def test_an_assembly_is_not_read_as_though_it_were_a_part(ctx, caplog):
     """'manufacturing:' means something else on an assembly, and this may not read it.
 
-    'pc test' runs every check over assemblies as well as parts, and an
+    'pc qual test' runs every check over assemblies as well as parts, and an
     assembly's method vocabulary is its own: AssemblyConfiguration gives every
     'type: assy' assembly 'method: assy', which is not a way of making a *part*
     and is not in the part method map. Reading it with
     'PartConfiguration.get_manufacturing_data' therefore reports an unknown
     method - and reports it as an error, so it does not merely read oddly. It
-    fails 'pc test' outright for every package that contains an assembly, which
+    fails 'pc qual test' outright for every package that contains an assembly, which
     is most of them.
 
     'test()' has always asked this question first. The key had to ask it too.
