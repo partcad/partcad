@@ -151,6 +151,29 @@ def test_a_key_mouser_refuses_says_to_log_in(mouser):
     assert made.whoami({"api_key": "bad"}) is None
 
 
+@pytest.mark.parametrize(
+    "message, about_the_key",
+    [
+        ("Invalid unique identifier.", True),
+        ("The API key is invalid.", True),
+        ("apiKey is required.", True),
+        ("Keyword is required.", False),
+        ("The keyword must be at least 3 characters.", False),
+    ],
+)
+def test_only_an_error_about_the_key_says_to_log_in(mouser, message, about_the_key):
+    made = mouser()
+    code = "Invalid" if message.startswith("Invalid") else "Required"
+    made.http.request.table[API + "/search/keyword"] = (
+        200,
+        {"Errors": [{"Id": 0, "Code": code, "Message": message}], "SearchResults": None},
+    )
+    with pytest.raises(d.SiteError) as raised:
+        made.ask("/search/keyword", {"SearchByKeywordRequest": {"keyword": "lm"}}, "a search", ttl=0)
+    assert isinstance(raised.value, d.NeedsCredentials) is about_the_key
+    assert message in str(raised.value)
+
+
 def test_without_a_key_nothing_is_asked(mouser, capsys):
     made = mouser("")
     assert d.pm.serve(made, "search/part?q=lm358") is None

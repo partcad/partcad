@@ -31,6 +31,7 @@ price break says. Mouser allows a key 30 requests a minute and 1,000 a day.
 
 import importlib.util
 import os
+import re
 import sys
 import urllib.parse
 
@@ -58,6 +59,8 @@ d = _shared()
 
 API = "https://api.mouser.com/api/v1"
 WEB = "https://www.mouser.com"
+# An error that names the API key, as a word: "keyword" is a search's, not the key's.
+KEY_ERROR = re.compile(r"\b(?:api\s*key|apikey|key)\b", re.IGNORECASE)
 
 # What Mouser says of a product that can no longer be ordered.
 GONE = ("obsolete", "endoflife", "discontinued", "factorydiscontinued")
@@ -115,7 +118,7 @@ class Mouser(d.Distributor):
         errors = [e for e in (answer or {}).get("Errors") or [] if isinstance(e, dict)]
         if errors:
             message = "; ".join(str(e.get("Message") or e.get("Code")) for e in errors)
-            if any(d.fold(e.get("Code")) in ("invalid", "unauthorized") for e in errors) or "key" in message.lower():
+            if any(d.fold(e.get("Code")) in ("invalid", "unauthorized") for e in errors) or KEY_ERROR.search(message):
                 raise d.NeedsCredentials("mouser: %s: %s: %s again" % (what, message, self.login_command()))
             raise d.SiteError("mouser: %s: %s" % (what, message))
         return [self.product_of(p) for p in ((answer or {}).get("SearchResults") or {}).get("Parts") or []]
