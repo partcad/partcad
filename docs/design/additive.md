@@ -1,12 +1,13 @@
-# Additive manufacturing - the design, the print, and what the print weighs: design
+# Additive manufacturing - the design, the printer, its route and the print: design
 
-This is the design record for how PartCAD describes a printed part: the design it is a print of, what it is drawn as,
-the process that prints it, and - proposed, not built - how the printed part itself is worked out: its real weight, and
-its geometry as a model of its own. How to *use* what is built is the user documentation's job
-(`docs/source/config_making.rst`, "Additive"); this file is for whoever changes it.
+This is the design record for how PartCAD describes a printed part: the design it is a print of, the printer that
+prints it, the route the printer follows and - proposed, not built - the print itself: the part as it comes off the
+bed, with the emptiness inside it, which is what it weighs and what a section through it shows. How to *use* what is
+built is the user documentation's job (`docs/source/config_making.rst`, "Additive"); this file is for whoever changes
+it.
 
 Status words, as in [`cmf.md`](cmf.md): **built** is on this branch; **decided** is agreed and not built yet;
-**proposed** is not agreed; **open** is not decided at all. *Unverified* marks a claim the survey could not confirm
+**proposed** is not agreed; **open** is not decided at all. *Unverified* marks a claim the surveys could not confirm
 from a primary source.
 
 ## Contents
@@ -14,29 +15,33 @@ from a primary source.
 1. [Goal](#1-goal)
 2. [What PartCAD did before](#2-what-partcad-did-before)
 3. [The declaration](#3-the-declaration)
-4. [Three geometries: the design, the visual, the print](#4-three-geometries-the-design-the-visual-the-print)
-5. [CMF and the manufacturing section](#5-cmf-and-the-manufacturing-section)
-6. [Survey: predicting the printed part](#6-survey-predicting-the-printed-part)
-7. [Proposal: the printed part, its weight, and its route](#7-proposal-the-printed-part-its-weight-and-its-route)
-8. [Specifications](#8-specifications)
-9. [Roadmap](#9-roadmap)
+4. [The design, the picture and the print](#4-the-design-the-picture-and-the-print)
+5. [A printer is a `pc cam` machine](#5-a-printer-is-a-pc-cam-machine)
+6. [CMF and the manufacturing section](#6-cmf-and-the-manufacturing-section)
+7. [Survey: the print from its route](#7-survey-the-print-from-its-route)
+8. [Prototype: a route from `pc cam`'s parts, and what it deposits](#8-prototype-a-route-from-pc-cams-parts-and-what-it-deposits)
+9. [Proposal](#9-proposal)
+10. [Specifications](#10-specifications)
+11. [Roadmap](#11-roadmap)
+12. [Appendix: the first survey - the print from its settings alone](#12-appendix-the-first-survey---the-print-from-its-settings-alone)
 
 ## 1. Goal
 
-A 3D-printed part is not the solid its designer drew. A slicer turns that solid into a skin a few lines thick, a top
-and a bottom a few layers deep, and an inside filled at a density - 15%, 20%, 40% - in a pattern. What is drawn, what is
-placed in an assembly and what a supplier is sent is the design; what the part *weighs*, where its centre of mass is,
-how stiff it is and what a section through it shows are properties of the print.
+A 3D-printed part is not the solid its designer drew. A slicer - a router program writer for a machine that adds
+material - turns that solid into a route: a few rings around every outline, a few solid layers under every top and over
+every bottom, and the inside crossed by lines at a density, 15%, 20%, 40%. What comes off the bed is the material that
+route deposits, and it is mostly empty inside.
 
 So in PartCAD:
 
-- A printed part names its **design** (`manufacturing: source:`) apart from itself, and the design is what is printed,
-  what the tolerance is measured against and what a print service is sent.
-- The design is also what the part is **drawn** as, unless it names a **visual** (`manufacturing: visual:`).
-- The **process** settings that decide the print's geometry (walls, top and bottom layers, infill) are declared under
-  the process' own subsection (`fff:`), as a subtractive machine's are under `cnc:` or `laser:`.
-- The **print** - the design as the process makes it - is derived from the two, never modelled by hand: first its
-  weight, then its geometry, then from the route that prints it.
+- A printed part names its **design** (`manufacturing: source:`). The design is what is printed, what the tolerance is
+  measured against and what a print service is sent - and what a **picture** of the part draws, unless the part names a
+  `visual:` of its own (the part-level key every part has).
+- The **printer** is a machine (`fff:`), declared and read exactly as `cnc:`, `laser:`, `drill:` and `cut:` are, with the
+  router's keys where they mean the same thing.
+- The **route** a printer follows is written by `pc cam`, out of the pieces `//builtin/cam` already has.
+- The **print** - the part itself, `get_wrapped`, what is weighed and sectioned and exported as what it is - is what that
+  route deposits. It is derived, never modelled by hand.
 - What it is **made of** stays the part's CMF. The manufacturing section says how, never of what.
 
 ## 2. What PartCAD did before
@@ -48,7 +53,8 @@ So in PartCAD:
 | `manufacturability-additive` | The part is a closed solid. `# TODO(clairbee): Utilize the data provided in the config`. |
 | `procurement` | A printed part is made "from nothing it names": nothing procured. |
 | `manufacturing_instructions` | "Made additively (3D printed)." |
-| Weight (`physics`) | The solid's volume at the material's density: a 20%-infill PLA bracket weighed as solid PLA, two to four times its real weight. |
+| Weight (`physics`) | The solid's volume at the material's density: a 20%-infill PLA part weighed as solid PLA, two to three times its real weight ([section 8](#8-prototype-a-route-from-pc-cams-parts-and-what-it-deposits)). |
+| `pc cam` | Routes for a router, a laser and a drill. Nothing for a printer. |
 | Cart (`get_mcft`) | The part's own `parameters:` defaults as raw strings: a reference (an alias, an enrich) reported no material at all. |
 
 ## 3. The declaration
@@ -66,77 +72,116 @@ parts:
       tolerance: {type: float, default: 0.2}
 
   bracket-printed:            # no type: it is the design, printed
+    visual: bracket-render    # optional: the part-level key; the design is drawn otherwise
     manufacturing:
       method: additive
       source: bracket         # the design
-      visual: bracket-render  # optional: drawn as this instead
-      fff:                    # the process
+      fff:                    # the printer: a machine
+        toolAxis: -Z          # the nozzle comes down along -Z: printed as modelled
         layerHeight: 0.2 mm
         walls: 3
         topLayers: 5
         bottomLayers: 4
         infill: 20%
         infillPattern: gyroid
+        feed: 3000
 ```
 
 | Key | Meaning |
 | --- | --- |
 | `source` | Optional. The design. A part naming none is its own design - what every `additive` part written before this meant. Never stock: `procurement.stock_name` is None for a printed part whatever it names. |
-| `visual` | Optional, and only beside a `source` and only on a part with no `type:`. What the part is drawn, placed and exported as. Never what is printed. |
-| `fff` | Optional. Fused filament fabrication (ISO/ASTM 52900 material extrusion; "FDM" is a trademark). Its keys: `nozzle`, `layerHeight`, `lineWidth` (lengths, any unit `pc cam` reads), `walls`, `topLayers`, `bottomLayers` (whole numbers), `infill` (`20%` or `0.2`; a bare number above 1 is refused), `infillPattern` (a name, lower-cased), `desc`. |
+| `visual` (the part's own, not the manufacturing section's) | What a picture draws. For a printed part that names a design and no `visual:`, the design (`visual.design`). |
+| `fff` | Optional. A filament printer (fused filament fabrication; ISO/ASTM 52900 material extrusion; "FDM" is a trademark), a machine read by `MachineConfig` ([section 5](#5-a-printer-is-a-pc-cam-machine)). A part naming none has no printer: there is no printing analogue of the router that cuts anything the others can. |
 
-**No `type:`.** A part that names a design needs no geometry of its own. `PartConfiguration.normalize` gives it
-`type: alias`, `source: <visual, else design>` and a marker (`implied_type: additive`,
-`part_config_manufacturing.implied_type`), so it *is* a reference: it takes its source's cache key, ports, CMF and
-tolerance, restates its own `manufacturing:` section (`PartFactoryAlias.RESTATED`), and takes `with:` to parameterise
-the design (`with: {color: ":orange"}`). A part that does write a `type:` is drawn as what it is and still names its
-design in `source`; it may not say `visual:` as well (the schema and the check refuse it). A design that cannot be
-found makes a type-less printed part a reference to nothing, which fails as every such reference does.
+**No `type:`.** A part that names a design needs no geometry of its own. Until the print can be worked out
+([section 9](#9-proposal)), `PartConfiguration.normalize` gives it `type: alias` of its design, marked
+`implied_type: additive` (`part_config_manufacturing.implied_type`): it is then a reference in every respect - the
+design's key, ports, CMF and tolerance - that restates its own `manufacturing:` and takes `with:` to parameterise the
+design. That makes its weight the solid design's for now, an upper bound; `implied_type` is the one place that changes
+when the print exists. A part that does write a `type:` - an as-printed model imported from a slicer or a scan - is that
+geometry, and names its design in `source`.
 
-**Errors are recorded, not raised.** A process subsection that cannot be read sets `process_error`, kept apart from
-`machine_error` on purpose: `pc cam` visits every part whose `machine_error` is set, and a typo in an infill is nothing a
-router program has to say about. A print setting written directly under `manufacturing:` is reported as "a setting of
-the process it is printed by; write it under 'fff:'" rather than as an unknown key. The cut's keys on a printed part
-are still refused as before, in the words every other method hears.
-
-**Names.** PartCAD's camelCase, not one slicer's spelling, so that the declaration is not tied to the slicer that reads
-it; the user documentation has the table to PrusaSlicer and Cura keys ([section 6.5](#65-vocabulary)). Only the settings
-that decide the printed *shape*: speeds, temperatures and cooling decide whether a print succeeds, and are the
-printer's. `PROCESS_DEFAULTS` (0.4 mm nozzle, 0.2 mm layers, 0.45 mm lines, 2 walls, 4 + 4 layers, 15% grid) is what
-PartCAD assumes where it has to work something out; it is never written into instructions or sent to a supplier, whose
-defaults are better than PartCAD's guess.
+**Errors are recorded, not raised**, as for every machine: an `fff:` that cannot be read is `machine_error`, which
+`manufacturability-additive` and the build plan report and `pc cam` visits ("broken, and therefore visited"). A printer's
+setting written directly under `manufacturing:` is reported as "a setting of the printer; write it under 'fff:'"; a
+cut's key on a printed part is refused as it always was; `manufacturing: visual:` is refused with a sentence pointing at
+the part-level key.
 
 **Where it is read.**
 
 | Reader | What it does with it |
 | --- | --- |
-| `manufacturability-additive` | The declaration can be read; the visual is not doubled by a type; the **design** (or the part itself) exists and is a closed solid. Keys on the design's key and the process settings. |
+| `visual.visual_of_async` | Draws a printed part as its design where it names no `visual:`. A reference inherits, so a type-less printed part (which is the design already) substitutes nothing. |
+| `manufacturability-additive` | The declaration can be read; the **design** (or the part itself) exists and is a closed solid. Keys on the design's key and each printer's `MachineConfig.key()`. |
 | `procurement` | A design is not stock: nothing is procured for it. |
-| `manufacturing_instructions` | "Printed from the design `bracket`." and "Print it on a filament printer (FFF); layer height 0.2 mm, 3 walls, ..., infill 20% gyroid." - only what was stated. |
-| `build_plan` | A `process_error` is a problem of the part, as a `machine_error` is. |
-| Cart | `manufacturing: {method, design, processes}` beside `material`/`color`/`finish` (`PartConfigManufacturing.print_data`), settings as stated. |
-| Manufacturer provider `load()` | Sends the **design's** STEP, not the visual's. |
+| `manufacturing_instructions` | "Printed from the design `bracket`." and "Print it on a filament printer (FFF); layer height 0.2 mm, 3 walls, ..., infill 20% gyroid, feed 3000 mm/min." - only what was stated, and the axis where it is not `-Z`. |
+| `cam` | `pc cam` passes a printed part over and `pc cam -m fff` refuses with `unrouted_reason` until a printer's route is written ([section 9.1](#91-pc-cam-writes-a-printers-route)). |
+| Cart | `manufacturing: {method, design, machines}` beside `material`/`color`/`finish` (`PartConfigManufacturing.print_data`), settings as stated. |
+| Manufacturer provider `load()` | Sends the **design's** STEP, not the part's own geometry. |
 
-## 4. Three geometries: the design, the visual, the print
+## 4. The design, the picture and the print
 
 | | What it is | Where it comes from | Who reads it |
 | --- | --- | --- | --- |
-| **design** | The solid the designer had in mind | `source:`, else the part | the additive check, the tolerance, a print service, the slicer |
-| **visual** | What the part looks like in a view | `visual:`, else the design | every view and drawing, an assembly's placement, `pc export` by default |
-| **print** | The design as the process makes it | derived: design + process (+ route) | weight, centre of mass, inertia; a section view; `pc export` of the print ([section 7](#7-proposal-the-printed-part-its-weight-and-its-route)) |
+| **design** | The solid the designer had in mind | `source:`, else the part | the additive check, the tolerance, a print service, the route |
+| **picture** | What the part looks like | the part's `visual:`, else the design (`partcad.visual`) | the 3D view, `render:` file types with `visuals: true` |
+| **print** | The design as the printer deposits it, empty inside | derived: design + printer, through the route | `get_wrapped`: weight, centre of mass, inertia, sections, exports, simulation, every check |
 
-The visual is the part's geometry - `get_wrapped` - because it is what nearly every reader wants and the cheapest to
-have. The print is a *derived* object, as a route from `pc cam` is: worked out on demand, cached under a key of its own,
-never what an assembly places. That is what keeps a printed part costing what it cost before for everything that does
-not ask about the print.
+The part-level `visual:` (#939) settles the first question this record used to answer for itself: a part *is* one
+thing - the tree every test, analysis, route, export and simulation reads - and a picture may draw another. For a print
+that is exactly the split wanted: the part is the print, with its voids, and a picture draws the design, which is what
+it looks like from outside. Nothing is substituted anywhere but in a picture, and a picture is keyed on the visual it
+drew, so neither costs the other a rebuild.
 
-*Rejected:* making the print the part's geometry (every render and every assembly would tessellate an infill
-lattice to draw a surface that looks like the design); a `print:` part type the user declares by hand for every printed
-part (one more declaration per part for what is always the same derivation - kept instead as an opt-in for exporting
-one, [section 7.4](#74-pc-export-and-pc-import)); the visual as a top-level key on every part (only a print has a design
-it differs from; a part that is drawn as something else is a reference).
+## 5. A printer is a `pc cam` machine
 
-## 5. CMF and the manufacturing section
+**Built:** the declaration. **Proposed:** the route ([section 9.1](#91-pc-cam-writes-a-printers-route)).
+
+A printer follows a route, layer by layer, exactly as a router does; along it, it lays a bead down where a router cuts
+one away. So `fff:` is a fifth machine - `MACHINE_FFF`, the additive method's (`PRINTERS`) - read by `MachineConfig`
+and `_read_machine` like the four subtractive ones, and every key it takes is either a router's key that means the same
+thing or one with no counterpart in a cut:
+
+| `fff:` key | `pc cam` counterpart | Kind |
+| --- | --- | --- |
+| `toolAxis` / `along` | the same key: the axis the tool comes down along. For a printer that is the **build orientation**, which decides where the layer lines run and what overhangs, and `pc cam` orients a print by it the way it orients a cut (`cam_gcode._orient`) | own |
+| `nozzle`, `filament` | a laser's `kerf`: what the machine *is*, not what it is told | own |
+| `feed` | `feed`, the same key and the same parser | job |
+| `layerHeight` | `depth_per_pass`, built up rather than cut down | job |
+| `lineWidth` | the width the path leaves behind: a router's `diameter`, a laser's `kerf` | job |
+| `walls` | a `profile`, repeated inward around every outline and every hole, a line apart | job |
+| `infill` | a `pocket` whose `stepover` is one line over the infill: 20% is a line every five | job |
+| `infillPattern` | `operation`: `concentric` *is* a pocket's rings; `rectilinear`, `grid`, `gyroid`... are lines | job |
+| `topLayers`, `bottomLayers` | nothing: a cut never asks what is above it | job |
+
+Speeds other than the feed, temperatures and cooling decide whether a print succeeds rather than what shape it is, and
+are the printer's. `implementation:` - who writes the route - is refused on `fff:` for now, as on `cut:`, because nothing
+writes a printer's route yet; it is the key a slicer package will be named by.
+
+**What `//builtin/cam` already has, and what a printer's route still needs.** `cam_gcode.py` is a 2.5D router program
+writer, and a slicer is a 2.5D program writer run once per layer. Of what a route is made of:
+
+| Piece | In `//builtin/cam` | For a printer |
+| --- | --- | --- |
+| The section at a height | `_faces_at(obj, z)` (`b3d.section`) | the same, once per layer |
+| The outline as a polyline within a tolerance | `_wire_points` (`GCPnts_QuasiUniformDeflection`) | the same |
+| Concentric offsets until nothing is left | `_pocket_paths` (`Wire.offset_2d`, `Kind.ARC`) | perimeters, and concentric infill - **but** a pocket refuses an island, and a printer's every hole is one |
+| The program, byte-stable, units and precision | `Program` | the same, plus the `E` word |
+| Orientation by the tool axis | `_orient` | the build orientation |
+| A drawing of the route from above | `cam_preview.svg` | the same, per layer |
+| Lines clipped to a region | - | rectilinear and grid infill, solid skins |
+| What is above and below a region | - | top and bottom skins: a layer's region less the intersection of the `n` layers above (below) |
+| Extrusion per move | - | `E = L * A / (pi (d_f / 2)^2)`, the stadium area `A = h (w - h (1 - pi / 4))` |
+
+The missing pieces are 2D polygon offsets and booleans that survive islands. OCCT's own fail exactly where a printer
+lives: `BRepOffsetAPI_MakeOffset` on a 20 x 20 mm section with a 4 mm hole returns the right regions at 1, 4 and 5 mm
+and **drops the hole at 3 mm**, where the hole's offset touches the outline's - and a slicer reaches that tangency on
+every part with a hole near a wall; build123d's `offset` of a face raises there (`'Face' object has no attribute
+'unwrap'`). That is why `_pocket_paths` refuses islands. Slicers use Clipper for this
+([Slic3r](https://github.com/slic3r/Slic3r), PrusaSlicer, Cura); its Python binding `pyclipper` is MIT, wheels on every
+platform, and is what the prototype below does it with ([section 8](#8-prototype-a-route-from-pc-cams-parts-and-what-it-deposits)).
+
+## 6. CMF and the manufacturing section
 
 **Decided:** material is not a manufacturing property. **Built:** the two fixes below. **Proposed:** the rest.
 
@@ -144,35 +189,379 @@ What CMF settled (see [`cmf.md`](cmf.md)) is that an item's material, colour and
 carried with its geometry. The question was whether the manufacturing section should carry a material too - a filament
 for a print, a sheet for a laser. It should not:
 
-- **One place.** The filament *is* the part's `material`: its density is what the part is weighed at, its colour claim
+- **One place.** The filament *is* the part's `material`: its density is what the print is weighed at, its colour claim
   what it is drawn in, its `manufacturable:` what the `cmf` check counts, its `ids` what a supplier matches. A
   `manufacturing: material:` would be a second answer to the same question, and the two can disagree.
 - **Slicers draw the same line.** PrusaSlicer's Print / Filament / Printer, Orca's process / filament / machine, Cura's
   quality profile / material XML / machine definition: density, diameter, colour, flow and shrinkage are the material's;
-  layers, walls and infill are the process' ([section 6.6](#66-material-and-process-in-slicers-and-services)).
+  layers, walls and infill are the process' ([section 12.6](#126-material-and-process-in-slicers-and-services)). The one
+  filament property a printer needs to write its route - the filament's *diameter*, which turns length of route into
+  length of filament - is the machine's (`filament:`), because it is what the printer is fed, as a laser's kerf is what
+  it burns.
 - **What a process constrains is a capability.** That FFF prints thermoplastics and not aluminium is what a provider's
   `caps` say, not what a part declares.
 - **An effective density is not a material.** "PLA at 20%" declared as a material of 0.4 g/cm3 would weigh the part
-  right and be wrong everywhere else - the CMF check, the exports, the cart, the colour. The print's weight is derived
-  from the material and the process ([section 7.1](#71-weight)), never declared.
+  right and be wrong everywhere else - the CMF check, the exports, the cart, the colour. The print's weight comes from its
+  geometry at the material's density ([section 9.2](#92-what-the-print-weighs)), never from a declared density.
 
 Where material still lives outside CMF, and what is done about each:
 
 | Where | Problem | Done |
 | --- | --- | --- |
-| `ShapeConfiguration.get_mcft` (the cart) | Read only the part's own `parameters:`; a reference - and so every type-less printed part - was ordered as made of nothing. | **Built:** falls back to what the reference resolves to. |
-| Manufacturer `load()` | Would have sent the visual. | **Built:** sends the design. |
+| `ShapeConfiguration.get_mcft` (the cart) | Read only the part's own `parameters:`; a reference - and so every type-less printed part - was ordered as made of nothing. | **Built:** falls back to what the reference resolves to (not where a store's SKU is bought through an alias, which reads only what the alias declares). |
+| Manufacturer `load()` | Would have sent the part's own geometry - the print, or an as-printed mesh. | **Built:** sends the design. |
 | Cart `material`/`color`/`finish` | Raw strings from `parameters:` defaults (`"red"`, a synthesised `"none"` finish), matched by providers as names (`TODO: resolve ... as a color object`). | **Proposed**, staged as `contributing.rst` requires: add the canonical CMF references and their `ids` beside them (`cmf.own_info`), migrate providers to match by `ids`, then retire the strings. Changing them in place breaks every provider's `caps` matching at once. |
 | `properties: material:` (physics, the BOM's `material` column, URDF) | One material per part, promoted from the parameter; the CMF section's material per *solid* - what a STEP file states - is not what the part is weighed at, and a two-material part is weighed at one density. | **Proposed:** physics weighs each solid by the material its CMF set claims (the summary already counts solids per set); `properties: material:` becomes derived from CMF and is no longer read where the section is at hand. |
 | Hand-written `properties: material:`/`color:` (`examples/produce_part_cadquery_logo`) | `properties:` is "never written by hand in a package" (`PartFactory.record_object_type_properties`). | **Proposed:** move to the CMF parameters with the next re-render of that example; its images are checked in. |
 | `object_type_parameter` | Still reads only the reference's own declaration (said in its docstring). | **Open:** whether every object-type parameter should resolve through a reference, as `get_mcft` now does. |
 
-## 6. Survey: predicting the printed part
+## 7. Survey: the print from its route
+
+A second survey, November 2026, of how the deposited volume is worked out from a route - a list of moves, each with a
+width `w`, a height `h` and a feed of filament - and which of those ways fits PartCAD. Measurements quoted here as
+*measured* were made for this record in a scratch environment beside the prototype of
+[section 8](#8-prototype-a-route-from-pc-cams-parts-and-what-it-deposits).
+
+### 7.1 The bead
+
+A bead's cross-section follows from the filament fed by volume conservation: `A = k E pi d_f^2 / (4 L)` for a move of
+length `L` that feeds `E` of filament of diameter `d_f`, `k` the extrusion multiplier. Its shape is the slicer's model of
+it, and the right model is the one of the slicer whose `E` is being read:
+
+| Model | Area | Used by |
+| --- | --- | --- |
+| Stadium: a rectangle with semicircular sides of radius `h/2` | `h (w - h (1 - pi/4))`; adjacent lines `s = w - h (1 - pi/4)` apart | Slic3r, PrusaSlicer, Orca ([`Flow.cpp`](https://github.com/prusa3d/PrusaSlicer/blob/master/src/libslic3r/Flow.cpp), [flow math](https://manual.slic3r.org/advanced/flow-math)) |
+| Rectangle | `w h` | CuraEngine ([`GCodePathConfig.cpp`](https://github.com/Ultimaker/CuraEngine/blob/main/src/GCodePathConfig.cpp)) |
+| Circle | `pi d^2 / 4` | bridges, everywhere |
+| Ellipse | `pi w h / 4` | the literature; to conserve the stadium's area it is `4 A / (pi h)` wide |
+
+Its signed distance, at `p = (x, y, z)`, from a move `a -> b` in the layer centred at `z_c` - exact outside, a bound
+inside - is the stadium's, `f = sqrt(max(d2 - (w - h)/2, 0)^2 + (z - z_c)^2) - h/2`, `d2` the plane distance from `(x,
+y)` to the segment; a rounded rectangle of corner radius `r` (0 for Cura, `h/2` for the stadium) is `|max(u, 0)| +
+min(max(u_x, u_z), 0) - r` with `u = (d2 - (w/2 - r), |z - z_c| - (h/2 - r))` ([Quilez's
+primitives](https://iquilezles.org/articles/distfunctions/), via [a port](https://mysterypancake.github.io/Houdini-Fun/Houdini_SDFs.html)).
+Because every bead of a layer shares `z_c`, **a layer's union is decided by one 2D field**, `D(x, y)`, the distance to
+the nearest move: the deposit stands `t(D)` tall over each point (`h` up to `(w - h)/2`, the stadium's chord to `w/2`,
+nothing beyond), and the layer's 3D SDF is `f(D, z)`. That is the observation every practical method below rests on.
+
+**The voids are real.** Adjacent stadium beads `s` apart overlap by a lens of about `0.09 h^2` - 4.45% of `A` - and
+leave a cusp-shaped void above and below the lens. Micro-CT of PLA at 100% infill, 0.2 mm layers, 0.48 mm lines,
+measures 4.05-5.84% porosity, most pores under 0.2 mm, the larger ones between crossing layers and where infill meets
+the perimeters ([Wang et al. 2019](https://pmc.ncbi.nlm.nih.gov/articles/PMC6680582/)); industrial ABS has 0.6-0.7% of
+elongated voids ([Hernandez-Contreras 2020](https://pmc.ncbi.nlm.nih.gov/articles/PMC7504175/)). The geometric union of
+nominal stadium beads comes out 2.0% (20% infill) to 3.7% (100%) below `sum A L` (*measured*): the order of the cusp
+porosity. **The part still weighs `rho sum A L`** - what the extruder fed, squeezed into the cusps - which is why the
+route, not the union, is what a weight is taken from ([section 9.2](#92-what-the-print-weighs)). PrusaSlicer also
+overlaps infill with the perimeters by 25% of a line by default (`infill_overlap`,
+[`ConfigDefsFDM.cpp`](https://github.com/prusa3d/PrusaSlicer/blob/master/src/slic3r-domain/src/Slic3r/Domain/ConfigDefsFDM.cpp)),
+which the prototype does not, and which closes the gap visible in its layer below.
+
+### 7.2 Four ways to the deposited volume
+
+**(a) An analytic SDF union** of every move. fogleman/sdf - the `sdf` part type's library - evaluates every operand of a
+`union` at every point, with no culling ([`dn.py`](https://github.com/fogleman/sdf/blob/main/sdf/dn.py)); its `sparse`
+mode skips a batch only after an O(N) distance test ([`core.py`](https://github.com/fogleman/sdf/blob/main/sdf/core.py)).
+*Measured* with `sdf-fork`: about 55 ns per point per primitive, linear from 10 to 1000 capsules - about ten hours for a
+20 mm cube at 0.05 mm. With a spatial index (layer buckets, a 2D cell grid) it becomes (b).
+
+**(b) A sampled distance field**: each move's exact distance splatted into the grid cells of its bounding box, then
+meshed. The voxel deposition models are of this family: VOLCO moves material into the nearest free voxels (0.1 mm by
+default, GPL-3.0; [repository](https://github.com/FullControlXYZ/volco), [paper](https://eprints.nottingham.ac.uk/51116/));
+its predecessor of GPAMS assigns each voxel a volume fraction from a rectangular bead and reports the over-filled voxels
+where beads overlap ([Acta Polytechnica 2020](https://ojs.cvut.cz/ojs/index.php/APP/article/view/6407)); Rivet et al. build
+a voxel mesh from G-code by a 2.5D shortest-path method
+([UPCommons](https://upcommons.upc.edu/entities/publication/7e5210b4-8dd7-4e1a-aec0-7ebf9f5bb869)); an adaptive octree
+from G-code ([arXiv 2305.07120](https://arxiv.org/abs/2305.07120)); Sandia's Sculpt overlay grid, a Benchy at 0.25 and 0.1
+mm being 1.9 M and 18 M elements ([arXiv 2509.12436](https://arxiv.org/abs/2509.12436)). Sparse grids: OpenVDB is
+Apache-2.0 since 12.0 ([Phoronix](https://phoronix.com/news/ASF-OpenVDB-12.0)) but not on PyPI - the `pyopenvdb` there is
+an unofficial wrapper - only on conda-forge ([recipe](https://github.com/conda-forge/openvdb-feedstock/blob/main/recipe/recipe.yaml)).
+
+**(c) A 2.5D footprint stack**: per layer, every move stroked by half a width with round ends, unioned, extruded by `h`.
+build123d 0.11's `offset_2d(..., side=Side.BOTH, closed=True)` strokes an open wire through `BRepOffsetAPI_MakeOffset`
+([`one_d.py`](https://github.com/gumyr/build123d/blob/v0.11.0/src/build123d/topology/one_d.py)); Clipper strokes and
+unions a whole layer in one call. DECODE, a sweep-based model, gave better volumes than VOLCO and handled larger parts,
+while VOLCO predicted mechanics better ([abstract](https://accedacris.ulpgc.es/jspui/handle/10553/121987)).
+
+**(d) A solid per move, fused**: FreeCAD sweeps from G-code took 69-88 s for a 10 mm cube's 443 sweeps and about 1550 s
+for a gyroid-filled dog-bone, growing as a power of the count ([Bacciaglia et
+al.](https://cris.unibo.it/bitstream/11585/896484/8/Manuscript_for_IRIS.pdf)); G-Code2STEP (2026) is the same idea
+([record](https://pure.unileoben.ac.at/en/publications/g-code2step-converter-for-accurate-representation-of-geometries-c/)).
+Not viable at 10^4-10^6 moves. *Measured*: fusing ten layers of the footprint stack in OCCT took 7.8 s, so the stack is
+kept as a compound and never fused.
+
+### 7.3 Resolution
+
+*Measured* on one 20 x 20 mm layer against a 3 micrometre reference:
+
+| | 0.1 mm | 0.05 mm | 0.025 mm | 0.0125 mm |
+| --- | --- | --- | --- | --- |
+| SDF + marching cubes, 20% infill: volume error | -5.7% | -1.5% | -0.33% | -0.09% |
+| SDF + marching cubes, 100% infill | -1.18% | -0.19% | -0.04% | -0.01% |
+| Triangles per sparse layer | 70 k | 0.3 M | 1.2 M | 4.8 M |
+| 2D exact distance and chord integral | - | 0.04%, 3 ms | - | - |
+
+Marching cubes errs low, and manifold3d's marching tetrahedra the same way (-1.2% at 0.05 mm); counting occupied voxels
+errs either way by up to 4.7%. About 1% needs a cell of `h/5` to `h/4`, `h/8` to be safe. A rasterised centre line put
+through `scipy.ndimage.distance_transform_edt` is 0.1-1.2% off; splatting the exact segment distance is as cheap.
+
+### 7.4 Interchange
+
+[3MF's extensions](https://3mf.io/spec/):
+
+- **Slice** (1.0.2, published): a stack of 2D polygons per layer, with a low-resolution mesh beside it
+  ([spec](https://github.com/3MFConsortium/spec_slice)) - exactly approach (c), and the compact way to write a print.
+- **Toolpath** (1.0.0, listed as published September 2026 though its own header still says release candidate): profiles
+  with `beadwidth` and `beadheight` ([spec](https://github.com/3MFConsortium/spec_toolpath)) - the route itself, in a
+  container other tools read. Reader support is *unverified*; lib3mf 2.5.0's notes do not mention it.
+- **Beam Lattice** (1.2.0, published): frustums with round sections and sphere or flat caps
+  ([spec](https://github.com/3MFConsortium/spec_beamlattice)). Capsules only, so a bead wider than it is tall is not one.
+- **Volumetric and Implicit** (1.0, published November 2025): a level set driven by a sampled SDF or an implicit node
+  graph, with a beam lattice distance node ([spec](https://github.com/3MFConsortium/spec_volumetric)). No consumer of a
+  print written this way was found.
+
+### 7.5 Tooling and licences
+
+| Tool | Licence | Wheels | For |
+| --- | --- | --- | --- |
+| [pyclipper](https://pypi.org/project/pyclipper/) 1.4 (Clipper 6.4.2) | MIT (Boost) | all three platforms | offsets and booleans of polygons, open paths clipped (`OpenPathsFromPolyTree`), strokes (`ET_OPENROUND`) |
+| [manifold3d](https://pypi.org/project/manifold3d/) 3.5 | Apache-2.0 | all three, aarch64 too | `CrossSection.extrude`, `batch_boolean`; its `CrossSection.offset` takes closed polygons only; `level_set` calls Python once per grid point (~0.8 us before the function runs) ([bindings](https://github.com/elalish/manifold/blob/master/bindings/python/manifold3d.cpp)) |
+| [scikit-image](https://pypi.org/project/scikit-image/) 0.26 | BSD | all three | marching cubes |
+| [sdf-fork](https://pypi.org/project/sdf-fork/) 0.1.1 | MIT | sdist only (2021) | the `sdf` part type |
+| [libfive](https://github.com/libfive/libfive) | MPL-2.0 (Studio GPL) | third-party, x86_64 only | - |
+| OpenVDB | Apache-2.0 | conda-forge only | sparse grids |
+| [trimesh](https://pypi.org/project/trimesh/), [pyvista](https://pypi.org/project/pyvista/) | MIT | pure Python | meshes |
+| [lib3mf](https://pypi.org/project/lib3mf/) 2.5 | BSD | x86_64, Windows, macOS | 3MF Slice |
+
+Two notes on PartCAD's own code. `wrapper_sdf.sdf_triangles_to_topods` builds unwelded triangles in a Python loop per
+vertex, which is impractical past about a million triangles - one more reason a whole print does not go through the
+`sdf` part type. And what a route needs beyond `pc cam`'s pieces - hatch clipping, skins (a layer's region less the
+intersection of the outlines `n` layers above or below, as CuraEngine's
+[`skin.cpp`](https://github.com/Ultimaker/CuraEngine/blob/main/src/skin.cpp) does) - is polygon algebra Clipper does
+robustly and fast; variable-width walls (Arachne, [Kuipers et al. 2020](https://arxiv.org/abs/2004.13497), the default
+in PrusaSlicer since 2.5) need a medial axis neither OCCT nor Clipper has, and would also break the one-field-per-layer
+shortcut of 7.1.
+
+## 8. Prototype: a route from `pc cam`'s parts, and what it deposits
+
+To find out what is practical rather than what is published, a route writer and three deposit models were built over
+`//builtin/cam`'s own code, run in PartCAD's sandbox environment (build123d 0.11.1, OCP 7.9) with `pyclipper`,
+`sdf-fork` (the library the `sdf` part type meshes with) and its scikit-image. Not part of this branch: the code is a
+scratch prototype, and the numbers are what the proposal rests on.
+
+**The route.** Per layer at `z_i = z_min + (i + 1/2) h`: the section by `cam_gcode._faces_at`, its wires as polylines by
+`cam_gcode._wire_points`; perimeters as Clipper offsets of the whole section (islands and all) at `w/2 + k s`, `s = w -
+h (1 - pi/4)` being Slic3r's line spacing for a stadium bead; the region left, less the intersection of the 4 sections
+above (below), is solid skin, filled with lines `s` apart; the rest is sparse, filled with lines `s / infill` apart,
+alternating +-45 degrees; and the program through `cam_gcode.Program` with a relative `E` per move. 0.2 mm layers, 0.45
+mm lines, 2 walls, 4 + 4 skins, 20% rectilinear infill, 1.75 mm filament.
+
+**The deposit**, three ways:
+
+- **(A) footprint stack** - per layer, the union of every path stroked to its width (Clipper `ET_CLOSEDLINE`/
+  `ET_OPENROUND`), as OCCT faces extruded by `h`: a B-rep, rectangular beads. Stroked at the line *spacing* instead of the
+  width, each bead has the stadium's area.
+- **(B) layered distance field** - per layer, the XY distance `D` from every point to the nearest path, and the stadium
+  bead's profile over it: the deposit stands `t(D) = 2 sqrt((h/2)^2 - max(D - (w - h)/2, 0)^2)` tall, centred on `z_i`.
+  Volume and centroid are sums over the grid. The same volume needs no grid at all: `V = h A(r0) + sum t(r) dA(r)` over
+  `r` from `r0 = (w - h)/2` to `w/2`, `A(r)` being the area of the route stroked to half-width `r` - a dozen Clipper
+  offsets per layer.
+- **(C) SDF** - (B) lifted to an SDF3, `f(p) = min over the layers near z of sqrt(max(D_i(x, y) - (w - h)/2, 0)^2 + (z -
+  z_i)^2) - h/2` with `D_i` bilinear on the grid, and marched by `sdf`'s own `generate` - what the `sdf` part type does
+  with a script's SDF.
+
+**Results** (PLA, 1.24 g/cm3):
+
+| Design | Solid | From the route's own `E` | (B) field, stadium beads | (A) stack, stroke `w` | (A) stack, stroke `s` |
+| --- | --- | --- | --- | --- | --- |
+| 20 mm cube | 8000 mm3, 9.92 g | 2941 mm3 | **2931 mm3, 3.63 g** | 3175 (+8.3%) | 2978 (+1.8%) |
+| 40 x 30 x 6 plate, two 8 mm holes | 6597 mm3, 8.18 g | 3164 | **3131, 3.88 g** | 3355 (+7.1%) | 3212 (+2.7%) |
+| cone, 24 to 8 mm, 16 mm tall | 3485 mm3, 4.32 g | 1413 | **1404, 1.74 g** | 1518 (+8.1%) | 1432 (+1.9%) |
+| 80 x 60 x 30 block, 4 holes, pocket | 119968 mm3, 148.8 g | 37560 | **37397, 46.4 g** | - | - |
+
+- The field is converged at a 0.05 mm grid (0.16% from 0.025 mm), and the offset integral agrees with it to 0.01%.
+- The route's `E` - what a slicer weighs a print by - is within 0.3-1.1% of the field: it counts the overlap of adjacent
+  beads twice, which a printer squeezes sideways rather than stacks. Summed per segment, `(L A, L A midpoint)` gives the
+  volume and the centroid with no geometry at all, in 15 ms for the cube.
+- The first survey's analytic shell-and-core formula ([section 12.1](#121-from-the-settings-without-a-route)) puts the cube
+  at 3124 mm3, 6.6% high: the route has a gap between the walls and the infill, bead overlaps, line ends - the details a
+  formula over the settings cannot see, and the reason the route is the thing to derive the print from.
+- The centre of mass moves where it should: the cube's stays at 10.000 mm; the cone's drops from 5.54 to 5.21 mm, its
+  skin being heavier low down.
+
+**Cost** (one core):
+
+| | Route | (B) field, Python | (B) offsets | (A) B-rep stack | (C) SDF mesh |
+| --- | --- | --- | --- | --- | --- |
+| 10 mm cube (6.2 m of route) | - | - | - | 0.2 s; 7188 faces, 4.1 MB BREP, 32k triangles | 0.1 mm: 3.2 s, 0.58 M triangles, +2.3%; 0.05 mm: 14.8 s, 3.9 M triangles, 2.9 GB, exact |
+| 20 mm cube (36 m) | 0.75 s | 2.7 s | 0.3 s | 0.4 s build; 22k faces, 12.9 MB, 98k triangles | 0.05 mm: killed at 15 GB |
+| 80 x 60 x 30 block (461 m) | 2.9 s | 77 s | 15 s | - | - |
+
+An SDF mesh of a print is accurate - at 0.05 mm it encloses exactly the field's volume - and hopeless as a part's
+geometry: every bead has a surface of its own, and that is about 0.6 million triangles and 0.45 GB per metre of route at
+0.05 mm. A 20 mm cube has 36 m of route. The footprint stack is two orders of magnitude lighter, a real B-rep, and within
+2-3% of the bead model when stroked at the line spacing.
+
+What the field shows, a layer of the plate and a vertical section through the cube:
+
+![A layer of the plate: its route, and how high the deposit stands over each point](images/additive-layer.png)
+
+![A vertical section through the 20 mm cube: two walls, 4 + 4 skins, 20% infill, and the voids between beads](images/additive-section.png)
+
+The layer shows one simplification of the prototype's route: its infill stops at the centre line of the next ring, so
+there is an empty band between the walls and the infill that a slicer closes by overlapping the two (PrusaSlicer's
+`infill_overlap`, 25% of a line, [section 7.1](#71-the-bead)). The section shows what no formula over the settings
+shows: the cusp voids between beads, in the walls and the skins, of the size micro-CT finds.
+
+## 9. Proposal
+
+**Proposed.** In the order it would be built; each step is useful on its own and is the next one's test.
+
+### 9.1 `pc cam` writes a printer's route
+
+`//builtin/cam`'s `gcode` file type gains a printer: `MACHINES["fff"]` in `cam_gcode.py`, the route of
+[section 8](#8-prototype-a-route-from-pc-cams-parts-and-what-it-deposits) with `E`, and `MACHINE_FFF` joins
+`ROUTED_MACHINES`. `pc cam -m fff :bracket-printed` writes `bracket-printed.fff.nc`; the instruction book draws each layer
+(`cam_preview`); the `cam` check asks that the route can be written, as it asks of a laser.
+
+- **Clipper** is added to `//builtin/cam`'s `pythonRequirements` (`pyclipper`, MIT): it runs in the sandbox, so nothing
+  is added to the wheel or the bundles. The section and the polylines stay `pc cam`'s own.
+- **What it is not.** It is a route PartCAD can reason about - every move known, nothing hidden - not a production
+  slicer: no supports, no bridges, no seams, no variable-width (Arachne) walls, no travel optimisation. A shop that needs
+  those names a slicer as the route's `implementation:` - a package of its own running an unmodified PrusaSlicer or
+  CuraEngine in a container through `partcad_utils.containers` (AGPL, so never imported), translating `fff:` by the table
+  in [section 12.5](#125-vocabulary), and handing back its G-code. Either way the print is derived from the route, so a
+  slicer's route is weighed and drawn by the same code as PartCAD's own.
+- **Infill patterns**: `concentric` (rings), `rectilinear` and `grid` (lines) first; `gyroid` as the level set of `sin x
+  cos y + sin y cos z + sin z cos x` at each layer's `z`, traced as polylines; anything else refused by name.
+
+### 9.2 What the print weighs
+
+**The route is the print's weight.** What a printer deposits is what its extruder feeds, `rho k sum A L` - the overlap
+of adjacent beads is squeezed into the cusps beside them, not lost ([section 7.1](#71-the-bead)). Summed per move, the
+same sum gives the centre of mass (`A L` at each move's midpoint and layer height) and the inertia (each move a slender
+box), in milliseconds and with no geometry; it is also what every slicer reports as a print's weight.
+
+The geometry's own volume is the deposit's - the union of the beads - and is 1-4% less, which is the print's cusp
+porosity. That is the volume the print *displaces*, which a scene buoys it by, and is the one `physics` already keeps
+apart from the mass (`volume`, `centerOfVolume`): a print reports both, from different sources, and each says which.
+
+It reaches the reader that already exists: a part's mass, centre of mass and inertia are derived from its measurements
+(`physics._derive`), and the print's measurements are the route's ([section 9.3](#93-the-print-is-the-part)). Cached, as
+every derivation is, under the part's key - which for a print covers the design, the printer's settings and the route's
+implementation.
+
+### 9.3 The print is the part
+
+The type-less printed part stops being a reference to its design. `implied_type` gives it a part type of its own -
+`print` - whose geometry is its route's deposit:
+
+- **Geometry** (`get_wrapped`): the footprint stack, stroked at the line spacing - a B-rep of planar prisms, one per
+  region per layer, so every export, section, drawing and check takes it as it takes any solid. 13 MB of BREP for a 20 mm
+  cube is heavy for a part nobody looks inside; the payload is a compound of prisms that is never fused, so the cost is
+  linear in route length, and a part whose print is never asked for never builds one. A part too big for that (the
+  survey extrapolates 10^6 faces for a 100 mm block) keeps the layer stack as polygons - the 3MF Slice form - and builds
+  prisms only for the layers a section or a drawing asks for; manifold3d's `CrossSection.extrude` and `batch_boolean`
+  are the mesh alternative where one closed body is wanted.
+- **Measurements**: written into the payload's metadata by the wrapper (`shape_envelope.METADATA_*`): the mass
+  properties from the route ([9.2](#92-what-the-print-weighs)), and the volume the print displaces from the field's
+  offset integral, so that neither is the stack's 1-3% approximation of the bead.
+- **Picture**: the design, by the part-level visual rule already built - a print is drawn as what it looks like from
+  outside, and a section of it as what it is.
+- **Keyed** on the design's key, `MachineConfig.key()` and the route implementation's code version, as a route is.
+- **Printability** for free: a feature thinner than a line deposits nothing, so comparing the print with the design
+  inside the design's tolerance (`wrapper_compare` measures the difference already) reports a wall too thin to print, a
+  hole too small for the nozzle, a pin that vanishes - `manufacturability-additive`'s next question, asked of what the
+  printer will actually do.
+
+### 9.4 Where SDF parts fit
+
+The `sdf` part type is the natural home for the bead-exact surface - (C) above is literally its pipeline - but not as
+the part's geometry: a bead-resolved surface is ~0.6 M triangles per metre of route at 0.05 mm, and a print of anything
+but a coin has hundreds of metres. It is right for three things:
+
+- **A section or a detail**: the field's SDF restricted to a box (a corner, a boss, a 2 mm slab) meshes in seconds, and
+  is what a reader of a section drawing or the 3D view zoomed into a wall wants to see - the scallops and the voids.
+- **Infill patterns that are fields already** - a gyroid core is an SDF, `|sin x cos y + ...| - t`, and a TPMS-filled
+  design for resin or powder is one by construction.
+- **Export to a format that carries a field** rather than a surface, where a reader exists
+  ([section 7.4](#74-interchange)).
+
+### 9.5 `pc export` and `pc import`
+
+- **`pc export`** of a printed part writes the print, because the print is the part; `--visuals`/a picture writes the
+  design. The route itself is `pc cam`'s file. A 3MF of the print may carry the layer stack as the 3MF **Slice**
+  extension - the footprint polygons and a height per layer - which is the stack with no tessellation at all.
+- **`pc import` of a route** (`.gcode`, `.nc`): a part type `gcode` whose geometry is the deposit of the file's moves
+  (the same footprint stack and field, widths from `E`, `L`, `h` and the filament diameter by volume conservation), with
+  `manufacturing: {method: additive, source: <design>}` when the user names the design. A slicer's own output becomes a
+  print PartCAD can weigh, section and compare with its design.
+- **`pc import` of an as-printed model** (a scan): a part with its own `type:` naming its design, compared with it inside
+  the tolerance, as in 9.3.
+
+### 9.6 Other processes
+
+Resin (`sla:`) and powder (`sls:`, `mjf:`) are machines of their own when something reads them. Their print is a
+hollowed design rather than a route's deposit - a wall thickness, drain holes, an optional lattice - which is an SDF
+(shell and gyroid) far more naturally than a B-rep.
+
+## 10. Specifications
+
+Requirements use SHALL; each is pinned by `tests/partcad/unit/test_additive.py`.
+
+**Requirement: a design.** An `additive` part MAY name a design in `source:`, and SHALL be its own design where it names
+none. A design SHALL NOT be procured.
+- *Scenario:* `printed` names `design` → `procured_as(printed) == []`, while a `subtractive` part naming the same object
+  is procured as it.
+
+**Requirement: drawn as its design.** A printed part that names a design and no `visual:` SHALL be drawn as the design
+wherever a picture is drawn; a `visual:` of its own SHALL win; `manufacturing: visual:` SHALL be refused.
+- *Scenario:* `as-printed: {type: basic, manufacturing: {method: additive, source: design}}` → its picture is
+  `//:design`; with `visual: look` → `//:look`.
+
+**Requirement: no geometry of its own.** An `additive` part that names a design and no `type:` SHALL, until its print can
+be derived, be a reference to the design with its own `manufacturing:` section.
+
+**Requirement: a printer is a machine.** `fff:` SHALL be read as a `MachineConfig`: `toolAxis`/`along`, `nozzle` and
+`filament` its own; `layerHeight`, `lineWidth`, `walls`, `topLayers`, `bottomLayers`, `infill`, `infillPattern` and
+`feed` its job; an unreadable one SHALL be `machine_error`. Until a printer's route is written it SHALL NOT be routed.
+- *Scenario:* `fff: {along: -Y, feed: 50 mm/s}` → axis `-Y`, feed 3000 mm/min.
+- *Scenario:* `infill: 20%` or `feed: 1200` directly under `manufacturing:` → "write it under 'fff:'".
+- *Scenario:* `pc cam` over the package passes the part over; `pc cam -m fff` → "a 'fff' is a printer, and PartCAD writes
+  no printer's route yet".
+
+**Requirement: what is printed is checked.** `manufacturability-additive` SHALL ask the design, not the part's own
+geometry, whether it is a closed solid, and SHALL key its verdict on the design and the printer.
+
+**Requirement: instructions and suppliers.** The instructions SHALL say the design and the stated settings only; a cart
+item SHALL carry them as `manufacturing`; a manufacturer SHALL be sent the design's geometry.
+
+**Requirement: material is CMF.** A `manufacturing:` section SHALL NOT take a material; a reference SHALL report its
+source's material to a cart where it states none.
+
+## 11. Roadmap
+
+| Step | Status |
+| --- | --- |
+| `source:` as the design; the design as the default picture through the part-level `visual:`; a type-less printed part | built |
+| `fff:` as a machine with `pc cam`'s vocabulary; not routed | built |
+| Check, instructions, cart, schema; `get_mcft` through references; a manufacturer sent the design | built |
+| `pc cam -m fff`: the route from `_faces_at`, `_wire_points`, Clipper rings and lines, `Program` with `E` ([9.1](#91-pc-cam-writes-a-printers-route)) | proposed |
+| The print's weight from the route's deposit ([9.2](#92-what-the-print-weighs)) | proposed |
+| `print` part type: the print as the part, footprint stack + field measurements; printability by comparison ([9.3](#93-the-print-is-the-part)) | proposed |
+| SDF sections and details of a print; gyroid infill as a field ([9.4](#94-where-sdf-parts-fit)) | proposed |
+| `pc import` of G-code as a print; 3MF Slice export ([9.5](#95-pc-export-and-pc-import)) | proposed |
+| A slicer package as a route `implementation:` (PrusaSlicer/CuraEngine in a container) | proposed |
+| Cart CMF references and `ids`; physics per solid material | proposed |
+| Resin and powder printers | open |
+
+## 12. Appendix: the first survey - the print from its settings alone
+
+The first survey, of November 2026, asked how the print is predicted from the settings alone, without a route. It is kept because its sources stand - slicer weights, bead models, licences, vocabulary - and because [section 8](#8-prototype-a-route-from-pc-cams-parts-and-what-it-deposits) measured where its shell-and-core formula falls short of a route (6.6% on a cube).
 
 From slicer sources (PrusaSlicer `version_2.9.2`, OrcaSlicer and Cura/CuraEngine `main`), vendor documentation and the
 literature, November 2026.
 
-### 6.1 From the process settings, without a route
+### 12.1 From the settings, without a route
 
 **Infill density is an area fraction by construction.** Cura sets the line spacing from it:
 `infill_line_distance = infill_line_width * 100 / infill_sparse_density * k`, `k` 1 for lines, 2 for grid, 3 for
@@ -205,7 +594,7 @@ wall thickness is the nozzle's, reaches a density by changing the period (*unver
 (`BRepOffsetAPI_MakeOffsetShape`, `MakeThickSolid`) thickens a sloped face along its normal, which is not what a
 slicer does, and fails on thin features ([OCCT modelling algorithms](https://occt3d.com/dev/doc/overview/html/occt_user_guides__modeling_algos.html)).
 
-### 6.2 From a route (G-code)
+### 12.2 From a route (G-code)
 
 **A bead's cross-section follows from the extrusion by volume conservation**: `A = E * pi (d_f / 2)^2 / L`, `E` the
 filament fed over a move of length `L`. Its width from its area and the layer height `h`
@@ -236,7 +625,7 @@ Cura's layer view, which draw widths from `E` as above.
 ([Dolenc & Makela 1994, via Hamburg](https://tams-www.informatik.uni-hamburg.de/publications/2017/Adaptive%20Slicing%20for%20the%20FDM%20Process%20Revisited.pdf);
 the closed form is *unverified*); a stadium bead's rounded edge takes about `0.107 h` off every vertical wall.
 
-### 6.3 Shrinkage, warpage, deviation
+### 12.3 Shrinkage, warpage, deviation
 
 FFF slicers compensate by scaling per material - Cura `material_shrinkage_percentage_xy/_z`, PrusaSlicer
 `filament_shrinkage_compensation_xy/_z`, Orca `filament_shrink` - and offset holes and contours (`xy_size_compensation`,
@@ -247,7 +636,7 @@ Simufact (iterated compensation) - or open and metal-only: [AdditiveFOAM](https:
 method for laser powder bed fusion ([review](https://doi.org/10.1007/s00170-022-10052-2)). Nothing open predicts FFF
 warpage well enough to build on: deviation is for a CAE plugin, not for PartCAD's core.
 
-### 6.4 Slicers and their licences
+### 12.4 Slicers and their licences
 
 | Tool | Licence | Headless |
 | --- | --- | --- |
@@ -274,7 +663,7 @@ implicit fields, and **Toolpath** deposition with `beadwidth` and `beadheight`
 ([spec_toolpath](https://github.com/3MFConsortium/spec_toolpath); its status, published or release candidate, is
 *unverified*).
 
-### 6.5 Vocabulary
+### 12.5 Vocabulary
 
 ISO/ASTM 52900 names the seven process categories - material extrusion (MEX), powder bed fusion, vat
 photopolymerization, binder and material jetting, sheet lamination, directed energy deposition
@@ -295,7 +684,7 @@ PrusaSlicer's patterns: `rectilinear`, `grid`, `triangles`, `stars`, `cubic`, `h
 `lightning`, `adaptivecubic`. `infillPattern` is free text for that reason: the slicer that reads it decides, and an
 implementation that cannot draw one says so.
 
-### 6.6 Material and process in slicers and services
+### 12.6 Material and process in slicers and services
 
 Slicers keep three profiles - print, filament, printer - and a filament is a brand, a material and a colour with a
 density and a diameter ([Cura `fdm_materials`](https://github.com/Ultimaker/fdm_materials)). Print services quote on a
@@ -303,152 +692,4 @@ material and finish (Craftcloud's published structure: material group, material,
 [`@all3dp/material-structure`](https://www.npmjs.com/package/@all3dp/material-structure)), Shapeways on a material id
 ([API](https://developers.shapeways.com/docs)); Xometry offers infill as three grades on its web quote
 ([Xometry](https://www.xometry.com/resources/3d-printing/comparing-infill-options-for-fdm-1/)); JLC3DP's API is gated.
-None takes a filament as a process setting - which is the line [section 5](#5-cmf-and-the-manufacturing-section) draws.
-
-## 7. Proposal: the printed part, its weight, and its route
-
-**Proposed.** In the order it would be built: each step is useful on its own, and each is the next one's test.
-
-### 7.1 Weight
-
-A printed part's mass, centre of mass and inertia are worked out from the design, the material's density and the
-process, and `pc info`, the exports and Build vs Buy report them in place of the solid's. The design's **volume** stays
-what it was - a closed print displaces its envelope, which is what a scene buoys it by - so only the mass properties
-change.
-
-**The model is the slicers' own, done per layer** ([section 6.1](#61-from-the-process-settings-without-a-route)):
-
-```
-for each layer i, at z_i = z_min + (i + 1/2) h:
-  S_i     = the design's section at z_i                       (2D faces)
-  C_i     = S_i offset inward by t_w = lineWidth * walls      (BRepOffsetAPI_MakeOffset, joined)
-  T_i     = C_i - (S_i+1 ∩ ... ∩ S_i+topLayers)               solid top skin
-  B_i     = C_i - (S_i-1 ∩ ... ∩ S_i-bottomLayers)            solid bottom skin
-  P_i     = C_i - T_i - B_i                                   sparse
-  dense_i = S_i - P_i,  sparse_i = P_i
-mass   = rho h sum_i [ A(dense_i) + phi A(sparse_i) ]
-moment = the same sum over each region's area moments (BRepGProp::SurfaceProperties), as slabs of thickness h
-```
-
-`phi` is `infill`, `rho` the material's density. Solid regions count at full density, which is how Slic3r spaces solid
-lines. A core that comes out empty is solid, as a slicer fills it. 2D offsets and booleans of planar faces are what OCCT
-does most reliably, the number of sections is the part's height over the layer height (500 for 100 mm at 0.2 mm), and
-nothing is ever a 3D lattice.
-
-On a 20 mm cube at 0.2 mm layers, 0.45 mm lines, 2 walls, 5 + 5 layers and 15% infill in PLA (1.24 g/cm3) the core is
-18.2 x 18.2 x 18 mm (5962 mm3) and the part `1.24 x (8000 - 0.85 x 5962) / 1000` = about **3.6 g**, against **9.9 g** as solid - which is the error this fixes.
-Expected accuracy is a slicer's: within 5-10% of a scale, dominated by the filament's real density and flow.
-
-- **Where:** a wrapper in the sandbox (`wrapper_print.py`, the measurement beside `shape_measure`), asked by `physics`
-  for a part whose manufacturing data names a process; `_derive` takes its mass properties instead of the solid's.
-  Sources say how: `derived: printed - 3 walls, 5/4 layers, 20% infill, at 1240 kg/m^3`.
-- **Cached** under the design's key, the process' `settings()` (`PrintProcess.key()`) and the density, as the solid's
-  derivation is (`physics._derived_hash`), so editing the infill re-weighs without rebuilding anything.
-- **Defaults:** `PROCESS_DEFAULTS` where a setting is not stated, said in the source. A printed part naming no process
-  is weighed as solid, as now, and `pc info` says that is an upper bound.
-- **Cheap fallback**, for a design the sections fail on: `V_core ~ vol(offset3D(S, -t_w) ∩ S shifted down t_t ∩ S
-  shifted up t_b)` and `m = rho [V_S - (1 - phi) V_core]`, said as the less exact of the two.
-
-### 7.2 The printed geometry
-
-The same per-layer regions are the printed part's geometry, at three levels of detail:
-
-| Level | What it is | Made by | Good for |
-| --- | --- | --- | --- |
-| `shell` | Two solids: the skin (dense) and the core (at `phi`) | the regions above, extruded by `h` and fused per kind | a section view of the walls; FEA with an effective core modulus; a STEP of the print |
-| `layers` | Every layer's dense regions plus its infill lines, clipped to `P_i`, each extruded by `h` | the pattern's 2D curves per layer: straight lines for `lines`/`grid`/`triangles`, the gyroid's level set `sin x cos y + sin y cos z + sin z cos x = 0` at `z_i` | seeing the infill; exact mass of the model; a mesh for a viewer |
-| `route` | Every extrusion move swept by its bead | a G-code ([section 7.3](#73-routes)), stadium cross-sections of width `A / h + h (1 - pi / 4)` | the part as *that* print will be |
-
-`shell` is a B-rep and stays one. `layers` and `route` are meshes, not B-reps: a gyroid core is millions of faces, and
-OCCT's booleans are the wrong tool for it. They are written as STL or 3MF in the sandbox, and a layer stack is exactly
-what the 3MF **Slice** extension stores, which is the compact form of `layers` - 2D polygons and a height, no
-tessellation at all.
-
-### 7.3 Routes
-
-`pc cam` writes a router's program today; a printer's is the same idea - the route a machine follows - and the slot is
-there: `cam:` file types are implementations a package supplies, and `implementation:` names one.
-
-- **A slicer implementation**, in a package of its own (`partcad/partcad-slicer`), runs an unmodified PrusaSlicer or
-  CuraEngine **in a container** through `partcad_utils.containers` ([section 6.4](#64-slicers-and-their-licences)),
-  translating `fff:` to that slicer's keys by the table in [section 6.5](#65-vocabulary) and handing it the design's
-  STL or 3MF. It returns the G-code and what the slicer says of it (grams, time). `pc cam bracket-printed` then writes
-  `bracket-printed.fff.gcode`, the alternatives landing beside each other as `-m laser` and `-m cnc` do.
-- **A route a part is printed with.** A printed part may name it - a G-code file it ships, or the route `pc cam`
-  writes - under `instructions:`, the key `sheet_metal` uses for the sketch that says how it is bent. With one, the
-  weight and the `route` geometry are the route's, not the model's, and `manufacturability-additive` checks that the
-  route agrees with the declaration it claims to be (its layer height from its Z steps, its extent within the design's
-  bounding box and tolerance).
-- **The weight from a route** is the sum of `E` at the filament's cross-section and density: no geometry, no
-  booleans, exact for that route.
-- `//builtin/cam` does not slice, and will not: a slicer is somebody else's program with a release cycle of its own,
-  which is the test `cam.py` gives for what ships in `builtin`.
-
-### 7.4 pc export and pc import
-
-- **`pc export --print [shell|layers|route]`** writes the printed geometry instead of the part's visual, in any format
-  the level allows (`shell` to STEP, `layers`/`route` to STL and 3MF, `layers` to 3MF Slice). Nothing is declared
-  for it.
-- **A print as a part of its own**, for whoever wants to place it, draw it, section it or compare it: a part type
-  `print` whose `source:` is the printed part and whose `detail:` is the level. It is an ordinary part from then on -
-  cached, rendered, exported, weighed by its own geometry - and costs nothing until it is asked for.
-- **`pc import` of an as-printed model** - a slicer's mesh, a scan, a G-code (as a `gcode` part type that sweeps it) -
-  gives a part with its own `type:` and `manufacturing: {method: additive, source: <design>}`: exactly the "a part with
-  a geometry of its own that names its design" case built here. A check `manufacturability-print-deviation` compares
-  it with its design inside the design's tolerance (`wrapper_compare` measures the difference already), which is how
-  a print that came out wrong is told from one that did not.
-
-### 7.5 Other processes
-
-Resin (`sla:`) and powder (`sls:`, `mjf:`) take settings of their own - hollowing and wall thickness, drain holes,
-packing - and get subsections of their own when something reads them, as the machines did. The weight model of a
-hollowed resin part is [section 7.1](#71-weight)'s with `infill: 0` and a 3D wall; a powder part is solid.
-
-## 8. Specifications
-
-Requirements use SHALL; each is pinned by the tests in `tests/partcad/unit/test_additive.py`.
-
-**Requirement: a design.** An `additive` part MAY name a design in `source:`, and SHALL be its own design where it names
-none. A design SHALL NOT be procured.
-- *Scenario:* `printed` names `design` → `procured_as(printed) == []`, while a `subtractive` part naming the same
-  object is procured as it.
-
-**Requirement: no geometry of its own.** An `additive` part that names a design and no `type:` SHALL be a reference to
-its visual - `visual:`, else the design - with its own `manufacturing:` section.
-- *Scenario:* `printed: {manufacturing: {method: additive, source: design}}` → `type: alias`, `source: design`, and its
-  manufacturing data names `design`.
-- *Scenario:* a part with a `type:`, or with a top-level `source:`, is given none.
-
-**Requirement: one visual.** `visual:` SHALL be said only beside a `source:` and only by a part with no `type:`.
-- *Scenario:* `type: stl` and `visual: render` → `manufacturability-additive` fails naming both; `pc lint` refuses it.
-
-**Requirement: the process' own subsection.** Print settings SHALL be read under `fff:` only, each as its kind, and an
-unreadable one SHALL be recorded, reported by `manufacturability-additive` and the build plan, and not visited by `pc
-cam`.
-- *Scenario:* `infill: 20%` directly under `manufacturing:` → "write it under 'fff:'".
-- *Scenario:* `fff: {infill: 20}` → "more than all of it"; `fff: {speed: 60}` → "does not take 'speed:'".
-
-**Requirement: what is printed is checked.** `manufacturability-additive` SHALL ask the design, not the visual, whether
-it is a closed solid, and SHALL key its verdict on the design and the process.
-- *Scenario:* a design with open edges → "The design 'design' is not solid"; a visual with open edges → passes.
-
-**Requirement: instructions and suppliers.** The instructions SHALL say the design and the stated settings only; a
-cart item SHALL carry them as `manufacturing`; a manufacturer SHALL be sent the design's geometry.
-
-**Requirement: material is CMF.** A `manufacturing:` section SHALL NOT take a material; a reference SHALL report its
-source's material to a cart where it states none.
-- *Scenario:* `printed` of a design with `material: //pub:pla` → the cart says `//pub:pla`.
-
-## 9. Roadmap
-
-| Step | Status |
-| --- | --- |
-| `source:` as the design, `visual:`, `fff:`, a type-less printed part, the check, instructions, cart, schema | built |
-| `get_mcft` through references; a manufacturer sent the design | built |
-| Weight per layer ([7.1](#71-weight)), in `pc info`, the exports and Build vs Buy | proposed |
-| Cart CMF references and `ids` beside the strings; providers matching by `ids`; the strings retired | proposed |
-| Physics weighing each solid by its CMF material | proposed |
-| The printed geometry: `shell`, then `layers` ([7.2](#72-the-printed-geometry)); `pc export --print` | proposed |
-| A slicer implementation of `pc cam` in a container; `instructions:` as the route; weight from a route ([7.3](#73-routes)) | proposed |
-| `print` part type; `pc import` of an as-printed model and the deviation check ([7.4](#74-pc-export-and-pc-import)) | proposed |
-| Resin and powder processes | open |
+None takes a filament as a process setting - which is the line [section 6](#6-cmf-and-the-manufacturing-section) draws.
