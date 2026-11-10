@@ -136,9 +136,17 @@ class ShapeFactory(factory.Factory):
             shape.add_code_versions(versions)
 
     def info(self, shape):
-        """This is the default implementation of the get_info method for factories."""
+        """This is the default implementation of the get_info method for factories.
+
+        'Url' is where to read about the object: the one it states itself - a
+        vendor's product page, a datasheet - and the package's where it states
+        none.
+        """
         info: dict = shape.shape_info(self.ctx)
-        if "url" in self.project.config_obj and self.project.config_obj["url"] is not None:
+        own_url = shape.config.get("url") if isinstance(shape.config, dict) else None
+        if own_url:
+            info["Url"] = own_url
+        elif "url" in self.project.config_obj and self.project.config_obj["url"] is not None:
             info["Url"] = self.project.config_obj["url"]
         if "importUrl" in self.project.config_obj and self.project.config_obj["importUrl"] is not None:
             info["ImportUrl"] = self.project.config_obj["importUrl"]

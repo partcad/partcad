@@ -25,6 +25,7 @@ Interfaces are declared in ``partcad.yaml`` using the following syntax:
     <interface name>:
       abstract: <(optional) whether the interface is abstract>
       desc: <(optional) textual description>
+      url: <(optional) where to read about it: a product page, a datasheet, a standard>
       path: <(optional) the source file path, "{interface name}.{ext}" otherwise>
       alias: <(optional) the interface this one is another name for>
       threadStep: <(optional) axial distance per full turn of a connection made through this interface, in mm>

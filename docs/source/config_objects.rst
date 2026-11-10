@@ -28,6 +28,29 @@ PartCAD :ref:`packages` may contain the following objects:
 
 - :ref:`providers` are implementations of a way to get parts and assemblies (to purchase them or to manufacture them).
 
+.. _object-url:
+
+======================
+Where to read about it
+======================
+
+Every object may say where to read about it with ``url:`` -- a vendor's product page, a datasheet, the
+standard an interface is part of -- and so may every declaration a package makes besides its objects: a part
+type, a provider, a repository, a reader of a file format (``import:``), a file type (``render:``,
+``export:``, ``cae:``, ``cam:``), a simulator (``simulation:``), a qualification test (``qual:``), an
+application (``open:``), and a colour, a material or a finish (see :ref:`cmf`).
+
+.. code-block:: yaml
+
+  assemblies:
+    hub:
+      desc: 1309 Series Sonic Hub (8mm REX Bore)
+      url: https://www.gobilda.com/1309-series-sonic-hub-8mm-rex-bore/
+      type: assy
+
+``pc info`` says it as ``Url``, and the package's own ``url:`` for an object that states none. It is for a
+reader: a plugin's script is never handed it as a parameter, as it is never handed ``desc``.
+
 .. _one-name-one-object:
 
 ====================

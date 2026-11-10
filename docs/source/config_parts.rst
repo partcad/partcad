@@ -46,6 +46,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
              |kicad|compound|wall|alias|enrich|:<partType declared by this package>
              |<package>:<partType declared by that package>>
       desc: <(optional) textual description>
+      url: <(optional) where to read about it: a product page, a datasheet, a standard>
       images: <(optional) the images this part was modeled from; see below>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
@@ -227,6 +228,7 @@ nothing to read and no script to run:
     <part name>:
       type: basic
       desc: <(optional) textual description>
+      url: <(optional) where to read about it: a product page, a datasheet, a standard>
       # The below are mutually exclusive options
       cuboid: <(optional) edge size of a cube>
       cuboid: [<size along X>, <size along Y>, <size along Z>]  # alternative syntax
