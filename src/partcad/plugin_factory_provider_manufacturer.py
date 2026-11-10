@@ -25,11 +25,13 @@ from .plugin_request_provider_quote import ProviderRequestQuote
 async def _sent_geometry(ctx, object):
     """What a manufacturer is sent the geometry of: a printed part's design, else the object itself.
 
-    A printed part is drawn as its visual, which may be a mesh nobody would
-    hand to a slicer; what is printed is its design, and that is what a print
-    service slices (see 'part_config_manufacturing.ADDITIVE_REQUIRED'). A design
-    that cannot be found is reported by 'pc qual test', and the part's own
-    geometry is sent meanwhile rather than nothing.
+    A printed part's own geometry is the print -- or, until PartCAD works the
+    print out, whatever stands in for it, an as-printed mesh included -- and a
+    mesh is nothing anybody would hand to a slicer; what is printed is its
+    design, and that is what a print service slices (see
+    'part_config_manufacturing.ADDITIVE_REQUIRED'). A design that cannot be
+    found is reported by 'pc qual test', and the part's own geometry is sent
+    meanwhile rather than nothing.
     """
     from .part import Part
     from .part_config import PartConfiguration

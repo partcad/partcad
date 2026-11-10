@@ -61,6 +61,12 @@ What is drawn:
     moved by its own 'offset'. One that scales the part is drawn as itself: a
     scale is work on the geometry, which a picture cannot do on its way.
   * A visual's own 'visual:' is not followed. A visual is what is drawn.
+  * A **printed part** that names its design ('manufacturing: method: additive'
+    with a 'source:') and no 'visual:' is drawn as that design: the design is
+    what the designer had in mind and what the print looks like from outside,
+    while the part is the print - what it weighs and what a section through it
+    shows (see 'part_config_manufacturing.ADDITIVE_REQUIRED'). A 'visual:' of
+    its own still wins.
 
 A visual that cannot be had - not found, refused, failing to build - is
 reported and the part is drawn as itself: a picture of the part is still a
@@ -123,9 +129,31 @@ def declared(config) -> typing.Optional[str]:
     return str(value)
 
 
+def design(config) -> typing.Optional[str]:
+    """The design a printed part is drawn as where it states no 'visual:', or None.
+
+    The 'source:' of an 'additive' part's own 'manufacturing:' section, which is
+    the design and never stock (see 'part_config_manufacturing.ADDITIVE_REQUIRED').
+    None for a reference: what it is drawn as is what the part it stands for is
+    drawn as ('_inherited_async'), which for a printed part PartCAD gave a type
+    to is its design already.
+    """
+    if not isinstance(config, dict) or config.get("type") in _REFERENCE_TYPES:
+        return None
+    section = config.get("manufacturing")
+    if not isinstance(section, dict) or section.get("method") != "additive":
+        return None
+    value = section.get("source")
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()
+
+
 def _declares_or_refers(config) -> bool:
-    """Whether a declaration could have a visual at all: it states one, or it stands for another part."""
-    return isinstance(config, dict) and (declared(config) is not None or config.get("type") in _REFERENCE_TYPES)
+    """Whether a declaration could have a visual at all: it states one, it is printed from a design, or it stands for another part."""
+    return isinstance(config, dict) and (
+        declared(config) is not None or design(config) is not None or config.get("type") in _REFERENCE_TYPES
+    )
 
 
 def _passed_parameters(ctx, part, declared_parameters) -> dict:
@@ -148,6 +176,8 @@ async def visual_of_async(ctx, part) -> typing.Optional[Drawn]:
     config = part.config
     where = "%s:%s" % (part.project_name, part.name)
     reference = declared(config)
+    if reference is None:
+        reference = design(config)
     if reference is None:
         return await _inherited_async(ctx, part, config, where)
 

@@ -153,7 +153,7 @@ Settings
 
 **Applies to** a part with ``manufacturing: method: additive``. ``pc qual test -f manufacturability-additive <object>`` runs it alone.
 
-Whether a part to be printed can be: its declaration can be read, and what is printed is a closed solid - a body with no open edges, which is what a slicer needs to know what is inside it. What is printed is the design the part names under ``manufacturing: source:``, or the part itself where it names none; never its ``visual:``, which may be a mesh nobody would slice.
+Whether a part to be printed can be: its declaration can be read, and what is printed is a closed solid - a body with no open edges, which is what a slicer needs to know what is inside it. What is printed is the design the part names under ``manufacturing: source:``, or the part itself where it names none.
 
 When it does not apply
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -163,7 +163,7 @@ Anything but a part, and a part made by any other method.
 When it fails
 ^^^^^^^^^^^^^
 
-* ``The additive declaration says ...``: the ``fff:`` section has a key it does not take or a value it cannot read, a print setting is written directly under ``manufacturing:`` instead of under ``fff:``, a ``visual:`` names no design to stand for, or a part with a ``type:`` of its own says ``visual:`` as well; the sentence names which.
+* ``The additive declaration says ...``: the ``fff:`` printer has a key it does not take or a value it cannot read, a printer's setting is written directly under ``manufacturing:`` instead of under ``fff:``, a cut's key is written on a printed part, or a ``visual:`` is written there rather than on the part itself; the sentence names which.
 * ``The design '...' it is printed from is not found``: fix the name under ``manufacturing: source:``.
 * ``The design '...' is not solid`` / ``The shape is not solid``: what is printed has open edges - faces that do not meet. Close the model in the tool it comes from, or export it as a solid rather than as a surface.
 * ``Failed to get the shape``: it did not build; see ``cad``.
@@ -171,7 +171,7 @@ When it fails
 Settings
 ^^^^^^^^
 
-``manufacturing:`` - ``source:`` (the design), ``visual:``, and ``fff:`` (the print process: ``layerHeight``, ``lineWidth``, ``nozzle``, ``walls``, ``topLayers``, ``bottomLayers``, ``infill``, ``infillPattern``).
+``manufacturing:`` - ``source:`` (the design) and ``fff:`` (the printer: ``toolAxis`` or ``along``, ``nozzle``, ``filament``, ``layerHeight``, ``lineWidth``, ``walls``, ``topLayers``, ``bottomLayers``, ``infill``, ``infillPattern``, ``feed``).
 
 .. _test-manufacturability-subtractive:
 

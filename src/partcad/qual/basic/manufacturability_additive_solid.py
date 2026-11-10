@@ -17,54 +17,28 @@ So a printed part may name the two apart:
     manufacturing:
       method: additive
       source: bracket          # the design; what it is a print of
-      visual: bracket-render   # optional: what it is drawn as instead
-      fff:                     # the process, and how it fills the design
+      fff:                     # the printer, and how it fills the design
         walls: 3
         infill: 20%
 
 and this is where the declaration is held to what it says:
 
-* It can be read: the process subsection takes only that process' settings, and
-  each of them is a value of its kind (see 'part_config_manufacturing').
-* `visual:` is said only by a part that has no geometry of its own. One with a
-  `type:` is drawn as what it is, and a second answer would be one too many.
+* It can be read: the printer's subsection takes only that printer's settings,
+  and each of them is a value of its kind (see 'part_config_manufacturing').
 * The design exists and is a closed solid: a body with no open edges, which is
   what a slicer needs to know what is inside it. The design rather than the part,
-  because the design is what is printed -- a visual may well be a mesh nobody
-  would hand to a slicer. A part that names no design is its own, and is asked
-  what this check always asked of it.
+  because the design is what is printed -- the part is the print, which may be
+  an as-printed mesh nobody would hand to a slicer. A part that names no design
+  is its own, and is asked what this check always asked of it.
 """
 
 import hashlib
 
 from ...part import Part
 from ...part_config import PartConfiguration
-from ...part_config_manufacturing import IMPLIED_TYPE_KEY, METHOD_ADDITIVE
+from ...part_config_manufacturing import METHOD_ADDITIVE
 from ..qualification import BasicQualification, Qualification
 from .manufacturability_reference import reference_key, resolve_reference
-
-
-def visual_conflict(part) -> str | None:
-    """Why a part's own `visual:` cannot be honoured, or None where it can.
-
-    Read off the part's own declaration rather than the configuration it
-    resolves to, because the question is what *this* part wrote: a reference
-    resolves to its source's configuration, and whether it was given a type by
-    PartCAD or by its author is said only on its own (see
-    'part_config_manufacturing.implied_type').
-    """
-    config = getattr(part, "config", None)
-    if not isinstance(config, dict):
-        return None
-    section = config.get("manufacturing")
-    if not isinstance(section, dict) or not section.get("visual"):
-        return None
-    if config.get(IMPLIED_TYPE_KEY):
-        return None
-    return (
-        "'visual:' says what a printed part with no geometry of its own is drawn as, and this one has"
-        " 'type: %s'; leave one of them out" % config.get("type")
-    )
 
 
 class ManufacturabilityAdditiveSolidTest(BasicQualification):
@@ -95,19 +69,12 @@ class ManufacturabilityAdditiveSolidTest(BasicQualification):
         data = PartConfiguration.get_manufacturing_data(shape)
         if data.method != METHOD_ADDITIVE:
             return ""
-        conflict = visual_conflict(shape)
-        if (
-            not data.design
-            and not data.processes
-            and not data.process_error
-            and not data.machine_error
-            and not conflict
-        ):
+        if not data.design and not data.machines and not data.machine_error:
             return ""
         declared = [
             await reference_key(ctx, shape, data.design, "part") if data.design else "design@self",
-            "processes:" + ";".join(data.processes[kind].key() for kind in sorted(data.processes)),
-            "error:%s|%s|%s" % (data.machine_error or "", data.process_error or "", conflict or ""),
+            "machines:" + ";".join(data.machines[kind].key() for kind in sorted(data.machines)),
+            "error:%s" % (data.machine_error or ""),
         ]
         return ".additive=" + hashlib.sha256(";".join(declared).encode()).hexdigest()[:16]
 
@@ -122,12 +89,11 @@ class ManufacturabilityAdditiveSolidTest(BasicQualification):
             return self.not_applicable(shape, reason)
 
         data = PartConfiguration.get_manufacturing_data(shape)
-        for error in (data.machine_error, data.process_error, visual_conflict(shape)):
-            if error:
-                # Reported here rather than raised while the package loads: a
-                # part whose declaration is wrong is still a part, and
-                # everything that is not about making it goes on working.
-                return self.failed(shape, "The additive declaration says %s", error)
+        if data.machine_error:
+            # Reported here rather than raised while the package loads: a part
+            # whose declaration is wrong is still a part, and everything that
+            # is not about making it goes on working.
+            return self.failed(shape, "The additive declaration says %s", data.machine_error)
 
         # The manufacturability analysis runs in a sandbox (see
         # manufacturability_analysis), so this module needs no CAD library.

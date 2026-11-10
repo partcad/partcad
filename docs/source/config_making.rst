@@ -61,8 +61,9 @@ apart from itself, and say how it is filled:
     bracket-printed:          # the bracket, printed
       manufacturing:
         method: additive
-        source: bracket       # the design; also what it is drawn as
-        fff:                  # fused filament fabrication, and how it fills the design
+        source: bracket       # the design; also what a picture of it draws
+        fff:                  # the printer: a machine, as cnc: and laser: are
+          toolAxis: -Z        # the nozzle comes down along -Z: printed as modelled
           layerHeight: 0.2 mm
           walls: 3
           topLayers: 5
@@ -72,9 +73,11 @@ apart from itself, and say how it is filled:
 
 - ``source`` -- *optional*. The design the part is a print of. It is what the
   print is measured against (the tolerance is the design's), what a print
-  service is sent to slice, and -- unless ``visual`` says otherwise -- what the
-  part is drawn, placed and exported as. A part that names none **is its own
-  design**, which is what every ``additive`` part written before this meant:
+  service is sent to slice, and what a picture of the part draws, unless the
+  part names a :ref:`visual <part-visual>` of its own. The part itself is the
+  *print*: the design as the process makes it, which is what it weighs and what
+  a section through it shows. A part that names none **is its own design**,
+  which is what every ``additive`` part written before this meant:
 
   .. code-block:: yaml
 
@@ -84,48 +87,69 @@ apart from itself, and say how it is filled:
         method: additive      # printed, and the design is the knob itself
 
 - **No** ``type``. A part that names a ``source`` design needs no geometry of its
-  own -- it is the design, printed -- so it may leave ``type:`` out. It is then a
-  reference to its visual, exactly as ``type: alias`` would make it, with its own
-  ``manufacturing:`` section; ``with:`` passes parameters to the design as an
-  alias passes them to its source (``with: {color: ":orange"}`` is the bracket
-  printed in orange). A part that does write a ``type:`` is drawn as what it is,
-  and the design is still the one ``source`` names.
-- ``visual`` -- *optional*, and only for a part with no ``type:``. What the part
-  is drawn as where that is not the design: a mesh with the layer lines on it, a
-  lighter model of a heavy one. It is never what is printed.
-- ``fff`` -- the process, *optional*. Fused filament fabrication (ISO/ASTM 52900
-  "material extrusion", what most people call FDM) and the settings that decide
-  the *shape* of what it prints. Speeds, temperatures and cooling decide whether
-  a print succeeds rather than what shape it is, and are left to whoever prints
-  it. Every setting is optional; one left out is the printer's default:
+  own -- it is the design, printed -- so it may leave ``type:`` out. Until PartCAD
+  works the print out from its route (see below), such a part is a reference to
+  the design, exactly as ``type: alias`` would make it, with its own
+  ``manufacturing:`` section: it weighs what the solid design weighs, which is an
+  upper bound. ``with:`` passes parameters to the design as an alias passes them
+  to its source (``with: {color: ":orange"}`` is the bracket printed in orange).
+  A part that does write a ``type:`` -- an as-printed model imported from a
+  slicer or a scan -- is that geometry, and is still drawn as its design unless
+  it names a ``visual:``.
+- ``fff`` -- the **printer**, *optional*: a filament printer (fused filament
+  fabrication; ISO/ASTM 52900 "material extrusion", what most people call FDM).
+  It is the additive method's **machine**, named by adding its subsection
+  exactly as a subtractive part names ``cnc:`` or ``laser:``, and read the same
+  way: a printer follows a route layer by layer as a router does, laying a bead
+  along it where a router cuts one. So it takes a router's keys where they mean
+  the same thing and has its own where nothing in a cut does. Every setting is
+  optional; one left out is the printer's default:
 
-  +-------------------+--------------------------------------------+-------------------------------------+
-  | Key               | What it is                                 | PrusaSlicer / Cura                  |
-  +===================+============================================+=====================================+
-  | ``nozzle``        | The nozzle's diameter, a length            | ``nozzle_diameter`` /               |
-  |                   |                                            | ``machine_nozzle_size``             |
-  +-------------------+--------------------------------------------+-------------------------------------+
-  | ``layerHeight``   | How thick each layer is                    | ``layer_height``                    |
-  +-------------------+--------------------------------------------+-------------------------------------+
-  | ``lineWidth``     | How wide each extruded line is             | ``extrusion_width`` /               |
-  |                   |                                            | ``line_width``                      |
-  +-------------------+--------------------------------------------+-------------------------------------+
-  | ``walls``         | How many lines thick the sides are         | ``perimeters`` /                    |
-  |                   |                                            | ``wall_line_count``                 |
-  +-------------------+--------------------------------------------+-------------------------------------+
-  | ``topLayers``,    | How many solid layers close each region    | ``top_solid_layers`` /              |
-  | ``bottomLayers``  | from above and from below                  | ``top_layers`` (and ``bottom_``)    |
-  +-------------------+--------------------------------------------+-------------------------------------+
-  | ``infill``        | How full the inside is: ``20%`` or ``0.2``;| ``fill_density`` /                  |
-  |                   | a bare number above 1 is refused           | ``infill_sparse_density``           |
-  +-------------------+--------------------------------------------+-------------------------------------+
-  | ``infillPattern`` | What the inside is filled with, as the     | ``fill_pattern`` /                  |
-  |                   | slicer names it: ``grid``, ``gyroid``...   | ``infill_pattern``                  |
-  +-------------------+--------------------------------------------+-------------------------------------+
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | Key               | What it is                                   | In ``pc cam``'s terms        | PrusaSlicer / Cura                  |
+  +===================+==============================================+==============================+=====================================+
+  | ``toolAxis``      | The axis the nozzle comes down along, in the | the same key, the same axis: | the orientation on the bed          |
+  | (or ``along``)    | design's frame: ``-Z`` (the default) prints  | ``pc cam`` orients a print   |                                     |
+  |                   | it as modelled, ``-Y`` on its back           | the way it orients a cut     |                                     |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | ``nozzle``,       | The nozzle's diameter and the filament's: the| a laser's ``kerf``: the      | ``nozzle_diameter``,                |
+  | ``filament``      | machine's own                                | machine's own property       | ``filament_diameter``               |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | ``layerHeight``   | How thick each layer is                      | ``depth_per_pass``, built up | ``layer_height``                    |
+  |                   |                                              | rather than cut down         |                                     |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | ``lineWidth``     | How wide each extruded line is               | the width the path leaves:   | ``extrusion_width`` /               |
+  |                   |                                              | a ``diameter``, a ``kerf``   | ``line_width``                      |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | ``walls``         | How many lines thick the sides are           | a ``profile`` around every   | ``perimeters`` /                    |
+  |                   |                                              | outline and hole, repeated   | ``wall_line_count``                 |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | ``infill``        | How full the inside is: ``20%`` or ``0.2``;  | a ``pocket`` whose           | ``fill_density`` /                  |
+  |                   | a bare number above 1 is refused             | ``stepover`` is one line     | ``infill_sparse_density``           |
+  |                   |                                              | over this                    |                                     |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | ``infillPattern`` | What the inside is filled with:              | ``operation``: concentric is | ``fill_pattern`` /                  |
+  |                   | ``concentric``, ``rectilinear``, ``grid``... | a pocket's rings             | ``infill_pattern``                  |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | ``topLayers``,    | How many layers under a top and over a       | nothing: a cut never asks    | ``top_solid_layers`` /              |
+  | ``bottomLayers``  | bottom are solid                             | what is above it             | ``top_layers`` (and ``bottom_``)    |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
+  | ``feed``          | How fast the head moves while it extrudes    | ``feed``, the same key       | the print speeds                    |
+  +-------------------+----------------------------------------------+------------------------------+-------------------------------------+
 
-  The settings are a process' own and are written under it: an ``infill:``
-  directly under ``manufacturing:`` is an error that says where it goes, the
-  way a router's ``diameter:`` is refused on a printed part.
+  Settings are the printer's and are written under it: an ``infill:`` or a
+  ``feed:`` directly under ``manufacturing:`` is an error that says where it
+  goes, and a cut's keys (``diameter:``, ``cnc:``...) are refused on a printed
+  part as on every method that makes no cut. Speeds other than the feed,
+  temperatures and cooling decide whether a print succeeds rather than what
+  shape it is, and are left to whoever prints it.
+
+  ``pc cam`` does not write a printer's route yet -- ``pc cam -m fff`` says so,
+  and ``pc cam`` over a package passes printed parts over, as it does a part
+  only a saw cuts. ``//builtin/cam`` has the pieces a route is made of (the
+  section at each height, the rings a pocket is cleared with, the polylines a
+  machine follows); writing the route from them, and the print from the route,
+  is ``docs/design/additive.md`` in the repository.
 
 **What it is made of is its CMF, not its manufacturing section.** The filament
 is the part's ``material`` -- the CMF parameter every part type takes, stated on
@@ -140,7 +164,7 @@ check, the exports, a supplier's cart -- already reads (see
 procured: the bill of materials and ``pc supply`` count a printed part as made,
 from nothing it names, as before. A print service is sent the design's geometry
 and the print settings the part states (``request["cart"]`` item
-``manufacturing``), never its visual.
+``manufacturing``), never the part's own geometry.
 
 ``pc qual test`` checks that the declaration can be read and that the design is a
 closed solid (``manufacturability-additive``). See

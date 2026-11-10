@@ -964,27 +964,38 @@ at all).
   manufacturing pages repeat each part's instructions as text (`manufacturing_instructions.py`) and draw its
   route from above where one can be produced (`cam_preview.py`).
 
-- **A printed part names its design, not its stock** (`part_config_manufacturing.py`,
-  `qual/basic/manufacturability_additive_solid.py`; design record `docs/design/additive.md`): `additive`'s
-  `source:` is the *design* -- what is printed, what the tolerance is measured against, what a print service is
-  sent -- and never stock, so `procurement.stock_name` is None for a printed part whatever it names. Optional: a
-  part naming none is its own design, as every printed part was before. `visual:` is what it is drawn as instead,
-  and the process settings that decide the print's shape live under the process' own subsection, `fff:`
-  (`PrintProcess`), as a machine's do under `cnc:`.
+- **A printed part names its design, not its stock, and its printer is a machine** (`part_config_manufacturing.py`,
+  `qual/basic/manufacturability_additive_solid.py`, `visual.py`; design record `docs/design/additive.md`):
+  `additive`'s `source:` is the *design* -- what is printed, what the tolerance is measured against, what a print
+  service is sent -- and never stock, so `procurement.stock_name` is None for a printed part whatever it names.
+  Optional: a part naming none is its own design, as every printed part was before. The part itself is the
+  *print*: the design as the printer makes it, which is what it weighs.
 
-  A printed part that names a design needs no `type:`: `PartConfiguration.normalize` makes it `type: alias` of its
-  visual (else the design), marked `implied_type`, so it is a reference in every respect and restates its own
-  `manufacturing:`. A part *with* a `type:` may name a design but not a `visual:` -- the check reads that off the
-  part's own declaration, because the configuration a reference resolves to is its source's.
+  **The design is the part's default visual** (`visual.design`): a printed part that names a design and no
+  `visual:` of its own is drawn as the design wherever a picture is drawn, by devel's one substitution path
+  (`visual_of_async`). A reference inherits as before, so a type-less printed part -- which
+  `PartConfiguration.normalize` makes `type: alias` of its design, marked `implied_type`, until the print can be
+  worked out from its route -- is the design already and nothing is substituted. `manufacturing: visual:` is
+  refused with a sentence pointing at the part-level key.
 
-  An unreadable `fff:` is `process_error`, **not** `machine_error`: `cam.declares_job` visits any part whose
-  `machine_error` is set, and a typo in an infill is nothing a router has a program for. `PROCESS_DEFAULTS` is
-  for working something out (a weight); instructions and the cart carry only what the part states.
+  **`fff:` is a machine** (`MACHINE_FFF`, `PRINTERS`), read by `MachineConfig` and `_read_machine` like `laser:`:
+  its own keys are the axis (`toolAxis`/`along` -- the build orientation, oriented by `pc cam` the way a cut is),
+  `nozzle` and `filament` (a laser's `kerf`'s kind); its job keys are `pc cam`'s `feed` and the printer's own
+  names where a cut has no word (`layerHeight` ~ `depth_per_pass`, `lineWidth` ~ the width the path leaves,
+  `walls` ~ repeated `profile`, `infill` ~ a pocket's `stepover` inverted, `infillPattern` ~ `operation`,
+  `topLayers`/`bottomLayers`). An error in it is `machine_error`, so `pc cam` visits it as it visits a broken
+  `laser:`. It is **not** in `ROUTED_MACHINES` yet: `pc cam` passes a printed part over and `-m fff` refuses
+  with `unrouted_reason`, until `//builtin/cam` writes a printer's route (its `_faces_at`, ring offsets and
+  `_wire_points` are what the route is made of; the design record has a prototype's numbers). A printed part that
+  names no printer has none -- there is no printing analogue of CNC-as-default. Nothing is shared directly under
+  `manufacturing:` for a print: a printer's key there is reported as "write it under 'fff:'".
 
-  Material stays CMF: the manufacturing section takes none. `get_mcft` (the cart) now falls back to what a
-  reference resolves to, since a reference states no material of its own and a type-less printed part is one;
-  the manufacturer provider is sent the design's STEP, not the visual's. The printed geometry and its weight are
-  proposed in the design record, not built.
+  `PRINT_DEFAULTS` (`MachineConfig.settings`) is for working something out; instructions and the cart carry only
+  what the part states (`PartConfigManufacturing.print_data`, sent as the cart item's `manufacturing`).
+
+  Material stays CMF: the manufacturing section takes none. `get_mcft` (the cart) falls back to what a reference
+  resolves to, since a reference states no material of its own and a type-less printed part is one; the
+  manufacturer provider is sent the design's STEP, not the part's own geometry.
 
 - **Build vs Buy decides the build plan, and the plan decides the instruction book** (`build_plan.py`): the
   tree of an object's line items says what each can be (bought, built, both, neither); `effective_choice` is

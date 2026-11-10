@@ -4156,7 +4156,9 @@ class Shape(ShapeConfiguration):
             routed = [kind for kind in manufacturing_data.machine_choices() if kind in ROUTED_MACHINES]
             chosen = manufacturing_data.machine_named(routed[0]) if len(routed) == 1 else None
         if chosen is not None and chosen.kind not in ROUTED_MACHINES:
-            raise pc_cam.CamConfigError("a '%s' runs no program, so there is no route to write for it" % chosen.kind)
+            from .part_config_manufacturing import unrouted_reason
+
+            raise pc_cam.CamConfigError(unrouted_reason(chosen.kind))
         if chosen is None:
             # Made some other way, so there is no machine to name and nothing
             # wrong with that: an implementation handed nothing writes what it

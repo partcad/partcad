@@ -20,14 +20,14 @@ from .part_config_manufacturing import (
     MACHINE_CNC,
     MACHINE_CUT,
     MACHINE_DRILL,
+    MACHINE_FFF,
     MACHINE_LASER,
     METHOD_ADDITIVE,
     METHOD_FORMING,
     METHOD_SHEET_METAL,
     METHOD_SUBTRACTIVE,
-    PROCESS_FFF,
+    PRINTERS,
     PartConfigManufacturing,
-    PrintProcess,
 )
 
 MM_PER_INCH = 25.4
@@ -119,6 +119,8 @@ def _settings(options: dict) -> str | None:
 def _machine_lines(data: PartConfigManufacturing, kind: str) -> list:
     """How the part is made on one machine."""
     machine = data.machines[kind]
+    if kind in PRINTERS:
+        return _print_lines(machine)
     phrase = _MACHINE_PHRASES.get(kind, "on a '%s'" % kind)
     lines = []
     if kind == MACHINE_CUT:
@@ -140,23 +142,30 @@ def _machine_lines(data: PartConfigManufacturing, kind: str) -> list:
     return lines
 
 
-# The process, as the sentence introducing it names it.
-_PROCESS_PHRASES = {
-    PROCESS_FFF: "on a filament printer (FFF)",
+# The printer, as the sentence introducing it names it.
+_PRINTER_PHRASES = {
+    MACHINE_FFF: "on a filament printer (FFF)",
 }
 
 
-def _process_lines(process: PrintProcess) -> list:
-    """How the part is printed by one process: what was said, and nothing assumed.
+def _print_lines(machine) -> list:
+    """How the part is printed on one printer: what was said, and nothing assumed.
 
     Only the settings the part states. What it leaves out is the printer's
     default, and whoever prints it knows their printer's defaults better than
-    PartCAD's guess at them (see 'PROCESS_DEFAULTS', which is for working out a
-    weight, not for telling somebody what to do).
+    PartCAD's guess at them (see 'PRINT_DEFAULTS', which is for working
+    something out, not for telling somebody what to do). The axis only where it
+    is not the one every printer prints along: then it is how the part is laid
+    on the bed, which nobody can be left to guess.
     """
-    said = process.options
+    said = machine.options
     parts = []
-    for key, name in (("nozzle", "nozzle"), ("layerHeight", "layer height"), ("lineWidth", "line width")):
+    for key, name in (
+        ("nozzle", "nozzle"),
+        ("filament", "filament"),
+        ("layerHeight", "layer height"),
+        ("lineWidth", "line width"),
+    ):
         if said.get(key) is not None:
             parts.append("%s %s mm" % (name, _number(said[key])))
     for key, one, many in (
@@ -173,7 +182,11 @@ def _process_lines(process: PrintProcess) -> list:
         parts.append(infill)
     elif said.get("infillPattern"):
         parts.append("%s infill" % said["infillPattern"])
-    sentence = "Print it %s" % _PROCESS_PHRASES.get(process.kind, "by '%s'" % process.kind)
+    if said.get("feed") is not None:
+        parts.append("feed %s mm/min" % _number(said["feed"]))
+    sentence = "Print it %s" % _PRINTER_PHRASES.get(machine.kind, "on a '%s'" % machine.kind)
+    if machine.tool_axis and machine.tool_axis.strip().lower() not in ("-z",):
+        sentence += ", the nozzle working along the part's %s" % machine.tool_axis
     lines = [sentence + ("; %s." % ", ".join(parts) if parts else ".")]
     if said.get("desc"):
         lines.append(str(said["desc"]).strip())
@@ -200,11 +213,6 @@ def describe(data: PartConfigManufacturing, stock: str | None = None) -> list:
             lines.append("Printed from the design `%s`." % data.design)
         else:
             lines.append("Made additively (3D printed).")
-        if data.process_error:
-            lines.append("How it is printed cannot be read: %s." % data.process_error)
-        else:
-            for kind in sorted(data.processes):
-                lines += _process_lines(data.processes[kind])
     elif data.method == METHOD_FORMING:
         lines.append("Formed: molded, cast or pressed.")
 

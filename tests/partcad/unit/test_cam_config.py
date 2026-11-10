@@ -351,14 +351,16 @@ def test_what_describes_the_file_is_not_an_object_key():
     "stray",
     [
         {"diameter": 6},
-        {"feed": 1200},
         {"cnc": {"diameter": 6}},
         {"laser": {"kerf": 0.1}},
         {"implementation": "p:gcode"},
     ],
 )
 def test_a_method_that_describes_no_cut_refuses_the_keys_that_do(stray):
-    """`additive` takes no machine and no job, and says so rather than ignoring it.
+    """`additive` takes no cutting machine and no cut, and says so rather than ignoring it.
+
+    Its machine is a printer, `fff:`, which takes the keys a printer reads -- a
+    `feed:` among them, under `fff:` rather than shared (see `test_additive.py`).
 
     Nothing reads a cut from a printed part, so a `diameter:` written on one is
     a number somebody chose and nothing acts on -- which is the failure the move

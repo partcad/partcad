@@ -651,10 +651,9 @@ def declared_config(shape, machine: Optional[str] = None) -> Optional[dict]:
                 % (machine, ", ".join("'%s'" % kind for kind in data.machine_choices()) or "no machine")
             )
         if machine not in ROUTED_MACHINES:
-            raise CamConfigError(
-                "a '%s' runs no program: where it cuts is the whole of what it is told, and the part's own"
-                " declaration already says so" % machine
-            )
+            from .part_config_manufacturing import unrouted_reason
+
+            raise CamConfigError(unrouted_reason(machine))
     elif len(routed) > 1:
         raise CamConfigError(
             "it could be made on %s, so one of them has to be chosen" % " or ".join("'%s'" % kind for kind in routed)

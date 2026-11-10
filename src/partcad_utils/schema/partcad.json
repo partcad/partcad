@@ -95,13 +95,16 @@
       "additionalProperties": false
     },
     "additive-fff": {
-      "description": "Fused filament fabrication -- ISO/ASTM 52900 material extrusion, what most people call FDM -- and the settings that decide the shape of what it prints: how thick the skin is and how full the inside. Speeds, temperatures and cooling decide whether a print succeeds rather than what shape it is, and are left to whoever prints it. A setting left out is the printer's default; PartCAD assumes the usual ones (a 0.4 mm nozzle, 0.2 mm layers, 0.45 mm lines, 2 walls, 4 top and 4 bottom layers, 15% grid infill) only where it has to work something out, such as a weight.",
+      "description": "A filament printer: fused filament fabrication, ISO/ASTM 52900 material extrusion, what most people call FDM. A machine like the subtractive ones -- it follows a route, layer by layer, laying a bead where a router cuts one -- so it takes their axis and their 'feed:', and settings of its own for what a cut has no word for: how thick the skin is and how full the inside. A setting left out is the printer's default; PartCAD assumes the usual ones (a 0.4 mm nozzle, 1.75 mm filament, 0.2 mm layers, 0.45 mm lines, 2 walls, 4 top and 4 bottom layers, 15% rectilinear infill) only where it has to work something out. 'pc cam' writes no printer's route yet.",
       "type": "object",
       "properties": {
-        "nozzle": { "$ref": "#/definitions/cam-length", "description": "The diameter of the nozzle the filament comes out of" },
-        "layerHeight": { "$ref": "#/definitions/cam-length", "description": "How thick each layer is" },
-        "lineWidth": { "$ref": "#/definitions/cam-length", "description": "How wide each extruded line is" },
-        "walls": { "type": "integer", "minimum": 0, "description": "How many lines thick the sides are (a slicer's perimeters, or wall line count)" },
+        "toolAxis": { "$ref": "#/definitions/machine-axis", "description": "The axis the nozzle comes down along, in the design's own frame: '-Z' (the default) prints it as modelled, '-Y' prints it lying on its back. The build orientation, which decides where the layer lines run and what overhangs" },
+        "along": { "$ref": "#/definitions/machine-axis", "description": "The same as 'toolAxis:'. Write one or the other." },
+        "nozzle": { "$ref": "#/definitions/cam-length", "description": "The diameter of the nozzle: the machine's own, as a laser's kerf is" },
+        "filament": { "$ref": "#/definitions/cam-length", "description": "The diameter of the filament it is fed (1.75 mm, 2.85 mm): what turns a length of route into a length of filament" },
+        "layerHeight": { "$ref": "#/definitions/cam-length", "description": "How thick each layer is: a router's 'depth_per_pass', built up rather than cut down" },
+        "lineWidth": { "$ref": "#/definitions/cam-length", "description": "How wide each extruded line is: the width the path leaves behind, as a laser's kerf is the width its path removes" },
+        "walls": { "type": "integer", "minimum": 0, "description": "How many lines thick the sides are: a 'profile' around every outline and every hole, repeated inward (a slicer's perimeters, or wall line count)" },
         "topLayers": { "type": "integer", "minimum": 0, "description": "How many solid layers close the top of every region" },
         "bottomLayers": { "type": "integer", "minimum": 0, "description": "How many solid layers close the bottom of every region" },
         "infill": {
@@ -109,11 +112,13 @@
             { "type": "number", "minimum": 0, "maximum": 1 },
             { "type": "string", "pattern": "^\\s*[0-9]+(\\.[0-9]+)?\\s*%\\s*$" }
           ],
-          "description": "How full the inside is: '20%', or 0.2. A bare number above 1 is refused rather than guessed at"
+          "description": "How full the inside is: '20%', or 0.2 -- a pocket whose stepover is one line over this. A bare number above 1 is refused rather than guessed at"
         },
-        "infillPattern": { "type": "string", "minLength": 1, "description": "What the inside is filled with: 'grid', 'gyroid', 'honeycomb', 'cubic', 'lines'... as the slicer names it" },
+        "infillPattern": { "type": "string", "minLength": 1, "description": "What the inside is filled with, as the slicer names it: 'concentric' (a pocket's rings), 'rectilinear', 'grid', 'gyroid', 'honeycomb'..." },
+        "feed": { "$ref": "#/definitions/cam-feed", "description": "How fast the head travels while it extrudes; a bare number is millimeters per minute" },
         "desc": { "type": "string", "maxLength": 1000 }
       },
+      "not": { "required": ["toolAxis", "along"] },
       "additionalProperties": false
     },
     "subtractive-cut-one": {
@@ -2388,12 +2393,7 @@
                     "source": {
                       "type": "string",
                       "minLength": 1,
-                      "description": "The part that goes into the process, for a method that works on one rather than on stock. Required by 'sheet_metal', where it is the flat piece that is bent -- itself manufactured, and expected to be cut by a subtractive process that gives it its outline and its holes. Required by 'subtractive', where it is the stock the part is cut out of. Optional for 'additive', where it is the design -- the solid the designer had in mind, which is what is printed and what the part is drawn as -- rather than anything that goes into the printer; a printed part that names one needs no 'type:' of its own. A reference, resolved against this package like any other."
-                    },
-                    "visual": {
-                      "type": "string",
-                      "minLength": 1,
-                      "description": "'additive' only: what a printed part with no 'type:' of its own is drawn, placed and exported as, where that is not its 'source:' design -- a mesh with the layer lines on it, a lighter model of a heavy one. A reference to a part."
+                      "description": "The part that goes into the process, for a method that works on one rather than on stock. Required by 'sheet_metal', where it is the flat piece that is bent -- itself manufactured, and expected to be cut by a subtractive process that gives it its outline and its holes. Required by 'subtractive', where it is the stock the part is cut out of. Optional for 'additive', where it is the design -- the solid the designer had in mind, which is what is printed and, unless the part names a 'visual:' of its own, what a picture of it draws -- rather than anything that goes into the printer; a printed part that names one needs no 'type:' of its own. A reference, resolved against this package like any other."
                     },
                     "instructions": {
                       "type": "string",
@@ -2463,17 +2463,12 @@
                       }
                     },
                     {
-                      "description": "A design, a visual and a print process describe building a part up. Only 'additive' does that.",
+                      "description": "A print process describes building a part up. Only 'additive' does that.",
                       "if": {
                         "properties": { "method": { "not": { "const": "additive" } } },
                         "required": ["method"]
                       },
-                      "then": { "properties": { "visual": false, "fff": false } }
-                    },
-                    {
-                      "description": "A visual stands for a design, so it is said only beside one.",
-                      "if": { "required": ["visual"] },
-                      "then": { "required": ["source"] }
+                      "then": { "properties": { "fff": false } }
                     }
                   ]
                 },
@@ -2496,7 +2491,7 @@
               "anyOf": [
                 { "required": ["type"] },
                 {
-                  "description": "A printed part that names its design and no geometry of its own: it is that design, printed, and is drawn as 'manufacturing: visual:', or else as the design.",
+                  "description": "A printed part that names its design and no geometry of its own: it is that design, printed.",
                   "required": ["manufacturing"],
                   "not": { "required": ["source"] },
                   "properties": {
@@ -2507,11 +2502,6 @@
                   }
                 }
               ],
-              "if": { "required": ["type"] },
-              "then": {
-                "description": "A part with a 'type:' is drawn as what it is, so it says no 'visual:' as well.",
-                "properties": { "manufacturing": { "properties": { "visual": false } } }
-              },
               "additionalProperties": false
             },
             {

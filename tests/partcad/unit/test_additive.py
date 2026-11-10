@@ -3,18 +3,19 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""A printed part, the design it is a print of, and the process that prints it.
+"""A printed part, the design it is a print of, and the printer that prints it.
 
 'additive' is the one method whose `source:` is not something that goes into
 the machine. What a printer is handed is a *design*, and what comes out is that
-design as the process can make it -- so the declaration names the design, may
-name what the part is drawn as, and says how the inside is filled:
+design as the process can make it -- so the declaration names the design, and
+names the printer the way a subtractive part names its machine:
 
     printed:
       manufacturing:
         method: additive
-        source: design        # what it is a print of, and what it is drawn as
-        fff:
+        source: design        # what it is a print of, and what a picture draws
+        fff:                  # a machine, read as a router or a laser is
+          toolAxis: -Z
           walls: 3
           infill: 20%
 
@@ -37,9 +38,10 @@ from partcad.manufacturing_instructions import describe
 from partcad.part_config import PartConfiguration
 from partcad.part_config_manufacturing import (
     IMPLIED_TYPE_KEY,
+    MACHINE_FFF,
     METHOD_ADDITIVE,
-    PROCESS_DEFAULTS,
-    PROCESS_FFF,
+    PRINT_DEFAULTS,
+    ROUTED_MACHINES,
     PartConfigManufacturing,
     implied_type,
     parse_fraction,
@@ -61,9 +63,8 @@ def test_a_printed_part_names_its_design():
     data = _manufacturing(method="additive", source="design")
     assert data.method == METHOD_ADDITIVE
     assert data.design == "design"
-    assert data.visual is None
     assert data.missing_fields() == []
-    assert data.process_error is None and data.machine_error is None
+    assert data.machine_error is None
 
 
 def test_a_printed_part_that_names_none_is_its_own_design():
@@ -71,8 +72,10 @@ def test_a_printed_part_that_names_none_is_its_own_design():
     data = _manufacturing(method="additive")
     assert data.design is None
     assert data.missing_fields() == []
-    assert data.processes == {}
-    assert data.process_error is None
+    # No printer named is no printer: there is none that prints whatever the
+    # others can, as a router cuts whatever a laser can.
+    assert data.machines == {}
+    assert data.machine_error is None
 
 
 def test_only_a_print_has_a_design():
@@ -81,12 +84,15 @@ def test_only_a_print_has_a_design():
     assert _manufacturing(method="sheet_metal", source="blank", instructions="bends").design is None
 
 
-def test_the_process_settings_are_read_into_their_units():
+def test_the_printer_settings_are_read_into_their_units():
     data = _manufacturing(
         method="additive",
         source="design",
         fff={
+            "along": "-Y",
             "nozzle": "0.6 mm",
+            "filament": "2.85 mm",
+            "feed": "50 mm/s",
             "layerHeight": 0.3,
             "lineWidth": "0.03 in",
             "walls": 3,
@@ -97,35 +103,45 @@ def test_the_process_settings_are_read_into_their_units():
             "desc": "Logo side up",
         },
     )
-    assert data.process_error is None
-    process = data.process
-    assert process is not None and process.kind == PROCESS_FFF
-    assert process.get("nozzle") == pytest.approx(0.6)
-    assert process.get("layerHeight") == pytest.approx(0.3)
-    assert process.get("lineWidth") == pytest.approx(0.762)
-    assert process.get("walls") == 3
-    assert process.get("bottomLayers") == 0
-    assert process.get("infill") == pytest.approx(0.2)
-    assert process.get("infillPattern") == "gyroid"
-    assert process.get("desc") == "Logo side up"
+    assert data.machine_error is None
+    printer = data.machine
+    assert printer is not None and printer.kind == MACHINE_FFF
+    # The axis is a machine's, read as a router's is: the build orientation.
+    assert printer.tool_axis == "-Y"
+    assert printer.vector == (0.0, -1.0, 0.0)
+    # Own keys, a laser's kerf's kind.
+    assert printer.get("nozzle") == pytest.approx(0.6)
+    assert printer.get("filament") == pytest.approx(2.85)
+    # The router's own feed, read the way 'pc cam' reads it.
+    assert printer.get("feed") == pytest.approx(3000.0)
+    assert printer.get("layerHeight") == pytest.approx(0.3)
+    assert printer.get("lineWidth") == pytest.approx(0.762)
+    assert printer.get("walls") == 3
+    assert printer.get("bottomLayers") == 0
+    assert printer.get("infill") == pytest.approx(0.2)
+    assert printer.get("infillPattern") == "gyroid"
+    assert printer.get("desc") == "Logo side up"
+    assert printer.to_data()["machine"] == MACHINE_FFF
+    assert printer.to_data()["filament"] == pytest.approx(2.85)
+    assert "infill" in printer.job_options() and "nozzle" not in printer.job_options()
 
 
-def test_what_a_process_leaves_out_is_assumed_only_where_something_is_worked_out():
+def test_what_a_printer_leaves_out_is_assumed_only_where_something_is_worked_out():
     """'settings()' fills the gaps with the usual defaults; 'options' is what was said."""
     data = _manufacturing(method="additive", fff={"infill": 0.4})
-    process = data.process
-    assert process.options == {"infill": 0.4}
-    settings = process.settings()
+    printer = data.machine
+    assert printer.options == {"infill": 0.4}
+    assert printer.tool_axis == "-Z"
+    settings = printer.settings()
     assert settings["infill"] == 0.4
-    assert settings["walls"] == PROCESS_DEFAULTS[PROCESS_FFF]["walls"]
-    assert "desc" not in settings
-    assert process.to_data()["process"] == PROCESS_FFF
+    assert settings["walls"] == PRINT_DEFAULTS[MACHINE_FFF]["walls"]
+    assert "desc" not in settings and "feed" not in settings
 
 
-def test_an_empty_process_subsection_names_the_process_and_nothing_else():
+def test_an_empty_printer_subsection_names_the_printer_and_nothing_else():
     data = _manufacturing(method="additive", fff=None)
-    assert data.process_error is None
-    assert data.process.options == {}
+    assert data.machine_error is None
+    assert data.machine.options == {}
 
 
 @pytest.mark.parametrize(
@@ -148,14 +164,20 @@ def test_a_fraction_that_is_not_one_is_refused(value):
     [
         ({"infill": "20%"}, "write it under 'fff:'"),
         ({"walls": 3, "fff": {}}, "write it under 'fff:'"),
-        ({"fff": {"speed": 60}}, "'fff:' does not take 'speed:'"),
+        ({"feed": 1200}, "write it under 'fff:'"),
+        ({"toolAxis": "-Y"}, "write it under 'fff:'"),
+        ({"fff": {"toolAxis": "-Y", "along": "-Y"}}, "which are one thing"),
+        ({"fff": {"toolAxis": "sideways"}}, "is not an axis"),
+        ({"fff": {"implementation": "slicer:gcode"}}, "'fff:' does not take implementation"),
+        ({"fff": {"diameter": 6}}, "'fff:' does not take diameter"),
+        ({"fff": {"speed": 60}}, "'fff:' does not take speed"),
         ({"fff": {"infill": 20}}, "more than all of it"),
         ({"fff": {"walls": 2.5}}, "not a count"),
         ({"fff": {"walls": True}}, "not a count"),
         ({"fff": {"layerHeight": 0}}, "not a positive length"),
         ({"fff": {"infillPattern": ""}}, "not the name of a pattern"),
         ({"fff": "yes"}, "is not a section"),
-        ({"visual": "render"}, "there is no 'source:' design"),
+        ({"source": "design", "visual": "render"}, "write it on the part itself"),
         ({"source": ""}, "not a reference to a part"),
         ({"bogus": 1}, "does not take 'bogus:'"),
     ],
@@ -163,19 +185,55 @@ def test_a_fraction_that_is_not_one_is_refused(value):
 def test_a_declaration_that_cannot_be_read_is_recorded_rather_than_raised(section, said):
     """Loading a package must not fail over one part's declaration; the check reports it."""
     data = _manufacturing(method="additive", **section)
-    assert data.process_error is not None
-    assert said in data.process_error
-    assert data.processes == {}
-    # Not the router's business: 'pc cam' visits a part whose 'machine_error'
-    # is set, and a printer's typo is nothing it has a program for.
-    assert data.machine_error is None
+    assert data.machine_error is not None
+    assert said in data.machine_error
+    assert data.machines == {}
 
 
 def test_a_cut_on_a_printed_part_is_still_refused_as_a_cut():
-    """The keys a cut takes are refused in the words every other method hears."""
+    """The keys a cut takes, and no printer does, are refused in the words every other method hears."""
     data = _manufacturing(method="additive", source="design", diameter=3)
     assert "describes no cut" in data.machine_error
-    assert data.process_error is None
+
+
+#
+# How it relates to 'pc cam'
+#
+
+
+class _Shape:
+    """Just enough of a part for 'pc cam's own questions."""
+
+    def __init__(self, section):
+        self.config = {"manufacturing": section}
+        self.name = "printed"
+
+    def get_final_config(self):
+        return self.config
+
+
+def test_a_printer_is_a_machine_pc_cam_does_not_route_yet():
+    from partcad import cam
+
+    assert MACHINE_FFF not in ROUTED_MACHINES
+    shape = _Shape({"method": "additive", "source": "design", "fff": {"infill": "20%"}})
+    # Passed over by 'pc cam' over a package, as a part only cut by a saw is...
+    assert cam.declares_job(shape) is False
+    assert cam.declared_config(shape) is None
+    # ...and asked for by name, refused with a sentence that says what is missing.
+    with pytest.raises(cam.CamConfigError) as raised:
+        cam.declared_config(shape, machine="fff")
+    assert "a 'fff' is a printer" in str(raised.value)
+
+
+def test_a_printer_that_cannot_be_read_is_visited_and_reported_as_a_machine_is():
+    from partcad import cam
+
+    shape = _Shape({"method": "additive", "fff": {"infill": 20}})
+    assert cam.declares_job(shape) is True
+    with pytest.raises(cam.CamConfigError) as raised:
+        cam.declared_config(shape)
+    assert "more than all of it" in str(raised.value)
 
 
 #
@@ -188,9 +246,10 @@ def test_a_printed_part_with_no_type_is_its_design():
     assert implied == {"type": "alias", "source": "design", IMPLIED_TYPE_KEY: "additive"}
 
 
-def test_a_printed_part_with_a_visual_is_drawn_as_the_visual():
-    implied = implied_type({"manufacturing": {"method": "additive", "source": "design", "visual": "render"}})
-    assert implied["source"] == "render"
+def test_what_a_printed_part_is_drawn_as_is_no_part_of_its_type():
+    """A part's 'visual:' is a picture's business (see 'partcad.visual'); the part is the design, printed."""
+    implied = implied_type({"visual": "render", "manufacturing": {"method": "additive", "source": "design"}})
+    assert implied["source"] == "design"
 
 
 @pytest.mark.parametrize(
@@ -199,7 +258,7 @@ def test_a_printed_part_with_a_visual_is_drawn_as_the_visual():
         {"type": "stl", "manufacturing": {"method": "additive", "source": "design"}},
         {"source": "other", "manufacturing": {"method": "additive", "source": "design"}},
         {"manufacturing": {"method": "additive"}},
-        {"manufacturing": {"method": "additive", "visual": "render"}},
+        {"visual": "render", "manufacturing": {"method": "additive"}},
         {"manufacturing": {"method": "subtractive", "source": "stock"}},
         {"manufacturing": "additive"},
         {},
@@ -228,12 +287,9 @@ PACKAGE = {
         "printed_denser": {
             "manufacturing": {"method": "additive", "source": "design", "fff": {"walls": 3, "infill": "40%"}},
         },
-        "drawn_otherwise": {"manufacturing": {"method": "additive", "source": "design", "visual": "render"}},
+        # A part of its own that names its design: an as-printed model, say.
+        "as_printed": {"type": "stl", "manufacturing": {"method": "additive", "source": "design"}},
         "self_printed": {"type": "stl", "manufacturing": {"method": "additive"}},
-        "typed_with_visual": {
-            "type": "stl",
-            "manufacturing": {"method": "additive", "source": "design", "visual": "render"},
-        },
         "typo": {"manufacturing": {"method": "additive", "source": "design", "fff": {"infill": 20}}},
         "orphan": {"type": "stl", "manufacturing": {"method": "additive", "source": "missing"}},
         "typeless_orphan": {"manufacturing": {"method": "additive", "source": "missing"}},
@@ -292,13 +348,7 @@ def test_a_printed_part_with_no_type_loads_as_a_reference_to_its_design(ctx):
     data = PartConfiguration.get_manufacturing_data(part)
     assert data.method == METHOD_ADDITIVE
     assert data.design == "design"
-    assert data.process.get("infill") == pytest.approx(0.2)
-
-
-def test_a_printed_part_with_a_visual_points_at_the_visual(ctx):
-    part = ctx.get_part("//test:drawn_otherwise")
-    assert part.config["source"] == "render"
-    assert PartConfiguration.get_manufacturing_data(part).design == "design"
+    assert data.machine.get("infill") == pytest.approx(0.2)
 
 
 def test_a_design_is_not_stock(ctx):
@@ -323,11 +373,12 @@ def test_a_printed_part_passes_when_its_design_is_a_closed_solid(ctx, monkeypatc
     assert built == ["design"]
 
 
-def test_the_design_is_asked_rather_than_the_visual(ctx, monkeypatch):
-    """A visual may be a mesh nobody would hand to a slicer; the design is what is printed."""
-    _arrange(monkeypatch, open_edges={"drawn_otherwise": 7, "render": 7})
+def test_the_design_is_asked_rather_than_the_part(ctx, monkeypatch):
+    """The part may be an as-printed mesh nobody would hand to a slicer; the design is what is printed."""
+    built = _arrange(monkeypatch, open_edges={"as_printed": 7})
     check = ManufacturabilityAdditiveSolidTest()
-    assert _verdict(check, ctx, "drawn_otherwise") is check.TEST_PASSED
+    assert _verdict(check, ctx, "as_printed") is check.TEST_PASSED
+    assert built == ["design"]
 
 
 def test_a_design_that_is_not_solid_fails_naming_the_design(ctx, monkeypatch, caplog):
@@ -362,7 +413,7 @@ def test_a_part_that_is_its_own_design_is_asked_what_it_always_was(ctx, monkeypa
     assert built == ["self_printed"]
 
 
-def test_a_process_that_cannot_be_read_fails_before_anything_is_built(ctx, monkeypatch, caplog):
+def test_a_printer_that_cannot_be_read_fails_before_anything_is_built(ctx, monkeypatch, caplog):
     built = _arrange(monkeypatch)
     check = ManufacturabilityAdditiveSolidTest()
     with caplog.at_level("ERROR"):
@@ -371,22 +422,13 @@ def test_a_process_that_cannot_be_read_fails_before_anything_is_built(ctx, monke
     assert built == []
 
 
-def test_a_part_with_a_type_of_its_own_says_no_visual(ctx, monkeypatch, caplog):
-    """It is drawn as what it is; a second answer is one too many."""
-    _arrange(monkeypatch)
-    check = ManufacturabilityAdditiveSolidTest()
-    with caplog.at_level("ERROR"):
-        assert _verdict(check, ctx, "typed_with_visual") is check.TEST_FAILED
-    assert "'visual:'" in caplog.text and "'type: stl'" in caplog.text
-
-
 def test_the_check_passes_over_a_part_made_some_other_way(ctx, monkeypatch):
     _arrange(monkeypatch, open_edges={"cut": 9})
     check = ManufacturabilityAdditiveSolidTest()
     assert _verdict(check, ctx, "cut") is check.TEST_PASSED
 
 
-def test_the_verdict_is_keyed_on_the_design_and_the_process(ctx):
+def test_the_verdict_is_keyed_on_the_design_and_the_printer(ctx):
     """'manufacturing:' is left out of a part's own hash, so the check keys on what it read."""
     check = ManufacturabilityAdditiveSolidTest()
 
@@ -415,9 +457,9 @@ def test_the_instructions_say_only_what_was_said():
     assert lines[1:] == ["Print it on a filament printer (FFF); 1 top layer, infill 100%.", "Upright"]
 
 
-def test_a_process_that_cannot_be_read_is_a_problem_of_the_build_plan(ctx):
+def test_a_printer_that_cannot_be_read_is_a_problem_of_the_build_plan(ctx):
     problems = _part_problems(ctx.get_part("//test:typo"), made=True, bought=True)
-    assert any(problem.startswith("How it is printed cannot be read:") for problem in problems)
+    assert any(problem.startswith("The machine it is made on cannot be read:") for problem in problems)
 
 
 #
@@ -436,11 +478,15 @@ def test_the_schema_takes_a_printed_part_with_no_type():
                 "manufacturing": {
                     "method": "additive",
                     "source": "design",
-                    "visual": "render",
                     "fff": {"layerHeight": "0.2 mm", "walls": 3, "infill": "20%", "infillPattern": "gyroid"},
-                }
+                },
+                "visual": "render",
             }
         }
+    )
+    # A part of its own may name its design, and be drawn as something else again.
+    assert not _errors(
+        {"printed": {"type": "step", "visual": "render", "manufacturing": {"method": "additive", "source": "design"}}}
     )
     assert not _errors({"printed": {"type": "step", "manufacturing": {"method": "additive", "fff": {"infill": 0.2}}}})
 
@@ -451,11 +497,9 @@ def test_the_schema_takes_a_printed_part_with_no_type():
         # No design, so nothing to be with no type of its own.
         {"manufacturing": {"method": "additive"}},
         {"manufacturing": {"method": "subtractive", "source": "stock"}},
-        # A geometry of its own and a visual: two answers.
+        # What a part is drawn as is the part's, not its manufacturing section's.
         {"type": "step", "manufacturing": {"method": "additive", "source": "design", "visual": "render"}},
-        # A visual stands for a design.
-        {"type": "step", "manufacturing": {"method": "additive", "visual": "render"}},
-        # A print process is a printer's.
+        # A printer is the additive method's machine.
         {"type": "step", "manufacturing": {"method": "subtractive", "source": "stock", "fff": {}}},
         {"type": "step", "manufacturing": {"method": "additive", "fff": {"infill": 20}}},
         {"type": "step", "manufacturing": {"method": "additive", "fff": {"speed": 60}}},
@@ -477,9 +521,13 @@ def test_a_print_service_is_told_the_design_and_the_settings_as_stated():
     assert data.print_data() == {
         "method": "additive",
         "design": "design",
-        "processes": {"fff": {"walls": 3, "infill": 0.2}},
+        "machines": {"fff": {"walls": 3, "infill": 0.2}},
     }
     assert _manufacturing(method="additive").print_data() == {"method": "additive"}
+    # How it lies on the bed is said where it is not the default, because it
+    # decides the print as much as the infill does.
+    sideways = _manufacturing(method="additive", fff={"along": "-Y"}).print_data()
+    assert sideways["machines"] == {"fff": {"toolAxis": "-Y"}}
 
 
 def test_nothing_is_told_about_what_is_not_printed_or_cannot_be_read():
@@ -496,7 +544,7 @@ CMF_PACKAGE = {
         },
         "render": {"type": "stl"},
         "printed": {"manufacturing": {"method": "additive", "source": "design", "fff": {"infill": "20%"}}},
-        "drawn_otherwise": {"manufacturing": {"method": "additive", "source": "design", "visual": "render"}},
+        "as_printed": {"type": "stl", "manufacturing": {"method": "additive", "source": "design"}},
     },
 }
 
@@ -504,7 +552,7 @@ CMF_PACKAGE = {
 @pytest.fixture
 def cmf_ctx(tmp_path):
     (tmp_path / "partcad.yaml").write_text(yaml.safe_dump(CMF_PACKAGE))
-    for name in ("design", "render"):
+    for name in ("design", "render", "as_printed"):
         (tmp_path / (name + ".stl")).write_text("")
     return pc.Context(str(tmp_path))
 
@@ -525,7 +573,7 @@ def test_the_cart_carries_how_it_is_printed(cmf_ctx):
     assert composed["manufacturing"] == {
         "method": "additive",
         "design": "design",
-        "processes": {"fff": {"infill": 0.2}},
+        "machines": {"fff": {"infill": 0.2}},
     }
 
     plain = ProviderCartItem()
@@ -533,13 +581,82 @@ def test_the_cart_carries_how_it_is_printed(cmf_ctx):
     assert "manufacturing" not in plain.compose()
 
 
-def test_a_manufacturer_is_sent_the_design_rather_than_the_visual(cmf_ctx):
-    """A visual may be a mesh nobody would slice; the design is what is printed."""
+def test_a_manufacturer_is_sent_the_design_rather_than_the_part(cmf_ctx):
+    """The part may be an as-printed mesh nobody would slice; the design is what is printed."""
     from partcad.plugin_factory_provider_manufacturer import _sent_geometry
 
-    drawn_otherwise = cmf_ctx.get_part("//test:drawn_otherwise")
-    sent = asyncio.run(_sent_geometry(cmf_ctx, drawn_otherwise))
+    as_printed = cmf_ctx.get_part("//test:as_printed")
+    sent = asyncio.run(_sent_geometry(cmf_ctx, as_printed))
     assert sent.name == "design"
 
     render = cmf_ctx.get_part("//test:render")
     assert asyncio.run(_sent_geometry(cmf_ctx, render)) is render
+
+
+#
+# What a picture of it draws (see 'partcad.visual')
+#
+
+
+PICTURE_PACKAGE = """
+parts:
+  design:
+    type: basic
+    cuboid: [20, 10, 5]
+  look:
+    type: basic
+    cylinder: {radius: 3, height: 30}
+  printed:
+    manufacturing: {method: additive, source: design, fff: {infill: 20%}}
+  printed-drawn:
+    visual: look
+    manufacturing: {method: additive, source: design}
+  as-printed:
+    type: basic
+    cuboid: [19, 9, 4]
+    manufacturing: {method: additive, source: design}
+  as-printed-drawn:
+    type: basic
+    cuboid: [19, 9, 4]
+    visual: look
+    manufacturing: {method: additive, source: design}
+  self-printed:
+    type: basic
+    cuboid: [5, 5, 5]
+    manufacturing: {method: additive}
+"""
+
+
+@pytest.fixture(scope="module")
+def picture_ctx(tmp_path_factory):
+    root = tmp_path_factory.mktemp("printed-pictures")
+    (root / "partcad.yaml").write_text(PICTURE_PACKAGE.lstrip())
+    return pc.Context(str(root))
+
+
+def _drawn_as(context, name):
+    """What a picture of the part draws in its place, or None where it draws the part itself."""
+    from partcad import visual
+
+    part = context.get_part(name)
+    tree = asyncio.run(part.get_wrapped(context))
+    return asyncio.run(visual.substitute_async(context, part, tree)).tree.get(visual.NODE_KEY)
+
+
+def test_a_part_with_a_geometry_of_its_own_is_drawn_as_its_design(picture_ctx):
+    """The source is what the designer had in mind: it is the visual unless another is said."""
+    assert _drawn_as(picture_ctx, "as-printed") == "//:design"
+
+
+def test_a_visual_of_its_own_wins_over_the_design(picture_ctx):
+    assert _drawn_as(picture_ctx, "as-printed-drawn") == "//:look"
+    assert _drawn_as(picture_ctx, "printed-drawn") == "//:look"
+
+
+def test_a_printed_part_with_no_geometry_of_its_own_is_the_design_already(picture_ctx):
+    """Until the print is worked out its geometry is the design's, and nothing is substituted."""
+    assert _drawn_as(picture_ctx, "printed") is None
+
+
+def test_a_part_that_is_its_own_design_is_drawn_as_itself(picture_ctx):
+    assert _drawn_as(picture_ctx, "self-printed") is None

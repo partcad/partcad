@@ -46,8 +46,8 @@ import threading
 
 from . import logging as pc_logging
 from .part_config import PartConfiguration
-from .shape_config_store import STORE_PROPERTIES, ShapeConfigStore
 from .part_config_manufacturing import METHOD_ADDITIVE
+from .shape_config_store import STORE_PROPERTIES, ShapeConfigStore
 from .utils import resolve_resource_path
 
 # How many stock references are followed before giving up on a cycle -- a part
