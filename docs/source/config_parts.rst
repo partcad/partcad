@@ -984,9 +984,10 @@ closed into solids on the way out: a shell a STEP part was reported to be stays
 the shell it was.
 
 The same part can be had without declaring it: ``pc export --compound`` writes
-an assembly or a scene as its compound, ``pc import assembly --compound``
-imports an assembly file as one part, and ``pc adhoc convert part --compound``
-converts one (see :doc:`cli`). A file type whose implementation is written for
+an assembly or a scene as its compound, ``pc import part --compound`` and ``pc
+import assembly --compound`` import an assembly file as one part, and ``pc adhoc
+convert part --compound`` converts one (see :doc:`cli`). ``pc import part``
+without it refuses a file that holds an assembly. A file type whose implementation is written for
 one shape says ``compound: true`` in its ``export:`` or ``render:`` declaration,
 and an assembly is handed to it as its compound whatever the run asks.
 

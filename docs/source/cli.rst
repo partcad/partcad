@@ -513,6 +513,14 @@ Object commands
   is; a URDF, which has no part type, is read as the robot it is and its compound written into the package as
   a ``step`` part.
 
+  ``pc import part`` refuses a file that holds an **assembly** rather than a part, because reading it as one
+  throws away what it is made of: a STEP file whose product structure places more than one component, a glTF
+  scene that places more than one mesh, and a URDF. The message says which of two things to do instead:
+  ``pc import part --compound`` imports it as one part, its compound -- the same part ``pc import assembly
+  --compound`` makes, converted to ``-t <format>`` if one is given -- and ``pc import assembly`` keeps its
+  items and where each is placed. ``pc add part`` declares a file where it lies, as it always has, whatever it
+  holds.
+
 ``pc qual test``
   Run the qualification tests of a part, an assembly, a scene or a sketch -- or of every object of a package
   with ``-P <package>...`` (see :ref:`recursive-names`). Every test is of one of four subtypes, told apart by

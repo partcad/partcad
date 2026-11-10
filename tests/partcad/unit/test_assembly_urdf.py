@@ -919,6 +919,43 @@ def test_import_a_urdf_as_its_compound(tmp_path):
     assert envelope is not None and "brep" in envelope and "assembly" not in envelope
 
 
+def test_import_part_refuses_a_urdf(tmp_path):
+    """A URDF is an assembly, which no part type reads: as a part, only as its compound."""
+    from partcad.actions.part import import_part_action
+    from partcad.assembly_file import AssemblyNotPart
+
+    root = sandbox(tmp_path, ("produce_part_stl",))
+    source = root / "robot.urdf"
+    shutil.copy(os.path.join(EXAMPLES, "produce_assembly_urdf", "robot.urdf"), source)
+    project = pc.Context(str(root)).get_project("//produce_part_stl")
+
+    with pytest.raises(AssemblyNotPart, match="a URDF describes an assembly"):
+        import_part_action(project, "urdf", "robot", str(source))
+
+    assert not (root / "produce_part_stl" / "robot.step").exists()
+
+
+@pytest.mark.parametrize("target_format, written", [(None, "robot.step"), ("stl", "robot.stl")])
+def test_import_part_compound_of_a_urdf(tmp_path, target_format, written):
+    """'pc import part --compound robot.urdf [-t stl]': the robot's compound, as STEP or as what was asked."""
+    from partcad.actions.part import import_part_action
+
+    root = sandbox(tmp_path, ("produce_part_stl",))
+    package = root / "produce_part_stl"
+    source = root / "robot.urdf"
+    shutil.copy(os.path.join(EXAMPLES, "produce_assembly_urdf", "robot.urdf"), source)
+    project = pc.Context(str(root)).get_project("//produce_part_stl")
+
+    import_part_action(project, "urdf", "robot", str(source), target_format=target_format, compound=True)
+
+    assert (package / written).stat().st_size > 0
+    config = yaml.safe_load((package / "partcad.yaml").read_text())
+    assert config["parts"]["robot"]["type"] == (target_format or "step")
+    ctx = pc.Context(str(package))
+    envelope = asyncio.run(ctx.get_part(":robot").get_wrapped(ctx))
+    assert envelope is not None and "brep" in envelope
+
+
 def test_a_compound_import_refuses_a_part_name_in_use(tmp_path):
     root = sandbox(tmp_path, ("produce_part_stl",))
     source = root / "cube.urdf"

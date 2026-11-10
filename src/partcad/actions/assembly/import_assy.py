@@ -172,18 +172,19 @@ def _part_name_refusal(project: Project, name: str):
     return project.name_taken("part", name, config)
 
 
-def import_compound_action(project: Project, file_type: str, assembly_file: str, config: dict) -> str:
+def import_compound_action(project: Project, file_type: str, assembly_file: str, config: dict, name: str = None) -> str:
     """Import an assembly file as one part: the compound of the assembly it holds.
 
     See the module's docstring for which formats are imported as they are and
-    which are written as the STEP of their compound. Returns the part's name.
+    which are written as the STEP of their compound. 'name' is the part's,
+    the file's own name by default. Returns the part's name.
     """
-    name = Path(assembly_file).stem
+    name = name or Path(assembly_file).stem
     refusal = _part_name_refusal(project, name)
     if refusal is not None:
         raise ValueError(refusal)
     if file_type in COMPOUND_AS_PART:
-        import_part_action(project, file_type, name, assembly_file, config)
+        import_part_action(project, file_type, name, assembly_file, config, compound=True)
         return name
 
     from ... import assembly_compound

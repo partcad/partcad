@@ -1488,6 +1488,15 @@ at all).
   `compound` part type used to return the assembly's *tree* under the part's name -- not a part to anything
   that asked -- and `transform.py` in its key is what keeps an entry cached in that form from being served.
 
+- **An assembly file is not imported as a part unasked** (`./src/partcad/assembly_file.py`). `pc import part`
+  of a file that holds an assembly -- a STEP product structure placing more than one component, a glTF scene
+  placing more than one mesh, a URDF -- raises `AssemblyNotPart`, which the daemon answers as a usage error
+  naming `--compound` and `pc import assembly`; `--compound` imports it as its compound. The rule reads the
+  file itself, without a kernel, and stops at the second component; it is the import's alone -- `pc add part`
+  declares a file where it lies whatever it holds, and the package's own `type: gltf` of a scene is a part
+  by declaration. One product placing one component is a part (it is how PartCAD writes a part placed away
+  from the origin), and several solids with no product structure are one multi-body part.
+
 - **An exploded view is an object-type parameter of `assy`** (`./src/partcad/assembly_explode.py`,
   `Assembly.exploded`, `AssemblyFactoryAssy.ACCEPTED_OBJECT_TYPE_PARAMETERS`): `exploded: true` draws the
   assembly with every item backed out of what it is connected to. Being a parameter is the point: an

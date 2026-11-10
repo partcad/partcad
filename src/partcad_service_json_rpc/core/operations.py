@@ -1061,7 +1061,10 @@ def import_object(session, params):
     ``compound``, for an assembly, imports it as one part -- its compound --
     rather than as parts and an ASSY that places them (``pc import assembly
     --compound``; see `partcad.actions.assembly.import_assy`). The answer then
-    names that part, and says so under ``kind``.
+    names that part, and says so under ``kind``. For a part it is what lets the
+    file hold an assembly at all (``pc import part --compound``): a part import
+    of a file that holds one is refused without it (see `partcad.assembly_file`),
+    and the refusal says which of the two to use.
     """
     from pathlib import Path
 
@@ -1086,11 +1089,18 @@ def import_object(session, params):
     try:
         if obj_kind == "part":
             from partcad.actions.part import import_part_action
+            from partcad.assembly_file import AssemblyNotPart
 
             part_type = params["part_type"]
+            compound = _compound(pc, params)
             try:
-                import_part_action(package_obj, part_type, name, source, config, params.get("target_format"))
+                import_part_action(
+                    package_obj, part_type, name, source, config, params.get("target_format"), compound=compound
+                )
                 pc.logging.info("Successfully imported part: %s" % name)
+            except AssemblyNotPart as e:
+                # Nothing was imported, and what to do instead is the message.
+                raise JsonRpcError(USAGE_ERROR, str(e)) from e
             except Exception as e:  # pylint: disable=broad-except
                 pc.logging.exception("Error importing part '%s' (%s)" % (name, part_type))
                 raise JsonRpcError(USAGE_ERROR, "Error importing part '%s' (%s): %s" % (name, part_type, e)) from e

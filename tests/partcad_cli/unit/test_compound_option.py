@@ -6,8 +6,8 @@
 """'--compound' on the commands that take an assembly in and can hand a part out.
 
 What is pinned here is what reaches the daemon: one parameter, 'compound', sent
-only when it is asked for, on 'pc export', 'pc import assembly' and 'pc adhoc
-convert part'. What the daemon does with it is tested beside
+only when it is asked for, on 'pc export', 'pc import assembly', 'pc import
+part' and 'pc adhoc convert part'. What the daemon does with it is tested beside
 'partcad.assembly_compound' and the operations.
 """
 
@@ -44,11 +44,12 @@ def _commands(tmp_path):
     return [
         ("export", "render.objects", ["export", "-t", "step", "-a", "robot"]),
         ("import.assembly", "import.object", ["import", "assembly", str(source)]),
+        ("import.part", "import.object", ["import", "part", str(source)]),
         ("adhoc.convert.part", "adhoc.convert", ["adhoc", "convert", "part", str(source), str(tmp_path / "out.stl")]),
     ]
 
 
-@pytest.mark.parametrize("index", range(3))
+@pytest.mark.parametrize("index", range(4))
 def test_compound_reaches_the_daemon(monkeypatch, tmp_path, index):
     module, method, args = _commands(tmp_path)[index]
     recorder = _record(monkeypatch, module)
@@ -61,7 +62,7 @@ def test_compound_reaches_the_daemon(monkeypatch, tmp_path, index):
     assert params["compound"] is True
 
 
-@pytest.mark.parametrize("index", range(3))
+@pytest.mark.parametrize("index", range(4))
 def test_no_compound_is_not_sent(monkeypatch, tmp_path, index):
     """Left out rather than sent as false: a request that does not ask is the request it always was."""
     module, _method, args = _commands(tmp_path)[index]
@@ -83,3 +84,16 @@ def test_a_compound_import_says_which_part_it_made(monkeypatch, tmp_path):
 
     assert result.exit_code == 0, result.output
     assert "imported successfully as the part 'robot'" in result.output
+
+
+def test_import_part_names_a_urdf_for_the_daemon_to_refuse_or_flatten(monkeypatch, tmp_path):
+    """A '.urdf' is a type of its own, so the daemon can say it is an assembly rather than "unknown type"."""
+    recorder = _record(monkeypatch, "import.part")
+    source = tmp_path / "robot.urdf"
+    source.write_text("<robot name='robot'/>")
+
+    result = _invoke("import", "part", str(source), "--compound")
+
+    assert result.exit_code == 0, result.output
+    ((_method, params),) = recorder.calls
+    assert (params["part_type"], params["compound"]) == ("urdf", True)

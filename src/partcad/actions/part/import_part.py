@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
+from ... import assembly_file
 from ... import logging as pc_logging
 from ...adhoc.convert import convert_cad_file
 from ...part_factory_gltf import GLB_MAGIC, gltf_companions
@@ -50,8 +51,19 @@ def import_part_action(
     source_path: str,
     config: Optional[dict] = None,
     target_format: Optional[str] = None,
+    compound: bool = False,
 ):
-    """Import an existing part into the project, optionally converting it first using ad-hoc conversion."""
+    """Import an existing part into the project, optionally converting it first using ad-hoc conversion.
+
+    A file that holds an assembly rather than a part (see 'partcad.assembly_file')
+    is refused, because reading it as a part throws away what it is made of,
+    unless 'compound' asks for exactly that: the whole assembly as one part, its
+    compound (see 'partcad.assembly_compound'). A STEP or a glTF assembly is then
+    imported as a part of its own type, which reads every solid or mesh in the
+    file into one shape; a URDF, which no part type reads, is written into the
+    package as the STEP of its compound - or converted to 'target_format', if one
+    is given.
+    """
     config = config or {}
     source_path = Path(source_path).resolve()
     original_source = source_path
@@ -61,13 +73,31 @@ def import_part_action(
     if not source_path.exists():
         raise ValueError(f"Source file '{source_path}' not found.")
 
+    holds = assembly_file.assembly_in(source_path, kind)
+    if holds is not None and not compound:
+        raise assembly_file.AssemblyNotPart(
+            f"'{source_path.name}' holds an assembly ({holds}), not a part. Import it with '--compound' to make one "
+            "part of the whole assembly, or with 'pc import assembly' to keep its items and where each is placed."
+        )
+    if holds is not None:
+        pc_logging.info(f"'{source_path.name}' holds an assembly ({holds}): importing it as one part, its compound")
+    if kind in assembly_file.ASSEMBLY_ONLY_TYPES and not target_format:
+        # Here and not at the top: the assembly import imports this module.
+        from ..assembly.import_assy import import_compound_action
+
+        return import_compound_action(project, kind, str(source_path), config, name=name)
+
     # If a target format is specified, perform ad-hoc conversion before adding to project
     if target_format and target_format != kind:
         temp_dir = Path(tempfile.mkdtemp())
         converted_path = temp_dir / f"{name}.{target_format}"
 
         pc_logging.info(f"Performing ad-hoc conversion: {kind} -> {target_format}")
-        convert_cad_file(str(source_path), kind, str(converted_path), target_format)
+        if kind in assembly_file.ASSEMBLY_ONLY_TYPES:
+            # Read as the assembly it is, and written as its compound.
+            convert_cad_file(str(source_path), kind, str(converted_path), target_format, compound=True)
+        else:
+            convert_cad_file(str(source_path), kind, str(converted_path), target_format)
 
         if not converted_path.exists():
             raise RuntimeError(f"Ad-hoc conversion failed: {source_path} -> {converted_path}")

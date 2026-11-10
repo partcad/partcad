@@ -5904,3 +5904,56 @@ def test_an_assembly_imported_as_its_compound_is_said_to_be_a_part(monkeypatch, 
 
     assert imported == [("urdf", str(source), True)]
     assert answer == {"name": "robot", "kind": "part"}
+
+
+class _AssemblyNotPart(ValueError):
+    """Stands in for 'partcad.assembly_file.AssemblyNotPart'."""
+
+
+def _part_import(monkeypatch, tmp_path, error=None):
+    imported = []
+
+    def import_part_action(project, part_type, name, source, config, target_format=None, compound=False):
+        imported.append((part_type, name, target_format, compound))
+        if error is not None:
+            raise error
+
+    install_fake_partcad_modules(
+        monkeypatch,
+        {
+            "partcad.actions.part": {"import_part_action": import_part_action},
+            "partcad.assembly_file": {"AssemblyNotPart": _AssemblyNotPart},
+        },
+    )
+    source = tmp_path / "AeroAssembly.step"
+    source.write_text("ISO-10303-21;")
+    return imported, source
+
+
+def test_a_part_import_hands_compound_on(monkeypatch, tmp_path):
+    imported, source = _part_import(monkeypatch, tmp_path)
+    session, _ = make_session()
+
+    answer = operations.import_object(
+        session, {"obj_kind": "part", "source": str(source), "part_type": "step", "package": "//", "compound": True}
+    )
+
+    assert imported == [("step", "AeroAssembly", None, True)]
+    assert answer == {"name": "AeroAssembly"}
+
+
+def test_an_assembly_refused_as_a_part_is_a_usage_error_and_no_failure(monkeypatch, tmp_path):
+    """Nothing was imported and the message says what to do: no traceback in the log for it."""
+    refusal = _AssemblyNotPart("'AeroAssembly.step' holds an assembly (...), not a part. Import it with '--compound'")
+    imported, source = _part_import(monkeypatch, tmp_path, error=refusal)
+    session, _ = make_session()
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.import_object(
+            session, {"obj_kind": "part", "source": str(source), "part_type": "step", "package": "//"}
+        )
+
+    assert imported == [("step", "AeroAssembly", None, False)]
+    assert caught.value.code == operations.USAGE_ERROR
+    assert caught.value.message == str(refusal)
+    assert session.partcad.logging.messages("exception") == []

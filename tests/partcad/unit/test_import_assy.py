@@ -133,6 +133,32 @@ def test_a_compound_import_refuses_a_part_name_in_use(setup_test_project):
         import_assy_action(project, "step", str(ASSEMBLY_FILE), {}, compound=True)
 
 
+def test_import_part_refuses_an_assembly(setup_test_project):
+    """'pc import part AeroAssembly.step': an assembly read as a part loses its parts, so it is not done unasked."""
+    from partcad.actions.part import import_part_action
+    from partcad.assembly_file import AssemblyNotPart
+
+    project, project_dir = setup_test_project
+
+    with pytest.raises(AssemblyNotPart, match="holds an assembly"):
+        import_part_action(project, "step", "AeroAssembly", str(ASSEMBLY_FILE))
+
+    assert not (project_dir / "AeroAssembly.step").exists()
+    assert load_yaml(project_dir / "partcad.yaml") == {"parts": {}}
+
+
+def test_import_part_compound_imports_an_assembly_as_one_part(setup_test_project):
+    """'pc import part --compound AeroAssembly.step': the same part 'pc import assembly --compound' makes."""
+    from partcad.actions.part import import_part_action
+
+    project, project_dir = setup_test_project
+
+    import_part_action(project, "step", "AeroAssembly", str(ASSEMBLY_FILE), compound=True)
+
+    assert (project_dir / "AeroAssembly.step").read_bytes() == ASSEMBLY_FILE.read_bytes()
+    assert load_yaml(project_dir / "partcad.yaml")["parts"] == {"AeroAssembly": {"type": "step"}}
+
+
 def test_import_invalid_file(setup_test_project):
     """Tests handling of an invalid/missing assembly file."""
     project, _ = setup_test_project
