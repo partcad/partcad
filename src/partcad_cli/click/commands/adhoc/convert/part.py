@@ -51,11 +51,19 @@ INPUT_ONLY_PART_TYPES = ["chili3d", "sdf", "scad"] + [
 OUTPUT_PART_TYPES = [part_type for part_type in PART_TYPES if part_type not in INPUT_ONLY_PART_TYPES]
 
 
+# What '--input' may name: every part type, and the assembly formats that are
+# read, with '--compound', as the assembly they hold (see
+# 'partcad.adhoc.convert.COMPOUND_INPUT_TYPES'). Without '--compound' the
+# daemon refuses those, saying why - which is where that rejection is reported
+# from, as it is for a '.urdf' the type is inferred from.
+COMPOUND_INPUT_TYPES = ["urdf"]
+
+
 @click.command(help="Convert CAD files between formats (ad-hoc mode).")
 @click.option(
     "--input",
     "input_type",
-    type=click.Choice(PART_TYPES),
+    type=click.Choice(PART_TYPES + COMPOUND_INPUT_TYPES),
     help="Input file type. Inferred from filename if not provided.",
 )
 @click.option(

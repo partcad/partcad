@@ -128,7 +128,20 @@ def test_a_urdf_is_always_an_assembly(tmp_path):
     assert assembly_file.assembly_in(tmp_path / "robot.urdf", "urdf") == "a URDF describes an assembly"
 
 
-@pytest.mark.parametrize("kind, content", [("step", b"\x1f\x8bnot gzip"), ("gltf", b"glTF\x02\x00"), ("gltf", b"{")])
+@pytest.mark.parametrize(
+    "kind, content",
+    [
+        ("step", b"\x1f\x8bnot gzip"),
+        # A gzip header and then a deflate stream that is not one.
+        ("step", gzip.compress(b"NEXT_ASSEMBLY_USAGE_OCCURRENCE" * 4)[:10] + b"\xff" * 32),
+        ("gltf", b"glTF\x02\x00"),
+        ("gltf", b"{"),
+        # JSON, and not the structure glTF names.
+        ("gltf", json.dumps({"scenes": [1], "scene": 0}).encode()),
+        ("gltf", json.dumps({"nodes": ["a node"]}).encode()),
+        ("gltf", json.dumps({"nodes": [{"children": 3}], "scenes": [{"nodes": [0]}]}).encode()),
+    ],
+)
 def test_a_file_that_cannot_be_read_here_is_left_to_the_part_s_reader(tmp_path, kind, content):
     path = tmp_path / ("broken." + kind)
     path.write_bytes(content)

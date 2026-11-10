@@ -97,3 +97,26 @@ def test_import_part_names_a_urdf_for_the_daemon_to_refuse_or_flatten(monkeypatc
     assert result.exit_code == 0, result.output
     ((_method, params),) = recorder.calls
     assert (params["part_type"], params["compound"]) == ("urdf", True)
+
+
+def test_adhoc_convert_takes_a_urdf_named_as_one(monkeypatch, tmp_path):
+    """'--input urdf' is accepted, for '--compound' to read; the daemon refuses it without."""
+    recorder = _record(monkeypatch, "adhoc.convert.part")
+    source = tmp_path / "robot.xml"
+    source.write_text("<robot name='robot'/>")
+
+    result = _invoke("adhoc", "convert", "part", "--compound", "--input", "urdf", str(source), str(tmp_path / "r.step"))
+
+    assert result.exit_code == 0, result.output
+    ((_method, params),) = recorder.calls
+    assert (params["input_type"], params["compound"]) == ("urdf", True)
+
+
+def test_a_urdf_is_still_no_output_of_adhoc_convert(monkeypatch, tmp_path):
+    _record(monkeypatch, "adhoc.convert.part")
+    source = tmp_path / "plate.stl"
+    source.write_bytes(b"")
+
+    result = _invoke("adhoc", "convert", "part", "--output", "urdf", str(source), str(tmp_path / "plate.urdf"))
+
+    assert result.exit_code == 2

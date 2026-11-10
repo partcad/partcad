@@ -143,7 +143,10 @@ def assembly_in(path, file_type: str) -> typing.Optional[str]:
         elif file_type == "gltf":
             if _gltf_meshes(path, 2) >= 2:
                 return "its scene places several meshes"
-    except (OSError, ValueError, UnicodeDecodeError, EOFError, gzip.BadGzipFile):
-        # Read by the part type's own reader, which says what is wrong with it.
+    except Exception:  # pylint: disable=broad-except
+        # Whatever this cannot make sense of - a file it cannot read, a glTF
+        # whose structure is not the one the format names, a gzip stream cut
+        # short - is read by the part type's own reader, which says what is
+        # wrong with it in the format's own terms. This only asks a question.
         return None
     return None

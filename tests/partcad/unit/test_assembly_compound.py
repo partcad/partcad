@@ -23,6 +23,7 @@ import asyncio
 import os
 import re
 import sys
+import types
 
 import pytest
 
@@ -399,3 +400,24 @@ def test_a_step_assembly_converted_ad_hoc_as_its_compound(tmp_path):
     convert_cad_file(source, "step", str(target), "brep", compound=True)
 
     assert target.exists() and target.stat().st_size > 0
+
+
+def test_an_adhoc_compound_of_an_assembly_that_failed_says_why(tmp_path, monkeypatch):
+    """What the assembly recorded is the reason its compound is empty, and is what is reported."""
+    from partcad.adhoc import adhoc
+    from partcad.project import Project
+
+    failed = types.SimpleNamespace(errors=["the link 'base' names a mesh that is not there"])
+    empty = types.SimpleNamespace(errors=[])
+
+    async def nothing(ctx):
+        return None
+
+    empty.get_wrapped = nothing
+    monkeypatch.setattr(Project, "get_assembly", lambda self, name, *args, **kwargs: failed)
+    monkeypatch.setattr(assembly_compound, "view", lambda source: empty if source is failed else source)
+    source = tmp_path / "robot.urdf"
+    source.write_text("<robot name='robot'/>")
+
+    with pytest.raises(RuntimeError, match="names a mesh that is not there"):
+        adhoc.write_output_file(str(source), "urdf", str(tmp_path / "robot.stl"), "stl", kind="assembly", compound=True)

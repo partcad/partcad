@@ -427,6 +427,9 @@ def write_output_file(
             obj = getattr(project, GETTERS[kind])(object_name)
             if not obj:
                 raise RuntimeError(f"Failed to load the input {kind}: no {kind} returned")
+            # What the file was read as: what records why it could not be,
+            # which its compound - made of it - does not.
+            read = obj
             if compound:
                 from .. import assembly_compound
 
@@ -437,8 +440,9 @@ def write_output_file(
             # sandbox that would not install - that is the reason there is no
             # shape, and it is the one worth reporting. "No shape returned" is
             # what is left to say when nothing was recorded.
-            if obj.errors:
-                raise RuntimeError(f"Failed to load the input {kind}: {obj.errors}")
+            errors = list(read.errors) + ([] if obj is read else list(obj.errors))
+            if errors:
+                raise RuntimeError(f"Failed to load the input {kind}: {errors}")
             if not shape:
                 raise RuntimeError(f"Failed to load the input {kind}: no shape returned")
 

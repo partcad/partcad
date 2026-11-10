@@ -42,6 +42,7 @@ the package as a STEP part, which keeps the colours and materials it states.
 
 import asyncio
 from pathlib import Path
+from typing import Optional
 
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedSeq
@@ -172,7 +173,9 @@ def _part_name_refusal(project: Project, name: str):
     return project.name_taken("part", name, config)
 
 
-def import_compound_action(project: Project, file_type: str, assembly_file: str, config: dict, name: str = None) -> str:
+def import_compound_action(
+    project: Project, file_type: str, assembly_file: str, config: dict, name: Optional[str] = None
+) -> str:
     """Import an assembly file as one part: the compound of the assembly it holds.
 
     See the module's docstring for which formats are imported as they are and
