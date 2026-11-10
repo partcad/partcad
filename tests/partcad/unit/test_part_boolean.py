@@ -100,6 +100,39 @@ parts:
     type: boolean
     operation: and
     parts: [left]
+  whole-in-words:
+    type: boolean
+    operation: and
+    parts: [left, right]
+    whole: "yes"
+  # Errors only building it can find.
+  with-nothing:
+    type: boolean
+    operation: and
+    parts: [left, nowhere]
+  far:
+    type: basic
+    cuboid: 1
+    offset: [[100, 0, 0], [0, 0, 1], 0]
+  apart:
+    type: boolean
+    operation: and
+    parts: [left, far]
+  unreadable:
+    type: step
+    path: unreadable.step
+  with-unreadable:
+    type: boolean
+    operation: and
+    parts: [left, unreadable]
+  uncached:
+    type: basic
+    cuboid: 10
+    cache: false
+  with-uncached:
+    type: boolean
+    operation: and
+    parts: [left, uncached]
 """
 
 
@@ -120,6 +153,7 @@ def ctx(tmp_path_factory):
     path = tmp_path_factory.mktemp("boolean")
     (path / "partcad.yaml").write_text(textwrap.dedent(PACKAGE))
     _write_pair(path / "pair.step")
+    (path / "unreadable.step").write_text("This is not a STEP file.\n")
     return pc.Context(str(path))
 
 
@@ -200,11 +234,35 @@ def test_by_whole_solids_xor_puts_the_rest_back_without_it(ctx):
     assert {entry.get("material") for entry in _sets(part)} == {"//:alu"}
 
 
-@pytest.mark.parametrize("name, message", [("wrong-operation", "'operation'"), ("one-part", "'parts'")])
+@pytest.mark.parametrize(
+    "name, message", [("wrong-operation", "'operation'"), ("one-part", "'parts'"), ("whole-in-words", "'whole'")]
+)
 def test_a_declaration_that_is_not_one_says_why(ctx, caplog, name, message):
     with caplog.at_level(logging.ERROR):
         assert ctx.get_part(":" + name) is None
     assert any(message in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.parametrize(
+    "name, message",
+    [
+        ("with-nothing", "the part //:nowhere is not found"),
+        ("apart", "leaves no solid"),
+        ("with-unreadable", "with-unreadable: failed to combine the two parts"),
+    ],
+)
+def test_a_boolean_that_cannot_be_built_says_why(ctx, caplog, name, message):
+    part = ctx.get_part(":" + name)
+    assert part is not None
+    with caplog.at_level(logging.ERROR):
+        assert asyncio.run(part.get_wrapped(ctx)) is None
+    assert any(message in record.getMessage() for record in caplog.records), [r.getMessage() for r in caplog.records]
+
+
+def test_what_is_built_of_a_part_that_is_not_cached_is_not_cached_either(ctx):
+    part = ctx.get_part(":with-uncached")
+    asyncio.run(part.get_cache_key_async())
+    assert part.cacheable is False
 
 
 def test_two_operations_on_the_same_parts_are_two_entries(ctx):
@@ -220,7 +278,7 @@ def test_the_schema_takes_a_boolean_and_refuses_another_operation():
 
     schema = get_partcad_schema()
     document = yaml.safe_load(textwrap.dedent(PACKAGE))
-    for name in ("wrong-operation", "one-part"):
+    for name in ("wrong-operation", "one-part", "whole-in-words"):
         broken = {"parts": {name: document["parts"].pop(name)}}
         with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(broken, schema)

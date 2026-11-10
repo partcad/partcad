@@ -44,7 +44,7 @@ import wrapper_common
 # What this wrapper reports for what it produces (see 'partcad.code_version'):
 # raise it with any change that changes that, and everything it produced
 # before is produced again.
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 OPERATIONS = ("and", "or", "xor")
 
@@ -217,17 +217,26 @@ class Carried:
         """
         for rank, operand in enumerate(operands):
             for sub, cmf_set, solid in operand.stated():
-                images = list(operation.Modified(sub))
-                if not images and not operation.IsDeleted(sub):
-                    images = [sub]
-                for image in images:
+                for image in self._images(operation, sub):
                     if not self._seen[solid].Contains(image):
                         self._seen[solid].Add(image)
                         (self.solids if solid else self.faces)[image] = cmf_set
-                    if not solid:
-                        lent = operand.solid_set_of_face(sub)
-                        if lent is not None:
-                            self._lent.append((image, rank, lent))
+            # What a solid is made of goes with every face that bounds it, in a
+            # colour or not, for 'lend' to find in a solid nothing was carried to.
+            for index in range(1, operand.face_map.Extent() + 1):
+                face = operand.face_map.FindKey(index)
+                lent = operand.solid_set_of_face(face)
+                if lent is not None:
+                    for image in self._images(operation, face):
+                        self._lent.append((image, rank, lent))
+
+    @staticmethod
+    def _images(operation, sub) -> list:
+        """What 'sub' became in the result: itself, kept; what 'Modified' says, split or trimmed; nothing, removed."""
+        images = list(operation.Modified(sub))
+        if not images and not operation.IsDeleted(sub):
+            images = [sub]
+        return images
 
     def lend(self, shape) -> None:
         """Give each solid of 'shape' that nothing was carried to what the solids its faces came from are made of."""
@@ -252,7 +261,12 @@ class Carried:
         for solid, offered in offers.values():
             best = min(offered, key=lambda offer: offer[0])[0]
             sets = [cmf_set for rank, cmf_set in offered if rank == best]
-            self.solids[solid] = max(set(sets), key=sets.count)
+            # The set most of its faces came from, and of sets that tie, the one
+            # offered first: 'max' keeps the first of equals in the order it is
+            # given, which is the order the operand's faces are mapped in. Not a
+            # 'set' of them, whose order is the order of their hashes, and which
+            # differs from one process to the next.
+            self.solids[solid] = max(sets, key=sets.count)
 
 
 def by_volume(operation: str, first: Operand, second: Operand):
