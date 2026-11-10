@@ -582,7 +582,12 @@ class ProjectExternalRepository(ProjectPlugin):
         return list(known.items())
 
     def known_object_count(self, kind: str) -> int:
-        return super().known_object_count(kind) + len(self._request_cache)
+        # Only the declarations of 'kind' kept so far, as 'known_object_configs'
+        # reads them: a search or the metadata being fetched adds no object.
+        prefix = self._scope("objects/%s/" % kind)
+        with self._request_lock:
+            fetched = sum(1 for key in self._request_cache if key.startswith(prefix))
+        return super().known_object_count(kind) + fetched
 
     def _serves_kind(self, kind: str) -> bool:
         kinds = self._served_kinds()

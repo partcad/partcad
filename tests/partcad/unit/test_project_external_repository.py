@@ -1444,6 +1444,27 @@ def test_a_catalogues_pack_aliases_count_once_a_search_has_found_them(tmp_path):
     ]
 
 
+def test_only_a_kept_declaration_moves_the_count_the_alias_index_is_keyed_on(tmp_path):
+    """Fetching what is not an object of the kind - a search page, the metadata - does not rebuild the index."""
+    data = {
+        "meta": {"searchKinds": ["part"]},
+        "objects/part": {},
+        "search/part?q=10k": {
+            "RC0603~yageo": {"type": "step", "path": "r.step"},
+            "R-CT": {"type": "alias", "source": ":RC0603~yageo", "vendor": "digikey", "sku": "R-CT"},
+        },
+    }
+    ctx, repo, _fake = _listing_context(tmp_path, data)
+    count = repo.known_object_count("part")
+    with repo._request_lock:
+        repo._request_cache[repo._scope("search/part?q=nothing")] = {}
+    assert repo.known_object_count("part") == count
+
+    repo.search("part", "10k")
+
+    assert repo.known_object_count("part") == count + 2
+
+
 def test_a_package_that_searches_has_something_in_it(tmp_path):
     """Listed by 'pc list packages -r' though it lists nothing: a distributor's category is one."""
     ctx, repo, _fake = _listing_context(tmp_path, {"meta": {"searchKinds": ["part"]}, "objects/part": {}})
