@@ -51,10 +51,10 @@ docs:
     than a cone). So `collar`, `wall`, `stage` and `cone` have no Gazebo run.
   usage: |
     ```shell
-    pc sim -a pendulum       # released horizontal, it passes the bottom at the speed its fall gives it
-    pc sim -a nut            # a nut runs down its screw as slowly as the turn it is given says
-    pc test -f sim           # every one, as the check pc test runs
-    pc sim --json -a nudged  # what each engine reports: joints.swing, in degrees and deg/s
+    pc qual test --simulation -a pendulum       # released horizontal, it passes the bottom at the speed its fall gives it
+    pc qual test --simulation -a nut            # a nut runs down its screw as slowly as the turn it is given says
+    pc qual test -f sim           # every one, as the check pc qual test runs
+    pc qual test --simulation --json -a nudged  # what each engine reports: joints.swing, in degrees and deg/s
     ```
 
     ### The closed forms
@@ -236,66 +236,67 @@ assemblies:
       start:
         type: float
         default: 90
-    simulate:
-      swings_through:
-        desc: |
-          Released horizontal, the bar passes the bottom at the speed its fall
-          gives it, and gets there in a quarter of its period at that amplitude.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          # Past the bottom, with a reading every millisecond - and a step of
-          # half of one, so that a reading is never more than that late.
-          duration: 0.6
-          samples: 599
-          timestep: 0.0005
-        # It starts where the assembly shows it, at 90; its fastest is
-        # sqrt(2 g d / (I/m)) in deg/s; and it reaches the bottom
-        # K(sin 45 deg) sqrt((I/m) / (g d)) seconds in, the instant read
-        # between the readings either side of it. Each within 1 %: an axle
-        # anywhere else, a point mass instead of a bar, or the wrong units are
-        # each tens of per cent out.
-        validation: &swings_through |
-          (
-              abs(before["joints"]["swing"]["pos"] - 90) < 1e-6
-              and abs(
-                  max(abs(s["joints"]["swing"]["vel"]) for s in result["samples"])
-                  / ((2 * 9.81 * 0.15 / (0.3 ** 2 / 3 + 0.01 ** 2 / 12)) ** 0.5 * 180 / 3.14159265)
-                  - 1
-              ) < 0.01
-              and abs(
-                  min(
-                      a["time"]
-                      + (b["time"] - a["time"])
-                      * a["joints"]["swing"]["pos"]
-                      / (a["joints"]["swing"]["pos"] - b["joints"]["swing"]["pos"])
-                      for a, b in zip(result["samples"], result["samples"][1:])
-                      if a["joints"]["swing"]["pos"] > 0 >= b["joints"]["swing"]["pos"]
-                  )
-                  / (1.854075 * ((0.3 ** 2 / 3 + 0.01 ** 2 / 12) / (9.81 * 0.15)) ** 0.5)
-                  - 1
-              ) < 0.01
-          )
-      swings_through_in_gazebo:
-        desc: The same, in Gazebo
-        simulation: //pub/feature/simulate/gazebo:gazebo
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        # Fewer readings than MuJoCo's. A Gazebo reading is a pose message,
-        # and those come 60 times a second of the wall clock; a run asking for
-        # more than that, less the plugin's margin - 48 a simulated second - is
-        # slowed below real time to give them, which is the whole cost of a
-        # run: 599 here took 17 s, 27 take 6. Each reading lands on the next
-        # pose message, up to one late - 17 to 34 ms apart here - so every
-        # instant a validation compares is read between the two readings
-        # either side of it, never the later one taken as it. No 'timestep'
-        # either: Gazebo steps at SDFormat's 1 ms, which every claim here
-        # holds to.
-        params:
-          duration: 0.6
-          samples: 27
-        validation: *swings_through
+    qual:
+      sim:
+        swings_through:
+          desc: |
+            Released horizontal, the bar passes the bottom at the speed its fall
+            gives it, and gets there in a quarter of its period at that amplitude.
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            # Past the bottom, with a reading every millisecond - and a step of
+            # half of one, so that a reading is never more than that late.
+            duration: 0.6
+            samples: 599
+            timestep: 0.0005
+          # It starts where the assembly shows it, at 90; its fastest is
+          # sqrt(2 g d / (I/m)) in deg/s; and it reaches the bottom
+          # K(sin 45 deg) sqrt((I/m) / (g d)) seconds in, the instant read
+          # between the readings either side of it. Each within 1 %: an axle
+          # anywhere else, a point mass instead of a bar, or the wrong units are
+          # each tens of per cent out.
+          validation: &swings_through |
+            (
+                abs(before["joints"]["swing"]["pos"] - 90) < 1e-6
+                and abs(
+                    max(abs(s["joints"]["swing"]["vel"]) for s in result["samples"])
+                    / ((2 * 9.81 * 0.15 / (0.3 ** 2 / 3 + 0.01 ** 2 / 12)) ** 0.5 * 180 / 3.14159265)
+                    - 1
+                ) < 0.01
+                and abs(
+                    min(
+                        a["time"]
+                        + (b["time"] - a["time"])
+                        * a["joints"]["swing"]["pos"]
+                        / (a["joints"]["swing"]["pos"] - b["joints"]["swing"]["pos"])
+                        for a, b in zip(result["samples"], result["samples"][1:])
+                        if a["joints"]["swing"]["pos"] > 0 >= b["joints"]["swing"]["pos"]
+                    )
+                    / (1.854075 * ((0.3 ** 2 / 3 + 0.01 ** 2 / 12) / (9.81 * 0.15)) ** 0.5)
+                    - 1
+                ) < 0.01
+            )
+        swings_through_in_gazebo:
+          desc: The same, in Gazebo
+          path: //pub/feature/simulate/gazebo:gazebo
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          # Fewer readings than MuJoCo's. A Gazebo reading is a pose message,
+          # and those come 60 times a second of the wall clock; a run asking for
+          # more than that, less the plugin's margin - 48 a simulated second - is
+          # slowed below real time to give them, which is the whole cost of a
+          # run: 599 here took 17 s, 27 take 6. Each reading lands on the next
+          # pose message, up to one late - 17 to 34 ms apart here - so every
+          # instant a validation compares is read between the two readings
+          # either side of it, never the later one taken as it. No 'timestep'
+          # either: Gazebo steps at SDFormat's 1 ms, which every claim here
+          # holds to.
+          params:
+            duration: 0.6
+            samples: 27
+          validation: *swings_through
 
   nudged:
     desc: The same pendulum, started 5 degrees from hanging straight down
@@ -305,296 +306,302 @@ assemblies:
       start:
         type: float
         default: 5
-    simulate:
-      keeps_time:
-        desc: Swinging 5 degrees either side of the bottom, the bar keeps the small-angle period
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          duration: 2.0
-          samples: 1999
-          timestep: 0.0005
-        # The instants it passes the bottom going the same way, a period apart:
-        # 2 pi sqrt((I/m) / (g d)) within half a per cent. A 5 degree swing is
-        # slower than the small-angle formula by 0.05 %, and each crossing is
-        # read between the two readings either side of it, which is good to a
-        # few microseconds however far apart they are.
-        validation: &keeps_time |
-          (
-              len(
-                  up := [
-                      a["time"]
-                      + (b["time"] - a["time"])
-                      * a["joints"]["swing"]["pos"]
-                      / (a["joints"]["swing"]["pos"] - b["joints"]["swing"]["pos"])
-                      for a, b in zip(result["samples"], result["samples"][1:])
-                      if a["joints"]["swing"]["pos"] < 0 <= b["joints"]["swing"]["pos"]
-                  ]
-              ) >= 2
-              and abs(
-                  (up[1] - up[0]) / (2 * 3.14159265 * ((0.3 ** 2 / 3 + 0.01 ** 2 / 12) / (9.81 * 0.15)) ** 0.5) - 1
-              ) < 0.005
-          )
-      keeps_time_in_gazebo:
-        desc: The same, in Gazebo
-        simulation: //pub/feature/simulate/gazebo:gazebo
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          duration: 2.0
-          samples: 94
-        validation: *keeps_time
+    qual:
+      sim:
+        keeps_time:
+          desc: Swinging 5 degrees either side of the bottom, the bar keeps the small-angle period
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            duration: 2.0
+            samples: 1999
+            timestep: 0.0005
+          # The instants it passes the bottom going the same way, a period apart:
+          # 2 pi sqrt((I/m) / (g d)) within half a per cent. A 5 degree swing is
+          # slower than the small-angle formula by 0.05 %, and each crossing is
+          # read between the two readings either side of it, which is good to a
+          # few microseconds however far apart they are.
+          validation: &keeps_time |
+            (
+                len(
+                    up := [
+                        a["time"]
+                        + (b["time"] - a["time"])
+                        * a["joints"]["swing"]["pos"]
+                        / (a["joints"]["swing"]["pos"] - b["joints"]["swing"]["pos"])
+                        for a, b in zip(result["samples"], result["samples"][1:])
+                        if a["joints"]["swing"]["pos"] < 0 <= b["joints"]["swing"]["pos"]
+                    ]
+                ) >= 2
+                and abs(
+                    (up[1] - up[0]) / (2 * 3.14159265 * ((0.3 ** 2 / 3 + 0.01 ** 2 / 12) / (9.81 * 0.15)) ** 0.5) - 1
+                ) < 0.005
+            )
+        keeps_time_in_gazebo:
+          desc: The same, in Gazebo
+          path: //pub/feature/simulate/gazebo:gazebo
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            duration: 2.0
+            samples: 94
+          validation: *keeps_time
 
   wound:
     desc: The pendulum unbounded, started at 270 degrees
     type: assy
     path: wound.assy
-    simulate:
-      winds_on:
-        desc: |
-          Started at 270 degrees, the bar reads 270, passes the bottom at 360 -
-          a whole turn from its zero - at the pendulum's speed, and gets there
-          when the pendulum does.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          duration: 0.6
-          samples: 599
-          timestep: 0.0005
-        # It reads 270 at the start, where a reading wrapped into +-180 would
-        # be -90, and a lost start 0. Its fastest is sqrt(2 g d / (I/m)); and
-        # it reaches 360 K(sin 45 deg) sqrt((I/m) / (g d)) seconds in, the
-        # instant read between the two readings either side of it.
-        validation: &winds_on |
-          (
-              abs(before["joints"]["swing"]["pos"] - 270) < 1e-6
-              and abs(
-                  max(abs(s["joints"]["swing"]["vel"]) for s in result["samples"])
-                  / ((2 * 9.81 * 0.15 / (0.3 ** 2 / 3 + 0.01 ** 2 / 12)) ** 0.5 * 180 / 3.14159265)
-                  - 1
-              ) < 0.01
-              and abs(
-                  min(
-                      a["time"]
-                      + (b["time"] - a["time"])
-                      * (360 - a["joints"]["swing"]["pos"])
-                      / (b["joints"]["swing"]["pos"] - a["joints"]["swing"]["pos"])
-                      for a, b in zip(result["samples"], result["samples"][1:])
-                      if a["joints"]["swing"]["pos"] < 360 <= b["joints"]["swing"]["pos"]
-                  )
-                  / (1.854075 * ((0.3 ** 2 / 3 + 0.01 ** 2 / 12) / (9.81 * 0.15)) ** 0.5)
-                  - 1
-              ) < 0.01
-          )
-      winds_on_in_gazebo:
-        desc: The same, in Gazebo
-        simulation: //pub/feature/simulate/gazebo:gazebo
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        # Fewer readings, and no 'timestep', for the reasons the pendulum's
-        # Gazebo run gives.
-        params:
-          duration: 0.6
-          samples: 27
-        validation: *winds_on
+    qual:
+      sim:
+        winds_on:
+          desc: |
+            Started at 270 degrees, the bar reads 270, passes the bottom at 360 -
+            a whole turn from its zero - at the pendulum's speed, and gets there
+            when the pendulum does.
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            duration: 0.6
+            samples: 599
+            timestep: 0.0005
+          # It reads 270 at the start, where a reading wrapped into +-180 would
+          # be -90, and a lost start 0. Its fastest is sqrt(2 g d / (I/m)); and
+          # it reaches 360 K(sin 45 deg) sqrt((I/m) / (g d)) seconds in, the
+          # instant read between the two readings either side of it.
+          validation: &winds_on |
+            (
+                abs(before["joints"]["swing"]["pos"] - 270) < 1e-6
+                and abs(
+                    max(abs(s["joints"]["swing"]["vel"]) for s in result["samples"])
+                    / ((2 * 9.81 * 0.15 / (0.3 ** 2 / 3 + 0.01 ** 2 / 12)) ** 0.5 * 180 / 3.14159265)
+                    - 1
+                ) < 0.01
+                and abs(
+                    min(
+                        a["time"]
+                        + (b["time"] - a["time"])
+                        * (360 - a["joints"]["swing"]["pos"])
+                        / (b["joints"]["swing"]["pos"] - a["joints"]["swing"]["pos"])
+                        for a, b in zip(result["samples"], result["samples"][1:])
+                        if a["joints"]["swing"]["pos"] < 360 <= b["joints"]["swing"]["pos"]
+                    )
+                    / (1.854075 * ((0.3 ** 2 / 3 + 0.01 ** 2 / 12) / (9.81 * 0.15)) ** 0.5)
+                    - 1
+                ) < 0.01
+            )
+        winds_on_in_gazebo:
+          desc: The same, in Gazebo
+          path: //pub/feature/simulate/gazebo:gazebo
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          # Fewer readings, and no 'timestep', for the reasons the pendulum's
+          # Gazebo run gives.
+          params:
+            duration: 0.6
+            samples: 27
+          validation: *winds_on
 
   door:
     desc: The pendulum bounded at 30 degrees on one side only, released at -90
     type: assy
     path: door.assy
-    simulate:
-      stops_short:
-        desc: |
-          Released at -90 degrees, the bar passes the bottom at the pendulum's
-          speed - nothing on the open side stopped it - and is turned back by
-          its stop at 30, where it would otherwise have swung up to 90.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          # Long enough for the bar to have reached 90 without its stop, which
-          # is twice the time to the bottom, 0.53 s.
-          duration: 0.8
-          samples: 799
-          timestep: 0.0005
-        # It starts at -90. Its fastest is sqrt(2 g d / (I/m)), within 1 %:
-        # Gazebo's reading nearest the bottom is within 17 ms of it, which
-        # leaves it under 0.8 % slow. And the furthest it gets
-        # is past 25 degrees, so it reached its stop, and short of 45: a stop's
-        # own give is a few degrees, and what is checked is that it was there.
-        validation: &stops_short |
-          (
-              abs(before["joints"]["swing"]["pos"] + 90) < 1e-6
-              and abs(
-                  max(abs(s["joints"]["swing"]["vel"]) for s in result["samples"])
-                  / ((2 * 9.81 * 0.15 / (0.3 ** 2 / 3 + 0.01 ** 2 / 12)) ** 0.5 * 180 / 3.14159265)
-                  - 1
-              ) < 0.01
-              and 25 < max(s["joints"]["swing"]["pos"] for s in result["samples"]) < 45
-          )
-      stops_short_in_gazebo:
-        desc: The same, in Gazebo
-        simulation: //pub/feature/simulate/gazebo:gazebo
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          duration: 0.8
-          samples: 37
-        validation: *stops_short
+    qual:
+      sim:
+        stops_short:
+          desc: |
+            Released at -90 degrees, the bar passes the bottom at the pendulum's
+            speed - nothing on the open side stopped it - and is turned back by
+            its stop at 30, where it would otherwise have swung up to 90.
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            # Long enough for the bar to have reached 90 without its stop, which
+            # is twice the time to the bottom, 0.53 s.
+            duration: 0.8
+            samples: 799
+            timestep: 0.0005
+          # It starts at -90. Its fastest is sqrt(2 g d / (I/m)), within 1 %:
+          # Gazebo's reading nearest the bottom is within 17 ms of it, which
+          # leaves it under 0.8 % slow. And the furthest it gets
+          # is past 25 degrees, so it reached its stop, and short of 45: a stop's
+          # own give is a few degrees, and what is checked is that it was there.
+          validation: &stops_short |
+            (
+                abs(before["joints"]["swing"]["pos"] + 90) < 1e-6
+                and abs(
+                    max(abs(s["joints"]["swing"]["vel"]) for s in result["samples"])
+                    / ((2 * 9.81 * 0.15 / (0.3 ** 2 / 3 + 0.01 ** 2 / 12)) ** 0.5 * 180 / 3.14159265)
+                    - 1
+                ) < 0.01
+                and 25 < max(s["joints"]["swing"]["pos"] for s in result["samples"]) < 45
+            )
+        stops_short_in_gazebo:
+          desc: The same, in Gazebo
+          path: //pub/feature/simulate/gazebo:gazebo
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            duration: 0.8
+            samples: 37
+          validation: *stops_short
 
   incline:
     desc: A carriage on a rail at 30 degrees, bounded at the rail's lower end, started 200 mm up
     type: assy
     path: incline.assy
-    simulate:
-      slides_to_the_stop:
-        desc: |
-          Started 200 mm up a frictionless rail at 30 degrees, the carriage
-          slides down it as g sin 30 deg pulls it, and stops at the stop.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :bolted
-        offset: [[0, 0, 200], [0, 0, 1], 0]
-        params:
-          # It reaches the stop 0.286 s in; without it, it would be 413 mm
-          # below it by the end.
-          duration: 0.5
-          samples: 499
-          timestep: 0.0005
-        # It starts 200 mm up. At the reading nearest 0.2 s it has slid
-        # (g sin 30 deg) t^2 / 2 at that reading's own time - 98.1 mm at 0.2 s,
-        # to 101.9 - within 1 %. It never gets 20 mm past the stop, and it
-        # ends within 5 mm of it.
-        validation: &slides_to_the_stop |
-          (
-              abs(before["joints"]["slide"]["pos"] - 200) < 1e-6
-              and abs(
-                  (200 - (at := min(result["samples"], key=lambda s: abs(s["time"] - 0.2)))["joints"]["slide"]["pos"])
-                  / (0.5 * 9.81 * 0.5 * at["time"] ** 2 * 1000)
-                  - 1
-              ) < 0.01
-              and min(s["joints"]["slide"]["pos"] for s in result["samples"]) > -20
-              and abs(after["joints"]["slide"]["pos"]) < 5
-          )
-      slides_to_the_stop_in_gazebo:
-        desc: The same, in Gazebo
-        simulation: //pub/feature/simulate/gazebo:gazebo
-        scene: :bolted
-        offset: [[0, 0, 200], [0, 0, 1], 0]
-        params:
-          duration: 0.5
-          samples: 22
-        validation: *slides_to_the_stop
+    qual:
+      sim:
+        slides_to_the_stop:
+          desc: |
+            Started 200 mm up a frictionless rail at 30 degrees, the carriage
+            slides down it as g sin 30 deg pulls it, and stops at the stop.
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :bolted
+          offset: [[0, 0, 200], [0, 0, 1], 0]
+          params:
+            # It reaches the stop 0.286 s in; without it, it would be 413 mm
+            # below it by the end.
+            duration: 0.5
+            samples: 499
+            timestep: 0.0005
+          # It starts 200 mm up. At the reading nearest 0.2 s it has slid
+          # (g sin 30 deg) t^2 / 2 at that reading's own time - 98.1 mm at 0.2 s,
+          # to 101.9 - within 1 %. It never gets 20 mm past the stop, and it
+          # ends within 5 mm of it.
+          validation: &slides_to_the_stop |
+            (
+                abs(before["joints"]["slide"]["pos"] - 200) < 1e-6
+                and abs(
+                    (200 - (at := min(result["samples"], key=lambda s: abs(s["time"] - 0.2)))["joints"]["slide"]["pos"])
+                    / (0.5 * 9.81 * 0.5 * at["time"] ** 2 * 1000)
+                    - 1
+                ) < 0.01
+                and min(s["joints"]["slide"]["pos"] for s in result["samples"]) > -20
+                and abs(after["joints"]["slide"]["pos"]) < 5
+            )
+        slides_to_the_stop_in_gazebo:
+          desc: The same, in Gazebo
+          path: //pub/feature/simulate/gazebo:gazebo
+          scene: :bolted
+          offset: [[0, 0, 200], [0, 0, 1], 0]
+          params:
+            duration: 0.5
+            samples: 22
+          validation: *slides_to_the_stop
 
   collar:
     desc: A collar with an arm on a shaft at 30 degrees, started 260 mm up and turned 5 degrees
     type: assy
     path: collar.assy
-    simulate:
-      slides_and_swings:
-        desc: |
-          In one run, the collar slides down its shaft as g sin 30 deg pulls it,
-          and its arm swings about the shaft as g cos 30 deg does, at the period
-          of a pendulum under that: the two motions are exactly uncoupled.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :bolted
-        offset: [[0, 0, 300], [0, 0, 1], 0]
-        params:
-          # Past three quarters of a period, 0.285 s, by when it has slid 199 mm.
-          duration: 0.32
-          samples: 319
-          timestep: 0.0005
-        # It starts where it was put. At the reading nearest 0.25 s it has slid
-        # (g sin 30 deg) t^2 / 2, within 1 %. And the arm passes the bottom
-        # half a period apart, going down and then coming back:
-        # 2 pi sqrt((I/m) / (g cos 30 deg d)), within 1 %, where the arm is a
-        # block of length L = 50 mm and thickness t = 20 mm whose centre is
-        # c = 15 mm from the shaft, less a bore of radius r = 5 mm on it. Per
-        # unit of length along the shaft, I = L t ((L^2 + t^2) / 12 + c^2) -
-        # pi r^4 / 2 and m d = L t c (the bore, being on the axis, moves the
-        # centre of mass by nothing but what it takes away), so
-        # (I/m) / d = I / (m d): 0.380 s.
-        validation: |
-          (
-              abs(before["joints"]["collar"]["pos"]["turnZ"] - 5) < 1e-6
-              and abs(before["joints"]["collar"]["pos"]["moveZ"] - 260) < 1e-6
-              and abs(
-                  (260 - (at := min(result["samples"], key=lambda s: abs(s["time"] - 0.25)))["joints"]["collar"]["pos"]["moveZ"])
-                  / (0.5 * 9.81 * 0.5 * at["time"] ** 2 * 1000)
-                  - 1
-              ) < 0.01
-              and len(
-                  bottom := [
-                      a["time"]
-                      + (b["time"] - a["time"])
-                      * a["joints"]["collar"]["pos"]["turnZ"]
-                      / (a["joints"]["collar"]["pos"]["turnZ"] - b["joints"]["collar"]["pos"]["turnZ"])
-                      for a, b in zip(result["samples"], result["samples"][1:])
-                      if (a["joints"]["collar"]["pos"]["turnZ"] > 0) != (b["joints"]["collar"]["pos"]["turnZ"] > 0)
-                  ]
-              ) >= 2
-              and abs(
-                  2 * (bottom[1] - bottom[0])
-                  / (
-                      2 * 3.14159265
-                      * (
-                          (0.05 * 0.02 * ((0.05 ** 2 + 0.02 ** 2) / 12 + 0.015 ** 2) - 3.14159265 * 0.005 ** 4 / 2)
-                          / (9.81 * 3 ** 0.5 / 2 * 0.05 * 0.02 * 0.015)
-                      ) ** 0.5
-                  )
-                  - 1
-              ) < 0.01
-          )
+    qual:
+      sim:
+        slides_and_swings:
+          desc: |
+            In one run, the collar slides down its shaft as g sin 30 deg pulls it,
+            and its arm swings about the shaft as g cos 30 deg does, at the period
+            of a pendulum under that: the two motions are exactly uncoupled.
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :bolted
+          offset: [[0, 0, 300], [0, 0, 1], 0]
+          params:
+            # Past three quarters of a period, 0.285 s, by when it has slid 199 mm.
+            duration: 0.32
+            samples: 319
+            timestep: 0.0005
+          # It starts where it was put. At the reading nearest 0.25 s it has slid
+          # (g sin 30 deg) t^2 / 2, within 1 %. And the arm passes the bottom
+          # half a period apart, going down and then coming back:
+          # 2 pi sqrt((I/m) / (g cos 30 deg d)), within 1 %, where the arm is a
+          # block of length L = 50 mm and thickness t = 20 mm whose centre is
+          # c = 15 mm from the shaft, less a bore of radius r = 5 mm on it. Per
+          # unit of length along the shaft, I = L t ((L^2 + t^2) / 12 + c^2) -
+          # pi r^4 / 2 and m d = L t c (the bore, being on the axis, moves the
+          # centre of mass by nothing but what it takes away), so
+          # (I/m) / d = I / (m d): 0.380 s.
+          validation: |
+            (
+                abs(before["joints"]["collar"]["pos"]["turnZ"] - 5) < 1e-6
+                and abs(before["joints"]["collar"]["pos"]["moveZ"] - 260) < 1e-6
+                and abs(
+                    (260 - (at := min(result["samples"], key=lambda s: abs(s["time"] - 0.25)))["joints"]["collar"]["pos"]["moveZ"])
+                    / (0.5 * 9.81 * 0.5 * at["time"] ** 2 * 1000)
+                    - 1
+                ) < 0.01
+                and len(
+                    bottom := [
+                        a["time"]
+                        + (b["time"] - a["time"])
+                        * a["joints"]["collar"]["pos"]["turnZ"]
+                        / (a["joints"]["collar"]["pos"]["turnZ"] - b["joints"]["collar"]["pos"]["turnZ"])
+                        for a, b in zip(result["samples"], result["samples"][1:])
+                        if (a["joints"]["collar"]["pos"]["turnZ"] > 0) != (b["joints"]["collar"]["pos"]["turnZ"] > 0)
+                    ]
+                ) >= 2
+                and abs(
+                    2 * (bottom[1] - bottom[0])
+                    / (
+                        2 * 3.14159265
+                        * (
+                            (0.05 * 0.02 * ((0.05 ** 2 + 0.02 ** 2) / 12 + 0.015 ** 2) - 3.14159265 * 0.005 ** 4 / 2)
+                            / (9.81 * 3 ** 0.5 / 2 * 0.05 * 0.02 * 0.015)
+                        ) ** 0.5
+                    )
+                    - 1
+                ) < 0.01
+            )
 
   nut:
     desc: A nut on an upright screw with a 10 mm lead, started 100 mm up
     type: assy
     path: nut.assy
-    simulate:
-      runs_down:
-        desc: |
-          The nut runs down its screw, turning as the thread makes it: slower
-          than it would fall by as much as the turn it has to be given takes,
-          and 36 degrees for every millimetre.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :bolted
-        offset: [[0, 0, 100], [0, 0, 1], 0]
-        params:
-          duration: 1.0
-          samples: 999
-          timestep: 0.0005
-        # A ring's I/m about its axis is (r1^2 + r2^2) / 2, and every
-        # millimetre down turns it 2 pi / p radians, p being the lead; so it
-        # falls at a = g / (1 + (I/m) (2 pi / p)^2), 0.1948 m/s^2, and at the
-        # reading nearest 0.8 s it is a t^2 / 2 down, within 1 %. It starts at
-        # 100 mm and 45 degrees. And it has turned 360 / p = 36 degrees for
-        # every millimetre it ran down, within 0.1 %.
-        validation: &runs_down |
-          (
-              abs(before["joints"]["nut"]["pos"]["moveZ"] - 100) < 1e-6
-              and abs(before["joints"]["nut"]["pos"]["turnZ"] - 45) < 1e-6
-              and abs(
-                  (100 - (at := min(result["samples"], key=lambda s: abs(s["time"] - 0.8)))["joints"]["nut"]["pos"]["moveZ"])
-                  / (0.5 * 9.81 / (1 + (0.005 ** 2 + 0.015 ** 2) / 2 * (2 * 3.14159265 / 0.01) ** 2) * at["time"] ** 2 * 1000)
-                  - 1
-              ) < 0.01
-              and abs(
-                  (before["joints"]["nut"]["pos"]["turnZ"] - after["joints"]["nut"]["pos"]["turnZ"])
-                  / (before["joints"]["nut"]["pos"]["moveZ"] - after["joints"]["nut"]["pos"]["moveZ"])
-                  / (360 / 10)
-                  - 1
-              ) < 0.001
-          )
-      runs_down_in_gazebo:
-        desc: The same, in Gazebo
-        simulation: //pub/feature/simulate/gazebo:gazebo
-        scene: :bolted
-        offset: [[0, 0, 100], [0, 0, 1], 0]
-        params:
-          duration: 1.0
-          samples: 46
-        validation: *runs_down
+    qual:
+      sim:
+        runs_down:
+          desc: |
+            The nut runs down its screw, turning as the thread makes it: slower
+            than it would fall by as much as the turn it has to be given takes,
+            and 36 degrees for every millimetre.
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :bolted
+          offset: [[0, 0, 100], [0, 0, 1], 0]
+          params:
+            duration: 1.0
+            samples: 999
+            timestep: 0.0005
+          # A ring's I/m about its axis is (r1^2 + r2^2) / 2, and every
+          # millimetre down turns it 2 pi / p radians, p being the lead; so it
+          # falls at a = g / (1 + (I/m) (2 pi / p)^2), 0.1948 m/s^2, and at the
+          # reading nearest 0.8 s it is a t^2 / 2 down, within 1 %. It starts at
+          # 100 mm and 45 degrees. And it has turned 360 / p = 36 degrees for
+          # every millimetre it ran down, within 0.1 %.
+          validation: &runs_down |
+            (
+                abs(before["joints"]["nut"]["pos"]["moveZ"] - 100) < 1e-6
+                and abs(before["joints"]["nut"]["pos"]["turnZ"] - 45) < 1e-6
+                and abs(
+                    (100 - (at := min(result["samples"], key=lambda s: abs(s["time"] - 0.8)))["joints"]["nut"]["pos"]["moveZ"])
+                    / (0.5 * 9.81 / (1 + (0.005 ** 2 + 0.015 ** 2) / 2 * (2 * 3.14159265 / 0.01) ** 2) * at["time"] ** 2 * 1000)
+                    - 1
+                ) < 0.01
+                and abs(
+                    (before["joints"]["nut"]["pos"]["turnZ"] - after["joints"]["nut"]["pos"]["turnZ"])
+                    / (before["joints"]["nut"]["pos"]["moveZ"] - after["joints"]["nut"]["pos"]["moveZ"])
+                    / (360 / 10)
+                    - 1
+                ) < 0.001
+            )
+        runs_down_in_gazebo:
+          desc: The same, in Gazebo
+          path: //pub/feature/simulate/gazebo:gazebo
+          scene: :bolted
+          offset: [[0, 0, 100], [0, 0, 1], 0]
+          params:
+            duration: 1.0
+            samples: 46
+          validation: *runs_down
 
   hooke:
     desc: The plate on a universal joint, started 5 degrees about the edge it hangs by
@@ -608,53 +615,54 @@ assemblies:
       across:
         type: float
         default: 0
-    simulate:
-      swings_about_its_edge:
-        desc: |
-          Turned 5 degrees about the edge it hangs by, the plate swings out of
-          its own plane at a pendulum's period, and the other turn stays at
-          nought.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          # Past the bottom twice going the same way, which is 5/4 of a period.
-          duration: 1.2
-          samples: 1199
-          timestep: 0.0005
-        # A plate of length L = 200 mm and thickness t = 10 mm hung by an edge:
-        # I/m = L^2/3 + t^2/12 about the edge, and d = L/2. It starts at 5
-        # degrees. It passes the bottom going down a
-        # period apart, 2 pi sqrt((I/m) / (g d)) = 0.7327 s, within half a per
-        # cent; and the turn about the other axis is never a hundredth of a
-        # degree.
-        validation: &swings_about_its_edge |
-          (
-              abs(before["joints"]["hooke"]["pos"]["turnX"] - 5) < 1e-6
-              and len(
-                  down := [
-                      a["time"]
-                      + (b["time"] - a["time"])
-                      * a["joints"]["hooke"]["pos"]["turnX"]
-                      / (a["joints"]["hooke"]["pos"]["turnX"] - b["joints"]["hooke"]["pos"]["turnX"])
-                      for a, b in zip(result["samples"], result["samples"][1:])
-                      if a["joints"]["hooke"]["pos"]["turnX"] > 0 >= b["joints"]["hooke"]["pos"]["turnX"]
-                  ]
-              ) >= 2
-              and abs(
-                  (down[1] - down[0]) / (2 * 3.14159265 * ((0.2 ** 2 / 3 + 0.01 ** 2 / 12) / (9.81 * 0.1)) ** 0.5) - 1
-              ) < 0.005
-              and max(abs(s["joints"]["hooke"]["pos"]["turnY"]) for s in result["samples"]) < 0.01
-          )
-      swings_about_its_edge_in_gazebo:
-        desc: The same, in Gazebo
-        simulation: //pub/feature/simulate/gazebo:gazebo
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          duration: 1.2
-          samples: 56
-        validation: *swings_about_its_edge
+    qual:
+      sim:
+        swings_about_its_edge:
+          desc: |
+            Turned 5 degrees about the edge it hangs by, the plate swings out of
+            its own plane at a pendulum's period, and the other turn stays at
+            nought.
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            # Past the bottom twice going the same way, which is 5/4 of a period.
+            duration: 1.2
+            samples: 1199
+            timestep: 0.0005
+          # A plate of length L = 200 mm and thickness t = 10 mm hung by an edge:
+          # I/m = L^2/3 + t^2/12 about the edge, and d = L/2. It starts at 5
+          # degrees. It passes the bottom going down a
+          # period apart, 2 pi sqrt((I/m) / (g d)) = 0.7327 s, within half a per
+          # cent; and the turn about the other axis is never a hundredth of a
+          # degree.
+          validation: &swings_about_its_edge |
+            (
+                abs(before["joints"]["hooke"]["pos"]["turnX"] - 5) < 1e-6
+                and len(
+                    down := [
+                        a["time"]
+                        + (b["time"] - a["time"])
+                        * a["joints"]["hooke"]["pos"]["turnX"]
+                        / (a["joints"]["hooke"]["pos"]["turnX"] - b["joints"]["hooke"]["pos"]["turnX"])
+                        for a, b in zip(result["samples"], result["samples"][1:])
+                        if a["joints"]["hooke"]["pos"]["turnX"] > 0 >= b["joints"]["hooke"]["pos"]["turnX"]
+                    ]
+                ) >= 2
+                and abs(
+                    (down[1] - down[0]) / (2 * 3.14159265 * ((0.2 ** 2 / 3 + 0.01 ** 2 / 12) / (9.81 * 0.1)) ** 0.5) - 1
+                ) < 0.005
+                and max(abs(s["joints"]["hooke"]["pos"]["turnY"]) for s in result["samples"]) < 0.01
+            )
+        swings_about_its_edge_in_gazebo:
+          desc: The same, in Gazebo
+          path: //pub/feature/simulate/gazebo:gazebo
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            duration: 1.2
+            samples: 56
+          validation: *swings_about_its_edge
 
   hooke_across:
     desc: The plate on a universal joint, started 5 degrees about the line square to it
@@ -667,272 +675,279 @@ assemblies:
       across:
         type: float
         default: 5
-    simulate:
-      swings_in_its_plane:
-        desc: |
-          Turned 5 degrees about the line square to it, the plate swings in its
-          own plane at a pendulum's period, and the other turn stays at nought.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          duration: 1.2
-          samples: 1199
-          timestep: 0.0005
-        # As 'hooke', about the second turn: the plate's width w = 200 mm is
-        # what turns about it, so I/m = L^2/3 + w^2/12, and the period is
-        # 0.8190 s.
-        validation: &swings_in_its_plane |
-          (
-              abs(before["joints"]["hooke"]["pos"]["turnY"] - 5) < 1e-6
-              and len(
-                  down := [
-                      a["time"]
-                      + (b["time"] - a["time"])
-                      * a["joints"]["hooke"]["pos"]["turnY"]
-                      / (a["joints"]["hooke"]["pos"]["turnY"] - b["joints"]["hooke"]["pos"]["turnY"])
-                      for a, b in zip(result["samples"], result["samples"][1:])
-                      if a["joints"]["hooke"]["pos"]["turnY"] > 0 >= b["joints"]["hooke"]["pos"]["turnY"]
-                  ]
-              ) >= 2
-              and abs(
-                  (down[1] - down[0]) / (2 * 3.14159265 * ((0.2 ** 2 / 3 + 0.2 ** 2 / 12) / (9.81 * 0.1)) ** 0.5) - 1
-              ) < 0.005
-              and max(abs(s["joints"]["hooke"]["pos"]["turnX"]) for s in result["samples"]) < 0.01
-          )
-      swings_in_its_plane_in_gazebo:
-        desc: The same, in Gazebo
-        simulation: //pub/feature/simulate/gazebo:gazebo
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          duration: 1.2
-          samples: 56
-        validation: *swings_in_its_plane
+    qual:
+      sim:
+        swings_in_its_plane:
+          desc: |
+            Turned 5 degrees about the line square to it, the plate swings in its
+            own plane at a pendulum's period, and the other turn stays at nought.
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            duration: 1.2
+            samples: 1199
+            timestep: 0.0005
+          # As 'hooke', about the second turn: the plate's width w = 200 mm is
+          # what turns about it, so I/m = L^2/3 + w^2/12, and the period is
+          # 0.8190 s.
+          validation: &swings_in_its_plane |
+            (
+                abs(before["joints"]["hooke"]["pos"]["turnY"] - 5) < 1e-6
+                and len(
+                    down := [
+                        a["time"]
+                        + (b["time"] - a["time"])
+                        * a["joints"]["hooke"]["pos"]["turnY"]
+                        / (a["joints"]["hooke"]["pos"]["turnY"] - b["joints"]["hooke"]["pos"]["turnY"])
+                        for a, b in zip(result["samples"], result["samples"][1:])
+                        if a["joints"]["hooke"]["pos"]["turnY"] > 0 >= b["joints"]["hooke"]["pos"]["turnY"]
+                    ]
+                ) >= 2
+                and abs(
+                    (down[1] - down[0]) / (2 * 3.14159265 * ((0.2 ** 2 / 3 + 0.2 ** 2 / 12) / (9.81 * 0.1)) ** 0.5) - 1
+                ) < 0.005
+                and max(abs(s["joints"]["hooke"]["pos"]["turnX"]) for s in result["samples"]) < 0.01
+            )
+        swings_in_its_plane_in_gazebo:
+          desc: The same, in Gazebo
+          path: //pub/feature/simulate/gazebo:gazebo
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            duration: 1.2
+            samples: 56
+          validation: *swings_in_its_plane
 
   spherical:
     desc: The plate on a ball, twisted 90 degrees and tilted 5
     type: assy
     path: spherical.assy
-    simulate:
-      keeps_its_twist:
-        desc: |
-          Twisted 90 degrees and then tilted 5, the plate swings in its own
-          plane - at the period 'hooke_across' swings at, not the one 'hooke'
-          does - and stays twisted.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          duration: 1.2
-          samples: 1199
-          timestep: 0.0005
-        # The tilt as in 'hooke_across', I/m = L^2/3 + w^2/12 and 0.8190 s:
-        # with the twist lost, the same tilt would swing it about its edge, at
-        # 0.7327 s, and with the tilt lost it would not swing at all. The twist
-        # never moves a hundredth of a degree from 90, nor the third turn from
-        # nought.
-        validation: &keeps_its_twist |
-          (
-              abs(before["joints"]["socket"]["pos"]["turnX"] - 5) < 1e-6
-              and len(
-                  down := [
-                      a["time"]
-                      + (b["time"] - a["time"])
-                      * a["joints"]["socket"]["pos"]["turnX"]
-                      / (a["joints"]["socket"]["pos"]["turnX"] - b["joints"]["socket"]["pos"]["turnX"])
-                      for a, b in zip(result["samples"], result["samples"][1:])
-                      if a["joints"]["socket"]["pos"]["turnX"] > 0 >= b["joints"]["socket"]["pos"]["turnX"]
-                  ]
-              ) >= 2
-              and abs(
-                  (down[1] - down[0]) / (2 * 3.14159265 * ((0.2 ** 2 / 3 + 0.2 ** 2 / 12) / (9.81 * 0.1)) ** 0.5) - 1
-              ) < 0.005
-              and max(abs(s["joints"]["socket"]["pos"]["turnZ"] - 90) for s in [before] + result["samples"]) < 0.01
-              and max(abs(s["joints"]["socket"]["pos"]["turnY"]) for s in result["samples"]) < 0.01
-          )
-      keeps_its_twist_in_gazebo:
-        desc: The same, in Gazebo
-        simulation: //pub/feature/simulate/gazebo:gazebo
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          duration: 1.2
-          samples: 56
-        validation: *keeps_its_twist
+    qual:
+      sim:
+        keeps_its_twist:
+          desc: |
+            Twisted 90 degrees and then tilted 5, the plate swings in its own
+            plane - at the period 'hooke_across' swings at, not the one 'hooke'
+            does - and stays twisted.
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            duration: 1.2
+            samples: 1199
+            timestep: 0.0005
+          # The tilt as in 'hooke_across', I/m = L^2/3 + w^2/12 and 0.8190 s:
+          # with the twist lost, the same tilt would swing it about its edge, at
+          # 0.7327 s, and with the tilt lost it would not swing at all. The twist
+          # never moves a hundredth of a degree from 90, nor the third turn from
+          # nought.
+          validation: &keeps_its_twist |
+            (
+                abs(before["joints"]["socket"]["pos"]["turnX"] - 5) < 1e-6
+                and len(
+                    down := [
+                        a["time"]
+                        + (b["time"] - a["time"])
+                        * a["joints"]["socket"]["pos"]["turnX"]
+                        / (a["joints"]["socket"]["pos"]["turnX"] - b["joints"]["socket"]["pos"]["turnX"])
+                        for a, b in zip(result["samples"], result["samples"][1:])
+                        if a["joints"]["socket"]["pos"]["turnX"] > 0 >= b["joints"]["socket"]["pos"]["turnX"]
+                    ]
+                ) >= 2
+                and abs(
+                    (down[1] - down[0]) / (2 * 3.14159265 * ((0.2 ** 2 / 3 + 0.2 ** 2 / 12) / (9.81 * 0.1)) ** 0.5) - 1
+                ) < 0.005
+                and max(abs(s["joints"]["socket"]["pos"]["turnZ"] - 90) for s in [before] + result["samples"]) < 0.01
+                and max(abs(s["joints"]["socket"]["pos"]["turnY"]) for s in result["samples"]) < 0.01
+            )
+        keeps_its_twist_in_gazebo:
+          desc: The same, in Gazebo
+          path: //pub/feature/simulate/gazebo:gazebo
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            duration: 1.2
+            samples: 56
+          validation: *keeps_its_twist
 
   cone:
     desc: The plate stood on a ball bounded at 20 degrees, started 5 degrees from upright
     type: assy
     path: cone.assy
-    simulate:
-      stays_in_its_cone:
-        desc: |
-          Stood 5 degrees from upright, the plate falls over against its
-          bound and stays inside it, where without it it would fall to hang
-          straight down.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          # It gets to 20 degrees a quarter of a second in.
-          duration: 1.0
-          samples: 999
-          timestep: 0.0005
-        # It starts at 5 degrees. The angle a rotation turns through is
-        # 2 acos(w), w being its quaternion's first element, so the furthest it
-        # turns is between 15 and 30 degrees exactly when the smallest w is
-        # between cos 15 deg = (sqrt 6 + sqrt 2) / 4 and
-        # cos 7.5 deg = sqrt((1 + cos 15 deg) / 2): it fell well past where it
-        # started, and the bound held it, give and all.
-        validation: |
-          (
-              abs(before["joints"]["tilt"]["pos"]["turnX"] - 5) < 1e-6
-              and (6 ** 0.5 + 2 ** 0.5) / 4
-              < min(abs(s["joints"]["tilt"]["quat"][0]) for s in result["samples"])
-              < ((1 + (6 ** 0.5 + 2 ** 0.5) / 4) / 2) ** 0.5
-          )
+    qual:
+      sim:
+        stays_in_its_cone:
+          desc: |
+            Stood 5 degrees from upright, the plate falls over against its
+            bound and stays inside it, where without it it would fall to hang
+            straight down.
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            # It gets to 20 degrees a quarter of a second in.
+            duration: 1.0
+            samples: 999
+            timestep: 0.0005
+          # It starts at 5 degrees. The angle a rotation turns through is
+          # 2 acos(w), w being its quaternion's first element, so the furthest it
+          # turns is between 15 and 30 degrees exactly when the smallest w is
+          # between cos 15 deg = (sqrt 6 + sqrt 2) / 4 and
+          # cos 7.5 deg = sqrt((1 + cos 15 deg) / 2): it fell well past where it
+          # started, and the bound held it, give and all.
+          validation: |
+            (
+                abs(before["joints"]["tilt"]["pos"]["turnX"] - 5) < 1e-6
+                and (6 ** 0.5 + 2 ** 0.5) / 4
+                < min(abs(s["joints"]["tilt"]["quat"][0]) for s in result["samples"])
+                < ((1 + (6 ** 0.5 + 2 ** 0.5) / 4) / 2) ** 0.5
+            )
 
   wall:
     desc: The plate on a planar joint against a face, started 50 mm up, 100 mm along and turned 30 degrees
     type: assy
     path: wall.assy
-    simulate:
-      falls_without_turning:
-        desc: |
-          The plate falls down the face as a free body would, and neither
-          slides along it nor turns.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          duration: 0.2
-          samples: 199
-          timestep: 0.0005
-        # It starts where it was put. At the reading nearest 0.1 s it has
-        # fallen g t^2 / 2, 49.05 mm at 0.1 s, within 1 %; and the other two
-        # readings never move a thousandth from where they started - the turn
-        # is about the plate's own middle, where its weight acts.
-        validation: |
-          (
-              abs(before["joints"]["wall"]["pos"]["moveX"] - 50) < 1e-6
-              and abs(before["joints"]["wall"]["pos"]["moveY"] - 100) < 1e-6
-              and abs(before["joints"]["wall"]["pos"]["turnZ"] - 30) < 1e-6
-              and abs(
-                  (50 - (at := min(result["samples"], key=lambda s: abs(s["time"] - 0.1)))["joints"]["wall"]["pos"]["moveX"])
-                  / (0.5 * 9.81 * at["time"] ** 2 * 1000)
-                  - 1
-              ) < 0.01
-              and max(abs(s["joints"]["wall"]["pos"]["moveY"] - 100) for s in result["samples"]) < 1e-3
-              and max(abs(s["joints"]["wall"]["pos"]["turnZ"] - 30) for s in result["samples"]) < 1e-3
-          )
+    qual:
+      sim:
+        falls_without_turning:
+          desc: |
+            The plate falls down the face as a free body would, and neither
+            slides along it nor turns.
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            duration: 0.2
+            samples: 199
+            timestep: 0.0005
+          # It starts where it was put. At the reading nearest 0.1 s it has
+          # fallen g t^2 / 2, 49.05 mm at 0.1 s, within 1 %; and the other two
+          # readings never move a thousandth from where they started - the turn
+          # is about the plate's own middle, where its weight acts.
+          validation: |
+            (
+                abs(before["joints"]["wall"]["pos"]["moveX"] - 50) < 1e-6
+                and abs(before["joints"]["wall"]["pos"]["moveY"] - 100) < 1e-6
+                and abs(before["joints"]["wall"]["pos"]["turnZ"] - 30) < 1e-6
+                and abs(
+                    (50 - (at := min(result["samples"], key=lambda s: abs(s["time"] - 0.1)))["joints"]["wall"]["pos"]["moveX"])
+                    / (0.5 * 9.81 * at["time"] ** 2 * 1000)
+                    - 1
+                ) < 0.01
+                and max(abs(s["joints"]["wall"]["pos"]["moveY"] - 100) for s in result["samples"]) < 1e-3
+                and max(abs(s["joints"]["wall"]["pos"]["turnZ"] - 30) for s in result["samples"]) < 1e-3
+            )
 
   stage:
     desc: The plate on two moves against a face, started 50 mm up and 100 mm along
     type: assy
     path: stage.assy
-    simulate:
-      falls_straight:
-        desc: The plate falls down the face as a free body would, and does not slide along it.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          duration: 0.2
-          samples: 199
-          timestep: 0.0005
-        # As 'wall', without the turn.
-        validation: |
-          (
-              abs(before["joints"]["stage"]["pos"]["moveX"] - 50) < 1e-6
-              and abs(before["joints"]["stage"]["pos"]["moveY"] - 100) < 1e-6
-              and abs(
-                  (50 - (at := min(result["samples"], key=lambda s: abs(s["time"] - 0.1)))["joints"]["stage"]["pos"]["moveX"])
-                  / (0.5 * 9.81 * at["time"] ** 2 * 1000)
-                  - 1
-              ) < 0.01
-              and max(abs(s["joints"]["stage"]["pos"]["moveY"] - 100) for s in result["samples"]) < 1e-3
-          )
+    qual:
+      sim:
+        falls_straight:
+          desc: The plate falls down the face as a free body would, and does not slide along it.
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            duration: 0.2
+            samples: 199
+            timestep: 0.0005
+          # As 'wall', without the turn.
+          validation: |
+            (
+                abs(before["joints"]["stage"]["pos"]["moveX"] - 50) < 1e-6
+                and abs(before["joints"]["stage"]["pos"]["moveY"] - 100) < 1e-6
+                and abs(
+                    (50 - (at := min(result["samples"], key=lambda s: abs(s["time"] - 0.1)))["joints"]["stage"]["pos"]["moveX"])
+                    / (0.5 * 9.81 * at["time"] ** 2 * 1000)
+                    - 1
+                ) < 0.01
+                and max(abs(s["joints"]["stage"]["pos"]["moveY"] - 100) for s in result["samples"]) < 1e-3
+            )
 
   loose:
     desc: A block held by nothing, 100 mm above its base
     type: assy
     path: loose.assy
-    simulate:
-      lands_on_its_base:
-        desc: |
-          The block falls as a free body does, lands on its base and comes to
-          rest on it rather than passing through it.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :bolted
-        offset: [[0, 0, 100], [0, 0, 1], 0]
-        params:
-          # It lands 0.143 s in.
-          duration: 1.0
-          samples: 999
-          timestep: 0.0005
-        # It starts 100 mm above its base, at -100. At the reading nearest
-        # 0.1 s it has fallen g t^2 / 2, 49.05 mm at 0.1 s,
-        # within 2 % (a step of a millisecond, which is Gazebo's, puts a free
-        # fall g t dt / 2 ahead of the closed form: dt / t of it, 1.2 % at the
-        # reading 86 ms in that is Gazebo's nearest to 0.1 s). And at the
-        # end it is within a millimetre of resting on the base, and still.
-        validation: &lands_on_its_base |
-          (
-              abs(before["joints"]["loose"]["pos"]["moveZ"] + 100) < 1e-6
-              and abs(
-                  ((at := min(result["samples"], key=lambda s: abs(s["time"] - 0.1)))["joints"]["loose"]["pos"]["moveZ"] + 100)
-                  / (0.5 * 9.81 * at["time"] ** 2 * 1000)
-                  - 1
-              ) < 0.02
-              and abs(after["joints"]["loose"]["pos"]["moveZ"]) < 1
-              and abs(after["joints"]["loose"]["vel"]["moveZ"]) < 10
-          )
-      lands_on_its_base_in_gazebo:
-        desc: The same, in Gazebo
-        simulation: //pub/feature/simulate/gazebo:gazebo
-        scene: :bolted
-        offset: [[0, 0, 100], [0, 0, 1], 0]
-        params:
-          duration: 1.0
-          samples: 46
-        validation: *lands_on_its_base
+    qual:
+      sim:
+        lands_on_its_base:
+          desc: |
+            The block falls as a free body does, lands on its base and comes to
+            rest on it rather than passing through it.
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :bolted
+          offset: [[0, 0, 100], [0, 0, 1], 0]
+          params:
+            # It lands 0.143 s in.
+            duration: 1.0
+            samples: 999
+            timestep: 0.0005
+          # It starts 100 mm above its base, at -100. At the reading nearest
+          # 0.1 s it has fallen g t^2 / 2, 49.05 mm at 0.1 s,
+          # within 2 % (a step of a millisecond, which is Gazebo's, puts a free
+          # fall g t dt / 2 ahead of the closed form: dt / t of it, 1.2 % at the
+          # reading 86 ms in that is Gazebo's nearest to 0.1 s). And at the
+          # end it is within a millimetre of resting on the base, and still.
+          validation: &lands_on_its_base |
+            (
+                abs(before["joints"]["loose"]["pos"]["moveZ"] + 100) < 1e-6
+                and abs(
+                    ((at := min(result["samples"], key=lambda s: abs(s["time"] - 0.1)))["joints"]["loose"]["pos"]["moveZ"] + 100)
+                    / (0.5 * 9.81 * at["time"] ** 2 * 1000)
+                    - 1
+                ) < 0.02
+                and abs(after["joints"]["loose"]["pos"]["moveZ"]) < 1
+                and abs(after["joints"]["loose"]["vel"]["moveZ"]) < 10
+            )
+        lands_on_its_base_in_gazebo:
+          desc: The same, in Gazebo
+          path: //pub/feature/simulate/gazebo:gazebo
+          scene: :bolted
+          offset: [[0, 0, 100], [0, 0, 1], 0]
+          params:
+            duration: 1.0
+            samples: 46
+          validation: *lands_on_its_base
 
   locked:
     desc: The pendulum with its joint locked
     type: assy
     path: locked.assy
-    simulate:
-      stays_put:
-        desc: |
-          Locked, the level bar is part of the frame's body: there is no joint
-          to report, and the one body there is, bolted down, does not move.
-        simulation: //pub/feature/simulate/mujoco:mujoco
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          duration: 0.6
-          timestep: 0.0005
-        validation: &stays_put |
-          (
-              before["joints"] == {} == after["joints"]
-              and list(after["bodies"]) == ["subject"]
-              and all(
-                  abs(a - b) < 1e-6
-                  for a, b in zip(
-                      before["bodies"]["subject"]["pos"] + before["bodies"]["subject"]["quat"],
-                      after["bodies"]["subject"]["pos"] + after["bodies"]["subject"]["quat"],
-                  )
-              )
-          )
-      stays_put_in_gazebo:
-        desc: The same, in Gazebo
-        simulation: //pub/feature/simulate/gazebo:gazebo
-        scene: :bolted
-        offset: [[0, 0, 400], [0, 0, 1], 0]
-        params:
-          duration: 0.6
-        validation: *stays_put
+    qual:
+      sim:
+        stays_put:
+          desc: |
+            Locked, the level bar is part of the frame's body: there is no joint
+            to report, and the one body there is, bolted down, does not move.
+          path: //pub/feature/simulate/mujoco:mujoco
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            duration: 0.6
+            timestep: 0.0005
+          validation: &stays_put |
+            (
+                before["joints"] == {} == after["joints"]
+                and list(after["bodies"]) == ["subject"]
+                and all(
+                    abs(a - b) < 1e-6
+                    for a, b in zip(
+                        before["bodies"]["subject"]["pos"] + before["bodies"]["subject"]["quat"],
+                        after["bodies"]["subject"]["pos"] + after["bodies"]["subject"]["quat"],
+                    )
+                )
+            )
+        stays_put_in_gazebo:
+          desc: The same, in Gazebo
+          path: //pub/feature/simulate/gazebo:gazebo
+          scene: :bolted
+          offset: [[0, 0, 400], [0, 0, 1], 0]
+          params:
+            duration: 0.6
+          validation: *stays_put
 
 scenes:
   bolted:
@@ -944,7 +959,7 @@ scenes:
     # SDFormat's 9.8.
     gravity: [0, 0, -9.81]
     parameters:
-      # The three the scene PartCAD ships takes, assigned by 'pc sim'. The
+      # The three the scene PartCAD ships takes, assigned by 'pc qual test --simulation'. The
       # pendulum by default, so the scene on its own holds something to draw.
       subject:
         type: string

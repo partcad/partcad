@@ -304,7 +304,7 @@ const SHOTS = {
     //
     // The first sub-tab of a group has no picture of its own, because the
     // group's own picture is taken on it: 'dt-analysis' *is* the FEA tab,
-    // 'dt-manufacturing' is Build vs Buy, 'dt-validation' is Test. Those pages
+    // 'dt-manufacturing' is Build vs Buy, 'dt-validation' is Qualification -> Basic. Those pages
     // use that file, and nothing here takes the same picture twice.
     //
     // The view panel stays folded in every picture but 'dt-design-3d', whose
@@ -427,7 +427,7 @@ const SHOTS = {
         });
     },
 
-    // Validation: every check 'pc test' runs, with its verdict. The checks are
+    // Qualification -> Basic: every basic test 'pc qual test' runs, with its verdict. The tests are
     // run by opening the tab, so this one waits for a verdict to appear.
     async 'dt-validation'() {
         await inVSCode(EXAMPLES, async (page) => {
@@ -436,7 +436,7 @@ const SHOTS = {
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
             await showStill(page, 'example-bracket', 2);
-            await tab(page, 'validation', 'test', 8000);
+            await tab(page, 'qualification', 'basic', 8000);
             await filled(page, '.test-verdict');
             await tidy(page);
             await shot(page, out('dt-validation'), await panel(page));
@@ -518,7 +518,7 @@ const SHOTS = {
         });
     },
 
-    // Validation -> Simulation: a run, played back. Opening the tab runs the
+    // Qualification -> Simulation: a run, played back. Opening the tab runs the
     // first simulation the scene declares, which for 'stable' is a stack that
     // stands - the clearest before-and-after there is.
     async 'dt-validation-simulation'() {
@@ -528,7 +528,7 @@ const SHOTS = {
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
             await showStill(page, 'stable', 2);
-            await tab(page, 'validation', 'simulation', 8000);
+            await tab(page, 'qualification', 'simulation', 8000);
             await filled(page, '.simulation-figure, .simulation-video-media, .simulation-pictures');
             await tidy(page);
             await shot(page, out('dt-validation-simulation'), await panel(page));
@@ -618,7 +618,7 @@ const SHOTS = {
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
             await showStill(page, 'pendulum', 2);
-            await tab(page, 'validation', 'simulation', 8000);
+            await tab(page, 'qualification', 'simulation', 8000);
             await filled(page, '.simulation-figure, .simulation-video-media, .simulation-pictures');
             await tidy(page);
             await shot(page, out('sim-example-pendulum'), await panel(page));
@@ -633,7 +633,7 @@ const SHOTS = {
             await openViewer(page);
             await layout(page, { sidebar: 300, editor: 820 });
             await showStill(page, 'arm', 2);
-            await tab(page, 'validation', 'simulation', 8000);
+            await tab(page, 'qualification', 'simulation', 8000);
             await filled(page, '.simulation-figure, .simulation-video-media, .simulation-pictures');
             await tidy(page);
             await shot(page, out('sim-example-arm'), await panel(page));

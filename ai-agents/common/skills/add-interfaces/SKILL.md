@@ -13,7 +13,7 @@ interface types and the exact port coordinates by examining the geometry, and
 you prove they are right twice: by drawing them on the part itself
 (`pc render --with-all`, step 4) and by mating two instances in a throwaway
 assembly and rendering that (step 5). Hard requirement: the enriched part
-**passes `pc test`** and the validation assembly renders **correctly
+**passes `pc qual test`** and the validation assembly renders **correctly
 connected**.
 
 Interfaces are the reusable half of this: define the connector once, then every
@@ -138,7 +138,7 @@ spelling of a `revolute` with both bounds open, and `pc lint` warns about it.
 
 State the travel **once**. The parameter's range is the joint's; `limits:` is the
 short form's way of stating the range of a parameter the type brings along, and
-`limits` that disagree with a declared range fail `pc test`'s `connect` check. A
+`limits` that disagree with a declared range fail `pc qual test`'s `connect` check. A
 side to leave open whatever the parameter says is `-.inf` or `.inf`
 (`limits: {lower: -.inf, upper: .inf}`). A `ball` is bounded by one angle, how far
 it turns — `limits: {upper: 30}` — and never by a range on one of its turns.
@@ -246,11 +246,11 @@ links:
 ```
 
 `connect:` mates by interface; `location`/`connectPorts`/`connect` are mutually
-exclusive per node. Mark the assembly `manufacturable: false` so `pc test`
+exclusive per node. Mark the assembly `manufacturable: false` so `pc qual test`
 passes, then:
 
 ```sh
-pc test <name>                                        # geometry instantiates + mates resolve
+pc qual test <name>                                        # geometry instantiates + mates resolve
 pc render -t png -O /tmp/pc-render <name>             # writes /tmp/pc-render/<name>.png
 pc render -t png -O /tmp/pc-render --with-ports <name>      # the same, with every port drawn
 ```

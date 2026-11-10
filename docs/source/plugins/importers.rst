@@ -251,6 +251,6 @@ meshes it references:
   pc export -t sim-mujoco:mjcf :cell        # a scene
   pc export -t sim-mujoco:mjcf :arm         # or an assembly
 
-It is also the format ``pc sim`` hands a scene to MuJoCo in (see
+It is also the format ``pc qual test --simulation`` hands a scene to MuJoCo in (see
 :ref:`sim-engines`), and the one ``pc ide open --with mujoco`` expects a file to
 already be in (see :ref:`sim-opening`).

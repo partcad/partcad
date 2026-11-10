@@ -6,7 +6,7 @@
 
 import asyncio
 
-from partcad.test.test import Test
+from partcad.qual.qualification import Qualification
 
 
 class _FakeCache:
@@ -40,13 +40,13 @@ class _FakeShape:
         return True
 
 
-class _PassTest(Test):
+class _PassTest(Qualification):
     async def test(self, tests_to_run, ctx, shape, test_ctx={}):
         return self.TEST_PASSED
 
 
 def _cache_read_identity(manufacturable):
-    Test.MAX_CONCURRENT_TESTS = 8
+    Qualification.MAX_CONCURRENT_TESTS = 8
     # No semaphore to reset between the two asyncio.run() calls below: the gate
     # in 'partcad.concurrency' keeps one per loop, which is what a daemon
     # serving a second command needs too.
@@ -90,7 +90,7 @@ class _MemoryCache:
             self.entries[(shape_hash, key)] = value
 
 
-class _FailTest(Test):
+class _FailTest(Qualification):
     """Fails with two reasons, and fails another object on the way."""
 
     def __init__(self):
@@ -109,15 +109,15 @@ class _FailTest(Test):
 def _run_twice(check, caplog):
     import logging
 
-    Test.MAX_CONCURRENT_TESTS = 8
+    Qualification.MAX_CONCURRENT_TESTS = 8
     ctx = _FakeCtx()
     ctx.cache_tests = _MemoryCache()
     shape = _FakeShape(True)
     shape.name = "bracket"
-    assert asyncio.run(check.test_cached([], ctx, shape)) is Test.TEST_FAILED
+    assert asyncio.run(check.test_cached([], ctx, shape)) is Qualification.TEST_FAILED
     caplog.clear()
     with caplog.at_level(logging.ERROR):
-        assert asyncio.run(check.test_cached([], ctx, shape)) is Test.TEST_FAILED
+        assert asyncio.run(check.test_cached([], ctx, shape)) is Qualification.TEST_FAILED
     return ctx, [record.getMessage() for record in caplog.records if record.levelno >= logging.ERROR]
 
 
@@ -138,8 +138,8 @@ def test_a_remembered_failure_says_why(caplog):
 
 def test_a_pass_is_still_one_byte():
     """Every entry this cache held before reasons were kept is a pass or a bare failure."""
-    assert Test._record(Test.TEST_PASSED, ["ignored"]) == bytes([True])
-    assert Test._record(Test.TEST_FAILED, []) == bytes([False])
+    assert Qualification._record(Qualification.TEST_PASSED, ["ignored"]) == bytes([True])
+    assert Qualification._record(Qualification.TEST_FAILED, []) == bytes([False])
 
 
 def test_an_entry_from_before_reasons_were_kept_reads_as_it_always_did(caplog):
@@ -148,8 +148,8 @@ def test_an_entry_from_before_reasons_were_kept_reads_as_it_always_did(caplog):
     check = _FailTest()
     shape = _FakeShape(True)
     with caplog.at_level(logging.ERROR):
-        assert asyncio.run(check._replay_async(None, shape, bytes([False]))) is Test.TEST_FAILED
-        assert asyncio.run(check._replay_async(None, shape, bytes([True]))) is Test.TEST_PASSED
+        assert asyncio.run(check._replay_async(None, shape, bytes([False]))) is Qualification.TEST_FAILED
+        assert asyncio.run(check._replay_async(None, shape, bytes([True]))) is Qualification.TEST_PASSED
     assert "Failed test result loaded from cache" in caplog.text
 
 
@@ -160,13 +160,13 @@ def test_a_reason_that_will_not_decode_still_leaves_the_verdict(caplog):
     with caplog.at_level(logging.ERROR):
         assert (
             asyncio.run(check._replay_async(None, _FakeShape(True), bytes([False]) + b"\xff not json"))
-            is Test.TEST_FAILED
+            is Qualification.TEST_FAILED
         )
     assert "Failed test result loaded from cache" in caplog.text
 
 
 def test_a_pathological_reason_is_bounded():
-    entry = Test._record(Test.TEST_FAILED, ["x" * 200000])
+    entry = Qualification._record(Qualification.TEST_FAILED, ["x" * 200000])
     assert len(entry) < 4096
 
 
@@ -175,7 +175,7 @@ def test_a_pathological_reason_is_bounded():
 # --------------------------------------------------------------------------- #
 
 
-class _ArtifactTest(Test):
+class _ArtifactTest(Qualification):
     """Fails, leaving one thing behind to look at; restores it only while 'restorable'."""
 
     def __init__(self):
@@ -193,8 +193,8 @@ class _ArtifactTest(Test):
 
 
 def _collected(check, ctx, shape):
-    """Run 'check' through its cache with a report collecting, as 'partcad.test.report' does."""
-    from partcad.test.test import _report
+    """Run 'check' through its cache with a report collecting, as 'partcad.qual.report' does."""
+    from partcad.qual.qualification import _report
 
     notes = []
 
@@ -209,19 +209,19 @@ def _collected(check, ctx, shape):
 
 
 def test_a_remembered_failure_keeps_what_it_left_behind():
-    Test.MAX_CONCURRENT_TESTS = 8
+    Qualification.MAX_CONCURRENT_TESTS = 8
     check = _ArtifactTest()
     ctx = _FakeCtx()
     ctx.cache_tests = _MemoryCache()
     shape = _FakeShape(True)
 
     first, notes = _collected(check, ctx, shape)
-    assert first is Test.TEST_FAILED
+    assert first is Qualification.TEST_FAILED
     assert ("artifact", {"kind": "assembly", "package": "pkg", "name": "bracket/overlap"}) in notes
 
     # Read back: the reason is said again, and the artifact is put back first.
     again, notes = _collected(check, ctx, shape)
-    assert again is Test.TEST_FAILED
+    assert again is Qualification.TEST_FAILED
     assert check.restored == ["bracket/overlap"]
     assert [level for level, _ in notes] == ["error", "artifact"]
 
@@ -233,7 +233,7 @@ def test_a_remembered_failure_keeps_what_it_left_behind():
 
 def test_the_artifacts_survive_a_failure_too_long_to_keep_whole():
     reasons = ["x" * 2048] * 100 + [{"artifact": {"name": "overlap"}}]
-    recorded = Test._record(Test.TEST_FAILED, reasons)
+    recorded = Qualification._record(Qualification.TEST_FAILED, reasons)
     import json
 
     kept = json.loads(recorded[1:].decode("utf-8"))
@@ -301,7 +301,7 @@ class _Context:
         return self.ctx._get_assembly(":assembly")
 
 
-class _DeclarationCheck(Test):
+class _DeclarationCheck(Qualification):
     """A check answered from the declaration, which never builds the shape."""
 
     def __init__(self):
@@ -313,7 +313,7 @@ class _DeclarationCheck(Test):
         return self.passed(shape)
 
 
-class _BuildingCheck(Test):
+class _BuildingCheck(Qualification):
     """A check that builds the shape, which prepares it before anything else (see 'Shape.get_wrapped')."""
 
     def __init__(self):
@@ -333,14 +333,14 @@ def test_a_verdict_is_not_kept_once_a_part_the_assembly_links_to_changes(tmp_pat
     preparing it - remembered it under a key that left the parts out, and kept
     handing back the pass after one of them had changed.
     """
-    Test.MAX_CONCURRENT_TESTS = 8
+    Qualification.MAX_CONCURRENT_TESTS = 8
     package = _package(tmp_path)
     cache = _KeyedCache()
     check = _DeclarationCheck()
 
     def run():
         context = _Context(package, cache)
-        assert asyncio.run(check.test_cached([], context.ctx, context.assembly())) is Test.TEST_PASSED
+        assert asyncio.run(check.test_cached([], context.ctx, context.assembly())) is Qualification.TEST_PASSED
 
     run()
     assert check.runs == 1
@@ -357,21 +357,21 @@ def test_a_verdict_is_not_kept_once_a_part_the_assembly_links_to_changes(tmp_pat
 def test_a_verdict_is_read_and_written_under_one_complete_key(tmp_path, caplog):
     """Nothing is added to the hash after the verdict's key has been read from it.
 
-    Every assembly a package-wide 'pc test' reached used to log "Hash update
+    Every assembly a package-wide 'pc qual test' reached used to log "Hash update
     after being used": the key was read, then the check built the assembly,
     and building it prepared it - adding the keys of its links to a hash that
     had already been used.
     """
     import logging
 
-    Test.MAX_CONCURRENT_TESTS = 8
+    Qualification.MAX_CONCURRENT_TESTS = 8
     package = _package(tmp_path)
     cache = _KeyedCache()
     context = _Context(package, cache)
     assembly = context.assembly()
 
     with caplog.at_level(logging.WARNING):
-        assert asyncio.run(_BuildingCheck().test_cached([], context.ctx, assembly)) is Test.TEST_PASSED
+        assert asyncio.run(_BuildingCheck().test_cached([], context.ctx, assembly)) is Qualification.TEST_PASSED
 
     assert "Hash update after being used" not in caplog.text
     assert cache.reads == cache.writes
@@ -390,7 +390,7 @@ def test_every_check_waits_for_the_preparation_the_first_one_began(tmp_path, cap
     """
     import logging
 
-    Test.MAX_CONCURRENT_TESTS = 8
+    Qualification.MAX_CONCURRENT_TESTS = 8
     package = _package(tmp_path)
     fresh = _Context(package, _KeyedCache())
     fetched = asyncio.run(fresh.ctx.get_part(":cube").get_cache_key_async())
@@ -416,7 +416,7 @@ def test_every_check_waits_for_the_preparation_the_first_one_began(tmp_path, cap
         return await asyncio.gather(*(check.test_cached([], context.ctx, part) for check in checks))
 
     with caplog.at_level(logging.WARNING):
-        assert asyncio.run(run_all()) == [Test.TEST_PASSED] * len(checks)
+        assert asyncio.run(run_all()) == [Qualification.TEST_PASSED] * len(checks)
 
     assert "Hash update after being used" not in caplog.text
     assert cache.reads == [fetched] * len(checks)

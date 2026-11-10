@@ -43,7 +43,7 @@ objects whose geometry is the same and whose origins are not are, for the
 surface, a millimetre or a metre apart, and that is reported.
 
 The same rules answer a 'match:' requirement (see 'partcad.requirements'), so
-that 'pc test' and 'pc compare' cannot disagree about what "within 5%" means.
+that 'pc qual test' and 'pc compare' cannot disagree about what "within 5%" means.
 """
 
 from __future__ import annotations

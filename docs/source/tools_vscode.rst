@@ -111,7 +111,7 @@ Digital Thread
 
 Displaying an object opens the ``Digital Thread``, which is a strip of tabs over that one object rather than
 a bare canvas: groups of tabs, each with tabs of its own -- **Design**, **Analysis**, **Manufacturing** and
-**Validation**, followed by **Operations**, which has nothing in it yet and is always disabled. Design
+**Qualification**, followed by **Operations**, which has nothing in it yet and is always disabled. Design
 is always the first (see :doc:`/digital_thread/introduction` for what each group is for):
 
 - **Design** — the object itself, three ways, and what it is in, in tabs of its own:
@@ -126,7 +126,7 @@ is always the first (see :doc:`/digital_thread/introduction` for what each group
 
   - **CMF** — for a part, an assembly or a scene: the colour, material and finish of each item it is made of,
     set by set with a swatch of each colour, what is unspecified, and what keeps it from being made -- the items
-    ``pc test``'s ``cmf`` check finds incomplete first (see :doc:`/digital_thread/lifecycle/design_cmf`).
+    ``pc qual test``'s ``cmf`` check finds incomplete first (see :doc:`/digital_thread/lifecycle/design_cmf`).
 
   2D and Draft each have a **Save…** button that saves the file on screen wherever you choose. A picture is
   shown on the tab, and can be zoomed with the mouse wheel, dragged, and put back with a double-click; a PDF or
@@ -151,16 +151,25 @@ is always the first (see :doc:`/digital_thread/introduction` for what each group
     (``pc instructions``).
 
   Manufacturing is for a part or an assembly; for a scene, a sketch or an interface it is disabled.
-- **Validation** — whether the object is what it claims to be, and does what it is supposed to:
+- **Qualification** — whether the object is what it claims to be, and does what it is supposed to, a tab per
+  subtype of qualification test (see :doc:`/digital_thread/lifecycle/qualification`):
 
-  - **Test** — every check ``pc test`` runs, with how each came out on this object: passed, failed, warned,
-    skipped, or not applicable and why. The check selected shows what it found and what it is, when it applies
-    and what to do when it fails (:doc:`/digital_thread/lifecycle/testing`). An interference leaves an assembly of the two
-    parts and what they share, to open in 3D. Always the first tab, and always enabled; an object that belongs
-    to no package has nothing to ask PartCAD about, and the tab says so.
-  - **Simulation** — for a part, an assembly or a scene that declares a ``simulate:`` section (see :doc:`/digital_thread/lifecycle/simulation`):
+  - **Basic** — every basic test ``pc qual test --basic`` runs, with how each came out on this object: passed,
+    failed, warned, skipped, or not applicable and why. The test selected shows what it found and what it is,
+    when it applies and what to do when it fails (:doc:`/digital_thread/lifecycle/qualification_tests`). Always
+    the first tab, and always enabled; an object that belongs to no package has nothing to ask PartCAD about,
+    and the tab says so.
+  - **Topology** — the topology tests, the same way: the parts of an assembly that overlap, the faces and
+    edges of a part to be made that nothing tolerances, and the faces and edges of a part that are badly made
+    (``defects``). A finding says where it is: **Show** opens the object in the 3D view with the finding --
+    the volumes two parts share, the untoleranced or defective faces, the edges drawn as tubes -- in a colour
+    of its own, everything else faded, and a callout on each piece saying which it is. A card over the view
+    keeps what the test said: its verdict, every line of its findings, and what is drawn. It folds to its
+    title, **×** shows all of the object again, and **Back to the Topology tab** returns to the object with
+    that test open.
+  - **Simulation** — for a part, an assembly or a scene that declares simulations under ``qual: sim:`` (see :doc:`/digital_thread/lifecycle/simulation`):
     the simulations it declares, listed on the left with the first one selected. Selecting one runs it, as
-    ``pc sim -f <name>`` does, and shows whether its ``validation:`` held, and plays the video of the run the
+    ``pc qual test --simulation -f <name>`` does, and shows whether its ``validation:`` held, and plays the video of the run the
     simulation plugin recorded (see :ref:`sim-video`), in a player with the usual controls -- play and pause,
     replay, a step back and forward, a position to drag, the speed, and full screen. Until it is played, the
     player shows two pictures of the scene the plugin took -- before anything moved on the left, and when the
@@ -171,12 +180,14 @@ is always the first (see :doc:`/digital_thread/introduction` for what each group
     Whether each run held is a green or red mark before its name in the list. Above the pictures, as on the
     Draft tab, **Simulated by** names the plugin that runs it -- filled in with the one it names, offering the
     ones PartCAD knows of, and taking any other name typed into it; another runs it with that one, like
-    ``pc sim --plugin`` -- and **Simulate** runs it afresh. Under the
+    ``pc qual test --simulation --plugin`` -- and **Simulate** runs it afresh. Under the
     pictures, **Criteria**, **Before** and **After** open on a click: the ``validation:`` expression, and the
     ``before`` and ``after`` the plugin reported, which are what that expression is evaluated over.
+  - **Other** — the tests plugins supply that the object declares under ``qual: other:``, each with the
+    report its tool wrote, drawn as a table; for an object that declares none, how to declare one.
   - **Process Emulation** — nothing yet; always disabled.
 
-  Validation is always enabled, for its Test tab; Simulation is disabled for anything that declares no
+  Qualification is always enabled, for its Basic tab; Simulation is disabled for anything that declares no
   simulation.
 
 Every group always shows all of its tabs and disables the ones that do not apply, and a group none of whose

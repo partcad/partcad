@@ -2,7 +2,7 @@ desc: >
   This example demonstrates parts that are made by taking material away from a
   piece of stock. Each one names the stock it is cut from with `source:`, and
   each names the machine that cuts it -- a router, a laser, a drill or a saw -- which
-  is what decides both the checks `pc test` applies to it and the program
+  is what decides both the checks `pc qual test` applies to it and the program
   `pc cam` writes for it.
 
 docs:
@@ -14,7 +14,7 @@ docs:
     pc ide view bearing_block
     pc ide view drilled_plate
     pc ide view rail
-    pc test -f manufacturability
+    pc qual test -f manufacturability
     ```
 
     Each part's route is written for the machine it declares -- the same file
@@ -79,7 +79,7 @@ parts:
 
       It is also the one part here that says it could be made *either* way.
       Those are alternatives rather than stages -- `pc cam -m laser gasket` and
-      `pc cam -m cnc gasket` are two programs for the same part, and `pc test`
+      `pc cam -m cnc gasket` are two programs for the same part, and `pc qual test`
       answers for both claims. A part that really is machined in stages is a
       chain of parts, each naming the previous as its `source`.
     manufacturing:

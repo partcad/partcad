@@ -1,0 +1,59 @@
+# A 20 x 10 x 5 mm block with a 4 mm bore through it, read from a STEP file whose
+# GD&T tolerances two faces of seven: a flatness on the top face and a
+# cylindricity on the bore. What 'tolerance-surfaces' and 'tolerance-edges' are
+# tested against (tests/partcad/unit/test_qual_tolerance.py). 'plain_block.step' is
+# the same block without the bore and without any GD&T.
+parts:
+  feature_by_feature:
+    type: step
+    path: bored_block.step
+    desc: Toleranced by its file's GD&T, two faces of seven
+    manufacturing:
+      method: additive
+  general:
+    type: step
+    path: bored_block.step
+    desc: Covered whole by a general tolerance
+    tolerance: 0.1
+    manufacturing:
+      method: additive
+  strict:
+    type: step
+    path: bored_block.step
+    desc: A general tolerance that is told not to count, and small faces left out
+    tolerance: 0.1
+    manufacturing:
+      method: additive
+    qual:
+      topology:
+        tolerance-surfaces:
+          general: false
+          minArea: 100
+  bought:
+    type: step
+    path: bored_block.step
+    desc: Bought, so it comes as it comes
+    vendor: Example
+    sku: BLOCK-1
+  model:
+    type: step
+    path: bored_block.step
+    desc: A model of something nobody here makes
+    manufacturable: false
+  untoleranced:
+    type: basic
+    cuboid: [20, 10, 5]
+    desc: Made, and toleranced by nothing at all
+    manufacturing:
+      method: additive
+  told_off:
+    type: step
+    path: plain_block.step
+    desc: A general tolerance told not to count, and a file with no GD&T in it to tolerance a face
+    tolerance: 0.1
+    manufacturing:
+      method: additive
+    qual:
+      topology:
+        tolerance-surfaces:
+          general: false

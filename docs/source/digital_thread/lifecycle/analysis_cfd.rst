@@ -80,7 +80,7 @@ On the command line
   pc cae cfd -f through :duct                                   # one of them
   pc cae cfd -i //pub/feature/cae/openfoam:cfd :duct            # with a named solver
   pc ide view --analysis-cfd :duct                              # shown in the panel
-  pc test -f cfd :duct                                          # as the check pc test runs
+  pc qual test -f cfd :duct                                          # as the check pc qual test runs
 
 Who runs it
 ===========

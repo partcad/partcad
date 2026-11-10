@@ -19,7 +19,7 @@ What a person does on a first afternoon, done by the commands a person types:
 4. `pc ide view --analysis-fea :cantilever` opens the FEA tab on the cantilever,
    which runs the analysis, and that has to come back without an error either --
    unless this machine has no container runtime that can run a Linux image, the
-   one excuse `pc test` accepts for an analysis that could not run (macOS and
+   one excuse `pc qual test` accepts for an analysis that could not run (macOS and
    Windows runners; see `container_runtime`). Where the example's own `unless:`
    leaves the cantilever out (64-bit Arm, Apple silicon included), there is
    nothing to open: this step is not tried, and a `NOTE:` says so, as it does
@@ -681,7 +681,7 @@ def test_install_open_view_and_analyse_in_a_real_editor(session):
         assert (viewer["subject"]["name"], viewer["tab"], viewer["subTab"]) == ("cantilever", "analysis", "fea")
         excused = probe["fea"]["errors"] and not container_runtime()
         if excused:
-            # The one excuse `pc test` accepts for an analysis that came back with
+            # The one excuse `pc qual test` accepts for an analysis that came back with
             # nothing (see `CaeTest._verdict`): no container runtime that can run a
             # Linux image -- macOS, and Windows' Windows-container daemon -- so the
             # solver the implementation's image carries could never have been had.
@@ -744,7 +744,7 @@ def excluded_here(path: str):
 
 
 def container_runtime() -> bool:
-    """Whether this machine could have run the analysis's container: `pc test`'s own question, asked the same way."""
+    """Whether this machine could have run the analysis's container: `pc qual test`'s own question, asked the same way."""
     if os.environ.get("PC_PYTHON_SANDBOX") == "remote":
         return True
     from partcad import runtime

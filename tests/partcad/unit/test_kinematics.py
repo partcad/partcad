@@ -1743,7 +1743,7 @@ def test_every_example_keeps_every_placement_invariant(stand_in_geometry):
 
 
 def test_the_simulated_stacks_are_where_every_body_was_free_before(stand_in_geometry):
-    """The examples' stacks, in the worlds 'pc sim' places them in: bodies, to the bit, where they were.
+    """The examples' stacks, in the worlds 'pc qual test --simulation' places them in: bodies, to the bit, where they were.
 
     What makes the scene rule change nothing for them: every block was a free
     body of its own before ('flatten: true'), and as an element of a scene it

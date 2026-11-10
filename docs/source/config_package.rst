@@ -468,8 +468,11 @@ requests within the repository. In this way one plugin can serve an entire tree
 of packages, each with its own sketches, parts, assemblies, providers and
 further children.
 
-Non-null responses from a plugin are cached on disk, keyed by the plugin
-reference and the request; a request the plugin has no answer for is remembered
+Non-null responses from a plugin are cached on disk, keyed by the plugin's full
+object path - the directory of the package that declares it, and its name there
+- and the request. The reference alone would not do: every project's root
+package is ``//``, so a plugin ``:repo`` is ``//:repo`` in each of them, and two
+projects would be answered from one another's cache. A request the plugin has no answer for is remembered
 only for the run that made it, and is put to the plugin again after a restart.
 The same key also names the directory the plugin's own files are materialized
 into, and a file already there is served without asking the plugin again.

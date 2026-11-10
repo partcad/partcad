@@ -37,7 +37,7 @@ from OCP.TopTools import TopTools_IndexedMapOfShape
 
 import partcad as pc
 from partcad import brep_inspect
-from partcad.test.shell import ShellTest
+from partcad.qual.basic.shell import ShellTest
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 import ocp_serialize  # noqa: E402

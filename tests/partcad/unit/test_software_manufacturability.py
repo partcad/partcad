@@ -20,8 +20,8 @@ import pytest
 
 import partcad as pc
 from partcad.file_factory import parse_hash
-from partcad.test import manufacturability
-from partcad.test.test import Test
+from partcad.qual.basic import manufacturability
+from partcad.qual.qualification import Qualification
 
 DATA = "tests/partcad/unit/data/software_cam"
 
@@ -120,13 +120,13 @@ def test_every_bad_reference_is_reported(ctx):
 
 
 def test_the_manufacturing_test_passes_a_board_whose_software_holds_up(ctx):
-    assert _test_part(ctx, "board") == Test.TEST_PASSED
+    assert _test_part(ctx, "board") == Qualification.TEST_PASSED
 
 
 def test_the_manufacturing_test_fails_a_board_whose_software_does_not(ctx):
-    assert _test_part(ctx, "board-mismatched") == Test.TEST_FAILED
-    assert _test_part(ctx, "board-unpinned") == Test.TEST_FAILED
-    assert _test_part(ctx, "board-missing") == Test.TEST_FAILED
+    assert _test_part(ctx, "board-mismatched") == Qualification.TEST_FAILED
+    assert _test_part(ctx, "board-unpinned") == Qualification.TEST_FAILED
+    assert _test_part(ctx, "board-missing") == Qualification.TEST_FAILED
 
 
 def test_an_assembly_is_held_to_the_same_rule(ctx):
@@ -137,7 +137,7 @@ def test_an_assembly_is_held_to_the_same_rule(ctx):
 
     assembly.config["software_resolved"] = ["//:mismatched"]
     test = manufacturability.ManufacturabilityTest()
-    assert asyncio.run(test.test([test], ctx, assembly)) == Test.TEST_FAILED
+    assert asyncio.run(test.test([test], ctx, assembly)) == Qualification.TEST_FAILED
 
 
 def test_a_part_that_is_not_manufacturable_is_not_asked(ctx):
@@ -145,7 +145,7 @@ def test_a_part_that_is_not_manufacturable_is_not_asked(ctx):
     part = ctx.get_part("//:board-mismatched")
     part.is_manufacturable = False
     test = manufacturability.ManufacturabilityTest()
-    assert asyncio.run(test.test([test], ctx, part)) == Test.TEST_PASSED
+    assert asyncio.run(test.test([test], ctx, part)) == Qualification.TEST_PASSED
 
 
 #

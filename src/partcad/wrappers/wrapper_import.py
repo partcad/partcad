@@ -78,9 +78,11 @@ import wrapper_common
 # before is produced again.
 CACHE_VERSION = 1
 
-# The key the request carries the implementation script under. Passed in the
-# request rather than on the command line for the reason 'wrapper_export' gives:
-# 'wrapper_common.handle_input()' already spends both positional arguments.
+# The key the request carries the implementation script under: in the request
+# because 'wrapper_common.handle_input()' already spends both positional
+# arguments. Like every path the request names, it has been pointed at where the
+# script is in this sandbox by the time it is read (see
+# 'wrapper_common.adopt_paths'). Twin of 'partcad.output.SCRIPT_KEY'.
 SCRIPT_KEY = "__script__"
 
 

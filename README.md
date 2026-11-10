@@ -39,7 +39,7 @@ agents, and the per-OS notes are all in
 pc init                      # a package in the current directory, with agent skills for Claude Code and Cursor
 pc ide view my_part          # show it in the Digital Thread of the IDE or the extension
 pc render my_part            # SVG, PNG, DXF... from any angle
-pc test                      # the ports, interfaces, physics and simulations the objects declare
+pc qual test                 # qualify: basic, topology (overlaps, untoleranced faces), simulation, plugins
 pc instructions my_assembly  # the assembly instruction book, PDF or HTML, with the bill of materials
 ```
 
@@ -59,7 +59,7 @@ The [tutorial](https://partcad.readthedocs.io/en/latest/tutorial.html) walks thr
 - **Outputs**: STEP, BREP, STL, 3MF, OBJ, IGES, glTF, URDF, Gazebo and MuJoCo worlds, 2D projections,
   dimensioned drawings, Markdown documentation and PDF or HTML instruction books.
 - **Engineering**: FEA, modal, thermal and CFD analysis (`pc cae`), simulation in MuJoCo or Gazebo
-  (`pc sim`), 2.5D toolpaths (`pc cam`), and materials and manufacturing methods carried into the bill of
+  (`pc qual test --simulation`), 2.5D toolpaths (`pc cam`), and materials and manufacturing methods carried into the bill of
   materials.
 - **Supply chain**: a Build vs Buy decision per line item, stock-based procurement for made parts, and
   automated purchasing from the command line.

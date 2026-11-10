@@ -42,7 +42,7 @@ def filter_optional_params(model, params, optional):
     Object-type parameters are the exception, and only they. They are
     contributed by the part *type* rather than written by the author of the
     script - 'material', 'color' and 'tolerance' today - so a part may be
-    obliged to declare one ('pc test' requires a manufactured part to state a
+    obliged to declare one ('pc qual test' requires a manufactured part to state a
     tolerance) while the script that builds its geometry has no use for it. Such
     a name is dropped here, before the strict setter ever sees it. A script that
     *does* assign one still receives its value, which is the entire point of

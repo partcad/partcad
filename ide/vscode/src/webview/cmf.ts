@@ -506,7 +506,7 @@ export function drawDeclaration(declaration: CmfDeclaration): HTMLElement {
             declaration.manufacturable
                 ? 'A claim: it can be sourced or made as it is declared.'
                 : "Display only: a picture, not a specification. An item in it is not specified, and the 'cmf' " +
-                      'check of pc test says so.',
+                      'check of pc qual test says so.',
         ),
     );
 

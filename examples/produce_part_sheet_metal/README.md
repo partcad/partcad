@@ -7,7 +7,7 @@ This example demonstrates parts that are made by bending a flat piece of sheet m
 pc ide view angle_up
 pc ide view angle_down
 pc ide view bracket
-pc test -f manufacturability-sheet-metal
+pc qual test -f manufacturability-sheet-metal
 ```
 
 Each part's `instructions` are a reading of the one drawing, and each reading

@@ -16,8 +16,8 @@ import asyncio
 import pytest
 
 from partcad.geom import Location
-from partcad.test.connectivity import ConnectivityTest, _packed
-from partcad.test.solidity import SolidityTest
+from partcad.qual.basic.connectivity import ConnectivityTest, _packed
+from partcad.qual.basic.solidity import SolidityTest
 
 
 class _Item:
@@ -73,8 +73,8 @@ class _Assembly(_Shape):
 
 @pytest.fixture(autouse=True)
 def _assembly_is_an_assembly(monkeypatch):
-    monkeypatch.setattr("partcad.test.connectivity.Assembly", _Assembly)
-    monkeypatch.setattr("partcad.test.solidity.Assembly", _Assembly)
+    monkeypatch.setattr("partcad.qual.basic.connectivity.Assembly", _Assembly)
+    monkeypatch.setattr("partcad.qual.basic.solidity.Assembly", _Assembly)
 
 
 def _run(test, shape, ctx=None):
@@ -163,7 +163,7 @@ def test_two_different_parts_in_one_place_are_interference_not_duplication():
 
 def test_duplicates_can_be_allowed():
     brick = _Item("brick")
-    config = {"connectivity": {"allowDuplicates": True}}
+    config = {"qual": {"basic": {"connectivity": {"allowDuplicates": True}}}}
     children = [_Child("a", brick, HERE), _Child("b", brick, HERE)]
     assert _run(ConnectivityTest(), _Assembly(children, config=config))
 
@@ -214,7 +214,7 @@ def test_an_interface_that_takes_many_says_so():
 def test_the_same_port_name_on_two_different_targets_is_two_ports():
     # 'requireAnchored' off so that this says something about ports alone:
     # 'r' is placed by coordinates, which is that other check's business.
-    config = {"connectivity": {"requireAnchored": False}}
+    config = {"qual": {"basic": {"connectivity": {"requireAnchored": False}}}}
     children = [
         _Child("l", _Item("l"), HERE),
         _Child("r", _Item("r"), THERE),
@@ -249,7 +249,7 @@ def test_the_first_item_is_what_everything_else_hangs_from():
 
 
 def test_requiring_an_anchor_can_be_turned_off():
-    config = {"connectivity": {"requireAnchored": False}}
+    config = {"qual": {"basic": {"connectivity": {"requireAnchored": False}}}}
     children = [
         _Child("base", _Item("base"), HERE),
         _connected("a", "base", "c0r0"),
@@ -263,7 +263,7 @@ def test_a_rule_is_turned_off_one_at_a_time_rather_than_all_at_once():
     it - 'allowDuplicates', 'requireAnchored' - so what it has turned off is
     written down and the rest of the check still runs."""
     brick = _Item("brick")
-    config = {"connectivity": {"allowDuplicates": True}}
+    config = {"qual": {"basic": {"connectivity": {"allowDuplicates": True}}}}
     assert _run(ConnectivityTest(), _Assembly([_Child("a", brick, HERE), _Child("b", brick, HERE)], config=config))
 
 
@@ -296,10 +296,10 @@ def test_the_settings_that_decide_a_verdict_are_in_its_cache_key():
     omits them hands back the answer from before they were changed."""
     conn = ConnectivityTest()
     assert asyncio.run(conn.cache_key_suffix(None, _Assembly())) != asyncio.run(
-        conn.cache_key_suffix(None, _Assembly(config={"connectivity": {"allowDuplicates": True}}))
+        conn.cache_key_suffix(None, _Assembly(config={"qual": {"basic": {"connectivity": {"allowDuplicates": True}}}}))
     )
     assert asyncio.run(conn.cache_key_suffix(None, _Assembly())) != asyncio.run(
-        conn.cache_key_suffix(None, _Assembly(config={"connectivity": {"requireAnchored": False}}))
+        conn.cache_key_suffix(None, _Assembly(config={"qual": {"basic": {"connectivity": {"requireAnchored": False}}}}))
     )
     # 'solidity' has nothing in its key: it reads the geometry and takes no
     # settings, so there is nothing a package can change that moves the answer.
@@ -376,7 +376,7 @@ def test_the_item_the_others_hang_from_is_exempt_wherever_it_sits(monkeypatch):
     'example-bracket' - the one item that is allowed to be placed by
     coordinates, because everything else connects to it.
     """
-    monkeypatch.setattr("partcad.test.connectivity.Assembly", _Assembly)
+    monkeypatch.setattr("partcad.qual.basic.connectivity.Assembly", _Assembly)
     inner = _Assembly(
         [
             _Child("example-bracket", _Item("bracket"), HERE),
@@ -390,7 +390,7 @@ def test_the_item_the_others_hang_from_is_exempt_wherever_it_sits(monkeypatch):
 
 def test_a_stray_inside_a_nested_group_is_still_reported(monkeypatch):
     """The exemption is one item per group, not one per assembly."""
-    monkeypatch.setattr("partcad.test.connectivity.Assembly", _Assembly)
+    monkeypatch.setattr("partcad.qual.basic.connectivity.Assembly", _Assembly)
     inner = _Assembly(
         [
             _Child("base", _Item("base"), HERE),
@@ -406,7 +406,7 @@ def test_a_verdict_that_consulted_an_interface_is_not_remembered(monkeypatch):
     """'multiConnect' lives in the interface's configuration, which is neither
     in shape.hash nor among this shape's cache dependencies. A remembered
     verdict would survive that setting being changed."""
-    monkeypatch.setattr("partcad.test.connectivity.Assembly", _Assembly)
+    monkeypatch.setattr("partcad.qual.basic.connectivity.Assembly", _Assembly)
     children = [
         _Child("shaft", _Item("shaft"), HERE),
         _connected("gear1", "shaft", "along", "//pub:shaft"),
@@ -420,7 +420,7 @@ def test_a_verdict_that_consulted_an_interface_is_not_remembered(monkeypatch):
 def test_a_verdict_that_consulted_nothing_is_remembered(monkeypatch):
     """Most assemblies never reach an interface: one item per port, no lookup,
     and the verdict depends only on what shape.hash already covers."""
-    monkeypatch.setattr("partcad.test.connectivity.Assembly", _Assembly)
+    monkeypatch.setattr("partcad.qual.basic.connectivity.Assembly", _Assembly)
     children = [_Child("a", _Item("a"), HERE), _Child("b", _Item("b"), THERE)]
     ctx_out = {}
     assert _run_ctx2(ConnectivityTest(), _Assembly(children), _Ctx(), ctx_out)
@@ -435,7 +435,7 @@ def _run_ctx2(test, shape, ctx, test_ctx):
 
 
 def _validity(shape, ctx=None):
-    from partcad.test.validity import ValidityTest
+    from partcad.qual.basic.validity import ValidityTest
 
     test_ctx = {}
     verdict = asyncio.run(ValidityTest().test([], ctx, shape, test_ctx))
@@ -444,8 +444,8 @@ def _validity(shape, ctx=None):
 
 @pytest.fixture
 def _validity_classes(monkeypatch):
-    monkeypatch.setattr("partcad.test.validity.Assembly", _Assembly)
-    monkeypatch.setattr("partcad.test.validity.Sketch", _Sketch2)
+    monkeypatch.setattr("partcad.qual.basic.validity.Assembly", _Assembly)
+    monkeypatch.setattr("partcad.qual.basic.validity.Sketch", _Sketch2)
 
 
 class _Sketch2(_Shape):
@@ -508,7 +508,7 @@ def test_a_check_that_breaks_says_so_without_failing(_validity_classes, caplog):
     pretend the question was answered, and the verdict is not remembered."""
     import logging
 
-    from partcad.test.validity import ValidityTest
+    from partcad.qual.basic.validity import ValidityTest
 
     shape = _Shape(raises=Exception("boom"))
     with caplog.at_level(logging.INFO):
@@ -519,7 +519,7 @@ def test_a_check_that_breaks_says_so_without_failing(_validity_classes, caplog):
 
 
 def test_skip_moves_the_cache_key():
-    from partcad.test.validity import ValidityTest
+    from partcad.qual.basic.validity import ValidityTest
 
     t = ValidityTest()
     assert t.cache_key_suffix(None, _Shape()) != t.cache_key_suffix(None, _Shape(config={"validity": {"skip": True}}))
@@ -638,7 +638,7 @@ def test_the_manufacturable_rule_is_still_turned_off_by_configuration():
             _Child("base", _thing()),
             _Child("arm", _thing(), located=True),
         ],
-        config={"connectivity": {"requireAnchored": False}},
+        config={"qual": {"basic": {"connectivity": {"requireAnchored": False}}}},
         is_manufacturable=True,
     )
     assert _run(ConnectivityTest(), asm)
@@ -654,7 +654,7 @@ def test_whether_it_is_to_be_made_is_part_of_the_connectivity_cache_key():
 
 
 def test_every_check_agrees_on_how_its_cache_key_is_asked_for():
-    """'Test.cache_key_suffix' is awaited, so a check that defines it without
+    """'Qualification.cache_key_suffix' is awaited, so a check that defines it without
     'async' fails the whole run with "object str can't be used in 'await'
     expression" - and fails it at the point a *different* check is being
     cached, which says nothing about where the mistake is.
@@ -665,7 +665,7 @@ def test_every_check_agrees_on_how_its_cache_key_is_asked_for():
     """
     import inspect
 
-    from partcad.test.all import tests as registered_tests
+    from partcad.qual.registry import builtin as registered_tests
 
     checks = registered_tests(concurrency_cap=8)
     assert checks, "no checks are registered"

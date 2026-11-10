@@ -5,7 +5,7 @@ MCP server
 ``pc mcp`` serves the `Model Context Protocol <https://modelcontextprotocol.io>`_ (MCP) on stdio. It is how an
 AI agent drives PartCAD without a shell: any MCP client -- Claude Code, Claude Desktop, Cursor, Visual Studio
 Code and the rest -- starts it as a subprocess and calls its tools to see what a package holds, read an
-object's declaration, look at it, test it and write it out, and to reach everything else PartCAD's daemon can
+object's declaration, look at it, qualify it and write it out, and to reach everything else PartCAD's daemon can
 do.
 
 The server is a client of the workspace's daemon, exactly like the other ``pc`` commands: it starts the daemon
@@ -100,7 +100,7 @@ Tools
 *****
 
 Each tool is one daemon method, with the parameters the ``pc`` command it mirrors sends. The ones that name an
-object -- ``info``, ``render``, ``export``, ``test``, ``bom`` and ``instructions`` -- take ``params``, the values of
+object -- ``info``, ``render``, ``export``, ``qual_test``, ``bom`` and ``instructions`` -- take ``params``, the values of
 the object's own parameters by name, which is ``-p <name>=<value>`` on the command line (see
 :ref:`parameter-values`).
 
@@ -131,9 +131,15 @@ price asks the suppliers for a quote, so it is the one of them that goes out to 
    * - ``export``
      - ``pc export``
      - Writes one object to a file in the workspace: STEP, STL, 3MF, OBJ, glTF, BREP, PNG, SVG, ...
-   * - ``test``
-     - ``pc test``
-     - Checks objects against the requirements and tests they declare.
+   * - ``qual_test``
+     - ``pc qual test``
+     - Runs the qualification tests objects are held to and the ones they declare, all four subtypes or the
+       ``subtypes`` asked for (``basic``, ``topology``, ``sim``, ``other``); ``filter`` keeps the tests whose names
+       start with it. See :doc:`/digital_thread/lifecycle/qualification`.
+   * - ``qual_add``
+     - ``pc qual add``
+     - Declares a qualification test of an object in its package's ``partcad.yaml``, as
+       ``<object>.qual.<subtype>.<name>``: a built-in test's parameters, a plugin's test (``path``), or a simulation.
    * - ``lint``
      - ``pc lint``
      - Checks a package's ``partcad.yaml``, ASSY files and scripts.
@@ -184,16 +190,16 @@ Results and errors
 
 Every tool returns one JSON text block: ``ok``; the daemon's ``result`` when there is one; ``errors``, the
 error lines the daemon logged; and ``log``, everything else it logged while it worked. Most of PartCAD answers
-by logging -- ``pc list`` prints a table -- so for ``list_objects``, ``info``, ``test`` and ``search`` the log
+by logging -- ``pc list`` prints a table -- so for ``list_objects``, ``info``, ``qual_test`` and ``search`` the log
 *is* the answer. A render's picture follows the text block as an image.
 
 A failure is a result with ``ok`` false and the error in it, never a protocol error: an object that does not
-build, a test that fails, a daemon that cannot be reached, a path outside the workspace. Only a malformed tool
+build, a qualification test that fails, a daemon that cannot be reached, a path outside the workspace. Only a malformed tool
 call is refused by the protocol. When the connection to the daemon is lost in the middle of a call, the result
 says the call may or may not have finished -- the server never sends it again on its own -- and the next call
 reconnects.
 
-The first render or test of an object builds it in its sandbox, which can take minutes; clients that ask for
+The first render or qualification of an object builds it in its sandbox, which can take minutes; clients that ask for
 progress are told what the daemon is working on.
 
 *************************

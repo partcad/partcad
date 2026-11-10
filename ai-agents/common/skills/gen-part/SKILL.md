@@ -8,7 +8,7 @@ description: Generate a PartCAD part from a natural-language description (and op
 Generate one PartCAD **part**. The text after the command (`$ARGUMENTS`) is the
 part description — what to build. *You* author the CAD script yourself and prove
 it works with the PartCAD CLI; do not use any built-in `ai-*` part type or
-generation pipeline. Hard requirement: the finished part **passes `pc test`** (its
+generation pipeline. Hard requirement: the finished part **passes `pc qual test`** (its
 geometry instantiates cleanly).
 
 Steps 4–7 are the reference flow — the shape the legacy `pc add part --ai`
@@ -163,7 +163,7 @@ Language conventions for the script:
   external modules; no export.
 
 Then mark the part **not manufacturable** in `partcad.yaml` — a generated part is
-not a catalog/supplier item, and this is what lets `pc test` pass:
+not a catalog/supplier item, and this is what lets `pc qual test` pass:
 
 ```yaml
 parts:
@@ -191,7 +191,7 @@ parts:
 ### Write down what it is required to be
 
 Then add `requirements:` to the same declaration — what the description asked
-for, in the description's own terms, *not* the design you chose. `pc test`
+for, in the description's own terms, *not* the design you chose. `pc qual test`
 checks the model against what it can measure — the `ports:`, `interfaces:`,
 `physics:` and `match:` — and `/pc:validate` judges the `features:`, which are
 prose; the IDE shows both as the part's Requirements tab:
@@ -243,9 +243,9 @@ prose; the IDE shows both as the part's Requirements tab:
           mass: 5%                      # within 5% of what bracket-v1 weighs
   ```
 
-  `pc test` reads it by the numbers `pc compare :bracket-v1 <name>` reports
+  `pc qual test` reads it by the numbers `pc compare :bracket-v1 <name>` reports
   (§7). A mass needs a material with a density on both objects, as above.
-- If the part declares a `simulate:` entry that demonstrates one of the
+- If the part declares a `qual: sim:` entry that demonstrates one of the
   features, say which with `feature: <name>` on that entry.
 
 Leave out what the description did not ask for. A requirement you invented is a
@@ -293,14 +293,14 @@ PartCAD (fixed in partcad/partcad#470).
 
 ## 6. Validate
 
-`pc test` is the build gate: with `manufacturable: false`, its CAD check passes
+`pc qual test` is the build gate: with `manufacturable: false`, its CAD check passes
 only if the geometry instantiates cleanly, and the manufacturability checks are
 skipped. Its `requirements` check holds the model to the `ports:`, `interfaces:`
 and `physics:` you wrote down in §5, and says which one is not met and what it
-found instead; `pc --no-ansi -v test -f requirements <name>` lists every one.
+found instead; `pc --no-ansi -v qual test -f requirements <name>` lists every one.
 
 ```sh
-pc --no-ansi test <name>
+pc --no-ansi qual test <name>
 ```
 
 Three of its checks fail geometry that instantiates perfectly, and all three are
@@ -332,7 +332,7 @@ to it:
 
 ## 7. Render it from several angles, compare, and iterate
 
-`pc test` proves the geometry instantiates. It says nothing about whether the
+`pc qual test` proves the geometry instantiates. It says nothing about whether the
 geometry is the part that was asked for — that is decided by looking at it.
 
 One picture is not enough to decide it. A projection hides everything behind it,
@@ -453,7 +453,7 @@ reference has it.
 ### Show each version that renders
 
 Under an IDE (§2), show each version of the part in its 3D view as soon as it
-passes the basic checks: the geometry builds (`pc test` finds nothing wrong with
+passes the basic checks: the geometry builds (`pc qual test` finds nothing wrong with
 the shape itself; a requirement not met yet does not count against it) and all
 four views above rendered without an error. Do it on every pass through this
 section, right after the renders and before you compare them:
@@ -494,8 +494,8 @@ and their files (`/pc:gen-sketch` §9) — unless the user wants them kept; keep
 and describe, the sketch an `extrude` or `sweep` part is built from.
 
 If the description claims something physical of the part on its own — it rests
-without rolling, it floats — declare that claim as a `simulate:` and check it
-with `pc sim`. A part takes the same section an assembly does; `/pc:gen-assembly`
+without rolling, it floats — declare that claim as a `qual: sim:` and check it
+with `pc qual test --simulation`. A part takes the same section an assembly does; `/pc:gen-assembly`
 §7 shows how. Name the feature it demonstrates with `feature: <name>`.
 
 If the part is meant to connect to something — a bolt pattern, a plug, a rail —

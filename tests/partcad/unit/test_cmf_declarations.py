@@ -24,7 +24,7 @@ import pytest
 import yaml
 
 import partcad as pc
-from partcad import cmf, factory
+from partcad import cmf, factory, shape_envelope
 from partcad.lint.all import get_partcad_schema
 from partcad_utils.utils import escape_name, format_parameterized_name, parse_parameterized_name, unescape_name
 
@@ -42,6 +42,10 @@ colors:
       color: {type: string, default: "000000FF"}
     display: "#%color%"
     manufacturable: false
+materials:
+  steel:
+    density: 7850
+    color: ":Medium Stone Grey"
 """
 
 ROOT = """
@@ -73,6 +77,8 @@ materials:
     full: Aluminium 6061-T6
     density: 2700
     color: ":natural"
+  plastic:
+    density: 1200
 parts:
   box:
     type: step
@@ -82,6 +88,33 @@ parts:
     path: box.step
     parameters:
       color: {type: string, default: ":red"}
+  alu-box:
+    type: step
+    path: box.step
+    parameters:
+      material: {type: string, default: ":alu"}
+  red-alu-box:
+    type: step
+    path: box.step
+    parameters:
+      material: {type: string, default: ":alu"}
+      color: {type: string, default: ":red"}
+  steel-box:
+    type: step
+    path: box.step
+    parameters:
+      material: {type: string, default: "//vendor:steel"}
+  plastic-box:
+    type: step
+    path: box.step
+    parameters:
+      material: {type: string, default: ":plastic"}
+  alu-box-again:
+    type: alias
+    source: alu-box
+  red-box-again:
+    type: alias
+    source: red-box
   brick:
     type: stl
     path: box.stl
@@ -330,6 +363,35 @@ def test_a_part_in_a_colour_is_an_instance_of_its_own(ctx):
     assert ctx.get_part(":box").config.get("properties", {}).get("color") is None
 
 
+def test_a_part_that_names_no_colour_is_drawn_in_the_one_its_material_claims(ctx):
+    assert ctx.get_part(":alu-box").config["properties"]["color"] == "#A8A9AD"
+
+
+def test_a_colour_the_part_names_wins_over_its_material_s(ctx):
+    assert ctx.get_part(":red-alu-box").config["properties"]["color"] == "#C91A09"
+
+
+def test_a_material_s_claim_is_read_in_the_material_s_own_package(ctx):
+    # ':Medium Stone Grey' is written in //vendor, where the material is.
+    assert ctx.get_part(":steel-box").config["properties"]["color"] == "#969696"
+
+
+def test_a_material_that_claims_no_colour_draws_nothing(ctx):
+    assert ctx.get_part(":plastic-box").config.get("properties", {}).get("color") is None
+
+
+def test_an_alias_is_drawn_in_its_source_s_colour_and_made_of_its_material(ctx):
+    assert ctx.get_part(":red-box-again")._shape_properties()["color"] == "#C91A09"
+    alias = ctx.get_part(":alu-box-again")._shape_properties()
+    assert alias["color"] == "#A8A9AD"
+    assert alias["material"] == ":alu"
+
+
+def test_a_part_named_with_a_material_is_drawn_in_its_claim(ctx):
+    assert ctx.get_part(":box;material=:alu").config["properties"]["color"] == "#A8A9AD"
+    assert ctx.get_part(":box").config.get("properties", {}).get("color") is None
+
+
 def test_a_link_names_the_canonical_colour_whichever_alias_it_used(ctx):
     wall = ctx._get_assembly(":wall")
     asyncio.run(wall.do_instantiate())
@@ -494,3 +556,27 @@ def test_an_alias_naming_nothing_is_listed_as_broken(tmp_path):
     assert rows["orphan"].startswith("<broken>")
     assert rows["red"].startswith("#C91A09")
     assert cmf.lookup(ctx, "color", None, quiet=True) is None
+
+
+def test_an_alias_is_in_what_its_source_is_in(tmp_path):
+    """Built, it records the CMF of the part it stands for, as 'pc info' and 'pc test' read it."""
+    (tmp_path / "partcad.yaml").write_text(textwrap.dedent("""
+            colors:
+              natural: "#A8A9AD"
+            materials:
+              alu: {density: 2700, color: ":natural"}
+            parts:
+              block:
+                type: basic
+                cuboid: 10
+                parameters:
+                  material: {type: string, default: ":alu"}
+              block-again:
+                type: alias
+                source: block
+            """))
+    ctx = pc.Context(str(tmp_path))
+    alias = ctx.get_part(":block-again")
+    assert asyncio.run(alias.get_wrapped(ctx)) is not None
+    summary = asyncio.run(alias.get_metadata_async(ctx))[shape_envelope.METADATA_CMF]
+    assert [(entry["material"], entry["color"]) for entry in summary["sets"]] == [("//:alu", "//:natural")]

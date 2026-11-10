@@ -413,9 +413,10 @@ class FakeProject:
         self.parts_requested.append(name)
         return self.parts.get(name)
 
-    async def test_log_wrapper_async(self, ctx, tests=None, fast_only=False):
+    async def test_log_wrapper_async(self, ctx, tests=None, fast_only=False, subtypes=None, prefix=None):
         self.tested_whole_package = True
         self.tested_fast_only = fast_only
+        self.tested_subtypes = subtypes
 
     def object_config(self, kind, name):
         obj = getattr(self, self._sections[kind]).get(name)
@@ -729,7 +730,7 @@ def test_inspect_part_without_context_is_a_silent_noop():
         (operations.info_object, {}),
         (operations.render_objects, {}),
         (operations.convert_object, {"object_name": "widget"}),
-        (operations.test_run, {}),
+        (operations.qual_run, {}),
         (operations.lint_run, {}),
         (operations.assembly_guide, {"object": "top"}),
         (operations.supply_quote, {"object": "top"}),
@@ -1415,7 +1416,7 @@ def test_a_recursive_test_does_not_test_an_excluded_package(monkeypatch):
     sub = FakeProject(name="//sub").add("parts", FakeObject("widget"))
     session.partcad_ctx.projects["//sub"] = sub
 
-    operations.test_run(session, {"recursive": True, "object": "widget", "exclude": ["//sub"]})
+    operations.qual_run(session, {"recursive": True, "object": "widget", "exclude": ["//sub"]})
 
     assert root.parts_requested == ["widget"]
     assert sub.parts_requested == []
@@ -1970,19 +1971,34 @@ def test_inspect_object_reports_a_missing_object_of_the_requested_package():
 
 
 class FakeTestBase:
-    """'partcad.test.test.Test' as '_test_async' reads it: the context keys."""
+    """'partcad.qual.qualification.Qualification' as '_test_async' reads it: the context keys."""
 
     NAMED = "named"
 
 
 def install_fake_tests(monkeypatch, checks=()):
     """The check list '_test_async' imports. Empty by default: what is under test
-    here is which package each request lands on, not what the checks then do."""
+    here is which package each request lands on, not what the checks then do.
+
+    'select' keeps what a run of 'subtypes' asks for (a check with no subtype is
+    basic), and 'for_shape' adds nothing: no fake object declares a plugin's test.
+    """
+
+    def select(quals, subtypes=None, prefix=None):
+        chosen = subtypes or ("basic", "topology", "sim", "other")
+        return [
+            q for q in quals if getattr(q, "SUBTYPE", "basic") in chosen and (not prefix or q.name.startswith(prefix))
+        ]
+
     install_fake_partcad_modules(
         monkeypatch,
         {
-            "partcad.test.all": {"tests": lambda threads_max: list(checks)},
-            "partcad.test.test": {"Test": FakeTestBase},
+            "partcad.qual.registry": {
+                "builtin": lambda threads_max: list(checks),
+                "select": select,
+                "for_shape": lambda quals, shape, subtypes=None, prefix=None: list(quals),
+            },
+            "partcad.qual.qualification": {"Qualification": FakeTestBase},
         },
     )
 
@@ -2001,7 +2017,7 @@ class RecordingCheck:
 
 
 def test_an_object_named_on_its_own_is_tested_as_named(monkeypatch):
-    """'pc test widget' is a question about that object, and the checks are told so.
+    """'pc qual test widget' is a question about that object, and the checks are told so.
 
     The 'sim' check is the one that reads it: a claim with no condition to
     check fails when the object is asked about, and is skipped in a walk.
@@ -2011,7 +2027,7 @@ def test_an_object_named_on_its_own_is_tested_as_named(monkeypatch):
     session, _ = make_session()
     session.partcad_ctx.projects["//"].add("parts", FakeObject("widget"))
 
-    operations.test_run(session, {"object": "widget"})
+    operations.qual_run(session, {"object": "widget"})
 
     assert check.contexts == [("widget", {"named": True})]
 
@@ -2024,7 +2040,7 @@ def test_every_object_of_a_name_in_a_tree_is_a_walk_and_not_named(monkeypatch):
     session.partcad_ctx.projects["//"].add("parts", FakeObject("widget"))
     session.partcad_ctx.projects["//sub"] = FakeProject(name="//sub").add("parts", FakeObject("widget"))
 
-    operations.test_run(session, {"recursive": True, "object": "widget"})
+    operations.qual_run(session, {"recursive": True, "object": "widget"})
 
     assert check.contexts == [("widget", {}), ("widget", {})]
 
@@ -2036,7 +2052,7 @@ def test_test_run_looks_the_object_up_in_the_requested_package(monkeypatch):
     sub = FakeProject(name="//sub").add("parts", FakeObject("widget"))
     session.partcad_ctx.projects["//sub"] = sub
 
-    operations.test_run(session, {"package": "//sub", "object": "widget"})
+    operations.qual_run(session, {"package": "//sub", "object": "widget"})
 
     assert sub.parts_requested == ["widget"]
     assert session.partcad.logging.messages("error") == []
@@ -2052,7 +2068,7 @@ def test_test_run_recursive_tests_the_object_in_each_package(monkeypatch):
     sub = FakeProject(name="//sub").add("parts", FakeObject("widget"))
     session.partcad_ctx.projects["//sub"] = sub
 
-    operations.test_run(session, {"recursive": True, "object": "widget"})
+    operations.qual_run(session, {"recursive": True, "object": "widget"})
 
     assert root.parts_requested == ["widget"]
     assert sub.parts_requested == ["widget"]
@@ -2067,9 +2083,9 @@ def test_a_recursive_test_run_tests_each_package_as_an_action(monkeypatch):
     session.partcad_ctx.projects["//"].add("parts", FakeObject("widget"))
     session.partcad_ctx.projects["//sub"] = FakeProject(name="//sub").add("parts", FakeObject("gadget"))
 
-    operations.test_run(session, {"recursive": True})
+    operations.qual_run(session, {"recursive": True})
 
-    assert sorted(a for a in session.partcad.logging.actions if a[0] == "Test") == [("Test", "//"), ("Test", "//sub")]
+    assert sorted(a for a in session.partcad.logging.actions if a[0] == "Qual") == [("Qual", "//"), ("Qual", "//sub")]
 
 
 def test_a_single_package_test_run_leaves_its_timing_to_the_process(monkeypatch):
@@ -2078,10 +2094,10 @@ def test_a_single_package_test_run_leaves_its_timing_to_the_process(monkeypatch)
     session, _ = make_session()
     session.partcad_ctx.projects["//"].add("parts", FakeObject("widget"))
 
-    operations.test_run(session, {})
+    operations.qual_run(session, {})
 
-    assert [a for a in session.partcad.logging.actions if a[0] == "Test"] == []
-    assert ("Test", "//") in session.partcad.logging.processes
+    assert [a for a in session.partcad.logging.actions if a[0] == "Qual"] == []
+    assert ("Qual", "//") in session.partcad.logging.processes
 
 
 def test_test_run_recursive_runs_a_qualified_object_once(monkeypatch):
@@ -2095,7 +2111,7 @@ def test_test_run_recursive_runs_a_qualified_object_once(monkeypatch):
     sub = FakeProject(name="//sub").add("parts", FakeObject("widget"))
     session.partcad_ctx.projects["//sub"] = sub
 
-    operations.test_run(session, {"recursive": True, "object": "//sub:widget"})
+    operations.qual_run(session, {"recursive": True, "object": "//sub:widget"})
 
     assert sub.parts_requested == ["widget"]
     assert root.parts_requested == []
@@ -2107,7 +2123,7 @@ def test_test_run_reports_a_package_a_qualified_object_name_cannot_reach(monkeyp
     install_fake_tests(monkeypatch)
     session, _ = make_session()
 
-    operations.test_run(session, {"object": "//nope:widget"})
+    operations.qual_run(session, {"object": "//nope:widget"})
 
     assert session.partcad.logging.messages("error") == ["Package //nope is not found"]
 
@@ -2132,7 +2148,7 @@ def test_a_suffix_on_the_package_walks_the_subtree(monkeypatch):
     sub = FakeProject(name="//sub").add("parts", FakeObject("widget"))
     session.partcad_ctx.projects["//sub"] = sub
 
-    operations.test_run(session, {"package": "//..."})
+    operations.qual_run(session, {"package": "//..."})
 
     assert root.tested_whole_package
     assert sub.tested_whole_package
@@ -2146,7 +2162,7 @@ def test_a_suffix_on_the_object_walks_the_subtree(monkeypatch):
     sub = FakeProject(name="//sub").add("parts", FakeObject("widget"))
     session.partcad_ctx.projects["//sub"] = sub
 
-    operations.test_run(session, {"object": "...:widget"})
+    operations.qual_run(session, {"object": "...:widget"})
 
     assert root.parts_requested == ["widget"]
     assert sub.parts_requested == ["widget"]
@@ -2162,7 +2178,7 @@ def test_a_suffix_on_the_object_says_where_the_walk_starts(monkeypatch):
     sub = FakeProject(name="//sub").add("parts", FakeObject("widget"))
     session.partcad_ctx.projects["//sub"] = sub
 
-    operations.test_run(session, {"object": "//sub...:widget"})
+    operations.qual_run(session, {"object": "//sub...:widget"})
 
     assert sub.parts_requested == ["widget"]
     assert root.parts_requested == []
@@ -2178,7 +2194,7 @@ def test_a_walk_passes_over_the_packages_that_declare_no_such_object(monkeypatch
     bare = FakeProject(name="//bare")
     session.partcad_ctx.projects["//bare"] = bare
 
-    operations.test_run(session, {"object": "...:widget"})
+    operations.qual_run(session, {"object": "...:widget"})
 
     assert root.parts_requested == ["widget"]
     assert bare.parts_requested == []
@@ -2190,7 +2206,7 @@ def test_a_walk_that_found_the_object_nowhere_is_the_one_failure(monkeypatch):
     session, _ = make_session()
     session.partcad_ctx.projects["//sub"] = FakeProject(name="//sub")
 
-    operations.test_run(session, {"object": "...:nosuch"})
+    operations.qual_run(session, {"object": "...:nosuch"})
 
     assert session.partcad.logging.messages("error") == ["nosuch is not found in // or in any package below it"]
 
@@ -2698,7 +2714,7 @@ def test_a_render_asks_for_the_prices_of_the_shape_it_draws(monkeypatch):
 CLUSTER = {"material": "//:abs", "name": "abs", "at": [5.0, 0.0, 0.0], "nodes": [[0], [1]], "faces": 12}
 
 
-def _clustered(monkeypatch, ctx, kind="assembly", name="top", configured=10.0):
+def _clustered(monkeypatch, ctx, kind="assembly", name="top", configured=10.0, uncached=()):
     """'cmf.clusters' over a session holding one object, with the sandbox stood in for.
 
     The rule is 'material_clusters' among the wrappers, which has tests of its
@@ -2728,7 +2744,11 @@ def _clustered(monkeypatch, ctx, kind="assembly", name="top", configured=10.0):
     async def get_wrapped(ctx):
         return {"name": "//:%s" % name, "assembly": []}
 
+    async def get_uncached_subassemblies_async(ctx):
+        return list(uncached)
+
     shape.get_wrapped = get_wrapped
+    shape.get_uncached_subassemblies_async = get_uncached_subassemblies_async
     shape.artifacts_cacheable = lambda: True
     ctx.shapes[(kind, "//:%s" % name)] = shape
     return asked
@@ -2774,6 +2794,20 @@ def test_the_clusters_are_of_what_the_3d_view_is_cut_to(monkeypatch):
 
     assert result["section"] == section
     assert asked[0][0] == {"name": "//:top", "assembly": [], "cut": section}
+
+
+@pytest.mark.parametrize("kind", ["assembly", "scene"])
+def test_the_sub_assemblies_are_built_first_one_request_each(monkeypatch, kind):
+    """Phase one of the build its tree needs, as for every request that ends in one: nothing is clustered yet."""
+    session, _ = make_session()
+    sub = FakeShape(name="arm", project_name="//", kind="assembly")
+    asked = _clustered(monkeypatch, session.partcad_ctx, kind=kind, uncached=[sub])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.cmf_clusters(session, {"package": "//", "object": "top", "kind": kind})
+
+    assert [staging.identity(item) for item in _retry_error(caught)] == ["//:arm"]
+    assert asked == []
 
 
 def test_only_what_is_made_has_materials(monkeypatch):
@@ -3824,21 +3858,21 @@ def test_requirements_check_names_what_it_could_not_find(monkeypatch):
 #
 # The method behind the IDE's Test tab. What each check decides is the checks'
 # own, tested beside them, and how what they say becomes a report is
-# 'partcad.test.report', tested beside it; what is pinned here is which object
+# 'partcad.qual.report', tested beside it; what is pinned here is which object
 # is asked, whether anything is run, and what a refusal reads as.
 
 
 def _report_session(monkeypatch, kind="part", name="plate"):
     asked = []
 
-    async def run_async(ctx, shape, verify=True):
+    async def run_async(ctx, shape, verify=True, subtypes=None):
         asked.append((shape, verify))
         return ["results of %s" % shape.name]
 
-    def to_dict(object_name, kind, results, verified):
+    def to_dict(object_name, kind, results, verified, subtypes=None):
         return {"object": object_name, "kind": kind, "tests": results, "verified": verified}
 
-    install_fake_partcad_modules(monkeypatch, {"partcad.test.report": {"run_async": run_async, "to_dict": to_dict}})
+    install_fake_partcad_modules(monkeypatch, {"partcad.qual.report": {"run_async": run_async, "to_dict": to_dict}})
     session, _ = make_session()
     shape = FakeObject(name, project_name="//")
     session.partcad_ctx.shapes[(kind, "//:" + name)] = shape
@@ -3848,8 +3882,8 @@ def _report_session(monkeypatch, kind="part", name="plate"):
 def test_test_report_lists_the_checks_unless_asked_to_run_them(monkeypatch):
     session, plate, asked = _report_session(monkeypatch)
 
-    listed = operations.test_report(session, {"package": "//", "object": "plate", "kind": "part"})
-    run = operations.test_report(session, {"package": "//", "object": "plate", "kind": "part", "verify": True})
+    listed = operations.qual_report(session, {"package": "//", "object": "plate", "kind": "part"})
+    run = operations.qual_report(session, {"package": "//", "object": "plate", "kind": "part", "verify": True})
 
     assert asked == [(plate, False), (plate, True)]
     assert listed == {"object": "//:plate", "kind": "part", "tests": ["results of plate"], "verified": False}
@@ -3860,7 +3894,7 @@ def test_test_report_lists_the_checks_unless_asked_to_run_them(monkeypatch):
 def test_test_report_asks_the_kind_it_was_told(monkeypatch, kind):
     session, shape, asked = _report_session(monkeypatch, kind=kind, name="thing")
 
-    operations.test_report(session, {"package": "//", "object": "thing", "kind": kind})
+    operations.qual_report(session, {"package": "//", "object": "thing", "kind": kind})
 
     assert asked == [(shape, False)]
     assert session.partcad_ctx.requested[-1][:2] == (kind, "//:thing")
@@ -3871,11 +3905,11 @@ def test_test_report_builds_an_assembly_s_sub_assemblies_first_when_it_runs_the_
     session, _, asked = _report_session(monkeypatch, kind="assembly", name="robot")
     _assembly_with(session, "//:robot", uncached=[("//", "arm")])
 
-    operations.test_report(session, {"package": "//", "object": "robot", "kind": "assembly"})
+    operations.qual_report(session, {"package": "//", "object": "robot", "kind": "assembly"})
     assert [verify for _, verify in asked] == [False]
 
     with pytest.raises(JsonRpcError) as caught:
-        operations.test_report(session, {"package": "//", "object": "robot", "kind": "assembly", "verify": True})
+        operations.qual_report(session, {"package": "//", "object": "robot", "kind": "assembly", "verify": True})
     assert [entry["name"] for entry in _retry_error(caught)] == ["arm"]
     assert [verify for _, verify in asked] == [False]
 
@@ -3884,7 +3918,7 @@ def test_test_report_refuses_what_pc_test_does_not_test(monkeypatch):
     session, _, asked = _report_session(monkeypatch)
 
     with pytest.raises(JsonRpcError) as caught:
-        operations.test_report(session, {"package": "//", "object": "box", "kind": "package"})
+        operations.qual_report(session, {"package": "//", "object": "box", "kind": "package"})
 
     assert caught.value.code == operations.USAGE_ERROR
     assert "'package'" in str(caught.value)
@@ -3895,7 +3929,7 @@ def test_test_report_names_what_it_could_not_find(monkeypatch):
     session, _, asked = _report_session(monkeypatch)
 
     with pytest.raises(JsonRpcError) as caught:
-        operations.test_report(session, {"package": "//", "object": "missing", "kind": "part"})
+        operations.qual_report(session, {"package": "//", "object": "missing", "kind": "part"})
 
     assert caught.value.code == operations.USAGE_ERROR
     assert "//:missing" in str(caught.value)
@@ -4022,7 +4056,7 @@ def test_cae_analyze_passes_the_per_run_overrides_through():
 
 
 def test_cae_analyze_runs_every_scenario_one_after_another():
-    """'pc cae fea :bracket' is every scenario, as 'pc sim' is every simulation."""
+    """'pc cae fea :bracket' is every scenario, as 'pc qual test --simulation' is every simulation."""
     session, part = make_cae_session(
         FakeAnalysablePart(
             "bracket",
@@ -4719,10 +4753,43 @@ def test_a_whole_package_test_run_hands_fast_only_on(monkeypatch):
     root = session.partcad_ctx.projects["//"]
     root.add("parts", FakeObject("widget"))
 
-    operations.test_run(session, {"fast_only": True})
+    operations.qual_run(session, {"fast_only": True})
 
     assert root.tested_whole_package
     assert root.tested_fast_only is True
+
+
+def test_a_qual_run_hands_the_subtypes_it_was_asked_for_on(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("widget"))
+
+    operations.qual_run(session, {"subtypes": ["other", "topology"]})
+
+    # In presentation order, whatever order they were asked in.
+    assert root.tested_subtypes == ("topology", "other")
+
+
+def test_a_qual_run_of_no_subtype_is_every_subtype(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("widget"))
+
+    operations.qual_run(session, {})
+
+    assert root.tested_subtypes is None
+
+
+def test_a_qual_run_of_an_unknown_subtype_is_a_usage_error(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.qual_run(session, {"subtypes": ["validation"]})
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "is not a subtype of qualification" in str(caught.value)
 
 
 def test_a_named_slow_assembly_is_not_tested_with_fast_only(monkeypatch):
@@ -4730,7 +4797,7 @@ def test_a_named_slow_assembly_is_not_tested_with_fast_only(monkeypatch):
     session, _ = make_session()
     session.partcad_ctx.projects["//"].add("assemblies", _slow("slow", project_name="//"))
 
-    operations.test_run(session, {"object": "slow", "assembly": True, "fast_only": True})
+    operations.qual_run(session, {"object": "slow", "assembly": True, "fast_only": True})
 
     log = session.partcad.logging
     assert "Skipping '//:slow'" in log.messages("info")
@@ -5038,7 +5105,7 @@ def test_the_overlay_reader_takes_the_flags_and_the_ports(monkeypatch):
 # ---- simulate.list and the snapshots of simulate.run ------------------------
 #
 # What the IDE's Validation tab is enabled by (what an object declares under
-# 'simulate:') and what its Simulation tab shows (a run's two pictures, as
+# 'qual: sim:') and what its Simulation tab shows (a run's two pictures, as
 # bytes: the daemon may be on another machine).
 
 
@@ -5068,7 +5135,7 @@ def test_simulate_list_names_what_an_assembly_declares_without_running_it(monkey
     stack = FakeObject("stack")
     session.partcad_ctx.shapes[("assembly", "//:stack")] = stack
 
-    result = operations.simulate_list(session, {"package": "//", "object": "stack", "kind": "assembly"})
+    result = operations.qual_simulations(session, {"package": "//", "object": "stack", "kind": "assembly"})
 
     assert result["object"] == "//:stack"
     assert result["kind"] == "assembly"
@@ -5089,7 +5156,7 @@ def test_simulate_list_names_what_a_scene_declares(monkeypatch):
     session, _ = make_session()
     session.partcad_ctx.shapes[("scene", "//:pile")] = FakeObject("pile")
 
-    result = operations.simulate_list(session, {"package": "//", "object": "pile", "kind": "scene"})
+    result = operations.qual_simulations(session, {"package": "//", "object": "pile", "kind": "scene"})
 
     assert (result["object"], result["kind"]) == ("//:pile", "scene")
     assert [entry["name"] for entry in result["simulations"]] == ["stands"]
@@ -5100,7 +5167,7 @@ def test_simulate_list_of_an_object_that_declares_nothing_is_empty_rather_than_a
     session, _ = make_session()
     session.partcad_ctx.shapes[("part", "//:block")] = FakeObject("block")
 
-    result = operations.simulate_list(session, {"package": "//", "object": "block"})
+    result = operations.qual_simulations(session, {"package": "//", "object": "block"})
 
     assert result["kind"] == "part"
     assert result["simulations"] == []
@@ -5111,7 +5178,7 @@ def test_simulate_list_says_which_object_it_could_not_find(monkeypatch):
     session, _ = make_session()
 
     with pytest.raises(JsonRpcError) as raised:
-        operations.simulate_list(session, {"package": "//", "object": "nope", "kind": "assembly"})
+        operations.qual_simulations(session, {"package": "//", "object": "nope", "kind": "assembly"})
     assert "Assembly //:nope is not found" in str(raised.value)
 
 
@@ -5170,7 +5237,7 @@ def test_the_snapshots_of_a_run_come_back_as_bytes_when_asked(tmp_path):
 
 
 def test_the_video_of_a_run_comes_back_as_bytes_when_asked_and_its_path_is_said(tmp_path, monkeypatch):
-    """What the IDE's Simulation tab plays, and 'pc sim --video' saves: the daemon may be on another machine."""
+    """What the IDE's Simulation tab plays, and 'pc qual test --simulation --video' saves: the daemon may be on another machine."""
     (tmp_path / "video.webm").write_bytes(b"\x1a\x45\xdf\xa3 webm")
     session, _ = make_session()
     session.partcad_ctx.projects["//"] = FakeObject("//")
@@ -5192,8 +5259,8 @@ def test_the_video_of_a_run_comes_back_as_bytes_when_asked_and_its_path_is_said(
 
     monkeypatch.setattr(operations, "_simulate_async", simulate)
 
-    plain = operations.simulate_run(session, {"package": "//", "object": "stack"})
-    inline = operations.simulate_run(session, {"package": "//", "object": "stack", "inline": True})
+    plain = operations.qual_simulate(session, {"package": "//", "object": "stack"})
+    inline = operations.qual_simulate(session, {"package": "//", "object": "stack", "inline": True})
 
     assert plain["simulations"][0]["video"] == str(tmp_path / "video.webm")
     assert "recording" not in plain["simulations"][0]
@@ -5322,7 +5389,7 @@ def test_a_test_run_with_no_flag_tests_the_kind_the_package_says(monkeypatch):
     stack.finalized = True
     root.add("assemblies", stack)
 
-    operations.test_run(session, {"object": "stack"})
+    operations.qual_run(session, {"object": "stack"})
 
     # Not asked for as a part, which is what it would have been before.
     assert root.parts_requested == []
@@ -5336,7 +5403,7 @@ def test_simulate_list_with_no_kind_finds_a_scene(monkeypatch):
     session.partcad_ctx.projects["//"].add("scenes", FakeObject("pile"))
     session.partcad_ctx.shapes[("scene", "//:pile")] = FakeObject("pile")
 
-    result = operations.simulate_list(session, {"package": "//", "object": "pile"})
+    result = operations.qual_simulations(session, {"package": "//", "object": "pile"})
 
     assert (result["object"], result["kind"]) == ("//:pile", "scene")
 

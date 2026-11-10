@@ -42,8 +42,10 @@ class FakeContext:
 def _forget_previous_answers():
     """The answer is memoized per context; these tests reuse none of them."""
     pfe._declared_versions.clear()
+    pfe._plugin_paths.clear()
     yield
     pfe._declared_versions.clear()
+    pfe._plugin_paths.clear()
 
 
 def _rewrite(path, body):
@@ -269,3 +271,47 @@ def test_the_version_is_found_among_the_plugin_s_other_constants(tmp_path):
         "_LDU_MM = 0.4\n" "_STUD_MM = 8\n" "NAMES = {'brick': 1}\n" "CACHE_VERSION = 9\n" "_AFTERWARDS = None\n",
     )
     assert pfe.declared_cache_version(ctx, parent, "//pkg:repo") == 9
+
+
+# --- where a plugin's answers are kept ---------------------------------------------
+
+
+def test_two_projects_plugins_of_one_name_are_two_plugins(tmp_path):
+    """Every project's root is '//': the reference alone did not tell them apart."""
+    first, second = tmp_path / "first", tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    one = FakeProject("//", first, {"repo": {"type": "basic"}})
+    other = FakeProject("//", second, {"repo": {"type": "basic"}})
+    path_one = pfe.plugin_object_path(FakeContext(), one, "//:repo")
+    path_other = pfe.plugin_object_path(FakeContext(), other, "//:repo")
+    assert path_one != path_other
+    assert path_one.endswith(":repo") and os.path.normcase(os.path.realpath(first)) in path_one
+
+
+def test_the_whole_hierarchy_keeps_its_answers_in_one_place(tmp_path):
+    """A child asks with the plugin-backed package as its parent, and gets the root's path."""
+    root = FakeProject("//pkg", tmp_path, {"repo": {"type": "basic"}})
+    ctx = FakeContext()
+    path = pfe.plugin_object_path(ctx, root, "//pkg:repo")
+    child_parent = FakeProject("//pkg/models", tmp_path / "elsewhere", {})
+    assert pfe.plugin_object_path(ctx, child_parent, "//pkg:repo") == path
+
+
+def test_a_plugin_in_another_package_is_placed_where_that_package_is(tmp_path):
+    host_dir = tmp_path / "host"
+    host_dir.mkdir()
+    host = FakeProject("//host", host_dir, {"repo": {"type": "basic"}})
+    importer = FakeProject("//other", tmp_path, {})
+    path = pfe.plugin_object_path(FakeContext({"//host": host}), importer, "//host:repo")
+    assert path == "%s:repo" % os.path.normcase(os.path.realpath(host_dir))
+
+
+def test_a_plugin_that_cannot_be_placed_is_its_reference_and_is_not_remembered(tmp_path):
+    importer = FakeProject("//other", tmp_path, {})
+    ctx = FakeContext()
+    assert pfe.plugin_object_path(ctx, importer, "//host:repo") == "//host:repo"
+    # Once the package can be loaded, its place is found after all.
+    ctx._projects["//host"] = FakeProject("//host", tmp_path, {"repo": {"type": "basic"}})
+    assert pfe.plugin_object_path(ctx, importer, "//host:repo").endswith(":repo")
+    assert pfe.plugin_object_path(ctx, importer, "//host:repo") != "//host:repo"

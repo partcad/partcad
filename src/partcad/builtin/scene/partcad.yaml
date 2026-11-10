@@ -1,13 +1,13 @@
 # The scenes PartCAD ships with itself.
 #
 # One scene, and it is a template: `subject` places whatever is being simulated
-# and nothing else. It exists because `simulate:` has to name a scene -- a
+# and nothing else. It exists because `qual: sim:` has to name a scene -- a
 # simulation is of a thing *in a world*, and a part on its own has no world --
 # and most of the time the world nothing else stands in is the right one.
 #
 # A package that needs more than that (a fixture to drop the part onto, a
 # conveyor to push it along) writes a scene of its own and names it in
-# `simulate: { scene: ... }`. There is nothing special about this one: it is an
+# `qual: sim: { <name>: { scene: ... } }`. There is nothing special about this one: it is an
 # ordinary `assy` scene in an ordinary package, and the only thing that makes it
 # the default is that `simulation.py` falls back to it.
 #
@@ -20,7 +20,7 @@
 #
 # Nor does it state a `gravity:` or a `medium:`, and that *is* what it says:
 # Earth's gravity as the engine has it, in a vacuum -- which is what every
-# simulation meant before a scene could say anything else. A `simulate:` cannot
+# simulation meant before a scene could say anything else. A `qual: sim:` cannot
 # ask this scene for water, deliberately. The fluid a part is simulated in is a
 # fact about the world, like the fixture it stands on, and a package that wants
 # its part under water writes a scene that is under water (see
@@ -31,7 +31,7 @@
 name: //builtin/scene
 desc: |
   The scenes PartCAD ships with itself. `subject` is the empty world that holds
-  the object being simulated, and is the scene a `simulate:` gets when it names
+  the object being simulated, and is the scene a `qual: sim:` gets when it names
   none of its own.
 
 scenes:
@@ -40,18 +40,18 @@ scenes:
     path: subject.assy
     desc: |
       An empty world holding one object: whatever `subject` names, placed where
-      `subject_offset` puts it. The scene a `simulate:` that names no scene of
+      `subject_offset` puts it. The scene a `qual: sim:` that names no scene of
       its own is run in.
     parameters:
       # The full path of the object being simulated ("//package:part"). Assigned
-      # by `pc sim` from the object whose `simulate:` is being run -- always,
+      # by `pc qual test --simulation` from the object whose `qual: sim:` is being run -- always,
       # and whatever else the declaration says. Empty means "nothing to place",
       # which is what makes this scene declarable without being runnable.
       subject:
         type: string
         default: ""
       # Which kind of object that is - `part`, `assembly` or `scene` - since an
-      # ASSY link names each with a key of its own. `pc sim` fills it in from
+      # ASSY link names each with a key of its own. `pc qual test --simulation` fills it in from
       # what it resolved. A scene placed here keeps its elements bodies of their
       # own, and an assembly is one articulated body tree whose root is free:
       # this world welds nothing to itself.

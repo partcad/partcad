@@ -69,7 +69,7 @@ On the command line
   pc cae dynamic :bracket                                     # every scenario
   pc cae dynamic -f bolted-down :bracket                      # one of them
   pc ide view --analysis-dynamic :bracket                     # shown in the panel
-  pc test -f dynamic :bracket                                 # as the check pc test runs
+  pc qual test -f dynamic :bracket                                 # as the check pc qual test runs
 
 Who runs it
 ===========

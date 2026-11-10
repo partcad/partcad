@@ -167,7 +167,7 @@ bound the one freedom of a ``revolute`` or ``prismatic`` motion and the turn of 
 type implies -- the same travel said in the short form:
 
 * a side ``limits`` does not state is the parameter's own;
-* a side the parameter states as well has to say the same, or ``pc test`` fails
+* a side the parameter states as well has to say the same, or ``pc qual test`` fails
   the assembly's ``connect`` check (and the parameter's range is used);
 * YAML's own infinity states a side open whatever the parameter's range says:
   ``limits: {lower: -.inf, upper: .inf}`` is how a parameter declared with a range
@@ -189,7 +189,7 @@ siblings along a principal axis, ``angle`` and ``offset`` along any other (the
 names ``pc convert assembly -t assy`` writes). Either way a connection can give
 it a value. ``dof`` is the declaration and ``type`` its short form, so a
 ``motion:`` that states both is asserting that they say the same thing: where they
-do not, ``pc test`` fails the ``connect`` check (the joint is built from the
+do not, ``pc qual test`` fails the ``connect`` check (the joint is built from the
 ``dof``); where they do, the ``type``'s ``limits`` bound the parameters ``dof``
 names, as above.
 
@@ -267,7 +267,7 @@ What it costs
 ``physics:`` on an interface, a mating or a connection, with the precedence of
 ``motion:``. Where both interfaces state physics they are taken together, and a
 value they both state has to agree, or the mating has to state its own: two
-dampers in series do not add, so there is no sum to take. ``pc test`` reports a
+dampers in series do not add, so there is no sum to take. ``pc qual test`` reports a
 disagreement.
 
 Damping and a joint's friction are SI per unit of the joint's motion -

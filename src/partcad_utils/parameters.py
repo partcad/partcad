@@ -14,10 +14,18 @@ to share this one -- which is why it lives here.
 The values a request assigns ('-p'/'--param') are read here for the same
 reason: 'pc' checks them before sending, the MCP server writes them, and the
 daemon reads them, and three readings of '<name>=<value>' would be three answers.
+
+So is what 'shared: true' on a declaration means -- a package-level parameter,
+one value for every object of the package that declares it -- and the rule that
+every declaration of one name in a package agrees about it: PartCAD refuses a
+package that breaks it as it loads the package, and 'pc lint' and the editor
+report it where it is written (see 'shared_parameter_problems').
 """
 
+import copy
 import decimal
 import re
+from typing import Mapping, NamedTuple, Optional
 
 from .logging import debug
 from .utils import format_parameterized_name
@@ -255,3 +263,317 @@ def assign(name: str, values) -> str:
     if not values:
         return name
     return format_parameterized_name(name, {key: format_assignment(value) for key, value in values.items()})
+
+
+# ---- package-level (shared) parameters -------------------------------------
+#
+# A declaration that says 'shared: true' is not a parameter of its object alone:
+# it is a parameter of the package, and every object of the package that
+# declares a parameter of that name with 'shared: true' has the one value. The
+# motivating case is a package of plugins for one website -- a repository and a
+# provider that need the same API token -- where logging in once has to serve
+# both. See 'partcad.shared_parameters' for how PartCAD holds the value.
+
+# The key a declaration says it is shared with. Absent means false.
+SHARED = "shared"
+
+# The keys shared declarations of one name may differ in: what a person reads
+# about the parameter, never what it is or what it is worth.
+SHARED_MAY_DIFFER = ("desc", "description")
+
+# The kinds of object a 'partcad.yaml' declares parameters on, and the section
+# each is declared in. Materials, colours and finishes are parametric too, but a
+# value of theirs names a declaration rather than configuring one, and none of
+# them is ever a client of anything: they are not shared.
+PARAMETERIZED_SECTIONS = {
+    "interface": "interfaces",
+    "sketch": "sketches",
+    "part": "parts",
+    "assembly": "assemblies",
+    "scene": "scenes",
+    "software": "software",
+    "provider": "providers",
+    "repository": "repositories",
+}
+
+# The movement parameters that need no 'dir' because their axis is in their
+# name. Both spellings: an interface's own 'parameters:' uses 'moveX' and a
+# 'mates:' section uses 'move-x', and both have always been accepted.
+MOVEMENT_PARAMETER_NAMES = frozenset(
+    ["move%s" % axis for axis in "XYZ"]
+    + ["turn%s" % axis for axis in "XYZ"]
+    + ["move-%s" % axis for axis in "xyz"]
+    + ["turn-%s" % axis for axis in "xyz"]
+)
+
+# The keys that only a freedom-of-movement parameter has, and the two values of
+# 'type' that only it uses.
+MOVEMENT_PARAMETER_KEYS = ("min", "max", "dir")
+MOVEMENT_PARAMETER_TYPES = ("move", "turn")
+
+
+def is_movement_parameter(name: str, declaration) -> bool:
+    """Whether an entry of an interface's 'parameters:' is freedom of movement rather than a value.
+
+    See 'partcad.interface_config' for the rules, which this reads in order. A
+    movement parameter is what a connection may still do, never a value an
+    object is built with, so it is never shared.
+    """
+    if name in MOVEMENT_PARAMETER_NAMES:
+        return True
+    if isinstance(declaration, (list, tuple)):
+        return True
+    if isinstance(declaration, dict):
+        if any(key in declaration for key in MOVEMENT_PARAMETER_KEYS):
+            return True
+        if declaration.get("type") in MOVEMENT_PARAMETER_TYPES:
+            return True
+    return False
+
+
+def is_shared(declaration) -> bool:
+    """Whether a parameter declaration is a package-level one ('shared: true')."""
+    return isinstance(declaration, dict) and declaration.get(SHARED) is True
+
+
+class Declaration(NamedTuple):
+    """One declaration of a parameter: the object declaring it, and what it says, expanded."""
+
+    kind: str
+    object: str
+    declaration: dict
+
+
+def parameter_declarations(sections: Mapping) -> dict:
+    """Every parameter declaration of a package, by parameter name.
+
+    ``sections`` maps a kind of :data:`PARAMETERIZED_SECTIONS` to that kind's
+    declarations as ``{object: config}``; a kind that is absent or None is left
+    out. Each declaration is an expanded copy (see 'normalize_parameters'), so
+    'size: 3' and '{type: int, default: 3}' are the same declaration. An
+    interface's freedom of movement is left out (see 'is_movement_parameter').
+    """
+    found = {}
+    for kind in PARAMETERIZED_SECTIONS:
+        declarations = sections.get(kind)
+        if not isinstance(declarations, Mapping):
+            continue
+        for object_name, config in declarations.items():
+            if not isinstance(config, Mapping):
+                continue
+            declared = config.get("parameters")
+            if not isinstance(declared, Mapping):
+                continue
+            for param_name, declaration in declared.items():
+                if kind == "interface" and is_movement_parameter(param_name, declaration):
+                    continue
+                expanded = normalize_parameters({param_name: copy.deepcopy(declaration)})[param_name]
+                if not isinstance(expanded, dict):
+                    continue
+                found.setdefault(param_name, []).append(Declaration(kind, str(object_name), expanded))
+    return found
+
+
+def comparable(declaration: dict) -> dict:
+    """What shared declarations of one name have to agree on: everything but 'SHARED_MAY_DIFFER'."""
+    return {key: value for key, value in declaration.items() if key not in SHARED_MAY_DIFFER}
+
+
+def differences(first: dict, second: dict, ignore=()) -> list:
+    """The keys two declarations say different things about, sorted, leaving out 'ignore'."""
+    one, other = comparable(first), comparable(second)
+    return sorted(key for key in set(one) | set(other) if key not in ignore and one.get(key) != other.get(key))
+
+
+class SharedProblem(NamedTuple):
+    """Declarations of one parameter name that a package may not have together.
+
+    ``declarations`` are all of the package's declarations of ``name``: each is
+    refused, since which of them is the mistake is the author's to say.
+    """
+
+    name: str
+    declarations: list
+    message: str
+
+
+def _objects(declarations) -> str:
+    named = ["the %s '%s'" % (d.kind, d.object) for d in declarations]
+    if len(named) == 1:
+        return named[0]
+    return ", ".join(named[:-1]) + " and " + named[-1]
+
+
+def shared_parameter_problems(declarations: Mapping) -> list:
+    """The parameter names a package declares in ways that cannot be one shared parameter.
+
+    ``declarations`` is what 'parameter_declarations' answers. Within one
+    package every declaration of a name agrees on 'shared': all of them say
+    'shared: true', or none of them does -- a name that is one value for some
+    objects and a value of its own for others would mean two things depending
+    on which object it was set through. And the shared declarations of a name
+    are one parameter, so they agree on everything else too -- its 'type', its
+    'default', its 'enum' -- and may differ only in 'desc'.
+
+    Read by PartCAD as it loads a package (see
+    'Project._refuse_shared_parameter_disagreements') and by the linter
+    ('assy_lint.check_shared_parameters'), so that both say the same thing in
+    the same words.
+    """
+    problems = []
+    for name, found in declarations.items():
+        shared = [d for d in found if is_shared(d.declaration)]
+        if not shared:
+            continue
+        if len(shared) != len(found):
+            others = [d for d in found if not is_shared(d.declaration)]
+            problems.append(
+                SharedProblem(
+                    name,
+                    list(found),
+                    "The parameter '%s' is declared 'shared: true' by %s, and not by %s: every declaration of a "
+                    "parameter in one package says 'shared: true', or none of them does (absent is false)"
+                    % (name, _objects(shared), _objects(others)),
+                )
+            )
+            continue
+        first = shared[0]
+        for other in shared[1:]:
+            keys = differences(first.declaration, other.declaration)
+            if keys:
+                problems.append(
+                    SharedProblem(
+                        name,
+                        list(found),
+                        "The shared parameter '%s' is declared differently by %s and %s (%s): the shared "
+                        "declarations of a name are one parameter, and may differ only in 'desc'"
+                        % (name, _objects([first]), _objects([other]), ", ".join("'%s'" % k for k in keys)),
+                    )
+                )
+                break
+    return problems
+
+
+class SharedValue(NamedTuple):
+    """What the user's configuration sets a shared parameter to.
+
+    ``found`` says whether it sets it at all, and ``value`` is then the value as
+    written (the declared type reads it, see 'coerce_parameter_value').
+    ``source`` is the entry it came from. ``conflict`` says why the per-object
+    entries were passed over, when they disagree.
+    """
+
+    found: bool
+    value: object = None
+    source: Optional[str] = None
+    conflict: Optional[str] = None
+
+
+def shared_override(package_name: str, param_name: str, sharers, overrides: Mapping) -> SharedValue:
+    """The value the user's overrides give the shared parameter 'param_name' of a package.
+
+    ``overrides`` is object name -> {parameter: value}, the 'parameters:' of
+    '~/.partcad/config.yaml' with '--extra-param' on top
+    ('partcad.config.parameter_overrides'); ``sharers`` the names, within the
+    package, of the objects sharing the parameter. Two kinds of entry set it:
+
+    - one per object, as for any parameter ('<package>:<object>'). Setting it
+      through any of the objects that share it sets it for all of them, so every
+      one of their entries is read, not only the entry of the object asked
+      about;
+    - one for the whole package ('<package>', with no object), which is where
+      'pc login' saves a shared credential.
+
+    An object's entry is the more specific of the two and wins, which is what
+    makes '--extra-param <package>:<object>.<parameter>=...' work over a value
+    the configuration file sets for the package. Two object entries that
+    disagree cannot both be the package's value, and neither is guessed
+    between: both are passed over, with ``conflict`` saying so, and the
+    package's entry or the declared default stands.
+    """
+    package_entry = overrides.get(package_name)
+    per_object = []
+    for sharer in sharers:
+        key = "%s:%s" % (package_name, sharer)
+        entry = overrides.get(key)
+        if isinstance(entry, Mapping) and param_name in entry:
+            per_object.append((key, entry[param_name]))
+    conflict = None
+    if per_object:
+        values = {_comparable_value(value) for _key, value in per_object}
+        if len(values) == 1:
+            return SharedValue(True, per_object[0][1], per_object[0][0])
+        conflict = (
+            "The shared parameter '%s' of '%s' is set to different values for %s: it is one value for all of "
+            "them, so none of these is used. Set it once, under 'parameters: %s:' in your configuration"
+            % (param_name, package_name, ", ".join("'%s'" % key for key, _value in per_object), package_name)
+        )
+    if isinstance(package_entry, Mapping) and param_name in package_entry:
+        return SharedValue(True, package_entry[param_name], package_name, conflict)
+    return SharedValue(False, conflict=conflict)
+
+
+def _comparable_value(value):
+    # What two entries are compared by: their text, so that '4' typed on a
+    # command line and 4 written in YAML are one value, and lists hash.
+    if isinstance(value, (list, tuple)):
+        return tuple(_comparable_value(item) for item in value)
+    return format_assignment(value)
+
+
+def package_of(object_name: str) -> str:
+    """The package an object's full name ('//pub/x:bolt') is in: everything before the first ':'.
+
+    A package's name holds no ':' of its own, so the first one is where the
+    object's name starts.
+    """
+    return object_name.partition(":")[0]
+
+
+def place_saved_overrides(entries, object_name: str, values: Mapping, package_name: str = None, shared=()) -> None:
+    """Put the values 'pc login' saves for 'object_name' where they will be read, in 'entries'.
+
+    ``entries`` is the 'parameters:' of a user's configuration, as a mutable
+    mapping of object name -> {parameter: value}. A value for a parameter in
+    ``shared`` is a value of the package's, so it goes under the package's own
+    entry (``package_name``), and every object entry of that package that sets
+    the parameter loses it: those are more specific and would win
+    ('shared_override'), so a value saved by an earlier login through another
+    of the objects would otherwise go on being used, or conflict with this one.
+    Every other value goes under the object, as it always has. An object entry
+    left with nothing in it is removed.
+    """
+    shared = set(shared or ()) if package_name else set()
+    own = {name: value for name, value in values.items() if name not in shared}
+    common = {name: value for name, value in values.items() if name in shared}
+    if common:
+        prefix = package_name + ":"
+        for key in list(entries.keys()):
+            if not isinstance(key, str) or not key.startswith(prefix):
+                continue
+            entry = entries[key]
+            if not isinstance(entry, Mapping):
+                continue
+            stale = [name for name in common if name in entry]
+            if not stale:
+                continue
+            remaining = {name: value for name, value in entry.items() if name not in common}
+            if not remaining:
+                del entries[key]
+                continue
+            for name in stale:
+                del entry[name]
+        _merge_entry(entries, package_name, common)
+    if own:
+        _merge_entry(entries, object_name, own)
+
+
+def _merge_entry(entries, key: str, values: Mapping) -> None:
+    entry = entries.get(key) if hasattr(entries, "get") else None
+    if entry is None:
+        entries[key] = dict(values)
+        return
+    if not isinstance(entry, Mapping):
+        raise ValueError("'parameters: %s' is not a mapping" % key)
+    for name, value in values.items():
+        entry[name] = value

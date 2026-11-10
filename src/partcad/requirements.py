@@ -5,14 +5,14 @@
 #
 """What an object is required to be, and whether the CAD model is it.
 
-``simulate:`` says what an object is supposed to *do*. ``requirements:`` says
+``qual: sim:`` says what an object is supposed to *do*. ``requirements:`` says
 what it is supposed to *be*, and it is written before the design is, in the
 terms whoever asked for the design thinks in:
 
     features    a name for each thing the object has to have or do, with a
                 sentence saying what. Free text, because most of what a product
                 is asked for is not a number: "takes an M3 screw from either
-                side", "survives a drop from a desk". A ``simulate:`` entry can
+                side", "survives a drop from a desk". A ``qual: sim:`` entry can
                 name the feature it demonstrates (``feature:``), and so can a
                 scenario of an engineering analysis (``fea: <name>:``, see
                 'partcad.cae') -- "carries a full shelf" is demonstrated by the
@@ -36,7 +36,7 @@ terms whoever asked for the design thinks in:
                 'pc compare' reads two objects by (see 'partcad.compare');
                 'weight' is accepted for 'mass'.
 
-The last four are what ``pc test`` checks (the ``requirements`` test, see
+The last four are what ``pc qual test`` checks (the ``requirements`` test, see
 'test/requirements.py'), and this module is the one place that says what they
 mean -- the test, the daemon's ``requirements.check`` that the IDE's
 Requirements tab is drawn from, and anything else that asks, all go through
@@ -94,14 +94,14 @@ INTERFACES = "interfaces"
 PHYSICS = "physics"
 MATCH = "match"
 
-# The sections 'pc test' verifies against the model, in the order a report
+# The sections 'pc qual test' verifies against the model, in the order a report
 # lists them. 'features' is not one of them: a feature is prose.
 STRUCTURED = (PORTS, INTERFACES, PHYSICS, MATCH)
 
 # Where a feature reference that names nothing is reported: it is a mistake in
-# a 'simulate:' entry, not in the requirements. One an analysis scenario makes
+# a simulation (`qual: sim:`), not in the requirements. One an analysis scenario makes
 # is reported under the analysis's own section ('fea', 'cfd', ...).
-SIMULATE = "simulate"
+SIMULATE = "sim"
 
 # How close two numbers have to be to be the same number: a millimetre of
 # position, a component of a unit vector and a degree are all compared with it.
@@ -548,7 +548,7 @@ class Declaration:
 
     @property
     def structured(self) -> bool:
-        """Whether anything here is for 'pc test' to check."""
+        """Whether anything here is for 'pc qual test' to check."""
         return bool(self.ports or self.interfaces or self.physics or self.match or self.problems)
 
     @property
@@ -1001,7 +1001,7 @@ class Report:
         self.declaration = declaration
         self.verified = False
         self.checks: list = []
-        # feature name -> the 'simulate:' entries that name it, in declaration order.
+        # feature name -> the 'qual: sim:' entries that name it, in declaration order.
         self.simulations: dict = {}
         # feature name -> the analysis scenarios that name it, as
         # {"analysis": "fea", "name": "<scenario>"}, in the order 'cae.ANALYSES'
@@ -1038,7 +1038,7 @@ class Report:
 
 
 def _feature_references(shape, declaration: typing.Optional[Declaration], report: Report) -> None:
-    """Which 'simulate:' entries and analysis scenarios demonstrate which feature, and which name one nobody declared."""
+    """Which 'qual: sim:' entries and analysis scenarios demonstrate which feature, and which name one nobody declared."""
     from . import cae, simulation
 
     features = declaration.features if declaration is not None else {}
@@ -1380,7 +1380,7 @@ def _declared(shape):
     """The report on 'shape' with nothing verified, and its checks by section.
 
     Every check a verified report will hold is already in it - the
-    declarations that cannot be read, a 'simulate:' entry or an analysis
+    declarations that cannot be read, a 'qual: sim:' entry or an analysis
     scenario naming a feature nobody declares, and a line per port, interface
     and physical property -
     so whether there is anything to check is known before anything is built.
@@ -1404,7 +1404,7 @@ def _declared(shape):
 
 
 def anything_to_check(shape) -> bool:
-    """Whether 'pc test' has anything to check 'shape' against: what its 'requirements' test applies to."""
+    """Whether 'pc qual test' has anything to check 'shape' against: what its 'requirements' test applies to."""
     return bool(_declared(shape)[0].checks)
 
 

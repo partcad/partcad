@@ -7,7 +7,7 @@
 """The built-in G-code route implementation, run in this process.
 
 `//builtin/cam`'s `cam_gcode.py` is a script the sandbox executes, so everything
-that reaches it end to end -- `pc cam`, `pc test -f cam`, `features/cam.feature`
+that reaches it end to end -- `pc cam`, `pc qual test -f cam`, `features/cam.feature`
 -- runs it in an interpreter this one cannot see into. That is the right way to
 *use* it and a poor way to test it: a failure arrives as a sentence from another
 process, and the arithmetic that produces the route is never examined on its own.

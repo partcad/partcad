@@ -130,12 +130,12 @@ async def tree_async(ctx, obj, force_manufacturing: bool = False) -> tuple:
     Returns '(tree, index)'. See the module docstring for what the tree is, and
     the contract its fields keep in 'ide/vscode/src/webview/messages.ts'.
 
-    Each node says what 'pc test -f manufacturability' would let it be, as far
+    Each node says what 'pc qual test -f manufacturability' would let it be, as far
     as that can be known from the declarations alone (see
     '_manufacturable', '_part_problems' and '_assembly_problems'). Whether a
     supplier has it today, whether its geometry suits its method and whether its
     software can be fetched are not here: they are the market's question and the
-    geometry's, which 'pc test' and the Buy tab ask.
+    geometry's, which 'pc qual test' and the Buy tab ask.
 
     'force_manufacturing' is '--ignore-manufacturability': the object is to be
     taken as manufacturable whatever it says, and so is everything in it.
@@ -161,7 +161,7 @@ def _manufacturable(obj, forced: bool) -> bool:
 
 
 def _part_problems(part, made: bool, bought: bool) -> list:
-    """What stops a part from being made, of what 'pc test' checks without geometry.
+    """What stops a part from being made, of what 'pc qual test' checks without geometry.
 
     Only asked of a part that says how it is made. Each is a failure of the
     manufacturability test's part path, worded as the test words it.
@@ -189,7 +189,7 @@ def _part_problems(part, made: bool, bought: bool) -> list:
 
 
 async def _tolerance_problem(part) -> Optional[str]:
-    from .test.manufacturability import tolerance_failure
+    from .qual.basic.manufacturability import tolerance_failure
 
     try:
         return await tolerance_failure(part)
@@ -198,7 +198,7 @@ async def _tolerance_problem(part) -> Optional[str]:
 
 
 def _assembly_problems(assembly, content, bought: bool) -> list:
-    """What stops an assembly from being put together, of what 'pc test' checks without geometry.
+    """What stops an assembly from being put together, of what 'pc qual test' checks without geometry.
 
     An assembly is put together by following its Assembly YAML (ASSY) file - the
     one manufacturing method an assembly has (see

@@ -758,7 +758,7 @@ follow from an analysis not being a file type of the object:
   behalf would put a name on a file whose contents are something else.
 * **The implementation reports findings.** Beside ``success`` it returns
   ``findings``, a JSON array of what it has to say about the part. An empty one
-  is a pass, and is what the analysis checks of ``pc test`` require.
+  is a pass, and is what the analysis checks of ``pc qual test`` require.
 
 The file it writes is named after the analysis and the scenario as well as the
 object -- ``bracket.fea.loaded.glb`` -- because a part has as many results as it

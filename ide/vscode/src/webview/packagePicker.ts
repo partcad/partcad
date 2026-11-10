@@ -13,7 +13,7 @@
 // the list offers the packages PartCAD knows of for the job, that one marked;
 // and the field takes any other name too, because a package of the user's own,
 // or one nobody has registered yet, is as good a package as any of those. What
-// is in the field is what 'pc render -e', 'pc sim --plugin' and 'pc cae -i'
+// is in the field is what 'pc render -e', 'pc qual test --simulation --plugin' and 'pc cae -i'
 // would be given.
 //
 // Not a <select>, which cannot take a name it does not list, and not an <input>
