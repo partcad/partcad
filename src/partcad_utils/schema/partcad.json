@@ -533,6 +533,7 @@
       "type": ["object", "null"],
       "properties": {
         "desc": { "type": "string", "maxLength": 1000 },
+        "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
         "path": { "type": "string", "minLength": 1, "description": "The script that runs the simulation, relative to the package that declares it" },
         "package": { "type": "string", "minLength": 1, "description": "The package holding 'path', when it is not this one" },
         "format": { "type": "string", "minLength": 1, "description": "The file type the scene is exported to before the plugin is started" },
@@ -554,6 +555,7 @@
       "type": ["object", "null"],
       "properties": {
         "desc": { "type": "string", "maxLength": 1000 },
+        "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
         "path": { "type": "string", "minLength": 1, "description": "The reader script, relative to the package that declares it" },
         "package": { "type": "string", "minLength": 1, "description": "The package holding 'path', when it is not this one" },
         "extension": {
@@ -595,6 +597,7 @@
       "type": ["object", "null"],
       "properties": {
         "desc": { "type": "string", "maxLength": 1000 },
+        "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
         "displayName": { "type": "string", "minLength": 1, "description": "What the application is called in a message" },
         "formats": {
           "type": "array",
@@ -816,6 +819,7 @@
       "type": ["object", "null"],
       "properties": {
         "desc": { "type": "string", "maxLength": 1000 },
+        "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
         "path": { "type": "string", "minLength": 1, "description": "The script that runs the test, relative to the package that declares it (see wrappers/wrapper_qual.py)" },
         "package": { "type": "string", "minLength": 1, "description": "The package holding 'path', when it is not this one" },
         "subtype": { "type": "string", "enum": ["basic", "topology", "other"], "default": "other", "description": "What the test produces: words ('basic'), places on the object ('topology'), or a report of its own ('other')" },
@@ -1035,6 +1039,7 @@
           "type": "object",
           "properties": {
             "desc": { "type": "string", "maxLength": 1000 },
+            "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
             "path": { "type": "string", "minLength": 1 },
             "package": { "type": "string", "minLength": 1 },
             "pythonRequirements": { "type": "array", "items": { "type": "string" } },
@@ -1044,6 +1049,11 @@
               "type": "boolean",
               "default": false,
               "description": "Whether this file has to come out byte-for-byte the same every time it is written from the same object. Set to true for a drawing that is kept in a repository, so that a diff answers whether it changed: the built-in 2D projections then go through OpenCASCADE's exact hidden-line algorithm rather than the polygonal one, every number is rounded to the precision the file type claims, and a DXF gets fixed header metadata instead of the clock and a fresh pair of GUIDs. Off by default because the exact projection is much the slower of the two on a large assembly. Unlike the other fields here it is also handed to the implementation, so an implementation another package supplies reads it and means the same thing by it"
+            },
+            "visuals": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether what this implementation writes is a picture of an object - what it looks like - so that every part with a 'visual:' is drawn as that visual. The implementing package's word, read from its own declaration of the file type and from no other layer, and only in a 'render:' section: PartCAD's own SVG, PNG and JPEG and its videos say it; its DXF, every export, and a file type another package implements without saying it draw each part as it is"
             },
             "filter": {
               "$ref": "#/definitions/link-filter",
@@ -1419,6 +1429,15 @@
       ],
       "minItems": 3,
       "maxItems": 3
+    },
+    "object-private": {
+      "description": "Whether this object is its package's own: 'true', and a reference written in another package - an ASSY link, an alias or an enrich, the sketch an extrusion names, a part's 'visual:' - cannot name it, while every object of its own package can. Commands (pc, the IDE, an agent's MCP tools) still reach it by name. Not the package's own top-level 'private:', which says the package does not track the public index.",
+      "type": "boolean",
+      "default": false
+    },
+    "part-visual": {
+      "description": "The part drawn in this part's place in a picture - the Digital Thread's 3D view, and a 'render:' file type whose implementation says 'visuals: true' (PartCAD's own SVG, PNG and JPEG, and its videos) - and nowhere else: never in an export, a DXF, a dimensioned drawing, a test, an analysis or a simulation, which all take the part as it is. A reference to a part, as a link names one; it is asked for with this part's own values of every parameter it declares too, and the ones it names on top.",
+      "$ref": "#/definitions/object-reference"
     },
     "object-reference": {
       "description": "A reference to another object: a name of this package ('m3-thru'), or one qualified with a package path ('//std/metric/m:m3-thru'), either of them carrying parameter values ('m-thru;size=4,depth=3'). A value may be a '%...%' expression over the parameters of the object the reference is written in ('m-thru;size=%size + 1%'), which is why a complete expression is allowed anywhere in the name - it is resolved before the reference is looked up.",
@@ -2205,7 +2224,7 @@
                     "basic", "cadquery", "build123d", "chili3d", "sdf", "svg", "dxf", "extrude",
                     "sweep", "stl", "step", "scad", "3mf", "enrich", "alias", "brep",
                     "obj", "gltf", "kicad", "compound", "fcstd", "wall", "iges", "f3d",
-                    "sldprt", "ipt", "catpart", "sat", "pvz", "usd"
+                    "sldprt", "ipt", "catpart", "sat", "pvz", "usd", "boolean"
                   ]
                 },
                 "aliases": {
@@ -2228,6 +2247,23 @@
                   "uniqueItems": true
                 },
                 "sketch": { "type": "string", "minLength": 1 },
+                "operation": {
+                  "type": "string",
+                  "enum": ["and", "or", "xor"],
+                  "description": "'boolean' only: how the two 'parts' are combined. 'and' is the material both occupy, 'or' the material either occupies, 'xor' the material exactly one of them occupies - or, with 'whole', the same of their solids, each kept whole."
+                },
+                "parts": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "description": "'boolean' only: the two parts the 'operation' combines, the first first: where a solid of the result is a piece of both, it is made of what the first is made of. References, resolved against this package like any other, and they may carry parameters."
+                },
+                "whole": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "'boolean' only: combine the two parts by their solids rather than by their volume. A solid of one part is in the other when it lies wholly inside it, and nothing is cut: 'and' keeps the solids of the first that lie inside the second, which is how one piece of a model of several touching pieces is taken out of it by a box around it."
+                },
                 "depth": { "type": "number" },
                 "cuboid": { "$ref": "#/definitions/part-cuboid" },
                 "cylinder": { "$ref": "#/definitions/part-cylinder" },
@@ -2257,6 +2293,18 @@
                 "openings": {
                   "type": "string",
                   "description": "'wall' only: the sketch the wall's doors and windows are cut out by, drawn on the XY plane as if the wall were unrolled flat - X along its base from 0 to 'length', Y up from 0 to 'height'. An opening reaching beyond the wall is an error. Empty, or absent, for none; a '%...%' expression over the part's parameters is resolved."
+                },
+                "thickness": {
+                  "type": ["number", "string"],
+                  "description": "'wall' only: how far the wall goes back from its face, in millimetres - away from the side it is seen from, outside a room traced clockwise. 0, or absent, is a one-sided surface with no body; anything more is the solid that surface is the face of: its elevation, the openings cut out, extruded through the thickness - straight back for a straight wall, along the radius for an arc wall. A number, or a '%...%' expression over the part's parameters."
+                },
+                "extendStart": {
+                  "type": ["number", "string"],
+                  "description": "'wall' with a 'thickness', straight, only: how far its solid goes on past its start, in millimetres along its base, or stops short of it where negative - how two walls meet at a corner with no gap and no overlap. The face stays where it is. A number, or a '%...%' expression over the part's parameters."
+                },
+                "extendEnd": {
+                  "type": ["number", "string"],
+                  "description": "'wall' with a 'thickness', straight, only: as 'extendStart', past its end."
                 },
                 "cache": { "type": "boolean", "default": true },
                 "requirements": { "$ref": "#/definitions/requirements" },
@@ -2398,6 +2446,8 @@
                   "minimum": 0,
                   "description": "How precisely this part has to be made, in millimetres. Only for the part types that take it -- 'step' and 'kicad' -- whose file may state a tolerance of its own; every other type states this as the 'tolerance' parameter instead. What is declared here is what is used; the file is read only when nothing is."
                 },
+                "private": { "$ref": "#/definitions/object-private" },
+                "visual": { "$ref": "#/definitions/part-visual" },
                 "unless": { "$ref": "#/definitions/unless" },
                 "connect": { "$ref": "#/definitions/connect" },
                 "software": { "$ref": "#/definitions/software-refs" }
@@ -2414,6 +2464,7 @@
                   "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
+                "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
                 "parameters": { "$ref": "#/definitions/shape-parameter" },
                 "fileFrom": { "type": "string", "enum": ["url"] },
                 "fileUrl": { "$ref": "#/definitions/url" },
@@ -2452,6 +2503,7 @@
                   "description": "'assy' is an Assembly YAML file, 'step' a STEP assembly, 'f3d' an Autodesk Fusion design, 'pvz' a Creo View package, 'gltf' a glTF scene ('.gltf' or '.glb') with a part per mesh, 'urdf' a URDF robot description. A format an engine's plugin package implements is not in this list and is named through that package - 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
+                "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
                 "images": {
                   "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
                   "type": "array",
@@ -2527,6 +2579,7 @@
                   "minimum": 1,
                   "description": "How many seconds working on this assembly may go without a word from the daemon before a client gives up on it, in place of the default of 300 (PC_DAEMON_IDLE_TIMEOUT). Declaring it also marks the assembly as slow: a command run with '--fast-only' passes over it"
                 },
+                "private": { "$ref": "#/definitions/object-private" },
                 "unless": { "$ref": "#/definitions/unless" },
                 "connect": { "$ref": "#/definitions/connect" },
                 "map": { "$ref": "#/definitions/port-map" },
@@ -2547,6 +2600,7 @@
                   "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
+                "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
                 "fileUrl": { "$ref": "#/definitions/url" },
@@ -2600,6 +2654,7 @@
                   "description": "'assy' is an Assembly YAML file read as a scene, which is the same format without the 'how' sections. 'walls' is the walls of a room standing on the outline of a sketch ('sketch', 'height', 'wall'), with no file at all. An engine's own scene format is implemented by that engine's plugin package and is named through it - 'sim-gazebo:world' for a Gazebo world (SDFormat), 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
+                "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
                 "fileUrl": { "$ref": "#/definitions/url" },
@@ -2616,7 +2671,11 @@
                 "wall": {
                   "type": "string",
                   "minLength": 1,
-                  "description": "'walls' only: the part each wall is, asked for with the parameters 'length', 'height' and 'radius'. '//builtin/building:wall' unless this says otherwise."
+                  "description": "'walls' only: the part each wall is, asked for with the parameters 'length', 'height' and 'radius', and 'thickness' when the scene states one. '//builtin/building:wall' unless this says otherwise."
+                },
+                "thickness": {
+                  "type": ["number", "string"],
+                  "description": "'walls' only: how thick each wall is, in millimetres, outside the outline - passed to every wall as its 'thickness'. Absent, the wall part's own default stands. A number, or a '%...%' expression over the scene's parameters."
                 },
                 "ignoreCollision": {
                   "oneOf": [
@@ -2661,6 +2720,7 @@
                   "minimum": 1,
                   "description": "How many seconds working on this scene may go without a word from the daemon before a client gives up on it, in place of the default of 300 (PC_DAEMON_IDLE_TIMEOUT). Declaring it also marks the scene as slow: a command run with '--fast-only' passes over it"
                 },
+                "private": { "$ref": "#/definitions/object-private" },
                 "unless": { "$ref": "#/definitions/unless" },
                 "properties": { "$ref": "#/definitions/shape-properties" }
               },
@@ -2676,6 +2736,7 @@
                   "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
+                "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
                 "fileUrl": { "$ref": "#/definitions/url" },
@@ -2720,6 +2781,7 @@
           "properties": {
             "type": { "type": "string", "enum": ["basic", "dxf", "svg", "cadquery", "build123d", "enrich", "alias"] },
             "desc": { "type": "string", "maxLength": 1000 },
+            "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
             "qual": { "$ref": "#/definitions/qual" },
             "images": {
               "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
@@ -2727,6 +2789,7 @@
               "items": { "type": "string", "minLength": 1 },
               "uniqueItems": true
             },
+            "private": { "$ref": "#/definitions/object-private" },
             "unless": { "$ref": "#/definitions/unless" },
             "path": { "type": "string", "minLength": 1 },
             "fileFrom": { "type": "string", "enum": ["url"] },
@@ -2864,12 +2927,14 @@
           "properties": {
             "abstract": { "type": "boolean", "default": false },
             "desc": { "type": "string", "maxLength": 1000 },
+            "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
             "images": {
               "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
               "type": "array",
               "items": { "type": "string", "minLength": 1 },
               "uniqueItems": true
             },
+            "private": { "$ref": "#/definitions/object-private" },
             "unless": { "$ref": "#/definitions/unless" },
             "path": { "type": "string", "minLength": 1 },
             "alias": {
@@ -2927,6 +2992,7 @@
           "properties": {
             "type": { "type": "string", "enum": ["store", "manufacturer", "enrich"] },
             "desc": { "type": "string", "maxLength": 1000 },
+            "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
             "path": { "type": "string", "minLength": 1, "description": "The script that implements the provider, relative to the package that declares it. Defaults to '<name>.py'" },
             "source": { "type": "string", "minLength": 1 },
             "package": { "type": "string", "minLength": 1 },
@@ -2955,6 +3021,7 @@
           "properties": {
             "type": { "type": "string", "enum": ["basic", "enrich"] },
             "desc": { "type": "string", "maxLength": 1000 },
+            "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
             "path": { "type": "string", "minLength": 1, "description": "The script that serves the repository (a 'basic' one), relative to the package that declares it. Defaults to '<name>.py'" },
             "source": { "type": "string", "minLength": 1 },
             "package": { "type": "string", "minLength": 1 },
@@ -2999,6 +3066,7 @@
                   "allOf": [{ "$ref": "#/definitions/file-hash" }],
                   "description": "As elsewhere. Software is the one place a missing one is reported before anything is built: see the 'Software' lint check."
                 },
+                "private": { "$ref": "#/definitions/object-private" },
                 "unless": { "$ref": "#/definitions/unless" }
               },
               "additionalProperties": false
@@ -3016,6 +3084,7 @@
           "properties": {
             "kind": { "type": "string", "enum": ["wrapper"] },
             "desc": { "type": "string", "maxLength": 1000 },
+            "url": { "$ref": "#/definitions/url", "description": "Where to read about this: its product page, its datasheet, its documentation." },
             "unless": { "$ref": "#/definitions/unless" },
             "path": { "type": "string", "minLength": 1 },
             "extension": { "type": "string", "minLength": 1, "description": "The extension of the file each part of this type is read from. Declaring one makes the part file-backed: its 'path' is relative to the part's own package and defaults to '<name>.<extension>', 'fileFrom' fetches it, and the script finds it as request['path']" },

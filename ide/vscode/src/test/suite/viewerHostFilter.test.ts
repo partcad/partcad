@@ -102,6 +102,27 @@ suite('The Digital Thread host, asked to render', () => {
         assert.strictEqual(sent[0].withInterfaceNames, false);
         viewer.dispose();
     });
+
+    test("asks the Draft tab's drawing of the parts as they are, and leaves the 2D tab's to the file type", async () => {
+        // A dimensioned drawing is of the object as it is: never of a part's
+        // 'visual:', whichever package draws it. A picture is the file type's call.
+        const viewer = new PartcadViewer(vscode.Uri.file(__dirname));
+        const host = viewer as unknown as {
+            lastShow: unknown;
+            fetchTab(message: Record<string, unknown>): Promise<void>;
+        };
+        host.lastShow = { type: 'show', name: 'logo', kind: 'assembly', package: '//pkg' };
+        sent.length = 0;
+
+        await host.fetchTab({ tab: 'draft', token: 3, format: 'svg', plugin: '//pub/feature/render/draftwright' });
+        await host.fetchTab({ tab: '2d', token: 4, format: 'png' });
+
+        assert.strictEqual(sent.length, 2);
+        assert.strictEqual(sent[0].visuals, false);
+        assert.strictEqual(sent[0].plugin, '//pub/feature/render/draftwright');
+        assert.strictEqual(sent[1].visuals, undefined);
+        viewer.dispose();
+    });
 });
 
 suite('The Digital Thread host, asked what the components cost', () => {

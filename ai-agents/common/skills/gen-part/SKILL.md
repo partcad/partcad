@@ -67,6 +67,12 @@ Pick the script kind that best fits the part — you decide:
 | `sdf` | organic / implicit shapes |
 | `extrude` / `sweep` | a constant profile, straight or along a path: built from the sketch §4 validated, with no script at all |
 
+A part that is two existing parts combined - what both occupy, either, or
+only one - needs no script either: `type: boolean` with `operation: and|or|xor`
+and `parts: [first, second]`, and `whole: true` to take whole solids out of a
+model of several touching ones (a bolt out of a vendor's hub) rather than cut
+by volume. See `docs/source/config_parts.rst`, "Booleans".
+
 A part that is nothing but one box or one cylinder needs no script at all:
 declare it as `type: basic` with a `cuboid:` (a number for a cube, or
 `[x, y, z]` sizes) or a `cylinder:` (`radius`, `height`, standing along Z).
@@ -281,6 +287,45 @@ states no `Mu` (`pc info` shows it under `Material`), give the part a `friction`
 under `properties: physics:` from a datasheet — otherwise the engine uses a
 default nobody chose.
 
+### When what it looks like is not what it is: `visual:` and `private:`
+
+A part is the body `pc qual test` measures, a simulation collides with and an export
+writes. Model **that**: the physical object, a correct solid, whatever a picture
+of it should show. When the right *picture* is something else, give the part a
+`visual:` naming the part drawn in its place, and model the look as a part of
+its own:
+
+```yaml
+parts:
+  <name>:
+    type: <kind>                 # the physical object: a solid
+    ...
+    visual: <name>-look          # what the 3D view and pc render's pictures draw
+  <name>-look:
+    type: <kind>                 # geometry for a picture: may be a surface, a mesh
+    private: true                # nothing outside this package may build on it
+    manufacturable: false
+```
+
+- Use it where the two genuinely differ: a body simplified to what a simulation
+  collides with, drawn as the detailed model it stands for; a wall that is a
+  solid, drawn as the one-sided surface a floor plan shows
+  (`//builtin/building:wall` is exactly that). Not to hide a modelling problem:
+  the part itself still has to pass `pc qual test`.
+- The visual is drawn **only** in pictures: the IDE's 3D view and `pc render`'s
+  SVG, PNG, JPEG and videos. Exports, DXF, the IDE's Draft drawings, every check,
+  analysis, BOM and simulation see the part as it is. So when you compare
+  renders against the description (§7), you are looking at the visual; the
+  dimension table is measured on the part, rendered with `--no-visuals`
+  (`pc --no-ansi render -t svg --no-visuals ... <name>`) where the two differ.
+- The visual is asked for with the part's own values of every parameter it
+  declares too: give it the same parameter names (and `color`) and it follows the
+  part's size and colour.
+- Mark the look `private: true`, and any other object that exists only to build
+  this part - a helper sketch, a stock shape - so that another package cannot
+  come to depend on it. Objects of the same package still use it freely;
+  commands (`pc render`, `pc qual test`, `pc ide view`) still reach it by name.
+
 If you started the project with `pc init`, also delete the empty `sketches:` and
 `assemblies:` sections it leaves — a null section crashes `pc render` on older
 PartCAD (fixed in partcad/partcad#470).
@@ -485,7 +530,10 @@ the features included.
 
 Remove the temporary sketches the part is not built from — their declarations
 and their files (`/pc:gen-sketch` §9) — unless the user wants them kept; keep,
-and describe, the sketch an `extrude` or `sweep` part is built from.
+and describe, the sketch an `extrude` or `sweep` part is built from, and mark it
+`private: true` when nothing outside this package should build on it. If the part
+has a `visual:`, say what it is drawn as and why, and that the visual is
+`private: true`.
 
 If the description claims something physical of the part on its own — it rests
 without rolling, it floats — declare that claim as a `qual: sim:` and check it

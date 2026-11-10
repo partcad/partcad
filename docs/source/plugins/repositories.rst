@@ -140,6 +140,16 @@ of object or a new piece of metadata needs no new API:
   ``pc search parts`` then asks the plugin rather than matching what it lists,
   which is what makes a catalog nobody can list searchable at all.
 
+  A search is recursive by default, so each package of the plugin's tree is
+  asked in turn. A plugin whose search at the top already finds everything
+  below it -- a distributor's catalog, whose categories are only that search
+  narrowed -- says ``"searchScope": "tree"`` in its ``meta``, and is then asked
+  once, at the top of the tree the search reaches, rather than once for each
+  of its categories. One whose packages hold what their parents do not (IKEA's
+  categories) leaves it out, and each is asked. A package that searches counts
+  as having something in it, so ``pc list packages -r`` shows it even when it
+  lists nothing.
+
 ``objects/<kind>/<name>;<param>=<value>,...``
   One parametrized instance, for a package whose ``meta`` lists the kind under
   ``instanceKinds``: the plugin resolves it itself, so a parameter can choose

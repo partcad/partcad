@@ -44,6 +44,7 @@ Declare scenes
                     # implemented by that engine's plugin package and named through it:
                     # "sim-gazebo:world" (a Gazebo world), "sim-mujoco:mjcf" (a MuJoCo model).
       desc: <(optional) textual description>
+      url: <(optional) where to read about it: a product page, a datasheet, a standard>
       path: <(optional) the source file path>
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
       fileUrl: <(fileFrom=url only) the URL to download the source file from>
@@ -155,6 +156,7 @@ a room, worked out from a sketch of its plan:
       type: walls
       sketch: living-room-plan
       height: 2700                    # mm
+      thickness: 150                  # (optional) mm, outside the outline
       wall: //builtin/building:wall   # (optional) the part each wall is
 
 The sketch has to be **one enclosed outline** made of **straight lines and arcs of
@@ -165,20 +167,46 @@ them, each standing where its edge starts and turned the way the edge goes. A
 line is a straight wall and an arc an arc wall of the arc's radius and length.
 
 Every wall looks into the room, whichever way round the outline was drawn: the
-walk goes clockwise, and a wall is seen from its right. So a picture of the
-room taken from outside is taken *through* the walls nearest the camera, and
-shows the far walls from the inside, the way a dollhouse or a sales brochure
-shows a flat. From straight above, every wall is seen edge-on, and the drawing
-is the plan.
+walk goes clockwise, and a wall is seen from its right. Its face stands on the
+outline, and its thickness goes back from there, outside it: the outline is the
+inside of the room, at the size it was drawn.
+
+Each wall is ``//builtin/building:wall`` unless the scene says otherwise, and that
+is a **solid** -- a physical wall, which ``pc qual test`` checks, a simulation collides
+with and an export writes -- whose :ref:`visual <part-visual>` is the one-sided
+surface of its face. So a picture of the room taken from outside, in the 3D view
+or by ``pc render``, is taken *through* the walls nearest the camera, and shows
+the far walls from the inside, the way a dollhouse or a sales brochure shows a
+flat; from straight above, every wall is seen edge-on, and the drawing is the
+plan. A STEP export of the same room, its simulation and its dimensioned drawing
+have walls with their thickness.
+
+Where two walls meet at a **right angle**, they meet the way they are built:
+with nothing missing and nothing in both. Their thickness is outside the
+outline, so at an outside corner of the room the two would leave a square of it
+open, and at an inside corner both would fill one. So the wall *arriving* at the
+corner, walking the outline clockwise, goes on past it by the thickness at an
+outside corner (``extendEnd``), and stops short of it by the thickness at an inside
+one -- or, if it is too short for that, the wall leaving the corner stops short of
+its start. Only a straight wall moves: where the wall arriving is an arc -- the
+end of a bay bulging out of the room, or of a column the room goes around -- the
+straight wall leaving the corner goes on past its start, or stops short of it,
+instead (``extendStart``). An arc's thickness follows its radius, so at an inside
+corner it parts from that square along the curve and leaves a sliver of it open
+outside both walls, where nothing overlaps. The faces, and the surfaces a picture
+draws, stay on the outline: only the solids move. Walls that meet at any other
+angle, and two arcs meeting, are left as they meet -- a gap outside an obtuse or
+acute outside corner, an overlap inside the walls at such an inside one.
 
 A sketch that is not such an outline is refused, with the reason, rather than
 approximated: two outlines (``has 2 faces``), a hole in one (a column nobody
 said how to draw), an open one, a spline (``edge 3 of ... is a B-spline``), or
 one that is not on the XY plane.
 
-``sketch:`` and ``height:`` may be ``%...%`` expressions over the scene's
-parameters, and PartCAD ships one such scene, ``//builtin/building:room``, with
-the parameters ``sketch`` and ``height``. Any package can use it without
+``sketch:``, ``height:`` and ``thickness:`` may be ``%...%`` expressions over the
+scene's parameters, and PartCAD ships one such scene, ``//builtin/building:room``,
+with the parameters ``sketch``, ``height`` and ``thickness`` (114.3 mm, 4.5 in, unless it is
+told otherwise). Any package can use it without
 declaring a scene of its own -- by name, or through an ``enrich``. Name the
 sketch in full, because it belongs to your package and not to ``//builtin``:
 
@@ -218,9 +246,14 @@ nobody painted is drawn in one.
 
 ``wall:`` names the part each wall is, ``//builtin/building:wall`` unless it says
 otherwise. Whatever it names is asked for with the parameters ``length``,
-``height`` and ``radius`` (see :ref:`walls`), and with the room's CMF, so a wall
-of your own is an ``enrich`` of that one, or a ``type: wall`` part declaring the
-same three parameters.
+``height`` and ``radius`` (see :ref:`walls`) -- ``thickness``, when the scene
+states one, and ``extendStart``/``extendEnd`` at a corner, when it declares
+both -- and with the room's CMF, so a wall of your own is an ``enrich`` of
+that one, or a ``type: wall`` part declaring the same parameters. A wall of your
+own with no thickness is the one-sided surface alone, and a room of it has no
+walls anything collides with: give it a thickness, and the surface as its
+``visual:``, the way ``//builtin/building:wall`` does. ``//builtin/building:wall-surface``
+itself is :ref:`private <private-objects>`, and a room cannot be built of it.
 
 A room is a scene, so it is not manufacturable, and its walls are not either:
 see :ref:`walls` for what that excuses them from in ``pc qual test``.

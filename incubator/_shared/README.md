@@ -1,0 +1,41 @@
+# The shared part of the distributor plugins
+
+`distributor.py` is in every `partcad-svc-commerce-<store>` package, byte for
+byte - the ones incubated in this directory, and the ones that have moved out
+to repositories of their own (DigiKey, Octopart, McMaster-Carr) - and so are
+`conftest.py` and `test_distributor.py`. This copy is the one to edit;
+`copy.sh` puts it into every package here and into every checkout named on its
+command line, and writes the digest each package's own tests hold its copy to
+(`distributor.sha256`).
+
+```shell
+./incubator/_shared/copy.sh ../partcad-svc-commerce-digikey ../partcad-svc-commerce-octopart \
+  ../partcad-svc-commerce-mscmaster-carr
+```
+
+It is the distributor counterpart of PartCAD's `plugin_models` (the toolkit for
+model-site plugins), and it builds on it rather than copying it: the HTTP
+client, its cache, the errors, the name grammar and the part types are
+`plugin_models`', which PartCAD puts on the path of every plugin it runs
+(PartCAD 0.9.17 or newer). What it adds is what a distributor is to PartCAD:
+
+* **a catalogue** - categories as child packages, a search per package, a part
+  per product named by the distributor's part number, its 3D model served as
+  `files/<path>`, `vendor` and `sku` on every part, and the package's own store
+  as every category's supplier;
+* **a store** - `avail` and `quote` by the distributor's part number, or by a
+  manufacturer and its part number; priced at the quantity actually ordered
+  (the minimum, the order multiple, the price break it reaches), with stock
+  said per line and never refused;
+* **OAuth 2.0 client credentials**, in the form or as HTTP Basic
+  (`basic=True`, which OAuth prefers and Nexar takes), with the token kept on
+  disk until it expires (each api is a process of its own);
+* **an alias for a product with no model**: a distributor that links a CAD
+  partner's page (DigiKey to SnapMagic) answers `alias_of`, and the product is
+  served as an alias of the partner's part, still bought from the distributor;
+* **logging in** with an API key or a client ID and secret pasted into PartCAD's
+  login banner, or handed over with `pc login --agent ... --set`.
+
+Should these packages prove themselves, the next step is the one
+`plugin_models` took: move `distributor.py` into PartCAD's wrappers as
+`plugin_distributors.py`, tested with the rest of PartCAD, and drop the copies.

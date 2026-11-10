@@ -69,7 +69,7 @@ class SketchFactoryAlias(SketchFactory):
         Resolving is the point: the source may live in another package, and
         asking the context for it loads - and so downloads - that package.
         """
-        source = self.ctx._get_sketch(self.source)
+        source = self.ctx._get_sketch(self.source, referrer=self.project.name)
         if not source:
             raise Exception(f"The alias source {self.source} is not found")
         await source.prepare_async()
@@ -89,7 +89,7 @@ class SketchFactoryAlias(SketchFactory):
     async def instantiate(self, obj):
         with pc_logging.Action("Alias", obj.project_name, f"{obj.name}:{self.source_sketch_name}"):
 
-            source = self.ctx._get_sketch(self.source)
+            source = self.ctx._get_sketch(self.source, referrer=self.project.name)
             if not source:
                 pc_logging.error(f"The alias source {self.source} is not found")
                 return None
@@ -126,7 +126,7 @@ class SketchFactoryAlias(SketchFactory):
         there is deliberately no counterpart here: the schema gives 'vendor' and
         'sku' to parts and assemblies alone, so a sketch has nothing to restate.
         """
-        source = self.ctx._get_sketch(self.source)
+        source = self.ctx._get_sketch(self.source, referrer=self.project.name)
         if not source:
             raise Exception(f"The alias source {self.source} is not found")
         return source.get_final_config()

@@ -8,6 +8,7 @@ allow
 along
 also
 anchored
+and
 angle
 angstrom
 apps
@@ -26,6 +27,7 @@ basic
 binaries
 binary
 bool
+boolean
 brep
 build
 cache
@@ -98,6 +100,7 @@ dynamic
 edges
 effort
 elif
+end
 endautoescape
 endblock
 endcall
@@ -116,6 +119,7 @@ exclude
 executable
 exploded
 export
+extend
 extends
 extension
 extensions
@@ -262,6 +266,7 @@ openscad
 operation
 optimize
 options
+or
 orientation
 other
 outlet
@@ -363,6 +368,7 @@ spring
 square
 squares
 stage
+start
 step
 stepover
 stiffness
@@ -384,6 +390,7 @@ tar
 target
 temperature
 thermal
+thickness
 thread
 threejs
 timeout
@@ -417,13 +424,17 @@ version
 via
 viscosity
 visibility
+visual
+visuals
 volume
 wall
 walls
 weight
+whole
 width
 windows
 wires
 with
 wrapper
+xor
 yd

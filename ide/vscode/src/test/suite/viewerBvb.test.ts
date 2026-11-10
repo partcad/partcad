@@ -24,6 +24,7 @@ import {
     effectiveChoice,
     isMissing,
     massOf,
+    offersLine,
     pruneChoices,
     visibleRows,
 } from '../../webview/bvb';
@@ -89,6 +90,29 @@ suite('The Build vs Buy table', () => {
             `${MISSING_HINT}\nIt declares neither a vendor and an SKU nor manufacturing instructions.`,
         );
         assert.strictEqual(MISSING_HINT, "Can't be manufacturable until it can be either bought or built");
+    });
+
+    test('a part bought through aliases of it says what it is bought as, and that an alias names the SKU', () => {
+        const resistor: TreeNode = {
+            ...part('//p:resistor', { buy: true }),
+            vendor: 'digikey',
+            sku: 'R-CT',
+            offers: [
+                { name: '//p:resistor-cut-tape', vendor: 'digikey', sku: 'R-CT', count_per_sku: 1 },
+                { name: '//p:resistor-reel', vendor: 'digikey', sku: 'R-TR', count_per_sku: 5000 },
+            ],
+        };
+        const { rows } = computeRows(resistor, {});
+
+        assert.strictEqual(offersLine(resistor), 'Bought as digikey R-CT, digikey R-TR (5000 per SKU)');
+        assert.strictEqual(
+            rows[0].locked,
+            'Bought: an alias of it names a vendor and an SKU, and it has no manufacturing instructions to build it with.',
+        );
+        // One that names its own SKU says nothing more, as it always did.
+        const bolt = part(':bolt', { buy: true });
+        assert.strictEqual(offersLine(bolt), undefined);
+        assert.match(computeRows(bolt, {}).rows[0].locked ?? '', /^Bought: it declares a vendor and an SKU,/);
     });
 
     test('a stock reference that resolves to nothing is missing too, and nothing that can be either is', () => {

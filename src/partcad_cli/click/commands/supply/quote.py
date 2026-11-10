@@ -55,6 +55,13 @@ from ...cli_context import CliContext
     is_flag=True,
     show_envvar=True,
 )
+@click.option(
+    "--cheapest",
+    help="Price every way each part can be ordered at each supplier - its own SKU, and every pack or store an "
+    "alias of it names - and order the cheapest, rather than the first way a supplier has it",
+    is_flag=True,
+    show_envvar=True,
+)
 @click.argument(
     "specs",
     metavar="object[[,material],count]",
@@ -62,7 +69,7 @@ from ...cli_context import CliContext
     nargs=-1,
 )  # help="Part (default) or assembly to quote, with options",
 @click.pass_obj
-def cli(cli_ctx: CliContext, api, qos, provider, recursive, ignore_missing, specs):
+def cli(cli_ctx: CliContext, api, qos, provider, recursive, ignore_missing, cheapest, specs):
     """
     TODO-117: Implementing Network Error Handling
     """
@@ -70,7 +77,7 @@ def cli(cli_ctx: CliContext, api, qos, provider, recursive, ignore_missing, spec
         ctx: pc.Context = cli_ctx.get_partcad_context()
 
         with pc.logging.Process("SupplyQuote", "this"):
-            cart = pc.ProviderCart(qos=qos, ignore_missing=ignore_missing)
+            cart = pc.ProviderCart(qos=qos, ignore_missing=ignore_missing, cheapest=cheapest)
             asyncio.run(cart.add_objects(ctx, specs, recursive=recursive))
             pc.logging.debug("Cart: %s" % str(cart.parts))
 
@@ -90,7 +97,7 @@ def cli(cli_ctx: CliContext, api, qos, provider, recursive, ignore_missing, spec
             # What a scene holds, and with '--ignore-missing' anything, is quoted
             # without what nobody supplies: said here, and not a failure.
             preferred_suppliers, left_out = ctx.drop_unsupplied_optional(cart, preferred_suppliers)
-            supplier_carts = asyncio.run(ctx.prepare_supplier_carts(preferred_suppliers))
+            supplier_carts = asyncio.run(ctx.prepare_supplier_carts(preferred_suppliers, cart))
             quotes = asyncio.run(ctx.supplier_carts_to_quotes(supplier_carts))
             pc.logging.debug("Quotes: %s" % str(quotes))
 
@@ -138,7 +145,11 @@ def cli(cli_ctx: CliContext, api, qos, provider, recursive, ignore_missing, spec
                         pc.logging.info("No provider found:")
 
                     for part in quote.cart.parts.values():
-                        pc.logging.info(f"\t\t\t{part.name}#{part.count}")
+                        # Which SKU, where it is not the part's own: an alias's,
+                        # the pack or the store the supplier sells it as.
+                        via = getattr(part, "via", None)
+                        sold_as = f" (as {via}: {part.vendor} {part.sku})" if via else ""
+                        pc.logging.info(f"\t\t\t{part.name}#{part.count}{sold_as}")
                 if left_out:
                     pc.logging.info("Left out, as nobody supplies them:")
                     for name in left_out:

@@ -24,8 +24,10 @@ import pytest
 
 from partcad_utils.utils import (
     format_parameterized_name,
+    get_child_project_path,
     normalize_resource_path,
     parse_parameterized_name,
+    resolve_parent_segments,
     resolve_resource_path,
     split_recursive_object,
     split_resource_path,
@@ -99,6 +101,100 @@ def test_the_root_and_an_unnamed_current_package_resolve_as_they_did():
     assert resolve_resource_path("//", "sub:obj") == ("//sub", "obj")
     assert resolve_resource_path("", "obj") == ("/", "obj")
     assert resolve_resource_path("", "//pkg:obj;a=x:y") == ("//pkg", "obj;a=x:y")
+
+
+# A package served at some depth below its own root - a catalogue's
+# '<package>/products/<category>/<subcategory>' - names that root with as many
+# '..' as it is deep. One pass of a regular expression resolved the first of
+# them and not the rest.
+CATALOGUE = "//x/store/products"
+
+
+@pytest.mark.parametrize(
+    "current, pattern, package",
+    [
+        (CATALOGUE, "..:store", "//x/store"),
+        (CATALOGUE + "/resistors", "../..:store", "//x/store"),
+        (CATALOGUE + "/resistors/chip", "../../..:store", "//x/store"),
+        # A '..' is a whole segment: three of them in a row are three levels,
+        # not a segment named '..' cancelling the one after it.
+        ("//a/b/c/d", "../../..:obj", "//a"),
+        ("//a/b/c/d", "../../../..:obj", "//"),
+    ],
+)
+def test_every_level_of_parent_is_climbed(current, pattern, package):
+    item = pattern.split(":", 1)[1]
+    assert resolve_resource_path(current, pattern) == (package, item)
+    assert normalize_resource_path(current, pattern) == "%s:%s" % (package, item)
+
+
+@pytest.mark.parametrize(
+    "current, pattern, package",
+    [
+        (HERE, "../sibling/child:item", "//sibling/child"),
+        ("//a/b/c", "../../sibling/child:item", "//a/sibling/child"),
+        ("//a/b/c", "../x/../y:item", "//a/b/y"),
+        ("//a/b/c", "x/../../y:item", "//a/b/y"),
+        # An absolute path is resolved too.
+        (HERE, "//a/b/../c:item", "//a/c"),
+        # And so is the deprecated single '/', once it has become '//'.
+        (HERE, "/a/b/../../c:item", "//c"),
+    ],
+)
+def test_parent_segments_mix_with_names(current, pattern, package):
+    assert resolve_resource_path(current, pattern) == (package, "item")
+
+
+@pytest.mark.parametrize(
+    "current, pattern, package",
+    [
+        ("//a", "../..:obj", "//.."),
+        ("//a", "../../b:obj", "//../b"),
+        ("//", "..:obj", "//.."),
+        ("//a/b", "../../../c/d:obj", "//../c/d"),
+    ],
+)
+def test_a_reference_climbing_above_the_root_is_left_unresolved(current, pattern, package):
+    """Not taken to mean the root, and not an error here.
+
+    Every '..' that has nothing left to take away stays, so the result names no
+    package and its lookup says "not found" under a name that shows why. Read as
+    the root, a reference that miscounted its levels would quietly name another
+    package.
+    """
+    assert resolve_resource_path(current, pattern) == (package, "obj")
+
+
+def test_the_wildcard_and_a_parent_segment_resolve_together():
+    """'...' is a name ('*'), never a '..' with a dot to spare."""
+    assert resolve_resource_path(HERE, "../...:bolt") == ("//*", "bolt")
+    assert resolve_resource_path("//a/b", ".../..:bolt") == ("//a/b", "bolt")
+    assert resolve_resource_path("//a/b/c", "../../...:bolt...") == ("//a/*", "bolt*")
+    assert resolve_resource_path(HERE, "//pkg/...:bolt") == ("//pkg/*", "bolt")
+
+
+def test_resolving_parent_segments_leaves_everything_else_as_written():
+    for path in ("//", "/", "//a", "//a/b/", "//*", "//a/.b", "//a/b..", "relative/path"):
+        assert resolve_parent_segments(path) == path
+    assert resolve_parent_segments("//a/b/../") == "//a/"
+    assert resolve_parent_segments("a/b/../../..") == ".."
+
+
+@pytest.mark.parametrize(
+    "parent, child, expected",
+    [
+        ("//a/b", "c", "//a/b/c"),
+        ("//a/b", "..", "//a"),
+        ("//a/b", "../..", "//"),
+        ("//a/b/c", "../../d", "//a/d"),
+        ("//", "a", "//a"),
+        ("//", "..", "//.."),
+        ("//a", "b/", "//a/b"),
+    ],
+)
+def test_a_child_package_path_climbs_the_same_way(parent, child, expected):
+    """A dependency's or '--package' path, which used to share the regular expression."""
+    assert get_child_project_path(parent, child) == expected
 
 
 def test_a_recursive_object_keeps_a_colon_in_its_parameters():

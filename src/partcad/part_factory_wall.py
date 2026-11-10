@@ -3,13 +3,25 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""The 'wall' part type: a one-sided surface a room is drawn with.
+"""The 'wall' part type: the walls a room is laid out with, as a surface or as a solid.
 
 Built for laying out a space rather than for making anything: a floor plan, an
-apartment for sale, the room a machine is going to stand in. A wall here is a
-sheet of faces with no thickness, which is seen from one side and is not there
-from the other - so that a picture of a room taken from outside it looks
-through the near walls at the far ones, the way a plan or a dollhouse is drawn.
+apartment for sale, the room a machine is going to stand in. A wall is its
+elevation - a rectangle as long and as high as it is, straight or bent along an
+arc, with its doors and windows cut out by a sketch - and what it is depends on
+its thickness:
+
+  * **No thickness** (the default): the elevation itself, a sheet of faces seen
+    from one side and not there from the other - so that a picture of a room
+    taken from outside it looks through the near walls at the far ones, the
+    way a plan or a dollhouse is drawn. Geometry only, for a picture.
+  * **A thickness**: the solid the elevation is the face of, extruded straight
+    back through the thickness from the side it is seen from. A physical wall,
+    which a check measures, a simulation collides with and an export writes -
+    and which is drawn, where it says 'visual:', as the surface of it (see
+    'partcad.visual'). That is what '//builtin/building:wall' is: a solid,
+    whose visual is the private surface beside it.
+
 See 'wrappers/wrapper_wall.py' for the geometry and the frame it is built in.
 
     parts:
@@ -20,26 +32,33 @@ See 'wrappers/wrapper_wall.py' for the geometry and the frame it is built in.
         height: 2700          # mm
         radius: 0             # 0 is straight; + bends towards its front, - away
         openings: windows     # (optional) a sketch, drawn on the wall unrolled flat
+        thickness: 100        # (optional) mm behind its face; 0, or none, is a surface
+        extendStart: 0        # (optional) mm the solid goes on past its start; negative stops short
+        extendEnd: 0          # (optional) the same, past its end
 
-Each of the four may be a '%...%' expression over the part's parameters (see
+Each of these may be a '%...%' expression over the part's parameters (see
 'partcad.expr'), which is how '//builtin/building:wall' is one declaration that
 builds every wall: 'wall;length=4200,height=2700'.
 
-Three things set it apart from every other part type, and all three follow from
-it being a surface on purpose (see 'partcad.surface'):
+It is never manufactured, and has to say so, whatever its thickness: a
+declaration that does not state 'manufacturable: false' - itself, or through its
+package - is refused with a message saying what to add, rather than flipped
+quietly. A wall lays out a space; whoever reads the package should read there
+that it is not a product anybody makes.
 
-  * It is never manufactured, and has to say so. A declaration that does not
-    state 'manufacturable: false' - itself, or through its package - is refused
-    with a message saying what to add, rather than flipped quietly: whoever
-    reads the package should read there that this is not a thing to be made.
+Two more things set a wall with no thickness apart from every other part, and
+both follow from it being a surface on purpose (see 'partcad.surface'):
+
   * It leaves the wrapper as it was built: not closed into a solid, and not
     reported for not being one.
   * It reports 'oneSided: true' among its properties - an output, like a
-    colour, worked out from its type wherever it is reached from (see
+    colour, worked out from what it is wherever it is reached from (see
     'Shape._shape_properties') - which is how everything that draws it, the
     IDE's 3D view and '//builtin/render', knows to draw it from the front only.
     A drawing is made from the shape tree, which carries properties and not
     declarations. Its faces' normals say which side the front is.
+
+A wall with a thickness is a body like any other part, and is held to being one.
 """
 
 from . import config as pc_config
@@ -51,9 +70,33 @@ from .process_crash import describe_exit_code
 
 # What a wall is built from, and what each reads back as when it is not
 # declared. 'length' and 'height' have no default: a wall nobody gave a size to
-# is a mistake, not a default-sized wall.
+# is a mistake, not a default-sized wall. No 'thickness' is a surface. The two
+# extensions move the ends of a straight wall's solid along its base, and not its
+# face: how two walls meet at a corner (see 'scene_factory_walls').
 REQUIRED_FIELDS = ("length", "height")
-OPTIONAL_FIELDS = {"radius": 0.0, "openings": ""}
+
+# What a wall's solid may be shortened to at a corner, at least, in millimetres:
+# a thousandth of a millimetre, the tolerance the wrapper measures to.
+MINIMUM_LENGTH = 1e-3
+OPTIONAL_FIELDS = {"radius": 0.0, "openings": "", "thickness": 0.0, "extendStart": 0.0, "extendEnd": 0.0}
+
+
+def thickness_of(config, where: str = "") -> float:
+    """The thickness a wall's declaration resolves to, in millimetres: 0 for a surface.
+
+    Over the declaration's own parameter values, the way the factory resolves
+    it, so that 'partcad.surface' - which decides whether a wall is a surface
+    from the declaration it resolves to, without building it - and the factory
+    cannot come to different answers. A value that is not a number reads as
+    no thickness here; the factory is what refuses it, with the reason.
+    """
+    if not isinstance(config, dict) or config.get("thickness") in (None, ""):
+        return 0.0
+    values = pc_config.parameter_values(config.get("parameters"))
+    try:
+        return float(expr.resolve(config["thickness"], values, where) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 class WallDeclarationError(Exception):
@@ -77,7 +120,7 @@ class PartFactoryWall(PartFactory):
             # '_validate_object_type_parameters').
             if config.get("manufacturable", True):
                 raise WallDeclarationError(
-                    "%s: a wall is a surface drawn to lay out a space, not a thing anybody makes, and has to say so: "
+                    "%s: a wall lays out a space, and is not a thing anybody makes, and has to say so: "
                     "add 'manufacturable: false' to it, or to its package" % where
                 )
 
@@ -95,9 +138,18 @@ class PartFactoryWall(PartFactory):
                 self.length = float(resolved["length"])
                 self.height = float(resolved["height"])
                 self.radius = float(resolved["radius"] or 0.0)
+                self.thickness = float(resolved["thickness"] or 0.0)
+                self.extend_start = float(resolved["extendStart"] or 0.0)
+                self.extend_end = float(resolved["extendEnd"] or 0.0)
             except (TypeError, ValueError) as e:
                 raise WallDeclarationError(
-                    "%s: 'length', 'height' and 'radius' are numbers of millimetres: %s" % (where, e)
+                    "%s: 'length', 'height', 'radius', 'thickness', 'extendStart' and 'extendEnd' are numbers of "
+                    "millimetres: %s" % (where, e)
+                )
+            if self.thickness < 0.0:
+                raise WallDeclarationError(
+                    "%s: 'thickness' is how far the wall goes back from its face, and is not %s"
+                    % (where, self.thickness)
                 )
 
             # The sketch the openings are cut out by, resolved as an extrusion
@@ -119,17 +171,21 @@ class PartFactoryWall(PartFactory):
             # What is built, as numbers: the declaration may say it in
             # expressions, and two of them that come to the same wall are the
             # same wall. The sketch's name too, and its content once it is
-            # resolved (see 'prepare_async').
-            self.part.hash.add_dict(
-                {
-                    "wall": {
-                        "length": self.length,
-                        "height": self.height,
-                        "radius": self.radius,
-                        "openings": self.openings_spec,
-                    }
-                }
-            )
+            # resolved (see 'prepare_async'). The thickness only where there is
+            # one, so that a surface keeps the key it had before walls had any.
+            built = {
+                "length": self.length,
+                "height": self.height,
+                "radius": self.radius,
+                "openings": self.openings_spec,
+            }
+            if self.thickness > 0.0:
+                built["thickness"] = self.thickness
+            if self.extend_start:
+                built["extendStart"] = self.extend_start
+            if self.extend_end:
+                built["extendEnd"] = self.extend_end
+            self.part.hash.add_dict({"wall": built})
             if self.openings_spec is not None:
                 self.part.cache_dependencies_broken = True
 
@@ -141,6 +197,9 @@ class PartFactoryWall(PartFactory):
             "height": self.height,
             "radius": self.radius,
             "openings": self.openings_spec,
+            "thickness": self.thickness,
+            "extendStart": self.extend_start,
+            "extendEnd": self.extend_end,
         }
         return info
 
@@ -152,7 +211,7 @@ class PartFactoryWall(PartFactory):
         """
         if self.openings_spec is None:
             return
-        sketch = self.ctx.get_sketch(self.openings_spec)
+        sketch = self.ctx.get_sketch(self.openings_spec, referrer=self.project.name)
         if sketch is None:
             # Reported by 'instantiate', which is where it is worth saying.
             return
@@ -167,7 +226,7 @@ class PartFactoryWall(PartFactory):
             try:
                 openings = None
                 if self.openings_spec is not None:
-                    sketch = self.ctx.get_sketch(self.openings_spec)
+                    sketch = self.ctx.get_sketch(self.openings_spec, referrer=self.project.name)
                     if sketch is None:
                         part.error(
                             "%s:%s: the openings sketch '%s' is not found"
@@ -189,11 +248,15 @@ class PartFactoryWall(PartFactory):
                     "length": self.length,
                     "height": self.height,
                     "radius": self.radius,
+                    "thickness": self.thickness,
+                    "extendStart": self.extend_start,
+                    "extendEnd": self.extend_end,
                     "openingsName": self.openings_spec or "",
                     "name": "%s:%s" % (part.project_name, part.name),
                     "label": part.name,
-                    # Moved by the wrapper while the shape is live; for a wall,
-                    # nothing else (see 'Shape.finish_request').
+                    # Moved by the wrapper while the shape is live, and, for a
+                    # wall with a thickness, validated like any solid; for a
+                    # surface, nothing else (see 'Shape.finish_request').
                     shape_envelope.KEY_FINISH: part.finish_request(),
                 }
                 if openings is not None:

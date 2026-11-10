@@ -1,17 +1,12 @@
 import rich_click as click
 
+from ...search_scope import each_package_option, recursive_option
 from ...service import run
 
 
 @click.command(help="Search sketches by keyword")
-@click.option(
-    "-r",
-    "--recursive",
-    "recursive",
-    is_flag=True,
-    help="Recursively search in all imported packages (older spelling of '<package>...')",
-    show_envvar=True,
-)
+@recursive_option
+@each_package_option
 @click.option(
     "--package",
     "-P",
@@ -31,10 +26,16 @@ from ...service import run
     required=True,
 )
 @click.pass_obj
-def cli(cli_ctx, recursive: bool, package: str, keyword: str) -> None:
+def cli(cli_ctx, recursive: bool, each_package: bool, package: str, keyword: str) -> None:
     run(
         cli_ctx,
         "search.objects",
-        {"kind": "sketches", "package": package, "recursive": recursive, "keyword": keyword},
+        {
+            "kind": "sketches",
+            "package": package,
+            "recursive": recursive,
+            "each_package": each_package,
+            "keyword": keyword,
+        },
         needs_context=True,
     )

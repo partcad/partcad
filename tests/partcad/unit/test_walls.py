@@ -5,19 +5,25 @@
 #
 """End to end: walls and rooms, built through PartCAD in a sandbox.
 
-A wall is a 'type: wall' part - a one-sided surface drawn to lay out a space -
-and a room is a 'type: walls' scene, the walls standing on the outline of a
-sketch. PartCAD ships one of each in '//builtin/building'. What is held here is
-what PartCAD does with them rather than the geometry, which 'test_wall_geometry.py'
-asks of the sandbox's own functions directly:
+A wall is a 'type: wall' part - with no thickness a one-sided surface drawn to
+lay out a space, with one the solid behind that surface - and a room is a 'type:
+walls' scene, the walls standing on the outline of a sketch. PartCAD ships one of
+each in '//builtin/building', and its wall is a solid drawn as its private
+surface. What is held here is what PartCAD does with them rather than the
+geometry, which 'test_wall_geometry.py' asks of the sandbox's own functions
+directly:
 
-  * a wall is a surface by its type - an alias of one too - and is passed over by
-    the checks that ask whether a part is a body, never validated into a solid,
-    and drawn one-sided ('surface.py');
+  * a wall with no thickness is a surface by its type - an alias of one too - and
+    is passed over by the checks that ask whether a part is a body, never
+    validated into a solid, and drawn one-sided ('surface.py'); one with a
+    thickness is a solid held to being one;
   * a wall has to say it is not manufacturable, and nothing manufacturable can be
     made with one in it;
   * a room is one wall per edge of its sketch, placed along it, and a sketch that
-    is not one closed loop of lines and arcs is refused with the reason.
+    is not one closed loop of lines and arcs is refused with the reason;
+  * PartCAD's own wall is a solid whose 'visual:' is its surface, private to
+    '//builtin/building': a picture draws the surface, everything else the solid,
+    and no other package can build a room of the surface.
 
 The package declares no requirements of its own, so it renders in the CAD
 sandbox the other part tests provision rather than building one.
@@ -26,6 +32,7 @@ sandbox the other part tests provision rather than building one.
 import asyncio
 import math
 import os
+import re
 import sys
 import textwrap
 import threading
@@ -72,6 +79,16 @@ sketches:
   too-wide:
     type: basic
     rectangle: {x: 3900, y: 1050, side-x: 900, side-y: 2100}
+  kept-door:
+    type: basic
+    private: true
+    rectangle: {x: 1450, y: 1050, side-x: 900, side-y: 2100}
+  ell:
+    type: build123d
+    path: ell.py
+  bayed:
+    type: build123d
+    path: bayed.py
 
 parts:
   north:
@@ -86,7 +103,37 @@ parts:
     openings: too-wide
   curved:
     type: alias
+    source: "//builtin/building:wall;length=3141.592654,radius=-1000,thickness=0"
+  thick-north:
+    type: wall
+    length: 4000
+    height: 2700
+    openings: door
+    thickness: 200
+  thick-curved:
+    type: alias
     source: "//builtin/building:wall;length=3141.592654,radius=-1000"
+  too-thick:
+    type: wall
+    length: 3000
+    height: 2700
+    radius: -150
+    thickness: 200
+  surface-alias:
+    type: alias
+    source: //builtin/building:wall-surface
+  own-kept-door:
+    type: wall
+    length: 4000
+    height: 2700
+    openings: kept-door
+  builtin-kept-door:
+    type: enrich
+    source: //builtin/building:wall
+    with:
+      length: 4000
+      height: 2700
+      openings: //:kept-door
 
 scenes:
   living:
@@ -109,6 +156,58 @@ scenes:
     with:
       sketch: //:plan
       color: //:sage
+  thick-living:
+    type: walls
+    sketch: plan
+    height: 2500
+    thickness: 250
+  of-surfaces:
+    type: walls
+    sketch: plan
+    height: 2500
+    wall: //builtin/building:wall-surface
+  ell-room:
+    type: walls
+    sketch: ell
+    height: 2500
+  bayed-room:
+    type: walls
+    sketch: bayed
+    height: 2500
+"""
+
+# An L from above: five outside corners and one inside one.
+ELL = """
+import build123d as bd
+
+with bd.BuildSketch() as ell:
+    with bd.BuildLine():
+        bd.Polyline((0, 0), (4000, 0), (4000, 2000), (2000, 2000), (2000, 4000), (0, 4000), close=True)
+    bd.make_face()
+
+if "show_object" in locals():
+    show_object(ell.sketch)
+"""
+
+# A room with a bay bulging out of its east wall and a column cut into its south
+# one: four corners where an arc meets a straight wall at a right angle.
+BAYED = """
+import build123d as bd
+
+with bd.BuildSketch() as bayed:
+    with bd.BuildLine():
+        bd.Line((0, 0), (2000, 0))
+        bd.ThreePointArc((2000, 0), (2300, 300), (2600, 0))
+        bd.Line((2600, 0), (4000, 0))
+        bd.Line((4000, 0), (4000, 1000))
+        bd.ThreePointArc((4000, 1000), (5000, 2000), (4000, 3000))
+        bd.Line((4000, 3000), (4000, 4000))
+        bd.Line((4000, 4000), (0, 4000))
+        bd.Line((0, 4000), (0, 0))
+    bd.make_face()
+
+if "show_object" in locals():
+    show_object(bayed.sketch)
 """
 
 # A package that is manufacturable, as a package is unless it says otherwise.
@@ -130,6 +229,8 @@ parts:
 def package(tmp_path_factory):
     root = tmp_path_factory.mktemp("walls_package")
     (root / "partcad.yaml").write_text(textwrap.dedent(CONFIG).lstrip())
+    (root / "ell.py").write_text(textwrap.dedent(ELL).lstrip())
+    (root / "bayed.py").write_text(textwrap.dedent(BAYED).lstrip())
     return root
 
 
@@ -175,16 +276,59 @@ def test_an_opening_beyond_the_wall_is_an_error_naming_the_sketch_and_the_overha
 
 
 def test_the_builtin_wall_is_a_parametric_wall_in_its_own_colour(context):
+    """A solid, 4.5 in (114.3 mm) thick behind its face, which is on the XZ plane: what a room is walled with."""
     wall, _envelope = _built(context, "//builtin/building:wall;length=2000")
     assert wall.errors == []
-    assert wall._shape_properties() == {"color": "#9C9284", "oneSided": True}
+    assert wall._shape_properties() == {"color": "#9C9284"}
+    assert not surface.is_surface(wall)
     box = asyncio.run(wall.get_bounding_box_async(context))
-    assert box == pytest.approx((0.0, 0.0, 0.0, 2000.0, 0.0, 2700.0), abs=1e-6)
+    assert box == pytest.approx((0.0, 0.0, 0.0, 2000.0, 114.3, 2700.0), abs=1e-6)
+
+
+def _volume(envelope):
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    props = GProp_GProps()
+    BRepGProp.VolumeProperties_s(ocp_serialize.decode_shape(envelope), props)
+    return props.Mass()
+
+
+def test_a_thick_wall_is_its_elevation_extruded_back_through_its_thickness(context):
+    """The face where a surface wall would be, the openings through it, and the thickness behind it."""
+    wall, envelope = _built(context, "thick-north")
+    assert wall.errors == [], wall.errors
+    assert not surface.is_surface(wall)
+    assert wall._shape_properties() is None
+    # A body, so held to being one as it leaves the wrapper.
+    assert wall._validates() and "validate" in wall.finish_request()
+    assert _volume(envelope) == pytest.approx((4000.0 * 2700.0 - 900.0 * 2100.0) * 200.0, rel=1e-6)
+    box = asyncio.run(wall.get_bounding_box_async(context))
+    assert box == pytest.approx((0.0, 0.0, 0.0, 4000.0, 200.0, 2700.0), abs=1e-6)
+    for check in (ShellTest, DegenerateTest, SolidityTest, ValidityTest):
+        assert check().inapplicable(wall) is None, check
+
+
+def test_a_thick_arc_wall_is_extruded_along_its_radius(context):
+    """Bending away from its face, an arc wall's thickness is towards its axis: a ring sector, 114.3 thick."""
+    wall, envelope = _built(context, "thick-curved")
+    assert wall.errors == [], wall.errors
+    assert not surface.is_surface(wall)
+    # Half a turn of a ring between radii 885.7 and 1000, 2700 high.
+    assert _volume(envelope) == pytest.approx(math.pi * (1000.0**2 - 885.7**2) / 2.0 * 2700.0, rel=1e-4)
+
+
+def test_an_arc_wall_thicker_than_its_radius_behind_its_face_is_refused(context):
+    wall, envelope = _built(context, "too-thick")
+    assert envelope is None
+    [error] = wall.errors
+    assert "thinner than that: 'thickness' is 200 mm" in error
 
 
 def test_an_alias_of_a_wall_is_a_wall(context):
     """It states no properties and no type of its own, and is one-sided and a surface all the same.
 
+    Of PartCAD's own wall with no thickness: a surface, whatever it is drawn as.
     And it is in the colour of the wall it is another name for: a reference
     reports what its source turned out to be.
     """
@@ -248,7 +392,10 @@ def test_a_room_is_a_wall_per_edge_of_its_sketch_each_looking_in(context):
         assert name.startswith("//builtin/building:wall;")
         assert "height=2500" in name
         assert "radius=0.0" in name
-        assert properties["oneSided"] is True
+        # Asked for with no thickness: the wall's own, 114.3 mm, stands.
+        assert "thickness" not in name
+        # Solids: the surface is what a picture draws, and no part of the scene.
+        assert "oneSided" not in properties
         lengths.append(float(name.split("length=")[1].split(",")[0]))
     assert sorted(lengths) == [3000.0, 3000.0, 4000.0, 4000.0]
 
@@ -305,11 +452,165 @@ def test_a_painted_room_paints_every_wall(context):
     for _label, name, _location, properties in walls:
         assert "color=//:sage" in name
         assert properties["color"] == "#7D8F69"
-        assert properties["oneSided"] is True
+        assert "oneSided" not in properties
 
     # And a room nobody painted is the walls' own grey.
     for _label, _name, _location, properties in _walls(context, "living"):
         assert properties["color"] == "#9C9284"
+
+
+def test_a_room_that_states_a_thickness_passes_it_to_every_wall(context):
+    walls = _walls(context, "thick-living")
+    assert len(walls) == 4
+    for _label, name, _location, _properties in walls:
+        assert "thickness=250.0" in name
+
+
+def test_a_room_is_drawn_as_the_surfaces_of_its_walls_and_is_walled_all_the_same(context):
+    """The tree a picture draws: every wall the private surface, where the wall is; the scene itself, solids."""
+    from partcad import visual
+
+    scene, envelope = _built(context, "living", kind="scene")
+    drawn = asyncio.run(visual.substitute_async(context, scene, envelope))
+    nodes = drawn.tree[ocp_serialize.KEY_ASSEMBLY]
+    assert len(nodes) == 4
+    for before, after in zip(envelope[ocp_serialize.KEY_ASSEMBLY], nodes):
+        # Where the wall is, under its own name and link: what the 3D view selects.
+        assert after["label"] == before["label"]
+        assert after["name"] == before["name"]
+        assert after["location"] == before["location"]
+        # Drawn as the surface, with the wall's own length and colour.
+        assert after["visual"].startswith("//builtin/building:wall-surface;")
+        assert "length=%s" % before["name"].split("length=")[1].split(",")[0] in after["visual"]
+        assert after["properties"] == {"color": "#9C9284", "oneSided": True}
+        assert "visual" not in before
+    # The surfaces are what the picture is keyed on, besides the scene.
+    assert drawn.keys and all(name.startswith("//builtin/building:wall-surface;") for name, _key in drawn.keys)
+    assert drawn.cacheable
+    # And the scene itself is still the solids it was.
+    assert all("oneSided" not in node["properties"] for node in envelope[ocp_serialize.KEY_ASSEMBLY])
+
+
+def test_the_surface_of_a_wall_is_private_to_the_building_package(context, caplog):
+    """A room of surfaces, or an alias of one, in another package is refused, naming why; a command still reaches it."""
+    refusal = (
+        "A part '//builtin/building:wall-surface' is private to //builtin/building, "
+        "and a reference written in // cannot name it"
+    )
+    scene = context.get_scene("of-surfaces")
+    with pytest.raises(Exception):
+        asyncio.run(scene.get_wrapped(context))
+    # Each wall, as the instance the room asked for.
+    assert re.search(
+        r"A part '//builtin/building:wall-surface;height=2500\.0,length=\d+\.0,radius=0\.0' is private to "
+        r"//builtin/building, and a reference written in // cannot name it",
+        caplog.text,
+    )
+
+    caplog.clear()
+    alias = context.get_part("surface-alias")
+    with pytest.raises(Exception, match="The alias source //builtin/building:wall-surface is not found"):
+        asyncio.run(alias.get_wrapped(context))
+    assert refusal in caplog.text
+
+    # A command names it to look at it, and is not a reference.
+    assert context.get_part("//builtin/building:wall-surface") is not None
+    assert context.get_part("//builtin/building:wall-surface", referrer=context.get_project("//").name) is None
+
+
+def test_a_private_sketch_cuts_this_package_s_walls_and_no_other_package_s(context, caplog):
+    """The openings of a 'type: wall' part of the sketch's own package, but not of an enrich of PartCAD's wall.
+
+    That instance is '//builtin/building''s, which any package may ask for by
+    name: the reference to the sketch is written there, and is refused.
+    """
+    own, envelope = _built(context, "own-kept-door")
+    assert envelope is not None and own.errors == []
+    caplog.clear()
+    _borrowed, envelope = _built(context, "builtin-kept-door")
+    assert envelope is None
+    assert (
+        "A sketch '//:kept-door' is private to //, and a reference written in //builtin/building cannot name it"
+        in caplog.text
+    )
+
+
+def _corners_closed(context, name, thickness, height, ring):
+    """The walls of 'name' fill the ring of 'ring' square millimetres around its plan exactly: no gap, no overlap."""
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
+
+    _scene, envelope = _built(context, name, kind="scene")
+    solids = [ocp_serialize.decode_shape(node) for node in envelope[ocp_serialize.KEY_ASSEMBLY]]
+    assert sum(_volume_of(solid) for solid in solids) == pytest.approx(ring * height, rel=1e-6)
+    for i, first in enumerate(solids):
+        for second in solids[i + 1 :]:
+            assert _volume_of(BRepAlgoAPI_Common(first, second).Shape()) == pytest.approx(0.0, abs=1e-3)
+
+
+def _volume_of(shape):
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    props = GProp_GProps()
+    BRepGProp.VolumeProperties_s(shape, props)
+    return props.Mass()
+
+
+def test_the_walls_of_a_rectangular_room_meet_at_its_corners_with_nothing_missing_and_nothing_in_both(context):
+    """4000 x 3000, walls 250 thick outside it: the ring between it and the rectangle 250 bigger all round."""
+    walls = _walls(context, "thick-living")
+    for _label, name, _location, _properties in walls:
+        assert "extendEnd=250.0" in name and "extendStart" not in name
+    _corners_closed(context, "thick-living", 250.0, 2500.0, (4500.0 * 3500.0) - (4000.0 * 3000.0))
+
+
+def test_the_walls_of_an_l_shaped_room_close_its_outside_corners_and_do_not_meet_twice_inside(context):
+    """Five outside corners and an inside one, with PartCAD's own 114.3 mm: the outline grown by it, less the outline."""
+    t = 114.3
+    walls = _walls(context, "ell-room")
+    assert sorted(name.split("extendEnd=")[1].split(",")[0] for _l, name, _p, _q in walls) == ["-114.3"] + ["114.3"] * 5
+    perimeter = 2 * (4000.0 + 4000.0)
+    _corners_closed(context, "ell-room", t, 2500.0, perimeter * t + (5 - 1) * t * t)
+
+
+def test_where_a_bay_or_a_column_meets_a_wall_the_walls_neither_overlap_nor_leave_the_corner_open(context):
+    """The arcs stay as they are and the straight walls beside them move: nothing in both, the column's corners filled.
+
+    The bay's ends are inside corners, where its thickness and the straight
+    wall's would fill one square; the column's are outside corners, where they
+    would leave one open, below the south wall's line.
+    """
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+    from OCP.gp import gp_Pnt
+    from OCP.TopAbs import TopAbs_IN
+
+    t = 114.3
+    _scene, envelope = _built(context, "bayed-room", kind="scene")
+    solids = [ocp_serialize.decode_shape(node) for node in envelope[ocp_serialize.KEY_ASSEMBLY]]
+    assert len(solids) == 8
+    for i, first in enumerate(solids):
+        for second in solids[i + 1 :]:
+            assert _volume_of(BRepAlgoAPI_Common(first, second).Shape()) == pytest.approx(0.0, abs=1e-3)
+
+    def filled(x, y):
+        point = gp_Pnt(x, y, 1250.0)
+        return any(BRepClass3d_SolidClassifier(solid, point, 1e-6).State() == TopAbs_IN for solid in solids)
+
+    assert filled(2000.0 + t / 2, -t / 2) and filled(2600.0 - t / 2, -t / 2)
+    # And the bay's corners are still walled, by the arc's thickness.
+    assert filled(4000.0 + t / 2, 3000.0 + t / 4) and filled(4000.0 + t / 2, 1000.0 - t / 4)
+
+
+def test_a_picture_of_a_room_draws_its_surfaces_on_the_outline_whatever_its_corners_did(context):
+    """The extensions move the solids; the visual is asked for without them, the length of the edge it is on."""
+    from partcad import visual
+
+    scene, envelope = _built(context, "ell-room", kind="scene")
+    drawn = asyncio.run(visual.substitute_async(context, scene, envelope))
+    for node in drawn.tree[ocp_serialize.KEY_ASSEMBLY]:
+        assert "extend" not in node["visual"]
+        assert "length=%s" % node["name"].split("length=")[1].split(",")[0] in node["visual"]
 
 
 def _reader_of(read):

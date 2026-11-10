@@ -2803,7 +2803,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.10.6"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.10.9"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -3203,12 +3203,23 @@ def _cmf_items(session, project, kind: str) -> list:
 
 
 def list_packages(session, params):
-    """List imported packages that have at least one sketch, part, or assembly."""
+    """List the packages below a package: its sub-packages, or with recursion all with something in them.
+
+    Without recursion it is the package's own sub-packages - the folders and
+    dependencies directly below it, every one, so that a package holding nothing
+    but more packages is a step on the way down rather than a dead end. With it,
+    it is every package below that has something to look at (a sketch, a part,
+    an assembly or a scene, listed or found by its own search). With "all" it is
+    the complete subtree, the package itself and every package below it whether
+    or not it holds anything, by name; "all" implies recursion.
+    """
     ctx = _ctx(session, params)
     if ctx is None:
         return None
     pc = session.partcad
     selected, _, recursive = _request(params)
+    complete = bool(params.get("all"))
+    recursive = recursive or complete
     package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
     if not package_obj:
@@ -3221,14 +3232,23 @@ def list_packages(session, params):
         if recursive:
             packages = [
                 p["name"]
-                for p in ctx.get_all_packages(parent_name=package, has_stuff=True, exclude=_excluded(ctx, params))
+                for p in ctx.get_all_packages(
+                    parent_name=package, has_stuff=not complete, exclude=_excluded(ctx, params)
+                )
             ]
+            if complete:
+                # A tree, read top down: a package before the ones below it.
+                packages.sort()
         else:
-            packages = [package]
+            packages = _sub_packages(ctx, package_obj, _excluded(ctx, params))
 
         output = "PartCAD packages:\n"
         for project_name in packages:
             project = ctx.projects[project_name]
+            # A package served by a repository plugin says what it is in its
+            # metadata, which a package reached by name has not asked for yet.
+            if hasattr(project, "load_metadata"):
+                project.load_metadata()
             line = "\t%s" % project_name
             padding_size = 60 - len(project_name)
             if padding_size < 4:
@@ -3246,6 +3266,25 @@ def list_packages(session, params):
             output += "\t<none>\n"
         pc.logging.info(output)
     return None
+
+
+def _sub_packages(ctx, package_obj, exclude=()) -> list:
+    """The names of the packages directly below a package - its folders and its dependencies - loaded.
+
+    Only what is directly below is loaded, so listing the top of a large tree
+    (the public index) costs its first level and no more.
+    """
+    from partcad.context import is_excluded
+
+    names = []
+    for child in package_obj.get_child_project_names() or []:
+        if exclude and is_excluded(child, exclude):
+            continue
+        project = ctx.get_project(child)
+        # A folder may also be declared as a dependency, which names it twice.
+        if project is not None and not getattr(project, "skipped", False) and project.name not in names:
+            names.append(project.name)
+    return names
 
 
 def list_providers(session, params):
@@ -4547,17 +4586,19 @@ def supply_quote(session, params):
                 path,
                 qos=params.get("qos") or None,
                 recursive=bool(params.get("recursive")),
+                cheapest=bool(params.get("cheapest")),
             )
         )
     result["object"] = path
     return result
 
 
-async def _supply_quote_async(pc, ctx, path, qos, recursive):
+async def _supply_quote_async(pc, ctx, path, qos, recursive, cheapest=False):
     """The body of 'supply_quote', once the request has been made sense of."""
     from partcad.plugin_provider_data_cart import ProviderCart, resolve_cart_object
 
     cart = ProviderCart(qos=qos)
+    cart.cheapest = cheapest
     try:
         await cart.add_object(ctx, path, recursive=recursive)
     except Exception as e:
@@ -4608,7 +4649,10 @@ async def _item_suppliers(pc, ctx, cart_item, cart):
     project = ctx.get_project(project_name)
     if project is None:
         return []
-    if not getattr(cart_item, "suppliers", None) and not await project.get_suppliers_async():
+    # A part bought through an alias is sold by whoever the alias's package
+    # names, though nothing else names a supplier for it.
+    via_alias = any(name != cart_item.name for name, _record in getattr(cart_item, "offers", None) or [])
+    if not getattr(cart_item, "suppliers", None) and not await project.get_suppliers_async() and not via_alias:
         return []
     return await ctx.find_part_suppliers(cart_item, cart)
 
@@ -4624,12 +4668,18 @@ async def _supply_option(pc, ctx, cart_item, provider_name, qos):
 
     cart = ProviderCart(qos=qos)
     item = cart.add_item(cart_item)
+    # Ordered the way this supplier was found to have it: its own SKU, or the
+    # alias's it sells it as (see 'Context.offer_at').
+    if hasattr(item, "use_offer_of"):
+        item.use_offer_of(provider_name)
     option = {
         "name": provider_name,
         "desc": getattr(provider, "desc", None) or None,
         "url": getattr(provider, "url", None),
         "currency": _provider_currency(provider),
     }
+    if getattr(item, "via", None):
+        option.update({"via": item.via, "vendor": item.vendor, "sku": item.sku, "count_per_sku": item.count_per_sku})
 
     try:
         # Loading is what makes it a supplier cart rather than a plain one: a
@@ -5020,6 +5070,8 @@ def search_objects(session, params):
         pc.logging.error("Searching %s by interface is not supported" % kind)
         return None
 
+    # Passed only when asked for, so that a search function that predates it is called as it always was.
+    each_package = {"each_package": True} if params.get("each_package") else {}
     count = 0
     if interface and keyword:
         output = "PartCAD %s implementing '%s' with '%s' keyword:\n" % (kind, interface, keyword)
@@ -5029,7 +5081,7 @@ def search_objects(session, params):
         output = "PartCAD %s with '%s' keyword:\n" % (kind, keyword)
     with pc.logging.Process("Search " + kind.capitalize(), package):
         found = (
-            search_fn(ctx, package, recursive, keyword, interface, limit)
+            search_fn(ctx, package, recursive, keyword, interface, limit, **each_package)
             if takes_interface
             else search_fn(ctx, package, recursive, keyword)
         )
@@ -5165,6 +5217,9 @@ def render_objects(session, params):
     --compound``; see `partcad.assembly_compound`). A part or a sketch is one shape
     already and is written as it is. A file type that declares ``compound: true``
     is written that way whether or not this asks.
+
+    ``visuals``, false, draws every part as it is, never as its ``visual:`` -- ``pc
+    render --no-visuals`` -- as ``render.inline`` takes it.
     """
     ctx = _ctx(session, params)
     if ctx is None:
@@ -5193,6 +5248,10 @@ def render_objects(session, params):
     # somewhere else.
     render_opts = _render_options(pc, params)
     render_opts.update(_video(params))
+    # Handed to every 'Shape.render_async' of the run with the rest of these,
+    # where it is a parameter of its own rather than an export parameter.
+    if _visuals(pc, params) is False:
+        render_opts["visuals"] = False
 
     from partcad.exception import AssemblyDocumentError
 
@@ -5316,6 +5375,13 @@ def render_inline(session, params):
     attachment to a client that reads them, and as base64 to any other (see
     ``partcad_utils.framing``).
 
+    ``visuals``, false, draws every part as itself whatever the file type: what
+    the Draft tab asks, because a dimensioned drawing is of the object as it is
+    and never of a part's ``visual:`` (see `partcad.visual`). Left out, or true,
+    a file type that draws pictures - PartCAD's own PNG, JPEG and SVG, which is
+    what the 2D tab shows - draws each part as its visual, and one that draws
+    geometry draws the geometry.
+
     An implementation that writes nothing has said why in the log, which the
     client is streaming; the error here says only that there is no file.
     """
@@ -5361,6 +5427,7 @@ def render_inline(session, params):
     section = _section(params)
     compound = _compound(pc, params)
     render_opts = {**_render_options(pc, params), **_video(params)}
+    visuals = _visuals(pc, params)
 
     if kind in ("assembly", "scene"):
         # Phase one of an assembly build, as for every other request that ends
@@ -5385,6 +5452,7 @@ def render_inline(session, params):
                     link_filter=link_filter,
                     section=section,
                     compound=compound,
+                    visuals=visuals,
                     **render_opts,
                 )
             )
@@ -5429,6 +5497,22 @@ def _compound(pc, params) -> bool:
         return bool(value)
     try:
         return pc.output.as_flag(value, "compound")
+    except ValueError as e:
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
+
+
+def _visuals(pc, params):
+    """What a request says about drawing parts as their visuals: False for never, None for as the file type says.
+
+    Read with 'output.as_flag', like every boolean of the protocol, so that a
+    "false" from a JSON-RPC client is false. True is None: a file type that
+    draws geometry is not made to draw pictures by being asked (see
+    'Shape.render_async').
+    """
+    if params.get("visuals") is None:
+        return None
+    try:
+        return None if pc.output.as_flag(params["visuals"], "visuals") else False
     except ValueError as e:
         raise JsonRpcError(USAGE_ERROR, str(e)) from e
 

@@ -434,6 +434,14 @@ def test_a_picture_asked_for_nothing_extra_is_the_request_it_always_was(tmp_path
     call(server, "render", {"object": "box", "with_port_names": True, "with_component_names": False})
     (request,) = requests(daemon, "render.inline")
     assert not [key for key in request if key.startswith("with_")]
+    assert "visuals" not in request
+
+
+def test_a_picture_of_every_part_as_it_is_says_so_as_pc_render_no_visuals_does(tmp_path):
+    daemon, server = serve(tmp_path, {"render.inline": rendered("png", PNG)})
+    call(server, "render", {"object": "box", "visuals": False})
+    (request,) = requests(daemon, "render.inline")
+    assert request["visuals"] is False
 
 
 def test_the_overlay_and_callout_switches_are_the_ones_pc_render_has(tmp_path):

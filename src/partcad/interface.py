@@ -156,7 +156,9 @@ class InterfacePort:
                     project.relocate(self.source_sketch_name),
                 )
                 self.source_sketch_spec = self.source_project_name + ":" + self.source_sketch_name
-                self.sketch = project.ctx.get_sketch(self.source_sketch_spec, self.sketch_params or None)
+                self.sketch = project.ctx.get_sketch(
+                    self.source_sketch_spec, self.sketch_params or None, referrer=project.name
+                )
             else:
                 self.source_project_name = project.name
                 self.source_sketch_spec = self.source_project_name + ":" + self.source_sketch_name
@@ -1087,10 +1089,18 @@ class Interface:
         info = {
             "name": self.name,
             "desc": self.desc,
-            "ports": list(self.get_ports().values()),
-            "parameters": list(self.params.values()),
-            "inherits": self.get_parents(),
         }
+        url = self.config.get("url") if isinstance(getattr(self, "config", None), dict) else None
+        if url:
+            # Where to read about it: the standard it is a part of, say.
+            info["url"] = url
+        info.update(
+            {
+                "ports": list(self.get_ports().values()),
+                "parameters": list(self.params.values()),
+                "inherits": self.get_parents(),
+            }
+        )
         if self.construction_params:
             # What this instance was built from, not what could be asked for:
             # 'pc info -i m-thru;size=4' has to show the 4 it resolved. Reported

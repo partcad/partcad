@@ -1472,13 +1472,19 @@ def test_an_excluded_package_is_named_the_way_a_package_is():
     assert operations._excluded(ctx, {}) == []
 
 
-def test_list_packages_reports_the_package_with_its_url():
+def test_list_packages_reports_the_sub_packages_with_their_urls():
+    """Without recursion a package's sub-packages are listed - not the package itself - every one of them."""
     session, _ = make_session()
-    session.partcad_ctx.projects["//"] = FakeProject(
-        name="//",
+    root = FakeProject(name="//", desc="Root package")
+    root.children = ["//rpi", "//empty"]
+    session.partcad_ctx.projects["//"] = root
+    session.partcad_ctx.projects["//rpi"] = FakeProject(
+        name="//rpi",
         desc="Raspberry Pi",
         url="https://example.com/repo",
     )
+    # Nothing in it but what is below it: still a step on the way down.
+    session.partcad_ctx.projects["//empty"] = FakeProject(name="//empty", desc="Only sub-packages")
 
     operations.list_packages(session, {"package": "//"})
 
@@ -1486,9 +1492,71 @@ def test_list_packages_reports_the_package_with_its_url():
     assert log.processes == [("ListPackages", "//")]
     output = lines_of(log.only("info"))
     assert output[0] == "PartCAD packages:"
-    assert output[1].startswith("\t//")
+    assert output[1].startswith("\t//rpi")
     assert output[1].endswith("Raspberry Pi")
     assert output[2].strip() == "https://example.com/repo"
+    assert output[3].startswith("\t//empty") and output[3].endswith("Only sub-packages")
+    assert not any("Root package" in line for line in output)
+
+
+def test_list_packages_names_a_folder_declared_as_a_dependency_once():
+    """A sub-folder may also be declared as a dependency: one row, not two."""
+    session, _ = make_session()
+    root = FakeProject(name="//", desc="Root package")
+    root.children = ["//rpi", "//rpi"]
+    session.partcad_ctx.projects["//"] = root
+    session.partcad_ctx.projects["//rpi"] = FakeProject(name="//rpi", desc="Raspberry Pi")
+
+    operations.list_packages(session, {"package": "//"})
+
+    output = lines_of(session.partcad.logging.only("info"))
+    assert [line for line in output if line.startswith("\t//rpi")] == [output[1]]
+
+
+def test_list_packages_asks_a_plugin_package_for_its_description():
+    session, _ = make_session()
+    root = FakeProject(name="//", desc="Root package")
+    root.children = ["//shop"]
+    session.partcad_ctx.projects["//"] = root
+    shop = FakeProject(name="//shop", desc=None)
+
+    def load_metadata():
+        shop.desc = "Its categories, as the plugin says them"
+
+    shop.load_metadata = load_metadata
+    session.partcad_ctx.projects["//shop"] = shop
+
+    operations.list_packages(session, {"package": "//"})
+
+    output = lines_of(session.partcad.logging.only("info"))
+    assert output[1].endswith("Its categories, as the plugin says them")
+
+
+def test_list_packages_recursively_leaves_out_what_holds_nothing_unless_all_is_asked():
+    """'-r' is every package below with something in it; '--all' the complete subtree, sorted, and recursive."""
+    session, _ = make_session()
+    ctx = session.partcad_ctx
+    ctx.projects["//"] = FakeProject(name="//", desc="Root package")
+    ctx.projects["//shelf/b"] = FakeProject(name="//shelf/b", desc="Bolts").add("parts", FakeObject("bolt"))
+    ctx.projects["//shelf"] = FakeProject(name="//shelf", desc="Only sub-packages")
+
+    operations.list_packages(session, {"package": "//", "recursive": True})
+    output = session.partcad.logging.only("info")
+    assert "Bolts" in output and "Only sub-packages" not in output and "Root package" not in output
+
+    session.partcad.logging.records.clear()
+    operations.list_packages(session, {"package": "//", "all": True})
+    names = [line.split()[0] for line in lines_of(session.partcad.logging.only("info"))[1:]]
+    assert names == ["//", "//shelf", "//shelf/b"]
+
+
+def test_list_packages_of_a_package_with_none_below_says_none():
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"] = FakeProject(name="//", desc="Root package")
+
+    operations.list_packages(session, {"package": "//"})
+
+    assert lines_of(session.partcad.logging.only("info"))[1].strip() == "<none>"
 
 
 # ---- info ------------------------------------------------------------------
@@ -4516,6 +4584,41 @@ def test_render_inline_aims_and_cuts_the_picture_it_is_asked_for():
     # the one it was cut to, as PartCAD reads it.
     assert result["viewport"] == drawn_from
     assert result["section"] == {"x": [0.0, 5.0]}
+
+
+@pytest.mark.parametrize(
+    "visuals, passed",
+    [(None, None), (True, None), ("true", None), (False, False), ("false", False)],
+)
+def test_render_inline_draws_parts_as_themselves_when_the_draft_tab_says_so(visuals, passed):
+    """'visuals: false' is the Draft tab: never a part's 'visual:'. Anything else leaves it to the file type."""
+    from partcad import output
+
+    session = _inline_session()
+    session.partcad.output.as_flag = output.as_flag
+    part = FakeRenderable("cube", filename="cube.png")
+    session.partcad_ctx.shapes[("part", "//:cube")] = part
+
+    params = {"package": "//", "object": "cube", "format": "png"}
+    if visuals is not None:
+        params["visuals"] = visuals
+    operations.render_inline(session, params)
+
+    assert part.render_kwargs[0]["visuals"] is passed
+
+
+def test_render_inline_refuses_a_visuals_that_is_not_a_boolean():
+    from partcad import output
+
+    session = _inline_session()
+    session.partcad.output.as_flag = output.as_flag
+    part = FakeRenderable("cube", filename="cube.png")
+    session.partcad_ctx.shapes[("part", "//:cube")] = part
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_inline(session, {"package": "//", "object": "cube", "format": "png", "visuals": "maybe"})
+    assert caught.value.code == operations.USAGE_ERROR
+    assert part.render_calls == []
 
 
 @pytest.mark.parametrize(

@@ -10,16 +10,12 @@ from partcad_cli.click.commands.search.sketches import cli as search_sketches
 
 from ... import fast_only
 from ...cli_context import CliContext
+from ...search_scope import each_package_option, recursive_option
 
 
 @click.command(help="Search all available parts, sketches, assemblies and scenes with the given keyword")
-@click.option(
-    "-r",
-    "--recursive",
-    is_flag=True,
-    help="Recursively search in all imported packages (older spelling of '<package>...')",
-    show_envvar=True,
-)
+@recursive_option
+@each_package_option
 @fast_only.option()
 @click.option(
     "-k",
@@ -40,13 +36,13 @@ from ...cli_context import CliContext
     ),
 )
 @click.pass_obj
-def cli(cli_ctx: CliContext, recursive: bool, fast_only: bool, package: str, keyword: str) -> None:
-    """Search all available parts, assemblies and scenes recursively with the given keyword."""
+def cli(cli_ctx: CliContext, recursive: bool, each_package: bool, fast_only: bool, package: str, keyword: str) -> None:
+    """Search all available parts, assemblies and scenes with the given keyword, recursively unless told not to."""
     options = []
     runner = CliRunner()
 
-    if recursive:
-        options.append("--recursive")
+    # Forwarded either way: each search is recursive unless told otherwise.
+    options.append("--recursive" if recursive else "--no-recursive")
     if package:
         options.extend(["--package", package])
     if keyword:
@@ -54,12 +50,14 @@ def cli(cli_ctx: CliContext, recursive: bool, fast_only: bool, package: str, key
     # Only the searches that find assemblies take it: nothing else declares a
     # timeout, so nothing else has anything to leave out.
     assembly_options = (["--fast-only"] if fast_only else []) + options
+    # Only the searches of shapes take it: a catalog searches for those.
+    shape_options = ["--each-package"] if each_package else []
 
     catch_exceptions = False
 
     runner.invoke(search_packages, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
-    runner.invoke(search_sketches, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
+    runner.invoke(search_sketches, shape_options + options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     runner.invoke(search_interfaces, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
-    runner.invoke(search_parts, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
-    runner.invoke(search_assemblies, assembly_options, catch_exceptions=catch_exceptions, obj=cli_ctx)
-    runner.invoke(search_scenes, assembly_options, catch_exceptions=catch_exceptions, obj=cli_ctx)
+    runner.invoke(search_parts, shape_options + options, catch_exceptions=catch_exceptions, obj=cli_ctx)
+    runner.invoke(search_assemblies, shape_options + assembly_options, catch_exceptions=catch_exceptions, obj=cli_ctx)
+    runner.invoke(search_scenes, shape_options + assembly_options, catch_exceptions=catch_exceptions, obj=cli_ctx)

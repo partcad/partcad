@@ -29,6 +29,7 @@ are configured by a section of ``partcad.yaml`` named after the command --
       prefix: <(optional) where the file goes, relative to the package>
       exclude: <(optional) kinds of object not to write this type for>
       reproducible: <(optional) true to require the same bytes every time>
+      visuals: <(optional, render: only) true if the script draws pictures; see below>
       compound: <(optional) true to be handed an assembly as one part>
       <parameter name>: <value> # anything else is an export parameter
 
@@ -284,6 +285,33 @@ the same file. So two renders on one machine are the same file, and two
 machines agree on everything but the hardest subjects. That is why PartCAD's own
 ``Examples (PartCAD)`` job compares the checked-in drawings on one cell of its
 matrix rather than on all of them.
+
+.. _output-visuals:
+
+``visuals`` says what an implementation writes is a **picture** of an object --
+what it looks like -- rather than its geometry. With it, every part in what the
+implementation is handed that declares a :ref:`visual <part-visual>` is drawn as
+that visual:
+
+.. code-block:: yaml
+
+  render:
+    poster:
+      path: poster.py
+      visuals: true
+
+``//builtin/render`` says it of its ``svg``, ``png`` and ``jpeg`` -- the pictures the
+IDE's 2D tab shows -- and of every video; not of ``dxf``, which is the projection
+a laser cuts from and another CAD tool opens. It is the implementing package's
+word about its own script, read from its declaration of the file type and from no
+other layer: a package that only tunes ``svg`` keeps PartCAD's answer, and one
+that declares a ``path`` of its own -- a drawing package's dimensioned ``svg`` --
+answers for itself, and draws the parts as they are unless it says so. It counts
+only in ``render:``: an export is what another tool computes with, and a visual
+is not what the part is. It is not handed to the script.
+
+The IDE's Draft tab goes further, and asks for its drawing with no visuals
+whatever the file type says: a dimensioned drawing is of the object as it is.
 
 .. _output-compound:
 

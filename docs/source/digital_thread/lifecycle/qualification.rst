@@ -109,6 +109,7 @@ of its own ``partcad.yaml``:
   qual:
     lockwire:
       desc: Lockwire's power, mass, bus and torque budgets
+      url: https://lockwirerobotics.com/   # where to read about it; never handed to the script
       path: lockwire_qual.py         # the script
       subtype: other                 # basic, topology or other
       kinds: [assembly, part]        # what it can be asked of

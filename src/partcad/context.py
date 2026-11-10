@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 
 import asyncio
+import copy
 import os
 import socket
 import sys
@@ -73,7 +74,8 @@ def is_excluded(name: str, exclude) -> bool:
 
 
 # How long a package's 'partcad.yaml' is taken to be unchanged after it was
-# last checked (see 'Context.reload_changed_packages').
+# last checked, unless a command is about that package itself (see
+# 'Context.reload_changed_packages').
 CONFIG_CHECK_INTERVAL = 15.0
 
 
@@ -560,20 +562,26 @@ class Context:
         of them. A package something reaches without declaring it is not
         checked, and may be answered from the configuration read before.
 
-        Whether a configuration changed is its modification time and size: a
-        stat, no read, and at most once per 'CONFIG_CHECK_INTERVAL' seconds per
-        package, so that a burst of commands does not stat the same files over
-        and over. A changed package is dropped together with every package
-        underneath it, and is loaded again from disk the next time something
-        asks for it. Nothing else is: the packages beside it, the sandboxes, and
-        whatever the other packages have built stay as they are. The root's
-        children are every package, so a changed root reloads them all - in this
+        Whether a configuration changed is its modification time and size: a stat, no
+        read. The packages in 'packages' are stated every time: a file edited a moment
+        ago is what the next command about that package has to see, and an editor or an
+        agent runs that command within seconds of saving - inside any interval, which
+        then answered silently from the file as it was. What they declare, and with
+        'recursive' everything underneath them, is stated at most once per
+        'CONFIG_CHECK_INTERVAL' seconds per package, so that a burst of commands over a
+        large tree does not stat the same files over and over. A changed package is
+        dropped together with every package underneath it, and is loaded again from disk
+        the next time something asks for it. Nothing else is: the packages beside it,
+        the sandboxes, and whatever the other packages have built stay as they are. The
+        root's children are every package, so a changed root reloads them all - in this
         context, rather than in a new one.
 
         Returns the names of the packages dropped.
         """
         with self.lock:
             names = list(self.projects) if packages is None else self._config_check_scope(packages, recursive)
+            # Asked for by name: checked whenever asked (see above).
+            targets = set() if packages is None else set(packages)
             now = time.monotonic()
             changed = []
             for name in names:
@@ -581,7 +589,7 @@ class Context:
                 if project is None or not hasattr(project, "config_stat"):
                     continue
                 checked_at = self._config_checked_at.get(name)
-                if checked_at is not None and now - checked_at < CONFIG_CHECK_INTERVAL:
+                if name not in targets and checked_at is not None and now - checked_at < CONFIG_CHECK_INTERVAL:
                     continue
                 self._config_checked_at[name] = now
                 if file_stat(project.config_path) != project.config_stat:
@@ -1225,8 +1233,12 @@ class Context:
             # Count via the object accessors (enumeration) rather than the
             # instantiated dicts, so a plugin-backed package - which enumerates
             # lazily and does not instantiate up front - is counted correctly.
+            # A package that searches its own catalogue has something in it,
+            # whether or not it lists any of it: every category of a
+            # distributor's catalogue is one.
             projects = filter(
-                lambda x: sum(x.object_count(kind) for kind in HAS_STUFF_KINDS) > 0,
+                lambda x: sum(x.object_count(kind) for kind in HAS_STUFF_KINDS) > 0
+                or any(x.searches(kind) for kind in HAS_STUFF_KINDS),
                 projects,
             )
         return list(
@@ -1361,7 +1373,7 @@ class Context:
 
         return source_candidate_interfaces, target_candidate_interfaces
 
-    def _get_sketch(self, sketch_spec, params=None):
+    def _get_sketch(self, sketch_spec, params=None, referrer=None):
         project_name, sketch_name = resolve_resource_path(
             self.current_project_path,
             sketch_spec,
@@ -1372,10 +1384,16 @@ class Context:
             pc_logging.error("Packages found: %s" % str(self.projects))
             return None
         pc_logging.debug("Retrieving %s from %s" % (sketch_name, project_name))
-        return prj.get_sketch(sketch_name, params)
+        return prj.get_sketch(sketch_name, params, referrer=referrer)
 
-    def get_sketch(self, sketch_spec, params=None):
-        return self._get_sketch(sketch_spec, params)
+    def get_sketch(self, sketch_spec, params=None, referrer=None):
+        """The sketch '<package>:<name>' names, or None.
+
+        'referrer' is the package the reference was written in, when an object
+        of it is what names the sketch; a private sketch is refused to any
+        other package (see 'partcad.privacy'). A command passes none.
+        """
+        return self._get_sketch(sketch_spec, params, referrer=referrer)
 
     def get_sketch_shape(self, sketch_spec, params=None):
         return asyncio.run(self._get_sketch(sketch_spec, params).get_wrapped(self))
@@ -1430,7 +1448,7 @@ class Context:
             return None
         return prj.object_kind(object_name, kinds)
 
-    def _get_interface(self, interface_spec, params=None):
+    def _get_interface(self, interface_spec, params=None, referrer=None):
         project_name, interface_name = resolve_resource_path(
             self.current_project_path,
             interface_spec,
@@ -1441,15 +1459,16 @@ class Context:
             pc_logging.error("Packages found: %s" % str(self.projects))
             return None
         pc_logging.debug("Retrieving %s from %s" % (interface_name, project_name))
-        return prj.get_interface(interface_name, params)
+        return prj.get_interface(interface_name, params, referrer=referrer)
 
-    def get_interface(self, interface_spec, params=None):
+    def get_interface(self, interface_spec, params=None, referrer=None):
         """The interface named by '<package>:<name>', or None.
 
         'interface_spec' may carry parameter values ('m-thru;size=4') and
         'params' may add to them, the same as for a part or a sketch.
+        'referrer' as 'get_sketch' takes it.
         """
-        return self._get_interface(interface_spec, params)
+        return self._get_interface(interface_spec, params, referrer=referrer)
 
     def get_interface_shape(self, interface_spec, params=None):
         return asyncio.run(self._get_interface(interface_spec, params).get_wrapped(self))
@@ -1486,9 +1505,17 @@ class Context:
             cart (ProviderCart, optional): Use this cart for requirements and preferences. Defaults to None.
 
         The candidates are the suppliers of the package of the assembly the
-        item was procured for, first, and then those of the package the item
-        itself is declared in (see 'ProviderCartItem.suppliers'), each asked
-        once.
+        item was procured for, first, then those of the packages of the
+        aliases the item can be ordered as (see 'procurement.alternatives'),
+        and then those of the package the item itself is declared in (see
+        'ProviderCartItem.suppliers'), each asked once.
+
+        A supplier is asked about each way the item can be ordered, its own SKU
+        first and then each alias's, and has it if it has any of them: the
+        first it has is what it is handed (recorded in
+        'ProviderCartItem.offer_by_provider'). With 'cart.cheapest', every
+        way each supplier has it is priced, each supplier is handed its
+        cheapest, and the suppliers come cheapest first.
 
         Returns:
             list[str]: list of provider names that can supply the part, a
@@ -1508,7 +1535,26 @@ class Context:
         pc_logging.debug("Retrieving suppliers from %s" % project_name)
 
         part_suppliers = dict(getattr(part_item, "suppliers", None) or {})
-        for supplier, extra in (await prj.get_suppliers_async()).items():
+        own_suppliers = await prj.get_suppliers_async()
+        # The stores this package names publish aliases of what they sell,
+        # which count once their packages are loaded.
+        from . import procurement
+
+        procurement.load_suppliers(self, part_suppliers)
+        procurement.load_suppliers(self, own_suppliers)
+        if hasattr(part_item, "refresh_offers"):
+            part_item.refresh_offers(self)
+        # A part bought through an alias of it is sold by whoever the alias's
+        # package says sells what it names: a catalogue's packaging of a part
+        # another package draws, a store's SKU of a standard size.
+        for offer_name, _record in getattr(part_item, "offers", None) or []:
+            if offer_name == part_item.name:
+                continue
+            via_project = self.get_project(offer_name.partition(":")[0])
+            if via_project is not None:
+                for supplier, extra in (await via_project.get_suppliers_async()).items():
+                    part_suppliers.setdefault(supplier, extra)
+        for supplier, extra in own_suppliers.items():
             part_suppliers.setdefault(supplier, extra)
         if len(part_suppliers) == 0:
             if getattr(part_item, "optional", False):
@@ -1520,6 +1566,8 @@ class Context:
             pc_logging.debug("Part suppliers: %s" % str(part_suppliers))
 
         pc_logging.debug("Part: %s" % str(part_item))
+        cheapest = bool(cart is not None and getattr(cart, "cheapest", False))
+        prices = {}
         for provider_name, provider_extra_config in part_suppliers.items():
             provider = self.get_provider(provider_name, provider_extra_config)
             if provider is None:
@@ -1527,9 +1575,10 @@ class Context:
                 # without the one that registers its stores - has been reported
                 # by 'get_provider', and has nothing to offer: ask the next.
                 continue
-            if not await provider.is_part_available(part_item):
-                continue
             if cart and cart.qos is not None and not provider.is_qos_available(cart.qos):
+                continue
+            found = await self.offer_at(provider, part_item, cart, price=cheapest)
+            if found is None:
                 continue
 
             # The name of the instance that was asked: a supplier named with
@@ -1537,8 +1586,73 @@ class Context:
             # carts and quotes made from this ask 'get_provider' for it by
             # name. Its bare name would be the provider with its defaults.
             providers.append(provider.name)
+            prices[provider.name] = found[1]
 
+        if cheapest:
+            # Cheapest first, which is the one 'select_preferred_supplier'
+            # takes; a supplier that would not say what it wants comes last.
+            providers.sort(key=lambda name: (prices[name] is None, prices[name] or 0.0))
         return providers
+
+    async def offer_at(self, provider, part_item, cart=None, price: bool = False):
+        """Which way of ordering 'part_item' 'provider' has, as '(offer name, price)'; None if it has none.
+
+        The offers are put to it in 'ProviderCartItem.candidates' order and the
+        first it has is the answer, unpriced. With 'price', every offer it has
+        is priced and the cheapest is the answer - one it has only one way of
+        ordering too, since the price is what the suppliers are compared by
+        (see 'find_part_suppliers'). An item with no offer to put - one a
+        manufacturer makes, with nothing to order it by - is asked about as it
+        is, and its offer name is None.
+
+        What is found is recorded on the item, by provider, so that the cart
+        this supplier is handed orders the item the same way (see
+        'prepare_supplier_carts').
+        """
+        candidates = part_item.candidates() if hasattr(part_item, "candidates") else []
+        if not candidates:
+            if not await provider.is_part_available(part_item):
+                return None
+            return (None, await self._price_at(provider, part_item, cart) if price else None)
+
+        available = []
+        for offer_name, _record in candidates:
+            trial = copy.deepcopy(part_item)
+            trial.use_offer(offer_name)
+            if await provider.is_part_available(trial):
+                available.append((offer_name, trial))
+                if not price:
+                    break
+        if not available:
+            return None
+
+        priced = [(name, None) for name, _trial in available]
+        if price:
+            priced = [(name, await self._price_at(provider, trial, cart)) for name, trial in available]
+            with_price = [pair for pair in priced if pair[1] is not None]
+            if with_price:
+                priced = sorted(with_price, key=lambda pair: pair[1])
+        chosen, cost = priced[0]
+        part_item.offer_by_provider[provider.name] = chosen
+        part_item.price_by_provider[provider.name] = cost
+        return chosen, cost
+
+    async def _price_at(self, provider, part_item, cart=None):
+        """What 'provider' quotes for 'part_item' alone, or None when it will not say."""
+        one = ProviderCart(qos=getattr(cart, "qos", None))
+        item = one.add_item(part_item)
+        try:
+            await provider.load(item)
+            request = ProviderRequestQuote(one)
+            result = await provider.query_quote(request)
+        except Exception as e:  # pylint: disable=broad-except
+            pc_logging.debug("No price from %s for %s as %s: %s" % (provider.name, part_item.name, part_item.sku, e))
+            return None
+        value = result.get("price") if isinstance(result, dict) else None
+        try:
+            return float(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
 
     def select_preferred_supplier(self, suppliers: list[str]):
         """From a list of suppliers, select the preferred one, or '' if there is none.
@@ -1560,15 +1674,29 @@ class Context:
         return preferred_suppliers
 
     async def select_supplier(self, provider, cart: ProviderCart) -> dict[str, str]:
-        """Given a specific provider, confirm it can provide all the parts."""
+        """Given a specific provider, confirm it can provide all the parts.
+
+        Each part in whichever way the provider has it: its own SKU, or an
+        alias's (see 'offer_at').
+        """
         if cart.qos is not None and not provider.is_qos_available(cart.qos):
             pc_logging.error(f"QoS {cart.qos} is not available from {provider}")
             return
         suppliers = {}
         tasks = []
 
+        from . import procurement
+
+        # The provider's own package publishes what it sells as aliases, which
+        # count once it is loaded: refresh what each item can be ordered as.
+        procurement.load_suppliers(self, {provider.name: {}})
+        for cart_item in cart.parts.values():
+            procurement.load_suppliers(self, getattr(cart_item, "suppliers", None))
+            if hasattr(cart_item, "refresh_offers"):
+                cart_item.refresh_offers(self)
+
         async def _set_supplier(name, cart_item):
-            if not await provider.is_part_available(cart_item):
+            if await self.offer_at(provider, cart_item, cart, price=bool(getattr(cart, "cheapest", False))) is None:
                 if getattr(cart_item, "optional", False):
                     pc_logging.info("Part %s is not available from %s: it is left out" % (name, provider.name))
                 else:
@@ -1601,12 +1729,18 @@ class Context:
                 kept[spec] = supplier
         return kept, sorted(left_out)
 
-    async def prepare_supplier_carts(self, preferred_suppliers: dict[str, str]) -> dict[str, ProviderCart]:
+    async def prepare_supplier_carts(
+        self, preferred_suppliers: dict[str, str], cart: ProviderCart = None
+    ) -> dict[str, ProviderCart]:
         """Given the list of preferred suppliers, prepare the supplier carts.
 
         'preferred_suppliers' is keyed by cart item spec, '<name>#<count>', as
         'select_supplier()' and 'select_preferred_suppliers()' return it.
+        'cart' is the cart those were chosen for: each item is then ordered
+        from its supplier the way that supplier was found to have it, which a
+        spec alone does not say (see 'offer_at').
         """
+        originals = {str(item): item for item in cart.parts.values()} if cart is not None else {}
         supplier_carts: dict[str, ProviderCart] = {}
 
         # Create a supplier cart for each supplier
@@ -1619,6 +1753,10 @@ class Context:
             if provider_name not in supplier_carts:
                 supplier_carts[provider_name] = ProviderCart()
             cart_item = await supplier_carts[provider_name].add_part_spec(self, part_spec)
+            original = originals.get(part_spec)
+            if original is not None and provider_name:
+                cart_item.offer_by_provider = dict(getattr(original, "offer_by_provider", None) or {})
+                cart_item.use_offer_of(provider_name)
 
             # If it's not 'None' which means no provider found
             if provider_name:
@@ -1677,14 +1815,14 @@ class Context:
         pc_logging.debug("Retrieving %s from %s" % (part_name, project_name))
         return prj, part_name
 
-    def _get_part(self, part_spec, params=None) -> Optional[Part]:
+    def _get_part(self, part_spec, params=None, referrer=None) -> Optional[Part]:
         resolved = self._resolve_part_project(part_spec)
         if resolved is None:
             return None
         prj, part_name = resolved
-        return prj.get_part(part_name, params)
+        return prj.get_part(part_name, params, referrer=referrer)
 
-    async def _get_part_async(self, part_spec, params=None) -> Optional[Part]:
+    async def _get_part_async(self, part_spec, params=None, referrer=None) -> Optional[Part]:
         """'_get_part()' for a caller already running on a loop.
 
         Resolving a part may have to build the assembly that produces it, and
@@ -1698,7 +1836,7 @@ class Context:
         if resolved is None:
             return None
         prj, part_name = resolved
-        return await prj.get_part_async(part_name, params)
+        return await prj.get_part_async(part_name, params, referrer=referrer)
 
     async def _warm_project_async(self, project_path: str) -> None:
         """Fetch, on the caller's loop, what 'get_project(project_path)' would fetch blocking it.
@@ -1744,11 +1882,12 @@ class Context:
         await self._warm_project_async(project_path)
         return self.get_project(project_path)
 
-    def get_part(self, part_spec, params=None) -> Optional[Part]:
-        return self._get_part(part_spec, params)
+    def get_part(self, part_spec, params=None, referrer=None) -> Optional[Part]:
+        """The part '<package>:<name>' names, or None; 'referrer' as 'get_sketch' takes it."""
+        return self._get_part(part_spec, params, referrer=referrer)
 
-    async def get_part_async(self, part_spec, params=None) -> Optional[Part]:
-        return await self._get_part_async(part_spec, params)
+    async def get_part_async(self, part_spec, params=None, referrer=None) -> Optional[Part]:
+        return await self._get_part_async(part_spec, params, referrer=referrer)
 
     def get_part_shape(self, part_spec, params=None):
         return asyncio.run(self._get_part(part_spec, params).get_wrapped(self))
@@ -1772,7 +1911,7 @@ class Context:
         """Return the SDF part's mesh (normalized in the sandbox at build time)."""
         return asyncio.run(self._get_part(part_spec, params).get_wrapped(self))
 
-    def _get_assembly(self, assembly_spec, params=None):
+    def _get_assembly(self, assembly_spec, params=None, referrer=None):
         project_name, assembly_name = resolve_resource_path(
             self.current_project_path,
             assembly_spec,
@@ -1782,12 +1921,13 @@ class Context:
             pc_logging.error("Package %s not found" % project_name)
             return None
         pc_logging.debug("Retrieving %s from %s" % (assembly_name, project_name))
-        return prj.get_assembly(assembly_name, params)
+        return prj.get_assembly(assembly_name, params, referrer=referrer)
 
-    def get_assembly(self, assembly_spec, params=None):
-        return self._get_assembly(assembly_spec, params)
+    def get_assembly(self, assembly_spec, params=None, referrer=None):
+        """The assembly '<package>:<name>' names, or None; 'referrer' as 'get_sketch' takes it."""
+        return self._get_assembly(assembly_spec, params, referrer=referrer)
 
-    async def get_assembly_async(self, assembly_spec, params=None):
+    async def get_assembly_async(self, assembly_spec, params=None, referrer=None):
         """'get_assembly()' for a caller already running on a loop.
 
         The packages above it are warmed on the caller's loop, and then the
@@ -1800,7 +1940,7 @@ class Context:
             pc_logging.error("Package %s not found" % project_name)
             return None
         pc_logging.debug("Retrieving %s from %s" % (assembly_name, project_name))
-        return await prj.get_assembly_async(assembly_name, params)
+        return await prj.get_assembly_async(assembly_name, params, referrer=referrer)
 
     def get_assembly_shape(self, assembly_spec, params=None):
         return asyncio.run(self._get_assembly(assembly_spec, params).get_wrapped(self))
@@ -1812,7 +1952,7 @@ class Context:
         """
         return asyncio.run(self._get_assembly(assembly_spec, params).convert(part_type, self, **kwargs))
 
-    def _get_scene(self, scene_spec, params=None):
+    def _get_scene(self, scene_spec, params=None, referrer=None):
         project_name, scene_name = resolve_resource_path(
             self.current_project_path,
             scene_spec,
@@ -1822,10 +1962,11 @@ class Context:
             pc_logging.error("Package %s not found" % project_name)
             return None
         pc_logging.debug("Retrieving %s from %s" % (scene_name, project_name))
-        return prj.get_scene(scene_name, params)
+        return prj.get_scene(scene_name, params, referrer=referrer)
 
-    def get_scene(self, scene_spec, params=None):
-        return self._get_scene(scene_spec, params)
+    def get_scene(self, scene_spec, params=None, referrer=None):
+        """The scene '<package>:<name>' names, or None; 'referrer' as 'get_sketch' takes it."""
+        return self._get_scene(scene_spec, params, referrer=referrer)
 
     def get_scene_shape(self, scene_spec, params=None):
         return asyncio.run(self._get_scene(scene_spec, params).get_wrapped(self))

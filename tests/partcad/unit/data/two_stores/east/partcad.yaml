@@ -1,0 +1,12 @@
+desc: The east store's products.
+parts:
+  board:
+    type: alias
+    source: //:board
+    vendor: east
+    sku: E-B
+  module:
+    type: alias
+    source: //:module
+    vendor: east
+    sku: E-M

@@ -1152,6 +1152,17 @@ export interface MaterialClustersData {
 /** What the user chose for each line that can be both built and bought, by its full name. */
 export type Choices = Record<string, 'build' | 'buy'>;
 
+/** One way of ordering a part that is bought through aliases of it: one of those aliases. */
+export interface Offer {
+    /** The alias, '//package:name'. */
+    name: string;
+    vendor?: string | null;
+    sku?: string | null;
+    /** How many of the part one SKU is: a pack, a reel. */
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    count_per_sku?: number | null;
+}
+
 /**
  * One node of what an object is made of, as 'manufacturing.tree' answers.
  *
@@ -1168,12 +1179,19 @@ export interface TreeNode {
     /** The link's name inside the parent assembly. */
     link?: string | null;
     desc?: string | null;
-    /** It declares a vendor and an SKU. */
+    /** It declares a vendor and an SKU, or an alias of it that is loaded does (see 'offers'). */
     buy: boolean;
     /** It declares how it is made (a part) or has links to put together (an assembly). */
     build: boolean;
     vendor?: string | null;
     sku?: string | null;
+    /**
+     * The aliases of it it is bought through, when it names no vendor and SKU
+     * of its own: each one an SKU to order it by, often the same thing in
+     * another pack, fewest items per SKU first (see 'partcad.procurement.offers').
+     * Absent for a part that names its own, and from a daemon too old to say.
+     */
+    offers?: Offer[] | null;
     /** The material reference, as written. */
     material?: string | null;
     /** Its own colour, material and finish, as a bill of materials line says them (see 'BomItem.cmf'). */

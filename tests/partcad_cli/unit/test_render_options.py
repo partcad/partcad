@@ -62,6 +62,15 @@ def test_pc_render_sends_nothing_when_it_was_not_asked_so_the_file_type_decides(
 
     assert _invoke("render", "bracket").exit_code == 0
     assert "reproducible" not in recorder.calls[0][1]
+    assert "visuals" not in recorder.calls[0][1]
+
+
+def test_pc_render_asks_for_every_part_as_it_is_when_told_no_visuals(monkeypatch):
+    """'--no-visuals': the picture of what an export sees, never a part's 'visual:'."""
+    recorder = _record(monkeypatch, "render")
+
+    assert _invoke("render", "--no-visuals", "bracket").exit_code == 0
+    assert recorder.calls[0][1]["visuals"] is False
 
 
 @pytest.mark.parametrize("kind", ["part", "sketch"])

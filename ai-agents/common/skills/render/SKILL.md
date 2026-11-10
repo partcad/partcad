@@ -75,6 +75,17 @@ take no viewing angle.
 The file is written into `-O` and named after the object. Nothing about the
 package changes.
 
+A part may declare a `visual:` - another part a picture draws in its place, such
+as the one-sided surface a floor plan's solid wall is drawn as. `svg`, `png`,
+`jpeg` and the videos draw it; `dxf`, a drawing package's file types and every
+export draw the part as it is. `--no-visuals` draws every part as it is in a
+picture too, which is what to measure when the question is about the object
+rather than its look:
+
+```sh
+pc --no-ansi render -t svg --view top --no-visuals -O ./out living-room   # the walls with their thickness
+```
+
 An object that declares `parameters:` is rendered with particular values by
 `-p <name>=<value>`, repeated for each — or by naming it `"bolt;length=30"`,
 which is the same request, quoted because a shell ends the command at the `;`.

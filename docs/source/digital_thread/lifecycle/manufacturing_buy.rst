@@ -100,6 +100,12 @@ read the same way (see :ref:`repositories`):
 
   {"desc": "Metric hex bolts", "suppliers": {"//pub/svc/commerce/homedepot:homedepot": {}}}
 
+A package the plugin serves below the top of its own package -- a catalogue's
+``<package>/products/<category>/<subcategory>`` -- names a store of that same
+package relatively, with one ``..`` per level (``"../../..:store"`` from a
+subcategory), so that it keeps working wherever the package is imported rather
+than only at its place in the public index (see :ref:`relative-references`).
+
 A package that builds assemblies out of somebody else's parts can say where to
 buy them, too. When ``pc supply`` breaks an assembly (or a scene) down into what
 it is procured from, every one of those parts is looked for first at the

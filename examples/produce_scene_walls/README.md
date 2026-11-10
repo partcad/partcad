@@ -1,12 +1,16 @@
 # //pub/examples/partcad/produce_scene_walls
 
-This example demonstrates how to lay out a space with walls: one-sided surfaces seen from the inside of a room and looked through from outside it.
+This example demonstrates how to lay out a space with walls: solid walls, drawn as one-sided surfaces seen from the inside of a room and looked through from outside it.
 
 ## Usage
-A wall is a surface rather than a body - a sheet of faces with no thickness,
-drawn from the side it faces and not at all from the other - so a room drawn
-from outside is drawn *through* its near walls, the way a floor plan or a
-sales brochure shows a flat. None of it is manufacturable, and it says so.
+A room's walls are solids - each one its elevation extruded back through its
+thickness, outside the plan - and a picture draws each as its `visual:`, the
+surface of its face: a sheet of faces drawn from the side it faces and not
+at all from the other. So a room drawn from outside is drawn *through* its
+near walls, the way a floor plan or a sales brochure shows a flat, and is
+walled all the same: `pc export -t step -S living-room` writes the solids,
+and so does everything else that is not a picture. None of it is
+manufacturable, and it says so.
 
 ```shell
 pc ide view -S living-room
@@ -17,10 +21,11 @@ pc render -t svg --view top -S living-room   # from above, it is the plan
 `living-room` is a `walls` scene: a wall per edge of the sketch `plan`, every
 one of them looking in, and every one painted the room's colour - a CMF
 colour, `sage`, that claims nothing, since nobody buys a wall. `entrance` is
-one wall on its own, with a door and a window cut out of it by the sketch
+one wall on its own - a `type: wall` part with no thickness, which is the
+surface alone - with a door and a window cut out of it by the sketch
 `openings`, drawn as if the wall were unrolled flat. `bay` is PartCAD's own
 wall asked for an arc, bending towards the side it is seen from, in the grey
-a wall is unless it is painted.
+a wall is unless it is painted: a solid 4.5 in (114.3 mm) thick, drawn as its surface.
 
 A shaded picture, or a video of the room turning, is drawn the same way:
 
@@ -60,6 +65,9 @@ pc render -t png -S "//builtin/building:room;sketch=//pub/examples/partcad/produ
 <li>height: 2700.0</li>
 <li>radius: 1500.0</li>
 <li>openings: </li>
+<li>thickness: 114.3</li>
+<li>extendStart: 0.0</li>
+<li>extendEnd: 0.0</li>
 <li>color: :wall</li>
 </ul>
 </td>

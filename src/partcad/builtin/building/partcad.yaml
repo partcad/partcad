@@ -2,30 +2,40 @@
 #
 # For drawing a floor plan, an apartment, the room a machine is going to stand
 # in - a space rather than a product. Nothing here is manufacturable, and that
-# is what it says: a wall is a one-sided surface with no thickness and no body,
-# drawn from the side it faces and see-through from the other, so that a room
-# seen from outside is seen *into* through its near walls (see
-# `src/partcad/surface.py` for what being a surface excuses a part from, and
-# what it does not).
+# is what it says: a wall lays out a space and nobody makes it.
 #
-# Two objects, each the parametric face of a type PartCAD implements, and the
-# one colour they are drawn in: the geometry is `wall` and `walls` (see
+# A wall is two parts, because it is two things. What it *is* is `wall`: a
+# solid, its elevation extruded straight back through its thickness from the
+# face a room sees - a physical object, which `pc qual test` measures, a simulation
+# collides with and an export writes. What a picture of a floor plan *draws* is
+# `wall-surface`: that face alone, one-sided, drawn from the side it faces and
+# see-through from the other, so that a room seen from outside is seen *into*
+# through its near walls (see `src/partcad/surface.py` for what being a surface
+# excuses a part from). `wall` names it as its `visual:` - which is drawn in the
+# 3D view and in PartCAD's own pictures, and never anywhere else (see
+# `src/partcad/visual.py`) - and it is `private: true`: geometry for a picture,
+# and nothing another package may build a room out of (see
+# `src/partcad/privacy.py`).
+#
+# The geometry is the `wall` part type and the `walls` scene type (see
 # `part_factory_wall.py` and `scene_factory_walls.py`), and what is here is the
 # parameters they are asked for with. A wall is coloured the way any part is,
 # by its CMF `color` parameter, and a room passes its own colour, material and
 # finish to every wall it stands up: `room;color=//my/package:sage` is a room
-# painted sage. A package that wants walls of its own - with a different default
-# height, say - declares a `type: wall` part of its own, or an `enrich` of this
-# one; a room of its own is a `type: walls` scene naming that part as its
-# `wall:`.
+# painted sage. The surface is asked for with the wall's own values, its
+# colour included, so the picture is of the wall it stands for. A package that
+# wants walls of its own - with a different default height, say - declares a
+# `type: wall` part of its own, or an `enrich` of `wall`; a room of its own is a
+# `type: walls` scene naming that part as its `wall:`.
 
 name: //builtin/building
 desc: |
-  What a space is laid out with: `wall`, a one-sided surface drawn from the
-  side it faces and see-through from behind, straight or along an arc and with
-  doors and windows cut out of it by a sketch; and `room`, the walls standing
-  on the outline of a sketch, every one of them looking in. For floor plans and
-  space planning: none of it is manufacturable.
+  What a space is laid out with: `wall`, a solid wall, straight or along an arc
+  and with doors and windows cut out of it by a sketch, drawn in a picture as
+  the one-sided surface of it - seen from the side it faces and see-through
+  from behind; and `room`, the walls standing on the outline of a sketch, every
+  one of them looking in. For floor plans and space planning: none of it is
+  manufacturable.
 
 # Said once for the whole package as well as on each object: a wall refuses to
 # be declared without it, and so would any object added here later.
@@ -46,15 +56,26 @@ parts:
     type: wall
     manufacturable: false
     desc: |
-      A wall: a one-sided surface, seen from its front and see-through from
-      behind, which is how a room drawn from outside is seen into. Its base
-      starts at the origin and sets off along +X; it rises along +Z, and it
-      faces -Y - the way `pc render --view front` looks at it - so that seen
-      from the front it is its openings as they were drawn.
+      A wall: a solid, its face where it stands and its thickness behind it,
+      drawn in a picture as the one-sided surface of it - seen from its front
+      and see-through from behind, which is how a room drawn from outside is
+      seen into. Its base starts at the origin and sets off along +X; it rises
+      along +Z, and it faces -Y - the way `pc render --view front` looks at it -
+      so that seen from the front it is its openings as they were drawn. Its
+      thickness goes back from there, towards +Y: outside a room traced
+      clockwise, which keeps the room the size it was drawn.
     length: "%length%"
     height: "%height%"
     radius: "%radius%"
     openings: "%openings%"
+    thickness: "%thickness%"
+    extendStart: "%extendStart%"
+    extendEnd: "%extendEnd%"
+    # What a picture draws in its place: the face of it, asked for with this
+    # wall's own length, height, radius, openings and colour. Not its
+    # extensions, which the surface does not declare: they move the ends of the
+    # solid, and the face stays where the plan drew it.
+    visual: wall-surface
     parameters:
       length:
         type: float
@@ -81,6 +102,30 @@ parts:
           wall were unrolled flat in front of you: X along its base from 0 to
           the length, Y up from 0 to the height. An opening reaching beyond the
           wall is an error.
+      thickness:
+        type: float
+        # 4.5 inches: a 2x4 stud (3.5 in) with half an inch of drywall on
+        # either side, the interior wall of a framed house.
+        default: 114.3
+        desc: |
+          How thick the wall is, in millimetres, behind its face: the side it is
+          not seen from, outside a room. 114.3 (4.5 in, a 2x4 stud between two
+          half-inch drywall boards) unless it says. An arc wall bending away
+          from its face has to be thinner than its radius.
+      extendStart:
+        type: float
+        default: 0.0
+        desc: |
+          How far the solid goes on past the wall's start, in millimetres along
+          its base, or stops short of it where it is negative - so that two
+          walls meeting at a corner leave no gap and do not overlap. The face,
+          and the surface a picture draws, stay where they are. A straight wall
+          with a thickness only. A `walls` scene sets it at its right-angle
+          corners.
+      extendEnd:
+        type: float
+        default: 0.0
+        desc: As `extendStart`, past the wall's end.
       # The CMF parameter every part takes, given a default: the grey above.
       # `wall;color=//my/package:sage` paints it, and a room paints all of its
       # walls the same way.
@@ -89,17 +134,55 @@ parts:
         default: ":wall"
         desc: What the wall is painted - a colour declaration, named in full. Grey unless it says.
 
+  # The face of `wall`, and nothing behind it: what a picture of a floor plan
+  # draws. Private, because it is geometry for a picture and not a wall: no
+  # other package may place it, alias it or draw anything else as it.
+  wall-surface:
+    type: wall
+    manufacturable: false
+    private: true
+    desc: |
+      The face of a wall and nothing behind it: a one-sided surface, seen from
+      its front and see-through from behind. What `wall` is drawn as.
+    length: "%length%"
+    height: "%height%"
+    radius: "%radius%"
+    openings: "%openings%"
+    parameters:
+      length:
+        type: float
+        default: 3000.0
+        desc: As `wall`'s.
+      height:
+        type: float
+        default: 2700.0
+        desc: As `wall`'s.
+      radius:
+        type: float
+        default: 0.0
+        desc: As `wall`'s.
+      openings:
+        type: string
+        default: ""
+        desc: As `wall`'s.
+      color:
+        type: string
+        default: ":wall"
+        desc: As `wall`'s.
+
 scenes:
   room:
     type: walls
     desc: |
       The walls of a room, standing on the outline of the sketch `sketch`:
-      one `wall` per edge of it, each looking into the room. The sketch is one
-      enclosed outline of straight lines and arcs, drawn on the XY plane as a
-      plan is; anything else is refused with the reason. Name it with a
-      `color` - a `material`, a `finish` - and every wall is painted in it.
+      one `wall` per edge of it, each looking into the room, its face on the
+      outline and its thickness outside it. The sketch is one enclosed outline
+      of straight lines and arcs, drawn on the XY plane as a plan is; anything
+      else is refused with the reason. Name it with a `color` - a `material`,
+      a `finish` - and every wall is painted in it.
     sketch: "%sketch%"
     height: "%height%"
+    thickness: "%thickness%"
     parameters:
       sketch:
         type: string
@@ -112,3 +195,10 @@ scenes:
         type: float
         default: 2700.0
         desc: How high the walls are, in millimetres.
+      thickness:
+        type: float
+        default: 114.3
+        desc: |
+          How thick the walls are, in millimetres, outside the outline: 114.3
+          (4.5 in, a 2x4 stud between two half-inch drywall boards) unless it
+          says.
