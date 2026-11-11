@@ -3968,6 +3968,13 @@ class Shape(ShapeConfiguration):
             subject = await pc_cae_material.subject_async(ctx, self)
             if subject.note:
                 pc_logging.info("%s:%s: %s" % (self.project_name, self.name, subject.note))
+            # What is meshed is then the design, and a print kept in a file of its
+            # own is keyed on that file: a design edited since it was
+            # materialized leaves the print's key as it was. So the answer is
+            # keyed on the design too, and not kept at all where it has no key.
+            meshed = None
+            if subject.shape is not self:
+                meshed = {"meshed": await subject.shape.get_artifact_key_async()}
 
             with pc_logging.Timeout(window, self.project_name, self.name):
                 # Clearing the path, writing it and reading the answer back are one
@@ -4025,9 +4032,17 @@ class Shape(ShapeConfiguration):
                     # with it. Asked here, once the request is complete, because the
                     # request is most of the question.
                     cache = getattr(ctx, "cache_artifacts", None)
-                    artifact = await self._artifact_hash(
-                        output.CAE, analysis, impl, script, request, "%s:%s" % (options_project.name, format_name)
-                    )
+                    artifact = None
+                    if meshed is None or meshed["meshed"] is not None:
+                        artifact = await self._artifact_hash(
+                            output.CAE,
+                            analysis,
+                            impl,
+                            script,
+                            request,
+                            "%s:%s" % (options_project.name, format_name),
+                            extra=meshed,
+                        )
                     model = {"model": final_filepath}
                     result = await cache_artifacts.restore_async(cache, artifact, files=model)
                     cached = result is not None

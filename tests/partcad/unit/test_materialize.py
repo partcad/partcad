@@ -508,6 +508,41 @@ def test_a_part_cut_either_way_is_keyed_on_each_machines_own_implementation(tmp_
     assert key(900) != key(1800)
 
 
+def test_a_part_is_keyed_on_the_code_of_the_package_that_routes_it(tmp_path):
+    """A post-processor edited in place, or a helper it imports, is another machine; a copy of it is the same one."""
+    from partcad.part_factory_manufactured import product_key_async
+
+    def key(helper):
+        package = {
+            "name": "//test",
+            "sketches": {"outline": {"type": "basic", "rectangle": [20, 10]}},
+            "parts": {
+                "stock": {"type": "basic", "cuboid": [40, 30, 5]},
+                "cut": {
+                    "type": "basic",
+                    "cuboid": [20, 10, 5],
+                    "manufacturing": {
+                        "method": "subtractive",
+                        "source": "stock",
+                        "instructions": "outline",
+                        "cnc": {"diameter": 3, "implementation": "//test:router"},
+                    },
+                },
+            },
+            "cam": {"router": {"path": "route.py", "extension": "tap"}},
+        }
+        root = tmp_path / str(len(os.listdir(tmp_path)))
+        root.mkdir()
+        (root / "partcad.yaml").write_text(yaml.safe_dump(package))
+        (root / "route.py").write_text("from post import FEED\n")
+        (root / "post.py").write_text(helper)
+        context = pc.Context(str(root))
+        return asyncio.run(product_key_async(context, context.get_part("//test:cut")))
+
+    assert key("FEED = 900\n") == key("FEED = 900\n")
+    assert key("FEED = 900\n") != key("FEED = 1800\n")
+
+
 def test_a_cut_or_a_molding_is_keyed_on_every_setting_of_its_machine(tmp_path):
     """A tool diameter, a job every machine shares and a mold's shrinkage each change what is made."""
 

@@ -588,6 +588,42 @@ def test_a_part_that_is_not_cached_is_analysed_every_time(analysed, monkeypatch)
     assert len(runs) == 2
 
 
+def test_a_print_meshed_as_its_design_is_analysed_again_when_the_design_changes(analysed, monkeypatch):
+    """A print kept in its own file keeps its key when its design is edited; what is meshed does not."""
+    from partcad import cae_material
+
+    ctx, part, runs, _root = analysed
+    design = types.SimpleNamespace(key="design-1")
+
+    async def design_wrapped(_ctx):
+        return {"brep": str(design.key).encode()}
+
+    async def design_key():
+        return design.key
+
+    design.get_wrapped = design_wrapped
+    design.get_artifact_key_async = design_key
+
+    async def subject(_ctx, _shape):
+        return cae_material.Subject(design, 0.4, "analysed as its design")
+
+    monkeypatch.setattr(cae_material, "subject_async", subject)
+
+    _run(part.analyze_async(ctx, cae.FEA))
+    _run(part.analyze_async(ctx, cae.FEA))
+    assert len(runs) == 1
+
+    design.key = "design-2"
+    _run(part.analyze_async(ctx, cae.FEA))
+    assert len(runs) == 2
+
+    # A design with no key leaves nothing to tell an edit of it by.
+    design.key = None
+    _run(part.analyze_async(ctx, cae.FEA))
+    _run(part.analyze_async(ctx, cae.FEA))
+    assert len(runs) == 4
+
+
 # --------------------------------------------------------------------------- #
 # `pc qual test --simulation`                                                                    #
 # --------------------------------------------------------------------------- #

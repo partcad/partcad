@@ -297,6 +297,56 @@ def test_a_part_another_file_declares_has_nowhere_to_be_written(package):
         project.set_machine_settings("elsewhere", "fff", {"infill": "30%"})
 
 
+def test_a_declaration_that_cannot_be_written_is_left_as_it_was(package, monkeypatch):
+    """A dump that fails halfway leaves the package's file whole, and nothing beside it."""
+    import ruamel.yaml
+
+    ctx = pc.Context(str(package))
+    before = (package / "partcad.yaml").read_bytes()
+
+    def dump(self, data, stream, **kwargs):
+        stream.write("name: //camdemo\nparts:\n")
+        raise ruamel.yaml.representer.RepresenterError("cannot represent an object")
+
+    monkeypatch.setattr(ruamel.yaml.YAML, "dump", dump)
+    with pytest.raises(ruamel.yaml.representer.RepresenterError):
+        ctx.get_project("//camdemo").set_machine_settings("print", "fff", {"infill": "30%"})
+
+    assert (package / "partcad.yaml").read_bytes() == before
+    assert sorted(p.name for p in package.iterdir()) == ["partcad.yaml"]
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "{% set infill = '20%' %}\n",
+        "{# printed sparse #}\n",
+    ],
+)
+def test_a_declaration_that_is_a_template_is_not_written_into(package, template):
+    """What PartCAD reads is what the template renders to, so the source is not edited as if it were that."""
+    (package / "partcad.yaml").write_text(template + PACKAGE)
+    ctx = pc.Context(str(package))
+    before = (package / "partcad.yaml").read_bytes()
+
+    with pytest.raises(ValueError, match="Jinja2 template.*by hand"):
+        ctx.get_project("//camdemo").set_machine_settings("print", "fff", {"infill": "30%"})
+
+    assert (package / "partcad.yaml").read_bytes() == before
+
+
+def test_an_expression_where_a_value_goes_is_not_read_as_a_mapping_and_written_back(package):
+    """'{{ w }}' unquoted is a mapping in a mapping to a YAML reader; written back, the template would be broken."""
+    (package / "partcad.yaml").write_text(PACKAGE.replace("cuboid: [20, 10, 5]", "cuboid: [20, 10, {{ 2 + 3 }}]"))
+    ctx = pc.Context(str(package))
+    before = (package / "partcad.yaml").read_bytes()
+
+    with pytest.raises(ValueError, match="Jinja2 template"):
+        ctx.get_project("//camdemo").set_machine_settings("print", "fff", {"infill": "30%"})
+
+    assert (package / "partcad.yaml").read_bytes() == before
+
+
 def test_saving_nothing_new_names_no_machine(package):
     (package / "partcad.yaml").write_text(
         PACKAGE.replace("      fff:\n        infill: 20%   # sparse, to see inside\n", "")

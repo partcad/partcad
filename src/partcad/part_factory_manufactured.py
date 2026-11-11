@@ -331,8 +331,8 @@ async def product_key_async(ctx, part) -> typing.Optional[str]:
     a part or a drawing, resolved the way the route resolves them
     ('Shape._route_subject_async') -- every machine's subsection as written and
     the job they share, the implementation's options as every layer of them
-    reaches the route ('_layered_options'), and the code that makes it
-    ('maker_parts'). None of
+    reaches the route and the code of the package it comes from
+    ('_layered_options'), and the code that makes it ('maker_parts'). None of
     those moves the key of a part with a geometry of its own: 'manufacturing:'
     is left out of a shape's hash, and an edited design is another object. So
     whatever keeps an answer about the product of such a part -- the
@@ -374,18 +374,25 @@ def _layered_options(ctx, part, declared) -> str:
     and the implementing package's defaults ('Shape._output_getopts') -- a
     tool's diameter, say -- and those move what the machine makes as much as
     the part's own settings do. Keyed as the 'cam' check keys them.
+
+    With them goes the implementing package's code ('source_key.package_key'),
+    as a route's own cached answer is keyed on it. '_maker_parts_of' keys a
+    package other than PartCAD's by its name alone, because a part's own key is
+    worked out where no package may be loaded; this one is loaded by now, and a
+    post-processor edited in place is another machine.
     """
-    from . import output
+    from . import output, source_key
 
     try:
         options_project, format_name = part._route_implementation(ctx, declared=declared)
         options, _output_dir = part._output_getopts(
             ctx, format_name, output.CAM, ctx.get_project(part.project_name), options_project
         )
-        return "options:%s:%s:%s" % (
+        return "options:%s:%s:%s:%s" % (
             options_project.name,
             format_name,
             json.dumps(options, sort_keys=True, default=str),
+            source_key.package_key(options_project),
         )
     except Exception as e:  # pylint: disable=broad-except
         # Not resolved: an answer of its own (the product cannot be made), and

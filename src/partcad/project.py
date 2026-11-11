@@ -14,6 +14,7 @@ import copy
 import inspect
 import os
 import re
+import shutil
 import tempfile
 import threading
 import typing
@@ -3412,16 +3413,32 @@ class Project(project_config.Configuration):
         is what 'ruamel' round-trips. An axis written or taken out under one of its
         two spellings ('toolAxis:', 'along:') takes the other out.
 
+        The file is replaced only once the new one is written in full, beside it:
+        opening it for writing would empty the package's declaration before the
+        dump, and a dump that fails then leaves nothing.
+
         Raises:
             ValueError: the part is not declared in this file - one a plugin
                 supplies, or one another file holds - so there is nowhere here to
-                write it.
+                write it; or the file is a Jinja2 template, which is not the
+                document PartCAD reads until it is rendered.
         """
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
         yaml.width = 4096
         with open(self.config_path) as fp:
-            config = yaml.load(fp)
+            text = fp.read()
+        if any(opening in text for opening in ("{{", "{%", "{#")):
+            # What PartCAD reads is the rendered document, and what would be
+            # edited is the source: read as YAML, 'width: {{ w }}' is a mapping
+            # in a mapping, and would be written back as one. So nothing is
+            # written into a template.
+            raise ValueError(
+                "'%s' is a Jinja2 template, so the settings of '%s' cannot be written into it without changing what"
+                " it renders to: write them under the part's 'manufacturing: %s:' by hand"
+                % (self.config_path, part_name, machine)
+            )
+        config = yaml.load(text)
         parts = config.get("parts") if isinstance(config, dict) else None
         declaration = parts.get(part_name) if isinstance(parts, dict) else None
         if not isinstance(declaration, dict):
@@ -3452,8 +3469,18 @@ class Project(project_config.Configuration):
             del section[machine]
             if not section:
                 del declaration["manufacturing"]
-        with open(self.config_path, "w") as fp:
-            yaml.dump(config, fp)
+        target = os.path.realpath(self.config_path)
+        temporary = "%s.%d.%d.tmp" % (target, os.getpid(), threading.get_ident())
+        try:
+            with open(temporary, "w") as fp:
+                yaml.dump(config, fp)
+            with contextlib.suppress(OSError):
+                shutil.copymode(target, temporary)
+            os.replace(temporary, target)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.remove(temporary)
+            raise
 
     def add_sketch(self, kind: str, path: str, config={}) -> bool:
         pc_logging.info("Adding the sketch %s of type %s" % (self.rel_path(path), kind))
