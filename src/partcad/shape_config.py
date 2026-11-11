@@ -269,8 +269,8 @@ class ShapeConfiguration:
         none of these -- what the object it points at declares. A reference is
         that object's geometry and its CMF (see 'Shape._with_source_cmf'), so a
         cart that asked only the reference's own parameters ordered an alias of
-        a PLA part, and a printed part with no geometry of its own (see
-        'part_config_manufacturing.implied_type'), as made of nothing.
+        a PLA part as made of nothing. (A part that is what its machine makes is
+        lent its design's CMF as it is declared: see 'part_factory_manufactured'.)
         """
 
         store_data = self.get_store_data()

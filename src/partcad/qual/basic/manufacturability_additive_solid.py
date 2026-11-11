@@ -69,11 +69,12 @@ class ManufacturabilityAdditiveSolidTest(BasicQualification):
         data = PartConfiguration.get_manufacturing_data(shape)
         if data.method != METHOD_ADDITIVE:
             return ""
-        if not data.design and not data.machines and not data.machine_error:
+        machines = sorted(kind for kind, machine in data.machines.items() if machine.declared)
+        if not data.design and not machines and not data.machine_error:
             return ""
         declared = [
             await reference_key(ctx, shape, data.design, "part") if data.design else "design@self",
-            "machines:" + ";".join(data.machines[kind].key() for kind in sorted(data.machines)),
+            "machines:" + ";".join(data.machines[kind].key() for kind in machines),
             "error:%s" % (data.machine_error or ""),
         ]
         return ".additive=" + hashlib.sha256(";".join(declared).encode()).hexdigest()[:16]

@@ -1,8 +1,9 @@
 # Additive manufacturing - the design, the printer, its route and the print: design
 
 This is the design record for how PartCAD describes a printed part: the design it is a print of, the printer that
-prints it, the route the printer follows and - proposed, not built - the print itself: the part as it comes off the
-bed, with the emptiness inside it, which is what it weighs and what a section through it shows. How to *use* what is
+prints it, the route the printer follows and the print itself: the part as it comes off the bed, with the emptiness
+inside it, which is what it weighs and what a section through it shows - and, by the same means, the part a router
+leaves of its stock and a mold gives back of its cavity. How to *use* what is
 built is the user documentation's job (`docs/source/config_making.rst`, "Additive"); this file is for whoever changes
 it.
 
@@ -91,15 +92,17 @@ parts:
 | --- | --- |
 | `source` | Optional. The design. A part naming none is its own design - what every `additive` part written before this meant. Never stock: `procurement.stock_name` is None for a printed part whatever it names. |
 | `visual` (the part's own, not the manufacturing section's) | What a picture draws. For a printed part that names a design and no `visual:`, the design (`visual.design`). |
-| `fff` | Optional. A filament printer (fused filament fabrication; ISO/ASTM 52900 material extrusion; "FDM" is a trademark), a machine read by `MachineConfig` ([section 5](#5-a-printer-is-a-pc-cam-machine)). A part naming none has no printer: there is no printing analogue of the router that cuts anything the others can. |
+| `fff` | Optional. A filament printer (fused filament fabrication; ISO/ASTM 52900 material extrusion; "FDM" is a trademark), a machine read by `MachineConfig` ([section 5](#5-a-printer-is-a-pc-cam-machine)). A part naming none is printed on an undeclared one with the usual settings, as a cut part naming no machine is cut on CNC: `pc cam` over a package passes it over, and `-m fff` or making the part routes it. |
 
-**No `type:`.** A part that names a design needs no geometry of its own. Until the print can be worked out
-([section 9](#9-proposal)), `PartConfiguration.normalize` gives it `type: alias` of its design, marked
-`implied_type: additive` (`part_config_manufacturing.implied_type`): it is then a reference in every respect - the
-design's key, ports, CMF and tolerance - that restates its own `manufacturing:` and takes `with:` to parameterise the
-design. That makes its weight the solid design's for now, an upper bound; `implied_type` is the one place that changes
-when the print exists. A part that does write a `type:` - an as-printed model imported from a slicer or a scan - is that
-geometry, and names its design in `source`.
+**No `type:`.** A part that names a design needs no geometry of its own: it is what the printer makes of it
+([section 9.3](#93-the-print-is-the-part), **built**). `part_config_manufacturing.implied_type` gives it `type:
+manufactured`, with `implied_type` holding the format its file is kept in - `brep` where it says nothing, `step`, `brep`
+or `sdf` where `type:` says one of those. Its factory reads that file where `pc cam --materialize` has written it, and
+makes the print on demand where it has not. It is lent the design's material, colour, finish and tolerance where it
+states none (`part_factory_manufactured._lend_cmf`). A part that writes any other `type:` - an as-printed model imported
+from a slicer or a scan - is that geometry, names its design in `source`, and is compared with the print by the
+`materialize` check. The same holds for a molding naming its cavity and a cut part naming its stock and its
+`instructions:`.
 
 **Errors are recorded, not raised**, as for every machine: an `fff:` that cannot be read is `machine_error`, which
 `manufacturability-additive` and the build plan report and `pc cam` visits ("broken, and therefore visited"). A printer's
@@ -155,8 +158,8 @@ thing or one with no counterpart in a cut:
 | `topLayers`, `bottomLayers` | nothing: a cut never asks what is above it | job |
 
 Speeds other than the feed, temperatures and cooling decide whether a print succeeds rather than what shape it is, and
-are the printer's. `implementation:` - who writes the route - is refused on `fff:` for now, as on `cut:`, because nothing
-writes a printer's route yet; it is the key a slicer package will be named by.
+are the printer's. `implementation:` - who writes the route - is taken on `fff:` as on a router: `//builtin/cam:gcode`
+unless said, and the key a slicer package is named by.
 
 **What `//builtin/cam` already has, and what a printer's route still needs.** `cam_gcode.py` is a 2.5D router program
 writer, and a slicer is a 2.5D program writer run once per layer. Of what a route is made of:
@@ -414,14 +417,15 @@ shows: the cusp voids between beads, in the walls and the skins, of the size mic
 
 ## 9. Proposal
 
-**Proposed.** In the order it would be built; each step is useful on its own and is the next one's test.
+In the order it is built; each step is useful on its own and is the next one's test. Each says how far it got.
 
 ### 9.1 `pc cam` writes a printer's route
 
-`//builtin/cam`'s `gcode` file type gains a printer: `MACHINES["fff"]` in `cam_gcode.py`, the route of
-[section 8](#8-prototype-a-route-from-pc-cams-parts-and-what-it-deposits) with `E`, and `MACHINE_FFF` joins
-`ROUTED_MACHINES`. `pc cam -m fff :bracket-printed` writes `bracket-printed.fff.nc`; the instruction book draws each layer
-(`cam_preview`); the `cam` check asks that the route can be written, as it asks of a laser.
+**Built.** `//builtin/cam`'s `gcode` file type has a printer: `MACHINES["fff"]` in `cam_gcode.py`, the route of
+[section 8](#8-prototype-a-route-from-pc-cams-parts-and-what-it-deposits) in `cam_fff.py`, with `E` in relative
+extrusion, and `MACHINE_FFF` in `ROUTED_MACHINES`. `pc cam :bracket-printed` writes `bracket-printed.nc` (with the
+machine in the name only where the part names several); the `cam` check asks that the route can be written, as it asks
+of a laser. The instruction book's layer drawings (`cam_preview`) are not built.
 
 - **Clipper** is added to `//builtin/cam`'s `pythonRequirements` (`pyclipper`, MIT): it runs in the sandbox, so nothing
   is added to the wheel or the bundles. The section and the polylines stay `pc cam`'s own.
@@ -431,10 +435,14 @@ shows: the cusp voids between beads, in the walls and the skins, of the size mic
   CuraEngine in a container through `partcad_utils.containers` (AGPL, so never imported), translating `fff:` by the table
   in [section 12.5](#125-vocabulary), and handing back its G-code. Either way the print is derived from the route, so a
   slicer's route is weighed and drawn by the same code as PartCAD's own.
-- **Infill patterns**: `concentric` (rings), `rectilinear` and `grid` (lines) first; `gyroid` as the level set of `sin x
-  cos y + sin y cos z + sin z cos x` at each layer's `z`, traced as polylines; anything else refused by name.
+- **Infill patterns**: `concentric` (rings), `rectilinear`, `lines` and `grid` are built; `gyroid` as the level set of
+  `sin x cos y + sin y cos z + sin z cos x` at each layer's `z`, traced as polylines, is not; anything else is refused by
+  name.
 
 ### 9.2 What the print weighs
+
+**Partly built.** The route's stats carry `volume` (the sum below), `solid_volume` (the sections stacked up) and
+`filament_length`; the part's mass is still derived from the deposit geometry's volume, which is 1-4% under the route's.
 
 **The route is the print's weight.** What a printer deposits is what its extruder feeds, `rho k sum A L` - the overlap
 of adjacent beads is squeezed into the cusps beside them, not lost ([section 7.1](#71-the-bead)). Summed per move, the
@@ -452,8 +460,15 @@ implementation.
 
 ### 9.3 The print is the part
 
-The type-less printed part stops being a reference to its design. `implied_type` gives it a part type of its own -
-`print` - whose geometry is its route's deposit:
+**Built**, as the `manufactured` part type rather than a `print` one, because it covers every process whose product
+follows from its instructions: a print's deposit (`cam_fff.deposit`), what a router, a laser or a drill leaves of its
+stock (`cam_product.removal`, `drilled`), what a saw leaves (`sawn`), a mold's cavity shrunk (`molded`). The product is
+asked of the same implementation as the route, with `materialize: true`, so the two cannot disagree; `pc cam
+--materialize` writes it into the part's file, and the `materialize` check compares a part that has a file of its own
+with it by recorded volume and bounding box. The measurements below are the geometry's own, not yet the route's.
+
+The type-less printed part stopped being a reference to its design. `implied_type` gives it a part type of its own
+whose geometry is its route's deposit:
 
 - **Geometry** (`get_wrapped`): the footprint stack, stroked at the line spacing - a B-rep of planar prisms, one per
   region per layer, so every export, section, drawing and check takes it as it takes any solid. 13 MB of BREP for a 20 mm
@@ -475,8 +490,13 @@ The type-less printed part stops being a reference to its design. `implied_type`
 
 ### 9.4 Where SDF parts fit
 
+**Built as an option**: a printed part that says `type: sdf` is kept as a script whose field is its route's beads
+(`cam_fff.sdf_script`: each layer's paths splatted into a 2D distance field, the stadium bead profile, bounded by the
+design's box), meshed by the `sdf` part type at half a layer. It is there because it is the bead-exact surface, and it
+is not the default for the reason below.
+
 The `sdf` part type is the natural home for the bead-exact surface - (C) above is literally its pipeline - but not as
-the part's geometry: a bead-resolved surface is ~0.6 M triangles per metre of route at 0.05 mm, and a print of anything
+the part's geometry by default: a bead-resolved surface is ~0.6 M triangles per metre of route at 0.05 mm, and a print of anything
 but a coin has hundreds of metres. It is right for three things:
 
 - **A section or a detail**: the field's SDF restricted to a box (a corner, a boss, a 2 mm slab) meshes in seconds, and
@@ -518,16 +538,22 @@ wherever a picture is drawn; a `visual:` of its own SHALL win; `manufacturing: v
 - *Scenario:* `as-printed: {type: basic, manufacturing: {method: additive, source: design}}` → its picture is
   `//:design`; with `visual: look` → `//:look`.
 
-**Requirement: no geometry of its own.** An `additive` part that names a design and no `type:` SHALL, until its print can
-be derived, be a reference to the design with its own `manufacturing:` section.
+**Requirement: no geometry of its own.** An `additive` or `forming` part that names a design, or a `subtractive` part
+that names its stock and its instructions, and that states no `type:` or `type: brep|step|sdf`, SHALL be what its machine
+makes: read from its file where one is written, made on demand where none is. A part fetched from a `fileUrl:` SHALL keep
+its file. (`tests/partcad/unit/test_materialize.py`.)
+- *Scenario:* no `type:` → `type: manufactured`, `implied_type: brep`; `printed.brep` written → read as `brep`.
+- *Scenario:* `pc cam --materialize :printed` → `printed.brep`; with `type: step` → `printed.step`; with `type: sdf` →
+  `printed.py`.
+- *Scenario:* a part with a file of its own the wrong size → `materialize` fails, naming the difference.
 
 **Requirement: a printer is a machine.** `fff:` SHALL be read as a `MachineConfig`: `toolAxis`/`along`, `nozzle` and
 `filament` its own; `layerHeight`, `lineWidth`, `walls`, `topLayers`, `bottomLayers`, `infill`, `infillPattern` and
-`feed` its job; an unreadable one SHALL be `machine_error`. Until a printer's route is written it SHALL NOT be routed.
+`feed` its job; an unreadable one SHALL be `machine_error`. It SHALL be routed by `pc cam`.
 - *Scenario:* `fff: {along: -Y, feed: 50 mm/s}` → axis `-Y`, feed 3000 mm/min.
 - *Scenario:* `infill: 20%` or `feed: 1200` directly under `manufacturing:` → "write it under 'fff:'".
-- *Scenario:* `pc cam` over the package passes the part over; `pc cam -m fff` → "a 'fff' is a printer, and PartCAD writes
-  no printer's route yet".
+- *Scenario:* a printed part that names no printer is passed over by `pc cam` over the package and routed by
+  `pc cam -m fff`.
 
 **Requirement: what is printed is checked.** `manufacturability-additive` SHALL ask the design, not the part's own
 geometry, whether it is a closed solid, and SHALL key its verdict on the design and the printer.
@@ -536,19 +562,22 @@ geometry, whether it is a closed solid, and SHALL key its verdict on the design 
 item SHALL carry them as `manufacturing`; a manufacturer SHALL be sent the design's geometry.
 
 **Requirement: material is CMF.** A `manufacturing:` section SHALL NOT take a material; a reference SHALL report its
-source's material to a cart where it states none.
+source's material to a cart where it states none; a part that is what its machine makes SHALL be lent its design's (or
+its stock's) material and tolerance where it states none.
 
 ## 11. Roadmap
 
 | Step | Status |
 | --- | --- |
 | `source:` as the design; the design as the default picture through the part-level `visual:`; a type-less printed part | built |
-| `fff:` as a machine with `pc cam`'s vocabulary; not routed | built |
+| `fff:` as a machine with `pc cam`'s vocabulary | built |
 | Check, instructions, cart, schema; `get_mcft` through references; a manufacturer sent the design | built |
-| `pc cam -m fff`: the route from `_faces_at`, `_wire_points`, Clipper rings and lines, `Program` with `E` ([9.1](#91-pc-cam-writes-a-printers-route)) | proposed |
-| The print's weight from the route's deposit ([9.2](#92-what-the-print-weighs)) | proposed |
-| `print` part type: the print as the part, footprint stack + field measurements; printability by comparison ([9.3](#93-the-print-is-the-part)) | proposed |
-| SDF sections and details of a print; gyroid infill as a field ([9.4](#94-where-sdf-parts-fit)) | proposed |
+| `pc cam -m fff`: the route from `_faces_at`, `_wire_points`, Clipper rings and lines, `Program` with `E` ([9.1](#91-pc-cam-writes-a-printers-route)) | built |
+| The route's volume and filament in its stats ([9.2](#92-what-the-print-weighs)) | built |
+| The part's mass from the route rather than from the deposit's geometry | proposed |
+| `manufactured` part type: the print, the cut, the molding as the part; `pc cam --materialize`; the `materialize` check ([9.3](#93-the-print-is-the-part)) | built |
+| A print kept as an SDF (`type: sdf`) ([9.4](#94-where-sdf-parts-fit)) | built |
+| SDF sections and details of a print; gyroid infill as a field | proposed |
 | `pc import` of G-code as a print; 3MF Slice export ([9.5](#95-pc-export-and-pc-import)) | proposed |
 | A slicer package as a route `implementation:` (PrusaSlicer/CuraEngine in a container) | proposed |
 | Cart CMF references and `ids`; physics per solid material | proposed |

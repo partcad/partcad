@@ -114,6 +114,18 @@ _ADDITIVE_SECTION_KEYS = ("method", "source")
 MACHINE_FFF = "fff"
 PRINTERS = (MACHINE_FFF,)
 
+# The machine a `forming` part is made in: a mold. What it makes is its cavity
+# -- the part's `source:` -- shrunk as the material cools, by `shrinkage:`, a
+# linear fraction ('0.5%' for most ABS). It runs no program, and like a saw it
+# is asked only what it makes (`pc cam --materialize`).
+MACHINE_MOLD = "mold"
+FORMERS = (MACHINE_MOLD,)
+
+# The methods whose `source:` is a *design* -- what the machine reproduces --
+# rather than a piece of material that goes into it: a print's design, a mold's
+# cavity. Neither is ever procured (see 'procurement.stock_name').
+DESIGN_METHODS = ("additive", "forming")
+
 # The settings of a printer that are read as lengths, and as counts. A length
 # is read the way 'pc cam' reads one ('6', '6 mm', '0.25 in').
 PRINT_LENGTH_KEYS = ("layerHeight", "lineWidth", "nozzle", "filament")
@@ -170,26 +182,23 @@ MACHINE_LASER = "laser"
 MACHINE_CUT = "cut"
 MACHINES = (MACHINE_CNC, MACHINE_DRILL, MACHINE_LASER, MACHINE_CUT)
 
-# Every machine, of either method: what a 'MachineConfig' may be.
-ALL_MACHINES = MACHINES + PRINTERS
+# Every machine, of every method: what a 'MachineConfig' may be.
+ALL_MACHINES = MACHINES + PRINTERS + FORMERS
 
 # The machines `pc cam` writes a program for. A cut is not one of them: a saw
 # cutting stock to length runs no program, and what it needs to be told -- where
 # to cut -- is already the whole of its declaration. `pc cam` passes over a part
 # that is only cut, and refuses `-m cut` with a sentence rather than handing a
 # router emitter a part that has no router.
-ROUTED_MACHINES = (MACHINE_CNC, MACHINE_DRILL, MACHINE_LASER)
+ROUTED_MACHINES = (MACHINE_CNC, MACHINE_DRILL, MACHINE_LASER, MACHINE_FFF)
 
 # Why 'pc cam' writes nothing for each machine that is not routed, as the end of
-# a sentence that starts with the machine's name. A printer *does* run a
-# program; what is missing is the code that writes it, which is the next step
-# of docs/design/additive.md -- '//builtin/cam' already has what it is made of
-# (the section at a height, the rings a pocket is cleared with, the polylines).
+# a sentence that starts with the machine's name. Both still *make* something,
+# which 'pc cam --materialize' works out.
 _UNROUTED = {
     MACHINE_CUT: "runs no program: where it cuts is the whole of what it is told, and the part's own declaration"
     " already says so",
-    MACHINE_FFF: "is a printer, and PartCAD writes no printer's route yet; slice the design with a slicer of"
-    " your own meanwhile (see docs/design/additive.md)",
+    MACHINE_MOLD: "runs no program: it gives back its cavity, which the part's own declaration already names",
 }
 
 
@@ -253,6 +262,9 @@ MACHINE_OWN_KEYS: dict[str, tuple] = {
     # The nozzle and the filament it is fed are the machine's own, as a laser's
     # kerf is: they are what it is, not what it is told.
     MACHINE_FFF: ("toolAxis", "along", "nozzle", "filament"),
+    # How much the part shrinks as it cools, as a linear fraction: what the
+    # mold, filled with this material, gives back of its cavity.
+    MACHINE_MOLD: ("shrinkage",),
 }
 
 MACHINE_JOB_KEYS: dict[str, tuple] = {
@@ -294,6 +306,7 @@ MACHINE_JOB_KEYS: dict[str, tuple] = {
     # Speeds other than the feed, temperatures and cooling decide whether a
     # print succeeds rather than what shape it is, and are the printer's.
     MACHINE_FFF: PRINT_LENGTH_KEYS[:2] + PRINT_COUNT_KEYS + ("infill", "infillPattern", "feed"),
+    MACHINE_MOLD: (),
 }
 
 # Two keys every machine takes, because they are about the route rather than
@@ -573,6 +586,8 @@ class MachineConfig:
             for key, value in list(self.options.items()):
                 if value is not None:
                     self.options[key] = _parse_print_option(key, value, "'%s: %s:'" % (kind, key))
+        if kind in FORMERS and self.options.get("shrinkage") is not None:
+            self.options["shrinkage"] = parse_fraction(self.options["shrinkage"], "'%s: shrinkage:'" % kind)
 
     def settings(self) -> dict:
         """A printer's every setting that decides what it prints, the defaults filling what was not said.
@@ -714,40 +729,63 @@ def _parse_print_option(key: str, value, what: str):
 _PRINT_SETTING_KEYS = frozenset(PRINT_LENGTH_KEYS + PRINT_COUNT_KEYS + ("infill", "infillPattern"))
 
 
-# The marker 'implied_type' leaves on a declaration it gave a type to: that the
-# `type:` it has was not written, so that whatever reads it can tell a printed
-# part PartCAD completed from a reference somebody wrote.
+# The marker 'implied_type' leaves on a declaration whose geometry is what its
+# manufacturing makes: the format that geometry is kept in once it is
+# materialized ('brep', 'step' or 'sdf'), and what tells such a part from one
+# whose 'type:' is a file of its own and nothing more.
 IMPLIED_TYPE_KEY = "implied_type"
+
+# The part type such a declaration is given, whose factory reads the
+# materialized file where there is one and makes the part by following its
+# manufacturing where there is not (see 'part_factory_manufactured').
+MANUFACTURED_TYPE = "manufactured"
+
+# The formats a part's own geometry may be materialized in, and the file each
+# is kept in by default. 'brep' is what a part that says nothing is: PartCAD
+# declares no default part type, so nothing makes 'step' the one to imply.
+MATERIALIZED_FORMATS = {"brep": ".brep", "step": ".step", "sdf": ".py"}
+
+# The methods whose part is what they make, and so may be materialized.
+MATERIALIZED_METHODS = ("additive", "subtractive", "forming")
 
 
 def implied_type(config) -> dict | None:
-    """What a printed part with no geometry of its own is, as the keys to add to its declaration; None otherwise.
+    """What a part whose geometry is what its manufacturing makes is, as the keys to add; None otherwise.
 
-    A part that says `manufacturing: method: additive` and names a `source:`
-    design needs no `type:`: it is that design, printed.
+    A part that says how it is made from something it names -- a print or a
+    molding from its `source:` design, a cut from its `source:` stock along its
+    `instructions:` -- needs no geometry of its own:
+    its geometry is what the machine makes by following its route, which `pc
+    cam --materialize` writes into its file. So it may leave `type:` out, and
+    is then a `brep` part; or say `brep`, `step` or `sdf` to keep that file in
+    another format. Either way it is given the type 'manufactured', whose
+    factory reads the file where it exists and makes the part where it does not
+    (see 'part_factory_manufactured').
 
-    *For now* that is a reference to the design -- `type: alias` pointing at it,
-    with this part's own `manufacturing:` section, which a reference restates
-    rather than inherits (see 'PartFactoryAlias') -- so the part's geometry is
-    the design's, and so are its weight and its picture. The design stands in
-    for the print until PartCAD can work the print out from its route (see
-    docs/design/additive.md, section 7): this is the one place that changes
-    when it can, and the marker is what tells such a part from a reference
-    somebody wrote.
-
-    None for anything else, including a part that wrote a `type:` (its geometry
-    is its own) and one that wrote a top-level `source:` without one (an alias
-    missing its type, which is reported as it always was).
+    None for anything else: another type is a file or a script of its own and
+    nothing more; a part with a top-level `source:` is a reference, and one
+    with a `fileUrl:` is a file fetched from somewhere, which is there to be
+    read rather than written; a print or a molding naming no design has nothing to
+    be made from; and a cut naming no instructions is routed along its own
+    file, which it therefore has to have.
     """
-    if not isinstance(config, dict) or config.get("type") is not None or config.get("source") is not None:
+    if not isinstance(config, dict) or config.get("source") is not None:
+        return None
+    if config.get("fileFrom") is not None or config.get("fileUrl") is not None:
+        return None
+    declared = config.get("type")
+    if declared is not None and declared not in MATERIALIZED_FORMATS:
         return None
     section = config.get("manufacturing")
-    if not isinstance(section, dict) or section.get("method") != "additive":
+    if not isinstance(section, dict) or section.get("method") not in MATERIALIZED_METHODS:
         return None
-    design = section.get("source")
-    if not isinstance(design, str) or not design.strip():
+    source = section.get("source")
+    if not isinstance(source, str) or not source.strip():
         return None
-    return {"type": "alias", "source": design, IMPLIED_TYPE_KEY: "additive"}
+    if section.get("method") == "subtractive" and not section.get("instructions"):
+        # Stock, and nothing but the part's own file to say what to cut out of it.
+        return None
+    return {"type": MANUFACTURED_TYPE, IMPLIED_TYPE_KEY: declared or "brep"}
 
 
 class PartConfigManufacturing:
@@ -805,29 +843,32 @@ class PartConfigManufacturing:
         # this instance of it was made with.
         self.parameters = parameter_values(final_config)
         if self.method == METHOD_ADDITIVE:
-            self._read_printers(manufacturing_config)
+            self._read_designed(manufacturing_config, PRINTERS, "printer")
+        elif self.method == METHOD_FORMING:
+            self._read_designed(manufacturing_config, FORMERS, "mold")
         else:
             self._read_machines(manufacturing_config)
 
-    def _read_printers(self, manufacturing_config: dict) -> None:
-        """Which printers a printed part could be printed on.
+    def _read_designed(self, manufacturing_config: dict, kinds: tuple, noun: str) -> None:
+        """Which machines a part made from a design could be made in: printers, or molds.
 
-        The printed half of '_read_machines', and recorded the same way. Two
-        differences, each because a print is not a cut: a part that names no
-        printer has none -- there is no machine that prints anything the others
-        can, as a router cuts anything a laser can -- and nothing is shared
-        directly under `manufacturing:`, where a printer's setting is a mistake
-        said as such.
+        The other half of '_read_machines', and recorded the same way. Two
+        differences, each because neither a print nor a molding is a cut: a part
+        that names no machine has none -- there is no machine that prints
+        anything the others can, as a router cuts anything a laser can -- and
+        nothing is shared directly under `manufacturing:`, where a machine's
+        setting is a mistake said as such.
         """
         # A setting written one level too high. Said as such rather than as an
-        # unknown key, because it is a known one: the printer is what decides
+        # unknown key, because it is a known one: the machine is what decides
         # what it means.
-        printer_keys = {key for kind in PRINTERS for key in machine_keys(kind)} - {"desc"}
-        misplaced = sorted(key for key in manufacturing_config if key in printer_keys)
+        own_keys = {key for kind in kinds for key in machine_keys(kind)} - {"desc"}
+        misplaced = sorted(key for key in manufacturing_config if key in own_keys)
         if misplaced:
-            self.machine_error = "%s is a setting of the printer; write it under %s" % (
+            self.machine_error = "%s is a setting of the %s; write it under %s" % (
                 ", ".join("'%s:'" % key for key in misplaced),
-                " or ".join("'%s:'" % kind for kind in PRINTERS),
+                noun,
+                " or ".join("'%s:'" % kind for kind in kinds),
             )
             return
         # A cut's keys, refused in the words every method that makes no cut uses.
@@ -843,16 +884,23 @@ class PartConfigManufacturing:
             # 'type:', whatever it is made by (see 'partcad.visual').
             self.machine_error = "'visual:' is not a manufacturing setting; write it on the part itself, beside 'type:'"
             return
-        unknown = sorted(key for key in manufacturing_config if key not in _ADDITIVE_SECTION_KEYS + PRINTERS)
+        unknown = sorted(key for key in manufacturing_config if key not in _ADDITIVE_SECTION_KEYS + kinds)
         if unknown:
             self.machine_error = "'manufacturing:' does not take %s" % ", ".join("'%s:'" % key for key in unknown)
             return
         if self.source is not None and (not isinstance(self.source, str) or not self.source.strip()):
             self.machine_error = "'source:' is not a reference to a part: %r" % (self.source,)
             return
-        for kind in PRINTERS:
-            if kind not in manufacturing_config:
-                continue
+        named = [kind for kind in kinds if kind in manufacturing_config]
+        if not named:
+            # The usual machine, standing in where the part names none, as the
+            # router does for a cut: a printer with the usual settings, a mold
+            # that gives back its cavity as it is. Undeclared, so that nothing
+            # that acts only on what a part asked for -- 'pc cam' over a
+            # package, the instructions, a print service -- acts on it.
+            self.machines[kinds[0]] = MachineConfig(kinds[0], None, declared=False)
+            return
+        for kind in named:
             machine = self._read_machine(kind, manufacturing_config.get(kind))
             if machine is None:
                 self.machines = {}
@@ -861,12 +909,13 @@ class PartConfigManufacturing:
 
     @property
     def design(self) -> str | None:
-        """What a printed part is a print of, as written, or None where it is its own design.
+        """What a printed (or molded) part is made after, as written, or None where it is its own design.
 
-        Only for `additive`: every other method's `source:` is what goes into
-        the machine, which is not a design but a piece of material.
+        Only for `additive` and `forming` (`DESIGN_METHODS`): every other
+        method's `source:` is what goes into the machine, which is not a design
+        but a piece of material.
         """
-        if self.method != METHOD_ADDITIVE:
+        if self.method not in (METHOD_ADDITIVE, METHOD_FORMING):
             return None
         return self.source or None
 
@@ -886,9 +935,10 @@ class PartConfigManufacturing:
         data: dict = {"method": "additive"}
         if self.design:
             data["design"] = self.design
-        if self.machines:
+        declared = {kind: machine for kind, machine in self.machines.items() if machine.declared}
+        if declared:
             printers = {}
-            for kind, machine in sorted(self.machines.items()):
+            for kind, machine in sorted(declared.items()):
                 said = {key: value for key, value in machine.options.items() if key != "desc" and value is not None}
                 if machine.tool_axis != DEFAULT_TOOL_AXIS:
                     said["toolAxis"] = machine.tool_axis

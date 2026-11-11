@@ -1,0 +1,315 @@
+#
+# PartCAD, 2026
+#
+# Licensed under Apache License, Version 2.0.
+#
+"""A part whose geometry is what its machine makes, and the file that geometry is kept in.
+
+    printed:
+      manufacturing:
+        method: additive
+        source: design
+        fff: {infill: 20%}
+
+states no file: it is made on demand by following its manufacturing (the
+'manufactured' type), `pc cam --materialize` writes it into `printed.brep` (or
+the `step` or `sdf` file its `type:` names), and from then on that file is the
+part, held to what the machine makes by the `materialize` check.
+
+The machine itself is stubbed here, as 'test_additive.py' stubs the analysis:
+what is tested is where the product goes and what is done with the answer.
+What a route actually makes is 'test_cam_materialize.py's.
+"""
+
+import asyncio
+import os
+
+import pytest
+import yaml
+
+import partcad as pc
+from partcad import shape_envelope
+from partcad.part_config_manufacturing import IMPLIED_TYPE_KEY, MANUFACTURED_TYPE
+from partcad.qual.basic.materialize import MaterializeTest
+
+PACKAGE = {
+    "name": "//test",
+    "parts": {
+        "design": {"type": "basic", "cuboid": [20, 10, 5]},
+        "printed": {"manufacturing": {"method": "additive", "source": "design", "fff": {"infill": "20%"}}},
+        "printed-step": {"type": "step", "manufacturing": {"method": "additive", "source": "design"}},
+        "printed-sdf": {"type": "sdf", "manufacturing": {"method": "additive", "source": "design"}},
+        "printed-here": {
+            "path": "prints/here.brep",
+            "manufacturing": {"method": "additive", "source": "design"},
+        },
+        # A geometry of its own that claims to be the print: a scan, say.
+        "scanned": {
+            "type": "basic",
+            "cuboid": [20, 10, 5],
+            "manufacturing": {"method": "additive", "source": "design"},
+        },
+        "molded": {"manufacturing": {"method": "forming", "source": "design", "mold": {"shrinkage": "1%"}}},
+    },
+}
+
+
+def _context(root, files=()):
+    (root / "partcad.yaml").write_text(yaml.safe_dump(PACKAGE))
+    for name in files:
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("")
+    return pc.Context(str(root))
+
+
+@pytest.fixture
+def ctx(tmp_path):
+    return _context(tmp_path)
+
+
+#
+# What it is before and after it is materialized
+#
+
+
+def test_a_part_with_no_file_of_its_own_is_made_on_demand(ctx):
+    part = ctx.get_part("//test:printed")
+    assert part.config["type"] == MANUFACTURED_TYPE
+    assert part.config[IMPLIED_TYPE_KEY] == "brep"
+    assert part.desc == "design, as a 'fff' makes it"
+
+
+def test_a_part_that_says_its_type_is_made_on_demand_until_its_file_is_written(ctx):
+    part = ctx.get_part("//test:printed-step")
+    assert part.config["type"] == MANUFACTURED_TYPE
+    assert part.config[IMPLIED_TYPE_KEY] == "step"
+
+
+def test_a_print_kept_as_an_sdf_is_meshed_at_half_a_layer(ctx):
+    part = ctx.get_part("//test:printed-sdf")
+    assert part.config[IMPLIED_TYPE_KEY] == "sdf"
+    assert part.config["parameters"]["step"]["default"] == pytest.approx(0.1)
+
+
+def test_once_written_the_file_is_the_part(tmp_path):
+    context = _context(tmp_path, files=("printed.brep", "printed-step.step", "prints/here.brep"))
+    printed = context.get_part("//test:printed")
+    assert printed.config["type"] == "brep"
+    assert printed.config["path"] == "printed.brep"
+    assert context.get_part("//test:printed-step").config["type"] == "step"
+    here = context.get_part("//test:printed-here")
+    assert here.config["type"] == "brep"
+    assert here.config["path"] == "prints/here.brep"
+
+
+@pytest.mark.parametrize("written", [False, True])
+def test_a_part_is_made_of_what_its_design_is_made_of_and_held_to_its_tolerance(tmp_path, written):
+    """Whether it is made on demand or read from the file it was materialized into."""
+    package = dict(PACKAGE)
+    package["parts"] = dict(PACKAGE["parts"])
+    package["parts"]["design"] = {
+        "type": "basic",
+        "cuboid": [20, 10, 5],
+        "parameters": {
+            "material": {"type": "string", "default": "//pub:pla"},
+            "tolerance": {"type": "float", "default": 0.2},
+        },
+    }
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump(package))
+    if written:
+        (tmp_path / "printed.brep").write_text("")
+        (tmp_path / "printed-step.step").write_text("")
+    context = pc.Context(str(tmp_path))
+    for name in ("printed", "printed-step", "printed-sdf"):
+        part = context.get_part("//test:" + name)
+        assert part is not None, name
+        assert asyncio.run(part.get_mcft("material")) == "//pub:pla"
+        assert asyncio.run(part.get_tolerance()) == pytest.approx(0.2)
+
+
+#
+# Writing it
+#
+
+
+def _stub_machine(monkeypatch, product=None, step=None, script=None):
+    """Make every route answer with the given product, and record what was asked."""
+    asked = []
+    product = product or {shape_envelope.KEY_BREP: b"CASCADE Topology V3, (c) Open Cascade"}
+
+    async def route(self, ctx, **kwargs):
+        asked.append((self.name, kwargs))
+        return {
+            "product": product,
+            "product_step": step if kwargs.get("representation") == "step" else None,
+            "sdf_script": script if kwargs.get("representation") == "sdf" else None,
+            "stats": {"volume": 1.0},
+        }
+
+    async def product_run(self, ctx, chosen, implementation, extra, output_dir):
+        asked.append((self.name, dict(extra, machine=chosen.kind)))
+        return {"product": product, "stats": {}}
+
+    monkeypatch.setattr(pc.shape.Shape, "route_async", route)
+    monkeypatch.setattr(pc.shape.Shape, "_product_run_async", product_run)
+    return asked
+
+
+def test_a_print_is_written_to_its_name_as_brep(ctx, tmp_path, monkeypatch):
+    asked = _stub_machine(monkeypatch)
+    made = asyncio.run(ctx.get_part("//test:printed").materialize_async(ctx, write=True))
+    assert made["written"] == str(tmp_path / "printed.brep")
+    assert (tmp_path / "printed.brep").read_bytes().startswith(b"CASCADE Topology V3")
+    # Asked to make it, on the printer it names.
+    assert asked[0][1]["materialize"] is True
+
+
+def test_a_print_is_written_where_its_path_says(ctx, tmp_path, monkeypatch):
+    _stub_machine(monkeypatch)
+    made = asyncio.run(ctx.get_part("//test:printed-here").materialize_async(ctx, write=True))
+    assert made["written"] == str(tmp_path / "prints" / "here.brep")
+
+
+def test_a_step_part_is_written_as_step(ctx, tmp_path, monkeypatch):
+    asked = _stub_machine(monkeypatch, step="ISO-10303-21;\nEND-ISO-10303-21;\n")
+    asyncio.run(ctx.get_part("//test:printed-step").materialize_async(ctx, write=True))
+    assert (tmp_path / "printed-step.step").read_text().startswith("ISO-10303-21")
+    assert asked[-1][1]["representation"] == "step"
+
+
+def test_an_sdf_part_is_written_as_its_script(ctx, tmp_path, monkeypatch):
+    _stub_machine(monkeypatch, script="show_object(print_)\n")
+    asyncio.run(ctx.get_part("//test:printed-sdf").materialize_async(ctx, write=True))
+    assert (tmp_path / "printed-sdf.py").read_text() == "show_object(print_)\n"
+
+
+def test_a_molding_is_asked_of_its_mold(ctx, tmp_path, monkeypatch):
+    asked = _stub_machine(monkeypatch)
+    asyncio.run(ctx.get_part("//test:molded").materialize_async(ctx, write=True))
+    assert asked[0][1]["machine"] == "mold"
+    assert (tmp_path / "molded.brep").exists()
+
+
+def test_settings_tried_out_go_to_the_machine_and_not_into_the_declaration(ctx, monkeypatch):
+    asked = _stub_machine(monkeypatch)
+    part = ctx.get_part("//test:printed")
+    asyncio.run(part.materialize_async(ctx, overrides={"infill": 0.6, "walls": None}))
+    assert asked[0][1]["infill"] == 0.6
+    assert "walls" not in asked[0][1]
+    assert part.config["manufacturing"]["fff"] == {"infill": "20%"}
+
+
+def test_a_part_whose_type_is_its_own_is_not_written_over(ctx, monkeypatch):
+    _stub_machine(monkeypatch)
+    with pytest.raises(pc.cam.CamConfigError, match="'basic' part"):
+        asyncio.run(ctx.get_part("//test:scanned").materialize_async(ctx, write=True))
+
+
+def test_a_part_made_some_other_way_is_not_materialized(ctx):
+    with pytest.raises(pc.cam.CamConfigError, match="not made by following instructions"):
+        asyncio.run(ctx.get_part("//test:design").materialize_async(ctx))
+
+
+#
+# The 'materialize' check
+#
+
+
+def _envelope(volume, bbox):
+    return {
+        shape_envelope.KEY_BREP: b"",
+        shape_envelope.KEY_METADATA: {
+            shape_envelope.METADATA_MEASUREMENTS: {
+                shape_envelope.METADATA_VOLUME: volume,
+                shape_envelope.METADATA_BBOX: list(bbox),
+            }
+        },
+    }
+
+
+BOX = (-10.0, -5.0, 0.0, 10.0, 5.0, 5.0)
+
+
+def _arrange(monkeypatch, own, made, stats=None):
+    async def wrapped(self, ctx):
+        return own
+
+    async def materialize(self, ctx, **kwargs):
+        return {"product": made, "stats": stats or {}}
+
+    monkeypatch.setattr(pc.shape.Shape, "get_wrapped", wrapped)
+    monkeypatch.setattr(pc.shape.Shape, "materialize_async", materialize)
+
+
+def _verdict(ctx, name):
+    return asyncio.run(MaterializeTest().test([], ctx, ctx.get_part("//test:" + name)))
+
+
+def test_the_check_asks_only_a_part_with_a_geometry_of_its_own(ctx):
+    check = MaterializeTest()
+    assert "nothing to compare" in check.inapplicable(ctx.get_part("//test:printed"))
+    assert "not made by following instructions" in check.inapplicable(ctx.get_part("//test:design"))
+    assert check.inapplicable(ctx.get_part("//test:scanned")) is None
+
+
+def test_a_materialized_part_is_asked_too(tmp_path):
+    context = _context(tmp_path, files=("printed.brep",))
+    assert MaterializeTest().inapplicable(context.get_part("//test:printed")) is None
+
+
+def test_a_part_that_is_what_its_machine_makes_passes(ctx, monkeypatch):
+    _arrange(monkeypatch, _envelope(500.0, BOX), _envelope(500.5, BOX))
+    assert _verdict(ctx, "scanned") is MaterializeTest.TEST_PASSED
+
+
+def test_a_part_the_wrong_size_fails(ctx, monkeypatch, caplog):
+    larger = BOX[:3] + (12.0, 5.0, 5.0)
+    _arrange(monkeypatch, _envelope(500.0, BOX), _envelope(560.0, larger))
+    with caplog.at_level("ERROR"):
+        assert _verdict(ctx, "scanned") is MaterializeTest.TEST_FAILED
+    assert "its extent differs by 2.000 mm" in caplog.text
+
+
+def test_a_part_the_right_size_and_the_wrong_weight_fails(ctx, monkeypatch, caplog):
+    _arrange(monkeypatch, _envelope(1000.0, BOX), _envelope(400.0, BOX))
+    with caplog.at_level("ERROR"):
+        assert _verdict(ctx, "scanned") is MaterializeTest.TEST_FAILED
+    assert "the machine makes 400.0 mm3" in caplog.text
+
+
+def test_a_part_modelled_solid_is_what_its_print_looks_like(ctx, monkeypatch):
+    """The print's sections stacked up: what a part drawn solid and printed with infill is the outside of."""
+    _arrange(monkeypatch, _envelope(1000.0, BOX), _envelope(400.0, BOX), stats={"solid_volume": 1000.4})
+    assert _verdict(ctx, "scanned") is MaterializeTest.TEST_PASSED
+
+
+def test_a_machine_that_cannot_make_it_fails_the_check(ctx, monkeypatch, caplog):
+    async def wrapped(self, ctx):
+        return _envelope(1.0, BOX)
+
+    async def broken(self, ctx, **kwargs):
+        raise pc.cam.CamConfigError("no printer")
+
+    monkeypatch.setattr(pc.shape.Shape, "get_wrapped", wrapped)
+    monkeypatch.setattr(pc.shape.Shape, "materialize_async", broken)
+    with caplog.at_level("ERROR"):
+        assert _verdict(ctx, "scanned") is MaterializeTest.TEST_FAILED
+    assert "could not be worked out: no printer" in caplog.text
+
+
+def test_the_verdict_is_keyed_on_what_it_is_made_from_and_how(tmp_path):
+    def suffix(fff):
+        package = dict(PACKAGE)
+        package["parts"] = dict(PACKAGE["parts"])
+        package["parts"]["scanned"] = dict(PACKAGE["parts"]["scanned"])
+        package["parts"]["scanned"]["manufacturing"] = {"method": "additive", "source": "design", "fff": fff}
+        root = tmp_path / str(len(os.listdir(tmp_path)))
+        root.mkdir()
+        (root / "partcad.yaml").write_text(yaml.safe_dump(package))
+        context = pc.Context(str(root))
+        return asyncio.run(MaterializeTest().cache_key_suffix(context, context.get_part("//test:scanned")))
+
+    sparse = suffix({"infill": "20%"})
+    assert sparse.startswith(".materialize=")
+    assert sparse != suffix({"infill": "40%"})

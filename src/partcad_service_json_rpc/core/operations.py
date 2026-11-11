@@ -4311,6 +4311,12 @@ def cam_route(session, params):
     failed, rather than stopping at the first. A route is a file: an object
     whose section is wrong must not cost the other nineteen theirs, and a user
     who ran this over a package wants the list rather than the first line of it.
+
+    ``materialize`` also writes what each machine makes by following its route
+    into the part's own file (``Shape.materialize_async``): its ``path:``, else
+    its name with the extension of the format it is kept in. With no
+    ``object`` it is every part of the package whose geometry is what its
+    manufacturing makes (``part_config_manufacturing.implied_type``).
     """
     import asyncio
 
@@ -4365,12 +4371,16 @@ def cam_route(session, params):
                 machine=machine,
                 output_dir=params.get("output_dir") or None,
                 quiet_misses=bool(recursive and object_name),
+                materialize=bool(params.get("materialize")),
             )
         )
 
     if not params.get("json"):
         for result in results:
-            pc.logging.info(pc.cam.route_report(result["object"], result))
+            if result.get("filepath"):
+                pc.logging.info(pc.cam.route_report(result["object"], result))
+            if result.get("written"):
+                pc.logging.info("Materialized %s into %s" % (result["object"], result["written"]))
         if not results and not failures and not object_name:
             # Nothing was wrong and nothing was produced, which is a real answer
             # and one a user acting on an empty command line needs said out
@@ -4408,7 +4418,16 @@ def _routed_kind(params):
 
 
 async def _route_packages_async(
-    pc, ctx, packages, object_name, kind, implementation, output_dir, machine=None, quiet_misses=False
+    pc,
+    ctx,
+    packages,
+    object_name,
+    kind,
+    implementation,
+    output_dir,
+    machine=None,
+    quiet_misses=False,
+    materialize=False,
 ):
     """Route the objects of every package named, reporting each as it lands.
 
@@ -4463,11 +4482,18 @@ async def _route_packages_async(
             continue
         if obj is None:
             # The whole package: every sketch and part of it that says how it
-            # is made, under 'manufacturing:'.
-            shapes.extend(await prj.routable_shapes_async())
+            # is made, under 'manufacturing:' -- or, materializing, every part
+            # whose geometry is what its manufacturing makes.
+            if materialize:
+                shapes.extend(await _materializable_shapes_async(prj))
+            else:
+                shapes.extend(await prj.routable_shapes_async())
             continue
 
-        if await _kind_of_async(ctx, target, obj, kind, _ROUTED) == "sketch":
+        if materialize:
+            found = await prj.get_part_async(obj, quiet=True)
+            named = [found] if found is not None else []
+        elif await _kind_of_async(ctx, target, obj, kind, _ROUTED) == "sketch":
             named = await prj.routable_shapes_async(sketches=[obj])
         else:
             named = await prj.routable_shapes_async(parts=[obj])
@@ -4493,6 +4519,24 @@ async def _route_packages_async(
         async with at_once:
             # A safe point (see 'cancellation'): this object's turn has come.
             cancellation.check()
+            if materialize:
+                made = await shape.materialize_async(
+                    ctx,
+                    machine=machine,
+                    implementation=implementation,
+                    write=True,
+                    output_dir=output_dir,
+                    discard_route=False,
+                )
+                # What travels back is what was written and what it came to:
+                # the product itself is the file.
+                return {
+                    "object": "%s:%s" % (shape.project_name, shape.name),
+                    "filepath": made.get("route"),
+                    "written": made.get("written"),
+                    "stats": made.get("stats") or {},
+                    "warnings": [],
+                }
             return await shape.route_async(ctx, implementation=implementation, output_dir=output_dir, machine=machine)
 
     produced = await asyncio.gather(*[route(shape) for shape in shapes], return_exceptions=True)
@@ -4525,6 +4569,22 @@ async def _route_packages_async(
             raise result
         failures.append((name, result))
     return results, failures
+
+
+async def _materializable_shapes_async(prj):
+    """The parts of a package whose geometry is what their manufacturing makes, in a stable order."""
+    from partcad.part_config_manufacturing import IMPLIED_TYPE_KEY, implied_type
+
+    shapes = []
+    for name, config in sorted((prj.object_configs("part") or {}).items()):
+        if not isinstance(config, dict):
+            continue
+        if not config.get(IMPLIED_TYPE_KEY) and not implied_type(config):
+            continue
+        part = await prj.get_part_async(name, quiet=True)
+        if part is not None:
+            shapes.append(part)
+    return shapes
 
 
 def supply_quote(session, params):

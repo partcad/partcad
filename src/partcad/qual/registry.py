@@ -40,6 +40,7 @@ from .basic.manufacturability_forming import ManufacturabilityFormingTest
 from .basic.manufacturability_laser import ManufacturabilityLaserTest
 from .basic.manufacturability_sheet_metal import ManufacturabilitySheetMetalTest
 from .basic.manufacturability_subtractive import ManufacturabilitySubtractiveTest
+from .basic.materialize import MaterializeTest
 from .basic.requirements import RequirementsTest
 from .basic.shell import ShellTest
 from .basic.solidity import SolidityTest
@@ -75,6 +76,10 @@ def builtin(concurrency_cap: typing.Optional[int] = None) -> list[Qualification]
                 ManufacturabilityLaserTest(),
                 ManufacturabilityDrillTest(),
                 ManufacturabilityCutTest(),
+                # Whether a part with a geometry of its own is what its machine
+                # makes by following its instructions (see 'pc cam
+                # --materialize').
+                MaterializeTest(),
                 ConnectTest(),
                 ConnectivityTest(),
                 # What the object was required to be: its ports, its interfaces

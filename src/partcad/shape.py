@@ -25,6 +25,7 @@ from partcad_utils import timeouts
 
 from . import cache_artifacts
 from . import cae as pc_cae
+from . import cae_material as pc_cae_material
 from . import cam as pc_cam
 from . import code_version
 from . import logging as pc_logging
@@ -3800,6 +3801,15 @@ class Shape(ShapeConfiguration):
             # A scenario that says it takes longer ('params: {timeout: ...}')
             # is taken at its word, as one run's parameters are.
             window = timeouts.seconds({**(impl.parameters or {}), **kwargs}.get(timeouts.KEY))
+
+            # A print is meshed as its design, at the print's density (see
+            # 'partcad.cae_material'); everything else as itself. Worked out
+            # before this shape's lock is taken: a print is built by routing
+            # it, and the route takes the lock of the part it is for.
+            subject = await pc_cae_material.subject_async(ctx, self)
+            if subject.note:
+                pc_logging.info("%s:%s: %s" % (self.project_name, self.name, subject.note))
+
             with pc_logging.Timeout(window, self.project_name, self.name):
                 # Clearing the path, writing it and reading the answer back are one
                 # operation on one file, and the path is derived from the shape --
@@ -3831,7 +3841,7 @@ class Shape(ShapeConfiguration):
                     if os.path.exists(final_filepath):
                         os.remove(final_filepath)
 
-                    obj = await self.get_wrapped(ctx)
+                    obj = await subject.shape.get_wrapped(ctx)
                     if obj is None:
                         raise Exception("Cannot analyse '%s': shape is empty" % self.name)
 
@@ -3839,6 +3849,12 @@ class Shape(ShapeConfiguration):
                     script = await self._materialize_output_script(ctx, impl)
 
                     request = await self._output_request(ctx, obj, impl, kwargs)
+                    # What the part is made of, where the analysis's own layers
+                    # say nothing about it.
+                    stated = self._analysis_stated(ctx, format_name, project, kwargs)
+                    filled = pc_cae_material.fill(request, self.get_material(ctx), stated, subject.fraction)
+                    if filled:
+                        pc_logging.debug("%s:%s: from its material: %s" % (self.project_name, self.name, filled))
                     request.update(config.to_data())
                     # The ports each condition landed on, in the shape's own
                     # coordinate system. 'fix' and 'load' above say what the user
@@ -3906,6 +3922,15 @@ class Shape(ShapeConfiguration):
             # condition landed, not handed a BREP of every port outline.
             "boundary": [{key: value for key, value in record.items() if key != "sketch"} for record in boundary],
         }
+
+    def _analysis_stated(self, ctx, format_name: str, project, kwargs: dict) -> set:
+        """The analysis parameters something other than the implementation states: the package, the object, the run.
+
+        The implementation's own declaration is the one layer left out -- its
+        defaults are what a material overrides (see 'partcad.cae_material').
+        """
+        opts, _ = self._output_getopts(ctx, format_name, output.CAE, project, None)
+        return set(opts) | {key for key, value in kwargs.items() if value is not None}
 
     async def _artifact_hash(
         self, section: str, label: str, impl, script: str, request: dict, implementation: str, extra=None
@@ -4231,7 +4256,7 @@ class Shape(ShapeConfiguration):
                 if os.path.exists(final_filepath):
                     os.remove(final_filepath)
 
-                obj = await self.get_wrapped(ctx)
+                obj = await self._route_subject_async(ctx)
                 if obj is None:
                     raise Exception("Cannot route '%s': shape is empty" % self.name)
 
@@ -4272,17 +4297,25 @@ class Shape(ShapeConfiguration):
                 # written it, with what the implementation counted. Keyed after
                 # the request is complete, because the machine and the job are
                 # in it and in nothing else.
-                cache = getattr(ctx, "cache_artifacts", None)
-                artifact = await self._artifact_hash(
-                    output.CAM,
-                    "cam.%s" % (machine or request.get("machine") or "default"),
-                    impl,
-                    script,
-                    request,
-                    "%s:%s" % (options_project.name, format_name),
+                # What the machine makes, asked for beside the route, is an
+                # answer the artifact cache has no file for: it is the part's
+                # own geometry, cached as that (see 'part_factory_manufactured').
+                materializing = bool(kwargs.get(pc_cam.MATERIALIZE_KEY))
+                cache = None if materializing else getattr(ctx, "cache_artifacts", None)
+                artifact = (
+                    None
+                    if materializing
+                    else await self._artifact_hash(
+                        output.CAM,
+                        "cam.%s" % (machine or request.get("machine") or "default"),
+                        impl,
+                        script,
+                        request,
+                        "%s:%s" % (options_project.name, format_name),
+                    )
                 )
                 route = {"route": final_filepath}
-                result = await cache_artifacts.restore_async(cache, artifact, files=route)
+                result = None if materializing else await cache_artifacts.restore_async(cache, artifact, files=route)
                 cached = result is not None
                 if not cached:
                     result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
@@ -4300,7 +4333,7 @@ class Shape(ShapeConfiguration):
                         )
                     )
                 written = os.path.exists(final_filepath)
-                if written and not cached:
+                if written and not cached and not materializing:
                     # Only an answer is remembered: everything that failed has
                     # raised by now (see 'partcad.cache_artifacts').
                     await cache_artifacts.store_async(cache, artifact, result, files=route)
@@ -4326,7 +4359,277 @@ class Shape(ShapeConfiguration):
             # PartCAD deciding that on their behalf (see 'cam.route_report').
             "stats": result.get("stats") or {},
             "warnings": list(result.get("warnings") or []),
+            # What the machine makes by following the route, where it was
+            # asked for (see 'materialize_async').
+            **{key: result[key] for key in pc_cam.PRODUCT_KEYS if result.get(key) is not None},
         }
+
+    async def _route_subject_async(self, ctx):
+        """What the route is written from: the design a print or a molding is made after, the instructions a cut follows, or the shape itself.
+
+        A printed part's own geometry is what its route deposits, so the route
+        cannot be written from it: it is written from the design it names. A
+        cut part follows its 'instructions:' where it names them -- the drawing
+        or the part whose outline the machine goes round -- and its own geometry
+        otherwise, as it always has. A part that is made on demand and names
+        neither has nothing to be routed from, and says so rather than asking
+        itself for the geometry it is being made into.
+        """
+        from .part_config import PartConfiguration
+        from .part_config_manufacturing import MANUFACTURED_TYPE, METHOD_SUBTRACTIVE
+        from .qual.basic.manufacturability_reference import resolve_reference
+
+        try:
+            data = PartConfiguration.get_manufacturing_data(self)
+        except Exception:  # pylint: disable=broad-except
+            data = None
+        reference = None
+        if data is not None:
+            if data.design:
+                reference = data.design
+            elif data.method == METHOD_SUBTRACTIVE and data.instructions:
+                reference = data.instructions
+        if reference is not None:
+            # A part, or a drawing whose outline the machine goes round.
+            found = await resolve_reference(ctx, self, reference, "part")
+            if found is None:
+                found = await resolve_reference(ctx, self, reference, "sketch")
+            if found is None:
+                # Said without the object's name: 'route_async' puts it in front.
+                raise pc_cam.CamConfigError("it is made from '%s', which is not found" % reference)
+            return await found.get_wrapped(ctx)
+        if isinstance(self.config, dict) and self.config.get("type") == MANUFACTURED_TYPE:
+            raise pc_cam.CamConfigError(
+                "it has no geometry of its own and names nothing to follow: a cut part names the drawing or the"
+                " part it is cut after in 'manufacturing: instructions:'"
+            )
+        return await self.get_wrapped(ctx)
+
+    async def materialize_async(
+        self,
+        ctx: Context,
+        machine: Optional[str] = None,
+        implementation: Optional[str] = None,
+        write: bool = False,
+        filepath=None,
+        representation: Optional[str] = None,
+        output_dir=None,
+        overrides: Optional[dict] = None,
+        discard_route: bool = True,
+    ) -> dict:
+        """What this part's manufacturing makes: the part's own geometry, by following its instructions.
+
+        A print is what the printer deposits along the route `pc cam` writes for
+        its design; a cut part is what the router, the laser or the drill leaves
+        of its stock along its route, or what a saw leaves of it; a molded part
+        is its mold's cavity, shrunk. The same implementation that writes the
+        route says what it makes (`//builtin/cam`'s `cam_fff` and
+        `cam_product`), so a product and its route cannot come to disagree.
+
+        Args:
+            machine: which of the part's machines makes it, where it names
+                several.
+            write: write the product into the part's file -- its `path:`, else
+                its name with the extension of the format it is kept in
+                ('brep' unless it says `type: step` or `type: sdf`).
+            filepath: write it there instead.
+            representation: 'sdf' for a print's distance field as a script,
+                'step' for STEP text, None for the shape alone.
+            output_dir: where the route goes, where it is kept.
+            discard_route: write the route into a scratch directory and throw
+                it away (the default: the product is what was asked for); False
+                keeps it where `output_dir`, else the configuration, puts it.
+            overrides: settings of the machine to make it with instead of the
+                ones the part states (`layerHeight`, `infill`...), for a caller
+                that is trying settings out rather than writing them down.
+
+        Returns:
+            '{product, product_step, sdf_script, stats, route, written}': the
+            product as a shape envelope, its text where asked for, what the
+            route came to, where the route went, and where the product was
+            written if it was.
+
+        Raises:
+            partcad.cam.CamConfigError: the part is not made by following
+                anything, or names what it is made from and it is not there.
+        """
+        import tempfile
+
+        from .part_config import PartConfiguration
+        from .part_config_manufacturing import (
+            IMPLIED_TYPE_KEY,
+            MACHINE_FFF,
+            MACHINE_MOLD,
+            MATERIALIZED_FORMATS,
+            MATERIALIZED_METHODS,
+            METHOD_ADDITIVE,
+            METHOD_FORMING,
+            METHOD_SUBTRACTIVE,
+            ROUTED_MACHINES,
+            MachineConfig,
+        )
+        from .qual.basic.manufacturability_reference import resolve_reference
+
+        data = PartConfiguration.get_manufacturing_data(self)
+        name = "%s:%s" % (self.project_name, self.name)
+        if data.machine_error:
+            raise pc_cam.CamConfigError("%s: %s" % (name, data.machine_error))
+        if data._method_string() not in MATERIALIZED_METHODS:
+            raise pc_cam.CamConfigError(
+                "%s is not made by following instructions: it is made by %s, and only 'additive', 'subtractive' and"
+                " 'forming' parts are materialized" % (name, data._method_string())
+            )
+
+        if machine:
+            chosen = data.machine_named(machine)
+            if chosen is None:
+                raise pc_cam.CamConfigError(
+                    "%s is not made on a '%s'; it names %s"
+                    % (name, machine, ", ".join("'%s'" % kind for kind in data.machine_choices()) or "no machine")
+                )
+        elif data.machines:
+            chosen = data.machine
+            if chosen is None:
+                raise pc_cam.CamConfigError(
+                    "%s could be made on %s, so one of them has to be chosen"
+                    % (name, " or ".join("'%s'" % kind for kind in data.machine_choices()))
+                )
+        else:
+            # A print or a molding that names no machine is made on the usual
+            # one: a printer with the usual settings, a mold that gives back its
+            # cavity as it is.
+            default = MACHINE_FFF if data.method == METHOD_ADDITIVE else MACHINE_MOLD
+            chosen = MachineConfig(default, None, declared=False)
+        if data.method in (METHOD_ADDITIVE, METHOD_FORMING) and not data.design:
+            raise pc_cam.CamConfigError(
+                "%s names no design to be made after: it is its own design ('manufacturing: source:')" % name
+            )
+
+        extra = {pc_cam.MATERIALIZE_KEY: True}
+        if representation:
+            extra[pc_cam.REPRESENTATION_KEY] = representation
+        if data.method == METHOD_SUBTRACTIVE:
+            if not data.source:
+                raise pc_cam.CamConfigError("%s names no stock to be cut from ('manufacturing: source:')" % name)
+            stock = await resolve_reference(ctx, self, data.source, "part")
+            if stock is None:
+                raise pc_cam.CamConfigError("%s is cut from '%s', which is not found" % (name, data.source))
+            extra[pc_cam.STOCK_KEY] = await stock.get_wrapped(ctx)
+        if overrides:
+            extra.update({key: value for key, value in overrides.items() if value is not None})
+
+        scratch = None
+        if discard_route:
+            scratch = tempfile.mkdtemp(prefix="partcad-materialize-")
+            output_dir = scratch
+        try:
+            if chosen.kind in ROUTED_MACHINES:
+                result = await self.route_async(
+                    ctx,
+                    implementation=implementation,
+                    output_dir=output_dir,
+                    machine=chosen.kind if (machine or len(data.machines) > 1 or not chosen.declared) else None,
+                    **extra,
+                )
+            else:
+                result = await self._product_run_async(ctx, chosen, implementation, extra, output_dir)
+        finally:
+            if scratch is not None:
+                import shutil
+
+                shutil.rmtree(scratch, ignore_errors=True)
+
+        made = {
+            "product": result.get("product"),
+            "product_step": result.get("product_step"),
+            "sdf_script": result.get("sdf_script"),
+            "stats": result.get("stats") or {},
+            "route": None if scratch is not None else result.get("filepath"),
+            "written": None,
+        }
+        if not write:
+            return made
+
+        fmt = self.config.get(IMPLIED_TYPE_KEY) or self.config.get("type")
+        if fmt not in MATERIALIZED_FORMATS:
+            raise pc_cam.CamConfigError(
+                "%s is a '%s' part, whose geometry is its own file or script rather than one 'pc cam' writes; leave"
+                " 'type:' out, or say 'brep', 'step' or 'sdf'" % (name, fmt)
+            )
+        from .part_factory_manufactured import materialized_path
+
+        project = ctx.get_project(self.project_name)
+        target = os.path.abspath(filepath or materialized_path(project, self.config))
+        if fmt == "sdf" and chosen.kind != MACHINE_FFF:
+            raise pc_cam.CamConfigError(
+                "%s: only a print is kept as an SDF; a '%s' makes a solid" % (name, chosen.kind)
+            )
+        if fmt == "sdf":
+            text = made["sdf_script"]
+            if not text:
+                again = await self.materialize_async(
+                    ctx, machine=machine, implementation=implementation, representation="sdf", overrides=overrides
+                )
+                text = again["sdf_script"]
+            payload = text.encode("utf-8")
+        elif fmt == "step":
+            text = made["product_step"]
+            if not text:
+                again = await self.materialize_async(
+                    ctx, machine=machine, implementation=implementation, representation="step", overrides=overrides
+                )
+                text = again["product_step"]
+                made["product"] = again["product"]
+            payload = text.encode("utf-8")
+        else:
+            if made["product"] is None:
+                raise pc_cam.CamFailed("%s: the 'pc cam' implementation made nothing" % name)
+            payload = shape_envelope.brep_plain(made["product"][shape_envelope.KEY_BREP])
+        ctx.ensure_dirs_for_file(target)
+        with open(target, "wb") as f:
+            f.write(payload)
+        made["written"] = target
+        return made
+
+    async def _product_run_async(self, ctx, chosen, implementation, extra, output_dir) -> dict:
+        """What a machine that runs no program makes -- a saw, a mold -- asked of the 'pc cam' implementation.
+
+        The same implementation as a route, asked only for the product: there is
+        no route file, and the request carries the machine as the part names
+        it, with what it works on as the object (the stock a saw cuts, the
+        cavity a mold is).
+        """
+        from .part_config import PartConfiguration
+        from .part_config_manufacturing import MACHINE_CUT
+        from .qual.basic.manufacturability_reference import resolve_reference
+
+        data = PartConfiguration.get_manufacturing_data(self)
+        if chosen.kind == MACHINE_CUT:
+            subject = extra.get(pc_cam.STOCK_KEY)
+        else:
+            design = await resolve_reference(ctx, self, data.design, "part")
+            if design is None:
+                raise pc_cam.CamConfigError(
+                    "%s:%s is made after '%s', which is not found" % (self.project_name, self.name, data.design)
+                )
+            subject = await design.get_wrapped(ctx)
+        if subject is None:
+            raise pc_cam.CamFailed("%s:%s: nothing to make it from" % (self.project_name, self.name))
+
+        project = ctx.get_project(self.project_name)
+        options_project, format_name = self._route_implementation(ctx, implementation)
+        impl, final_filepath = self.cam_getopts(ctx, format_name, project, None, options_project, output_dir)
+        script = await self._materialize_output_script(ctx, impl)
+        request = await self._output_request(ctx, subject, impl, {})
+        request.update(chosen.to_data())
+        request.update(extra)
+        result = await self._run_implementation_async(ctx, impl, script, request, os.path.abspath(final_filepath))
+        if result is None or not result.get("success"):
+            raise pc_cam.CamFailed(
+                "Nothing made for %s:%s: %s"
+                % (self.project_name, self.name, (result or {}).get("exception") or "no answer")
+            )
+        return result
 
     def route(
         self,

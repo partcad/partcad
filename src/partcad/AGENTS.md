@@ -971,12 +971,10 @@ at all).
   Optional: a part naming none is its own design, as every printed part was before. The part itself is the
   *print*: the design as the printer makes it, which is what it weighs.
 
-  **The design is the part's default visual** (`visual.design`): a printed part that names a design and no
-  `visual:` of its own is drawn as the design wherever a picture is drawn, by devel's one substitution path
-  (`visual_of_async`). A reference inherits as before, so a type-less printed part -- which
-  `PartConfiguration.normalize` makes `type: alias` of its design, marked `implied_type`, until the print can be
-  worked out from its route -- is the design already and nothing is substituted. `manufacturing: visual:` is
-  refused with a sentence pointing at the part-level key.
+  **The design is the part's default visual** (`visual.design`): a printed or molded part that names a design and
+  no `visual:` of its own is drawn as the design wherever a picture is drawn, by devel's one substitution path
+  (`visual_of_async`) -- with a geometry of its own or without one. A reference inherits as before.
+  `manufacturing: visual:` is refused with a sentence pointing at the part-level key.
 
   **`fff:` is a machine** (`MACHINE_FFF`, `PRINTERS`), read by `MachineConfig` and `_read_machine` like `laser:`:
   its own keys are the axis (`toolAxis`/`along` -- the build orientation, oriented by `pc cam` the way a cut is),
@@ -984,18 +982,49 @@ at all).
   names where a cut has no word (`layerHeight` ~ `depth_per_pass`, `lineWidth` ~ the width the path leaves,
   `walls` ~ repeated `profile`, `infill` ~ a pocket's `stepover` inverted, `infillPattern` ~ `operation`,
   `topLayers`/`bottomLayers`). An error in it is `machine_error`, so `pc cam` visits it as it visits a broken
-  `laser:`. It is **not** in `ROUTED_MACHINES` yet: `pc cam` passes a printed part over and `-m fff` refuses
-  with `unrouted_reason`, until `//builtin/cam` writes a printer's route (its `_faces_at`, ring offsets and
-  `_wire_points` are what the route is made of; the design record has a prototype's numbers). A printed part that
-  names no printer has none -- there is no printing analogue of CNC-as-default. Nothing is shared directly under
-  `manufacturing:` for a print: a printer's key there is reported as "write it under 'fff:'".
+  `laser:`. It is in `ROUTED_MACHINES`: `//builtin/cam/cam_fff.py` writes its route (sections by `_faces_at`,
+  island-safe offsets and hatching by Clipper -- `pyclipper`, because OCCT's face offset drops a hole at
+  tangency), and `cam.declared_config` hands it `PRINT_KEYS` over `settings()`'s defaults. A printed part that
+  names no printer gets an undeclared one (`declared=False`), as a cut part naming no machine gets CNC: `pc cam`
+  over a package passes it over and `-m fff` routes it. Nothing is shared directly under `manufacturing:` for a
+  print: a printer's key there is reported as "write it under 'fff:'". The forming method's machine is `mold:`
+  (`FORMERS`), whose one key is `shrinkage`; it and `cut:` are `_UNROUTED` -- `unrouted_reason` says why -- and
+  are asked for their product alone (`Shape._product_run_async`).
+
+- **A part with no geometry of its own is what its machine makes** (`part_config_manufacturing.implied_type`,
+  `part_factory_manufactured.py`, `builtin/cam/cam_product.py`, `Shape.materialize_async`,
+  `qual/basic/materialize.py`): a print or a molding naming its `source:`, or a cut naming its stock and its
+  `instructions:`, with no `type:` -- or `type: brep|step|sdf`, which says only what its file is kept in -- is
+  normalized to `type: manufactured` with `implied_type` holding the format. Its factory (`create`) hands the
+  part to that format's own factory when the file (`path:`, else `<name>.<ext>`) exists, and otherwise makes it
+  on demand: `PartFactoryManufactured` calls `materialize_async`, which asks the same `pc cam` implementation
+  for the route with `materialize: true` and gets back the product beside it -- `cam_fff.deposit` (the route's
+  footprints stroked at the line spacing, extruded per layer, a compound never fused), `cam_product.removal`
+  (stock minus the swept tool, keeping what lies inside the outline by bounding box), `drilled`, `sawn`,
+  `molded` -- in the part's frame. `type: sdf` asks for `sdf_script` instead, a script whose field is the
+  route's beads, meshed by `PartFactoryManufacturedSdf` (a `PartFactorySdf`) at half a layer. The part's key
+  is seeded with its `manufacturing:` section and its references' keys (it is left out of every shape's hash
+  otherwise), and it borrows the design's or the stock's CMF (`LENT_CMF`) where it states none.
+  `pc cam --materialize` (`cam.route` with `materialize`) writes the product into the file; the `materialize`
+  check compares a part that has a geometry of its own with the product by recorded volume and bounding box,
+  never a boolean -- a print is tens of thousands of prisms. A part with a `fileUrl:`, or a cut with no
+  `instructions:`, keeps its own file. A print or an unshrunk molding has its design's ports (`_lend_ports`, an
+  alias's `_SourcePorts`) unless it declares its own.
+
+  **An analysis meshes a print's design, at the print's density** (`cae_material.py`): `subject_async` swaps the
+  design in for a part that is what its printer makes, with the fraction of the design it deposits (the two
+  recorded volumes) -- worked out *before* `_analysis_run_async` takes the part's lock, because building the print
+  routes it and the route takes that lock from another task. `fill` hands the implementation the part's material
+  (`Material.youngs_modulus`/`poissons_ratio`/`yield_strength`/`density`, `material.ANALYSIS_FROM_MATERIAL`) for
+  every parameter of that name it takes and nothing above its own layer states (`Shape._analysis_stated`), and
+  scales stiffness, strength and density by the fraction.
 
   `PRINT_DEFAULTS` (`MachineConfig.settings`) is for working something out; instructions and the cart carry only
   what the part states (`PartConfigManufacturing.print_data`, sent as the cart item's `manufacturing`).
 
-  Material stays CMF: the manufacturing section takes none. `get_mcft` (the cart) falls back to what a reference
-  resolves to, since a reference states no material of its own and a type-less printed part is one; the
-  manufacturer provider is sent the design's STEP, not the part's own geometry.
+  Material stays CMF: the manufacturing section takes none. A type-less printed part is lent its design's
+  material by its factory (`_lend_cmf`); the manufacturer provider is sent the design's STEP, not the part's own
+  geometry.
 
 - **Build vs Buy decides the build plan, and the plan decides the instruction book** (`build_plan.py`): the
   tree of an object's line items says what each can be (bought, built, both, neither); `effective_choice` is

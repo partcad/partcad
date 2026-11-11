@@ -130,18 +130,22 @@ def declared(config) -> typing.Optional[str]:
 
 
 def design(config) -> typing.Optional[str]:
-    """The design a printed part is drawn as where it states no 'visual:', or None.
+    """The design a printed or molded part is drawn as where it states no 'visual:', or None.
 
-    The 'source:' of an 'additive' part's own 'manufacturing:' section, which is
-    the design and never stock (see 'part_config_manufacturing.ADDITIVE_REQUIRED').
-    None for a reference: what it is drawn as is what the part it stands for is
-    drawn as ('_inherited_async'), which for a printed part PartCAD gave a type
-    to is its design already.
+    The 'source:' of an 'additive' or 'forming' part's own 'manufacturing:'
+    section: what it is a print of, or the cavity it is molded in -- what the
+    designer had in mind, and never stock. That holds whether the part has a
+    geometry of its own or is what its machine makes (the 'manufactured' type,
+    see 'part_config_manufacturing.implied_type'): a print is drawn as its
+    design, and its own geometry, bead by bead, only where that is asked for.
+    A cut part is drawn as itself, since its 'source:' is the stock it is cut
+    from. None for a reference: what it is drawn as is what the part it stands
+    for is drawn as ('_inherited_async').
     """
     if not isinstance(config, dict) or config.get("type") in _REFERENCE_TYPES:
         return None
     section = config.get("manufacturing")
-    if not isinstance(section, dict) or section.get("method") != "additive":
+    if not isinstance(section, dict) or section.get("method") not in ("additive", "forming"):
         return None
     value = section.get("source")
     if not isinstance(value, str) or not value.strip():
@@ -150,7 +154,7 @@ def design(config) -> typing.Optional[str]:
 
 
 def _declares_or_refers(config) -> bool:
-    """Whether a declaration could have a visual at all: it states one, it is printed from a design, or it stands for another part."""
+    """Whether a declaration could have a visual at all: it states one, it is made after a design, or it stands for another part."""
     return isinstance(config, dict) and (
         declared(config) is not None or design(config) is not None or config.get("type") in _REFERENCE_TYPES
     )

@@ -472,7 +472,13 @@ def process(script, path, request):
     # kind of shape (see 'render_svg.VIEWPORT_KEY'). What the IDE's 2D tab shows
     # beside the picture, so that its viewpoint is the picture's rather than a
     # guess at it.
-    for key in ("warnings", "unsupported", "findings", "stats", "viewport"):
+    #
+    # 'product' is a 'cam:' implementation's too, asked for with
+    # 'materialize': what the machine makes by following the route, as a
+    # shape. Encoded on the way out like any shape in an answer.
+    # With it, as 'product_step' and 'sdf_script', the same product as text in
+    # the format the part keeps it in.
+    for key in ("warnings", "unsupported", "findings", "stats", "viewport", "product", "product_step", "sdf_script"):
         if output.get(key):
             result[key] = output[key]
     # Passed on when it is a list at all, empty included: see FILES_KEY. A value

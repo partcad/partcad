@@ -46,7 +46,7 @@ import threading
 
 from . import logging as pc_logging
 from .part_config import PartConfiguration
-from .part_config_manufacturing import METHOD_ADDITIVE
+from .part_config_manufacturing import METHOD_ADDITIVE, METHOD_FORMING
 from .shape_config_store import STORE_PROPERTIES, ShapeConfigStore
 from .utils import resolve_resource_path
 
@@ -252,11 +252,12 @@ def stock_name(part) -> str | None:
     Resolved against the package the part is declared in, like every other
     reference a part makes (see 'test.manufacturability_reference').
 
-    None for a printed part whatever it names: its `source:` is its design, and
-    a design is not something anybody orders to print it.
+    None for a printed or a molded part whatever it names: its `source:` is its
+    design, or its mold's cavity, and neither is something anybody orders to
+    make it.
     """
     data = PartConfiguration.get_manufacturing_data(part)
-    if not data.method or not data.source or data.method == METHOD_ADDITIVE:
+    if not data.method or not data.source or data.method in (METHOD_ADDITIVE, METHOD_FORMING):
         return None
     project_name, object_name = resolve_resource_path(part.project_name, data.source)
     return "%s:%s" % (project_name, object_name)

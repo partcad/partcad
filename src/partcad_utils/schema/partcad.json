@@ -95,7 +95,7 @@
       "additionalProperties": false
     },
     "additive-fff": {
-      "description": "A filament printer: fused filament fabrication, ISO/ASTM 52900 material extrusion, what most people call FDM. A machine like the subtractive ones -- it follows a route, layer by layer, laying a bead where a router cuts one -- so it takes their axis and their 'feed:', and settings of its own for what a cut has no word for: how thick the skin is and how full the inside. A setting left out is the printer's default; PartCAD assumes the usual ones (a 0.4 mm nozzle, 1.75 mm filament, 0.2 mm layers, 0.45 mm lines, 2 walls, 4 top and 4 bottom layers, 15% rectilinear infill) only where it has to work something out. 'pc cam' writes no printer's route yet.",
+      "description": "A filament printer: fused filament fabrication, ISO/ASTM 52900 material extrusion, what most people call FDM. A machine like the subtractive ones -- it follows a route, layer by layer, laying a bead where a router cuts one -- so it takes their axis and their 'feed:', and settings of its own for what a cut has no word for: how thick the skin is and how full the inside. A setting left out is the printer's default; PartCAD assumes the usual ones (a 0.4 mm nozzle, 1.75 mm filament, 0.2 mm layers, 0.45 mm lines, 2 walls, 4 top and 4 bottom layers, 15% rectilinear infill) only where it has to work something out: the route 'pc cam' writes for it, and what that route deposits, which is what a printed part with no geometry of its own is.",
       "type": "object",
       "properties": {
         "toolAxis": { "$ref": "#/definitions/machine-axis", "description": "The axis the nozzle comes down along, in the design's own frame: '-Z' (the default) prints it as modelled, '-Y' prints it lying on its back. The build orientation, which decides where the layer lines run and what overhangs" },
@@ -114,11 +114,27 @@
           ],
           "description": "How full the inside is: '20%', or 0.2 -- a pocket whose stepover is one line over this. A bare number above 1 is refused rather than guessed at"
         },
-        "infillPattern": { "type": "string", "minLength": 1, "description": "What the inside is filled with, as the slicer names it: 'concentric' (a pocket's rings), 'rectilinear', 'grid', 'gyroid', 'honeycomb'..." },
+        "infillPattern": { "type": "string", "minLength": 1, "description": "What the inside is filled with, as the slicer names it: 'concentric' (a pocket's rings), 'rectilinear', 'grid', 'gyroid', 'honeycomb'... 'pc cam' draws 'rectilinear', 'grid', 'lines' and 'concentric', and refuses to route any other; a print service is told it as it is" },
         "feed": { "$ref": "#/definitions/cam-feed", "description": "How fast the head travels while it extrudes; a bare number is millimeters per minute" },
+        "implementation": { "type": "string", "minLength": 1, "description": "Who produces this route, as '<package>:<file type>'; '//builtin/cam:gcode' unless said" },
         "desc": { "type": "string", "maxLength": 1000 }
       },
       "not": { "required": ["toolAxis", "along"] },
+      "additionalProperties": false
+    },
+    "forming-mold": {
+      "description": "A mold: what a 'forming' part is made in. It runs no program -- it gives back its cavity, which is the part's 'source:' -- shrunk as the material cools.",
+      "type": "object",
+      "properties": {
+        "shrinkage": {
+          "oneOf": [
+            { "type": "number", "minimum": 0, "exclusiveMaximum": 1 },
+            { "type": "string", "pattern": "^\\s*[0-9]{1,2}(\\.[0-9]+)?\\s*%\\s*$" }
+          ],
+          "description": "How much smaller than its cavity the part comes out, along every axis: '1.5%', or 0.015. Applied about the part's origin"
+        },
+        "desc": { "type": "string", "maxLength": 1000 }
+      },
       "additionalProperties": false
     },
     "subtractive-cut-one": {
@@ -420,6 +436,22 @@
                   "type": "number",
                   "exclusiveMinimum": 0,
                   "description": "Dynamic viscosity in Pa*s, SI like every physical quantity PartCAD states: water at 15 C is 0.001138. What a fluid states so that a scene filled with it ('medium') can slow down what moves through it"
+                },
+                "youngsModulus": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Young's modulus in Pa, SI like every physical quantity PartCAD states: PLA is about 3.5e9, steel about 2.0e11. What an analysis of a part made of this material is handed as its 'youngs_modulus' unless the package or the part states one"
+                },
+                "poissonsRatio": {
+                  "type": "number",
+                  "minimum": 0,
+                  "exclusiveMaximum": 0.5,
+                  "description": "Poisson's ratio, dimensionless. Handed to an analysis as its 'poissons_ratio' unless the package or the part states one"
+                },
+                "yieldStrength": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Yield strength in Pa: the stress past which the material does not spring back. Handed to an analysis as its 'yield_strength', which is what a part's peak stress is held to, unless the package or the part states one"
                 },
                 "mu": {
                   "type": "number",
@@ -2393,18 +2425,19 @@
                     "source": {
                       "type": "string",
                       "minLength": 1,
-                      "description": "The part that goes into the process, for a method that works on one rather than on stock. Required by 'sheet_metal', where it is the flat piece that is bent -- itself manufactured, and expected to be cut by a subtractive process that gives it its outline and its holes. Required by 'subtractive', where it is the stock the part is cut out of. Optional for 'additive', where it is the design -- the solid the designer had in mind, which is what is printed and, unless the part names a 'visual:' of its own, what a picture of it draws -- rather than anything that goes into the printer; a printed part that names one needs no 'type:' of its own. A reference, resolved against this package like any other."
+                      "description": "The part that goes into the process, for a method that works on one rather than on stock. Required by 'sheet_metal', where it is the flat piece that is bent -- itself manufactured, and expected to be cut by a subtractive process that gives it its outline and its holes. Required by 'subtractive', where it is the stock the part is cut out of. Optional for 'additive', where it is the design -- the solid the designer had in mind, which is what is printed and, unless the part names a 'visual:' of its own, what a picture of it draws -- rather than anything that goes into the printer; and for 'forming', where it is the mold's cavity, drawn the same way. A part whose geometry is what its machine makes needs no 'type:' of its own: a print or a molding that names one, or a cut that names its stock and its 'instructions:'. It is then kept as '<name>.brep' once 'pc cam --materialize' writes it, or as a 'step' or 'sdf' file where 'type:' says so, and made on demand until then. A reference, resolved against this package like any other."
                     },
                     "instructions": {
                       "type": "string",
                       "minLength": 1,
-                      "description": "The sketch that says how the process is carried out. Required by 'sheet_metal', where it holds one line per bend, each annotated with its angle, its inner radius and its direction. A reference to a sketch, which may carry parameters -- 'bends;include=BEND_UP,BEND_DOWN' reads the bend layers of a drawing that also holds the outline."
+                      "description": "The sketch that says how the process is carried out. Required by 'sheet_metal', where it holds one line per bend, each annotated with its angle, its inner radius and its direction. A reference to a sketch, which may carry parameters -- 'bends;include=BEND_UP,BEND_DOWN' reads the bend layers of a drawing that also holds the outline. For 'subtractive', the drawing (or the part) the machine goes round instead of the part's own geometry, which a part that names it then needs none of."
                     },
                     "cnc": { "$ref": "#/definitions/subtractive-cnc" },
                     "drill": { "$ref": "#/definitions/subtractive-drill" },
                     "laser": { "$ref": "#/definitions/subtractive-laser" },
                     "cut": { "$ref": "#/definitions/subtractive-cut" },
                     "fff": { "$ref": "#/definitions/additive-fff" },
+                    "mold": { "$ref": "#/definitions/forming-mold" },
                     "diameter": { "$ref": "#/definitions/cam-length", "description": "Shared by every machine named below that reads one: the cutter on a router, the bit in a drill. A laser has none and ignores it" },
                     "depth": { "$ref": "#/definitions/cam-length", "description": "How far down from the top of the object the cut goes. An object that does not say is cut through" },
                     "depth_per_pass": { "$ref": "#/definitions/cam-length", "description": "How deep each pass goes" },
@@ -2469,6 +2502,14 @@
                         "required": ["method"]
                       },
                       "then": { "properties": { "fff": false } }
+                    },
+                    {
+                      "description": "A mold is what 'forming' is done in, and nothing else is.",
+                      "if": {
+                        "properties": { "method": { "not": { "const": "forming" } } },
+                        "required": ["method"]
+                      },
+                      "then": { "properties": { "mold": false } }
                     }
                   ]
                 },
@@ -2491,13 +2532,24 @@
               "anyOf": [
                 { "required": ["type"] },
                 {
-                  "description": "A printed part that names its design and no geometry of its own: it is that design, printed.",
+                  "description": "A printed or molded part that names its design and no geometry of its own: it is what its machine makes of that design.",
                   "required": ["manufacturing"],
                   "not": { "required": ["source"] },
                   "properties": {
                     "manufacturing": {
                       "required": ["method", "source"],
-                      "properties": { "method": { "const": "additive" } }
+                      "properties": { "method": { "enum": ["additive", "forming"] } }
+                    }
+                  }
+                },
+                {
+                  "description": "A cut part that names its stock and what to cut out of it, and no geometry of its own: it is what its machine leaves of the stock.",
+                  "required": ["manufacturing"],
+                  "not": { "required": ["source"] },
+                  "properties": {
+                    "manufacturing": {
+                      "required": ["method", "source", "instructions"],
+                      "properties": { "method": { "const": "subtractive" } }
                     }
                   }
                 }

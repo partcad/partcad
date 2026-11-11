@@ -967,6 +967,7 @@ Object commands
       pc cam -m laser :gasket   # one that could be made either way, written for the laser
       pc cam -P ...             # this package and everything it imports
       pc cam ...:panel          # every panel from here down
+      pc cam --materialize      # and write what each machine makes into its part's file
 
   Unlike ``pc cae``, this is a **package-level** command. An analysis is asked of one part; a route is what a
   package's cut list is made of, so with nothing named ``pc cam`` produces one for every sketch and part of
@@ -1071,6 +1072,20 @@ Object commands
   -- a tool bigger than the hole it was asked to cut, an outline the offset consumed, a sandbox that will not
   build. A machine that cannot provision a sandbox at all is the one thing it does not hold against the object:
   nothing was ever asked there, so it skips, loudly, and does not remember the skip.
+
+  **What the route makes.** ``--materialize`` writes, beside each route, what the machine makes by following it
+  into the file of the part it makes -- the part's ``path:``, or its name with ``.brep`` (``.step`` where the
+  part says ``type: step``, ``.py`` for an SDF where it says ``type: sdf``): a print's deposit, bead by bead; what
+  a router, a laser or a drill leaves of the stock; what a saw leaves of it; a mold's cavity, shrunk. Over a
+  package it writes every part whose geometry is what its machine makes (see :ref:`manufactured-parts`), the
+  ones whose machine runs no program -- a saw, a mold -- included, and no other; naming a part whose type is a
+  file of its own is refused rather than written over. From then on the file is the part, and
+  ``pc qual test``'s ``materialize`` check says whether it still is what the machine makes::
+
+      pc cam --materialize :bracket-printed   # bracket-printed.nc and bracket-printed.brep
+
+  A printer's route is written like a router's (see :ref:`additive`); ``-m fff`` routes a printed part that
+  names no printer, with the usual settings.
 
   Unlike the analyses, the check does **not** keep what it produced. An analysis writes its model beside the
   package because the model is the answer somebody asked for; a route produced by a check is a by-product, and
