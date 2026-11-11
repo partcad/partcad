@@ -19,6 +19,29 @@ from .shape_config_store import resolve_store_properties
 from .utils import format_parameterized_name
 
 
+def joined_by_source_ports(declaration) -> bool:
+    """Whether a reference to an assembly is joined by its source's ports: when it declares none of its own.
+
+    Nor when it moves the geometry they sit on ('offset', 'scale'): its source's
+    ports are where the source is, as a part's are (see
+    'assembly_ports.keeps_source_ports'), and one that moves says where its
+    own are with a 'map:' or 'ports:'.
+    """
+    return not any(declaration.get(key) for key in ("map", "ports", "implements", "offset", "scale"))
+
+
+def join_source_ports(obj, source) -> None:
+    """Take the port carrier of 'source' as this object's own.
+
+    The carrier itself rather than a copy: one assembly, one set of ports,
+    resolved once on the object whose 'map:' says what they are, however many
+    names it has.
+    """
+    if source is not None and getattr(source, "with_ports", None) is not None:
+        obj.with_ports = source.with_ports
+        obj.ports_source = source
+
+
 @telemetry.instrument()
 class AssemblyFactoryAlias(pf.AssemblyFactory):
     source_assembly_name: str
@@ -73,7 +96,35 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
                 config["type"], target_project.name, self.source
             )
 
+            # Where it connects, too, unless it says so itself - the rule a part
+            # alias follows (see 'PartFactoryAlias'). An alias is the assembly it
+            # points at under another name, so it is joined by the ports that
+            # assembly is: those its 'map:' externalizes. Otherwise it would
+            # report none at all - every assembly has a port carrier of its own,
+            # and an alias's declares nothing - and neither would an enrich of
+            # it, which takes its source's (see 'AssemblyFactoryEnrich'). One
+            # that declares ports of its own, or moves the assembly away from
+            # where its ports are, answers for its ports itself.
+            #
+            # Asked for here rather than by preparing this object, so that
+            # finding them waits for nothing else a preparation waits for (see
+            # 'shape_ports.prepare_async').
+            self.joins_source_ports = joined_by_source_ports(config)
+            if self.joins_source_ports:
+                self.assembly.find_ports_source = self.find_ports_source
+
             # pc_logging.debug("Initialized an alias to %s" % self.source)
+
+    def find_ports_source(self):
+        """The assembly whose ports this one is joined by: the one it points at, or None if not found.
+
+        What 'shape_ports.prepare_async' asks. It takes that assembly's ports as
+        it answers, so a chain of references reports what is at the end of it
+        whichever link is asked first.
+        """
+        source = self.get_source_object(self.source)
+        join_source_ports(self.assembly, source)
+        return source
 
     async def prepare_async(self, obj) -> None:
         """Resolve the source, then prepare it.
@@ -106,6 +157,16 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
         obj.cacheable = source.cacheable and obj.cacheable
         obj.cache_dependencies = copy.copy(source.cache_dependencies)
         obj.cache_dependencies_broken = source.cache_dependencies_broken
+
+        # And the ports it is joined by (see '__init__'). Only pointed at here,
+        # not worked out: working out a 'map:' walks the assembly that declares
+        # it, which builds it, and a preparation is something every reader of
+        # this object's cache key waits for - a minute of building inside it is
+        # a minute they wait, and longer than they may.
+        # 'shape_ports.prepare_async' resolves them, on the source, for whoever
+        # asks for the ports.
+        if self.joins_source_ports:
+            join_source_ports(obj, source)
 
     async def subassemblies_async(self, assembly) -> list:
         """What this points at: building that is what builds this.
