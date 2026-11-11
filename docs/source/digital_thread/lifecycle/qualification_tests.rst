@@ -66,8 +66,9 @@ none -- say so and pass. Each verdict is one of:
 - **not applicable**: the test has nothing to ask of this object, and says why.
 
 A verdict is cached under everything it depends on, so asking again about an
-object that has not changed costs a lookup; a failure read from the cache is said
-again as "remembered from an earlier run", and ``pc --cache-bypass qual test`` asks
+object that has not changed costs a lookup; a failure, or a finding reported and
+not failed (a **warning**, such as ``defects``'), read from the cache is said again
+as "remembered from an earlier run", and ``pc --cache-bypass qual test`` asks
 afresh. Asked about one object by name, a test may be stricter than when it is
 walked to as part of a package -- ``sim`` fails a simulation with no condition to
 check rather than skipping it.

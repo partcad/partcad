@@ -4098,9 +4098,16 @@ class Shape(ShapeConfiguration):
         filepath=None,
         output_dir=None,
         machine: Optional[str] = None,
+        own_directory: bool = False,
         **kwargs,
     ) -> dict:
         """Produce the route file this shape declares, and report what it is.
+
+        'own_directory' says the route goes to a directory nobody else writes
+        to -- the scratch directory a part made on demand is routed into (see
+        'materialize_async') -- so there is no other run of this shape to keep
+        off its file, and this shape's lock is not taken for it. It must not
+        be: that build holds the lock already, possibly from another task.
 
         Args:
             ctx: Execution context.
@@ -4167,7 +4174,7 @@ class Shape(ShapeConfiguration):
 
         try:
             return await self._route_run_async(
-                ctx, config, project, options_project, format_name, filepath, output_dir, kwargs, machine
+                ctx, config, project, options_project, format_name, filepath, output_dir, kwargs, machine, own_directory
             )
         except pc_cam.CamConfigError as e:
             # The same naming, for the layers underneath the object: a feed the
@@ -4290,6 +4297,7 @@ class Shape(ShapeConfiguration):
         output_dir,
         kwargs: dict,
         machine: Optional[str] = None,
+        own_directory: bool = False,
     ) -> dict:
         """'route_async' once it knows what to run and who runs it.
 
@@ -4320,8 +4328,12 @@ class Shape(ShapeConfiguration):
             # so a second run over the same shape resolves to the same path and
             # would otherwise interleave with this one. Held for all three; the
             # nested 'get_wrapped' and '_run_implementation_async' take the same
-            # re-entrant lock without waiting for it.
-            async with self.locked():
+            # re-entrant lock without waiting for it. Not where the directory is
+            # this run's own: a part made on demand is routed while it is being
+            # built, under this lock, and the build that routes it may be on a
+            # task of the pools ('Part.get_shape') that would wait for it for
+            # good.
+            async with contextlib.nullcontext() if own_directory else self.locked():
                 ctx.ensure_dirs_for_file(final_filepath)
                 # A route is the answer to *this* run, and the path it goes to
                 # is stable. So one an earlier run left there would satisfy the
@@ -4396,7 +4408,10 @@ class Shape(ShapeConfiguration):
                 result = None if materializing else await cache_artifacts.restore_async(cache, artifact, files=route)
                 cached = result is not None
                 if not cached:
-                    result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+                    # In a directory of its own, nobody else writes the file:
+                    # see 'own_directory'.
+                    run = self._run_implementation_locked if own_directory else self._run_implementation_async
+                    result = await run(ctx, impl, script, request, final_filepath)
 
                 if result is None:
                     raise Exception("The '%s' implementation reported nothing: %s" % (format_name, script))
@@ -4607,10 +4622,13 @@ class Shape(ShapeConfiguration):
                     implementation=implementation,
                     output_dir=output_dir,
                     machine=chosen.kind if (machine or len(data.machines) > 1 or not chosen.declared) else None,
+                    own_directory=scratch is not None,
                     **extra,
                 )
             else:
-                result = await self._product_run_async(ctx, chosen, implementation, extra, output_dir)
+                result = await self._product_run_async(
+                    ctx, chosen, implementation, extra, output_dir, own_directory=scratch is not None
+                )
         finally:
             if scratch is not None:
                 import shutil
@@ -4669,7 +4687,7 @@ class Shape(ShapeConfiguration):
         made["written"] = target
         return made
 
-    async def _product_run_async(self, ctx, chosen, implementation, extra, output_dir) -> dict:
+    async def _product_run_async(self, ctx, chosen, implementation, extra, output_dir, own_directory=False) -> dict:
         """What a machine that runs no program makes -- a saw, a mold -- asked of the 'pc cam' implementation.
 
         The same implementation as a route, asked only for the product: there is
@@ -4701,7 +4719,10 @@ class Shape(ShapeConfiguration):
         request = await self._output_request(ctx, subject, impl, {})
         request.update(chosen.to_data())
         request.update(extra)
-        result = await self._run_implementation_async(ctx, impl, script, request, os.path.abspath(final_filepath))
+        # In a directory of its own nobody else writes, and this part may be
+        # being built under its lock on another task: see 'route_async'.
+        run = self._run_implementation_locked if own_directory else self._run_implementation_async
+        result = await run(ctx, impl, script, request, os.path.abspath(final_filepath))
         if result is None or not result.get("success"):
             raise pc_cam.CamFailed(
                 "Nothing made for %s:%s: %s"

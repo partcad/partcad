@@ -325,7 +325,11 @@ class PartFactoryManufacturedSdf(PartFactorySdf):
 
     The script is written by the 'pc cam' implementation into the package's
     cache rather than beside the package, which is what materializing it does.
-    Not cached: the script it is made from is written as it is built.
+    It is written as the part is built, so the part is not keyed on it as a file
+    part is keyed on its file -- the one on disk may be another setting's, or not
+    there yet -- but on what it is a function of: the declaration, what the
+    print is made from and the code that makes it, as 'PartFactoryManufactured'
+    is. So the mesh and every verdict reached on it are remembered.
     """
 
     def __init__(self, ctx, source_project, target_project, config):
@@ -336,13 +340,32 @@ class PartFactoryManufacturedSdf(PartFactorySdf):
         cache = os.path.join(output.package_cache_dir(ctx, source_project), "manufactured")
         os.makedirs(cache, exist_ok=True)
         declared_path = config.get("path")
-        config["path"] = os.path.join(cache, (config.get("orig_name") or config["name"]) + ".py")
+        # Relative to the package, as a declared 'path:' is: the declaration is
+        # part of the key, and the package's own '.cache' is where it is
+        # wherever the package is.
+        config["path"] = os.path.relpath(
+            os.path.join(cache, (config.get("orig_name") or config["name"]) + ".py"), source_project.config_dir
+        )
         super().__init__(ctx, source_project, target_project, config, can_create=True)
+        script = os.path.abspath(self.path)
         if declared_path is not None:
             config["path"] = declared_path
         else:
             config.pop("path", None)
-        self.part.cacheable = False
+        # The list the part's hash reads its files from, changed where it is.
+        self.part.cache_dependencies[:] = [
+            path for path in self.part.cache_dependencies if os.path.abspath(path) != script
+        ]
+        _hash_declaration(self.part, config, "sdf")
+        self.part.cache_dependencies_broken = True
+
+    async def prepare_async(self, part) -> None:
+        """Key the part on what it is made from and on the code that makes it, as 'PartFactoryManufactured' does."""
+        await super().prepare_async(part)
+        if await _add_reference_keys(self.ctx, part, self.config) and _add_maker_key(self.ctx, part, self.config):
+            part.cache_dependencies_broken = False
+        else:
+            part.cacheable = False
 
     async def instantiate(self, part):
         with pc_logging.Action("ManufacturedSdf", part.project_name, part.name):

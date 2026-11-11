@@ -422,3 +422,50 @@ def test_every_check_waits_for_the_preparation_the_first_one_began(tmp_path, cap
     assert cache.reads == [fetched] * len(checks)
     # The assembly linking it is keyed on what was fetched, too.
     assert asyncio.run(context.assembly().get_cache_key_async()) == expected
+
+
+# --------------------------------------------------------------------------- #
+# A remembered pass says what it warned about                                 #
+# --------------------------------------------------------------------------- #
+
+
+class _WarnTest(Qualification):
+    """Passes with a finding, as 'defects' does: said, and never failed."""
+
+    def __init__(self):
+        super().__init__("defects")
+        self.runs = 0
+
+    async def test(self, tests_to_run, ctx, shape, test_ctx={}):
+        self.runs += 1
+        # Another object's warning is that object's, as another's failure is.
+        self.warned(_FakeShape(True), "a part it is made from has a sliver")
+        return self.warned(shape, "16 of its 137160 faces are defective: 48 slivers thinner than 0.001 mm")
+
+
+def test_a_remembered_pass_says_what_it_found(caplog):
+    """A remembered 'defects' pass used to read as a clean one: the pieces came back, the sentence did not."""
+    import logging
+
+    Qualification.MAX_CONCURRENT_TESTS = 8
+    check = _WarnTest()
+    ctx = _FakeCtx()
+    ctx.cache_tests = _MemoryCache()
+    shape = _FakeShape(True)
+    shape.name = "stand"
+    assert asyncio.run(check.test_cached([], ctx, shape)) is Qualification.TEST_PASSED
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        assert asyncio.run(check.test_cached([], ctx, shape)) is Qualification.TEST_PASSED
+    said = [record.getMessage() for record in caplog.records if record.levelno == logging.WARNING]
+
+    assert check.runs == 1
+    assert len(said) == 1
+    assert "pkg:stand: defects" in said[0]
+    assert "16 of its 137160 faces are defective" in said[0]
+    assert "remembered from an earlier run" in said[0]
+
+
+def test_a_pass_that_said_nothing_is_still_one_byte():
+    assert Qualification._record(Qualification.TEST_PASSED, []) == bytes([True])
+    assert Qualification._record(Qualification.TEST_PASSED, [{"warning": "w"}])[:1] == bytes([True])

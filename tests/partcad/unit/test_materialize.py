@@ -147,7 +147,7 @@ def _stub_machine(monkeypatch, product=None, step=None, script=None):
             "stats": {"volume": 1.0},
         }
 
-    async def product_run(self, ctx, chosen, implementation, extra, output_dir):
+    async def product_run(self, ctx, chosen, implementation, extra, output_dir, own_directory=False):
         asked.append((self.name, dict(extra, machine=chosen.kind)))
         return {"product": product, "stats": {}}
 
@@ -339,3 +339,84 @@ def test_a_print_is_keyed_on_the_code_that_makes_it(tmp_path, monkeypatch):
     # ...and so is the same one with other sources.
     monkeypatch.setattr(source_key, "directory_key", lambda directory: "changed")
     assert key("d") != builtin
+
+
+def test_a_print_kept_as_an_sdf_is_keyed_on_what_makes_it_and_not_on_its_script(tmp_path):
+    """The script is written as the part is built, so a stale one on disk must not move the key."""
+    from partcad import output
+
+    def key(folder, infill="20%", stale=None):
+        package = dict(PACKAGE)
+        package["parts"] = dict(PACKAGE["parts"])
+        package["parts"]["printed-sdf"] = {
+            "type": "sdf",
+            "manufacturing": {"method": "additive", "source": "design", "fff": {"infill": infill}},
+        }
+        root = tmp_path / folder
+        root.mkdir()
+        (root / "partcad.yaml").write_text(yaml.safe_dump(package))
+        context = pc.Context(str(root))
+        project = context.get_project("//test")
+        if stale is not None:
+            cache = os.path.join(output.package_cache_dir(context, project), "manufactured")
+            os.makedirs(cache, exist_ok=True)
+            with open(os.path.join(cache, "printed-sdf.py"), "w") as f:
+                f.write(stale)
+        part = context.get_part("//test:printed-sdf")
+        found = asyncio.run(part.get_cache_key_async())
+        assert part.get_cacheable()
+        return found
+
+    clean = key("a")
+    assert clean is not None
+    assert key("b", stale="show_object(an_older_print)\n") == clean
+    assert key("c", infill="40%") != clean
+
+
+def test_a_part_made_while_another_task_holds_its_lock_is_made(ctx, monkeypatch):
+    """The deadlock a print kept as an SDF met in the daemon.
+
+    Its build holds the part's lock and runs on a task of the pools
+    ('Part.get_shape'), and routing it took the same lock again from there --
+    waiting for itself for good. A part made on demand is routed into a
+    directory of its own, which needs no lock: nobody else writes there.
+    """
+    asked = []
+
+    async def design(self, ctx):
+        return {shape_envelope.KEY_BREP: b"CASCADE Topology V3"}
+
+    async def unlocked(self, ctx, impl, script, request, final_filepath):
+        asked.append(final_filepath)
+        with open(final_filepath, "w") as f:
+            f.write("G21\nM30\n")
+        return {"success": True, "product": {shape_envelope.KEY_BREP: b"deposit"}, "stats": {}}
+
+    async def locked(self, *args, **kwargs):
+        raise AssertionError("a route into a directory of its own took the part's lock")
+
+    monkeypatch.setattr(pc.shape.Shape, "get_wrapped", design)
+    monkeypatch.setattr(pc.shape.Shape, "_run_implementation_locked", unlocked)
+    monkeypatch.setattr(pc.shape.Shape, "_run_implementation_async", locked)
+    part = ctx.get_part("//test:printed")
+
+    async def scenario():
+        held = asyncio.Event()
+        done = asyncio.Event()
+
+        async def build():
+            async with part.locked():
+                held.set()
+                await done.wait()
+
+        holder = asyncio.create_task(build())
+        await held.wait()
+        try:
+            return await asyncio.wait_for(part.materialize_async(ctx), timeout=60)
+        finally:
+            done.set()
+            await holder
+
+    made = asyncio.run(scenario())
+    assert made["product"][shape_envelope.KEY_BREP] == b"deposit"
+    assert len(asked) == 1
