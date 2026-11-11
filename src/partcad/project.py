@@ -3409,8 +3409,8 @@ class Project(project_config.Configuration):
         (see 'partcad.cam_view'). The section and the machine's subsection are
         made where the part has none; everything else in the file - the other
         settings, the order, the comments - is kept as its author wrote it, which
-        is what 'ruamel' round-trips. An axis written under one of its two
-        spellings ('toolAxis:', 'along:') takes the other out.
+        is what 'ruamel' round-trips. An axis written or taken out under one of its
+        two spellings ('toolAxis:', 'along:') takes the other out.
 
         Raises:
             ValueError: the part is not declared in this file - one a plugin
@@ -3439,12 +3439,13 @@ class Project(project_config.Configuration):
             settings = ruamel.yaml.comments.CommentedMap()
             section[machine] = settings
         for key, value in values.items():
+            if key in ("toolAxis", "along"):
+                # One axis, two spellings: written or taken out, the other goes.
+                settings.pop("along" if key == "toolAxis" else "toolAxis", None)
             if value is None:
                 settings.pop(key, None)
                 continue
             settings[key] = value
-            if key in ("toolAxis", "along"):
-                settings.pop("along" if key == "toolAxis" else "toolAxis", None)
         if created and not settings:
             # Nothing to say: a machine named with no settings is a machine the
             # part now says it is made on, which saving defaults did not ask for.

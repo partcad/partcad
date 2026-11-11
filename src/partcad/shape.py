@@ -2871,6 +2871,7 @@ class Shape(ShapeConfiguration):
         section=None,
         batch=None,
         visuals=None,
+        outsides=None,
         compound=False,
     ):
         """'_run_implementation_async' for an export or a render file, asked of the cache first.
@@ -2935,6 +2936,11 @@ class Shape(ShapeConfiguration):
             extra["section"] = section
         if visuals is not None and visuals.keys:
             extra["visuals"] = visuals.keys
+        if outsides is not None and outsides.keys:
+            # A simulation's scene: every print in it is its design's geometry
+            # ('visual.substitute_async(outsides=True)'), which is not the file an
+            # export of the same object writes.
+            extra["outsides"] = outsides.keys
         artifact = await self._artifact_hash(
             impl.section,
             impl.format_name,
@@ -2945,6 +2951,8 @@ class Shape(ShapeConfiguration):
             extra,
         )
         if visuals is not None and not visuals.cacheable:
+            artifact = None
+        if outsides is not None and not outsides.cacheable:
             artifact = None
 
         output_ = _Output(impl, script, request, final_filepath, artifact)
@@ -3170,13 +3178,15 @@ class Shape(ShapeConfiguration):
                 views[key] = await pc_visual.substitute_async(ctx, subject, obj)
             drawn_as = views[key]
             obj = drawn_as.tree
+        collides_as = None
         if outsides:
             from . import visual as pc_visual
 
             key = ("outsides", mask.key() if mask is not None and not mask.keeps_all else None, of_compound)
             if key not in views:
                 views[key] = await pc_visual.substitute_async(ctx, subject, obj, outsides=True)
-            obj = views[key].tree
+            collides_as = views[key]
+            obj = collides_as.tree
         # Cut after the filter: a section is a box through what is kept, and the
         # links a filter drops have nothing left to cut. The ports drawn on top
         # are found on the subject itself, uncut - a port is where it is whether
@@ -3227,6 +3237,7 @@ class Shape(ShapeConfiguration):
             section=section,
             batch=batch,
             visuals=drawn_as,
+            outsides=collides_as,
             compound=of_compound,
         )
         if result is None:
@@ -4663,10 +4674,11 @@ class Shape(ShapeConfiguration):
             # cavity as it is.
             default = MACHINE_FFF if data.method == METHOD_ADDITIVE else MACHINE_MOLD
             chosen = MachineConfig(default, None, declared=False)
-        if data.method in (METHOD_ADDITIVE, METHOD_FORMING) and not data.design:
-            raise pc_cam.CamConfigError(
-                "%s names no design to be made after: it is its own design ('manufacturing: source:')" % name
-            )
+        if data.method == METHOD_FORMING and not data.design:
+            # A print that names no design is its own, and is routed from its
+            # own geometry ('_route_subject_async'); a molding has nothing to be
+            # molded in.
+            raise pc_cam.CamConfigError("%s names no cavity to be molded in ('manufacturing: source:')" % name)
 
         fmt = None
         if write:
@@ -4840,6 +4852,34 @@ class Shape(ShapeConfiguration):
                 filepath=filepath,
                 output_dir=output_dir,
                 **kwargs,
+            )
+        )
+
+    def materialize(
+        self,
+        ctx: Context,
+        machine: Optional[str] = None,
+        implementation: Optional[str] = None,
+        write: bool = False,
+        filepath=None,
+        representation: Optional[str] = None,
+        output_dir=None,
+        overrides: Optional[dict] = None,
+        discard_route: bool = True,
+    ) -> dict:
+        """'materialize_async' for a caller that has no event loop of its own."""
+        # By keyword, as 'route' passes its own.
+        return asyncio.run(
+            self.materialize_async(
+                ctx,
+                machine=machine,
+                implementation=implementation,
+                write=write,
+                filepath=filepath,
+                representation=representation,
+                output_dir=output_dir,
+                overrides=overrides,
+                discard_route=discard_route,
             )
         )
 

@@ -189,6 +189,19 @@ def test_settings_tried_are_written_over_a_copy_of_the_declaration():
     assert config["manufacturing"]["fff"] == {"infill": "20%", "along": "-Y"}
     taken = cam_view.with_settings(config, "fff", {"infill": None})
     assert taken["manufacturing"]["fff"] == {"along": "-Y"}
+    # The axis taken out under either spelling is taken out, whichever the part wrote.
+    assert cam_view.with_settings(config, "fff", {"toolAxis": None})["manufacturing"]["fff"] == {"infill": "20%"}
+    assert cam_view.with_settings(config, "fff", {"along": None})["manufacturing"]["fff"] == {"infill": "20%"}
+
+
+def test_saving_an_axis_taken_out_takes_out_the_one_the_part_wrote(package):
+    (package / "partcad.yaml").write_text(
+        PACKAGE.replace("infill: 20%   # sparse, to see inside", "infill: 20%\n        along: -Y")
+    )
+    ctx = pc.Context(str(package))
+    cam_view.save_settings(ctx, ctx.get_part("//camdemo:print"), values={"toolAxis": None})
+    text = (package / "partcad.yaml").read_text()
+    assert "along" not in text and "toolAxis" not in text
 
 
 @pytest.mark.parametrize(

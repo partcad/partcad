@@ -1339,6 +1339,29 @@ def test_a_view_is_keyed_as_the_links_it_keeps(exported, tmp_path):
     assert len(runs) == 3
 
 
+def test_a_scene_whose_prints_collide_as_their_designs_is_not_an_export(exported, tmp_path):
+    """A simulation's scene puts a print's design where the print is ('outsides'): another file than the export."""
+    from partcad import visual
+
+    ctx, part, runs, _root = exported
+    project = ctx.get_project("//export-cache")
+    impl, path = part.output_getopts(ctx, "toy", project, filepath=str(tmp_path / "out" / "bracket.toy"))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    async def once(outsides):
+        script = await part._materialize_output_script(ctx, impl)
+        request = {"wrapped": {"brep": b"scene"}, "shape_name": part.name}
+        return await part._output_run_async(ctx, impl, script, request, path, outsides=outsides)
+
+    _run(once(None))
+    _run(once(visual.Substitution({}, [["//export-cache:design", "key-of-the-design"]])))
+    _run(once(visual.Substitution({}, [["//export-cache:design", "key-of-the-design"]])))
+    # A design that keeps no key keeps no scene either.
+    _run(once(visual.Substitution({}, [["//export-cache:design", None]])))
+    _run(once(visual.Substitution({}, [["//export-cache:design", None]])))
+    assert len(runs) == 4
+
+
 def test_a_part_painted_another_colour_is_drawn_again(exported, tmp_path, monkeypatch):
     """'properties:' is no part of a shape's key - a part that gains a colour is the same solid.
 

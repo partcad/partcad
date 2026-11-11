@@ -314,12 +314,17 @@ def _machine_of(part, machine=None) -> str:
     return PRINTERS[0] if method == "additive" else FORMERS[0] if method == "forming" else "cnc"
 
 
+# The two spellings of a machine's axis, each to the other ('toolAxis:' and 'along:').
+AXIS_SPELLINGS = {"toolAxis": "along", "along": "toolAxis"}
+
+
 def with_settings(config: dict, machine: str, values: dict) -> dict:
     """A copy of a part's declaration with 'values' written into its 'manufacturing: <machine>:' section.
 
     A value of None takes that setting out, back to whatever is taken where the
-    part states nothing. An axis written under one spelling takes the other one
-    out, since a section that says both is refused.
+    part states nothing. An axis written or taken out under one spelling takes
+    the other one out too: a section that says both is refused, and one that
+    keeps the other states the axis it did.
     """
     config = copy.deepcopy(config)
     section = config.get("manufacturing")
@@ -327,14 +332,14 @@ def with_settings(config: dict, machine: str, values: dict) -> dict:
     machine_section = section.get(machine)
     machine_section = dict(machine_section) if isinstance(machine_section, dict) else {}
     for key, value in (values or {}).items():
+        if key in AXIS_SPELLINGS:
+            # One axis, two spellings: whichever is written or taken out, the
+            # other goes, or the part goes on stating the axis it did.
+            machine_section.pop(AXIS_SPELLINGS[key], None)
         if value is None or value == "":
             machine_section.pop(key, None)
             continue
         machine_section[key] = value
-        if key == "toolAxis":
-            machine_section.pop("along", None)
-        elif key == "along":
-            machine_section.pop("toolAxis", None)
     section[machine] = machine_section
     config["manufacturing"] = section
     return config

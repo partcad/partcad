@@ -215,6 +215,25 @@ def test_a_product_that_cannot_be_written_leaves_the_old_one_as_it_was(ctx, tmp_
     assert sorted(os.listdir(tmp_path)) == ["partcad.yaml", "printed.brep"]
 
 
+def test_a_print_that_is_its_own_design_is_made_from_itself(tmp_path, monkeypatch):
+    """Routed from its own geometry, as 'pc cam' routes it: its CAM tab has something to draw."""
+    asked = _stub_machine(monkeypatch)
+    package = {
+        "name": "//test",
+        "parts": {
+            "self": {"type": "basic", "cuboid": [5, 5, 5], "manufacturing": {"method": "additive"}},
+            "cavityless": {"type": "basic", "cuboid": [5, 5, 5], "manufacturing": {"method": "forming"}},
+        },
+    }
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump(package))
+    context = pc.Context(str(tmp_path))
+    made = context.get_part("//test:self").materialize(context)
+    assert made["product"] is not None
+    assert asked[0][0] == "self"
+    with pytest.raises(pc.cam.CamConfigError, match="no cavity"):
+        context.get_part("//test:cavityless").materialize(context)
+
+
 def test_a_molding_is_asked_of_its_mold(ctx, tmp_path, monkeypatch):
     asked = _stub_machine(monkeypatch)
     asyncio.run(ctx.get_part("//test:molded").materialize_async(ctx, write=True))
