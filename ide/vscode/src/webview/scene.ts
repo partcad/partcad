@@ -68,6 +68,7 @@ import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRe
 import {
     Appearance,
     DEFAULT_APPEARANCE,
+    DEFAULT_COLOR,
     OWN_APPEARANCE,
     OwnAppearance,
     appearanceKey,
@@ -87,6 +88,7 @@ import {
     matchOrthographic,
     placeCamera as aimCamera,
     readViewpoint,
+    toStage,
 } from './cameraView';
 import { el, empty } from './dom';
 import { applyFinish, setFinishShown } from './finish';
@@ -238,6 +240,28 @@ export function onViewChange(listener: () => void): void {
 }
 
 const scene = new THREE.Scene();
+
+/**
+ * What the model is put on the stage in: a group three's WebGPU renderer clips
+ * what it holds by, while a section slider is being moved ('previewSection').
+ *
+ * Three's 'ClippingGroup' is in its WebGPU build only, which this file cannot
+ * import (see 'finishNode.ts'), and the renderer knows one by what it says it is
+ * - 'isClippingGroup', and the four fields below - so a group saying so is one.
+ * WebGL ignores all of it and clips by the renderer's own planes instead
+ * ('Surface.setClippingPlanes'); the painter clips nothing.
+ */
+class ClippingGroup extends THREE.Group {
+    public readonly isClippingGroup = true;
+    public enabled = false;
+    public clippingPlanes: THREE.Plane[] = [];
+    public clipIntersection = false;
+    public clipShadows = false;
+}
+
+const stage = new ClippingGroup();
+scene.add(stage);
+
 const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 10000);
 camera.position.set(0, 0, 5);
 
@@ -1101,8 +1125,9 @@ function disposeTree(root: THREE.Object3D): void {
 export function clearGeometry(): void {
     // Takes a generation too, so a show still decoding cannot undo the clear.
     generation += 1;
+    endPreview();
     if (content !== undefined) {
-        scene.remove(content);
+        stage.remove(content);
         disposeTree(content);
         content = undefined;
     }
@@ -2103,8 +2128,11 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     // after that keeps the camera where it is - its angle above all, which
     // Animate has been turning - and fits it to what arrived, gradually.
     const first = content === undefined;
+    // A cut being previewed is over: what arrives is the cut, or what was asked
+    // for instead of it.
+    endPreview();
     if (content !== undefined) {
-        scene.remove(content);
+        stage.remove(content);
         disposeTree(content);
     }
     shownGeometry?.disposeMaterials();
@@ -2124,7 +2152,7 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     findingCallouts = [];
     pinFindingCallouts();
     shownCut = cut;
-    scene.add(group);
+    stage.add(group);
     // Framed on every shape the show carries, whether or not it is switched on:
     // the camera has to stay where it is when an item is unchecked, and a model
     // that reframed itself on every checkbox would be unusable.
@@ -2465,6 +2493,119 @@ export function setOpacity(opacity: number): void {
     });
     // And what is drawn faint meanwhile, as it will be drawn once it is not.
     faded.forEach(apply);
+    invalidate();
+}
+
+/**
+ * What the section sliders show while one is being moved, before it is let go:
+ * the geometry already on the stage, clipped to the box the sliders say, with
+ * what the clip opens drawn as a flat face of the object's colour - so that a
+ * part shows as the solid it is rather than as a shell. Undefined while nothing
+ * is previewed.
+ *
+ * Only the planes and a flat face, which is why it is a preview: PartCAD cuts the
+ * exact geometry once the slider is let go, and what a cut opens - a print's
+ * infill - is what it sends then ('showSection' in 'viewer.ts'). The flat face is
+ * the back of whatever lies behind the cut, drawn unlit and nudged in front of
+ * it: the far side of the inside, which is where a section face would be seen.
+ */
+let preview: { caps: THREE.Mesh[]; materials: Map<number, THREE.Material> } | undefined;
+
+/** Whether this view can clip what it has: every GPU renderer can, the painter cannot. */
+export const previews = !software;
+
+/**
+ * Clip the stage to 'box' - PartCAD's frame, millimetres - while a section slider
+ * is moved, or stop (null). Answers whether it could: the painter cannot clip.
+ */
+export function previewSection(box: Bounds | null): boolean {
+    if (!previews) {
+        return false;
+    }
+    if (box === null || content === undefined) {
+        endPreview();
+        return box === null;
+    }
+    const frame = stageFrame();
+    const origin = new THREE.Vector3(...toStage([0, 0, 0], frame));
+    const planes: THREE.Plane[] = [];
+    for (let axis = 0; axis < 3; axis++) {
+        const along: [number, number, number] = [0, 0, 0];
+        along[axis] = 1;
+        // A unit along the axis on the stage: the turn and the scale of the frame, and not its offset.
+        const normal = new THREE.Vector3(...toStage(along, frame)).sub(origin).normalize();
+        const low: [number, number, number] = [0, 0, 0];
+        low[axis] = box.min[axis];
+        const high: [number, number, number] = [0, 0, 0];
+        high[axis] = box.max[axis];
+        if (!Number.isFinite(box.min[axis]) || !Number.isFinite(box.max[axis])) {
+            // Not cut along this axis.
+            continue;
+        }
+        // Three keeps what is on the side a plane's normal points to.
+        planes.push(new THREE.Plane().setFromNormalAndCoplanarPoint(normal, new THREE.Vector3(...toStage(low, frame))));
+        planes.push(
+            new THREE.Plane().setFromNormalAndCoplanarPoint(
+                normal.clone().negate(),
+                new THREE.Vector3(...toStage(high, frame)),
+            ),
+        );
+    }
+    if (preview === undefined) {
+        preview = { caps: [], materials: new Map() };
+        const made = preview;
+        content.traverse((node) => {
+            const mesh = node as THREE.Mesh;
+            if (!mesh.isMesh || node.userData.preview === true) {
+                return;
+            }
+            const material = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as
+                THREE.MeshPhongMaterial | undefined;
+            if (material?.userData.annotation === true) {
+                // A port's boundary is drawn over the object, not part of it.
+                return;
+            }
+            const color = material?.color ?? new THREE.Color(DEFAULT_COLOR);
+            const key = color.getHex();
+            let cap = made.materials.get(key);
+            if (cap === undefined) {
+                cap = new THREE.MeshBasicMaterial({
+                    color: color.clone().multiplyScalar(0.8),
+                    side: THREE.BackSide,
+                    polygonOffset: true,
+                    polygonOffsetFactor: -1,
+                    polygonOffsetUnits: -1,
+                });
+                // The preview's own, freed when it ends ('endPreview') and by nothing else.
+                cap.userData.cached = true;
+                made.materials.set(key, cap);
+            }
+            const face = new THREE.Mesh(mesh.geometry, cap);
+            face.userData.preview = true;
+            mesh.add(face);
+            made.caps.push(face);
+        });
+    }
+    surface.setClippingPlanes?.(planes);
+    stage.clippingPlanes = planes;
+    stage.enabled = true;
+    invalidate();
+    return true;
+}
+
+/** Stop clipping the stage, and take the flat faces of a preview away. */
+function endPreview(): void {
+    if (preview === undefined) {
+        return;
+    }
+    for (const face of preview.caps) {
+        face.removeFromParent();
+    }
+    preview.materials.forEach((material) => material.dispose());
+    preview = undefined;
+    surface.setClippingPlanes?.([]);
+    stage.clippingPlanes = [];
+    stage.enabled = false;
     invalidate();
 }
 

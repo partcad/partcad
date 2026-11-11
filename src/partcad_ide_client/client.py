@@ -297,6 +297,8 @@ def show(
     tab=None,
     scenario=None,
     section=None,
+    extra_details=None,
+    cam=None,
 ) -> dict:
     """Display one already-tessellated object in the IDE's Digital Thread.
 
@@ -333,6 +335,11 @@ def show(
 
     'section' is the cross-section 'obj' was cut to (see 'protocol.KEY_SECTION'),
     or None for the whole object. Sent either way.
+
+    'extra_details' is what the 3D view's "Extra details" box said when 'obj' was
+    drawn (see 'protocol.KEY_EXTRA_DETAILS'), and 'cam' what the CAM tab asked
+    for when 'obj' is what a part's machine makes (see 'protocol.KEY_CAM'); each
+    is sent only when given.
     """
     if tab is not None and tab not in protocol.viewer_tab_ids():
         raise ValueError("not a Digital Thread tab: %r (one of %s)" % (tab, ", ".join(protocol.viewer_tab_ids())))
@@ -362,6 +369,10 @@ def show(
         message[protocol.KEY_TAB] = tab
     if scenario is not None:
         message[protocol.KEY_SCENARIO] = scenario
+    if extra_details is not None:
+        message[protocol.KEY_EXTRA_DETAILS] = bool(extra_details)
+    if cam is not None:
+        message[protocol.KEY_CAM] = cam
     return _exchange(lambda connection: _show(connection, message, reply_timeout))
 
 

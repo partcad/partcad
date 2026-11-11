@@ -94,6 +94,12 @@ export interface ViewCapabilities {
     section: Capability;
     animate: Capability;
     opacity: Capability;
+    /**
+     * The "Extra details" box, on the one panel that offers it (the 3D tab's):
+     * the object as it is, finely, rather than each part drawn as its visual.
+     * Left out, the box says nothing works about it.
+     */
+    extraDetails?: Capability;
 }
 
 export interface ViewPanelCallbacks {
@@ -125,6 +131,18 @@ export interface ViewPanelCallbacks {
     onAutoFit?: (autoFit: boolean) => void;
     /** From 0 to 1. */
     onOpacity?: (opacity: number) => void;
+    /**
+     * "Extra details" was ticked or cleared: the object as it is, finely, or
+     * each part drawn as its visual. Only a panel that offers the box says it.
+     */
+    onExtraDetails?: (on: boolean) => void;
+    /**
+     * A section slider is being moved, and has not been let go: what the three
+     * ranges say now, for a view that can cut what it already holds while the
+     * daemon is not asked ('onSection' is, once it is let go); null once there
+     * is nothing to preview any more - let go where it was, or reset.
+     */
+    onSectionPreview?: (ranges: Partial<Record<SectionAxis, Range>> | null) => void;
 }
 
 export interface ViewPanelOptions {
@@ -134,6 +152,8 @@ export interface ViewPanelOptions {
     animate?: boolean;
     /** Whether showing the same object again starts out fitting it, which the Auto-fit box then says. */
     autoFit?: boolean;
+    /** Whether the panel offers the "Extra details" box, after everything else: the 3D tab's does. */
+    extraDetails?: boolean;
     /**
      * How the view starts out drawn, which the projection then says: in
      * perspective unless this says otherwise. A tab that cannot change it says
@@ -152,6 +172,7 @@ export interface ViewPanelOptions {
         opacityValue?: string;
         reset?: string;
         projection?: string;
+        extraDetails?: string;
     };
 }
 
@@ -204,6 +225,8 @@ export class ViewPanel {
     private readonly animateRow: HTMLElement;
     private readonly autoFitRow: HTMLElement;
     private readonly opacityRow: HTMLElement;
+    private readonly extraDetailsBox: HTMLInputElement;
+    private readonly extraDetailsRow: HTMLElement;
 
     private capabilities: ViewCapabilities = {
         viewpoint: true,
@@ -358,7 +381,22 @@ export class ViewPanel {
             this.callbacks.onOpacity?.(value / 100);
         });
         this.opacityRow.append(el('span', undefined, 'Opacity'), this.opacity, this.opacityValue);
-        display.append(this.animateRow, this.autoFitRow, this.opacityRow);
+
+        // After everything else: "Extra details", the object as it is and
+        // finely, rather than each part drawn as its visual. Only the 3D tab's
+        // panel offers it.
+        this.extraDetailsRow = el('label', 'control-label');
+        this.extraDetailsBox = el('input');
+        this.extraDetailsBox.type = 'checkbox';
+        if (options.ids?.extraDetails) {
+            this.extraDetailsBox.id = options.ids.extraDetails;
+        }
+        this.extraDetailsBox.addEventListener('change', () =>
+            this.callbacks.onExtraDetails?.(this.extraDetailsBox.checked),
+        );
+        this.extraDetailsRow.append(this.extraDetailsBox, el('span', undefined, 'Extra details'));
+        this.extraDetailsRow.hidden = options.extraDetails !== true;
+        display.append(this.animateRow, this.autoFitRow, this.opacityRow, this.extraDetailsRow);
 
         this.groups = { viewpoint: view, section, display };
         body.append(gizmoRow, buttons, view, section, display);
@@ -455,6 +493,16 @@ export class ViewPanel {
         return parseInt(this.opacity.value, 10) / 100;
     }
 
+    /** What the "Extra details" box says. */
+    public get extraDetails(): boolean {
+        return this.extraDetailsBox.checked;
+    }
+
+    /** Tick or clear the "Extra details" box, as what is on screen was drawn: nothing is asked for. */
+    public setExtraDetails(on: boolean): void {
+        this.extraDetailsBox.checked = on;
+    }
+
     /** A group's heading: its title, then 'beside' it, and 'buttons' at the far end. */
     private heading(text: string, buttons: HTMLElement[], beside?: HTMLElement): HTMLElement {
         const heading = el('div', 'view-heading');
@@ -535,6 +583,14 @@ export class ViewPanel {
         }
         this.ranges[axis] = [this.toLength(axis, low, bounds), this.toLength(axis, high, bounds)];
         this.drawSlider(axis);
+        if (this.callbacks.onSectionPreview !== undefined) {
+            // All three, the ones not being moved as the section has them.
+            const ranges: Partial<Record<SectionAxis, Range>> = {};
+            for (const each of SECTION_AXES) {
+                ranges[each] = this.ranges[each] ?? rangeOf(this.section, each, bounds);
+            }
+            this.callbacks.onSectionPreview(ranges);
+        }
     }
 
     /** A slider was let go: the section the sliders now say, reported if it is a new one. */
@@ -551,6 +607,8 @@ export class ViewPanel {
         this.ranges = {};
         if (sameSection(section, this.section)) {
             this.drawSliders();
+            // Let go where it was: nothing to ask for, and nothing to preview.
+            this.callbacks.onSectionPreview?.(null);
             return;
         }
         this.section = section;
@@ -777,6 +835,15 @@ export class ViewPanel {
         this.opacity.disabled = opacity !== true;
         this.opacityRow.title = opacity === true ? 'How see-through the model is drawn' : opacity;
         this.opacityRow.classList.toggle('disabled', opacity !== true);
+        const extra = this.capabilities.extraDetails ?? 'Nothing is shown';
+        this.extraDetailsBox.disabled = extra !== true;
+        this.extraDetailsRow.title =
+            extra === true
+                ? 'Draw the object as it is, finely: every part as its own geometry rather than as the visual it ' +
+                  'names, and a print or a molding as what its machine makes. Cleared, each part is drawn as its ' +
+                  "visual, or a print as its design, at the preview's level of detail."
+                : extra;
+        this.extraDetailsRow.classList.toggle('disabled', extra !== true);
         this.groups.display.classList.toggle('disabled', animate !== true && opacity !== true);
     }
 

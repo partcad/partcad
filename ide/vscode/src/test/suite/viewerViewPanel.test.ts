@@ -693,6 +693,88 @@ suite('The view panel: the widget', () => {
         assert.deepStrictEqual(asked.sections[asked.sections.length - 1], null);
     });
 
+    test('a slider being moved is previewed with all three ranges, and the preview ends where it is let go unchanged', () => {
+        const previews: unknown[] = [];
+        const sections: unknown[] = [];
+        const view = new ViewPanel(
+            {
+                onViewpoint: () => {},
+                onResetView: () => {},
+                onSection: (section) => sections.push(section),
+                onSectionPreview: (ranges) => previews.push(ranges),
+            },
+            { target: true },
+        );
+        const root = view.element as unknown as FakeElement;
+        view.setCapabilities(EVERYTHING);
+        view.setBounds(boundsOf(brick()));
+        const [, high] = byClass(root, 'range-pair')[0].children;
+        high.value = '500';
+        high.fire('input');
+        // X moved to halfway; Y and Z as the section has them, the whole brick.
+        assert.deepStrictEqual(previews, [{ x: [0, 5], y: [0, 20], z: [0, 30] }]);
+        assert.deepStrictEqual(sections, [], 'the daemon is asked once it is let go, not while it moves');
+        high.fire('change');
+        assert.deepStrictEqual(sections, [{ x: [0, 5] }]);
+
+        // Moved and put back where it was: nothing to ask for, and the preview ends.
+        high.value = '400';
+        high.fire('input');
+        high.value = '500';
+        high.fire('input');
+        high.fire('change');
+        assert.deepStrictEqual(sections, [{ x: [0, 5] }]);
+        assert.strictEqual(previews[previews.length - 1], null);
+    });
+
+    test('Extra details is offered after everything else, only where asked, and says when it changes', () => {
+        const heard: boolean[] = [];
+        const view = new ViewPanel(
+            {
+                onViewpoint: () => {},
+                onResetView: () => {},
+                onSection: () => {},
+                onExtraDetails: (on) => heard.push(on),
+            },
+            { target: true, extraDetails: true, ids: { extraDetails: 'extra-details-checkbox' } },
+        );
+        const root = view.element as unknown as FakeElement;
+        const box = all(root, (element) => element.id === 'extra-details-checkbox')[0];
+        const rows = byClass(byClass(root, 'view-display')[0], 'control-label');
+        assert.ok(rows[rows.length - 1].children.includes(box), 'the last row of the panel');
+        assert.strictEqual(rows[rows.length - 1].hidden, false);
+        assert.strictEqual(rows[rows.length - 1].children[1].textContent, 'Extra details');
+
+        // What the show was drawn with is what the box says; nothing is asked for.
+        view.setExtraDetails(true);
+        assert.strictEqual(view.extraDetails, true);
+        assert.deepStrictEqual(heard, []);
+        // Disabled until the panel says it works, and then why not where it does not.
+        assert.strictEqual(box.disabled, true);
+        view.setCapabilities({ ...EVERYTHING, extraDetails: true });
+        assert.strictEqual(box.disabled, false);
+        box.checked = false;
+        box.fire('change');
+        assert.deepStrictEqual(heard, [false]);
+        view.setCapabilities({ ...EVERYTHING, extraDetails: 'This PartCAD draws every part as its visual' });
+        assert.strictEqual(box.disabled, true);
+        assert.strictEqual(rows[rows.length - 1].title, 'This PartCAD draws every part as its visual');
+
+        // A panel that does not ask for it has none.
+        const other = new ViewPanel(
+            { onViewpoint: () => {}, onResetView: () => {}, onSection: () => {} },
+            { target: true, ids: { extraDetails: 'extra-details-checkbox' } },
+        );
+        const otherBox = all(
+            other.element as unknown as FakeElement,
+            (element) => element.id === 'extra-details-checkbox',
+        )[0];
+        const otherRow = byClass(other.element as unknown as FakeElement, 'control-label').find((label) =>
+            label.children.includes(otherBox),
+        );
+        assert.strictEqual(otherRow?.hidden, true);
+    });
+
     test('Fit is there where the view has a camera to move, and asks for a fit', () => {
         const { view, root, asked } = panel();
         const [fit] = byClass(root, 'view-fit');

@@ -267,11 +267,11 @@ sight (`rz`) is dropped, and a tilt stops at the poles.
 
 ## The view panel
 
-Down the right of every tab that shows the object — 3D, 2D and Draft, each analysis, and Simulation — is one
+Down the right of every tab that shows the object — 3D, 2D, Draft and CAM, each analysis, and Simulation — is one
 widget, `viewPanel.ts`: the orientation gizmo (`gizmo.ts`), a button per axis view, the viewpoint as three editable
 vectors with the projection right after its heading's title and **Fit** (where the view has a camera of its own to
 bring in, which it says by giving `onFit`; only the 3D tab does) and **Reset** beside them, a two-ended section
-slider per axis, and Animate, Auto-fit (the 3D tab only) and Opacity. It is a
+slider per axis, Animate, Auto-fit (the 3D and CAM tabs) and Opacity, and last Extra details (the 3D tab only). It is a
 `SidePanel` (`sidePanel.ts`):
 folded into a strip with the editor's side bar button at the top of it, and brought out by that button. Out or
 folded is one answer per side for the whole panel, not per tab, and the right side starts folded.
@@ -323,6 +323,11 @@ cut to (`KEY_SECTION`); the glTF wrapper cuts and tessellates in one sandbox. Th
   (`frame()`'s `centred`): centred on what is left, the object would jump on the stage with every slider let go.
 * **A PartCAD that cannot cut is told apart from an uncut object** by the key being absent rather than null, and
   is offered no sliders: re-asking a daemon that ignores `section` would be a loop.
+* **While a slider is dragged, nothing is asked: what is on the stage is clipped instead** (`onSectionPreview`,
+  `scene.previewSection`), with the opening drawn as an unlit back face so that a part reads as solid; the daemon
+  is asked once it is let go, and the preview lasts until that show is on the stage. A cut is asked with the
+  rest of what the stage is to draw - the 3D tab's Extra details, or the CAM tab's settings tried - as one
+  request (`redraw` in `viewer.ts`), and while it is out the cursor and a notification say so.
 
 **What a tab cannot do is disabled and says why** (`capabilitiesOf` in `viewer.ts`) rather than taken away, so the
 panel keeps its shape from tab to tab: a drawing package lays its views out itself (Draft: no viewpoint), an
@@ -422,6 +427,10 @@ the protocol has no authentication.
 | `src/webview/section.ts` | A cross-section as the panel holds it, and the object's bounds it spans |
 | `src/partcad/shape_section.py` | A cross-section: what a request may ask for, and the cut of a BREP tree in a sandbox |
 | `src/partcad/wrappers/wrapper_section.py` | Sandbox: a tree's geometry cut by a box, node by node |
+| `src/partcad/shape_visible.py` | What of a print can be seen: its tree cut, and the faces nothing can see left out, in a sandbox |
+| `src/partcad/wrappers/wrapper_visible.py` | Sandbox: a print's prisms cut one by one, and kept face by face where open space is in front of them |
+| `src/partcad/cam_view.py` | How the 3D view draws an object (Extra details, the level of detail), and the CAM tab: a machine's settings, tried and saved |
+| `src/webview/cam.ts` | The CAM tab's control pane: how the part is made, a field per setting, Save |
 | `src/webview/spacemouse.ts` | A SpaceMouse: which gamepad is one, what its axes mean, and how it moves the camera of the view on screen |
 | `src/viewer/spacenav.ts` | spacenavd's socket, read in the extension host for Linux |
 | `src/webview/render.ts` | The 2D and Draft tabs: the control pane, the file, and Save |

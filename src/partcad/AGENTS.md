@@ -1758,6 +1758,26 @@ at all).
   a step (about a fifth) finer than the budget and never coarser; written from its digits, so it is the same
   float -- and the same key -- on every machine.
 
+  **There are two budgets, and the Digital Thread's "Extra details" box picks one** (`shape_gltf.DETAILS`:
+  `low` is the half pixel and 0.4 rad above, what a preview always was; `high` an eighth of a pixel and 0.2
+  rad). Which one, and whether the parts in a tree are drawn as their visuals, is `cam_view.representation`:
+  the box ticked (the default for a part or a sketch) is the object as it is, finely; cleared (the default for an
+  assembly, a scene, an interface) it is visuals at the preview's budget. A part made by following a route
+  (`cam_view.MADE_METHODS`) is the exception: ticked, it is what its machine makes -- planar beads a finer budget
+  makes no finer -- so it stays at `low`, and its hidden faces are left out (`shape_visible`, below). The level
+  is part of every tessellation's key through the tolerances, so the two never answer for each other.
+
+  **A print is drawn with only the faces something can see** (`shape_visible.visible_async` →
+  `wrappers/wrapper_visible.py`, asked by `get_representation(hidden_stripped=True)` for such a part, and by the
+  CAM tab). A deposit is tens of thousands of planar prisms, never fused; drawn whole, it is every layer lying on
+  the next and all of the infill, which nothing can see. The wrapper cuts it by the section solid by solid (a
+  box misses most of them, so only the ones it passes through go through a boolean), follows the empty space
+  layer by layer on a grid, and keeps a face only where what lies in front of it is open space with a way in
+  from outside -- the outside, a ring the cut opened, a layer with nothing over it. The wrapper's description
+  says exactly what that approximation keeps and drops; a shape that is not a deposit is cut as
+  `wrapper_section` cuts it. Cached on what it was handed, the section included; its glTF is then cached like
+  any other, per shape and per level of detail.
+
   **That size is read, not measured** (`shape_gltf.size_of`). Every shape a wrapper returned carries the box it
   was measured in as it was built (`metadata.measurements.bbox`), so sizing a tree is arithmetic over numbers
   already in hand: no kernel, no sandbox pass, and the same box `Shape.get_bounding_box_async()` hands every
