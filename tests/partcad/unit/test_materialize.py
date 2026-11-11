@@ -442,6 +442,38 @@ def test_the_verdict_on_a_print_of_a_design_that_keeps_no_key_is_not_kept(tmp_pa
     assert not test_ctx.get(MaterializeTest.NOT_CACHEABLE)
 
 
+def test_a_product_is_keyed_on_what_the_package_tells_its_machine(tmp_path):
+    """A tool the part does not state is the package's 'cam:' section's to say, and it moves what is cut."""
+    from partcad.part_factory_manufactured import product_key_async
+
+    def key(depth_per_pass):
+        package = {
+            "name": "//test",
+            "sketches": {"outline": {"type": "basic", "rectangle": [20, 10]}},
+            "parts": {
+                "stock": {"type": "basic", "cuboid": [40, 30, 5]},
+                "cut": {
+                    "type": "basic",
+                    "cuboid": [20, 10, 5],
+                    "manufacturing": {
+                        "method": "subtractive",
+                        "source": "stock",
+                        "instructions": "outline",
+                        "cnc": {"diameter": 3},
+                    },
+                },
+            },
+            "cam": {"gcode": {"depth_per_pass": depth_per_pass}},
+        }
+        root = tmp_path / str(len(os.listdir(tmp_path)))
+        root.mkdir()
+        (root / "partcad.yaml").write_text(yaml.safe_dump(package))
+        context = pc.Context(str(root))
+        return asyncio.run(product_key_async(context, context.get_part("//test:cut")))
+
+    assert key(3) != key(6)
+
+
 def test_a_cut_or_a_molding_is_keyed_on_every_setting_of_its_machine(tmp_path):
     """A tool diameter, a job every machine shares and a mold's shrinkage each change what is made."""
 
