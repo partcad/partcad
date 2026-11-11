@@ -28,6 +28,7 @@ import { ShowNode } from '../../webview/messages';
 import {
     boundsOf,
     describeSection,
+    previewRange,
     rangeOf,
     sameSection,
     sectionFrom,
@@ -424,6 +425,14 @@ suite('The view panel: what the object is cut to', () => {
         assert.deepStrictEqual(rangeOf({ x: [0, 4] }, 'y', bounds), [0, 20]);
     });
 
+    test('a preview clips at no end that lies on the object: a plane there would clip its face', () => {
+        const bounds = boundsOf(brick())!;
+        assert.deepStrictEqual(previewRange([0, 10], 'x', bounds), [-Infinity, Infinity]);
+        assert.deepStrictEqual(previewRange([4, 10], 'x', bounds), [4, Infinity]);
+        assert.deepStrictEqual(previewRange([-5, 4], 'x', bounds), [-Infinity, 4]);
+        assert.deepStrictEqual(previewRange([12, 3], 'y', bounds), [3, 12]);
+    });
+
     test('a section travels as PartCAD reads it, and is read back from what PartCAD said', () => {
         assert.strictEqual(sectionRequest(null), null);
         assert.strictEqual(sectionRequest({}), null);
@@ -712,7 +721,9 @@ suite('The view panel: the widget', () => {
         high.value = '500';
         high.fire('input');
         // X moved to halfway; Y and Z as the section has them, the whole brick.
-        assert.deepStrictEqual(previews, [{ x: [0, 5], y: [0, 20], z: [0, 30] }]);
+        // An end on the brick's own face is no end: a plane there would clip
+        // that face pixel by pixel.
+        assert.deepStrictEqual(previews, [{ x: [-Infinity, 5], y: [-Infinity, Infinity], z: [-Infinity, Infinity] }]);
         assert.deepStrictEqual(sections, [], 'the daemon is asked once it is let go, not while it moves');
         high.fire('change');
         assert.deepStrictEqual(sections, [{ x: [0, 5] }]);

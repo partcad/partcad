@@ -399,8 +399,10 @@ const sceneLoaded: Promise<Scene | undefined> = import(/* webpackMode: "eager" *
         if (module.onCpu) {
             // Drawn by the CPU, the model does not turn on its own: a frame
             // every 16 ms is what the CPU cannot afford. The box
-            // says so, and ticking it turns it on regardless.
+            // says so, and ticking it turns it on regardless - on the CAM
+            // tab's panel too, which is the same view.
             view3d.setAnimate(false);
+            viewCam.setAnimate(false);
         }
         // Where the camera is, said in the view panel as it moves - however it
         // was moved: a drag, the damping after it, Animate, a SpaceMouse.
@@ -816,7 +818,7 @@ const view3d = new ViewPanel(
         onProjection: (projection) => scene?.setPerspective(projection === 'perspective'),
         onSection: (section) => onSectionChanged(section),
         onSectionPreview: (ranges) => previewSection(view3d, ranges),
-        onAnimate: (animate) => scene?.setAutoRotate(animate),
+        onAnimate: (animate) => turn(animate),
         onAutoFit: (autoFit) => scene?.setAutoFit(autoFit),
         onOpacity: (opacity) => scene?.setOpacity(opacity),
         onExtraDetails: (on) => {
@@ -860,7 +862,7 @@ const viewCam = new ViewPanel(
         onProjection: (projection) => scene?.setPerspective(projection === 'perspective'),
         onSection: (section) => onSectionChanged(section),
         onSectionPreview: (ranges) => previewSection(viewCam, ranges),
-        onAnimate: (animate) => scene?.setAutoRotate(animate),
+        onAnimate: (animate) => turn(animate),
         onAutoFit: (autoFit) => scene?.setAutoFit(autoFit),
         onOpacity: (opacity) => scene?.setOpacity(opacity),
     },
@@ -993,6 +995,16 @@ const follow3dCamera = throttled(() => {
         viewCam.setViewpoint(scene?.viewpoint());
     }
 });
+
+/**
+ * Animate, ticked or cleared on the 3D or the CAM tab: one view turns or does
+ * not, whichever tab it is on, so the box of the other says the same.
+ */
+function turn(animate: boolean): void {
+    view3d.setAnimate(animate);
+    viewCam.setAnimate(animate);
+    scene?.setAutoRotate(animate);
+}
 
 /**
  * A viewpoint chosen in the 3D view's panel holds still: Animate would turn the
@@ -1464,11 +1476,11 @@ function placeStage(tab: '3d' | 'cam'): void {
         pane.insertBefore(stage, viewPanels[tab]?.element ?? null);
     }
     // The panel beside it is what the view does now: its projection, its
-    // animation and its opacity, which the other tab's may have left otherwise.
+    // fitting and its opacity, which the other tab's may have left otherwise.
+    // Not whether it turns, which the two boxes say together ('turn').
     const panel = viewPanels[tab];
     if (panel !== undefined && scene !== undefined) {
         scene.setPerspective(panel.projection === 'perspective');
-        scene.setAutoRotate(panel.animating);
         scene.setAutoFit(panel.autoFitting);
         scene.setOpacity(panel.opacityFraction);
         panel.setViewpoint(scene.viewpoint());

@@ -55,6 +55,7 @@ import {
     Section,
     SectionAxis,
     formatLength,
+    previewRange,
     rangeOf,
     sameSection,
     sectionOf,
@@ -584,10 +585,11 @@ export class ViewPanel {
         this.ranges[axis] = [this.toLength(axis, low, bounds), this.toLength(axis, high, bounds)];
         this.drawSlider(axis);
         if (this.callbacks.onSectionPreview !== undefined) {
-            // All three, the ones not being moved as the section has them.
+            // All three, the ones not being moved as the section has them, and
+            // an end on the object's own face no end at all ('previewRange').
             const ranges: Partial<Record<SectionAxis, Range>> = {};
             for (const each of SECTION_AXES) {
-                ranges[each] = this.ranges[each] ?? rangeOf(this.section, each, bounds);
+                ranges[each] = previewRange(this.ranges[each] ?? rangeOf(this.section, each, bounds), each, bounds);
             }
             this.callbacks.onSectionPreview(ranges);
         }

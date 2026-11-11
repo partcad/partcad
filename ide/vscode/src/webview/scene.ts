@@ -2506,10 +2506,11 @@ export function setOpacity(opacity: number): void {
  * Only the planes and a flat face, which is why it is a preview: PartCAD cuts the
  * exact geometry once the slider is let go, and what a cut opens - a print's
  * infill - is what it sends then ('showSection' in 'viewer.ts'). The flat face is
- * the back of whatever lies behind the cut, drawn unlit and nudged in front of
- * it: the far side of the inside, which is where a section face would be seen.
+ * the back of whatever lies behind the cut, drawn unlit while the object's own
+ * faces are drawn from the front only: the far side of the inside, which is where
+ * a section face would be seen.
  */
-let preview: { caps: THREE.Mesh[]; materials: Map<number, THREE.Material> } | undefined;
+let preview: { caps: THREE.Mesh[]; materials: Map<number, THREE.Material>; turned: Set<THREE.Material> } | undefined;
 
 /** Whether this view can clip what it has: every GPU renderer can, the painter cannot. */
 export const previews = !software;
@@ -2534,25 +2535,28 @@ export function previewSection(box: Bounds | null): boolean {
         along[axis] = 1;
         // A unit along the axis on the stage: the turn and the scale of the frame, and not its offset.
         const normal = new THREE.Vector3(...toStage(along, frame)).sub(origin).normalize();
-        const low: [number, number, number] = [0, 0, 0];
-        low[axis] = box.min[axis];
-        const high: [number, number, number] = [0, 0, 0];
-        high[axis] = box.max[axis];
-        if (!Number.isFinite(box.min[axis]) || !Number.isFinite(box.max[axis])) {
-            // Not cut along this axis.
-            continue;
+        // Three keeps what is on the side a plane's normal points to. An end
+        // that is not finite is not cut at.
+        if (Number.isFinite(box.min[axis])) {
+            const low: [number, number, number] = [0, 0, 0];
+            low[axis] = box.min[axis];
+            planes.push(
+                new THREE.Plane().setFromNormalAndCoplanarPoint(normal, new THREE.Vector3(...toStage(low, frame))),
+            );
         }
-        // Three keeps what is on the side a plane's normal points to.
-        planes.push(new THREE.Plane().setFromNormalAndCoplanarPoint(normal, new THREE.Vector3(...toStage(low, frame))));
-        planes.push(
-            new THREE.Plane().setFromNormalAndCoplanarPoint(
-                normal.clone().negate(),
-                new THREE.Vector3(...toStage(high, frame)),
-            ),
-        );
+        if (Number.isFinite(box.max[axis])) {
+            const high: [number, number, number] = [0, 0, 0];
+            high[axis] = box.max[axis];
+            planes.push(
+                new THREE.Plane().setFromNormalAndCoplanarPoint(
+                    normal.clone().negate(),
+                    new THREE.Vector3(...toStage(high, frame)),
+                ),
+            );
+        }
     }
     if (preview === undefined) {
-        preview = { caps: [], materials: new Map() };
+        preview = { caps: [], materials: new Map(), turned: new Set() };
         const made = preview;
         content.traverse((node) => {
             const mesh = node as THREE.Mesh;
@@ -2565,16 +2569,26 @@ export function previewSection(box: Bounds | null): boolean {
                 // A port's boundary is drawn over the object, not part of it.
                 return;
             }
+            // The back of a face is the cut's while the preview lasts: drawn
+            // lit as well, the two would fight over every pixel of it.
+            for (const each of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+                if (each !== undefined && each.side === THREE.DoubleSide && !made.turned.has(each)) {
+                    each.side = THREE.FrontSide;
+                    each.needsUpdate = true;
+                    made.turned.add(each);
+                }
+            }
             const color = material?.color ?? new THREE.Color(DEFAULT_COLOR);
             const key = color.getHex();
             let cap = made.materials.get(key);
             if (cap === undefined) {
+                // Not nudged in front of anything: with the object's own faces
+                // drawn from the front only, nothing else lies where a back face
+                // does, and a nudge is what let the back of a print's lower
+                // layers show through the top of the one over them.
                 cap = new THREE.MeshBasicMaterial({
                     color: color.clone().multiplyScalar(0.8),
                     side: THREE.BackSide,
-                    polygonOffset: true,
-                    polygonOffsetFactor: -1,
-                    polygonOffsetUnits: -1,
                 });
                 // The preview's own, freed when it ends ('endPreview') and by nothing else.
                 cap.userData.cached = true;
@@ -2602,6 +2616,10 @@ function endPreview(): void {
         face.removeFromParent();
     }
     preview.materials.forEach((material) => material.dispose());
+    preview.turned.forEach((material) => {
+        material.side = THREE.DoubleSide;
+        material.needsUpdate = true;
+    });
     preview = undefined;
     surface.setClippingPlanes?.([]);
     stage.clippingPlanes = [];
