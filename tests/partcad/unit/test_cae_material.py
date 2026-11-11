@@ -169,3 +169,58 @@ def test_a_print_connects_where_its_design_does(ctx):
     # Its own say wins, and a mold that shrinks it moves its ports off the design's.
     assert names("printed-own-ports") == ["elsewhere"]
     assert names("shrunk") == []
+
+
+#
+# What a simulation collides with (see 'partcad.visual')
+#
+
+
+def _named(name, brep, volume):
+    return {
+        "name": name,
+        shape_envelope.KEY_BREP: brep,
+        shape_envelope.KEY_PROPERTIES: {"material": ":pla"},
+        shape_envelope.KEY_METADATA: {shape_envelope.METADATA_MEASUREMENTS: {shape_envelope.METADATA_VOLUME: volume}},
+    }
+
+
+def test_a_simulation_collides_with_a_prints_design_and_weighs_the_print(ctx, monkeypatch):
+    from partcad import visual
+
+    design = _named("//test:design", b"DESIGN", 1000.0)
+
+    async def wrapped(self, ctx):
+        return design
+
+    monkeypatch.setattr(pc.shape.Shape, "get_wrapped", wrapped)
+    printed = _named("//test:printed", b"DEPOSIT", 400.0)
+    plain = _named("//test:design", b"DESIGN", 1000.0)
+    tree = {"name": "//test:assy", shape_envelope.KEY_ASSEMBLY: [printed, plain]}
+
+    scene = asyncio.run(visual.substitute_async(ctx, None, tree, outsides=True)).tree
+    collided, untouched = scene[shape_envelope.KEY_ASSEMBLY]
+    # The design's geometry...
+    assert collided[shape_envelope.KEY_BREP] == b"DESIGN"
+    # ...under the print's name, weighed by the print's measurements.
+    assert collided["name"] == "//test:printed"
+    assert collided[shape_envelope.KEY_METADATA] == printed[shape_envelope.KEY_METADATA]
+    assert visual.NODE_KEY not in collided
+    # A part that is not a print is left as it is.
+    assert untouched is plain
+
+
+def test_a_picture_still_draws_a_print_as_its_design_with_the_designs_measurements(ctx, monkeypatch):
+    from partcad import visual
+
+    design = _named("//test:design", b"DESIGN", 1000.0)
+
+    async def wrapped(self, ctx):
+        return design
+
+    monkeypatch.setattr(pc.shape.Shape, "get_wrapped", wrapped)
+    tree = {"name": "//test:assy", shape_envelope.KEY_ASSEMBLY: [_named("//test:printed", b"DEPOSIT", 400.0)]}
+    drawn = asyncio.run(visual.substitute_async(ctx, None, tree)).tree[shape_envelope.KEY_ASSEMBLY][0]
+    assert drawn[shape_envelope.KEY_BREP] == b"DESIGN"
+    # Asked for with the material the print was lent, as a visual is asked for with the part's own values.
+    assert drawn[visual.NODE_KEY].startswith("//test:design")

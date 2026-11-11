@@ -2985,6 +2985,7 @@ class Shape(ShapeConfiguration):
         section=None,
         batch=None,
         visuals=None,
+        outsides=False,
     ):
         """Produce one output file, whatever its type.
 
@@ -2997,6 +2998,9 @@ class Shape(ShapeConfiguration):
 
         'visuals' is 'render_async''s: None to draw parts as their visuals
         where the file type says it draws pictures, False never to.
+
+        'outsides' writes every print as its design's geometry, weighed as the
+        print: what a simulation's scene is (see 'partcad.visual').
         """
         impl, final_filepath = self.output_getopts(
             ctx, format_name, project, filepath, options_project, output_dir, defaults_only=defaults_only
@@ -3040,6 +3044,13 @@ class Shape(ShapeConfiguration):
                 views[key] = await pc_visual.substitute_async(ctx, subject, obj)
             drawn_as = views[key]
             obj = drawn_as.tree
+        if outsides:
+            from . import visual as pc_visual
+
+            key = ("outsides", mask.key() if mask is not None and not mask.keeps_all else None)
+            if key not in views:
+                views[key] = await pc_visual.substitute_async(ctx, subject, obj, outsides=True)
+            obj = views[key].tree
         # Cut after the filter: a section is a box through what is kept, and the
         # links a filter drops have nothing left to cut. The ports drawn on top
         # are found on the subject itself, uncut - a port is where it is whether
@@ -3139,6 +3150,7 @@ class Shape(ShapeConfiguration):
         defaults_only: bool = False,
         section=None,
         visuals: Optional[bool] = None,
+        outsides: bool = False,
         **kwargs,
     ) -> dict:
         """Write this shape out as one output file type, several, or all of them.
@@ -3239,6 +3251,7 @@ class Shape(ShapeConfiguration):
                 section=section,
                 batch=batch,
                 visuals=visuals,
+                outsides=outsides,
             )
 
         if isinstance(format_name, (list, tuple)):

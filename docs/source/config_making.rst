@@ -283,6 +283,13 @@ the printer deposits``). More infill is a stiffer, stronger, heavier part. The
 average credits a print's walls with less of a bending load than they carry, so
 it errs on the side of the part failing. A print has its design's ports, so
 the design's ``fix:`` and ``load:`` land where they would on the design.
+
+**In a simulation, a print collides as its design and weighs what it deposits.**
+A rigid body is its outside -- MuJoCo collides with a mesh's convex hull in any
+case -- and a print's tens of thousands of beads are more triangles than an
+engine reads from one mesh. So the scene a simulation is handed holds the
+design's geometry where the print is, with the print's own name, placement,
+mass, centre of mass and inertia.
 ``docs/design/additive.md`` in the repository has how the print is worked out
 from the route, how far its volume is from what a real printer lays, and what
 each way of keeping it costs.

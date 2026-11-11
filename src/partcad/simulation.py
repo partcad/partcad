@@ -1181,6 +1181,9 @@ async def _export_scene_async(ctx, scene, impl, directory: str) -> str:
         project=scene_project,
         options_project=impl.project,
         filepath=path,
+        # A print collides as its design and weighs what it deposits: see
+        # 'partcad.visual'.
+        outsides=True,
         **options,
     )
     if not os.path.isfile(path):

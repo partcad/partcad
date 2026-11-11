@@ -71,6 +71,16 @@ What is drawn:
 A visual that cannot be had - not found, refused, failing to build - is
 reported and the part is drawn as itself: a picture of the part is still a
 picture of the part.
+
+**One substitution that is not a picture: a print's outside, in a simulation.**
+A part that is what its printer makes is, as geometry, tens of thousands of
+prisms -- more triangles than a physics engine reads from one mesh, and nothing
+a rigid body collides with differently from its design, whose outside it is
+(MuJoCo collides with a mesh's convex hull in any case). So the scene a
+simulation is handed ('simulation._export_scene_async') holds the design's
+geometry where a print is, with everything else the print's own: its name, its
+placement, and the measurements and properties it is weighed by -- it weighs
+what the printer deposits ('substitute_async(outsides=True)', 'outside_of_async').
 """
 
 import typing
@@ -250,7 +260,12 @@ async def _inherited_async(ctx, part, config, where) -> typing.Optional[Drawn]:
     return Drawn(drawn.part, moved if drawn.location is None else moved * drawn.location)
 
 
-def drawn_node(node: dict, envelope: dict, visual_name: str, location=None) -> dict:
+# What a print's design lends it in a simulation: the geometry, and nothing it is
+# weighed by (see the module docstring).
+_OUTSIDE_KEYS = _DRAWN_KEYS - {shape_envelope.KEY_METADATA, shape_envelope.KEY_PROPERTIES}
+
+
+def drawn_node(node: dict, envelope: dict, visual_name: str, location=None, keys=_DRAWN_KEYS) -> dict:
     """'node' drawn as 'envelope': the visual's geometry and looks, the part's place and identity.
 
     'location' is where the visual sits in the part's frame, if anywhere but
@@ -258,16 +273,17 @@ def drawn_node(node: dict, envelope: dict, visual_name: str, location=None) -> d
     composed under it, and the node's placement over both - the one
     composition 'shape_envelope.placed' is.
     """
-    geometry = {key: value for key, value in envelope.items() if key in _DRAWN_KEYS}
+    geometry = {key: value for key, value in envelope.items() if key in keys}
     own = envelope.get(shape_envelope.KEY_LOCATION)
     if own is not None:
         geometry[shape_envelope.KEY_LOCATION] = own
     if location is not None:
         geometry = shape_envelope.placed(geometry, location)
     geometry = shape_envelope.placed(geometry, node.get(shape_envelope.KEY_LOCATION))
-    drawn = {key: value for key, value in node.items() if key not in _DRAWN_KEYS and key != shape_envelope.KEY_LOCATION}
+    drawn = {key: value for key, value in node.items() if key not in keys and key != shape_envelope.KEY_LOCATION}
     drawn.update(geometry)
-    drawn[NODE_KEY] = visual_name
+    if keys is _DRAWN_KEYS:
+        drawn[NODE_KEY] = visual_name
     return drawn
 
 
@@ -291,8 +307,32 @@ class Substitution:
         return all(key is not None for _name, key in self.keys)
 
 
-async def substitute_async(ctx, shape, tree) -> Substitution:
+async def outside_of_async(ctx, part) -> typing.Optional[Drawn]:
+    """The design a print collides as in a simulation, or None for a part that collides as itself.
+
+    Only a part that is what its printer makes (see
+    'part_config_manufacturing.implied_type'), whichever form its geometry is
+    kept in: a part with a geometry of its own is that geometry.
+    """
+    from .part_config_manufacturing import IMPLIED_TYPE_KEY, METHOD_ADDITIVE, PartConfigManufacturing
+    from .qual.basic.manufacturability_reference import resolve_reference
+
+    config = getattr(part, "config", None)
+    if getattr(part, "kind", None) != "part" or not isinstance(config, dict) or not config.get(IMPLIED_TYPE_KEY):
+        return None
+    data = PartConfigManufacturing(config)
+    if data.method != METHOD_ADDITIVE or not data.design:
+        return None
+    found = await resolve_reference(ctx, part, data.design, "part")
+    return Drawn(found) if found is not None else None
+
+
+async def substitute_async(ctx, shape, tree, outsides: bool = False) -> Substitution:
     """'tree', the tree of 'shape', with every part in it that has a visual drawn as that visual.
+
+    With 'outsides', not a picture but a simulation's scene: every print is its
+    design's geometry instead, weighed as the print (see the module docstring),
+    and nothing else changes.
 
     'tree' is not changed: what comes back is a copy where anything was drawn
     differently, and 'tree' itself where nothing was. A part is found by the
@@ -321,7 +361,7 @@ async def substitute_async(ctx, shape, tree) -> Substitution:
                 part = await _part_named_async(ctx, name)
             if part is None:
                 return None
-            drawn = await visual_of_async(ctx, part)
+            drawn = await (outside_of_async if outsides else visual_of_async)(ctx, part)
             if drawn is None:
                 return None
             envelope = await drawn.part.get_wrapped(ctx)
@@ -352,7 +392,7 @@ async def substitute_async(ctx, shape, tree) -> Substitution:
                 found = await visual_for(name, part)
                 if found is not None:
                     envelope, visual_name, location = found
-                    return drawn_node(node, envelope, visual_name, location)
+                    return drawn_node(node, envelope, visual_name, location, _OUTSIDE_KEYS if outsides else _DRAWN_KEYS)
             return node
         if not isinstance(children, list):
             return node
