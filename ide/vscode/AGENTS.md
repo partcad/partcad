@@ -355,9 +355,10 @@ from the start for a part or a sketch: the object as it is and at the finer leve
 each part as its `visual:` at the preview's - or the CAM tab's settings tried. Both are asked of the daemon by the
 one request the sliders always used (`showSection` -> `partcad.showSection` -> `inspect.object` with `section`,
 `extra_details`, `cam`), and the show says what it is (`extraDetails`, `cam`; `KEY_EXTRA_DETAILS`, `KEY_CAM` in
-`partcad_ide_client.protocol`), which is what `redraw` compares against. Which level, and that a printed part is
-the exception (drawn as what its machine makes, at the preview's level, its hidden faces left out), is
-`partcad.cam_view.representation`'s to decide: nothing here knows what a print is. While a drawing is out the body
+`partcad_ide_client.protocol`), which is what `redraw` compares against. Which level, and that a part a machine
+makes is drawn as what it makes (its hidden faces left out) -- at the box's level for a cut or molded part, and at
+the preview's for a print, every face of which is flat -- is `partcad.cam_view.representation`'s to decide: nothing
+here knows what a print is. While a drawing is out the body
 carries `busy` (a progress cursor everywhere) and the host shows a notification (`withProgress`), and an error is
 said in one too and under the sliders. The box starts as the first show of an object says, so a PartCAD that does
 not send `extraDetails` leaves it disabled; it is kept, like the section, across shows of the same object.

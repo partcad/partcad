@@ -99,6 +99,18 @@ def test_a_part_a_machine_makes_is_drawn_as_it_is_made_at_the_previews_level():
     assert cam == cam_view.Representation(extra_details=True, visuals=False, detail="high", stripped=True)
 
 
+@pytest.mark.parametrize("method", ["subtractive", "forming"])
+def test_a_cut_or_molded_part_is_drawn_as_finely_as_the_box_says(method):
+    """What a router or a mold makes has curved faces -- a drilled hole, a molded knob -- as any part does."""
+    made = _shape("part", {"method": method, "source": "stock"})
+    assert cam_view.made_by_machine(made)
+    ticked = cam_view.representation(made)
+    assert ticked == cam_view.Representation(extra_details=True, visuals=False, detail="high", stripped=True)
+    cleared = cam_view.representation(made, extra_details=False)
+    assert cleared == cam_view.Representation(extra_details=False, visuals=True, detail="low", stripped=False)
+    assert cam_view.representation(made, cam=True).detail == "high"
+
+
 def test_only_a_part_made_by_following_a_route_is_made_by_a_machine():
     assert not cam_view.made_by_machine(_shape("part"))
     assert not cam_view.made_by_machine(_shape("part", {"method": "sheet_metal"}))

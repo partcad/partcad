@@ -18,12 +18,14 @@ out ticked; an assembly, a scene, an interface starts out cleared
 ('default_extra_details').
 
 A part made by following a route - 'additive', 'subtractive' or 'forming'
-('MADE_METHODS') - is the exception, in two ways. Its own geometry is what its
-machine makes (for a print, the deposit of its route), so "as it is" is that,
-and the box ticked is how to look at it. And that geometry is the machine's:
-planar beads that a finer tessellation makes no finer, or a cut whose detail is
-the route's. So it is drawn at the preview's level whichever way the box is, and
-with the faces nothing can see left out (see 'shape_visible').
+('MADE_METHODS') - is drawn, with the box ticked, as what its machine makes:
+its own geometry, so "as it is" is that, with the faces nothing can see left out
+(see 'shape_visible'). A print is the one exception to the level of detail: the
+deposit of its route is planar beads, every face of them flat, which a finer
+tessellation makes no finer and only slower, so it is drawn at the preview's
+level whichever way the box is. What a router leaves of its stock or a mold
+gives back of its cavity has curved faces like any part - a drilled hole, a
+molded knob - and follows the box.
 
 **The CAM tab** ('settings', 'product_async', 'save_settings'). For such a part
 the Digital Thread has a tab of its own: what the machine makes, drawn finely,
@@ -57,6 +59,11 @@ from .part_config_manufacturing import (
 # The methods whose part is what a machine makes by following a route, and so
 # have a CAM tab.
 MADE_METHODS = MATERIALIZED_METHODS
+
+# The one of them whose product is drawn at the preview's level whatever the
+# "Extra details" box says: a print, every face of which is flat. As
+# 'method_of' answers, spelled as the declaration spells it.
+PRINTED = "additive"
 
 # The kinds of object the "Extra details" box starts out ticked for.
 DETAILED_KINDS = ("part", "sketch")
@@ -130,8 +137,8 @@ def representation(shape, extra_details=None, detail=None, cam=False) -> Represe
     made = made_by_machine(shape)
     if cam:
         chosen = shape_gltf.DETAIL_HIGH
-    elif made:
-        # What a machine makes is not drawn any finer for asking: see the module.
+    elif method_of(shape) == PRINTED:
+        # A print is flat faces, which no level draws any finer: see the module.
         chosen = shape_gltf.DETAIL_LOW
     else:
         chosen = shape_gltf.DETAIL_HIGH if extra_details else shape_gltf.DETAIL_LOW

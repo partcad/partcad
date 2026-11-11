@@ -66,10 +66,14 @@ and cleared for an assembly, a scene or an interface, and is kept while the same
 object is shown again.
 
 A part made by following a route -- printed, cut or molded -- is drawn, with the
-box ticked, as what its machine makes: a print as the beads its printer lays down.
-That is planar, so it is drawn at the preview's level of detail either way, and
-only its outside is sent -- the faces nothing can see (one layer lying on the
-next, the infill a skin closes in) are left out before it is drawn. The
+box ticked, as what its machine makes: a print as the beads its printer lays down,
+a cut part as what the tool leaves of its stock, a molding as its cavity shrunk.
+A cut or molded part is drawn as finely as the box says, as any part is: a
+drilled hole or a molded curve is round. A print is planar, every face of it
+flat, so it is drawn at the preview's level of detail either way, which is no
+coarser and much quicker; and only its outside is sent -- the faces nothing can
+see (one layer lying on the next, the infill a skin closes in) are left out
+before it is drawn. The
 :doc:`CAM tab <design_cam>` draws the same thing finely, beside the settings it
 is made with.
 
