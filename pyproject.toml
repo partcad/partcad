@@ -296,11 +296,14 @@ timeout = 900
 # `timeout_method = thread` a Python thread -- and either one waits for a test
 # stuck in native code holding the GIL (an OCCT call through OCP) to return,
 # which a hang never does. faulthandler's watchdog is a C thread that needs no
-# GIL, so a minute before that it dumps every thread's stack, test function
-# included, whatever the test is stuck in. Measured with a C loop called with
-# the GIL held: the signal fired only once the loop returned, the thread
-# method likewise, and this dumped on time.
-faulthandler_timeout = 840
+# GIL: a minute later it dumps every thread's stack, test function included,
+# and ends the process, which pytest-xdist reports as the test that crashed its
+# worker and replaces. Measured with a C loop called with the GIL held: the
+# signal fired only once the loop returned, the thread method likewise, and
+# this dumped on time. Both plugins stop their watch when a test fails, so the
+# root `conftest.py` sets this one again for that test's teardown.
+faulthandler_timeout = 960
+faulthandler_exit_on_timeout = true
 
 # TODO(clairbee): make the below work instead of "behave.ini"
 # [tool.behave]

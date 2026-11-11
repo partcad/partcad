@@ -583,8 +583,9 @@ def test_a_daemon_that_never_answers_again_says_so(daemon, monkeypatch):
     )
     theirs.comes_back = False
     daemon.store[name] = theirs
-    with pytest.raises(ConnectionError, match="does not answer"):
+    with pytest.raises(containers.ContainerUnavailable, match="does not answer") as failed:
         containers.acquire(spec(), client=daemon, ping=ready)
+    assert isinstance(failed.value.__cause__, ConnectionError)
     assert theirs.archives == []
 
 

@@ -44,6 +44,36 @@ import pathlib
 import pytest
 
 
+@pytest.hookimpl(trylast=True)
+def pytest_exception_interact(node, call, report):
+    """Watch the teardown of a test that failed, as every other phase is watched.
+
+    pytest's faulthandler plugin and pytest-timeout both cancel their timers
+    here - so that a debugger is not interrupted - and neither sets one again,
+    which left the fixtures of every failed test free to hang until the job's
+    own `timeout-minutes`, naming nothing. This runs after them (and after a
+    debugger, which runs here too), and sets faulthandler's again for what is
+    left of the test: the C watchdog that dumps every stack and, with
+    `faulthandler_exit_on_timeout`, ends the process (see `pyproject.toml`).
+    """
+    timeout = float(node.config.getini("faulthandler_timeout") or 0.0)
+    if timeout <= 0 or not isinstance(node, pytest.Item):
+        return
+    try:
+        # Where the plugin writes its dumps: a copy of stderr made before any
+        # capturing, which pytest keeps under this key and nowhere public.
+        from _pytest.faulthandler import fault_handler_stderr_fd_key
+
+        stderr = node.config.stash[fault_handler_stderr_fd_key]
+    except (ImportError, KeyError):
+        return
+    import faulthandler
+
+    faulthandler.dump_traceback_later(
+        timeout, file=stderr, exit=bool(node.config.getini("faulthandler_exit_on_timeout"))
+    )
+
+
 @pytest.hookimpl(wrapper=True, tryfirst=True)
 def pytest_sessionfinish(session, exitstatus):
     """Write the session's verdict to `PYTEST_RESULT_MARKER`, if a caller asked for one.
