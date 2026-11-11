@@ -288,9 +288,12 @@ export class CamView {
         this.refresh();
     }
 
-    /** Save is done: say where it went. The settings are asked for again by the caller, and the fields follow. */
+    /**
+     * Save is done: say where it went. The settings are asked for again by the caller, and the fields follow them --
+     * so they stay as they are, and cannot be changed, until the caller has shown those and ends the Save
+     * ('setSaving'): an edit typed in between would be lost to them.
+     */
     public saved(data: CamSavedData | null | undefined): void {
-        this.setSaving(false);
         if (!data) {
             this.setNote('Saved.');
             return;

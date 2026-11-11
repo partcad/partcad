@@ -105,6 +105,14 @@ def method_of(shape) -> typing.Optional[str]:
     return method if isinstance(method, str) else None
 
 
+def deposited(shape) -> bool:
+    """Whether a part's own geometry is what its machine makes ('part_config_manufacturing.implied_type')."""
+    from .part_config_manufacturing import IMPLIED_TYPE_KEY
+
+    config = getattr(shape, "config", None)
+    return getattr(shape, "kind", None) == "part" and isinstance(config, dict) and bool(config.get(IMPLIED_TYPE_KEY))
+
+
 def made_by_machine(shape) -> bool:
     """Whether a shape is a part made by following a route, and so has a CAM tab."""
     return method_of(shape) in MADE_METHODS
@@ -146,9 +154,12 @@ def representation(shape, extra_details=None, detail=None, cam=False) -> Represe
         extra_details=extra_details,
         visuals=not extra_details and not cam,
         detail=shape_gltf.detail_of(detail if detail is not None else chosen),
-        # Only a print is a deposit of prisms, most of them out of sight: a cut
-        # part or a molding is a solid like any other, its faces each its own.
-        stripped=printed and (extra_details or cam),
+        # Only what a printer deposits is prisms, most of them out of sight: a
+        # cut part or a molding is a solid like any other, its faces each its
+        # own, and so is a print with a geometry of its own (a scan, a model
+        # somebody drew), which is drawn as it is. The CAM tab always draws
+        # what the printer deposits.
+        stripped=printed and (cam or deposited(shape)) and (extra_details or cam),
     )
 
 

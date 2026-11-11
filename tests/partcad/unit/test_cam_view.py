@@ -55,10 +55,18 @@ def test_the_high_level_is_finer_on_both_counts(size):
 #
 
 
-def _shape(kind, manufacturing=None):
+def _shape(kind, manufacturing=None, own=False):
+    """A shape for 'representation' to look at: a part made by its machine unless 'own' gives it a geometry of its own."""
+    from partcad.part_config_manufacturing import IMPLIED_TYPE_KEY, implied_type
+
     config = {"name": "thing"}
     if manufacturing is not None:
         config["manufacturing"] = manufacturing
+        if not own:
+            config.update(implied_type(dict(config)) or {})
+    if own:
+        config["type"] = "step"
+        config.pop(IMPLIED_TYPE_KEY, None)
     return types.SimpleNamespace(kind=kind, config=config, get_final_config=lambda: config)
 
 
@@ -97,6 +105,15 @@ def test_a_part_a_machine_makes_is_drawn_as_it_is_made_at_the_previews_level():
     # Its CAM tab draws what its machine makes, finely.
     cam = cam_view.representation(printed, cam=True)
     assert cam == cam_view.Representation(extra_details=True, visuals=False, detail="high", stripped=True)
+
+
+def test_a_print_with_a_geometry_of_its_own_is_drawn_as_it_is():
+    """A scan or a model somebody drew is not a deposit: no face of it is left out, and none loses its colour."""
+    scanned = _shape("part", PRINT, own=True)
+    ticked = cam_view.representation(scanned)
+    assert ticked == cam_view.Representation(extra_details=True, visuals=False, detail="low", stripped=False)
+    # Its CAM tab draws what the printer deposits, which is.
+    assert cam_view.representation(scanned, cam=True).stripped
 
 
 @pytest.mark.parametrize("method", ["subtractive", "forming"])

@@ -186,6 +186,35 @@ def test_an_sdf_part_is_written_as_its_script(ctx, tmp_path, monkeypatch):
     assert [kwargs["representation"] for _name, kwargs in asked] == ["sdf"]
 
 
+def test_a_product_that_cannot_be_written_leaves_the_old_one_as_it_was(ctx, tmp_path, monkeypatch):
+    """The file is the old product or the new one, never part of either: the part is read from it."""
+    (tmp_path / "printed.brep").write_bytes(b"the old print")
+    _stub_machine(monkeypatch)
+
+    class HalfWritten:
+        """A file the disk fills up half way through."""
+
+        def __init__(self, path, mode):
+            self.file = open(path, mode)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.file.close()
+
+        def write(self, data):
+            self.file.write(data[: len(data) // 2])
+            raise OSError("the disk is full")
+
+    monkeypatch.setattr(pc.shape, "open", HalfWritten, raising=False)
+    with pytest.raises(OSError, match="the disk is full"):
+        asyncio.run(ctx.get_part("//test:printed").materialize_async(ctx, write=True))
+    assert (tmp_path / "printed.brep").read_bytes() == b"the old print"
+    # And nothing is left beside it.
+    assert sorted(os.listdir(tmp_path)) == ["partcad.yaml", "printed.brep"]
+
+
 def test_a_molding_is_asked_of_its_mold(ctx, tmp_path, monkeypatch):
     asked = _stub_machine(monkeypatch)
     asyncio.run(ctx.get_part("//test:molded").materialize_async(ctx, write=True))

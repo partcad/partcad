@@ -4760,8 +4760,19 @@ class Shape(ShapeConfiguration):
                 raise pc_cam.CamFailed("%s: the 'pc cam' implementation made nothing" % name)
             payload = shape_envelope.brep_plain(made["product"][shape_envelope.KEY_BREP])
         ctx.ensure_dirs_for_file(target)
-        with open(target, "wb") as f:
-            f.write(payload)
+        # Written beside it and moved over it, so that the file is the old
+        # product or the new one and never a part of either: a write that fails
+        # half way would otherwise leave the part read from a truncated file.
+        # Opened as any file is, so that it gets the permissions any file gets.
+        written = "%s.%d.%d.partial" % (target, os.getpid(), threading.get_ident())
+        try:
+            with open(written, "wb") as f:
+                f.write(payload)
+            os.replace(written, target)
+        except BaseException:
+            if os.path.exists(written):
+                os.remove(written)
+            raise
         made["written"] = target
         return made
 

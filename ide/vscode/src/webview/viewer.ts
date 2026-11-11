@@ -1421,8 +1421,9 @@ function saveCamSettings(settings: CamSettings): void {
  * this one's to show. It goes on and finishes -- nothing is taken back -- and is no longer waited for here.
  */
 function releaseCamSave(): void {
-    if (camSaving !== undefined) {
+    if (camSaving !== undefined || camFresh) {
         camSaving = undefined;
+        camFresh = false;
         camView.setSaving(false);
     }
 }
@@ -1449,6 +1450,8 @@ function onCamSaved(message: CamSavedMessage): void {
 /** What the CAM tab said of the part on screen has arrived: drawn, and the Design strip rebuilt by it. */
 function onCamSettings(data: CamSettingsData | undefined, error: string | undefined): void {
     const before = camData === undefined || camData === 'failed' ? undefined : camData.object;
+    const fresh = camFresh;
+    camFresh = false;
     if (error !== undefined || data === undefined || data === null) {
         camData = 'failed';
         camView.showError(error ?? 'PartCAD had nothing to say about how this is made.');
@@ -1456,9 +1459,12 @@ function onCamSettings(data: CamSettingsData | undefined, error: string | undefi
         camData = data;
         // The same part again keeps what was typed into the fields; another, or
         // the part as it was saved, starts from what it states.
-        camView.show(data, before === data.object && !camFresh);
-        camFresh = false;
+        camView.show(data, before === data.object && !fresh);
         camTried = camView.edits();
+    }
+    if (fresh) {
+        // The part as it was saved is in the fields: the Save is over.
+        camView.setSaving(false);
     }
     if (shown === undefined) {
         return;

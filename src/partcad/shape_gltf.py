@@ -384,6 +384,10 @@ async def convert_async(
     tree once it is cut, and before it is tessellated (see 'shape_visible'):
     cut and stripped in one sandbox, and cached as one answer. Only the nodes
     whose geometry is a print's deposit change; the rest are what the cut left.
+    Which nodes those are is read off their geometry alone -- prisms, one height
+    to another -- so a caller asks for it only for a tree that is a print's
+    deposit ('cam_view.representation'): another tree of prismatic solids would
+    lose the faces nobody sees, and the colour each face was given.
     """
     if ctx is None:
         raise ValueError("A context is required to tessellate a shape tree")
