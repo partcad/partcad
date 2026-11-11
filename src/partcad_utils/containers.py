@@ -707,16 +707,24 @@ def _await_named(client, name: str, seconds: float = 10.0) -> None:
 
 def _await_start_by_creator(container, seconds: float) -> str:
     """The container's status once whoever created it has started it -- still "created" if they did not in time."""
+    import docker
+
     deadline = time.monotonic() + seconds
     status = getattr(container, "status", "")
     while status == "created" and time.monotonic() < deadline:
         time.sleep(0.1)
         try:
             container.reload()
-        except Exception:
-            # Removed, most likely: its creator's start failed. Nothing is put
-            # into it, and the start that follows says what became of it.
+        except docker.errors.NotFound:
+            # Removed: its creator's start failed. Nothing is put into it, and
+            # the start that follows says what became of it.
             return ""
+        except Exception:
+            # A request that did not get through is no news about the
+            # container: it is still the creator's to start, so look again.
+            # One that never gets through leaves it "created", and the
+            # put and start that follow say why.
+            continue
         status = getattr(container, "status", "")
     return status
 

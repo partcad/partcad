@@ -516,6 +516,52 @@ def test_somebody_elses_container_caught_between_create_and_start_is_left_to_its
     assert daemon.order == [("started by its creator", name)]
 
 
+class _LookedAtThroughAFlakyConnection(_StartedByItsCreator):
+    """A look that does not get through, and then the creator's start."""
+
+    failures = 1
+
+    def reload(self):
+        if self.failures:
+            self.failures -= 1
+            raise ConnectionError("the request did not get through")
+        super().reload()
+
+
+def test_a_look_that_does_not_get_through_is_no_news_about_the_container(daemon):
+    """Read as "it is gone", it had this process start a container whose service may not be in it yet."""
+    name = containers.container_name(spec())
+    theirs = _LookedAtThroughAFlakyConnection(
+        daemon, name, {"labels": {containers.LABEL_IDENTITY: containers.identity(spec())}}, status="created"
+    )
+    daemon.store[name] = theirs
+    containers.acquire(spec(), client=daemon, ping=ready)
+    assert theirs.archives == []
+    assert theirs.started == 0
+    assert daemon.order == [("started by its creator", name)]
+
+
+class _RemovedByItsCreator(FakeContainer):
+    """Created by another process, whose start failed and which removed it."""
+
+    def reload(self):
+        raise docker.errors.NotFound(self.name)
+
+    def start(self):
+        raise docker.errors.NotFound(self.name)
+
+
+def test_a_container_its_creator_removed_is_not_given_the_service(daemon):
+    name = containers.container_name(spec())
+    theirs = _RemovedByItsCreator(
+        daemon, name, {"labels": {containers.LABEL_IDENTITY: containers.identity(spec())}}, status="created"
+    )
+    daemon.store[name] = theirs
+    with pytest.raises(containers.ContainerUnavailable, match="Cannot start"):
+        containers.acquire(spec(), client=daemon, ping=ready)
+    assert theirs.archives == []
+
+
 def test_the_first_address_that_answers_is_the_one_used(daemon):
     answering = {("172.17.0.9", 5000)}
     endpoint = containers.acquire(spec(), client=daemon, ping=lambda h, p: 2 if (h, p) in answering else None)
