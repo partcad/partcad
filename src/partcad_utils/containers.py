@@ -712,6 +712,7 @@ def _await_start_by_creator(container, seconds: float) -> str:
 
     deadline = time.monotonic() + seconds
     status = getattr(container, "status", "")
+    unverified = False
     while status == "created" and time.monotonic() < deadline:
         time.sleep(0.1)
         try:
@@ -723,10 +724,21 @@ def _await_start_by_creator(container, seconds: float) -> str:
         except (docker.errors.APIError, requests.exceptions.RequestException, OSError) as e:
             # A request that did not get through is no news about the
             # container: it is still the creator's to start, so look again.
-            # One that never gets through leaves it "created", and the
-            # put and start that follow say why.
             pc_logging.debug("Cannot look at the '%s' container yet: %s" % (getattr(container, "name", "?"), e))
+            unverified = True
             continue
+        unverified = False
+        status = getattr(container, "status", "")
+    if unverified:
+        # The grace ran out on a look that did not get through, and what the
+        # caller does next - put the service in - is only safe on a status
+        # read from the daemon. One more look, then: a daemon that has come
+        # back says where the creator got to, and one that has not raises
+        # what is wrong with it.
+        try:
+            container.reload()
+        except docker.errors.NotFound:
+            return ""
         status = getattr(container, "status", "")
     return status
 

@@ -541,6 +541,53 @@ def test_a_look_that_does_not_get_through_is_no_news_about_the_container(daemon)
     assert daemon.order == [("started by its creator", name)]
 
 
+class _UnreachableWhileWaitedOn(FakeContainer):
+    """Every look taken while waiting - after a sleep - fails; the one taken once the grace is over gets through.
+
+    By then its creator has started it, which is what a daemon that comes back
+    can show: the service is in it, and putting it in again would replace it.
+    """
+
+    slept = False
+    comes_back = True
+
+    def reload(self):
+        if self.slept or not self.comes_back:
+            self.slept = False
+            raise ConnectionError("the daemon does not answer")
+        if self.status == "created":
+            self.status = "running"
+            self.daemon.order.append(("started by its creator", self.name))
+
+
+def test_a_grace_that_runs_out_on_failed_looks_decides_on_one_that_gets_through(daemon, monkeypatch):
+    """The service is put in on a status read from the daemon, never on the one from before it stopped answering."""
+    monkeypatch.setattr(containers, "CREATED_GRACE_SECONDS", 0.05)
+    name = containers.container_name(spec())
+    theirs = _UnreachableWhileWaitedOn(
+        daemon, name, {"labels": {containers.LABEL_IDENTITY: containers.identity(spec())}}, status="created"
+    )
+    daemon.store[name] = theirs
+    monkeypatch.setattr(containers.time, "sleep", lambda seconds: setattr(theirs, "slept", True))
+    containers.acquire(spec(), client=daemon, ping=ready)
+    assert theirs.archives == [], "the creator started it while the daemon was away"
+    assert theirs.started == 0
+    assert daemon.order == [("started by its creator", name)]
+
+
+def test_a_daemon_that_never_answers_again_says_so(daemon, monkeypatch):
+    monkeypatch.setattr(containers, "CREATED_GRACE_SECONDS", 0.2)
+    name = containers.container_name(spec())
+    theirs = _UnreachableWhileWaitedOn(
+        daemon, name, {"labels": {containers.LABEL_IDENTITY: containers.identity(spec())}}, status="created"
+    )
+    theirs.comes_back = False
+    daemon.store[name] = theirs
+    with pytest.raises(ConnectionError, match="does not answer"):
+        containers.acquire(spec(), client=daemon, ping=ready)
+    assert theirs.archives == []
+
+
 class _RemovedByItsCreator(FakeContainer):
     """Created by another process, whose start failed and which removed it."""
 
