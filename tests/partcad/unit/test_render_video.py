@@ -1161,6 +1161,44 @@ def test_a_gstreamer_that_said_it_failed_and_stays_up_is_stopped(tmp_path):
     assert time.monotonic() - started < 30
 
 
+def test_gstreamer_is_given_a_temporary_directory_of_its_own():
+    environ = video_encode.scratch_environment("/scratch", {"PATH": "/bin", "TMPDIR": "/tmp", "TEMP": "C:\\Temp"})
+
+    assert environ == {"PATH": "/bin", "TMPDIR": "/scratch", "TEMP": "/scratch", "TMP": "/scratch"}
+
+
+def test_a_gstreamer_stopped_after_its_error_leaves_nothing_behind(tmp_path, monkeypatch):
+    """What 'gst-launch-1.0' does when its main loop missed being asked to quit, without GStreamer.
+
+    It writes into the temporary directory as a 'faststart' muxer does, says
+    ERROR, and never exits. It is stopped soon after saying so, and the file it
+    was writing goes with the directory it was given.
+    """
+    stays_up = (
+        "import os, sys, tempfile, time\n"
+        "handle, path = tempfile.mkstemp(prefix='qtmux')\n"
+        "os.write(handle, b'mdat')\n"
+        "os.close(handle)\n"
+        "sys.stderr.write('ERROR: from element /GstPipeline:pipeline0/GstFileSrc:filesrc0: Internal data stream "
+        "error.\\nscratch=%s\\n' % os.path.dirname(path))\n"
+        "sys.stderr.flush()\n"
+        "time.sleep(600)\n"
+    )
+    monkeypatch.setattr(video_encode.Pipeline, "argv", lambda self: [sys.executable, "-c", stays_up])
+    monkeypatch.setattr(video_encode, "ERROR_GRACE", 0.5)
+    pipeline = video_encode.Pipeline(str(tmp_path / "turn.mp4"), "mp4", 16, 16, 10)
+
+    with pytest.raises(video_encode.GStreamerError) as raised:
+        pipeline.run([])
+
+    said = str(raised.value)
+    assert "did not exit within 0.5s of saying so, and was stopped" in said
+    scratch = re.search(r"scratch=(.+)", said).group(1).strip()
+    assert os.path.basename(scratch).startswith("partcad-gstreamer-")
+    assert not os.path.exists(scratch)
+    assert sorted(os.listdir(tmp_path)) == []
+
+
 def test_a_gstreamer_still_working_is_left_alone(tmp_path):
     """No ERROR said, however long it takes: a long video takes long."""
     import subprocess

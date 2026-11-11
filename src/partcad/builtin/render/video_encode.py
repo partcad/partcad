@@ -160,13 +160,23 @@ CONNECT_TIMEOUT = 5
 # How long GStreamer is given to exit once it has said it stopped on an error.
 #
 # 'gst-launch-1.0' prints "ERROR: ..." when an element of the pipeline fails,
-# and that is final: the file is not going to be written. It then shuts the
-# pipeline down and exits - and now and then, when the element that failed is
-# on a branch other than the frames' (a text's subtitle file 'subparse' could
-# not recognise), it does not: one run in three or so stayed up with nothing
-# left to do, and whoever was writing it frames or waiting for it to finish
-# waited for ever. So it is given this long after saying so, and then stopped.
-ERROR_GRACE = 10.0
+# and that is final: the file is not going to be written. It prints it on the
+# thread of the element that failed and asks its main loop to quit there; once
+# the loop has returned, it shuts the pipeline down and exits, in milliseconds
+# (25 at the most, where it was measured, under twice as many busy threads as
+# there were CPUs). But an element that fails as the pipeline is being started
+# - on its first buffer, such as a subtitle file 'subparse' cannot recognise -
+# asks a main loop that has not started yet, and GLib's main loop forgets
+# being asked to quit when it starts. 'gst-launch-1.0' then runs it for ever,
+# its pipeline stopped short of playing and nothing left that would end it:
+# about one such failure in two, on GStreamer 1.20 and 1.24 alike, and its
+# main branch quits the same way. Whoever was writing it frames, or waiting
+# for it to finish, waited for ever. So it is given this long after saying
+# so - far more than one that is going to exit takes - and then stopped.
+# Stopping one that was about to exit costs nothing: the write has failed
+# either way, and what it was in the middle of writing is in a directory that
+# goes with it ('scratch_environment').
+ERROR_GRACE = 2.0
 
 # How often the watch over a running GStreamer reads what it has said.
 ERROR_POLL = 0.25
@@ -854,6 +864,7 @@ class Pipeline:
         written = [0, 0]
         broken = False
         diagnosis = ""
+        scratch = tempfile.mkdtemp(prefix="partcad-gstreamer-")
         try:
             with open(errors_path, "wb") as errors:
                 # Its own output to files of its own, never to the pipes of the
@@ -864,7 +875,7 @@ class Pipeline:
                     stdin=subprocess.PIPE,
                     stdout=subprocess.DEVNULL,
                     stderr=errors,
-                    env=diagnostic_environment(debug_path),
+                    env=scratch_environment(scratch, diagnostic_environment(debug_path)),
                 )
                 watch = _ErrorWatch(process, errors_path)
                 watch.start()
@@ -893,7 +904,7 @@ class Pipeline:
             with open(errors_path, "rb") as stream:
                 said = stream.read().decode("utf-8", "replace")
             if watch.killed:
-                said += "\n(It did not exit within %gs of saying so, and was stopped.)" % ERROR_GRACE
+                said += "\n(It did not exit within %gs of saying so, and was stopped.)" % watch.grace
             if status != 0 or broken:
                 # Before the files it read are gone: the subtitle files live
                 # in a directory the caller removes once this returns.
@@ -904,6 +915,7 @@ class Pipeline:
             for path in (errors_path, debug_path):
                 if os.path.exists(path):
                     os.remove(path)
+            shutil.rmtree(scratch, ignore_errors=True)
         if status != 0 or broken:
             raise GStreamerError(
                 "GStreamer failed writing '%s' (exit status %s): %s%s"
@@ -997,6 +1009,27 @@ def diagnostic_environment(debug_path, environ=None):
         environ["GST_DEBUG"] = DIAGNOSTIC_DEBUG
         environ["GST_DEBUG_FILE"] = debug_path
         environ["GST_DEBUG_NO_COLOR"] = "1"
+    return environ
+
+
+# The variables GLib, and so GStreamer, takes the temporary directory from:
+# TMPDIR on Linux and macOS, TEMP and TMP on Windows.
+TEMPORARY_VARIABLES = ("TMPDIR", "TEMP", "TMP")
+
+
+def scratch_environment(directory, environ):
+    """'environ', with the temporary directory GStreamer writes to set to 'directory'.
+
+    A muxer writing the index at the front of a file ('faststart') first writes
+    the rest of the file to one of its own in the temporary directory, and
+    removes it when the pipeline is shut down - which a GStreamer that has to
+    be stopped ('ERROR_GRACE') never is: it left one behind in the system's
+    temporary directory each time. In a directory of its own, removed after
+    the write however it ended, whatever it leaves goes with it.
+    """
+    environ = dict(environ)
+    for name in TEMPORARY_VARIABLES:
+        environ[name] = directory
     return environ
 
 
