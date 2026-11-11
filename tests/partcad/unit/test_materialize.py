@@ -313,3 +313,29 @@ def test_the_verdict_is_keyed_on_what_it_is_made_from_and_how(tmp_path):
     sparse = suffix({"infill": "20%"})
     assert sparse.startswith(".materialize=")
     assert sparse != suffix({"infill": "40%"})
+
+
+def test_a_print_is_keyed_on_the_code_that_makes_it(tmp_path, monkeypatch):
+    """A print an older route made is not this route's print."""
+    from partcad import source_key
+
+    def key(folder, implementation=None):
+        package = dict(PACKAGE)
+        package["parts"] = dict(PACKAGE["parts"])
+        if implementation:
+            package["parts"]["printed"] = {
+                "manufacturing": {"method": "additive", "source": "design", "fff": {"implementation": implementation}}
+            }
+        root = tmp_path / folder
+        root.mkdir()
+        (root / "partcad.yaml").write_text(yaml.safe_dump(package))
+        context = pc.Context(str(root))
+        return asyncio.run(context.get_part("//test:printed").get_cache_key_async())
+
+    builtin = key("a")
+    assert key("b") == builtin
+    # Another implementation is another maker...
+    assert key("c", "//slicers:gcode") != builtin
+    # ...and so is the same one with other sources.
+    monkeypatch.setattr(source_key, "directory_key", lambda directory: "changed")
+    assert key("d") != builtin

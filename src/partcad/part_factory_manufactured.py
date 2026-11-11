@@ -260,6 +260,32 @@ class PartFactoryMaterializedStep(PartFactoryHomogen, PartFactoryStep):
 _MATERIALIZED = {"brep": PartFactoryMaterializedBrep, "step": PartFactoryMaterializedStep, "sdf": PartFactorySdf}
 
 
+def _add_maker_key(ctx, part, config) -> bool:
+    """Fold in the code that makes the part, as a route's cached answer is keyed on its implementation.
+
+    The part is what that code makes, so a change to it is another part: a print
+    built by an older route is not this route's print. Keyed without loading any
+    package -- resolving the implementation's package from inside a preparation
+    is what it must not do (loading it waits for what is waiting for this) -- so
+    on the implementation's name as the part's route resolves it ('pc cam -i'
+    aside, which the part is never made with), and for PartCAD's own
+    '//builtin/cam' on its sources as they are on disk, with the wrappers that
+    run them. Another package's code is keyed by its name, and moves with the
+    revision its dependency is pinned at.
+    """
+    from . import source_key
+
+    data = PartConfigManufacturing(config)
+    declared = data.machine.get("implementation") if data.machine is not None else None
+    implementation = str(declared or ctx.user_config.cam_implementation or "").strip()
+    part.hash.add_string("maker:%s" % implementation)
+    if implementation.split(":")[0] in ("", "//builtin/cam") or implementation.startswith("//builtin/cam:"):
+        directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin", "cam")
+        part.hash.add_string("maker-sources:%s" % source_key.directory_key(directory))
+    part.hash.add_string("wrappers:%s" % source_key.wrappers_key())
+    return True
+
+
 @telemetry.instrument()
 class PartFactoryManufactured(PartFactoryHomogen, pf.PartFactory):
     """A part made on demand by following its manufacturing, until it is materialized into its file."""
@@ -276,8 +302,8 @@ class PartFactoryManufactured(PartFactoryHomogen, pf.PartFactory):
                 self.part.desc = "%s, as %s makes it" % (data.source, _maker(data))
 
     async def prepare_async(self, part) -> None:
-        """Key the part on what it is made from, once that is resolved."""
-        if await _add_reference_keys(self.ctx, part, self.config):
+        """Key the part on what it is made from, once that is resolved, and on the code that makes it."""
+        if await _add_reference_keys(self.ctx, part, self.config) and _add_maker_key(self.ctx, part, self.config):
             part.cache_dependencies_broken = False
         else:
             part.cacheable = False

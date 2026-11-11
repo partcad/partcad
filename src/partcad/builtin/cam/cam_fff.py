@@ -349,6 +349,18 @@ def footprint(paths, width, tolerance):
     return offsetter.Execute(width / 2.0 * SCALE)
 
 
+# How close two corners of an outline may be before one is dropped, in mm:
+# twice what the 'defects' check calls a sliver. An offset leaves corners a few
+# nanometres apart where arcs meet, and each pair is a side face of a prism no
+# thicker than the gap.
+CLEAN = 0.002
+
+
+def _clean(path):
+    """'path' without corners closer than CLEAN to their neighbours, or in line with them."""
+    return pyclipper.CleanPolygon(path, CLEAN * SCALE)
+
+
 def prisms(regions, height, builder, compound):
     """Each region at its height, a face extruded by `height`, added to `compound`. Never fused."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
@@ -371,12 +383,14 @@ def prisms(regions, height, builder, compound):
         def walk(node, bottom):
             nonlocal count
             for child in node.Childs:
-                if child.IsHole or len(child.Contour) < 3:
+                contour = _clean(child.Contour)
+                if child.IsHole or len(contour) < 3:
                     continue
-                maker = BRepBuilderAPI_MakeFace(wire(child.Contour, bottom), True)
+                maker = BRepBuilderAPI_MakeFace(wire(contour, bottom), True)
                 for hole in child.Childs:
-                    if len(hole.Contour) >= 3:
-                        maker.Add(wire(hole.Contour, bottom))
+                    hole_contour = _clean(hole.Contour)
+                    if len(hole_contour) >= 3:
+                        maker.Add(wire(hole_contour, bottom))
                 if maker.IsDone():
                     builder.Add(compound, BRepPrimAPI_MakePrism(maker.Face(), gp_Vec(0, 0, height)).Shape())
                     count += 1
