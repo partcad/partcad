@@ -183,10 +183,13 @@ class GStreamerError(Exception):
 # it. A failure in that branch reads only "streaming stopped, reason
 # not-negotiated" in what GStreamer prints, which is the same few words for a
 # file it could not recognise ("File too small to be a subtitles file", in the
-# debug log) and for caps the overlay refused. Pytest's 3.14 cell on CI has
-# failed that way now and then, and nowhere else; the debug log is what says
-# which it was. Written to a file of its own (GST_DEBUG_FILE), so what
-# GStreamer prints is unchanged, and read only when the write fails.
+# debug log), for caps the overlay refused, and for a 'subparse' that finished
+# reading its file only as the pipeline was being shut down - the overlay's
+# "video EOS" coming before the parser's second "initialising parser", which
+# is what the Pytest cells on CI showed (see 'wait-text' in
+# 'render_video.text_overlays'). The debug log is what tells them apart.
+# Written to a file of its own (GST_DEBUG_FILE), so what GStreamer prints is
+# unchanged, and read only when the write fails.
 DIAGNOSTIC_DEBUG = "filesrc:5,subparse:5,basetextoverlay:4"
 
 # How much of that log a failure carries: its last lines, as many as fit.
