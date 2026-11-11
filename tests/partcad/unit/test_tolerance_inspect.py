@@ -308,3 +308,22 @@ def test_reducing_values_that_agree_within_a_rounding():
 
 def test_reducing_values_that_do_not_agree():
     assert math.isnan(tolerance_inspect.reduce([0.1, 0.2]))
+
+
+def test_a_large_file_of_geometry_is_read_in_one_pass(tmp_path):
+    """A block of records with no quote and no comment is walked once, not once per record.
+
+    The walk used to look for the next quote and the next comment afresh after
+    every record, each search reading the rest of the block: a 64 MB STEP of a
+    print took minutes, and these half a million points did not finish in five.
+    Now they take a fraction of a second; the bound leaves room for a busy
+    machine.
+    """
+    import time
+
+    points = "\n".join("#%d=CARTESIAN_POINT('',(%d.,0.,0.));" % (1000 + i, i) for i in range(500000))
+    path = _write(tmp_path, points + "\n" + _flatness(200, "0.05"))
+
+    started = time.monotonic()
+    assert tolerance_inspect.of_step_file(path) == pytest.approx(0.05)
+    assert time.monotonic() - started < 20.0
