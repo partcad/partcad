@@ -376,6 +376,53 @@ def test_a_cut_is_keyed_on_the_drawing_it_follows(tmp_path):
     assert suffix(20) != suffix(25)
 
 
+def _made_from(tmp_path, design):
+    """A scanned print of 'design', in a package of its own: '(context, part)'."""
+    package = {
+        "name": "//test",
+        "parts": {
+            "design": design,
+            "scanned": {
+                "type": "basic",
+                "cuboid": [20, 10, 5],
+                "manufacturing": {"method": "additive", "source": "design"},
+            },
+        },
+    }
+    root = tmp_path / str(len(os.listdir(tmp_path)))
+    root.mkdir()
+    (root / "partcad.yaml").write_text(yaml.safe_dump(package))
+    context = pc.Context(str(root))
+    return context, context.get_part("//test:scanned")
+
+
+def test_nothing_made_from_a_design_that_keeps_no_key_is_keyed(tmp_path):
+    """An edit of a 'cache: false' design leaves no key to tell it by, so nothing made from it may be kept."""
+    from partcad.part_factory_manufactured import product_key_async
+
+    kept = _made_from(tmp_path, {"type": "basic", "cuboid": [20, 10, 5]})
+    assert asyncio.run(product_key_async(*kept))
+    unkept = _made_from(tmp_path, {"type": "basic", "cuboid": [20, 10, 5], "cache": False})
+    assert asyncio.run(product_key_async(*unkept)) is None
+    # A design that is not there is keyed as missing: an answer, until it is added.
+    missing = _made_from(tmp_path, {"type": "basic", "cuboid": [20, 10, 5]})
+    missing[1].config["manufacturing"]["source"] = "nowhere"
+    assert asyncio.run(product_key_async(*missing))
+
+
+def test_the_verdict_on_a_print_of_a_design_that_keeps_no_key_is_not_kept(tmp_path, monkeypatch):
+    _arrange(monkeypatch, _envelope(500.0, BOX), _envelope(500.5, BOX))
+    context, part = _made_from(tmp_path, {"type": "basic", "cuboid": [20, 10, 5], "cache": False})
+    test_ctx = {}
+    assert asyncio.run(MaterializeTest().test([], context, part, test_ctx)) is MaterializeTest.TEST_PASSED
+    assert test_ctx.get(MaterializeTest.NOT_CACHEABLE)
+
+    context, part = _made_from(tmp_path, {"type": "basic", "cuboid": [20, 10, 5]})
+    test_ctx = {}
+    asyncio.run(MaterializeTest().test([], context, part, test_ctx))
+    assert not test_ctx.get(MaterializeTest.NOT_CACHEABLE)
+
+
 def test_a_cut_or_a_molding_is_keyed_on_every_setting_of_its_machine(tmp_path):
     """A tool diameter, a job every machine shares and a mold's shrinkage each change what is made."""
 

@@ -410,18 +410,15 @@ async def product_async(ctx, part, machine=None, values=None) -> dict:
             from .part_factory_manufactured import product_key_async
 
             # The part's own key, and what its product is made from: a part with
-            # a geometry of its own keeps its key when its design is edited.
-            key = json.dumps(
-                [
-                    await part.get_cache_key_async(),
-                    await product_key_async(ctx, part),
-                    kind,
-                    values,
-                    part.config.get("manufacturing"),
-                ],
-                sort_keys=True,
-                default=str,
-            )
+            # a geometry of its own keeps its key when its design is edited. Not
+            # kept at all where either has none.
+            own, made_from = await part.get_cache_key_async(), await product_key_async(ctx, part)
+            if own is not None and made_from is not None:
+                key = json.dumps(
+                    [own, made_from, kind, values, part.config.get("manufacturing")],
+                    sort_keys=True,
+                    default=str,
+                )
     except Exception as e:  # pylint: disable=broad-except
         pc_logging.debug("%s:%s: what its machine makes is not kept: %s" % (part.project_name, part.name, e))
     if key is not None:

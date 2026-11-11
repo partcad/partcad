@@ -346,6 +346,29 @@ def test_a_product_is_made_again_when_the_design_it_is_made_after_changes(tmp_pa
     assert made == [[20, 10, 5], [30, 10, 5]]
 
 
+def test_a_product_made_from_a_design_that_keeps_no_key_is_not_kept(package, monkeypatch):
+    """A scan keeps its own key, and nothing tells an edit of a 'cache: false' design apart: made every time."""
+    made = []
+
+    async def materialize(self, ctx, machine=None, **kwargs):
+        made.append(machine)
+        return {"product": {"brep": b"product"}, "stats": {}}
+
+    monkeypatch.setattr(Shape, "materialize_async", materialize)
+    cam_view.forget_products()
+    declared = PACKAGE.replace("    cuboid: [20, 10, 5]\n", "    cuboid: [20, 10, 5]\n    cache: false\n", 1)
+    declared += (
+        "  scanned:\n    type: basic\n    cuboid: [19, 9, 4]\n    manufacturing: {method: additive, source: block}\n"
+    )
+    (package / "partcad.yaml").write_text(declared)
+    ctx = pc.Context(str(package))
+    part = ctx.get_part("//camdemo:scanned")
+    assert asyncio.run(part.get_cache_key_async()) is not None
+    asyncio.run(cam_view.product_async(ctx, part))
+    asyncio.run(cam_view.product_async(ctx, part))
+    assert len(made) == 2
+
+
 def test_the_product_is_drawn_as_the_part(package):
     ctx = pc.Context(str(package))
     part = ctx.get_part("//camdemo:print")

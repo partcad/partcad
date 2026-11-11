@@ -74,12 +74,20 @@ class MaterializeTest(BasicQualification):
             return ""
         from ...part_factory_manufactured import product_key_async
 
-        return ".materialize=" + await product_key_async(ctx, shape)
+        # None where something it is made from keeps no key: 'test' then says
+        # its verdict is not to be kept, so nothing is ever read back from here.
+        return ".materialize=" + (await product_key_async(ctx, shape) or "unkept")
 
     async def test(self, tests_to_run: list[Qualification], ctx, shape, test_ctx: dict = {}) -> bool:
         reason = self.inapplicable(shape)
         if reason is not None:
             return self.not_applicable(shape, reason)
+        from ...part_factory_manufactured import product_key_async
+
+        if await product_key_async(ctx, shape) is None:
+            # Made from something that keeps no key ('cache: false'): an edit of
+            # it would leave the key as it is, so the verdict must not be kept.
+            test_ctx[self.NOT_CACHEABLE] = True
 
         own = await shape.get_wrapped(ctx)
         if own is None:

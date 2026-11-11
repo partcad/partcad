@@ -33,6 +33,7 @@ import copy
 import hashlib
 import json
 import os
+import typing
 
 from . import cmf
 from . import logging as pc_logging
@@ -294,7 +295,32 @@ def _add_maker_key(ctx, part, config) -> bool:
     return True
 
 
-async def product_key_async(ctx, part) -> str:
+async def _referenced_key(ctx, part, reference, kind) -> typing.Optional[str]:
+    """What a reference the product is made from contributes to its key; None where that object keeps no key.
+
+    One that resolves to nothing keys as missing ('kind:name@'), which is an
+    answer like any other and stops being one the moment the object is added.
+    One that resolves to an object with no key -- 'cache: false', say -- leaves
+    nothing to tell an edit of it by, so nothing made from it may be kept.
+    """
+    from .qual.basic.manufacturability_reference import resolve_reference
+
+    if not reference:
+        return "%s@" % kind
+    found = await resolve_reference(ctx, part, reference, kind)
+    if found is None:
+        return "%s:%s@" % (kind, reference)
+    try:
+        key = await found.get_cache_key_async()
+    except Exception as e:  # pylint: disable=broad-except
+        pc_logging.debug("No key for '%s', which %s:%s is made from: %s" % (reference, part.project_name, part.name, e))
+        key = None
+    if key is None:
+        return None
+    return "%s:%s@%s" % (kind, reference, key)
+
+
+async def product_key_async(ctx, part) -> typing.Optional[str]:
     """What a part's product is made from and how, as one key: everything about it the part's own key leaves out.
 
     The keys of what it is made from -- its 'source:', and its 'instructions:',
@@ -305,16 +331,21 @@ async def product_key_async(ctx, part) -> str:
     is left out of a shape's hash, and an edited design is another object. So
     whatever keeps an answer about the product of such a part -- the
     'materialize' check's verdict, the CAM tab's drawing -- keys on this too.
+
+    None where something it is made from keeps no key ('_referenced_key'): an
+    answer about it is not to be kept at all.
     """
     from .part_config import PartConfiguration
-    from .qual.basic.manufacturability_reference import reference_key, resolve_reference
+    from .qual.basic.manufacturability_reference import resolve_reference
 
     data = PartConfiguration.get_manufacturing_data(part)
-    declared = [await reference_key(ctx, part, data.source, "part")]
+    declared = [await _referenced_key(ctx, part, data.source, "part")]
     if data.instructions:
         found = await resolve_reference(ctx, part, data.instructions, "part")
         kind = "part" if found is not None else "sketch"
-        declared.append(await reference_key(ctx, part, data.instructions, kind))
+        declared.append(await _referenced_key(ctx, part, data.instructions, kind))
+    if any(key is None for key in declared):
+        return None
     for kind in data.machine_choices():
         machine = data.machines[kind]
         declared.append("%s:%s:%s" % (kind, machine.key(), json.dumps(machine.options, sort_keys=True, default=str)))
