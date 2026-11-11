@@ -912,10 +912,11 @@ class Pipeline:
         finally:
             if server is not None:
                 server.close()
+            # First, as what cannot fail: the logs below can.
+            shutil.rmtree(scratch, ignore_errors=True)
             for path in (errors_path, debug_path):
                 if os.path.exists(path):
                     os.remove(path)
-            shutil.rmtree(scratch, ignore_errors=True)
         if status != 0 or broken:
             raise GStreamerError(
                 "GStreamer failed writing '%s' (exit status %s): %s%s"
