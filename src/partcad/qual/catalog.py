@@ -176,11 +176,19 @@ somebody drew, or an as-printed scan - still is it. Compared by volume and
 extent, within the part's tolerance; a print may also match its outside (its
 sections stacked up), which is what a part modelled solid is.
 
+A part that names several machines is held to what each of them makes, since
+each is a claim that it could be made that way.
+
 ### When it does not apply
 
 Anything but a part; a part made some other way or naming nothing it is made
 from; and a part with no geometry of its own - no `type:`, no file yet - which
-*is* what its machine makes.
+*is* what its machine makes. Nor a cut part that names no machine and no job,
+which no machine makes anything of; or a router, a laser or a drill cutting a
+part along its own geometry (no `instructions:`), which is then the design the
+machine follows rather than a claim about what it leaves - a pocket leaves the
+stock with the part taken out of it, and a profile leaves the part less what a
+2.5-axis route cannot cut, which `pc cam` warns about as it routes it.
 
 ### When it fails
 

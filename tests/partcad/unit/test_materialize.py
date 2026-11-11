@@ -334,6 +334,82 @@ def test_a_part_modelled_solid_is_what_its_print_looks_like(ctx, monkeypatch):
     assert _verdict(ctx, "scanned") is MaterializeTest.TEST_PASSED
 
 
+def _cut_context(tmp_path, cut):
+    """A package with a cut part that has a geometry of its own, declared as 'cut' (its 'manufacturing:')."""
+    package = {
+        "name": "//test",
+        "sketches": {"outline": {"type": "basic", "rectangle": [20, 10]}},
+        "parts": {
+            "stock": {"type": "basic", "cuboid": [40, 30, 5]},
+            "cut": {"type": "basic", "cuboid": [20, 10, 5], "manufacturing": dict(method="subtractive", **cut)},
+        },
+    }
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump(package))
+    return pc.Context(str(tmp_path))
+
+
+def test_a_cut_that_says_nothing_about_the_cutting_is_not_asked(tmp_path):
+    """Stock and nothing else: no machine makes anything of it, as 'pc cam' passes over it."""
+    context = _cut_context(tmp_path, {"source": "stock"})
+    assert "says nothing about how it is cut" in MaterializeTest().inapplicable(context.get_part("//test:cut"))
+
+
+@pytest.mark.parametrize(
+    "machine",
+    [
+        {"cnc": {"operation": "pocket", "diameter": 3}},
+        {"cnc": {"diameter": 3}},
+        {"laser": {"kerf": 0.2}},
+        {"feed": 900},
+    ],
+)
+def test_a_cut_routed_along_the_part_itself_is_not_asked(tmp_path, machine):
+    """No 'instructions:': the geometry is what the machine follows, not a claim about what it leaves.
+
+    A pocket's product is the stock with the part taken out; a profile's, the
+    part less what a 2.5-axis route cannot cut.
+    """
+    context = _cut_context(tmp_path, dict({"source": "stock"}, **machine))
+    assert "cut along its own geometry" in MaterializeTest().inapplicable(context.get_part("//test:cut"))
+
+
+def test_a_cut_along_a_drawing_is_held_to_what_it_leaves(tmp_path):
+    """With 'instructions:' the part's geometry is the stock after the cut, which is a claim."""
+    context = _cut_context(
+        tmp_path, {"source": "stock", "instructions": "outline", "cnc": {"operation": "pocket", "diameter": 3}}
+    )
+    assert MaterializeTest().inapplicable(context.get_part("//test:cut")) is None
+
+
+def test_a_cut_to_length_is_held_to_what_the_saw_leaves(tmp_path):
+    """A saw follows no geometry: the stock cut to length is a product of its own."""
+    context = _cut_context(tmp_path, {"source": "stock", "cut": {"cuts": [{"length": 20}]}})
+    assert MaterializeTest().inapplicable(context.get_part("//test:cut")) is None
+
+
+def test_a_part_cut_either_way_is_held_to_what_each_machine_makes(tmp_path, monkeypatch, caplog):
+    """Alternatives, not stages: each machine is a claim, and the one that makes something else fails it."""
+    context = _cut_context(
+        tmp_path, {"source": "stock", "instructions": "outline", "cnc": {"diameter": 3}, "laser": {"kerf": 0.2}}
+    )
+    asked = []
+
+    async def wrapped(self, ctx):
+        return _envelope(500.0, BOX)
+
+    async def materialize(self, ctx, machine=None, **kwargs):
+        asked.append(machine)
+        return {"product": _envelope(500.0 if machine == "cnc" else 300.0, BOX), "stats": {}}
+
+    monkeypatch.setattr(pc.shape.Shape, "get_wrapped", wrapped)
+    monkeypatch.setattr(pc.shape.Shape, "materialize_async", materialize)
+    with caplog.at_level("ERROR"):
+        verdict = asyncio.run(MaterializeTest().test([], context, context.get_part("//test:cut")))
+    assert verdict is MaterializeTest.TEST_FAILED
+    assert sorted(asked) == ["cnc", "laser"]
+    assert "On its 'laser': It is not what its machine makes" in caplog.text
+
+
 def test_a_machine_that_cannot_make_it_fails_the_check(ctx, monkeypatch, caplog):
     async def wrapped(self, ctx):
         return _envelope(1.0, BOX)

@@ -788,14 +788,23 @@ def implied_type(config) -> dict | None:
             # Stock, and nothing but the part's own file to say what to cut out of it.
             return None
         data = PartConfigManufacturing(config)
-        if not data.machine_error and not data.job and not any(m.declared for m in data.machines.values()):
+        if not data.machine_error and not says_how_it_is_cut(data):
             # Stock and an outline, and nothing about the cutting: no machine and
-            # no tool, so no route to make it by ('cam.declared_config' routes a
-            # cut part only where it says something about being cut). It keeps
-            # needing a file of its own. A section that cannot be read is still
-            # implied, so that building the part says what is wrong with it.
+            # no tool, so no route to make it by. It keeps needing a file of its
+            # own. A section that cannot be read is still implied, so that
+            # building the part says what is wrong with it.
             return None
     return {"type": MANUFACTURED_TYPE, IMPLIED_TYPE_KEY: declared or "brep"}
+
+
+def says_how_it_is_cut(data) -> bool:
+    """Whether a cut part says anything about the cutting: a machine it names, or a job parameter.
+
+    'cam.declared_config' routes a cut part only where it does. One that names
+    its stock and nothing else has described what it is made from and nothing
+    about the making, so no machine makes anything of it.
+    """
+    return bool(data.job) or any(machine.declared for machine in data.machines.values())
 
 
 class PartConfigManufacturing:
