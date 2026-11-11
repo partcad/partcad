@@ -275,10 +275,14 @@ def maker_parts(ctx, config) -> list:
     run them. Another package's code is keyed by its name, and moves with the
     revision its dependency is pinned at.
     """
+    data = PartConfigManufacturing(config)
+    return _maker_parts_of(ctx, data.machine.get("implementation") if data.machine is not None else None)
+
+
+def _maker_parts_of(ctx, declared) -> list:
+    """'maker_parts' for a machine declaring 'declared' as its implementation (None: it declares none)."""
     from . import source_key
 
-    data = PartConfigManufacturing(config)
-    declared = data.machine.get("implementation") if data.machine is not None else None
     implementation = str(declared or ctx.user_config.cam_implementation or "").strip()
     parts = ["maker:%s" % implementation]
     if implementation.split(":")[0] in ("", "//builtin/cam") or implementation.startswith("//builtin/cam:"):
@@ -353,14 +357,18 @@ async def product_key_async(ctx, part) -> typing.Optional[str]:
         declared.append("%s:%s:%s" % (kind, machine.key(), json.dumps(machine.options, sort_keys=True, default=str)))
     declared.append("job:%s" % json.dumps(data.job, sort_keys=True, default=str))
     declared.append("error:%s" % (data.machine_error or ""))
-    declared.append(_layered_options(ctx, part, data))
-    config = part.config if isinstance(part.config, dict) else {}
-    declared += maker_parts(ctx, config)
+    # Every machine the part could be made on, each with the implementation it
+    # declares: which of them a run is asked for is the caller's to say, and a
+    # key covering all of them is right for whichever it is.
+    for kind in data.machine_choices() or [None]:
+        implementation = data.machines[kind].get("implementation") if kind is not None else None
+        declared.append("%s:%s" % (kind, _layered_options(ctx, part, implementation)))
+        declared += _maker_parts_of(ctx, implementation)
     return hashlib.sha256(";".join(declared).encode()).hexdigest()[:16]
 
 
-def _layered_options(ctx, part, data) -> str:
-    """The 'pc cam' implementation's options as they reach the part's route, every layer of them, as key text.
+def _layered_options(ctx, part, declared) -> str:
+    """The options of the 'pc cam' implementation a machine declaring 'declared' routes with, every layer of them.
 
     What the part does not state is filled from the package's 'cam:' section
     and the implementing package's defaults ('Shape._output_getopts') -- a
@@ -369,7 +377,6 @@ def _layered_options(ctx, part, data) -> str:
     """
     from . import output
 
-    declared = data.machine.get("implementation") if data.machine is not None else None
     try:
         options_project, format_name = part._route_implementation(ctx, declared=declared)
         options, _output_dir = part._output_getopts(
