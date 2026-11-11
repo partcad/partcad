@@ -476,7 +476,9 @@ def test_a_name_reserved_but_not_yet_inspectable_is_waited_for(daemon):
     assert endpoint.container is daemon.store[containers.container_name(spec())]
 
 
-def test_somebody_elses_container_caught_between_create_and_start_is_finished(daemon):
+def test_somebody_elses_container_left_between_create_and_start_is_finished(daemon, monkeypatch):
+    """Its creator is gone: nobody else will put the service in and start it."""
+    monkeypatch.setattr(containers, "CREATED_GRACE_SECONDS", 0.3)
     name = containers.container_name(spec())
     theirs = FakeContainer(
         daemon, name, {"labels": {containers.LABEL_IDENTITY: containers.identity(spec())}}, status="created"
@@ -485,6 +487,33 @@ def test_somebody_elses_container_caught_between_create_and_start_is_finished(da
     containers.acquire(spec(), client=daemon, ping=ready)
     assert theirs.archives, "the service has to be put there before the start"
     assert theirs.started == 1
+
+
+class _StartedByItsCreator(FakeContainer):
+    """Created by another process, which starts it a moment later -- while this one is looking at it."""
+
+    def reload(self):
+        if self.status == "created":
+            self.status = "running"
+            self.daemon.order.append(("started by its creator", self.name))
+
+
+def test_somebody_elses_container_caught_between_create_and_start_is_left_to_its_creator(daemon):
+    """What four real processes asking at once failed on: the service put in again as its creator started it.
+
+    The daemon unpacks an archive by removing each file it replaces, so the
+    creator's start ran 'python3' on a path with nothing at it.
+    """
+    name = containers.container_name(spec())
+    theirs = _StartedByItsCreator(
+        daemon, name, {"labels": {containers.LABEL_IDENTITY: containers.identity(spec())}}, status="created"
+    )
+    daemon.store[name] = theirs
+    endpoint = containers.acquire(spec(), client=daemon, ping=ready)
+    assert endpoint.container is theirs
+    assert theirs.archives == [], "putting the service in again replaces the file its creator is starting"
+    assert theirs.started == 0
+    assert daemon.order == [("started by its creator", name)]
 
 
 def test_the_first_address_that_answers_is_the_one_used(daemon):

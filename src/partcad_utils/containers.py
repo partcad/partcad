@@ -93,6 +93,13 @@ READY_SECONDS = 60.0
 # container, or loses a removal race and goes round again.
 START_ATTEMPTS = 3
 
+# How long a container another process created, and has not started yet, is
+# left for that process to start before this one finishes the job (see
+# '_start_and_wait'). Creating, putting the service in and starting take well
+# under a second; this is for a busy daemon, and only a creator that has gone
+# away costs it.
+CREATED_GRACE_SECONDS = 10.0
+
 
 class ContainerUnavailable(Exception):
     """A container that was needed could not be had: no image, no start, no answer."""
@@ -698,6 +705,22 @@ def _await_named(client, name: str, seconds: float = 10.0) -> None:
             time.sleep(0.1)
 
 
+def _await_start_by_creator(container, seconds: float) -> str:
+    """The container's status once whoever created it has started it -- still "created" if they did not in time."""
+    deadline = time.monotonic() + seconds
+    status = getattr(container, "status", "")
+    while status == "created" and time.monotonic() < deadline:
+        time.sleep(0.1)
+        try:
+            container.reload()
+        except Exception:
+            # Removed, most likely: its creator's start failed. Nothing is put
+            # into it, and the start that follows says what became of it.
+            return ""
+        status = getattr(container, "status", "")
+    return status
+
+
 def _create(client, name, spec, digest, reference, image_obj, remote_host):
     # The image's own list, then the spec's on top -- except that a name the
     # spec allows only "wherever PATH finds it" does not unpin a path the image
@@ -752,11 +775,19 @@ def _start_and_wait(name, spec, container, remote_host, ping, created_here=False
     import docker
 
     status = getattr(container, "status", "")
-    if status != "running":
-        if status == "created" and not created_here:
-            # Somebody else's, between its create and its start. The service
-            # may not be in it yet; putting it there again is harmless.
+    if status == "created" and not created_here:
+        # Somebody else's, between its create and its start: theirs to start.
+        # Putting the service in again is not harmless. The daemon unpacks an
+        # archive by removing each file it replaces and writing it anew, so a
+        # start landing in between ran 'python3' on a path with nothing at it
+        # ("can't open file '/.partcad-service/container_service.py'"), which
+        # is how four processes asking at once failed one of them. Only a
+        # container that stays created - whoever made it is gone - is finished
+        # here, service and all.
+        status = _await_start_by_creator(container, CREATED_GRACE_SECONDS)
+        if status == "created":
             container.put_archive("/", _service_archive())
+    if status != "running":
         try:
             container.start()
         except docker.errors.APIError as e:
