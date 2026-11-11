@@ -983,6 +983,7 @@ can do applies to it. What it is, is a set of facts about a substance:
       youngsModulus: <(optional) Young's modulus in Pa>
       poissonsRatio: <(optional) Poisson's ratio, dimensionless>
       yieldStrength: <(optional) yield strength in Pa>
+      thermalConductivity: <(optional) thermal conductivity in W/(m*K)>
       mu: <(optional) coefficient of sliding friction, dimensionless>
       tags: <(optional) a list of free-form tags, or a single tag>
 
@@ -1040,11 +1041,27 @@ not the ``GPa`` and ``MPa`` a datasheet prints, for the reason a density is in
 and ``density`` -- where the implementation takes one and neither the package,
 the part, the scenario nor the run states it.
 
+``thermalConductivity`` is how readily heat crosses the substance, in
+``W/(m*K)`` near room temperature -- PLA is about ``0.13``, aluminium 6061-T6
+``167``. It fills a heat conduction analysis's ``conductivity``, which is what
+every thermal implementation in the index calls it, on the same terms.
+
+A catalogue states each of these only where it is known for the substance it
+names, and says where the number comes from: a value nobody stated leaves the
+implementation's own default in place, which is a visible default rather than a
+plausible-looking guess. The catalogues PartCAD publishes write the source and
+the condition -- the grade, the temper, moulded or printed, the temperature --
+in a comment beside each value.
+
 ``viscosity`` is what a *fluid* states: how hard it resists being sheared, which
 is what a simulator drags a body moving through it with. It is the **dynamic**
 viscosity, in ``Pa*s``: water at 15 C is ``0.001138``, the number its datasheet
 prints and the one MuJoCo is handed. A part is rarely made of a fluid; a
 :ref:`scene <scenes>` is often filled with one, and names it as its ``medium``.
+A part that *is* one -- the air in a duct, drawn as the volume it fills -- hands a
+fluid-dynamics analysis of it its ``density`` and ``viscosity``; a material
+that states a viscosity is a fluid, and a fluid says nothing to a stress, mode
+or heat conduction analysis, nor a solid to a fluid-dynamics one.
 
 .. note::
 

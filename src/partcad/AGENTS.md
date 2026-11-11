@@ -1015,9 +1015,13 @@ at all).
   design in for a part that is what its printer makes, with the fraction of the design it deposits (the two
   recorded volumes) -- worked out *before* `_analysis_run_async` takes the part's lock, because building the print
   routes it and the route takes that lock from another task. `fill` hands the implementation the part's material
-  (`Material.youngs_modulus`/`poissons_ratio`/`yield_strength`/`density`, `material.ANALYSIS_FROM_MATERIAL`) for
-  every parameter of that name it takes and nothing above its own layer states (`Shape._analysis_stated`), and
-  scales stiffness, strength and density by the fraction.
+  (`Material.youngs_modulus`/`poissons_ratio`/`yield_strength`/`density`/`thermal_conductivity`/`viscosity`,
+  `material.ANALYSIS_FROM_MATERIAL`, which maps `thermal_conductivity` onto the `conductivity` every thermal
+  implementation in the index takes) for every parameter of that name it takes and nothing above its own layer
+  states (`Shape._analysis_stated`), and scales stiffness, strength, density and conductivity by the fraction.
+  `speaks_to` keeps the two kinds of substance apart: a fluid (`Material.is_fluid`, it states a viscosity) fills
+  only a `cfd` analysis (`FLUID_ANALYSES`), which meshes the part as the fluid in it, and a solid fills every
+  other analysis and never a `cfd` one -- a duct's PLA is not the density of the air in it.
 
   `PRINT_DEFAULTS` (`MachineConfig.settings`) is for working something out; instructions and the cart carry only
   what the part states (`PartConfigManufacturing.print_data`, sent as the cart item's `manufacturing`).

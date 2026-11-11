@@ -33,6 +33,16 @@ the weight and an upper bound for the stiffness of a lattice. A print's walls
 carry more than their share of a bending load, and the average does not credit
 them with it, which errs on the side of the part failing.
 
+**A fluid is what a fluid analysis is of, and nothing else is.** A CFD
+implementation meshes the part as the volume a fluid fills and takes that
+fluid's `density` and `viscosity`. So a part made of water, or of air, hands a
+CFD analysis its fluid -- and a part made of PLA, which a CFD analysis also
+meshes as fluid, hands it nothing: the duct is not the air in it, and PLA's
+1240 kg/m^3 is not the density of anything flowing. The other way round holds
+too: a stress, mode or conduction analysis takes nothing from a fluid. Which a
+material is, is 'Material.is_fluid' (it states a viscosity); which an analysis
+is, is 'FLUID_ANALYSES'.
+
 A part that has a geometry of its own -- an as-printed scan, a model somebody
 drew -- is analysed as that geometry, at its material's full properties: it is
 what it is, and it says nothing about its inside that a mesh would not see.
@@ -45,8 +55,16 @@ from .material import analysis_of
 
 # The parameters a print's density scales: what a homogenized lattice of the
 # same substance is, per unit of the design's volume. Poisson's ratio is a
-# ratio of strains and is left as it is.
-SCALED = ("youngs_modulus", "yield_strength", "density")
+# ratio of strains and is left as it is. A conductivity scales like a
+# stiffness does, and is an upper bound for the same reason: the heat that
+# crosses a lattice crosses it through the plastic, and the air between the
+# beads carries next to none of it.
+SCALED = ("youngs_modulus", "yield_strength", "density", "conductivity")
+
+# The analyses whose subject is a fluid: what the part is meshed as is the
+# volume a fluid fills, so only a fluid material says anything to them, and a
+# fluid material says nothing to any other.
+FLUID_ANALYSES = ("cfd",)
 
 
 class Subject(typing.NamedTuple):
@@ -105,24 +123,41 @@ async def subject_async(ctx, shape) -> Subject:
     )
 
 
-def fill(request: dict, material, stated: typing.Iterable[str], fraction: typing.Optional[float]) -> dict:
+def speaks_to(material, analysis: typing.Optional[str]) -> bool:
+    """Whether 'material' says anything to an 'analysis': a fluid to a fluid analysis, a solid to the rest."""
+    if material is None:
+        return False
+    fluid = bool(getattr(material, "is_fluid", False))
+    return fluid == (analysis in FLUID_ANALYSES)
+
+
+def fill(
+    request: dict,
+    material,
+    stated: typing.Iterable[str],
+    fraction: typing.Optional[float],
+    analysis: typing.Optional[str] = None,
+) -> dict:
     """Put what 'material' says into 'request' where nothing 'stated' it; scale by a print's 'fraction'.
 
     Only a parameter the implementation takes is filled: one it does not
     declare would be a key it ignores, and the request is part of the
-    analysis's cache key. Returns what was filled, as it went into the request.
+    analysis's cache key. Only a material that speaks to 'analysis' fills
+    anything (see 'speaks_to'); None is an analysis of a solid. Returns what
+    was filled, as it went into the request.
     """
     stated = set(stated)
-    facts = analysis_of(material) if material is not None else {}
+    facts = analysis_of(material) if speaks_to(material, analysis) else {}
     filled = {}
     for key, value in facts.items():
         if key in stated or key not in request:
             continue
         filled[key] = value
-    if fraction is not None:
+    if fraction is not None and analysis not in FLUID_ANALYSES:
         # The print's density applies to whatever the substance is said to be,
         # including the implementation's own default where the material states
-        # nothing: a lattice of steel is as much lighter than steel.
+        # nothing: a lattice of steel is as much lighter than steel. Not in
+        # an analysis of a fluid, whose density is the fluid's, not the part's.
         for key in SCALED:
             if key in stated or key not in request:
                 continue

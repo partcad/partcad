@@ -435,7 +435,7 @@
                 "viscosity": {
                   "type": "number",
                   "exclusiveMinimum": 0,
-                  "description": "Dynamic viscosity in Pa*s, SI like every physical quantity PartCAD states: water at 15 C is 0.001138. What a fluid states so that a scene filled with it ('medium') can slow down what moves through it"
+                  "description": "Dynamic viscosity in Pa*s, SI like every physical quantity PartCAD states: water at 15 C is 0.001138. What a fluid states so that a scene filled with it ('medium') can slow down what moves through it, and what a fluid-dynamics analysis of a part made of it is handed as its 'viscosity'"
                 },
                 "youngsModulus": {
                   "type": "number",
@@ -452,6 +452,11 @@
                   "type": "number",
                   "exclusiveMinimum": 0,
                   "description": "Yield strength in Pa: the stress past which the material does not spring back. Handed to an analysis as its 'yield_strength', which is what a part's peak stress is held to, unless the package or the part states one"
+                },
+                "thermalConductivity": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Thermal conductivity in W/(m*K), near room temperature: PLA is about 0.13, aluminium 6061-T6 167. Handed to a heat conduction analysis of a part made of this material as its 'conductivity' unless the package or the part states one"
                 },
                 "mu": {
                   "type": "number",
