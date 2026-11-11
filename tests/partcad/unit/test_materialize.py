@@ -347,6 +347,36 @@ def test_a_cut_is_keyed_on_the_drawing_it_follows(tmp_path):
     assert suffix(20) != suffix(25)
 
 
+def test_a_cut_or_a_molding_is_keyed_on_every_setting_of_its_machine(tmp_path):
+    """A tool diameter, a job every machine shares and a mold's shrinkage each change what is made."""
+
+    def suffix(name, manufacturing):
+        package = {
+            "name": "//test",
+            "sketches": {"outline": {"type": "basic", "rectangle": [20, 10]}},
+            "parts": {
+                "stock": {"type": "basic", "cuboid": [40, 30, 5]},
+                name: {"type": "basic", "cuboid": [20, 10, 5], "manufacturing": manufacturing},
+            },
+        }
+        root = tmp_path / str(len(os.listdir(tmp_path)))
+        root.mkdir()
+        (root / "partcad.yaml").write_text(yaml.safe_dump(package))
+        context = pc.Context(str(root))
+        return asyncio.run(MaterializeTest().cache_key_suffix(context, context.get_part("//test:" + name)))
+
+    def cut(**section):
+        return suffix("cut", dict({"method": "subtractive", "source": "stock", "instructions": "outline"}, **section))
+
+    assert cut(cnc={"diameter": 3}) != cut(cnc={"diameter": 6})
+    assert cut(cnc={"diameter": 3}, feed=1000) != cut(cnc={"diameter": 3}, feed=2000)
+
+    def molded(shrinkage):
+        return suffix("molded", {"method": "forming", "source": "stock", "mold": {"shrinkage": shrinkage}})
+
+    assert molded("1%") != molded("2%")
+
+
 def test_a_print_is_keyed_on_the_code_that_makes_it(tmp_path, monkeypatch):
     """A print an older route made is not this route's print."""
     from partcad import source_key

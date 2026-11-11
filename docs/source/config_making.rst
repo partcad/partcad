@@ -93,7 +93,8 @@ sandbox, and the answer is cached like any other part's, under a key that covers
 the design, the stock and every setting of the machine. A print or a molding is
 **drawn** as its design -- what the designer had in mind -- unless it names a
 :ref:`visual <part-visual>` of its own; what a section through it shows is the
-part.
+part. A molding whose mold shrinks it is the exception: its cavity is bigger
+than it by what it shrinks, so it is drawn as itself.
 
 **Materializing it.** ``pc cam --materialize`` (see :ref:`cam`) writes what the
 machine makes into the part's own file, and from then on that file is the part:
@@ -580,7 +581,7 @@ mold that forms it:
 .. code-block:: yaml
 
   parts:
-    knob-cavity:              # the mold's cavity: the part as it is drawn
+    knob-cavity:              # the mold's cavity: the part as designed
       type: build123d
       path: knob.py
       manufacturable: false
@@ -594,8 +595,11 @@ mold that forms it:
 
 - ``source`` -- *optional*. The cavity the part is formed in: like a print's
   design, what the designer had in mind and what a picture of the part draws
-  unless it names a ``visual:``. A part that names one needs no ``type:`` of its
-  own (see :ref:`manufactured-parts`): it is the cavity, shrunk.
+  unless it names a ``visual:`` -- as long as the mold does not shrink it. A
+  molding that shrinks is smaller than its cavity, so a picture draws the part
+  itself, and the part connects where it says rather than where the cavity's
+  ports are. A part that names a cavity needs no ``type:`` of its own (see
+  :ref:`manufactured-parts`): it is the cavity, shrunk.
 - ``mold`` -- *optional*. The mold. It runs no program, so ``pc cam`` writes
   nothing for it and refuses ``-m mold``; what it says is ``shrinkage``, the
   fraction the material shrinks by as it cools (``1.5%`` or ``0.015``, applied

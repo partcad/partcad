@@ -26,14 +26,11 @@ stacked up (the route's `solid_volume`), which is what it looks like and weighs
 nothing like.
 """
 
-import hashlib
-
 from ... import shape_envelope
 from ...part import Part
 from ...part_config import PartConfiguration
 from ...part_config_manufacturing import MANUFACTURED_TYPE, MATERIALIZED_METHODS
 from ..qualification import BasicQualification, Qualification
-from .manufacturability_reference import reference_key, resolve_reference
 
 # What the part is compared at when it states no tolerance, in mm.
 DEFAULT_TOLERANCE = 0.1
@@ -75,17 +72,9 @@ class MaterializeTest(BasicQualification):
         """What the product is made from and how, which the part's own key leaves out."""
         if self.inapplicable(shape) is not None:
             return ""
-        data = PartConfiguration.get_manufacturing_data(shape)
-        declared = [await reference_key(ctx, shape, data.source, "part")]
-        if data.instructions:
-            # A part, or a drawing whose outline the machine goes round: keyed on
-            # whichever the route is written from ('Shape._route_subject_async').
-            found = await resolve_reference(ctx, shape, data.instructions, "part")
-            kind = "part" if found is not None else "sketch"
-            declared.append(await reference_key(ctx, shape, data.instructions, kind))
-        declared += [data.machines[kind].key() for kind in data.machine_choices()]
-        declared.append("error:%s" % (data.machine_error or ""))
-        return ".materialize=" + hashlib.sha256(";".join(declared).encode()).hexdigest()[:16]
+        from ...part_factory_manufactured import product_key_async
+
+        return ".materialize=" + await product_key_async(ctx, shape)
 
     async def test(self, tests_to_run: list[Qualification], ctx, shape, test_ctx: dict = {}) -> bool:
         reason = self.inapplicable(shape)

@@ -30,6 +30,7 @@ meshes it (`PartFactoryManufacturedSdf`).
 """
 
 import copy
+import hashlib
 import json
 import os
 
@@ -260,8 +261,8 @@ class PartFactoryMaterializedStep(PartFactoryHomogen, PartFactoryStep):
 _MATERIALIZED = {"brep": PartFactoryMaterializedBrep, "step": PartFactoryMaterializedStep, "sdf": PartFactorySdf}
 
 
-def _add_maker_key(ctx, part, config) -> bool:
-    """Fold in the code that makes the part, as a route's cached answer is keyed on its implementation.
+def maker_parts(ctx, config) -> list:
+    """The code that makes the part, as the strings a cache key is made of.
 
     The part is what that code makes, so a change to it is another part: a print
     built by an older route is not this route's print. Keyed without loading any
@@ -278,12 +279,50 @@ def _add_maker_key(ctx, part, config) -> bool:
     data = PartConfigManufacturing(config)
     declared = data.machine.get("implementation") if data.machine is not None else None
     implementation = str(declared or ctx.user_config.cam_implementation or "").strip()
-    part.hash.add_string("maker:%s" % implementation)
+    parts = ["maker:%s" % implementation]
     if implementation.split(":")[0] in ("", "//builtin/cam") or implementation.startswith("//builtin/cam:"):
         directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin", "cam")
-        part.hash.add_string("maker-sources:%s" % source_key.directory_key(directory))
-    part.hash.add_string("wrappers:%s" % source_key.wrappers_key())
+        parts.append("maker-sources:%s" % source_key.directory_key(directory))
+    parts.append("wrappers:%s" % source_key.wrappers_key())
+    return parts
+
+
+def _add_maker_key(ctx, part, config) -> bool:
+    """Fold in the code that makes the part ('maker_parts'), as a route's cached answer is keyed on its implementation."""
+    for piece in maker_parts(ctx, config):
+        part.hash.add_string(piece)
     return True
+
+
+async def product_key_async(ctx, part) -> str:
+    """What a part's product is made from and how, as one key: everything about it the part's own key leaves out.
+
+    The keys of what it is made from -- its 'source:', and its 'instructions:',
+    a part or a drawing, resolved the way the route resolves them
+    ('Shape._route_subject_async') -- every machine's subsection as written and
+    the job they share, and the code that makes it ('maker_parts'). None of
+    those moves the key of a part with a geometry of its own: 'manufacturing:'
+    is left out of a shape's hash, and an edited design is another object. So
+    whatever keeps an answer about the product of such a part -- the
+    'materialize' check's verdict, the CAM tab's drawing -- keys on this too.
+    """
+    from .part_config import PartConfiguration
+    from .qual.basic.manufacturability_reference import reference_key, resolve_reference
+
+    data = PartConfiguration.get_manufacturing_data(part)
+    declared = [await reference_key(ctx, part, data.source, "part")]
+    if data.instructions:
+        found = await resolve_reference(ctx, part, data.instructions, "part")
+        kind = "part" if found is not None else "sketch"
+        declared.append(await reference_key(ctx, part, data.instructions, kind))
+    for kind in data.machine_choices():
+        machine = data.machines[kind]
+        declared.append("%s:%s:%s" % (kind, machine.key(), json.dumps(machine.options, sort_keys=True, default=str)))
+    declared.append("job:%s" % json.dumps(data.job, sort_keys=True, default=str))
+    declared.append("error:%s" % (data.machine_error or ""))
+    config = part.config if isinstance(part.config, dict) else {}
+    declared += maker_parts(ctx, config)
+    return hashlib.sha256(";".join(declared).encode()).hexdigest()[:16]
 
 
 @telemetry.instrument()

@@ -344,7 +344,8 @@ def _tried(part, machine: str, values: dict):
 
 # What the CAM tab asked for last, kept: a section moved, the box ticked, the tab
 # opened again ask for the same product, which is a route run in a sandbox. Keyed
-# by the part's key and the settings tried, a handful at a time.
+# by the part's key, what its product is made from and the settings tried, a
+# handful at a time.
 _PRODUCTS: "collections.OrderedDict[str, dict]" = collections.OrderedDict()
 _PRODUCTS_KEPT = 8
 _products_lock = threading.Lock()
@@ -395,8 +396,18 @@ async def product_async(ctx, part, machine=None, values=None) -> dict:
     key = None
     try:
         if part.get_cacheable():
+            from .part_factory_manufactured import product_key_async
+
+            # The part's own key, and what its product is made from: a part with
+            # a geometry of its own keeps its key when its design is edited.
             key = json.dumps(
-                [await part.get_cache_key_async(), kind, values, part.config.get("manufacturing")],
+                [
+                    await part.get_cache_key_async(),
+                    await product_key_async(ctx, part),
+                    kind,
+                    values,
+                    part.config.get("manufacturing"),
+                ],
                 sort_keys=True,
                 default=str,
             )

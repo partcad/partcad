@@ -301,6 +301,34 @@ def test_settings_tried_make_the_part_again_once_each(package, monkeypatch):
     assert len(made) == 2
 
 
+def test_a_product_is_made_again_when_the_design_it_is_made_after_changes(tmp_path, monkeypatch):
+    """A part with a geometry of its own keeps its key when its design is edited; what it makes does not."""
+    made = []
+
+    async def materialize(self, ctx, machine=None, **kwargs):
+        design = ctx.get_part("//camdemo:block").config["cuboid"]
+        made.append(design)
+        return {"product": {"brep": ("made after %s" % design).encode()}, "stats": {}}
+
+    monkeypatch.setattr(Shape, "materialize_async", materialize)
+    cam_view.forget_products()
+
+    def product(width):
+        root = tmp_path / str(width)
+        root.mkdir()
+        (root / "partcad.yaml").write_text(
+            PACKAGE.replace("cuboid: [20, 10, 5]", "cuboid: [%d, 10, 5]" % width)
+            # The print, scanned: a geometry of its own, the same in both.
+            .replace("    desc: The block, printed\n", "    type: basic\n    cuboid: [19, 9, 4]\n")
+        )
+        ctx = pc.Context(str(root))
+        return asyncio.run(cam_view.product_async(ctx, ctx.get_part("//camdemo:print")))
+
+    assert product(20)["product"]["brep"] == b"made after [20, 10, 5]"
+    assert product(30)["product"]["brep"] == b"made after [30, 10, 5]"
+    assert made == [[20, 10, 5], [30, 10, 5]]
+
+
 def test_the_product_is_drawn_as_the_part(package):
     ctx = pc.Context(str(package))
     part = ctx.get_part("//camdemo:print")
