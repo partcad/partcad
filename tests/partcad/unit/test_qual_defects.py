@@ -7,7 +7,8 @@
 
 What 'validity' and 'degenerate' say of a whole part, this says of its pieces,
 and shows them: the free edges of a box with a face missing, the slivers of a
-block fused badly, and nothing at all of a box that is well made.
+block fused badly, and nothing at all of a box that is well made. Checked in shards, as a large
+shape is, it says and shows exactly the same.
 """
 
 import asyncio
@@ -15,7 +16,9 @@ import asyncio
 import pytest
 
 import partcad as pc
+from partcad import shape_envelope
 from partcad.qual import highlight, report
+from partcad.qual.topology import defects
 
 PACKAGE = "tests/partcad/unit/data/qual_defects/partcad.yaml"
 
@@ -83,3 +86,49 @@ def test_a_threshold_below_the_slivers_lets_them_pass(ctx):
     result = _defects(ctx, "sliver_tolerated")
     assert result.status == report.PASSED
     assert result.artifacts == []
+
+
+def _verdict_and_drawing(name, shard_threshold, monkeypatch):
+    """The verdict on 'name', in shards when its BREP is 'shard_threshold' bytes or more, and what it drew, as BREP."""
+    monkeypatch.setattr(defects, "SHARD_THRESHOLD", shard_threshold)
+    monkeypatch.setattr(defects, "SHARD_BYTES", 1)
+    config = pc.UserConfig()
+    config.cache_bypass = True
+    ctx = pc.Context(PACKAGE, user_config=config)
+    result = _defects(ctx, name)
+    drawn = {}
+    for kind in ("faces", "edges"):
+        part = ctx.get_part("//:%s/defects/focus/%s" % (name, kind))
+        if part is not None:
+            envelope = asyncio.run(part.get_wrapped(ctx))
+            drawn[kind] = shape_envelope.brep_plain(envelope[shape_envelope.KEY_BREP])
+    return result.status, result.findings, result.artifacts, drawn
+
+
+@pytest.mark.parametrize("name", ["open_box", "sliver", "sound"])
+def test_checked_in_shards_the_verdict_and_what_it_draws_are_the_same(name, monkeypatch):
+    # Every shape here is a few kilobytes: a threshold of nothing and a shard
+    # per byte has it checked in as many shards as there are process slots.
+    assert defects.sandbox_lock.process_slots.count >= 2
+    whole = _verdict_and_drawing(name, 1 << 40, monkeypatch)
+    sharded = _verdict_and_drawing(name, 0, monkeypatch)
+    assert sharded == whole
+
+
+def test_a_shape_is_sharded_by_the_size_of_its_brep_and_no_more_than_there_are_slots(monkeypatch):
+    monkeypatch.setattr(defects.sandbox_lock.process_slots, "_count", 6)
+
+    def envelope(size, shared=1):
+        node = {shape_envelope.KEY_BREP: b"x" * size}
+        # A payload shared by several nodes is one shape's, and counted once.
+        return {"children": [node] * shared} if shared > 1 else node
+
+    assert defects.payload_size(envelope(1000, shared=3)) == 1000
+    assert defects.shard_count(envelope(defects.SHARD_THRESHOLD - 1)) == 1
+    assert defects.shard_count(envelope(defects.SHARD_THRESHOLD)) == defects.SHARD_THRESHOLD // defects.SHARD_BYTES
+    # Five payloads of their own, each the size of a shard.
+    assert (
+        defects.shard_count({"children": [{shape_envelope.KEY_BREP: b"x" * defects.SHARD_BYTES} for _ in range(5)]})
+        == 5
+    )
+    assert defects.shard_count(envelope(100 * defects.SHARD_BYTES)) == 6

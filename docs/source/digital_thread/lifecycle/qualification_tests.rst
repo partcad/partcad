@@ -685,6 +685,8 @@ Which faces and edges of a part are badly made, shown where they are. ``validity
 
 The faces and the edges (as tubes along them) are left behind in an assembly of the part and, in a sub-assembly named ``focus``, the pieces, drawn in red and orange. The IDE's Topology tab shows them with the rest of the part faded and a callout on each (\*\*Show\*\*). Like ``validity``, it reports and never fails.
 
+A large part - a 3D print made of tens of thousands of beads, a plate drilled with thousands of holes - is checked in shards side by side, each in a sandbox of its own, as many at once as ``threadsMax`` lets PartCAD run; what it finds and shows is the same as checked in one piece. A part whose geometry is under a megabyte, compressed, is checked in one piece, as sharding would cost it more than it saves.
+
 When it does not apply
 ^^^^^^^^^^^^^^^^^^^^^^
 

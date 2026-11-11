@@ -373,7 +373,12 @@ at all).
   checks leave that to `manufacturability`, and a finding that is the whole part anyway is said in words with
   nothing drawn. `defects` is the place-on-the-object half of two basic checks that stay whole-part questions:
   `validity` (OCCT will not certify it) and `degenerate` (it is flat) -- the faces and edges OCCT rejects, the free
-  edges, and the slivers thinner than `degenerate`'s threshold, reported and never failed.
+  edges, and the slivers thinner than `degenerate`'s threshold, reported and never failed. A shape over a
+  megabyte of compressed BREP is checked in shards, one sandbox run each, gathered in the check and capped by
+  the process slots like any other run (`defects.shard_count`), then put together by one more run
+  (`wrapper_defects.finish`): OCCT checks a face by itself and an edge only against the faces it bounds, so a
+  shard checks its faces and its run of edges, with those faces, and gets exactly the answer of one run --
+  `tests/partcad/unit/test_wrapper_defects.py` holds it to that, byte for byte.
 
 - **What an object is required to be is one module** (`requirements.py`): the `requirements:` section of a
   part, an assembly, a scene or a sketch -- `features` in words, `ports`, `interfaces` and `physics` where

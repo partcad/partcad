@@ -56,9 +56,27 @@ MAX_TUBES = 400
 _SAME_SIZE = 1e-4
 
 
+def members(shapes):
+    """The shapes of an OCCT list of them ('TopTools_ListOfShape'), as a Python list, in order.
+
+    Iterating such a list from Python costs about a quarter of a millisecond
+    however short the list is, and an edge's list of faces is asked for once
+    per edge: on a 3D print of 364,000 edges that was 95 of the 150 seconds the
+    'defects' check took. 'Size', 'First' and 'Last' cost microseconds, and an
+    edge of a solid bounds two faces, so only a longer list is iterated.
+    """
+    size = shapes.Size()
+    if size == 0:
+        return []
+    if size == 1:
+        return [shapes.First()]
+    if size == 2:
+        return [shapes.First(), shapes.Last()]
+    return list(shapes)
+
+
 def _features(shape, kind):
     """The faces or edges of 'shape', in the order OCCT indexes them, without seams and degenerate edges."""
-    from OCP.BRep import BRep_Tool
     from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
     from OCP.TopExp import TopExp
     from OCP.TopoDS import TopoDS
@@ -74,18 +92,44 @@ def _features(shape, kind):
 
     ancestors = TopTools_IndexedDataMapOfShapeListOfShape()
     TopExp.MapShapesAndAncestors_s(shape, TopAbs_EDGE, TopAbs_FACE, ancestors)
+    return edges_between(found, ancestors, 1, found.Extent() + 1)
+
+
+def edges_between(found, ancestors, first: int, end: int):
+    """The edges at places 'first' to 'end' (not included) of 'found', without seams and degenerate edges.
+
+    'found' is the map of every edge of a shape ('TopExp.MapShapes'), and
+    'ancestors' every face each edge bounds ('TopExp.MapShapesAndAncestors').
+    Answers the edges kept, in order, and the faces each of them bounds. This is
+    '_features' for a run of the edges, which is what lets a shard of the
+    'defects' check list its own edges only and still number them as the
+    whole shape does: an edge's place among the kept ones is the number kept
+    before its run plus its place in it.
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.TopoDS import TopoDS
+
+    result = []
     faces_of = []
-    for index in range(1, found.Extent() + 1):
-        edge = TopoDS.Edge_s(found.FindKey(index))
-        if BRep_Tool.Degenerated_s(edge):
+    # Bound once: this loop runs once per edge, hundreds of thousands of times
+    # on a 3D print, and what it costs is mostly the Python around the calls.
+    find_key, find_index, find_list = found.FindKey, ancestors.FindIndex, ancestors.FindFromIndex
+    as_edge, as_face = TopoDS.Edge_s, TopoDS.Face_s
+    degenerated, closed = BRep_Tool.Degenerated_s, BRep_Tool.IsClosed_s
+    for index in range(first, end):
+        edge = as_edge(find_key(index))
+        if degenerated(edge):
             continue
-        faces = []
-        if ancestors.Contains(edge):
-            for face in ancestors.FindFromKey(edge):
-                faces.append(TopoDS.Face_s(face))
-        if any(BRep_Tool.IsClosed_s(edge, face) for face in faces):
-            # A seam: the one edge a closed surface is cut along, bounding the
-            # same face on both sides.
+        place = find_index(edge)
+        faces = [as_face(face) for face in members(find_list(place))] if place else []
+        seam = False
+        for face in faces:
+            if closed(edge, face):
+                # A seam: the one edge a closed surface is cut along, bounding
+                # the same face on both sides.
+                seam = True
+                break
+        if seam:
             continue
         result.append(edge)
         faces_of.append(faces)

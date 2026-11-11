@@ -45,9 +45,10 @@ Parameters, on the object:
               minLength: 0.01    # mm; shorter edges, and narrower faces, are slivers
 """
 
+import asyncio
 import json
 
-from ... import sandbox_versions, shape_envelope
+from ... import sandbox_lock, sandbox_versions, shape_envelope
 from ... import surface as pc_surface
 from ... import wrapper
 from ...assembly import Assembly
@@ -59,6 +60,12 @@ from ..qualification import Qualification, TopologyQualification
 # The 'degenerate' check's threshold for a whole part, in millimetres, which is
 # what a piece is held to unless the object says otherwise.
 DEFAULT_MIN_LENGTH = 1e-3
+
+# The size of the compressed BREP, in bytes, from which a shape is checked in
+# shards side by side rather than in one run, and how much of it a shard is
+# given at the least (see 'shard_count').
+SHARD_THRESHOLD = 1 << 20
+SHARD_BYTES = 1 << 19
 
 # What each kind of fault is called where a person reads it.
 _NAMES = {
@@ -233,9 +240,41 @@ class DefectsTest(TopologyQualification):
         return sentence
 
     async def _find(self, ctx, envelope, min_length: float) -> dict:
+        """What the wrapper finds wrong with 'envelope': in one run, or in shards run side by side and put together.
+
+        A shape whose geometry is over 'SHARD_THRESHOLD' bytes is checked in
+        shards ('shard_count'), each a run of its own: they wait for process
+        slots like every other sandbox run ('sandbox_lock.process_slots', sized
+        by 'threadsMax'), so they take as much of the machine as a render
+        would and no more. Then one more run puts their findings together
+        ('wrapper_defects.finish') and draws the defective pieces, with the
+        shape -- which it is handed only if there is something to draw. What
+        comes back is what one run would have answered, to the byte.
+        """
         runtime = ctx.get_python_runtime(version=sandbox_versions.DEFAULT_PYTHON_VERSION)
         await runtime.ensure_async(sandbox_versions.OCP)
-        request = {"shape": envelope, "minLength": min_length}
+        count = shard_count(envelope)
+        if count == 1:
+            return await self._run(runtime, {"shape": envelope, "minLength": min_length})
+
+        # Every shard is waited for before a failure is raised, so that none is
+        # left running for a check that has already given up.
+        shards = await asyncio.gather(
+            *(
+                self._run(runtime, {"shape": envelope, "minLength": min_length, "shard": [index, count]})
+                for index in range(count)
+            ),
+            return_exceptions=True,
+        )
+        for found in shards:
+            if isinstance(found, BaseException):
+                raise found
+        request = {"minLength": min_length, "shards": [_findings(found) for found in shards]}
+        if any(found.get("face_problems") or found.get("edge_problems") for found in shards):
+            request["shape"] = envelope
+        return await self._run(runtime, request)
+
+    async def _run(self, runtime, request: dict) -> dict:
         exitcode, response_serialized, errors = await runtime.run_async(
             [wrapper.get("defects.py"), "defects"], shape_envelope.serialize(request)
         )
@@ -247,3 +286,49 @@ class DefectsTest(TopologyQualification):
         if not result.get("success", False):
             raise Exception(result.get("exception") or "the defects check failed")
         return result
+
+
+def _findings(found: dict) -> dict:
+    """One shard's answer, without what every answer of the wrapper carries."""
+    return {key: value for key, value in found.items() if key not in ("success", "exception")}
+
+
+def payload_size(envelope) -> int:
+    """How many bytes of compressed BREP 'envelope' carries, each payload counted once however many nodes share it."""
+    seen = set()
+    size = 0
+    stack = [envelope]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            payload = node.get(shape_envelope.KEY_BREP)
+            if payload is not None and id(payload) not in seen:
+                seen.add(id(payload))
+                # Base64 in a document read as JSON: its length says the size
+                # near enough, without decoding megabytes to learn it.
+                size += len(payload) * 3 // 4 if isinstance(payload, str) else len(payload)
+            stack.extend(value for key, value in node.items() if key != shape_envelope.KEY_BREP)
+        elif isinstance(node, list):
+            stack.extend(node)
+    return size
+
+
+def shard_count(envelope) -> int:
+    """How many shards to check 'envelope' in: one below 'SHARD_THRESHOLD', else one per 'SHARD_BYTES', up to the slots.
+
+    The size of the compressed BREP is what the core knows of a shape without
+    reading it, and the work goes with it: at least 4.4 microseconds of checking
+    a byte, measured on compounds of boxes, and up to 34 on a plate drilled with
+    900 holes, whose faces with the holes in them are the expensive kind; the
+    tutorial's printed stand, 5.3 MB, is 11. So 'SHARD_THRESHOLD' is four
+    seconds of checking at the least. Against that, each shard reads all of the
+    shape and lists its faces, and one more run puts them together; at the
+    threshold the two still come out ahead -- 7.1 seconds in one run for 5,000
+    boxes, 1.45 MB, and 6.4 in two shards and the run after them -- and below
+    it they would not. A shard is given at least 'SHARD_BYTES', two seconds or
+    more of checking, so that what each one costs is spread over work enough.
+    """
+    size = payload_size(envelope)
+    if size < SHARD_THRESHOLD:
+        return 1
+    return max(1, min(sandbox_lock.process_slots.count, size // SHARD_BYTES))
