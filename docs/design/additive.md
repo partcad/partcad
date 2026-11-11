@@ -84,7 +84,7 @@ parts:
         topLayers: 5
         bottomLayers: 4
         infill: 20%
-        infillPattern: gyroid
+        infillPattern: grid
         feed: 3000
 ```
 

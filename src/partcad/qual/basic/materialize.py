@@ -33,7 +33,7 @@ from ...part import Part
 from ...part_config import PartConfiguration
 from ...part_config_manufacturing import MANUFACTURED_TYPE, MATERIALIZED_METHODS
 from ..qualification import BasicQualification, Qualification
-from .manufacturability_reference import reference_key
+from .manufacturability_reference import reference_key, resolve_reference
 
 # What the part is compared at when it states no tolerance, in mm.
 DEFAULT_TOLERANCE = 0.1
@@ -78,7 +78,11 @@ class MaterializeTest(BasicQualification):
         data = PartConfiguration.get_manufacturing_data(shape)
         declared = [await reference_key(ctx, shape, data.source, "part")]
         if data.instructions:
-            declared.append(await reference_key(ctx, shape, data.instructions, "part"))
+            # A part, or a drawing whose outline the machine goes round: keyed on
+            # whichever the route is written from ('Shape._route_subject_async').
+            found = await resolve_reference(ctx, shape, data.instructions, "part")
+            kind = "part" if found is not None else "sketch"
+            declared.append(await reference_key(ctx, shape, data.instructions, kind))
         declared += [data.machines[kind].key() for kind in data.machine_choices()]
         declared.append("error:%s" % (data.machine_error or ""))
         return ".materialize=" + hashlib.sha256(";".join(declared).encode()).hexdigest()[:16]

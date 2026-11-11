@@ -286,7 +286,9 @@ def test_a_part_may_say_what_its_own_geometry_is_kept_in(fmt):
 @pytest.mark.parametrize(
     "section",
     [
-        {"method": "subtractive", "source": "stock", "instructions": "outline"},
+        {"method": "subtractive", "source": "stock", "instructions": "outline", "cnc": {"diameter": 3}},
+        {"method": "subtractive", "source": "stock", "instructions": "outline", "laser": {"kerf": 0.2}},
+        {"method": "subtractive", "source": "stock", "instructions": "outline", "diameter": 3},
         {"method": "forming", "source": "cavity"},
         {"method": "forming", "source": "cavity", "mold": {"shrinkage": "1.5%"}},
     ],
@@ -311,6 +313,8 @@ def test_what_a_printed_part_is_drawn_as_is_no_part_of_its_type():
         {"manufacturing": {"method": "subtractive", "source": "stock"}},
         # Cut along its own file, which it therefore has.
         {"type": "step", "manufacturing": {"method": "subtractive", "source": "stock"}},
+        # An outline and nothing to cut it with: no route to make it by.
+        {"manufacturing": {"method": "subtractive", "source": "stock", "instructions": "outline"}},
         # Fetched, and so read rather than written.
         {
             "type": "step",
@@ -628,6 +632,10 @@ CMF_PACKAGE = {
         "render": {"type": "stl"},
         "printed": {"manufacturing": {"method": "additive", "source": "design", "fff": {"infill": "20%"}}},
         "as_printed": {"type": "stl", "manufacturing": {"method": "additive", "source": "design"}},
+        "molded": {
+            "type": "stl",
+            "manufacturing": {"method": "forming", "source": "design", "mold": {"shrinkage": "2%"}},
+        },
     },
 }
 
@@ -635,7 +643,7 @@ CMF_PACKAGE = {
 @pytest.fixture
 def cmf_ctx(tmp_path):
     (tmp_path / "partcad.yaml").write_text(yaml.safe_dump(CMF_PACKAGE))
-    for name in ("design", "render", "as_printed"):
+    for name in ("design", "render", "as_printed", "molded"):
         (tmp_path / (name + ".stl")).write_text("")
     return pc.Context(str(tmp_path))
 
@@ -675,6 +683,11 @@ def test_a_manufacturer_is_sent_the_design_rather_than_the_part(cmf_ctx):
     render = cmf_ctx.get_part("//test:render")
     assert asyncio.run(_sent_geometry(cmf_ctx, render)) is render
 
+    # A molding is sent as itself: its 'source:' is the cavity, bigger than the
+    # part by what the mold shrinks it.
+    molded = cmf_ctx.get_part("//test:molded")
+    assert asyncio.run(_sent_geometry(cmf_ctx, molded)) is molded
+
 
 #
 # What a picture of it draws (see 'partcad.visual')
@@ -707,6 +720,14 @@ parts:
     type: basic
     cuboid: [5, 5, 5]
     manufacturing: {method: additive}
+  molded:
+    type: basic
+    cuboid: [20, 10, 5]
+    manufacturing: {method: forming, source: design}
+  molded-shrunk:
+    type: basic
+    cuboid: [19.6, 9.8, 4.9]
+    manufacturing: {method: forming, source: design, mold: {shrinkage: 2%}}
 """
 
 
@@ -747,3 +768,9 @@ def test_a_printed_part_with_no_geometry_of_its_own_is_drawn_as_its_design(pictu
 
 def test_a_part_that_is_its_own_design_is_drawn_as_itself(picture_ctx):
     assert _drawn_as(picture_ctx, "self-printed") is None
+
+
+def test_a_molding_is_drawn_as_its_cavity_unless_the_mold_shrinks_it(picture_ctx):
+    """A shrunk molding is smaller than its cavity: drawn as the cavity, it would be drawn the wrong size."""
+    assert _drawn_as(picture_ctx, "molded") == "//:design"
+    assert _drawn_as(picture_ctx, "molded-shrunk") is None

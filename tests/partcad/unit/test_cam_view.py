@@ -104,11 +104,15 @@ def test_a_cut_or_molded_part_is_drawn_as_finely_as_the_box_says(method):
     """What a router or a mold makes has curved faces -- a drilled hole, a molded knob -- as any part does."""
     made = _shape("part", {"method": method, "source": "stock"})
     assert cam_view.made_by_machine(made)
+    # And it is a solid, not a print's prisms: no face of it is left out, so
+    # none loses the colour it was given.
     ticked = cam_view.representation(made)
-    assert ticked == cam_view.Representation(extra_details=True, visuals=False, detail="high", stripped=True)
+    assert ticked == cam_view.Representation(extra_details=True, visuals=False, detail="high", stripped=False)
     cleared = cam_view.representation(made, extra_details=False)
     assert cleared == cam_view.Representation(extra_details=False, visuals=True, detail="low", stripped=False)
-    assert cam_view.representation(made, cam=True).detail == "high"
+    assert cam_view.representation(made, cam=True) == cam_view.Representation(
+        extra_details=True, visuals=False, detail="high", stripped=False
+    )
 
 
 def test_only_a_part_made_by_following_a_route_is_made_by_a_machine():

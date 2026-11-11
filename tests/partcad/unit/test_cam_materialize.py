@@ -171,6 +171,63 @@ def test_a_print_kept_as_an_sdf_is_a_script_with_its_route_in_it(gcode, tmp_path
     compile(script, "cube.py", "exec")
 
 
+class _SdfStub:
+    """Enough of the 'sdf' package for an SDF print's script to run: its distance function is kept, not meshed."""
+
+    X = Y = None
+
+    @staticmethod
+    def sdf3(factory):
+        return factory
+
+    class box:
+        def __init__(self, size, center):
+            self.size, self.center = size, center
+
+        def __rand__(self, field):
+            return (field, self)
+
+
+def _run_sdf_script(script):
+    """What an SDF print's script shows: its deposit's distance function, and the box it is meshed in."""
+    import numpy
+
+    saved = sys.modules.get("sdf")
+    sys.modules["sdf"] = _SdfStub
+    shown = []
+    try:
+        exec(compile(script, "print.py", "exec"), {"show_object": shown.append, "__name__": "print"})
+    finally:
+        if saved is None:
+            del sys.modules["sdf"]
+        else:
+            sys.modules["sdf"] = saved
+    field, bounds = shown[0]
+    return (lambda points: field(numpy.array(points, dtype=float)).ravel()), bounds
+
+
+def test_an_sdf_print_finds_each_layer_by_its_height(gcode):
+    """A height with no section has no layer: the layers above a gap are not where counting from the bottom puts them."""
+    sys.path.insert(0, CAM_DIR)
+    try:
+        import cam_fff
+    finally:
+        sys.path.remove(CAM_DIR)
+    square = [(-2.0, -2.0), (2.0, -2.0), (2.0, 2.0), (-2.0, 2.0)]
+    shifted = [(x + 10.0, y) for x, y in square]
+    # Two layers 0.2 mm high, a millimetre apart: the four between them are empty.
+    paths = [cam_fff.Path(0, 0.1, "perimeter", square, True), cam_fff.Path(5, 1.1, "perimeter", shifted, True)]
+    distance, bounds = _run_sdf_script(cam_fff.sdf_script(paths, cam_fff.Settings({}), "two"))
+    # On each layer's bead, the deposit is there: inside, or on its surface.
+    below, above = distance([[-2.0, 0.0, 0.1], [8.0, 0.0, 1.1]])
+    assert below <= 1e-6
+    assert above <= 1e-6
+    # In the gap, nothing is.
+    assert distance([[8.0, 0.0, 0.6]])[0] > 0.1
+    # The box it is meshed in reaches the top layer.
+    assert bounds.center[2] + bounds.size[2] / 2.0 > 1.1 + 0.1
+
+
 def test_a_product_kept_as_step_is_step(gcode, tmp_path):
     result = _make(gcode, tmp_path, "fff", b3d.Box(4, 4, 1, align=BOTTOM), infill=0.2, representation="step")
     assert result["product_step"].startswith("ISO-10303-21")

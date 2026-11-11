@@ -60,8 +60,10 @@ a picture.
 ``cnc:`` -- keeping the rest of the file as it was written, comments included.
 A field emptied takes that setting out. If the part's geometry has been
 materialized -- its file is there -- Save writes it again too, with what was
-saved, so that the declaration and the file cannot come to disagree. **Revert**
-puts every field back to what the part states.
+saved, so that the declaration and the file cannot come to disagree; where it
+cannot be made again, nothing is saved, and the line under the buttons says
+why. While Save is under way the fields cannot be changed. **Revert** puts every
+field back to what the part states.
 
 .. image:: /images/dt-design-cam.png
   :width: 100%

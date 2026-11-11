@@ -90,7 +90,7 @@ import { BuildView } from './build';
 import { BvbResult, BvbView, THUMBNAIL_SIZE, visibleRows } from './bvb';
 import { hasCallouts } from './callouts';
 import { CaeResult } from './cae';
-import { CamView } from './cam';
+import { CamView, sameSettings } from './cam';
 import type { CmfChoice } from './choice';
 import { CmfView } from './cmf';
 import { el, empty, placeholder } from './dom';
@@ -1221,11 +1221,6 @@ function sameDrawing(a: Drawing, b: Drawing): boolean {
     return a.extraDetails === undefined || b.extraDetails === undefined || a.extraDetails === b.extraDetails;
 }
 
-function sameSettings(a: CamSettings, b: CamSettings): boolean {
-    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-    return [...keys].every((key) => (a[key] ?? null) === (b[key] ?? null));
-}
-
 /** What the show on the stage was drawn as. */
 let shownDrawing: Drawing = { section: null };
 
@@ -1419,6 +1414,17 @@ function saveCamSettings(settings: CamSettings): void {
         ...(camData.machine ? { machine: camData.machine } : {}),
         settings,
     });
+}
+
+/**
+ * Another object is shown, or none: a Save still under way is the object's it was pressed on, so its answer is not
+ * this one's to show. It goes on and finishes -- nothing is taken back -- and is no longer waited for here.
+ */
+function releaseCamSave(): void {
+    if (camSaving !== undefined) {
+        camSaving = undefined;
+        camView.setSaving(false);
+    }
 }
 
 /** The Save is done, or could not be: what the part states is asked for again, and the fields follow it. */
@@ -1957,6 +1963,7 @@ async function show(message: ShowMessage): Promise<void> {
         extraDetails = message.extraDetails;
         camData = undefined;
         camTried = {};
+        releaseCamSave();
         camView.setBusy(
             message.kind === 'part' ? 'Asking PartCAD how this is made…' : 'Only a part is made by a machine.',
         );
@@ -2202,6 +2209,7 @@ function clear(): void {
     extraDetails = undefined;
     camData = undefined;
     camTried = {};
+    releaseCamSave();
     camView.setBusy('Nothing to show.');
     camView.setStats(undefined);
     designBounds = undefined;

@@ -134,10 +134,10 @@ def representation(shape, extra_details=None, detail=None, cam=False) -> Represe
     if extra_details is None:
         extra_details = default_extra_details(kind)
     extra_details = bool(extra_details)
-    made = made_by_machine(shape)
+    printed = method_of(shape) == PRINTED
     if cam:
         chosen = shape_gltf.DETAIL_HIGH
-    elif method_of(shape) == PRINTED:
+    elif printed:
         # A print is flat faces, which no level draws any finer: see the module.
         chosen = shape_gltf.DETAIL_LOW
     else:
@@ -146,7 +146,9 @@ def representation(shape, extra_details=None, detail=None, cam=False) -> Represe
         extra_details=extra_details,
         visuals=not extra_details and not cam,
         detail=shape_gltf.detail_of(detail if detail is not None else chosen),
-        stripped=made and (extra_details or cam),
+        # Only a print is a deposit of prisms, most of them out of sight: a cut
+        # part or a molding is a solid like any other, its faces each its own.
+        stripped=printed and (extra_details or cam),
     )
 
 

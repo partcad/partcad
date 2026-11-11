@@ -175,13 +175,15 @@ def test_a_step_part_is_written_as_step(ctx, tmp_path, monkeypatch):
     asked = _stub_machine(monkeypatch, step="ISO-10303-21;\nEND-ISO-10303-21;\n")
     asyncio.run(ctx.get_part("//test:printed-step").materialize_async(ctx, write=True))
     assert (tmp_path / "printed-step.step").read_text().startswith("ISO-10303-21")
-    assert asked[-1][1]["representation"] == "step"
+    # Asked for as STEP the first time: one route, not one for the shape and one for its text.
+    assert [kwargs["representation"] for _name, kwargs in asked] == ["step"]
 
 
 def test_an_sdf_part_is_written_as_its_script(ctx, tmp_path, monkeypatch):
-    _stub_machine(monkeypatch, script="show_object(print_)\n")
+    asked = _stub_machine(monkeypatch, script="show_object(print_)\n")
     asyncio.run(ctx.get_part("//test:printed-sdf").materialize_async(ctx, write=True))
     assert (tmp_path / "printed-sdf.py").read_text() == "show_object(print_)\n"
+    assert [kwargs["representation"] for _name, kwargs in asked] == ["sdf"]
 
 
 def test_a_molding_is_asked_of_its_mold(ctx, tmp_path, monkeypatch):
@@ -313,6 +315,36 @@ def test_the_verdict_is_keyed_on_what_it_is_made_from_and_how(tmp_path):
     sparse = suffix({"infill": "20%"})
     assert sparse.startswith(".materialize=")
     assert sparse != suffix({"infill": "40%"})
+
+
+def test_a_cut_is_keyed_on_the_drawing_it_follows(tmp_path):
+    """A cut along a sketch is routed from the sketch, so a changed outline is a different verdict."""
+
+    def suffix(width):
+        package = {
+            "name": "//test",
+            "sketches": {"outline": {"type": "basic", "rectangle": [width, 10]}},
+            "parts": {
+                "stock": {"type": "basic", "cuboid": [40, 30, 5]},
+                "cut": {
+                    "type": "basic",
+                    "cuboid": [20, 10, 5],
+                    "manufacturing": {
+                        "method": "subtractive",
+                        "source": "stock",
+                        "instructions": "outline",
+                        "cnc": {"diameter": 3},
+                    },
+                },
+            },
+        }
+        root = tmp_path / str(len(os.listdir(tmp_path)))
+        root.mkdir()
+        (root / "partcad.yaml").write_text(yaml.safe_dump(package))
+        context = pc.Context(str(root))
+        return asyncio.run(MaterializeTest().cache_key_suffix(context, context.get_part("//test:cut")))
+
+    assert suffix(20) != suffix(25)
 
 
 def test_a_print_is_keyed_on_the_code_that_makes_it(tmp_path, monkeypatch):

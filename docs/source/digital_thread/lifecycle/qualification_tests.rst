@@ -533,14 +533,14 @@ It does not fail. When it says ``the geometry is a solid but not a well formed o
 ``cam``: A machine route can be produced
 ----------------------------------------
 
-**Applies to** parts and sketches that name a machine to be cut on. ``pc qual test -f cam <object>`` runs it alone.
+**Applies to** parts and sketches that name a machine to be cut or printed on. ``pc qual test -f cam <object>`` runs it alone.
 
-Whether the program a machine cuts the object with can be produced: for every ``cnc:``, ``laser:`` or ``drill:`` machine it names, the post-processor that machine uses writes a route, and the route is thrown away. The same code as ``pc cam``.
+Whether the program a machine makes the object with can be produced: for every ``cnc:``, ``laser:``, ``drill:`` or ``fff:`` machine it names, the post-processor that machine uses writes a route, and the route is thrown away. The same code as ``pc cam``.
 
 When it does not apply
 ^^^^^^^^^^^^^^^^^^^^^^
 
-An object that names no machine to be routed on - nothing under ``manufacturing:`` asks for one, or only a ``cut:`` machine, which needs no program.
+An object that names no machine to be routed on - nothing under ``manufacturing:`` asks for one, or only a ``cut:`` or a ``mold:``, neither of which runs a program.
 
 When it fails
 ^^^^^^^^^^^^^

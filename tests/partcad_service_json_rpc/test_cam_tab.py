@@ -140,6 +140,41 @@ def test_save_makes_the_materialized_file_again(session, package, made):
     assert made == [{"settings": {"infill": "20%", "walls": 3}, "write": True}]
 
 
+@pytest.mark.parametrize("failure", ["config", "other"])
+def test_save_that_cannot_make_the_file_again_puts_the_settings_back(session, package, monkeypatch, failure):
+    """The file still holds what the old settings made: a declaration saying otherwise is what Save must not leave."""
+    (package / "print.brep").write_text("an old print")
+    before = (package / "partcad.yaml").read_text()
+
+    async def broken(self, ctx, machine=None, write=False, **kwargs):
+        if failure == "config":
+            raise pc.cam.CamFailed("the printer is out of filament")
+        raise RuntimeError("the sandbox went away")
+
+    monkeypatch.setattr(Shape, "materialize_async", broken)
+    cam_view.forget_products()
+    expected = JsonRpcError if failure == "config" else RuntimeError
+    with pytest.raises(expected) as caught:
+        operations.cam_save(session, {"package": "//", "object": "print", "settings": {"infill": "35%"}})
+    if failure == "config":
+        assert caught.value.code == operations.USAGE_ERROR
+        assert "settings are as they were" in caught.value.message and "out of filament" in caught.value.message
+    assert (package / "partcad.yaml").read_text() == before
+    assert (package / "print.brep").read_text() == "an old print"
+    # And the next request reads the settings as they were.
+    again = operations.cam_settings(session, {"package": "//", "object": "print"})
+    assert next(control for control in again["controls"] if control["key"] == "infill")["value"] == "20%"
+
+
+@pytest.mark.parametrize("settings", [[], False, 0, ""])
+def test_save_refuses_settings_that_are_not_a_mapping(session, package, made, settings):
+    before = (package / "partcad.yaml").read_text()
+    with pytest.raises(JsonRpcError) as caught:
+        operations.cam_save(session, {"package": "//", "object": "print", "settings": settings})
+    assert caught.value.code == operations.USAGE_ERROR
+    assert (package / "partcad.yaml").read_text() == before
+
+
 def test_save_refuses_what_the_machine_does_not_take_and_writes_nothing(session, package, made):
     before = (package / "partcad.yaml").read_text()
     for settings in ({"infill": "150%"}, {"diameter": "6"}, {"walls": True}, {"walls": [3]}):
@@ -166,6 +201,8 @@ def test_a_part_shows_with_extra_details_unless_asked_otherwise(session, shown):
         ({"detail": "medium"}, "A level of detail is one of low, high"),
         ({"cam": "fff"}, "'cam' is"),
         ({"cam": {"settings": ["infill"]}}, "'cam: settings' maps"),
+        ({"cam": {"settings": []}}, "'cam: settings' maps"),
+        ({"cam": {"settings": False}}, "'cam: settings' maps"),
         ({"cam": {"settings": {"infill": {"a": 1}}}}, "'cam: settings: infill'"),
         ({"cam": {"machine": 3}}, "'cam: machine'"),
     ],

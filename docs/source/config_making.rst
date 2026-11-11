@@ -162,7 +162,7 @@ apart from itself, and say how it is filled:
           topLayers: 5
           bottomLayers: 4
           infill: 20%
-          infillPattern: gyroid
+          infillPattern: grid
 
 - ``source`` -- *optional*. The design the part is a print of. It is what the
   print is measured against (the tolerance is the design's), what a print
@@ -396,15 +396,16 @@ other rather than one overwriting the other. A part that really is machined in
 *stages* is not this: it is a chain of parts, each naming the previous one as
 its ``source``.
 
-**Only ``subtractive`` has a machine at all**, and the keys that describe a cut
-are refused everywhere else rather than accepted and never read. A ``diameter:``
-on a part that says ``method: additive`` is a number somebody chose and nothing
-acts on, which is the whole reason the job moved out of a section of its own --
-a printer has feeds and speeds too, and the day PartCAD writes a program for one
-they will be a printer's keys under a printer's subsection rather than a
-router's read by accident. A *sketch* is the one section with no ``method:`` in
-it: a drawing is not made out of anything, so it names the machine and the job
-and nothing else.
+**A machine belongs to the method that makes the part with it**: ``cnc:``,
+``laser:``, ``drill:`` and ``cut:`` to ``subtractive``, ``fff:`` to
+:ref:`additive <additive>`, ``mold:`` to :ref:`forming <forming>`. The keys that
+describe a cut are refused everywhere else rather than accepted and never read.
+A ``diameter:`` on a part that says ``method: additive`` is a number somebody
+chose and nothing acts on, which is the whole reason the job moved out of a
+section of its own -- a printer has feeds and speeds too, and they are a
+printer's keys under ``fff:`` rather than a router's read by accident. A
+*sketch* is the one section with no ``method:`` in it: a drawing is not made out
+of anything, so it names the machine and the job and nothing else.
 
 Every machine takes a ``toolAxis``, which is the axis the tool, the beam, the
 drill or the saw approaches along, written as one of ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z``
@@ -500,7 +501,8 @@ from its top down, unless ``depth:`` says otherwise:
           diameter: 3 mm
 
 A cut that names no instructions is routed along its own file, and so has to
-have one.
+have one. So does one that names a drawing and says nothing about how it is cut
+-- no machine and no tool: there is no route to make it by.
 
 ``examples/produce_part_subtractive`` is the whole of the above in one package:
 two stocks, a laser-cut blank and gasket, a routed block whose chamfer is the

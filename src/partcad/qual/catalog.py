@@ -762,16 +762,18 @@ which an edge is not reported, and `general: false`, as for
     ),
     "cam": Entry(
         "A machine route can be produced",
-        "parts and sketches that name a machine to be cut on",
+        "parts and sketches that name a machine to be cut or printed on",
         """
-Whether the program a machine cuts the object with can be produced: for every
-`cnc:`, `laser:` or `drill:` machine it names, the post-processor that machine
-uses writes a route, and the route is thrown away. The same code as `pc cam`.
+Whether the program a machine makes the object with can be produced: for every
+`cnc:`, `laser:`, `drill:` or `fff:` machine it names, the post-processor that
+machine uses writes a route, and the route is thrown away. The same code as
+`pc cam`.
 
 ### When it does not apply
 
 An object that names no machine to be routed on - nothing under
-`manufacturing:` asks for one, or only a `cut:` machine, which needs no program.
+`manufacturing:` asks for one, or only a `cut:` or a `mold:`, neither of which
+runs a program.
 
 ### When it fails
 

@@ -2067,7 +2067,7 @@ class Shape(ShapeConfiguration):
                     cacheable=self.artifacts_cacheable(),
                     section=section,
                     detail=drawn.detail,
-                    hidden_stripped=True,
+                    hidden_stripped=drawn.stripped,
                 )
             else:
                 # TODO(clairbee): consider removing this exception handler permanently
@@ -4668,6 +4668,24 @@ class Shape(ShapeConfiguration):
                 "%s names no design to be made after: it is its own design ('manufacturing: source:')" % name
             )
 
+        fmt = None
+        if write:
+            # Worked out before the route is, so that a part kept as STEP or as
+            # an SDF is asked for in that form the first time rather than
+            # routed again for it.
+            fmt = self.config.get(IMPLIED_TYPE_KEY) or self.config.get("type")
+            if fmt not in MATERIALIZED_FORMATS:
+                raise pc_cam.CamConfigError(
+                    "%s is a '%s' part, whose geometry is its own file or script rather than one 'pc cam' writes;"
+                    " leave 'type:' out, or say 'brep', 'step' or 'sdf'" % (name, fmt)
+                )
+            if fmt == "sdf" and chosen.kind != MACHINE_FFF:
+                raise pc_cam.CamConfigError(
+                    "%s: only a print is kept as an SDF; a '%s' makes a solid" % (name, chosen.kind)
+                )
+            if not representation and fmt in ("step", "sdf"):
+                representation = fmt
+
         extra = {pc_cam.MATERIALIZE_KEY: True}
         if representation:
             extra[pc_cam.REPRESENTATION_KEY] = representation
@@ -4716,20 +4734,10 @@ class Shape(ShapeConfiguration):
         if not write:
             return made
 
-        fmt = self.config.get(IMPLIED_TYPE_KEY) or self.config.get("type")
-        if fmt not in MATERIALIZED_FORMATS:
-            raise pc_cam.CamConfigError(
-                "%s is a '%s' part, whose geometry is its own file or script rather than one 'pc cam' writes; leave"
-                " 'type:' out, or say 'brep', 'step' or 'sdf'" % (name, fmt)
-            )
         from .part_factory_manufactured import materialized_path
 
         project = ctx.get_project(self.project_name)
         target = os.path.abspath(filepath or materialized_path(project, self.config))
-        if fmt == "sdf" and chosen.kind != MACHINE_FFF:
-            raise pc_cam.CamConfigError(
-                "%s: only a print is kept as an SDF; a '%s' makes a solid" % (name, chosen.kind)
-            )
         if fmt == "sdf":
             text = made["sdf_script"]
             if not text:
