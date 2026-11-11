@@ -238,7 +238,7 @@ at all).
 Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|assembly|scene|file`,
 `export.part|assembly|scene`, `ai.regenerate|change`, `add.part|assembly|scene`, `package.load|path|refresh`, `init`,
 `list.all`, `bom`, `assembly.guide`, `supply.quote`, `cae.analyze|defaults|list`, `cam.route`, `filter.object`,
-`test`, `info`, `activate`, and `rpc.discover`. Five methods mirror no subcommand:
+`test`, `info`, `activate`, and `rpc.discover`. These mirror no subcommand:
 
 * `assembly.instantiate`, which a client calls on its own behalf as the second half of a two-phase assembly
   build (see below).

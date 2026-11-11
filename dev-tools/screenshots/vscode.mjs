@@ -27,9 +27,11 @@ export const SCALE = 2;
 
 // The Digital Thread's port for this VS Code, so that what PartCAD shows reaches
 // this window and not a VS Code of your own (see 'PARTCAD_IDE_PORT').
-export const IDE_PORT = '9238';
+// Both ports can be moved, so that two runs on one machine -- a second display,
+// a second checkout -- do not answer each other's windows.
+export const IDE_PORT = process.env.PC_SCREENSHOT_IDE_PORT ?? '9238';
 
-const DEVTOOLS_PORT = 9339;
+const DEVTOOLS_PORT = Number(process.env.PC_SCREENSHOT_DEVTOOLS_PORT ?? 9339);
 
 /**
  * Start VS Code on 'folder' and connect to it.
