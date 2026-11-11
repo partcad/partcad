@@ -1182,7 +1182,7 @@ def test_a_gstreamer_stopped_after_its_error_leaves_nothing_behind(tmp_path, mon
         "sys.stderr.write('ERROR: from element /GstPipeline:pipeline0/GstFileSrc:filesrc0: Internal data stream "
         "error.\\nscratch=%s\\n' % os.path.dirname(path))\n"
         "sys.stderr.flush()\n"
-        "time.sleep(600)\n"
+        "time.sleep(60)\n"
     )
     monkeypatch.setattr(video_encode.Pipeline, "argv", lambda self: [sys.executable, "-c", stays_up])
     monkeypatch.setattr(video_encode, "ERROR_GRACE", 0.5)
