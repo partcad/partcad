@@ -36,12 +36,145 @@ the verdict is recorded for whatever paths a caller passes. It used to live in
 `tests/partcad/conftest.py`, which recorded nothing for a run that did not
 collect that directory -- and `pyproject.toml` already carries the scar of a job
 that ran nothing and reported success.
+
+The other hooks here make a test that never returns say where it was stuck, for
+the same callers: see `timeout` and `faulthandler_timeout` in `pyproject.toml`.
 """
 
 import os
 import pathlib
+import sys
+import threading
+import traceback
 
 import pytest
+
+#: How much of a timed-out test's captured log and output goes with its stacks:
+#: the end of each, which is what it was doing when it stopped.
+TIMEOUT_REPORT_TAIL = 20000
+
+
+def _stderr_for_dumps(config):
+    """Where pytest's faulthandler plugin writes its dumps, or None.
+
+    A copy of stderr made before any capturing, which pytest keeps under this
+    key and nowhere public. Under pytest-xdist it is the stderr a worker
+    inherited from the controller, so what is written to it reaches the job's
+    log; the worker's stdout does not (execnet points it at the null device).
+    """
+    try:
+        from _pytest.faulthandler import fault_handler_stderr_fd_key
+
+        return config.stash[fault_handler_stderr_fd_key]
+    except (ImportError, KeyError):
+        return None
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_exception_interact(node, call, report):
+    """Watch the teardown of a test that failed, as every other phase is watched.
+
+    pytest's faulthandler plugin and pytest-timeout both cancel their timers
+    here - so that a debugger is not interrupted - and neither sets one again,
+    which left the fixtures of every failed test free to hang until the job's
+    own `timeout-minutes`, naming nothing. This runs after them (and after a
+    debugger, which runs here too), and sets faulthandler's again for what is
+    left of the test: the C watchdog that dumps every stack and, with
+    `faulthandler_exit_on_timeout`, ends the process (see `pyproject.toml`).
+    """
+    timeout = float(node.config.getini("faulthandler_timeout") or 0.0)
+    if timeout <= 0 or not isinstance(node, pytest.Item):
+        return
+    stderr = _stderr_for_dumps(node.config)
+    if stderr is None:
+        return
+    import faulthandler
+
+    faulthandler.dump_traceback_later(
+        timeout, file=stderr, exit=bool(node.config.getini("faulthandler_exit_on_timeout"))
+    )
+
+
+@pytest.hookimpl(optionalhook=True, tryfirst=True)
+def pytest_timeout_set_timer(item, settings):
+    """pytest-timeout's thread method, with its report written where it is read.
+
+    The thread method is what pytest-timeout uses wherever there is no SIGALRM,
+    which is Windows. When it fires it writes the test's stacks with pytest's
+    terminal writer, to stdout, and ends the process -- and under pytest-xdist
+    a worker's stdout is the null device. So a hung test on Windows was ended
+    on time and reported as nothing but "worker 'gw1' crashed while running
+    ...": `Pytest (windows-2022, 3.14)` lost three tests that way at once, on
+    #948, with not a line to say what any of them was waiting for.
+
+    This is the same timer, cancelled the same way (pytest-timeout's own
+    `pytest_timeout_cancel_timer` calls `item.cancel_timeout`), writing the
+    same report -- the test, what it had logged and printed, and every
+    thread's stack -- to the stream faulthandler's dumps go to. The signal
+    method fails the test with the stacks in its own report, and is left to
+    pytest-timeout, as is everything when that stream is not there.
+    """
+    stderr = _stderr_for_dumps(item.config)
+    if settings.method != "thread" or stderr is None:
+        return None
+    timer = threading.Timer(settings.timeout, _timed_out, (item, settings, stderr))
+    timer.name = "timeout %s" % item.nodeid
+    # Unlike pytest-timeout's own, a daemon: a timer nobody cancelled must not
+    # keep a finished process alive until it fires and turns it into a failure.
+    timer.daemon = True
+
+    def cancel():
+        timer.cancel()
+        timer.join()
+
+    item.cancel_timeout = cancel
+    timer.start()
+    return True
+
+
+def _timed_out(item, settings, stderr):
+    """Report a test that ran past its timeout, then end the process, as the thread method does."""
+    import pytest_timeout
+
+    if not settings.disable_debugger_detection and pytest_timeout.is_debugging():
+        return
+    try:
+        with os.fdopen(os.dup(stderr), "w", encoding="utf-8", errors="backslashreplace") as out:
+            try:
+                _write_timeout_report(out, item, settings.timeout)
+            except Exception:
+                traceback.print_exc(file=out)
+    finally:
+        os._exit(1)
+
+
+def _write_timeout_report(out, item, timeout):
+    """The test, the end of what it logged and printed, and the stack of every other thread."""
+    out.write("\n%s Timeout %s\n%s ran for more than %gs\n" % ("+" * 30, "+" * 30, item.nodeid, timeout))
+    sections = []
+    # What the test logged in the phase it is stuck in, which pytest resets
+    # at the start of each one.
+    handler = getattr(item.config.pluginmanager.get_plugin("logging-plugin"), "report_handler", None)
+    if handler is not None:
+        sections.append(("Captured log", handler.stream.getvalue()))
+    capture = item.config.pluginmanager.get_plugin("capturemanager")
+    try:
+        captured = capture.read_global_capture()
+        sections += [("Captured stdout", captured.out), ("Captured stderr", captured.err)]
+    except Exception:  # `-s`, or nothing being captured: nothing to show
+        pass
+    for title, text in sections:
+        if text:
+            cut = " (the end of it)" if len(text) > TIMEOUT_REPORT_TAIL else ""
+            out.write("%s %s%s %s\n%s\n" % ("~" * 10, title, cut, "~" * 10, text[-TIMEOUT_REPORT_TAIL:]))
+    current = threading.get_ident()
+    names = {thread.ident: thread.name for thread in threading.enumerate()}
+    for ident, frame in sys._current_frames().items():
+        if ident != current:
+            name = names.get(ident, "<unknown>")
+            out.write("%s Stack of %s (%s) %s\n" % ("~" * 10, name, ident, "~" * 10))
+            out.write("".join(traceback.format_stack(frame)))
+    out.write("%s\n" % ("+" * 69))
 
 
 @pytest.hookimpl(wrapper=True, tryfirst=True)

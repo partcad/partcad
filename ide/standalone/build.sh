@@ -1000,7 +1000,23 @@ with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as bundle:
     # The /Applications alias is the "drag this there" half of the window every
     # macOS user has seen.
     ln -s /Applications "${DMG_STAGE}/Applications"
-    hdiutil create -volname "PartCAD IDE" -srcfolder "${DMG_STAGE}" -ov -quiet -format UDZO "${DMG}"
+    # A few attempts, each saying why it failed. `hdiutil create` on a hosted
+    # macOS runner fails now and then and passes when run again -- on 0.10.10 it
+    # did on both macOS legs at once, the time before on one -- and it used to
+    # run with `-quiet`, so all the log ever held was the exit status. What it
+    # prints is kept out of the log while it works and shown when it does not.
+    HDIUTIL_LOG="${WORK_DIR}/hdiutil.log"
+    attempt=1
+    until hdiutil create -volname "PartCAD IDE" -srcfolder "${DMG_STAGE}" -ov -format UDZO "${DMG}" \
+      >"${HDIUTIL_LOG}" 2>&1; do
+      warn "hdiutil could not create ${DMG} (attempt ${attempt}): $(tr '\n' ' ' <"${HDIUTIL_LOG}")"
+      if [ "${attempt}" -ge 3 ]; then
+        fail "hdiutil could not create ${DMG}; see above"
+      fi
+      rm -f "${DMG}"
+      sleep $((attempt * 10))
+      attempt=$((attempt + 1))
+    done
     checksum "${DMG}"
     PRODUCED="${PRODUCED} $(basename "${DMG}")"
   fi

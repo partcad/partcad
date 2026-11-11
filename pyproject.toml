@@ -281,6 +281,34 @@ filterwarnings = [
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
+# A backstop, not a bound (pytest-timeout, which `requirements-dev.in` installs
+# for CI): the longest single test in the "Pytest" job takes about three minutes
+# (on Windows), the IDE's end-to-end test five, and the ones that need a tighter
+# limit name it with `pytest.mark.timeout`. What this is for is a test that
+# never returns. The "Pytest" job reached "[ 99%]" on the 0.10.10 bump and then
+# printed nothing for an hour, until its own 75-minute `timeout-minutes`
+# cancelled it -- which names no test, keeps no coverage and says nothing about
+# where it was stuck. Past this, the test fails with every thread's stack, and
+# the job goes on. It is short enough to land inside that job's limit even for a
+# test that hangs after the slowest whole run so far (33 minutes, on Windows).
+#
+# Where there is no SIGALRM (Windows) pytest-timeout ends the whole process
+# instead, and writes its report to stdout first -- which, in a pytest-xdist
+# worker, is the null device. The root `conftest.py` sends that report where
+# faulthandler's go, which reaches the job's log.
+timeout = 900
+# pytest-timeout fails the test from Python -- a signal handler, or with
+# `timeout_method = thread` a Python thread -- and either one waits for a test
+# stuck in native code holding the GIL (an OCCT call through OCP) to return,
+# which a hang never does. faulthandler's watchdog is a C thread that needs no
+# GIL: a minute later it dumps every thread's stack, test function included,
+# and ends the process, which pytest-xdist reports as the test that crashed its
+# worker and replaces. Measured with a C loop called with the GIL held: the
+# signal fired only once the loop returned, the thread method likewise, and
+# this dumped on time. Both plugins stop their watch when a test fails, so the
+# root `conftest.py` sets this one again for that test's teardown.
+faulthandler_timeout = 960
+faulthandler_exit_on_timeout = true
 
 # TODO(clairbee): make the below work instead of "behave.ini"
 # [tool.behave]
