@@ -373,11 +373,19 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
         with_materials: WithMaterials = False,
         with_port_names: WithPortNames = True,
         with_interface_names: WithInterfaceNames = True,
+        compound: Annotated[
+            bool,
+            Field(
+                description="Write an assembly or a scene as its compound: one part with every item in it, rather "
+                "than the tree of what it places. Nothing for a part or a sketch."
+            ),
+        ] = False,
     ) -> CallToolResult:
         """Export or render one object to a file in the workspace.
 
         `pc export` / `pc render` for one object, written where the agent says. The ports, interfaces and
         callouts are drawn on a picture (png, svg, ...) and mean nothing to a model format such as step.
+        `compound` is `pc export --compound`.
         """
         try:
             target = scope.check(path)
@@ -388,6 +396,8 @@ def build_server(bridge: Bridge, scope: PathScope) -> MCPServer:
             request["options_package"] = options_package
         if params:
             request["params"] = _assignments(params)
+        if compound:
+            request["compound"] = True
         request.update(
             _drawn(
                 with_ports,

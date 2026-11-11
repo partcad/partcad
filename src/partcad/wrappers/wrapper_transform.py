@@ -5,8 +5,9 @@
 #
 
 # This script is executed within the python sandbox environment (python runtime)
-# to apply geometry transformations - "offset", "scale" and "compound" - so the
-# core process never has to touch a live OCP object to perform them. The operand
+# to apply geometry transformations - "offset", "scale", "compound" and
+# "flatten" - so the core process never has to touch a live OCP object to
+# perform them. The operand
 # shape(s) arrive in the request as BREP (see ocp_serialize) and the result goes
 # back the same way.
 #
@@ -155,8 +156,58 @@ def _compound(shapes):
     return ocp_serialize.compound_of(kept)
 
 
+def flatten(tree):
+    """An assembly or a scene, as an *undecoded* tree, made one part: its compound, and the CMF of every leaf.
+
+    The geometry is what 'ocp_serialize.decode_tree' makes of the tree -
+    every leaf placed where the tree puts it, a compound per assembly node -
+    and what is handed back is that one shape, which a part is
+    ('partcad.assembly_compound'). The tree is read raw rather than decoded
+    with the request because the leaves are what say what each face is: the
+    CMF section after each leaf's BREP, completed with the colour the nodes
+    above it lend it ('cmf_export.face_sets', the rule every exporter draws a
+    tree by). Each leaf's sets go onto its faces as they sit in the compound,
+    so a part made of a red bolt placed four times has four red bolts in it,
+    and the section addresses the compound in the order PartCAD's codec keeps
+    ('ocp_serialize.cmf_section_for').
+
+    Returns '(shape, cmf)': the compound, and its CMF section or None when no
+    leaf states any, for 'wrapper_common.finished' to finish and encode.
+    """
+    import cmf_export
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_SOLID
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import TopTools_IndexedMapOfShape
+
+    whole, decoded = ocp_serialize.decode_tree(tree)
+    memo = {}
+    faces, solids = {}, {}
+
+    def stated(target, shape, kind, sets):
+        found = TopTools_IndexedMapOfShape()
+        TopExp.MapShapes_s(shape, kind, found)
+        for index, cmf_set in enumerate(sets[: found.Extent()]):
+            if not cmf_export.is_plain(cmf_set):
+                target[found.FindKey(index + 1)] = cmf_set
+
+    # A leaf and its geometry as it is in 'whole', the very sub-shape (see
+    # 'cmf_export.paired'): its faces there are the compound's faces, at the
+    # placement this leaf has, and not those of another placement of it.
+    for leaf, placed in cmf_export.paired(decoded, whole):
+        stated(faces, placed, TopAbs_FACE, cmf_export.face_sets(leaf, memo, placed))
+        stated(solids, placed, TopAbs_SOLID, cmf_export.solid_sets(leaf, memo, placed))
+    cmf = ocp_serialize.cmf_section_for(whole, faces, solids) if faces or solids else None
+    return whole, cmf
+
+
 def process(request):
     operation = request.get("operation")
+    if operation == "flatten":
+        whole, cmf = flatten(request["shape"])
+        return wrapper_common.finished(whole, cmf=cmf)
+    # Every other operation is handed live geometry. The request is read raw
+    # (see '__main__') so that 'flatten' can read the tree's nodes as data.
+    request = ocp_serialize.decode(request)
     if operation == "offset":
         return relocate(request["shape"], request["offset"])
     if operation == "scale":
@@ -169,7 +220,7 @@ def process(request):
 if __name__ == "__main__":
     # argv[1] carries the operation name for readability in process listings and
     # logs; the authoritative copy travels in the request.
-    _, request = wrapper_common.handle_input()
+    _, request = wrapper_common.handle_input(decode=False)
     try:
         shape = process(request)
         model = {"success": True, "exception": None, "shape": shape}

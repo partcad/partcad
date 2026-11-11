@@ -398,11 +398,21 @@ QUAL_KEYS = frozenset({"subtype", "kinds", "format", "formatOptions", "timeout",
 
 # The same, for the two sections that write a file *of an object*: 'filter' says
 # which of that object's links the file is of (see 'partcad_utils.assy_filter'),
-# which PartCAD acts on itself -- it hands the implementation a smaller shape
-# rather than the same shape and a note about it. Reserved in these two sections
-# only: a 'cam:' route or an 'import:' reader may well have a parameter of its
-# own called 'filter', and hiding it from one would be a silent break.
-SELECTION_KEYS = frozenset({"filter"})
+# and 'compound' that an assembly or a scene is written as its compound - one
+# part, rather than the tree of what it places (see 'partcad.assembly_compound'
+# and 'COMPOUND_KEY'). PartCAD acts on both itself -- it hands the
+# implementation another shape rather than the same shape and a note about it.
+# Reserved in these two sections only: a 'cam:' route or an 'import:' reader may
+# well have a parameter of its own called 'filter', and hiding it from one would
+# be a silent break.
+SELECTION_KEYS = frozenset({"filter", "compound"})
+
+# The file type field that says its implementation is written for one shape:
+# an assembly or a scene is handed to it as its compound, a part, which is what
+# 'pc export --compound' asks of every file type for one run. Absent, it is
+# false, and an implementation is handed the tree with the compound of it
+# beside it ('wrapper_export'), as every implementation always has been.
+COMPOUND_KEY = "compound"
 
 # The same, for the 'import:' section. None of these is a parameter of the
 # reader: 'kinds' says which object kinds may be declared with this type,
@@ -763,6 +773,20 @@ class Implementation:
         from partcad_utils import assy_filter
 
         return assy_filter.of(self.config.get("filter"))
+
+    @property
+    def compound(self) -> bool:
+        """Whether this file type is written of an assembly's or a scene's compound, as declared.
+
+        What ``compound:`` on a ``render:``/``export:`` file type says, read
+        through the same layering as ``filter:``. PartCAD's own, like that one:
+        the implementation is handed the compound as the part it is, and never
+        sees the field (see 'COMPOUND_KEY').
+
+        Raises:
+            ValueError: the declaration is not a flag.
+        """
+        return as_flag(self.config.get(COMPOUND_KEY), COMPOUND_KEY)
 
     @property
     def parameters(self) -> dict:

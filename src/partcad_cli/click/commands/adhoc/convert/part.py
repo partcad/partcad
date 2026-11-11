@@ -51,11 +51,19 @@ INPUT_ONLY_PART_TYPES = ["chili3d", "sdf", "scad"] + [
 OUTPUT_PART_TYPES = [part_type for part_type in PART_TYPES if part_type not in INPUT_ONLY_PART_TYPES]
 
 
+# What '--input' may name: every part type, and the assembly formats that are
+# read, with '--compound', as the assembly they hold (see
+# 'partcad.adhoc.convert.COMPOUND_INPUT_TYPES'). Without '--compound' the
+# daemon refuses those, saying why - which is where that rejection is reported
+# from, as it is for a '.urdf' the type is inferred from.
+COMPOUND_INPUT_TYPES = ["urdf"]
+
+
 @click.command(help="Convert CAD files between formats (ad-hoc mode).")
 @click.option(
     "--input",
     "input_type",
-    type=click.Choice(PART_TYPES),
+    type=click.Choice(PART_TYPES + COMPOUND_INPUT_TYPES),
     help="Input file type. Inferred from filename if not provided.",
 )
 @click.option(
@@ -64,10 +72,18 @@ OUTPUT_PART_TYPES = [part_type for part_type in PART_TYPES if part_type not in I
     type=click.Choice(OUTPUT_PART_TYPES),
     help="Output file type. Inferred from filename if not provided.",
 )
+@click.option(
+    "--compound",
+    is_flag=True,
+    help=(
+        "Read the input as the assembly it holds and write its compound: one part with every item in it. "
+        "A URDF is read this way only."
+    ),
+)
 @click.argument("input_filename", type=click.Path(exists=True))
 @click.argument("output_filename", type=click.Path(), required=False)
 @click.pass_obj
-def cli(cli_ctx, input_type, output_type, input_filename, output_filename):
+def cli(cli_ctx, input_type, output_type, compound, input_filename, output_filename):
     """Convert CAD files from one format to another without modifying project configuration."""
     if input_type is None:
         # The daemon infers a type from the extensions its factories write; a
@@ -86,6 +102,7 @@ def cli(cli_ctx, input_type, output_type, input_filename, output_filename):
             # Absolute so the daemon reads/writes in the user's cwd.
             "input_filename": os.path.abspath(input_filename),
             "output_filename": os.path.abspath(output_filename) if output_filename else None,
+            **({"compound": True} if compound else {}),
         },
         needs_context=False,
     )

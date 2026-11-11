@@ -4,9 +4,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from . import assembly_compound
 from . import logging as pc_logging
 from . import part_factory as pf
-from . import reference, telemetry
+from . import reference, sandbox_versions, telemetry
 
 
 @telemetry.instrument()
@@ -14,10 +15,20 @@ class PartFactoryCompound(pf.PartFactory):
     """A part that is the TopoDS_Compound of a referenced assembly.
 
     An assembly preserves its hierarchy; a 'compound' part flattens a referenced
-    assembly into a single part. If - and only if - the part declares
-    'parameters', those are passed verbatim to the assembly to produce the shape
-    that is compounded.
+    assembly into a single part: one shape, every item of the assembly placed
+    in it, with the colours and materials each states on its own faces (see
+    'partcad.assembly_compound', which is also what 'pc export --compound'
+    makes of an assembly). If - and only if - the part declares 'parameters',
+    those are passed verbatim to the assembly to produce the shape that is
+    compounded.
     """
+
+    # The compound is made in a sandbox, by 'wrapper_transform.flatten'. Until
+    # it was, this part was the assembly's tree under the part's name - not a
+    # part at all, for anything that asked - and the wrapper's version in its
+    # key is what keeps an entry cached in that form from being read back.
+    WRAPPERS = assembly_compound.WRAPPERS
+    PYTHON_SANDBOX_VERSION = sandbox_versions.DEFAULT_PYTHON_VERSION
 
     source_assembly_name: str
     source_project_name: str
@@ -70,7 +81,7 @@ class PartFactoryCompound(pf.PartFactory):
                 part.error("%s: compound source assembly not found: %s" % (part.name, self.source))
                 return None
 
-            shape = await assembly.get_wrapped(self.ctx)
+            shape = await assembly_compound.flatten_async(self.ctx, part, assembly)
             if shape is None:
                 part.error("%s: compound source assembly produced no shape: %s" % (part.name, self.source))
                 return None

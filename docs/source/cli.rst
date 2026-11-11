@@ -516,6 +516,20 @@ Object commands
   declare it as an assembly of the ``step`` or ``gltf`` type or a scene of that reader's type instead (see
   :ref:`assembly_step`, :ref:`assembly-gltf` and :ref:`scenes`).
 
+  ``pc import assembly --compound`` imports the assembly as **one part** instead: its compound, every item
+  in one shape, in the colours and materials each states (see :ref:`part-compound`). A STEP or glTF file is
+  that already when it is read as a part, so it is copied and declared as a ``step`` or ``gltf`` part as it
+  is; a URDF, which has no part type, is read as the robot it is and its compound written into the package as
+  a ``step`` part.
+
+  ``pc import part`` refuses a file that holds an **assembly** rather than a part, because reading it as one
+  throws away what it is made of: a STEP file whose product structure places more than one component, a glTF
+  scene that places more than one mesh, and a URDF. The message says which of two things to do instead:
+  ``pc import part --compound`` imports it as one part, its compound -- the same part ``pc import assembly
+  --compound`` makes, converted to ``-t <format>`` if one is given -- and ``pc import assembly`` keeps its
+  items and where each is placed. ``pc add part`` declares a file where it lies, as it always has, whatever it
+  holds.
+
 ``pc qual test``
   Run the qualification tests of a part, an assembly, a scene or a sketch -- or of every object of a package
   with ``-P <package>...`` (see :ref:`recursive-names`). Every test is of one of four subtypes, told apart by
@@ -1165,6 +1179,14 @@ Object commands
   A ``filter:`` on an ``export:`` file type asks for the same thing permanently, per file type, and this
   overrides it for one run.
 
+  ``--compound`` exports every assembly and scene as its **compound**: one part, every item it places in it,
+  in the colours and materials each states -- rather than the tree of what it places, which is what a
+  STEP product structure, a glTF scene graph and a URDF's links are written from. The file has the
+  object's own name and goes where the object's own would have. A part or a sketch is one shape already and
+  is exported as it is. With ``--filter`` it is the compound of what the filter keeps. A file type whose
+  implementation is written for one shape declares ``compound: true`` instead (see :ref:`output-files`),
+  and is then handed an assembly's compound whether or not the run asks.
+
   ``-t`` also takes a full path, ``-t sim-gazebo:world``, which names the package the implementation lives
   in. That is how a format PartCAD ships no implementation of is reached, and an engine's own scene format is
   exactly that: a Gazebo world (SDFormat) is written by
@@ -1749,6 +1771,10 @@ Other commands
   The assembly formats ``assy`` and ``urdf`` are refused by both: an ASSY file is a set of references to the
   parts of a package and a URDF becomes a part per link, so neither means anything without one. Declare it in a
   package and use ``pc convert assembly``, ``pc export`` or ``pc render`` instead.
+
+  ``pc adhoc convert part --compound`` reads the input as the **assembly** it holds -- a STEP or glTF assembly,
+  or a URDF, which is accepted this way only -- and writes its compound, one part (see :ref:`part-compound`):
+  ``pc adhoc convert part --compound robot.urdf robot.step``.
 
 ``pc healthcheck``
   Check the host system for known issues. Use ``--dry-run`` to list the available checks, ``--filters`` to run

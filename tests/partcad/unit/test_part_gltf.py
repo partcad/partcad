@@ -36,6 +36,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 import partcad as pc
 from partcad import factory, shape_envelope
@@ -99,6 +100,29 @@ def test_importing_a_gltf_brings_its_buffers(tmp_path):
     # The same buffer again is no conflict.
     import_part_action(project, "gltf", "again", str(DATA / "box.gltf"))
     assert (project_dir / "again.gltf").is_file()
+
+
+def test_importing_a_gltf_scene_of_several_meshes_as_a_part_is_refused(tmp_path):
+    """Reading it as a part would throw away its meshes and where each is placed: '--compound' says to."""
+    from partcad.assembly_file import AssemblyNotPart
+
+    project_dir, project = _package(tmp_path)
+
+    with pytest.raises(AssemblyNotPart, match="'scene.glb' holds an assembly .*'--compound'.*'pc import assembly'"):
+        import_part_action(project, "gltf", "scene", str(DATA / "scene.glb"))
+
+    assert not (project_dir / "scene.glb").exists()
+    assert yaml.safe_load((project_dir / "partcad.yaml").read_text()) == {"parts": {}}
+
+
+def test_importing_a_gltf_scene_as_its_compound_is_one_gltf_part(tmp_path):
+    project_dir, project = _package(tmp_path)
+
+    import_part_action(project, "gltf", "scene", str(DATA / "scene.glb"), compound=True)
+
+    assert (project_dir / "scene.glb").read_bytes() == (DATA / "scene.glb").read_bytes()
+    parts = yaml.safe_load((project_dir / "partcad.yaml").read_text())["parts"]
+    assert parts == {"scene": {"type": "gltf", "path": "scene.glb"}}
 
 
 def test_importing_a_gltf_never_replaces_another_part_s_buffer(tmp_path):

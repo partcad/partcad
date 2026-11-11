@@ -1069,7 +1069,7 @@ def test_the_files_a_pipeline_reads_are_read_back_from_its_command(location):
 
 @needs_gstreamer
 def test_a_text_branch_that_fails_says_why(tmp_path, monkeypatch):
-    """The failure Pytest's 3.14 cell on CI has had, made on purpose: a subtitle file 'subparse' cannot recognise.
+    """One of the failures GStreamer reports as "not-negotiated", made on purpose: a subtitle file 'subparse' cannot recognise.
 
     GStreamer's own words are only "streaming stopped, reason not-negotiated";
     the size of the file and the debug log are what tell this cause apart.
@@ -1095,6 +1095,34 @@ def test_a_text_branch_that_fails_says_why(tmp_path, monkeypatch):
     assert "File too small to be a subtitles file" in said
     # Nothing of it is left beside the video it did not write.
     assert not [name for name in os.listdir(tmp_path) if "gstreamer" in name]
+
+
+@needs_gstreamer
+def test_a_text_that_arrives_late_is_drawn_on_every_frame(tmp_path):
+    """The race behind the "not-negotiated" failures on CI, made certain: the text reaches the overlay after the frames.
+
+    The frames are handed over as fast as they are drawn, and the text comes on a
+    thread of its own. On a busy machine every frame of a short video could be
+    past the overlay before 'subparse' had read its file: the video was written
+    without its text, or, when 'subparse' got there as the pipeline was being
+    shut down, failed with "not-negotiated".
+    """
+    width, height, fps, count = 160, 120, 10, 10
+    elements, sources = render_video.text_overlays({"text": "PartCAD"}, width, height, count / fps, str(tmp_path))
+    assert [source[0] for source in sources] == ["filesrc"] and sources[0][2:4] == ["!", "subparse"]
+    # Half a second between reading the subtitle file and parsing it: far
+    # longer than ten small frames take to be encoded.
+    late = [source[:3] + ["identity", "sleep-time=500000", "!"] + source[3:] for source in sources]
+    path = str(tmp_path / "late.mp4")
+    pipeline = video_encode.Pipeline(path, "mp4", width, height, fps, video=elements, sources=late)
+
+    black = np.zeros((height, width, 3), dtype=np.uint8)
+    assert pipeline.run([black] * count) == (0, count)
+
+    frames = list(video_encode.decode_frames(path, width, height, fps, limit=2 * count))
+    assert len(frames) == count
+    # White text on black frames: every one of them has some.
+    assert [bool((frame.max(axis=2) > 128).any()) for frame in frames] == [True] * count
 
 
 @needs_gstreamer

@@ -198,7 +198,7 @@ env:
   # is the interpreter PartCAD itself runs on. 'test-pub-repo', which renders
   # the public index, uses PYTHONS_SANDBOX instead.
   PYTHONS_SLIM: '["3.10", "3.14"]'
-  VERSION: 0.10.9
+  VERSION: 0.10.12
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
   PC_TELEMETRY_PERFORMANCE: false
@@ -2430,17 +2430,29 @@ jobs:
           # whose deletion would take that tag with it, so it is left alone and
           # said out loud instead.
           failed=0
+          listed=true
           versions=$(gh api --paginate \
             "orgs/${owner}/packages/container/${package}/versions?per_page=100" \
-            --jq '.[] | {id: .id, tags: (.metadata.container.tags // [])} | @json' || true)
+            --jq '.[] | {id: .id, tags: (.metadata.container.tags // [])} | @json') || listed=false
           if [ -z "${versions}" ]; then
             echo "::warning::could not list versions of ${package}; the nightly sweep will pick these up"
             exit 0
           fi
+          if [ "${listed}" != "true" ]; then
+            echo "::warning::the listing of ${package} stopped part of the way; deleting what it found, the nightly sweep will pick up the rest"
+          fi
 
           while IFS= read -r version; do
             [ -n "${version}" ] || continue
-            id=$(echo "${version}" | jq -r '.id')
+            # A listing cut off part of the way -- the API answered one of its
+            # pages with a 502 -- can end in part of a line. That is no version,
+            # and reading one as if it were ended this job, under 'set -e', on
+            # jq's "Unfinished JSON term at EOF": the red job this housekeeping
+            # is never meant to be (see the note at the end).
+            if ! id=$(echo "${version}" | jq -er '.id' 2>/dev/null); then
+              echo "::warning::passing over a line of the listing that is not a whole version"
+              continue
+            fi
             tags=$(echo "${version}" | jq -r '.tags | join(" ")')
             for tag in ${tags}; do
               case " ${wanted} " in

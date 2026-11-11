@@ -399,6 +399,48 @@ def test_an_enrich_of_an_enrich_has_the_ports_its_first_source_maps():
     assert _at(again, "top-thru-m3") == pytest.approx((-10.0, 10.0, 20.0))
 
 
+def test_an_assembly_alias_has_the_ports_its_source_maps():
+    """An alias is the assembly it points at under another name, joined by the same ports - as a part alias is."""
+    _, mount = _assembly("mount-alias")
+    assert _at(mount, "hold") == pytest.approx((0.0, 0.0, 5.0))
+    assert _at(mount, "top-thru-m3") == pytest.approx((-10.0, 10.0, 20.0))
+    assert mount.ports_source.name == "mount"
+
+
+def test_an_alias_of_an_assembly_alias_has_the_ports_at_the_end_of_the_chain():
+    _, mount = _assembly("mount-alias-alias")
+    assert _at(mount, "hold") == pytest.approx((0.0, 0.0, 5.0))
+    assert _at(mount, "top-thru-m3") == pytest.approx((-10.0, 10.0, 20.0))
+
+
+def test_an_enrich_of_an_assembly_alias_has_the_ports_behind_the_alias():
+    """The alias in the middle used to report no ports at all, and the enrich took that."""
+    _, mount = _assembly("mount-alias-again")
+    assert _at(mount, "hold") == pytest.approx((0.0, 0.0, 5.0))
+    assert _at(mount, "top-thru-m3") == pytest.approx((-10.0, 10.0, 20.0))
+
+
+def test_an_assembly_alias_s_ports_whichever_is_asked_first():
+    """Its preparation or its ports: the answer is the same, and the alias's preparation does not walk the mount."""
+    import os
+
+    ctx = pc.Context(os.path.dirname(PACKAGE), user_config=pc.UserConfig())
+    alias = ctx._get_assembly(":mount-alias")
+    asyncio.run(alias.prepare_async())
+    assert alias.ports_source.name == "mount"
+    assert not alias.ports_source.with_ports.map_resolved()
+
+    asyncio.run(shape_ports.prepare_async(alias, ctx))
+    assert _at(alias, "hold") == pytest.approx((0.0, 0.0, 5.0))
+
+
+def test_an_assembly_alias_with_ports_of_its_own_is_joined_by_those():
+    _, mount = _assembly("mount-alias-own-port")
+    assert _at(mount, "own") == pytest.approx((0.0, 0.0, 9.0))
+    assert "hold" not in _ports(mount)
+    assert getattr(mount, "ports_source", None) is None
+
+
 def test_two_variants_asking_for_one_source_s_ports_at_once_resolve_its_map_once():
     """Built side by side, two colours of one assembly ask for its 'map:' together: one resolves it, the other waits.
 

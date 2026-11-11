@@ -29,6 +29,10 @@ pytest==9.1.1
 pytest-cov==7.1.0
 pytest-durations==1.7.0
 pytest-html==4.2.0
+# The `timeout` in `[tool.pytest.ini_options]`, and every `pytest.mark.timeout`,
+# is this plugin's: without it here they were enforced by a `poetry install`
+# and by nothing CI runs.
+pytest-timeout==2.4.0
 pytest-xdist==3.8.0
 rich-click==1.9.8
 strip-ansi==0.1.1

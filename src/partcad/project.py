@@ -3674,6 +3674,7 @@ class Project(project_config.Configuration):
         render_opts: Optional[dict] = None,
         fast_only: bool = False,
         link_filter=None,
+        compound: bool = False,
     ):
         """Write out the files this package's objects are configured to produce.
 
@@ -3686,6 +3687,13 @@ class Project(project_config.Configuration):
         documents generated from an assembly as well as the files the shapes
         themselves are written to, so that a filtered bill of materials lists
         what the filtered object is made of.
+
+        'compound' writes every assembly and scene as its compound - one part,
+        rather than the tree of what it places (``pc export --compound``; see
+        'partcad.assembly_compound'). It reaches the files the shapes are
+        written to and not the documents: a bill of materials or an instruction
+        book is an account of what an assembly is made of, which its compound
+        no longer says.
         """
         with pc_logging.Action("RenderPkg", self.name):
             # A skipped package has nothing to render, and must not be asked to:
@@ -3782,6 +3790,10 @@ class Project(project_config.Configuration):
                             # shape here: one object may be rendered to
                             # a filtered PNG and a whole STEP.
                             link_filter=link_filter,
+                            # One run's '--compound', if there was one;
+                            # left to each file type's own 'compound:'
+                            # otherwise, for the reason the filter is.
+                            compound=compound,
                             # One run's worth of export parameters (the
                             # viewport of 'pc render --view'), on top of
                             # everything the configuration resolved to.
@@ -4062,6 +4074,7 @@ class Project(project_config.Configuration):
         render_opts: Optional[dict] = None,
         fast_only: bool = False,
         link_filter=None,
+        compound: bool = False,
     ):
         asyncio.run(
             self.render_async(
@@ -4078,6 +4091,7 @@ class Project(project_config.Configuration):
                 render_opts,
                 fast_only,
                 link_filter,
+                compound,
             )
         )
 

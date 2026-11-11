@@ -5898,3 +5898,165 @@ def test_compare_reloads_the_package_of_either_object():
     )
     assert targets == ["//a", "//b"]
     assert recursive is False
+
+
+# ---- the compound ------------------------------------------------------------
+#
+# `pc export --compound` (and the MCP `export` tool, through `render.inline`), `pc
+# import assembly --compound` and `pc adhoc convert part --compound`: an assembly
+# or a scene handed out as one part, its compound (see `partcad.assembly_compound`).
+# What is pinned is that every request that takes it hands it on, that one that
+# does not ask hands on nothing, and that a value that is not a flag is refused.
+
+
+def test_a_render_hands_compound_on(monkeypatch):
+    session, rendered = _render_session(monkeypatch)
+
+    operations.render_objects(session, {"package": "//", "format": "step", "compound": True})
+
+    assert rendered and rendered[0]["compound"] is True
+
+
+def test_a_render_of_one_assembly_hands_compound_on(monkeypatch):
+    session, rendered = _render_session(monkeypatch)
+    session.partcad_ctx.shapes[("assembly", "//:top")] = FakeShape(name="top", kind="assembly")
+
+    operations.render_objects(
+        session, {"package": "//", "format": "step", "object": "top", "assembly": True, "compound": True}
+    )
+
+    assert len(rendered) == 1
+    assert rendered[0]["compound"] is True
+
+
+def test_a_render_that_does_not_ask_for_the_compound_asks_for_none(monkeypatch):
+    session, rendered = _render_session(monkeypatch)
+
+    operations.render_objects(session, {"package": "//", "format": "step"})
+
+    assert rendered[0]["compound"] is False
+
+
+def test_a_compound_that_is_not_a_flag_is_a_usage_error(monkeypatch):
+    session, rendered = _render_session(monkeypatch)
+
+    def as_flag(value, name):
+        raise ValueError("'%s' must be true or false, got: %r" % (name, value))
+
+    session.partcad.output.as_flag = as_flag
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_objects(session, {"package": "//", "format": "step", "compound": "sometimes"})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "'compound' must be true or false" in caught.value.message
+    assert rendered == []
+
+
+class _CompoundConverter(FakeConverter):
+    """A ``convert_cad_file`` that takes the compound, as the real one does."""
+
+    def __call__(self, input_filename, input_type, output_filename, output_type, compound=False):
+        super().__call__(input_filename, input_type, output_filename, output_type)
+        self.calls[-1] = self.calls[-1] + (compound,)
+
+
+def test_adhoc_convert_hands_compound_on(monkeypatch, tmp_path):
+    part = _CompoundConverter()
+    install_fake_convert(monkeypatch, part=part)
+    session, _ = make_session()
+    source = tmp_path / "robot.step"
+
+    operations.adhoc_convert(
+        session,
+        {"kind": "part", "input_filename": str(source), "output_type": "stl", "compound": True},
+    )
+
+    assert part.calls == [(str(source), "step", str(tmp_path / "robot.stl"), "stl", True)]
+
+
+def test_adhoc_convert_asks_a_sketch_for_no_compound(monkeypatch, tmp_path):
+    install_fake_convert(monkeypatch)
+    session, _ = make_session()
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.adhoc_convert(
+            session,
+            {"kind": "sketch", "input_filename": str(tmp_path / "a.svg"), "output_type": "dxf", "compound": True},
+        )
+
+    assert caught.value.code == operations.USAGE_ERROR
+
+
+def test_an_assembly_imported_as_its_compound_is_said_to_be_a_part(monkeypatch, tmp_path):
+    imported = []
+
+    def import_assy_action(project, assembly_type, source, config, compound=False):
+        imported.append((assembly_type, source, compound))
+        return "robot"
+
+    install_fake_partcad_modules(monkeypatch, {"partcad.actions.assembly": {"import_assy_action": import_assy_action}})
+    session, _ = make_session()
+    source = tmp_path / "robot.urdf"
+    source.write_text("<robot name='robot'/>")
+
+    answer = operations.import_object(
+        session,
+        {"obj_kind": "assembly", "source": str(source), "assembly_type": "urdf", "package": "//", "compound": True},
+    )
+
+    assert imported == [("urdf", str(source), True)]
+    assert answer == {"name": "robot", "kind": "part"}
+
+
+class _AssemblyNotPart(ValueError):
+    """Stands in for 'partcad.assembly_file.AssemblyNotPart'."""
+
+
+def _part_import(monkeypatch, tmp_path, error=None):
+    imported = []
+
+    def import_part_action(project, part_type, name, source, config, target_format=None, compound=False):
+        imported.append((part_type, name, target_format, compound))
+        if error is not None:
+            raise error
+
+    install_fake_partcad_modules(
+        monkeypatch,
+        {
+            "partcad.actions.part": {"import_part_action": import_part_action},
+            "partcad.assembly_file": {"AssemblyNotPart": _AssemblyNotPart},
+        },
+    )
+    source = tmp_path / "AeroAssembly.step"
+    source.write_text("ISO-10303-21;")
+    return imported, source
+
+
+def test_a_part_import_hands_compound_on(monkeypatch, tmp_path):
+    imported, source = _part_import(monkeypatch, tmp_path)
+    session, _ = make_session()
+
+    answer = operations.import_object(
+        session, {"obj_kind": "part", "source": str(source), "part_type": "step", "package": "//", "compound": True}
+    )
+
+    assert imported == [("step", "AeroAssembly", None, True)]
+    assert answer == {"name": "AeroAssembly"}
+
+
+def test_an_assembly_refused_as_a_part_is_a_usage_error_and_no_failure(monkeypatch, tmp_path):
+    """Nothing was imported and the message says what to do: no traceback in the log for it."""
+    refusal = _AssemblyNotPart("'AeroAssembly.step' holds an assembly (...), not a part. Import it with '--compound'")
+    imported, source = _part_import(monkeypatch, tmp_path, error=refusal)
+    session, _ = make_session()
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.import_object(
+            session, {"obj_kind": "part", "source": str(source), "part_type": "step", "package": "//"}
+        )
+
+    assert imported == [("step", "AeroAssembly", None, False)]
+    assert caught.value.code == operations.USAGE_ERROR
+    assert caught.value.message == str(refusal)
+    assert session.partcad.logging.messages("exception") == []

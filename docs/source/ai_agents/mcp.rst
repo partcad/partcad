@@ -114,6 +114,9 @@ price asks the suppliers for a quote, so it is the one of them that goes out to 
 ``visuals``, true unless set false, which is ``pc render --no-visuals`` when it is false: every part drawn as it
 is, rather than as the ``visual:`` it declares -- what an export, a test and a simulation see.
 
+``export`` takes ``compound`` as well, which is ``pc export --compound``: an assembly or a scene written as one part,
+its compound, rather than as the tree of what it places (see :ref:`part-compound`).
+
 .. list-table::
    :header-rows: 1
    :widths: 18 18 64

@@ -888,6 +888,84 @@ def test_import_leaves_no_urdf_assembly_behind(tmp_path):
     )
 
 
+def test_import_a_urdf_as_its_compound(tmp_path):
+    """'pc import assembly --compound robot.urdf': one STEP part, every link of the robot in it.
+
+    A URDF has no part type, so its compound is written into the package as a
+    STEP file and declared as a part of it; nothing of the robot - its links,
+    its joints, the transient assembly the import reads it through - is left
+    behind as an object of the package.
+    """
+    root = sandbox(tmp_path, ("produce_part_stl",))
+    package = root / "produce_part_stl"
+    source = root / "robot.urdf"
+    shutil.copy(os.path.join(EXAMPLES, "produce_assembly_urdf", "robot.urdf"), source)
+    before = yaml.safe_load((package / "partcad.yaml").read_text()) or {}
+
+    project = pc.Context(str(root)).get_project("//produce_part_stl")
+    name = import_assy_action(project, "urdf", str(source), {}, compound=True)
+
+    assert name == "robot"
+    assert (package / "robot.step").exists()
+    config = yaml.safe_load((package / "partcad.yaml").read_text())
+    assert config["parts"]["robot"]["type"] == "step"
+    assert set(config["parts"]) == set(before.get("parts") or {}) | {"robot"}
+    assert config.get("assemblies") == before.get("assemblies")
+    assert config.get("interfaces") == before.get("interfaces")
+
+    # And it is one part, which builds: one shape, not a tree.
+    ctx = pc.Context(str(package))
+    envelope = asyncio.run(ctx.get_part(":robot").get_wrapped(ctx))
+    assert envelope is not None and "brep" in envelope and "assembly" not in envelope
+
+
+def test_import_part_refuses_a_urdf(tmp_path):
+    """A URDF is an assembly, which no part type reads: as a part, only as its compound."""
+    from partcad.actions.part import import_part_action
+    from partcad.assembly_file import AssemblyNotPart
+
+    root = sandbox(tmp_path, ("produce_part_stl",))
+    source = root / "robot.urdf"
+    shutil.copy(os.path.join(EXAMPLES, "produce_assembly_urdf", "robot.urdf"), source)
+    project = pc.Context(str(root)).get_project("//produce_part_stl")
+
+    with pytest.raises(AssemblyNotPart, match="a URDF describes an assembly"):
+        import_part_action(project, "urdf", "robot", str(source))
+
+    assert not (root / "produce_part_stl" / "robot.step").exists()
+
+
+@pytest.mark.parametrize("target_format, written", [(None, "robot.step"), ("stl", "robot.stl")])
+def test_import_part_compound_of_a_urdf(tmp_path, target_format, written):
+    """'pc import part --compound robot.urdf [-t stl]': the robot's compound, as STEP or as what was asked."""
+    from partcad.actions.part import import_part_action
+
+    root = sandbox(tmp_path, ("produce_part_stl",))
+    package = root / "produce_part_stl"
+    source = root / "robot.urdf"
+    shutil.copy(os.path.join(EXAMPLES, "produce_assembly_urdf", "robot.urdf"), source)
+    project = pc.Context(str(root)).get_project("//produce_part_stl")
+
+    import_part_action(project, "urdf", "robot", str(source), target_format=target_format, compound=True)
+
+    assert (package / written).stat().st_size > 0
+    config = yaml.safe_load((package / "partcad.yaml").read_text())
+    assert config["parts"]["robot"]["type"] == (target_format or "step")
+    ctx = pc.Context(str(package))
+    envelope = asyncio.run(ctx.get_part(":robot").get_wrapped(ctx))
+    assert envelope is not None and "brep" in envelope
+
+
+def test_a_compound_import_refuses_a_part_name_in_use(tmp_path):
+    root = sandbox(tmp_path, ("produce_part_stl",))
+    source = root / "cube.urdf"
+    source.write_text("<robot name='cube'><link name='a'/></robot>")
+
+    project = pc.Context(str(root)).get_project("//produce_part_stl")
+    with pytest.raises(ValueError, match="already has a part named 'cube'"):
+        import_assy_action(project, "urdf", str(source), {}, compound=True)
+
+
 def test_import_refuses_to_overwrite_an_existing_assembly(tmp_path):
     """A name that is taken is a mistake worth reporting, not something to clobber."""
     root = sandbox(tmp_path, URDF_EXAMPLE_PACKAGES)

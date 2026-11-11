@@ -417,6 +417,17 @@ def test_the_overlays_and_callouts_are_asked_for_as_pc_render_asks(tmp_path, too
     }
 
 
+def test_an_export_asks_for_the_compound_as_pc_export_does(tmp_path):
+    """'compound' is `pc export --compound`: sent when it is asked for, and not otherwise."""
+    daemon, server = serve(tmp_path, {"render.inline": rendered("step", b"ISO-10303-21;")})
+    call(server, "export", {"object": "logo", "format": "step", "path": "out/logo.step", "compound": True})
+    call(server, "export", {"object": "logo", "format": "step", "path": "out/tree.step"})
+
+    asked, plain = requests(daemon, "render.inline")
+    assert asked["compound"] is True
+    assert "compound" not in plain
+
+
 def test_a_picture_asked_for_nothing_extra_is_the_request_it_always_was(tmp_path):
     """The defaults are not sent: the daemon keeps its cached picture, and an older daemon is asked what it knows."""
     daemon, server = serve(tmp_path, {"render.inline": rendered("png", PNG)})
