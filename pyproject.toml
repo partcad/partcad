@@ -292,6 +292,15 @@ markers = [
 # is short enough to land inside that job's limit even for a test that hangs
 # after the slowest whole run so far (33 minutes, on Windows).
 timeout = 900
+# pytest-timeout fails the test from Python -- a signal handler, or with
+# `timeout_method = thread` a Python thread -- and either one waits for a test
+# stuck in native code holding the GIL (an OCCT call through OCP) to return,
+# which a hang never does. faulthandler's watchdog is a C thread that needs no
+# GIL, so a minute before that it dumps every thread's stack, test function
+# included, whatever the test is stuck in. Measured with a C loop called with
+# the GIL held: the signal fired only once the loop returned, the thread
+# method likewise, and this dumped on time.
+faulthandler_timeout = 840
 
 # TODO(clairbee): make the below work instead of "behave.ini"
 # [tool.behave]
