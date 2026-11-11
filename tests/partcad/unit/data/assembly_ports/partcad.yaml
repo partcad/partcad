@@ -210,6 +210,29 @@ assemblies:
     source: mount
     offset: [[0.0, 0.0, 30.0], [0.0, 0.0, 1.0], 0.0]
 
+  # The mount under another name: an alias is joined by the ports of the
+  # assembly it points at, as a part alias is.
+  mount-alias:
+    type: alias
+    source: mount
+
+  # An alias of that alias, and an enrich of it: both reach the ports the
+  # mount's 'map:' gives it, through the alias in the middle.
+  mount-alias-alias:
+    type: alias
+    source: mount-alias
+
+  mount-alias-again:
+    type: enrich
+    source: mount-alias
+
+  # One that declares a port of its own answers for its ports itself.
+  mount-alias-own-port:
+    type: alias
+    source: mount
+    ports:
+      own: [[0.0, 0.0, 9.0], [0.0, 0.0, 1.0], 0.0]
+
   # The parametric one under a name of its own, for an override to say which.
   parametric-again:
     type: enrich

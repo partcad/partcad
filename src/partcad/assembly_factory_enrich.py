@@ -56,13 +56,10 @@ class AssemblyFactoryEnrich(afa.AssemblyFactoryAlias):
             # to it a second time by the alias this hands the work to.
             config.pop("package", None)
             config.pop("project", None)
+            # Joined by its source's ports unless it declares its own, as an
+            # alias is: the alias works that out from this copy, which carries
+            # every key of the declaration it decides by.
             super().__init__(ctx, source_project, target_project, config)
-
-            # Joined by its source's ports, unless it declares its own (see
-            # 'prepare_async' below): asked for here, they need no preparation
-            # of this object to be waited for.
-            if _joined_by_source_ports(self.enrich_declaration):
-                self.assembly.find_ports_source = self.find_ports_source
 
     def find_ports_source(self):
         """The assembly whose ports this one is joined by: the instance it enriches, or None if not found.
@@ -76,11 +73,7 @@ class AssemblyFactoryEnrich(afa.AssemblyFactoryAlias):
         was loaded.
         """
         resolve_source_again(self, self.enrich_declaration, "source_assembly_name")
-        source = self.get_source_object(self.source)
-        if source is not None and getattr(source, "with_ports", None) is not None:
-            self.assembly.with_ports = source.with_ports
-            self.assembly.ports_source = source
-        return source
+        return super().find_ports_source()
 
     async def prepare_async(self, assembly) -> None:
         # Before anything is resolved: the user's own parameter overrides may
@@ -96,37 +89,16 @@ class AssemblyFactoryEnrich(afa.AssemblyFactoryAlias):
         if source is None:
             raise Exception(f"Failed to find the assembly to enrich: {self.source}")
         adopt_source_config(assembly, source, self.source)
-        # And the ports it is joined by are its source's. An assembly's own
-        # come from its 'map:', worked out from where its children are, and the
-        # instance this enriches is where those children are: an assembly in a
-        # colour of its own - a LEGO wheel, a battery box - is joined by exactly
-        # the ports the one it is a variant of is.
-        #
-        # Only pointed at here, not worked out: that walks the source, which
-        # builds it, and a preparation is something every reader of this
-        # object's cache key waits for - a minute of building inside it is a
-        # minute they wait, and longer than they may. 'shape_ports.prepare_async'
-        # resolves them, on the source, for whoever asks for the ports.
-        #
-        # One that declares ports of its own - a 'map:', 'ports:' or
-        # 'implements:' - is joined by those, worked out on this object like
-        # any other assembly's, as a part that does is (see
+        # The ports it is joined by were taken in the alias's preparation, from
+        # the instance this resolved to. An assembly's own come from its
+        # 'map:', worked out from where its children are, and the instance this
+        # enriches is where those children are: an assembly in a colour of its
+        # own - a LEGO wheel, a battery box - is joined by exactly the ports the
+        # one it is a variant of is. One that declares ports of its own - a
+        # 'map:', 'ports:' or 'implements:' - is joined by those, worked out on
+        # this object like any other assembly's, as a part that does is (see
         # 'assembly_ports.keeps_source_ports').
-        if _joined_by_source_ports(self.enrich_declaration) and getattr(source, "with_ports", None) is not None:
-            assembly.with_ports = source.with_ports
-            assembly.ports_source = source
 
     def instantiate(self, assembly):
         with pc_logging.Action("Enrich", assembly.project_name, f"{assembly.name}:{self.source_assembly_name}"):
             super().instantiate(assembly)
-
-
-def _joined_by_source_ports(declaration) -> bool:
-    """Whether an enriched assembly is joined by its source's ports: when it declares none of its own.
-
-    Nor when it moves the geometry they sit on ('offset', 'scale'): its source's
-    ports are where the source is, as a part's are (see
-    'assembly_ports.keeps_source_ports'), and one that moves says where its
-    own are with a 'map:' or 'ports:'.
-    """
-    return not any(declaration.get(key) for key in ("map", "ports", "implements", "offset", "scale"))

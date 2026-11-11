@@ -250,7 +250,8 @@ those ports, the viewer marks them, ``pc render --with-ports`` draws them, a
 the assembly by them. What is inside it and not externalized is its own
 business. An assembly that declares no ``map:``, no ``ports:`` and no
 ``implements:`` therefore has no ports at all -- which is the answer to "what
-can I connect to this", not a failure. ``pc render --with-internals`` looks
+can I connect to this", not a failure. An alias or an enrich of one is the
+exception: it has the ports of what it points at (see `References`_). ``pc render --with-internals`` looks
 inside one anyway, for finding the connection that went wrong (see :doc:`/cli`).
 
 .. _map-own:
@@ -684,6 +685,14 @@ with other values is another instance of the same assembly, and that is what an
               <param1>: <value1>
     - Create an opinionated alternative to the existing assembly by setting
       some of its parameters, the same way a part is enriched.
+
+Either one is joined by the ports of the assembly it points at -- the ones that
+assembly's ``map:`` externalizes, under the same names -- as an alias or an
+enrich of a part is. A chain of them, an alias of an alias or an enrich of an
+alias, has the ports at the end of the chain. One that declares a ``map:``,
+``ports:`` or ``implements:`` of its own has those instead, and so does one that
+moves the assembly with ``offset:``: the ports it points at would no longer be
+where the assembly is.
 
 Procurement
 ===========
