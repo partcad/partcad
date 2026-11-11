@@ -248,7 +248,18 @@ def text_overlays(request, width, height, duration, work):
             "name=%s" % name,
             video_encode.prop("font-desc", "%s %dpx" % (font, pixels)),
             "auto-resize=false",
-            "wait-text=false",
+            # A frame waits at the overlay until its text is there - or the
+            # subtitle file has ended, or the frame comes before the text
+            # starts. The text arrives on a thread of its own, from 'subparse',
+            # while the frames are handed over as fast as they are drawn: told
+            # not to wait, the overlay let every frame of a short video past
+            # before 'subparse' had worked out what its file was, and the
+            # video was written without its text - or, when 'subparse' got
+            # there as the finished pipeline was being shut down, GStreamer
+            # failed the write with "not-negotiated" after writing it whole.
+            # Waiting cannot hang: the end of the subtitle file wakes the
+            # frames, and so does the pipeline stopping on an error.
+            "wait-text=true",
             "valignment=%s" % valign,
             "halignment=%s" % halign,
             "line-alignment=center",
