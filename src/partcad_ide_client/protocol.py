@@ -325,6 +325,19 @@ KEY_SCENARIO = "scenario"
 # daemon to show the object again with one ('inspect.object' with 'section'),
 # and this is how it learns what the geometry on screen was cut to.
 KEY_SECTION = "section"
+# On a show message: whether the object was drawn with the 3D view's "Extra
+# details" box ticked -- as it is, finely, rather than each part drawn as its
+# visual (see 'partcad.cam_view.representation'). Sent by a PartCAD that knows
+# the box on every show it makes, so the first show of an object says what the
+# box starts out as for it (ticked for a part or a sketch) and the viewer ticks it
+# so. Absent from an older PartCAD, which always drew visuals; the viewer then
+# offers the box disabled.
+KEY_EXTRA_DETAILS = "extraDetails"
+# On a show message: that what is drawn is what a part's machine makes, not the
+# part -- the CAM tab's drawing -- as the request that asked for it said it:
+# '{"machine": "fff", "settings": {"infill": "40%"}}', the machine and the
+# settings tried in place of what the part states. Absent from every other show.
+KEY_CAM = "cam"
 
 # The tabs whose pane is a list of what the object declares, one of which is
 # selected and run: its simulations, and its scenarios of each analysis.
@@ -338,7 +351,7 @@ SCENARIO_TABS = ("fea", "dynamic", "thermal", "cfd", "simulation")
 # here: it holds nothing yet and is always disabled, so a flag for it could
 # never open it.
 VIEWER_TABS = {
-    "design": ("3d", "2d", "draft", "cmf"),
+    "design": ("3d", "2d", "draft", "cmf", "cam"),
     "analysis": ("fea", "dynamic", "thermal", "cfd"),
     "manufacturing": ("bvb", "build", "supply", "bom", "assembly"),
     "qualification": ("basic", "topology", "simulation", "other"),

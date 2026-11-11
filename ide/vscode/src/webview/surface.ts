@@ -67,6 +67,12 @@ export interface Surface {
     readonly info?: { render: { calls: number; triangles: number }; memory: { geometries: number; textures: number } };
     /** Give the context back. A browser keeps a handful of GPU contexts and drops the oldest past that. */
     dispose(): void;
+    /**
+     * Clip everything drawn to the side each plane's normal points to, or stop
+     * (none): the renderer's own planes, which only WebGL has. WebGPU clips by a
+     * group in the scene instead, and the painter does not clip at all.
+     */
+    setClippingPlanes?(planes: THREE.Plane[]): void;
 }
 
 /** Why there is no WebGL, in three's words, for the notice that says so. */
@@ -148,6 +154,9 @@ function webglSurface(options: SurfaceOptions): Surface | undefined {
         dispose: () => {
             renderer.setAnimationLoop(null);
             renderer.dispose();
+        },
+        setClippingPlanes: (planes) => {
+            renderer.clippingPlanes = planes;
         },
     };
 }

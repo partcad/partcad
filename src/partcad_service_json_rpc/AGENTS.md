@@ -281,6 +281,16 @@ Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|as
   illustration a second time beside the copy inside it; `image_bytes` carries each picture of the model as its
   bytes and media type rather than as a data URI, which is how the IDE asks (and `manufacturing.plan` takes it
   too). An older daemon ignores both and sends what it always sent, which both clients still read.
+* `cam.settings` and `cam.save`, behind the Digital Thread's CAM tab (`partcad/cam_view.py`). The first reads, off
+  a part's declaration and the configuration schema, how it is made and every setting its machine takes -- a row
+  per setting with its type, choices, what the part states as written and what is taken where it states none --
+  building nothing, so it is asked on every show of a part, as `cae.list` is. The second writes settings into the
+  part's `manufacturing: <machine>:` section of its `partcad.yaml` (`Project.set_machine_settings`, ruamel, so
+  the file keeps its comments), reloads the package, and where the part was materialized writes its product
+  again with what was saved. What the tab *draws* is `inspect.object` with `cam` -- `{machine, settings}` tried
+  in place of what the part states, nothing written -- which answers `{stats}`; the same method takes
+  `extra_details`, the 3D tab's "Extra details" box, and `detail`, a level of tessellation
+  (`partcad.cam_view.representation` decides both), and the show says which way the box was (`extraDetails`).
 * `cmf.info`, behind the Digital Thread's CMF tab (see `partcad/cmf.py`, "What the IDE shows"): for a part, an
   assembly or a scene, a row per item the `cmf` check judges -- the part itself, or every part an assembly holds and
   every sub-assembly in it bought whole -- each with its CMF as `pc info` says it and the check's findings, the

@@ -199,6 +199,23 @@ export function sectionOf(ranges: Partial<Record<SectionAxis, Range>>, bounds: B
     return Object.keys(section).length > 0 ? section : null;
 }
 
+/**
+ * The range a preview clips one axis to: 'range' with an end at or beyond the
+ * object's own face made no end at all (an infinity). A clipping plane lying on
+ * a face clips it pixel by pixel, half of it drawn and half not, and the sliders
+ * not being moved sit on the object's faces.
+ */
+export function previewRange(range: Range, axis: SectionAxis, bounds: Bounds): Range {
+    const index = SECTION_AXES.indexOf(axis);
+    const tolerance = slack(bounds, index);
+    const low = Math.min(range[0], range[1]);
+    const high = Math.max(range[0], range[1]);
+    return [
+        low <= bounds.min[index] + tolerance ? -Infinity : low,
+        high >= bounds.max[index] - tolerance ? Infinity : high,
+    ];
+}
+
 /** The range one axis keeps under 'section': its own, or the whole of the object. */
 export function rangeOf(section: Section | null | undefined, axis: SectionAxis, bounds: Bounds): Range {
     const index = SECTION_AXES.indexOf(axis);

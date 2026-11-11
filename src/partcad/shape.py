@@ -956,7 +956,9 @@ class Shape(ShapeConfiguration):
 
         return self.components
 
-    async def get_representation(self, ctx, form=shape_envelope.FORM_BREP, section=None, visuals=False):
+    async def get_representation(
+        self, ctx, form=shape_envelope.FORM_BREP, section=None, visuals=False, detail=None, hidden_stripped=False
+    ):
         """This shape as a tree of nodes, with the geometry at each in 'form'.
 
         The one way to ask a shape for itself as a whole. Every shape is such a
@@ -991,6 +993,12 @@ class Shape(ShapeConfiguration):
         somebody to look at, which is the 3D view and nothing else that asks
         here. Off, the tree is the object as it is, which is what every caller
         that computes with it needs.
+
+        'detail' is the level of detail the glTF form is tessellated at
+        ('shape_gltf.DETAILS'; None is the preview's), and 'hidden_stripped'
+        leaves out of it every face of a print nothing can see once it is cut
+        (see 'shape_visible'): both for the 3D view, as 'cam_view.representation'
+        decides them.
         """
         from . import port_sketches, shape_gltf
 
@@ -1000,7 +1008,15 @@ class Shape(ShapeConfiguration):
 
             tree = (await pc_visual.substitute_async(ctx, self, tree)).tree
         tree = await port_sketches.attach_async(ctx, tree)
-        return await shape_gltf.in_form_async(ctx, tree, form, cacheable=self.artifacts_cacheable(), section=section)
+        return await shape_gltf.in_form_async(
+            ctx,
+            tree,
+            form,
+            cacheable=self.artifacts_cacheable(),
+            section=section,
+            detail=detail,
+            hidden_stripped=hidden_stripped,
+        )
 
     def prepare(self):
         return asyncio.run(self.prepare_async())
@@ -1982,25 +1998,43 @@ class Shape(ShapeConfiguration):
         )
         return await self.convert("build123d", ctx)
 
-    async def show_async(self, ctx=None, tab=None, scenario=None, section=None):
+    async def show_async(
+        self, ctx=None, tab=None, scenario=None, section=None, extra_details=None, detail=None, cam=None
+    ):
         """Show this shape in the Digital Thread, on its tab 'tab' if one is named, and that tab's 'scenario'.
 
         'section' cuts it by a box first ('shape_section'): what the viewer's
         section sliders ask for, by asking for the object to be shown again.
+
+        'extra_details' is the 3D view's "Extra details" box: the object as it
+        is, finely, rather than each part drawn as its visual - None for what
+        the box starts out as for this kind of object - and 'detail' a level of
+        detail that outranks the one the box would choose. See
+        'cam_view.representation', which decides both, and why a part a machine
+        makes is the exception.
+
+        'cam' shows instead what the part's machine makes - its CAM tab - with
+        the settings '{"machine": ..., "settings": {key: value}}' tried in place
+        of what the part states: 'cam_view.product_async', drawn finely, the
+        faces nothing can see left out. A failure there is raised rather than
+        logged, since the tab that asked has to say it; and what the product
+        came to is returned, '{"stats": ...}'.
         """
-        from . import viewer
+        from . import cam_view, shape_gltf, viewer
 
         # Refused before anything is built: a section that is not one costs a
         # message, not a tessellation.
         section = shape_section.normalize(section)
+        drawn = cam_view.representation(self, extra_details, detail, cam=cam is not None)
 
         # A caller that cannot pass one gets the process-wide context; one that
         # passes None where there is no global is told so rather than left to
         # discover it from the first thing that needs one. See 'viewer.context'.
         ctx = viewer.context(ctx, self.name)
         if ctx is None:
-            return
+            return None
 
+        made = None
         with pc_logging.Action("Show", self.project_name, self.name):
             # The whole object, as the tree it is, with every node's geometry
             # tessellated: the viewer is a browser and has no CAD kernel, so the
@@ -2010,12 +2044,34 @@ class Shape(ShapeConfiguration):
             # answers with for every other purpose - except what each part with
             # a 'visual:' is drawn as: this is a picture (see 'partcad.visual').
             tree = None
-            # TODO(clairbee): consider removing this exception handler permanently
-            # Comment out the below exception handler for easier troubleshooting in CLI
-            try:
-                tree = await self.get_representation(ctx, shape_envelope.FORM_GLTF, section=section, visuals=True)
-            except Exception as e:
-                pc_logging.exception(e)
+            if cam is not None:
+                # What the machine makes: the CAM tab's, which says why it could not.
+                made = await cam_view.product_async(
+                    ctx, self, machine=cam.get("machine"), values=cam.get("settings") or {}
+                )
+                tree = await shape_gltf.in_form_async(
+                    ctx,
+                    cam_view.product_tree(ctx, self, made),
+                    shape_envelope.FORM_GLTF,
+                    cacheable=self.artifacts_cacheable(),
+                    section=section,
+                    detail=drawn.detail,
+                    hidden_stripped=True,
+                )
+            else:
+                # TODO(clairbee): consider removing this exception handler permanently
+                # Comment out the below exception handler for easier troubleshooting in CLI
+                try:
+                    tree = await self.get_representation(
+                        ctx,
+                        shape_envelope.FORM_GLTF,
+                        section=section,
+                        visuals=drawn.visuals,
+                        detail=drawn.detail,
+                        hidden_stripped=drawn.stripped,
+                    )
+                except Exception as e:
+                    pc_logging.exception(e)
 
             if tree is not None:
                 await viewer.show(
@@ -2027,10 +2083,19 @@ class Shape(ShapeConfiguration):
                     tab=tab,
                     scenario=scenario,
                     section=section,
+                    extra_details=drawn.extra_details,
+                    cam=cam,
                 )
+        if made is not None:
+            return {"stats": made.get("stats") or {}}
+        return None
 
-    def show(self, ctx=None, tab=None, scenario=None, section=None):
-        asyncio.run(self.show_async(ctx, tab=tab, scenario=scenario, section=section))
+    def show(self, ctx=None, tab=None, scenario=None, section=None, extra_details=None, detail=None, cam=None):
+        return asyncio.run(
+            self.show_async(
+                ctx, tab=tab, scenario=scenario, section=section, extra_details=extra_details, detail=detail, cam=cam
+            )
+        )
 
     def shape_info(self, ctx):
         """What 'pc info' reports of any shape, whatever kind or type it is.

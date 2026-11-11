@@ -3401,6 +3401,59 @@ class Project(project_config.Configuration):
             yaml.dump(config, fp)
         return True
 
+    def set_machine_settings(self, part_name: str, machine: str, values: dict) -> None:
+        """Write settings of one machine into a part's 'manufacturing:' section of this package's 'partcad.yaml'.
+
+        '<part>.manufacturing.<machine>.<key>' becomes each value of 'values', and
+        one that is None is taken out - what the Digital Thread's CAM tab saves
+        (see 'partcad.cam_view'). The section and the machine's subsection are
+        made where the part has none; everything else in the file - the other
+        settings, the order, the comments - is kept as its author wrote it, which
+        is what 'ruamel' round-trips. An axis written under one of its two
+        spellings ('toolAxis:', 'along:') takes the other out.
+
+        Raises:
+            ValueError: the part is not declared in this file - one a plugin
+                supplies, or one another file holds - so there is nowhere here to
+                write it.
+        """
+        yaml = ruamel.yaml.YAML()
+        yaml.preserve_quotes = True
+        yaml.width = 4096
+        with open(self.config_path) as fp:
+            config = yaml.load(fp)
+        parts = config.get("parts") if isinstance(config, dict) else None
+        declaration = parts.get(part_name) if isinstance(parts, dict) else None
+        if not isinstance(declaration, dict):
+            raise ValueError(
+                "The part '%s' is not declared in '%s', so there is nowhere to write its settings"
+                % (part_name, self.config_path)
+            )
+        section = declaration.get("manufacturing")
+        if not isinstance(section, dict):
+            section = ruamel.yaml.comments.CommentedMap()
+            declaration["manufacturing"] = section
+        settings = section.get(machine)
+        created = not isinstance(settings, dict)
+        if created:
+            settings = ruamel.yaml.comments.CommentedMap()
+            section[machine] = settings
+        for key, value in values.items():
+            if value is None:
+                settings.pop(key, None)
+                continue
+            settings[key] = value
+            if key in ("toolAxis", "along"):
+                settings.pop("along" if key == "toolAxis" else "toolAxis", None)
+        if created and not settings:
+            # Nothing to say: a machine named with no settings is a machine the
+            # part now says it is made on, which saving defaults did not ask for.
+            del section[machine]
+            if not section:
+                del declaration["manufacturing"]
+        with open(self.config_path, "w") as fp:
+            yaml.dump(config, fp)
+
     def add_sketch(self, kind: str, path: str, config={}) -> bool:
         pc_logging.info("Adding the sketch %s of type %s" % (self.rel_path(path), kind))
         return self._add_component(

@@ -83,6 +83,11 @@ _OPERATIONS = {
     # rather than run -- what the IDE's Analysis tabs are enabled by and list.
     "cae.list": operations.cae_list,
     "cam.route": operations.cam_route,
+    # Not CLI commands: the Digital Thread's CAM tab -- what a part's machine is
+    # and every setting it takes, read; and its Save, which writes them into the
+    # part's declaration (and its product again, where it was materialized).
+    "cam.settings": operations.cam_settings,
+    "cam.save": operations.cam_save,
     "search.objects": operations.search_objects,
     # 'pc login': one step of a plugin's login. The browser it may ask for is
     # opened by the client, never here (see 'operations.plugin_login').
